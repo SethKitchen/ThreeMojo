@@ -11,12 +11,15 @@ to. Both are asserted against worked-out answers rather than against whatever
 the implementation happens to do.
 """
 
-from render.framebuffer import Color
+from render.framebuffer import Color, FloatColor
 from render.texture import (
+    BILINEAR,
     CLAMP,
+    NEAREST,
     MIRROR,
     REPEAT,
     Texture,
+    blend,
     checkerboard,
     wrap_index,
 )
@@ -312,6 +315,128 @@ def test_a_checkerboard_must_divide_evenly() raises:
 def test_a_checkerboard_carries_its_wrap_mode() raises:
     var board = checkerboard(4, 2, Color(255, 255, 255), Color(0, 0, 0), CLAMP)
     assert_equal(board.wrap, CLAMP)
+
+
+# --- bilinear filtering -----------------------------------------------------
+
+
+def smooth_quad() raises -> Texture:
+    """Return the 2x2 texture again, blended rather than stepped."""
+    var pixels = List[UInt8]()
+    var colours = [
+        Color(255, 0, 0),
+        Color(0, 255, 0),
+        Color(0, 0, 255),
+        Color(255, 255, 255),
+    ]
+    for index in range(4):
+        pixels.append(colours[index].r)
+        pixels.append(colours[index].g)
+        pixels.append(colours[index].b)
+        pixels.append(colours[index].a)
+    return Texture(2, 2, pixels^, CLAMP, BILINEAR)
+
+
+def test_a_bilinear_sample_on_a_texel_centre_is_that_texel() raises:
+    # Texel centres sit at 0.25 and 0.75 on a 2x2 image. Landing exactly on
+    # one must give it back unblended, or every image is offset.
+    var image = smooth_quad()
+    var middle = image.sample(0.25, 0.75)
+    assert_almost_equal(middle.r, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(middle.g, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(middle.b, Float32(0), atol=TOLERANCE)
+
+
+def test_a_bilinear_sample_between_two_texels_is_their_mean() raises:
+    # Halfway between the top-left red and top-right green, along the row of
+    # texel centres: half of each and nothing of the bottom row.
+    var image = smooth_quad()
+    var between = image.sample(0.5, 0.75)
+    assert_almost_equal(between.r, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(between.g, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(between.b, Float32(0), atol=TOLERANCE)
+
+
+def test_a_bilinear_sample_in_the_middle_is_all_four() raises:
+    # The centre of the image is equidistant from all four texel centres.
+    # red + green + blue + white, quartered: r = (1 + 0 + 0 + 1) / 4 = 0.5.
+    var image = smooth_quad()
+    var centre = image.sample(0.5, 0.5)
+    assert_almost_equal(centre.r, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(centre.g, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(centre.b, Float32(0.5), atol=TOLERANCE)
+
+
+def test_nearest_and_bilinear_agree_on_texel_centres() raises:
+    # The filters differ between centres, not at them.
+    var stepped = quad(CLAMP)
+    var smooth = smooth_quad()
+    assert_equal(stepped.sample(0.25, 0.75).r, smooth.sample(0.25, 0.75).r)
+    assert_equal(stepped.sample(0.75, 0.25).g, smooth.sample(0.75, 0.25).g)
+
+
+def test_bilinear_blends_where_nearest_steps() raises:
+    # Just off a boundary, nearest jumps and bilinear does not.
+    var stepped = quad(CLAMP)
+    var smooth = smooth_quad()
+    assert_equal(stepped.sample(0.5, 0.75).r, Float32(0))
+    assert_true(smooth.sample(0.5, 0.75).r > 0.4)
+    assert_true(smooth.sample(0.5, 0.75).r < 0.6)
+
+
+def test_bilinear_blends_through_the_wrap_mode() raises:
+    # Beyond the edge, a clamped texture holds its edge texel rather than
+    # fading out of it -- the neighbours are fetched through the wrap mode,
+    # not clamped to the image after the fact.
+    var image = smooth_quad()
+    var beyond = image.sample(1.4, 0.75)
+    assert_almost_equal(beyond.g, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(beyond.r, Float32(0), atol=TOLERANCE)
+
+
+def test_a_repeating_bilinear_texture_blends_across_its_seam() raises:
+    # The other side of the same rule: a tiled image's left edge blends with
+    # its own right edge, which is what keeps a tiled surface seamless.
+    var pixels = List[UInt8]()
+    var colours = [Color(255, 0, 0), Color(0, 0, 255)]
+    for index in range(2):
+        pixels.append(colours[index].r)
+        pixels.append(colours[index].g)
+        pixels.append(colours[index].b)
+        pixels.append(colours[index].a)
+    var strip = Texture(2, 1, pixels^, REPEAT, BILINEAR)
+    # At u = 0 the sample sits between the right-hand texel of the previous
+    # tile and the left-hand texel of this one: half red, half blue.
+    var seam = strip.sample(0.0, 0.5)
+    assert_almost_equal(seam.r, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(seam.b, Float32(0.5), atol=TOLERANCE)
+
+
+def test_an_unknown_filter_mode_is_rejected() raises:
+    var pixels = List[UInt8](length=16, fill=0)
+    with assert_raises():
+        _ = Texture(2, 2, pixels^, REPEAT, 9)
+
+
+def test_a_texture_keeps_the_filter_it_was_given() raises:
+    assert_equal(quad().filter, NEAREST)
+    assert_equal(smooth_quad().filter, BILINEAR)
+    var board = checkerboard(
+        4, 2, Color(255, 255, 255), Color(0, 0, 0), REPEAT, BILINEAR
+    )
+    assert_equal(board.filter, BILINEAR)
+
+
+def test_the_blank_texture_is_white_under_either_filter() raises:
+    # Blank short-circuits before the filter is consulted at all.
+    assert_equal(Texture().sample(0.3, 0.3).r, Float32(1))
+
+
+def test_blending_four_equal_texels_changes_nothing() raises:
+    var same = FloatColor(0.25, 0.5, 0.75, 1.0)
+    var result = blend(same, same, same, same, 0.3, 0.8)
+    assert_almost_equal(result.r, Float32(0.25), atol=TOLERANCE)
+    assert_almost_equal(result.b, Float32(0.75), atol=TOLERANCE)
 
 
 def main() raises:

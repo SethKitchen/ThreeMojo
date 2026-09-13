@@ -55,13 +55,18 @@ a legitimate thing to want; three.js expresses the same choice as a material's
 
 from cameras.camera import Camera
 from core.buffer_geometry import NORMAL, POSITION, UV
-from core.geometry_store import GeometryStore
+from core.assets import Assets
 from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
+from materials.material import (
+    BACK_SIDE,
+    DOUBLE_SIDE,
+    FRONT_SIDE,
+    NO_TEXTURE,
+)
 from render.framebuffer import Color, FloatColor, Framebuffer
-from render.texture import Texture
 from math.vector2 import Vector2
 from render.rasterizer import (
     SHADE_LIT,
@@ -129,7 +134,9 @@ def _faces_away(
     return area > 0
 
 
-def _to_raster(vertex: ClipVertex, to_screen: Matrix4) -> RasterVertex:
+def _to_raster(
+    vertex: ClipVertex, to_screen: Matrix4, texture: Int
+) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
     `transform_point` does the perspective divide and throws the divisor away,
@@ -153,6 +160,7 @@ def _to_raster(vertex: ClipVertex, to_screen: Matrix4) -> RasterVertex:
         vertex.color,
         vertex.u,
         vertex.v,
+        texture,
     )
 
 
@@ -164,21 +172,12 @@ struct Renderer(Movable):
     var background: Color
     var light: Vector3
     var ambient: Float32
-    # Whether to discard triangles facing away from the camera. On by
-    # default, as three.js's default FrontSide material is; off draws both
-    # windings, which is three.js's DoubleSide. There is deliberately no
-    # equivalent of BackSide, which draws *only* back faces -- that is a
-    # third state, and it belongs with `Material` rather than as a third
-    # value of a flag on the renderer.
-    var cull_backfaces: Bool
-    # SHADE_LIT, SHADE_UV or SHADE_TEXTURE; see `render.rasterizer`.
+    # What a fragment's colour comes from. `SHADE_TEXTURE` is the default and
+    # means "follow the material": a material with a map is sampled, one
+    # without is not, which is what three.js does by having a map at all.
+    # `SHADE_LIT` and `SHADE_UV` are overrides for looking at something —
+    # ignore every texture, or draw texture coordinates instead of colour.
     var shading: Int
-    # The image `SHADE_TEXTURE` samples. One per renderer rather than one per
-    # mesh, which is the wrong shape and knows it: a texture is a property of
-    # a material, and there is no `Material` yet. It moves there, unchanged,
-    # the moment there is one. Blank by default, and the blank texture samples
-    # as white, so a renderer that never sets one shades as it always did.
-    var texture: Texture
 
     def __init__(out self, width: Int, height: Int) raises:
         """Create a renderer with a dark background and a default light.
@@ -201,39 +200,19 @@ struct Renderer(Movable):
         self.light = direction
         # Enough fill that a face turned away is still legible, not black.
         self.ambient = 0.25
-        self.cull_backfaces = True
-        self.shading = SHADE_LIT
-        self.texture = Texture()
+        self.shading = SHADE_TEXTURE
 
     def set_background(mut self, color: Color):
         """Set the colour the image is cleared to."""
         self.background = color
 
-    def set_cull_backfaces(mut self, cull: Bool):
-        """Choose whether triangles facing away from the camera are drawn.
-
-        True is three.js's `FrontSide`, False its `DoubleSide`. `BackSide` —
-        only the faces pointing away — is a third state this does not have,
-        because it is a per-material decision rather than a renderer-wide
-        one and there is no `Material` yet.
-
-        Culling is an optimization, not a correctness fix: the depth buffer
-        already hides what is behind something. It is worth having because it
-        discards roughly half the triangles of a closed mesh before they are
-        rasterized at all — but it must be switchable, because "inside a
-        closed mesh" is a legitimate place for a camera to be, and there
-        every visible surface is a back face.
-        """
-        self.cull_backfaces = cull
-
     def set_shading(mut self, mode: Int) raises:
         """Choose what a fragment's colour is taken from.
 
         Args:
-            mode: `SHADE_LIT` for the interpolated lighting, `SHADE_UV` to
-                write texture coordinates as red and green instead, or
-                `SHADE_TEXTURE` to sample the renderer's texture and modulate
-                it by the lighting.
+            mode: `SHADE_TEXTURE` to follow each material, `SHADE_LIT` to
+                ignore every texture, or `SHADE_UV` to write texture
+                coordinates as red and green instead.
 
         Raises:
             Error: If the mode is not one this renderer knows.
@@ -241,15 +220,6 @@ struct Renderer(Movable):
         if mode != SHADE_LIT and mode != SHADE_UV and mode != SHADE_TEXTURE:
             raise Error("Unknown shading mode")
         self.shading = mode
-
-    def set_texture(mut self, var texture: Texture):
-        """Give the renderer the image `SHADE_TEXTURE` samples.
-
-        Moved in rather than copied, so a large image is not duplicated by
-        being handed over. Setting one does not by itself change anything —
-        `set_shading(SHADE_TEXTURE)` is what starts reading it.
-        """
-        self.texture = texture^
 
     def set_light(mut self, direction: Vector3, ambient: Float32) raises:
         """Point the light and set how much the unlit side keeps.
@@ -291,7 +261,7 @@ struct Renderer(Movable):
     ](
         self,
         scene: Scene,
-        geometries: GeometryStore,
+        assets: Assets,
         meshes: List[Mesh],
         camera: C,
     ) raises -> List[RasterVertex]:
@@ -314,8 +284,8 @@ struct Renderer(Movable):
 
         Args:
             scene: The transform hierarchy the meshes sit in.
-            geometries: The vertex data the meshes name. Two meshes naming
-                the same id share one copy of it.
+            assets: The geometry, materials and textures the meshes name.
+                Two meshes naming the same id share one copy of it.
             meshes: What to draw, each naming a node and a geometry.
             camera: The camera to project through — anything satisfying
                 `cameras.camera.Camera`, perspective or orthographic.
@@ -343,7 +313,13 @@ struct Renderer(Movable):
             var mirrored = world.determinant() < 0
             # Borrowed, not copied: two meshes naming the same id read the
             # same arrays rather than each holding their own.
-            ref geometry = geometries.get(meshes[index].geometry)
+            ref geometry = assets.geometries.get(meshes[index].geometry)
+            var material = assets.materials.get(meshes[index].material)
+            # Carried on every vertex of this mesh, so one flat triangle list
+            # can hold a scene whose meshes use different images.
+            var map = material.map
+            if self.shading != SHADE_TEXTURE:
+                map = NO_TEXTURE
             var smooth = geometry.has_attribute(String(NORMAL))
             var mapped = geometry.has_attribute(String(UV))
 
@@ -392,9 +368,7 @@ struct Renderer(Movable):
                         normals.vector3(vertex)
                     )
                     direction.normalize()
-                    vertex_colors.append(
-                        self.shade(meshes[index].color, direction)
-                    )
+                    vertex_colors.append(self.shade(material.color, direction))
 
             var triangles = geometry.triangle_count()
             for triangle in range(triangles):
@@ -427,7 +401,7 @@ struct Renderer(Movable):
                         geometric = Vector3(
                             -geometric.x, -geometric.y, -geometric.z
                         )
-                    color_a = self.shade(meshes[index].color, geometric)
+                    color_a = self.shade(material.color, geometric)
                     color_b = color_a
                     color_c = color_a
 
@@ -454,13 +428,18 @@ struct Renderer(Movable):
                     far,
                 )
                 for piece in range(len(pieces) // 3):
-                    var one = _to_raster(pieces[piece * 3], to_screen)
-                    var two = _to_raster(pieces[piece * 3 + 1], to_screen)
-                    var three = _to_raster(pieces[piece * 3 + 2], to_screen)
-                    if self.cull_backfaces and _faces_away(
-                        one, two, three, mirrored
-                    ):
-                        continue
+                    var one = _to_raster(pieces[piece * 3], to_screen, map)
+                    var two = _to_raster(pieces[piece * 3 + 1], to_screen, map)
+                    var three = _to_raster(
+                        pieces[piece * 3 + 2], to_screen, map
+                    )
+                    # The material decides which faces exist at all.
+                    if material.side != DOUBLE_SIDE:
+                        var away = _faces_away(one, two, three, mirrored)
+                        if material.side == FRONT_SIDE and away:
+                            continue
+                        if material.side == BACK_SIDE and not away:
+                            continue
                     corners.append(one)
                     corners.append(two)
                     corners.append(three)
@@ -472,7 +451,7 @@ struct Renderer(Movable):
     ](
         self,
         scene: Scene,
-        geometries: GeometryStore,
+        assets: Assets,
         meshes: List[Mesh],
         camera: C,
     ) raises -> Framebuffer:
@@ -482,7 +461,7 @@ struct Renderer(Movable):
 
         Args:
             scene: The transform hierarchy the meshes sit in.
-            geometries: The vertex data the meshes name.
+            assets: The geometry, materials and textures the meshes name.
             meshes: What to draw, each naming a node and a geometry.
             camera: The camera to project through.
 
@@ -493,7 +472,7 @@ struct Renderer(Movable):
             Error: If a mesh names a node or a geometry that is not there, or
                 its geometry has no positions.
         """
-        var corners = self.prepare(scene, geometries, meshes, camera)
+        var corners = self.prepare(scene, assets, meshes, camera)
         var target = Framebuffer(self.width, self.height, self.background)
         for triangle in range(len(corners) // 3):
             rasterize_shaded(
@@ -502,6 +481,6 @@ struct Renderer(Movable):
                 corners[triangle * 3 + 2],
                 target,
                 self.shading,
-                self.texture,
+                assets.textures,
             )
         return target^

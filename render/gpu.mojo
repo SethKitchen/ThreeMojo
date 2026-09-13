@@ -50,7 +50,9 @@ from render.rasterizer import (
     RasterVertex,
     Triangle,
 )
-from render.texture import Texture, wrap_index
+from materials.material import NO_TEXTURE
+from render.texture import BILINEAR, NEAREST, Texture, blend, wrap_index
+from render.texture_store import TextureStore
 from std.gpu import global_idx
 from std.math import ceildiv, floor, inf
 from std.memory import unsafe_memcpy
@@ -62,18 +64,60 @@ from std.sys import has_accelerator
 comptime TILE = 16
 
 # How a `RasterVertex` is laid out in the flat float buffer the kernel reads:
-# x, y, z, inv_w, r, g, b, a, u, v. A struct would be tidier and is not an
+# x, y, z, inv_w, r, g, b, a, u, v, texture id. A struct would be tidier and
+# is not an
 # option — the buffer has to be plain floats to cross to the device.
 # tests/test_gpu.mojo asserts this layout, because the host packs it and the
 # kernel unpacks it from two different places and nothing else would notice
 # them drifting apart.
-comptime FLOATS_PER_VERTEX = 10
+comptime FLOATS_PER_VERTEX = 11
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # Further than any NDC depth, so the first covering triangle always wins. The
 # host framebuffer uses an actual infinity; a literal keeps the kernel free of
 # any dependency on how the host spells one.
 comptime FURTHEST = Float32(1.0e30)
+
+# One row per texture in the store: where its bytes start, how big it is, and
+# how to sample it. A device cannot hold a `List` of `List`s, so every image
+# goes into one buffer end to end and this says where each one begins.
+comptime TABLE_COLUMNS = 5
+
+
+def flatten_textures(
+    textures: TextureStore,
+) raises -> Tuple[List[UInt8], List[Int32]]:
+    """Return every texture's bytes end to end, and the table describing them.
+
+    Args:
+        textures: The store to upload.
+
+    Returns:
+        The concatenated texels, and `TABLE_COLUMNS` entries per texture:
+        byte offset, width, height, wrap mode, filter mode.
+
+    Raises:
+        Error: If a texture cannot be read.
+    """
+    var texels = List[UInt8]()
+    var table = List[Int32]()
+    for id in range(textures.count()):
+        ref image = textures.get(id)
+        table.append(Int32(len(texels)))
+        table.append(Int32(image.width))
+        table.append(Int32(image.height))
+        table.append(Int32(image.wrap))
+        table.append(Int32(image.filter))
+        for byte in range(len(image.pixels)):
+            texels.append(image.pixels[byte])
+    # Never empty: a zero-length device buffer is not worth the special case,
+    # and a vertex naming NO_TEXTURE never reads either of these.
+    if len(texels) == 0:
+        texels.append(0)
+    if len(table) == 0:
+        for _ in range(TABLE_COLUMNS):
+            table.append(0)
+    return (texels^, table^)
 
 
 def pack(color: Color) -> UInt32:
@@ -98,7 +142,7 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         corners: Raster vertices, three per triangle.
 
     Returns:
-        Ten floats per vertex, in the order the kernel unpacks them.
+        Eleven floats per vertex, in the order the kernel unpacks them.
     """
     var flat = List[Float32]()
     for index in range(len(corners)):
@@ -113,7 +157,35 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.color.a)
         flat.append(corner.u)
         flat.append(corner.v)
+        flat.append(Float32(corner.texture))
     return flat^
+
+
+def _fetch(
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    start: Int,
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    wrap: Int,
+) -> FloatColor:
+    """Read one texel from the device buffer, with the wrap mode applied.
+
+    The device counterpart of `Texture.wrapped_texel`. Only the memory access
+    differs between the two — the index arithmetic is `wrap_index`, shared,
+    and so is the blend built on top of it.
+    """
+    var offset = (
+        start
+        + (wrap_index(y, height, wrap) * width + wrap_index(x, width, wrap)) * 4
+    )
+    return FloatColor(
+        Float32(texels[unsafe_offset=offset]) / 255,
+        Float32(texels[unsafe_offset=offset + 1]) / 255,
+        Float32(texels[unsafe_offset=offset + 2]) / 255,
+        Float32(texels[unsafe_offset=offset + 3]) / 255,
+    )
 
 
 def rasterize_kernel(
@@ -126,9 +198,7 @@ def rasterize_kernel(
     background: UInt32,
     mode: Int32,
     texels: MutPointer[UInt8, MutAnyOrigin],
-    texture_width: Int32,
-    texture_height: Int32,
-    texture_wrap: Int32,
+    table: MutPointer[Int32, MutAnyOrigin],
 ):
     """Colour one pixel from the nearest triangle that covers it."""
     var x = Int(global_idx.x)
@@ -153,14 +223,14 @@ def rasterize_kernel(
         var ay = corners[unsafe_offset=base + 1]
         var az = corners[unsafe_offset=base + 2]
         var aw = corners[unsafe_offset=base + 3]
-        var bx = corners[unsafe_offset=base + 10]
-        var by = corners[unsafe_offset=base + 11]
-        var bz = corners[unsafe_offset=base + 12]
-        var bw = corners[unsafe_offset=base + 13]
-        var cx = corners[unsafe_offset=base + 20]
-        var cy = corners[unsafe_offset=base + 21]
-        var cz = corners[unsafe_offset=base + 22]
-        var cw = corners[unsafe_offset=base + 23]
+        var bx = corners[unsafe_offset=base + 11]
+        var by = corners[unsafe_offset=base + 12]
+        var bz = corners[unsafe_offset=base + 13]
+        var bw = corners[unsafe_offset=base + 14]
+        var cx = corners[unsafe_offset=base + 22]
+        var cy = corners[unsafe_offset=base + 23]
+        var cz = corners[unsafe_offset=base + 24]
+        var cw = corners[unsafe_offset=base + 25]
 
         # Exactly `_Coverage` on the host: snap, normalize the winding, then
         # test with the top-left bias. Only the snapped coordinates are
@@ -229,85 +299,144 @@ def rasterize_kernel(
         if mode == Int32(SHADE_TEXTURE):
             var u = (
                 corners[unsafe_offset=base + 8] * share_a
-                + corners[unsafe_offset=base + 18] * share_b
-                + corners[unsafe_offset=base + 28] * share_c
+                + corners[unsafe_offset=base + 19] * share_b
+                + corners[unsafe_offset=base + 30] * share_c
             )
             var v = (
                 corners[unsafe_offset=base + 9] * share_a
-                + corners[unsafe_offset=base + 19] * share_b
-                + corners[unsafe_offset=base + 29] * share_c
+                + corners[unsafe_offset=base + 20] * share_b
+                + corners[unsafe_offset=base + 31] * share_c
             )
             red = (
                 corners[unsafe_offset=base + 4] * share_a
-                + corners[unsafe_offset=base + 14] * share_b
-                + corners[unsafe_offset=base + 24] * share_c
+                + corners[unsafe_offset=base + 15] * share_b
+                + corners[unsafe_offset=base + 26] * share_c
             )
             green = (
                 corners[unsafe_offset=base + 5] * share_a
-                + corners[unsafe_offset=base + 15] * share_b
-                + corners[unsafe_offset=base + 25] * share_c
+                + corners[unsafe_offset=base + 16] * share_b
+                + corners[unsafe_offset=base + 27] * share_c
             )
             blue = (
                 corners[unsafe_offset=base + 6] * share_a
-                + corners[unsafe_offset=base + 16] * share_b
-                + corners[unsafe_offset=base + 26] * share_c
+                + corners[unsafe_offset=base + 17] * share_b
+                + corners[unsafe_offset=base + 28] * share_c
             )
             alpha = (
                 corners[unsafe_offset=base + 7] * share_a
-                + corners[unsafe_offset=base + 17] * share_b
-                + corners[unsafe_offset=base + 27] * share_c
+                + corners[unsafe_offset=base + 18] * share_b
+                + corners[unsafe_offset=base + 29] * share_c
             )
-            # A width of zero is the blank texture, which samples as white and
-            # so leaves the lighting exactly as it is.
-            if texture_width > 0:
-                # Nearest neighbour, v flipped, wrapped by the same routine
-                # the host uses -- see render.texture.
-                var column = Int(floor(u * Float32(texture_width)))
-                var row = Int(floor((1 - v) * Float32(texture_height)))
-                var offset = (
-                    wrap_index(row, Int(texture_height), Int(texture_wrap))
-                    * Int(texture_width)
-                    + wrap_index(column, Int(texture_width), Int(texture_wrap))
-                ) * 4
-                red *= Float32(texels[unsafe_offset=offset]) / 255
-                green *= Float32(texels[unsafe_offset=offset + 1]) / 255
-                blue *= Float32(texels[unsafe_offset=offset + 2]) / 255
-                alpha *= Float32(texels[unsafe_offset=offset + 3]) / 255
+            # Which image, from the vertex; -1 is no texture, which samples
+            # as white and so leaves the lighting alone.
+            var slot = Int(corners[unsafe_offset=base + 10])
+            if slot != NO_TEXTURE:
+                # Every texture lives in one buffer end to end, so the table
+                # says where this one starts and how to read it.
+                var entry = slot * TABLE_COLUMNS
+                var start = Int(table[unsafe_offset=entry])
+                var width = Int(table[unsafe_offset=entry + 1])
+                var height = Int(table[unsafe_offset=entry + 2])
+                var wrap = Int(table[unsafe_offset=entry + 3])
+                var filter = Int(table[unsafe_offset=entry + 4])
+                # v flipped and wrapped by the same routine the host uses,
+                # and blended by the same one -- see render.texture.
+                var sampled = FloatColor(1, 1, 1, 1)
+                if filter == NEAREST:
+                    sampled = _fetch(
+                        texels,
+                        start,
+                        Int(floor(u * Float32(width))),
+                        Int(floor((1 - v) * Float32(height))),
+                        width,
+                        height,
+                        wrap,
+                    )
+                else:
+                    # Texel centres sit at half-integers; see Texture.sample.
+                    var across = u * Float32(width) - 0.5
+                    var down = (1 - v) * Float32(height) - 0.5
+                    var column = Int(floor(across))
+                    var row = Int(floor(down))
+                    sampled = blend(
+                        _fetch(
+                            texels,
+                            start,
+                            column,
+                            row,
+                            width,
+                            height,
+                            wrap,
+                        ),
+                        _fetch(
+                            texels,
+                            start,
+                            column + 1,
+                            row,
+                            width,
+                            height,
+                            wrap,
+                        ),
+                        _fetch(
+                            texels,
+                            start,
+                            column,
+                            row + 1,
+                            width,
+                            height,
+                            wrap,
+                        ),
+                        _fetch(
+                            texels,
+                            start,
+                            column + 1,
+                            row + 1,
+                            width,
+                            height,
+                            wrap,
+                        ),
+                        across - Float32(column),
+                        down - Float32(row),
+                    )
+                red *= sampled.r
+                green *= sampled.g
+                blue *= sampled.b
+                alpha *= sampled.a
         elif mode == Int32(SHADE_UV):
             # Texture coordinates straight out as red and green, matching
             # rasterize_shaded's SHADE_UV.
             red = (
                 corners[unsafe_offset=base + 8] * share_a
-                + corners[unsafe_offset=base + 18] * share_b
-                + corners[unsafe_offset=base + 28] * share_c
+                + corners[unsafe_offset=base + 19] * share_b
+                + corners[unsafe_offset=base + 30] * share_c
             )
             green = (
                 corners[unsafe_offset=base + 9] * share_a
-                + corners[unsafe_offset=base + 19] * share_b
-                + corners[unsafe_offset=base + 29] * share_c
+                + corners[unsafe_offset=base + 20] * share_b
+                + corners[unsafe_offset=base + 31] * share_c
             )
             blue = 0
             alpha = 1
         else:
             red = (
                 corners[unsafe_offset=base + 4] * share_a
-                + corners[unsafe_offset=base + 14] * share_b
-                + corners[unsafe_offset=base + 24] * share_c
+                + corners[unsafe_offset=base + 15] * share_b
+                + corners[unsafe_offset=base + 26] * share_c
             )
             green = (
                 corners[unsafe_offset=base + 5] * share_a
-                + corners[unsafe_offset=base + 15] * share_b
-                + corners[unsafe_offset=base + 25] * share_c
+                + corners[unsafe_offset=base + 16] * share_b
+                + corners[unsafe_offset=base + 27] * share_c
             )
             blue = (
                 corners[unsafe_offset=base + 6] * share_a
-                + corners[unsafe_offset=base + 16] * share_b
-                + corners[unsafe_offset=base + 26] * share_c
+                + corners[unsafe_offset=base + 17] * share_b
+                + corners[unsafe_offset=base + 28] * share_c
             )
             alpha = (
                 corners[unsafe_offset=base + 7] * share_a
-                + corners[unsafe_offset=base + 17] * share_b
-                + corners[unsafe_offset=base + 27] * share_c
+                + corners[unsafe_offset=base + 18] * share_b
+                + corners[unsafe_offset=base + 29] * share_c
             )
 
     var word = background
@@ -356,11 +485,9 @@ struct GpuRenderer(Movable):
     var pixels: DeviceBuffer[DType.uint8]
     var depth: DeviceBuffer[DType.float32]
     var corners: DeviceBuffer[DType.float32]
-    # The texture `SHADE_TEXTURE` samples, uploaded once rather than per draw.
+    # Every texture the scene can sample, uploaded once rather than per draw.
     var texels: DeviceBuffer[DType.uint8]
-    var texture_width: Int
-    var texture_height: Int
-    var texture_wrap: Int
+    var table: DeviceBuffer[DType.int32]
 
     def __init__(out self, width: Int, height: Int) raises:
         """Create a renderer and its device buffers for a fixed image size.
@@ -396,9 +523,9 @@ struct GpuRenderer(Movable):
         # device buffer is not worth the special case, and a width of zero is
         # what the kernel actually reads to mean "no texture".
         self.texels = self.context.enqueue_create_buffer[DType.uint8](4)
-        self.texture_width = 0
-        self.texture_height = 0
-        self.texture_wrap = 0
+        self.table = self.context.enqueue_create_buffer[DType.int32](
+            TABLE_COLUMNS
+        )
 
     def draw(
         mut self,
@@ -448,9 +575,7 @@ struct GpuRenderer(Movable):
             pack(background),
             Int32(mode),
             self.texels.unsafe_ptr(),
-            Int32(self.texture_width),
-            Int32(self.texture_height),
-            Int32(self.texture_wrap),
+            self.table.unsafe_ptr(),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -459,32 +584,39 @@ struct GpuRenderer(Movable):
         )
         self.drawn = True
 
-    def set_texture(mut self, texture: Texture) raises:
-        """Upload `texture` to the device, replacing any previous one.
+    def set_textures(mut self, textures: TextureStore) raises:
+        """Upload every texture in `textures`, replacing any previous set.
 
-        Separate from `draw` on purpose: an animation samples the same image
-        every frame, and re-uploading it each time would cost more than the
+        Separate from `draw` on purpose: an animation samples the same images
+        every frame, and re-uploading them each time would cost more than the
         rasterization does.
 
         Args:
-            texture: The image to sample, or a blank one to sample nothing.
+            textures: The store to upload. An empty one is allowed and means
+                no mesh can be textured.
 
         Raises:
-            Error: If the device buffer cannot be filled.
+            Error: If the device buffers cannot be filled.
         """
-        self.texture_width = texture.width
-        self.texture_height = texture.height
-        self.texture_wrap = texture.wrap
-        if texture.is_blank():
-            return
+        var flattened = flatten_textures(textures)
+        ref bytes = flattened[0]
+        ref rows = flattened[1]
+
         self.texels = self.context.enqueue_create_buffer[DType.uint8](
-            len(texture.pixels)
+            len(bytes)
         )
         with self.texels.map_to_host() as host:
             unsafe_memcpy(
                 dest=host.unsafe_ptr(),
-                src=texture.pixels.unsafe_ptr(),
-                count=len(texture.pixels),
+                src=bytes.unsafe_ptr(),
+                count=len(bytes),
+            )
+        self.table = self.context.enqueue_create_buffer[DType.int32](len(rows))
+        with self.table.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=rows.unsafe_ptr(),
+                count=len(rows),
             )
 
     def read_back(self) raises -> Framebuffer:
@@ -531,7 +663,7 @@ def render_triangles(
     height: Int,
     background: Color,
     mode: Int = SHADE_LIT,
-    texture: Texture = Texture(),
+    textures: TextureStore = TextureStore(),
 ) raises -> Framebuffer:
     """Draw prepared triangles on the GPU and read the image back.
 
@@ -545,7 +677,7 @@ def render_triangles(
         height: Image height in pixels.
         background: Colour for pixels no triangle covers.
         mode: `SHADE_LIT`, `SHADE_UV` or `SHADE_TEXTURE`.
-        texture: The image `SHADE_TEXTURE` samples.
+        textures: The images `SHADE_TEXTURE` samples, named per vertex.
 
     Returns:
         The rendered image.
@@ -555,7 +687,7 @@ def render_triangles(
             corner count is not a multiple of three.
     """
     var renderer = GpuRenderer(width, height)
-    renderer.set_texture(texture)
+    renderer.set_textures(textures)
     renderer.draw(corners, background, mode)
     return renderer.read_back()
 

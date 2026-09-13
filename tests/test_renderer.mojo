@@ -9,7 +9,14 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from core.object3d import Object3D
-from core.geometry_store import GeometryStore
+from core.assets import Assets
+from materials.material import (
+    BACK_SIDE,
+    DOUBLE_SIDE,
+    FRONT_SIDE,
+    NO_TEXTURE,
+    Material,
+)
 from core.scene import Scene
 from geometries.box import cube
 from geometries.sphere import sphere
@@ -142,34 +149,55 @@ def test_a_degenerate_triangle_has_no_normal() raises:
 
 
 def test_a_mesh_binds_geometry_to_a_node() raises:
-    var geometries = GeometryStore()
-    var mesh = Mesh(geometries.add(cube(Length(1.0, METRE))), Color(1, 2, 3), 4)
+    var assets = Assets()
+    var mesh = Mesh(
+        assets.geometries.add(cube(Length(1.0, METRE))),
+        assets.materials.add(Material(Color(1, 2, 3))),
+        4,
+    )
     assert_equal(mesh.node, 4)
-    assert_equal(mesh.color.r, UInt8(1))
-    assert_equal(geometries.get(mesh.geometry).triangle_count(), 12)
+    assert_equal(assets.materials.get(mesh.material).color.r, UInt8(1))
+    assert_equal(assets.geometries.get(mesh.geometry).triangle_count(), 12)
 
 
 def test_a_mesh_must_name_a_node() raises:
-    var geometries = GeometryStore()
-    var box = geometries.add(cube(Length(1.0, METRE)))
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
     with assert_raises():
-        _ = Mesh(box, Color(1, 2, 3), -1)
+        _ = Mesh(box, assets.materials.add(Material(Color(1, 2, 3))), -1)
 
 
 def test_a_mesh_must_name_a_geometry() raises:
+    var assets = Assets()
+    var paint = assets.materials.add(Material(Color(1, 2, 3)))
     with assert_raises():
-        _ = Mesh(-1, Color(1, 2, 3), 0)
+        _ = Mesh(-1, paint, 0)
+
+
+def test_a_mesh_must_name_a_material() raises:
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    with assert_raises():
+        _ = Mesh(box, -1, 0)
+
+
+def test_a_mesh_naming_a_material_that_is_not_there_is_rejected() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, 7, 0))
+    with assert_raises():
+        _ = renderer.render(scene_with_node_at(0), assets, meshes, a_camera())
 
 
 def test_a_mesh_naming_a_geometry_that_is_not_there_is_rejected() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
-    var geometries = GeometryStore()
+    var assets = Assets()
     var meshes = List[Mesh]()
-    meshes.append(Mesh(7, Color(255, 0, 0), 0))
+    meshes.append(Mesh(7, assets.materials.add(Material(Color(255, 0, 0))), 0))
     with assert_raises():
-        _ = renderer.render(
-            scene_with_node_at(0), geometries, meshes, a_camera()
-        )
+        _ = renderer.render(scene_with_node_at(0), assets, meshes, a_camera())
 
 
 def test_two_meshes_can_share_one_geometry() raises:
@@ -177,9 +205,9 @@ def test_two_meshes_can_share_one_geometry() raises:
     # different nodes in two different colours — and the geometry is borrowed
     # by both rather than copied into either.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var geometries = GeometryStore()
-    var box = geometries.add(cube(Length(1.0, METRE)))
-    assert_equal(geometries.count(), 1)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    assert_equal(assets.geometries.count(), 1)
 
     var scene = Scene()
     var left = Object3D()
@@ -191,12 +219,16 @@ def test_two_meshes_can_share_one_geometry() raises:
     scene.update()
 
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(255, 0, 0), left_node))
-    meshes.append(Mesh(box, Color(0, 0, 255), right_node))
+    meshes.append(
+        Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), left_node)
+    )
+    meshes.append(
+        Mesh(box, assets.materials.add(Material(Color(0, 0, 255))), right_node)
+    )
     # Still one geometry after two meshes named it.
-    assert_equal(geometries.count(), 1)
+    assert_equal(assets.geometries.count(), 1)
 
-    var image = renderer.render(scene, geometries, meshes, a_camera())
+    var image = renderer.render(scene, assets, meshes, a_camera())
     # Both boxes drew, on their own sides, in their own colours.
     var reds = 0
     var blues = 0
@@ -212,12 +244,12 @@ def test_two_meshes_can_share_one_geometry() raises:
 
 
 def test_a_geometry_id_that_is_out_of_range_is_rejected() raises:
-    var geometries = GeometryStore()
-    assert_equal(geometries.count(), 0)
+    var assets = Assets()
+    assert_equal(assets.geometries.count(), 0)
     with assert_raises():
-        _ = geometries.get(0)
+        _ = assets.geometries.get(0)
     with assert_raises():
-        _ = geometries.get(-1)
+        _ = assets.geometries.get(-1)
 
 
 # --- Renderer ---------------------------------------------------------------
@@ -286,37 +318,41 @@ def test_ambient_outside_zero_to_one_is_rejected() raises:
 
 
 def test_an_empty_scene_renders_pure_background() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     var renderer = Renderer(WIDTH, HEIGHT)
-    var image = renderer.render(Scene(), geometries, List[Mesh](), a_camera())
+    var image = renderer.render(Scene(), assets, List[Mesh](), a_camera())
     assert_equal(image.width, WIDTH)
     assert_equal(image.height, HEIGHT)
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
 
 def test_a_mesh_actually_covers_some_pixels() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     var renderer = Renderer(WIDTH, HEIGHT)
     var scene = scene_with_node_at(0)
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(geometries.add(cube(Length(1.0, METRE))), Color(255, 0, 0), 0)
+        Mesh(
+            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.materials.add(Material(Color(255, 0, 0))),
+            0,
+        )
     )
-    var image = renderer.render(scene, geometries, meshes, a_camera())
+    var image = renderer.render(scene, assets, meshes, a_camera())
     assert_true(count_background(image, renderer.background) < WIDTH * HEIGHT)
 
 
 def test_the_background_colour_is_used() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_background(Color(7, 8, 9))
-    var image = renderer.render(Scene(), geometries, List[Mesh](), a_camera())
+    var image = renderer.render(Scene(), assets, List[Mesh](), a_camera())
     assert_equal(image.get_pixel(0, 0).r, UInt8(7))
     assert_equal(image.get_pixel(0, 0).b, UInt8(9))
 
 
 def test_a_nearer_mesh_hides_a_further_one_whatever_the_order() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     # The whole point of rendering with depth rather than painting in order.
     var renderer = Renderer(WIDTH, HEIGHT)
     var scene = Scene()
@@ -331,33 +367,37 @@ def test_a_nearer_mesh_hides_a_further_one_whatever_the_order() raises:
     var near_first = List[Mesh]()
     near_first.append(
         Mesh(
-            geometries.add(cube(Length(1.0, METRE))),
-            Color(255, 0, 0),
+            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.materials.add(Material(Color(255, 0, 0))),
             near_node,
         )
     )
     near_first.append(
         Mesh(
-            geometries.add(cube(Length(1.0, METRE))), Color(0, 255, 0), far_node
+            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.materials.add(Material(Color(0, 255, 0))),
+            far_node,
         )
     )
 
     var far_first = List[Mesh]()
     far_first.append(
         Mesh(
-            geometries.add(cube(Length(1.0, METRE))), Color(0, 255, 0), far_node
+            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.materials.add(Material(Color(0, 255, 0))),
+            far_node,
         )
     )
     far_first.append(
         Mesh(
-            geometries.add(cube(Length(1.0, METRE))),
-            Color(255, 0, 0),
+            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.materials.add(Material(Color(255, 0, 0))),
             near_node,
         )
     )
 
-    var a = renderer.render(scene, geometries, near_first, a_camera())
-    var b = renderer.render(scene, geometries, far_first, a_camera())
+    var a = renderer.render(scene, assets, near_first, a_camera())
+    var b = renderer.render(scene, assets, far_first, a_camera())
     # The centre pixel belongs to the near cube either way, and both images
     # must agree everywhere.
     var centre = a.get_pixel(WIDTH // 2, HEIGHT // 2)
@@ -368,7 +408,7 @@ def test_a_nearer_mesh_hides_a_further_one_whatever_the_order() raises:
 
 
 def test_the_scene_transform_is_what_places_a_mesh() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     var renderer = Renderer(WIDTH, HEIGHT)
     var scene = Scene()
     var node = Object3D()
@@ -377,15 +417,19 @@ def test_the_scene_transform_is_what_places_a_mesh() raises:
     scene.update()
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(geometries.add(cube(Length(0.5, METRE))), Color(255, 0, 0), 0)
+        Mesh(
+            assets.geometries.add(cube(Length(0.5, METRE))),
+            assets.materials.add(Material(Color(255, 0, 0))),
+            0,
+        )
     )
     # Moved well off to the side, it leaves the frame entirely.
-    var image = renderer.render(scene, geometries, meshes, a_camera())
+    var image = renderer.render(scene, assets, meshes, a_camera())
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
 
 def test_a_mesh_with_no_vertices_draws_nothing() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     # A geometry can exist before its data does, and rendering one must be a
     # no-op rather than an error.
     var renderer = Renderer(WIDTH, HEIGHT)
@@ -393,24 +437,34 @@ def test_a_mesh_with_no_vertices_draws_nothing() raises:
     var empty = BufferGeometry()
     empty.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
     var meshes = List[Mesh]()
-    meshes.append(Mesh(geometries.add(empty^), Color(255, 0, 0), 0))
-    var image = renderer.render(scene, geometries, meshes, a_camera())
+    meshes.append(
+        Mesh(
+            assets.geometries.add(empty^),
+            assets.materials.add(Material(Color(255, 0, 0))),
+            0,
+        )
+    )
+    var image = renderer.render(scene, assets, meshes, a_camera())
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
 
 def test_a_mesh_naming_a_node_that_is_not_there_is_rejected() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     var renderer = Renderer(WIDTH, HEIGHT)
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(geometries.add(cube(Length(1.0, METRE))), Color(255, 0, 0), 3)
+        Mesh(
+            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.materials.add(Material(Color(255, 0, 0))),
+            3,
+        )
     )
     with assert_raises():
-        _ = renderer.render(Scene(), geometries, meshes, a_camera())
+        _ = renderer.render(Scene(), assets, meshes, a_camera())
 
 
 def test_a_geometry_without_normals_shades_flat() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     # No normal attribute, so each face supplies its own and the triangle
     # takes one colour throughout.
     var renderer = Renderer(WIDTH, HEIGHT)
@@ -421,13 +475,19 @@ def test_a_geometry_without_normals_shades_flat() raises:
         data.append(Float32(value))
     plain.set_attribute(String(POSITION), BufferAttribute(data^, 3))
     var meshes = List[Mesh]()
-    meshes.append(Mesh(geometries.add(plain^), Color(200, 200, 200), 0))
-    var image = renderer.render(scene, geometries, meshes, a_camera())
+    meshes.append(
+        Mesh(
+            assets.geometries.add(plain^),
+            assets.materials.add(Material(Color(200, 200, 200))),
+            0,
+        )
+    )
+    var image = renderer.render(scene, assets, meshes, a_camera())
     assert_true(count_background(image, renderer.background) < WIDTH * HEIGHT)
 
 
 def test_a_sphere_shades_smoothly_across_a_triangle() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     # Per-vertex normals mean neighbouring pixels differ, where a flat face
     # would hold one colour.
     var renderer = Renderer(WIDTH, HEIGHT)
@@ -435,12 +495,12 @@ def test_a_sphere_shades_smoothly_across_a_triangle() raises:
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            geometries.add(sphere(Length(1.0, METRE), 16, 12)),
-            Color(200, 200, 200),
+            assets.geometries.add(sphere(Length(1.0, METRE), 16, 12)),
+            assets.materials.add(Material(Color(200, 200, 200))),
             0,
         )
     )
-    var image = renderer.render(scene, geometries, meshes, a_camera())
+    var image = renderer.render(scene, assets, meshes, a_camera())
     var shades = 0
     var seen = List[UInt8]()
     for y in range(HEIGHT):
@@ -460,27 +520,32 @@ def test_a_sphere_shades_smoothly_across_a_triangle() raises:
 
 
 def test_geometry_crossing_the_near_plane_is_clipped_not_mangled() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     # The camera sits inside a large cube. Without clipping, corners behind
     # the camera project through the origin and smear across the image.
     var renderer = Renderer(WIDTH, HEIGHT)
-    # Every surface visible from inside a closed mesh is a back face, so
-    # culling would correctly discard the whole cube and leave nothing to
-    # judge the clipping by. Drawing both windings is three.js's DoubleSide.
-    renderer.set_cull_backfaces(False)
     var scene = scene_with_node_at(0)
     var meshes = List[Mesh]()
+    # Every surface visible from inside a closed mesh is a back face, so a
+    # FrontSide material would correctly discard the whole cube and leave
+    # nothing to judge the clipping by.
     meshes.append(
-        Mesh(geometries.add(cube(Length(8.0, METRE))), Color(255, 140, 40), 0)
+        Mesh(
+            assets.geometries.add(cube(Length(8.0, METRE))),
+            assets.materials.add(
+                Material(Color(255, 140, 40), NO_TEXTURE, DOUBLE_SIDE)
+            ),
+            0,
+        )
     )
-    var image = renderer.render(scene, geometries, meshes, a_camera())
+    var image = renderer.render(scene, assets, meshes, a_camera())
     # Every pixel belongs to the cube's inside surface, and every one of them
     # is a real shade rather than a projection artefact.
     assert_true(count_background(image, renderer.background) < 100)
 
 
 def test_geometry_beyond_the_far_plane_is_not_drawn() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     # The depth buffer will not catch this on its own: it clears to infinity,
     # and a point past the far plane still projects to a finite NDC depth, so
     # it would pass the test and be drawn outside the promised frustum.
@@ -497,14 +562,18 @@ def test_geometry_beyond_the_far_plane_is_not_drawn() raises:
     var scene = scene_with_node_at(-20)
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(geometries.add(cube(Length(6.0, METRE))), Color(255, 140, 40), 0)
+        Mesh(
+            assets.geometries.add(cube(Length(6.0, METRE))),
+            assets.materials.add(Material(Color(255, 140, 40))),
+            0,
+        )
     )
-    var image = renderer.render(scene, geometries, meshes, camera)
+    var image = renderer.render(scene, assets, meshes, camera)
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
 
 def test_geometry_inside_the_far_plane_is_still_drawn() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     # The other side of the same check: moving the far plane out past the cube
     # brings it back, so the test above is measuring the plane and not simply
     # a cube that was never visible.
@@ -519,14 +588,18 @@ def test_geometry_inside_the_far_plane_is_still_drawn() raises:
     var scene = scene_with_node_at(-20)
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(geometries.add(cube(Length(6.0, METRE))), Color(255, 140, 40), 0)
+        Mesh(
+            assets.geometries.add(cube(Length(6.0, METRE))),
+            assets.materials.add(Material(Color(255, 140, 40))),
+            0,
+        )
     )
-    var image = renderer.render(scene, geometries, meshes, camera)
+    var image = renderer.render(scene, assets, meshes, camera)
     assert_true(count_background(image, renderer.background) < WIDTH * HEIGHT)
 
 
 def test_a_non_uniform_scale_still_shades_the_true_surface() raises:
-    var geometries = GeometryStore()
+    var assets = Assets()
     # A flat triangle whose vertex normals are its own geometric normal. Get
     # the normal transform right and smooth shading must agree exactly with
     # flat shading from the *scaled* triangle's geometry — the surface has
@@ -566,8 +639,14 @@ def test_a_non_uniform_scale_still_shades_the_true_surface() raises:
 
     var base = Color(255, 200, 120)
     var meshes = List[Mesh]()
-    meshes.append(Mesh(geometries.add(geometry^), base, 0))
-    var image = renderer.render(scene, geometries, meshes, a_camera())
+    meshes.append(
+        Mesh(
+            assets.geometries.add(geometry^),
+            assets.materials.add(Material(base)),
+            0,
+        )
+    )
+    var image = renderer.render(scene, assets, meshes, a_camera())
 
     # What the scaled triangle's own geometry says its colour must be.
     var world = scene.world_matrix(0)
@@ -600,14 +679,20 @@ def test_a_smooth_geometry_with_no_vertices_draws_nothing() raises:
     # A geometry that declares normals but holds no vertices: the shading pass
     # must cope with running zero times rather than assuming at least one.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var geometries = GeometryStore()
+    var assets = Assets()
     var empty = BufferGeometry()
     empty.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
     empty.set_attribute(String(NORMAL), BufferAttribute(List[Float32](), 3))
     var meshes = List[Mesh]()
-    meshes.append(Mesh(geometries.add(empty^), Color(255, 0, 0), 0))
+    meshes.append(
+        Mesh(
+            assets.geometries.add(empty^),
+            assets.materials.add(Material(Color(255, 0, 0))),
+            0,
+        )
+    )
     var image = renderer.render(
-        scene_with_node_at(0), geometries, meshes, a_camera()
+        scene_with_node_at(0), assets, meshes, a_camera()
     )
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
@@ -615,19 +700,22 @@ def test_a_smooth_geometry_with_no_vertices_draws_nothing() raises:
 # --- backface culling -------------------------------------------------------
 
 
-def test_culling_is_on_by_default_and_hides_the_inside_of_a_cube() raises:
-    # From inside a closed mesh every visible surface faces away, so culling
-    # leaves nothing at all. That is the honest consequence of the default,
-    # and the reason it has to be switchable.
+def test_a_front_side_material_hides_the_inside_of_a_cube() raises:
+    # From inside a closed mesh every visible surface faces away, so the
+    # default FrontSide leaves nothing at all. That is the honest consequence
+    # of the default, and the reason `side` has to exist.
     var renderer = Renderer(WIDTH, HEIGHT)
-    assert_true(renderer.cull_backfaces)
-    var geometries = GeometryStore()
+    var assets = Assets()
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(geometries.add(cube(Length(8.0, METRE))), Color(255, 140, 40), 0)
+        Mesh(
+            assets.geometries.add(cube(Length(8.0, METRE))),
+            assets.materials.add(Material(Color(255, 140, 40))),
+            0,
+        )
     )
     var image = renderer.render(
-        scene_with_node_at(0), geometries, meshes, a_camera()
+        scene_with_node_at(0), assets, meshes, a_camera()
     )
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
@@ -637,15 +725,26 @@ def test_culling_does_not_change_a_solid_seen_from_outside() raises:
     # are exactly the ones the depth buffer was already hiding, so the image
     # must come out identical either way.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var geometries = GeometryStore()
-    var box = geometries.add(cube(Length(1.0, METRE)))
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(255, 0, 0), 0))
+    meshes.append(
+        Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), 0)
+    )
     var scene = scene_with_node_at(0)
 
-    var culled = renderer.render(scene, geometries, meshes, a_camera())
-    renderer.set_cull_backfaces(False)
-    var complete = renderer.render(scene, geometries, meshes, a_camera())
+    var culled = renderer.render(scene, assets, meshes, a_camera())
+    var both = List[Mesh]()
+    both.append(
+        Mesh(
+            box,
+            assets.materials.add(
+                Material(Color(255, 0, 0), NO_TEXTURE, DOUBLE_SIDE)
+            ),
+            0,
+        )
+    )
+    var complete = renderer.render(scene, assets, both, a_camera())
 
     var drawn = 0
     for y in range(HEIGHT):
@@ -662,15 +761,26 @@ def test_culling_halves_the_triangles_of_a_closed_mesh() raises:
     # triangles rather than on timings, which is the part that is actually a
     # property of the renderer.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var geometries = GeometryStore()
-    var ball = geometries.add(sphere(Length(1.0, METRE), 16, 12))
+    var assets = Assets()
+    var ball = assets.geometries.add(sphere(Length(1.0, METRE), 16, 12))
     var meshes = List[Mesh]()
-    meshes.append(Mesh(ball, Color(200, 200, 200), 0))
+    meshes.append(
+        Mesh(ball, assets.materials.add(Material(Color(200, 200, 200))), 0)
+    )
     var scene = scene_with_node_at(0)
 
-    var kept = renderer.prepare(scene, geometries, meshes, a_camera())
-    renderer.set_cull_backfaces(False)
-    var everything = renderer.prepare(scene, geometries, meshes, a_camera())
+    var kept = renderer.prepare(scene, assets, meshes, a_camera())
+    var both = List[Mesh]()
+    both.append(
+        Mesh(
+            ball,
+            assets.materials.add(
+                Material(Color(200, 200, 200), NO_TEXTURE, DOUBLE_SIDE)
+            ),
+            0,
+        )
+    )
+    var everything = renderer.prepare(scene, assets, both, a_camera())
 
     assert_true(len(kept) > 0)
     assert_true(len(kept) < len(everything))
@@ -681,21 +791,19 @@ def test_culling_halves_the_triangles_of_a_closed_mesh() raises:
 # --- the shading mode -------------------------------------------------------
 
 
-def test_a_renderer_starts_in_lit_mode() raises:
-    assert_equal(Renderer(WIDTH, HEIGHT).shading, SHADE_LIT)
-
-
 def test_uv_mode_draws_texture_coordinates_instead_of_lighting() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
-    var geometries = GeometryStore()
-    var box = geometries.add(cube(Length(1.5, METRE)))
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METRE)))
     var scene = scene_with_node_at(0)
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(255, 0, 0), 0))
+    meshes.append(
+        Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), 0)
+    )
 
-    var lit = renderer.render(scene, geometries, meshes, a_camera())
+    var lit = renderer.render(scene, assets, meshes, a_camera())
     renderer.set_shading(SHADE_UV)
-    var mapped = renderer.render(scene, geometries, meshes, a_camera())
+    var mapped = renderer.render(scene, assets, meshes, a_camera())
 
     # A box face runs uv from (0,0) to (1,1), so the mapped image has both a
     # red and a green gradient where the lit one has neither.
@@ -718,16 +826,18 @@ def test_an_unknown_shading_mode_is_rejected() raises:
     with assert_raises():
         renderer.set_shading(97)
     # And the mode is unchanged by the attempt.
-    assert_equal(renderer.shading, SHADE_LIT)
+    assert_equal(renderer.shading, SHADE_TEXTURE)
 
 
-def test_both_known_shading_modes_are_accepted() raises:
-    # Each half of the check has to be able to decide the outcome on its own.
+def test_every_known_shading_mode_is_accepted() raises:
+    # Each operand of the check has to be able to decide the outcome alone.
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_shading(SHADE_UV)
     assert_equal(renderer.shading, SHADE_UV)
     renderer.set_shading(SHADE_LIT)
     assert_equal(renderer.shading, SHADE_LIT)
+    renderer.set_shading(SHADE_TEXTURE)
+    assert_equal(renderer.shading, SHADE_TEXTURE)
 
 
 def test_a_mapped_geometry_with_no_vertices_draws_nothing() raises:
@@ -735,14 +845,20 @@ def test_a_mapped_geometry_with_no_vertices_draws_nothing() raises:
     # uv-gathering pass must cope with running zero times.
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_shading(SHADE_UV)
-    var geometries = GeometryStore()
+    var assets = Assets()
     var empty = BufferGeometry()
     empty.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
     empty.set_attribute(String(UV), BufferAttribute(List[Float32](), 2))
     var meshes = List[Mesh]()
-    meshes.append(Mesh(geometries.add(empty^), Color(255, 0, 0), 0))
+    meshes.append(
+        Mesh(
+            assets.geometries.add(empty^),
+            assets.materials.add(Material(Color(255, 0, 0))),
+            0,
+        )
+    )
     var image = renderer.render(
-        scene_with_node_at(0), geometries, meshes, a_camera()
+        scene_with_node_at(0), assets, meshes, a_camera()
     )
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
@@ -751,7 +867,7 @@ def test_a_geometry_without_uv_maps_to_the_texture_origin() raises:
     # No uv attribute means zeroes rather than whatever was lying around.
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_shading(SHADE_UV)
-    var geometries = GeometryStore()
+    var assets = Assets()
     var plain = BufferGeometry()
     var data = List[Float32]()
     for value in [
@@ -768,9 +884,15 @@ def test_a_geometry_without_uv_maps_to_the_texture_origin() raises:
         data.append(value)
     plain.set_attribute(String(POSITION), BufferAttribute(data^, 3))
     var meshes = List[Mesh]()
-    meshes.append(Mesh(geometries.add(plain^), Color(200, 200, 200), 0))
+    meshes.append(
+        Mesh(
+            assets.geometries.add(plain^),
+            assets.materials.add(Material(Color(200, 200, 200))),
+            0,
+        )
+    )
     var image = renderer.render(
-        scene_with_node_at(0), geometries, meshes, a_camera()
+        scene_with_node_at(0), assets, meshes, a_camera()
     )
     var drawn = 0
     for y in range(HEIGHT):
@@ -853,16 +975,16 @@ def rendered_triangle(
     Raises:
         Error: If the render fails.
     """
-    var geometries = GeometryStore()
+    var assets = Assets()
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            geometries.add(lone_triangle(with_normals)),
-            Color(200, 200, 200),
+            assets.geometries.add(lone_triangle(with_normals)),
+            assets.materials.add(Material(Color(200, 200, 200))),
             0,
         )
     )
-    return renderer.render(scene, geometries, meshes, a_camera())
+    return renderer.render(scene, assets, meshes, a_camera())
 
 
 def test_a_mirrored_mesh_is_not_culled_away() raises:
@@ -892,12 +1014,16 @@ def test_a_reflection_inherited_from_a_parent_counts_too() raises:
     _ = scene.attach(Object3D(), root)
     scene.update()
 
-    var geometries = GeometryStore()
+    var assets = Assets()
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(geometries.add(lone_triangle(False)), Color(200, 200, 200), 1)
+        Mesh(
+            assets.geometries.add(lone_triangle(False)),
+            assets.materials.add(Material(Color(200, 200, 200))),
+            1,
+        )
     )
-    var image = renderer.render(scene, geometries, meshes, a_camera())
+    var image = renderer.render(scene, assets, meshes, a_camera())
     assert_true(
         count_background(image, renderer.background) < WIDTH * HEIGHT,
         "an inherited reflection culled the mesh away",
@@ -954,43 +1080,49 @@ def test_an_unmirrored_mesh_still_agrees_between_the_normal_paths() raises:
 # --- textures ---------------------------------------------------------------
 
 
-def test_a_renderer_starts_with_no_texture() raises:
-    assert_true(Renderer(WIDTH, HEIGHT).texture.is_blank())
-
-
-def test_texture_mode_without_a_texture_matches_lit_shading() raises:
+def test_a_material_without_a_map_shades_as_plain_colour() raises:
     # The blank texture samples as white and white is the identity for
-    # modulation, so "no texture" costs nothing and needs no branch.
+    # modulation, so a material with no map costs nothing and needs no branch:
+    # following the material and ignoring every texture agree exactly.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var geometries = GeometryStore()
-    var box = geometries.add(cube(Length(1.5, METRE)))
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METRE)))
+    var paint = assets.materials.add(Material(Color(220, 160, 80)))
     var scene = scene_with_node_at(0)
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(220, 160, 80), 0))
+    meshes.append(Mesh(box, paint, 0))
 
-    var lit = renderer.render(scene, geometries, meshes, a_camera())
-    renderer.set_shading(SHADE_TEXTURE)
-    var textured = renderer.render(scene, geometries, meshes, a_camera())
+    var followed = renderer.render(scene, assets, meshes, a_camera())
+    renderer.set_shading(SHADE_LIT)
+    var ignored = renderer.render(scene, assets, meshes, a_camera())
     for y in range(HEIGHT):
         for x in range(WIDTH):
-            assert_equal(lit.get_pixel(x, y).r, textured.get_pixel(x, y).r)
-            assert_equal(lit.get_pixel(x, y).g, textured.get_pixel(x, y).g)
+            assert_equal(followed.get_pixel(x, y).r, ignored.get_pixel(x, y).r)
+            assert_equal(followed.get_pixel(x, y).g, ignored.get_pixel(x, y).g)
 
 
-def test_a_texture_changes_what_a_mesh_looks_like() raises:
+def test_a_map_changes_what_a_mesh_looks_like() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
-    var geometries = GeometryStore()
-    var box = geometries.add(cube(Length(1.5, METRE)))
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METRE)))
     var scene = scene_with_node_at(0)
-    var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(255, 255, 255), 0))
 
-    var plain = renderer.render(scene, geometries, meshes, a_camera())
-    renderer.set_shading(SHADE_TEXTURE)
-    renderer.set_texture(
+    var plain_meshes = List[Mesh]()
+    plain_meshes.append(
+        Mesh(box, assets.materials.add(Material(Color(255, 255, 255))), 0)
+    )
+    var board = assets.textures.add(
         checkerboard(8, 4, Color(255, 255, 255), Color(20, 20, 20))
     )
-    var patterned = renderer.render(scene, geometries, meshes, a_camera())
+    var mapped_meshes = List[Mesh]()
+    mapped_meshes.append(
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 255, 255), board)), 0
+        )
+    )
+
+    var plain = renderer.render(scene, assets, plain_meshes, a_camera())
+    var patterned = renderer.render(scene, assets, mapped_meshes, a_camera())
 
     var differing = 0
     var dark = 0
@@ -1007,31 +1139,164 @@ def test_a_texture_changes_what_a_mesh_looks_like() raises:
     assert_true(dark > 0, "no dark square reached the image")
 
 
-def test_setting_a_texture_does_not_start_using_it() raises:
-    # Two separate decisions: what image to sample, and whether to sample at
-    # all. Handing over a texture while still shading lit must change nothing.
+def test_two_meshes_can_carry_different_textures() raises:
+    # The thing `Material` was built for, and the thing a texture on the
+    # renderer made impossible: one scene, two images. Before this the whole
+    # scene shared a single texture and this test could not be written.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var geometries = GeometryStore()
-    var box = geometries.add(cube(Length(1.5, METRE)))
-    var scene = scene_with_node_at(0)
-    var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(255, 255, 255), 0))
-
-    var before = renderer.render(scene, geometries, meshes, a_camera())
-    renderer.set_texture(
-        checkerboard(8, 4, Color(255, 255, 255), Color(20, 20, 20))
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(0.8, METRE)))
+    var reds = assets.textures.add(
+        checkerboard(8, 2, Color(255, 40, 40), Color(90, 10, 10))
     )
-    var after = renderer.render(scene, geometries, meshes, a_camera())
-    assert_false(renderer.texture.is_blank())
+    var blues = assets.textures.add(
+        checkerboard(8, 2, Color(40, 40, 255), Color(10, 10, 90))
+    )
+
+    var scene = Scene()
+    var left = Object3D()
+    left.set_position(-0.9, 0, 0)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.9, 0, 0)
+    var right_node = scene.add(right^)
+    scene.update()
+
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            box,
+            assets.materials.add(Material(Color(255, 255, 255), reds)),
+            left_node,
+        )
+    )
+    meshes.append(
+        Mesh(
+            box,
+            assets.materials.add(Material(Color(255, 255, 255), blues)),
+            right_node,
+        )
+    )
+    # One geometry, two materials, two textures.
+    assert_equal(assets.geometries.count(), 1)
+    assert_equal(assets.materials.count(), 2)
+    assert_equal(assets.textures.count(), 2)
+
+    var image = renderer.render(scene, assets, meshes, a_camera())
+    var reddish = 0
+    var bluish = 0
     for y in range(HEIGHT):
         for x in range(WIDTH):
-            assert_equal(before.get_pixel(x, y).r, after.get_pixel(x, y).r)
+            var pixel = image.get_pixel(x, y)
+            if pixel.r > pixel.b and pixel.r != renderer.background.r:
+                reddish += 1
+            if pixel.b > pixel.r and pixel.b != renderer.background.b:
+                bluish += 1
+    assert_true(reddish > 0, "the red-mapped cube did not draw")
+    assert_true(bluish > 0, "the blue-mapped cube did not draw")
+
+
+def test_lit_shading_ignores_every_map() raises:
+    # The override. Two separate decisions: what image a material names, and
+    # whether the renderer is reading any at all.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_shading(SHADE_LIT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METRE)))
+    var board = assets.textures.add(
+        checkerboard(8, 4, Color(255, 255, 255), Color(20, 20, 20))
+    )
+    var scene = scene_with_node_at(0)
+
+    var plain = List[Mesh]()
+    plain.append(
+        Mesh(box, assets.materials.add(Material(Color(255, 255, 255))), 0)
+    )
+    var mapped = List[Mesh]()
+    mapped.append(
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 255, 255), board)), 0
+        )
+    )
+
+    var without = renderer.render(scene, assets, plain, a_camera())
+    var with_map = renderer.render(scene, assets, mapped, a_camera())
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(without.get_pixel(x, y).r, with_map.get_pixel(x, y).r)
+
+
+def test_a_renderer_follows_materials_by_default() raises:
+    assert_equal(Renderer(WIDTH, HEIGHT).shading, SHADE_TEXTURE)
 
 
 def test_texture_shading_is_a_known_mode() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_shading(SHADE_TEXTURE)
     assert_equal(renderer.shading, SHADE_TEXTURE)
+
+
+def test_a_back_side_material_draws_what_front_side_hides() raises:
+    # BackSide is the third state a Bool could not express: it draws *only*
+    # the faces pointing away. On a closed cube seen from outside that is the
+    # far half, so something is drawn, and it is not what FrontSide drew.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var scene = scene_with_node_at(0)
+
+    var front = List[Mesh]()
+    front.append(Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), 0))
+    var back = List[Mesh]()
+    back.append(
+        Mesh(
+            box,
+            assets.materials.add(
+                Material(Color(255, 0, 0), NO_TEXTURE, BACK_SIDE)
+            ),
+            0,
+        )
+    )
+
+    var outside = renderer.render(scene, assets, front, a_camera())
+    var inside = renderer.render(scene, assets, back, a_camera())
+    var drawn_front = WIDTH * HEIGHT - count_background(
+        outside, renderer.background
+    )
+    var drawn_back = WIDTH * HEIGHT - count_background(
+        inside, renderer.background
+    )
+    assert_true(drawn_front > 0, "FrontSide drew nothing")
+    assert_true(drawn_back > 0, "BackSide drew nothing")
+
+    # Same silhouette, different surfaces: the two images must differ.
+    var differing = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            if outside.get_pixel(x, y).r != inside.get_pixel(x, y).r:
+                differing += 1
+    assert_true(differing > 0, "BackSide drew the same faces as FrontSide")
+
+
+def test_a_back_side_material_shows_the_inside_of_a_cube() raises:
+    # From within a closed mesh every visible surface faces away, so BackSide
+    # sees all of it where FrontSide sees none.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            assets.geometries.add(cube(Length(8.0, METRE))),
+            assets.materials.add(
+                Material(Color(255, 140, 40), NO_TEXTURE, BACK_SIDE)
+            ),
+            0,
+        )
+    )
+    var image = renderer.render(
+        scene_with_node_at(0), assets, meshes, a_camera()
+    )
+    assert_true(count_background(image, renderer.background) < 100)
 
 
 def main() raises:

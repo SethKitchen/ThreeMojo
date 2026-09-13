@@ -47,9 +47,9 @@ promised: `make check-cpu` builds and tests the standard-library-only half, and
 > **Status: early but no longer a toybox.** Scene graph, transforms, camera,
 > geometry, meshes, depth buffering, per-vertex normals, near and far clipping,
 > perspective-correct shading, and both a CPU and a GPU rasterizer are in place
-> and fully tested, along with textures, backface culling and an orthographic
-> camera. Missing, among much else: materials, bilinear filtering, mipmaps,
-> quaternions, and any kind of windowing. This is a learning project in the open, not a
+> and fully tested, along with materials, textures with two filters, backface
+> culling and an orthographic camera. Missing, among much else: mipmaps,
+> transparency, quaternions, and any kind of windowing. This is a learning project in the open, not a
 > drop-in three.js replacement.
 
 ## Rendering a scene
@@ -343,8 +343,11 @@ unmissable on two triangles running to the horizon.
 neighbour, three wrap modes, and no filtering yet:
 
 ```mojo
-renderer.set_shading(SHADE_TEXTURE)
-renderer.set_texture(checkerboard(64, 8, Color(245, 245, 250), Color(40, 90, 170)))
+var board = assets.textures.add(
+    checkerboard(64, 8, Color(245, 245, 250), Color(40, 90, 170))
+)
+var paint = assets.materials.add(Material(Color(255, 255, 255), board))
+meshes.append(Mesh(box, paint, node))
 ```
 
 A sampled texel *modulates* the lighting rather than replacing it — the image
@@ -361,14 +364,59 @@ exactly 0 or 1 sits on a tile boundary**, where the wrap mode decides which
 side it belongs to: under `REPEAT` both ends name the same texel, which is what
 seamless means, while under `CLAMP` they name opposite edges.
 
-Nearest sampling is the honest starting point rather than a shortcut. Hard
-edges make the mapping visible: a wrong `uv` moves a square somewhere obviously
-wrong, where a blurred one would just look soft. `make animation` renders
-`out/textured.png`, a checkerboard cube turning.
+Two filters. `NEAREST` takes whichever texel the sample lands in; `BILINEAR`
+blends the four around it, shifting the sample by half a texel first because
+texel *centres* sit at half-integers. Nearest is exact and keeps a
+checkerboard's edges hard, which is what makes a mapping error legible — a
+wrong `uv` moves a square somewhere obviously wrong, where a blurred one would
+just look soft. Bilinear is what you want once the image is meant to be looked
+at: at a glancing angle nearest turns a fine pattern into noise.
 
-The GPU samples the same way, calling the same `wrap_index` the CPU does — the
-`fillrule` argument again — and the two agree texel for texel in all three wrap
-modes, including coordinates well outside the unit square.
+`make animation` renders `out/textured.png`: two checkerboard cubes turning,
+one sharp and one blended, which is only one render because a texture belongs
+to a material.
+
+The GPU samples the same way, calling the same `wrap_index` and the same
+`blend` the CPU does — the `fillrule` argument again. The two agree texel for
+texel in all three wrap modes, including coordinates well outside the unit
+square, and under both filters. Nearest *must* agree, being integer arithmetic
+once the coordinate is floored; bilinear is floating point and agrees anyway,
+which is measured rather than guaranteed.
+
+Every texture in a scene crosses to the device as one buffer with a table
+saying where each image starts, because a device cannot hold a list of lists.
+A vertex carries the id of the image it wants.
+
+## Materials
+
+`Material` was refused three times before it was written, on the grounds that a
+material with one field is ceremony. Textures are what changed that: a texture
+on the renderer meant one image for an entire scene, and two meshes with
+different textures was impossible.
+
+```mojo
+struct Material:
+    var color: Color   # was on Mesh
+    var map: Int       # was on Renderer: one texture, whole scene
+    var side: Int      # was a Bool on Renderer: could not express BackSide
+```
+
+`side` stops being a flag and becomes what three.js has: `FRONT_SIDE` draws
+surfaces facing the camera, `BACK_SIDE` only those facing away, `DOUBLE_SIDE`
+both. A Bool could express the first and last; the middle is a third state.
+
+A `Mesh` is now three ids and nothing else — where it is, what shape it is,
+what it is made of:
+
+```mojo
+var box = assets.geometries.add(cube(Length(1.0, METRE)))
+var paint = assets.materials.add(Material(Color(255, 140, 40)))
+meshes.append(Mesh(box, paint, node))
+```
+
+`Assets` holds the three stores together. Each is append-only and hands out
+ids, for the reason the first one did: the thing being shared has to be owned
+by exactly one owner, and everything else names it.
 
 ## Cameras
 
@@ -639,7 +687,8 @@ math/        Vector2, Vector3                    ported from three.js
 cameras/     Camera                              the trait a renderer needs
              PerspectiveCamera                   fov in Angle, planes in Length
              OrthographicCamera                  no perspective; w stays 1
-core/        Object3D, Scene                     transform hierarchy
+core/        Assets                              the three stores together
+             Object3D, Scene                     transform hierarchy
              BufferGeometry, BufferAttribute     vertex data, borrowed on read
              GeometryStore                       owns geometry; meshes share it
 geometries/  box                                 a box, four vertices per face
@@ -647,8 +696,9 @@ geometries/  box                                 a box, four vertices per face
 objects/     Mesh                                geometry id + colour at a node
 renderers/   Renderer                            scene + camera -> triangles
              clip                                near and far plane clipping
+materials/   Material, MaterialStore             colour, map and side
 render/      Framebuffer, Color, FloatColor      RGBA, depth, and linear colour
-             Texture                             nearest sampling, three wraps
+             Texture, TextureStore               two filters, three wraps
              fillrule                            coverage maths, CPU *and* GPU
              rasterizer                          software rasterization
              gpu                                 the same rasterizer, on the GPU
@@ -658,7 +708,7 @@ examples/    triangle.mojo                       renders triangle.png
              cube.mojo                           a 3D cube, animated
              cubes.mojo                          two cubes, depth + hierarchy
              uv.mojo                             perspective-correct vs affine
-             textured.mojo                       a checkerboard cube, turning
+             textured.mojo                       two cubes, two textures
 bench/       raster_bench.mojo                   CPU vs GPU timings
 tools/       gpu_status.mojo                     is there an accelerator?
 out/         rendered images, gitignored

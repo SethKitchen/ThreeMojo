@@ -21,45 +21,48 @@ moved it in, so two meshes meant two copies of the vertex array and sharing was
 impossible however the comment read. Naming it by id is what made the claim
 true.
 
-A mesh is now small enough to copy freely: two indices and a colour.
+A mesh is three indices and nothing else — where it is, what shape it is, and
+what it is made of — which is as small as identity gets.
 
-Colour lives here rather than in a `Material` for now. A material with exactly
-one field would be ceremony; it earns its own type when there is a second
-property to put in it.
+Colour used to live here, with a note saying a `Material` would be ceremony
+until there was a second property to put in it. Textures were that second
+property, and `side` a third; see `materials.material`.
 """
 
 from core.geometry_store import GeometryId
-from render.framebuffer import Color
+from materials.material import MaterialId
 
 
 struct Mesh(ImplicitlyCopyable):
-    """A geometry drawn in a given colour at a given scene node."""
+    """A geometry drawn with a given material at a given scene node."""
 
     var geometry: GeometryId
-    var color: Color
+    var material: MaterialId
     var node: Int
 
     def __init__(
-        out self, geometry: GeometryId, color: Color, node: Int
+        out self, geometry: GeometryId, material: MaterialId, node: Int
     ) raises:
-        """Bind a stored geometry and a colour to a scene node.
+        """Bind a stored geometry and material to a scene node.
 
-        Whether the ids exist is not checkable here — a mesh does not hold the
-        store or the scene — so only the obviously impossible is refused. The
-        renderer has both and raises if either id is out of range.
+        Whether the ids exist is not checkable here — a mesh holds none of the
+        three stores — so only the obviously impossible is refused. The
+        renderer has them all and raises if any id is out of range.
 
         Args:
             geometry: Id of the geometry to draw, from `GeometryStore.add`.
-            color: Its base colour, before shading.
+            material: Id of the material to draw it with.
             node: Index of the scene node giving its world transform.
 
         Raises:
-            Error: If either id is negative.
+            Error: If any id is negative.
         """
         if node < 0:
             raise Error("A mesh must name a scene node")
         if geometry < 0:
             raise Error("A mesh must name a geometry")
+        if material < 0:
+            raise Error("A mesh must name a material")
         self.geometry = geometry
-        self.color = color
+        self.material = material
         self.node = node

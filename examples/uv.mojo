@@ -28,7 +28,8 @@ sphere and unmissable on two triangles stretching to the horizon.
 from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION, UV
-from core.geometry_store import GeometryStore
+from core.assets import Assets
+from materials.material import Material
 from core.object3d import Object3D
 from core.scene import Scene
 from math.vector3 import Vector3
@@ -146,15 +147,17 @@ def main() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_background(background)
 
-    var geometries = GeometryStore()
-    var plane = geometries.add(floor_plane())
+    var assets = Assets()
+    var plane = assets.geometries.add(floor_plane())
 
     var scene = Scene()
     _ = scene.add(Object3D())
     scene.update()
 
     var meshes = List[Mesh]()
-    meshes.append(Mesh(plane, Color(255, 255, 255), 0))
+    meshes.append(
+        Mesh(plane, assets.materials.add(Material(Color(255, 255, 255))), 0)
+    )
 
     # Low and close, so the far edge of the plane runs away to a vanishing
     # point and one triangle spans a great deal of perspective.
@@ -166,7 +169,7 @@ def main() raises:
     )
     camera.place(Vector3(0, 0.8, 3.4), Vector3(0, 0, -1.5))
 
-    var corners = renderer.prepare(scene, geometries, meshes, camera)
+    var corners = renderer.prepare(scene, assets, meshes, camera)
 
     var frames = List[Framebuffer]()
     frames.append(fill(corners, background))

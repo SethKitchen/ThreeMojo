@@ -12,7 +12,8 @@ than "the picture has no perspective in it".
 """
 
 from cameras.orthographic_camera import OrthographicCamera, centred
-from core.geometry_store import GeometryStore
+from core.assets import Assets
+from materials.material import Material
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
@@ -193,14 +194,14 @@ def test_an_unusable_camera_is_rejected() raises:
 
 
 def drawn_pixels(
-    renderer: Renderer, scene: Scene, store: GeometryStore, meshes: List[Mesh]
+    renderer: Renderer, scene: Scene, assets: Assets, meshes: List[Mesh]
 ) raises -> Int:
     """Return how many pixels a scene covers through an orthographic camera.
 
     Args:
         renderer: The renderer to draw with.
         scene: The transform hierarchy.
-        store: The geometry the meshes name.
+        assets: The geometry, materials and textures the meshes name.
         meshes: What to draw.
 
     Returns:
@@ -209,7 +210,7 @@ def drawn_pixels(
     Raises:
         Error: If the render fails.
     """
-    var image = renderer.render(scene, store, meshes, a_camera())
+    var image = renderer.render(scene, assets, meshes, a_camera())
     var drawn = 0
     for y in range(HEIGHT):
         for x in range(WIDTH):
@@ -234,10 +235,16 @@ def test_a_camera_with_a_zero_near_plane_renders() raises:
         Length(100.0, METRE),
     )
     camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
-    var store = GeometryStore()
+    var assets = Assets()
     var meshes = List[Mesh]()
-    meshes.append(Mesh(store.add(cube(Length(2.0, METRE))), Color(9, 9, 9), 0))
-    var image = renderer.render(a_scene_at(0), store, meshes, camera)
+    meshes.append(
+        Mesh(
+            assets.geometries.add(cube(Length(2.0, METRE))),
+            assets.materials.add(Material(Color(9, 9, 9))),
+            0,
+        )
+    )
+    var image = renderer.render(a_scene_at(0), assets, meshes, camera)
     var drawn = 0
     for y in range(HEIGHT):
         for x in range(WIDTH):
@@ -249,15 +256,17 @@ def test_a_camera_with_a_zero_near_plane_renders() raises:
 def test_the_renderer_accepts_an_orthographic_camera() raises:
     # The trait doing its job: `Renderer` never mentions either camera type.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var store = GeometryStore()
-    var box = store.add(cube(Length(2.0, METRE)))
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(2.0, METRE)))
     var scene = Scene()
     var node = Object3D()
     _ = scene.add(node^)
     scene.update()
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(255, 140, 40), 0))
-    assert_true(drawn_pixels(renderer, scene, store, meshes) > 0)
+    meshes.append(
+        Mesh(box, assets.materials.add(Material(Color(255, 140, 40))), 0)
+    )
+    assert_true(drawn_pixels(renderer, scene, assets, meshes) > 0)
 
 
 def a_scene_at(z: Float32) raises -> Scene:
@@ -275,13 +284,15 @@ def test_distance_does_not_change_which_pixels_a_cube_covers() raises:
     # Comparing *counts* would be too weak: two different silhouettes can
     # cover the same number of pixels. These must be the same pixels.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var store = GeometryStore()
-    var box = store.add(cube(Length(2.0, METRE)))
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(2.0, METRE)))
 
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(255, 140, 40), 0))
-    var near = renderer.render(a_scene_at(0), store, meshes, a_camera())
-    var far = renderer.render(a_scene_at(-8), store, meshes, a_camera())
+    meshes.append(
+        Mesh(box, assets.materials.add(Material(Color(255, 140, 40))), 0)
+    )
+    var near = renderer.render(a_scene_at(0), assets, meshes, a_camera())
+    var far = renderer.render(a_scene_at(-8), assets, meshes, a_camera())
 
     var covered = 0
     for y in range(HEIGHT):
@@ -305,13 +316,15 @@ def test_moving_away_still_changes_the_depth_buffer() raises:
     # *depth* must, or the projection would be flattening z as well and the
     # test above would pass for the wrong reason.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var store = GeometryStore()
-    var box = store.add(cube(Length(2.0, METRE)))
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(2.0, METRE)))
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(255, 140, 40), 0))
+    meshes.append(
+        Mesh(box, assets.materials.add(Material(Color(255, 140, 40))), 0)
+    )
 
-    var near = renderer.render(a_scene_at(0), store, meshes, a_camera())
-    var far = renderer.render(a_scene_at(-8), store, meshes, a_camera())
+    var near = renderer.render(a_scene_at(0), assets, meshes, a_camera())
+    var far = renderer.render(a_scene_at(-8), assets, meshes, a_camera())
 
     var compared = 0
     for y in range(HEIGHT):

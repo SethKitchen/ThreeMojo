@@ -28,7 +28,8 @@ comparison produced 112 MB of them and dominated the entire coverage run.
 
 from cameras.orthographic_camera import centred
 from cameras.perspective_camera import PerspectiveCamera
-from core.geometry_store import GeometryStore
+from core.assets import Assets
+from materials.material import Material
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
@@ -40,7 +41,16 @@ from objects.mesh import Mesh
 from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METRE
 from render.framebuffer import Color, FloatColor, Framebuffer
-from render.texture import CLAMP, MIRROR, REPEAT, Texture, checkerboard
+from materials.material import NO_TEXTURE
+from render.texture_store import TextureStore
+from render.texture import (
+    BILINEAR,
+    CLAMP,
+    MIRROR,
+    REPEAT,
+    Texture,
+    checkerboard,
+)
 from render.gpu import (
     GpuRenderer,
     available,
@@ -504,7 +514,7 @@ def test_flattening_lays_out_eight_floats_per_vertex() raises:
     var corners = List[RasterVertex]()
     corners.append(corner(1, 2, 3, 4, Color(255, 128, 0, 64)))
     var flat = flatten(corners)
-    assert_equal(len(flat), 10)
+    assert_equal(len(flat), 11)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
     assert_equal(flat[2], Float32(3))
@@ -529,9 +539,9 @@ def test_both_backends_agree_on_a_whole_prepared_scene() raises:
     var renderer = Renderer(48, 36)
     renderer.set_background(BACKGROUND)
 
-    var geometries = GeometryStore()
-    var box = geometries.add(cube(Length(1.0, METRE)))
-    var ball = geometries.add(sphere(Length(0.7, METRE), 12, 8))
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var ball = assets.geometries.add(sphere(Length(0.7, METRE), 12, 8))
 
     var scene = Scene()
     var left = Object3D()
@@ -552,15 +562,25 @@ def test_both_backends_agree_on_a_whole_prepared_scene() raises:
     camera.place(Vector3(0, 0.6, 3.0), Vector3(0, 0, 0))
 
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(255, 140, 40), left_node))
-    meshes.append(Mesh(ball, Color(90, 190, 255), right_node))
+    meshes.append(
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 140, 40))), left_node
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(Material(Color(90, 190, 255))),
+            right_node,
+        )
+    )
 
     # Prepared once, filled twice.
-    var corners = renderer.prepare(scene, geometries, meshes, camera)
+    var corners = renderer.prepare(scene, assets, meshes, camera)
     assert_true(len(corners) > 0, "the scene prepared no triangles")
     assert_equal(len(corners) % 3, 0)
 
-    var cpu = renderer.render(scene, geometries, meshes, camera)
+    var cpu = renderer.render(scene, assets, meshes, camera)
     var gpu = render_triangles(corners, 48, 36, BACKGROUND)
 
     # A real image: both meshes visible, and plenty of background left.
@@ -711,9 +731,9 @@ def test_both_backends_agree_on_a_prepared_orthographic_uv_scene() raises:
     renderer.set_background(BACKGROUND)
     renderer.set_shading(SHADE_UV)
 
-    var geometries = GeometryStore()
-    var box = geometries.add(cube(Length(1.4, METRE)))
-    var ball = geometries.add(sphere(Length(0.8, METRE), 10, 6))
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.4, METRE)))
+    var ball = assets.geometries.add(sphere(Length(0.8, METRE), 10, 6))
 
     var scene = Scene()
     var left = Object3D()
@@ -734,13 +754,23 @@ def test_both_backends_agree_on_a_prepared_orthographic_uv_scene() raises:
     camera.place(Vector3(0, 0.5, 4), Vector3(0, 0, 0))
 
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(255, 255, 255), left_node))
-    meshes.append(Mesh(ball, Color(255, 255, 255), right_node))
+    meshes.append(
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 255, 255))), left_node
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(Material(Color(255, 255, 255))),
+            right_node,
+        )
+    )
 
-    var corners = renderer.prepare(scene, geometries, meshes, camera)
+    var corners = renderer.prepare(scene, assets, meshes, camera)
     assert_true(len(corners) > 0, "the scene prepared no triangles")
 
-    var cpu = renderer.render(scene, geometries, meshes, camera)
+    var cpu = renderer.render(scene, assets, meshes, camera)
     var gpu = render_triangles(corners, 48, 36, BACKGROUND, SHADE_UV)
 
     # An orthographic camera leaves every inv_w at one, so the interpolation
@@ -765,33 +795,38 @@ def test_both_backends_agree_on_a_prepared_orthographic_uv_scene() raises:
 
 
 def lit_corner(
-    x: Float32, y: Float32, inv_w: Float32, u: Float32, v: Float32
+    x: Float32,
+    y: Float32,
+    inv_w: Float32,
+    u: Float32,
+    v: Float32,
+    texture: Int = NO_TEXTURE,
 ) -> RasterVertex:
     """Return a white raster vertex carrying texture coordinates."""
-    return RasterVertex(x, y, 0.5, inv_w, FloatColor(1, 1, 1), u, v)
+    return RasterVertex(x, y, 0.5, inv_w, FloatColor(1, 1, 1), u, v, texture)
 
 
-def mapped_quad(size: Float32) -> List[RasterVertex]:
+def mapped_quad(size: Float32, texture: Int = NO_TEXTURE) -> List[RasterVertex]:
     """Return two triangles covering a square image, mapped once across it."""
     var corners = List[RasterVertex]()
-    corners.append(lit_corner(0, 0, 1, 0, 1))
-    corners.append(lit_corner(size, 0, 1, 1, 1))
-    corners.append(lit_corner(size, size, 1, 1, 0))
-    corners.append(lit_corner(0, 0, 1, 0, 1))
-    corners.append(lit_corner(size, size, 1, 1, 0))
-    corners.append(lit_corner(0, size, 1, 0, 0))
+    corners.append(lit_corner(0, 0, 1, 0, 1, texture))
+    corners.append(lit_corner(size, 0, 1, 1, 1, texture))
+    corners.append(lit_corner(size, size, 1, 1, 0, texture))
+    corners.append(lit_corner(0, 0, 1, 0, 1, texture))
+    corners.append(lit_corner(size, size, 1, 1, 0, texture))
+    corners.append(lit_corner(0, size, 1, 0, 0, texture))
     return corners^
 
 
 def cpu_textured(
-    corners: List[RasterVertex], size: Int, texture: Texture
+    corners: List[RasterVertex], size: Int, textures: TextureStore
 ) raises -> Framebuffer:
     """Return the CPU rasterizer's textured output.
 
     Args:
         corners: Raster vertices, three per triangle.
         size: Image width and height.
-        texture: The image to sample.
+        textures: The images to sample.
 
     Returns:
         The rendered framebuffer.
@@ -807,7 +842,7 @@ def cpu_textured(
             corners[triangle * 3 + 2],
             target,
             SHADE_TEXTURE,
-            texture,
+            textures,
         )
     return target^
 
@@ -817,12 +852,15 @@ def test_both_backends_sample_a_texture_identically() raises:
     # floored, so unlike interpolated shading this has to agree exactly.
     if skipped_for_lack_of_a_gpu("both backends sample a texture"):
         return
-    var board = checkerboard(16, 4, Color(240, 60, 20), Color(20, 40, 200))
-    var corners = mapped_quad(24)
-    var gpu = render_triangles(
-        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, Texture(copy=board)
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(16, 4, Color(240, 60, 20), Color(20, 40, 200))
     )
-    var cpu = cpu_textured(corners, 24, board)
+    var corners = mapped_quad(24, board)
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    var cpu = cpu_textured(corners, 24, textures)
 
     # A real pattern: both colours present, so the mapping did something.
     var light = 0
@@ -843,21 +881,22 @@ def test_both_backends_agree_on_every_wrap_mode() raises:
     if skipped_for_lack_of_a_gpu("both backends agree on wrapping"):
         return
     for mode in [REPEAT, CLAMP, MIRROR]:
-        var board = checkerboard(
-            8, 2, Color(240, 60, 20), Color(20, 40, 200), mode
+        var textures = TextureStore()
+        var board = textures.add(
+            checkerboard(8, 2, Color(240, 60, 20), Color(20, 40, 200), mode)
         )
         var corners = List[RasterVertex]()
         # Three tiles across and up, and starting below zero.
-        corners.append(lit_corner(0, 0, 1, -1.0, 2.0))
-        corners.append(lit_corner(24, 0, 1, 2.0, 2.0))
-        corners.append(lit_corner(24, 24, 1, 2.0, -1.0))
-        corners.append(lit_corner(0, 0, 1, -1.0, 2.0))
-        corners.append(lit_corner(24, 24, 1, 2.0, -1.0))
-        corners.append(lit_corner(0, 24, 1, -1.0, -1.0))
+        corners.append(lit_corner(0, 0, 1, -1.0, 2.0, board))
+        corners.append(lit_corner(24, 0, 1, 2.0, 2.0, board))
+        corners.append(lit_corner(24, 24, 1, 2.0, -1.0, board))
+        corners.append(lit_corner(0, 0, 1, -1.0, 2.0, board))
+        corners.append(lit_corner(24, 24, 1, 2.0, -1.0, board))
+        corners.append(lit_corner(0, 24, 1, -1.0, -1.0, board))
         var gpu = render_triangles(
-            corners, 24, 24, BACKGROUND, SHADE_TEXTURE, Texture(copy=board)
+            corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
         )
-        var cpu = cpu_textured(corners, 24, board)
+        var cpu = cpu_textured(corners, 24, textures)
         assert_equal(count_mismatches(cpu, gpu), 0)
 
 
@@ -877,17 +916,56 @@ def test_a_texture_survives_being_drawn_twice() raises:
     # has to still find it there.
     if skipped_for_lack_of_a_gpu("a texture survives a second draw"):
         return
-    var board = checkerboard(16, 4, Color(240, 60, 20), Color(20, 40, 200))
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(16, 4, Color(240, 60, 20), Color(20, 40, 200))
+    )
     var renderer = GpuRenderer(24, 24)
-    renderer.set_texture(board)
-    var corners = mapped_quad(24)
+    renderer.set_textures(textures)
+    var corners = mapped_quad(24, board)
 
     renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
     var first = renderer.read_back()
     renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
     var second = renderer.read_back()
     assert_equal(count_mismatches(first, second), 0)
-    assert_equal(count_mismatches(cpu_textured(corners, 24, board), first), 0)
+    assert_equal(
+        count_mismatches(cpu_textured(corners, 24, textures), first), 0
+    )
+
+
+def test_both_backends_filter_a_texture_identically() raises:
+    # Bilinear is floating-point arithmetic, unlike nearest, so this is where
+    # a fused multiply-add might have rounded differently. It does not: the
+    # two agree exactly, and the assertion below says so rather than allowing
+    # a level it does not need. That is measured, not guaranteed -- the blend
+    # is a chain of multiply-adds and a device that contracts them differently
+    # could land either side of a quantization midpoint. If this ever fails by
+    # one level on some other hardware, that is what happened, and
+    # `count_mismatches` takes a tolerance for exactly this reason.
+    if skipped_for_lack_of_a_gpu("both backends filter a texture"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            8, 2, Color(240, 60, 20), Color(20, 40, 200), REPEAT, BILINEAR
+        )
+    )
+    var corners = mapped_quad(24, board)
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    var cpu = cpu_textured(corners, 24, textures)
+
+    # Blended, not stepped: there are colours between the two.
+    var between = 0
+    for y in range(24):
+        for x in range(24):
+            var pixel = cpu.get_pixel(x, y)
+            if pixel.r > 60 and pixel.b > 60:
+                between += 1
+    assert_true(between > 0, "nothing was blended, so nothing was compared")
+    assert_equal(count_mismatches(cpu, gpu), 0)
 
 
 def main() raises:

@@ -3,12 +3,17 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A checkerboard cube, turning.
+"""Two checkerboard cubes, turning, with different textures.
 
-Everything this project has built, in one image: a scene graph places the cube,
-the camera projects it, backface culling drops the half facing away, the depth
-buffer sorts what is left, `uv` reaches each fragment with the perspective
-divide applied, and a texture is read there.
+Everything this project has built, in one image: a scene graph places the
+cubes, the camera projects them, each material's `side` drops the half facing
+away, the depth buffer sorts what is left, `uv` reaches each fragment with the
+perspective divide applied, and a texture is read there.
+
+Two cubes rather than one because a texture belongs to a material now, not to
+the renderer. When it belonged to the renderer this example could only have
+drawn one image per frame, and the left cube's sharp squares beside the right
+cube's blended ones would have been two renders and a composite.
 
 A checkerboard is the traditional test image because its errors are legible. A
 wrong `uv` moves a square somewhere obviously wrong; a wrong interpolation
@@ -22,7 +27,8 @@ edges, rather than continuing around the cube.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
-from core.geometry_store import GeometryId, GeometryStore
+from core.assets import Assets
+from materials.material import Material
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
@@ -30,8 +36,7 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from render.rasterizer import SHADE_TEXTURE
-from render.texture import checkerboard
+from render.texture import BILINEAR, REPEAT, checkerboard
 from renderers.renderer import Renderer
 from std.pathlib import Path
 from std.sys import argv
@@ -47,18 +52,18 @@ comptime DELAY_MS = 60
 def frame_at(
     renderer: Renderer,
     camera: PerspectiveCamera,
-    geometries: GeometryStore,
-    box: GeometryId,
+    assets: Assets,
+    meshes: List[Mesh],
     turn: Float32,
 ) raises -> Framebuffer:
     """Render one frame with the cube turned to `turn` degrees.
 
     Args:
-        renderer: The renderer to draw with, already holding the texture.
+        renderer: The renderer to draw with.
         camera: The camera to view through.
-        geometries: The store owning the cube.
-        box: Id of the cube.
-        turn: How far the cube has turned, in degrees.
+        assets: The geometry, materials and textures.
+        meshes: The two cubes, already bound to nodes 0 and 1.
+        turn: How far the cubes have turned, in degrees.
 
     Returns:
         The rendered frame.
@@ -67,16 +72,21 @@ def frame_at(
         Error: If the scene or the render is invalid.
     """
     var scene = Scene()
-    var node = Object3D()
-    # Tilted as well as spun, so the top face comes into view and its own
-    # copy of the pattern can be seen meeting the side's at the edge.
-    node.set_euler(Angle(26.0, DEGREE), Angle(turn, DEGREE), Angle(0.0, DEGREE))
-    _ = scene.add(node^)
+    # Tilted as well as spun, so a top face comes into view and its own copy
+    # of the pattern can be seen meeting a side's at the edge. The two turn
+    # opposite ways, which keeps them from looking like one object.
+    var left = Object3D()
+    left.set_position(-0.95, 0, 0)
+    left.set_euler(Angle(26.0, DEGREE), Angle(turn, DEGREE), Angle(0.0, DEGREE))
+    _ = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.95, 0, 0)
+    right.set_euler(
+        Angle(26.0, DEGREE), Angle(-turn, DEGREE), Angle(0.0, DEGREE)
+    )
+    _ = scene.add(right^)
     scene.update()
-
-    var meshes = List[Mesh]()
-    meshes.append(Mesh(box, Color(255, 255, 255), 0))
-    return renderer.render(scene, geometries, meshes, camera)
+    return renderer.render(scene, assets, meshes, camera)
 
 
 def main() raises:
@@ -87,15 +97,40 @@ def main() raises:
 
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_background(Color(14, 16, 22))
-    renderer.set_shading(SHADE_TEXTURE)
-    # White meshes, so the texture arrives unmodulated by any base colour and
-    # only the lighting dims it.
-    renderer.set_texture(
+
+    var assets = Assets()
+    # One geometry, drawn twice.
+    var box = assets.geometries.add(cube(Length(1.1, METRE)))
+    # Two images, one sharp and one blended, so the difference between the
+    # filters is visible side by side on the same shape.
+    var sharp = assets.textures.add(
         checkerboard(64, 8, Color(245, 245, 250), Color(40, 90, 170))
     )
-
-    var geometries = GeometryStore()
-    var box = geometries.add(cube(Length(1.2, METRE)))
+    var smooth = assets.textures.add(
+        checkerboard(
+            64,
+            8,
+            Color(250, 240, 215),
+            Color(190, 80, 40),
+            REPEAT,
+            BILINEAR,
+        )
+    )
+    # White base colours, so each texture arrives unmodulated by anything but
+    # the lighting.
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 255, 255), sharp)), 0
+        )
+    )
+    meshes.append(
+        Mesh(
+            box,
+            assets.materials.add(Material(Color(255, 255, 255), smooth)),
+            1,
+        )
+    )
 
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
@@ -111,8 +146,8 @@ def main() raises:
             frame_at(
                 renderer,
                 camera,
-                geometries,
-                box,
+                assets,
+                meshes,
                 Float32(360) * Float32(index) / Float32(FRAMES),
             )
         )

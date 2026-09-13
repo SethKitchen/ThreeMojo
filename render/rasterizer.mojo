@@ -25,7 +25,8 @@ asserts pixel for pixel.
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
-from render.texture import Texture
+from materials.material import NO_TEXTURE
+from render.texture_store import TextureStore
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, max, min
 
@@ -268,7 +269,6 @@ def rasterize_depth(
                 target.set_pixel(x, y, color)
 
 
-@fieldwise_init
 struct RasterVertex(ImplicitlyCopyable):
     """One corner as the rasterizer wants it: screen position and varyings.
 
@@ -298,6 +298,31 @@ struct RasterVertex(ImplicitlyCopyable):
     # colour at the vertex, because that is what sampling a texture will need.
     var u: Float32
     var v: Float32
+    # Which texture to sample, or `NO_TEXTURE` for none. It travels with the
+    # vertex because `Renderer.prepare` returns one flat list of triangles for
+    # a whole scene, and the meshes in a scene need not share a material.
+    var texture: Int
+
+    def __init__(
+        out self,
+        x: Float32,
+        y: Float32,
+        z: Float32,
+        inv_w: Float32,
+        color: FloatColor,
+        u: Float32 = 0,
+        v: Float32 = 0,
+        texture: Int = NO_TEXTURE,
+    ):
+        """Create a corner. Texture coordinates and map default to none."""
+        self.x = x
+        self.y = y
+        self.z = z
+        self.inv_w = inv_w
+        self.color = color
+        self.u = u
+        self.v = v
+        self.texture = texture
 
 
 # What a fragment's colour is taken from. Still an Int: the three cases differ
@@ -316,7 +341,7 @@ def rasterize_shaded(
     c: RasterVertex,
     mut target: Framebuffer,
     mode: Int = SHADE_LIT,
-    texture: Texture = Texture(),
+    textures: TextureStore = TextureStore(),
 ) raises:
     """Fill a triangle whose corners each carry their own colour.
 
@@ -351,9 +376,12 @@ def rasterize_shaded(
             triangles shows the difference between a correct interpolation
             and an affine one directly, which no assertion about a colour
             channel really does.
-        texture: The image `SHADE_TEXTURE` samples. Defaults to the blank
-            texture, which samples as opaque white and so leaves the lighting
-            untouched — "no texture" is a value here rather than a branch.
+        textures: Where `SHADE_TEXTURE` looks the triangle's map up. Which
+            one it wants is on the vertices, so a single call can draw a
+            scene whose meshes use different images. A vertex naming
+            `NO_TEXTURE` samples the blank texture, which is opaque white and
+            so leaves the lighting untouched — "no texture" is a value here
+            rather than a branch.
 
     Raises:
         Error: If a pixel write lands out of bounds, which the loop prevents.
@@ -410,7 +438,9 @@ def rasterize_shaded(
                     # Modulate rather than replace: the texture says what
                     # colour the surface is, the lighting says how much of it
                     # reaches the camera, and a renderer needs both.
-                    var texel = texture.sample(u, v)
+                    var texel = FloatColor(1.0, 1.0, 1.0, 1.0)
+                    if a.texture != NO_TEXTURE:
+                        texel = textures.get(a.texture).sample(u, v)
                     shaded = FloatColor(
                         shaded.r * texel.r,
                         shaded.g * texel.g,

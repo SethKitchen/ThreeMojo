@@ -15,11 +15,13 @@ is where those two disagree, so sampling is where it is reconciled, once:
 `1 - v` turns one into the other. three.js spells the same reconciliation
 `flipY`, and has it on by default.
 
-**Nearest-neighbour only, for now.** A sample takes the colour of whichever
-texel it lands in, with no blending between neighbours. That is the honest
-starting point: it makes the mapping itself visible — a checkerboard's edges
-stay hard, so a wrong `uv` shows up as a misplaced square rather than a vague
-blur — and bilinear filtering is a separate, testable change on top of it.
+**Two filters.** `NEAREST` takes the colour of whichever texel the sample
+lands in; `BILINEAR` blends the four around it. Nearest keeps a checkerboard's
+edges hard, which is what makes a mapping error legible — a wrong `uv` shows a
+misplaced square rather than a vague blur — and it is exact, so both backends
+agree on it to the last bit. Bilinear is what you want once the image is meant
+to be looked at rather than debugged: at a glancing angle nearest turns a fine
+pattern into noise.
 
 **Out-of-range coordinates wrap.** Nothing constrains `uv` to the unit square:
 a geometry can ask for its texture five times across, and clipping can produce
@@ -38,6 +40,65 @@ comptime REPEAT = 0
 comptime CLAMP = 1
 # Tile, flipping direction every other tile, so tiles meet without a seam.
 comptime MIRROR = 2
+
+# How a sample between texel centres is resolved.
+# Take whichever texel the sample lands in. Hard edges, visible texels.
+comptime NEAREST = 0
+# Blend the four texels around the sample by how close it is to each.
+comptime BILINEAR = 1
+
+
+def mix(near: Float32, far: Float32, t: Float32) -> Float32:
+    """Return one channel a fraction `t` of the way from `near` to `far`."""
+    return near + (far - near) * t
+
+
+def blend(
+    lower_left: FloatColor,
+    lower_right: FloatColor,
+    upper_left: FloatColor,
+    upper_right: FloatColor,
+    across: Float32,
+    down: Float32,
+) -> FloatColor:
+    """Blend the four texels around a sample point.
+
+    Two mixes along one axis and one along the other, which is what bilinear
+    means. Public and pure because the GPU kernel calls it too: each backend
+    fetches its own four texels, and then both do the arithmetic here. Sharing
+    the *blend* rather than the lookup is the part that matters — memory
+    access differs between host and device by nature, and interpolation does
+    not.
+
+    Args:
+        lower_left: The texel at the smaller column and row.
+        lower_right: One column further on.
+        upper_left: One row further on.
+        upper_right: One of each.
+        across: How far between the two columns, 0 to 1.
+        down: How far between the two rows, 0 to 1.
+
+    Returns:
+        The blended colour.
+    """
+    var top = FloatColor(
+        mix(lower_left.r, lower_right.r, across),
+        mix(lower_left.g, lower_right.g, across),
+        mix(lower_left.b, lower_right.b, across),
+        mix(lower_left.a, lower_right.a, across),
+    )
+    var bottom = FloatColor(
+        mix(upper_left.r, upper_right.r, across),
+        mix(upper_left.g, upper_right.g, across),
+        mix(upper_left.b, upper_right.b, across),
+        mix(upper_left.a, upper_right.a, across),
+    )
+    return FloatColor(
+        mix(top.r, bottom.r, down),
+        mix(top.g, bottom.g, down),
+        mix(top.b, bottom.b, down),
+        mix(top.a, bottom.a, down),
+    )
 
 
 def wrap_index(coordinate: Int, extent: Int, mode: Int) -> Int:
@@ -91,6 +152,7 @@ struct Texture(Movable):
     # image rendered by this project can be fed straight back in as a texture.
     var pixels: List[UInt8]
     var wrap: Int
+    var filter: Int
 
     def __init__(out self):
         """Create the blank texture, which samples as opaque white.
@@ -103,6 +165,7 @@ struct Texture(Movable):
         self.height = 0
         self.pixels = List[UInt8]()
         self.wrap = REPEAT
+        self.filter = NEAREST
 
     def __init__(
         out self,
@@ -110,6 +173,7 @@ struct Texture(Movable):
         height: Int,
         var pixels: List[UInt8],
         wrap: Int = REPEAT,
+        filter: Int = NEAREST,
     ) raises:
         """Create a texture from RGBA bytes.
 
@@ -118,10 +182,11 @@ struct Texture(Movable):
             height: Image height in texels.
             pixels: Row-major RGBA bytes from the top, width * height * 4.
             wrap: How coordinates outside the unit square are resolved.
+            filter: `NEAREST` or `BILINEAR`.
 
         Raises:
             Error: If the dimensions are not positive, the buffer length
-                disagrees with them, or the wrap mode is not one of the three.
+                disagrees with them, or either mode is not one this knows.
         """
         if width <= 0 or height <= 0:
             raise Error("Texture dimensions must be positive")
@@ -129,10 +194,13 @@ struct Texture(Movable):
             raise Error("Texture buffer length does not match the dimensions")
         if wrap != REPEAT and wrap != CLAMP and wrap != MIRROR:
             raise Error("Unknown texture wrap mode")
+        if filter != NEAREST and filter != BILINEAR:
+            raise Error("Unknown texture filter mode")
         self.width = width
         self.height = height
         self.pixels = pixels^
         self.wrap = wrap
+        self.filter = filter
 
     def __init__(out self, *, copy: Self):
         """Copy another texture, image data included."""
@@ -140,6 +208,7 @@ struct Texture(Movable):
         self.height = copy.height
         self.pixels = copy.pixels.copy()
         self.wrap = copy.wrap
+        self.filter = copy.filter
 
     def is_blank(self) -> Bool:
         """Return True if this is the blank texture."""
@@ -170,36 +239,22 @@ struct Texture(Movable):
             self.pixels[offset + 3],
         )
 
-    def sample(self, u: Float32, v: Float32) -> FloatColor:
-        """Return the colour at a texture coordinate.
+    def wrapped_texel(self, x: Int, y: Int) -> FloatColor:
+        """Return a texel by index, with the wrap mode applied first.
 
-        Nearest neighbour: the sample takes whichever texel it lands in. `v`
-        is flipped because rows run down from the top while texture space
-        counts up from the bottom.
-
-        A coordinate of exactly zero or one sits on a tile boundary, and the
-        wrap mode decides which side it belongs to. Under `REPEAT` both ends
-        of the range name the same texel, which is what makes a tiled texture
-        seamless; under `CLAMP` they name opposite edges, which is what makes
-        a clamped one hold still.
-
-        Does not raise: a fragment shader is not a place to handle errors, and
-        every coordinate has an answer once a wrap mode is chosen.
+        Unlike `texel`, this cannot fail: every index has an answer once a
+        wrap mode is chosen, which is what a sampler needs.
 
         Args:
-            u: Horizontal coordinate, 0 at the left edge.
-            v: Vertical coordinate, 0 at the *bottom* edge.
+            x: Column, possibly outside the image.
+            y: Row from the top, possibly outside the image.
 
         Returns:
-            The colour found there, or opaque white if the texture is blank.
+            The colour found there.
         """
-        if self.is_blank():
-            return FloatColor(1.0, 1.0, 1.0, 1.0)
-        var column = Int(floor(u * Float32(self.width)))
-        var row = Int(floor((1 - v) * Float32(self.height)))
         var offset = (
-            wrap_index(row, self.height, self.wrap) * self.width
-            + wrap_index(column, self.width, self.wrap)
+            wrap_index(y, self.height, self.wrap) * self.width
+            + wrap_index(x, self.width, self.wrap)
         ) * Self.CHANNELS
         return FloatColor(
             of=Color(
@@ -210,9 +265,67 @@ struct Texture(Movable):
             )
         )
 
+    def sample(self, u: Float32, v: Float32) -> FloatColor:
+        """Return the colour at a texture coordinate.
+
+        `v` is flipped because rows run down from the top while texture space
+        counts up from the bottom.
+
+        Under `NEAREST` the sample takes whichever texel it lands in. A
+        coordinate of exactly zero or one sits on a tile boundary, and the
+        wrap mode decides which side it belongs to: under `REPEAT` both ends
+        of the range name the same texel, which is what makes a tiled texture
+        seamless; under `CLAMP` they name opposite edges.
+
+        Under `BILINEAR` it blends the four texels around it. Texel *centres*
+        sit at half-integers, which is the whole reason for the half subtracted
+        below: without it the blend is offset by half a texel and every image
+        drifts diagonally. The four neighbours are fetched through the wrap
+        mode, so a bilinear `REPEAT` texture blends across its own seam and a
+        `CLAMP` one holds its edge instead of fading out of it.
+
+        Does not raise: a fragment shader is not a place to handle errors, and
+        every coordinate has an answer once the modes are chosen.
+
+        Args:
+            u: Horizontal coordinate, 0 at the left edge.
+            v: Vertical coordinate, 0 at the *bottom* edge.
+
+        Returns:
+            The colour found there, or opaque white if the texture is blank.
+        """
+        if self.is_blank():
+            return FloatColor(1.0, 1.0, 1.0, 1.0)
+
+        if self.filter == NEAREST:
+            return self.wrapped_texel(
+                Int(floor(u * Float32(self.width))),
+                Int(floor((1 - v) * Float32(self.height))),
+            )
+
+        # Texel centres are at half-integers, so shift the sample into a space
+        # where they are at integers, and blend between the two either side.
+        var across = u * Float32(self.width) - 0.5
+        var down = (1 - v) * Float32(self.height) - 0.5
+        var column = Int(floor(across))
+        var row = Int(floor(down))
+        return blend(
+            self.wrapped_texel(column, row),
+            self.wrapped_texel(column + 1, row),
+            self.wrapped_texel(column, row + 1),
+            self.wrapped_texel(column + 1, row + 1),
+            across - Float32(column),
+            down - Float32(row),
+        )
+
 
 def checkerboard(
-    size: Int, squares: Int, light: Color, dark: Color, wrap: Int = REPEAT
+    size: Int,
+    squares: Int,
+    light: Color,
+    dark: Color,
+    wrap: Int = REPEAT,
+    filter: Int = NEAREST,
 ) raises -> Texture:
     """Return a square checkerboard, the traditional mapping test image.
 
@@ -226,6 +339,7 @@ def checkerboard(
         light: Colour of the square at the top left.
         dark: Colour of its neighbours.
         wrap: How coordinates outside the unit square are resolved.
+        filter: `NEAREST` or `BILINEAR`.
 
     Returns:
         The texture.
@@ -253,4 +367,4 @@ def checkerboard(
             pixels.append(shade.g)
             pixels.append(shade.b)
             pixels.append(shade.a)
-    return Texture(size, size, pixels^, wrap)
+    return Texture(size, size, pixels^, wrap, filter)
