@@ -39,7 +39,8 @@ def _crc32(bytes: List[UInt8]) -> UInt32:
     instrumentation, where every iteration costs a write to stderr.
     """
     var crc = UInt32(0xFFFFFFFF)
-    for index in range(len(bytes)):
+    # Every chunk checksums at least its four-byte type, so never empty.
+    for index in range(len(bytes)):  # pragma: no branch
         crc ^= UInt32(bytes[index])
         for _ in range(8):  # pragma: no branch
             if (crc & UInt32(1)) != 0:
@@ -70,7 +71,8 @@ def push_be32(mut out: List[UInt8], value: UInt32):
 def _push_ascii(mut out: List[UInt8], text: String):
     """Append the bytes of an ASCII string such as a chunk type."""
     var bytes = text.as_bytes()
-    for index in range(len(bytes)):
+    # A chunk type is always four characters.
+    for index in range(len(bytes)):  # pragma: no branch
         out.append(bytes[index])
 
 
@@ -93,7 +95,8 @@ def push_chunk(mut out: List[UInt8], kind: String, data: List[UInt8]) raises:
     _push_ascii(checked, kind)
     for index in range(len(data)):
         checked.append(data[index])
-    for index in range(len(checked)):
+    # `checked` holds the type as well as the data, so at least four bytes.
+    for index in range(len(checked)):  # pragma: no branch
         out.append(checked[index])
     push_be32(out, _crc32(checked))
 
@@ -110,7 +113,10 @@ def raw_scanlines(buffer: Framebuffer) raises -> List[UInt8]:
     for y in range(buffer.height):  # pragma: no branch
         raw.append(0)
         var start = y * buffer.width * Framebuffer.CHANNELS
-        for offset in range(buffer.width * Framebuffer.CHANNELS):
+        # A Framebuffer always has a positive width.
+        for offset in range(
+            buffer.width * Framebuffer.CHANNELS
+        ):  # pragma: no branch
             raw.append(buffer.pixels[start + offset])
     return raw^
 

@@ -10,12 +10,26 @@ mesh's world transform, project its vertices, and rasterize its triangles with
 depth. Having it in one place is what lets an example say `render(scene,
 meshes, camera)` instead of spelling all that out.
 
-Shading is flat: one colour per triangle, from the angle between its face and
-a fixed light. The normal is computed from the triangle's own world-space
-corners with a cross product rather than read from the geometry, because there
-is no `normal` attribute yet. That makes it a *geometric* normal — faceted by
-construction, which is right for a cube and would look wrong on a sphere, where
-per-vertex normals smoothed across the surface are what is wanted.
+Lighting is evaluated per vertex and interpolated across the triangle, which
+is Gouraud shading. A geometry's `normal` attribute decides how it looks: a
+box gives each of a face's four corners that face's own normal, so the four
+agree and the face comes out flat with a crisp edge; a sphere gives each
+vertex the direction it points from the centre, so neighbouring triangles
+agree along their shared edge and the facets disappear.
+
+A geometry with no normals falls back to the triangle's *geometric* normal,
+computed from its own world-space corners with a cross product. That is always
+faceted, which is the honest result for geometry that never said which way it
+faces.
+
+Normals are rotated by the world matrix but not translated, since a direction
+has no position. Non-uniform scale would need the inverse transpose to stay
+perpendicular; that is not handled, and is noted rather than hidden.
+
+Vertices are taken into camera space and cut against the near plane *before*
+being projected. Projecting first would divide by a depth of zero or a
+negative one for anything level with or behind the camera, which does not
+produce a slightly wrong triangle but a wildly wrong one. See `renderers.clip`.
 
 There is no backface culling. Faces pointing away light to ambient and are
 covered by nearer geometry anyway, so the depth buffer alone gives the correct
@@ -24,12 +38,13 @@ true because the depth buffer exists.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
-from core.buffer_geometry import POSITION
+from core.buffer_geometry import NORMAL, POSITION
 from core.scene import Scene
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
-from render.rasterizer import rasterize_depth
+from render.rasterizer import rasterize_shaded
+from renderers.clip import ClipVertex, clip_near
 from std.math import max
 
 
@@ -156,39 +171,83 @@ struct Renderer(Movable):
                 geometry has no positions.
         """
         var target = Framebuffer(self.width, self.height, self.background)
+        var view = camera.view_matrix()
+        var to_screen = camera.view_to_screen_matrix(self.width, self.height)
+        var near = camera.near.value
 
         for index in range(len(meshes)):
             var world = scene.world_matrix(meshes[index].node)
-
-            # World positions are kept as well as screen ones: shading needs
-            # the triangle's real shape, which the projection does not
-            # preserve.
             var positions = meshes[index].geometry.attribute(String(POSITION))
+            var smooth = meshes[index].geometry.has_attribute(String(NORMAL))
+
+            # World positions are kept as well as camera-space ones: a
+            # geometric normal needs the triangle's real shape, and the view
+            # transform is where clipping has to happen.
             var world_points = List[Vector3]()
-            var screen_points = List[Vector3]()
+            var view_points = List[Vector3]()
+            var vertex_colors = List[Color]()
             for vertex in range(positions.count()):
                 var point = world.transform_point(positions.vector3(vertex))
-                screen_points.append(
-                    camera.project(point, self.width, self.height)
-                )
                 world_points.append(point)
+                view_points.append(view.transform_point(point))
+                if smooth:
+                    # transform_direction ignores translation, which is what a
+                    # normal wants: it points somewhere, it is not somewhere.
+                    var direction = world.transform_direction(
+                        meshes[index]
+                        .geometry.attribute(String(NORMAL))
+                        .vector3(vertex)
+                    )
+                    direction.normalize()
+                    vertex_colors.append(
+                        self.shade(meshes[index].color, direction)
+                    )
 
             var triangles = meshes[index].geometry.triangle_count()
             for triangle in range(triangles):
                 var first = meshes[index].geometry.corner_index(triangle, 0)
                 var second = meshes[index].geometry.corner_index(triangle, 1)
                 var third = meshes[index].geometry.corner_index(triangle, 2)
-                var normal = face_normal(
-                    world_points[first],
-                    world_points[second],
-                    world_points[third],
+
+                var color_a: Color
+                var color_b: Color
+                var color_c: Color
+                if smooth:
+                    color_a = vertex_colors[first]
+                    color_b = vertex_colors[second]
+                    color_c = vertex_colors[third]
+                else:
+                    # No normals given, so the face supplies its own and the
+                    # whole triangle takes one colour.
+                    color_a = self.shade(
+                        meshes[index].color,
+                        face_normal(
+                            world_points[first],
+                            world_points[second],
+                            world_points[third],
+                        ),
+                    )
+                    color_b = color_a
+                    color_c = color_a
+
+                var pieces = clip_near(
+                    ClipVertex(view_points[first], color_a),
+                    ClipVertex(view_points[second], color_b),
+                    ClipVertex(view_points[third], color_c),
+                    near,
                 )
-                rasterize_depth(
-                    screen_points[first],
-                    screen_points[second],
-                    screen_points[third],
-                    target,
-                    self.shade(meshes[index].color, normal),
-                )
+                for piece in range(len(pieces) // 3):
+                    var one = pieces[piece * 3]
+                    var two = pieces[piece * 3 + 1]
+                    var three = pieces[piece * 3 + 2]
+                    rasterize_shaded(
+                        to_screen.transform_point(one.position),
+                        to_screen.transform_point(two.position),
+                        to_screen.transform_point(three.position),
+                        one.color,
+                        two.color,
+                        three.color,
+                        target,
+                    )
 
         return target^

@@ -8,7 +8,13 @@
 from math.vector2 import Vector2
 from render.framebuffer import Color, Framebuffer
 from math.vector3 import Vector3
-from render.rasterizer import Triangle, edge, rasterize, rasterize_depth
+from render.rasterizer import (
+    Triangle,
+    edge,
+    rasterize,
+    rasterize_depth,
+    rasterize_shaded,
+)
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -195,6 +201,148 @@ def test_depth_rasterization_covers_the_same_pixels_as_the_flat_one() raises:
             assert_equal(
                 flat_target.get_pixel(x, y).r, depth_target.get_pixel(x, y).r
             )
+
+
+def test_a_single_colour_fills_evenly() raises:
+    var fb = Framebuffer(6, 6, Color(0, 0, 0))
+    var t = covering(0.5)
+    rasterize_shaded(
+        t[0], t[1], t[2], Color(90, 0, 0), Color(90, 0, 0), Color(90, 0, 0), fb
+    )
+    assert_equal(fb.get_pixel(0, 0).r, UInt8(90))
+    assert_equal(fb.get_pixel(5, 5).r, UInt8(90))
+
+
+def test_colour_is_mixed_across_the_face() raises:
+    # Red at the left corner, blue at the right: the middle is neither.
+    var fb = Framebuffer(9, 9, Color(0, 0, 0))
+    rasterize_shaded(
+        Vector3(-5, -5, 0.5),
+        Vector3(20, -5, 0.5),
+        Vector3(-5, 20, 0.5),
+        Color(255, 0, 0),
+        Color(0, 0, 255),
+        Color(255, 0, 0),
+        fb,
+    )
+    var left = fb.get_pixel(0, 0)
+    var right = fb.get_pixel(8, 0)
+    assert_true(left.r > right.r)
+    assert_true(right.b > left.b)
+
+
+def test_shaded_rasterization_still_respects_depth() raises:
+    var fb = Framebuffer(6, 6, Color(0, 0, 0))
+    var near = covering(0.1)
+    var far = covering(0.9)
+    rasterize_shaded(
+        near[0],
+        near[1],
+        near[2],
+        Color(0, 255, 0),
+        Color(0, 255, 0),
+        Color(0, 255, 0),
+        fb,
+    )
+    rasterize_shaded(
+        far[0],
+        far[1],
+        far[2],
+        Color(255, 0, 0),
+        Color(255, 0, 0),
+        Color(255, 0, 0),
+        fb,
+    )
+    assert_equal(fb.get_pixel(0, 0).g, UInt8(255))
+
+
+def test_a_degenerate_shaded_triangle_draws_nothing() raises:
+    var fb = Framebuffer(4, 4, Color(1, 2, 3))
+    rasterize_shaded(
+        Vector3(0, 0, 0.5),
+        Vector3(2, 2, 0.5),
+        Vector3(4, 4, 0.5),
+        Color(255, 0, 0),
+        Color(255, 0, 0),
+        Color(255, 0, 0),
+        fb,
+    )
+    assert_equal(fb.get_pixel(2, 2).r, UInt8(1))
+
+
+def test_alpha_is_mixed_like_any_other_channel() raises:
+    var fb = Framebuffer(6, 6, Color(0, 0, 0))
+    var t = covering(0.5)
+    rasterize_shaded(
+        t[0],
+        t[1],
+        t[2],
+        Color(0, 0, 0, 0),
+        Color(0, 0, 0, 255),
+        Color(0, 0, 0, 255),
+        fb,
+    )
+    assert_true(fb.get_pixel(0, 0).a != fb.get_pixel(5, 5).a)
+
+
+def test_a_triangle_above_the_viewport_touches_no_rows() raises:
+    # Entirely above the image, so its bounding box has no rows at all and
+    # the row loop itself must run zero times, not just the column loop.
+    var fb = Framebuffer(4, 4, Color(1, 2, 3))
+    rasterize(
+        Triangle(Vector2(0, -10), Vector2(4, -10), Vector2(0, -6)),
+        fb,
+        Color(255, 0, 0),
+    )
+    rasterize_depth(
+        Vector3(0, -10, 0.5),
+        Vector3(4, -10, 0.5),
+        Vector3(0, -6, 0.5),
+        fb,
+        Color(255, 0, 0),
+    )
+    rasterize_shaded(
+        Vector3(0, -10, 0.5),
+        Vector3(4, -10, 0.5),
+        Vector3(0, -6, 0.5),
+        Color(255, 0, 0),
+        Color(255, 0, 0),
+        Color(255, 0, 0),
+        fb,
+    )
+    for y in range(4):
+        for x in range(4):
+            assert_equal(fb.get_pixel(x, y).r, UInt8(1))
+
+
+def test_a_triangle_beside_the_viewport_touches_no_columns() raises:
+    # Entirely to the left: the bounding box has rows but no columns, so the
+    # column loop is what runs zero times this time.
+    var fb = Framebuffer(4, 4, Color(1, 2, 3))
+    rasterize(
+        Triangle(Vector2(-10, 0), Vector2(-6, 0), Vector2(-10, 4)),
+        fb,
+        Color(255, 0, 0),
+    )
+    rasterize_depth(
+        Vector3(-10, 0, 0.5),
+        Vector3(-6, 0, 0.5),
+        Vector3(-10, 4, 0.5),
+        fb,
+        Color(255, 0, 0),
+    )
+    rasterize_shaded(
+        Vector3(-10, 0, 0.5),
+        Vector3(-6, 0, 0.5),
+        Vector3(-10, 4, 0.5),
+        Color(255, 0, 0),
+        Color(255, 0, 0),
+        Color(255, 0, 0),
+        fb,
+    )
+    for y in range(4):
+        for x in range(4):
+            assert_equal(fb.get_pixel(x, y).r, UInt8(1))
 
 
 def main() raises:

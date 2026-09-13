@@ -361,13 +361,14 @@ Every command below is identical on macOS, Linux, and WSL.
 | `make lint` | Compile everything with warnings promoted to errors. |
 | `make fmt` | Reformat all sources in place. |
 | `make fmt-check` | Verify formatting without modifying anything. |
-| `make coverage` | Line, branch, condition and MC/DC coverage. Exits non-zero on any gap. |
+| `make coverage` | Line, branch, condition and MC/DC coverage, ~5s. Exits non-zero on any gap or if it exceeds one second per suite. |
 | `make docstrings` | Strict docstring audit (`Args:`/`Returns:`/`Raises:` on every public symbol). |
 | `make example` | Render `out/triangle.png`. |
 | `make animation` | Render the animated examples into `out/`. |
 | `make bench` | CPU vs GPU rasterization across image sizes. |
 | `make compile-fail` | Assert every unit error is still rejected by the compiler. |
-| `make clean` | Remove `out/`, the coverage build and the task cache. |
+| `make clean` | Remove the coverage build and the task cache. Keeps `out/`. |
+| `make clean-images` | Remove the rendered images in `out/`. |
 
 Task results are cached on a SHA-256 of the source contents, so a task whose
 inputs have not changed is skipped entirely — a warm `make check` is instant.
@@ -493,17 +494,23 @@ in review rather than silently dropped from the denominator:
 for y in range(self.height):  # pragma: no branch
 ```
 
-Three modules sit in `COVERAGE_EXCLUDE` in the Makefile. `render/png.mojo` and
-`math/matrix4.mojo` are statement-dense numeric code: instrumenting them
-roughly triples the statement count, after which *compiling* the instrumented
-copy takes minutes. The measurement is impractical, not the testing — matrix4
-has 38 tests and png 13. The tool suits control-flow-heavy code and scales
-badly on straight-line arithmetic.
+One module is excluded, `render/gpu.mojo`, and for a structural reason: the
+probes write to stderr, and a GPU kernel has no stderr. Device code cannot be
+instrumented under this design at all. It is covered instead by tests
+asserting its output matches the CPU rasterizer pixel for pixel.
 
-`render/gpu.mojo` is excluded for a different reason than speed:
-the probes write to stderr, and a GPU kernel has no stderr. Instrumenting
-device code cannot work under this design at all. It is covered instead by
-asserting its output matches the CPU rasterizer exactly.
+Everything else — including the rasterizer, the renderer, the PNG encoder and
+`Matrix4` — is measured, and the whole run takes about five seconds. The
+Makefile gives it a budget of one second per test suite and fails it loudly
+past that, on the principle that slow coverage means something is being
+instrumented that should not be.
+
+For a while four more modules were excluded because instrumenting them made
+compilation take minutes. That turned out to be a **Mojo compiler issue**
+triggered by one construct the instrumenter emitted — a `Bool` loop flag read
+after nested loops — not anything about those modules. The bisection, the
+one-line workaround, a standalone reproducer and a draft upstream report are
+in [`docs/mojo-compiler-issue/`](docs/mojo-compiler-issue/README.md).
 
 Known limits. MC/DC is the **masking** variant, since short-circuit evaluation
 makes strict unique-cause MC/DC unreachable for most compound decisions. The

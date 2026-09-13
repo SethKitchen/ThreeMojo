@@ -56,13 +56,15 @@ FORMATTED    := $(SOURCES) $(COMPILE_FAIL)
 # render/gpu.mojo is excluded for a harder reason than speed: the probes write
 # to stderr, and there is no stderr inside a GPU kernel. Instrumenting device
 # code cannot work at all under this design.
-# math/matrix4.mojo joins render/png.mojo for the same reason: both are
-# statement-dense numeric code, and instrumenting them roughly triples the
-# statement count, after which *compiling* the instrumented copy takes
-# minutes. The measurement is impractical, not the testing: matrix4 has 38
-# tests and png 13. The tool suits control-flow-heavy code and scales badly
-# on straight-line arithmetic.
-COVERAGE_EXCLUDE := render/png.mojo render/gpu.mojo math/matrix4.mojo
+# render/gpu.mojo is the one module that cannot be measured under this design:
+# a probe writes to stderr, and a GPU kernel has no stderr. It is covered
+# instead by tests asserting its output matches the CPU rasterizer exactly.
+#
+# Four other modules used to sit here because instrumenting them made the
+# *compile* take minutes. The cause turned out to be one construct the
+# instrumenter emitted -- a Bool loop flag assigned a constant and read after
+# nested loops -- and not the modules at all. See coverage/instrument.mojo.
+COVERAGE_EXCLUDE := render/gpu.mojo
 COVERED := $(filter-out $(COVERAGE_EXCLUDE),$(LIB_SOURCES))
 COV_DIR := coverage/build
 # Rendered images land here. Gitignored, but kept between runs so they can be
@@ -74,6 +76,23 @@ OUT_DIR := out
 # a task re-runs only when something relevant changed. Content rather than
 # mtime, so `make fmt` rewriting a file byte-identically keeps the cache warm
 # and a fresh `git clone` does not throw it away.
+# Test suites are independent processes, and every one pays a fixed compile
+# cost of roughly a third of a second whatever it contains. Running them at
+# once turns that floor from a sum into a maximum.
+JOBS ?= $(shell sysctl -n hw.logicalcpu 2> /dev/null \
+          || nproc 2> /dev/null || echo 4)
+
+# One second per test suite. Coverage slower than that is a bug in the
+# instrumentation rather than a slow machine, and should fail loudly instead
+# of hanging. perl's alarm is used because macOS ships no `timeout`.
+# tests/test_gpu.mojo is left out of the coverage run: it exercises
+# render/gpu.mojo, which cannot be instrumented at all, so it contributes no
+# records while costing a Metal shader compile and a pixel-by-pixel image
+# comparison. It still runs in `make test`, where its job is to prove the GPU
+# and CPU rasterizers agree.
+COVERAGE_TESTS := $(filter-out tests/test_gpu.mojo,$(TESTS))
+COV_BUDGET := $(words $(COVERAGE_TESTS))
+
 CACHE_DIR := .cache
 HASHER    := $(shell command -v shasum > /dev/null 2>&1 \
                && echo "shasum -a 256" || echo "sha256sum")
@@ -94,10 +113,10 @@ mkdir -p $(CACHE_DIR) && rm -f $(CACHE_DIR)/$(1)-* \
 endef
 
 .PHONY: help check test lint docstrings fmt fmt-check coverage \
-        compile-fail example animation bench clean
+        compile-fail example animation bench clean clean-images
 
 help:
-	@echo "ThreeMojo tasks (inputs hash to $(HASH))"
+	@echo "ThreeMojo tasks (inputs hash to $(HASH), $(COV_BUDGET) tests)"
 	@echo
 	@echo "  make check      fmt-check + lint + test   <- before committing"
 	@echo "  make test       run every tests/test_*.mojo suite"
@@ -110,7 +129,8 @@ help:
 	@echo "  make example    render out/triangle.png"
 	@echo "  make animation  render the animated examples into out/"
 	@echo "  make bench      CPU vs GPU rasterization across sizes"
-	@echo "  make clean      remove out/, the coverage build and the cache"
+	@echo "  make clean      remove the coverage build and the cache"
+	@echo "  make clean-images  remove the rendered images in out/"
 	@echo
 	@echo "Cached tasks re-run only when a source file's content changes."
 	@echo "Force one with 'make -B <task>'."
@@ -120,28 +140,29 @@ check: fmt-check lint test compile-fail
 # --- cached tasks -----------------------------------------------------------
 test: $(TEST_STAMP)
 $(TEST_STAMP):
-	@fail=0; \
-	for t in $(TESTS); do \
-	  $(call run,$(MOJO) run $(MOJOFLAGS) "$$t"); \
-	  [ $$rc -eq 0 ] || fail=1; \
-	done; \
-	if [ $$fail -ne 0 ]; then echo "Some suites FAILED."; exit 1; fi; \
-	echo "All suites passed."
+	@printf '%s\n' $(TESTS) \
+	  | xargs -P $(JOBS) -I {} \
+	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
+	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
+	  || { echo "Some suites FAILED."; exit 1; }
+	@echo "All suites passed."
 	@$(call stamp,test)
 
 lint: $(LINT_STAMP)
 $(LINT_STAMP):
-	@fail=0; \
-	for f in $(ENTRY_POINTS); do \
-	  $(call run,$(MOJO) build $(MOJOFLAGS) --Werror -o /dev/null "$$f"); \
-	  [ $$rc -eq 0 ] || fail=1; \
-	done; \
-	for f in $(DOC_SOURCES); do \
-	  $(call run,$(MOJO) doc $(MOJOFLAGS) --Werror -o /dev/null "$$f"); \
-	  [ $$rc -eq 0 ] || fail=1; \
-	done; \
-	if [ $$fail -ne 0 ]; then exit 1; fi; \
-	echo "No warnings."
+	@printf '%s\n' $(ENTRY_POINTS) \
+	  | xargs -P $(JOBS) -I {} \
+	      sh -c 'out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o /dev/null "$$1" \
+	               2>&1); rc=$$?; printf "%s" "$$out" | sed "/Crashpad/d"; \
+	             exit $$rc' _ {} \
+	  || exit 1
+	@printf '%s\n' $(DOC_SOURCES) \
+	  | xargs -P $(JOBS) -I {} \
+	      sh -c 'out=$$($(MOJO) doc $(MOJOFLAGS) --Werror -o /dev/null "$$1" \
+	               2>&1); rc=$$?; printf "%s" "$$out" | sed "/Crashpad/d"; \
+	             exit $$rc' _ {} \
+	  || exit 1
+	@echo "No warnings."
 	@$(call stamp,lint)
 
 # mojo format has no --check flag, so format a scratch copy and diff it.
@@ -178,16 +199,24 @@ $(COV_STAMP):
 	@for f in $(COVERAGE_EXCLUDE); do \
 	  mkdir -p "$(COV_DIR)/$$(dirname $$f)"; cp "$$f" "$(COV_DIR)/$$f"; \
 	done
-	@: > $(COV_DIR)/hits.txt
-	@fail=0; \
-	for t in $(TESTS); do \
-	  $(MOJO) run -I $(COV_DIR) $(MOJOFLAGS) "$$t" \
-	    2>> $(COV_DIR)/hits.txt > /dev/null || fail=1; \
-	done; \
-	if [ $$fail -ne 0 ]; then \
-	  echo "Tests failed under instrumentation; coverage not measured."; \
-	  exit 1; \
-	fi
+	@mkdir -p $(COV_DIR)/hits
+	@# One file per suite rather than a shared append: probe records must not
+	@# interleave mid-line, and MC-DC needs each decision's records in order.
+	@printf '%s\n' $(COVERAGE_TESTS) \
+	  | perl -e 'alarm shift; exec @ARGV' $(COV_BUDGET) \
+	      xargs -P $(JOBS) -I {} \
+	      sh -c 'name=$$(basename "$$1" .mojo); \
+	             $(MOJO) run -I $(COV_DIR) $(MOJOFLAGS) "$$1" \
+	               2> $(COV_DIR)/hits/$$name.txt > /dev/null' _ {} \
+	  || { rc=$$?; \
+	       if [ $$rc -eq 142 ]; then \
+	         echo "Coverage exceeded its $(COV_BUDGET)s budget (one second per" \
+	              "suite). Something is being instrumented that should not be."; \
+	       else \
+	         echo "A suite failed under instrumentation (exit $$rc); coverage" \
+	              "not measured. Run it with -I $(COV_DIR) to see why."; \
+	       fi; exit 1; }
+	@cat $(COV_DIR)/hits/*.txt > $(COV_DIR)/hits.txt
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo \
 	  $(COV_DIR)/manifest.txt $(COV_DIR)/hits.txt); \
 	[ $$rc -eq 0 ] || exit 1
@@ -256,6 +285,13 @@ $(OUT_DIR)/triangle.png: $(LIB_SOURCES) examples/triangle.mojo
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/triangle.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
+# Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be
+# looked at, and a folder that keeps emptying itself is no use to watch.
+# `make clean-images` removes them when you actually want them gone.
 clean:
-	@rm -rf $(OUT_DIR) $(COV_DIR) $(CACHE_DIR)
-	@echo "Removed generated files and the task cache."
+	@rm -rf $(COV_DIR) $(CACHE_DIR)
+	@echo "Removed the coverage build and the cache; kept $(OUT_DIR)."
+
+clean-images:
+	@rm -rf $(OUT_DIR)
+	@echo "Removed $(OUT_DIR)."

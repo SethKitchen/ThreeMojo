@@ -12,6 +12,11 @@ pixel differently is a bug that no aggregate check would catch.
 
 Tests needing hardware return early when none is present, so the suite passes
 on a machine without a GPU rather than failing for the wrong reason.
+
+Images are kept small deliberately. Comparing two renders means reading every
+pixel of both, and `Framebuffer.get_pixel` is instrumented when the coverage
+tool runs, so each pixel costs a record written to stderr. A 320x240
+comparison produced 112 MB of them and dominated the entire coverage run.
 """
 
 from math.vector2 import Vector2
@@ -90,8 +95,8 @@ def test_gpu_matches_the_cpu_rasterizer() raises:
     var triangle = Triangle(
         Vector2(50, 180), Vector2(160, 40), Vector2(275, 190)
     )
-    var gpu = render(triangle, 320, 240, BACKGROUND, FOREGROUND)
-    var cpu = cpu_render(triangle, 320, 240)
+    var gpu = render(triangle, 80, 60, BACKGROUND, FOREGROUND)
+    var cpu = cpu_render(triangle, 80, 60)
     assert_equal(count_mismatches(cpu, gpu), 0)
 
 

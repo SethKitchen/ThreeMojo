@@ -7,10 +7,10 @@
 
 The box is built from twenty-four vertices rather than eight, four per face.
 Sharing the eight corners would be smaller, but a corner shared between three
-faces can only carry one normal and one texture coordinate, so the faces could
-never be shaded or textured separately. three.js splits them for that reason
-and so does this, even though normals are not here yet — changing the vertex
-layout later would silently invalidate every index buffer built against it.
+faces can only carry one normal, so the faces could never be shaded
+separately. That is no longer hypothetical: each of a face's four vertices
+carries that face's outward normal, which is what keeps a cube's edges
+crisp when the renderer interpolates normals across a triangle.
 
 Faces are emitted in a fixed order, two triangles each, so triangle index
 divided by two identifies the face. `examples/cubes.mojo` uses exactly that to
@@ -18,7 +18,7 @@ shade the sides differently.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, POSITION
+from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
 from math.vector3 import Vector3
 from units.si import Length
 
@@ -28,6 +28,23 @@ def _push(mut data: List[Float32], x: Float32, y: Float32, z: Float32):
     data.append(x)
     data.append(y)
     data.append(z)
+
+
+def _face(
+    mut data: List[Float32],
+    mut normals: List[Float32],
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    d: Vector3,
+    nx: Float32,
+    ny: Float32,
+    nz: Float32,
+):
+    """Append one face's four corners, each carrying the face's own normal."""
+    for corner in [a, b, c, d]:  # pragma: no branch
+        _push(data, corner.x, corner.y, corner.z)
+        _push(normals, nx, ny, nz)
 
 
 def _quad(mut index: List[Int], start: Int):
@@ -53,8 +70,8 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
         depth: Extent along z.
 
     Returns:
-        A geometry with a `position` attribute and an index buffer, its faces
-        ordered front, back, left, right, top, bottom.
+        A geometry with `position` and `normal` attributes and an index
+        buffer, its faces ordered front, back, left, right, top, bottom.
 
     Raises:
         Error: If any extent is not positive.
@@ -67,36 +84,74 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
     var z = depth.value / 2
 
     var data = List[Float32]()
-    # Front (+z)
-    _push(data, -x, -y, z)
-    _push(data, x, -y, z)
-    _push(data, x, y, z)
-    _push(data, -x, y, z)
-    # Back (-z)
-    _push(data, x, -y, -z)
-    _push(data, -x, -y, -z)
-    _push(data, -x, y, -z)
-    _push(data, x, y, -z)
-    # Left (-x)
-    _push(data, -x, -y, -z)
-    _push(data, -x, -y, z)
-    _push(data, -x, y, z)
-    _push(data, -x, y, -z)
-    # Right (+x)
-    _push(data, x, -y, z)
-    _push(data, x, -y, -z)
-    _push(data, x, y, -z)
-    _push(data, x, y, z)
-    # Top (+y)
-    _push(data, -x, y, z)
-    _push(data, x, y, z)
-    _push(data, x, y, -z)
-    _push(data, -x, y, -z)
-    # Bottom (-y)
-    _push(data, -x, -y, -z)
-    _push(data, x, -y, -z)
-    _push(data, x, -y, z)
-    _push(data, -x, -y, z)
+    var normals = List[Float32]()
+
+    _face(
+        data,
+        normals,
+        Vector3(-x, -y, z),
+        Vector3(x, -y, z),
+        Vector3(x, y, z),
+        Vector3(-x, y, z),
+        0,
+        0,
+        1,
+    )  # front
+    _face(
+        data,
+        normals,
+        Vector3(x, -y, -z),
+        Vector3(-x, -y, -z),
+        Vector3(-x, y, -z),
+        Vector3(x, y, -z),
+        0,
+        0,
+        -1,
+    )  # back
+    _face(
+        data,
+        normals,
+        Vector3(-x, -y, -z),
+        Vector3(-x, -y, z),
+        Vector3(-x, y, z),
+        Vector3(-x, y, -z),
+        -1,
+        0,
+        0,
+    )  # left
+    _face(
+        data,
+        normals,
+        Vector3(x, -y, z),
+        Vector3(x, -y, -z),
+        Vector3(x, y, -z),
+        Vector3(x, y, z),
+        1,
+        0,
+        0,
+    )  # right
+    _face(
+        data,
+        normals,
+        Vector3(-x, y, z),
+        Vector3(x, y, z),
+        Vector3(x, y, -z),
+        Vector3(-x, y, -z),
+        0,
+        1,
+        0,
+    )  # top
+    _face(
+        data,
+        normals,
+        Vector3(-x, -y, -z),
+        Vector3(x, -y, -z),
+        Vector3(x, -y, z),
+        Vector3(-x, -y, z),
+        0,
+        -1,
+        0,
+    )  # bottom
 
     var index = List[Int]()
     # A box always has six faces, so this cannot run zero times.
@@ -105,6 +160,7 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
 
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
+    geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_index(index^)
     return geometry^
 

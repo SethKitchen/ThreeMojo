@@ -21,8 +21,14 @@ comptime PROBE_IMPORT = (
 comptime BRANCH_KEYWORDS = ["if ", "elif ", "while "]
 
 # A `for` loop has no condition to wrap. Its two outcomes are "the body ran"
-# and "the sequence was empty", so a flag is raised inside the body and read
-# once the loop has finished.
+# and "the sequence was empty", so a counter is bumped inside the body and
+# read once the loop has finished.
+#
+# It is an Int counter and not a Bool flag for a reason that cost a day to
+# find: a Bool assigned the constant `True` inside a loop and read after it
+# sends the Mojo compiler's dataflow analysis superlinear on nested loops.
+# An instrumented sphere took minutes to *compile*; `+= 1` on an Int is not a
+# constant assignment, and the same file builds in two seconds.
 comptime LOOP_KEYWORD = "for "
 
 # Opt-out for a decision whose second outcome is unreachable rather than
@@ -270,6 +276,10 @@ def _wrap_condition(
     var condition = String(_substring(line, condition_start, colon).strip())
     if condition == "":
         return Wrapped(String(line), 0)
+    # `while True:` is a loop, not a decision: a literal condition has exactly
+    # one outcome, so reporting the other as "never evaluated" is noise.
+    if condition == "True" or condition == "False":
+        return Wrapped(String(line), 0)
 
     var parts = split_conditions(condition)
     var rebuilt = String("")
@@ -342,8 +352,48 @@ def _close_loops(
             + last.id
             + '", '
             + last.flag
-            + ")\n"
+            + " > 0)\n"
         )
+
+
+def _emit_loop(
+    mut out: String,
+    mut branches: List[Int],
+    mut conditions: List[Int],
+    mut closers: List[_LoopCloser],
+    header: String,
+    number: Int,
+    module: String,
+):
+    """Emit a `for` loop's counter, its header, and the probe on entry.
+
+    Used for a header that fit on one line and for one joined from several,
+    so the two cannot drift apart. The closer that reads the counter after
+    the loop is queued for `_close_loops` to emit when the body ends.
+
+    Args:
+        out: Destination text.
+        branches: Decision lines, appended to.
+        conditions: Condition counts, appended to in step with `branches`.
+        closers: Loops awaiting their trailing probe.
+        header: The complete `for ...:` line, already comment-stripped if it
+            was joined from several physical lines.
+        number: The source line the header started on.
+        module: Probe id prefix.
+    """
+    var flag = "_cov_loop_" + String(number)
+    var id = module + ":" + String(number)
+    branches.append(number)
+    conditions.append(0)
+    var indent = indent_of(header)
+    out += " " * indent + "var " + flag + " = 0\n"
+    out += header + "\n"
+    # Bumped on entry, so a body that returns still reports the sequence was
+    # non-empty.
+    var body_indent = " " * (indent + 4)
+    out += body_indent + flag + " += 1\n"
+    out += body_indent + '_ = _cov_branch("' + id + '", True)\n'
+    closers.append(_LoopCloser(indent, id, flag))
 
 
 def instrument(source: String, module: String) raises -> Instrumented:
@@ -375,6 +425,12 @@ def instrument(source: String, module: String) raises -> Instrumented:
     var pending = String("")
     var pending_line = 0
     var pending_keyword = String("")
+    # A `for` header can span lines too, and a pragma may sit on any of them,
+    # so both are tracked for the whole logical header rather than its first
+    # physical line. Getting that wrong emitted a loop prologue into the
+    # middle of a `range(` argument list.
+    var pending_is_loop = False
+    var pending_excluded = False
     var closers = List[_LoopCloser]()
 
     for raw in source.splitlines():
@@ -396,14 +452,28 @@ def instrument(source: String, module: String) raises -> Instrumented:
 
         # Still accumulating a header split over several physical lines.
         if pending != "":
+            pending_excluded = pending_excluded or PRAGMA_NO_BRANCH in line
             pending += " " + _strip_comment(String(line.strip()))
             if _statement_colon(pending) >= 0:
-                var id = module + ":" + String(pending_line)
-                var joined = _wrap_condition(pending, pending_keyword, id)
-                if joined.text != pending:
-                    branches.append(pending_line)
-                    conditions.append(joined.conditions)
-                out += joined.text + "\n"
+                if pending_excluded:
+                    out += pending + "\n"
+                elif pending_is_loop:
+                    _emit_loop(
+                        out,
+                        branches,
+                        conditions,
+                        closers,
+                        pending,
+                        pending_line,
+                        module,
+                    )
+                else:
+                    var id = module + ":" + String(pending_line)
+                    var joined = _wrap_condition(pending, pending_keyword, id)
+                    if joined.text != pending:
+                        branches.append(pending_line)
+                        conditions.append(joined.conditions)
+                    out += joined.text + "\n"
                 pending = String("")
             continue
 
@@ -424,24 +494,20 @@ def instrument(source: String, module: String) raises -> Instrumented:
 
         var excluded = PRAGMA_NO_BRANCH in line
 
-        if (
-            significant
-            and not excluded
-            and String(line.strip()).startswith(LOOP_KEYWORD)
-        ):
-            var flag = "_cov_loop_" + String(number)
-            var id = module + ":" + String(number)
-            branches.append(number)
-            conditions.append(0)
-            out += " " * indent_of(line) + "var " + flag + " = False\n"
-            out += line + "\n"
-            # Raised on entry, so a body that returns still reports the
-            # sequence was non-empty.
-            var body_indent = " " * (indent_of(line) + 4)
-            out += body_indent + flag + " = True\n"
-            out += body_indent + '_ = _cov_branch("' + id + '", True)\n'
-            closers.append(_LoopCloser(indent_of(line), id, flag))
-            continue
+        if significant and String(line.strip()).startswith(LOOP_KEYWORD):
+            if _statement_colon(line) < 0:
+                # The header continues on the next line; decide about the
+                # pragma once all of it has been seen.
+                pending = _strip_comment(line)
+                pending_line = number
+                pending_is_loop = True
+                pending_excluded = excluded
+                continue
+            if not excluded:
+                _emit_loop(
+                    out, branches, conditions, closers, line, number, module
+                )
+                continue
 
         # `elif` never takes a line probe but is still a decision, so branch
         # detection is deliberately independent of `executable`.
@@ -454,6 +520,8 @@ def instrument(source: String, module: String) raises -> Instrumented:
                     pending = _strip_comment(line)
                     pending_line = number
                     pending_keyword = keyword^
+                    pending_is_loop = False
+                    pending_excluded = False
                     continue
                 var id = module + ":" + String(number)
                 var wrapped = _wrap_condition(line, keyword, id)

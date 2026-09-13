@@ -21,8 +21,10 @@ geometry type is for.
 from core.buffer_attribute import BufferAttribute
 from math.vector3 import Vector3
 
-# The one attribute every geometry must have, named as three.js names it.
+# The attributes this port knows about, named as three.js names them.
+# `position` is the only one a geometry must have.
 comptime POSITION = "position"
+comptime NORMAL = "normal"
 
 
 struct BufferGeometry(Movable):

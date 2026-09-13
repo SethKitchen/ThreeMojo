@@ -138,6 +138,27 @@ struct PerspectiveCamera(ImplicitlyCopyable):
         combined.multiply(self.view_projection_matrix())
         return combined^
 
+    def view_to_screen_matrix(self, width: Int, height: Int) raises -> Matrix4:
+        """Return the transform from camera space to pixels.
+
+        This is `screen_matrix` without the view half, for callers that have
+        already moved into camera space — anything clipping against the near
+        plane has to, since the plane is only a plane there.
+
+        Args:
+            width: Image width in pixels.
+            height: Image height in pixels.
+
+        Returns:
+            The product viewport * projection.
+
+        Raises:
+            Error: If the viewport or the projection is invalid.
+        """
+        var combined = viewport(width, height)
+        combined.multiply(self.projection_matrix())
+        return combined^
+
     def project(
         self, point: Vector3, width: Int, height: Int
     ) raises -> Vector3:

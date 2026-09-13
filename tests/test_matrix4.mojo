@@ -119,11 +119,16 @@ def test_out_of_range_indices_are_rejected() raises:
 
 
 def test_out_of_range_writes_are_rejected() raises:
+    # All four edges of the guard, each its own case.
     var m = Matrix4()
+    with assert_raises():
+        m.put(-1, 0, 1.0)
     with assert_raises():
         m.put(4, 0, 1.0)
     with assert_raises():
         m.put(0, -1, 1.0)
+    with assert_raises():
+        m.put(0, 4, 1.0)
 
 
 def test_identity_resets_a_modified_matrix() raises:

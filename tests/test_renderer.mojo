@@ -11,6 +11,7 @@ from core.buffer_geometry import BufferGeometry, POSITION
 from core.object3d import Object3D
 from core.scene import Scene
 from geometries.box import cube
+from geometries.sphere import sphere
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
@@ -26,8 +27,13 @@ from std.testing import (
 from units.si import Angle, DEGREE, Length, METRE
 
 comptime TOLERANCE = Float64(1e-5)
-comptime WIDTH = 60
-comptime HEIGHT = 48
+# Small on purpose. These tests cover the renderer's logic, not its output at
+# any particular size, and every covered pixel costs a probe record when the
+# coverage tool instruments the rasterizer. A 60x48 viewport made the
+# instrumented run minutes long; this is the same code paths for a fraction of
+# the work.
+comptime WIDTH = 24
+comptime HEIGHT = 18
 
 
 def a_camera() raises -> PerspectiveCamera:
@@ -302,6 +308,63 @@ def test_a_mesh_naming_a_node_that_is_not_there_is_rejected() raises:
     meshes.append(Mesh(cube(Length(1.0, METRE)), Color(255, 0, 0), 3))
     with assert_raises():
         _ = renderer.render(Scene(), meshes, a_camera())
+
+
+def test_a_geometry_without_normals_shades_flat() raises:
+    # No normal attribute, so each face supplies its own and the triangle
+    # takes one colour throughout.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var scene = scene_with_node_at(0)
+    var plain = BufferGeometry()
+    var data = List[Float32]()
+    for value in [-1.0, -1.0, 0.0, 1.0, -1.0, 0.0, 0.0, 1.0, 0.0]:
+        data.append(Float32(value))
+    plain.set_attribute(String(POSITION), BufferAttribute(data^, 3))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(plain^, Color(200, 200, 200), 0))
+    var image = renderer.render(scene, meshes, a_camera())
+    assert_true(count_background(image, renderer.background) < WIDTH * HEIGHT)
+
+
+def test_a_sphere_shades_smoothly_across_a_triangle() raises:
+    # Per-vertex normals mean neighbouring pixels differ, where a flat face
+    # would hold one colour.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var scene = scene_with_node_at(0)
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(sphere(Length(1.0, METRE), 16, 12), Color(200, 200, 200), 0)
+    )
+    var image = renderer.render(scene, meshes, a_camera())
+    var shades = 0
+    var seen = List[UInt8]()
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var value = image.get_pixel(x, y).r
+            var known = False
+            for index in range(len(seen)):
+                if seen[index] == value:
+                    known = True
+                    break
+            if not known:
+                seen.append(value)
+                shades += 1
+    # A flat-shaded sphere would show one value per triangle band; smooth
+    # shading gives a distinct value almost everywhere.
+    assert_true(shades > 10)
+
+
+def test_geometry_crossing_the_near_plane_is_clipped_not_mangled() raises:
+    # The camera sits inside a large cube. Without clipping, corners behind
+    # the camera project through the origin and smear across the image.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var scene = scene_with_node_at(0)
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(cube(Length(8.0, METRE)), Color(255, 140, 40), 0))
+    var image = renderer.render(scene, meshes, a_camera())
+    # Every pixel belongs to the cube's inside surface, and every one of them
+    # is a real shade rather than a projection artefact.
+    assert_true(count_background(image, renderer.background) < 100)
 
 
 def main() raises:

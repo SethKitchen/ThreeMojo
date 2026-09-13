@@ -10,13 +10,48 @@
 a pixel only when it is nearer than what is already there, which is what lets
 geometry be submitted in any order.
 
-No clipping and no top-left fill rule: a triangle crossing the near plane will
-misbehave, and two triangles sharing an edge may both claim the pixels on it.
+Each triangle is scanned only inside its own bounding box. Walking the whole
+framebuffer per triangle is the obvious way to write this and costs the same
+for a triangle covering four pixels as for one covering the screen; a sphere
+of several hundred triangles made that difference impossible to ignore.
+
+No top-left fill rule. Two triangles sharing an edge both test the pixels
+along it, and because the edge function is evaluated from different corner
+orderings for each, rounding can put a pixel fractionally outside *both* —
+leaving a one-pixel crack along the shared diagonal of a quad. It is rare and
+grows with triangle size. Fixing it properly means snapping vertices to a
+fixed-point grid so the edge function is exact, which is what hardware does.
 """
+
+
+@fieldwise_init
+struct _Bounds(ImplicitlyCopyable):
+    """The pixel rows and columns a triangle can possibly touch."""
+
+    var left: Int
+    var right: Int
+    var top: Int
+    var bottom: Int
+
+
+def _bounds(triangle: Triangle, width: Int, height: Int) -> _Bounds:
+    """Return the triangle's bounding box, clamped to the framebuffer."""
+    var left = min(triangle.a.x, min(triangle.b.x, triangle.c.x))
+    var right = max(triangle.a.x, max(triangle.b.x, triangle.c.x))
+    var top = min(triangle.a.y, min(triangle.b.y, triangle.c.y))
+    var bottom = max(triangle.a.y, max(triangle.b.y, triangle.c.y))
+    return _Bounds(
+        max(0, Int(floor(left))),
+        min(width - 1, Int(ceil(right))),
+        max(0, Int(floor(top))),
+        min(height - 1, Int(ceil(bottom))),
+    )
+
 
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
+from std.math import ceil, floor, max, min
 
 
 def edge(a: Vector2, b: Vector2, p: Vector2) -> Float32:
@@ -61,10 +96,11 @@ def rasterize(triangle: Triangle, mut target: Framebuffer, color: Color) raises:
 
     Samples at each pixel's center, with the image origin at the top left.
     """
-    # A Framebuffer always has positive dimensions, so neither loop can run
+    var box = _bounds(triangle, target.width, target.height)
+    # A triangle entirely off-screen leaves an empty box, so these can run
     # zero times.
-    for y in range(target.height):  # pragma: no branch
-        for x in range(target.width):  # pragma: no branch
+    for y in range(box.top, box.bottom + 1):
+        for x in range(box.left, box.right + 1):
             var p = Vector2(Float32(x) + 0.5, Float32(y) + 0.5)
             if triangle.contains(p):
                 target.set_pixel(x, y, color)
@@ -105,10 +141,11 @@ def rasterize_depth(
     if area == 0:
         return
 
-    # A Framebuffer always has positive dimensions, so neither loop can run
+    var box = _bounds(flat, target.width, target.height)
+    # A triangle entirely off-screen leaves an empty box, so these can run
     # zero times.
-    for y in range(target.height):  # pragma: no branch
-        for x in range(target.width):  # pragma: no branch
+    for y in range(box.top, box.bottom + 1):
+        for x in range(box.left, box.right + 1):
             var p = Vector2(Float32(x) + 0.5, Float32(y) + 0.5)
             if not flat.contains(p):
                 continue
@@ -120,3 +157,79 @@ def rasterize_depth(
             var z = wa * a.z + wb * b.z + wc * c.z
             if target.test_depth(x, y, z):
                 target.set_pixel(x, y, color)
+
+
+def _blend(
+    a: UInt8, b: UInt8, c: UInt8, wa: Float32, wb: Float32, wc: Float32
+) -> UInt8:
+    """Return one colour channel mixed by three barycentric weights."""
+    # Inside a triangle every barycentric weight is non-negative and they sum
+    # to one, so the mix stays between the inputs and cannot go negative; only
+    # the rounding on a 255 needs clamping.
+    var value = Float32(a) * wa + Float32(b) * wb + Float32(c) * wc + 0.5
+    if value > 255:
+        return 255
+    return UInt8(value)
+
+
+def rasterize_shaded(
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    color_a: Color,
+    color_b: Color,
+    color_c: Color,
+    mut target: Framebuffer,
+) raises:
+    """Fill a triangle whose corners each carry their own colour.
+
+    The colour is mixed across the face by the same barycentric weights the
+    depth uses, which is Gouraud shading: lighting is evaluated per corner and
+    interpolated between, rather than once for the whole face.
+
+    Unlike depth, colour interpolated linearly in screen space is only an
+    approximation — strictly it should go through 1/w like any other vertex
+    attribute. The error grows with how much perspective a single triangle
+    spans, so it is invisible on a subdivided sphere and would show on a floor
+    plane drawn as two enormous triangles.
+
+    Args:
+        a: First corner, screen x and y with NDC depth in z.
+        b: Second corner.
+        c: Third corner.
+        color_a: Colour at the first corner.
+        color_b: Colour at the second.
+        color_c: Colour at the third.
+        target: The framebuffer to draw into.
+
+    Raises:
+        Error: If a pixel write lands out of bounds, which the loop prevents.
+    """
+    var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
+    var area = flat.area2()
+    if area == 0:
+        return
+
+    var box = _bounds(flat, target.width, target.height)
+    # A triangle entirely off-screen leaves an empty box, so these can run
+    # zero times.
+    for y in range(box.top, box.bottom + 1):
+        for x in range(box.left, box.right + 1):
+            var p = Vector2(Float32(x) + 0.5, Float32(y) + 0.5)
+            if not flat.contains(p):
+                continue
+            var wa = edge(flat.b, flat.c, p) / area
+            var wb = edge(flat.c, flat.a, p) / area
+            var wc = edge(flat.a, flat.b, p) / area
+            var z = wa * a.z + wb * b.z + wc * c.z
+            if target.test_depth(x, y, z):
+                target.set_pixel(
+                    x,
+                    y,
+                    Color(
+                        _blend(color_a.r, color_b.r, color_c.r, wa, wb, wc),
+                        _blend(color_a.g, color_b.g, color_c.g, wa, wb, wc),
+                        _blend(color_a.b, color_b.b, color_c.b, wa, wb, wc),
+                        _blend(color_a.a, color_b.a, color_c.a, wa, wb, wc),
+                    ),
+                )

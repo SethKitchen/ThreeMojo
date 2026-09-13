@@ -111,7 +111,7 @@ struct Matrix4(ImplicitlyCopyable):
 
     def transpose(mut self):
         """Swap this matrix's rows and columns in place."""
-        for row in range(4):
+        for row in range(4):  # pragma: no branch
             for column in range(row + 1, 4):
                 var high = self.elements[column * 4 + row]
                 self.elements[column * 4 + row] = self.elements[
@@ -125,10 +125,11 @@ struct Matrix4(ImplicitlyCopyable):
         Order matters: the right-hand matrix is applied to a point first.
         """
         var result = Array[Float32, 16](fill=0.0)
-        for row in range(4):
-            for column in range(4):
+        # Fixed 4x4, so none of these can run zero times.
+        for row in range(4):  # pragma: no branch
+            for column in range(4):  # pragma: no branch
                 var total = Float32(0)
-                for k in range(4):
+                for k in range(4):  # pragma: no branch
                     total += (
                         self.elements[k * 4 + row]
                         * other.elements[column * 4 + k]

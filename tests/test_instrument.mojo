@@ -298,8 +298,8 @@ def test_for_loop_raises_a_flag_inside_its_body() raises:
         "def f(n: Int):\n    for i in range(n):\n        g(i)\n"
     )
     var result = instrument(source, String("m"))
-    assert_true("var _cov_loop_2 = False" in result.text)
-    assert_true("_cov_loop_2 = True" in result.text)
+    assert_true("var _cov_loop_2 = 0" in result.text)
+    assert_true("_cov_loop_2 += 1" in result.text)
 
 
 def test_for_loop_reports_the_empty_case_after_its_body() raises:
@@ -308,7 +308,7 @@ def test_for_loop_reports_the_empty_case_after_its_body() raises:
     )
     var result = instrument(source, String("m"))
     # Reading the flag after the loop is the only way to see zero iterations.
-    assert_true('_ = _cov_branch("m:2", _cov_loop_2)' in result.text)
+    assert_true('_ = _cov_branch("m:2", _cov_loop_2 > 0)' in result.text)
 
 
 def test_for_loop_reports_entry_from_inside_the_body() raises:
@@ -327,8 +327,8 @@ def test_nested_loops_close_innermost_first() raises:
     )
     var result = instrument(source, String("m"))
     assert_equal(result.branches, [2, 3])
-    var inner = result.text.find('_ = _cov_branch("m:3", _cov_loop_3)')
-    var outer = result.text.find('_ = _cov_branch("m:2", _cov_loop_2)')
+    var inner = result.text.find('_ = _cov_branch("m:3", _cov_loop_3 > 0)')
+    var outer = result.text.find('_ = _cov_branch("m:2", _cov_loop_2 > 0)')
     assert_true(inner < outer)
 
 
@@ -337,7 +337,9 @@ def test_loop_closer_is_indented_to_the_loop_header() raises:
         "def f(n: Int):\n    for y in range(n):\n        g(y)\n    return 1\n"
     )
     var result = instrument(source, String("m"))
-    assert_true('\n    _ = _cov_branch("m:2", _cov_loop_2)\n' in result.text)
+    assert_true(
+        '\n    _ = _cov_branch("m:2", _cov_loop_2 > 0)\n' in result.text
+    )
 
 
 def test_statement_after_a_loop_is_still_probed() raises:
@@ -353,7 +355,7 @@ def test_loop_at_end_of_file_still_gets_its_closer() raises:
         "def f(n: Int):\n    for y in range(n):\n        g(y)\n"
     )
     var result = instrument(source, String("m"))
-    assert_true('_ = _cov_branch("m:2", _cov_loop_2)' in result.text)
+    assert_true('_ = _cov_branch("m:2", _cov_loop_2 > 0)' in result.text)
 
 
 def test_blank_and_comment_lines_do_not_close_a_loop_early() raises:
@@ -363,7 +365,7 @@ def test_blank_and_comment_lines_do_not_close_a_loop_early() raises:
     )
     var result = instrument(source, String("m"))
     # The closer must come after h(y), not before it.
-    assert_true(result.text.find("h(y)") < result.text.find("_cov_loop_2)"))
+    assert_true(result.text.find("h(y)") < result.text.find("_cov_loop_2 > 0)"))
 
 
 def test_pragma_excludes_a_loop_from_branch_measurement() raises:
@@ -394,12 +396,55 @@ def test_pragma_still_leaves_the_line_measured() raises:
     assert_equal(result.lines, [2, 3])
 
 
+def test_a_multi_line_for_header_is_joined_before_instrumenting() raises:
+    # The formatter splits a long header like this. The loop prologue must
+    # land after the whole header, not inside the range() argument list.
+    var source = String(
+        "def f(n: Int):\n    for i in range(\n        n\n    ):\n        g(i)\n"
+    )
+    var result = instrument(source, String("m"))
+    assert_equal(result.branches, [2])
+    assert_true(
+        "for i in range( n ):\n        _cov_loop_2 += 1\n" in result.text
+    )
+    assert_true('_ = _cov_branch("m:2", _cov_loop_2 > 0)' in result.text)
+
+
+def test_a_pragma_on_a_continuation_line_excludes_the_loop() raises:
+    var source = String(
+        "def f(n: Int):\n    for i in range(\n        n\n"
+        "    ):  # pragma: no branch\n        g(i)\n"
+    )
+    var result = instrument(source, String("m"))
+    assert_equal(len(result.branches), 0)
+    assert_true("_cov_loop" not in result.text)
+
+
+def test_a_pragma_on_a_continuation_line_excludes_the_decision() raises:
+    var source = String(
+        "def f(a: Int):\n    if (\n        a > 0\n"
+        "    ):  # pragma: no branch\n        return 1\n"
+    )
+    var result = instrument(source, String("m"))
+    assert_equal(len(result.branches), 0)
+    assert_true('_cov_branch("' not in result.text)
+
+
 def test_the_word_for_inside_a_docstring_is_not_a_loop() raises:
     var source = String(
         'def f():\n    """Doc.\n\n    for i in x:\n    """\n    return 1\n'
     )
     var result = instrument(source, String("m"))
     assert_equal(len(result.branches), 0)
+
+
+def test_a_literal_condition_is_not_a_decision() raises:
+    # `while True:` has one outcome by definition; wrapping it would report
+    # a False that can never happen.
+    var source = String("def f():\n    while True:\n        break\n")
+    var result = instrument(source, String("m"))
+    assert_equal(len(result.branches), 0)
+    assert_true('_cov_branch("' not in result.text)
 
 
 def test_the_word_if_inside_a_docstring_is_not_a_branch() raises:
