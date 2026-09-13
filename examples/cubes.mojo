@@ -19,8 +19,10 @@ around. That is the entire point of a transform hierarchy.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
+from core.buffer_geometry import POSITION, BufferGeometry
 from core.object3d import Object3D
 from core.scene import Scene
+from geometries.box import cube
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from render.apng import encode
@@ -35,42 +37,6 @@ comptime WIDTH = 260
 comptime HEIGHT = 200
 comptime FRAMES = 48
 comptime DELAY_MS = 50
-
-
-def corners(half: Float32) -> List[Vector3]:
-    """Return the eight corners of a cube of the given half-extent."""
-    var points = List[Vector3]()
-    points.append(Vector3(-half, -half, -half))
-    points.append(Vector3(half, -half, -half))
-    points.append(Vector3(half, half, -half))
-    points.append(Vector3(-half, half, -half))
-    points.append(Vector3(-half, -half, half))
-    points.append(Vector3(half, -half, half))
-    points.append(Vector3(half, half, half))
-    points.append(Vector3(-half, half, half))
-    return points^
-
-
-def add_face(mut indices: List[Int], a: Int, b: Int, c: Int, d: Int):
-    """Append the two triangles of a quad face."""
-    indices.append(a)
-    indices.append(b)
-    indices.append(c)
-    indices.append(a)
-    indices.append(c)
-    indices.append(d)
-
-
-def faces() -> List[Int]:
-    """Return the cube's twelve triangles as corner indices."""
-    var indices = List[Int]()
-    add_face(indices, 4, 5, 6, 7)  # front  (+z)
-    add_face(indices, 1, 0, 3, 2)  # back   (-z)
-    add_face(indices, 0, 4, 7, 3)  # left   (-x)
-    add_face(indices, 5, 1, 2, 6)  # right  (+x)
-    add_face(indices, 3, 7, 6, 2)  # top    (+y)
-    add_face(indices, 0, 1, 5, 4)  # bottom (-y)
-    return indices^
 
 
 def shade(face: Int, base: Color) -> Color:
@@ -90,40 +56,44 @@ def shade(face: Int, base: Color) -> Color:
     )
 
 
-def draw_cube(
+def draw(
     mut target: Framebuffer,
     camera: PerspectiveCamera,
+    geometry: BufferGeometry,
     world: Matrix4,
-    half: Float32,
     base: Color,
 ) raises:
-    """Draw one cube under `world`, letting the depth buffer sort it out.
+    """Draw a geometry under `world`, letting the depth buffer sort it out.
 
     Args:
         target: The framebuffer to draw into.
         camera: The camera to project through.
-        world: The cube's world transform.
-        half: Half the cube's edge length.
-        base: The cube's colour before per-face shading.
+        geometry: The vertex data to draw.
+        world: Its world transform.
+        base: The colour before per-face shading.
 
     Raises:
         Error: If projection or rasterization fails.
     """
-    var points = corners(half)
-    var indices = faces()
-
+    # Project each vertex once; the index buffer is what makes that worth
+    # doing, since a cube's twenty-four vertices fill thirty-six slots.
+    var positions = geometry.attribute(POSITION)
     var screen = List[Vector3]()
-    for index in range(len(points)):
+    for vertex in range(positions.count()):
         screen.append(
-            camera.project(world.transform_point(points[index]), WIDTH, HEIGHT)
+            camera.project(
+                world.transform_point(positions.vector3(vertex)),
+                WIDTH,
+                HEIGHT,
+            )
         )
 
     # No backface culling: every triangle is submitted, and depth decides.
-    for face in range(len(indices) // 3):
+    for face in range(geometry.triangle_count()):
         rasterize_depth(
-            screen[indices[face * 3]],
-            screen[indices[face * 3 + 1]],
-            screen[indices[face * 3 + 2]],
+            screen[geometry.corner_index(face, 0)],
+            screen[geometry.corner_index(face, 1)],
+            screen[geometry.corner_index(face, 2)],
             target,
             shade(face, base),
         )
@@ -142,6 +112,11 @@ def main() raises:
         Length(100.0, METRE),
     )
     camera.place(Vector3(0, 1.2, 4.5), Vector3(0, 0, 0))
+
+    # Built once, drawn many times under different transforms -- which is what
+    # separating geometry from its placement buys.
+    var big = cube(Length(1.1, METRE))
+    var small = cube(Length(0.44, METRE))
 
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
@@ -172,18 +147,18 @@ def main() raises:
         scene.update()
 
         var target = Framebuffer(WIDTH, HEIGHT, Color(16, 18, 26))
-        draw_cube(
+        draw(
             target,
             camera,
+            big,
             scene.world_matrix(centre_index),
-            0.55,
             Color(255, 140, 40),
         )
-        draw_cube(
+        draw(
             target,
             camera,
+            small,
             scene.world_matrix(moon_index),
-            0.22,
             Color(90, 190, 255),
         )
         frames.append(target^)

@@ -42,6 +42,27 @@ libraries — only the Mojo standard library.
 > tested. There is no `Matrix4`, camera, or mesh pipeline yet. This is a
 > learning project in the open, not a drop-in three.js replacement.
 
+## Geometry
+
+A `BufferGeometry` is named attributes — `position` at minimum — plus an
+optional index buffer. Flat float arrays rather than lists of `Vector3`,
+because that is the layout a GPU wants and can be uploaded without
+rearranging. Indexing means a vertex shared by several triangles is stored
+once.
+
+```mojo
+var geometry = cube(Length(1.0, METRE))
+geometry.vertex_count()          # 24
+geometry.triangle_count()        # 12
+geometry.corner(0, 1)            # a corner position
+geometry.corner_index(0, 1)      # which vertex that was, to project once
+```
+
+A box uses twenty-four vertices, not eight. Sharing corners would be smaller,
+but a corner shared between three faces can carry only one normal and one
+texture coordinate, so the faces could never be shaded separately — which is
+why three.js splits them too.
+
 ## Scene graph and depth
 
 `rasterize_depth` interpolates NDC depth across the triangle and keeps a
@@ -386,6 +407,8 @@ math/        Vector2, Vector3                    ported from three.js
              projection                          perspective, look_at, viewport
 cameras/     PerspectiveCamera                   fov in Angle, planes in Length
 core/        Object3D, Scene                     transform hierarchy
+             BufferGeometry, BufferAttribute     vertex data
+geometries/  box                                 a box, four vertices per face
 render/      Framebuffer, Color                  RGBA plus a depth buffer
              rasterizer                          software rasterization
              gpu                                 the same rasterizer, on the GPU

@@ -19,6 +19,8 @@ or two objects overlapping, would need real depth.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
+from core.buffer_geometry import POSITION, BufferGeometry
+from geometries.box import cube as cube_geometry
 from math.matrix4 import Matrix4, rotation_x, rotation_y
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -36,47 +38,6 @@ comptime FRAMES = 36
 comptime DELAY_MS = 55
 
 
-def corners() -> List[Vector3]:
-    """Return the eight corners of a 1 m cube centred on the origin."""
-    var half = Float32(0.5)
-    var points = List[Vector3]()
-    points.append(Vector3(-half, -half, -half))
-    points.append(Vector3(half, -half, -half))
-    points.append(Vector3(half, half, -half))
-    points.append(Vector3(-half, half, -half))
-    points.append(Vector3(-half, -half, half))
-    points.append(Vector3(half, -half, half))
-    points.append(Vector3(half, half, half))
-    points.append(Vector3(-half, half, half))
-    return points^
-
-
-def add_face(mut indices: List[Int], a: Int, b: Int, c: Int, d: Int):
-    """Append the two triangles of a quad face, wound counter-clockwise.
-
-    Winding consistently from outside is what lets a reversed winding on
-    screen identify a face pointing away from the camera.
-    """
-    indices.append(a)
-    indices.append(b)
-    indices.append(c)
-    indices.append(a)
-    indices.append(c)
-    indices.append(d)
-
-
-def faces() -> List[Int]:
-    """Return the cube's twelve triangles as corner indices."""
-    var indices = List[Int]()
-    add_face(indices, 4, 5, 6, 7)  # front  (+z)
-    add_face(indices, 1, 0, 3, 2)  # back   (-z)
-    add_face(indices, 0, 4, 7, 3)  # left   (-x)
-    add_face(indices, 5, 1, 2, 6)  # right  (+x)
-    add_face(indices, 3, 7, 6, 2)  # top    (+y)
-    add_face(indices, 0, 1, 5, 4)  # bottom (-y)
-    return indices^
-
-
 def face_color(face: Int) -> Color:
     """Return a distinct colour per cube face, two triangles at a time."""
     var palette = List[Color]()
@@ -89,11 +50,14 @@ def face_color(face: Int) -> Color:
     return palette[(face // 2) % 6]
 
 
-def frame_at(camera: PerspectiveCamera, model: Matrix4) raises -> Framebuffer:
+def frame_at(
+    camera: PerspectiveCamera, geometry: BufferGeometry, model: Matrix4
+) raises -> Framebuffer:
     """Render one frame of the cube under the given model transform.
 
     Args:
         camera: The camera to project through.
+        geometry: The cube's vertex data.
         model: The cube's world transform for this frame.
 
     Returns:
@@ -103,20 +67,23 @@ def frame_at(camera: PerspectiveCamera, model: Matrix4) raises -> Framebuffer:
         Error: If projection or rasterization fails.
     """
     var target = Framebuffer(WIDTH, HEIGHT, Color(18, 20, 28))
-    var points = corners()
-    var indices = faces()
 
-    # Project every corner once, then reuse it for each face that touches it.
+    # Project every vertex once, then reuse it for each face that shares it.
+    var positions = geometry.attribute(POSITION)
     var screen = List[Vector3]()
-    for index in range(len(points)):
+    for vertex in range(positions.count()):
         screen.append(
-            camera.project(model.transform_point(points[index]), WIDTH, HEIGHT)
+            camera.project(
+                model.transform_point(positions.vector3(vertex)),
+                WIDTH,
+                HEIGHT,
+            )
         )
 
-    for face in range(len(indices) // 3):
-        var a = screen[indices[face * 3]]
-        var b = screen[indices[face * 3 + 1]]
-        var c = screen[indices[face * 3 + 2]]
+    for face in range(geometry.triangle_count()):
+        var a = screen[geometry.corner_index(face, 0)]
+        var b = screen[geometry.corner_index(face, 1)]
+        var c = screen[geometry.corner_index(face, 2)]
         var triangle = Triangle(
             Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y)
         )
@@ -142,12 +109,14 @@ def main() raises:
     )
     camera.place(Vector3(0, 0, 2.5), Vector3(0, 0, 0))
 
+    var geometry = cube_geometry(Length(1.0, METRE))
+
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
         var turn = Float32(360) * Float32(index) / Float32(FRAMES)
         var model = rotation_y(Angle(turn, DEGREE))
         model.premultiply(rotation_x(Angle(20.0, DEGREE)))
-        frames.append(frame_at(camera, model))
+        frames.append(frame_at(camera, geometry, model))
 
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")

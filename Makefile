@@ -25,7 +25,8 @@ endef
 
 # --- sources ----------------------------------------------------------------
 # Library modules have no main(), so they are checked with `mojo doc`.
-LIB_SOURCES  := $(shell find math render units cameras core -name '*.mojo' \
+LIB_SOURCES  := $(shell find math render units cameras core geometries \
+                  -name '*.mojo' \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
 TOOL_CLIS    := coverage/build_cli.mojo coverage/report_cli.mojo
