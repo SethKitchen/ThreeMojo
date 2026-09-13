@@ -140,7 +140,7 @@ def test_setting_an_attribute_twice_replaces_it() raises:
 def test_fetching_an_attribute_that_is_not_there_is_rejected() raises:
     var geometry = BufferGeometry()
     with assert_raises():
-        _ = geometry.attribute(String("uv"))
+        _ = geometry.clone_attribute(String("uv"))
     with assert_raises():
         _ = geometry.vertex_count()
 
@@ -250,7 +250,7 @@ def test_a_box_can_have_three_different_extents() raises:
     var tallest = Float32(0)
     var deepest = Float32(0)
     for vertex in range(geometry.vertex_count()):
-        var point = geometry.attribute(String(POSITION)).vector3(vertex)
+        var point = geometry.attribute_view(String(POSITION)).vector3(vertex)
         widest = max(widest, abs(point.x))
         tallest = max(tallest, abs(point.y))
         deepest = max(deepest, abs(point.z))
@@ -263,7 +263,7 @@ def test_a_box_is_centred_on_the_origin() raises:
     var geometry = cube(Length(3.0, METRE))
     var total = Vector3(0, 0, 0)
     for vertex in range(geometry.vertex_count()):
-        total.add(geometry.attribute(String(POSITION)).vector3(vertex))
+        total.add(geometry.attribute_view(String(POSITION)).vector3(vertex))
     assert_almost_equal(total.length(), Float32(0), atol=Float64(1e-4))
 
 
@@ -298,19 +298,21 @@ def test_a_box_with_no_extent_is_rejected() raises:
 def test_a_box_carries_a_normal_per_vertex() raises:
     var geometry = cube(Length(1.0, METRE))
     assert_true(geometry.has_attribute(String(NORMAL)))
-    assert_equal(geometry.attribute(String(NORMAL)).count(), 24)
+    assert_equal(geometry.attribute_view(String(NORMAL)).count(), 24)
 
 
 def test_a_face_four_vertices_share_one_normal() raises:
     # What keeps a cube's edges crisp when normals are interpolated.
-    var normals = cube(Length(1.0, METRE)).attribute(String(NORMAL))
+    var geometry = cube(Length(1.0, METRE))
+    ref normals = geometry.attribute_view(String(NORMAL))
     for corner in range(4):
         var direction = normals.vector3(corner)
         assert_almost_equal(direction.z, Float32(1), atol=TOLERANCE)
 
 
 def test_box_normals_point_outwards_and_are_unit_length() raises:
-    var normals = cube(Length(2.0, METRE)).attribute(String(NORMAL))
+    var geometry = cube(Length(2.0, METRE))
+    ref normals = geometry.attribute_view(String(NORMAL))
     for vertex in range(normals.count()):
         assert_almost_equal(
             normals.vector3(vertex).length(), Float32(1), atol=TOLERANCE
@@ -318,7 +320,8 @@ def test_box_normals_point_outwards_and_are_unit_length() raises:
 
 
 def test_the_six_faces_point_six_different_ways() raises:
-    var normals = cube(Length(1.0, METRE)).attribute(String(NORMAL))
+    var geometry = cube(Length(1.0, METRE))
+    ref normals = geometry.attribute_view(String(NORMAL))
     var seen = List[Float32]()
     for face in range(6):
         var direction = normals.vector3(face * 4)
@@ -333,7 +336,7 @@ def test_the_six_faces_point_six_different_ways() raises:
 
 def test_every_sphere_vertex_lies_on_the_surface() raises:
     var geometry = sphere(Length(3.0, METRE), 12, 8)
-    var positions = geometry.attribute(String(POSITION))
+    ref positions = geometry.attribute_view(String(POSITION))
     for vertex in range(positions.count()):
         assert_almost_equal(
             positions.vector3(vertex).length(), Float32(3), atol=Float64(1e-5)
@@ -343,8 +346,8 @@ def test_every_sphere_vertex_lies_on_the_surface() raises:
 def test_a_sphere_normal_is_the_direction_from_the_centre() raises:
     # Which is what makes neighbouring triangles agree and the facets vanish.
     var geometry = sphere(Length(2.0, METRE), 12, 8)
-    var positions = geometry.attribute(String(POSITION))
-    var normals = geometry.attribute(String(NORMAL))
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref normals = geometry.attribute_view(String(NORMAL))
     for vertex in range(positions.count()):
         var point = positions.vector3(vertex)
         var direction = normals.vector3(vertex)
@@ -384,7 +387,7 @@ def test_no_sphere_triangle_is_degenerate() raises:
 def test_a_sphere_can_be_measured_in_feet() raises:
     var geometry = sphere(Length(1.0, FOOT), 8, 4)
     assert_almost_equal(
-        geometry.attribute(String(POSITION)).vector3(0).length(),
+        geometry.attribute_view(String(POSITION)).vector3(0).length(),
         Float32(0.3048),
         atol=Float64(1e-5),
     )
@@ -402,6 +405,37 @@ def test_a_sphere_needs_enough_segments_to_close() raises:
         _ = sphere(Length(1.0, METRE), 2, 4)
     with assert_raises():
         _ = sphere(Length(1.0, METRE), 8, 1)
+
+
+def test_cloning_an_attribute_gives_an_independent_copy() raises:
+    # The deliberate-copy half of the pair. Replacing the geometry's attribute
+    # afterwards must not reach through into the clone, which is the whole
+    # difference between this and `attribute_view`.
+    var geometry = BufferGeometry()
+    geometry.set_attribute(String(POSITION), triangle_attribute())
+    var taken = geometry.clone_attribute(String(POSITION))
+    assert_equal(taken.count(), 3)
+
+    var replacement = List[Float32]()
+    for _ in range(9):
+        replacement.append(99.0)
+    geometry.set_attribute(String(POSITION), BufferAttribute(replacement^, 3))
+
+    assert_equal(geometry.attribute_view(String(POSITION)).vector3(0).x, 99.0)
+    # The clone still holds what it held when it was taken.
+    assert_equal(taken.vector3(0).x, Float32(0))
+
+
+def test_a_geometry_counts_the_attributes_it_holds() raises:
+    var geometry = BufferGeometry()
+    assert_equal(geometry.attribute_count(), 0)
+    geometry.set_attribute(String(POSITION), triangle_attribute())
+    assert_equal(geometry.attribute_count(), 1)
+    geometry.set_attribute(String(NORMAL), triangle_attribute())
+    assert_equal(geometry.attribute_count(), 2)
+    # Replacing a name that is already there does not add a second entry.
+    geometry.set_attribute(String(POSITION), triangle_attribute())
+    assert_equal(geometry.attribute_count(), 2)
 
 
 def main() raises:

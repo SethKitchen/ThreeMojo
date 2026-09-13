@@ -16,39 +16,17 @@ framebuffer per triangle is the obvious way to write this and costs the same
 for a triangle covering four pixels as for one covering the screen; a sphere
 of several hundred triangles made that difference impossible to ignore.
 
-Coverage is decided in fixed point, not floating point, and that is the
-interesting part. Two triangles sharing an edge test it from opposite corner
-orderings: one asks `edge(A, B, p)`, the other `edge(B, A, p)`. In exact
-arithmetic those are negations of each other, so every pixel belongs to one
-side or the other. In floating point they are computed from different
-subtractions and need not negate exactly, so a pixel lying almost on the edge
-could come out fractionally negative for *both* — belonging to neither, and
-leaving a one-pixel crack along the shared diagonal of a quad.
-
-Snapping vertices to a 1/16-pixel grid makes the edge function exact integer
-arithmetic, where the two orderings do negate exactly and no pixel can be
-missed. That leaves the opposite problem: a pixel exactly on the shared edge
-now satisfies both triangles and would be drawn twice. The top-left fill rule
-breaks that tie, giving each shared edge to exactly one of the two. Drawing
-twice is invisible with an opaque depth test but doubles the contribution of
-every shared edge once anything is blended.
-
-This is what graphics hardware does, and for the same two reasons.
+Which pixels a triangle covers is decided by `render.fillrule`, in exact
+integer arithmetic, and that module explains why. It is shared with the GPU
+kernel so that both answer identically — the property `tests/test_gpu.mojo`
+asserts pixel for pixel.
 """
 
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer
+from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, max, min
-
-# Vertices snap to a grid this many steps to the pixel. Four bits of subpixel
-# precision is what most hardware rasterizers settled on: fine enough that the
-# snapping is invisible, coarse enough that the edge function stays well
-# clear of overflow. At 4096 pixels across, an edge value reaches about
-# 4096*16 squared, roughly 4e9 -- comfortable in Mojo's 64-bit Int and not in
-# a 32-bit one.
-comptime SUBPIXEL_BITS = 4
-comptime SUBPIXEL = 1 << SUBPIXEL_BITS
 
 
 def edge(a: Vector2, b: Vector2, p: Vector2) -> Float32:
@@ -57,37 +35,10 @@ def edge(a: Vector2, b: Vector2, p: Vector2) -> Float32:
     The sign tells you which side of the line a->b the point p falls on. This
     is the floating-point form, kept for `area2` and for callers asking a
     geometric question — backface culling, say. Rasterization uses the exact
-    fixed-point form below instead.
+    fixed-point form in `render.fillrule` instead, for the reasons given
+    there.
     """
     return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x)
-
-
-def snap(value: Float32) -> Int:
-    """Return a screen coordinate on the subpixel grid, as an integer."""
-    return Int(floor(value * Float32(SUBPIXEL) + 0.5))
-
-
-def edge_at(ax: Int, ay: Int, bx: Int, by: Int, px: Int, py: Int) -> Int:
-    """Return the signed twice-area of (a, b, p), all on the subpixel grid.
-
-    Integer arithmetic, so `edge_at(a, b, p)` is exactly `-edge_at(b, a, p)`
-    and a pixel can never fall outside both of two triangles sharing an edge.
-    """
-    return (bx - ax) * (py - ay) - (by - ay) * (px - ax)
-
-
-def _is_top_left(ax: Int, ay: Int, bx: Int, by: Int) -> Bool:
-    """Return True if the directed edge a->b is a top or a left edge.
-
-    With the winding normalized so the triangle's area is positive and screen
-    y running downwards, an edge heading upwards has the interior to its left,
-    and a horizontal edge heading left has the interior below it. Those are
-    the edges that keep the pixels lying exactly on them; the other two give
-    theirs to the neighbouring triangle.
-    """
-    if ay == by:
-        return bx < ax
-    return by < ay
 
 
 struct _Coverage(ImplicitlyCopyable):
@@ -137,27 +88,13 @@ struct _Coverage(ImplicitlyCopyable):
         # A pixel exactly on an edge has an edge value of zero. Top and left
         # edges keep it; the others need a strictly positive value, which a
         # bias of -1 expresses without a second comparison in the loop.
-        self.bias_ab = 0 if _is_top_left(
-            self.ax, self.ay, self.bx, self.by
-        ) else -1
-        self.bias_bc = 0 if _is_top_left(
-            self.bx, self.by, self.cx, self.cy
-        ) else -1
-        self.bias_ca = 0 if _is_top_left(
-            self.cx, self.cy, self.ax, self.ay
-        ) else -1
+        self.bias_ab = bias(self.ax, self.ay, self.bx, self.by)
+        self.bias_bc = bias(self.bx, self.by, self.cx, self.cy)
+        self.bias_ca = bias(self.cx, self.cy, self.ax, self.ay)
 
     def is_degenerate(self) -> Bool:
         """Return True if the three corners are collinear on the grid."""
         return self.area == 0
-
-    def sample(self, index: Int) -> Int:
-        """Return the grid coordinate of the centre of pixel row/column `index`.
-
-        Sampling at the centre rather than the corner is why a half-step is
-        added; the same arithmetic serves both axes.
-        """
-        return index * SUBPIXEL + SUBPIXEL // 2
 
 
 @fieldwise_init
@@ -176,8 +113,8 @@ def _test(coverage: _Coverage, x: Int, y: Int) -> _Fragment:
     Returns the weights of the caller's original corners, undoing the winding
     swap if there was one.
     """
-    var px = coverage.sample(x)
-    var py = coverage.sample(y)
+    var px = sample(x)
+    var py = sample(y)
 
     var e_ab = edge_at(
         coverage.ax, coverage.ay, coverage.bx, coverage.by, px, py
@@ -330,47 +267,63 @@ def rasterize_depth(
                 target.set_pixel(x, y, color)
 
 
-def _blend(
-    a: UInt8, b: UInt8, c: UInt8, wa: Float32, wb: Float32, wc: Float32
-) -> UInt8:
-    """Return one colour channel mixed by three barycentric weights."""
-    # Inside a triangle every barycentric weight is non-negative and they sum
-    # to one, so the mix stays between the inputs and cannot go negative; only
-    # the rounding on a 255 needs clamping.
-    var value = Float32(a) * wa + Float32(b) * wb + Float32(c) * wc + 0.5
-    if value > 255:
-        return 255
-    return UInt8(value)
+@fieldwise_init
+struct RasterVertex(ImplicitlyCopyable):
+    """One corner as the rasterizer wants it: screen position and varyings.
+
+    This is the boundary between what a renderer works out and what a
+    rasterizer fills in. Everything perspective has already been applied to
+    `x`, `y` and `z`; `inv_w` is what is left of the divide, and it is what
+    lets any *attribute* be interpolated correctly rather than only depth.
+
+    Keeping it a named type rather than a pile of arguments is the point:
+    texture coordinates and per-vertex properties go here when they arrive,
+    without changing a signature or teaching the caller a new argument order.
+    """
+
+    # Screen-space pixel coordinates.
+    var x: Float32
+    var y: Float32
+    # NDC depth, already divided. Interpolated affinely in screen space, which
+    # is correct: the projection makes depth linear in screen space precisely
+    # so that a depth buffer can work this way. Do not put this through
+    # `inv_w` as well.
+    var z: Float32
+    # The reciprocal of the clip-space w this corner was divided by.
+    var inv_w: Float32
+    var color: FloatColor
 
 
 def rasterize_shaded(
-    a: Vector3,
-    b: Vector3,
-    c: Vector3,
-    color_a: Color,
-    color_b: Color,
-    color_c: Color,
+    a: RasterVertex,
+    b: RasterVertex,
+    c: RasterVertex,
     mut target: Framebuffer,
 ) raises:
     """Fill a triangle whose corners each carry their own colour.
 
-    The colour is mixed across the face by the same barycentric weights the
-    depth uses, which is Gouraud shading: lighting is evaluated per corner and
-    interpolated between, rather than once for the whole face.
+    The colour is mixed across the face by the triangle's barycentric weights,
+    which is Gouraud shading: lighting is evaluated per corner and interpolated
+    between, rather than once for the whole face.
 
-    Unlike depth, colour interpolated linearly in screen space is only an
-    approximation — strictly it should go through 1/w like any other vertex
-    attribute. The error grows with how much perspective a single triangle
-    spans, so it is invisible on a subdivided sphere and would show on a floor
-    plane drawn as two enormous triangles.
+    The mix is *perspective correct*. Screen-space barycentric weights are not
+    the weights the surface itself sees — perspective compresses the far half
+    of a triangle into fewer pixels — so an attribute interpolated straight
+    across the screen drifts from what the geometry says. The correction is to
+    weight by `inv_w` and divide by the interpolated `inv_w`:
+
+        attribute = sum(w_i * a_i * inv_w_i) / sum(w_i * inv_w_i)
+
+    which is the same rule a graphics API applies to any non-flat varying. The
+    error it removes grows with how much perspective one triangle spans: it is
+    invisible on a subdivided sphere and obvious on a floor drawn as two
+    enormous triangles. Depth is deliberately *not* corrected this way; see
+    `RasterVertex.z`.
 
     Args:
-        a: First corner, screen x and y with NDC depth in z.
+        a: First corner.
         b: Second corner.
         c: Third corner.
-        color_a: Colour at the first corner.
-        color_b: Colour at the second.
-        color_c: Colour at the third.
         target: The framebuffer to draw into.
 
     Raises:
@@ -393,14 +346,38 @@ def rasterize_shaded(
             var wb = fragment.wb
             var wc = fragment.wc
             var z = wa * a.z + wb * b.z + wc * c.z
-            if target.test_depth(x, y, z):
-                target.set_pixel(
-                    x,
-                    y,
-                    Color(
-                        _blend(color_a.r, color_b.r, color_c.r, wa, wb, wc),
-                        _blend(color_a.g, color_b.g, color_c.g, wa, wb, wc),
-                        _blend(color_a.b, color_b.b, color_c.b, wa, wb, wc),
-                        _blend(color_a.a, color_b.a, color_c.a, wa, wb, wc),
-                    ),
-                )
+            if not target.test_depth(x, y, z):
+                continue
+
+            # The denominator of the perspective correction, and the
+            # interpolated reciprocal depth in its own right.
+            var inv_w = wa * a.inv_w + wb * b.inv_w + wc * c.inv_w
+            # An orthographic or degenerate setup can leave this at zero, in
+            # which case there is no perspective to correct for and the plain
+            # screen-space weights are the right answer.
+            var share_a = wa
+            var share_b = wb
+            var share_c = wc
+            if inv_w != 0:
+                share_a = wa * a.inv_w / inv_w
+                share_b = wb * b.inv_w / inv_w
+                share_c = wc * c.inv_w / inv_w
+
+            target.set_pixel(
+                x,
+                y,
+                FloatColor(
+                    a.color.r * share_a
+                    + b.color.r * share_b
+                    + c.color.r * share_c,
+                    a.color.g * share_a
+                    + b.color.g * share_b
+                    + c.color.g * share_c,
+                    a.color.b * share_a
+                    + b.color.b * share_b
+                    + c.color.b * share_c,
+                    a.color.a * share_a
+                    + b.color.a * share_b
+                    + c.color.a * share_c,
+                ).quantize(),
+            )

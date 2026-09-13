@@ -22,14 +22,21 @@ computed from its own world-space corners with a cross product. That is always
 faceted, which is the honest result for geometry that never said which way it
 faces.
 
-Normals are rotated by the world matrix but not translated, since a direction
-has no position. Non-uniform scale would need the inverse transpose to stay
-perpendicular; that is not handled, and is noted rather than hidden.
+Normals are carried by the world matrix's *normal matrix* — the inverse
+transpose of its rotation and scale part — rather than by the world matrix
+itself. Under a uniform scale the two agree up to a length that normalizing
+removes, which is why the simpler version worked for as long as it did. Under
+a non-uniform scale they do not: `Object3D.set_scale` takes three separate
+factors, so the transform API could always reach a state the naive version
+shaded wrongly. It is computed once per mesh, not once per vertex.
 
-Vertices are taken into camera space and cut against the near plane *before*
-being projected. Projecting first would divide by a depth of zero or a
+Vertices are taken into camera space and cut against the near and far planes
+*before* being projected. Projecting first would divide by a depth of zero or a
 negative one for anything level with or behind the camera, which does not
-produce a slightly wrong triangle but a wildly wrong one. See `renderers.clip`.
+produce a slightly wrong triangle but a wildly wrong one. The far plane is cut
+too, because the depth buffer cannot enforce it on its own: it clears to
+infinity and accepts anything smaller, so geometry past `camera.far` would
+otherwise still be drawn. See `renderers.clip`.
 
 There is no backface culling. Faces pointing away light to ambient and are
 covered by nearer geometry anyway, so the depth buffer alone gives the correct
@@ -39,12 +46,14 @@ true because the depth buffer exists.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_geometry import NORMAL, POSITION
+from core.geometry_store import GeometryStore
 from core.scene import Scene
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.framebuffer import Color, Framebuffer
-from render.rasterizer import rasterize_shaded
-from renderers.clip import ClipVertex, clip_near
+from render.framebuffer import Color, FloatColor, Framebuffer
+from render.rasterizer import RasterVertex, rasterize_shaded
+from renderers.clip import ClipVertex, clip_depth
 from std.math import max
 
 
@@ -65,18 +74,23 @@ def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     return first^
 
 
-def _scale(channel: UInt8, level: Float32) -> UInt8:
-    """Return `channel` multiplied by `level`, rounded rather than truncated.
+def _to_raster(vertex: ClipVertex, to_screen: Matrix4) -> RasterVertex:
+    """Project a clipped camera-space vertex into the rasterizer's input.
 
-    Truncating costs a level everywhere: a face square-on to the light has a
-    Lambert term of 0.99999 rather than 1, and converting that straight to an
-    integer turns 200 into 199. Every shaded pixel would come out fractionally
-    darker than asked for.
+    `transform_point` does the perspective divide and throws the divisor away,
+    which is all a position needs. Anything interpolated *alongside* the
+    position needs the divisor too, so it is asked for separately and kept as
+    its reciprocal — see `RasterVertex`.
     """
-    var scaled = Float32(channel) * level + 0.5
-    if scaled > 255:
-        return 255
-    return UInt8(scaled)
+    var w = to_screen.transform_w(vertex.position)
+    var inv_w = Float32(0)
+    # Clipping has already removed everything at or behind the near plane, so
+    # w is positive here. The guard costs nothing and keeps a degenerate
+    # camera from producing infinities rather than a visible error.
+    if w != 0:  # pragma: no branch
+        inv_w = Float32(1) / w
+    var screen = to_screen.transform_point(vertex.position)
+    return RasterVertex(screen.x, screen.y, screen.z, inv_w, vertex.color)
 
 
 struct Renderer(Movable):
@@ -134,25 +148,40 @@ struct Renderer(Movable):
         self.light = pointing
         self.ambient = ambient
 
-    def shade(self, base: Color, normal: Vector3) -> Color:
+    def shade(self, base: Color, normal: Vector3) -> FloatColor:
         """Return `base` dimmed by how far the face is turned from the light.
 
         A face turned away keeps the ambient fraction rather than going black,
         because a scene lit by one light and nothing else reads as broken.
+
+        The result stays in floating point. It is about to be interpolated
+        across a triangle and possibly cut by a clipping plane first, and
+        rounding to eight bits before either of those throws away precision
+        that those steps would have used.
         """
         var lambert = max(Float32(0), normal.dot(self.light))
         var level = self.ambient + (1 - self.ambient) * lambert
-        return Color(
-            _scale(base.r, level),
-            _scale(base.g, level),
-            _scale(base.b, level),
-            base.a,
-        )
+        return FloatColor(of=base).scaled(level)
 
-    def render(
-        self, scene: Scene, meshes: List[Mesh], camera: PerspectiveCamera
-    ) raises -> Framebuffer:
-        """Draw every mesh and return the finished image.
+    def prepare(
+        self,
+        scene: Scene,
+        geometries: GeometryStore,
+        meshes: List[Mesh],
+        camera: PerspectiveCamera,
+    ) raises -> List[RasterVertex]:
+        """Turn a scene into the triangles a rasterizer can fill.
+
+        Everything that is not filling pixels happens here: world transforms,
+        lighting, clipping and projection. What comes out is the boundary
+        between the two halves of the renderer — screen-space triangles with
+        their varyings already worked out — and it is the *same* boundary
+        whichever rasterizer consumes it. The CPU one is `render` below; the
+        GPU one is `render.gpu`, which takes exactly this list.
+
+        Keeping it a separate step is what makes the two backends comparable
+        rather than merely similar: a parity test can hand both the identical
+        input and demand identical output.
 
         `scene.update()` must have been called since the last transform
         change; this reads world matrices rather than recomputing them, so a
@@ -160,58 +189,73 @@ struct Renderer(Movable):
 
         Args:
             scene: The transform hierarchy the meshes sit in.
-            meshes: What to draw, each naming a node in `scene`.
+            geometries: The vertex data the meshes name. Two meshes naming
+                the same id share one copy of it.
+            meshes: What to draw, each naming a node and a geometry.
             camera: The camera to project through.
 
         Returns:
-            The rendered image.
+            Raster vertices, three per triangle, in submission order.
 
         Raises:
-            Error: If a mesh names a node the scene does not have, or its
-                geometry has no positions.
+            Error: If a mesh names a node or a geometry that is not there, or
+                its geometry has no positions.
         """
-        var target = Framebuffer(self.width, self.height, self.background)
+        var corners = List[RasterVertex]()
         var view = camera.view_matrix()
         var to_screen = camera.view_to_screen_matrix(self.width, self.height)
         var near = camera.near.value
+        var far = camera.far.value
 
         for index in range(len(meshes)):
             var world = scene.world_matrix(meshes[index].node)
-            var positions = meshes[index].geometry.attribute(String(POSITION))
-            var smooth = meshes[index].geometry.has_attribute(String(NORMAL))
+            # Borrowed, not copied: two meshes naming the same id read the
+            # same arrays rather than each holding their own.
+            ref geometry = geometries.get(meshes[index].geometry)
+            var smooth = geometry.has_attribute(String(NORMAL))
 
             # World positions are kept as well as camera-space ones: a
             # geometric normal needs the triangle's real shape, and the view
             # transform is where clipping has to happen.
             var world_points = List[Vector3]()
             var view_points = List[Vector3]()
-            var vertex_colors = List[Color]()
-            for vertex in range(positions.count()):
+            # `ref` and not `var`: this borrows the geometry's array rather
+            # than copying it. Writing `var` here is a compile error, which is
+            # the point of the two accessors.
+            ref positions = geometry.attribute_view(String(POSITION))
+            var vertex_count = positions.count()
+            for vertex in range(vertex_count):
                 var point = world.transform_point(positions.vector3(vertex))
                 world_points.append(point)
                 view_points.append(view.transform_point(point))
-                if smooth:
+
+            # Shading is its own pass so the normal array can be borrowed only
+            # when there is one, and the normal matrix built once per mesh
+            # rather than once per vertex.
+            var vertex_colors = List[FloatColor]()
+            if smooth:
+                ref normals = geometry.attribute_view(String(NORMAL))
+                var to_normal = world.normal_matrix()
+                for vertex in range(vertex_count):
                     # transform_direction ignores translation, which is what a
                     # normal wants: it points somewhere, it is not somewhere.
-                    var direction = world.transform_direction(
-                        meshes[index]
-                        .geometry.attribute(String(NORMAL))
-                        .vector3(vertex)
+                    var direction = to_normal.transform_direction(
+                        normals.vector3(vertex)
                     )
                     direction.normalize()
                     vertex_colors.append(
                         self.shade(meshes[index].color, direction)
                     )
 
-            var triangles = meshes[index].geometry.triangle_count()
+            var triangles = geometry.triangle_count()
             for triangle in range(triangles):
-                var first = meshes[index].geometry.corner_index(triangle, 0)
-                var second = meshes[index].geometry.corner_index(triangle, 1)
-                var third = meshes[index].geometry.corner_index(triangle, 2)
+                var first = geometry.corner_index(triangle, 0)
+                var second = geometry.corner_index(triangle, 1)
+                var third = geometry.corner_index(triangle, 2)
 
-                var color_a: Color
-                var color_b: Color
-                var color_c: Color
+                var color_a: FloatColor
+                var color_b: FloatColor
+                var color_c: FloatColor
                 if smooth:
                     color_a = vertex_colors[first]
                     color_b = vertex_colors[second]
@@ -230,24 +274,49 @@ struct Renderer(Movable):
                     color_b = color_a
                     color_c = color_a
 
-                var pieces = clip_near(
+                var pieces = clip_depth(
                     ClipVertex(view_points[first], color_a),
                     ClipVertex(view_points[second], color_b),
                     ClipVertex(view_points[third], color_c),
                     near,
+                    far,
                 )
-                for piece in range(len(pieces) // 3):
-                    var one = pieces[piece * 3]
-                    var two = pieces[piece * 3 + 1]
-                    var three = pieces[piece * 3 + 2]
-                    rasterize_shaded(
-                        to_screen.transform_point(one.position),
-                        to_screen.transform_point(two.position),
-                        to_screen.transform_point(three.position),
-                        one.color,
-                        two.color,
-                        three.color,
-                        target,
-                    )
+                for piece in range(len(pieces)):
+                    corners.append(_to_raster(pieces[piece], to_screen))
 
+        return corners^
+
+    def render(
+        self,
+        scene: Scene,
+        geometries: GeometryStore,
+        meshes: List[Mesh],
+        camera: PerspectiveCamera,
+    ) raises -> Framebuffer:
+        """Draw every mesh on the CPU and return the finished image.
+
+        `prepare` does the work; this fills the triangles it produces.
+
+        Args:
+            scene: The transform hierarchy the meshes sit in.
+            geometries: The vertex data the meshes name.
+            meshes: What to draw, each naming a node and a geometry.
+            camera: The camera to project through.
+
+        Returns:
+            The rendered image.
+
+        Raises:
+            Error: If a mesh names a node or a geometry that is not there, or
+                its geometry has no positions.
+        """
+        var corners = self.prepare(scene, geometries, meshes, camera)
+        var target = Framebuffer(self.width, self.height, self.background)
+        for triangle in range(len(corners) // 3):
+            rasterize_shaded(
+                corners[triangle * 3],
+                corners[triangle * 3 + 1],
+                corners[triangle * 3 + 2],
+                target,
+            )
         return target^

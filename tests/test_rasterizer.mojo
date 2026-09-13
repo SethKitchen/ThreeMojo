@@ -6,9 +6,10 @@
 """Tests for `render.rasterizer`."""
 
 from math.vector2 import Vector2
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer
 from math.vector3 import Vector3
 from render.rasterizer import (
+    RasterVertex,
     Triangle,
     edge,
     rasterize,
@@ -197,6 +198,26 @@ def test_rasterize_leaves_background_when_nothing_is_covered() raises:
             assert_equal(fb.get_pixel(x, y).r, background.r)
 
 
+def flat_vertex(
+    point: Vector3, color: Color, inv_w: Float32 = 1.0
+) -> RasterVertex:
+    """Return a raster vertex at `point` in `color`, with no perspective.
+
+    An `inv_w` of one everywhere means the perspective correction has nothing
+    to correct, so these tests measure coverage and blending on their own.
+    The tests that do care about perspective pass differing values.
+
+    Args:
+        point: Screen x and y with NDC depth in z.
+        color: The colour at this corner.
+        inv_w: Reciprocal of the clip-space w; one means no perspective.
+
+    Returns:
+        The corner as the rasterizer wants it.
+    """
+    return RasterVertex(point.x, point.y, point.z, inv_w, FloatColor(of=color))
+
+
 def covering(z: Float32) raises -> List[Vector3]:
     """Return a triangle covering any small viewport, flat at depth `z`.
 
@@ -287,7 +308,10 @@ def test_a_single_colour_fills_evenly() raises:
     var fb = Framebuffer(6, 6, Color(0, 0, 0))
     var t = covering(0.5)
     rasterize_shaded(
-        t[0], t[1], t[2], Color(90, 0, 0), Color(90, 0, 0), Color(90, 0, 0), fb
+        flat_vertex(t[0], Color(90, 0, 0)),
+        flat_vertex(t[1], Color(90, 0, 0)),
+        flat_vertex(t[2], Color(90, 0, 0)),
+        fb,
     )
     assert_equal(fb.get_pixel(0, 0).r, UInt8(90))
     assert_equal(fb.get_pixel(5, 5).r, UInt8(90))
@@ -297,12 +321,9 @@ def test_colour_is_mixed_across_the_face() raises:
     # Red at the left corner, blue at the right: the middle is neither.
     var fb = Framebuffer(9, 9, Color(0, 0, 0))
     rasterize_shaded(
-        Vector3(-5, -5, 0.5),
-        Vector3(20, -5, 0.5),
-        Vector3(-5, 20, 0.5),
-        Color(255, 0, 0),
-        Color(0, 0, 255),
-        Color(255, 0, 0),
+        flat_vertex(Vector3(-5, -5, 0.5), Color(255, 0, 0)),
+        flat_vertex(Vector3(20, -5, 0.5), Color(0, 0, 255)),
+        flat_vertex(Vector3(-5, 20, 0.5), Color(255, 0, 0)),
         fb,
     )
     var left = fb.get_pixel(0, 0)
@@ -316,21 +337,15 @@ def test_shaded_rasterization_still_respects_depth() raises:
     var near = covering(0.1)
     var far = covering(0.9)
     rasterize_shaded(
-        near[0],
-        near[1],
-        near[2],
-        Color(0, 255, 0),
-        Color(0, 255, 0),
-        Color(0, 255, 0),
+        flat_vertex(near[0], Color(0, 255, 0)),
+        flat_vertex(near[1], Color(0, 255, 0)),
+        flat_vertex(near[2], Color(0, 255, 0)),
         fb,
     )
     rasterize_shaded(
-        far[0],
-        far[1],
-        far[2],
-        Color(255, 0, 0),
-        Color(255, 0, 0),
-        Color(255, 0, 0),
+        flat_vertex(far[0], Color(255, 0, 0)),
+        flat_vertex(far[1], Color(255, 0, 0)),
+        flat_vertex(far[2], Color(255, 0, 0)),
         fb,
     )
     assert_equal(fb.get_pixel(0, 0).g, UInt8(255))
@@ -339,12 +354,9 @@ def test_shaded_rasterization_still_respects_depth() raises:
 def test_a_degenerate_shaded_triangle_draws_nothing() raises:
     var fb = Framebuffer(4, 4, Color(1, 2, 3))
     rasterize_shaded(
-        Vector3(0, 0, 0.5),
-        Vector3(2, 2, 0.5),
-        Vector3(4, 4, 0.5),
-        Color(255, 0, 0),
-        Color(255, 0, 0),
-        Color(255, 0, 0),
+        flat_vertex(Vector3(0, 0, 0.5), Color(255, 0, 0)),
+        flat_vertex(Vector3(2, 2, 0.5), Color(255, 0, 0)),
+        flat_vertex(Vector3(4, 4, 0.5), Color(255, 0, 0)),
         fb,
     )
     assert_equal(fb.get_pixel(2, 2).r, UInt8(1))
@@ -354,12 +366,9 @@ def test_alpha_is_mixed_like_any_other_channel() raises:
     var fb = Framebuffer(6, 6, Color(0, 0, 0))
     var t = covering(0.5)
     rasterize_shaded(
-        t[0],
-        t[1],
-        t[2],
-        Color(0, 0, 0, 0),
-        Color(0, 0, 0, 255),
-        Color(0, 0, 0, 255),
+        flat_vertex(t[0], Color(0, 0, 0, 0)),
+        flat_vertex(t[1], Color(0, 0, 0, 255)),
+        flat_vertex(t[2], Color(0, 0, 0, 255)),
         fb,
     )
     assert_true(fb.get_pixel(0, 0).a != fb.get_pixel(5, 5).a)
@@ -382,12 +391,9 @@ def test_a_triangle_above_the_viewport_touches_no_rows() raises:
         Color(255, 0, 0),
     )
     rasterize_shaded(
-        Vector3(0, -10, 0.5),
-        Vector3(4, -10, 0.5),
-        Vector3(0, -6, 0.5),
-        Color(255, 0, 0),
-        Color(255, 0, 0),
-        Color(255, 0, 0),
+        flat_vertex(Vector3(0, -10, 0.5), Color(255, 0, 0)),
+        flat_vertex(Vector3(4, -10, 0.5), Color(255, 0, 0)),
+        flat_vertex(Vector3(0, -6, 0.5), Color(255, 0, 0)),
         fb,
     )
     for y in range(4):
@@ -412,17 +418,133 @@ def test_a_triangle_beside_the_viewport_touches_no_columns() raises:
         Color(255, 0, 0),
     )
     rasterize_shaded(
-        Vector3(-10, 0, 0.5),
-        Vector3(-6, 0, 0.5),
-        Vector3(-10, 4, 0.5),
-        Color(255, 0, 0),
-        Color(255, 0, 0),
-        Color(255, 0, 0),
+        flat_vertex(Vector3(-10, 0, 0.5), Color(255, 0, 0)),
+        flat_vertex(Vector3(-6, 0, 0.5), Color(255, 0, 0)),
+        flat_vertex(Vector3(-10, 4, 0.5), Color(255, 0, 0)),
         fb,
     )
     for y in range(4):
         for x in range(4):
             assert_equal(fb.get_pixel(x, y).r, UInt8(1))
+
+
+# --- perspective-correct interpolation --------------------------------------
+
+
+def wide_triangle() -> List[Vector3]:
+    """Return a triangle spanning a 9x9 image, for interpolation tests."""
+    var corners = List[Vector3]()
+    corners.append(Vector3(-5, -5, 0.5))
+    corners.append(Vector3(20, -5, 0.5))
+    corners.append(Vector3(-5, 20, 0.5))
+    return corners^
+
+
+def test_equal_inv_w_everywhere_is_plain_screen_linear_blending() raises:
+    # The correction divides by the interpolated inv_w, so a constant value
+    # cancels completely whatever it is. If it did not, every orthographic-ish
+    # triangle would shade differently depending on how far away it happened
+    # to be.
+    var t = wide_triangle()
+    var ones = Framebuffer(9, 9, Color(0, 0, 0))
+    var halves = Framebuffer(9, 9, Color(0, 0, 0))
+    rasterize_shaded(
+        flat_vertex(t[0], Color(255, 0, 0), 1.0),
+        flat_vertex(t[1], Color(0, 0, 255), 1.0),
+        flat_vertex(t[2], Color(255, 0, 0), 1.0),
+        ones,
+    )
+    rasterize_shaded(
+        flat_vertex(t[0], Color(255, 0, 0), 0.5),
+        flat_vertex(t[1], Color(0, 0, 255), 0.5),
+        flat_vertex(t[2], Color(255, 0, 0), 0.5),
+        halves,
+    )
+    for y in range(9):
+        for x in range(9):
+            assert_equal(ones.get_pixel(x, y).r, halves.get_pixel(x, y).r)
+            assert_equal(ones.get_pixel(x, y).b, halves.get_pixel(x, y).b)
+
+
+def test_the_nearer_corner_holds_more_of_the_screen() raises:
+    # A corner four times further away has a quarter the inv_w. Halfway across
+    # the screen the surface is only a fifth of the way to it, so the near
+    # colour should still dominate there — which screen-linear blending gets
+    # wrong by putting the two exactly even.
+    var t = wide_triangle()
+    var linear = Framebuffer(9, 9, Color(0, 0, 0))
+    var correct = Framebuffer(9, 9, Color(0, 0, 0))
+    rasterize_shaded(
+        flat_vertex(t[0], Color(255, 0, 0), 1.0),
+        flat_vertex(t[1], Color(0, 0, 255), 1.0),
+        flat_vertex(t[2], Color(255, 0, 0), 1.0),
+        linear,
+    )
+    rasterize_shaded(
+        flat_vertex(t[0], Color(255, 0, 0), 1.0),
+        flat_vertex(t[1], Color(0, 0, 255), 0.25),
+        flat_vertex(t[2], Color(255, 0, 0), 1.0),
+        correct,
+    )
+    # Somewhere along the red-to-blue edge the two must disagree.
+    var differences = 0
+    for y in range(9):
+        for x in range(9):
+            if correct.get_pixel(x, y).r != linear.get_pixel(x, y).r:
+                differences += 1
+                # Wherever they differ, the near red is stronger and the far
+                # blue weaker than the naive blend said.
+                assert_true(
+                    correct.get_pixel(x, y).r > linear.get_pixel(x, y).r
+                )
+                assert_true(
+                    correct.get_pixel(x, y).b < linear.get_pixel(x, y).b
+                )
+    assert_true(differences > 0, "the correction changed nothing")
+
+
+def test_depth_is_interpolated_affinely_not_corrected() raises:
+    # NDC depth is already linear in screen space — that is what the
+    # projection buys — so it must be interpolated with the plain weights.
+    # Putting it through inv_w as well would be a second, wrong divide, and
+    # the depth buffer would stop agreeing with itself between triangles.
+    var t = wide_triangle()
+    var flat = Framebuffer(9, 9, Color(0, 0, 0))
+    var sloped = Framebuffer(9, 9, Color(0, 0, 0))
+    rasterize_shaded(
+        RasterVertex(t[0].x, t[0].y, 0.1, 1.0, FloatColor(1, 1, 1)),
+        RasterVertex(t[1].x, t[1].y, 0.9, 1.0, FloatColor(1, 1, 1)),
+        RasterVertex(t[2].x, t[2].y, 0.5, 1.0, FloatColor(1, 1, 1)),
+        flat,
+    )
+    # Same corners and depths, wildly different w. Depth must not notice.
+    rasterize_shaded(
+        RasterVertex(t[0].x, t[0].y, 0.1, 1.0, FloatColor(1, 1, 1)),
+        RasterVertex(t[1].x, t[1].y, 0.9, 0.05, FloatColor(1, 1, 1)),
+        RasterVertex(t[2].x, t[2].y, 0.5, 4.0, FloatColor(1, 1, 1)),
+        sloped,
+    )
+    for y in range(9):
+        for x in range(9):
+            assert_equal(flat.depth_at(x, y), sloped.depth_at(x, y))
+
+
+def test_a_zero_inv_w_falls_back_to_screen_linear() raises:
+    # Nothing in this renderer produces it — clipping removes the near plane
+    # and everything behind it — but a divide by an interpolated zero would
+    # give infinities rather than an error, so the guard is exercised.
+    var t = wide_triangle()
+    var fb = Framebuffer(9, 9, Color(0, 0, 0))
+    rasterize_shaded(
+        flat_vertex(t[0], Color(255, 0, 0), 0.0),
+        flat_vertex(t[1], Color(0, 0, 255), 0.0),
+        flat_vertex(t[2], Color(255, 0, 0), 0.0),
+        fb,
+    )
+    var left = fb.get_pixel(0, 0)
+    var right = fb.get_pixel(8, 0)
+    assert_true(left.r > right.r)
+    assert_true(right.b > left.b)
 
 
 def main() raises:

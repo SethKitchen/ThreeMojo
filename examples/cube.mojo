@@ -69,7 +69,7 @@ def frame_at(
     var target = Framebuffer(WIDTH, HEIGHT, Color(18, 20, 28))
 
     # Project every vertex once, then reuse it for each face that shares it.
-    var positions = geometry.attribute(POSITION)
+    ref positions = geometry.attribute_view(POSITION)
     var screen = List[Vector3]()
     for vertex in range(positions.count()):
         screen.append(

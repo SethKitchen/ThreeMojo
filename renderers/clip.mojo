@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Cutting triangles against the near plane before they are projected.
+"""Cutting triangles against the near and far planes before they are projected.
 
 Perspective projection divides by depth, so a vertex level with the camera
 divides by zero and one behind it divides by a negative and comes out mirrored
@@ -11,19 +11,27 @@ through the origin. A triangle with one corner behind the camera does not
 project to a slightly wrong triangle; it projects to a wildly wrong one,
 usually a huge wedge across the whole image.
 
-The fix is to cut the triangle where it crosses the near plane and project
-only the part in front. The cut has to happen in camera space, before the
-divide, because the near plane is only a plane there — projection is what
-bends it.
+The fix is to cut the triangle where it crosses the plane and project only the
+part in front. The cut has to happen in camera space, before the divide,
+because the planes are only planes there — projection is what bends them.
+
+The far plane is cut for a different reason. Nothing divides by zero out there,
+but the camera promised a frustum ending at `far`, and the depth buffer cannot
+enforce it: depth starts at infinity and accepts anything smaller, and a point
+past the far plane still projects to an NDC depth below infinity. A point at
+z = -20 with near 0.1 and far 10 lands at about 1.0101 — outside the unit cube
+the projection is defined on, and drawn anyway. Clipping is what makes `far`
+mean something.
 
 Clipping a triangle against one plane leaves a polygon of three or four
-corners, which is one or two triangles. The interpolation at each cut carries
-the vertex colour with it, so a clipped triangle shades as though it were
+corners; against both, up to five. Fanning from the first corner turns whatever
+is left into triangles. The interpolation at each cut carries the vertex colour
+with it, in floating point, so a clipped triangle shades as though it were
 never cut.
 """
 
 from math.vector3 import Vector3
-from render.framebuffer import Color
+from render.framebuffer import FloatColor
 
 
 @fieldwise_init
@@ -31,40 +39,47 @@ struct ClipVertex(ImplicitlyCopyable):
     """A camera-space position with the colour already worked out for it."""
 
     var position: Vector3
-    var color: Color
+    var color: FloatColor
 
 
-def _mix(a: UInt8, b: UInt8, t: Float32) -> UInt8:
+def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
     """Return one colour channel a fraction `t` of the way from `a` to `b`."""
-    # `t` lies in [0, 1], so the result sits between the two inputs and can
-    # never go negative; only the rounding on a 255 needs clamping.
-    var value = Float32(a) + (Float32(b) - Float32(a)) * t + 0.5
-    if value > 255:
-        return 255
-    return UInt8(value)
+    # Done in floats and kept there. Rounding to a byte at each cut, as this
+    # used to, spent a level of precision every time a triangle crossed a
+    # plane — and a triangle can cross two.
+    return a + (b - a) * t
 
 
-def _cross_at(a: ClipVertex, b: ClipVertex, near: Float32) -> ClipVertex:
-    """Return the vertex where the edge from `a` to `b` meets the near plane.
+def _inside(z: Float32, plane_z: Float32, keep_nearer: Bool) -> Bool:
+    """Return True if `z` is on the kept side of the plane at `plane_z`.
 
-    The camera looks down -z, so the plane is at z = -near and the crossing
-    fraction comes from how far `a` is from it relative to the whole edge.
+    The camera looks down -z, so depth grows more negative with distance. The
+    near plane keeps what is further away than it; the far plane keeps what is
+    nearer. That is the only difference between the two, which is why one
+    routine clips both.
     """
-    # Only called for an edge with one end in front of the plane and one
-    # behind, so the ends differ in z and the span cannot be zero. The guard
-    # is kept because dividing by zero here would silently produce NaN
-    # coordinates rather than a visible error.
+    if keep_nearer:
+        return z <= plane_z
+    return z >= plane_z
+
+
+def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
+    """Return the vertex where the edge from `a` to `b` meets `plane_z`."""
+    # Only called for an edge with one end on each side of the plane, so the
+    # ends differ in z and the span cannot be zero. The guard is kept because
+    # dividing by zero here would silently produce NaN coordinates rather than
+    # a visible error.
     var span = a.position.z - b.position.z
     var t = Float32(0)
     if span != 0:  # pragma: no branch
-        t = (a.position.z + near) / span
+        t = (a.position.z - plane_z) / span
     return ClipVertex(
         Vector3(
             a.position.x + (b.position.x - a.position.x) * t,
             a.position.y + (b.position.y - a.position.y) * t,
-            -near,
+            plane_z,
         ),
-        Color(
+        FloatColor(
             _mix(a.color.r, b.color.r, t),
             _mix(a.color.g, b.color.g, t),
             _mix(a.color.b, b.color.b, t),
@@ -73,52 +88,79 @@ def _cross_at(a: ClipVertex, b: ClipVertex, near: Float32) -> ClipVertex:
     )
 
 
-def clip_near(
-    a: ClipVertex, b: ClipVertex, c: ClipVertex, near: Float32
+def _clip_plane(
+    polygon: List[ClipVertex], plane_z: Float32, keep_nearer: Bool
+) -> List[ClipVertex]:
+    """Return `polygon` cut down to the kept side of one plane.
+
+    Sutherland-Hodgman: walk the edges, keeping every corner on the kept side
+    and adding a crossing wherever an edge leaves or enters. An empty polygon
+    in gives an empty polygon out, which is what lets the two planes be
+    applied one after the other without a special case between them.
+
+    Args:
+        polygon: The corners, in order.
+        plane_z: Where the plane sits on the camera's z axis.
+        keep_nearer: True to keep what is nearer the camera than the plane
+            (the far plane), False to keep what is further (the near plane).
+
+    Returns:
+        The surviving corners, in order.
+    """
+    var kept = List[ClipVertex]()
+    for position in range(len(polygon)):
+        var current = polygon[position]
+        var following = polygon[(position + 1) % len(polygon)]
+        var current_in = _inside(current.position.z, plane_z, keep_nearer)
+        var following_in = _inside(following.position.z, plane_z, keep_nearer)
+        if current_in:
+            kept.append(current)
+        if current_in != following_in:
+            kept.append(_cross_at(current, following, plane_z))
+    return kept^
+
+
+def clip_depth(
+    a: ClipVertex, b: ClipVertex, c: ClipVertex, near: Float32, far: Float32
 ) raises -> List[ClipVertex]:
-    """Return the part of a triangle in front of the near plane.
+    """Return the part of a triangle inside the camera's depth range.
 
     Args:
         a: First corner, in camera space.
         b: Second corner.
         c: Third corner.
         near: Distance to the near plane; the plane sits at z = -near.
+        far: Distance to the far plane, at z = -far.
 
     Returns:
-        Corners three at a time: empty if the triangle is entirely behind the
-        plane, three if it survives whole or is cut to a triangle, six if the
-        cut leaves a quadrilateral.
+        Corners three at a time: empty if nothing survives, otherwise three
+        per triangle of the fan the clipped polygon was cut into.
 
     Raises:
         Error: If `near` is not positive, which would put the plane behind the
-            camera.
+            camera, or if `far` does not lie beyond `near`, which would leave
+            the frustum inside out.
     """
     if near <= 0:
         raise Error("The near plane must be in front of the camera")
+    if far <= near:
+        raise Error("The far plane must be beyond the near plane")
 
     var corners = List[ClipVertex]()
     corners.append(a)
     corners.append(b)
     corners.append(c)
 
-    # Sutherland-Hodgman against the single plane: walk the edges, keeping
-    # every corner in front and adding a crossing wherever an edge leaves or
-    # enters.
-    var kept = List[ClipVertex]()
-    for position in range(3):  # pragma: no branch
-        var current = corners[position]
-        var following = corners[(position + 1) % 3]
-        var current_in = current.position.z <= -near
-        var following_in = following.position.z <= -near
-        if current_in:
-            kept.append(current)
-        if current_in != following_in:
-            kept.append(_cross_at(current, following, near))
+    # Near first, so the far pass usually gets an empty or already-small
+    # polygon. Order does not change the result, only the work.
+    var in_front = _clip_plane(corners, -near, True)
+    var within = _clip_plane(in_front, -far, False)
 
-    # Three or four corners, fanned from the first into one or two triangles.
+    # Three to five corners, fanned from the first into triangles. An empty
+    # or degenerate polygon gives an empty range and so no triangles.
     var triangles = List[ClipVertex]()
-    for corner in range(1, len(kept) - 1):
-        triangles.append(kept[0])
-        triangles.append(kept[corner])
-        triangles.append(kept[corner + 1])
+    for corner in range(1, len(within) - 1):
+        triangles.append(within[0])
+        triangles.append(within[corner])
+        triangles.append(within[corner + 1])
     return triangles^

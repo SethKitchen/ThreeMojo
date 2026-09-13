@@ -15,6 +15,10 @@ Keeping the buffer separate from the rasterizer also means the per-pixel logic
 can be tested without capturing stdout, and later lets a GPU kernel fill the
 same bytes.
 
+Colour has two forms here. `Color` is the eight bits per channel the buffer
+actually stores; `FloatColor` is what lighting, clipping and interpolation work
+in, converted down exactly once at the moment a pixel is written.
+
 The depth buffer holds one NDC depth per pixel, cleared to infinity so that
 the first fragment to arrive always wins. Depth is what lets geometry be drawn
 in any order: without it, correctness depends on the draw order or on the
@@ -38,6 +42,73 @@ struct Color(ImplicitlyCopyable):
         self.g = g
         self.b = b
         self.a = a
+
+
+struct FloatColor(ImplicitlyCopyable):
+    """An RGBA colour with channels as floats, nominally zero to one.
+
+    Lighting multiplies, interpolation mixes, and clipping mixes again. Doing
+    any of that in eight bits throws away precision at every step: the old
+    path rounded to a byte when the vertex was lit and rounded again when a
+    clipped corner was built, so a gradient crossing the near plane could
+    band before it was ever rasterized.
+
+    Colour stays in this form all the way to the framebuffer, where
+    `quantize` converts once. Values may exceed one on the way — a bright
+    light, an accumulated highlight — and are clamped only at that final step
+    rather than after each operation.
+    """
+
+    var r: Float32
+    var g: Float32
+    var b: Float32
+    var a: Float32
+
+    def __init__(
+        out self, r: Float32, g: Float32, b: Float32, a: Float32 = 1.0
+    ):
+        """Create a colour, opaque unless an alpha is given."""
+        self.r = r
+        self.g = g
+        self.b = b
+        self.a = a
+
+    def __init__(out self, *, of: Color):
+        """Convert an eight-bit colour, mapping 0-255 onto 0-1."""
+        self.r = Float32(of.r) / 255
+        self.g = Float32(of.g) / 255
+        self.b = Float32(of.b) / 255
+        self.a = Float32(of.a) / 255
+
+    def scaled(self, factor: Float32) -> Self:
+        """Return this colour with its three channels scaled, alpha kept."""
+        return FloatColor(
+            self.r * factor, self.g * factor, self.b * factor, self.a
+        )
+
+    def quantize(self) -> Color:
+        """Return the eight-bit colour nearest this one.
+
+        Rounds rather than truncates. Truncating costs a level everywhere: a
+        face square-on to the light has a Lambert term of 0.99999 rather than
+        1, and converting that straight to an integer turns 200 into 199.
+        """
+        return Color(
+            _to_byte(self.r),
+            _to_byte(self.g),
+            _to_byte(self.b),
+            _to_byte(self.a),
+        )
+
+
+def _to_byte(value: Float32) -> UInt8:
+    """Return `value` in 0-1 as a rounded, clamped byte."""
+    var scaled = value * 255 + 0.5
+    if scaled <= 0:
+        return 0
+    if scaled >= 255:
+        return 255
+    return UInt8(scaled)
 
 
 struct Framebuffer(Movable):

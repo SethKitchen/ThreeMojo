@@ -8,10 +8,12 @@
 from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
 from math.vector3 import Vector3
+from math.matrix4 import Matrix4
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -224,6 +226,32 @@ def test_a_parent_must_come_before_its_child() raises:
         scene.set(a, cyclic^)
 
 
+def test_replacing_a_node_with_a_negative_parent_is_rejected() raises:
+    # NO_PARENT is -1 and legal; any other negative is not. `add` refused
+    # these from the start, but `set` only checked the ordering half of the
+    # rule, so -2 got through and reached the world array during `update`.
+    var scene = Scene()
+    var a = scene.add(Object3D())
+    var _b = scene.attach(Object3D(), a)
+    var broken = scene.get(a)
+    broken.parent = -2
+    with assert_raises():
+        scene.set(a, broken^)
+
+
+def test_replacing_a_root_with_no_parent_is_allowed() raises:
+    # The other side of that check: NO_PARENT must stay acceptable at any
+    # index, including one a stricter test would reject.
+    var scene = Scene()
+    var a = scene.add(node_at(1, 0, 0))
+    var b = scene.attach(node_at(0, 1, 0), a)
+    var freed = scene.get(b)
+    freed.parent = NO_PARENT
+    scene.set(b, freed^)
+    scene.update()
+    assert_point(scene.world_position(b), 0, 1, 0)
+
+
 def test_reading_a_node_out_of_range_is_rejected() raises:
     var scene = Scene()
     with assert_raises():
@@ -266,6 +294,98 @@ def test_a_negative_world_matrix_index_is_rejected() raises:
     scene.update()
     with assert_raises():
         _ = scene.world_matrix(-1)
+
+
+# --- staleness and invariants -----------------------------------------------
+
+
+def test_a_new_scene_is_not_stale() raises:
+    # Nothing to recompute, so nothing is out of date.
+    assert_false(Scene().is_stale())
+
+
+def test_adding_a_node_makes_the_scene_stale() raises:
+    var scene = Scene()
+    _ = scene.add(node_at(1, 2, 3))
+    assert_true(scene.is_stale())
+    scene.update()
+    assert_false(scene.is_stale())
+
+
+def test_replacing_a_node_makes_the_scene_stale() raises:
+    var scene = Scene()
+    var a = scene.add(node_at(1, 2, 3))
+    scene.update()
+    assert_false(scene.is_stale())
+    var moved = scene.get(a)
+    moved.set_position(9, 9, 9)
+    scene.set(a, moved^)
+    assert_true(scene.is_stale())
+
+
+def test_reading_a_world_matrix_while_stale_is_rejected() raises:
+    # The whole point of tracking it. Serving the matrix from before the edit
+    # would render a plausible wrong image and report nothing at all.
+    var scene = Scene()
+    var a = scene.add(node_at(1, 2, 3))
+    with assert_raises():
+        _ = scene.world_matrix(a)
+    with assert_raises():
+        _ = scene.world_position(a)
+    scene.update()
+    assert_point(scene.world_position(a), 1, 2, 3)
+
+
+def test_an_out_of_range_index_is_rejected_before_staleness() raises:
+    # A bad index is the caller's mistake either way; it should not be
+    # reported as a stale scene.
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    with assert_raises():
+        _ = scene.world_matrix(7)
+
+
+def test_an_empty_scene_validates() raises:
+    # Vacuously well formed: no nodes, no parents, both arrays empty.
+    Scene().validate()
+
+
+def test_a_well_formed_scene_validates() raises:
+    var scene = Scene()
+    var a = scene.add(node_at(1, 0, 0))
+    var b = scene.attach(node_at(0, 1, 0), a)
+    _ = scene.attach(node_at(0, 0, 1), b)
+    _ = scene.add(Object3D())
+    scene.update()
+    scene.validate()
+
+
+def test_validate_catches_a_parent_that_is_not_earlier() raises:
+    # Reaching past the underscore is exactly what `validate` is for: Mojo
+    # does not enforce private fields, so the convention can be broken and
+    # the single-pass update would then read a matrix that is not ready.
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    _ = scene.add(Object3D())
+    scene._nodes[0].parent = 1
+    with assert_raises():
+        scene.validate()
+
+
+def test_validate_catches_a_negative_parent() raises:
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene._nodes[0].parent = -4
+    with assert_raises():
+        scene.validate()
+
+
+def test_validate_catches_arrays_that_have_drifted_apart() raises:
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene._world.append(Matrix4())
+    with assert_raises():
+        scene.validate()
 
 
 def main() raises:

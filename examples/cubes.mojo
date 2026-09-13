@@ -23,6 +23,8 @@ left is the scene itself.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.object3d import Object3D
+from core.geometry_store import GeometryStore
+from core.geometry_store import GeometryId, GeometryStore
 from core.scene import Scene
 from geometries.box import cube
 from math.vector3 import Vector3
@@ -43,13 +45,25 @@ comptime ORBIT_RADIUS = Float32(1.6)
 
 
 def frame_at(
-    renderer: Renderer, camera: PerspectiveCamera, turn: Float32
+    renderer: Renderer,
+    camera: PerspectiveCamera,
+    geometries: GeometryStore,
+    centre_box: GeometryId,
+    moon_box: GeometryId,
+    turn: Float32,
 ) raises -> Framebuffer:
     """Render one frame with the orbit advanced to `turn` degrees.
+
+    The geometries are built once by the caller and named by id here. Only the
+    transforms change between frames, so rebuilding two cubes forty-eight
+    times would be forty-eight times the work for the same vertices.
 
     Args:
         renderer: The renderer to draw with.
         camera: The camera to view through.
+        geometries: The store owning both cubes.
+        centre_box: Id of the cube at the centre.
+        moon_box: Id of the smaller orbiting cube.
         turn: How far round the orbit has gone, in degrees.
 
     Returns:
@@ -82,12 +96,20 @@ def frame_at(
 
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(cube(Length(1.1, METRE)), Color(255, 140, 40), centre_node)
+        Mesh(
+            centre_box,
+            Color(255, 140, 40),
+            centre_node,
+        )
     )
     meshes.append(
-        Mesh(cube(Length(0.44, METRE)), Color(90, 190, 255), moon_node)
+        Mesh(
+            moon_box,
+            Color(90, 190, 255),
+            moon_node,
+        )
     )
-    return renderer.render(scene, meshes, camera)
+    return renderer.render(scene, geometries, meshes, camera)
 
 
 def main() raises:
@@ -106,12 +128,20 @@ def main() raises:
 
     var renderer = Renderer(WIDTH, HEIGHT)
 
+    # Built once and shared by every frame.
+    var geometries = GeometryStore()
+    var centre_box = geometries.add(cube(Length(1.1, METRE)))
+    var moon_box = geometries.add(cube(Length(0.44, METRE)))
+
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
         frames.append(
             frame_at(
                 renderer,
                 camera,
+                geometries,
+                centre_box,
+                moon_box,
                 Float32(360) * Float32(index) / Float32(FRAMES),
             )
         )

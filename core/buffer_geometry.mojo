@@ -13,6 +13,20 @@ stored once; a cube's eight corners serve thirty-six triangle slots.
 Without an index, vertices are taken three at a time in order. three.js allows
 both and so does this.
 
+Reading an attribute borrows it; copying one is a separate call with copy in
+its name. That distinction is the whole reason `attribute_view` exists next to
+`clone_attribute`: a single accessor that returned an owning copy made every
+read allocate, and reads are what a renderer does constantly.
+
+The attributes are held as two parallel lists rather than a `Dict`, which is
+the concession that makes the borrowing accessor usable. Mojo gives every value
+in a `Dict` the same symbolic origin, so taking a view of `normal` invalidates
+an outstanding view of `position` — the compiler cannot tell the two apart, and
+a renderer that wants both at once is refused. List elements share an origin
+too, but one the compiler does not invalidate on a second borrow. Two lists
+also keep insertion order, which a `Dict` does not promise and a GPU upload
+will eventually want.
+
 The examples grew these arrays by hand before this module existed, and two of
 them had drifted into near-identical copies. That duplication is what a
 geometry type is for.
@@ -30,40 +44,102 @@ comptime NORMAL = "normal"
 struct BufferGeometry(Movable):
     """Named vertex attributes, with optional indexed triangles."""
 
-    var attributes: Dict[String, BufferAttribute]
+    # Parallel arrays: `names[i]` is the name of `values[i]`. See the module
+    # docstring for why this is not a Dict.
+    var names: List[String]
+    var values: List[BufferAttribute]
     var index: List[Int]
 
     def __init__(out self):
         """Create an empty geometry with no attributes and no index."""
-        self.attributes = Dict[String, BufferAttribute]()
+        self.names = List[String]()
+        self.values = List[BufferAttribute]()
         self.index = List[Int]()
+
+    def _slot(self, name: String) -> Int:
+        """Return where `name` is stored, or -1 if it is not present."""
+        for position in range(len(self.names)):
+            if self.names[position] == name:
+                return position
+        return -1
 
     def set_attribute(mut self, name: String, var attribute: BufferAttribute):
         """Store `attribute` under `name`, replacing any previous one."""
-        self.attributes[name] = attribute^
+        var slot = self._slot(name)
+        if slot < 0:
+            self.names.append(name)
+            self.values.append(attribute^)
+        else:
+            self.values[slot] = attribute^
 
     def has_attribute(self, name: String) -> Bool:
         """Return True if an attribute of that name is present."""
-        return name in self.attributes
+        return self._slot(name) >= 0
 
-    def attribute(self, name: String) raises -> BufferAttribute:
-        """Return a copy of the named attribute.
+    def attribute_count(self) -> Int:
+        """Return how many named attributes this geometry holds."""
+        return len(self.names)
+
+    def attribute_view(
+        self, name: String
+    ) raises -> ref[origin_of(self.values[0])] BufferAttribute:
+        """Return a borrowed view of the named attribute.
+
+        This is the ordinary way to read vertex data, and it copies nothing.
+        The reference borrows from the geometry, so the geometry must outlive
+        it; the compiler enforces that rather than trusting the caller.
+
+        Binding the result with `var` is a compile error rather than a silent
+        copy, because `BufferAttribute` is `Copyable` but not
+        `ImplicitlyCopyable`. Bind it with `ref`, or say `clone_attribute` if
+        a copy is genuinely what was meant.
+
+        The borrow is immutable, which is what lets a caller hold views of
+        `position` and `normal` at the same time.
 
         Args:
-            name: Which attribute to fetch.
+            name: Which attribute to read.
 
         Returns:
-            A copy of it.
+            A reference to it, valid as long as this geometry is.
 
         Raises:
             Error: If the geometry has no such attribute.
         """
-        if name not in self.attributes:
+        var slot = self._slot(name)
+        if slot < 0:
             raise Error("This geometry has no attribute named " + name)
-        return BufferAttribute(copy=self.attributes[name])
+        return self.values[slot]
+
+    def clone_attribute(self, name: String) raises -> BufferAttribute:
+        """Return an owning copy of the named attribute.
+
+        Allocates and copies the whole array, so this is for deliberately
+        duplicating vertex data — not for reading it. Use `attribute_view`
+        to read.
+
+        Args:
+            name: Which attribute to copy.
+
+        Returns:
+            A copy of it, owned by the caller.
+
+        Raises:
+            Error: If the geometry has no such attribute.
+        """
+        var slot = self._slot(name)
+        if slot < 0:
+            raise Error("This geometry has no attribute named " + name)
+        return BufferAttribute(copy=self.values[slot])
 
     def vertex_count(self) raises -> Int:
         """Return how many vertices the position attribute holds.
+
+        Reads the stored attribute through a view. This used to go through a
+        copying accessor, which mattered more than it looks: `corner_index`
+        calls it, the renderer calls `corner_index` three times per triangle,
+        and so drawing a mesh copied its entire position array nine times per
+        triangle.
 
         Returns:
             The vertex count.
@@ -71,7 +147,7 @@ struct BufferGeometry(Movable):
         Raises:
             Error: If the geometry has no positions.
         """
-        return self.attribute(POSITION).count()
+        return self.attribute_view(POSITION).count()
 
     def set_index(mut self, var index: List[Int]) raises:
         """Set the triangle index buffer.
@@ -154,6 +230,5 @@ struct BufferGeometry(Movable):
             Error: If either index is out of range, or an index entry points
                 past the end of the position attribute.
         """
-        return self.attribute(POSITION).vector3(
-            self.corner_index(triangle, corner)
-        )
+        var vertex = self.corner_index(triangle, corner)
+        return self.attribute_view(POSITION).vector3(vertex)

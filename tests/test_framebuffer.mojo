@@ -5,7 +5,7 @@
 
 """Tests for `render.framebuffer`."""
 
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -188,6 +188,52 @@ def test_depth_tests_out_of_bounds_are_rejected() raises:
         _ = fb.test_depth(0, -1, 0.5)
     with assert_raises():
         _ = fb.test_depth(0, 2, 0.5)
+
+
+# --- FloatColor -------------------------------------------------------------
+
+
+def test_an_eight_bit_colour_round_trips_through_floats() raises:
+    # Every byte must survive the trip out to 0-1 and back, or shading would
+    # shift colours simply by being computed.
+    for value in range(256):
+        var byte = UInt8(value)
+        var back = FloatColor(of=Color(byte, byte, byte, byte)).quantize()
+        assert_equal(back.r, byte)
+        assert_equal(back.a, byte)
+
+
+def test_quantizing_rounds_rather_than_truncating() raises:
+    # 0.5/255 is exactly half a level: it must land on 1, not 0. Truncating
+    # here is what used to turn a fully lit 200 into a 199.
+    assert_equal(FloatColor(0.5 / 255, 0, 0).quantize().r, UInt8(1))
+    assert_equal(FloatColor(1.4 / 255, 0, 0).quantize().r, UInt8(1))
+    assert_equal(FloatColor(1.6 / 255, 0, 0).quantize().r, UInt8(2))
+
+
+def test_quantizing_clamps_at_both_ends() raises:
+    # Lighting can overshoot one, and an interpolated value can undershoot
+    # zero by a rounding error. Neither may wrap around the byte.
+    var bright = FloatColor(4.0, 2.0, 1.5, 1.0).quantize()
+    assert_equal(bright.r, UInt8(255))
+    assert_equal(bright.g, UInt8(255))
+    var dark = FloatColor(-1.0, -0.001, 0.0, 1.0).quantize()
+    assert_equal(dark.r, UInt8(0))
+    assert_equal(dark.g, UInt8(0))
+    assert_equal(dark.b, UInt8(0))
+
+
+def test_scaling_dims_the_channels_and_keeps_alpha() raises:
+    var half = FloatColor(1.0, 0.5, 0.25, 0.8).scaled(0.5)
+    assert_equal(half.r, Float32(0.5))
+    assert_equal(half.g, Float32(0.25))
+    assert_equal(half.b, Float32(0.125))
+    # Dimming a surface must not make it transparent.
+    assert_equal(half.a, Float32(0.8))
+
+
+def test_a_float_colour_is_opaque_unless_told_otherwise() raises:
+    assert_equal(FloatColor(0.0, 0.0, 0.0).a, Float32(1.0))
 
 
 def main() raises:

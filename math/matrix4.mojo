@@ -368,6 +368,87 @@ struct Matrix4(ImplicitlyCopyable):
         ) * inv
         self.elements = e^
 
+    def normal_matrix(self) raises -> Self:
+        """Return the matrix that transforms normals through this transform.
+
+        A normal is perpendicular to a surface, and perpendicularity is not
+        preserved by an arbitrary transform. Scaling a plane by two in x and
+        one in y tilts the surface one way and the naive normal the other, so
+        a normal carried by the transform itself stops being perpendicular to
+        the surface it belongs to, and the lighting goes quietly wrong.
+
+        The matrix that does preserve it is the inverse transpose of the
+        upper-left 3x3, which is three.js's `Matrix3.getNormalMatrix`. For a
+        rotation it is the rotation back again, and for a uniform scale it is
+        the same rotation scaled — which is why ignoring all this works until
+        the moment a scale is not uniform.
+
+        Returned as a 4x4 with an empty translation column, so the result can
+        be handed straight to `transform_direction`. The result is not
+        normalized: it scales as well as rotates, and the caller normalizes.
+
+        Returns:
+            The inverse transpose of the rotation and scale part.
+
+        Raises:
+            Error: If the 3x3 is singular — a zero scale on some axis, say —
+                which leaves the surface with no direction to be perpendicular
+                to and no inverse to build the answer from.
+        """
+        var e = self.elements.copy()
+        # Rows of the upper-left 3x3, remembering storage is column-major.
+        var a = e[0]
+        var b = e[4]
+        var c = e[8]
+        var d = e[1]
+        var f = e[5]
+        var g = e[9]
+        var h = e[2]
+        var i = e[6]
+        var j = e[10]
+
+        # The cofactor matrix. inverse = adjugate / det = cofactor^T / det, so
+        # the inverse *transpose* is the cofactor matrix over the determinant
+        # — no separate transpose step is needed.
+        var c11 = f * j - g * i
+        var c12 = -(d * j - g * h)
+        var c13 = d * i - f * h
+        var c21 = -(b * j - c * i)
+        var c22 = a * j - c * h
+        var c23 = -(a * i - b * h)
+        var c31 = b * g - c * f
+        var c32 = -(a * g - c * d)
+        var c33 = a * f - b * d
+
+        # Expanding along the first row reuses the cofactors just computed.
+        var det = a * c11 + b * c12 + c * c13
+        if det == 0:
+            raise Error(
+                "A transform that collapses a dimension has no normal matrix"
+            )
+
+        var inv = Float32(1) / det
+        var matrix = Matrix4()
+        matrix.set(
+            c11 * inv,
+            c12 * inv,
+            c13 * inv,
+            0,
+            c21 * inv,
+            c22 * inv,
+            c23 * inv,
+            0,
+            c31 * inv,
+            c32 * inv,
+            c33 * inv,
+            0,
+            0,
+            0,
+            0,
+            1,
+        )
+        return matrix^
+
     def transform_point(self, point: Vector3) -> Vector3:
         """Return `point` transformed, treating it as a position (w = 1).
 
@@ -387,6 +468,26 @@ struct Matrix4(ImplicitlyCopyable):
             (e[1] * x + e[5] * y + e[9] * z + e[13]) * inv,
             (e[2] * x + e[6] * y + e[10] * z + e[14]) * inv,
         )
+
+    def transform_w(self, point: Vector3) -> Float32:
+        """Return the w that `transform_point` would divide this point by.
+
+        For a projection matrix this is the clip-space w — the camera-space
+        depth, up to sign — and its reciprocal is what makes an interpolated
+        vertex attribute perspective correct. `transform_point` computes it,
+        divides by it and discards it, which is everything a *position* needs
+        and not enough for anything carried alongside one.
+
+        Args:
+            point: The point to transform, treated as a position (w = 1).
+
+        Returns:
+            The transformed w. One for an affine transform, which is what
+            makes the perspective correction a no-op when there is no
+            perspective.
+        """
+        var e = self.elements.copy()
+        return e[3] * point.x + e[7] * point.y + e[11] * point.z + e[15]
 
     def transform_direction(self, direction: Vector3) -> Vector3:
         """Return `direction` transformed, ignoring translation (w = 0).
