@@ -7,8 +7,10 @@
 
 from math.vector2 import Vector2
 from render.framebuffer import Color, FloatColor, Framebuffer
+from render.texture import REPEAT, Texture, checkerboard
 from math.vector3 import Vector3
 from render.rasterizer import (
+    SHADE_TEXTURE,
     SHADE_UV,
     RasterVertex,
     Triangle,
@@ -679,6 +681,142 @@ def test_the_same_triangle_without_perspective_gives_the_flat_answer() raises:
     )
     assert_equal(fb.get_pixel(1, 1).r, UInt8(64))
     assert_equal(fb.get_pixel(1, 1).g, UInt8(64))
+
+
+# --- sampling a texture -----------------------------------------------------
+
+
+def lit_uv_vertex(
+    x: Float32, y: Float32, inv_w: Float32, u: Float32, v: Float32
+) -> RasterVertex:
+    """Return a white raster vertex carrying texture coordinates.
+
+    White, unlike `uv_vertex`, because modulating a texture by black is
+    black -- correct, and useless for seeing what was sampled.
+    """
+    return RasterVertex(x, y, 0.5, inv_w, FloatColor(1, 1, 1), u, v)
+
+
+def mapped_quad(size: Float32) -> List[RasterVertex]:
+    """Return two triangles covering a square image, mapped once across it.
+
+    One oversized triangle would be simpler and would not do: it covers the
+    image but stretches uv far beyond it, so the whole viewport lands inside
+    a single texel and every checkerboard square looks the same. The mapping
+    has to span exactly what is drawn.
+
+    Args:
+        size: The image's width and height in pixels.
+
+    Returns:
+        Six raster vertices, two triangles' worth.
+    """
+    var top_left = lit_uv_vertex(0, 0, 1, 0, 1)
+    var top_right = lit_uv_vertex(size, 0, 1, 1, 1)
+    var bottom_right = lit_uv_vertex(size, size, 1, 1, 0)
+    var bottom_left = lit_uv_vertex(0, size, 1, 0, 0)
+    var corners = List[RasterVertex]()
+    corners.append(top_left)
+    corners.append(top_right)
+    corners.append(bottom_right)
+    corners.append(top_left)
+    corners.append(bottom_right)
+    corners.append(bottom_left)
+    return corners^
+
+
+def test_a_texture_replaces_a_white_surface() raises:
+    # Modulation against white leaves the texel alone, which is what makes
+    # "show me the image" the simple case rather than a special one.
+    var image = checkerboard(8, 2, Color(255, 0, 0), Color(0, 0, 255))
+    var fb = Framebuffer(8, 8, Color(0, 0, 0))
+    var quad = mapped_quad(8)
+    for triangle in range(2):
+        rasterize_shaded(
+            quad[triangle * 3],
+            quad[triangle * 3 + 1],
+            quad[triangle * 3 + 2],
+            fb,
+            SHADE_TEXTURE,
+            image,
+        )
+    # Top-left quadrant is the light square, top-right the dark one.
+    assert_equal(fb.get_pixel(1, 1).r, UInt8(255))
+    assert_equal(fb.get_pixel(1, 1).b, UInt8(0))
+    assert_equal(fb.get_pixel(6, 1).b, UInt8(255))
+    assert_equal(fb.get_pixel(6, 1).r, UInt8(0))
+
+
+def test_a_texture_is_modulated_by_the_lighting() raises:
+    # Half-lit white surface, fully white texture: the result is half.
+    var pixels = List[UInt8](length=4, fill=255)
+    var white = Texture(1, 1, pixels^, REPEAT)
+    var fb = Framebuffer(8, 8, Color(0, 0, 0))
+    var t = covering(0.5)
+    rasterize_shaded(
+        RasterVertex(t[0].x, t[0].y, 0.5, 1, FloatColor(0.5, 0.5, 0.5), 0, 0),
+        RasterVertex(t[1].x, t[1].y, 0.5, 1, FloatColor(0.5, 0.5, 0.5), 0, 0),
+        RasterVertex(t[2].x, t[2].y, 0.5, 1, FloatColor(0.5, 0.5, 0.5), 0, 0),
+        fb,
+        SHADE_TEXTURE,
+        white,
+    )
+    assert_equal(fb.get_pixel(4, 4).r, UInt8(128))
+
+
+def test_no_texture_leaves_the_lighting_untouched() raises:
+    # The default is the blank texture, which samples as white, so
+    # SHADE_TEXTURE with nothing set must match SHADE_LIT exactly.
+    var lit = Framebuffer(8, 8, Color(0, 0, 0))
+    var textured = Framebuffer(8, 8, Color(0, 0, 0))
+    var t = covering(0.5)
+    var green = FloatColor(0.0, 0.6, 0.2)
+    rasterize_shaded(
+        RasterVertex(t[0].x, t[0].y, 0.5, 1, green, 0, 0),
+        RasterVertex(t[1].x, t[1].y, 0.5, 1, green, 0, 0),
+        RasterVertex(t[2].x, t[2].y, 0.5, 1, green, 0, 0),
+        lit,
+    )
+    rasterize_shaded(
+        RasterVertex(t[0].x, t[0].y, 0.5, 1, green, 0, 0),
+        RasterVertex(t[1].x, t[1].y, 0.5, 1, green, 0, 0),
+        RasterVertex(t[2].x, t[2].y, 0.5, 1, green, 0, 0),
+        textured,
+        SHADE_TEXTURE,
+    )
+    for y in range(8):
+        for x in range(8):
+            assert_equal(lit.get_pixel(x, y).g, textured.get_pixel(x, y).g)
+
+
+def test_a_texture_is_sampled_with_perspective_correct_coordinates() raises:
+    # The coordinates a texture is looked up with are the corrected ones, so
+    # a checkerboard on a receding surface bends the way a real one does.
+    var image = checkerboard(8, 2, Color(255, 0, 0), Color(0, 0, 255))
+    var correct = Framebuffer(16, 16, Color(0, 0, 0))
+    var affine = Framebuffer(16, 16, Color(0, 0, 0))
+    rasterize_shaded(
+        lit_uv_vertex(-1, -1, 1.0, 0, 1),
+        lit_uv_vertex(40, -1, 0.2, 1, 1),
+        lit_uv_vertex(-1, 40, 1.0, 0, 0),
+        correct,
+        SHADE_TEXTURE,
+        image,
+    )
+    rasterize_shaded(
+        lit_uv_vertex(-1, -1, 1.0, 0, 1),
+        lit_uv_vertex(40, -1, 1.0, 1, 1),
+        lit_uv_vertex(-1, 40, 1.0, 0, 0),
+        affine,
+        SHADE_TEXTURE,
+        image,
+    )
+    var differing = 0
+    for y in range(16):
+        for x in range(16):
+            if correct.get_pixel(x, y).r != affine.get_pixel(x, y).r:
+                differing += 1
+    assert_true(differing > 0, "the correction did not reach the sampling")
 
 
 def main() raises:

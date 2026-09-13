@@ -16,7 +16,8 @@ from geometries.sphere import sphere
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
-from render.rasterizer import SHADE_LIT, SHADE_UV
+from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV
+from render.texture import checkerboard
 from renderers.renderer import Renderer, face_normal
 from std.testing import (
     TestSuite,
@@ -948,6 +949,89 @@ def test_an_unmirrored_mesh_still_agrees_between_the_normal_paths() raises:
     for y in range(HEIGHT):
         for x in range(WIDTH):
             assert_equal(supplied.get_pixel(x, y).r, derived.get_pixel(x, y).r)
+
+
+# --- textures ---------------------------------------------------------------
+
+
+def test_a_renderer_starts_with_no_texture() raises:
+    assert_true(Renderer(WIDTH, HEIGHT).texture.is_blank())
+
+
+def test_texture_mode_without_a_texture_matches_lit_shading() raises:
+    # The blank texture samples as white and white is the identity for
+    # modulation, so "no texture" costs nothing and needs no branch.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var geometries = GeometryStore()
+    var box = geometries.add(cube(Length(1.5, METRE)))
+    var scene = scene_with_node_at(0)
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, Color(220, 160, 80), 0))
+
+    var lit = renderer.render(scene, geometries, meshes, a_camera())
+    renderer.set_shading(SHADE_TEXTURE)
+    var textured = renderer.render(scene, geometries, meshes, a_camera())
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(lit.get_pixel(x, y).r, textured.get_pixel(x, y).r)
+            assert_equal(lit.get_pixel(x, y).g, textured.get_pixel(x, y).g)
+
+
+def test_a_texture_changes_what_a_mesh_looks_like() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var geometries = GeometryStore()
+    var box = geometries.add(cube(Length(1.5, METRE)))
+    var scene = scene_with_node_at(0)
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, Color(255, 255, 255), 0))
+
+    var plain = renderer.render(scene, geometries, meshes, a_camera())
+    renderer.set_shading(SHADE_TEXTURE)
+    renderer.set_texture(
+        checkerboard(8, 4, Color(255, 255, 255), Color(20, 20, 20))
+    )
+    var patterned = renderer.render(scene, geometries, meshes, a_camera())
+
+    var differing = 0
+    var dark = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var one = plain.get_pixel(x, y)
+            var two = patterned.get_pixel(x, y)
+            if one.r != two.r:
+                differing += 1
+            # The dark squares of the board, not the background.
+            if two.r < one.r and one.r != renderer.background.r:
+                dark += 1
+    assert_true(differing > 0, "the texture changed nothing")
+    assert_true(dark > 0, "no dark square reached the image")
+
+
+def test_setting_a_texture_does_not_start_using_it() raises:
+    # Two separate decisions: what image to sample, and whether to sample at
+    # all. Handing over a texture while still shading lit must change nothing.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var geometries = GeometryStore()
+    var box = geometries.add(cube(Length(1.5, METRE)))
+    var scene = scene_with_node_at(0)
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, Color(255, 255, 255), 0))
+
+    var before = renderer.render(scene, geometries, meshes, a_camera())
+    renderer.set_texture(
+        checkerboard(8, 4, Color(255, 255, 255), Color(20, 20, 20))
+    )
+    var after = renderer.render(scene, geometries, meshes, a_camera())
+    assert_false(renderer.texture.is_blank())
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(before.get_pixel(x, y).r, after.get_pixel(x, y).r)
+
+
+def test_texture_shading_is_a_known_mode() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_shading(SHADE_TEXTURE)
+    assert_equal(renderer.shading, SHADE_TEXTURE)
 
 
 def main() raises:

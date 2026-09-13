@@ -25,6 +25,7 @@ asserts pixel for pixel.
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
+from render.texture import Texture
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, max, min
 
@@ -299,11 +300,14 @@ struct RasterVertex(ImplicitlyCopyable):
     var v: Float32
 
 
-# What a fragment's colour is taken from. An Int rather than a richer type
-# because there are two of them; when a texture arrives it becomes a third and
-# the argument grows into something that carries the texture with it.
+# What a fragment's colour is taken from. Still an Int: the three cases differ
+# in which numbers they read, not in what the rasterizer does around them.
+# `SHADE_TEXTURE` multiplies the sampled texel by the interpolated lighting,
+# so a white texture shades exactly as `SHADE_LIT` does and an unlit white
+# mesh shows the image unchanged.
 comptime SHADE_LIT = 0
 comptime SHADE_UV = 1
+comptime SHADE_TEXTURE = 2
 
 
 def rasterize_shaded(
@@ -312,6 +316,7 @@ def rasterize_shaded(
     c: RasterVertex,
     mut target: Framebuffer,
     mode: Int = SHADE_LIT,
+    texture: Texture = Texture(),
 ) raises:
     """Fill a triangle whose corners each carry their own colour.
 
@@ -338,12 +343,17 @@ def rasterize_shaded(
         b: Second corner.
         c: Third corner.
         target: The framebuffer to draw into.
-        mode: `SHADE_LIT` to write the interpolated colour, or `SHADE_UV` to
-            write the interpolated texture coordinates as red and green. The
-            second exists to make the perspective correction visible: with it
-            a floor plane drawn as two large triangles shows the difference
-            between a correct interpolation and an affine one directly, which
-            no assertion about a colour channel really does.
+        mode: `SHADE_LIT` to write the interpolated colour, `SHADE_UV` to
+            write the interpolated texture coordinates as red and green, or
+            `SHADE_TEXTURE` to look the colour up in `texture` and modulate
+            it by the lighting. `SHADE_UV` exists to make the perspective
+            correction visible: with it a floor plane drawn as two large
+            triangles shows the difference between a correct interpolation
+            and an affine one directly, which no assertion about a colour
+            channel really does.
+        texture: The image `SHADE_TEXTURE` samples. Defaults to the blank
+            texture, which samples as opaque white and so leaves the lighting
+            untouched — "no texture" is a value here rather than a branch.
 
     Raises:
         Error: If a pixel write lands out of bounds, which the loop prevents.
@@ -391,11 +401,20 @@ def rasterize_shaded(
                 a.color.b * share_a + b.color.b * share_b + c.color.b * share_c,
                 a.color.a * share_a + b.color.a * share_b + c.color.a * share_c,
             )
-            if mode == SHADE_UV:
-                shaded = FloatColor(
-                    a.u * share_a + b.u * share_b + c.u * share_c,
-                    a.v * share_a + b.v * share_b + c.v * share_c,
-                    0.0,
-                    1.0,
-                )
+            if mode != SHADE_LIT:
+                var u = a.u * share_a + b.u * share_b + c.u * share_c
+                var v = a.v * share_a + b.v * share_b + c.v * share_c
+                if mode == SHADE_UV:
+                    shaded = FloatColor(u, v, 0.0, 1.0)
+                else:
+                    # Modulate rather than replace: the texture says what
+                    # colour the surface is, the lighting says how much of it
+                    # reaches the camera, and a renderer needs both.
+                    var texel = texture.sample(u, v)
+                    shaded = FloatColor(
+                        shaded.r * texel.r,
+                        shaded.g * texel.g,
+                        shaded.b * texel.b,
+                        shaded.a * texel.a,
+                    )
             target.set_pixel(x, y, shaded.quantize())

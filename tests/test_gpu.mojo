@@ -40,6 +40,7 @@ from objects.mesh import Mesh
 from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METRE
 from render.framebuffer import Color, FloatColor, Framebuffer
+from render.texture import CLAMP, MIRROR, REPEAT, Texture, checkerboard
 from render.gpu import (
     GpuRenderer,
     available,
@@ -49,6 +50,7 @@ from render.gpu import (
     render_triangles,
 )
 from render.rasterizer import (
+    SHADE_TEXTURE,
     SHADE_UV,
     RasterVertex,
     Triangle,
@@ -757,6 +759,135 @@ def test_both_backends_agree_on_a_prepared_orthographic_uv_scene() raises:
                 greens += 1
     assert_true(reds > 0, "no u reached the image")
     assert_true(greens > 0, "no v reached the image")
+
+
+# --- textures ---------------------------------------------------------------
+
+
+def lit_corner(
+    x: Float32, y: Float32, inv_w: Float32, u: Float32, v: Float32
+) -> RasterVertex:
+    """Return a white raster vertex carrying texture coordinates."""
+    return RasterVertex(x, y, 0.5, inv_w, FloatColor(1, 1, 1), u, v)
+
+
+def mapped_quad(size: Float32) -> List[RasterVertex]:
+    """Return two triangles covering a square image, mapped once across it."""
+    var corners = List[RasterVertex]()
+    corners.append(lit_corner(0, 0, 1, 0, 1))
+    corners.append(lit_corner(size, 0, 1, 1, 1))
+    corners.append(lit_corner(size, size, 1, 1, 0))
+    corners.append(lit_corner(0, 0, 1, 0, 1))
+    corners.append(lit_corner(size, size, 1, 1, 0))
+    corners.append(lit_corner(0, size, 1, 0, 0))
+    return corners^
+
+
+def cpu_textured(
+    corners: List[RasterVertex], size: Int, texture: Texture
+) raises -> Framebuffer:
+    """Return the CPU rasterizer's textured output.
+
+    Args:
+        corners: Raster vertices, three per triangle.
+        size: Image width and height.
+        texture: The image to sample.
+
+    Returns:
+        The rendered framebuffer.
+
+    Raises:
+        Error: If the dimensions are invalid.
+    """
+    var target = Framebuffer(size, size, BACKGROUND)
+    for triangle in range(len(corners) // 3):
+        rasterize_shaded(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+            target,
+            SHADE_TEXTURE,
+            texture,
+        )
+    return target^
+
+
+def test_both_backends_sample_a_texture_identically() raises:
+    # Nearest-neighbour sampling is integer arithmetic once the coordinate is
+    # floored, so unlike interpolated shading this has to agree exactly.
+    if skipped_for_lack_of_a_gpu("both backends sample a texture"):
+        return
+    var board = checkerboard(16, 4, Color(240, 60, 20), Color(20, 40, 200))
+    var corners = mapped_quad(24)
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, Texture(copy=board)
+    )
+    var cpu = cpu_textured(corners, 24, board)
+
+    # A real pattern: both colours present, so the mapping did something.
+    var light = 0
+    var dark = 0
+    for y in range(24):
+        for x in range(24):
+            if cpu.get_pixel(x, y).r > 200:
+                light += 1
+            if cpu.get_pixel(x, y).b > 150:
+                dark += 1
+    assert_true(light > 0 and dark > 0, "the checkerboard did not appear")
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_both_backends_agree_on_every_wrap_mode() raises:
+    # Coordinates outside the unit square, so the wrap arithmetic is what is
+    # being compared rather than the sampling.
+    if skipped_for_lack_of_a_gpu("both backends agree on wrapping"):
+        return
+    for mode in [REPEAT, CLAMP, MIRROR]:
+        var board = checkerboard(
+            8, 2, Color(240, 60, 20), Color(20, 40, 200), mode
+        )
+        var corners = List[RasterVertex]()
+        # Three tiles across and up, and starting below zero.
+        corners.append(lit_corner(0, 0, 1, -1.0, 2.0))
+        corners.append(lit_corner(24, 0, 1, 2.0, 2.0))
+        corners.append(lit_corner(24, 24, 1, 2.0, -1.0))
+        corners.append(lit_corner(0, 0, 1, -1.0, 2.0))
+        corners.append(lit_corner(24, 24, 1, 2.0, -1.0))
+        corners.append(lit_corner(0, 24, 1, -1.0, -1.0))
+        var gpu = render_triangles(
+            corners, 24, 24, BACKGROUND, SHADE_TEXTURE, Texture(copy=board)
+        )
+        var cpu = cpu_textured(corners, 24, board)
+        assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_the_gpu_treats_no_texture_as_white() raises:
+    # A width of zero is what the kernel reads to mean "blank", and blank has
+    # to leave the lighting exactly alone.
+    if skipped_for_lack_of_a_gpu("the gpu treats no texture as white"):
+        return
+    var corners = mapped_quad(16)
+    var lit = render_triangles(corners, 16, 16, BACKGROUND)
+    var textured = render_triangles(corners, 16, 16, BACKGROUND, SHADE_TEXTURE)
+    assert_equal(count_mismatches(lit, textured), 0)
+
+
+def test_a_texture_survives_being_drawn_twice() raises:
+    # Uploaded once by set_texture rather than per draw, so the second frame
+    # has to still find it there.
+    if skipped_for_lack_of_a_gpu("a texture survives a second draw"):
+        return
+    var board = checkerboard(16, 4, Color(240, 60, 20), Color(20, 40, 200))
+    var renderer = GpuRenderer(24, 24)
+    renderer.set_texture(board)
+    var corners = mapped_quad(24)
+
+    renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
+    var first = renderer.read_back()
+    renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
+    var second = renderer.read_back()
+    assert_equal(count_mismatches(first, second), 0)
+    assert_equal(count_mismatches(cpu_textured(corners, 24, board), first), 0)
 
 
 def main() raises:

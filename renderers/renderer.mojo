@@ -61,9 +61,11 @@ from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor, Framebuffer
+from render.texture import Texture
 from math.vector2 import Vector2
 from render.rasterizer import (
     SHADE_LIT,
+    SHADE_TEXTURE,
     SHADE_UV,
     RasterVertex,
     edge,
@@ -169,8 +171,14 @@ struct Renderer(Movable):
     # third state, and it belongs with `Material` rather than as a third
     # value of a flag on the renderer.
     var cull_backfaces: Bool
-    # SHADE_LIT or SHADE_UV; see `render.rasterizer`.
+    # SHADE_LIT, SHADE_UV or SHADE_TEXTURE; see `render.rasterizer`.
     var shading: Int
+    # The image `SHADE_TEXTURE` samples. One per renderer rather than one per
+    # mesh, which is the wrong shape and knows it: a texture is a property of
+    # a material, and there is no `Material` yet. It moves there, unchanged,
+    # the moment there is one. Blank by default, and the blank texture samples
+    # as white, so a renderer that never sets one shades as it always did.
+    var texture: Texture
 
     def __init__(out self, width: Int, height: Int) raises:
         """Create a renderer with a dark background and a default light.
@@ -195,6 +203,7 @@ struct Renderer(Movable):
         self.ambient = 0.25
         self.cull_backfaces = True
         self.shading = SHADE_LIT
+        self.texture = Texture()
 
     def set_background(mut self, color: Color):
         """Set the colour the image is cleared to."""
@@ -221,15 +230,26 @@ struct Renderer(Movable):
         """Choose what a fragment's colour is taken from.
 
         Args:
-            mode: `SHADE_LIT` for the interpolated lighting, or `SHADE_UV` to
-                write texture coordinates as red and green instead.
+            mode: `SHADE_LIT` for the interpolated lighting, `SHADE_UV` to
+                write texture coordinates as red and green instead, or
+                `SHADE_TEXTURE` to sample the renderer's texture and modulate
+                it by the lighting.
 
         Raises:
             Error: If the mode is not one this renderer knows.
         """
-        if mode != SHADE_LIT and mode != SHADE_UV:
+        if mode != SHADE_LIT and mode != SHADE_UV and mode != SHADE_TEXTURE:
             raise Error("Unknown shading mode")
         self.shading = mode
+
+    def set_texture(mut self, var texture: Texture):
+        """Give the renderer the image `SHADE_TEXTURE` samples.
+
+        Moved in rather than copied, so a large image is not duplicated by
+        being handed over. Setting one does not by itself change anything —
+        `set_shading(SHADE_TEXTURE)` is what starts reading it.
+        """
+        self.texture = texture^
 
     def set_light(mut self, direction: Vector3, ambient: Float32) raises:
         """Point the light and set how much the unlit side keeps.
@@ -482,5 +502,6 @@ struct Renderer(Movable):
                 corners[triangle * 3 + 2],
                 target,
                 self.shading,
+                self.texture,
             )
         return target^

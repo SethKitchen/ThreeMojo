@@ -360,7 +360,7 @@ bench:
 example: $(OUT_DIR)/triangle.png
 
 animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
-           $(OUT_DIR)/uv.png
+           $(OUT_DIR)/uv.png $(OUT_DIR)/textured.png
 
 $(OUT_DIR)/cube.png: $(LIB_SOURCES) examples/cube.mojo
 	@mkdir -p $(OUT_DIR)
@@ -370,6 +370,12 @@ $(OUT_DIR)/cube.png: $(LIB_SOURCES) examples/cube.mojo
 $(OUT_DIR)/cubes.png: $(LIB_SOURCES) examples/cubes.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/cubes.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A checkerboard cube: scene graph, culling, depth, uv and sampling together.
+$(OUT_DIR)/textured.png: $(LIB_SOURCES) examples/textured.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/textured.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # Two frames, perspective-correct and affine, of the same prepared triangles.

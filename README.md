@@ -47,10 +47,9 @@ promised: `make check-cpu` builds and tests the standard-library-only half, and
 > **Status: early but no longer a toybox.** Scene graph, transforms, camera,
 > geometry, meshes, depth buffering, per-vertex normals, near and far clipping,
 > perspective-correct shading, and both a CPU and a GPU rasterizer are in place
-> and fully tested, along with texture coordinates, backface culling and an
-> orthographic camera. Missing, among much else: texture *sampling* (the
-> coordinates are carried and interpolated, but nothing reads an image with
-> them yet), materials, quaternions, and any kind of windowing. This is a learning project in the open, not a
+> and fully tested, along with textures, backface culling and an orthographic
+> camera. Missing, among much else: materials, bilinear filtering, mipmaps,
+> quaternions, and any kind of windowing. This is a learning project in the open, not a
 > drop-in three.js replacement.
 
 ## Rendering a scene
@@ -338,6 +337,39 @@ A floor plane is the worst case on purpose. The error grows with how much
 perspective one triangle spans, so it is invisible on a subdivided sphere and
 unmissable on two triangles running to the horizon.
 
+### Reading an image with them
+
+`render/texture.mojo` is what turns a `uv` pair into a colour. Nearest
+neighbour, three wrap modes, and no filtering yet:
+
+```mojo
+renderer.set_shading(SHADE_TEXTURE)
+renderer.set_texture(checkerboard(64, 8, Color(245, 245, 250), Color(40, 90, 170)))
+```
+
+A sampled texel *modulates* the lighting rather than replacing it — the image
+says what colour the surface is, the lighting says how much of it reaches the
+camera, and a renderer needs both. The blank texture samples as opaque white,
+which is the identity for that, so "no texture" is a value rather than a branch
+and a renderer that never sets one shades exactly as it did before textures
+existed.
+
+Two things are easy to get backwards here and neither reports an error. **Rows
+run down from the top while `v` runs up from the bottom**, so sampling flips it
+once — three.js calls the same reconciliation `flipY`. And **a coordinate of
+exactly 0 or 1 sits on a tile boundary**, where the wrap mode decides which
+side it belongs to: under `REPEAT` both ends name the same texel, which is what
+seamless means, while under `CLAMP` they name opposite edges.
+
+Nearest sampling is the honest starting point rather than a shortcut. Hard
+edges make the mapping visible: a wrong `uv` moves a square somewhere obviously
+wrong, where a blurred one would just look soft. `make animation` renders
+`out/textured.png`, a checkerboard cube turning.
+
+The GPU samples the same way, calling the same `wrap_index` the CPU does — the
+`fillrule` argument again — and the two agree texel for texel in all three wrap
+modes, including coordinates well outside the unit square.
+
 ## Cameras
 
 `PerspectiveCamera` and `OrthographicCamera` are interchangeable because the
@@ -616,6 +648,7 @@ objects/     Mesh                                geometry id + colour at a node
 renderers/   Renderer                            scene + camera -> triangles
              clip                                near and far plane clipping
 render/      Framebuffer, Color, FloatColor      RGBA, depth, and linear colour
+             Texture                             nearest sampling, three wraps
              fillrule                            coverage maths, CPU *and* GPU
              rasterizer                          software rasterization
              gpu                                 the same rasterizer, on the GPU
@@ -625,6 +658,7 @@ examples/    triangle.mojo                       renders triangle.png
              cube.mojo                           a 3D cube, animated
              cubes.mojo                          two cubes, depth + hierarchy
              uv.mojo                             perspective-correct vs affine
+             textured.mojo                       a checkerboard cube, turning
 bench/       raster_bench.mojo                   CPU vs GPU timings
 tools/       gpu_status.mojo                     is there an accelerator?
 out/         rendered images, gitignored

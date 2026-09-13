@@ -43,9 +43,16 @@ from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
-from render.rasterizer import SHADE_LIT, SHADE_UV, RasterVertex, Triangle
+from render.rasterizer import (
+    SHADE_LIT,
+    SHADE_TEXTURE,
+    SHADE_UV,
+    RasterVertex,
+    Triangle,
+)
+from render.texture import Texture, wrap_index
 from std.gpu import global_idx
-from std.math import ceildiv, inf
+from std.math import ceildiv, floor, inf
 from std.memory import unsafe_memcpy
 from std.sys import has_accelerator
 
@@ -118,6 +125,10 @@ def rasterize_kernel(
     height: Int32,
     background: UInt32,
     mode: Int32,
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    texture_width: Int32,
+    texture_height: Int32,
+    texture_wrap: Int32,
 ):
     """Colour one pixel from the nearest triangle that covers it."""
     var x = Int(global_idx.x)
@@ -215,7 +226,54 @@ def rasterize_kernel(
             share_b = wb * bw / inv_w
             share_c = wc * cw / inv_w
 
-        if mode == Int32(SHADE_UV):
+        if mode == Int32(SHADE_TEXTURE):
+            var u = (
+                corners[unsafe_offset=base + 8] * share_a
+                + corners[unsafe_offset=base + 18] * share_b
+                + corners[unsafe_offset=base + 28] * share_c
+            )
+            var v = (
+                corners[unsafe_offset=base + 9] * share_a
+                + corners[unsafe_offset=base + 19] * share_b
+                + corners[unsafe_offset=base + 29] * share_c
+            )
+            red = (
+                corners[unsafe_offset=base + 4] * share_a
+                + corners[unsafe_offset=base + 14] * share_b
+                + corners[unsafe_offset=base + 24] * share_c
+            )
+            green = (
+                corners[unsafe_offset=base + 5] * share_a
+                + corners[unsafe_offset=base + 15] * share_b
+                + corners[unsafe_offset=base + 25] * share_c
+            )
+            blue = (
+                corners[unsafe_offset=base + 6] * share_a
+                + corners[unsafe_offset=base + 16] * share_b
+                + corners[unsafe_offset=base + 26] * share_c
+            )
+            alpha = (
+                corners[unsafe_offset=base + 7] * share_a
+                + corners[unsafe_offset=base + 17] * share_b
+                + corners[unsafe_offset=base + 27] * share_c
+            )
+            # A width of zero is the blank texture, which samples as white and
+            # so leaves the lighting exactly as it is.
+            if texture_width > 0:
+                # Nearest neighbour, v flipped, wrapped by the same routine
+                # the host uses -- see render.texture.
+                var column = Int(floor(u * Float32(texture_width)))
+                var row = Int(floor((1 - v) * Float32(texture_height)))
+                var offset = (
+                    wrap_index(row, Int(texture_height), Int(texture_wrap))
+                    * Int(texture_width)
+                    + wrap_index(column, Int(texture_width), Int(texture_wrap))
+                ) * 4
+                red *= Float32(texels[unsafe_offset=offset]) / 255
+                green *= Float32(texels[unsafe_offset=offset + 1]) / 255
+                blue *= Float32(texels[unsafe_offset=offset + 2]) / 255
+                alpha *= Float32(texels[unsafe_offset=offset + 3]) / 255
+        elif mode == Int32(SHADE_UV):
             # Texture coordinates straight out as red and green, matching
             # rasterize_shaded's SHADE_UV.
             red = (
@@ -298,6 +356,11 @@ struct GpuRenderer(Movable):
     var pixels: DeviceBuffer[DType.uint8]
     var depth: DeviceBuffer[DType.float32]
     var corners: DeviceBuffer[DType.float32]
+    # The texture `SHADE_TEXTURE` samples, uploaded once rather than per draw.
+    var texels: DeviceBuffer[DType.uint8]
+    var texture_width: Int
+    var texture_height: Int
+    var texture_wrap: Int
 
     def __init__(out self, width: Int, height: Int) raises:
         """Create a renderer and its device buffers for a fixed image size.
@@ -329,6 +392,13 @@ struct GpuRenderer(Movable):
         self.corners = self.context.enqueue_create_buffer[DType.float32](
             FLOATS_PER_TRIANGLE
         )
+        # One texel's worth, standing in for the blank texture. A zero-length
+        # device buffer is not worth the special case, and a width of zero is
+        # what the kernel actually reads to mean "no texture".
+        self.texels = self.context.enqueue_create_buffer[DType.uint8](4)
+        self.texture_width = 0
+        self.texture_height = 0
+        self.texture_wrap = 0
 
     def draw(
         mut self,
@@ -377,6 +447,10 @@ struct GpuRenderer(Movable):
             Int32(self.height),
             pack(background),
             Int32(mode),
+            self.texels.unsafe_ptr(),
+            Int32(self.texture_width),
+            Int32(self.texture_height),
+            Int32(self.texture_wrap),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -384,6 +458,34 @@ struct GpuRenderer(Movable):
             block_dim=(TILE, TILE),
         )
         self.drawn = True
+
+    def set_texture(mut self, texture: Texture) raises:
+        """Upload `texture` to the device, replacing any previous one.
+
+        Separate from `draw` on purpose: an animation samples the same image
+        every frame, and re-uploading it each time would cost more than the
+        rasterization does.
+
+        Args:
+            texture: The image to sample, or a blank one to sample nothing.
+
+        Raises:
+            Error: If the device buffer cannot be filled.
+        """
+        self.texture_width = texture.width
+        self.texture_height = texture.height
+        self.texture_wrap = texture.wrap
+        if texture.is_blank():
+            return
+        self.texels = self.context.enqueue_create_buffer[DType.uint8](
+            len(texture.pixels)
+        )
+        with self.texels.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=texture.pixels.unsafe_ptr(),
+                count=len(texture.pixels),
+            )
 
     def read_back(self) raises -> Framebuffer:
         """Copy the device render target into a host framebuffer.
@@ -429,6 +531,7 @@ def render_triangles(
     height: Int,
     background: Color,
     mode: Int = SHADE_LIT,
+    texture: Texture = Texture(),
 ) raises -> Framebuffer:
     """Draw prepared triangles on the GPU and read the image back.
 
@@ -441,7 +544,8 @@ def render_triangles(
         width: Image width in pixels.
         height: Image height in pixels.
         background: Colour for pixels no triangle covers.
-        mode: `SHADE_LIT` or `SHADE_UV`.
+        mode: `SHADE_LIT`, `SHADE_UV` or `SHADE_TEXTURE`.
+        texture: The image `SHADE_TEXTURE` samples.
 
     Returns:
         The rendered image.
@@ -451,6 +555,7 @@ def render_triangles(
             corner count is not a multiple of three.
     """
     var renderer = GpuRenderer(width, height)
+    renderer.set_texture(texture)
     renderer.draw(corners, background, mode)
     return renderer.read_back()
 
