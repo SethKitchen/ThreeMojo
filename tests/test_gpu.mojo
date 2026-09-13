@@ -48,6 +48,7 @@ from render.gpu import (
     render_triangles,
 )
 from render.rasterizer import (
+    SHADE_UV,
     RasterVertex,
     Triangle,
     rasterize,
@@ -342,7 +343,7 @@ def corner(
     x: Float32, y: Float32, z: Float32, inv_w: Float32, color: Color
 ) -> RasterVertex:
     """Return a raster vertex, for building test triangles."""
-    return RasterVertex(x, y, z, inv_w, FloatColor(of=color))
+    return RasterVertex(x, y, z, inv_w, FloatColor(of=color), 0, 0)
 
 
 def cpu_render_triangles(
@@ -500,7 +501,7 @@ def test_flattening_lays_out_eight_floats_per_vertex() raises:
     var corners = List[RasterVertex]()
     corners.append(corner(1, 2, 3, 4, Color(255, 128, 0, 64)))
     var flat = flatten(corners)
-    assert_equal(len(flat), 8)
+    assert_equal(len(flat), 10)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
     assert_equal(flat[2], Float32(3))
@@ -645,6 +646,55 @@ def test_reading_back_before_drawing_is_rejected() raises:
     # Drawing nothing still counts as drawing; the target is now defined.
     var image = renderer.read_back()
     assert_equal(image.get_pixel(0, 0).r, BACKGROUND.r)
+
+
+# --- texture coordinates ----------------------------------------------------
+
+
+def test_both_backends_agree_on_texture_coordinates() raises:
+    # uv is unpacked from the flat buffer at ten-float strides on the device
+    # and packed at the same strides on the host. Nothing but this would
+    # notice the two drifting apart.
+    if skipped_for_lack_of_a_gpu("both backends agree on texture coordinates"):
+        return
+    var corners = List[RasterVertex]()
+    corners.append(
+        RasterVertex(-4, -4, 0.5, 1.0, FloatColor(0, 0, 0), 0.0, 0.0)
+    )
+    corners.append(
+        RasterVertex(40, -4, 0.5, 0.25, FloatColor(0, 0, 0), 1.0, 0.0)
+    )
+    corners.append(
+        RasterVertex(-4, 40, 0.5, 0.6, FloatColor(0, 0, 0), 0.0, 1.0)
+    )
+    var gpu = render_triangles(corners, 32, 24, BACKGROUND, SHADE_UV)
+
+    var cpu = Framebuffer(32, 24, BACKGROUND)
+    rasterize_shaded(corners[0], corners[1], corners[2], cpu, SHADE_UV)
+
+    # A real gradient in both channels, not a flat fill.
+    assert_true(cpu.get_pixel(0, 0).r != cpu.get_pixel(31, 0).r)
+    assert_true(cpu.get_pixel(0, 0).g != cpu.get_pixel(0, 23).g)
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_the_gpu_ignores_texture_coordinates_when_shading_lit() raises:
+    if skipped_for_lack_of_a_gpu("gpu ignores uv when shading lit"):
+        return
+    var corners = List[RasterVertex]()
+    corners.append(
+        RasterVertex(-4, -4, 0.5, 1.0, FloatColor(of=FOREGROUND), 1.0, 1.0)
+    )
+    corners.append(
+        RasterVertex(40, -4, 0.5, 1.0, FloatColor(of=FOREGROUND), 1.0, 1.0)
+    )
+    corners.append(
+        RasterVertex(-4, 40, 0.5, 1.0, FloatColor(of=FOREGROUND), 1.0, 1.0)
+    )
+    var image = render_triangles(corners, 16, 12, BACKGROUND)
+    assert_equal(image.get_pixel(2, 2).r, FOREGROUND.r)
+    assert_equal(image.get_pixel(2, 2).g, FOREGROUND.g)
+    assert_equal(image.get_pixel(2, 2).b, FOREGROUND.b)
 
 
 def main() raises:

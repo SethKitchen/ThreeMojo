@@ -47,8 +47,10 @@ promised: `make check-cpu` builds and tests the standard-library-only half, and
 > **Status: early but no longer a toybox.** Scene graph, transforms, camera,
 > geometry, meshes, depth buffering, per-vertex normals, near and far clipping,
 > perspective-correct shading, and both a CPU and a GPU rasterizer are in place
-> and fully tested. Missing, among much else: materials, textures, quaternions,
-> and any kind of windowing. This is a learning project in the open, not a
+> and fully tested, along with texture coordinates, backface culling and an
+> orthographic camera. Missing, among much else: texture *sampling* (the
+> coordinates are carried and interpolated, but nothing reads an image with
+> them yet), materials, quaternions, and any kind of windowing. This is a learning project in the open, not a
 > drop-in three.js replacement.
 
 ## Rendering a scene
@@ -180,10 +182,9 @@ scene.update()
 scene.world_matrix(moon)
 ```
 
-`make animation` renders `out/cubes.png`, where a small cube orbits a large one and
-passes behind it. There is no backface culling at all in that example — the
-depth buffer carries the whole result, which the earlier `cube.png` could not
-have done.
+`make animation` renders `out/cubes.png`, where a small cube orbits a large one
+and passes behind it. The depth buffer carries that result on its own, which
+the earlier `cube.png` could not have done.
 
 ## Camera
 
@@ -215,8 +216,21 @@ camera.project(Vector3(0, 0, 0), 240, 180)   # -> pixels, plus NDC depth
 world-space corners in metres, turned by a model matrix, projected, and
 rasterized where they land. Hidden surfaces are removed by the depth buffer,
 which is what lets geometry be submitted in any order and what makes a
-non-convex scene come out right. Backface culling would be an optimization on
-top of that, not a substitute for it, and is not done.
+non-convex scene come out right.
+
+Backface culling sits on top of that as an optimization rather than a
+substitute for it. It is on by default, as three.js's default `FrontSide`
+material is, and discards roughly half the triangles of a closed mesh before
+they are rasterized — the same ones the depth buffer was already hiding, so
+the image is unchanged. It has to be switchable, because a camera inside a
+closed mesh sees nothing *but* back faces:
+
+```mojo
+renderer.set_cull_backfaces(False)   # three.js says BackSide or DoubleSide
+```
+
+When `Material` exists this belongs there, per mesh, rather than on the
+renderer.
 
 ## Matrix4
 
@@ -282,6 +296,59 @@ compile error, which is a common enough graphics bug to be worth the deviation.
 Because those failures cannot be exercised from inside a test suite — a file
 containing one would not build — each lives in `tests/compile_fail/` and
 `make compile-fail` asserts every one still fails to compile.
+
+## Texture coordinates, and why interpolation is not obvious
+
+`box` and `sphere` carry a `uv` attribute, and it travels to the *fragment* —
+through clipping, through the perspective divide — rather than being folded
+into a colour at the vertex. That is what sampling a texture will need, and it
+is already enough to see the thing the rasterizer works hardest at.
+
+Screen-space barycentric weights are not the weights the surface sees:
+perspective squeezes the far half of a triangle into fewer pixels. Interpolate
+an attribute straight across the screen and it drifts from what the geometry
+says. The correction weights by `inv_w` and divides by the interpolated
+`inv_w`. Depth is deliberately *not* corrected — the projection makes it linear
+in screen space precisely so a depth buffer can work that way.
+
+`make animation` renders `out/uv.png`: two frames of one floor plane, drawn as
+two large triangles at a grazing angle with its texture coordinates written out
+as red and green. The first is correct, the second has every `inv_w` forced to
+one. Every covered pixel differs between them, by up to 142 levels of 255 —
+the warped, sliding textures of a PlayStation 1 game.
+
+Both frames come from a single `Renderer.prepare` call, which is why that seam
+is public: the affine frame is the same prepared triangles with the perspective
+thrown away, so nothing but the correction can account for the difference.
+
+```mojo
+var corners = renderer.prepare(scene, geometries, meshes, camera)
+```
+
+A floor plane is the worst case on purpose. The error grows with how much
+perspective one triangle spans, so it is invisible on a subdivided sphere and
+unmissable on two triangles running to the horizon.
+
+## Cameras
+
+`PerspectiveCamera` and `OrthographicCamera` are interchangeable because the
+renderer asks for neither. `cameras/camera.mojo` declares a `Camera` trait with
+the four things a renderer actually needs — a view matrix, a camera-to-pixels
+matrix, and the two clipping distances — and `Renderer.render` is generic over
+it. three.js reaches the same place by having both extend a `Camera` base
+class; Mojo has no inheritance, and the trait describes the relationship
+better anyway.
+
+```mojo
+var flat = centred(
+    Length(6.0, METRE), aspect, Length(0.1, METRE), Length(100.0, METRE)
+)
+```
+
+Orthographic projection leaves the transformed `w` at one, so every `inv_w` is
+one and the perspective correction divides by one. It is not special-cased
+anywhere: the maths already collapses, and a backend that branched on it would
+be two code paths where there is one.
 
 ## GPU
 
@@ -519,7 +586,9 @@ units/       Quantity, Unit                      compile-time dimensions
 math/        Vector2, Vector3                    ported from three.js
              Matrix4                             4x4 transforms, column-major
              projection                          perspective, look_at, viewport
-cameras/     PerspectiveCamera                   fov in Angle, planes in Length
+cameras/     Camera                              the trait a renderer needs
+             PerspectiveCamera                   fov in Angle, planes in Length
+             OrthographicCamera                  no perspective; w stays 1
 core/        Object3D, Scene                     transform hierarchy
              BufferGeometry, BufferAttribute     vertex data, borrowed on read
              GeometryStore                       owns geometry; meshes share it
@@ -537,6 +606,7 @@ examples/    triangle.mojo                       renders triangle.png
              spin.mojo                           renders spin.png, animated
              cube.mojo                           a 3D cube, animated
              cubes.mojo                          two cubes, depth + hierarchy
+             uv.mojo                             perspective-correct vs affine
 bench/       raster_bench.mojo                   CPU vs GPU timings
 tools/       gpu_status.mojo                     is there an accelerator?
 out/         rendered images, gitignored

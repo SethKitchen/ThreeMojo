@@ -194,5 +194,43 @@ def test_multi_line_import_is_skipped_entirely() raises:
     assert_equal(executable_lines(source), [6])
 
 
+# --- traits -----------------------------------------------------------------
+
+
+def test_a_trait_method_body_is_not_executable() raises:
+    # A trait declares what an implementation must provide; its bodies are a
+    # docstring and `...`, and never run. Probing them emitted a call to the
+    # probe function from inside a trait, where it is not in scope, and every
+    # file importing that trait stopped compiling.
+    var scanner = Scanner()
+    assert_false(scanner.is_executable("trait Camera(Copyable, Movable):"))
+    assert_false(scanner.is_executable('    """What a renderer needs."""'))
+    assert_false(scanner.is_executable("    def view_matrix(self) -> Int:"))
+    assert_false(scanner.is_executable('        """Return it."""'))
+    assert_false(scanner.is_executable("        ..."))
+
+
+def test_code_after_a_trait_is_executable_again() raises:
+    # The trait scope has to close like any other, or everything following a
+    # trait in the same file would go unmeasured.
+    var scanner = Scanner()
+    assert_false(scanner.is_executable("trait Camera:"))
+    assert_false(scanner.is_executable("    def near(self) -> Int:"))
+    assert_false(scanner.is_executable("        ..."))
+    assert_false(scanner.is_executable(""))
+    assert_false(scanner.is_executable("def after() -> Int:"))
+    assert_true(scanner.is_executable("    return 1"))
+
+
+def test_a_struct_implementing_a_trait_is_still_measured() raises:
+    # `struct X(Trait)` starts with "struct", not "trait", and its methods are
+    # ordinary code that has to be covered like any other.
+    var scanner = Scanner()
+    assert_false(scanner.is_executable("struct Persp(Camera):"))
+    assert_false(scanner.is_executable("    var near: Int"))
+    assert_false(scanner.is_executable("    def near_distance(self) -> Int:"))
+    assert_true(scanner.is_executable("        return self.near"))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

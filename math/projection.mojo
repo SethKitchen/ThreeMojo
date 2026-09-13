@@ -7,9 +7,10 @@
 
 Three transforms in sequence, each answering one question:
 
-    look_at     where is the camera, and which way is it facing?
-    perspective how does distance shrink things?
-    viewport    where on the image does a normalized point land?
+    look_at      where is the camera, and which way is it facing?
+    perspective  how does distance shrink things?
+    orthographic ...or what if it does not?
+    viewport     where on the image does a normalized point land?
 
 Between the second and third, coordinates are in **normalized device
 coordinates**: x and y run -1 to +1 across the visible frustum, and z runs
@@ -72,6 +73,80 @@ def perspective(
     # The -1 in the bottom row is what copies z into w, and dividing by w is
     # what makes distant things small. Everything else is scale and offset.
     matrix.set(x, 0, a, 0, 0, y, b, 0, 0, 0, c, d, 0, 0, -1, 0)
+    return matrix^
+
+
+def orthographic(
+    left: Float32,
+    right: Float32,
+    top: Float32,
+    bottom: Float32,
+    near: Float32,
+    far: Float32,
+) raises -> Matrix4:
+    """Return an orthographic projection for a box-shaped view volume.
+
+    The parallel counterpart to `perspective`: distance no longer shrinks
+    anything, so the frustum is a box rather than a pyramid and the edges are
+    given in world units at any depth rather than at the near plane.
+
+    The bottom row stays (0, 0, 0, 1), so the transformed w is always one and
+    `transform_point`'s divide does nothing. That is the whole difference, and
+    it is why the perspective-correct interpolation in the rasterizer quietly
+    becomes a no-op here: every `inv_w` is one, the correction's denominator
+    is one, and the weights come through unchanged.
+
+    Matches three.js's `Matrix4.makeOrthographic` with the WebGL convention,
+    where z runs -1 at the near plane to +1 at the far one.
+
+    Args:
+        left: Left edge of the view volume.
+        right: Right edge.
+        top: Top edge.
+        bottom: Bottom edge.
+        near: Distance to the near clipping plane; must be positive.
+        far: Distance to the far clipping plane; must exceed `near`.
+
+    Returns:
+        A projection matrix mapping the box onto the NDC cube.
+
+    Raises:
+        Error: If the volume is degenerate, or the planes are not ordered.
+            three.js allows a non-positive `near` here, since nothing divides
+            by depth; this does not, because the clipper in `renderers.clip`
+            is shared with the perspective path and the near plane has to sit
+            in front of the camera for that to mean anything.
+    """
+    if near <= 0:
+        raise Error("The near plane must be in front of the camera")
+    if far <= near:
+        raise Error("The far plane must be beyond the near plane")
+    if right == left or top == bottom:
+        raise Error("The view volume has no width or no height")
+
+    var w = 1 / (right - left)
+    var h = 1 / (top - bottom)
+    var p = 1 / (far - near)
+
+    var matrix = Matrix4()
+    matrix.set(
+        2 * w,
+        0,
+        0,
+        -(right + left) * w,
+        0,
+        2 * h,
+        0,
+        -(top + bottom) * h,
+        0,
+        0,
+        -2 * p,
+        -(far + near) * p,
+        0,
+        0,
+        0,
+        1,
+    )
     return matrix^
 
 

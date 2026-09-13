@@ -19,6 +19,7 @@ three.js reaches the same place through Object3D and a quaternion, which is
 more general and needs a scene graph this port does not have yet.
 """
 
+from cameras.camera import Camera
 from math.matrix4 import Matrix4
 from math.projection import look_at, perspective, viewport
 from math.vector3 import Vector3
@@ -26,7 +27,7 @@ from std.math import tan
 from units.si import Angle, Length
 
 
-struct PerspectiveCamera(ImplicitlyCopyable):
+struct PerspectiveCamera(Camera, ImplicitlyCopyable):
     """A camera that renders with perspective, in metres and radians."""
 
     var fov: Angle
@@ -158,6 +159,14 @@ struct PerspectiveCamera(ImplicitlyCopyable):
         var combined = viewport(width, height)
         combined.multiply(self.projection_matrix())
         return combined^
+
+    def near_distance(self) -> Float32:
+        """Return the near clipping distance, in metres."""
+        return self.near.value
+
+    def far_distance(self) -> Float32:
+        """Return the far clipping distance, in metres."""
+        return self.far.value
 
     def project(
         self, point: Vector3, width: Int, height: Int

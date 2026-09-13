@@ -9,6 +9,7 @@ from math.vector2 import Vector2
 from render.framebuffer import Color, FloatColor, Framebuffer
 from math.vector3 import Vector3
 from render.rasterizer import (
+    SHADE_UV,
     RasterVertex,
     Triangle,
     edge,
@@ -215,7 +216,9 @@ def flat_vertex(
     Returns:
         The corner as the rasterizer wants it.
     """
-    return RasterVertex(point.x, point.y, point.z, inv_w, FloatColor(of=color))
+    return RasterVertex(
+        point.x, point.y, point.z, inv_w, FloatColor(of=color), 0, 0
+    )
 
 
 def covering(z: Float32) raises -> List[Vector3]:
@@ -512,16 +515,16 @@ def test_depth_is_interpolated_affinely_not_corrected() raises:
     var flat = Framebuffer(9, 9, Color(0, 0, 0))
     var sloped = Framebuffer(9, 9, Color(0, 0, 0))
     rasterize_shaded(
-        RasterVertex(t[0].x, t[0].y, 0.1, 1.0, FloatColor(1, 1, 1)),
-        RasterVertex(t[1].x, t[1].y, 0.9, 1.0, FloatColor(1, 1, 1)),
-        RasterVertex(t[2].x, t[2].y, 0.5, 1.0, FloatColor(1, 1, 1)),
+        RasterVertex(t[0].x, t[0].y, 0.1, 1.0, FloatColor(1, 1, 1), 0, 0),
+        RasterVertex(t[1].x, t[1].y, 0.9, 1.0, FloatColor(1, 1, 1), 0, 0),
+        RasterVertex(t[2].x, t[2].y, 0.5, 1.0, FloatColor(1, 1, 1), 0, 0),
         flat,
     )
     # Same corners and depths, wildly different w. Depth must not notice.
     rasterize_shaded(
-        RasterVertex(t[0].x, t[0].y, 0.1, 1.0, FloatColor(1, 1, 1)),
-        RasterVertex(t[1].x, t[1].y, 0.9, 0.05, FloatColor(1, 1, 1)),
-        RasterVertex(t[2].x, t[2].y, 0.5, 4.0, FloatColor(1, 1, 1)),
+        RasterVertex(t[0].x, t[0].y, 0.1, 1.0, FloatColor(1, 1, 1), 0, 0),
+        RasterVertex(t[1].x, t[1].y, 0.9, 0.05, FloatColor(1, 1, 1), 0, 0),
+        RasterVertex(t[2].x, t[2].y, 0.5, 4.0, FloatColor(1, 1, 1), 0, 0),
         sloped,
     )
     for y in range(9):
@@ -545,6 +548,99 @@ def test_a_zero_inv_w_falls_back_to_screen_linear() raises:
     var right = fb.get_pixel(8, 0)
     assert_true(left.r > right.r)
     assert_true(right.b > left.b)
+
+
+# --- texture coordinates at the fragment ------------------------------------
+
+
+def uv_vertex(
+    x: Float32, y: Float32, inv_w: Float32, u: Float32, v: Float32
+) -> RasterVertex:
+    """Return a raster vertex carrying texture coordinates and no colour."""
+    return RasterVertex(x, y, 0.5, inv_w, FloatColor(0, 0, 0), u, v)
+
+
+def test_uv_mode_writes_texture_coordinates_as_red_and_green() raises:
+    # A right triangle covering the image, u growing with x and v with y.
+    var fb = Framebuffer(16, 16, Color(0, 0, 0))
+    rasterize_shaded(
+        uv_vertex(-1, -1, 1, 0, 0),
+        uv_vertex(40, -1, 1, 1, 0),
+        uv_vertex(-1, 40, 1, 0, 1),
+        fb,
+        SHADE_UV,
+    )
+    # Near the (0,0) corner both channels are low; along +x red climbs and
+    # along +y green does.
+    assert_true(fb.get_pixel(1, 1).r < 40)
+    assert_true(fb.get_pixel(1, 1).g < 40)
+    assert_true(fb.get_pixel(12, 1).r > fb.get_pixel(1, 1).r)
+    assert_true(fb.get_pixel(1, 12).g > fb.get_pixel(1, 1).g)
+    # u varies along x only, so moving down must not change red.
+    assert_equal(fb.get_pixel(4, 1).r, fb.get_pixel(4, 6).r)
+
+
+def test_lit_mode_ignores_texture_coordinates() raises:
+    # The colour path must not start depending on uv just because it is there.
+    var fb = Framebuffer(8, 8, Color(0, 0, 0))
+    var t = covering(0.5)
+    rasterize_shaded(
+        RasterVertex(t[0].x, t[0].y, 0.5, 1, FloatColor(0, 1, 0), 1, 1),
+        RasterVertex(t[1].x, t[1].y, 0.5, 1, FloatColor(0, 1, 0), 1, 1),
+        RasterVertex(t[2].x, t[2].y, 0.5, 1, FloatColor(0, 1, 0), 1, 1),
+        fb,
+    )
+    assert_equal(fb.get_pixel(4, 4).r, UInt8(0))
+    assert_equal(fb.get_pixel(4, 4).g, UInt8(255))
+
+
+def test_texture_coordinates_are_perspective_corrected_too() raises:
+    # The reason uv reaches the fragment at all. A far corner has a smaller
+    # inv_w, so the surface runs out of texture faster across the screen than
+    # an affine interpolation would say -- the classic warped floor.
+    var affine = Framebuffer(16, 16, Color(0, 0, 0))
+    var correct = Framebuffer(16, 16, Color(0, 0, 0))
+    rasterize_shaded(
+        uv_vertex(-1, -1, 1.0, 0, 0),
+        uv_vertex(40, -1, 1.0, 1, 0),
+        uv_vertex(-1, 40, 1.0, 0, 1),
+        affine,
+        SHADE_UV,
+    )
+    rasterize_shaded(
+        uv_vertex(-1, -1, 1.0, 0, 0),
+        uv_vertex(40, -1, 0.2, 1, 0),
+        uv_vertex(-1, 40, 1.0, 0, 1),
+        correct,
+        SHADE_UV,
+    )
+    var differences = 0
+    for y in range(16):
+        for x in range(16):
+            if correct.get_pixel(x, y).r != affine.get_pixel(x, y).r:
+                differences += 1
+                # The far corner's u arrives later across the screen, so the
+                # corrected value is the smaller one.
+                assert_true(
+                    correct.get_pixel(x, y).r < affine.get_pixel(x, y).r
+                )
+    assert_true(differences > 0, "the correction changed nothing")
+
+
+def test_an_unmapped_triangle_reads_as_the_texture_origin() raises:
+    # A geometry with no uv attribute gets zeroes, which is a defined place
+    # rather than whatever was left in the buffer.
+    var fb = Framebuffer(8, 8, Color(90, 90, 90))
+    var t = covering(0.5)
+    rasterize_shaded(
+        flat_vertex(t[0], Color(255, 255, 255)),
+        flat_vertex(t[1], Color(255, 255, 255)),
+        flat_vertex(t[2], Color(255, 255, 255)),
+        fb,
+        SHADE_UV,
+    )
+    assert_equal(fb.get_pixel(4, 4).r, UInt8(0))
+    assert_equal(fb.get_pixel(4, 4).g, UInt8(0))
 
 
 def main() raises:

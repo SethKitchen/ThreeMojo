@@ -24,12 +24,12 @@ comptime FAR = Float32(1000.0)
 
 def at(x: Float32, y: Float32, z: Float32) -> ClipVertex:
     """Return a white vertex at the given camera-space position."""
-    return ClipVertex(Vector3(x, y, z), FloatColor(1.0, 1.0, 1.0))
+    return ClipVertex(Vector3(x, y, z), FloatColor(1.0, 1.0, 1.0), 0, 0)
 
 
 def coloured(z: Float32, value: Float32) -> ClipVertex:
     """Return a vertex at depth `z` whose red channel is `value`."""
-    return ClipVertex(Vector3(0, 0, z), FloatColor(value, 0, 0))
+    return ClipVertex(Vector3(0, 0, z), FloatColor(value, 0, 0), 0, 0)
 
 
 def test_a_triangle_entirely_in_front_is_untouched() raises:
@@ -87,8 +87,8 @@ def test_colour_is_carried_to_the_cut() raises:
     # Halfway along the edge in depth, so halfway in colour.
     var pieces = clip_depth(
         coloured(-3, 0),
-        ClipVertex(Vector3(1, 0, 1), FloatColor(200, 0, 0)),
-        ClipVertex(Vector3(0, 1, -3), FloatColor(0, 0, 0)),
+        ClipVertex(Vector3(1, 0, 1), FloatColor(200, 0, 0), 0, 0),
+        ClipVertex(Vector3(0, 1, -3), FloatColor(0, 0, 0), 0, 0),
         NEAR,
         FAR,
     )
@@ -170,7 +170,7 @@ def test_colour_is_carried_to_a_far_plane_cut() raises:
     var pieces = clip_depth(
         coloured(-5, 0),
         coloured(-15, 200),
-        ClipVertex(Vector3(0, 1, -5), FloatColor(0, 0, 0)),
+        ClipVertex(Vector3(0, 1, -5), FloatColor(0, 0, 0), 0, 0),
         NEAR,
         Float32(10),
     )

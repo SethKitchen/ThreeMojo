@@ -18,7 +18,7 @@ shade the sides differently.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from math.vector3 import Vector3
 from units.si import Length
 
@@ -33,6 +33,7 @@ def _push(mut data: List[Float32], x: Float32, y: Float32, z: Float32):
 def _face(
     mut data: List[Float32],
     mut normals: List[Float32],
+    mut uvs: List[Float32],
     a: Vector3,
     b: Vector3,
     c: Vector3,
@@ -41,10 +42,21 @@ def _face(
     ny: Float32,
     nz: Float32,
 ):
-    """Append one face's four corners, each carrying the face's own normal."""
-    for corner in [a, b, c, d]:  # pragma: no branch
-        _push(data, corner.x, corner.y, corner.z)
+    """Append one face's four corners, with its normal and texture coordinates.
+
+    The corners arrive counter-clockwise from the face's bottom-left seen from
+    outside, so the texture covers each face once from (0,0) at that corner to
+    (1,1) diagonally opposite. Every face gets the whole image, which is what
+    three.js's BoxGeometry does too.
+    """
+    var u = [Float32(0), Float32(1), Float32(1), Float32(0)]
+    var v = [Float32(0), Float32(0), Float32(1), Float32(1)]
+    var corners = [a, b, c, d]
+    for corner in range(4):  # pragma: no branch
+        _push(data, corners[corner].x, corners[corner].y, corners[corner].z)
         _push(normals, nx, ny, nz)
+        uvs.append(u[corner])
+        uvs.append(v[corner])
 
 
 def _quad(mut index: List[Int], start: Int):
@@ -70,8 +82,9 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
         depth: Extent along z.
 
     Returns:
-        A geometry with `position` and `normal` attributes and an index
-        buffer, its faces ordered front, back, left, right, top, bottom.
+        A geometry with `position`, `normal` and `uv` attributes and an
+        index buffer, its faces ordered front, back, left, right, top,
+        bottom.
 
     Raises:
         Error: If any extent is not positive.
@@ -85,10 +98,12 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
 
     var data = List[Float32]()
     var normals = List[Float32]()
+    var uvs = List[Float32]()
 
     _face(
         data,
         normals,
+        uvs,
         Vector3(-x, -y, z),
         Vector3(x, -y, z),
         Vector3(x, y, z),
@@ -100,6 +115,7 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
     _face(
         data,
         normals,
+        uvs,
         Vector3(x, -y, -z),
         Vector3(-x, -y, -z),
         Vector3(-x, y, -z),
@@ -111,6 +127,7 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
     _face(
         data,
         normals,
+        uvs,
         Vector3(-x, -y, -z),
         Vector3(-x, -y, z),
         Vector3(-x, y, z),
@@ -122,6 +139,7 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
     _face(
         data,
         normals,
+        uvs,
         Vector3(x, -y, z),
         Vector3(x, -y, -z),
         Vector3(x, y, -z),
@@ -133,6 +151,7 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
     _face(
         data,
         normals,
+        uvs,
         Vector3(-x, y, z),
         Vector3(x, y, z),
         Vector3(x, y, -z),
@@ -144,6 +163,7 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
     _face(
         data,
         normals,
+        uvs,
         Vector3(-x, -y, -z),
         Vector3(x, -y, -z),
         Vector3(x, -y, z),
@@ -161,6 +181,7 @@ def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(index^)
     return geometry^
 

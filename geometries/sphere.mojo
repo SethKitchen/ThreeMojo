@@ -8,7 +8,9 @@
 Built the usual way, as a grid of latitude and longitude lines. Vertices run
 from the north pole to the south, and each ring repeats its first vertex at
 the end: the seam where longitude wraps needs two vertices at the same place,
-because they will eventually carry different texture coordinates.
+because they carry different texture coordinates: u is 0 on one and 1 on the
+other, and a single shared vertex would have to run the whole image backwards
+across the last column to reconcile them.
 
 The poles are where this gets fiddly. A quad against a pole has two of its
 corners in the same spot, so one of its two triangles is degenerate and is
@@ -22,7 +24,7 @@ disagree with the next face.
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from std.math import cos, pi, sin
 from units.si import Length
 
@@ -38,8 +40,8 @@ def sphere(
         height_segments: Divisions from pole to pole; at least two.
 
     Returns:
-        A geometry with `position` and `normal` attributes and an index
-        buffer.
+        A geometry with `position`, `normal` and `uv` attributes and an
+        index buffer.
 
     Raises:
         Error: If the radius is not positive or either segment count is too
@@ -55,17 +57,18 @@ def sphere(
     var r = radius.value
     var data = List[Float32]()
     var normals = List[Float32]()
+    var uvs = List[Float32]()
 
     # One extra column, so the seam has a vertex on each side of the wrap.
     # Segment counts were validated above, so none of these run zero times.
     for ring in range(height_segments + 1):  # pragma: no branch
-        var theta = Float32(pi) * Float32(ring) / Float32(height_segments)
+        var ring_fraction = Float32(ring) / Float32(height_segments)
+        var theta = Float32(pi) * ring_fraction
         var sin_theta = sin(theta)
         var cos_theta = cos(theta)
         for column in range(width_segments + 1):  # pragma: no branch
-            var phi = (
-                2 * Float32(pi) * Float32(column) / Float32(width_segments)
-            )
+            var column_fraction = Float32(column) / Float32(width_segments)
+            var phi = 2 * Float32(pi) * column_fraction
             var nx = -cos(phi) * sin_theta
             var ny = cos_theta
             var nz = sin(phi) * sin_theta
@@ -77,6 +80,11 @@ def sphere(
             normals.append(nx)
             normals.append(ny)
             normals.append(nz)
+            # u wraps once around the equator; v runs 1 at the north pole to
+            # 0 at the south, because texture space has its origin at the
+            # bottom while `ring` counts downwards from the top.
+            uvs.append(column_fraction)
+            uvs.append(1 - ring_fraction)
 
     var stride = width_segments + 1
     var index = List[Int]()
@@ -100,5 +108,6 @@ def sphere(
     var geometry = BufferGeometry()
     geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
     geometry.set_index(index^)
     return geometry^

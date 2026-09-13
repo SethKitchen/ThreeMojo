@@ -43,7 +43,7 @@ from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
-from render.rasterizer import RasterVertex, Triangle
+from render.rasterizer import SHADE_LIT, SHADE_UV, RasterVertex, Triangle
 from std.gpu import global_idx
 from std.math import ceildiv, inf
 from std.memory import unsafe_memcpy
@@ -55,9 +55,12 @@ from std.sys import has_accelerator
 comptime TILE = 16
 
 # How a `RasterVertex` is laid out in the flat float buffer the kernel reads:
-# x, y, z, inv_w, r, g, b, a. A struct would be tidier and is not an option —
-# the buffer has to be plain floats to cross to the device.
-comptime FLOATS_PER_VERTEX = 8
+# x, y, z, inv_w, r, g, b, a, u, v. A struct would be tidier and is not an
+# option — the buffer has to be plain floats to cross to the device.
+# tests/test_gpu.mojo asserts this layout, because the host packs it and the
+# kernel unpacks it from two different places and nothing else would notice
+# them drifting apart.
+comptime FLOATS_PER_VERTEX = 10
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # Further than any NDC depth, so the first covering triangle always wins. The
@@ -88,7 +91,7 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         corners: Raster vertices, three per triangle.
 
     Returns:
-        Eight floats per vertex, in the order the kernel unpacks them.
+        Ten floats per vertex, in the order the kernel unpacks them.
     """
     var flat = List[Float32]()
     for index in range(len(corners)):
@@ -101,6 +104,8 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.color.g)
         flat.append(corner.color.b)
         flat.append(corner.color.a)
+        flat.append(corner.u)
+        flat.append(corner.v)
     return flat^
 
 
@@ -112,6 +117,7 @@ def rasterize_kernel(
     width: Int32,
     height: Int32,
     background: UInt32,
+    mode: Int32,
 ):
     """Colour one pixel from the nearest triangle that covers it."""
     var x = Int(global_idx.x)
@@ -136,14 +142,14 @@ def rasterize_kernel(
         var ay = corners[unsafe_offset=base + 1]
         var az = corners[unsafe_offset=base + 2]
         var aw = corners[unsafe_offset=base + 3]
-        var bx = corners[unsafe_offset=base + 8]
-        var by = corners[unsafe_offset=base + 9]
-        var bz = corners[unsafe_offset=base + 10]
-        var bw = corners[unsafe_offset=base + 11]
-        var cx = corners[unsafe_offset=base + 16]
-        var cy = corners[unsafe_offset=base + 17]
-        var cz = corners[unsafe_offset=base + 18]
-        var cw = corners[unsafe_offset=base + 19]
+        var bx = corners[unsafe_offset=base + 10]
+        var by = corners[unsafe_offset=base + 11]
+        var bz = corners[unsafe_offset=base + 12]
+        var bw = corners[unsafe_offset=base + 13]
+        var cx = corners[unsafe_offset=base + 20]
+        var cy = corners[unsafe_offset=base + 21]
+        var cz = corners[unsafe_offset=base + 22]
+        var cw = corners[unsafe_offset=base + 23]
 
         # Exactly `_Coverage` on the host: snap, normalize the winding, then
         # test with the top-left bias. Only the snapped coordinates are
@@ -209,26 +215,42 @@ def rasterize_kernel(
             share_b = wb * bw / inv_w
             share_c = wc * cw / inv_w
 
-        red = (
-            corners[unsafe_offset=base + 4] * share_a
-            + corners[unsafe_offset=base + 12] * share_b
-            + corners[unsafe_offset=base + 20] * share_c
-        )
-        green = (
-            corners[unsafe_offset=base + 5] * share_a
-            + corners[unsafe_offset=base + 13] * share_b
-            + corners[unsafe_offset=base + 21] * share_c
-        )
-        blue = (
-            corners[unsafe_offset=base + 6] * share_a
-            + corners[unsafe_offset=base + 14] * share_b
-            + corners[unsafe_offset=base + 22] * share_c
-        )
-        alpha = (
-            corners[unsafe_offset=base + 7] * share_a
-            + corners[unsafe_offset=base + 15] * share_b
-            + corners[unsafe_offset=base + 23] * share_c
-        )
+        if mode == Int32(SHADE_UV):
+            # Texture coordinates straight out as red and green, matching
+            # rasterize_shaded's SHADE_UV.
+            red = (
+                corners[unsafe_offset=base + 8] * share_a
+                + corners[unsafe_offset=base + 18] * share_b
+                + corners[unsafe_offset=base + 28] * share_c
+            )
+            green = (
+                corners[unsafe_offset=base + 9] * share_a
+                + corners[unsafe_offset=base + 19] * share_b
+                + corners[unsafe_offset=base + 29] * share_c
+            )
+            blue = 0
+            alpha = 1
+        else:
+            red = (
+                corners[unsafe_offset=base + 4] * share_a
+                + corners[unsafe_offset=base + 14] * share_b
+                + corners[unsafe_offset=base + 24] * share_c
+            )
+            green = (
+                corners[unsafe_offset=base + 5] * share_a
+                + corners[unsafe_offset=base + 15] * share_b
+                + corners[unsafe_offset=base + 25] * share_c
+            )
+            blue = (
+                corners[unsafe_offset=base + 6] * share_a
+                + corners[unsafe_offset=base + 16] * share_b
+                + corners[unsafe_offset=base + 26] * share_c
+            )
+            alpha = (
+                corners[unsafe_offset=base + 7] * share_a
+                + corners[unsafe_offset=base + 17] * share_b
+                + corners[unsafe_offset=base + 27] * share_c
+            )
 
     var word = background
     var nearest_depth = inf[DType.float32]()
@@ -308,13 +330,19 @@ struct GpuRenderer(Movable):
             FLOATS_PER_TRIANGLE
         )
 
-    def draw(mut self, corners: List[RasterVertex], background: Color) raises:
+    def draw(
+        mut self,
+        corners: List[RasterVertex],
+        background: Color,
+        mode: Int = SHADE_LIT,
+    ) raises:
         """Rasterize prepared triangles into the device render target.
 
         Args:
             corners: Raster vertices, three per triangle. An empty list is
                 allowed and clears the target to `background`.
             background: Colour for pixels no triangle covers.
+            mode: `SHADE_LIT` or `SHADE_UV`, as `rasterize_shaded` takes.
 
         Raises:
             Error: If the corner count is not a multiple of three.
@@ -348,6 +376,7 @@ struct GpuRenderer(Movable):
             Int32(self.width),
             Int32(self.height),
             pack(background),
+            Int32(mode),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -399,6 +428,7 @@ def render_triangles(
     width: Int,
     height: Int,
     background: Color,
+    mode: Int = SHADE_LIT,
 ) raises -> Framebuffer:
     """Draw prepared triangles on the GPU and read the image back.
 
@@ -411,6 +441,7 @@ def render_triangles(
         width: Image width in pixels.
         height: Image height in pixels.
         background: Colour for pixels no triangle covers.
+        mode: `SHADE_LIT` or `SHADE_UV`.
 
     Returns:
         The rendered image.
@@ -420,7 +451,7 @@ def render_triangles(
             corner count is not a multiple of three.
     """
     var renderer = GpuRenderer(width, height)
-    renderer.draw(corners, background)
+    renderer.draw(corners, background, mode)
     return renderer.read_back()
 
 
@@ -452,7 +483,7 @@ def render(
     """
     var tint = FloatColor(of=foreground)
     var corners = List[RasterVertex]()
-    corners.append(RasterVertex(triangle.a.x, triangle.a.y, 0, 1, tint))
-    corners.append(RasterVertex(triangle.b.x, triangle.b.y, 0, 1, tint))
-    corners.append(RasterVertex(triangle.c.x, triangle.c.y, 0, 1, tint))
+    corners.append(RasterVertex(triangle.a.x, triangle.a.y, 0, 1, tint, 0, 0))
+    corners.append(RasterVertex(triangle.b.x, triangle.b.y, 0, 1, tint, 0, 0))
+    corners.append(RasterVertex(triangle.c.x, triangle.c.y, 0, 1, tint, 0, 0))
     return render_triangles(corners^, width, height, background)

@@ -7,7 +7,7 @@
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from core.object3d import Object3D
 from core.geometry_store import GeometryStore
 from core.scene import Scene
@@ -16,6 +16,7 @@ from geometries.sphere import sphere
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
+from render.rasterizer import SHADE_LIT, SHADE_UV
 from renderers.renderer import Renderer, face_normal
 from std.testing import (
     TestSuite,
@@ -462,6 +463,10 @@ def test_geometry_crossing_the_near_plane_is_clipped_not_mangled() raises:
     # The camera sits inside a large cube. Without clipping, corners behind
     # the camera project through the origin and smear across the image.
     var renderer = Renderer(WIDTH, HEIGHT)
+    # Every surface visible from inside a closed mesh is a back face, so
+    # culling would correctly discard the whole cube and leave nothing to
+    # judge the clipping by. three.js says the same thing with BackSide.
+    renderer.set_cull_backfaces(False)
     var scene = scene_with_node_at(0)
     var meshes = List[Mesh]()
     meshes.append(
@@ -604,6 +609,181 @@ def test_a_smooth_geometry_with_no_vertices_draws_nothing() raises:
         scene_with_node_at(0), geometries, meshes, a_camera()
     )
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
+
+
+# --- backface culling -------------------------------------------------------
+
+
+def test_culling_is_on_by_default_and_hides_the_inside_of_a_cube() raises:
+    # From inside a closed mesh every visible surface faces away, so culling
+    # leaves nothing at all. That is the honest consequence of the default,
+    # and the reason it has to be switchable.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    assert_true(renderer.cull_backfaces)
+    var geometries = GeometryStore()
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(geometries.add(cube(Length(8.0, METRE))), Color(255, 140, 40), 0)
+    )
+    var image = renderer.render(
+        scene_with_node_at(0), geometries, meshes, a_camera()
+    )
+    assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
+
+
+def test_culling_does_not_change_a_solid_seen_from_outside() raises:
+    # The point of the optimization: on a closed mesh the faces it discards
+    # are exactly the ones the depth buffer was already hiding, so the image
+    # must come out identical either way.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var geometries = GeometryStore()
+    var box = geometries.add(cube(Length(1.0, METRE)))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, Color(255, 0, 0), 0))
+    var scene = scene_with_node_at(0)
+
+    var culled = renderer.render(scene, geometries, meshes, a_camera())
+    renderer.set_cull_backfaces(False)
+    var complete = renderer.render(scene, geometries, meshes, a_camera())
+
+    var drawn = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(culled.get_pixel(x, y).r, complete.get_pixel(x, y).r)
+            assert_equal(culled.get_pixel(x, y).g, complete.get_pixel(x, y).g)
+            if culled.get_pixel(x, y).r != renderer.background.r:
+                drawn += 1
+    assert_true(drawn > 0, "the cube drew nothing, so nothing was compared")
+
+
+def test_culling_halves_the_triangles_of_a_closed_mesh() raises:
+    # Roughly: a convex solid shows half its faces. Measured on the prepared
+    # triangles rather than on timings, which is the part that is actually a
+    # property of the renderer.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var geometries = GeometryStore()
+    var ball = geometries.add(sphere(Length(1.0, METRE), 16, 12))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(ball, Color(200, 200, 200), 0))
+    var scene = scene_with_node_at(0)
+
+    var kept = renderer.prepare(scene, geometries, meshes, a_camera())
+    renderer.set_cull_backfaces(False)
+    var everything = renderer.prepare(scene, geometries, meshes, a_camera())
+
+    assert_true(len(kept) > 0)
+    assert_true(len(kept) < len(everything))
+    # Comfortably inside "about half", without pinning an exact count.
+    assert_true(len(kept) * 3 < len(everything) * 2)
+
+
+# --- the shading mode -------------------------------------------------------
+
+
+def test_a_renderer_starts_in_lit_mode() raises:
+    assert_equal(Renderer(WIDTH, HEIGHT).shading, SHADE_LIT)
+
+
+def test_uv_mode_draws_texture_coordinates_instead_of_lighting() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var geometries = GeometryStore()
+    var box = geometries.add(cube(Length(1.5, METRE)))
+    var scene = scene_with_node_at(0)
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, Color(255, 0, 0), 0))
+
+    var lit = renderer.render(scene, geometries, meshes, a_camera())
+    renderer.set_shading(SHADE_UV)
+    var mapped = renderer.render(scene, geometries, meshes, a_camera())
+
+    # A box face runs uv from (0,0) to (1,1), so the mapped image has both a
+    # red and a green gradient where the lit one has neither.
+    var differing = 0
+    var any_green = False
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var one = lit.get_pixel(x, y)
+            var two = mapped.get_pixel(x, y)
+            if one.r != two.r or one.g != two.g or one.b != two.b:
+                differing += 1
+            if two.g > 0 and two.b == 0:
+                any_green = True
+    assert_true(differing > 0, "the shading mode changed nothing")
+    assert_true(any_green, "no texture coordinate reached the image")
+
+
+def test_an_unknown_shading_mode_is_rejected() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    with assert_raises():
+        renderer.set_shading(97)
+    # And the mode is unchanged by the attempt.
+    assert_equal(renderer.shading, SHADE_LIT)
+
+
+def test_both_known_shading_modes_are_accepted() raises:
+    # Each half of the check has to be able to decide the outcome on its own.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_shading(SHADE_UV)
+    assert_equal(renderer.shading, SHADE_UV)
+    renderer.set_shading(SHADE_LIT)
+    assert_equal(renderer.shading, SHADE_LIT)
+
+
+def test_a_mapped_geometry_with_no_vertices_draws_nothing() raises:
+    # A geometry that declares texture coordinates but holds no vertices: the
+    # uv-gathering pass must cope with running zero times.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_shading(SHADE_UV)
+    var geometries = GeometryStore()
+    var empty = BufferGeometry()
+    empty.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
+    empty.set_attribute(String(UV), BufferAttribute(List[Float32](), 2))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(geometries.add(empty^), Color(255, 0, 0), 0))
+    var image = renderer.render(
+        scene_with_node_at(0), geometries, meshes, a_camera()
+    )
+    assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
+
+
+def test_a_geometry_without_uv_maps_to_the_texture_origin() raises:
+    # No uv attribute means zeroes rather than whatever was lying around.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_shading(SHADE_UV)
+    var geometries = GeometryStore()
+    var plain = BufferGeometry()
+    var data = List[Float32]()
+    for value in [
+        Float32(-1),
+        Float32(-1),
+        Float32(0),
+        Float32(1),
+        Float32(-1),
+        Float32(0),
+        Float32(0),
+        Float32(1),
+        Float32(0),
+    ]:
+        data.append(value)
+    plain.set_attribute(String(POSITION), BufferAttribute(data^, 3))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(geometries.add(plain^), Color(200, 200, 200), 0))
+    var image = renderer.render(
+        scene_with_node_at(0), geometries, meshes, a_camera()
+    )
+    var drawn = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var pixel = image.get_pixel(x, y)
+            if (
+                pixel.r != renderer.background.r
+                or pixel.g != renderer.background.g
+                or pixel.b != renderer.background.b
+            ):
+                drawn += 1
+                assert_equal(pixel.r, UInt8(0))
+                assert_equal(pixel.g, UInt8(0))
+    assert_true(drawn > 0, "the triangle drew nothing")
 
 
 def main() raises:

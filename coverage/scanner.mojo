@@ -8,7 +8,8 @@
 This is the whole difficulty of the coverage tool. A probe can only be inserted
 before a line that is a statement inside a function body, so everything else
 must be recognised and skipped: blank lines, comments, docstrings, decorators,
-imports, struct field declarations, `def`/`struct` headers, block-continuation
+imports, struct field declarations, `def`/`struct`/`trait` headers, trait
+method bodies, block-continuation
 keywords like `else:`, and any line that is the tail of a multi-line statement.
 
 Scanning is stateful and line-ordered: feed every line of the file to
@@ -66,10 +67,15 @@ def _bracket_delta(line: String) -> Int:
 
 @fieldwise_init
 struct _Scope(ImplicitlyCopyable):
-    """One open `def` or `struct` block, and the indent of its header."""
+    """One open `def`, `struct` or `trait` block, and its header's indent."""
 
     var indent: Int
     var is_def: Bool
+    # A `trait` block, or a `def` inside one. The bodies in a trait are
+    # declarations of what an implementation must provide -- a docstring and
+    # `...` -- and never run, so probing them produces code that names a
+    # function the trait cannot call.
+    var is_trait: Bool
 
 
 struct Scanner(Movable):
@@ -113,6 +119,13 @@ struct Scanner(Movable):
         if len(self._scopes) == 0:
             return False
         return self._scopes[len(self._scopes) - 1].is_def
+
+    def _inside_trait(self) -> Bool:
+        """Return True if any open block is a `trait`."""
+        for scope in range(len(self._scopes)):
+            if self._scopes[scope].is_trait:
+                return True
+        return False
 
     def is_executable(mut self, line: String) -> Bool:
         """Return True if a probe belongs immediately before `line`.
@@ -158,11 +171,20 @@ struct Scanner(Movable):
 
         if stripped.startswith("struct "):
             # Struct scope holds field declarations, not statements.
-            self._scopes.append(_Scope(indent, False))
+            self._scopes.append(_Scope(indent, False, False))
+            return False
+
+        if stripped.startswith("trait "):
+            # A trait declares what implementations must provide. Its method
+            # bodies are `...` and are never executed, so nothing inside one
+            # is a runtime step -- see `_inside_trait`.
+            self._scopes.append(_Scope(indent, False, True))
             return False
 
         if stripped.startswith("def "):
-            self._scopes.append(_Scope(indent, True))
+            # A `def` inherits its enclosing trait-ness: the body of a trait
+            # method is a declaration however much it looks like a function.
+            self._scopes.append(_Scope(indent, True, self._inside_trait()))
             return False
 
         if stripped.startswith("from ") or stripped.startswith("import "):
@@ -181,5 +203,8 @@ struct Scanner(Movable):
         ):
             return False
 
-        # Anything left outside a function body is a declaration, not a step.
+        # Anything left outside a function body is a declaration, not a step,
+        # and so is everything inside a trait.
+        if self._inside_trait():
+            return False
         return self._inside_function_body()

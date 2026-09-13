@@ -25,9 +25,9 @@ mean something.
 
 Clipping a triangle against one plane leaves a polygon of three or four
 corners; against both, up to five. Fanning from the first corner turns whatever
-is left into triangles. The interpolation at each cut carries the vertex colour
-with it, in floating point, so a clipped triangle shades as though it were
-never cut.
+is left into triangles. The interpolation at each cut carries every varying
+with it -- colour and texture coordinates, in floating point -- so a clipped
+triangle shades and maps as though it were never cut.
 """
 
 from math.vector3 import Vector3
@@ -36,10 +36,15 @@ from render.framebuffer import FloatColor
 
 @fieldwise_init
 struct ClipVertex(ImplicitlyCopyable):
-    """A camera-space position with the colour already worked out for it."""
+    """A camera-space position with the varyings that travel with it."""
 
     var position: Vector3
     var color: FloatColor
+    # Texture coordinates. A cut has to carry these too: a triangle clipped
+    # against the near plane keeps the part of the image that survived, and
+    # leaving them behind would slide the texture across the cut.
+    var u: Float32
+    var v: Float32
 
 
 def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
@@ -85,6 +90,8 @@ def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
             _mix(a.color.b, b.color.b, t),
             _mix(a.color.a, b.color.a, t),
         ),
+        _mix(a.u, b.u, t),
+        _mix(a.v, b.v, t),
     )
 
 

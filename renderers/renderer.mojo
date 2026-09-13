@@ -38,21 +38,30 @@ too, because the depth buffer cannot enforce it on its own: it clears to
 infinity and accepts anything smaller, so geometry past `camera.far` would
 otherwise still be drawn. See `renderers.clip`.
 
-There is no backface culling. Faces pointing away light to ambient and are
-covered by nearer geometry anyway, so the depth buffer alone gives the correct
-image. Culling would be an optimization, not a correctness fix, which is only
-true because the depth buffer exists.
+Triangles facing away from the camera are discarded before rasterization,
+which is an optimization rather than a correctness fix — the depth buffer
+already hides them, and did so alone for several versions. It is switchable
+because a camera inside a closed mesh sees nothing but back faces, and that is
+a legitimate thing to want; three.js expresses the same choice as a material's
+`side`, which is where this belongs once `Material` exists.
 """
 
-from cameras.perspective_camera import PerspectiveCamera
-from core.buffer_geometry import NORMAL, POSITION
+from cameras.camera import Camera
+from core.buffer_geometry import NORMAL, POSITION, UV
 from core.geometry_store import GeometryStore
 from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor, Framebuffer
-from render.rasterizer import RasterVertex, rasterize_shaded
+from math.vector2 import Vector2
+from render.rasterizer import (
+    SHADE_LIT,
+    SHADE_UV,
+    RasterVertex,
+    edge,
+    rasterize_shaded,
+)
 from renderers.clip import ClipVertex, clip_depth
 from std.math import max
 
@@ -74,6 +83,21 @@ def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     return first^
 
 
+def _faces_away(a: RasterVertex, b: RasterVertex, c: RasterVertex) -> Bool:
+    """Return True if these screen-space corners wind the wrong way round.
+
+    Geometry is wound counter-clockwise seen from outside, but the viewport
+    transform flips y — an image counts its rows downwards — and a flip
+    reverses winding. So a triangle facing the camera comes out with a
+    *negative* signed area here, and a positive one is facing away.
+
+    Exactly zero is a degenerate triangle seen edge-on. It is left in, because
+    the rasterizer already discards it and calling it "facing away" would be
+    a second, differently-worded answer to the same question.
+    """
+    return edge(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y)) > 0
+
+
 def _to_raster(vertex: ClipVertex, to_screen: Matrix4) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -90,7 +114,15 @@ def _to_raster(vertex: ClipVertex, to_screen: Matrix4) -> RasterVertex:
     if w != 0:  # pragma: no branch
         inv_w = Float32(1) / w
     var screen = to_screen.transform_point(vertex.position)
-    return RasterVertex(screen.x, screen.y, screen.z, inv_w, vertex.color)
+    return RasterVertex(
+        screen.x,
+        screen.y,
+        screen.z,
+        inv_w,
+        vertex.color,
+        vertex.u,
+        vertex.v,
+    )
 
 
 struct Renderer(Movable):
@@ -101,6 +133,14 @@ struct Renderer(Movable):
     var background: Color
     var light: Vector3
     var ambient: Float32
+    # Whether to discard triangles facing away from the camera. On by
+    # default, as three.js's default FrontSide material is. Turn it off to
+    # see the inside of something -- a camera within a cube, a plane viewed
+    # from behind -- which is what three.js's BackSide and DoubleSide are
+    # for. When `Material` arrives this belongs there, per-mesh, not here.
+    var cull_backfaces: Bool
+    # SHADE_LIT or SHADE_UV; see `render.rasterizer`.
+    var shading: Int
 
     def __init__(out self, width: Int, height: Int) raises:
         """Create a renderer with a dark background and a default light.
@@ -123,10 +163,38 @@ struct Renderer(Movable):
         self.light = direction
         # Enough fill that a face turned away is still legible, not black.
         self.ambient = 0.25
+        self.cull_backfaces = True
+        self.shading = SHADE_LIT
 
     def set_background(mut self, color: Color):
         """Set the colour the image is cleared to."""
         self.background = color
+
+    def set_cull_backfaces(mut self, cull: Bool):
+        """Choose whether triangles facing away from the camera are drawn.
+
+        Culling is an optimization, not a correctness fix: the depth buffer
+        already hides what is behind something. It is worth having because it
+        discards roughly half the triangles of a closed mesh before they are
+        rasterized at all — but it must be switchable, because "inside a
+        closed mesh" is a legitimate place for a camera to be, and there
+        every visible surface is a back face.
+        """
+        self.cull_backfaces = cull
+
+    def set_shading(mut self, mode: Int) raises:
+        """Choose what a fragment's colour is taken from.
+
+        Args:
+            mode: `SHADE_LIT` for the interpolated lighting, or `SHADE_UV` to
+                write texture coordinates as red and green instead.
+
+        Raises:
+            Error: If the mode is not one this renderer knows.
+        """
+        if mode != SHADE_LIT and mode != SHADE_UV:
+            raise Error("Unknown shading mode")
+        self.shading = mode
 
     def set_light(mut self, direction: Vector3, ambient: Float32) raises:
         """Point the light and set how much the unlit side keeps.
@@ -163,12 +231,14 @@ struct Renderer(Movable):
         var level = self.ambient + (1 - self.ambient) * lambert
         return FloatColor(of=base).scaled(level)
 
-    def prepare(
+    def prepare[
+        C: Camera
+    ](
         self,
         scene: Scene,
         geometries: GeometryStore,
         meshes: List[Mesh],
-        camera: PerspectiveCamera,
+        camera: C,
     ) raises -> List[RasterVertex]:
         """Turn a scene into the triangles a rasterizer can fill.
 
@@ -192,7 +262,8 @@ struct Renderer(Movable):
             geometries: The vertex data the meshes name. Two meshes naming
                 the same id share one copy of it.
             meshes: What to draw, each naming a node and a geometry.
-            camera: The camera to project through.
+            camera: The camera to project through — anything satisfying
+                `cameras.camera.Camera`, perspective or orthographic.
 
         Returns:
             Raster vertices, three per triangle, in submission order.
@@ -204,8 +275,8 @@ struct Renderer(Movable):
         var corners = List[RasterVertex]()
         var view = camera.view_matrix()
         var to_screen = camera.view_to_screen_matrix(self.width, self.height)
-        var near = camera.near.value
-        var far = camera.far.value
+        var near = camera.near_distance()
+        var far = camera.far_distance()
 
         for index in range(len(meshes)):
             var world = scene.world_matrix(meshes[index].node)
@@ -213,6 +284,7 @@ struct Renderer(Movable):
             # same arrays rather than each holding their own.
             ref geometry = geometries.get(meshes[index].geometry)
             var smooth = geometry.has_attribute(String(NORMAL))
+            var mapped = geometry.has_attribute(String(UV))
 
             # World positions are kept as well as camera-space ones: a
             # geometric normal needs the triangle's real shape, and the view
@@ -228,6 +300,22 @@ struct Renderer(Movable):
                 var point = world.transform_point(positions.vector3(vertex))
                 world_points.append(point)
                 view_points.append(view.transform_point(point))
+
+            # Texture coordinates travel untransformed: they name a place in
+            # an image, not a place in the world. A geometry without them
+            # gets zeroes, which map everything to one corner -- harmless
+            # until something is actually sampled with them.
+            var vertex_u = List[Float32]()
+            var vertex_v = List[Float32]()
+            if mapped:
+                ref uvs = geometry.attribute_view(String(UV))
+                for vertex in range(vertex_count):
+                    vertex_u.append(uvs.component(vertex, 0))
+                    vertex_v.append(uvs.component(vertex, 1))
+            else:
+                for _ in range(vertex_count):
+                    vertex_u.append(0)
+                    vertex_v.append(0)
 
             # Shading is its own pass so the normal array can be borrowed only
             # when there is one, and the normal matrix built once per mesh
@@ -275,23 +363,47 @@ struct Renderer(Movable):
                     color_c = color_a
 
                 var pieces = clip_depth(
-                    ClipVertex(view_points[first], color_a),
-                    ClipVertex(view_points[second], color_b),
-                    ClipVertex(view_points[third], color_c),
+                    ClipVertex(
+                        view_points[first],
+                        color_a,
+                        vertex_u[first],
+                        vertex_v[first],
+                    ),
+                    ClipVertex(
+                        view_points[second],
+                        color_b,
+                        vertex_u[second],
+                        vertex_v[second],
+                    ),
+                    ClipVertex(
+                        view_points[third],
+                        color_c,
+                        vertex_u[third],
+                        vertex_v[third],
+                    ),
                     near,
                     far,
                 )
-                for piece in range(len(pieces)):
-                    corners.append(_to_raster(pieces[piece], to_screen))
+                for piece in range(len(pieces) // 3):
+                    var one = _to_raster(pieces[piece * 3], to_screen)
+                    var two = _to_raster(pieces[piece * 3 + 1], to_screen)
+                    var three = _to_raster(pieces[piece * 3 + 2], to_screen)
+                    if self.cull_backfaces and _faces_away(one, two, three):
+                        continue
+                    corners.append(one)
+                    corners.append(two)
+                    corners.append(three)
 
         return corners^
 
-    def render(
+    def render[
+        C: Camera
+    ](
         self,
         scene: Scene,
         geometries: GeometryStore,
         meshes: List[Mesh],
-        camera: PerspectiveCamera,
+        camera: C,
     ) raises -> Framebuffer:
         """Draw every mesh on the CPU and return the finished image.
 
@@ -318,5 +430,6 @@ struct Renderer(Movable):
                 corners[triangle * 3 + 1],
                 corners[triangle * 3 + 2],
                 target,
+                self.shading,
             )
         return target^

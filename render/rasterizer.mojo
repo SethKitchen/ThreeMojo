@@ -292,6 +292,18 @@ struct RasterVertex(ImplicitlyCopyable):
     # The reciprocal of the clip-space w this corner was divided by.
     var inv_w: Float32
     var color: FloatColor
+    # Texture coordinates, interpolated the same perspective-correct way the
+    # colour is. They reach the fragment rather than being folded into the
+    # colour at the vertex, because that is what sampling a texture will need.
+    var u: Float32
+    var v: Float32
+
+
+# What a fragment's colour is taken from. An Int rather than a richer type
+# because there are two of them; when a texture arrives it becomes a third and
+# the argument grows into something that carries the texture with it.
+comptime SHADE_LIT = 0
+comptime SHADE_UV = 1
 
 
 def rasterize_shaded(
@@ -299,6 +311,7 @@ def rasterize_shaded(
     b: RasterVertex,
     c: RasterVertex,
     mut target: Framebuffer,
+    mode: Int = SHADE_LIT,
 ) raises:
     """Fill a triangle whose corners each carry their own colour.
 
@@ -325,6 +338,12 @@ def rasterize_shaded(
         b: Second corner.
         c: Third corner.
         target: The framebuffer to draw into.
+        mode: `SHADE_LIT` to write the interpolated colour, or `SHADE_UV` to
+            write the interpolated texture coordinates as red and green. The
+            second exists to make the perspective correction visible: with it
+            a floor plane drawn as two large triangles shows the difference
+            between a correct interpolation and an affine one directly, which
+            no assertion about a colour channel really does.
 
     Raises:
         Error: If a pixel write lands out of bounds, which the loop prevents.
@@ -363,21 +382,17 @@ def rasterize_shaded(
                 share_b = wb * b.inv_w / inv_w
                 share_c = wc * c.inv_w / inv_w
 
-            target.set_pixel(
-                x,
-                y,
-                FloatColor(
-                    a.color.r * share_a
-                    + b.color.r * share_b
-                    + c.color.r * share_c,
-                    a.color.g * share_a
-                    + b.color.g * share_b
-                    + c.color.g * share_c,
-                    a.color.b * share_a
-                    + b.color.b * share_b
-                    + c.color.b * share_c,
-                    a.color.a * share_a
-                    + b.color.a * share_b
-                    + c.color.a * share_c,
-                ).quantize(),
+            var shaded = FloatColor(
+                a.color.r * share_a + b.color.r * share_b + c.color.r * share_c,
+                a.color.g * share_a + b.color.g * share_b + c.color.g * share_c,
+                a.color.b * share_a + b.color.b * share_b + c.color.b * share_c,
+                a.color.a * share_a + b.color.a * share_b + c.color.a * share_c,
             )
+            if mode == SHADE_UV:
+                shaded = FloatColor(
+                    a.u * share_a + b.u * share_b + c.u * share_c,
+                    a.v * share_a + b.v * share_b + c.v * share_c,
+                    0.0,
+                    1.0,
+                )
+            target.set_pixel(x, y, shaded.quantize())

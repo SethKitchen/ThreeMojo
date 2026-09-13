@@ -39,6 +39,11 @@ from math.vector3 import Vector3
 # `position` is the only one a geometry must have.
 comptime POSITION = "position"
 comptime NORMAL = "normal"
+# Texture coordinates, two per vertex. three.js's convention and OpenGL's: the
+# origin is the bottom-left of the image and v grows upwards, which is the
+# opposite of how a framebuffer's rows are numbered. Sampling is where that
+# gets reconciled, not here.
+comptime UV = "uv"
 
 
 struct BufferGeometry(Movable):

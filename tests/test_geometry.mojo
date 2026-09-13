@@ -7,7 +7,7 @@
 """
 
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION
+from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from geometries.box import box, cube
 from geometries.sphere import sphere
 from math.vector3 import Vector3
@@ -436,6 +436,75 @@ def test_a_geometry_counts_the_attributes_it_holds() raises:
     # Replacing a name that is already there does not add a second entry.
     geometry.set_attribute(String(POSITION), triangle_attribute())
     assert_equal(geometry.attribute_count(), 2)
+
+
+# --- texture coordinates ----------------------------------------------------
+
+
+def test_a_box_gives_every_face_the_whole_image() raises:
+    var geometry = cube(Length(1.0, METRE))
+    assert_true(geometry.has_attribute(String(UV)))
+    ref uvs = geometry.attribute_view(String(UV))
+    assert_equal(uvs.count(), 24)
+    # Each face's four corners run (0,0) (1,0) (1,1) (0,1) counter-clockwise
+    # from its bottom-left seen from outside.
+    for face in range(6):
+        var base = face * 4
+        assert_equal(uvs.component(base, 0), Float32(0))
+        assert_equal(uvs.component(base, 1), Float32(0))
+        assert_equal(uvs.component(base + 1, 0), Float32(1))
+        assert_equal(uvs.component(base + 1, 1), Float32(0))
+        assert_equal(uvs.component(base + 2, 0), Float32(1))
+        assert_equal(uvs.component(base + 2, 1), Float32(1))
+        assert_equal(uvs.component(base + 3, 0), Float32(0))
+        assert_equal(uvs.component(base + 3, 1), Float32(1))
+
+
+def test_every_box_texture_coordinate_is_in_range() raises:
+    var geometry = cube(Length(2.0, METRE))
+    ref uvs = geometry.attribute_view(String(UV))
+    for vertex in range(uvs.count()):
+        assert_true(uvs.component(vertex, 0) >= 0)
+        assert_true(uvs.component(vertex, 0) <= 1)
+        assert_true(uvs.component(vertex, 1) >= 0)
+        assert_true(uvs.component(vertex, 1) <= 1)
+
+
+def test_a_sphere_wraps_u_once_around_the_equator() raises:
+    var geometry = sphere(Length(1.0, METRE), 8, 4)
+    assert_true(geometry.has_attribute(String(UV)))
+    ref uvs = geometry.attribute_view(String(UV))
+    # One row is width_segments + 1 vertices, the last repeating the first in
+    # space but not in u -- which is the whole reason the seam is duplicated.
+    assert_equal(uvs.component(0, 0), Float32(0))
+    assert_equal(uvs.component(8, 0), Float32(1))
+    ref positions = geometry.attribute_view(String(POSITION))
+    var start = positions.vector3(0)
+    var wrapped = positions.vector3(8)
+    assert_almost_equal(start.x, wrapped.x, atol=Float64(1e-5))
+    assert_almost_equal(start.z, wrapped.z, atol=Float64(1e-5))
+
+
+def test_a_sphere_runs_v_from_one_at_the_north_pole_to_zero_at_the_south() raises:
+    # Texture space has its origin at the bottom while `ring` counts down from
+    # the top, so v is the complement of the ring fraction.
+    var geometry = sphere(Length(1.0, METRE), 8, 4)
+    ref uvs = geometry.attribute_view(String(UV))
+    assert_equal(uvs.component(0, 1), Float32(1))
+    # Last row: ring == height_segments, so the final vertex.
+    assert_equal(uvs.component(uvs.count() - 1, 1), Float32(0))
+
+
+def test_sphere_texture_coordinates_cover_the_whole_range() raises:
+    var geometry = sphere(Length(1.0, METRE), 12, 6)
+    ref uvs = geometry.attribute_view(String(UV))
+    var widest = Float32(0)
+    var tallest = Float32(0)
+    for vertex in range(uvs.count()):
+        widest = max(widest, uvs.component(vertex, 0))
+        tallest = max(tallest, uvs.component(vertex, 1))
+    assert_equal(widest, Float32(1))
+    assert_equal(tallest, Float32(1))
 
 
 def main() raises:
