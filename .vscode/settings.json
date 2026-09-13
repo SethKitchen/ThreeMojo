@@ -1,0 +1,14 @@
+{
+  // The Mojo language server resolves imports with its own search path, which
+  // does not inherit the `-I .` the Makefile passes to `mojo run`. Without the
+  // repo root listed here, `from units.si import Length` shows "unable to
+  // locate module 'units'" in any file outside the root, even though it
+  // compiles fine.
+  //
+  // The value must be "." and not "${workspaceFolder}": this extension does
+  // no variable substitution, so it would hand the server that string as a
+  // literal directory name. "." works because the server is started with the
+  // workspace folder as its working directory. Verified by driving
+  // mojo-lsp-server directly with each value.
+  "mojo.lsp.includeDirs": ["."]
+}

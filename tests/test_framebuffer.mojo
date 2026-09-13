@@ -1,0 +1,124 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""Tests for `render.framebuffer`."""
+
+from render.framebuffer import Color, Framebuffer
+from std.testing import TestSuite, assert_equal, assert_raises
+
+
+def assert_color(got: Color, expected: Color) raises:
+    """Assert that two colors match on every channel."""
+    assert_equal(got.r, expected.r)
+    assert_equal(got.g, expected.g)
+    assert_equal(got.b, expected.b)
+    assert_equal(got.a, expected.a)
+
+
+def test_new_buffer_is_filled_with_clear_color() raises:
+    var clear = Color(20, 24, 32)
+    var fb = Framebuffer(4, 3, clear)
+    for y in range(3):
+        for x in range(4):
+            assert_color(fb.get_pixel(x, y), clear)
+
+
+def test_set_pixel_roundtrips() raises:
+    var fb = Framebuffer(4, 3, Color(0, 0, 0))
+    fb.set_pixel(2, 1, Color(255, 128, 32))
+    assert_color(fb.get_pixel(2, 1), Color(255, 128, 32))
+
+
+def test_set_pixel_does_not_disturb_neighbours() raises:
+    var fb = Framebuffer(4, 3, Color(1, 2, 3))
+    fb.set_pixel(2, 1, Color(255, 128, 32))
+    assert_color(fb.get_pixel(1, 1), Color(1, 2, 3))
+    assert_color(fb.get_pixel(3, 1), Color(1, 2, 3))
+    assert_color(fb.get_pixel(2, 0), Color(1, 2, 3))
+    assert_color(fb.get_pixel(2, 2), Color(1, 2, 3))
+
+
+def test_rows_are_stored_top_down() raises:
+    var fb = Framebuffer(2, 2, Color(0, 0, 0))
+    fb.set_pixel(0, 0, Color(9, 9, 9))
+    # The top-left pixel must be the first three bytes of the buffer.
+    assert_equal(fb.pixels[0], UInt8(9))
+
+
+def test_zero_width_is_rejected() raises:
+    with assert_raises():
+        _ = Framebuffer(0, 3, Color(0, 0, 0))
+
+
+def test_negative_height_is_rejected() raises:
+    with assert_raises():
+        _ = Framebuffer(4, -1, Color(0, 0, 0))
+
+
+def test_reads_past_each_edge_are_rejected() raises:
+    var fb = Framebuffer(4, 3, Color(0, 0, 0))
+    with assert_raises():
+        _ = fb.get_pixel(-1, 0)
+    with assert_raises():
+        _ = fb.get_pixel(4, 0)
+    with assert_raises():
+        _ = fb.get_pixel(0, -1)
+    with assert_raises():
+        _ = fb.get_pixel(0, 3)
+
+
+def test_writes_out_of_bounds_are_rejected() raises:
+    var fb = Framebuffer(4, 3, Color(0, 0, 0))
+    with assert_raises():
+        fb.set_pixel(4, 3, Color(1, 1, 1))
+
+
+def test_colors_are_opaque_unless_given_an_alpha() raises:
+    assert_equal(Color(1, 2, 3).a, UInt8(255))
+    assert_equal(Color(1, 2, 3, 128).a, UInt8(128))
+
+
+def test_alpha_roundtrips_through_the_buffer() raises:
+    var fb = Framebuffer(2, 2, Color(0, 0, 0))
+    fb.set_pixel(1, 1, Color(10, 20, 30, 64))
+    assert_equal(fb.get_pixel(1, 1).a, UInt8(64))
+
+
+def test_buffer_allocates_four_bytes_per_pixel() raises:
+    var fb = Framebuffer(4, 3, Color(0, 0, 0))
+    assert_equal(len(fb.pixels), 4 * 3 * 4)
+
+
+def test_existing_pixels_can_be_adopted() raises:
+    var pixels = List[UInt8](length=2 * 2 * 4, fill=7)
+    var fb = Framebuffer(2, 2, pixels^)
+    assert_color(fb.get_pixel(1, 1), Color(7, 7, 7, 7))
+    assert_equal(fb.width, 2)
+    assert_equal(fb.height, 2)
+
+
+def test_adopting_rejects_zero_width() raises:
+    with assert_raises():
+        _ = Framebuffer(0, 2, List[UInt8](length=0, fill=0))
+
+
+def test_adopting_rejects_zero_height() raises:
+    # The second half of the size guard needs its own case.
+    with assert_raises():
+        _ = Framebuffer(2, 0, List[UInt8](length=0, fill=0))
+
+
+def test_adopting_rejects_a_buffer_that_is_too_short() raises:
+    with assert_raises():
+        _ = Framebuffer(2, 2, List[UInt8](length=4, fill=0))
+
+
+def test_adopting_rejects_a_buffer_that_is_too_long() raises:
+    with assert_raises():
+        _ = Framebuffer(2, 2, List[UInt8](length=64, fill=0))
+
+
+def main() raises:
+    TestSuite.discover_tests[__functions_in_module()]().run()
