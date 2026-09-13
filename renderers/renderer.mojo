@@ -38,6 +38,13 @@ too, because the depth buffer cannot enforce it on its own: it clears to
 infinity and accepts anything smaller, so geometry past `camera.far` would
 otherwise still be drawn. See `renderers.clip`.
 
+A mesh whose world transform reflects it — a negative scale on one axis, or
+any odd number of them inherited down the hierarchy — has its winding reversed,
+and both the culling convention and the geometric-normal fallback are turned
+upside down with it. The sign of the world matrix's determinant is what says
+so, and it is asked once per mesh. three.js asks the same question of the same
+quantity.
+
 Triangles facing away from the camera are discarded before rasterization,
 which is an optimization rather than a correctness fix — the depth buffer
 already hides them, and did so alone for several versions. It is switchable
@@ -83,7 +90,9 @@ def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     return first^
 
 
-def _faces_away(a: RasterVertex, b: RasterVertex, c: RasterVertex) -> Bool:
+def _faces_away(
+    a: RasterVertex, b: RasterVertex, c: RasterVertex, mirrored: Bool
+) -> Bool:
     """Return True if these screen-space corners wind the wrong way round.
 
     Geometry is wound counter-clockwise seen from outside, but the viewport
@@ -91,11 +100,31 @@ def _faces_away(a: RasterVertex, b: RasterVertex, c: RasterVertex) -> Bool:
     reverses winding. So a triangle facing the camera comes out with a
     *negative* signed area here, and a positive one is facing away.
 
-    Exactly zero is a degenerate triangle seen edge-on. It is left in, because
-    the rasterizer already discards it and calling it "facing away" would be
-    a second, differently-worded answer to the same question.
+    Unless the mesh is mirrored. A transform with a negative determinant —
+    `set_scale(-1, 1, 1)`, or any odd number of reflections inherited from
+    parents — reverses winding a second time, and the whole convention is
+    upside down. Without this a mirrored single-sided triangle is culled
+    exactly when it should be drawn; the first version of this made one
+    disappear completely. three.js asks the same question of the same
+    quantity, the sign of the world matrix's determinant.
+
+    Exactly zero is a degenerate triangle seen edge-on. It is left in either
+    way, because the rasterizer already discards it and calling it "facing
+    away" would be a second, differently-worded answer to the same question.
+
+    Args:
+        a: First screen-space corner.
+        b: Second corner.
+        c: Third corner.
+        mirrored: True if the mesh's world transform reflects it.
+
+    Returns:
+        True if the triangle faces away from the camera.
     """
-    return edge(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y)) > 0
+    var area = edge(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
+    if mirrored:
+        return area < 0
+    return area > 0
 
 
 def _to_raster(vertex: ClipVertex, to_screen: Matrix4) -> RasterVertex:
@@ -134,10 +163,11 @@ struct Renderer(Movable):
     var light: Vector3
     var ambient: Float32
     # Whether to discard triangles facing away from the camera. On by
-    # default, as three.js's default FrontSide material is. Turn it off to
-    # see the inside of something -- a camera within a cube, a plane viewed
-    # from behind -- which is what three.js's BackSide and DoubleSide are
-    # for. When `Material` arrives this belongs there, per-mesh, not here.
+    # default, as three.js's default FrontSide material is; off draws both
+    # windings, which is three.js's DoubleSide. There is deliberately no
+    # equivalent of BackSide, which draws *only* back faces -- that is a
+    # third state, and it belongs with `Material` rather than as a third
+    # value of a flag on the renderer.
     var cull_backfaces: Bool
     # SHADE_LIT or SHADE_UV; see `render.rasterizer`.
     var shading: Int
@@ -172,6 +202,11 @@ struct Renderer(Movable):
 
     def set_cull_backfaces(mut self, cull: Bool):
         """Choose whether triangles facing away from the camera are drawn.
+
+        True is three.js's `FrontSide`, False its `DoubleSide`. `BackSide` —
+        only the faces pointing away — is a third state this does not have,
+        because it is a per-material decision rather than a renderer-wide
+        one and there is no `Material` yet.
 
         Culling is an optimization, not a correctness fix: the depth buffer
         already hides what is behind something. It is worth having because it
@@ -280,6 +315,12 @@ struct Renderer(Movable):
 
         for index in range(len(meshes)):
             var world = scene.world_matrix(meshes[index].node)
+            # An odd number of reflections in the world transform reverses
+            # winding, which turns both the culling convention and the
+            # geometric-normal fallback upside down. Asked once per mesh, of
+            # the world matrix rather than the node's own scale, because the
+            # reflection can be inherited from any parent.
+            var mirrored = world.determinant() < 0
             # Borrowed, not copied: two meshes naming the same id read the
             # same arrays rather than each holding their own.
             ref geometry = geometries.get(meshes[index].geometry)
@@ -351,14 +392,22 @@ struct Renderer(Movable):
                 else:
                     # No normals given, so the face supplies its own and the
                     # whole triangle takes one colour.
-                    color_a = self.shade(
-                        meshes[index].color,
-                        face_normal(
-                            world_points[first],
-                            world_points[second],
-                            world_points[third],
-                        ),
+                    var geometric = face_normal(
+                        world_points[first],
+                        world_points[second],
+                        world_points[third],
                     )
+                    if mirrored:
+                        # The cross product follows the mirrored winding, so
+                        # it comes out pointing into the surface. A supplied
+                        # normal carried through the inverse transpose does
+                        # not flip, and the two paths have to mean the same
+                        # side or an object would shade differently purely
+                        # for having normals.
+                        geometric = Vector3(
+                            -geometric.x, -geometric.y, -geometric.z
+                        )
+                    color_a = self.shade(meshes[index].color, geometric)
                     color_b = color_a
                     color_c = color_a
 
@@ -388,7 +437,9 @@ struct Renderer(Movable):
                     var one = _to_raster(pieces[piece * 3], to_screen)
                     var two = _to_raster(pieces[piece * 3 + 1], to_screen)
                     var three = _to_raster(pieces[piece * 3 + 2], to_screen)
-                    if self.cull_backfaces and _faces_away(one, two, three):
+                    if self.cull_backfaces and _faces_away(
+                        one, two, three, mirrored
+                    ):
                         continue
                     corners.append(one)
                     corners.append(two)

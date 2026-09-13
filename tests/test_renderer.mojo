@@ -465,7 +465,7 @@ def test_geometry_crossing_the_near_plane_is_clipped_not_mangled() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     # Every surface visible from inside a closed mesh is a back face, so
     # culling would correctly discard the whole cube and leave nothing to
-    # judge the clipping by. three.js says the same thing with BackSide.
+    # judge the clipping by. Drawing both windings is three.js's DoubleSide.
     renderer.set_cull_backfaces(False)
     var scene = scene_with_node_at(0)
     var meshes = List[Mesh]()
@@ -784,6 +784,170 @@ def test_a_geometry_without_uv_maps_to_the_texture_origin() raises:
                 assert_equal(pixel.r, UInt8(0))
                 assert_equal(pixel.g, UInt8(0))
     assert_true(drawn > 0, "the triangle drew nothing")
+
+
+# --- mirrored transforms ----------------------------------------------------
+
+
+def lone_triangle(with_normals: Bool) raises -> BufferGeometry:
+    """Return one counter-clockwise triangle facing +z.
+
+    Args:
+        with_normals: Whether to give each vertex the triangle's own normal.
+
+    Returns:
+        The geometry.
+
+    Raises:
+        Error: If the attributes are malformed, which they are not.
+    """
+    var data = List[Float32]()
+    for value in [
+        Float32(-1),
+        Float32(-1),
+        Float32(0),
+        Float32(1),
+        Float32(-1),
+        Float32(0),
+        Float32(0),
+        Float32(1),
+        Float32(0),
+    ]:
+        data.append(value)
+    var geometry = BufferGeometry()
+    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
+    if with_normals:
+        var normals = List[Float32]()
+        for _ in range(3):
+            normals.append(0)
+            normals.append(0)
+            normals.append(1)
+        geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
+    return geometry^
+
+
+def scaled_scene(x: Float32, y: Float32, z: Float32) raises -> Scene:
+    """Return a scene with one node scaled by the given factors."""
+    var scene = Scene()
+    var node = Object3D()
+    node.set_scale(x, y, z)
+    _ = scene.add(node^)
+    scene.update()
+    return scene^
+
+
+def rendered_triangle(
+    renderer: Renderer, scene: Scene, with_normals: Bool
+) raises -> Framebuffer:
+    """Render the lone triangle through `scene`'s only node.
+
+    Args:
+        renderer: The renderer to draw with.
+        scene: A scene whose node zero carries the transform.
+        with_normals: Whether the geometry supplies normals.
+
+    Returns:
+        The rendered image.
+
+    Raises:
+        Error: If the render fails.
+    """
+    var geometries = GeometryStore()
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            geometries.add(lone_triangle(with_normals)),
+            Color(200, 200, 200),
+            0,
+        )
+    )
+    return renderer.render(scene, geometries, meshes, a_camera())
+
+
+def test_a_mirrored_mesh_is_not_culled_away() raises:
+    # A negative scale reverses winding, so the front face reads as a back
+    # face and culling removed it entirely. The first version of this drew
+    # nothing at all.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var plain = rendered_triangle(renderer, scaled_scene(1, 1, 1), False)
+    var mirrored = rendered_triangle(renderer, scaled_scene(-1, 1, 1), False)
+    var drawn = WIDTH * HEIGHT - count_background(plain, renderer.background)
+    var reflected = WIDTH * HEIGHT - count_background(
+        mirrored, renderer.background
+    )
+    assert_true(drawn > 0, "the unmirrored triangle drew nothing")
+    # Symmetric about x, so mirroring covers exactly as much.
+    assert_equal(reflected, drawn)
+
+
+def test_a_reflection_inherited_from_a_parent_counts_too() raises:
+    # The determinant has to come from the world matrix. A node with no scale
+    # of its own is still mirrored if a parent reflects it.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var scene = Scene()
+    var parent = Object3D()
+    parent.set_scale(-1, 1, 1)
+    var root = scene.add(parent^)
+    _ = scene.attach(Object3D(), root)
+    scene.update()
+
+    var geometries = GeometryStore()
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(geometries.add(lone_triangle(False)), Color(200, 200, 200), 1)
+    )
+    var image = renderer.render(scene, geometries, meshes, a_camera())
+    assert_true(
+        count_background(image, renderer.background) < WIDTH * HEIGHT,
+        "an inherited reflection culled the mesh away",
+    )
+
+
+def test_two_reflections_cancel() raises:
+    # Determinant positive again, so the ordinary convention applies. An
+    # implementation that looked at any negative scale factor rather than the
+    # determinant would get this backwards.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var plain = rendered_triangle(renderer, scaled_scene(1, 1, 1), False)
+    var twice = rendered_triangle(renderer, scaled_scene(-1, -1, 1), False)
+    var drawn = WIDTH * HEIGHT - count_background(plain, renderer.background)
+    var both = WIDTH * HEIGHT - count_background(twice, renderer.background)
+    assert_true(drawn > 0)
+    assert_equal(both, drawn)
+
+
+def test_a_mirrored_mesh_shades_the_same_with_and_without_normals() raises:
+    # The two normal paths must mean the same side. Carried through the
+    # inverse transpose a supplied normal does not flip; the cross product of
+    # the mirrored triangle's world edges does. Left alone they disagreed,
+    # and an object shaded differently purely for having normals.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var scene = scaled_scene(-1, 1, 1)
+    var supplied = rendered_triangle(renderer, scene, True)
+    var derived = rendered_triangle(renderer, scene, False)
+    var compared = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var one = supplied.get_pixel(x, y)
+            var two = derived.get_pixel(x, y)
+            if one.r != renderer.background.r:
+                compared += 1
+            assert_equal(one.r, two.r)
+            assert_equal(one.g, two.g)
+            assert_equal(one.b, two.b)
+    assert_true(compared > 0, "nothing was drawn, so nothing was compared")
+
+
+def test_an_unmirrored_mesh_still_agrees_between_the_normal_paths() raises:
+    # The other side of the same check, so the fix cannot have been to flip
+    # the fallback unconditionally.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var scene = scaled_scene(1, 1, 1)
+    var supplied = rendered_triangle(renderer, scene, True)
+    var derived = rendered_triangle(renderer, scene, False)
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(supplied.get_pixel(x, y).r, derived.get_pixel(x, y).r)
 
 
 def main() raises:

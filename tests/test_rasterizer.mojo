@@ -643,5 +643,43 @@ def test_an_unmapped_triangle_reads_as_the_texture_origin() raises:
     assert_equal(fb.get_pixel(4, 4).g, UInt8(0))
 
 
+def test_perspective_correct_uv_has_the_exact_value_it_should() raises:
+    # The gradient tests above show the correction points the right way; this
+    # pins the number. A wrong formula can easily still produce a gradient in
+    # the expected direction.
+    #
+    # Corners at (0.5,0.5) (4.5,0.5) (0.5,4.5) put pixel (1,1)'s centre at
+    # barycentric (1/2, 1/4, 1/4) exactly, on the subpixel grid. With
+    # inv_w of 1, 1/2 and 1/4 the denominator is 11/16, so
+    #     u = (1/4 * 1 * 1/2) / (11/16) = 2/11
+    #     v = (1/4 * 1 * 1/4) / (11/16) = 1/11
+    # which quantize to 46 and 23.
+    var fb = Framebuffer(8, 8, Color(0, 0, 0))
+    rasterize_shaded(
+        uv_vertex(0.5, 0.5, 1.0, 0, 0),
+        uv_vertex(4.5, 0.5, 0.5, 1, 0),
+        uv_vertex(0.5, 4.5, 0.25, 0, 1),
+        fb,
+        SHADE_UV,
+    )
+    assert_equal(fb.get_pixel(1, 1).r, UInt8(46))
+    assert_equal(fb.get_pixel(1, 1).g, UInt8(23))
+
+
+def test_the_same_triangle_without_perspective_gives_the_flat_answer() raises:
+    # The same corners with every inv_w at one leave the plain screen-space
+    # weights, so both channels are 1/4 -- 64 after quantization.
+    var fb = Framebuffer(8, 8, Color(0, 0, 0))
+    rasterize_shaded(
+        uv_vertex(0.5, 0.5, 1.0, 0, 0),
+        uv_vertex(4.5, 0.5, 1.0, 1, 0),
+        uv_vertex(0.5, 4.5, 1.0, 0, 1),
+        fb,
+        SHADE_UV,
+    )
+    assert_equal(fb.get_pixel(1, 1).r, UInt8(64))
+    assert_equal(fb.get_pixel(1, 1).g, UInt8(64))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -226,11 +226,20 @@ the image is unchanged. It has to be switchable, because a camera inside a
 closed mesh sees nothing *but* back faces:
 
 ```mojo
-renderer.set_cull_backfaces(False)   # three.js says BackSide or DoubleSide
+renderer.set_cull_backfaces(False)   # both windings: three.js's DoubleSide
 ```
 
-When `Material` exists this belongs there, per mesh, rather than on the
-renderer.
+True is three.js's `FrontSide` and False its `DoubleSide`. `BackSide` — only
+the faces pointing away — is a third state rather than the other value of a
+flag, and it belongs with `Material` alongside the rest of this, per mesh,
+rather than on the renderer.
+
+A mesh whose world transform reflects it — `set_scale(-1, 1, 1)`, or any odd
+number of reflections inherited from parents — has its winding reversed, so
+the convention inverts with it. The sign of the world matrix's determinant is
+what says so, asked once per mesh; three.js asks the same question of the same
+quantity. Without it a mirrored single-sided mesh is culled exactly when it
+should be drawn, and disappears.
 
 ## Matrix4
 
@@ -348,7 +357,16 @@ var flat = centred(
 Orthographic projection leaves the transformed `w` at one, so every `inv_w` is
 one and the perspective correction divides by one. It is not special-cased
 anywhere: the maths already collapses, and a backend that branched on it would
-be two code paths where there is one.
+be two code paths where there is one. A happy consequence is that the CPU and
+GPU rasterizers agree bit-for-bit on an orthographic scene, interpolated
+colour included — affine interpolation leaves no room for a fused multiply-add
+to round differently.
+
+`near` may be zero here, as in three.js: nothing divides by depth, so the
+perspective camera's reason for forbidding it does not apply. The volume's
+edges must be properly ordered, though — right beyond left, top above bottom —
+because a reversed pair mirrors the projection, and mirrored winding is
+exactly what backface culling reads.
 
 ## GPU
 

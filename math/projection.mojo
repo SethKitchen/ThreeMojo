@@ -52,14 +52,17 @@ def perspective(
         A projection matrix mapping the frustum onto the NDC cube.
 
     Raises:
-        Error: If the frustum is degenerate, or the planes are not ordered.
+        Error: If the frustum is degenerate, or any of the planes are not
+            ordered. Reversed edges are refused as well as equal ones: they
+            would mirror the projection, and a mirrored projection reverses
+            screen winding, which is the one thing backface culling reads.
     """
     if near <= 0:
         raise Error("The near plane must be in front of the camera")
     if far <= near:
         raise Error("The far plane must be beyond the near plane")
-    if right == left or top == bottom:
-        raise Error("The frustum has no width or no height")
+    if right <= left or top <= bottom:
+        raise Error("The frustum must have positive width and height")
 
     var x = 2 * near / (right - left)
     var y = 2 * near / (top - bottom)
@@ -111,18 +114,19 @@ def orthographic(
         A projection matrix mapping the box onto the NDC cube.
 
     Raises:
-        Error: If the volume is degenerate, or the planes are not ordered.
-            three.js allows a non-positive `near` here, since nothing divides
-            by depth; this does not, because the clipper in `renderers.clip`
-            is shared with the perspective path and the near plane has to sit
-            in front of the camera for that to mean anything.
+        Error: If the volume is degenerate or its edges are reversed, or the
+            planes are not ordered. A `near` of exactly zero is allowed, as
+            three.js allows: nothing divides by depth here, so the perspective
+            camera's reason for forbidding it does not apply. Negative is
+            still refused, which keeps the near plane in front of the camera
+            and the depth range the right way round.
     """
-    if near <= 0:
-        raise Error("The near plane must be in front of the camera")
+    if near < 0:
+        raise Error("The near plane cannot be behind the camera")
     if far <= near:
         raise Error("The far plane must be beyond the near plane")
-    if right == left or top == bottom:
-        raise Error("The view volume has no width or no height")
+    if right <= left or top <= bottom:
+        raise Error("The view volume must have positive width and height")
 
     var w = 1 / (right - left)
     var h = 1 / (top - bottom)

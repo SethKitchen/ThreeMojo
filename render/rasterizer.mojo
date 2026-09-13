@@ -371,9 +371,12 @@ def rasterize_shaded(
             # The denominator of the perspective correction, and the
             # interpolated reciprocal depth in its own right.
             var inv_w = wa * a.inv_w + wb * b.inv_w + wc * c.inv_w
-            # An orthographic or degenerate setup can leave this at zero, in
-            # which case there is no perspective to correct for and the plain
-            # screen-space weights are the right answer.
+            # Nothing in the renderer produces a zero here: clipping removes
+            # everything at or in front of the near plane, and an
+            # *orthographic* camera leaves w at one, not zero — so its inv_w
+            # is one and the correction divides by one rather than needing
+            # this branch. The guard is for hand-built input, where the
+            # alternative is silent infinities.
             var share_a = wa
             var share_b = wb
             var share_c = wc

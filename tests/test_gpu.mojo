@@ -26,6 +26,7 @@ tool runs, so each pixel costs a record written to stderr. A 320x240
 comparison produced 112 MB of them and dominated the entire coverage run.
 """
 
+from cameras.orthographic_camera import centred
 from cameras.perspective_camera import PerspectiveCamera
 from core.geometry_store import GeometryStore
 from core.object3d import Object3D
@@ -695,6 +696,67 @@ def test_the_gpu_ignores_texture_coordinates_when_shading_lit() raises:
     assert_equal(image.get_pixel(2, 2).r, FOREGROUND.r)
     assert_equal(image.get_pixel(2, 2).g, FOREGROUND.g)
     assert_equal(image.get_pixel(2, 2).b, FOREGROUND.b)
+
+
+def test_both_backends_agree_on_a_prepared_orthographic_uv_scene() raises:
+    # The widest path this project has: an orthographic camera, a scene graph,
+    # clipping, texture coordinates, the ten-float GPU layout, interpolation
+    # and depth readback, all at once. The other GPU uv test starts from
+    # hand-built RasterVertex values and so covers only the last stage.
+    if skipped_for_lack_of_a_gpu("both backends agree on an ortho uv scene"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    renderer.set_shading(SHADE_UV)
+
+    var geometries = GeometryStore()
+    var box = geometries.add(cube(Length(1.4, METRE)))
+    var ball = geometries.add(sphere(Length(0.8, METRE), 10, 6))
+
+    var scene = Scene()
+    var left = Object3D()
+    left.set_position(-0.9, 0, 0)
+    left.set_euler(Angle(20.0, DEGREE), Angle(30.0, DEGREE), Angle(0.0, DEGREE))
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.9, 0.2, -0.5)
+    var right_node = scene.add(right^)
+    scene.update()
+
+    var camera = centred(
+        Length(4.0, METRE),
+        Float32(48) / Float32(36),
+        Length(0.0, METRE),
+        Length(50.0, METRE),
+    )
+    camera.place(Vector3(0, 0.5, 4), Vector3(0, 0, 0))
+
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, Color(255, 255, 255), left_node))
+    meshes.append(Mesh(ball, Color(255, 255, 255), right_node))
+
+    var corners = renderer.prepare(scene, geometries, meshes, camera)
+    assert_true(len(corners) > 0, "the scene prepared no triangles")
+
+    var cpu = renderer.render(scene, geometries, meshes, camera)
+    var gpu = render_triangles(corners, 48, 36, BACKGROUND, SHADE_UV)
+
+    # An orthographic camera leaves every inv_w at one, so the interpolation
+    # is exactly affine and the two must agree to the last bit.
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+    # And it is a real image with real texture coordinates in it.
+    var reds = 0
+    var greens = 0
+    for y in range(36):
+        for x in range(48):
+            var pixel = cpu.get_pixel(x, y)
+            if pixel.r > 0 and pixel.b == 0:
+                reds += 1
+            if pixel.g > 0 and pixel.b == 0:
+                greens += 1
+    assert_true(reds > 0, "no u reached the image")
+    assert_true(greens > 0, "no v reached the image")
 
 
 def main() raises:

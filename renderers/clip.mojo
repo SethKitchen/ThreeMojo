@@ -144,12 +144,21 @@ def clip_depth(
         per triangle of the fan the clipped polygon was cut into.
 
     Raises:
-        Error: If `near` is not positive, which would put the plane behind the
+        Error: If `near` is negative, which would put the plane behind the
             camera, or if `far` does not lie beyond `near`, which would leave
             the frustum inside out.
+
+            A `near` of exactly zero is fine here. This clipper's job is to
+            cut against two finite, ordered planes in camera space, and it
+            does that as happily at z = 0 as anywhere else — an orthographic
+            camera is entitled to a near plane there and three.js allows one.
+            Forbidding it was a perspective rule in the wrong place: what
+            cannot survive z = 0 is the *divide*, and that prohibition lives
+            in `math.projection.perspective` and `PerspectiveCamera`, which
+            both still refuse it.
     """
-    if near <= 0:
-        raise Error("The near plane must be in front of the camera")
+    if near < 0:
+        raise Error("The near plane cannot be behind the camera")
     if far <= near:
         raise Error("The far plane must be beyond the near plane")
 

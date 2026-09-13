@@ -15,6 +15,12 @@ world units rather than by an angle. three.js takes those four edges directly
 and so does this; `centred` is here for the common case of a symmetric box,
 which is the shape `PerspectiveCamera` always has.
 
+`near` may be zero. A perspective camera cannot allow that because projection
+divides by depth; nothing here does, so the restriction would be borrowed from
+a problem this camera does not have. Edges must be properly ordered — right
+beyond left, top above bottom — because a reversed pair mirrors the projection,
+and backface culling reads exactly that winding.
+
 Everything after the projection matrix is shared with the perspective path,
 including the clipper and the perspective-correct interpolation. The latter
 costs nothing here and is not special-cased: an orthographic matrix leaves the
@@ -63,15 +69,17 @@ struct OrthographicCamera(Camera):
             far: Distance to the far clipping plane.
 
         Raises:
-            Error: If the volume has no width or height, or the clipping
-                planes are unusable.
+            Error: If the volume has no width or height or its edges are
+                reversed, or the clipping planes are unusable. `near` may be
+                zero, as in three.js — nothing divides by depth here — but
+                not negative.
         """
-        if right.value == left.value:
-            raise Error("The view volume must have some width")
-        if top.value == bottom.value:
-            raise Error("The view volume must have some height")
-        if near.value <= 0:
-            raise Error("The near plane must be in front of the camera")
+        if right.value <= left.value:
+            raise Error("The view volume needs right beyond left")
+        if top.value <= bottom.value:
+            raise Error("The view volume needs top above bottom")
+        if near.value < 0:
+            raise Error("The near plane cannot be behind the camera")
         if far.value <= near.value:
             raise Error("The far plane must be beyond the near plane")
 
