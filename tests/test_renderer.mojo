@@ -1299,5 +1299,126 @@ def test_a_back_side_material_shows_the_inside_of_a_cube() raises:
     assert_true(count_background(image, renderer.background) < 100)
 
 
+def test_a_back_side_surface_is_lit_from_the_side_you_can_see() raises:
+    # Culling decides which faces exist; it does not decide which way they
+    # face for lighting. A triangle whose authored normal is +z, seen from
+    # -z with the light shining along -z, is lit square-on from the camera's
+    # side -- and rendered black until the normal was flipped with it.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_light(Vector3(0, 0, -1), 0.0)
+    var assets = Assets()
+    var tri = assets.geometries.add(lone_triangle(True))
+    var paint = assets.materials.add(
+        Material(Color(255, 255, 255), NO_TEXTURE, BACK_SIDE)
+    )
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(tri, paint, 0))
+
+    var behind = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METRE),
+        Length(100.0, METRE),
+    )
+    behind.place(Vector3(0, 0, -4), Vector3(0, 0, 0))
+    var image = renderer.render(scene, assets, meshes, behind)
+
+    var drawn = 0
+    var brightest = UInt8(0)
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var pixel = image.get_pixel(x, y)
+            if pixel.r != renderer.background.r:
+                drawn += 1
+                if pixel.r > brightest:
+                    brightest = pixel.r
+    assert_true(drawn > 0, "BackSide drew nothing to light")
+    # Ambient is zero and the surface faces the light square-on.
+    assert_equal(brightest, UInt8(255))
+
+
+def test_a_back_side_surface_lit_from_behind_stays_dark() raises:
+    # The other direction, so the fix cannot have been to light both sides.
+    # Same geometry, light now on the side nobody is looking at.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_light(Vector3(0, 0, 1), 0.0)
+    var assets = Assets()
+    var tri = assets.geometries.add(lone_triangle(True))
+    var paint = assets.materials.add(
+        Material(Color(255, 255, 255), NO_TEXTURE, BACK_SIDE)
+    )
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(tri, paint, 0))
+
+    var behind = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METRE),
+        Length(100.0, METRE),
+    )
+    behind.place(Vector3(0, 0, -4), Vector3(0, 0, 0))
+    var image = renderer.render(scene, assets, meshes, behind)
+
+    var drawn = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var pixel = image.get_pixel(x, y)
+            if pixel.r != renderer.background.r or (
+                pixel.g != renderer.background.g
+            ):
+                drawn += 1
+                assert_equal(pixel.r, UInt8(0))
+    assert_true(drawn > 0, "BackSide drew nothing to leave dark")
+
+
+def test_a_double_side_surface_lights_each_half_on_its_own_side() raises:
+    # DoubleSide keeps both, so within one mesh some triangles are seen from
+    # the front and some from behind, and each must use its own side's
+    # lighting. A geometry with no normals exercises the fallback path.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    # The camera sits inside a ten-metre cube, four metres from the centre,
+    # so every visible surface is the *inside* of a wall -- a back face. The
+    # light is behind the camera, shining at the far wall's visible side.
+    renderer.set_light(Vector3(0, 0, 1), 0.0)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(10.0, METRE)))
+    var paint = assets.materials.add(
+        Material(Color(255, 255, 255), NO_TEXTURE, DOUBLE_SIDE)
+    )
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, paint, 0))
+    var image = renderer.render(
+        scene_with_node_at(0), assets, meshes, a_camera()
+    )
+    # The far wall's visible side faces the light square-on, so with no
+    # ambient it is fully lit. Using the authored outward normal instead
+    # would light the side facing away and leave it black.
+    var brightest = UInt8(0)
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            if image.get_pixel(x, y).r > brightest:
+                brightest = image.get_pixel(x, y).r
+    assert_equal(brightest, UInt8(255))
+
+
+def test_a_material_naming_a_texture_that_is_not_there_is_rejected() raises:
+    # A material is built without the store in reach, so a positive id naming
+    # nothing is only detectable once both are together.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var paint = assets.materials.add(Material(Color(255, 255, 255), 3))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, paint, 0))
+    with assert_raises():
+        _ = renderer.render(scene_with_node_at(0), assets, meshes, a_camera())
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

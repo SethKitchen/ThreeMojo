@@ -59,15 +59,17 @@ var scene = Scene()
 var node = scene.add(spinning_object)
 scene.update()
 
-var geometries = GeometryStore()
-var box = geometries.add(cube(Length(1.0, METRE)))
+var assets = Assets()
+var box = assets.geometries.add(cube(Length(1.0, METRE)))
+var orange = assets.materials.add(Material(Color(255, 140, 40)))
+var blue = assets.materials.add(Material(Color(90, 190, 255)))
 
 var meshes = List[Mesh]()
-meshes.append(Mesh(box, Color(255, 140, 40), node))
-meshes.append(Mesh(box, Color(90, 190, 255), other_node))   # same vertices
+meshes.append(Mesh(box, orange, node))
+meshes.append(Mesh(box, blue, other_node))   # same vertices, same geometry id
 
 var renderer = Renderer(260, 200)
-var image = renderer.render(scene, geometries, meshes, camera)
+var image = renderer.render(scene, assets, meshes, camera)
 ```
 
 A `Mesh` names the scene node it is drawn at rather than owning a transform.
@@ -77,9 +79,9 @@ anyway — not every node has geometry (the pivot a cube orbits is a node and
 nothing else), and one geometry can be drawn at many nodes without copying.
 
 A mesh names its *geometry* by id too, into a `GeometryStore` that owns it.
-That is what makes the second half of that sentence true: a mesh is two indices
-and a colour, so the two meshes above share one copy of the box's vertices
-rather than holding one each.
+That is what makes the second half of that sentence true: a mesh is three
+indices and nothing else, so the two meshes above share one copy of the box's
+vertices rather than holding one each.
 
 Shading is Lambert against one directional light plus ambient, evaluated per
 vertex and interpolated across the face — Gouraud shading. A geometry's
@@ -90,6 +92,13 @@ neighbouring triangles agree along their shared edge and the facets vanish.
 A geometry with no normals falls back to the triangle's *geometric* normal,
 which is faceted by construction and the honest result for geometry that never
 said which way it faces.
+
+Which normal is used also depends on which side you can see. A `BACK_SIDE` or
+`DOUBLE_SIDE` surface seen from behind is lit with the normal flipped, because
+lighting the side nobody is looking at renders it black — the Lambert term is
+taken against a normal pointing away from the camera. Both variants are carried
+through clipping, since which one a triangle needs is not known until its
+screen winding has been read.
 
 Normals are carried by the world matrix's **normal matrix** — the inverse
 transpose of its rotation and scale — not by the world matrix itself. Under a
@@ -218,20 +227,19 @@ which is what lets geometry be submitted in any order and what makes a
 non-convex scene come out right.
 
 Backface culling sits on top of that as an optimization rather than a
-substitute for it. It is on by default, as three.js's default `FrontSide`
-material is, and discards roughly half the triangles of a closed mesh before
-they are rasterized — the same ones the depth buffer was already hiding, so
-the image is unchanged. It has to be switchable, because a camera inside a
-closed mesh sees nothing *but* back faces:
+substitute for it. `FRONT_SIDE`, the default as in three.js, discards roughly
+half the triangles of a closed mesh before they are rasterized — the same ones
+the depth buffer was already hiding, so the image is unchanged. It is a
+property of the material, because a camera inside a closed mesh sees nothing
+*but* back faces:
 
 ```mojo
-renderer.set_cull_backfaces(False)   # both windings: three.js's DoubleSide
+assets.materials.add(Material(Color(255, 140, 40), NO_TEXTURE, DOUBLE_SIDE))
 ```
 
-True is three.js's `FrontSide` and False its `DoubleSide`. `BackSide` — only
-the faces pointing away — is a third state rather than the other value of a
-flag, and it belongs with `Material` alongside the rest of this, per mesh,
-rather than on the renderer.
+`BACK_SIDE` draws only the faces pointing away; `DOUBLE_SIDE` draws both. That
+is why `side` is not a Bool: two of the three fit, and the middle one does
+not.
 
 A mesh whose world transform reflects it — `set_scale(-1, 1, 1)`, or any odd
 number of reflections inherited from parents — has its winding reversed, so

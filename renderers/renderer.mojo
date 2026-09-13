@@ -134,6 +134,20 @@ def _faces_away(
     return area > 0
 
 
+def _relit(corner: RasterVertex, color: FloatColor) -> RasterVertex:
+    """Return `corner` with a different colour and everything else kept."""
+    return RasterVertex(
+        corner.x,
+        corner.y,
+        corner.z,
+        corner.inv_w,
+        color,
+        corner.u,
+        corner.v,
+        corner.texture,
+    )
+
+
 def _to_raster(
     vertex: ClipVertex, to_screen: Matrix4, texture: Int
 ) -> RasterVertex:
@@ -294,8 +308,9 @@ struct Renderer(Movable):
             Raster vertices, three per triangle, in submission order.
 
         Raises:
-            Error: If a mesh names a node or a geometry that is not there, or
-                its geometry has no positions.
+            Error: If a mesh names a node, a geometry or a material that is
+                not there, if a material names a texture that is not there, or
+                if its geometry has no positions.
         """
         var corners = List[RasterVertex]()
         var view = camera.view_matrix()
@@ -318,6 +333,13 @@ struct Renderer(Movable):
             # Carried on every vertex of this mesh, so one flat triangle list
             # can hold a scene whose meshes use different images.
             var map = material.map
+            # Checked here because here is the first place that can: a
+            # material is built without the store in reach, so a positive id
+            # naming nothing is only detectable once both are together. It is
+            # checked before rasterization rather than during, so the answer
+            # does not depend on whether the mesh happened to cover a pixel.
+            if map != NO_TEXTURE and map >= assets.textures.count():
+                raise Error("A material names a texture that is not there")
             if self.shading != SHADE_TEXTURE:
                 map = NO_TEXTURE
             var smooth = geometry.has_attribute(String(NORMAL))
@@ -358,6 +380,12 @@ struct Renderer(Movable):
             # when there is one, and the normal matrix built once per mesh
             # rather than once per vertex.
             var vertex_colors = List[FloatColor]()
+            # The same vertices lit from the other side, for a surface seen
+            # from behind. Only worked out when the material can actually
+            # show a back face; for the usual FrontSide mesh this stays empty
+            # and costs nothing.
+            var two_sided = material.side != FRONT_SIDE
+            var vertex_back_colors = List[FloatColor]()
             if smooth:
                 ref normals = geometry.attribute_view(String(NORMAL))
                 var to_normal = world.normal_matrix()
@@ -369,6 +397,15 @@ struct Renderer(Movable):
                     )
                     direction.normalize()
                     vertex_colors.append(self.shade(material.color, direction))
+                    if two_sided:
+                        vertex_back_colors.append(
+                            self.shade(
+                                material.color,
+                                Vector3(
+                                    -direction.x, -direction.y, -direction.z
+                                ),
+                            )
+                        )
 
             var triangles = geometry.triangle_count()
             for triangle in range(triangles):
@@ -379,10 +416,20 @@ struct Renderer(Movable):
                 var color_a: FloatColor
                 var color_b: FloatColor
                 var color_c: FloatColor
+                var back_a: FloatColor
+                var back_b: FloatColor
+                var back_c: FloatColor
                 if smooth:
                     color_a = vertex_colors[first]
                     color_b = vertex_colors[second]
                     color_c = vertex_colors[third]
+                    back_a = color_a
+                    back_b = color_b
+                    back_c = color_c
+                    if two_sided:
+                        back_a = vertex_back_colors[first]
+                        back_b = vertex_back_colors[second]
+                        back_c = vertex_back_colors[third]
                 else:
                     # No normals given, so the face supplies its own and the
                     # whole triangle takes one colour.
@@ -404,23 +451,32 @@ struct Renderer(Movable):
                     color_a = self.shade(material.color, geometric)
                     color_b = color_a
                     color_c = color_a
+                    back_a = self.shade(
+                        material.color,
+                        Vector3(-geometric.x, -geometric.y, -geometric.z),
+                    )
+                    back_b = back_a
+                    back_c = back_a
 
                 var pieces = clip_depth(
                     ClipVertex(
                         view_points[first],
                         color_a,
+                        back_a,
                         vertex_u[first],
                         vertex_v[first],
                     ),
                     ClipVertex(
                         view_points[second],
                         color_b,
+                        back_b,
                         vertex_u[second],
                         vertex_v[second],
                     ),
                     ClipVertex(
                         view_points[third],
                         color_c,
+                        back_c,
                         vertex_u[third],
                         vertex_v[third],
                     ),
@@ -433,13 +489,23 @@ struct Renderer(Movable):
                     var three = _to_raster(
                         pieces[piece * 3 + 2], to_screen, map
                     )
-                    # The material decides which faces exist at all.
-                    if material.side != DOUBLE_SIDE:
-                        var away = _faces_away(one, two, three, mirrored)
-                        if material.side == FRONT_SIDE and away:
-                            continue
-                        if material.side == BACK_SIDE and not away:
-                            continue
+                    # Which way this piece ends up facing decides two things
+                    # at once: whether it survives, and which side's lighting
+                    # it carries. Read from the screen winding, so it is known
+                    # only now -- which is why both colours travelled here.
+                    var away = _faces_away(one, two, three, mirrored)
+                    if material.side == FRONT_SIDE and away:
+                        continue
+                    if material.side == BACK_SIDE and not away:
+                        continue
+                    if two_sided and away:
+                        # Seen from behind, so light the side being looked at.
+                        # Without this a BackSide surface with the light in
+                        # front of it renders black: the Lambert term is taken
+                        # against the normal pointing away from the camera.
+                        one = _relit(one, pieces[piece * 3].back_color)
+                        two = _relit(two, pieces[piece * 3 + 1].back_color)
+                        three = _relit(three, pieces[piece * 3 + 2].back_color)
                     corners.append(one)
                     corners.append(two)
                     corners.append(three)

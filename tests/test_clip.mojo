@@ -24,12 +24,20 @@ comptime FAR = Float32(1000.0)
 
 def at(x: Float32, y: Float32, z: Float32) -> ClipVertex:
     """Return a white vertex at the given camera-space position."""
-    return ClipVertex(Vector3(x, y, z), FloatColor(1.0, 1.0, 1.0), 0, 0)
+    return ClipVertex(
+        Vector3(x, y, z),
+        FloatColor(1.0, 1.0, 1.0),
+        FloatColor(1.0, 1.0, 1.0),
+        0,
+        0,
+    )
 
 
 def coloured(z: Float32, value: Float32) -> ClipVertex:
     """Return a vertex at depth `z` whose red channel is `value`."""
-    return ClipVertex(Vector3(0, 0, z), FloatColor(value, 0, 0), 0, 0)
+    return ClipVertex(
+        Vector3(0, 0, z), FloatColor(value, 0, 0), FloatColor(value, 0, 0), 0, 0
+    )
 
 
 def test_a_triangle_entirely_in_front_is_untouched() raises:
@@ -87,8 +95,12 @@ def test_colour_is_carried_to_the_cut() raises:
     # Halfway along the edge in depth, so halfway in colour.
     var pieces = clip_depth(
         coloured(-3, 0),
-        ClipVertex(Vector3(1, 0, 1), FloatColor(200, 0, 0), 0, 0),
-        ClipVertex(Vector3(0, 1, -3), FloatColor(0, 0, 0), 0, 0),
+        ClipVertex(
+            Vector3(1, 0, 1), FloatColor(200, 0, 0), FloatColor(200, 0, 0), 0, 0
+        ),
+        ClipVertex(
+            Vector3(0, 1, -3), FloatColor(0, 0, 0), FloatColor(0, 0, 0), 0, 0
+        ),
         NEAR,
         FAR,
     )
@@ -187,7 +199,9 @@ def test_colour_is_carried_to_a_far_plane_cut() raises:
     var pieces = clip_depth(
         coloured(-5, 0),
         coloured(-15, 200),
-        ClipVertex(Vector3(0, 1, -5), FloatColor(0, 0, 0), 0, 0),
+        ClipVertex(
+            Vector3(0, 1, -5), FloatColor(0, 0, 0), FloatColor(0, 0, 0), 0, 0
+        ),
         NEAR,
         Float32(10),
     )
@@ -215,7 +229,13 @@ def test_a_far_plane_not_beyond_the_near_one_is_rejected() raises:
 
 def mapped(z: Float32, u: Float32, v: Float32) -> ClipVertex:
     """Return a white vertex at depth `z` carrying texture coordinates."""
-    return ClipVertex(Vector3(0, 0, z), FloatColor(1.0, 1.0, 1.0), u, v)
+    return ClipVertex(
+        Vector3(0, 0, z),
+        FloatColor(1.0, 1.0, 1.0),
+        FloatColor(1.0, 1.0, 1.0),
+        u,
+        v,
+    )
 
 
 def test_texture_coordinates_are_carried_to_a_near_plane_cut() raises:
@@ -224,9 +244,15 @@ def test_texture_coordinates_are_carried_to_a_near_plane_cut() raises:
     # crossing sits a third of the way along each cut edge:
     #     t = (a.z - plane) / (a.z - b.z) = (-0.5 + 1) / (-0.5 + 2) = 1/3
     var pieces = clip_depth(
-        ClipVertex(Vector3(0, 0, -0.5), FloatColor(1, 1, 1), 0, 0),
-        ClipVertex(Vector3(1, 0, -2.0), FloatColor(1, 1, 1), 1, 0),
-        ClipVertex(Vector3(0, 1, -2.0), FloatColor(1, 1, 1), 0, 1),
+        ClipVertex(
+            Vector3(0, 0, -0.5), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 0, 0
+        ),
+        ClipVertex(
+            Vector3(1, 0, -2.0), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 1, 0
+        ),
+        ClipVertex(
+            Vector3(0, 1, -2.0), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 0, 1
+        ),
         NEAR,
         FAR,
     )
@@ -260,7 +286,9 @@ def test_texture_coordinates_are_carried_to_a_far_plane_cut() raises:
     var pieces = clip_depth(
         mapped(-5, 0, 0),
         mapped(-15, 1, 0),
-        ClipVertex(Vector3(0, 1, -5), FloatColor(1, 1, 1), 0, 0),
+        ClipVertex(
+            Vector3(0, 1, -5), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 0, 0
+        ),
         NEAR,
         Float32(10),
     )
@@ -276,8 +304,12 @@ def test_a_triangle_that_survives_whole_keeps_its_own_coordinates() raises:
     # Nothing is cut, so the corners must come back untouched.
     var pieces = clip_depth(
         mapped(-5, 0.25, 0.75),
-        ClipVertex(Vector3(1, 0, -5), FloatColor(1, 1, 1), 1, 0),
-        ClipVertex(Vector3(0, 1, -5), FloatColor(1, 1, 1), 0, 1),
+        ClipVertex(
+            Vector3(1, 0, -5), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 1, 0
+        ),
+        ClipVertex(
+            Vector3(0, 1, -5), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 0, 1
+        ),
         NEAR,
         FAR,
     )

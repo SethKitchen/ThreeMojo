@@ -45,6 +45,7 @@ from materials.material import NO_TEXTURE
 from render.texture_store import TextureStore
 from render.texture import (
     BILINEAR,
+    NEAREST,
     CLAMP,
     MIRROR,
     REPEAT,
@@ -966,6 +967,109 @@ def test_both_backends_filter_a_texture_identically() raises:
                 between += 1
     assert_true(between > 0, "nothing was blended, so nothing was compared")
     assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+# --- the texture table ------------------------------------------------------
+
+
+def test_one_draw_can_use_several_different_textures() raises:
+    # The machinery this commit introduced: every image crosses as one buffer
+    # with a table saying where each starts. Different sizes, filters and wrap
+    # modes in a single draw is what exercises the offsets and the selection;
+    # one texture at a time never leaves the first descriptor.
+    if skipped_for_lack_of_a_gpu("one draw, several textures"):
+        return
+    var textures = TextureStore()
+    var small = textures.add(
+        checkerboard(4, 2, Color(255, 0, 0), Color(60, 0, 0), CLAMP, NEAREST)
+    )
+    var large = textures.add(
+        checkerboard(32, 8, Color(0, 0, 255), Color(0, 0, 60), MIRROR, BILINEAR)
+    )
+    var plain = textures.add(Texture())
+
+    # Three strips side by side, each naming a different descriptor, plus a
+    # fourth naming none at all.
+    var corners = List[RasterVertex]()
+    var ids = [small, large, plain, NO_TEXTURE]
+    for slot in range(4):
+        var left = Float32(slot) * 8
+        var right = left + 8
+        corners.append(lit_corner(left, 0, 1, 0, 1, ids[slot]))
+        corners.append(lit_corner(right, 0, 1, 1, 1, ids[slot]))
+        corners.append(lit_corner(right, 32, 1, 1, 0, ids[slot]))
+        corners.append(lit_corner(left, 0, 1, 0, 1, ids[slot]))
+        corners.append(lit_corner(right, 32, 1, 1, 0, ids[slot]))
+        corners.append(lit_corner(left, 32, 1, 0, 0, ids[slot]))
+
+    var gpu = render_triangles(
+        corners, 32, 32, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    var cpu = cpu_textured(corners, 32, textures)
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+    # And the strips really are different: red, blue, and two whites.
+    assert_true(cpu.get_pixel(2, 16).r > cpu.get_pixel(2, 16).b)
+    assert_true(cpu.get_pixel(10, 16).b > cpu.get_pixel(10, 16).r)
+    assert_equal(cpu.get_pixel(18, 16).r, UInt8(255))
+    assert_equal(cpu.get_pixel(26, 16).r, UInt8(255))
+
+
+def test_a_stored_blank_texture_reads_as_white_on_both_backends() raises:
+    # A blank texture is a legitimate thing to store and gets a real id. Left
+    # as a zero-width descriptor the kernel reached a modulo by zero and
+    # returned black where the CPU returned white.
+    if skipped_for_lack_of_a_gpu("a stored blank texture reads as white"):
+        return
+    var textures = TextureStore()
+    var nothing = textures.add(Texture())
+    var corners = mapped_quad(16, nothing)
+    var gpu = render_triangles(
+        corners, 16, 16, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    var cpu = cpu_textured(corners, 16, textures)
+    assert_equal(cpu.get_pixel(4, 4).r, UInt8(255))
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+    # And it matches drawing with no texture at all, which is the contract.
+    var untextured = render_triangles(
+        mapped_quad(16), 16, 16, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    assert_equal(count_mismatches(untextured, gpu), 0)
+
+
+def test_drawing_a_texture_that_was_never_uploaded_is_rejected() raises:
+    # The kernel indexes the table with a number that arrived on a vertex, so
+    # an id past the end is an unchecked read of device memory. Nothing on the
+    # device can tell; the host has to.
+    if skipped_for_lack_of_a_gpu("an unuploaded texture is rejected"):
+        return
+    var renderer = GpuRenderer(16, 16)
+    with assert_raises():
+        renderer.draw(mapped_quad(16, 0), BACKGROUND, SHADE_TEXTURE)
+
+    var textures = TextureStore()
+    _ = textures.add(checkerboard(4, 2, Color(255, 0, 0), Color(0, 0, 255)))
+    renderer.set_textures(textures)
+    # One texture uploaded, so id 0 is fine and id 1 is not.
+    renderer.draw(mapped_quad(16, 0), BACKGROUND, SHADE_TEXTURE)
+    with assert_raises():
+        renderer.draw(mapped_quad(16, 1), BACKGROUND, SHADE_TEXTURE)
+
+
+def test_an_unknown_shading_mode_is_rejected_by_both_backends() raises:
+    # Left unchecked the two disagreed: the CPU's last branch treated an
+    # unrecognised mode as textured and the GPU's treated it as lit.
+    var fb = Framebuffer(8, 8, BACKGROUND)
+    var corners = mapped_quad(8)
+    with assert_raises():
+        rasterize_shaded(corners[0], corners[1], corners[2], fb, 99)
+
+    if skipped_for_lack_of_a_gpu("an unknown mode is rejected"):
+        return
+    var renderer = GpuRenderer(8, 8)
+    with assert_raises():
+        renderer.draw(corners, BACKGROUND, 99)
 
 
 def main() raises:

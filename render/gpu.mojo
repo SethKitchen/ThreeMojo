@@ -104,6 +104,22 @@ def flatten_textures(
     for id in range(textures.count()):
         ref image = textures.get(id)
         table.append(Int32(len(texels)))
+        if image.is_blank():
+            # A blank texture is a legitimate thing to store, and on the host
+            # it samples as opaque white. Rather than teach the kernel a
+            # second meaning for "no texture", it crosses as one white texel:
+            # the device invariant stays "every descriptor has a real size",
+            # and sampling a 1x1 white image gives white at any coordinate
+            # under any wrap mode. Left as a zero width it reached
+            # `wrap_index(..., 0, REPEAT)`, which is a modulo by zero, and the
+            # GPU returned black where the CPU returned white.
+            table.append(1)
+            table.append(1)
+            table.append(Int32(image.wrap))
+            table.append(Int32(image.filter))
+            for _ in range(4):
+                texels.append(255)
+            continue
         table.append(Int32(image.width))
         table.append(Int32(image.height))
         table.append(Int32(image.wrap))
@@ -488,6 +504,10 @@ struct GpuRenderer(Movable):
     # Every texture the scene can sample, uploaded once rather than per draw.
     var texels: DeviceBuffer[DType.uint8]
     var table: DeviceBuffer[DType.int32]
+    # How many descriptors the table actually holds. The kernel indexes it
+    # with a number that arrived on a vertex, so something has to know where
+    # the table ends; nothing on the device can find out.
+    var uploaded: Int
 
     def __init__(out self, width: Int, height: Int) raises:
         """Create a renderer and its device buffers for a fixed image size.
@@ -526,6 +546,9 @@ struct GpuRenderer(Movable):
         self.table = self.context.enqueue_create_buffer[DType.int32](
             TABLE_COLUMNS
         )
+        # Allocated but never filled, so until `set_textures` runs the only
+        # legal reference is NO_TEXTURE.
+        self.uploaded = 0
 
     def draw(
         mut self,
@@ -542,11 +565,35 @@ struct GpuRenderer(Movable):
             mode: `SHADE_LIT` or `SHADE_UV`, as `rasterize_shaded` takes.
 
         Raises:
-            Error: If the corner count is not a multiple of three.
+            Error: If the corner count is not a multiple of three, the mode is
+                unknown, or a vertex names a texture that is not uploaded.
         """
         if len(corners) % 3 != 0:
             raise Error("Rasterizing needs whole triangles")
+        if mode != SHADE_LIT and mode != SHADE_UV and mode != SHADE_TEXTURE:
+            raise Error("Unknown shading mode")
         var triangles = len(corners) // 3
+
+        # Every texture reference is checked here because it cannot be checked
+        # on the device: the kernel reads the descriptor table at whatever
+        # index a vertex hands it, and an index past the end is an unchecked
+        # read of device memory. The CPU rasterizer gets this for free from
+        # `TextureStore.get`, which raises; without this the two backends
+        # failed differently on the same bad input.
+        for index in range(len(corners)):
+            var slot = corners[index].texture
+            if slot == NO_TEXTURE:
+                continue
+            if slot < 0 or slot >= self.uploaded:
+                raise Error(
+                    "A vertex names a texture that has not been uploaded;"
+                    " call set_textures() first"
+                )
+            # Ids cross to the device as Float32, which represents every
+            # integer exactly only up to 2^24. Far beyond any real scene, and
+            # cheap to refuse rather than silently round.
+            if slot > 16777215:
+                raise Error("Too many textures for the device layout")
 
         if triangles > self.capacity:
             # Grow to exactly what is asked for. Frames tend to submit the
@@ -618,6 +665,9 @@ struct GpuRenderer(Movable):
                 src=rows.unsafe_ptr(),
                 count=len(rows),
             )
+        # Set last, so a failed upload leaves the previous count rather than
+        # advertising descriptors that are not there.
+        self.uploaded = textures.count()
 
     def read_back(self) raises -> Framebuffer:
         """Copy the device render target into a host framebuffer.

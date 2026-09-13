@@ -439,5 +439,15 @@ def test_blending_four_equal_texels_changes_nothing() raises:
     assert_almost_equal(result.b, Float32(0.75), atol=TOLERANCE)
 
 
+def test_the_blank_texture_wraps_to_white_rather_than_dividing_by_zero() raises:
+    # `wrapped_texel` is public and `sample` is not its only caller: the blank
+    # texture has a zero extent, and wrapping into one is a modulo by zero.
+    # The guard is in both places for that reason.
+    var nothing = Texture()
+    assert_equal(nothing.wrapped_texel(0, 0).r, Float32(1))
+    assert_equal(nothing.wrapped_texel(-3, 9).b, Float32(1))
+    assert_equal(nothing.wrapped_texel(0, 0).a, Float32(1))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

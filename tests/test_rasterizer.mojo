@@ -23,6 +23,7 @@ from render.rasterizer import (
 )
 from std.testing import (
     TestSuite,
+    assert_raises,
     assert_almost_equal,
     assert_equal,
     assert_false,
@@ -833,6 +834,32 @@ def test_a_texture_is_sampled_with_perspective_correct_coordinates() raises:
             if correct.get_pixel(x, y).r != affine.get_pixel(x, y).r:
                 differing += 1
     assert_true(differing > 0, "the correction did not reach the sampling")
+
+
+def test_an_unknown_shading_mode_is_refused() raises:
+    # Refused rather than guessed at. Left unchecked the two rasterizers
+    # disagreed about it -- the CPU's last branch treated anything
+    # unrecognised as textured, the GPU's treated it as lit -- which is the
+    # worst kind of divergence: silent, and only on input nobody meant to
+    # write. `Renderer.set_shading` checks too, but it is not the only caller.
+    var fb = Framebuffer(8, 8, Color(0, 0, 0))
+    var t = covering(0.5)
+    with assert_raises():
+        rasterize_shaded(
+            flat_vertex(t[0], Color(255, 0, 0)),
+            flat_vertex(t[1], Color(255, 0, 0)),
+            flat_vertex(t[2], Color(255, 0, 0)),
+            fb,
+            42,
+        )
+    with assert_raises():
+        rasterize_shaded(
+            flat_vertex(t[0], Color(255, 0, 0)),
+            flat_vertex(t[1], Color(255, 0, 0)),
+            flat_vertex(t[2], Color(255, 0, 0)),
+            fb,
+            -1,
+        )
 
 
 def main() raises:

@@ -384,8 +384,18 @@ def rasterize_shaded(
             rather than a branch.
 
     Raises:
-        Error: If a pixel write lands out of bounds, which the loop prevents.
+        Error: If the mode is not one of the three, a vertex names a texture
+            the store does not have, or a pixel write lands out of bounds —
+            the last of which the loop prevents.
     """
+    # An unknown mode is refused rather than guessed at. Without this the two
+    # rasterizers disagreed about it: the CPU's last branch treated anything
+    # unrecognised as textured and the GPU's treated it as lit, which is the
+    # worst kind of divergence -- silent, and only on input nobody meant to
+    # write. `Renderer.set_shading` checks too, but it is not the only caller.
+    if mode != SHADE_LIT and mode != SHADE_UV and mode != SHADE_TEXTURE:
+        raise Error("Unknown shading mode")
+
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
     if coverage.is_degenerate():

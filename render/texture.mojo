@@ -243,15 +243,20 @@ struct Texture(Movable):
         """Return a texel by index, with the wrap mode applied first.
 
         Unlike `texel`, this cannot fail: every index has an answer once a
-        wrap mode is chosen, which is what a sampler needs.
+        wrap mode is chosen, which is what a sampler needs. The blank texture
+        has no texels to wrap into, so it answers white like `sample` does —
+        the guard is here as well as there because this is public and a
+        caller reaching it directly would otherwise divide by a zero extent.
 
         Args:
             x: Column, possibly outside the image.
             y: Row from the top, possibly outside the image.
 
         Returns:
-            The colour found there.
+            The colour found there, or opaque white if the texture is blank.
         """
+        if self.is_blank():
+            return FloatColor(1.0, 1.0, 1.0, 1.0)
         var offset = (
             wrap_index(y, self.height, self.wrap) * self.width
             + wrap_index(x, self.width, self.wrap)
