@@ -28,7 +28,8 @@ from max.gpu.host import DeviceContext
 from render.framebuffer import Color, Framebuffer
 from render.rasterizer import Triangle
 from std.gpu import global_idx
-from std.math import ceildiv
+from render.rasterizer import SUBPIXEL
+from std.math import ceildiv, floor
 from std.memory import unsafe_memcpy
 from std.sys import has_accelerator
 
@@ -36,6 +37,28 @@ from std.sys import has_accelerator
 # the warp size on every vendor, and small enough that a narrow image still
 # fills several blocks.
 comptime TILE = 16
+
+
+def _snap(value: Float32) -> Int:
+    """Return a screen coordinate on the subpixel grid, as an integer.
+
+    Deliberately duplicated from `render.rasterizer` rather than imported: a
+    kernel cannot call into a module that prints, and the coverage tool
+    rewrites that module anyway.
+    """
+    return Int(floor(value * Float32(SUBPIXEL) + 0.5))
+
+
+def _edge(ax: Int, ay: Int, bx: Int, by: Int, px: Int, py: Int) -> Int:
+    """Return the signed twice-area of (a, b, p) on the subpixel grid."""
+    return (bx - ax) * (py - ay) - (by - ay) * (px - ax)
+
+
+def _bias(ax: Int, ay: Int, bx: Int, by: Int) -> Int:
+    """Return 0 if a->b is a top or left edge, -1 otherwise."""
+    if ay == by:
+        return 0 if bx < ax else -1
+    return 0 if by < ay else -1
 
 
 def pack(color: Color) -> UInt32:
@@ -73,20 +96,38 @@ def rasterize_kernel(
     if x >= Int(width) or y >= Int(height):
         return
 
-    # Sample at the pixel centre, matching the CPU rasterizer exactly.
-    var px = Float32(x) + 0.5
-    var py = Float32(y) + 0.5
+    # Coverage is decided exactly as `render.rasterizer` decides it: vertices
+    # snapped to the subpixel grid, edge functions in integers, winding
+    # normalized, and the top-left rule breaking ties on shared edges. Any
+    # divergence here would show up as single pixels differing between the two
+    # renderers, which is precisely what tests/test_gpu.mojo asserts cannot
+    # happen -- so the rule has to be the same rule, not merely a similar one.
+    var sax = _snap(ax)
+    var say = _snap(ay)
+    var sbx = _snap(bx)
+    var sby = _snap(by)
+    var scx = _snap(cx)
+    var scy = _snap(cy)
 
-    var area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax)
-    var e0 = (bx - ax) * (py - ay) - (by - ay) * (px - ax)
-    var e1 = (cx - bx) * (py - by) - (cy - by) * (px - bx)
-    var e2 = (ax - cx) * (py - cy) - (ay - cy) * (px - cx)
+    var area = _edge(sax, say, sbx, sby, scx, scy)
+    if area < 0:
+        var tx = sbx
+        var ty = sby
+        sbx = scx
+        sby = scy
+        scx = tx
+        scy = ty
+        area = -area
 
     var inside = False
-    if area > 0:
-        inside = e0 >= 0 and e1 >= 0 and e2 >= 0
-    elif area < 0:
-        inside = e0 <= 0 and e1 <= 0 and e2 <= 0
+    if area != 0:
+        # Sample at the pixel centre, on the same grid.
+        var px = x * SUBPIXEL + SUBPIXEL // 2
+        var py = y * SUBPIXEL + SUBPIXEL // 2
+        var e_ab = _edge(sax, say, sbx, sby, px, py) + _bias(sax, say, sbx, sby)
+        var e_bc = _edge(sbx, sby, scx, scy, px, py) + _bias(sbx, sby, scx, scy)
+        var e_ca = _edge(scx, scy, sax, say, px, py) + _bias(scx, scy, sax, say)
+        inside = e_ab >= 0 and e_bc >= 0 and e_ca >= 0
 
     var color = background
     if inside:

@@ -85,25 +85,105 @@ def test_degenerate_triangle_contains_nothing() raises:
     assert_false(line.contains(Vector2(1, 1)))
 
 
-def test_rasterize_covers_exactly_the_pixels_inside() raises:
+def test_rasterize_agrees_with_the_predicate_away_from_edges() raises:
+    # CCW has corners on whole pixels, so its hypotenuse runs exactly through
+    # sample points and the fill rule deliberately excludes some of them --
+    # see the quad tests below. Nudged off the grid, no sample point lies on
+    # an edge and filling and the geometric predicate must agree everywhere.
     var background = Color(0, 0, 0)
     var foreground = Color(255, 128, 32)
+    var nudged = Triangle(
+        Vector2(0.13, 0.13), Vector2(4.13, 0.13), Vector2(0.13, 4.13)
+    )
     var fb = Framebuffer(8, 8, background)
-    rasterize(CCW, fb, foreground)
+    rasterize(nudged, fb, foreground)
 
     var covered = 0
     for y in range(8):
         for x in range(8):
-            # Recheck against the predicate at the same sample point.
             var p = Vector2(Float32(x) + 0.5, Float32(y) + 0.5)
-            if CCW.contains(p):
+            if nudged.contains(p):
                 covered += 1
                 assert_equal(fb.get_pixel(x, y).r, foreground.r)
             else:
                 assert_equal(fb.get_pixel(x, y).r, background.r)
-    # Centers land inside when x + y <= 3, so 4 + 3 + 2 + 1 pixels. Note this
-    # exceeds the true area of 8 — center sampling is not area-exact.
-    assert_equal(covered, 10)
+    assert_true(covered > 0)
+
+
+def quad_coverage_counts() raises -> List[Int]:
+    """Return how many times each pixel of a two-triangle quad was drawn.
+
+    Returns:
+        One count per pixel of a 16x12 image, row-major.
+
+    Raises:
+        Error: If a pixel read or write is out of bounds.
+    """
+    var counts = List[Int](length=16 * 12, fill=0)
+    var corners = List[Vector2]()
+    corners.append(Vector2(2.0, 2.0))
+    corners.append(Vector2(13.0, 2.0))
+    corners.append(Vector2(13.0, 9.0))
+    corners.append(Vector2(2.0, 9.0))
+    var halves = List[Triangle]()
+    halves.append(Triangle(corners[0], corners[1], corners[2]))
+    halves.append(Triangle(corners[0], corners[2], corners[3]))
+    for half in range(2):
+        var fb = Framebuffer(16, 12, Color(0, 0, 0))
+        rasterize(halves[half], fb, Color(255, 255, 255))
+        for y in range(12):
+            for x in range(16):
+                if fb.get_pixel(x, y).r == 255:
+                    counts[y * 16 + x] += 1
+    return counts^
+
+
+def test_a_degenerate_triangle_fills_nothing() raises:
+    # Three collinear corners have no area, so there is nothing to fill and
+    # the barycentric weights would divide by zero if there were.
+    var fb = Framebuffer(6, 6, Color(1, 2, 3))
+    rasterize(
+        Triangle(Vector2(0, 0), Vector2(2, 2), Vector2(5, 5)),
+        fb,
+        Color(255, 0, 0),
+    )
+    for y in range(6):
+        for x in range(6):
+            assert_equal(fb.get_pixel(x, y).r, UInt8(1))
+
+
+def test_a_shared_edge_leaves_no_cracks() raises:
+    # Two triangles meeting along a diagonal used to miss pixels lying almost
+    # exactly on it: the edge function, computed from each triangle's own
+    # corner ordering, could round fractionally negative for both. Exact
+    # fixed-point arithmetic makes the two orderings negate exactly.
+    var counts = quad_coverage_counts()
+    for y in range(3, 9):
+        for x in range(3, 13):
+            assert_true(counts[y * 16 + x] > 0)
+
+
+def test_a_shared_edge_is_never_drawn_twice() raises:
+    # And the top-left fill rule stops exact arithmetic causing the opposite
+    # problem, where a pixel on the shared edge satisfies both triangles.
+    var counts = quad_coverage_counts()
+    for index in range(len(counts)):
+        assert_true(counts[index] <= 1)
+
+
+def test_a_triangle_is_filled_the_same_whichever_way_it_is_wound() raises:
+    # The winding is normalized before the fill rule is applied, so reversing
+    # the corner order cannot change which pixels come out.
+    var forward = Framebuffer(12, 12, Color(0, 0, 0))
+    var backward = Framebuffer(12, 12, Color(0, 0, 0))
+    var a = Vector2(1.5, 9.5)
+    var b = Vector2(9.5, 1.5)
+    var c = Vector2(9.5, 9.5)
+    rasterize(Triangle(a, b, c), forward, Color(255, 0, 0))
+    rasterize(Triangle(a, c, b), backward, Color(255, 0, 0))
+    for y in range(12):
+        for x in range(12):
+            assert_equal(forward.get_pixel(x, y).r, backward.get_pixel(x, y).r)
 
 
 def test_rasterize_leaves_background_when_nothing_is_covered() raises:

@@ -92,6 +92,27 @@ but a corner shared between three faces can carry only one normal and one
 texture coordinate, so the faces could never be shaded separately — which is
 why three.js splits them too.
 
+## Rasterization
+
+Coverage is decided in fixed point. Two triangles sharing an edge test it from
+opposite corner orderings — one asks `edge(A, B, p)`, the other `edge(B, A, p)`
+— and in floating point those need not negate exactly, so a pixel almost on
+the edge could come out negative for *both* and be drawn by neither. That left
+one-pixel cracks along the shared diagonal of a quad: two in a large quad,
+forty-four with the camera inside a cube.
+
+Snapping vertices to a 1/16-pixel grid makes the edge function exact integer
+arithmetic, where the orderings do negate exactly and no pixel can be missed.
+The **top-left fill rule** then handles the opposite problem, giving a pixel
+lying exactly on a shared edge to one triangle rather than both. Drawing twice
+is invisible under an opaque depth test but doubles every shared edge once
+anything is blended.
+
+The GPU kernel implements the same rule, deliberately duplicated rather than
+shared, because a kernel cannot call into a module that prints. The tests
+assert the two renderers agree pixel for pixel on triangles whose corners sit
+exactly on pixel boundaries — where a difference between them would show.
+
 ## Scene graph and depth
 
 `rasterize_depth` interpolates NDC depth across the triangle and keeps a

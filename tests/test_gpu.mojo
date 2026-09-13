@@ -133,6 +133,33 @@ def test_gpu_matches_the_cpu_when_the_triangle_is_offscreen() raises:
     assert_equal(count_mismatches(cpu, gpu), 0)
 
 
+def test_they_agree_on_pixels_lying_exactly_on_an_edge() raises:
+    # Corners on whole pixels put sample points exactly on the edges, which is
+    # where the fill rule decides and where a difference between the two
+    # implementations would show. Before both used the same fixed-point rule,
+    # these tests passed only because their triangles avoided such pixels.
+    if not available():
+        return
+    var triangle = Triangle(Vector2(4, 4), Vector2(28, 4), Vector2(28, 20))
+    var gpu = render(triangle, 32, 24, BACKGROUND, FOREGROUND)
+    var cpu = cpu_render(triangle, 32, 24)
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_they_agree_on_both_halves_of_a_shared_diagonal() raises:
+    # The two triangles of a quad, drawn into one image by each renderer.
+    if not available():
+        return
+    var upper = Triangle(Vector2(2, 2), Vector2(26, 2), Vector2(26, 18))
+    var gpu = render(upper, 32, 24, BACKGROUND, FOREGROUND)
+    var cpu = cpu_render(upper, 32, 24)
+    assert_equal(count_mismatches(cpu, gpu), 0)
+    var lower = Triangle(Vector2(2, 2), Vector2(26, 18), Vector2(2, 18))
+    var gpu_lower = render(lower, 32, 24, BACKGROUND, FOREGROUND)
+    var cpu_lower = cpu_render(lower, 32, 24)
+    assert_equal(count_mismatches(cpu_lower, gpu_lower), 0)
+
+
 def test_size_not_divisible_by_the_tile_is_handled() raises:
     if not available():
         return
