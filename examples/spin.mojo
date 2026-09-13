@@ -5,7 +5,7 @@
 
 """Render a spinning triangle to an animated PNG.
 
-    mojo run -I . examples/spin.mojo [out.png]
+    mojo run -I . examples/spin.mojo [path.png]
 
 The rotation is done by hand here rather than with a matrix, because there is
 no Matrix4 yet. When there is, this example is the first thing that should be
@@ -20,7 +20,7 @@ from std.math import cos, pi, sin
 from std.pathlib import Path
 from std.sys import argv
 
-comptime DEFAULT_OUTPUT = "spin.png"
+comptime DEFAULT_OUTPUT = "out/spin.png"
 comptime WIDTH = 160
 comptime HEIGHT = 120
 comptime FRAMES = 24

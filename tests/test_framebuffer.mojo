@@ -6,7 +6,13 @@
 """Tests for `render.framebuffer`."""
 
 from render.framebuffer import Color, Framebuffer
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 
 
 def assert_color(got: Color, expected: Color) raises:
@@ -118,6 +124,70 @@ def test_adopting_rejects_a_buffer_that_is_too_short() raises:
 def test_adopting_rejects_a_buffer_that_is_too_long() raises:
     with assert_raises():
         _ = Framebuffer(2, 2, List[UInt8](length=64, fill=0))
+
+
+def test_depth_starts_at_infinity() raises:
+    var fb = Framebuffer(2, 2, Color(0, 0, 0))
+    # Anything at all must be nearer than an empty buffer.
+    assert_true(fb.test_depth(0, 0, 1.0e30))
+
+
+def test_a_nearer_fragment_wins_and_is_recorded() raises:
+    var fb = Framebuffer(2, 2, Color(0, 0, 0))
+    assert_true(fb.test_depth(0, 0, 0.5))
+    assert_equal(fb.depth_at(0, 0), Float32(0.5))
+    assert_true(fb.test_depth(0, 0, 0.2))
+    assert_equal(fb.depth_at(0, 0), Float32(0.2))
+
+
+def test_a_further_fragment_loses_and_changes_nothing() raises:
+    var fb = Framebuffer(2, 2, Color(0, 0, 0))
+    _ = fb.test_depth(0, 0, 0.2)
+    assert_false(fb.test_depth(0, 0, 0.7))
+    assert_equal(fb.depth_at(0, 0), Float32(0.2))
+
+
+def test_an_equal_depth_loses() raises:
+    # Ties go to whoever got there first, so coplanar surfaces do not fight.
+    var fb = Framebuffer(2, 2, Color(0, 0, 0))
+    _ = fb.test_depth(0, 0, 0.4)
+    assert_false(fb.test_depth(0, 0, 0.4))
+
+
+def test_depth_is_tracked_per_pixel() raises:
+    var fb = Framebuffer(2, 2, Color(0, 0, 0))
+    _ = fb.test_depth(0, 0, 0.1)
+    assert_true(fb.test_depth(1, 1, 0.9))
+
+
+def test_adopted_buffers_start_with_a_cleared_depth() raises:
+    var fb = Framebuffer(2, 2, List[UInt8](length=2 * 2 * 4, fill=7))
+    assert_true(fb.test_depth(0, 0, 1.0e30))
+
+
+def test_depth_reads_out_of_bounds_are_rejected() raises:
+    # All four edges: each operand of the guard needs its own case.
+    var fb = Framebuffer(2, 2, Color(0, 0, 0))
+    with assert_raises():
+        _ = fb.depth_at(-1, 0)
+    with assert_raises():
+        _ = fb.depth_at(2, 0)
+    with assert_raises():
+        _ = fb.depth_at(0, -1)
+    with assert_raises():
+        _ = fb.depth_at(0, 2)
+
+
+def test_depth_tests_out_of_bounds_are_rejected() raises:
+    var fb = Framebuffer(2, 2, Color(0, 0, 0))
+    with assert_raises():
+        _ = fb.test_depth(-1, 0, 0.5)
+    with assert_raises():
+        _ = fb.test_depth(2, 0, 0.5)
+    with assert_raises():
+        _ = fb.test_depth(0, -1, 0.5)
+    with assert_raises():
+        _ = fb.test_depth(0, 2, 0.5)
 
 
 def main() raises:

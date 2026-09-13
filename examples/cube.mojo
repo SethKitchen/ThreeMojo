@@ -5,7 +5,7 @@
 
 """Render a spinning 3D cube to an animated PNG.
 
-    mojo run -I . examples/cube.mojo [out.png]
+    mojo run -I . examples/cube.mojo [path.png]
 
 This is the first example that draws a *scene* rather than screen-space
 shapes: world-space corners in metres, turned by a model matrix, projected by
@@ -29,7 +29,7 @@ from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, Length, METRE
 
-comptime DEFAULT_OUTPUT = "cube.png"
+comptime DEFAULT_OUTPUT = "out/cube.png"
 comptime WIDTH = 240
 comptime HEIGHT = 180
 comptime FRAMES = 36

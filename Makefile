@@ -25,7 +25,7 @@ endef
 
 # --- sources ----------------------------------------------------------------
 # Library modules have no main(), so they are checked with `mojo doc`.
-LIB_SOURCES  := $(shell find math render units cameras -name '*.mojo' \
+LIB_SOURCES  := $(shell find math render units cameras core -name '*.mojo' \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
 TOOL_CLIS    := coverage/build_cli.mojo coverage/report_cli.mojo
@@ -63,6 +63,9 @@ FORMATTED    := $(SOURCES) $(COMPILE_FAIL)
 COVERAGE_EXCLUDE := render/png.mojo render/gpu.mojo math/matrix4.mojo
 COVERED := $(filter-out $(COVERAGE_EXCLUDE),$(LIB_SOURCES))
 COV_DIR := coverage/build
+# Rendered images land here. Gitignored, but kept between runs so they can be
+# looked at; `make clean` removes it.
+OUT_DIR := out
 
 # --- caching ----------------------------------------------------------------
 # A task's result is keyed on the content of every file that can affect it, so
@@ -102,10 +105,10 @@ help:
 	@echo "  make coverage   line / branch / condition / MC-DC coverage"
 	@echo "  make compile-fail  assert unit errors are rejected"
 	@echo "  make docstrings strict docstring audit (not part of check)"
-	@echo "  make example    render triangle.png"
-	@echo "  make animation  render spin.png and cube.png (animated)"
+	@echo "  make example    render out/triangle.png"
+	@echo "  make animation  render the animated examples into out/"
 	@echo "  make bench      CPU vs GPU rasterization across sizes"
-	@echo "  make clean      remove generated files and the task cache"
+	@echo "  make clean      remove out/, the coverage build and the cache"
 	@echo
 	@echo "Cached tasks re-run only when a source file's content changes."
 	@echo "Force one with 'make -B <task>'."
@@ -227,22 +230,30 @@ bench:
 	@$(call run,$(MOJO) run $(MOJOFLAGS) bench/raster_bench.mojo); \
 	[ $$rc -eq 0 ] || exit 1
 
-example: triangle.png
+example: $(OUT_DIR)/triangle.png
 
-animation: spin.png cube.png
+animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png
 
-cube.png: $(LIB_SOURCES) examples/cube.mojo
+$(OUT_DIR)/cube.png: $(LIB_SOURCES) examples/cube.mojo
+	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/cube.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
-spin.png: $(LIB_SOURCES) examples/spin.mojo
+$(OUT_DIR)/cubes.png: $(LIB_SOURCES) examples/cubes.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/cubes.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/spin.png: $(LIB_SOURCES) examples/spin.mojo
+	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/spin.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
-triangle.png: $(LIB_SOURCES) examples/triangle.mojo
+$(OUT_DIR)/triangle.png: $(LIB_SOURCES) examples/triangle.mojo
+	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/triangle.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 clean:
-	@rm -rf triangle.png triangle.ppm spin.png cube.png $(COV_DIR) $(CACHE_DIR)
+	@rm -rf $(OUT_DIR) $(COV_DIR) $(CACHE_DIR)
 	@echo "Removed generated files and the task cache."

@@ -9,11 +9,10 @@
 # records. Regenerated from scratch by every `make coverage`.
 coverage/build/
 
-# Rendered output from `make example` and `make animation`.
+# Rendered images from `make example` and `make animation`. Kept between runs
+# so they can be looked at; removed by `make clean`.
+/out/
 *.ppm
-/triangle.png
-/spin.png
-/cube.png
 
 # Compiled binaries from `mojo build`.
 *.o

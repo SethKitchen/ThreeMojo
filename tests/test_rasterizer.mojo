@@ -7,8 +7,15 @@
 
 from math.vector2 import Vector2
 from render.framebuffer import Color, Framebuffer
-from render.rasterizer import Triangle, edge, rasterize
-from std.testing import TestSuite, assert_equal, assert_false, assert_true
+from math.vector3 import Vector3
+from render.rasterizer import Triangle, edge, rasterize, rasterize_depth
+from std.testing import (
+    TestSuite,
+    assert_almost_equal,
+    assert_equal,
+    assert_false,
+    assert_true,
+)
 
 # Counter-clockwise on screen (y grows downward), so area2 is positive.
 comptime CCW = Triangle(Vector2(0, 0), Vector2(4, 0), Vector2(0, 4))
@@ -102,6 +109,92 @@ def test_rasterize_leaves_background_when_nothing_is_covered() raises:
     for y in range(4):
         for x in range(4):
             assert_equal(fb.get_pixel(x, y).r, background.r)
+
+
+def covering(z: Float32) raises -> List[Vector3]:
+    """Return a triangle covering any small viewport, flat at depth `z`.
+
+    Args:
+        z: The NDC depth for all three corners.
+
+    Returns:
+        Three corners suitable for `rasterize_depth`.
+
+    Raises:
+        Error: Never.
+    """
+    var corners = List[Vector3]()
+    corners.append(Vector3(-10, -10, z))
+    corners.append(Vector3(40, -10, z))
+    corners.append(Vector3(-10, 40, z))
+    return corners^
+
+
+def test_a_nearer_triangle_drawn_second_wins() raises:
+    var fb = Framebuffer(4, 4, Color(0, 0, 0))
+    var far = covering(0.9)
+    var near = covering(0.1)
+    rasterize_depth(far[0], far[1], far[2], fb, Color(255, 0, 0))
+    rasterize_depth(near[0], near[1], near[2], fb, Color(0, 255, 0))
+    assert_equal(fb.get_pixel(0, 0).g, UInt8(255))
+
+
+def test_a_further_triangle_drawn_second_is_rejected() raises:
+    # The point of depth: the result does not depend on submission order.
+    var fb = Framebuffer(4, 4, Color(0, 0, 0))
+    var near = covering(0.1)
+    var far = covering(0.9)
+    rasterize_depth(near[0], near[1], near[2], fb, Color(0, 255, 0))
+    rasterize_depth(far[0], far[1], far[2], fb, Color(255, 0, 0))
+    assert_equal(fb.get_pixel(0, 0).g, UInt8(255))
+    # Interpolated, not copied: the barycentric weights sum to 1 only to
+    # within rounding, so even a flat triangle's depth is approximate.
+    assert_almost_equal(fb.depth_at(0, 0), Float32(0.1), atol=Float64(1e-6))
+
+
+def test_depth_is_interpolated_across_the_triangle() raises:
+    # A triangle tilted in depth: near on the left, far on the right.
+    var fb = Framebuffer(8, 8, Color(0, 0, 0))
+    rasterize_depth(
+        Vector3(-10, -10, 0.0),
+        Vector3(40, -10, 1.0),
+        Vector3(-10, 40, 0.0),
+        fb,
+        Color(9, 9, 9),
+    )
+    assert_true(fb.depth_at(0, 0) < fb.depth_at(7, 0))
+
+
+def test_a_degenerate_triangle_draws_nothing() raises:
+    var fb = Framebuffer(4, 4, Color(1, 2, 3))
+    rasterize_depth(
+        Vector3(0, 0, 0.5),
+        Vector3(2, 2, 0.5),
+        Vector3(4, 4, 0.5),
+        fb,
+        Color(255, 0, 0),
+    )
+    assert_equal(fb.get_pixel(2, 2).r, UInt8(1))
+
+
+def test_depth_rasterization_covers_the_same_pixels_as_the_flat_one() raises:
+    # The two must agree on coverage; only the depth test differs.
+    var flat_target = Framebuffer(8, 8, Color(0, 0, 0))
+    var depth_target = Framebuffer(8, 8, Color(0, 0, 0))
+    var triangle = Triangle(Vector2(1, 6), Vector2(4, 1), Vector2(7, 6))
+    rasterize(triangle, flat_target, Color(255, 128, 32))
+    rasterize_depth(
+        Vector3(1, 6, 0.5),
+        Vector3(4, 1, 0.5),
+        Vector3(7, 6, 0.5),
+        depth_target,
+        Color(255, 128, 32),
+    )
+    for y in range(8):
+        for x in range(8):
+            assert_equal(
+                flat_target.get_pixel(x, y).r, depth_target.get_pixel(x, y).r
+            )
 
 
 def main() raises:

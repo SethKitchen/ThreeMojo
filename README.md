@@ -42,6 +42,39 @@ libraries — only the Mojo standard library.
 > tested. There is no `Matrix4`, camera, or mesh pipeline yet. This is a
 > learning project in the open, not a drop-in three.js replacement.
 
+## Scene graph and depth
+
+`rasterize_depth` interpolates NDC depth across the triangle and keeps a
+fragment only when it is nearer than what is there, so geometry can be
+submitted in any order. Worth being explicit about why linear interpolation is
+correct here: *world* depth and attributes like texture coordinates need
+perspective-correct interpolation through 1/w, but NDC depth does not, because
+the perspective divide has already happened. That is exactly why hardware
+depth buffers store this value rather than distance.
+
+three.js gives every object a `children` array. **Mojo cannot express that** —
+a struct may not contain a `List` of itself, which the compiler rejects with
+*"field 'children' has non-'Deinitable' type"*. So the tree is stored inverted:
+each node records its parent's index and `Scene` owns the flat array.
+
+That turns out better than a workaround. `add` refuses a parent that does not
+already exist, so a parent always precedes its children, so updating every
+world matrix is a single forward pass — no recursion, no visited set, and
+cycles are impossible by construction rather than by checking.
+
+```mojo
+var scene = Scene()
+var pivot = scene.add(spinning_node)
+var moon  = scene.attach(node_at(1.6, 0, 0), pivot)   # orbits for free
+scene.update()
+scene.world_matrix(moon)
+```
+
+`make animation` renders `out/cubes.png`, where a small cube orbits a large one and
+passes behind it. There is no backface culling at all in that example — the
+depth buffer carries the whole result, which the earlier `cube.png` could not
+have done.
+
 ## Camera
 
 Three matrices take a scene from world space onto a screen, and the middle
@@ -68,7 +101,7 @@ camera.place(Vector3(0, 0, 2.5), Vector3(0, 0, 0))
 camera.project(Vector3(0, 0, 0), 240, 180)   # -> pixels, plus NDC depth
 ```
 
-`make animation` renders `cube.png`, the first example that draws a *scene*:
+`make animation` renders `out/cube.png`, the first example that draws a *scene*:
 world-space corners in metres, turned by a model matrix, projected, and
 rasterized where they land. There is no depth buffer yet, so hidden faces are
 removed by backface culling — a face whose screen-space winding has reversed
@@ -280,11 +313,11 @@ Every command below is identical on macOS, Linux, and WSL.
 | `make fmt-check` | Verify formatting without modifying anything. |
 | `make coverage` | Line, branch, condition and MC/DC coverage. Exits non-zero on any gap. |
 | `make docstrings` | Strict docstring audit (`Args:`/`Returns:`/`Raises:` on every public symbol). |
-| `make example` | Render `triangle.png`. |
-| `make animation` | Render `spin.png` and `cube.png`, animated PNGs. |
+| `make example` | Render `out/triangle.png`. |
+| `make animation` | Render the animated examples into `out/`. |
 | `make bench` | CPU vs GPU rasterization across image sizes. |
 | `make compile-fail` | Assert every unit error is still rejected by the compiler. |
-| `make clean` | Remove generated artifacts and the task cache. |
+| `make clean` | Remove `out/`, the coverage build and the task cache. |
 
 Task results are cached on a SHA-256 of the source contents, so a task whose
 inputs have not changed is skipped entirely — a warm `make check` is instant.
@@ -299,8 +332,8 @@ it you get `unable to locate module 'math'`.
 
 ```bash
 .venv/bin/mojo run -I . tests/test_vector3.mojo
-.venv/bin/mojo run -I . examples/triangle.mojo out.png
-.venv/bin/mojo run -I . examples/triangle.mojo out.ppm   # text format
+.venv/bin/mojo run -I . examples/triangle.mojo out/triangle.png
+.venv/bin/mojo run -I . examples/triangle.mojo out/triangle.ppm  # text
 ```
 
 ### Image formats
@@ -352,14 +385,17 @@ math/        Vector2, Vector3                    ported from three.js
              Matrix4                             4x4 transforms, column-major
              projection                          perspective, look_at, viewport
 cameras/     PerspectiveCamera                   fov in Angle, planes in Length
-render/      Framebuffer, Color                  the RGBA buffer
+core/        Object3D, Scene                     transform hierarchy
+render/      Framebuffer, Color                  RGBA plus a depth buffer
              rasterizer                          software rasterization
              gpu                                 the same rasterizer, on the GPU
              png, apng, ppm                      encoders that read the buffer
 examples/    triangle.mojo                       renders triangle.png
              spin.mojo                           renders spin.png, animated
              cube.mojo                           a 3D cube, animated
+             cubes.mojo                          two cubes, depth + hierarchy
 bench/       raster_bench.mojo                   CPU vs GPU timings
+out/         rendered images, gitignored
 tests/       one suite per module
              compile_fail/                       files that must NOT compile
 coverage/    line / branch / condition / MC-DC coverage tooling

@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""An RGBA pixel buffer.
+"""An RGBA pixel buffer with a depth buffer alongside it.
 
 three.js renders into a WebGLRenderTarget and lets the browser present it. With
 no graphics API underneath us, the equivalent is a plain byte buffer we fill
@@ -14,7 +14,14 @@ upload — so this module knows nothing about file formats. The encoders in
 Keeping the buffer separate from the rasterizer also means the per-pixel logic
 can be tested without capturing stdout, and later lets a GPU kernel fill the
 same bytes.
+
+The depth buffer holds one NDC depth per pixel, cleared to infinity so that
+the first fragment to arrive always wins. Depth is what lets geometry be drawn
+in any order: without it, correctness depends on the draw order or on the
+scene happening to be convex.
 """
+
+from std.math import inf
 
 
 struct Color(ImplicitlyCopyable):
@@ -41,6 +48,8 @@ struct Framebuffer(Movable):
     var width: Int
     var height: Int
     var pixels: List[UInt8]
+    # One depth per pixel, not per channel. Infinity means "nothing here yet".
+    var depth: List[Float32]
 
     def __init__(out self, width: Int, height: Int, clear: Color) raises:
         """Create a buffer of the given size, filled with `clear`."""
@@ -49,6 +58,9 @@ struct Framebuffer(Movable):
         self.width = width
         self.height = height
         self.pixels = List[UInt8](length=width * height * Self.CHANNELS, fill=0)
+        self.depth = List[Float32](
+            length=width * height, fill=inf[DType.float32]()
+        )
         # Both dimensions are proven positive above, so neither loop can
         # run zero times.
         for y in range(height):  # pragma: no branch
@@ -80,6 +92,9 @@ struct Framebuffer(Movable):
         self.width = width
         self.height = height
         self.pixels = pixels^
+        self.depth = List[Float32](
+            length=width * height, fill=inf[DType.float32]()
+        )
 
     def _offset(self, x: Int, y: Int) raises -> Int:
         """Return the index of pixel (x, y)'s red channel."""
@@ -94,6 +109,27 @@ struct Framebuffer(Movable):
         self.pixels[i + 1] = color.g
         self.pixels[i + 2] = color.b
         self.pixels[i + 3] = color.a
+
+    def depth_at(self, x: Int, y: Int) raises -> Float32:
+        """Return the depth recorded at pixel (x, y)."""
+        if x < 0 or x >= self.width or y < 0 or y >= self.height:
+            raise Error("Pixel coordinate out of bounds")
+        return self.depth[y * self.width + x]
+
+    def test_depth(mut self, x: Int, y: Int, z: Float32) raises -> Bool:
+        """Return True if `z` is nearer than what is stored, and claim it.
+
+        The test and the write are one operation because separating them
+        invites the caller to do one without the other, which is how a depth
+        buffer quietly stops working.
+        """
+        if x < 0 or x >= self.width or y < 0 or y >= self.height:
+            raise Error("Pixel coordinate out of bounds")
+        var slot = y * self.width + x
+        if z >= self.depth[slot]:
+            return False
+        self.depth[slot] = z
+        return True
 
     def get_pixel(self, x: Int, y: Int) raises -> Color:
         """Return the color at pixel (x, y)."""

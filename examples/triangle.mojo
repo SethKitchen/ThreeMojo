@@ -5,7 +5,7 @@
 
 """Render one triangle and write it out.
 
-    mojo run -I . examples/triangle.mojo [out.png]
+    mojo run -I . examples/triangle.mojo [path.png]
 
 Writes a PNG by default, since that is what image viewers and VS Code can
 actually display. Pass a path ending in `.ppm` to get the human-readable text
@@ -20,7 +20,7 @@ from render.rasterizer import Triangle, rasterize
 from std.pathlib import Path
 from std.sys import argv
 
-comptime DEFAULT_OUTPUT = "triangle.png"
+comptime DEFAULT_OUTPUT = "out/triangle.png"
 
 
 def main() raises:
