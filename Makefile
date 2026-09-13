@@ -95,9 +95,18 @@ OUT_DIR := out
 JOBS ?= $(shell sysctl -n hw.logicalcpu 2> /dev/null \
           || nproc 2> /dev/null || echo 4)
 
-# One second per test suite. Coverage slower than that is a bug in the
-# instrumentation rather than a slow machine, and should fail loudly instead
-# of hanging. perl's alarm is used because macOS ships no `timeout`.
+# One second per test suite, as a *hang* detector. The instrumenter once
+# emitted a construct that sent the compiler superlinear and turned a
+# five-second run into a ten-minute one, and a tight budget catches that
+# immediately instead of appearing to hang.
+#
+# It is deliberately calibrated to a fast development machine, which means it
+# is not a portable performance gate: a 2-core CI runner blows through it doing
+# nothing wrong. Override it there -- `make coverage COV_BUDGET=300` -- where
+# the point is to catch a genuine hang rather than to measure a machine. A
+# command-line assignment beats the one below without needing `?=`.
+#
+# perl's alarm is used because macOS ships no `timeout`.
 # tests/test_gpu.mojo is left out of the coverage run: it exercises
 # render/gpu.mojo, which cannot be instrumented at all, so it contributes no
 # records while costing a Metal shader compile and a pixel-by-pixel image
@@ -295,7 +304,10 @@ $(COV_STAMP):
 	  || { rc=$$?; \
 	       if [ $$rc -eq 142 ]; then \
 	         echo "Coverage exceeded its $(COV_BUDGET)s budget (one second per" \
-	              "suite). Something is being instrumented that should not be."; \
+	              "suite). Either something is being instrumented that should" \
+	              "not be, or this machine is slower than the budget assumes:" \
+	              "re-run with 'make coverage COV_BUDGET=300' to tell them" \
+	              "apart."; \
 	       else \
 	         echo "A suite failed under instrumentation (exit $$rc); coverage" \
 	              "not measured. Run it with -I $(COV_DIR) to see why."; \

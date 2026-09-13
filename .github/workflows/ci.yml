@@ -50,5 +50,10 @@ jobs:
 
       # Line, branch, condition and MC/DC, all gating: the report exits
       # non-zero if anything is uncovered.
+      #
+      # COV_BUDGET is raised well above its local default. That default is one
+      # second per suite, tuned on a fast many-core machine to catch the
+      # instrumenter sending the compiler superlinear; a 2-core hosted runner
+      # exceeds it while behaving perfectly. Here it is only a hang detector.
       - name: coverage
-        run: make -B coverage
+        run: make -B coverage COV_BUDGET=300
