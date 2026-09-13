@@ -25,7 +25,8 @@ endef
 
 # --- sources ----------------------------------------------------------------
 # Library modules have no main(), so they are checked with `mojo doc`.
-LIB_SOURCES  := $(shell find math render units -name '*.mojo' -not -name '__init__.mojo')
+LIB_SOURCES  := $(shell find math render units cameras -name '*.mojo' \
+                  -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
 TOOL_CLIS    := coverage/build_cli.mojo coverage/report_cli.mojo
 TOOL_LIBS    := $(filter-out $(TOOL_CLIS),$(wildcard coverage/*.mojo))
@@ -102,7 +103,7 @@ help:
 	@echo "  make compile-fail  assert unit errors are rejected"
 	@echo "  make docstrings strict docstring audit (not part of check)"
 	@echo "  make example    render triangle.png"
-	@echo "  make animation  render spin.png (animated)"
+	@echo "  make animation  render spin.png and cube.png (animated)"
 	@echo "  make bench      CPU vs GPU rasterization across sizes"
 	@echo "  make clean      remove generated files and the task cache"
 	@echo
@@ -228,7 +229,11 @@ bench:
 
 example: triangle.png
 
-animation: spin.png
+animation: spin.png cube.png
+
+cube.png: $(LIB_SOURCES) examples/cube.mojo
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/cube.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
 
 spin.png: $(LIB_SOURCES) examples/spin.mojo
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/spin.mojo $@); \
@@ -239,5 +244,5 @@ triangle.png: $(LIB_SOURCES) examples/triangle.mojo
 	[ $$rc -eq 0 ] || exit 1
 
 clean:
-	@rm -rf triangle.png triangle.ppm spin.png $(COV_DIR) $(CACHE_DIR)
+	@rm -rf triangle.png triangle.ppm spin.png cube.png $(COV_DIR) $(CACHE_DIR)
 	@echo "Removed generated files and the task cache."

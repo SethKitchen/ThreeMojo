@@ -266,7 +266,7 @@ def build_report(
                 else:
                     missing_lines.append(entry.line)
 
-        out += _pad(module, 24)
+        out += _pad(module, 30)
         out += (
             "lines "
             + _pad(
@@ -305,7 +305,7 @@ def build_report(
         grand_covered += line_covered + branch_covered + mcdc_covered
         grand_total += line_total + branch_total + mcdc_total
 
-    out += _pad(String("TOTAL"), 24)
+    out += _pad(String("TOTAL"), 30)
     out += (
         _pad(String(grand_covered) + "/" + String(grand_total), 10)
         + String(_percent(grand_covered, grand_total))

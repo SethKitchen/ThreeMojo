@@ -42,6 +42,39 @@ libraries — only the Mojo standard library.
 > tested. There is no `Matrix4`, camera, or mesh pipeline yet. This is a
 > learning project in the open, not a drop-in three.js replacement.
 
+## Camera
+
+Three matrices take a scene from world space onto a screen, and the middle
+ground between them is deliberately unitless:
+
+```
+look_at      where the camera is and which way it faces
+perspective  how distance shrinks things          -> normalized device coords
+viewport     where a normalized point lands       -> pixels
+```
+
+World space is **metres** — the camera's `near` and `far` are `Length`, which
+is where this project pins down what three.js leaves to the application. The
+field of view is an `Angle`, so `PerspectiveCamera(50.0, ...)` does not
+compile; you have to say degrees or radians. NDC in the middle is
+dimensionless, which is exactly right: it is the neutral ground where neither
+metres nor pixels apply.
+
+```mojo
+var camera = PerspectiveCamera(
+    Angle(50.0, DEGREE), 4.0 / 3.0, Length(0.1, METRE), Length(100.0, METRE)
+)
+camera.place(Vector3(0, 0, 2.5), Vector3(0, 0, 0))
+camera.project(Vector3(0, 0, 0), 240, 180)   # -> pixels, plus NDC depth
+```
+
+`make animation` renders `cube.png`, the first example that draws a *scene*:
+world-space corners in metres, turned by a model matrix, projected, and
+rasterized where they land. There is no depth buffer yet, so hidden faces are
+removed by backface culling — a face whose screen-space winding has reversed
+is pointing away. For a convex solid that is exactly right and costs one sign
+test that `Triangle.area2` already computes.
+
 ## Matrix4
 
 Column-major storage, as three.js and OpenGL both are — element (row, col)
@@ -248,7 +281,7 @@ Every command below is identical on macOS, Linux, and WSL.
 | `make coverage` | Line, branch, condition and MC/DC coverage. Exits non-zero on any gap. |
 | `make docstrings` | Strict docstring audit (`Args:`/`Returns:`/`Raises:` on every public symbol). |
 | `make example` | Render `triangle.png`. |
-| `make animation` | Render `spin.png`, a 24-frame animated PNG. |
+| `make animation` | Render `spin.png` and `cube.png`, animated PNGs. |
 | `make bench` | CPU vs GPU rasterization across image sizes. |
 | `make compile-fail` | Assert every unit error is still rejected by the compiler. |
 | `make clean` | Remove generated artifacts and the task cache. |
@@ -317,12 +350,15 @@ units/       Quantity, Unit                      compile-time dimensions
              si                                  metres, feet, degrees, ...
 math/        Vector2, Vector3                    ported from three.js
              Matrix4                             4x4 transforms, column-major
+             projection                          perspective, look_at, viewport
+cameras/     PerspectiveCamera                   fov in Angle, planes in Length
 render/      Framebuffer, Color                  the RGBA buffer
              rasterizer                          software rasterization
              gpu                                 the same rasterizer, on the GPU
              png, apng, ppm                      encoders that read the buffer
 examples/    triangle.mojo                       renders triangle.png
              spin.mojo                           renders spin.png, animated
+             cube.mojo                           a 3D cube, animated
 bench/       raster_bench.mojo                   CPU vs GPU timings
 tests/       one suite per module
              compile_fail/                       files that must NOT compile

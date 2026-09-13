@@ -35,6 +35,12 @@ struct Vector3(ImplicitlyCopyable):
         self.y += other.y
         self.z += other.z
 
+    def sub(mut self, other: Self):
+        """Subtract `other` from `self`, component-wise."""
+        self.x -= other.x
+        self.y -= other.y
+        self.z -= other.z
+
     def cross(mut self, other: Self):
         """Set `self` to the cross product of `self` and `other`."""
         # Keep the original components until all outputs are calculated.

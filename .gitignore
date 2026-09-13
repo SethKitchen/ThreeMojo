@@ -13,6 +13,7 @@ coverage/build/
 *.ppm
 /triangle.png
 /spin.png
+/cube.png
 
 # Compiled binaries from `mojo build`.
 *.o

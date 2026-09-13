@@ -1,0 +1,161 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""A perspective camera, ported from three.js `src/cameras/PerspectiveCamera.js`.
+
+three.js takes the field of view as a bare number and documents it as degrees.
+Here it is an `Angle`, so the unit is carried by the value and
+`PerspectiveCamera(50.0, ...)` does not compile — you have to say which.
+
+`near` and `far` are `Length`, which is where this project's world units get
+pinned down: **world space is metres**. three.js leaves world units to the
+application, and that works until someone builds a scene in feet and wonders
+why the camera clips. Saying it once, in the type, settles it.
+
+The camera is placed by `position` and `target` rather than by a transform.
+three.js reaches the same place through Object3D and a quaternion, which is
+more general and needs a scene graph this port does not have yet.
+"""
+
+from math.matrix4 import Matrix4
+from math.projection import look_at, perspective, viewport
+from math.vector3 import Vector3
+from std.math import tan
+from units.si import Angle, Length
+
+
+struct PerspectiveCamera(ImplicitlyCopyable):
+    """A camera that renders with perspective, in metres and radians."""
+
+    var fov: Angle
+    var aspect: Float32
+    var near: Length
+    var far: Length
+    var position: Vector3
+    var target: Vector3
+    var up: Vector3
+
+    def __init__(
+        out self,
+        fov: Angle,
+        aspect: Float32,
+        near: Length,
+        far: Length,
+    ) raises:
+        """Create a camera at the origin looking down -z.
+
+        Args:
+            fov: Vertical field of view.
+            aspect: Width divided by height; dimensionless.
+            near: Distance to the near clipping plane.
+            far: Distance to the far clipping plane.
+
+        Raises:
+            Error: If the aspect ratio or the clipping planes are unusable.
+        """
+        if aspect <= 0:
+            raise Error("The aspect ratio must be positive")
+        if fov.value <= 0:
+            raise Error("The field of view must be positive")
+        if near.value <= 0:
+            raise Error("The near plane must be in front of the camera")
+        if far.value <= near.value:
+            raise Error("The far plane must be beyond the near plane")
+
+        self.fov = fov
+        self.aspect = aspect
+        self.near = near
+        self.far = far
+        self.position = Vector3(0, 0, 0)
+        self.target = Vector3(0, 0, -1)
+        self.up = Vector3(0, 1, 0)
+
+    def place(mut self, position: Vector3, target: Vector3):
+        """Move the camera to `position` and aim it at `target`."""
+        self.position = position
+        self.target = target
+
+    def projection_matrix(self) raises -> Matrix4:
+        """Return the matrix taking camera space to normalized device space.
+
+        The frustum is symmetric, so the top edge is found from half the field
+        of view and the rest follows from it and the aspect ratio.
+
+        Returns:
+            The projection matrix.
+
+        Raises:
+            Error: If the frustum works out degenerate.
+        """
+        var top = self.near.value * tan(self.fov.value / 2)
+        var right = top * self.aspect
+        return perspective(
+            -right, right, top, -top, self.near.value, self.far.value
+        )
+
+    def view_matrix(self) raises -> Matrix4:
+        """Return the matrix taking world space to camera space.
+
+        Returns:
+            The view matrix.
+
+        Raises:
+            Error: If the camera sits at its own target, or up is parallel to
+                the view direction.
+        """
+        return look_at(self.position, self.target, self.up)
+
+    def view_projection_matrix(self) raises -> Matrix4:
+        """Return projection * view: world space straight to NDC.
+
+        Returns:
+            The combined matrix.
+
+        Raises:
+            Error: If either half cannot be built.
+        """
+        var combined = self.projection_matrix()
+        combined.multiply(self.view_matrix())
+        return combined^
+
+    def screen_matrix(self, width: Int, height: Int) raises -> Matrix4:
+        """Return the full world-space-to-pixels transform.
+
+        Args:
+            width: Image width in pixels.
+            height: Image height in pixels.
+
+        Returns:
+            The product viewport * projection * view, ready to transform
+            world points straight into pixels.
+
+        Raises:
+            Error: If the viewport or either camera matrix is invalid.
+        """
+        var combined = viewport(width, height)
+        combined.multiply(self.view_projection_matrix())
+        return combined^
+
+    def project(
+        self, point: Vector3, width: Int, height: Int
+    ) raises -> Vector3:
+        """Return where a world-space point lands on the image.
+
+        The x and y components come back in pixels, with y measured down from
+        the top. The z component is NDC depth, -1 at the near plane and +1 at
+        the far plane, which is what a depth buffer would compare.
+
+        Args:
+            point: A position in world space, in metres.
+            width: Image width in pixels.
+            height: Image height in pixels.
+
+        Returns:
+            The projected point, x and y in pixels and z as NDC depth.
+
+        Raises:
+            Error: If the camera or viewport is invalid.
+        """
+        return self.screen_matrix(width, height).transform_point(point)

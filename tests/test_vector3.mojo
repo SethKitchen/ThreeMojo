@@ -47,6 +47,20 @@ def test_assignment_copies_rather_than_aliases() raises:
     assert_equal(b.y, Float32(1))
 
 
+def test_sub_mutates_in_place() raises:
+    var v = Vector3(10, 20, 30)
+    v.sub(Vector3(1, 2, 3))
+    assert_equal(v.x, Float32(9))
+    assert_equal(v.y, Float32(18))
+    assert_equal(v.z, Float32(27))
+
+
+def test_subtracting_a_vector_from_itself_gives_zero() raises:
+    var v = Vector3(3, 4, 5)
+    v.sub(Vector3(3, 4, 5))
+    assert_equal(v.length(), Float32(0))
+
+
 def test_cross_of_basis_vectors() raises:
     var v = Vector3(1, 0, 0)
     v.cross(Vector3(0, 1, 0))
