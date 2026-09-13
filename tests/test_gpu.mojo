@@ -33,6 +33,7 @@ from core.scene import Scene
 from geometries.box import cube
 from geometries.sphere import sphere
 from math.vector2 import Vector2
+from std.math import inf
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from renderers.renderer import Renderer
@@ -591,6 +592,59 @@ def count_background(image: Framebuffer, background: Color) raises -> Int:
             ):
                 untouched += 1
     return untouched
+
+
+# --- the readback contract --------------------------------------------------
+
+
+def test_the_gpu_reads_back_depth_and_not_just_colour() raises:
+    # `read_back` returns a Framebuffer, and a Framebuffer promises depth. It
+    # used to hand back one whose depth was infinity everywhere, so drawing a
+    # further depth-tested triangle into it would paint straight over a nearer
+    # surface the GPU had already drawn.
+    if skipped_for_lack_of_a_gpu("gpu reads back depth"):
+        return
+    var corners = overlapping_pair()
+    var gpu = render_triangles(corners, 36, 30, BACKGROUND)
+    var cpu = cpu_render_triangles(corners, 36, 30)
+
+    var covered = 0
+    for y in range(30):
+        for x in range(36):
+            var theirs = cpu.depth_at(x, y)
+            var ours = gpu.depth_at(x, y)
+            if theirs == inf[DType.float32]():
+                # Nothing drawn here: the GPU must agree there is nothing.
+                assert_equal(ours, inf[DType.float32]())
+            else:
+                covered += 1
+                # Interpolated in floating point, so the same one-ULP caveat
+                # applies as to colour; see `count_mismatches`.
+                assert_almost_equal(ours, theirs, atol=Float64(1e-5))
+    assert_true(covered > 0, "nothing was drawn, so nothing was compared")
+
+
+def test_depth_is_infinite_where_nothing_was_drawn() raises:
+    if skipped_for_lack_of_a_gpu("depth is infinite where nothing was drawn"):
+        return
+    var image = render_triangles(List[RasterVertex](), 16, 12, BACKGROUND)
+    for y in range(12):
+        for x in range(16):
+            assert_equal(image.depth_at(x, y), inf[DType.float32]())
+
+
+def test_reading_back_before_drawing_is_rejected() raises:
+    # The device target is allocated but not cleared, so this would otherwise
+    # hand back whatever the allocation happened to contain.
+    if skipped_for_lack_of_a_gpu("reading back before drawing is rejected"):
+        return
+    var renderer = GpuRenderer(8, 8)
+    with assert_raises():
+        _ = renderer.read_back()
+    renderer.draw(List[RasterVertex](), BACKGROUND)
+    # Drawing nothing still counts as drawing; the target is now defined.
+    var image = renderer.read_back()
+    assert_equal(image.get_pixel(0, 0).r, BACKGROUND.r)
 
 
 def main() raises:

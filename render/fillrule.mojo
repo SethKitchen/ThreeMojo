@@ -64,12 +64,25 @@ def edge_at(ax: Int, ay: Int, bx: Int, by: Int, px: Int, py: Int) -> Int:
 def is_top_left(ax: Int, ay: Int, bx: Int, by: Int) -> Bool:
     """Return True if the edge a->b is a top or a left edge.
 
-    With a positive winding, a horizontal edge running right-to-left is a top
-    edge, and any edge running upwards is a left edge. Those are the ones that
-    keep the pixels lying exactly on them.
+    Work it out from the edge function rather than from memory, because the
+    horizontal case was wrong here for a while and reads plausibly either way.
+    For the edge (0,0)->(16,0), `edge_at` is +256 at (8,16) and -256 at
+    (8,-16). Screen y grows downwards, so the positive side — the interior of
+    a positively wound triangle — lies *below* a left-to-right horizontal
+    edge. A left-to-right horizontal edge is therefore the triangle's **top**
+    edge, and `bx > ax` is what makes it one.
+
+    The non-horizontal case asks the same question of x: an edge running
+    upwards (`by < ay`) has the interior to its right, which is a left edge.
+
+    Getting the horizontal half backwards does not crack or double-draw
+    anything — swapping top for bottom is still a consistent tie-break, so
+    each shared edge still belongs to exactly one triangle. It shows up
+    instead as a triangle silently losing its top row of pixels whenever that
+    edge lands exactly on pixel centres.
     """
     if ay == by:
-        return bx < ax
+        return bx > ax
     return by < ay
 
 

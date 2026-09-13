@@ -143,9 +143,11 @@ struct Framebuffer(Movable):
     ) raises:
         """Adopt an existing RGBA byte buffer.
 
-        Used when the pixels came from somewhere that already filled them — a
-        GPU kernel, say — so that wrapping them costs nothing. The clearing
-        constructor would otherwise overwrite the work that was just done.
+        Used when the pixels came from somewhere that already filled them so
+        that wrapping them costs nothing; the clearing constructor would
+        overwrite the work that was just done. The depth buffer is set to
+        infinity, meaning "nothing here yet" — if the source knows the depths
+        too, use the four-argument version instead and say so.
 
         Args:
             width: Image width in pixels.
@@ -166,6 +168,43 @@ struct Framebuffer(Movable):
         self.depth = List[Float32](
             length=width * height, fill=inf[DType.float32]()
         )
+
+    def __init__(
+        out self,
+        width: Int,
+        height: Int,
+        var pixels: List[UInt8],
+        var depth: List[Float32],
+    ) raises:
+        """Adopt existing pixels *and* the depth that goes with them.
+
+        The three-argument version above fills the depth buffer with infinity,
+        which is right for pixels that arrived without any — but wrong for
+        pixels that arrived *with* some. A GPU readback that used it returned
+        an image whose `depth_at` said nothing was there, so drawing one more
+        depth-tested triangle into it would paint straight over a nearer
+        surface.
+
+        Args:
+            width: Image width in pixels.
+            height: Image height in pixels.
+            pixels: Row-major RGBA bytes, exactly width * height * 4 of them.
+            depth: One NDC depth per pixel, infinity where nothing was drawn.
+
+        Raises:
+            Error: If the dimensions are not positive, or either buffer's
+                length disagrees with them.
+        """
+        if width <= 0 or height <= 0:
+            raise Error("Framebuffer dimensions must be positive")
+        if len(pixels) != width * height * Self.CHANNELS:
+            raise Error("Pixel buffer length does not match the dimensions")
+        if len(depth) != width * height:
+            raise Error("Depth buffer length does not match the dimensions")
+        self.width = width
+        self.height = height
+        self.pixels = pixels^
+        self.depth = depth^
 
     def _offset(self, x: Int, y: Int) raises -> Int:
         """Return the index of pixel (x, y)'s red channel."""

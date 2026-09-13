@@ -119,12 +119,14 @@ TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
 HASH      := $(shell { cat $(INPUTS) 2>/dev/null; echo "$(TOOLCHAIN)"; } \
                | $(HASHER) | cut -c1-12)
 
-# What the cache key does *not* include: whether a GPU is plugged in. Moving
-# the repo to a machine with different hardware can therefore reuse a GPU
-# stamp. `make check-gpu` prints the accelerator status on every run so that
-# stays visible, and CI should use `make ci` to skip the cache entirely.
+# What the cache key cannot include is whether a GPU is plugged in, which is
+# why `test-gpu` is not cached at all. Hardware-dependent tests skip when there
+# is no accelerator and the suite still exits successfully, so a cached run
+# without one would keep reporting success on a machine that has since grown a
+# GPU. Compilation is deterministic given the sources and the compiler, so
+# `lint-gpu` is still cached; only running against the device is not.
+# test-gpu has no stamp on purpose -- see the target.
 TEST_CPU_STAMP := $(CACHE_DIR)/test-cpu-$(HASH)
-TEST_GPU_STAMP := $(CACHE_DIR)/test-gpu-$(HASH)
 LINT_CPU_STAMP := $(CACHE_DIR)/lint-cpu-$(HASH)
 LINT_GPU_STAMP := $(CACHE_DIR)/lint-gpu-$(HASH)
 FMT_STAMP  := $(CACHE_DIR)/fmt-$(HASH)
@@ -195,15 +197,17 @@ $(TEST_CPU_STAMP):
 	@echo "All $(words $(CPU_TESTS)) CPU suites passed."
 	@$(call stamp,test-cpu)
 
-test-gpu: $(TEST_GPU_STAMP)
-$(TEST_GPU_STAMP):
+# Deliberately uncached: the one thing that decides whether this suite tests
+# anything -- an accelerator being present -- is not in the cache key and
+# cannot easily be put there. Running it every time costs a few seconds and
+# removes a way to be told "passed" by a stamp written on different hardware.
+test-gpu:
 	@printf '%s\n' $(GPU_TESTS) \
 	  | xargs -P $(JOBS) -I {} \
 	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
 	  || { echo "Some GPU suites FAILED."; exit 1; }
 	@echo "All $(words $(GPU_TESTS)) GPU suites passed."
-	@$(call stamp,test-gpu)
 
 gpu-status:
 	@$(call run,$(MOJO) run $(MOJOFLAGS) tools/gpu_status.mojo); \

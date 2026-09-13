@@ -18,9 +18,12 @@ triangles are large — but it is the only one of the two that is correct
 without synchronization. Independent triangle threads writing a shared colour
 and depth buffer race: `Framebuffer.test_depth` is a read followed by a write,
 which is a depth test, not an atomic. Because each pixel here is owned
-outright, its depth lives in a register that nothing else can touch, and the
-framebuffer needs no depth buffer at all. Tiling and per-triangle binning can
-come later; they are optimizations of a correct thing.
+outright, its depth lives in a register that nothing else can touch. That
+depth is written out alongside the colour, so what comes back is a framebuffer
+in the same sense the CPU produces one — a result that reports no depth at all
+would silently let a later depth-tested triangle paint over a nearer surface.
+Tiling and per-triangle binning can come later; they are optimizations of a
+correct thing.
 
 **The transform pipeline is still on the host.** Scene traversal, projection,
 lighting and clipping run on the CPU, and only the finished screen-space
@@ -42,7 +45,7 @@ from render.fillrule import bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rasterizer import RasterVertex, Triangle
 from std.gpu import global_idx
-from std.math import ceildiv
+from std.math import ceildiv, inf
 from std.memory import unsafe_memcpy
 from std.sys import has_accelerator
 
@@ -103,6 +106,7 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
 
 def rasterize_kernel(
     pixels: MutPointer[UInt8, MutAnyOrigin],
+    depth: MutPointer[Float32, MutAnyOrigin],
     corners: MutPointer[Float32, MutAnyOrigin],
     triangles: Int32,
     width: Int32,
@@ -227,13 +231,21 @@ def rasterize_kernel(
         )
 
     var word = background
+    var nearest_depth = inf[DType.float32]()
     if found:
         word = pack(FloatColor(red, green, blue, alpha).quantize())
+        nearest_depth = nearest
 
     # Every pixel is written, background included. Clearing on the host and
     # uploading that buffer would cost more than the render; letting each
     # thread decide its own colour costs nothing.
-    var offset = (y * Int(width) + x) * 4
+    var slot = y * Int(width) + x
+    # The depth this thread settled on, written out rather than discarded.
+    # A framebuffer that reports infinity everywhere would let a later
+    # depth-tested triangle paint over a nearer surface already drawn here.
+    depth[unsafe_offset=slot] = nearest_depth
+
+    var offset = slot * 4
     pixels[unsafe_offset=offset] = UInt8((word >> 24) & 0xFF)
     pixels[unsafe_offset=offset + 1] = UInt8((word >> 16) & 0xFF)
     pixels[unsafe_offset=offset + 2] = UInt8((word >> 8) & 0xFF)
@@ -257,8 +269,12 @@ struct GpuRenderer(Movable):
     var height: Int
     # How many triangles the vertex buffer can currently hold.
     var capacity: Int
+    # False until the first successful `draw`, so `read_back` cannot hand
+    # back whatever the allocation happened to contain.
+    var drawn: Bool
     var context: DeviceContext
     var pixels: DeviceBuffer[DType.uint8]
+    var depth: DeviceBuffer[DType.float32]
     var corners: DeviceBuffer[DType.float32]
 
     def __init__(out self, width: Int, height: Int) raises:
@@ -277,9 +293,13 @@ struct GpuRenderer(Movable):
             raise Error("No GPU available")
         self.width = width
         self.height = height
+        self.drawn = False
         self.context = DeviceContext()
         self.pixels = self.context.enqueue_create_buffer[DType.uint8](
             width * height * Framebuffer.CHANNELS
+        )
+        self.depth = self.context.enqueue_create_buffer[DType.float32](
+            width * height
         )
         # One triangle to start with; `draw` grows it as needed. Never zero,
         # because a zero-length device buffer is not worth the special case.
@@ -322,6 +342,7 @@ struct GpuRenderer(Movable):
 
         self.context.enqueue_function[rasterize_kernel](
             self.pixels.unsafe_ptr(),
+            self.depth.unsafe_ptr(),
             self.corners.unsafe_ptr(),
             Int32(triangles),
             Int32(self.width),
@@ -333,16 +354,25 @@ struct GpuRenderer(Movable):
             ),
             block_dim=(TILE, TILE),
         )
+        self.drawn = True
 
     def read_back(self) raises -> Framebuffer:
         """Copy the device render target into a host framebuffer.
 
+        Both the colour and the depth come back, so the result is the same
+        kind of thing the CPU renderer produces and can be drawn into again.
+
         Returns:
-            The rendered image.
+            The rendered image, with its depth buffer.
 
         Raises:
-            Error: If the framebuffer cannot be built from the bytes.
+            Error: If nothing has been drawn yet, or the framebuffer cannot
+                be built from the bytes.
         """
+        if not self.drawn:
+            raise Error(
+                "Nothing has been drawn yet; call draw() before read_back()"
+            )
         var count = self.width * self.height * Framebuffer.CHANNELS
         var pixels = List[UInt8](length=count, fill=0)
         with self.pixels.map_to_host() as host:
@@ -352,7 +382,16 @@ struct GpuRenderer(Movable):
             unsafe_memcpy(
                 dest=pixels.unsafe_ptr(), src=host.unsafe_ptr(), count=count
             )
-        return Framebuffer(self.width, self.height, pixels^)
+        var depth = List[Float32](
+            length=self.width * self.height, fill=inf[DType.float32]()
+        )
+        with self.depth.map_to_host() as host:
+            unsafe_memcpy(
+                dest=depth.unsafe_ptr(),
+                src=host.unsafe_ptr(),
+                count=self.width * self.height,
+            )
+        return Framebuffer(self.width, self.height, pixels^, depth^)
 
 
 def render_triangles(

@@ -111,11 +111,15 @@ def test_reversing_an_edge_negates_it_exactly() raises:
 # --- the top-left rule ------------------------------------------------------
 
 
-def test_a_horizontal_edge_is_a_top_edge_only_right_to_left() raises:
-    # With the winding normalized to a positive area and y downwards, a
-    # horizontal edge running right-to-left has the interior below it.
-    assert_true(is_top_left(16, 0, 0, 0))
-    assert_false(is_top_left(0, 0, 16, 0))
+def test_a_horizontal_edge_is_a_top_edge_only_left_to_right() raises:
+    # Derived from `edge_at`, not from the implementation -- this test
+    # asserted the opposite for a while because it was written the other way
+    # round. `edge_at(0,0, 16,0, 8,16)` is positive, so with y downwards the
+    # interior of a positively wound triangle is *below* a left-to-right
+    # horizontal edge, making that edge the top one.
+    assert_true(edge_at(0, 0, 16, 0, 8, 16) > 0)
+    assert_true(is_top_left(0, 0, 16, 0))
+    assert_false(is_top_left(16, 0, 0, 0))
 
 
 def test_an_upward_edge_is_a_left_edge() raises:
@@ -128,8 +132,8 @@ def test_an_upward_edge_is_a_left_edge() raises:
 def test_bias_is_zero_for_kept_edges_and_minus_one_otherwise() raises:
     # Added before the sign test, so a zero edge value survives on a top or
     # left edge and fails on the others without a second comparison.
-    assert_equal(bias(16, 0, 0, 0), 0)
-    assert_equal(bias(0, 0, 16, 0), -1)
+    assert_equal(bias(0, 0, 16, 0), 0)
+    assert_equal(bias(16, 0, 0, 0), -1)
     assert_equal(bias(0, 16, 0, 0), 0)
     assert_equal(bias(0, 0, 0, 16), -1)
 
@@ -161,6 +165,27 @@ def test_exactly_one_of_two_triangles_claims_a_shared_edge() raises:
     assert_equal(contested, 0)
     # Every pixel of the quad belongs to one of the two.
     assert_equal(claims, 16)
+
+
+def test_a_horizontal_top_edge_on_pixel_centres_keeps_its_row() raises:
+    # The symptom the reversed rule actually produced. A triangle whose top
+    # edge lies exactly on a row of pixel centres must keep that row; with
+    # top and bottom swapped it lost the row entirely and nothing else
+    # looked wrong.
+    #
+    # Corners at (0.5, 0.5), (4.5, 0.5), (0.5, 4.5): the top edge runs along
+    # y = 0.5, which is the centre of pixel row 0.
+    var ax = snap(0.5)
+    var ay = snap(0.5)
+    var bx = snap(4.5)
+    var by = snap(0.5)
+    var cx = snap(0.5)
+    var cy = snap(4.5)
+    assert_true(edge_at(ax, ay, bx, by, cx, cy) > 0)
+    # Pixel (1, 0) sits on that edge, clear of either corner.
+    assert_true(_covers(ax, ay, bx, by, cx, cy, sample(1), sample(0)))
+    # The row above it is outside the triangle and must stay empty.
+    assert_false(_covers(ax, ay, bx, by, cx, cy, sample(1), sample(-1)))
 
 
 def _covers(

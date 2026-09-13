@@ -136,10 +136,21 @@ lying exactly on a shared edge to one triangle rather than both. Drawing twice
 is invisible under an opaque depth test but doubles every shared edge once
 anything is blended.
 
-The GPU kernel implements the same rule, deliberately duplicated rather than
-shared, because a kernel cannot call into a module that prints. The tests
-assert the two renderers agree pixel for pixel on triangles whose corners sit
-exactly on pixel boundaries — where a difference between them would show.
+The GPU kernel applies the same rule by calling the same code: it lives in
+`render/fillrule.mojo`, which allocates nothing, prints nothing and raises
+nothing, so it compiles for a device as readily as for the host. It was
+duplicated for a while under a comment explaining that a kernel cannot call
+into a module that prints — true of the rasterizer, which writes pixels, and
+not of arithmetic.
+
+That closes one failure mode and opens another: a CPU/GPU parity test can no
+longer catch a bug *inside* the shared rule, because both sides would be wrong
+together and agree perfectly. `tests/test_fillrule.mojo` therefore pins it
+against values derived from the definitions — and caught exactly that, once:
+the horizontal half of the top-left rule was reversed, which is invisible to
+parity and to any crack-or-double-draw test (swapping top for bottom is still
+a consistent tie-break) and showed up as a triangle silently losing its top
+row when that edge landed on pixel centres.
 
 ## Scene graph and depth
 
@@ -274,8 +285,17 @@ containing one would not build — each lives in `tests/compile_fail/` and
 
 ## GPU
 
-`render/gpu.mojo` runs the same edge test as the CPU rasterizer with one thread
-per pixel, and its output is asserted **pixel-identical** to the CPU path.
+`render/gpu.mojo` runs the same edge test as the CPU rasterizer — the same
+module, not a copy — with one thread per pixel owning that pixel for the whole
+draw, so depth needs no synchronization. Colour and depth both come back.
+
+Its output is asserted **pixel-identical to the CPU path for coverage**, which
+is integer arithmetic and admits no disagreement. *Shading* is held to one
+level per channel instead: a GPU contracts `a * b + c` into a fused
+multiply-add that rounds once where the CPU rounds twice, and an interpolated
+channel whose exact value lands on a quantization midpoint can fall either
+side. The tests say which standard they are applying and why at each
+assertion.
 
 ```
 $ make bench
@@ -381,7 +401,7 @@ Reboot, open the Ubuntu terminal, then follow the **Linux** steps above.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install mojo          # Windows-in-WSL uses this same path
+.venv/bin/pip install "mojo==1.0.0"   # same pin as the uv path above
 ```
 
 ### Verify
@@ -587,7 +607,8 @@ for y in range(self.height):  # pragma: no branch
 One module is excluded, `render/gpu.mojo`, and for a structural reason: the
 probes write to stderr, and a GPU kernel has no stderr. Device code cannot be
 instrumented under this design at all. It is covered instead by tests
-asserting its output matches the CPU rasterizer pixel for pixel.
+asserting its output matches the CPU rasterizer — exactly for coverage, and
+within one level per channel for interpolated shading.
 
 Everything else — including the rasterizer, the renderer, the PNG encoder and
 `Matrix4` — is measured, and the whole run takes about five seconds. The

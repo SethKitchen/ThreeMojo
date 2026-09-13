@@ -1,0 +1,54 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+# Runs the standard-library-only half of the project on every push.
+#
+# GitHub's hosted runners have no accelerator, so `make check-gpu` is
+# deliberately absent: it would skip every hardware test and report success,
+# which is the exact thing the skip messages and the uncached `test-gpu` target
+# exist to prevent. The GPU half is checked on a machine that has one.
+#
+# Everything runs through `make ci`, which forces every recipe regardless of
+# the build cache. A cache hit from a previous commit is precisely what CI must
+# not honour.
+
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cpu:
+    name: check-cpu (standard library only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Mojo toolchain
+        run: |
+          uv venv --prompt ThreeMojo
+          uv pip install "mojo==1.0.0"
+          .venv/bin/mojo --version
+
+      # Formatting, linting, the CPU suites, and the compile-fail cases. No
+      # MAX, which is what proves the no-dependencies claim still holds.
+      - name: check-cpu
+        run: make -B check-cpu
+
+      # Line, branch, condition and MC/DC, all gating: the report exits
+      # non-zero if anything is uncovered.
+      - name: coverage
+        run: make -B coverage

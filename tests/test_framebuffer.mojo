@@ -236,5 +236,48 @@ def test_a_float_colour_is_opaque_unless_told_otherwise() raises:
     assert_equal(FloatColor(0.0, 0.0, 0.0).a, Float32(1.0))
 
 
+# --- adopting pixels together with their depth ------------------------------
+
+
+def test_adopting_pixels_and_depth_keeps_both() raises:
+    # What a GPU readback needs. The three-argument version fills depth with
+    # infinity, which would report an empty scene over a rendered one.
+    var pixels = List[UInt8](length=2 * 2 * 4, fill=7)
+    var depth = List[Float32](length=2 * 2, fill=0.25)
+    var image = Framebuffer(2, 2, pixels^, depth^)
+    assert_equal(image.get_pixel(1, 1).r, UInt8(7))
+    assert_equal(image.depth_at(0, 0), Float32(0.25))
+    # And the depth is live: something further away must not overwrite it.
+    assert_false(image.test_depth(0, 0, 0.9))
+    assert_true(image.test_depth(0, 0, 0.1))
+
+
+def test_adopting_a_depth_buffer_of_the_wrong_length_is_rejected() raises:
+    var pixels = List[UInt8](length=2 * 2 * 4, fill=0)
+    var depth = List[Float32](length=3, fill=0.0)
+    with assert_raises():
+        _ = Framebuffer(2, 2, pixels^, depth^)
+
+
+def test_adopting_pixels_of_the_wrong_length_is_rejected() raises:
+    var pixels = List[UInt8](length=5, fill=0)
+    var depth = List[Float32](length=2 * 2, fill=0.0)
+    with assert_raises():
+        _ = Framebuffer(2, 2, pixels^, depth^)
+
+
+def test_adopting_with_bad_dimensions_is_rejected() raises:
+    # Both halves of the dimension check, so each can be shown to decide the
+    # outcome on its own.
+    var pixels = List[UInt8](length=4, fill=0)
+    var depth = List[Float32](length=1, fill=0.0)
+    with assert_raises():
+        _ = Framebuffer(0, 1, pixels^, depth^)
+    var more_pixels = List[UInt8](length=4, fill=0)
+    var more_depth = List[Float32](length=1, fill=0.0)
+    with assert_raises():
+        _ = Framebuffer(1, -3, more_pixels^, more_depth^)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
