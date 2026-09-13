@@ -311,7 +311,7 @@ plain `venv` works identically.
 brew install uv
 xcode-select --install          # if `make` is missing
 
-git clone https://github.com/sethkitchen/ThreeMojo.git
+git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
 uv venv --prompt ThreeMojo
 uv pip install mojo
@@ -327,7 +327,7 @@ sudo apt update && sudo apt install -y build-essential curl git
 
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-git clone https://github.com/sethkitchen/ThreeMojo.git
+git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
 uv venv --prompt ThreeMojo
 uv pip install mojo
