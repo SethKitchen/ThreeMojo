@@ -42,6 +42,35 @@ libraries — only the Mojo standard library.
 > tested. There is no `Matrix4`, camera, or mesh pipeline yet. This is a
 > learning project in the open, not a drop-in three.js replacement.
 
+## Rendering a scene
+
+```mojo
+var scene = Scene()
+var node = scene.add(spinning_object)
+scene.update()
+
+var meshes = List[Mesh]()
+meshes.append(Mesh(cube(Length(1.0, METRE)), Color(255, 140, 40), node))
+
+var renderer = Renderer(260, 200)
+var image = renderer.render(scene, meshes, camera)
+```
+
+A `Mesh` names the scene node it is drawn at rather than owning a transform.
+three.js has `Mesh` inherit from `Object3D`; Mojo has no inheritance and the
+transforms already live in the scene's flat array. The split is worth keeping
+anyway — not every node has geometry (the pivot a cube orbits is a node and
+nothing else), and one geometry can be drawn at many nodes without copying.
+
+Shading is flat Lambert against one directional light plus ambient. The normal
+comes from the triangle's own world-space corners via a cross product, since
+there is no `normal` attribute yet — a *geometric* normal, faceted by
+construction. Right for a cube, wrong for a sphere, which needs per-vertex
+normals smoothed across the surface.
+
+Colour lives on the mesh rather than in a `Material`. A material with one
+field would be ceremony; it earns a type when there is a second property.
+
 ## Geometry
 
 A `BufferGeometry` is named attributes — `position` at minimum — plus an
@@ -409,6 +438,8 @@ cameras/     PerspectiveCamera                   fov in Angle, planes in Length
 core/        Object3D, Scene                     transform hierarchy
              BufferGeometry, BufferAttribute     vertex data
 geometries/  box                                 a box, four vertices per face
+objects/     Mesh                                geometry + colour at a node
+renderers/   Renderer                            scene + camera -> image
 render/      Framebuffer, Color                  RGBA plus a depth buffer
              rasterizer                          software rasterization
              gpu                                 the same rasterizer, on the GPU
