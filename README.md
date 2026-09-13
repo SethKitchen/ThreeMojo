@@ -35,12 +35,21 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 [![coverage](https://img.shields.io/badge/coverage-100%25%20line%20%7C%20branch%20%7C%20condition%20%7C%20MC%2FDC-brightgreen)](#coverage)
 
 A port of [three.js](https://threejs.org) to [Mojo](https://mojolang.org), built
-to learn both graphics and the language from first principles. No third-party
-libraries — only the Mojo standard library.
+to learn both graphics and the language from first principles.
 
-> **Status: early.** The math and rasterizer foundations are in place and fully
-> tested. There is no `Matrix4`, camera, or mesh pipeline yet. This is a
-> learning project in the open, not a drop-in three.js replacement.
+**Dependencies: the Mojo standard library, and nothing else** — for everything
+except one file. `render/gpu.mojo` imports `max.gpu.host`, so the optional GPU
+backend needs MAX installed; every other module, and every other test, builds
+and runs against the toolchain alone. The split is enforced rather than
+promised: `make check-cpu` builds and tests the standard-library-only half, and
+`make check-gpu` the rest.
+
+> **Status: early but no longer a toybox.** Scene graph, transforms, camera,
+> geometry, meshes, depth buffering, per-vertex normals, near and far clipping,
+> perspective-correct shading, and both a CPU and a GPU rasterizer are in place
+> and fully tested. Missing, among much else: materials, textures, quaternions,
+> and any kind of windowing. This is a learning project in the open, not a
+> drop-in three.js replacement.
 
 ## Rendering a scene
 
@@ -49,11 +58,15 @@ var scene = Scene()
 var node = scene.add(spinning_object)
 scene.update()
 
+var geometries = GeometryStore()
+var box = geometries.add(cube(Length(1.0, METRE)))
+
 var meshes = List[Mesh]()
-meshes.append(Mesh(cube(Length(1.0, METRE)), Color(255, 140, 40), node))
+meshes.append(Mesh(box, Color(255, 140, 40), node))
+meshes.append(Mesh(box, Color(90, 190, 255), other_node))   # same vertices
 
 var renderer = Renderer(260, 200)
-var image = renderer.render(scene, meshes, camera)
+var image = renderer.render(scene, geometries, meshes, camera)
 ```
 
 A `Mesh` names the scene node it is drawn at rather than owning a transform.
@@ -62,11 +75,26 @@ transforms already live in the scene's flat array. The split is worth keeping
 anyway — not every node has geometry (the pivot a cube orbits is a node and
 nothing else), and one geometry can be drawn at many nodes without copying.
 
-Shading is flat Lambert against one directional light plus ambient. The normal
-comes from the triangle's own world-space corners via a cross product, since
-there is no `normal` attribute yet — a *geometric* normal, faceted by
-construction. Right for a cube, wrong for a sphere, which needs per-vertex
-normals smoothed across the surface.
+A mesh names its *geometry* by id too, into a `GeometryStore` that owns it.
+That is what makes the second half of that sentence true: a mesh is two indices
+and a colour, so the two meshes above share one copy of the box's vertices
+rather than holding one each.
+
+Shading is Lambert against one directional light plus ambient, evaluated per
+vertex and interpolated across the face — Gouraud shading. A geometry's
+`normal` attribute decides how it looks: a box gives each of a face's four
+corners that face's own normal, so the face comes out flat with a crisp edge;
+a sphere gives each vertex the direction it points from the centre, so
+neighbouring triangles agree along their shared edge and the facets vanish.
+A geometry with no normals falls back to the triangle's *geometric* normal,
+which is faceted by construction and the honest result for geometry that never
+said which way it faces.
+
+Normals are carried by the world matrix's **normal matrix** — the inverse
+transpose of its rotation and scale — not by the world matrix itself. Under a
+uniform scale the two agree up to a length that normalizing removes; under a
+non-uniform scale they do not, and `Object3D.set_scale` takes three separate
+factors.
 
 Colour lives on the mesh rather than in a `Material`. A material with one
 field would be ceremony; it earns a type when there is a second property.
@@ -174,10 +202,10 @@ camera.project(Vector3(0, 0, 0), 240, 180)   # -> pixels, plus NDC depth
 
 `make animation` renders `out/cube.png`, the first example that draws a *scene*:
 world-space corners in metres, turned by a model matrix, projected, and
-rasterized where they land. There is no depth buffer yet, so hidden faces are
-removed by backface culling — a face whose screen-space winding has reversed
-is pointing away. For a convex solid that is exactly right and costs one sign
-test that `Triangle.area2` already computes.
+rasterized where they land. Hidden surfaces are removed by the depth buffer,
+which is what lets geometry be submitted in any order and what makes a
+non-convex scene come out right. Backface culling would be an optimization on
+top of that, not a substitute for it, and is not done.
 
 ## Matrix4
 
@@ -262,7 +290,9 @@ GPU timings include device allocation and the copy back, because that is what
 it costs to get a usable image. Timing the kernel alone would flatter it: at
 1080p the kernel is ~600 us and the transfer is the rest.
 
-Requires the Mojo GPU libraries (`uv pip install max`). On macOS it also needs
+Requires the Mojo GPU libraries (`uv pip install "max==26.5.0"`), which are
+**not** needed for anything else — see `make check-cpu`. On macOS it also
+needs
 Apple's Metal toolchain, which Xcode does **not** install by default:
 
 ```bash
@@ -314,7 +344,7 @@ xcode-select --install          # if `make` is missing
 git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
 uv venv --prompt ThreeMojo
-uv pip install mojo
+uv pip install "mojo==1.0.0"          # the pinned toolchain
 ```
 
 ### Linux
@@ -330,7 +360,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
 uv venv --prompt ThreeMojo
-uv pip install mojo
+uv pip install "mojo==1.0.0"          # the pinned toolchain
 ```
 
 ### Windows (WSL 2)
@@ -357,9 +387,22 @@ python3 -m venv .venv
 ### Verify
 
 ```bash
-.venv/bin/mojo --version            # Mojo 1.0.0 (...)
-make check                          # should print "All suites passed."
+.venv/bin/mojo --version            # Mojo 1.0.0 (ed45d567)
+make check-cpu                      # no MAX needed
+make check                          # adds the GPU half
 ```
+
+### Pinned versions
+
+| Component | Version | Needed for |
+|---|---|---|
+| Mojo | `1.0.0` (`ed45d567`) | everything |
+| MAX | `26.5.0` | `render/gpu.mojo` and its tests only |
+| Metal toolchain | Xcode component, macOS only | running GPU kernels on a Mac |
+
+The toolchain version is part of the build cache key, so upgrading Mojo
+invalidates every cached result rather than letting a stale pass count for the
+new compiler. `make help` prints the version it is hashing.
 
 The `Makefile` calls `.venv/bin/mojo` by path, so **you never need to activate
 the virtualenv**. If you prefer to anyway:
@@ -458,11 +501,15 @@ math/        Vector2, Vector3                    ported from three.js
              projection                          perspective, look_at, viewport
 cameras/     PerspectiveCamera                   fov in Angle, planes in Length
 core/        Object3D, Scene                     transform hierarchy
-             BufferGeometry, BufferAttribute     vertex data
+             BufferGeometry, BufferAttribute     vertex data, borrowed on read
+             GeometryStore                       owns geometry; meshes share it
 geometries/  box                                 a box, four vertices per face
-objects/     Mesh                                geometry + colour at a node
-renderers/   Renderer                            scene + camera -> image
-render/      Framebuffer, Color                  RGBA plus a depth buffer
+             sphere                              latitude/longitude, smooth
+objects/     Mesh                                geometry id + colour at a node
+renderers/   Renderer                            scene + camera -> triangles
+             clip                                near and far plane clipping
+render/      Framebuffer, Color, FloatColor      RGBA, depth, and linear colour
+             fillrule                            coverage maths, CPU *and* GPU
              rasterizer                          software rasterization
              gpu                                 the same rasterizer, on the GPU
              png, apng, ppm                      encoders that read the buffer
@@ -471,10 +518,28 @@ examples/    triangle.mojo                       renders triangle.png
              cube.mojo                           a 3D cube, animated
              cubes.mojo                          two cubes, depth + hierarchy
 bench/       raster_bench.mojo                   CPU vs GPU timings
+tools/       gpu_status.mojo                     is there an accelerator?
 out/         rendered images, gitignored
 tests/       one suite per module
              compile_fail/                       files that must NOT compile
 coverage/    line / branch / condition / MC-DC coverage tooling
+```
+
+`Renderer.prepare` is the seam between the two halves of rendering. It turns a
+scene into screen-space triangles — transforms, lighting, clipping, projection
+— and both rasterizers consume that same list, which is what makes the CPU/GPU
+parity tests mean something:
+
+```
+scene + geometries + meshes + camera
+                |
+        Renderer.prepare
+                |
+        List[RasterVertex]        <- screen x/y, NDC z, 1/w, linear colour
+           /           \
+   rasterize_shaded   GpuRenderer.draw
+           |                |
+      Framebuffer      device target -> read_back()
 ```
 
 ## Coverage
@@ -499,13 +564,17 @@ Four metrics, all gating:
 
 ```
 $ make coverage
-math/vector3        lines 16/16 100%   branches 2/2   100%   mcdc 0/0 100%
-render/ppm          lines 10/10 100%   branches 0/0   100%   mcdc 0/0 100%
-render/rasterizer   lines 16/16 100%   branches 6/6   100%   mcdc 0/0 100%
-render/apng         lines 44/44 100%   branches 10/10 100%   mcdc 2/2 100%
-render/framebuffer  lines 22/22 100%   branches 16/16 100%   mcdc 6/6 100%
-TOTAL               150/150 100%
+Instrumented 23 files: 913 lines, 117 decisions, 59 conditions.
+math/matrix4        lines 169/169 100%  branches 28/28 100%  mcdc 8/8   100%
+render/rasterizer   lines  97/97  100%  branches 40/40 100%  mcdc 0/0   100%
+render/fillrule     lines   9/9   100%  branches  4/4  100%  mcdc 0/0   100%
+render/framebuffer  lines  57/57  100%  branches 50/50 100%  mcdc 16/16 100%
+core/scene          lines  47/47  100%  branches 52/52 100%  mcdc 12/12 100%
+renderers/renderer  lines  83/83  100%  branches 30/30 100%  mcdc 4/4   100%
+TOTAL               1324/1324 100%
 ```
+
+(Abridged — the run covers twenty-one modules.)
 
 A decision whose second outcome is genuinely unreachable — a loop over a length
 an invariant already proves non-zero — is opted out explicitly, so it is visible
@@ -526,8 +595,8 @@ Makefile gives it a budget of one second per test suite and fails it loudly
 past that, on the principle that slow coverage means something is being
 instrumented that should not be.
 
-For a while four more modules were excluded because instrumenting them made
-compilation take minutes. That turned out to be a **Mojo compiler issue**
+For a while five more modules were excluded — the PNG encoder among them —
+because instrumenting them made compilation take minutes. That turned out to be a **Mojo compiler issue**
 triggered by one construct the instrumenter emitted — a `Bool` loop flag read
 after nested loops — not anything about those modules. The bisection, the
 one-line workaround, a standalone reproducer and a draft upstream report are
@@ -536,11 +605,15 @@ in [`docs/mojo-compiler-issue/`](docs/mojo-compiler-issue/README.md).
 Known limits. MC/DC is the **masking** variant, since short-circuit evaluation
 makes strict unique-cause MC/DC unreachable for most compound decisions. The
 coverage tool does not measure itself, so a bug in it cannot flatter its own
-numbers. And `render/png.mojo` is listed in `COVERAGE_EXCLUDE` in the Makefile:
-instrumenting a module full of byte-level loops multiplies its statement count
-enough that *compiling* the instrumented copy takes minutes. It is still fully
-tested — it is the measurement that is impractical — and the exclusion is
-spelled out in the Makefile so the gap stays visible.
+numbers.
+
+And now that the CPU and GPU rasterizers share `render/fillrule.mojo` rather
+than each carrying a copy of it, a CPU/GPU parity test can no longer catch a
+bug inside it — both sides would be wrong together and agree perfectly. So
+`tests/test_fillrule.mojo` pins that module against values worked out from the
+definitions instead, and asserts the two properties the design rests on: that
+reversing an edge negates it *exactly*, and that a shared edge is claimed by
+exactly one of the two triangles meeting along it.
 
 ## Contributing
 

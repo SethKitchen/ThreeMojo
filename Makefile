@@ -35,7 +35,7 @@ TOOL_LIBS    := $(filter-out $(TOOL_CLIS),$(wildcard coverage/*.mojo))
 # Anything with a main() can be compiled, which also type-checks its imports.
 # tests/compile_fail is deliberately excluded: those files must NOT compile,
 # which is the point of them, so linting them would always fail.
-ENTRY_POINTS := $(shell find tests examples bench -name '*.mojo' \
+ENTRY_POINTS := $(shell find tests examples bench tools -name '*.mojo' \
                   -not -path 'tests/compile_fail/*') $(TOOL_CLIS)
 COMPILE_FAIL := $(wildcard tests/compile_fail/*.mojo)
 DOC_SOURCES  := $(LIB_SOURCES) $(TOOL_LIBS)
@@ -43,27 +43,40 @@ TESTS        := $(wildcard tests/test_*.mojo)
 SOURCES      := $(DOC_SOURCES) $(ENTRY_POINTS)
 FORMATTED    := $(SOURCES) $(COMPILE_FAIL)
 
+# --- the optional GPU backend -----------------------------------------------
+# Everything that needs MAX installed, kept in one list so the rest of the
+# project can be built and tested without it. `make check-cpu` is the whole
+# library minus these; `make check-gpu` is these alone.
+#
+# The split is not cosmetic. The README calls this project standard-library
+# only, and that is true of every file except the ones below: `render/gpu.mojo`
+# imports `max.gpu.host`, and what imports it inherits the dependency. Leaving
+# them in the default lists meant CPU-only development could not be checked
+# without MAX, and the claim could rot without anything noticing.
+GPU_LIB_SOURCES  := render/gpu.mojo
+GPU_TESTS        := tests/test_gpu.mojo
+GPU_ENTRY_POINTS := $(GPU_TESTS) bench/raster_bench.mojo tools/gpu_status.mojo
+
+CPU_LIB_SOURCES  := $(filter-out $(GPU_LIB_SOURCES),$(LIB_SOURCES))
+CPU_TESTS        := $(filter-out $(GPU_TESTS),$(TESTS))
+CPU_ENTRY_POINTS := $(filter-out $(GPU_ENTRY_POINTS),$(ENTRY_POINTS))
+CPU_DOC_SOURCES  := $(CPU_LIB_SOURCES) $(TOOL_LIBS)
+
 # Sources whose coverage is measured. The coverage tool is deliberately absent
 # so a bug in it cannot flatter its own numbers.
 #
-# COVERAGE_EXCLUDE drops a file from measurement entirely. render/png.mojo is
-# excluded because instrumenting it makes the suite take minutes: the cost is
-# in compiling the instrumented copy, not in running it. The module is still
-# fully tested by tests/test_png.mojo -- it is the coverage *measurement* that
-# is impractical, and the exclusion is listed here rather than hidden so the
-# gap stays visible.
+# COVERAGE_EXCLUDE drops a file from measurement entirely, and exactly one file
+# is on it. render/gpu.mojo cannot be instrumented at all under this design: a
+# probe writes a record to stderr, and a GPU kernel has no stderr. It is
+# covered instead by tests/test_gpu.mojo asserting its output matches the CPU
+# rasterizer pixel for pixel, and by tests/test_fillrule.mojo pinning the
+# coverage maths the two now share.
 #
-# render/gpu.mojo is excluded for a harder reason than speed: the probes write
-# to stderr, and there is no stderr inside a GPU kernel. Instrumenting device
-# code cannot work at all under this design.
-# render/gpu.mojo is the one module that cannot be measured under this design:
-# a probe writes to stderr, and a GPU kernel has no stderr. It is covered
-# instead by tests asserting its output matches the CPU rasterizer exactly.
-#
-# Four other modules used to sit here because instrumenting them made the
-# *compile* take minutes. The cause turned out to be one construct the
-# instrumenter emitted -- a Bool loop flag assigned a constant and read after
-# nested loops -- and not the modules at all. See coverage/instrument.mojo.
+# Five modules used to sit here as well -- render/png.mojo among them -- because
+# instrumenting them made the *compile* take minutes. The cause turned out to be
+# one construct the instrumenter emitted, a Bool loop flag assigned a constant
+# and read after nested loops, and not the modules at all. All five are measured
+# again. See coverage/instrument.mojo and docs/mojo-compiler-issue/.
 COVERAGE_EXCLUDE := render/gpu.mojo
 COVERED := $(filter-out $(COVERAGE_EXCLUDE),$(LIB_SOURCES))
 COV_DIR := coverage/build
@@ -90,17 +103,30 @@ JOBS ?= $(shell sysctl -n hw.logicalcpu 2> /dev/null \
 # records while costing a Metal shader compile and a pixel-by-pixel image
 # comparison. It still runs in `make test`, where its job is to prove the GPU
 # and CPU rasterizers agree.
-COVERAGE_TESTS := $(filter-out tests/test_gpu.mojo,$(TESTS))
+COVERAGE_TESTS := $(CPU_TESTS)
 COV_BUDGET := $(words $(COVERAGE_TESTS))
 
 CACHE_DIR := .cache
 HASHER    := $(shell command -v shasum > /dev/null 2>&1 \
                && echo "shasum -a 256" || echo "sha256sum")
 INPUTS    := $(SOURCES) $(COMPILE_FAIL) Makefile
-HASH      := $(shell cat $(INPUTS) 2>/dev/null | $(HASHER) | cut -c1-12)
+# The compiler is an input too. Hashing only the sources meant that upgrading
+# Mojo left every success stamp eligible for reuse, so `make check` could pass
+# without having compiled a line against the new toolchain. Costs one process
+# launch (about 40ms) per make invocation, which is worth not lying about what
+# has been checked.
+TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
+HASH      := $(shell { cat $(INPUTS) 2>/dev/null; echo "$(TOOLCHAIN)"; } \
+               | $(HASHER) | cut -c1-12)
 
-TEST_STAMP := $(CACHE_DIR)/test-$(HASH)
-LINT_STAMP := $(CACHE_DIR)/lint-$(HASH)
+# What the cache key does *not* include: whether a GPU is plugged in. Moving
+# the repo to a machine with different hardware can therefore reuse a GPU
+# stamp. `make check-gpu` prints the accelerator status on every run so that
+# stays visible, and CI should use `make ci` to skip the cache entirely.
+TEST_CPU_STAMP := $(CACHE_DIR)/test-cpu-$(HASH)
+TEST_GPU_STAMP := $(CACHE_DIR)/test-gpu-$(HASH)
+LINT_CPU_STAMP := $(CACHE_DIR)/lint-cpu-$(HASH)
+LINT_GPU_STAMP := $(CACHE_DIR)/lint-gpu-$(HASH)
 FMT_STAMP  := $(CACHE_DIR)/fmt-$(HASH)
 COV_STAMP  := $(CACHE_DIR)/coverage-$(HASH)
 NEG_STAMP  := $(CACHE_DIR)/compile-fail-$(HASH)
@@ -112,13 +138,17 @@ mkdir -p $(CACHE_DIR) && rm -f $(CACHE_DIR)/$(1)-* \
   && touch $(CACHE_DIR)/$(1)-$(HASH)
 endef
 
-.PHONY: help check test lint docstrings fmt fmt-check coverage \
+.PHONY: help check check-cpu check-gpu ci test test-cpu test-gpu \
+        lint lint-cpu lint-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation bench clean clean-images
 
 help:
-	@echo "ThreeMojo tasks (inputs hash to $(HASH), $(COV_BUDGET) tests)"
+	@echo "ThreeMojo tasks ($(TOOLCHAIN), inputs hash to $(HASH))"
 	@echo
-	@echo "  make check      fmt-check + lint + test   <- before committing"
+	@echo "  make check      everything                 <- before committing"
+	@echo "  make check-cpu  the standard-library-only half ($(words $(CPU_TESTS)) suites)"
+	@echo "  make check-gpu  the optional MAX backend ($(words $(GPU_TESTS)) suite)"
+	@echo "  make ci         check, ignoring the cache"
 	@echo "  make test       run every tests/test_*.mojo suite"
 	@echo "  make lint       compile with warnings promoted to errors"
 	@echo "  make fmt        reformat sources in place"
@@ -135,35 +165,85 @@ help:
 	@echo "Cached tasks re-run only when a source file's content changes."
 	@echo "Force one with 'make -B <task>'."
 
-check: fmt-check lint test compile-fail
+check: check-cpu check-gpu
+
+# The half that needs nothing but the Mojo toolchain. This is what to run when
+# MAX is not installed, and what proves the no-dependencies claim is still
+# true.
+check-cpu: fmt-check lint-cpu test-cpu compile-fail
+
+# The half that needs MAX and, to be worth anything, a GPU. The status line
+# comes first so a suite that skipped every hardware test cannot be mistaken
+# for one that ran them.
+check-gpu: gpu-status lint-gpu test-gpu
+
+# For CI, where a cache hit from a previous commit is exactly what you do not
+# want. `-B` forces every recipe to run regardless of its stamp.
+ci:
+	@$(MAKE) -B check
 
 # --- cached tasks -----------------------------------------------------------
-test: $(TEST_STAMP)
-$(TEST_STAMP):
-	@printf '%s\n' $(TESTS) \
+test: test-cpu test-gpu
+
+test-cpu: $(TEST_CPU_STAMP)
+$(TEST_CPU_STAMP):
+	@printf '%s\n' $(CPU_TESTS) \
 	  | xargs -P $(JOBS) -I {} \
 	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
-	  || { echo "Some suites FAILED."; exit 1; }
-	@echo "All suites passed."
-	@$(call stamp,test)
+	  || { echo "Some CPU suites FAILED."; exit 1; }
+	@echo "All $(words $(CPU_TESTS)) CPU suites passed."
+	@$(call stamp,test-cpu)
 
-lint: $(LINT_STAMP)
-$(LINT_STAMP):
-	@printf '%s\n' $(ENTRY_POINTS) \
+test-gpu: $(TEST_GPU_STAMP)
+$(TEST_GPU_STAMP):
+	@printf '%s\n' $(GPU_TESTS) \
+	  | xargs -P $(JOBS) -I {} \
+	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
+	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
+	  || { echo "Some GPU suites FAILED."; exit 1; }
+	@echo "All $(words $(GPU_TESTS)) GPU suites passed."
+	@$(call stamp,test-gpu)
+
+gpu-status:
+	@$(call run,$(MOJO) run $(MOJOFLAGS) tools/gpu_status.mojo); \
+	[ $$rc -eq 0 ] || exit 1
+
+lint: lint-cpu lint-gpu
+
+lint-cpu: $(LINT_CPU_STAMP)
+$(LINT_CPU_STAMP):
+	@printf '%s\n' $(CPU_ENTRY_POINTS) \
 	  | xargs -P $(JOBS) -I {} \
 	      sh -c 'out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o /dev/null "$$1" \
 	               2>&1); rc=$$?; printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
 	  || exit 1
-	@printf '%s\n' $(DOC_SOURCES) \
+	@printf '%s\n' $(CPU_DOC_SOURCES) \
 	  | xargs -P $(JOBS) -I {} \
 	      sh -c 'out=$$($(MOJO) doc $(MOJOFLAGS) --Werror -o /dev/null "$$1" \
 	               2>&1); rc=$$?; printf "%s" "$$out" | sed "/Crashpad/d"; \
 	             exit $$rc' _ {} \
 	  || exit 1
-	@echo "No warnings."
-	@$(call stamp,lint)
+	@echo "No warnings (CPU)."
+	@$(call stamp,lint-cpu)
+
+lint-gpu: $(LINT_GPU_STAMP)
+$(LINT_GPU_STAMP):
+	@printf '%s\n' $(GPU_ENTRY_POINTS) \
+	  | xargs -P $(JOBS) -I {} \
+	      sh -c 'out=$$($(MOJO) build $(MOJOFLAGS) --Werror -o /dev/null "$$1" \
+	               2>&1); rc=$$?; printf "%s" "$$out" | sed "/Crashpad/d"; \
+	             exit $$rc' _ {} \
+	  || exit 1
+	@printf '%s\n' $(GPU_LIB_SOURCES) \
+	  | xargs -P $(JOBS) -I {} \
+	      sh -c 'out=$$($(MOJO) doc $(MOJOFLAGS) --Werror -o /dev/null "$$1" \
+	               2>&1); rc=$$?; printf "%s" "$$out" | sed "/Crashpad/d"; \
+	             exit $$rc' _ {} \
+	  || exit 1
+	@echo "No warnings (GPU)."
+	@$(call stamp,lint-gpu)
 
 # mojo format has no --check flag, so format a scratch copy and diff it.
 fmt-check: $(FMT_STAMP)
