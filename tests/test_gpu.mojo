@@ -896,6 +896,131 @@ def test_both_backends_sample_a_texture_identically() raises:
     assert_equal(count_mismatches(cpu, gpu), 0)
 
 
+def test_both_backends_choose_and_blend_mip_levels_identically() raises:
+    # A 64-texel board tiled four times across 24 pixels: about ten texels to
+    # a pixel, which is three or four levels down. The chain is the only
+    # reason this is not a field of noise, and the level is chosen from an
+    # analytic derivative that both backends have to compute the same way --
+    # one level out on either would be plainly visible here.
+    if skipped_for_lack_of_a_gpu("both backends agree on mip levels"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            64,
+            8,
+            Color(240, 60, 20),
+            Color(20, 40, 200),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    var corners = List[RasterVertex]()
+    corners.append(lit_corner(0, 0, 1, 0, 4, board))
+    corners.append(lit_corner(24, 0, 1, 4, 4, board))
+    corners.append(lit_corner(24, 24, 1, 4, 0, board))
+    corners.append(lit_corner(0, 0, 1, 0, 4, board))
+    corners.append(lit_corner(24, 24, 1, 4, 0, board))
+    corners.append(lit_corner(0, 24, 1, 0, 0, board))
+
+    var cpu = cpu_textured(corners, 24, textures)
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
+    )
+
+    # The surface really is minified: level zero would be sampling one texel
+    # in ten and the two colours would still be at full strength.
+    var extreme = 0
+    for y in range(24):
+        for x in range(24):
+            var shown = cpu.get_pixel(x, y)
+            if shown.r > 220 or shown.b > 180:
+                extreme += 1
+    assert_equal(extreme, 0)
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_agree_when_a_mipmapped_surface_recedes() raises:
+    # Perspective: `inv_w` differs across the quad, so the footprint grows
+    # towards the far edge and the level changes from pixel to pixel. That
+    # exercises the part neither a flat quad nor a uniform level can -- the
+    # neighbouring coordinates are perspective-corrected before the
+    # derivative is taken.
+    if skipped_for_lack_of_a_gpu("both backends agree on a receding surface"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            32,
+            8,
+            Color(255, 255, 255),
+            Color(0, 0, 0),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    var corners = List[RasterVertex]()
+    # Far edge at a tenth the near edge's inv_w: ten times the compression.
+    corners.append(lit_corner(2, 22, 1.0, 0, 0, board))
+    corners.append(lit_corner(16, 4, 0.1, 0.3, 3, board))
+    corners.append(lit_corner(22, 22, 1.0, 3, 0, board))
+    corners.append(lit_corner(2, 22, 1.0, 0, 0, board))
+    corners.append(lit_corner(8, 4, 0.1, 0.0, 3, board))
+    corners.append(lit_corner(16, 4, 0.1, 0.3, 3, board))
+
+    var cpu = cpu_textured(corners, 24, textures)
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    # Anything that is not the clear colour: a textured surface holds no one
+    # foreground colour, so `count_foreground` has nothing to count.
+    var drawn = 0
+    for y in range(24):
+        for x in range(24):
+            var shown = cpu.get_pixel(x, y)
+            if shown.r != BACKGROUND.r or shown.b != BACKGROUND.b:
+                drawn += 1
+    assert_true(drawn > 100, "the surface did not appear")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_a_mipmapped_and_a_plain_texture_can_be_drawn_together() raises:
+    # The level count is per texture and travels in the table, so one image
+    # with a chain and one without must not be read with each other's.
+    if skipped_for_lack_of_a_gpu("a mipmapped and a plain texture together"):
+        return
+    var textures = TextureStore()
+    var plain = textures.add(
+        checkerboard(16, 4, Color(240, 60, 20), Color(20, 40, 200))
+    )
+    var chained = textures.add(
+        checkerboard(
+            16,
+            4,
+            Color(20, 240, 60),
+            Color(200, 20, 40),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    var corners = List[RasterVertex]()
+    corners.append(lit_corner(0, 0, 1, 0, 1, plain))
+    corners.append(lit_corner(24, 0, 1, 2, 1, plain))
+    corners.append(lit_corner(24, 12, 1, 2, 0, plain))
+    corners.append(lit_corner(0, 12, 1, 0, 1, chained))
+    corners.append(lit_corner(24, 12, 1, 2, 1, chained))
+    corners.append(lit_corner(24, 24, 1, 2, 0, chained))
+
+    var cpu = cpu_textured(corners, 24, textures)
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_agree_on_every_wrap_mode() raises:
     # Coordinates outside the unit square, so the wrap arithmetic is what is
     # being compared rather than the sampling.

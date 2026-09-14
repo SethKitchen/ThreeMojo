@@ -30,7 +30,7 @@ from materials.material import BLEND, OPAQUE
 from render.target import RenderTarget
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
-from std.math import ceil, floor, max, min
+from std.math import ceil, floor, log2, max, min, sqrt
 
 
 def edge(a: Vector2, b: Vector2, p: Vector2) -> Float32:
@@ -109,6 +109,36 @@ struct _Fragment(ImplicitlyCopyable):
     var wa: Float32
     var wb: Float32
     var wc: Float32
+
+
+def _weights(coverage: _Coverage, x: Int, y: Int) -> _Fragment:
+    """Return a pixel centre's barycentric weights, covered or not.
+
+    The same arithmetic as `_test` without the fill-rule rejection, because
+    mip selection needs the weights at the *neighbouring* pixels and those are
+    routinely outside the triangle. Barycentric coordinates extrapolate
+    perfectly well; it is only coverage that stops at the edge.
+    """
+    var px = sample(x)
+    var py = sample(y)
+
+    var e_ab = edge_at(
+        coverage.ax, coverage.ay, coverage.bx, coverage.by, px, py
+    )
+    var e_bc = edge_at(
+        coverage.bx, coverage.by, coverage.cx, coverage.cy, px, py
+    )
+    var e_ca = edge_at(
+        coverage.cx, coverage.cy, coverage.ax, coverage.ay, px, py
+    )
+
+    var area = Float32(coverage.area)
+    var first = Float32(e_bc) / area
+    var second = Float32(e_ca) / area
+    var third = Float32(e_ab) / area
+    if coverage.swapped:
+        return _Fragment(True, first, third, second)
+    return _Fragment(True, first, second, third)
 
 
 def _test(coverage: _Coverage, x: Int, y: Int) -> _Fragment:
@@ -344,6 +374,77 @@ comptime SHADE_UV = 1
 comptime SHADE_TEXTURE = 2
 
 
+def _coordinates_at(
+    a: RasterVertex,
+    b: RasterVertex,
+    c: RasterVertex,
+    weights: _Fragment,
+) -> Vector2:
+    """Return the perspective-correct texture coordinates at one sample.
+
+    The same correction `rasterize_shaded` applies to colour, factored out
+    because mip selection needs it at three sample points rather than one.
+    """
+    var inv_w = (
+        weights.wa * a.inv_w + weights.wb * b.inv_w + weights.wc * c.inv_w
+    )
+    var share_a = weights.wa
+    var share_b = weights.wb
+    var share_c = weights.wc
+    if inv_w != 0:
+        share_a = weights.wa * a.inv_w / inv_w
+        share_b = weights.wb * b.inv_w / inv_w
+        share_c = weights.wc * c.inv_w / inv_w
+    return Vector2(
+        a.u * share_a + b.u * share_b + c.u * share_c,
+        a.v * share_a + b.v * share_b + c.v * share_c,
+    )
+
+
+def mip_level(
+    along_x: Vector2, along_y: Vector2, width: Int, height: Int
+) -> Float32:
+    """Return how far down the mip chain one pixel's footprint reaches.
+
+    A hardware rasterizer shades pixels in 2x2 quads and takes the derivative
+    by subtracting a neighbour's value from its own. This one shades each
+    pixel alone — and does not need to borrow, because the function is known:
+    texture coordinates across a triangle are an analytic expression, so the
+    neighbouring values can simply be evaluated. That is exact rather than
+    approximate, and it still works at a silhouette, where a quad would be
+    reaching for fragments that were never shaded.
+
+    The level is the log of the longer footprint edge measured in texels: a
+    pixel covering two texels across is one level down, four is two, and so
+    on, which is exactly the halving the chain stores.
+
+    Args:
+        along_x: How far the coordinates move over one pixel in x, in uv.
+        along_y: The same down one pixel in y.
+        width: The texture's full-size width in texels.
+        height: Its full-size height.
+
+    Returns:
+        The fractional level. Negative where the surface is magnified, which
+        is where the full-size image is already the right answer.
+    """
+    var across = Float32(width)
+    var down = Float32(height)
+    var in_x = _length(along_x.x * across, along_x.y * down)
+    var in_y = _length(along_y.x * across, along_y.y * down)
+    var longest = in_x
+    if in_y > longest:
+        longest = in_y
+    if longest <= 0:
+        return 0
+    return log2(longest)
+
+
+def _length(x: Float32, y: Float32) -> Float32:
+    """Return the length of a two-component vector."""
+    return sqrt(x * x + y * y)
+
+
 def _raw(u: Float32, v: Float32) -> Color:
     """Return texture coordinates as the bytes a debug view should show.
 
@@ -513,7 +614,29 @@ def rasterize_shaded(
                     # reaches the camera, and a renderer needs both.
                     var texel = FloatColor(1.0, 1.0, 1.0, 1.0)
                     if a.texture != NO_TEXTURE:
-                        texel = textures.get(a.texture).sample(u, v)
+                        ref image = textures.get(a.texture)
+                        if image.levels == 1:
+                            texel = image.sample(u, v)
+                        else:
+                            # How much of the texture this one pixel covers,
+                            # from the coordinates at the pixels either side.
+                            var here = Vector2(u, v)
+                            var right = _coordinates_at(
+                                a, b, c, _weights(coverage, x + 1, y)
+                            )
+                            var below = _coordinates_at(
+                                a, b, c, _weights(coverage, x, y + 1)
+                            )
+                            texel = image.sample_level(
+                                u,
+                                v,
+                                mip_level(
+                                    Vector2(right.x - here.x, right.y - here.y),
+                                    Vector2(below.x - here.x, below.y - here.y),
+                                    image.width,
+                                    image.height,
+                                ),
+                            )
                     shaded = FloatColor(
                         shaded.r * texel.r,
                         shaded.g * texel.g,

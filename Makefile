@@ -360,7 +360,8 @@ bench:
 example: $(OUT_DIR)/triangle.png
 
 animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
-           $(OUT_DIR)/uv.png $(OUT_DIR)/textured.png $(OUT_DIR)/glass.png
+           $(OUT_DIR)/uv.png $(OUT_DIR)/textured.png $(OUT_DIR)/glass.png \
+           $(OUT_DIR)/floor.png
 
 $(OUT_DIR)/cube.png: $(LIB_SOURCES) examples/cube.mojo
 	@mkdir -p $(OUT_DIR)
@@ -376,6 +377,12 @@ $(OUT_DIR)/cubes.png: $(LIB_SOURCES) examples/cubes.mojo
 $(OUT_DIR)/glass.png: $(LIB_SOURCES) examples/glass.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/glass.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# A receding floor, half mipmapped and half not: minification and aliasing.
+$(OUT_DIR)/floor.png: $(LIB_SOURCES) examples/floor.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/floor.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # A checkerboard cube: scene graph, culling, depth, uv and sampling together.

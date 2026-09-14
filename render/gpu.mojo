@@ -41,7 +41,7 @@ is size-dependent. `bench/raster_bench.mojo` measures where the crossover is.
 
 from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
-from render.fillrule import bias, edge_at, sample, snap
+from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rasterizer import (
     SHADE_LIT,
@@ -58,10 +58,11 @@ from render.texture import (
     NEAREST,
     Texture,
     blend_texels,
+    mix_colour,
     wrap_index,
 )
 from std.gpu import global_idx
-from std.math import ceildiv, floor, inf
+from std.math import ceildiv, floor, inf, log2, sqrt
 from std.memory import unsafe_memcpy
 from std.sys import has_accelerator
 
@@ -87,7 +88,7 @@ comptime FURTHEST = Float32(1.0e30)
 # One row per texture in the store: where its bytes start, how big it is, and
 # how to sample it. A device cannot hold a `List` of `List`s, so every image
 # goes into one buffer end to end and this says where each one begins.
-comptime TABLE_COLUMNS = 6
+comptime TABLE_COLUMNS = 7
 
 
 def flatten_textures(
@@ -100,7 +101,8 @@ def flatten_textures(
 
     Returns:
         The concatenated texels, and `TABLE_COLUMNS` entries per texture:
-        byte offset, width, height, wrap mode, filter mode, colour space.
+        byte offset, width, height, wrap mode, filter mode, colour space,
+        and how many mip levels follow.
 
     Raises:
         Error: If a texture cannot be read.
@@ -124,6 +126,7 @@ def flatten_textures(
             table.append(Int32(image.wrap))
             table.append(Int32(image.filter))
             table.append(Int32(image.color_space))
+            table.append(1)
             for _ in range(4):
                 texels.append(255)
             continue
@@ -132,6 +135,7 @@ def flatten_textures(
         table.append(Int32(image.wrap))
         table.append(Int32(image.filter))
         table.append(Int32(image.color_space))
+        table.append(Int32(image.levels))
         for byte in range(len(image.pixels)):
             texels.append(image.pixels[byte])
     # Never empty: a zero-length device buffer is not worth the special case,
@@ -184,6 +188,28 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
     return flat^
 
 
+def _extent(extent: Int, level: Int) -> Int:
+    """Return an image's size at `level`, never below one."""
+    var at = extent >> level
+    if at < 1:
+        return 1
+    return at
+
+
+def _level_start(width: Int, height: Int, level: Int) -> Int:
+    """Return where `level` begins, in bytes from the image's own start.
+
+    The same walk `Texture.level_offset` does, for the same reason: the chain
+    is stored end to end and a level's position is the sum of the sizes before
+    it. Recomputed rather than tabulated so both sides derive it from the same
+    two numbers and cannot drift.
+    """
+    var offset = 0
+    for step in range(level):
+        offset += _extent(width, step) * _extent(height, step) * 4
+    return offset
+
+
 def _fetch(
     texels: MutPointer[UInt8, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
@@ -194,6 +220,7 @@ def _fetch(
     height: Int,
     wrap: Int,
     space: Int,
+    level: Int,
 ) -> FloatColor:
     """Read one texel from the device buffer, decoded and wrapped.
 
@@ -203,9 +230,12 @@ def _fetch(
     blend on top of them is `blend`, also shared. Alpha is not colour and is
     never decoded.
     """
+    var wide = _extent(width, level)
+    var tall = _extent(height, level)
     var offset = (
         start
-        + (wrap_index(y, height, wrap) * width + wrap_index(x, width, wrap)) * 4
+        + _level_start(width, height, level)
+        + (wrap_index(y, tall, wrap) * wide + wrap_index(x, wide, wrap)) * 4
     )
     if space == LINEAR:
         return FloatColor(
@@ -245,6 +275,210 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
         state.append(Int32(corners[triangle * 3].texture.value))
         state.append(Int32(corners[triangle * 3].blend))
     return state^
+
+
+def _uv_at(
+    corners: MutPointer[Float32, MutAnyOrigin],
+    base: Int,
+    ax: Int,
+    ay: Int,
+    bx: Int,
+    by: Int,
+    cx: Int,
+    cy: Int,
+    span: Float32,
+    swapped: Bool,
+    px: Int,
+    py: Int,
+) -> Vector2:
+    """Return the perspective-correct texture coordinates at a sample point.
+
+    Coverage is not tested: this is called for the pixels either side, which
+    are routinely outside the triangle. Barycentric coordinates extrapolate
+    perfectly well; it is only coverage that stops at the edge.
+    """
+    var e_ab = edge_at(ax, ay, bx, by, px, py)
+    var e_bc = edge_at(bx, by, cx, cy, px, py)
+    var e_ca = edge_at(cx, cy, ax, ay, px, py)
+    var first = Float32(e_bc) / span
+    var second = Float32(e_ca) / span
+    var third = Float32(e_ab) / span
+    var wa = first
+    var wb = second
+    var wc = third
+    if swapped:
+        wb = third
+        wc = second
+
+    var aw = corners[unsafe_offset=base + 3]
+    var bw = corners[unsafe_offset=base + 13]
+    var cw = corners[unsafe_offset=base + 23]
+    var inv_w = wa * aw + wb * bw + wc * cw
+    var share_a = wa
+    var share_b = wb
+    var share_c = wc
+    if inv_w != 0:
+        share_a = wa * aw / inv_w
+        share_b = wb * bw / inv_w
+        share_c = wc * cw / inv_w
+    return Vector2(
+        corners[unsafe_offset=base + 8] * share_a
+        + corners[unsafe_offset=base + 18] * share_b
+        + corners[unsafe_offset=base + 28] * share_c,
+        corners[unsafe_offset=base + 9] * share_a
+        + corners[unsafe_offset=base + 19] * share_b
+        + corners[unsafe_offset=base + 29] * share_c,
+    )
+
+
+def _sample_at(
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    start: Int,
+    width: Int,
+    height: Int,
+    wrap: Int,
+    filter: Int,
+    space: Int,
+    u: Float32,
+    v: Float32,
+    level: Int,
+) -> FloatColor:
+    """Sample one mip level, the device counterpart of `Texture.sample_at`."""
+    var wide = _extent(width, level)
+    var tall = _extent(height, level)
+    if filter == NEAREST:
+        return _fetch(
+            texels,
+            ramp,
+            start,
+            Int(floor(u * Float32(wide))),
+            Int(floor((1 - v) * Float32(tall))),
+            width,
+            height,
+            wrap,
+            space,
+            level,
+        )
+    # Texel centres sit at half-integers; see Texture.sample.
+    var across = u * Float32(wide) - 0.5
+    var down = (1 - v) * Float32(tall) - 0.5
+    var column = Int(floor(across))
+    var row = Int(floor(down))
+    return blend_texels(
+        _fetch(
+            texels, ramp, start, column, row, width, height, wrap, space, level
+        ),
+        _fetch(
+            texels,
+            ramp,
+            start,
+            column + 1,
+            row,
+            width,
+            height,
+            wrap,
+            space,
+            level,
+        ),
+        _fetch(
+            texels,
+            ramp,
+            start,
+            column,
+            row + 1,
+            width,
+            height,
+            wrap,
+            space,
+            level,
+        ),
+        _fetch(
+            texels,
+            ramp,
+            start,
+            column + 1,
+            row + 1,
+            width,
+            height,
+            wrap,
+            space,
+            level,
+        ),
+        across - Float32(column),
+        down - Float32(row),
+    )
+
+
+def _sample_level(
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    start: Int,
+    width: Int,
+    height: Int,
+    wrap: Int,
+    filter: Int,
+    space: Int,
+    levels: Int,
+    u: Float32,
+    v: Float32,
+    level: Float32,
+) -> FloatColor:
+    """Trilinear across two mip levels, matching `Texture.sample_level`."""
+    if levels == 1 or level <= 0:
+        return _sample_at(
+            texels, ramp, start, width, height, wrap, filter, space, u, v, 0
+        )
+    if level >= Float32(levels - 1):
+        return _sample_at(
+            texels,
+            ramp,
+            start,
+            width,
+            height,
+            wrap,
+            filter,
+            space,
+            u,
+            v,
+            levels - 1,
+        )
+    var lower = Int(floor(level))
+    var near = _sample_at(
+        texels, ramp, start, width, height, wrap, filter, space, u, v, lower
+    )
+    var far = _sample_at(
+        texels, ramp, start, width, height, wrap, filter, space, u, v, lower + 1
+    )
+    return mix_colour(near, far, level - Float32(lower))
+
+
+def _mip_level(
+    u: Float32,
+    v: Float32,
+    along_x: Vector2,
+    along_y: Vector2,
+    width: Float32,
+    height: Float32,
+) -> Float32:
+    """How far down the chain this pixel's footprint reaches.
+
+    `along_x` and `along_y` already hold the coordinates at the neighbouring
+    pixels, worked out from the same analytic expression the host uses; see
+    `render.rasterizer.mip_level`.
+    """
+    var dx_u = (along_x.x - u) * width
+    var dx_v = (along_x.y - v) * height
+    var dy_u = (along_y.x - u) * width
+    var dy_v = (along_y.y - v) * height
+    var in_x = sqrt(dx_u * dx_u + dx_v * dx_v)
+    var in_y = sqrt(dy_u * dy_u + dy_v * dy_v)
+    var longest = in_x
+    if in_y > longest:
+        longest = in_y
+    if longest <= 0:
+        return 0
+    return log2(longest)
 
 
 def rasterize_kernel(
@@ -415,75 +649,58 @@ def rasterize_kernel(
                 var wrap = Int(table[unsafe_offset=entry + 3])
                 var filter = Int(table[unsafe_offset=entry + 4])
                 var space = Int(table[unsafe_offset=entry + 5])
+                var levels = Int(table[unsafe_offset=entry + 6])
+
+                # Where the coordinates land one pixel over and one down. The
+                # expression is analytic, so the neighbours are evaluated
+                # rather than borrowed from fragments that may not exist --
+                # see render.rasterizer.mip_level.
+                var along_x = _uv_at(
+                    corners,
+                    base,
+                    sax,
+                    say,
+                    sbx,
+                    sby,
+                    scx,
+                    scy,
+                    span,
+                    swapped,
+                    px + SUBPIXEL,
+                    py,
+                )
+                var along_y = _uv_at(
+                    corners,
+                    base,
+                    sax,
+                    say,
+                    sbx,
+                    sby,
+                    scx,
+                    scy,
+                    span,
+                    swapped,
+                    px,
+                    py + SUBPIXEL,
+                )
                 # v flipped and wrapped by the same routine the host uses,
                 # and blended by the same one -- see render.texture.
-                var sampled = FloatColor(1, 1, 1, 1)
-                if filter == NEAREST:
-                    sampled = _fetch(
-                        texels,
-                        ramp,
-                        start,
-                        Int(floor(u * Float32(width))),
-                        Int(floor((1 - v) * Float32(height))),
-                        width,
-                        height,
-                        wrap,
-                        space,
-                    )
-                else:
-                    # Texel centres sit at half-integers; see Texture.sample.
-                    var across = u * Float32(width) - 0.5
-                    var down = (1 - v) * Float32(height) - 0.5
-                    var column = Int(floor(across))
-                    var row = Int(floor(down))
-                    sampled = blend_texels(
-                        _fetch(
-                            texels,
-                            ramp,
-                            start,
-                            column,
-                            row,
-                            width,
-                            height,
-                            wrap,
-                            space,
-                        ),
-                        _fetch(
-                            texels,
-                            ramp,
-                            start,
-                            column + 1,
-                            row,
-                            width,
-                            height,
-                            wrap,
-                            space,
-                        ),
-                        _fetch(
-                            texels,
-                            ramp,
-                            start,
-                            column,
-                            row + 1,
-                            width,
-                            height,
-                            wrap,
-                            space,
-                        ),
-                        _fetch(
-                            texels,
-                            ramp,
-                            start,
-                            column + 1,
-                            row + 1,
-                            width,
-                            height,
-                            wrap,
-                            space,
-                        ),
-                        across - Float32(column),
-                        down - Float32(row),
-                    )
+                var sampled = _sample_level(
+                    texels,
+                    ramp,
+                    start,
+                    width,
+                    height,
+                    wrap,
+                    filter,
+                    space,
+                    levels,
+                    u,
+                    v,
+                    _mip_level(
+                        u, v, along_x, along_y, Float32(width), Float32(height)
+                    ),
+                )
                 red *= sampled.r
                 green *= sampled.g
                 blue *= sampled.b

@@ -22,6 +22,7 @@ from render.texture import (
     Texture,
     blend,
     checkerboard,
+    mix_colour,
     wrap_index,
 )
 from std.testing import (
@@ -523,6 +524,214 @@ def test_filtering_two_opaque_texels_is_unchanged_by_premultiplying() raises:
     assert_almost_equal(between.r, Float32(0.5), atol=TOLERANCE)
     assert_almost_equal(between.g, Float32(0.5), atol=TOLERANCE)
     assert_almost_equal(between.a, Float32(1.0), atol=TOLERANCE)
+
+
+# --- Mipmaps ----------------------------------------------------------------
+
+
+def test_a_texture_has_one_level_unless_asked_for_more() raises:
+    # Building the chain costs a third more memory and is pointless for an
+    # image that is never minified, so it is opt-in.
+    var plain = checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
+    assert_equal(plain.levels, 1)
+
+
+def test_the_chain_halves_down_to_a_single_texel() raises:
+    # 8 -> 4 -> 2 -> 1 is four levels, and the last one has nowhere to go.
+    var board = checkerboard(
+        8, 2, Color(255, 255, 255), Color(0, 0, 0), mipmapped=True
+    )
+    assert_equal(board.levels, 4)
+    assert_equal(board.level_width(0), 8)
+    assert_equal(board.level_width(3), 1)
+    assert_equal(board.level_height(3), 1)
+
+
+def test_a_level_starts_after_every_level_before_it() raises:
+    # The chain is one buffer, largest first: 8x8 then 4x4 then 2x2 then 1x1,
+    # four bytes each. The GPU works the same offsets out from the same two
+    # numbers, so they are asserted rather than assumed.
+    var board = checkerboard(
+        8, 2, Color(255, 255, 255), Color(0, 0, 0), mipmapped=True
+    )
+    assert_equal(board.level_offset(0), 0)
+    assert_equal(board.level_offset(1), 8 * 8 * 4)
+    assert_equal(board.level_offset(2), (8 * 8 + 4 * 4) * 4)
+    assert_equal(board.level_offset(3), (8 * 8 + 4 * 4 + 2 * 2) * 4)
+    assert_equal(len(board.pixels), (8 * 8 + 4 * 4 + 2 * 2 + 1) * 4)
+
+
+def test_a_level_is_the_average_of_the_light_beneath_it() raises:
+    # A two-square board of black and white averages, over any four texels,
+    # to half the *light* -- which encodes as 188, not 128. The smallest
+    # level is that average taken over the whole image.
+    var board = checkerboard(
+        8, 2, Color(255, 255, 255), Color(0, 0, 0), mipmapped=True
+    )
+    var smallest = board.wrapped_texel(0, 0, 3)
+    assert_almost_equal(smallest.r, Float32(0.5), atol=Float64(0.004))
+    assert_equal(
+        board.pixels[board.level_offset(3)],
+        UInt8(188),
+    )
+
+
+def test_a_uniform_image_survives_the_whole_chain() raises:
+    # Averaging equal values changes nothing, so every level of a flat image
+    # is the colour it started as. Catches an offset or extent that is wrong
+    # in a way a gradient would hide.
+    var board = checkerboard(
+        4, 1, Color(30, 90, 210), Color(30, 90, 210), mipmapped=True
+    )
+    for level in range(board.levels):
+        var texel = board.wrapped_texel(0, 0, level)
+        assert_almost_equal(
+            texel.r, srgb_to_linear(Float32(30) / 255), atol=Float64(0.004)
+        )
+        assert_almost_equal(
+            texel.b, srgb_to_linear(Float32(210) / 255), atol=Float64(0.004)
+        )
+
+
+def test_a_hidden_colour_weighs_nothing_when_a_level_is_built() raises:
+    # The premultiplied reason, one level up: a transparent red next to an
+    # opaque white must average to white at half alpha, not to pink. Two
+    # texels wide, so level 1 is a single texel holding the average.
+    var pixels = List[UInt8]()
+    for value in [UInt8(255), UInt8(0), UInt8(0), UInt8(0)]:
+        pixels.append(value)
+    for value in [UInt8(255), UInt8(255), UInt8(255), UInt8(255)]:
+        pixels.append(value)
+    var strip = Texture(2, 1, pixels^, CLAMP, BILINEAR, LINEAR, mipmapped=True)
+    assert_equal(strip.levels, 2)
+    var mixed = strip.wrapped_texel(0, 0, 1)
+    assert_almost_equal(mixed.a, Float32(0.5), atol=Float64(0.004))
+    # Levels are stored straight, like every other texel, so the colour that
+    # comes back is the white one alone -- pink would mean the red had been
+    # averaged in despite contributing no light.
+    assert_almost_equal(mixed.r, Float32(1.0), atol=Float64(0.01))
+    assert_almost_equal(mixed.g, Float32(1.0), atol=Float64(0.01))
+
+
+def test_a_fractional_level_lands_between_the_two_either_side() raises:
+    var board = checkerboard(
+        8, 2, Color(255, 255, 255), Color(0, 0, 0), mipmapped=True
+    )
+    var lower = board.sample_at(0.3, 0.7, 1)
+    var upper = board.sample_at(0.3, 0.7, 2)
+    var between = board.sample_level(0.3, 0.7, 1.25)
+    assert_almost_equal(
+        between.r, mix_colour(lower, upper, 0.25).r, atol=TOLERANCE
+    )
+
+
+def test_a_level_below_zero_reads_the_full_size_image() raises:
+    # Magnification: the surface is bigger on screen than the image is, and
+    # no amount of blurring improves that.
+    var board = checkerboard(
+        8, 2, Color(255, 255, 255), Color(0, 0, 0), mipmapped=True
+    )
+    assert_equal(
+        board.sample_level(0.1, 0.9, -3.0).r, board.sample_at(0.1, 0.9, 0).r
+    )
+
+
+def test_a_level_past_the_end_reads_the_smallest_image() raises:
+    var board = checkerboard(
+        8, 2, Color(255, 255, 255), Color(0, 0, 0), mipmapped=True
+    )
+    assert_equal(
+        board.sample_level(0.1, 0.9, 99.0).r, board.sample_at(0.1, 0.9, 3).r
+    )
+
+
+def test_a_texture_without_a_chain_ignores_the_level() raises:
+    var plain = checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
+    assert_equal(plain.sample_level(0.1, 0.9, 2.0).r, plain.sample(0.1, 0.9).r)
+
+
+def test_the_blank_texture_is_white_at_every_level() raises:
+    var nothing = Texture()
+    assert_equal(nothing.sample_level(0.5, 0.5, 2.0).r, Float32(1))
+    assert_equal(nothing.sample_at(0.5, 0.5, 2).r, Float32(1))
+    assert_equal(nothing.wrapped_texel(3, 4, 2).r, Float32(1))
+
+
+def test_a_chain_over_a_tall_strip_runs_out_of_width_first() raises:
+    # 1x4: the width is already one at the top of the chain, so every level
+    # after it halves only the height, and the four texels being averaged are
+    # two rows of one rather than a square.
+    var pixels = List[UInt8]()
+    for step in range(4):
+        var shade = UInt8(0)
+        if step < 2:
+            shade = 255
+        for _ in range(3):  # pragma: no branch
+            pixels.append(shade)
+        pixels.append(255)
+    var strip = Texture(1, 4, pixels^, CLAMP, NEAREST, LINEAR, mipmapped=True)
+    assert_equal(strip.levels, 3)
+    assert_equal(strip.level_width(1), 1)
+    assert_equal(strip.level_height(1), 2)
+    # The top pair averages to white, the bottom pair to black, and the whole
+    # image to half.
+    assert_almost_equal(
+        strip.wrapped_texel(0, 0, 1).r, Float32(1.0), atol=Float64(0.004)
+    )
+    assert_almost_equal(
+        strip.wrapped_texel(0, 1, 1).r, Float32(0.0), atol=Float64(0.004)
+    )
+    assert_almost_equal(
+        strip.wrapped_texel(0, 0, 2).r, Float32(0.5), atol=Float64(0.004)
+    )
+
+
+def test_a_chain_over_a_wide_strip_runs_out_of_height_first() raises:
+    # The other way round, because width and height are two separate shifts
+    # and clamping only one of them at a floor of one is a mistake a square
+    # image cannot show.
+    var pixels = List[UInt8]()
+    for step in range(4):
+        var shade = UInt8(0)
+        if step < 2:
+            shade = 255
+        for _ in range(3):  # pragma: no branch
+            pixels.append(shade)
+        pixels.append(255)
+    var strip = Texture(4, 1, pixels^, CLAMP, NEAREST, LINEAR, mipmapped=True)
+    assert_equal(strip.levels, 3)
+    assert_equal(strip.level_width(1), 2)
+    assert_equal(strip.level_height(1), 1)
+    assert_almost_equal(
+        strip.wrapped_texel(0, 0, 1).r, Float32(1.0), atol=Float64(0.004)
+    )
+    assert_almost_equal(
+        strip.wrapped_texel(1, 0, 1).r, Float32(0.0), atol=Float64(0.004)
+    )
+
+
+def test_a_level_is_filtered_within_itself_as_well() raises:
+    # Trilinear is bilinear twice: a bilinear texture's mip levels are read
+    # bilinearly too, not snapped to a texel because they are small.
+    var board = checkerboard(
+        8,
+        2,
+        Color(255, 255, 255),
+        Color(0, 0, 0),
+        REPEAT,
+        BILINEAR,
+        mipmapped=True,
+    )
+    # A quarter of the way between two texel centres of level 1, which under
+    # nearest would give one of them exactly.
+    var between = board.sample_at(0.3125, 0.5, 1)
+    var nearer = board.wrapped_texel(1, 1, 1)
+    var further = board.wrapped_texel(2, 1, 1)
+    assert_true(
+        (between.r > nearer.r and between.r < further.r)
+        or (between.r < nearer.r and between.r > further.r),
+        "the level was not filtered within itself",
+    )
 
 
 def main() raises:

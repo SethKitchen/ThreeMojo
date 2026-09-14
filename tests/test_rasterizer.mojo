@@ -9,7 +9,7 @@ from math.vector2 import Vector2
 from std.math import inf
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, NO_TEXTURE, OPAQUE
-from render.texture import REPEAT, Texture, checkerboard
+from render.texture import NEAREST, REPEAT, Texture, checkerboard
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from math.vector3 import Vector3
 from render.target import RenderTarget
@@ -19,6 +19,7 @@ from render.rasterizer import (
     RasterVertex,
     Triangle,
     edge,
+    mip_level,
     rasterize,
     rasterize_depth,
     rasterize_shaded,
@@ -992,6 +993,226 @@ def test_an_opaque_surface_still_claims_the_depth() raises:
         fb,
     )
     assert_almost_equal(fb.depth_at(3, 3), Float32(0.5), atol=Float64(1e-6))
+
+
+# --- Mip level selection ----------------------------------------------------
+
+
+def test_one_texel_per_pixel_is_the_full_size_image() raises:
+    # A 64-wide texture mapped so a pixel steps 1/64 across it covers exactly
+    # one texel, and log2(1) is zero.
+    assert_almost_equal(
+        mip_level(Vector2(1.0 / 64, 0), Vector2(0, 1.0 / 64), 64, 64),
+        Float32(0),
+        atol=Float64(1e-6),
+    )
+
+
+def test_a_pixel_covering_four_texels_is_two_levels_down() raises:
+    # Four texels across, and the chain halves each level, so two halvings.
+    assert_almost_equal(
+        mip_level(Vector2(4.0 / 64, 0), Vector2(0, 4.0 / 64), 64, 64),
+        Float32(2),
+        atol=Float64(1e-6),
+    )
+
+
+def test_a_magnified_surface_asks_for_a_level_below_zero() raises:
+    # Less than a texel per pixel: no level of the chain is sharper than the
+    # image already is, and `sample_level` reads level zero.
+    assert_true(
+        mip_level(Vector2(0.25 / 64, 0), Vector2(0, 0.25 / 64), 64, 64) < 0
+    )
+
+
+def test_the_longer_footprint_edge_decides_the_level() raises:
+    # A surface seen edge-on is compressed in one direction only. Taking the
+    # shorter edge, or an average, would leave the compressed direction
+    # aliasing; the longer one is what has to stop sparkling.
+    assert_almost_equal(
+        mip_level(Vector2(8.0 / 64, 0), Vector2(0, 1.0 / 64), 64, 64),
+        Float32(3),
+        atol=Float64(1e-6),
+    )
+    # And the same footprint the other way round gives the same answer.
+    assert_almost_equal(
+        mip_level(Vector2(1.0 / 64, 0), Vector2(0, 8.0 / 64), 64, 64),
+        Float32(3),
+        atol=Float64(1e-6),
+    )
+
+
+def test_a_footprint_is_measured_in_texels_not_in_uv() raises:
+    # The same uv step over a texture twice as wide covers twice as many
+    # texels, and so is one level further down.
+    var step = Vector2(1.0 / 64, 0)
+    var flat = Vector2(0, 1.0 / 64)
+    assert_almost_equal(
+        mip_level(step, flat, 128, 64) - mip_level(step, flat, 64, 64),
+        Float32(1),
+        atol=Float64(1e-6),
+    )
+
+
+def test_a_degenerate_footprint_asks_for_the_full_size_image() raises:
+    # A triangle collapsed to nothing moves no distance in uv, and log2(0) is
+    # negative infinity, which is not a level.
+    assert_equal(mip_level(Vector2(0, 0), Vector2(0, 0), 64, 64), Float32(0))
+
+
+# --- Mipmapped sampling -----------------------------------------------------
+
+
+def drawn_quad(
+    corners: List[RasterVertex], size: Int, textures: TextureStore
+) raises -> RenderTarget:
+    """Return a target with two textured triangles drawn into it."""
+    var fb = RenderTarget(size, size, Color(0, 0, 0))
+    for triangle in range(2):  # pragma: no branch
+        rasterize_shaded(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+            fb,
+            SHADE_TEXTURE,
+            textures,
+        )
+    return fb^
+
+
+def test_a_minified_surface_reads_down_the_chain() raises:
+    # A 32-texel board of two-texel squares squeezed into 8 pixels: four
+    # texels to a pixel, so level two, where one texel spans four squares and
+    # is their average. Without the chain every pixel would be one of the two
+    # extreme colours; with it nothing is extreme.
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            32,
+            16,
+            Color(255, 0, 0),
+            Color(0, 0, 255),
+            REPEAT,
+            NEAREST,
+            mipmapped=True,
+        )
+    )
+    var fb = drawn_quad(mapped_quad(8, board), 8, textures)
+    for y in range(8):
+        for x in range(8):
+            var shown = fb.shown(x, y)
+            assert_true(
+                shown.r > 20 and shown.b > 20,
+                "a minified pixel took one texel instead of their average",
+            )
+
+
+def test_the_same_surface_without_a_chain_takes_a_single_texel() raises:
+    # The control: identical in every way but the chain, and every pixel is
+    # one of the two colours outright. This is what the test above is the
+    # absence of, and without it that one would pass on a blurry bug.
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(32, 16, Color(255, 0, 0), Color(0, 0, 255))
+    )
+    var fb = drawn_quad(mapped_quad(8, board), 8, textures)
+    var extreme = 0
+    for y in range(8):
+        for x in range(8):
+            var shown = fb.shown(x, y)
+            if shown.r < 20 or shown.b < 20:
+                extreme += 1
+    assert_equal(extreme, 64)
+
+
+def test_a_magnified_surface_still_reads_the_full_size_image() raises:
+    # The chain must not blur what is already too big: two texels across
+    # sixteen pixels stays two hard squares.
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            2,
+            2,
+            Color(255, 0, 0),
+            Color(0, 0, 255),
+            REPEAT,
+            NEAREST,
+            mipmapped=True,
+        )
+    )
+    var fb = drawn_quad(mapped_quad(16, board), 16, textures)
+    assert_equal(fb.shown(2, 2).r, UInt8(255))
+    assert_equal(fb.shown(2, 2).b, UInt8(0))
+    assert_equal(fb.shown(13, 2).b, UInt8(255))
+    assert_equal(fb.shown(13, 2).r, UInt8(0))
+
+
+def test_a_mipmapped_surface_drawn_the_other_way_round_looks_the_same() raises:
+    # Winding decides the sign of the area, and the two barycentric weights
+    # that swap with it. The fragment loop already handles that; the
+    # neighbour lookups mip selection needs are a second place it has to be
+    # got right, and getting it wrong there would pick a level from a
+    # footprint with two axes exchanged.
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            32,
+            16,
+            Color(255, 0, 0),
+            Color(0, 0, 255),
+            REPEAT,
+            NEAREST,
+            mipmapped=True,
+        )
+    )
+    var forwards = mapped_quad(8, board)
+    var backwards = List[RasterVertex]()
+    for triangle in range(2):  # pragma: no branch
+        backwards.append(forwards[triangle * 3])
+        backwards.append(forwards[triangle * 3 + 2])
+        backwards.append(forwards[triangle * 3 + 1])
+
+    var one = drawn_quad(forwards, 8, textures)
+    var other = drawn_quad(backwards, 8, textures)
+    for y in range(8):
+        for x in range(8):
+            assert_equal(one.shown(x, y).r, other.shown(x, y).r)
+            assert_equal(one.shown(x, y).b, other.shown(x, y).b)
+
+
+def test_a_mipmapped_surface_with_no_depth_at_all_still_samples() raises:
+    # Every corner at inv_w zero: the perspective correction has nothing to
+    # divide by and falls back to the plain barycentric weights. Reachable
+    # only through a caller that built raster vertices by hand, but the
+    # division is there and has to have an answer.
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            16,
+            4,
+            Color(255, 0, 0),
+            Color(0, 0, 255),
+            REPEAT,
+            NEAREST,
+            mipmapped=True,
+        )
+    )
+    var flat = List[RasterVertex]()
+    for corner in mapped_quad(8, board):
+        flat.append(
+            RasterVertex(
+                corner.x,
+                corner.y,
+                corner.z,
+                0,
+                corner.color,
+                corner.u,
+                corner.v,
+                corner.texture,
+            )
+        )
+    var fb = drawn_quad(flat, 8, textures)
+    assert_true(fb.shown(4, 4).r > 0 or fb.shown(4, 4).b > 0)
 
 
 def main() raises:

@@ -347,8 +347,8 @@ unmissable on two triangles running to the horizon.
 
 ### Reading an image with them
 
-`render/texture.mojo` is what turns a `uv` pair into a colour. Nearest
-neighbour, three wrap modes, and no filtering yet:
+`render/texture.mojo` is what turns a `uv` pair into a colour: two filters,
+three wrap modes, and an optional mip chain.
 
 ```mojo
 var board = assets.textures.add(
@@ -394,6 +394,57 @@ which is measured rather than guaranteed.
 Every texture in a scene crosses to the device as one buffer with a table
 saying where each image starts, because a device cannot hold a list of lists.
 A vertex carries the id of the image it wants.
+
+### Mipmaps, and the footprint that chooses one
+
+Filtering fixes magnification — a pixel covering less than a texel. The
+opposite case is worse and bilinear does nothing for it. When a surface recedes,
+a pixel comes to cover dozens of texels, and reading one of them is a point
+sample of a signal far finer than the pixel grid can carry. Which texel it lands
+on swings wildly for a coordinate that barely moved, so the result is noise, and
+the noise *crawls* as the camera moves. That is aliasing, and it is the loudest
+artefact a texture mapper has.
+
+The answer is to average every texel under the pixel, and a mip chain is those
+averages taken in advance: each level is the one above it halved, so the level
+whose texels are pixel-sized is a lookup instead of a sum.
+
+```mojo
+var board = assets.textures.add(
+    checkerboard(
+        64, 8, Color(245, 245, 250), Color(35, 70, 150),
+        REPEAT, BILINEAR, mipmapped=True,
+    )
+)
+```
+
+The chain is opt-in because it costs a third more memory and buys nothing for
+an image that is never minified. It is built in premultiplied linear light, for
+the two reasons everything else in this renderer is: **light is what averages**,
+and **a hidden colour must weigh nothing**. Averaging sRGB bytes makes every
+level darker than the one before, so a receding surface dims as it goes — and
+averaging straight alpha drags the colour of fully transparent texels into view.
+Each level is re-encoded to bytes, which is what a GPU stores too.
+
+Which level to read comes from the *footprint*: how far the texture coordinates
+move over one pixel. `mip_level` measures both directions, takes the longer —
+the shorter one would leave the compressed direction aliasing, which is exactly
+the case a surface seen edge-on is in — and takes the log, because the chain
+halves. Sampling is trilinear: bilinear within the two levels either side, then
+between them, so the change from one level to the next is not a visible band.
+
+Hardware rasterizers get that derivative by shading pixels in 2x2 quads and
+subtracting a neighbour's value. This one **evaluates the neighbours
+analytically**: texture coordinates across a triangle are a known expression, so
+the value one pixel over can simply be computed — perspective divide included.
+That is exact rather than approximate, and it still works at a silhouette, where
+a quad would be reaching for fragments that were never shaded. Both backends
+compute it the same way and are held to it in parity tests, including a
+perspective quad where the level changes from pixel to pixel.
+
+`make animation` renders `out/floor.png`: one checkerboard floor running to the
+horizon, mipmapped on the right and not on the left. Both halves are sharp at
+the bottom of the frame and tell you everything at the top.
 
 ## Materials
 

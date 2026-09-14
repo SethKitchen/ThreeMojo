@@ -36,7 +36,7 @@ three.js offers.
 """
 
 from render.framebuffer import Color, FloatColor
-from render.srgb import LINEAR, SRGB, decode_ramp
+from render.srgb import LINEAR, SRGB, decode_ramp, linear_to_srgb
 from std.math import floor
 
 # How a coordinate outside the unit square is resolved.
@@ -57,6 +57,23 @@ comptime BILINEAR = 1
 def mix(near: Float32, far: Float32, t: Float32) -> Float32:
     """Return one channel a fraction `t` of the way from `near` to `far`."""
     return near + (far - near) * t
+
+
+def mix_colour(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
+    """Return one colour a fraction `t` of the way to another.
+
+    Mixed premultiplied, so a transparent colour contributes no colour — the
+    same reason `blend_texels` does. Shared with the GPU kernel, which blends
+    between mip levels with it.
+    """
+    var one = near.premultiplied()
+    var two = far.premultiplied()
+    return FloatColor(
+        mix(one.r, two.r, t),
+        mix(one.g, two.g, t),
+        mix(one.b, two.b, t),
+        mix(one.a, two.a, t),
+    ).unpremultiplied()
 
 
 def blend_texels(
@@ -149,6 +166,30 @@ def blend(
     )
 
 
+def _to_byte(value: Float32, space: Int) -> UInt8:
+    """Return a linear channel as the byte that stores it in `space`.
+
+    Only the top is clamped. The one caller averages values that came from
+    bytes, so `value` cannot be negative, and a guard against that would be a
+    branch no test could ever take -- coverage says so, and dead code that
+    looks like a safety check is worse than none.
+
+    Args:
+        value: A linear channel, 0 to 1.
+        space: `SRGB` to encode through the curve, `LINEAR` to store as is.
+
+    Returns:
+        The byte.
+    """
+    var shown = value
+    if space == SRGB:
+        shown = linear_to_srgb(value)
+    var scaled = shown * 255 + 0.5
+    if scaled >= 255:
+        return 255
+    return UInt8(scaled)
+
+
 def _identity_ramp() -> List[Float32]:
     """Return the 256 values a byte stands for when nothing is encoded."""
     var ramp = List[Float32]()
@@ -210,6 +251,9 @@ struct Texture(Movable):
     var wrap: Int
     var filter: Int
     var color_space: Int
+    # How many images the chain holds: the full-size one, then each halving
+    # down to a single texel. One means no chain.
+    var levels: Int
     # The 256 linear values this texture's bytes stand for. Built once here
     # rather than per fragment, because `pow` has only 256 possible inputs
     # and sampling happens per pixel.
@@ -229,6 +273,7 @@ struct Texture(Movable):
         self.filter = NEAREST
         self.color_space = LINEAR
         self.ramp = _identity_ramp()
+        self.levels = 1
 
     def __init__(
         out self,
@@ -238,6 +283,7 @@ struct Texture(Movable):
         wrap: Int = REPEAT,
         filter: Int = NEAREST,
         color_space: Int = SRGB,
+        mipmapped: Bool = False,
     ) raises:
         """Create a texture from RGBA bytes.
 
@@ -250,6 +296,8 @@ struct Texture(Movable):
             color_space: `SRGB` for a colour image, the default because that
                 is what an image file holds; `LINEAR` for data that is not
                 colour and must not be decoded.
+            mipmapped: Build the chain of halved copies. Costs a third more
+                memory and is what stops a distant surface from sparkling.
 
         Raises:
             Error: If the dimensions are not positive, the buffer length
@@ -275,6 +323,9 @@ struct Texture(Movable):
         self.pixels = pixels^
         self.wrap = wrap
         self.filter = filter
+        self.levels = 1
+        if mipmapped:
+            self._build_mipmaps()
 
     def __init__(out self, *, copy: Self):
         """Copy another texture, image data included."""
@@ -285,6 +336,7 @@ struct Texture(Movable):
         self.filter = copy.filter
         self.color_space = copy.color_space
         self.ramp = copy.ramp.copy()
+        self.levels = copy.levels
 
     def is_blank(self) -> Bool:
         """Return True if this is the blank texture."""
@@ -315,7 +367,95 @@ struct Texture(Movable):
             self.pixels[offset + 3],
         )
 
-    def wrapped_texel(self, x: Int, y: Int) -> FloatColor:
+    def level_width(self, level: Int) -> Int:
+        """Return how wide the image is at `level`, never below one."""
+        var extent = self.width >> level
+        if extent < 1:
+            return 1
+        return extent
+
+    def level_height(self, level: Int) -> Int:
+        """Return how tall the image is at `level`, never below one."""
+        var extent = self.height >> level
+        if extent < 1:
+            return 1
+        return extent
+
+    def level_offset(self, level: Int) -> Int:
+        """Return where `level` starts in the concatenated texel buffer.
+
+        The chain is stored end to end, largest first, so a level's position
+        is the sum of the sizes before it. Computed rather than stored: it is
+        a handful of shifts, and the GPU has to be able to work it out the
+        same way from the same numbers.
+        """
+        var offset = 0
+        for step in range(level):
+            offset += (
+                self.level_width(step) * self.level_height(step) * Self.CHANNELS
+            )
+        return offset
+
+    def _build_mipmaps(mut self) raises:
+        """Append each halved copy of the image to the texel buffer.
+
+        Box filter: each texel of a level is the average of the four beneath
+        it. Averaged in premultiplied linear light, for the two reasons
+        everything else in this file is — a hidden colour must weigh nothing,
+        and light is what averages — and encoded back to bytes at each level,
+        which is what a GPU stores too.
+
+        A chain exists to answer a question the full-size image cannot: when
+        one pixel covers many texels, which one is the colour? Any single
+        answer sparkles as the surface moves. The average of all of them does
+        not, and each level is the average already taken.
+        """
+        var level = 0
+        while self.level_width(level) > 1 or self.level_height(level) > 1:
+            var wide = self.level_width(level)
+            var tall = self.level_height(level)
+            var next_wide = self.level_width(level + 1)
+            var next_tall = self.level_height(level + 1)
+            var base = self.level_offset(level)
+            for y in range(next_tall):  # pragma: no branch
+                for x in range(next_wide):  # pragma: no branch
+                    var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+                    var taken = 0
+                    for dy in range(2):  # pragma: no branch
+                        for dx in range(2):  # pragma: no branch
+                            var sx = x * 2 + dx
+                            var sy = y * 2 + dy
+                            if sx >= wide or sy >= tall:
+                                continue
+                            var at = base + (sy * wide + sx) * Self.CHANNELS
+                            var texel = FloatColor(
+                                self.ramp[Int(self.pixels[at])],
+                                self.ramp[Int(self.pixels[at + 1])],
+                                self.ramp[Int(self.pixels[at + 2])],
+                                Float32(self.pixels[at + 3]) / 255,
+                            ).premultiplied()
+                            total = FloatColor(
+                                total.r + texel.r,
+                                total.g + texel.g,
+                                total.b + texel.b,
+                                total.a + texel.a,
+                            )
+                            taken += 1
+                    var share = 1 / Float32(taken)
+                    var mixed = FloatColor(
+                        total.r * share,
+                        total.g * share,
+                        total.b * share,
+                        total.a * share,
+                    ).unpremultiplied()
+                    self.pixels.append(_to_byte(mixed.r, self.color_space))
+                    self.pixels.append(_to_byte(mixed.g, self.color_space))
+                    self.pixels.append(_to_byte(mixed.b, self.color_space))
+                    self.pixels.append(_to_byte(mixed.a, LINEAR))
+            level += 1
+            self.levels = level + 1
+
+    def wrapped_texel(self, x: Int, y: Int, level: Int = 0) -> FloatColor:
         """Return a texel by index, with the wrap mode applied first.
 
         Unlike `texel`, this cannot fail: every index has an answer once a
@@ -327,22 +467,101 @@ struct Texture(Movable):
         Args:
             x: Column, possibly outside the image.
             y: Row from the top, possibly outside the image.
+            level: Which image of the mip chain to read, zero being full size.
 
         Returns:
             The colour found there, or opaque white if the texture is blank.
         """
         if self.is_blank():
             return FloatColor(1.0, 1.0, 1.0, 1.0)
+        var wide = self.level_width(level)
+        var tall = self.level_height(level)
         var offset = (
-            wrap_index(y, self.height, self.wrap) * self.width
-            + wrap_index(x, self.width, self.wrap)
-        ) * Self.CHANNELS
+            self.level_offset(level)
+            + (
+                wrap_index(y, tall, self.wrap) * wide
+                + wrap_index(x, wide, self.wrap)
+            )
+            * Self.CHANNELS
+        )
         # Colour through the ramp; alpha is not colour and never decoded.
         return FloatColor(
             self.ramp[Int(self.pixels[offset])],
             self.ramp[Int(self.pixels[offset + 1])],
             self.ramp[Int(self.pixels[offset + 2])],
             Float32(self.pixels[offset + 3]) / 255,
+        )
+
+    def sample_at(self, u: Float32, v: Float32, level: Int) -> FloatColor:
+        """Return the colour at a coordinate, read from one mip level.
+
+        Args:
+            u: Horizontal coordinate, 0 at the left edge.
+            v: Vertical coordinate, 0 at the *bottom* edge.
+            level: Which image of the chain, zero being full size.
+
+        Returns:
+            The colour found there, or opaque white if the texture is blank.
+        """
+        if self.is_blank():
+            return FloatColor(1.0, 1.0, 1.0, 1.0)
+        var wide = self.level_width(level)
+        var tall = self.level_height(level)
+
+        if self.filter == NEAREST:
+            return self.wrapped_texel(
+                Int(floor(u * Float32(wide))),
+                Int(floor((1 - v) * Float32(tall))),
+                level,
+            )
+
+        # Texel centres are at half-integers, so shift the sample into a space
+        # where they are at integers, and blend between the two either side.
+        var across = u * Float32(wide) - 0.5
+        var down = (1 - v) * Float32(tall) - 0.5
+        var column = Int(floor(across))
+        var row = Int(floor(down))
+        return blend_texels(
+            self.wrapped_texel(column, row, level),
+            self.wrapped_texel(column + 1, row, level),
+            self.wrapped_texel(column, row + 1, level),
+            self.wrapped_texel(column + 1, row + 1, level),
+            across - Float32(column),
+            down - Float32(row),
+        )
+
+    def sample_level(
+        self, u: Float32, v: Float32, level: Float32
+    ) -> FloatColor:
+        """Return the colour at a coordinate, blended between two mip levels.
+
+        Trilinear: bilinear within each of the two levels either side of
+        `level`, then linearly between them. The blend between levels is what
+        stops the change from one to the next being a visible seam across a
+        receding surface.
+
+        A texture with no chain ignores the level entirely and reads the only
+        image it has.
+
+        Args:
+            u: Horizontal coordinate, 0 at the left edge.
+            v: Vertical coordinate, 0 at the *bottom* edge.
+            level: How far down the chain to read, fractional. Below zero
+                means the surface is magnified, where the full-size image is
+                already the right answer.
+
+        Returns:
+            The colour found there, or opaque white if the texture is blank.
+        """
+        if self.is_blank() or self.levels == 1 or level <= 0:
+            return self.sample_at(u, v, 0)
+        if level >= Float32(self.levels - 1):
+            return self.sample_at(u, v, self.levels - 1)
+        var lower = Int(floor(level))
+        return mix_colour(
+            self.sample_at(u, v, lower),
+            self.sample_at(u, v, lower + 1),
+            level - Float32(lower),
         )
 
     def sample(self, u: Float32, v: Float32) -> FloatColor:
@@ -407,6 +626,7 @@ def checkerboard(
     wrap: Int = REPEAT,
     filter: Int = NEAREST,
     color_space: Int = SRGB,
+    mipmapped: Bool = False,
 ) raises -> Texture:
     """Return a square checkerboard, the traditional mapping test image.
 
@@ -422,6 +642,7 @@ def checkerboard(
         wrap: How coordinates outside the unit square are resolved.
         filter: `NEAREST` or `BILINEAR`.
         color_space: `SRGB` or `LINEAR`.
+        mipmapped: Build the chain of halved copies.
 
     Returns:
         The texture.
@@ -449,4 +670,4 @@ def checkerboard(
             pixels.append(shade.g)
             pixels.append(shade.b)
             pixels.append(shade.a)
-    return Texture(size, size, pixels^, wrap, filter, color_space)
+    return Texture(size, size, pixels^, wrap, filter, color_space, mipmapped)
