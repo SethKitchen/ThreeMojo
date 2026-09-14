@@ -31,6 +31,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from materials.material import Material
 from core.object3d import Object3D
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
 from geometries.box import cube
@@ -54,7 +55,10 @@ from render.texture import (
     Texture,
     checkerboard,
 )
+from lights.light import ambient_light, directional_light
+from lights.lighting import Lighting
 from render.gpu import (
+    FLOATS_PER_VERTEX,
     GpuRenderer,
     available,
     flatten,
@@ -65,6 +69,7 @@ from render.gpu import (
 from render.srgb import LINEAR
 from render.target import RenderTarget
 from render.rasterizer import (
+    SHADE_LIT,
     SHADE_TEXTURE,
     SHADE_UV,
     RasterVertex,
@@ -549,13 +554,16 @@ def test_a_partial_triangle_is_rejected() raises:
         renderer.draw(corners, BACKGROUND)
 
 
-def test_flattening_lays_out_eight_floats_per_vertex() raises:
+def test_flattening_lays_out_thirteen_floats_per_vertex() raises:
     # The host side of the kernel's unpacking. If these disagree the image is
-    # garbage, so the layout is asserted rather than assumed.
+    # garbage, so the layout is asserted rather than assumed. The count is
+    # spelled out because changing the stride and missing one of the kernel's
+    # offsets is a mistake this project has made twice.
     var corners = List[RasterVertex]()
     corners.append(corner(1, 2, 3, 4, Color(255, 128, 0, 64)))
     var flat = flatten(corners)
-    assert_equal(len(flat), 10)
+    assert_equal(len(flat), 13)
+    assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
     assert_equal(flat[2], Float32(3))
@@ -623,7 +631,12 @@ def test_both_backends_agree_on_a_whole_prepared_scene() raises:
     assert_equal(len(corners) % 3, 0)
 
     var cpu = renderer.render(scene, assets, meshes, camera)
-    var gpu = render_triangles(corners, 48, 36, BACKGROUND)
+    # The same lights the CPU path resolves. Lighting is per fragment now, so
+    # it is no longer baked into the prepared corners: hand it to both or they
+    # are not being asked the same question.
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), Lighting(scene)
+    )
 
     # A real image: both meshes visible, and plenty of background left.
     var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
@@ -1160,6 +1173,161 @@ def test_both_backends_agree_on_mipmapped_transparency() raises:
     for y in range(24):
         for x in range(24):
             assert_equal(cpu.depth_at(x, y), gpu.depth_at(x, y))
+
+
+def gpu_lit_along_z() raises -> Lighting:
+    """Return one white directional light along +z, plus a little ambient."""
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    _ = scene.add(lamp^)
+    scene.update()
+    scene.add_light(ambient_light(Color(40, 60, 90), 1.0))
+    scene.add_light(directional_light(Color(255, 240, 200), NodeId(0)))
+    return Lighting(scene)
+
+
+def bent(x: Float32, y: Float32, normal: Vector3) -> RasterVertex:
+    """Return a white corner carrying a normal of its own."""
+    return RasterVertex(
+        x, y, 0.5, 1, FloatColor(1, 1, 1), 0, 0, NO_TEXTURE, OPAQUE, normal
+    )
+
+
+def test_both_backends_shade_each_fragment_by_its_own_normal() raises:
+    # Lighting is no longer baked into the corners, so both backends now
+    # interpolate a normal, renormalize it and evaluate every light per
+    # fragment. Two implementations of that -- one in Mojo, one in a kernel --
+    # have to agree, and a coloured ambient plus a coloured lamp means a
+    # channel swapped anywhere shows up.
+    if skipped_for_lack_of_a_gpu("both backends shade per fragment"):
+        return
+    var lean = Float32(0.70710678)
+    var corners = List[RasterVertex]()
+    corners.append(bent(0, 0, Vector3(-lean, 0, lean)))
+    corners.append(bent(31, 0, Vector3(lean, 0, lean)))
+    corners.append(bent(16, 23, Vector3(0, lean, lean)))
+
+    var lighting = gpu_lit_along_z()
+    var target = RenderTarget(32, 24, BACKGROUND)
+    rasterize_shaded(
+        corners[0],
+        corners[1],
+        corners[2],
+        target,
+        SHADE_LIT,
+        TextureStore(),
+        lighting,
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 32, 24, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+
+    # The shading really does vary across the face, so this is not two flat
+    # fills agreeing.
+    var lowest = UInt8(255)
+    var highest = UInt8(0)
+    for y in range(24):
+        for x in range(32):
+            var shown = cpu.get_pixel(x, y)
+            if shown.r != BACKGROUND.r:
+                if shown.r < lowest:
+                    lowest = shown.r
+                if shown.r > highest:
+                    highest = shown.r
+    assert_true(Int(highest) - Int(lowest) > 20, "the face shaded almost flat")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_agree_when_a_surface_faces_away() raises:
+    # Every light behind the surface: both must land on the ambient term
+    # alone, and on the same ambient.
+    if skipped_for_lack_of_a_gpu("both backends agree on an unlit face"):
+        return
+    var away = Vector3(0, 0, -1)
+    var corners = List[RasterVertex]()
+    corners.append(bent(0, 0, away))
+    corners.append(bent(23, 0, away))
+    corners.append(bent(0, 23, away))
+    var lighting = gpu_lit_along_z()
+    var target = RenderTarget(24, 24, BACKGROUND)
+    rasterize_shaded(
+        corners[0],
+        corners[1],
+        corners[2],
+        target,
+        SHADE_LIT,
+        TextureStore(),
+        lighting,
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    # The ambient is blue-ish, so an unlit face is not black.
+    assert_true(cpu.get_pixel(4, 4).b > cpu.get_pixel(4, 4).r)
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_light_a_texture_the_same_way() raises:
+    if skipped_for_lack_of_a_gpu("both backends light a texture"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(8, 2, Color(240, 60, 20), Color(20, 40, 200))
+    )
+    var lean = Float32(0.70710678)
+    var quad = mapped_quad(24, board)
+    var corners = List[RasterVertex]()
+    var slants = [
+        Vector3(-lean, 0, lean),
+        Vector3(lean, 0, lean),
+        Vector3(0, lean, lean),
+    ]
+    for index in range(len(quad)):
+        var corner = quad[index]
+        corners.append(
+            RasterVertex(
+                corner.x,
+                corner.y,
+                corner.z,
+                corner.inv_w,
+                corner.color,
+                corner.u,
+                corner.v,
+                corner.texture,
+                corner.blend,
+                slants[index % 3],
+            )
+        )
+    var lighting = gpu_lit_along_z()
+    var cpu = cpu_textured_lit(corners, 24, textures, lighting)
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures, lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def cpu_textured_lit(
+    corners: List[RasterVertex],
+    size: Int,
+    textures: TextureStore,
+    lighting: Lighting,
+) raises -> Framebuffer:
+    """Return the CPU rasterizer's textured output under given lights."""
+    var target = RenderTarget(size, size, BACKGROUND)
+    for triangle in range(len(corners) // 3):  # pragma: no branch
+        rasterize_shaded(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+            target,
+            SHADE_TEXTURE,
+            textures,
+            lighting,
+        )
+    return target.resolve()
 
 
 def test_both_backends_agree_on_every_wrap_mode() raises:

@@ -11,9 +11,14 @@ from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, NO_TEXTURE, OPAQUE
 from render.texture import NEAREST, REPEAT, Texture, checkerboard
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
+from lights.light import directional_light
+from lights.lighting import Lighting
+from core.object3d import NodeId, Object3D
+from core.scene import Scene
 from math.vector3 import Vector3
 from render.target import RenderTarget
 from render.rasterizer import (
+    SHADE_LIT,
     SHADE_TEXTURE,
     SHADE_UV,
     RasterVertex,
@@ -1315,6 +1320,138 @@ def test_corners_that_disagree_about_their_texture_are_rejected() raises:
             SHADE_TEXTURE,
             textures,
         )
+
+
+# --- Per-fragment shading ---------------------------------------------------
+
+
+def lit_along_z() raises -> Lighting:
+    """Return one white directional light shining along +z, no ambient."""
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    _ = scene.add(lamp^)
+    scene.update()
+    scene.add_light(directional_light(Color(255, 255, 255), NodeId(0)))
+    return Lighting(scene)
+
+
+def bent_corner(x: Float32, y: Float32, normal: Vector3) -> RasterVertex:
+    """Return a white corner at a point, carrying a normal of its own."""
+    return RasterVertex(
+        x, y, 0.5, 1, FloatColor(1, 1, 1), 0, 0, NO_TEXTURE, OPAQUE, normal
+    )
+
+
+def test_the_middle_of_a_triangle_is_lit_by_its_own_normal() raises:
+    # The whole point of shading per fragment. Two corners lean 45 degrees
+    # away from the light, so each catches cos(45) of it. Between them the
+    # *normal* interpolates to straight at the light, so the middle is
+    # brighter than either end.
+    #
+    # Shading at the corners and interpolating the colour cannot do this: it
+    # would mix two equal values and give a flat face. Neither can
+    # interpolating the normal without normalizing it -- the average of those
+    # two unit vectors is (0, 0, 0.707), which is 0.707 long, and its Lambert
+    # term against the light is 0.707 again: exactly the corners' value. The
+    # renormalization is what makes the difference, so this test fails if it
+    # is dropped.
+    var lean = Float32(0.70710678)
+    var fb = RenderTarget(32, 16, Color(0, 0, 0))
+    rasterize_shaded(
+        bent_corner(0, 0, Vector3(-lean, 0, lean)),
+        bent_corner(31, 0, Vector3(lean, 0, lean)),
+        bent_corner(16, 15, Vector3(0, 0, 1)),
+        fb,
+        SHADE_LIT,
+        TextureStore(),
+        lit_along_z(),
+    )
+    var left_end = fb.shown(2, 1).r
+    var middle = fb.shown(16, 1).r
+    assert_true(left_end > 0, "the leaning corner caught no light at all")
+    assert_true(
+        middle > left_end + 20,
+        (
+            "the middle was no brighter than the corners: the normal was not"
+            " interpolated and renormalized per fragment"
+        ),
+    )
+    # The midpoint of the top edge is the one interior pixel whose answer
+    # follows from symmetry alone: the two leaning normals cancel in x and
+    # leave (0, 0, 0.707), which renormalizes to straight at the light. Fully
+    # lit, so 255. Every other pixel's value depends on where it sits in the
+    # triangle, so only this one is pinned exactly.
+    assert_equal(middle, UInt8(255))
+    assert_true(left_end < 240, "the left end was as bright as the middle")
+
+
+def test_a_face_turned_away_from_every_light_is_black() raises:
+    var fb = RenderTarget(16, 16, Color(0, 0, 0))
+    var away = Vector3(0, 0, -1)
+    rasterize_shaded(
+        bent_corner(0, 0, away),
+        bent_corner(15, 0, away),
+        bent_corner(0, 15, away),
+        fb,
+        SHADE_LIT,
+        TextureStore(),
+        lit_along_z(),
+    )
+    assert_equal(fb.shown(2, 2).r, UInt8(0))
+
+
+def test_lighting_modulates_a_texture_rather_than_replacing_it() raises:
+    # The texel says what colour the surface is; the light says how much of
+    # it arrives. A half-lit red texel is a darker red, not grey.
+    var textures = TextureStore()
+    var pixels = List[UInt8]()
+    for value in [UInt8(255), UInt8(0), UInt8(0), UInt8(255)]:
+        pixels.append(value)
+    var red = textures.add(Texture(1, 1, pixels^, REPEAT))
+    var lean = Float32(0.70710678)
+    var fb = RenderTarget(16, 16, Color(0, 0, 0))
+    var slanted = Vector3(lean, 0, lean)
+    rasterize_shaded(
+        RasterVertex(
+            0, 0, 0.5, 1, FloatColor(1, 1, 1), 0, 0, red, OPAQUE, slanted
+        ),
+        RasterVertex(
+            15, 0, 0.5, 1, FloatColor(1, 1, 1), 0, 0, red, OPAQUE, slanted
+        ),
+        RasterVertex(
+            0, 15, 0.5, 1, FloatColor(1, 1, 1), 0, 0, red, OPAQUE, slanted
+        ),
+        fb,
+        SHADE_TEXTURE,
+        textures,
+        lit_along_z(),
+    )
+    # All three normals are the same, so every fragment gets the same answer
+    # and it can be worked out by hand: a 45 degree lean catches cos(45) of
+    # the light, which is 0.7071 of it, and 0.7071 in linear light displays
+    # as 219. Not 188 -- that is *half* the light, which is a steeper lean.
+    var shown = fb.shown(2, 2)
+    assert_equal(shown.r, UInt8(219))
+    assert_equal(shown.g, UInt8(0))
+    assert_equal(shown.b, UInt8(0))
+
+
+def test_a_zero_length_normal_is_left_alone_rather_than_dividing_by_it() raises:
+    # A hand-built triangle can carry one, and normalizing it would be a
+    # divide by zero and a pixel full of NaN. It catches only the ambient.
+    var fb = RenderTarget(16, 16, Color(0, 0, 0))
+    var nothing = Vector3(0, 0, 0)
+    rasterize_shaded(
+        bent_corner(0, 0, nothing),
+        bent_corner(15, 0, nothing),
+        bent_corner(0, 15, nothing),
+        fb,
+        SHADE_LIT,
+        TextureStore(),
+        lit_along_z(),
+    )
+    assert_equal(fb.shown(2, 2).r, UInt8(0))
 
 
 def main() raises:

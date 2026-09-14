@@ -43,6 +43,8 @@ from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
+from lights.lighting import Lighting
+from math.vector3 import Vector3
 from render.rasterizer import (
     SHADE_LIT,
     SHADE_TEXTURE,
@@ -78,7 +80,7 @@ comptime TILE = 16
 # tests/test_gpu.mojo asserts this layout, because the host packs it and the
 # kernel unpacks it from two different places and nothing else would notice
 # them drifting apart.
-comptime FLOATS_PER_VERTEX = 10
+comptime FLOATS_PER_VERTEX = 13
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # Further than any NDC depth, so the first covering triangle always wins. The
@@ -171,7 +173,8 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         corners: Raster vertices, three per triangle.
 
     Returns:
-        Ten floats per vertex, in the order the kernel unpacks them.
+        `FLOATS_PER_VERTEX` floats per vertex, in the order the kernel
+        unpacks them.
     """
     var flat = List[Float32]()
     for index in range(len(corners)):
@@ -186,7 +189,71 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.color.a)
         flat.append(corner.u)
         flat.append(corner.v)
+        flat.append(corner.normal.x)
+        flat.append(corner.normal.y)
+        flat.append(corner.normal.z)
     return flat^
+
+
+def flatten_lights(lighting: Lighting) -> List[Float32]:
+    """Return a scene's lights as the flat float buffer the kernel reads.
+
+    Three floats of ambient, then six per directional light: a unit direction
+    and the light it carries. Already decoded and scaled by `Lighting`, so the
+    device does no colour-space work and both backends sum exactly the same
+    numbers.
+
+    Args:
+        lighting: The scene's lights, resolved to world space.
+
+    Returns:
+        `3 + 6 * count` floats.
+    """
+    var flat = List[Float32]()
+    flat.append(lighting.ambient.r)
+    flat.append(lighting.ambient.g)
+    flat.append(lighting.ambient.b)
+    for index in range(lighting.count()):
+        ref direction = lighting.directions[index]
+        flat.append(direction.x)
+        flat.append(direction.y)
+        flat.append(direction.z)
+        ref radiance = lighting.radiances[index]
+        flat.append(radiance.r)
+        flat.append(radiance.g)
+        flat.append(radiance.b)
+    return flat^
+
+
+def _arriving(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    count: Int,
+    nx: Float32,
+    ny: Float32,
+    nz: Float32,
+) -> Vector3:
+    """Return the light reaching a surface facing (nx, ny, nz).
+
+    The device counterpart of `Lighting.intensity_at`, and held to the same
+    answer by the parity tests. A `Vector3` only because the kernel has no
+    colour type; the three components are red, green and blue.
+    """
+    var red = lights[unsafe_offset=0]
+    var green = lights[unsafe_offset=1]
+    var blue = lights[unsafe_offset=2]
+    for index in range(count):
+        var at = 3 + index * 6
+        var lambert = (
+            nx * lights[unsafe_offset=at]
+            + ny * lights[unsafe_offset=at + 1]
+            + nz * lights[unsafe_offset=at + 2]
+        )
+        if lambert <= 0:
+            continue
+        red += lights[unsafe_offset=at + 3] * lambert
+        green += lights[unsafe_offset=at + 4] * lambert
+        blue += lights[unsafe_offset=at + 5] * lambert
+    return Vector3(red, green, blue)
 
 
 def _extent(extent: Int, level: Int) -> Int:
@@ -299,6 +366,8 @@ def _uv_at(
     perfectly well; it is only coverage that stops at the edge. That is what
     replaces the helper invocations a hardware quad would need.
     """
+    var b_base = base + FLOATS_PER_VERTEX
+    var c_base = base + 2 * FLOATS_PER_VERTEX
     var e_ab = edge_at(ax, ay, bx, by, px, py)
     var e_bc = edge_at(bx, by, cx, cy, px, py)
     var e_ca = edge_at(cx, cy, ax, ay, px, py)
@@ -313,8 +382,8 @@ def _uv_at(
         wc = second
 
     var aw = corners[unsafe_offset=base + 3]
-    var bw = corners[unsafe_offset=base + 13]
-    var cw = corners[unsafe_offset=base + 23]
+    var bw = corners[unsafe_offset=b_base + 3]
+    var cw = corners[unsafe_offset=c_base + 3]
     var inv_w = wa * aw + wb * bw + wc * cw
     var share_a = wa
     var share_b = wb
@@ -325,11 +394,11 @@ def _uv_at(
         share_c = wc * cw / inv_w
     return Vector2(
         corners[unsafe_offset=base + 8] * share_a
-        + corners[unsafe_offset=base + 18] * share_b
-        + corners[unsafe_offset=base + 28] * share_c,
+        + corners[unsafe_offset=b_base + 8] * share_b
+        + corners[unsafe_offset=c_base + 8] * share_c,
         corners[unsafe_offset=base + 9] * share_a
-        + corners[unsafe_offset=base + 19] * share_b
-        + corners[unsafe_offset=base + 29] * share_c,
+        + corners[unsafe_offset=b_base + 9] * share_b
+        + corners[unsafe_offset=c_base + 9] * share_c,
     )
 
 
@@ -496,6 +565,8 @@ def rasterize_kernel(
     texels: MutPointer[UInt8, MutAnyOrigin],
     table: MutPointer[Int32, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
+    lights: MutPointer[Float32, MutAnyOrigin],
+    light_count: Int32,
 ):
     """Colour one pixel from the nearest triangle that covers it."""
     var x = Int(global_idx.x)
@@ -532,18 +603,24 @@ def rasterize_kernel(
 
     for index in range(Int(triangles)):
         var base = index * FLOATS_PER_TRIANGLE
+        # Derived rather than written out: every offset past the first corner
+        # used to be a literal, and changing the stride meant changing all of
+        # them. Twice it meant missing one, which reads a neighbouring field
+        # as a coordinate and is invisible until a parity test disagrees.
+        var b_base = base + FLOATS_PER_VERTEX
+        var c_base = base + 2 * FLOATS_PER_VERTEX
         var ax = corners[unsafe_offset=base]
         var ay = corners[unsafe_offset=base + 1]
         var az = corners[unsafe_offset=base + 2]
         var aw = corners[unsafe_offset=base + 3]
-        var bx = corners[unsafe_offset=base + 10]
-        var by = corners[unsafe_offset=base + 11]
-        var bz = corners[unsafe_offset=base + 12]
-        var bw = corners[unsafe_offset=base + 13]
-        var cx = corners[unsafe_offset=base + 20]
-        var cy = corners[unsafe_offset=base + 21]
-        var cz = corners[unsafe_offset=base + 22]
-        var cw = corners[unsafe_offset=base + 23]
+        var bx = corners[unsafe_offset=b_base]
+        var by = corners[unsafe_offset=b_base + 1]
+        var bz = corners[unsafe_offset=b_base + 2]
+        var bw = corners[unsafe_offset=b_base + 3]
+        var cx = corners[unsafe_offset=c_base]
+        var cy = corners[unsafe_offset=c_base + 1]
+        var cz = corners[unsafe_offset=c_base + 2]
+        var cw = corners[unsafe_offset=c_base + 3]
 
         # Exactly `_Coverage` on the host: snap, normalize the winding, then
         # test with the top-left bias. Only the snapped coordinates are
@@ -607,37 +684,68 @@ def rasterize_kernel(
             share_b = wb * bw / inv_w
             share_c = wc * cw / inv_w
 
+        # The interpolated normal, made a unit vector again here. That
+        # renormalization is the difference between per-fragment and
+        # per-vertex shading: the average of two unit vectors is shorter than
+        # either, so leaving it alone dims the middle of every triangle.
+        # Computed for both shaded modes, and not for SHADE_UV, which is
+        # coordinates rather than light.
+        var nx = (
+            corners[unsafe_offset=base + 10] * share_a
+            + corners[unsafe_offset=b_base + 10] * share_b
+            + corners[unsafe_offset=c_base + 10] * share_c
+        )
+        var ny = (
+            corners[unsafe_offset=base + 11] * share_a
+            + corners[unsafe_offset=b_base + 11] * share_b
+            + corners[unsafe_offset=c_base + 11] * share_c
+        )
+        var nz = (
+            corners[unsafe_offset=base + 12] * share_a
+            + corners[unsafe_offset=b_base + 12] * share_b
+            + corners[unsafe_offset=c_base + 12] * share_c
+        )
+        var unit = sqrt(nx * nx + ny * ny + nz * nz)
+        if unit != 0:
+            nx /= unit
+            ny /= unit
+            nz /= unit
+        var arriving = _arriving(lights, Int(light_count), nx, ny, nz)
+
         if mode == Int32(SHADE_TEXTURE):
             var u = (
                 corners[unsafe_offset=base + 8] * share_a
-                + corners[unsafe_offset=base + 18] * share_b
-                + corners[unsafe_offset=base + 28] * share_c
+                + corners[unsafe_offset=b_base + 8] * share_b
+                + corners[unsafe_offset=c_base + 8] * share_c
             )
             var v = (
                 corners[unsafe_offset=base + 9] * share_a
-                + corners[unsafe_offset=base + 19] * share_b
-                + corners[unsafe_offset=base + 29] * share_c
+                + corners[unsafe_offset=b_base + 9] * share_b
+                + corners[unsafe_offset=c_base + 9] * share_c
             )
             red = (
                 corners[unsafe_offset=base + 4] * share_a
-                + corners[unsafe_offset=base + 14] * share_b
-                + corners[unsafe_offset=base + 24] * share_c
+                + corners[unsafe_offset=b_base + 4] * share_b
+                + corners[unsafe_offset=c_base + 4] * share_c
             )
             green = (
                 corners[unsafe_offset=base + 5] * share_a
-                + corners[unsafe_offset=base + 15] * share_b
-                + corners[unsafe_offset=base + 25] * share_c
+                + corners[unsafe_offset=b_base + 5] * share_b
+                + corners[unsafe_offset=c_base + 5] * share_c
             )
             blue = (
                 corners[unsafe_offset=base + 6] * share_a
-                + corners[unsafe_offset=base + 16] * share_b
-                + corners[unsafe_offset=base + 26] * share_c
+                + corners[unsafe_offset=b_base + 6] * share_b
+                + corners[unsafe_offset=c_base + 6] * share_c
             )
             alpha = (
                 corners[unsafe_offset=base + 7] * share_a
-                + corners[unsafe_offset=base + 17] * share_b
-                + corners[unsafe_offset=base + 27] * share_c
+                + corners[unsafe_offset=b_base + 7] * share_b
+                + corners[unsafe_offset=c_base + 7] * share_c
             )
+            red *= arriving.x
+            green *= arriving.y
+            blue *= arriving.z
             # Which image, from the triangle; -1 is no texture, which samples
             # as white and so leaves the lighting alone.
             var slot = Int(maps[unsafe_offset=index * 2])
@@ -738,37 +846,40 @@ def rasterize_kernel(
             # rasterize_shaded's SHADE_UV.
             red = (
                 corners[unsafe_offset=base + 8] * share_a
-                + corners[unsafe_offset=base + 18] * share_b
-                + corners[unsafe_offset=base + 28] * share_c
+                + corners[unsafe_offset=b_base + 8] * share_b
+                + corners[unsafe_offset=c_base + 8] * share_c
             )
             green = (
                 corners[unsafe_offset=base + 9] * share_a
-                + corners[unsafe_offset=base + 19] * share_b
-                + corners[unsafe_offset=base + 29] * share_c
+                + corners[unsafe_offset=b_base + 9] * share_b
+                + corners[unsafe_offset=c_base + 9] * share_c
             )
             blue = 0
             alpha = 1
         else:
             red = (
                 corners[unsafe_offset=base + 4] * share_a
-                + corners[unsafe_offset=base + 14] * share_b
-                + corners[unsafe_offset=base + 24] * share_c
+                + corners[unsafe_offset=b_base + 4] * share_b
+                + corners[unsafe_offset=c_base + 4] * share_c
             )
             green = (
                 corners[unsafe_offset=base + 5] * share_a
-                + corners[unsafe_offset=base + 15] * share_b
-                + corners[unsafe_offset=base + 25] * share_c
+                + corners[unsafe_offset=b_base + 5] * share_b
+                + corners[unsafe_offset=c_base + 5] * share_c
             )
             blue = (
                 corners[unsafe_offset=base + 6] * share_a
-                + corners[unsafe_offset=base + 16] * share_b
-                + corners[unsafe_offset=base + 26] * share_c
+                + corners[unsafe_offset=b_base + 6] * share_b
+                + corners[unsafe_offset=c_base + 6] * share_c
             )
             alpha = (
                 corners[unsafe_offset=base + 7] * share_a
-                + corners[unsafe_offset=base + 17] * share_b
-                + corners[unsafe_offset=base + 27] * share_c
+                + corners[unsafe_offset=b_base + 7] * share_b
+                + corners[unsafe_offset=c_base + 7] * share_c
             )
+            red *= arriving.x
+            green *= arriving.y
+            blue *= arriving.z
 
         # Opaque replaces what is there; translucent mixes into it. One pass
         # is enough only because every opaque triangle is submitted before any
@@ -858,6 +969,11 @@ struct GpuRenderer(Movable):
     var pixels: DeviceBuffer[DType.uint8]
     var depth: DeviceBuffer[DType.float32]
     var corners: DeviceBuffer[DType.float32]
+    # Three floats of ambient plus six per directional light. Grown on demand
+    # like the corner buffer; a scene's lights rarely change count, so this
+    # settles after the first frame.
+    var lights: DeviceBuffer[DType.float32]
+    var light_room: Int
     # One texture id per triangle, beside the vertex buffer rather than in it.
     var maps: DeviceBuffer[DType.int32]
     # Every texture the scene can sample, uploaded once rather than per draw.
@@ -895,6 +1011,9 @@ struct GpuRenderer(Movable):
         self.depth = self.context.enqueue_create_buffer[DType.float32](
             width * height
         )
+        # Room for the ambient term and one light to begin with.
+        self.light_room = 1
+        self.lights = self.context.enqueue_create_buffer[DType.float32](9)
         # One triangle to start with; `draw` grows it as needed. Never zero,
         # because a zero-length device buffer is not worth the special case.
         self.capacity = 1
@@ -919,11 +1038,38 @@ struct GpuRenderer(Movable):
                 dest=host.unsafe_ptr(), src=steps.unsafe_ptr(), count=256
             )
 
+    def _upload_lights(mut self, lighting: Lighting) raises -> Int:
+        """Put `lighting` on the device and return how many lights there are.
+
+        Args:
+            lighting: The scene's lights, resolved to world space.
+
+        Returns:
+            The directional light count; the ambient term is always present.
+
+        Raises:
+            Error: If the device buffer cannot be made or written.
+        """
+        var flat = flatten_lights(lighting)
+        if lighting.count() > self.light_room:
+            self.lights = self.context.enqueue_create_buffer[DType.float32](
+                len(flat)
+            )
+            self.light_room = lighting.count()
+        with self.lights.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=flat.unsafe_ptr(),
+                count=len(flat),
+            )
+        return lighting.count()
+
     def draw(
         mut self,
         corners: List[RasterVertex],
         background: Color,
         mode: Int = SHADE_LIT,
+        lighting: Lighting = Lighting.uniform(),
     ) raises:
         """Rasterize prepared triangles into the device render target.
 
@@ -932,6 +1078,10 @@ struct GpuRenderer(Movable):
                 allowed and clears the target to `background`.
             background: Colour for pixels no triangle covers.
             mode: `SHADE_LIT` or `SHADE_UV`, as `rasterize_shaded` takes.
+            lighting: The scene's lights, resolved to world space and
+                evaluated per fragment against the interpolated normal.
+                Defaults to `Lighting.uniform`, the identity for the multiply,
+                exactly as the CPU rasterizer's does.
 
         Raises:
             Error: If the corner count is not a multiple of three, the mode
@@ -998,6 +1148,7 @@ struct GpuRenderer(Movable):
                     count=len(state),
                 )
 
+        var count = self._upload_lights(lighting)
         self.context.enqueue_function[rasterize_kernel](
             self.pixels.unsafe_ptr(),
             self.depth.unsafe_ptr(),
@@ -1011,6 +1162,8 @@ struct GpuRenderer(Movable):
             self.texels.unsafe_ptr(),
             self.table.unsafe_ptr(),
             self.ramp.unsafe_ptr(),
+            self.lights.unsafe_ptr(),
+            Int32(count),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -1102,6 +1255,7 @@ def render_triangles(
     background: Color,
     mode: Int = SHADE_LIT,
     textures: TextureStore = TextureStore(),
+    lighting: Lighting = Lighting.uniform(),
 ) raises -> Framebuffer:
     """Draw prepared triangles on the GPU and read the image back.
 
@@ -1116,6 +1270,8 @@ def render_triangles(
         background: Colour for pixels no triangle covers.
         mode: `SHADE_LIT`, `SHADE_UV` or `SHADE_TEXTURE`.
         textures: The images `SHADE_TEXTURE` samples, named per vertex.
+        lighting: The scene's lights, evaluated per fragment. Defaults to
+            `Lighting.uniform`, which leaves the corner colours alone.
 
     Returns:
         The rendered image.
@@ -1126,7 +1282,7 @@ def render_triangles(
     """
     var renderer = GpuRenderer(width, height)
     renderer.set_textures(textures)
-    renderer.draw(corners, background, mode)
+    renderer.draw(corners, background, mode, lighting)
     return renderer.read_back()
 
 

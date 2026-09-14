@@ -547,6 +547,51 @@ malformed files each aimed at one specific refusal.
 which is dynamic-Huffman compressed and Sub-filtered — neither of which this
 project's encoder can produce.
 
+## Shading per fragment
+
+Lighting used to be worked out at each corner and the resulting *colour*
+interpolated across the triangle. That is Gouraud shading, and it is cheap for
+a reason: a triangle can only be as round as its corners, so a coarse sphere
+gets a visible crease along every edge and a highlight that lands between two
+vertices is simply lost.
+
+Now the **normal** is what travels, and every fragment evaluates the lights
+itself:
+
+```
+interpolate the normal  ->  make it unit length again  ->  sum the lights
+```
+
+That middle step is the whole difference and is easy to leave out. The average
+of two unit vectors is *shorter* than either — two normals 45 degrees apart
+average to a vector 0.92 long — so an interpolated normal used as-is dims the
+middle of every triangle, and the result is neither Gouraud nor Phong but a
+third, wrong thing. `tests/test_rasterizer.mojo` pins this with a triangle
+whose two leaning corners each catch cos(45) of the light while the point
+between them catches all of it; without the renormalization that point catches
+cos(45) too and the test fails.
+
+Both backends do it, from the same definition: `Lighting.intensity_at` on the
+host and `_arriving` in the kernel, checked against each other per pixel with a
+coloured ambient and a coloured lamp so a swapped channel cannot hide.
+
+**What it cost, measured.** Every existing demo is flat-faced — cubes, quads,
+a floor — and for a constant normal the two methods are algebraically the same.
+So four of the seven images are byte-for-byte unchanged, and the other three
+differ in exactly **one byte each, by one**, from the multiplies being
+reassociated: `(base x light) x texel` became `base x light x texel`. That is
+the expected size of the change, and finding a larger one would have meant a
+bug.
+
+The vertex stride grew from ten floats to thirteen. Every offset past the first
+corner used to be a literal in the kernel, and changing the stride meant
+changing all of them — twice that meant missing one, which silently reads a
+neighbouring field as a coordinate. They are derived from `FLOATS_PER_VERTEX`
+now, so that class of bug is gone rather than merely fixed.
+
+`make animation` renders `out/lamps.png`: three coloured lamps and a fourth
+parented to the turntable, on a sphere coarse enough to see the triangles.
+
 ## Materials
 
 `Material` was refused three times before it was written, on the grounds that a

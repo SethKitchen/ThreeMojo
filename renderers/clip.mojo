@@ -39,13 +39,15 @@ struct ClipVertex(ImplicitlyCopyable):
     """A camera-space position with the varyings that travel with it."""
 
     var position: Vector3
+    # The surface's own colour, not yet lit. Lighting happens per fragment
+    # now, so what travels here is what the material says and not what one
+    # corner of it happened to catch.
     var color: FloatColor
-    # The same corner lit from the other side. A surface drawn BackSide, or
-    # the far half of a DoubleSide one, is seen from behind, and lighting it
-    # with the authored normal lights the side nobody is looking at. Which of
-    # the two a triangle uses is not known until it has been projected and its
-    # screen winding read, so both travel this far.
-    var back_color: FloatColor
+    # The world-space normal, interpolated across the triangle and normalized
+    # again per fragment. A surface seen from behind is lit with this flipped,
+    # which is decided after projection from the screen winding -- so unlike
+    # the two colours this replaces, only one vector has to travel.
+    var normal: Vector3
     # Texture coordinates. A cut has to carry these too: a triangle clipped
     # against the near plane keeps the part of the image that survived, and
     # leaving them behind would slide the texture across the cut.
@@ -96,11 +98,12 @@ def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
             _mix(a.color.b, b.color.b, t),
             _mix(a.color.a, b.color.a, t),
         ),
-        FloatColor(
-            _mix(a.back_color.r, b.back_color.r, t),
-            _mix(a.back_color.g, b.back_color.g, t),
-            _mix(a.back_color.b, b.back_color.b, t),
-            _mix(a.back_color.a, b.back_color.a, t),
+        # Not renormalized here: a cut vertex is about to be interpolated
+        # across a triangle anyway, and the fragment normalizes what it gets.
+        Vector3(
+            _mix(a.normal.x, b.normal.x, t),
+            _mix(a.normal.y, b.normal.y, t),
+            _mix(a.normal.z, b.normal.z, t),
         ),
         _mix(a.u, b.u, t),
         _mix(a.v, b.v, t),

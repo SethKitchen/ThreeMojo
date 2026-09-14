@@ -70,16 +70,75 @@ struct Lighting(Movable):
             else:
                 raise Error("Unknown light kind")
 
+    def __init__(out self, *, ambient: FloatColor):
+        """Create lighting with a fill term and no directional lights.
+
+        Args:
+            ambient: The light arriving everywhere, already linear.
+        """
+        self.ambient = ambient
+        self.directions = List[Vector3]()
+        self.radiances = List[FloatColor]()
+
+    @staticmethod
+    def uniform() -> Lighting:
+        """Return lighting that leaves a surface's own colour alone.
+
+        Light of one in every channel, from nowhere in particular: the
+        identity for the multiply a fragment does, so a caller with no lights
+        in hand gets the colours it passed in rather than black.
+
+        The same idea as the blank texture sampling opaque white. It makes
+        "no lighting" a value rather than a branch, which is what lets
+        `rasterize_shaded` be called with hand-built triangles -- as the
+        rasterizer's own tests do, where the question is coverage or depth and
+        lights would only be noise.
+
+        A *scene* with no lights is a different thing and really does render
+        black: that is `Lighting(scene)` finding nothing, and is what no
+        lights means.
+        """
+        return Lighting(ambient=FloatColor(1.0, 1.0, 1.0, 1.0))
+
     def count(self) -> Int:
         """Return how many directional lights there are."""
         return len(self.directions)
 
+    def intensity_at(self, normal: Vector3) -> FloatColor:
+        """Return how much light of each colour reaches a surface facing this.
+
+        The surface's own colour is not in it: this is the light arriving,
+        and multiplying by what the surface reflects is the caller's step.
+        Split out because a fragment already holds its colour in linear form
+        and has no byte to decode, and because the GPU kernel computes exactly
+        this and must compute it the same way.
+
+        Lambert per directional light -- how much a surface catches falls off
+        with the cosine of the angle it is turned through -- summed, plus the
+        ambient term.
+
+        Args:
+            normal: The surface's unit normal, in world space.
+
+        Returns:
+            The arriving light, linear. Alpha is not light and stays at one.
+        """
+        var total = self.ambient
+        for index in range(len(self.directions)):
+            var lambert = max(Float32(0), normal.dot(self.directions[index]))
+            if lambert == 0:
+                continue
+            ref light = self.radiances[index]
+            total = FloatColor(
+                total.r + light.r * lambert,
+                total.g + light.g * lambert,
+                total.b + light.b * lambert,
+                1.0,
+            )
+        return total
+
     def shade(self, base: Color, normal: Vector3) -> FloatColor:
         """Return `base` lit by every light, in linear light.
-
-        Lambert per directional light — how much a surface catches falls off
-        with the cosine of the angle it is turned through — summed, plus the
-        ambient term, and the total multiplies the surface's own colour.
 
         The base colour is decoded from sRGB first: an authored byte is not
         proportional to light, and multiplying it by a Lambert term would be
@@ -97,18 +156,7 @@ struct Lighting(Movable):
         Returns:
             The lit colour, linear, with the base colour's alpha.
         """
-        var total = self.ambient
-        for index in range(len(self.directions)):
-            var lambert = max(Float32(0), normal.dot(self.directions[index]))
-            if lambert == 0:
-                continue
-            ref light = self.radiances[index]
-            total = FloatColor(
-                total.r + light.r * lambert,
-                total.g + light.g * lambert,
-                total.b + light.b * lambert,
-                1.0,
-            )
+        var total = self.intensity_at(normal)
         var surface = FloatColor(srgb=base)
         return FloatColor(
             surface.r * total.r,

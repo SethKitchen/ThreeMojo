@@ -29,6 +29,7 @@ from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, OPAQUE
 from render.target import RenderTarget
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
+from lights.lighting import Lighting
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, log2, max, min, sqrt
 
@@ -324,7 +325,16 @@ struct RasterVertex(ImplicitlyCopyable):
     var z: Float32
     # The reciprocal of the clip-space w this corner was divided by.
     var inv_w: Float32
+    # The surface's own colour, in linear light, with the material's opacity
+    # already in its alpha. Not lit: lighting happens per fragment now, so
+    # what a corner carries is what the material says rather than what that
+    # one corner caught.
     var color: FloatColor
+    # The world-space normal. Interpolated across the triangle and normalized
+    # again at every fragment, which is what makes the shading per-fragment
+    # rather than per-vertex. Already flipped by `Renderer.prepare` if this
+    # triangle is being seen from behind.
+    var normal: Vector3
     # Texture coordinates, interpolated the same perspective-correct way the
     # colour is. They reach the fragment rather than being folded into the
     # colour at the vertex, because that is what sampling a texture will need.
@@ -351,13 +361,20 @@ struct RasterVertex(ImplicitlyCopyable):
         v: Float32 = 0,
         texture: TextureId = NO_TEXTURE,
         blend: Int = OPAQUE,
+        normal: Vector3 = Vector3(0, 0, 1),
     ):
-        """Create a corner. Texture coordinates and map default to none."""
+        """Create a corner. Texture coordinates and map default to none.
+
+        The normal defaults to facing the camera, so a hand-built triangle
+        that does not care about lighting is lit square-on rather than edge-on
+        or, worse, from behind.
+        """
         self.x = x
         self.y = y
         self.z = z
         self.inv_w = inv_w
         self.color = color
+        self.normal = normal
         self.u = u
         self.v = v
         self.texture = texture
@@ -511,6 +528,7 @@ def rasterize_shaded(
     mut target: RenderTarget,
     mode: Int = SHADE_LIT,
     textures: TextureStore = TextureStore(),
+    lighting: Lighting = Lighting.uniform(),
 ) raises:
     """Fill a triangle whose corners each carry their own colour.
 
@@ -551,6 +569,11 @@ def rasterize_shaded(
             `NO_TEXTURE` samples the blank texture, which is opaque white and
             so leaves the lighting untouched — "no texture" is a value here
             rather than a branch.
+        lighting: The scene's lights, resolved to world space. Evaluated once
+            per fragment against the interpolated normal. Defaults to
+            `Lighting.uniform`, which leaves the corner colours alone — the
+            same identity the blank texture provides, and what a hand-built
+            triangle asking about coverage or depth wants.
 
     Raises:
         Error: If the mode is not one of the three, a vertex names a texture
@@ -622,11 +645,36 @@ def rasterize_shaded(
                 share_b = wb * b.inv_w / inv_w
                 share_c = wc * c.inv_w / inv_w
 
-            var shaded = FloatColor(
+            var base = FloatColor(
                 a.color.r * share_a + b.color.r * share_b + c.color.r * share_c,
                 a.color.g * share_a + b.color.g * share_b + c.color.g * share_c,
                 a.color.b * share_a + b.color.b * share_b + c.color.b * share_c,
                 a.color.a * share_a + b.color.a * share_b + c.color.a * share_c,
+            )
+            # The normal is interpolated like every other varying and made a
+            # unit vector again here. That renormalization is the whole
+            # difference between this and shading at the corners: the average
+            # of two unit vectors is shorter than either, so a normal
+            # interpolated and left alone dims the middle of every triangle.
+            var facing = Vector3(
+                a.normal.x * share_a
+                + b.normal.x * share_b
+                + c.normal.x * share_c,
+                a.normal.y * share_a
+                + b.normal.y * share_b
+                + c.normal.y * share_c,
+                a.normal.z * share_a
+                + b.normal.z * share_b
+                + c.normal.z * share_c,
+            )
+            if facing.length() != 0:
+                facing.normalize()
+            var arriving = lighting.intensity_at(facing)
+            var shaded = FloatColor(
+                base.r * arriving.r,
+                base.g * arriving.g,
+                base.b * arriving.b,
+                base.a,
             )
             if mode != SHADE_LIT:
                 var u = a.u * share_a + b.u * share_b + c.u * share_c

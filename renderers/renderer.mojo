@@ -208,18 +208,25 @@ def _draw_order(
     return order^
 
 
-def _relit(corner: RasterVertex, color: FloatColor) -> RasterVertex:
-    """Return `corner` with a different colour and everything else kept."""
+def _turned_around(corner: RasterVertex) -> RasterVertex:
+    """Return `corner` with its normal reversed.
+
+    For a surface being seen from its far side. Every other field is carried
+    across unchanged, which is why this exists rather than a mutation: a
+    `RasterVertex` has nine fields and rebuilding one by hand at three call
+    sites is three chances to drop one.
+    """
     return RasterVertex(
         corner.x,
         corner.y,
         corner.z,
         corner.inv_w,
-        color,
+        corner.color,
         corner.u,
         corner.v,
         corner.texture,
         corner.blend,
+        Vector3(-corner.normal.x, -corner.normal.y, -corner.normal.z),
     )
 
 
@@ -251,6 +258,7 @@ def _to_raster(
         vertex.v,
         texture,
         blend,
+        vertex.normal,
     )
 
 
@@ -416,16 +424,12 @@ struct Renderer(Movable):
                     vertex_u.append(0)
                     vertex_v.append(0)
 
-            # Shading is its own pass so the normal array can be borrowed only
-            # when there is one, and the normal matrix built once per mesh
-            # rather than once per vertex.
-            var vertex_colors = List[FloatColor]()
-            # The same vertices lit from the other side, for a surface seen
-            # from behind. Only worked out when the material can actually
-            # show a back face; for the usual FrontSide mesh this stays empty
-            # and costs nothing.
-            var two_sided = material.side != FRONT_SIDE
-            var vertex_back_colors = List[FloatColor]()
+            # World-space normals are their own pass so the normal array can
+            # be borrowed only when there is one, and the normal matrix built
+            # once per mesh rather than once per vertex. What used to happen
+            # here was the *lighting*; now only the normal is worked out, and
+            # the light is applied per fragment.
+            var vertex_normals = List[Vector3]()
             if smooth:
                 ref normals = geometry.attribute_view(String(NORMAL))
                 var to_normal = world.normal_matrix()
@@ -436,26 +440,14 @@ struct Renderer(Movable):
                         normals.vector3(vertex)
                     )
                     direction.normalize()
-                    vertex_colors.append(
-                        _with_opacity(
-                            lighting.shade(material.color, direction),
-                            material.opacity,
-                        )
-                    )
-                    if two_sided:
-                        vertex_back_colors.append(
-                            _with_opacity(
-                                lighting.shade(
-                                    material.color,
-                                    Vector3(
-                                        -direction.x,
-                                        -direction.y,
-                                        -direction.z,
-                                    ),
-                                ),
-                                material.opacity,
-                            )
-                        )
+                    vertex_normals.append(direction)
+
+            # One colour for the whole mesh now: the material's, decoded to
+            # linear once with its opacity folded into alpha. Every corner
+            # carries this same value and the fragment lights it.
+            var base = _with_opacity(
+                FloatColor(srgb=material.color), material.opacity
+            )
 
             var triangles = geometry.triangle_count()
             for triangle in range(triangles):
@@ -463,26 +455,16 @@ struct Renderer(Movable):
                 var second = geometry.corner_index(triangle, 1)
                 var third = geometry.corner_index(triangle, 2)
 
-                var color_a: FloatColor
-                var color_b: FloatColor
-                var color_c: FloatColor
-                var back_a: FloatColor
-                var back_b: FloatColor
-                var back_c: FloatColor
+                var normal_a: Vector3
+                var normal_b: Vector3
+                var normal_c: Vector3
                 if smooth:
-                    color_a = vertex_colors[first]
-                    color_b = vertex_colors[second]
-                    color_c = vertex_colors[third]
-                    back_a = color_a
-                    back_b = color_b
-                    back_c = color_c
-                    if two_sided:
-                        back_a = vertex_back_colors[first]
-                        back_b = vertex_back_colors[second]
-                        back_c = vertex_back_colors[third]
+                    normal_a = vertex_normals[first]
+                    normal_b = vertex_normals[second]
+                    normal_c = vertex_normals[third]
                 else:
                     # No normals given, so the face supplies its own and the
-                    # whole triangle takes one colour.
+                    # whole triangle takes one.
                     var geometric = face_normal(
                         world_points[first],
                         world_points[second],
@@ -498,41 +480,29 @@ struct Renderer(Movable):
                         geometric = Vector3(
                             -geometric.x, -geometric.y, -geometric.z
                         )
-                    color_a = _with_opacity(
-                        lighting.shade(material.color, geometric),
-                        material.opacity,
-                    )
-                    color_b = color_a
-                    color_c = color_a
-                    back_a = _with_opacity(
-                        lighting.shade(
-                            material.color,
-                            Vector3(-geometric.x, -geometric.y, -geometric.z),
-                        ),
-                        material.opacity,
-                    )
-                    back_b = back_a
-                    back_c = back_a
+                    normal_a = geometric
+                    normal_b = geometric
+                    normal_c = geometric
 
                 var pieces = clip_depth(
                     ClipVertex(
                         view_points[first],
-                        color_a,
-                        back_a,
+                        base,
+                        normal_a,
                         vertex_u[first],
                         vertex_v[first],
                     ),
                     ClipVertex(
                         view_points[second],
-                        color_b,
-                        back_b,
+                        base,
+                        normal_b,
                         vertex_u[second],
                         vertex_v[second],
                     ),
                     ClipVertex(
                         view_points[third],
-                        color_c,
-                        back_c,
+                        base,
+                        normal_c,
                         vertex_u[third],
                         vertex_v[third],
                     ),
@@ -550,22 +520,28 @@ struct Renderer(Movable):
                         pieces[piece * 3 + 2], to_screen, map, blending
                     )
                     # Which way this piece ends up facing decides two things
-                    # at once: whether it survives, and which side's lighting
-                    # it carries. Read from the screen winding, so it is known
-                    # only now -- which is why both colours travelled here.
+                    # at once: whether it survives, and which side of it is
+                    # being lit. Read from the screen winding, so it is known
+                    # only now -- which is why the normal travelled this far
+                    # unflipped.
                     var away = _faces_away(one, two, three, mirrored)
                     if material.side == FRONT_SIDE and away:
                         continue
                     if material.side == BACK_SIDE and not away:
                         continue
-                    if two_sided and away:
+                    if away:
                         # Seen from behind, so light the side being looked at.
                         # Without this a BackSide surface with the light in
                         # front of it renders black: the Lambert term is taken
                         # against the normal pointing away from the camera.
-                        one = _relit(one, pieces[piece * 3].back_color)
-                        two = _relit(two, pieces[piece * 3 + 1].back_color)
-                        three = _relit(three, pieces[piece * 3 + 2].back_color)
+                        #
+                        # One flip replaces the two colours this used to carry
+                        # from the vertex stage, because the far side's normal
+                        # is just this one negated -- which the lighting was
+                        # not, once it had been applied.
+                        one = _turned_around(one)
+                        two = _turned_around(two)
+                        three = _turned_around(three)
                     corners.append(one)
                     corners.append(two)
                     corners.append(three)
@@ -599,6 +575,9 @@ struct Renderer(Movable):
                 its geometry has no positions.
         """
         var corners = self.prepare(scene, assets, meshes, camera)
+        # Resolved here as well as in `prepare`, because the fragments need
+        # it: lighting is no longer baked into the corners on the way past.
+        var lighting = Lighting(scene)
         var target = RenderTarget(self.width, self.height, self.background)
         for triangle in range(len(corners) // 3):
             rasterize_shaded(
@@ -608,6 +587,7 @@ struct Renderer(Movable):
                 target,
                 self.shading,
                 assets.textures,
+                lighting,
             )
         # Linear light becomes an image exactly once, here.
         return target.resolve()

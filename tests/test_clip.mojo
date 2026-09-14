@@ -27,7 +27,7 @@ def at(x: Float32, y: Float32, z: Float32) -> ClipVertex:
     return ClipVertex(
         Vector3(x, y, z),
         FloatColor(1.0, 1.0, 1.0),
-        FloatColor(1.0, 1.0, 1.0),
+        Vector3(0, 0, 1),
         0,
         0,
     )
@@ -36,7 +36,7 @@ def at(x: Float32, y: Float32, z: Float32) -> ClipVertex:
 def coloured(z: Float32, value: Float32) -> ClipVertex:
     """Return a vertex at depth `z` whose red channel is `value`."""
     return ClipVertex(
-        Vector3(0, 0, z), FloatColor(value, 0, 0), FloatColor(value, 0, 0), 0, 0
+        Vector3(0, 0, z), FloatColor(value, 0, 0), Vector3(0, 0, 1), 0, 0
     )
 
 
@@ -96,10 +96,10 @@ def test_colour_is_carried_to_the_cut() raises:
     var pieces = clip_depth(
         coloured(-3, 0),
         ClipVertex(
-            Vector3(1, 0, 1), FloatColor(200, 0, 0), FloatColor(200, 0, 0), 0, 0
+            Vector3(1, 0, 1), FloatColor(200, 0, 0), Vector3(0, 0, 1), 0, 0
         ),
         ClipVertex(
-            Vector3(0, 1, -3), FloatColor(0, 0, 0), FloatColor(0, 0, 0), 0, 0
+            Vector3(0, 1, -3), FloatColor(0, 0, 0), Vector3(0, 0, 1), 0, 0
         ),
         NEAR,
         FAR,
@@ -200,7 +200,7 @@ def test_colour_is_carried_to_a_far_plane_cut() raises:
         coloured(-5, 0),
         coloured(-15, 200),
         ClipVertex(
-            Vector3(0, 1, -5), FloatColor(0, 0, 0), FloatColor(0, 0, 0), 0, 0
+            Vector3(0, 1, -5), FloatColor(0, 0, 0), Vector3(0, 0, 1), 0, 0
         ),
         NEAR,
         Float32(10),
@@ -232,7 +232,7 @@ def mapped(z: Float32, u: Float32, v: Float32) -> ClipVertex:
     return ClipVertex(
         Vector3(0, 0, z),
         FloatColor(1.0, 1.0, 1.0),
-        FloatColor(1.0, 1.0, 1.0),
+        Vector3(0, 0, 1),
         u,
         v,
     )
@@ -245,13 +245,13 @@ def test_texture_coordinates_are_carried_to_a_near_plane_cut() raises:
     #     t = (a.z - plane) / (a.z - b.z) = (-0.5 + 1) / (-0.5 + 2) = 1/3
     var pieces = clip_depth(
         ClipVertex(
-            Vector3(0, 0, -0.5), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 0, 0
+            Vector3(0, 0, -0.5), FloatColor(1, 1, 1), Vector3(0, 0, 1), 0, 0
         ),
         ClipVertex(
-            Vector3(1, 0, -2.0), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 1, 0
+            Vector3(1, 0, -2.0), FloatColor(1, 1, 1), Vector3(0, 0, 1), 1, 0
         ),
         ClipVertex(
-            Vector3(0, 1, -2.0), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 0, 1
+            Vector3(0, 1, -2.0), FloatColor(1, 1, 1), Vector3(0, 0, 1), 0, 1
         ),
         NEAR,
         FAR,
@@ -287,7 +287,7 @@ def test_texture_coordinates_are_carried_to_a_far_plane_cut() raises:
         mapped(-5, 0, 0),
         mapped(-15, 1, 0),
         ClipVertex(
-            Vector3(0, 1, -5), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 0, 0
+            Vector3(0, 1, -5), FloatColor(1, 1, 1), Vector3(0, 0, 1), 0, 0
         ),
         NEAR,
         Float32(10),
@@ -305,10 +305,10 @@ def test_a_triangle_that_survives_whole_keeps_its_own_coordinates() raises:
     var pieces = clip_depth(
         mapped(-5, 0.25, 0.75),
         ClipVertex(
-            Vector3(1, 0, -5), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 1, 0
+            Vector3(1, 0, -5), FloatColor(1, 1, 1), Vector3(0, 0, 1), 1, 0
         ),
         ClipVertex(
-            Vector3(0, 1, -5), FloatColor(1, 1, 1), FloatColor(1, 1, 1), 0, 1
+            Vector3(0, 1, -5), FloatColor(1, 1, 1), Vector3(0, 0, 1), 0, 1
         ),
         NEAR,
         FAR,
@@ -318,6 +318,43 @@ def test_a_triangle_that_survives_whole_keeps_its_own_coordinates() raises:
     assert_equal(pieces[0].v, Float32(0.75))
     assert_equal(pieces[1].u, Float32(1))
     assert_equal(pieces[2].v, Float32(1))
+
+
+def test_a_cut_carries_the_normal_across() raises:
+    # A triangle cut by the near plane keeps the shading of the part that
+    # survived. Leaving the normal behind would relight the cut edge, which
+    # is the same class of mistake as leaving the texture coordinates behind
+    # and slides the lighting across the cut instead of the image.
+    var near_end = ClipVertex(
+        Vector3(0, 0, -0.5), FloatColor(1, 1, 1), Vector3(0, 0, 1), 0, 0
+    )
+    var far_end = ClipVertex(
+        Vector3(0, 0, -2.5), FloatColor(1, 1, 1), Vector3(0, 1, 0), 0, 0
+    )
+    var side = ClipVertex(
+        Vector3(1, 0, -2.5), FloatColor(1, 1, 1), Vector3(0, 1, 0), 0, 0
+    )
+    var pieces = clip_depth(near_end, far_end, side, NEAR, FAR)
+    assert_true(len(pieces) > 0, "the triangle was clipped away entirely")
+    # The edge runs from z = -0.5 to z = -2.5 and the plane sits at z = -1,
+    # a quarter of the way along it. So the cut normal is a quarter of the way
+    # from (0, 0, 1) towards (0, 1, 0): y of 0.25 and z of 0.75. Not
+    # renormalized here, because the fragment does that after interpolating
+    # anyway.
+    var found = False
+    for index in range(len(pieces)):
+        var corner = pieces[index]
+        if corner.position.z > Float32(-1.01) and (
+            corner.position.z < Float32(-0.99)
+        ):
+            assert_almost_equal(
+                corner.normal.y, Float32(0.25), atol=Float64(1e-5)
+            )
+            assert_almost_equal(
+                corner.normal.z, Float32(0.75), atol=Float64(1e-5)
+            )
+            found = True
+    assert_true(found, "no corner landed on the near plane")
 
 
 def main() raises:

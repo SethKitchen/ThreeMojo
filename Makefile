@@ -361,7 +361,8 @@ example: $(OUT_DIR)/triangle.png
 
 animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/uv.png $(OUT_DIR)/textured.png $(OUT_DIR)/glass.png \
-           $(OUT_DIR)/floor.png $(OUT_DIR)/photo.png
+           $(OUT_DIR)/floor.png $(OUT_DIR)/photo.png \
+           $(OUT_DIR)/lamps.png
 
 $(OUT_DIR)/cube.png: $(LIB_SOURCES) examples/cube.mojo
 	@mkdir -p $(OUT_DIR)
@@ -377,6 +378,12 @@ $(OUT_DIR)/cubes.png: $(LIB_SOURCES) examples/cubes.mojo
 $(OUT_DIR)/glass.png: $(LIB_SOURCES) examples/glass.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/glass.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Three coloured lamps on a coarse sphere: many lights, and per-fragment shading.
+$(OUT_DIR)/lamps.png: $(LIB_SOURCES) examples/lamps.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/lamps.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # A cube wearing a PNG somebody else's encoder wrote: the decoder end to end.
