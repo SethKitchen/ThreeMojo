@@ -491,5 +491,39 @@ def test_the_blank_texture_wraps_to_white_rather_than_dividing_by_zero() raises:
     assert_equal(nothing.wrapped_texel(0, 0).a, Float32(1))
 
 
+def test_filtering_does_not_drag_hidden_colour_into_view() raises:
+    # An opaque red beside a fully transparent green. Filtering the straight
+    # colours averages them and puts a green fringe along a transparent edge,
+    # which is the halo around every badly filtered cut-out sprite. Blended
+    # where hidden colour weighs nothing, the answer is half-covered red.
+    var pixels = List[UInt8]()
+    for value in [UInt8(255), UInt8(0), UInt8(0), UInt8(255)]:
+        pixels.append(value)
+    for value in [UInt8(0), UInt8(255), UInt8(0), UInt8(0)]:
+        pixels.append(value)
+    var strip = Texture(2, 1, pixels^, CLAMP, BILINEAR, LINEAR)
+
+    # Halfway between the two texel centres.
+    var between = strip.sample(0.5, 0.5)
+    assert_almost_equal(between.a, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(between.g, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(between.r, Float32(1), atol=TOLERANCE)
+
+
+def test_filtering_two_opaque_texels_is_unchanged_by_premultiplying() raises:
+    # The other side: where both texels are opaque, premultiplying and
+    # unpremultiplying cancel and the plain average is still the answer.
+    var pixels = List[UInt8]()
+    for value in [UInt8(255), UInt8(0), UInt8(0), UInt8(255)]:
+        pixels.append(value)
+    for value in [UInt8(0), UInt8(255), UInt8(0), UInt8(255)]:
+        pixels.append(value)
+    var strip = Texture(2, 1, pixels^, CLAMP, BILINEAR, LINEAR)
+    var between = strip.sample(0.5, 0.5)
+    assert_almost_equal(between.r, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(between.g, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(between.a, Float32(1.0), atol=TOLERANCE)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

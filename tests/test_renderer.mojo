@@ -12,6 +12,8 @@ from core.object3d import Object3D
 from core.assets import Assets
 from materials.material import (
     BACK_SIDE,
+    BLEND,
+    OPAQUE,
     DOUBLE_SIDE,
     FRONT_SIDE,
     NO_TEXTURE,
@@ -1565,6 +1567,67 @@ def test_a_material_is_opaque_by_default() raises:
     assert_true(
         Material(Color(1, 2, 3), NO_TEXTURE, FRONT_SIDE, 0.5).is_transparent()
     )
+
+
+def test_a_translucent_base_colour_sorts_and_rasterizes_the_same_way() raises:
+    # One material, one answer. A base colour with alpha but an opacity of one
+    # used to sort as opaque and rasterize as blended: it did not write depth,
+    # so whatever was submitted after it painted straight over the top, and
+    # the image depended on submission order.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_light(Vector3(0, 0, 1), 1.0)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var red = assets.materials.add(Material(Color(255, 0, 0, 128)))
+    var blue = assets.materials.add(Material(Color(0, 0, 255)))
+    assert_true(
+        assets.materials.get(red).is_transparent(),
+        "a base colour with alpha must count as transparent",
+    )
+
+    var scene = Scene()
+    var front = Object3D()
+    front.set_position(0, 0, 0.9)
+    var front_node = scene.add(front^)
+    var back = Object3D()
+    back.set_position(0, 0, -0.9)
+    var back_node = scene.add(back^)
+    scene.update()
+
+    var red_first = List[Mesh]()
+    red_first.append(Mesh(box, red, front_node))
+    red_first.append(Mesh(box, blue, back_node))
+    var blue_first = List[Mesh]()
+    blue_first.append(Mesh(box, blue, back_node))
+    blue_first.append(Mesh(box, red, front_node))
+
+    var one = renderer.render(scene, assets, red_first, a_camera())
+    var two = renderer.render(scene, assets, blue_first, a_camera())
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(one.get_pixel(x, y).r, two.get_pixel(x, y).r)
+            assert_equal(one.get_pixel(x, y).b, two.get_pixel(x, y).b)
+    # And the translucent red really is mixed with the blue behind it.
+    var centre = one.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(centre.r > 0 and centre.b > 0)
+
+
+def test_blending_can_be_named_against_what_the_colour_suggests() raises:
+    # A texture's own alpha cannot be inferred from the material, so the
+    # policy has to be sayable. Both directions, so neither is the only path.
+    var opaque_looking = Material(
+        Color(255, 255, 255), NO_TEXTURE, FRONT_SIDE, 1.0, BLEND
+    )
+    assert_true(opaque_looking.is_transparent())
+    var clear_looking = Material(
+        Color(255, 255, 255, 10), NO_TEXTURE, FRONT_SIDE, 0.2, OPAQUE
+    )
+    assert_false(clear_looking.is_transparent())
+
+
+def test_an_unknown_blending_policy_is_rejected() raises:
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), NO_TEXTURE, FRONT_SIDE, 1.0, 7)
 
 
 def main() raises:

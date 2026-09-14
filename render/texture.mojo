@@ -59,6 +59,48 @@ def mix(near: Float32, far: Float32, t: Float32) -> Float32:
     return near + (far - near) * t
 
 
+def blend_texels(
+    lower_left: FloatColor,
+    lower_right: FloatColor,
+    upper_left: FloatColor,
+    upper_right: FloatColor,
+    across: Float32,
+    down: Float32,
+) -> FloatColor:
+    """Bilinear blend of four texels, done where hidden colour weighs nothing.
+
+    Filtering is a weighted sum, and a weighted sum of *straight* colours lets
+    an invisible texel contribute its colour anyway. An opaque red beside a
+    fully transparent green averages to half red and half green, so a fringe
+    of a colour nobody put there appears along every transparent edge — the
+    classic halo around a cut-out sprite.
+
+    Premultiplied, the transparent texel contributes nothing but its alpha,
+    and the answer is half-covered red. The result is unpremultiplied again so
+    that callers keep a single straight-alpha convention and alpha is applied
+    exactly once.
+
+    Args:
+        lower_left: The texel at the smaller column and row.
+        lower_right: One column further on.
+        upper_left: One row further on.
+        upper_right: One of each.
+        across: How far between the two columns, 0 to 1.
+        down: How far between the two rows, 0 to 1.
+
+    Returns:
+        The blended colour, with straight alpha.
+    """
+    return blend(
+        lower_left.premultiplied(),
+        lower_right.premultiplied(),
+        upper_left.premultiplied(),
+        upper_right.premultiplied(),
+        across,
+        down,
+    ).unpremultiplied()
+
+
 def blend(
     lower_left: FloatColor,
     lower_right: FloatColor,
@@ -347,7 +389,7 @@ struct Texture(Movable):
         var down = (1 - v) * Float32(self.height) - 0.5
         var column = Int(floor(across))
         var row = Int(floor(down))
-        return blend(
+        return blend_texels(
             self.wrapped_texel(column, row),
             self.wrapped_texel(column + 1, row),
             self.wrapped_texel(column, row + 1),

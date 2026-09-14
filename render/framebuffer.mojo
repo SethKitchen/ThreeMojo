@@ -15,6 +15,11 @@ Keeping the buffer separate from the rasterizer also means the per-pixel logic
 can be tested without capturing stdout, and later lets a GPU kernel fill the
 same bytes.
 
+Compositing does not happen here. Blending and depth-passing live on
+`render.target`, which keeps colour as linear light at full precision until an
+image is finished; a byte buffer is the wrong place to accumulate, because
+every layer would round and the losses compound. This type is the *result*.
+
 Colour has two forms here. `Color` is the eight bits per channel the buffer
 actually stores — sRGB encoded, ready for a display. `FloatColor` is *linear*
 light, which is what lighting, filtering, clipping and interpolation must work
@@ -100,6 +105,32 @@ struct FloatColor(ImplicitlyCopyable):
         self.g = Float32(of.g) / 255
         self.b = Float32(of.b) / 255
         self.a = Float32(of.a) / 255
+
+    def premultiplied(self) -> Self:
+        """Return this colour with its channels scaled by its own alpha.
+
+        *Associated* alpha: the stored numbers are the light the surface
+        actually contributes, rather than the light it would contribute if it
+        were opaque. Compositing and filtering both want this form, because
+        both are weighted sums and a hidden colour must weigh nothing. See
+        `render.target`.
+        """
+        return FloatColor(
+            self.r * self.a, self.g * self.a, self.b * self.a, self.a
+        )
+
+    def unpremultiplied(self) -> Self:
+        """Return the colour this would be if it were opaque, with its alpha.
+
+        The inverse of `premultiplied`, undefined where nothing is covered —
+        a colour that contributes no light has no colour to recover — so a
+        zero alpha gives transparent black, which is what PNG wants written.
+        """
+        if self.a <= 0:
+            return FloatColor(0.0, 0.0, 0.0, 0.0)
+        return FloatColor(
+            self.r / self.a, self.g / self.a, self.b / self.a, self.a
+        )
 
     def scaled(self, factor: Float32) -> Self:
         """Return this colour with its three channels scaled, alpha kept."""
@@ -279,65 +310,6 @@ struct Framebuffer(Movable):
             return False
         self.depth[slot] = z
         return True
-
-    def depth_passes(self, x: Int, y: Int, z: Float32) raises -> Bool:
-        """Return True if `z` is nearer than what is stored, claiming nothing.
-
-        The read half of `test_depth`, for surfaces that must be *hidden* by
-        what is in front of them without *hiding* what is behind them. A
-        translucent surface is exactly that: two of them one behind the other
-        both contribute, so neither may take ownership of the pixel's depth.
-
-        Args:
-            x: Column.
-            y: Row.
-            z: The NDC depth to test.
-
-        Returns:
-            True if the fragment is in front of what is recorded.
-
-        Raises:
-            Error: If the coordinate is out of bounds.
-        """
-        if x < 0 or x >= self.width or y < 0 or y >= self.height:
-            raise Error("Pixel coordinate out of bounds")
-        return z < self.depth[y * self.width + x]
-
-    def blend_pixel(mut self, x: Int, y: Int, color: FloatColor) raises:
-        """Mix `color` into pixel (x, y) by its own alpha.
-
-        The `over` operator: `result = src * a + dst * (1 - a)`. What is
-        already there is decoded back to linear first, because mixing light
-        has to happen in linear space — blending an encoded 0 and an encoded
-        255 half and half gives 128, which is 21.6% of the light rather than
-        50%. That is the most visible place the colour space matters, and the
-        reason it was settled before this existed.
-
-        Args:
-            x: Column.
-            y: Row.
-            color: The linear colour to mix in, with alpha as its coverage.
-
-        Raises:
-            Error: If the coordinate is out of bounds.
-        """
-        var behind = FloatColor(srgb=self.get_pixel(x, y))
-        var share = color.a
-        if share > 1:
-            share = 1
-        if share < 0:
-            share = 0
-        var keep = 1 - share
-        self.set_pixel(
-            x,
-            y,
-            FloatColor(
-                color.r * share + behind.r * keep,
-                color.g * share + behind.g * keep,
-                color.b * share + behind.b * keep,
-                1.0,
-            ).encode(),
-        )
 
     def get_pixel(self, x: Int, y: Int) raises -> Color:
         """Return the color at pixel (x, y)."""

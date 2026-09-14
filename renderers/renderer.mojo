@@ -67,6 +67,7 @@ from materials.material import (
     NO_TEXTURE,
 )
 from render.framebuffer import Color, FloatColor, Framebuffer
+from render.target import RenderTarget
 from math.vector2 import Vector2
 from render.rasterizer import (
     SHADE_LIT,
@@ -221,11 +222,12 @@ def _relit(corner: RasterVertex, color: FloatColor) -> RasterVertex:
         corner.u,
         corner.v,
         corner.texture,
+        corner.blend,
     )
 
 
 def _to_raster(
-    vertex: ClipVertex, to_screen: Matrix4, texture: Int
+    vertex: ClipVertex, to_screen: Matrix4, texture: Int, blend: Int
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -251,6 +253,7 @@ def _to_raster(
         vertex.u,
         vertex.v,
         texture,
+        blend,
     )
 
 
@@ -415,6 +418,7 @@ struct Renderer(Movable):
             var material = assets.materials.get(meshes[index].material)
             # Carried on every vertex of this mesh, so one flat triangle list
             # can hold a scene whose meshes use different images.
+            var blending = material.blending
             var map = material.map
             # Checked here because here is the first place that can: a
             # material is built without the store in reach, so a positive id
@@ -583,10 +587,14 @@ struct Renderer(Movable):
                     far,
                 )
                 for piece in range(len(pieces) // 3):
-                    var one = _to_raster(pieces[piece * 3], to_screen, map)
-                    var two = _to_raster(pieces[piece * 3 + 1], to_screen, map)
+                    var one = _to_raster(
+                        pieces[piece * 3], to_screen, map, blending
+                    )
+                    var two = _to_raster(
+                        pieces[piece * 3 + 1], to_screen, map, blending
+                    )
                     var three = _to_raster(
-                        pieces[piece * 3 + 2], to_screen, map
+                        pieces[piece * 3 + 2], to_screen, map, blending
                     )
                     # Which way this piece ends up facing decides two things
                     # at once: whether it survives, and which side's lighting
@@ -638,7 +646,7 @@ struct Renderer(Movable):
                 its geometry has no positions.
         """
         var corners = self.prepare(scene, assets, meshes, camera)
-        var target = Framebuffer(self.width, self.height, self.background)
+        var target = RenderTarget(self.width, self.height, self.background)
         for triangle in range(len(corners) // 3):
             rasterize_shaded(
                 corners[triangle * 3],
@@ -648,4 +656,5 @@ struct Renderer(Movable):
                 self.shading,
                 assets.textures,
             )
-        return target^
+        # Linear light becomes an image exactly once, here.
+        return target.resolve()

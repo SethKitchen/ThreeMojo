@@ -50,9 +50,15 @@ from render.rasterizer import (
     RasterVertex,
     Triangle,
 )
-from materials.material import NO_TEXTURE
+from materials.material import NO_TEXTURE, OPAQUE
 from render.srgb import LINEAR, decode_ramp
-from render.texture import BILINEAR, NEAREST, Texture, blend, wrap_index
+from render.texture import (
+    BILINEAR,
+    NEAREST,
+    Texture,
+    blend_texels,
+    wrap_index,
+)
 from render.texture_store import TextureStore
 from std.gpu import global_idx
 from std.math import ceildiv, floor, inf
@@ -216,25 +222,29 @@ def _fetch(
     )
 
 
-def triangle_textures(corners: List[RasterVertex]) -> List[Int32]:
-    """Return the texture each triangle samples, one entry per triangle.
+def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
+    """Return each triangle's texture and blend policy, two entries each.
 
-    A resource id is not a vertex attribute. It was one for a commit: carried
-    on all three corners, crossed as a `Float32`, and read back from the first
-    corner — which is to say it was already per-triangle, wearing a per-vertex
-    costume, and losing exactness above 2^24 on the way. A parallel integer
-    buffer says what it is.
+    Neither is a vertex attribute. A resource id was one for a commit —
+    carried on all three corners, crossed as a `Float32`, read back from the
+    first — which is to say it was already per-triangle in a per-vertex
+    costume, and losing exactness above 2^24 on the way. Whether a surface
+    composites is the same kind of thing, and worse to infer: it decides both
+    how the colour is combined *and* whether depth is written, so guessing it
+    from a float alpha in one place and a material in another is how the two
+    came to disagree.
 
     Args:
         corners: Raster vertices, three per triangle.
 
     Returns:
-        One id per triangle, taken from its first corner.
+        Texture id then blend policy per triangle, from its first corner.
     """
-    var ids = List[Int32]()
+    var state = List[Int32]()
     for triangle in range(len(corners) // 3):
-        ids.append(Int32(corners[triangle * 3].texture))
-    return ids^
+        state.append(Int32(corners[triangle * 3].texture))
+        state.append(Int32(corners[triangle * 3].blend))
+    return state^
 
 
 def rasterize_kernel(
@@ -261,6 +271,9 @@ def rasterize_kernel(
     var px = sample(x)
     var py = sample(y)
 
+    # Resolved by the material, not guessed at from an alpha. A debug view of
+    # texture coordinates is always opaque: it shows the nearest surface's
+    # coordinates, and averaging several surfaces' would mean nothing.
     var nearest = FURTHEST
     var found = False
     # True once an *opaque* fragment has claimed this pixel's depth. A
@@ -271,12 +284,15 @@ def rasterize_kernel(
     var green = Float32(0)
     var blue = Float32(0)
     var alpha = Float32(0)
-    # What the pixel holds so far, in linear light. Starts as the background
-    # decoded, so a translucent surface over nothing mixes with the clear
-    # colour rather than with black.
-    var mixed_r = ramp[unsafe_offset=Int((background >> 24) & 0xFF)]
-    var mixed_g = ramp[unsafe_offset=Int((background >> 16) & 0xFF)]
-    var mixed_b = ramp[unsafe_offset=Int((background >> 8) & 0xFF)]
+    # What the pixel holds so far, in *premultiplied* linear light — the
+    # light it actually contributes, already scaled by its coverage. Starts as
+    # the background decoded, so a translucent surface over nothing mixes with
+    # the clear colour rather than with black, and a transparent clear colour
+    # contributes nothing rather than black. See render.target.
+    var mixed_a = Float32(background & 0xFF) / 255
+    var mixed_r = ramp[unsafe_offset=Int((background >> 24) & 0xFF)] * mixed_a
+    var mixed_g = ramp[unsafe_offset=Int((background >> 16) & 0xFF)] * mixed_a
+    var mixed_b = ramp[unsafe_offset=Int((background >> 8) & 0xFF)] * mixed_a
 
     for index in range(Int(triangles)):
         var base = index * FLOATS_PER_TRIANGLE
@@ -388,7 +404,7 @@ def rasterize_kernel(
             )
             # Which image, from the triangle; -1 is no texture, which samples
             # as white and so leaves the lighting alone.
-            var slot = Int(maps[unsafe_offset=index])
+            var slot = Int(maps[unsafe_offset=index * 2])
             if slot != NO_TEXTURE:
                 # Every texture lives in one buffer end to end, so the table
                 # says where this one starts and how to read it.
@@ -420,7 +436,7 @@ def rasterize_kernel(
                     var down = (1 - v) * Float32(height) - 0.5
                     var column = Int(floor(across))
                     var row = Int(floor(down))
-                    sampled = blend(
+                    sampled = blend_texels(
                         _fetch(
                             texels,
                             ramp,
@@ -516,28 +532,39 @@ def rasterize_kernel(
         # blended fragment arrives -- the same guarantee `rasterize_shaded`
         # relies on, and the reason `Renderer.prepare` sorts.
         found = True
-        # Read from the first corner, not from the interpolated alpha, for the
-        # same reason `rasterize_shaded` does: transparency comes from the
-        # material, so all three corners agree, and three weights that sum to
-        # one in exact arithmetic sum to 0.99999994 in floating point. Deciding
-        # from that made every opaque triangle translucent and left the depth
-        # buffer empty.
-        if corners[unsafe_offset=base + 7] >= 1 or mode == Int32(SHADE_UV):
-            mixed_r = red
-            mixed_g = green
-            mixed_b = blue
+        var share = alpha
+        if share > 1:
+            share = 1
+        if share < 0:
+            share = 0
+        if maps[unsafe_offset=index * 2 + 1] == Int32(OPAQUE) or mode == Int32(
+            SHADE_UV
+        ):
+            # Nothing behind contributes. The surface's own alpha is kept
+            # rather than forced to one, so an opaque material drawn with a
+            # partly transparent texture resolves partly transparent.
+            mixed_r = red * share
+            mixed_g = green * share
+            mixed_b = blue * share
+            mixed_a = share
             nearest = z
             solid = True
         else:
-            var keep = 1 - alpha
-            mixed_r = red * alpha + mixed_r * keep
-            mixed_g = green * alpha + mixed_g * keep
-            mixed_b = blue * alpha + mixed_b * keep
+            # Source-over, premultiplied: a weighted sum with no special case.
+            var keep = 1 - share
+            mixed_r = red * share + mixed_r * keep
+            mixed_g = green * share + mixed_g * keep
+            mixed_b = blue * share + mixed_b * keep
+            mixed_a = share + mixed_a * keep
 
     var word = background
     var nearest_depth = inf[DType.float32]()
     if found:
-        var lit = FloatColor(mixed_r, mixed_g, mixed_b, 1.0)
+        # Unpremultiply, then encode. PNG stores unassociated alpha, and alpha
+        # is coverage rather than colour so it skips the transfer function.
+        var lit = FloatColor(
+            mixed_r, mixed_g, mixed_b, mixed_a
+        ).unpremultiplied()
         # SHADE_UV writes coordinates rather than light, so it is not encoded;
         # see rasterize_shaded.
         if mode == Int32(SHADE_UV):
@@ -630,7 +657,7 @@ struct GpuRenderer(Movable):
         self.corners = self.context.enqueue_create_buffer[DType.float32](
             FLOATS_PER_TRIANGLE
         )
-        self.maps = self.context.enqueue_create_buffer[DType.int32](1)
+        self.maps = self.context.enqueue_create_buffer[DType.int32](2)
         # One texel's worth, standing in for the blank texture. A zero-length
         # device buffer is not worth the special case, and a width of zero is
         # what the kernel actually reads to mean "no texture".
@@ -695,7 +722,7 @@ struct GpuRenderer(Movable):
                 triangles * FLOATS_PER_TRIANGLE
             )
             self.maps = self.context.enqueue_create_buffer[DType.int32](
-                triangles
+                triangles * 2
             )
             self.capacity = triangles
 
@@ -707,12 +734,12 @@ struct GpuRenderer(Movable):
                     src=flat.unsafe_ptr(),
                     count=len(flat),
                 )
-            var ids = triangle_textures(corners)
+            var state = triangle_state(corners)
             with self.maps.map_to_host() as host:
                 unsafe_memcpy(
                     dest=host.unsafe_ptr(),
-                    src=ids.unsafe_ptr(),
-                    count=len(ids),
+                    src=state.unsafe_ptr(),
+                    count=len(state),
                 )
 
         self.context.enqueue_function[rasterize_kernel](

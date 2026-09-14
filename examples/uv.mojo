@@ -36,6 +36,7 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
+from render.target import RenderTarget
 from render.rasterizer import SHADE_UV, RasterVertex, rasterize_shaded
 from renderers.renderer import Renderer
 from std.pathlib import Path
@@ -101,7 +102,7 @@ def fill(corners: List[RasterVertex], background: Color) raises -> Framebuffer:
     Raises:
         Error: If the framebuffer cannot be made.
     """
-    var target = Framebuffer(WIDTH, HEIGHT, background)
+    var target = RenderTarget(WIDTH, HEIGHT, background)
     for triangle in range(len(corners) // 3):
         rasterize_shaded(
             corners[triangle * 3],
@@ -110,7 +111,7 @@ def fill(corners: List[RasterVertex], background: Color) raises -> Framebuffer:
             target,
             SHADE_UV,
         )
-    return target^
+    return target.resolve()
 
 
 def flattened(corners: List[RasterVertex]) -> List[RasterVertex]:
@@ -132,6 +133,8 @@ def flattened(corners: List[RasterVertex]) -> List[RasterVertex]:
                 corner.color,
                 corner.u,
                 corner.v,
+                corner.texture,
+                corner.blend,
             )
         )
     return affine^

@@ -469,6 +469,16 @@ rules follow, and they are the two every renderer has:
 **A translucent surface tests depth without claiming it** — hidden by what is
 in front, hiding nothing behind — so two panes one behind the other both show.
 
+**Whether a surface composites is a property of its material**, resolved once
+and carried to both rasterizers as per-triangle state. It decides two things
+together — how the colour combines, and whether depth is written — so it has
+to be one answer. It was three: the mesh sorter asked the material, and each
+rasterizer asked a vertex colour. A material with an opaque `opacity` but a
+translucent base colour sorted as opaque and rasterized as blended, so it wrote
+no depth and whatever came after painted over it. `blending` is inferred where
+it can be and sayable where it cannot — a texture's own alpha is invisible from
+the material.
+
 **Draw order stops being the caller's business.** Blending is not commutative,
 so `Renderer.prepare` puts every opaque mesh first (they write the depth that
 stops a pane behind a wall from showing through) and then sorts the translucent
@@ -490,6 +500,36 @@ The GPU blends in one pass rather than two, which is only correct because the
 renderer guarantees the ordering: every opaque triangle arrives before any
 translucent one, so the nearest solid depth is already final when the first
 blended fragment shows up.
+
+## Compositing, and where linear stops
+
+Rasterization draws into a `RenderTarget`: **premultiplied linear RGBA**, at
+full float precision, resolved to an image exactly once. A `Framebuffer` is the
+result rather than the workspace, and two things went wrong while it was both.
+
+**Rounding compounds.** Blending used to read the byte back, decode, mix and
+re-encode for every translucent layer. A hundred layers of alpha 0.0001 over
+black come to about 0.00995 of the light, which displays as byte 25 — and
+rounding after each layer gives 0, because each contribution alone rounds back
+to black. The GPU accumulated in registers and resolved once, so the backends
+did not merely round differently; they had different contracts.
+
+**Alpha needs both sides.** Source-over needs the destination's alpha as well
+as the source's. Blending 50% red over transparent blue gave opaque purple: the
+invisible blue contributed colour, and the result was forced opaque.
+
+Premultiplied because compositing and filtering are both weighted sums, and a
+hidden colour must weigh nothing:
+
+```
+out.rgb = src.rgb + dst.rgb * (1 - src.a)
+out.a   = src.a   + dst.a   * (1 - src.a)
+```
+
+`resolve` unpremultiplies and encodes at the end, because PNG stores
+unassociated alpha and alpha is coverage rather than colour — it never goes
+through the sRGB curve. Texture filtering blends in the same space, so a
+transparent texel contributes no colour and a cut-out gets no halo.
 
 ## Cameras
 

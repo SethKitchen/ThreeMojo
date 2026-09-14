@@ -41,7 +41,7 @@ from objects.mesh import Mesh
 from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METRE
 from render.framebuffer import Color, FloatColor, Framebuffer
-from materials.material import NO_TEXTURE
+from materials.material import BLEND, NO_TEXTURE, OPAQUE
 from render.texture_store import TextureStore
 from render.texture import (
     BILINEAR,
@@ -60,6 +60,8 @@ from render.gpu import (
     render,
     render_triangles,
 )
+from render.srgb import LINEAR
+from render.target import RenderTarget
 from render.rasterizer import (
     SHADE_TEXTURE,
     SHADE_UV,
@@ -354,14 +356,28 @@ def test_negative_height_is_rejected() raises:
 
 
 def corner(
-    x: Float32, y: Float32, z: Float32, inv_w: Float32, color: Color
+    x: Float32,
+    y: Float32,
+    z: Float32,
+    inv_w: Float32,
+    color: Color,
+    blend: Int = OPAQUE,
 ) -> RasterVertex:
-    """Return a raster vertex, for building test triangles."""
-    return RasterVertex(x, y, z, inv_w, FloatColor(of=color), 0, 0)
+    """Return a raster vertex, for building test triangles.
+
+    Whether the surface composites is stated rather than inferred from its
+    alpha, because that is how the renderer states it.
+    """
+    return RasterVertex(
+        x, y, z, inv_w, FloatColor(of=color), 0, 0, NO_TEXTURE, blend
+    )
 
 
 def cpu_render_triangles(
-    corners: List[RasterVertex], width: Int, height: Int
+    corners: List[RasterVertex],
+    width: Int,
+    height: Int,
+    clear: Color = BACKGROUND,
 ) raises -> Framebuffer:
     """Return the CPU rasterizer's output for the same prepared triangles.
 
@@ -369,6 +385,7 @@ def cpu_render_triangles(
         corners: Raster vertices, three per triangle.
         width: Image width.
         height: Image height.
+        clear: The colour to clear to.
 
     Returns:
         The rendered framebuffer.
@@ -376,7 +393,7 @@ def cpu_render_triangles(
     Raises:
         Error: If the dimensions are invalid.
     """
-    var target = Framebuffer(width, height, BACKGROUND)
+    var target = RenderTarget(width, height, clear)
     for index in range(len(corners) // 3):
         rasterize_shaded(
             corners[index * 3],
@@ -384,7 +401,7 @@ def cpu_render_triangles(
             corners[index * 3 + 2],
             target,
         )
-    return target^
+    return target.resolve()
 
 
 def overlapping_pair() -> List[RasterVertex]:
@@ -693,8 +710,9 @@ def test_both_backends_agree_on_texture_coordinates() raises:
     )
     var gpu = render_triangles(corners, 32, 24, BACKGROUND, SHADE_UV)
 
-    var cpu = Framebuffer(32, 24, BACKGROUND)
-    rasterize_shaded(corners[0], corners[1], corners[2], cpu, SHADE_UV)
+    var drawn = RenderTarget(32, 24, BACKGROUND)
+    rasterize_shaded(corners[0], corners[1], corners[2], drawn, SHADE_UV)
+    var cpu = drawn.resolve()
 
     # A real gradient in both channels, not a flat fill.
     assert_true(cpu.get_pixel(0, 0).r != cpu.get_pixel(31, 0).r)
@@ -835,7 +853,7 @@ def cpu_textured(
     Raises:
         Error: If the dimensions are invalid.
     """
-    var target = Framebuffer(size, size, BACKGROUND)
+    var target = RenderTarget(size, size, BACKGROUND)
     for triangle in range(len(corners) // 3):
         rasterize_shaded(
             corners[triangle * 3],
@@ -845,7 +863,7 @@ def cpu_textured(
             SHADE_TEXTURE,
             textures,
         )
-    return target^
+    return target.resolve()
 
 
 def test_both_backends_sample_a_texture_identically() raises:
@@ -1060,7 +1078,7 @@ def test_drawing_a_texture_that_was_never_uploaded_is_rejected() raises:
 def test_an_unknown_shading_mode_is_rejected_by_both_backends() raises:
     # Left unchecked the two disagreed: the CPU's last branch treated an
     # unrecognised mode as textured and the GPU's treated it as lit.
-    var fb = Framebuffer(8, 8, BACKGROUND)
+    var fb = RenderTarget(8, 8, BACKGROUND)
     var corners = mapped_quad(8)
     with assert_raises():
         rasterize_shaded(corners[0], corners[1], corners[2], fb, 99)
@@ -1083,9 +1101,9 @@ def translucent_pair() -> List[RasterVertex]:
     corners.append(corner(40, 0, 0.8, 1, Color(0, 255, 0)))
     corners.append(corner(0, 40, 0.8, 1, Color(0, 255, 0)))
     # Translucent red, nearer.
-    corners.append(corner(0, 0, 0.3, 1, Color(255, 0, 0, 128)))
-    corners.append(corner(40, 0, 0.3, 1, Color(255, 0, 0, 128)))
-    corners.append(corner(0, 40, 0.3, 1, Color(255, 0, 0, 128)))
+    corners.append(corner(0, 0, 0.3, 1, Color(255, 0, 0, 128), BLEND))
+    corners.append(corner(40, 0, 0.3, 1, Color(255, 0, 0, 128), BLEND))
+    corners.append(corner(0, 40, 0.3, 1, Color(255, 0, 0, 128), BLEND))
     return corners^
 
 
@@ -1120,12 +1138,83 @@ def test_both_backends_blend_a_translucent_surface_over_nothing() raises:
     if skipped_for_lack_of_a_gpu("a blend over the background"):
         return
     var corners = List[RasterVertex]()
-    corners.append(corner(0, 0, 0.5, 1, Color(255, 255, 255, 128)))
-    corners.append(corner(40, 0, 0.5, 1, Color(255, 255, 255, 128)))
-    corners.append(corner(0, 40, 0.5, 1, Color(255, 255, 255, 128)))
+    corners.append(corner(0, 0, 0.5, 1, Color(255, 255, 255, 128), BLEND))
+    corners.append(corner(40, 0, 0.5, 1, Color(255, 255, 255, 128), BLEND))
+    corners.append(corner(0, 40, 0.5, 1, Color(255, 255, 255, 128), BLEND))
     var gpu = render_triangles(corners, 16, 16, BACKGROUND)
     var cpu = cpu_render_triangles(corners, 16, 16)
     assert_true(cpu.get_pixel(2, 2).r > BACKGROUND.r)
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_agree_on_depth_in_uv_mode() raises:
+    # A debug view of texture coordinates is opaque on both sides: it shows
+    # the nearest surface's coordinates, and averaging several surfaces'
+    # would mean nothing. The CPU used to read the policy and skip the depth
+    # write; the GPU always wrote it, so the two disagreed by an infinity.
+    if skipped_for_lack_of_a_gpu("uv mode agrees on depth"):
+        return
+    var corners = List[RasterVertex]()
+    for index in range(3):
+        var at = mapped_quad(16)[index]
+        corners.append(
+            RasterVertex(
+                at.x,
+                at.y,
+                0.5,
+                1,
+                FloatColor(1, 1, 1, 0.5),
+                at.u,
+                at.v,
+                NO_TEXTURE,
+                BLEND,
+            )
+        )
+    var gpu = render_triangles(corners, 16, 16, BACKGROUND, SHADE_UV)
+    var drawn = RenderTarget(16, 16, BACKGROUND)
+    rasterize_shaded(corners[0], corners[1], corners[2], drawn, SHADE_UV)
+    var cpu = drawn.resolve()
+
+    assert_almost_equal(cpu.depth_at(2, 2), Float32(0.5), atol=Float64(1e-6))
+    assert_almost_equal(gpu.depth_at(2, 2), Float32(0.5), atol=Float64(1e-6))
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_both_backends_keep_a_texture_alpha_on_an_opaque_surface() raises:
+    # An opaque material sampling a partly transparent texture: the surface
+    # replaces what is behind it, and its own alpha survives to the image.
+    # The CPU kept the sampled alpha and the GPU forced it to one.
+    if skipped_for_lack_of_a_gpu("texture alpha on an opaque surface"):
+        return
+    var textures = TextureStore()
+    var faded = List[UInt8]()
+    for value in [UInt8(255), UInt8(255), UInt8(255), UInt8(128)]:
+        faded.append(value)
+    var half = textures.add(Texture(1, 1, faded^, REPEAT, NEAREST, LINEAR))
+
+    var corners = mapped_quad(16, half)
+    var gpu = render_triangles(
+        corners, 16, 16, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    var cpu = cpu_textured(corners, 16, textures)
+    assert_equal(cpu.get_pixel(4, 4).a, UInt8(128))
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_both_backends_composite_over_a_transparent_clear_colour() raises:
+    # Nothing behind means nothing contributes, on both sides.
+    if skipped_for_lack_of_a_gpu("compositing over a transparent clear"):
+        return
+    var clear = Color(0, 0, 255, 0)
+    var corners = List[RasterVertex]()
+    corners.append(corner(0, 0, 0.5, 1, Color(255, 0, 0, 128), BLEND))
+    corners.append(corner(40, 0, 0.5, 1, Color(255, 0, 0, 128), BLEND))
+    corners.append(corner(0, 40, 0.5, 1, Color(255, 0, 0, 128), BLEND))
+    var gpu = render_triangles(corners, 16, 16, clear)
+    var cpu = cpu_render_triangles(corners, 16, 16, clear)
+    # The hidden blue contributes nothing, and coverage stays at a half.
+    assert_equal(cpu.get_pixel(2, 2).b, UInt8(0))
+    assert_equal(cpu.get_pixel(2, 2).a, UInt8(128))
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 

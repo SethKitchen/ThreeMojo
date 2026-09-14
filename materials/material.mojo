@@ -27,6 +27,12 @@ is a third state, and a third state needs somewhere that can hold three values.
 A material names its texture by id, into a `TextureStore`, for the reason
 `Mesh` names its geometry by id: so two materials can share one image without
 copying it.
+
+`blending` is the fourth property, and the one that had to become explicit
+rather than inferred. Whether a surface is composited decides two things at
+once — how its colour is combined, and whether it writes depth — and those
+have to be the same answer everywhere. They were not: three parts of the
+renderer each worked it out from a different number.
 """
 
 from render.framebuffer import Color
@@ -42,6 +48,12 @@ comptime DOUBLE_SIDE = 2
 # blank texture, which is opaque white, which leaves the colour alone.
 comptime NO_TEXTURE = -1
 
+# Replace whatever is behind: depth is tested and claimed.
+comptime OPAQUE = 0
+# Mix with whatever is behind, source-over: depth is tested but not claimed,
+# so the caller owns draw order. `Renderer.prepare` sorts.
+comptime BLEND = 1
+
 # An index into a `MaterialStore`.
 comptime MaterialId = Int
 
@@ -56,6 +68,14 @@ struct Material(ImplicitlyCopyable):
     # anything less mixes with what is behind. Separate from the texture's
     # own alpha, and multiplied by it.
     var opacity: Float32
+    # `OPAQUE` or `BLEND`, decided once here and read by everything else.
+    # It used to be rediscovered from a float alpha at three separate points —
+    # the mesh sorter asked the material, and both rasterizers asked the
+    # vertex colour — and they disagreed. A material with an opaque `opacity`
+    # but a translucent base colour sorted as opaque and rasterized as
+    # blended, so it did not write depth and whatever was submitted after it
+    # painted straight over the top.
+    var blending: Int
 
     def __init__(
         out self,
@@ -63,6 +83,7 @@ struct Material(ImplicitlyCopyable):
         map: Int = NO_TEXTURE,
         side: Int = FRONT_SIDE,
         opacity: Float32 = 1.0,
+        blending: Int = -1,
     ) raises:
         """Describe a surface.
 
@@ -71,12 +92,17 @@ struct Material(ImplicitlyCopyable):
             map: Id of the texture to sample, or `NO_TEXTURE`.
             side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
             opacity: One for an opaque surface, less to see through it.
+            blending: `OPAQUE` or `BLEND`. Left unset it is inferred, and
+                anything that can see through — an opacity below one or a base
+                colour with alpha — blends. Set it to say so explicitly: a
+                texture's own alpha cannot be inferred from here, so a cut-out
+                image needs `BLEND` even when the material looks opaque.
 
         Raises:
             Error: If `side` is not one of the three, or `map` is a negative
                 other than `NO_TEXTURE` — which would be an id nothing can
-                ever hold rather than a deliberate absence, or `opacity` is
-                outside zero to one.
+                ever hold rather than a deliberate absence, `opacity` is
+                outside zero to one, or `blending` is not one of the two.
         """
         if side != FRONT_SIDE and side != BACK_SIDE and side != DOUBLE_SIDE:
             raise Error("Unknown material side")
@@ -84,18 +110,30 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's texture id cannot be negative")
         if opacity < 0 or opacity > 1:
             raise Error("Opacity must be between zero and one")
+        if blending != -1 and blending != OPAQUE and blending != BLEND:
+            raise Error("Unknown material blending")
         self.color = color
         self.map = map
         self.side = side
         self.opacity = opacity
+        if blending != -1:
+            self.blending = blending
+        elif opacity < 1 or color.a < 255:
+            self.blending = BLEND
+        else:
+            self.blending = OPAQUE
 
     def is_textured(self) -> Bool:
         """Return True if this material names a texture."""
         return self.map != NO_TEXTURE
 
     def is_transparent(self) -> Bool:
-        """Return True if anything behind this surface can show through."""
-        return self.opacity < 1
+        """Return True if this surface is composited over what is behind it.
+
+        The single answer. Everything that needs to know — the mesh sorter,
+        both rasterizers — asks this rather than inspecting a colour.
+        """
+        return self.blending == BLEND
 
 
 struct MaterialStore(Movable):

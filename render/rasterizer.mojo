@@ -26,7 +26,8 @@ asserts pixel for pixel.
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
-from materials.material import NO_TEXTURE
+from materials.material import BLEND, NO_TEXTURE, OPAQUE
+from render.target import RenderTarget
 from render.texture_store import TextureStore
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, max, min
@@ -299,6 +300,11 @@ struct RasterVertex(ImplicitlyCopyable):
     # colour at the vertex, because that is what sampling a texture will need.
     var u: Float32
     var v: Float32
+    # `OPAQUE` or `BLEND`, resolved from the material by `Renderer.prepare`
+    # rather than guessed at from this vertex's alpha. Per-triangle metadata,
+    # like the texture below: the whole triangle comes from one material, so
+    # all three corners carry the same answer and the first is read.
+    var blend: Int
     # Which texture to sample, or `NO_TEXTURE` for none. It travels with the
     # vertex because `Renderer.prepare` returns one flat list of triangles for
     # a whole scene, and the meshes in a scene need not share a material.
@@ -314,6 +320,7 @@ struct RasterVertex(ImplicitlyCopyable):
         u: Float32 = 0,
         v: Float32 = 0,
         texture: Int = NO_TEXTURE,
+        blend: Int = OPAQUE,
     ):
         """Create a corner. Texture coordinates and map default to none."""
         self.x = x
@@ -324,6 +331,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.u = u
         self.v = v
         self.texture = texture
+        self.blend = blend
 
 
 # What a fragment's colour is taken from. Still an Int: the three cases differ
@@ -336,11 +344,21 @@ comptime SHADE_UV = 1
 comptime SHADE_TEXTURE = 2
 
 
+def _raw(u: Float32, v: Float32) -> Color:
+    """Return texture coordinates as the bytes a debug view should show.
+
+    Quantized without the sRGB curve, because they are coordinates and not
+    light. Handed back through `FloatColor(srgb=...)` so that `resolve`'s
+    decode and encode cancel and the bytes arrive unchanged.
+    """
+    return FloatColor(u, v, 0.0, 1.0).quantize()
+
+
 def rasterize_shaded(
     a: RasterVertex,
     b: RasterVertex,
     c: RasterVertex,
-    mut target: Framebuffer,
+    mut target: RenderTarget,
     mode: Int = SHADE_LIT,
     textures: TextureStore = TextureStore(),
 ) raises:
@@ -407,17 +425,19 @@ def rasterize_shaded(
     # The consequence is that the caller owns draw order: translucent
     # surfaces have to arrive after the opaque ones and back to front.
     # `Renderer.prepare` sorts them.
-    # Alpha below one means the surface is translucent, which changes two
-    # things: the fragment is mixed into what is already there rather than
-    # replacing it, and it tests depth without *claiming* it, so a second
-    # translucent surface behind this one still contributes. Read from the
-    # first corner, like the texture id, because both come from the material
-    # and are therefore the same on all three.
+    # Whether this surface composites, decided by the material and carried
+    # here rather than inferred from a colour. It changes two things together:
+    # the fragment is mixed into what is already there rather than replacing
+    # it, and it tests depth without *claiming* it, so a second translucent
+    # surface behind this one still contributes.
     #
-    # The consequence is that the caller owns draw order: translucent
-    # surfaces have to arrive after the opaque ones and back to front.
-    # `Renderer.prepare` sorts them.
-    var blended = a.color.a < 1
+    # A debug view of texture coordinates is always opaque: it shows the
+    # nearest surface's coordinates, and averaging several surfaces' would
+    # mean nothing.
+    #
+    # The consequence is that the caller owns draw order: translucent surfaces
+    # have to arrive after the opaque ones and back to front. `prepare` sorts.
+    var blended = a.blend == BLEND and mode != SHADE_UV
 
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
@@ -475,8 +495,16 @@ def rasterize_shaded(
                     # display turns numbers into brightness and a texture
                     # coordinate is not a brightness. Putting them through it
                     # would make the debug view lie about its own numbers.
-                    target.set_pixel(
-                        x, y, FloatColor(u, v, 0.0, 1.0).quantize()
+                    # Coordinates rather than light, so they bypass the
+                    # transfer function: `resolve` would otherwise encode
+                    # them and the debug view would lie about its own
+                    # numbers. Written straight into the linear buffer, where
+                    # `unpremultiplied` then `encode` must return them
+                    # unchanged -- which is why the alpha here is one.
+                    target.write(
+                        x,
+                        y,
+                        FloatColor(srgb=_raw(u, v)),
                     )
                     continue
                 else:
@@ -493,6 +521,6 @@ def rasterize_shaded(
                         shaded.a * texel.a,
                     )
             if blended:
-                target.blend_pixel(x, y, shaded)
+                target.blend(x, y, shaded)
             else:
-                target.set_pixel(x, y, shaded.encode())
+                target.write(x, y, shaded)
