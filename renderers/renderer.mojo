@@ -134,6 +134,82 @@ def _faces_away(
     return area > 0
 
 
+def _with_opacity(color: FloatColor, opacity: Float32) -> FloatColor:
+    """Return `color` with the material's opacity folded into its alpha.
+
+    Alpha reaching the rasterizer is how much of the surface shows, so the
+    material's opacity multiplies whatever the base colour already carried.
+    """
+    return FloatColor(color.r, color.g, color.b, color.a * opacity)
+
+
+def _draw_order(
+    scene: Scene,
+    assets: Assets,
+    meshes: List[Mesh],
+    view: Matrix4,
+) raises -> List[Int]:
+    """Return the order to draw meshes in: opaque first, then back to front.
+
+    Blending is not commutative, so a translucent surface only looks right if
+    what is behind it is already there. Two rules follow, and they are the
+    same two every renderer has:
+
+    Opaque first, because a translucent surface has to mix with the solid
+    thing behind it, and because opaque surfaces write depth — which is what
+    stops a translucent surface behind a wall from showing through it.
+
+    Then translucent, furthest first, because each one mixes into the result
+    of the ones beyond it. Sorted by the camera-space depth of the mesh's
+    origin, which is what three.js sorts by: per object, not per triangle.
+    Within one mesh the triangles keep their own order, so a translucent mesh
+    that overlaps itself is still approximate. That is the usual bargain, and
+    the alternative is sorting every triangle every frame.
+
+    Args:
+        scene: The transform hierarchy.
+        assets: Where the materials live.
+        meshes: What to draw.
+        view: The world-to-camera transform, for measuring depth.
+
+    Returns:
+        Indices into `meshes`, in the order they should be drawn.
+
+    Raises:
+        Error: If a mesh names a node or material that is not there.
+    """
+    var order = List[Int]()
+    var clear = List[Int]()
+    var depths = List[Float32]()
+    for index in range(len(meshes)):
+        if not assets.materials.get(meshes[index].material).is_transparent():
+            order.append(index)
+            continue
+        clear.append(index)
+        # The camera looks down -z, so a smaller z is further away.
+        depths.append(
+            view.transform_point(scene.world_position(meshes[index].node)).z
+        )
+
+    # Insertion sort: the list is one entry per translucent mesh, which is
+    # small, and a stable order keeps equally distant meshes in the order the
+    # caller gave them.
+    for position in range(len(clear)):
+        var mesh = clear[position]
+        var depth = depths[position]
+        var slot = position
+        while slot > 0 and depths[slot - 1] > depth:
+            clear[slot] = clear[slot - 1]
+            depths[slot] = depths[slot - 1]
+            slot -= 1
+        clear[slot] = mesh
+        depths[slot] = depth
+
+    for position in range(len(clear)):
+        order.append(clear[position])
+    return order^
+
+
 def _relit(corner: RasterVertex, color: FloatColor) -> RasterVertex:
     """Return `corner` with a different colour and everything else kept."""
     return RasterVertex(
@@ -261,6 +337,10 @@ struct Renderer(Movable):
         A face turned away keeps the ambient fraction rather than going black,
         because a scene lit by one light and nothing else reads as broken.
 
+        The base colour is decoded from sRGB first: an authored byte is not
+        proportional to light, and multiplying it by a Lambert term would be
+        arithmetic on the wrong numbers. See `render.srgb`.
+
         The result stays in floating point. It is about to be interpolated
         across a triangle and possibly cut by a clipping plane first, and
         rounding to eight bits before either of those throws away precision
@@ -268,7 +348,7 @@ struct Renderer(Movable):
         """
         var lambert = max(Float32(0), normal.dot(self.light))
         var level = self.ambient + (1 - self.ambient) * lambert
-        return FloatColor(of=base).scaled(level)
+        return FloatColor(srgb=base).scaled(level)
 
     def prepare[
         C: Camera
@@ -318,7 +398,10 @@ struct Renderer(Movable):
         var near = camera.near_distance()
         var far = camera.far_distance()
 
-        for index in range(len(meshes)):
+        # Worked out once, not once per mesh.
+        var order = _draw_order(scene, assets, meshes, view)
+        for ordered in range(len(meshes)):
+            var index = order[ordered]
             var world = scene.world_matrix(meshes[index].node)
             # An odd number of reflections in the world transform reverses
             # winding, which turns both the culling convention and the
@@ -396,14 +479,24 @@ struct Renderer(Movable):
                         normals.vector3(vertex)
                     )
                     direction.normalize()
-                    vertex_colors.append(self.shade(material.color, direction))
+                    vertex_colors.append(
+                        _with_opacity(
+                            self.shade(material.color, direction),
+                            material.opacity,
+                        )
+                    )
                     if two_sided:
                         vertex_back_colors.append(
-                            self.shade(
-                                material.color,
-                                Vector3(
-                                    -direction.x, -direction.y, -direction.z
+                            _with_opacity(
+                                self.shade(
+                                    material.color,
+                                    Vector3(
+                                        -direction.x,
+                                        -direction.y,
+                                        -direction.z,
+                                    ),
                                 ),
+                                material.opacity,
                             )
                         )
 
@@ -448,12 +541,18 @@ struct Renderer(Movable):
                         geometric = Vector3(
                             -geometric.x, -geometric.y, -geometric.z
                         )
-                    color_a = self.shade(material.color, geometric)
+                    color_a = _with_opacity(
+                        self.shade(material.color, geometric),
+                        material.opacity,
+                    )
                     color_b = color_a
                     color_c = color_a
-                    back_a = self.shade(
-                        material.color,
-                        Vector3(-geometric.x, -geometric.y, -geometric.z),
+                    back_a = _with_opacity(
+                        self.shade(
+                            material.color,
+                            Vector3(-geometric.x, -geometric.y, -geometric.z),
+                        ),
+                        material.opacity,
                     )
                     back_b = back_a
                     back_c = back_a

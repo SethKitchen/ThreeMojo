@@ -9,7 +9,8 @@
 `rasterize_depth` takes the same triangle with a depth per corner and writes a
 pixel only when it is nearer than what is already there, which is what lets
 geometry be submitted in any order. `rasterize_shaded` additionally mixes a
-colour given per corner.
+colour given per corner, and blends rather than replaces when that colour is
+translucent.
 
 Each triangle is scanned only inside its own bounding box. Walking the whole
 framebuffer per triangle is the obvious way to write this and costs the same
@@ -396,6 +397,28 @@ def rasterize_shaded(
     if mode != SHADE_LIT and mode != SHADE_UV and mode != SHADE_TEXTURE:
         raise Error("Unknown shading mode")
 
+    # Alpha below one means the surface is translucent, which changes two
+    # things: the fragment is mixed into what is already there rather than
+    # replacing it, and it tests depth without *claiming* it, so a second
+    # translucent surface behind this one still contributes. Read from the
+    # first corner, like the texture id, because both come from the material
+    # and are therefore the same on all three.
+    #
+    # The consequence is that the caller owns draw order: translucent
+    # surfaces have to arrive after the opaque ones and back to front.
+    # `Renderer.prepare` sorts them.
+    # Alpha below one means the surface is translucent, which changes two
+    # things: the fragment is mixed into what is already there rather than
+    # replacing it, and it tests depth without *claiming* it, so a second
+    # translucent surface behind this one still contributes. Read from the
+    # first corner, like the texture id, because both come from the material
+    # and are therefore the same on all three.
+    #
+    # The consequence is that the caller owns draw order: translucent
+    # surfaces have to arrive after the opaque ones and back to front.
+    # `Renderer.prepare` sorts them.
+    var blended = a.color.a < 1
+
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
     if coverage.is_degenerate():
@@ -413,7 +436,11 @@ def rasterize_shaded(
             var wb = fragment.wb
             var wc = fragment.wc
             var z = wa * a.z + wb * b.z + wc * c.z
-            if not target.test_depth(x, y, z):
+            if blended:
+                # Hidden by what is in front, but hiding nothing behind.
+                if not target.depth_passes(x, y, z):
+                    continue
+            elif not target.test_depth(x, y, z):
                 continue
 
             # The denominator of the perspective correction, and the
@@ -443,7 +470,15 @@ def rasterize_shaded(
                 var u = a.u * share_a + b.u * share_b + c.u * share_c
                 var v = a.v * share_a + b.v * share_b + c.v * share_c
                 if mode == SHADE_UV:
-                    shaded = FloatColor(u, v, 0.0, 1.0)
+                    # Coordinates, not light. They are written out raw rather
+                    # than encoded, because the sRGB curve describes how a
+                    # display turns numbers into brightness and a texture
+                    # coordinate is not a brightness. Putting them through it
+                    # would make the debug view lie about its own numbers.
+                    target.set_pixel(
+                        x, y, FloatColor(u, v, 0.0, 1.0).quantize()
+                    )
+                    continue
                 else:
                     # Modulate rather than replace: the texture says what
                     # colour the surface is, the lighting says how much of it
@@ -457,4 +492,7 @@ def rasterize_shaded(
                         shaded.b * texel.b,
                         shaded.a * texel.a,
                     )
-            target.set_pixel(x, y, shaded.quantize())
+            if blended:
+                target.blend_pixel(x, y, shaded)
+            else:
+                target.set_pixel(x, y, shaded.encode())

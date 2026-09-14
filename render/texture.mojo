@@ -23,6 +23,11 @@ agree on it to the last bit. Bilinear is what you want once the image is meant
 to be looked at rather than debugged: at a glancing angle nearest turns a fine
 pattern into noise.
 
+**Texels are decoded before anything is done with them.** An image file holds
+sRGB, and filtering or lighting encoded values is arithmetic on the wrong
+numbers — see `render.srgb`. A texture therefore carries which space it is in,
+and colour textures decode by default. Alpha never does: it is not colour.
+
 **Out-of-range coordinates wrap.** Nothing constrains `uv` to the unit square:
 a geometry can ask for its texture five times across, and clipping can produce
 coordinates outside anything the author wrote. `REPEAT` tiles, `CLAMP` holds
@@ -31,6 +36,7 @@ three.js offers.
 """
 
 from render.framebuffer import Color, FloatColor
+from render.srgb import LINEAR, SRGB, decode_ramp
 from std.math import floor
 
 # How a coordinate outside the unit square is resolved.
@@ -101,6 +107,14 @@ def blend(
     )
 
 
+def _identity_ramp() -> List[Float32]:
+    """Return the 256 values a byte stands for when nothing is encoded."""
+    var ramp = List[Float32]()
+    for step in range(256):  # pragma: no branch
+        ramp.append(Float32(step) / 255)
+    return ramp^
+
+
 def wrap_index(coordinate: Int, extent: Int, mode: Int) -> Int:
     """Return `coordinate` brought inside [0, extent) under a wrap mode.
 
@@ -153,6 +167,11 @@ struct Texture(Movable):
     var pixels: List[UInt8]
     var wrap: Int
     var filter: Int
+    var color_space: Int
+    # The 256 linear values this texture's bytes stand for. Built once here
+    # rather than per fragment, because `pow` has only 256 possible inputs
+    # and sampling happens per pixel.
+    var ramp: List[Float32]
 
     def __init__(out self):
         """Create the blank texture, which samples as opaque white.
@@ -166,6 +185,8 @@ struct Texture(Movable):
         self.pixels = List[UInt8]()
         self.wrap = REPEAT
         self.filter = NEAREST
+        self.color_space = LINEAR
+        self.ramp = _identity_ramp()
 
     def __init__(
         out self,
@@ -174,6 +195,7 @@ struct Texture(Movable):
         var pixels: List[UInt8],
         wrap: Int = REPEAT,
         filter: Int = NEAREST,
+        color_space: Int = SRGB,
     ) raises:
         """Create a texture from RGBA bytes.
 
@@ -183,6 +205,9 @@ struct Texture(Movable):
             pixels: Row-major RGBA bytes from the top, width * height * 4.
             wrap: How coordinates outside the unit square are resolved.
             filter: `NEAREST` or `BILINEAR`.
+            color_space: `SRGB` for a colour image, the default because that
+                is what an image file holds; `LINEAR` for data that is not
+                colour and must not be decoded.
 
         Raises:
             Error: If the dimensions are not positive, the buffer length
@@ -196,6 +221,13 @@ struct Texture(Movable):
             raise Error("Unknown texture wrap mode")
         if filter != NEAREST and filter != BILINEAR:
             raise Error("Unknown texture filter mode")
+        if color_space != SRGB and color_space != LINEAR:
+            raise Error("Unknown texture colour space")
+        self.color_space = color_space
+        if color_space == SRGB:
+            self.ramp = decode_ramp()
+        else:
+            self.ramp = _identity_ramp()
         self.width = width
         self.height = height
         self.pixels = pixels^
@@ -209,6 +241,8 @@ struct Texture(Movable):
         self.pixels = copy.pixels.copy()
         self.wrap = copy.wrap
         self.filter = copy.filter
+        self.color_space = copy.color_space
+        self.ramp = copy.ramp.copy()
 
     def is_blank(self) -> Bool:
         """Return True if this is the blank texture."""
@@ -261,13 +295,12 @@ struct Texture(Movable):
             wrap_index(y, self.height, self.wrap) * self.width
             + wrap_index(x, self.width, self.wrap)
         ) * Self.CHANNELS
+        # Colour through the ramp; alpha is not colour and never decoded.
         return FloatColor(
-            of=Color(
-                self.pixels[offset],
-                self.pixels[offset + 1],
-                self.pixels[offset + 2],
-                self.pixels[offset + 3],
-            )
+            self.ramp[Int(self.pixels[offset])],
+            self.ramp[Int(self.pixels[offset + 1])],
+            self.ramp[Int(self.pixels[offset + 2])],
+            Float32(self.pixels[offset + 3]) / 255,
         )
 
     def sample(self, u: Float32, v: Float32) -> FloatColor:
@@ -331,6 +364,7 @@ def checkerboard(
     dark: Color,
     wrap: Int = REPEAT,
     filter: Int = NEAREST,
+    color_space: Int = SRGB,
 ) raises -> Texture:
     """Return a square checkerboard, the traditional mapping test image.
 
@@ -345,6 +379,7 @@ def checkerboard(
         dark: Colour of its neighbours.
         wrap: How coordinates outside the unit square are resolved.
         filter: `NEAREST` or `BILINEAR`.
+        color_space: `SRGB` or `LINEAR`.
 
     Returns:
         The texture.
@@ -372,4 +407,4 @@ def checkerboard(
             pixels.append(shade.g)
             pixels.append(shade.b)
             pixels.append(shade.a)
-    return Texture(size, size, pixels^, wrap, filter)
+    return Texture(size, size, pixels^, wrap, filter, color_space)

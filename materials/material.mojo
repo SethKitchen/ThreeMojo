@@ -52,12 +52,17 @@ struct Material(ImplicitlyCopyable):
     var color: Color
     var map: Int
     var side: Int
+    # How much of the light reaching this surface it stops. One is opaque;
+    # anything less mixes with what is behind. Separate from the texture's
+    # own alpha, and multiplied by it.
+    var opacity: Float32
 
     def __init__(
         out self,
         color: Color,
         map: Int = NO_TEXTURE,
         side: Int = FRONT_SIDE,
+        opacity: Float32 = 1.0,
     ) raises:
         """Describe a surface.
 
@@ -65,23 +70,32 @@ struct Material(ImplicitlyCopyable):
             color: The base colour, modulated by any texture and by lighting.
             map: Id of the texture to sample, or `NO_TEXTURE`.
             side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
+            opacity: One for an opaque surface, less to see through it.
 
         Raises:
             Error: If `side` is not one of the three, or `map` is a negative
                 other than `NO_TEXTURE` — which would be an id nothing can
-                ever hold rather than a deliberate absence.
+                ever hold rather than a deliberate absence, or `opacity` is
+                outside zero to one.
         """
         if side != FRONT_SIDE and side != BACK_SIDE and side != DOUBLE_SIDE:
             raise Error("Unknown material side")
         if map < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
+        if opacity < 0 or opacity > 1:
+            raise Error("Opacity must be between zero and one")
         self.color = color
         self.map = map
         self.side = side
+        self.opacity = opacity
 
     def is_textured(self) -> Bool:
         """Return True if this material names a texture."""
         return self.map != NO_TEXTURE
+
+    def is_transparent(self) -> Bool:
+        """Return True if anything behind this surface can show through."""
+        return self.opacity < 1
 
 
 struct MaterialStore(Movable):

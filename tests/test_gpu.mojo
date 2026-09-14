@@ -515,7 +515,7 @@ def test_flattening_lays_out_eight_floats_per_vertex() raises:
     var corners = List[RasterVertex]()
     corners.append(corner(1, 2, 3, 4, Color(255, 128, 0, 64)))
     var flat = flatten(corners)
-    assert_equal(len(flat), 11)
+    assert_equal(len(flat), 10)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
     assert_equal(flat[2], Float32(3))
@@ -707,13 +707,13 @@ def test_the_gpu_ignores_texture_coordinates_when_shading_lit() raises:
         return
     var corners = List[RasterVertex]()
     corners.append(
-        RasterVertex(-4, -4, 0.5, 1.0, FloatColor(of=FOREGROUND), 1.0, 1.0)
+        RasterVertex(-4, -4, 0.5, 1.0, FloatColor(srgb=FOREGROUND), 1.0, 1.0)
     )
     corners.append(
-        RasterVertex(40, -4, 0.5, 1.0, FloatColor(of=FOREGROUND), 1.0, 1.0)
+        RasterVertex(40, -4, 0.5, 1.0, FloatColor(srgb=FOREGROUND), 1.0, 1.0)
     )
     corners.append(
-        RasterVertex(-4, 40, 0.5, 1.0, FloatColor(of=FOREGROUND), 1.0, 1.0)
+        RasterVertex(-4, 40, 0.5, 1.0, FloatColor(srgb=FOREGROUND), 1.0, 1.0)
     )
     var image = render_triangles(corners, 16, 12, BACKGROUND)
     assert_equal(image.get_pixel(2, 2).r, FOREGROUND.r)
@@ -1070,6 +1070,63 @@ def test_an_unknown_shading_mode_is_rejected_by_both_backends() raises:
     var renderer = GpuRenderer(8, 8)
     with assert_raises():
         renderer.draw(corners, BACKGROUND, 99)
+
+
+# --- blending ---------------------------------------------------------------
+
+
+def translucent_pair() -> List[RasterVertex]:
+    """Return an opaque pane with a translucent one in front of it."""
+    var corners = List[RasterVertex]()
+    # Opaque green, far. Opaque first is the order the renderer guarantees.
+    corners.append(corner(0, 0, 0.8, 1, Color(0, 255, 0)))
+    corners.append(corner(40, 0, 0.8, 1, Color(0, 255, 0)))
+    corners.append(corner(0, 40, 0.8, 1, Color(0, 255, 0)))
+    # Translucent red, nearer.
+    corners.append(corner(0, 0, 0.3, 1, Color(255, 0, 0, 128)))
+    corners.append(corner(40, 0, 0.3, 1, Color(255, 0, 0, 128)))
+    corners.append(corner(0, 40, 0.3, 1, Color(255, 0, 0, 128)))
+    return corners^
+
+
+def test_both_backends_blend_identically() raises:
+    if skipped_for_lack_of_a_gpu("both backends blend identically"):
+        return
+    var corners = translucent_pair()
+    var gpu = render_triangles(corners, 16, 16, BACKGROUND)
+    var cpu = cpu_render_triangles(corners, 16, 16)
+    # Both colours present at once, which is what blending means.
+    assert_true(cpu.get_pixel(2, 2).r > 0)
+    assert_true(cpu.get_pixel(2, 2).g > 0)
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_agree_that_a_blend_claims_no_depth() raises:
+    # A translucent surface is hidden by what is in front without hiding what
+    # is behind, so the depth that comes back is the nearest *solid* one.
+    if skipped_for_lack_of_a_gpu("a blend claims no depth"):
+        return
+    var corners = translucent_pair()
+    var gpu = render_triangles(corners, 16, 16, BACKGROUND)
+    var cpu = cpu_render_triangles(corners, 16, 16)
+    # The opaque pane is at 0.8; the translucent one at 0.3 claims nothing.
+    assert_almost_equal(cpu.depth_at(2, 2), Float32(0.8), atol=Float64(1e-5))
+    assert_almost_equal(gpu.depth_at(2, 2), Float32(0.8), atol=Float64(1e-5))
+
+
+def test_both_backends_blend_a_translucent_surface_over_nothing() raises:
+    # Over the background rather than over black, which is what the kernel
+    # has to decode the clear colour for.
+    if skipped_for_lack_of_a_gpu("a blend over the background"):
+        return
+    var corners = List[RasterVertex]()
+    corners.append(corner(0, 0, 0.5, 1, Color(255, 255, 255, 128)))
+    corners.append(corner(40, 0, 0.5, 1, Color(255, 255, 255, 128)))
+    corners.append(corner(0, 40, 0.5, 1, Color(255, 255, 255, 128)))
+    var gpu = render_triangles(corners, 16, 16, BACKGROUND)
+    var cpu = cpu_render_triangles(corners, 16, 16)
+    assert_true(cpu.get_pixel(2, 2).r > BACKGROUND.r)
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def main() raises:

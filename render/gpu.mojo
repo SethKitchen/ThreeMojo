@@ -51,6 +51,7 @@ from render.rasterizer import (
     Triangle,
 )
 from materials.material import NO_TEXTURE
+from render.srgb import LINEAR, decode_ramp
 from render.texture import BILINEAR, NEAREST, Texture, blend, wrap_index
 from render.texture_store import TextureStore
 from std.gpu import global_idx
@@ -64,13 +65,12 @@ from std.sys import has_accelerator
 comptime TILE = 16
 
 # How a `RasterVertex` is laid out in the flat float buffer the kernel reads:
-# x, y, z, inv_w, r, g, b, a, u, v, texture id. A struct would be tidier and
-# is not an
+# x, y, z, inv_w, r, g, b, a, u, v. A struct would be tidier and is not an
 # option — the buffer has to be plain floats to cross to the device.
 # tests/test_gpu.mojo asserts this layout, because the host packs it and the
 # kernel unpacks it from two different places and nothing else would notice
 # them drifting apart.
-comptime FLOATS_PER_VERTEX = 11
+comptime FLOATS_PER_VERTEX = 10
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # Further than any NDC depth, so the first covering triangle always wins. The
@@ -81,7 +81,7 @@ comptime FURTHEST = Float32(1.0e30)
 # One row per texture in the store: where its bytes start, how big it is, and
 # how to sample it. A device cannot hold a `List` of `List`s, so every image
 # goes into one buffer end to end and this says where each one begins.
-comptime TABLE_COLUMNS = 5
+comptime TABLE_COLUMNS = 6
 
 
 def flatten_textures(
@@ -94,7 +94,7 @@ def flatten_textures(
 
     Returns:
         The concatenated texels, and `TABLE_COLUMNS` entries per texture:
-        byte offset, width, height, wrap mode, filter mode.
+        byte offset, width, height, wrap mode, filter mode, colour space.
 
     Raises:
         Error: If a texture cannot be read.
@@ -117,6 +117,7 @@ def flatten_textures(
             table.append(1)
             table.append(Int32(image.wrap))
             table.append(Int32(image.filter))
+            table.append(Int32(image.color_space))
             for _ in range(4):
                 texels.append(255)
             continue
@@ -124,6 +125,7 @@ def flatten_textures(
         table.append(Int32(image.height))
         table.append(Int32(image.wrap))
         table.append(Int32(image.filter))
+        table.append(Int32(image.color_space))
         for byte in range(len(image.pixels)):
             texels.append(image.pixels[byte])
     # Never empty: a zero-length device buffer is not worth the special case,
@@ -158,7 +160,7 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         corners: Raster vertices, three per triangle.
 
     Returns:
-        Eleven floats per vertex, in the order the kernel unpacks them.
+        Ten floats per vertex, in the order the kernel unpacks them.
     """
     var flat = List[Float32]()
     for index in range(len(corners)):
@@ -173,41 +175,73 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.color.a)
         flat.append(corner.u)
         flat.append(corner.v)
-        flat.append(Float32(corner.texture))
     return flat^
 
 
 def _fetch(
     texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
     start: Int,
     x: Int,
     y: Int,
     width: Int,
     height: Int,
     wrap: Int,
+    space: Int,
 ) -> FloatColor:
-    """Read one texel from the device buffer, with the wrap mode applied.
+    """Read one texel from the device buffer, decoded and wrapped.
 
     The device counterpart of `Texture.wrapped_texel`. Only the memory access
-    differs between the two — the index arithmetic is `wrap_index`, shared,
-    and so is the blend built on top of it.
+    differs between the two: the index arithmetic is `wrap_index`, shared; the
+    decode is the same 256-entry table the host builds, uploaded once; and the
+    blend on top of them is `blend`, also shared. Alpha is not colour and is
+    never decoded.
     """
     var offset = (
         start
         + (wrap_index(y, height, wrap) * width + wrap_index(x, width, wrap)) * 4
     )
+    if space == LINEAR:
+        return FloatColor(
+            Float32(texels[unsafe_offset=offset]) / 255,
+            Float32(texels[unsafe_offset=offset + 1]) / 255,
+            Float32(texels[unsafe_offset=offset + 2]) / 255,
+            Float32(texels[unsafe_offset=offset + 3]) / 255,
+        )
     return FloatColor(
-        Float32(texels[unsafe_offset=offset]) / 255,
-        Float32(texels[unsafe_offset=offset + 1]) / 255,
-        Float32(texels[unsafe_offset=offset + 2]) / 255,
+        ramp[unsafe_offset=Int(texels[unsafe_offset=offset])],
+        ramp[unsafe_offset=Int(texels[unsafe_offset=offset + 1])],
+        ramp[unsafe_offset=Int(texels[unsafe_offset=offset + 2])],
         Float32(texels[unsafe_offset=offset + 3]) / 255,
     )
+
+
+def triangle_textures(corners: List[RasterVertex]) -> List[Int32]:
+    """Return the texture each triangle samples, one entry per triangle.
+
+    A resource id is not a vertex attribute. It was one for a commit: carried
+    on all three corners, crossed as a `Float32`, and read back from the first
+    corner — which is to say it was already per-triangle, wearing a per-vertex
+    costume, and losing exactness above 2^24 on the way. A parallel integer
+    buffer says what it is.
+
+    Args:
+        corners: Raster vertices, three per triangle.
+
+    Returns:
+        One id per triangle, taken from its first corner.
+    """
+    var ids = List[Int32]()
+    for triangle in range(len(corners) // 3):
+        ids.append(Int32(corners[triangle * 3].texture))
+    return ids^
 
 
 def rasterize_kernel(
     pixels: MutPointer[UInt8, MutAnyOrigin],
     depth: MutPointer[Float32, MutAnyOrigin],
     corners: MutPointer[Float32, MutAnyOrigin],
+    maps: MutPointer[Int32, MutAnyOrigin],
     triangles: Int32,
     width: Int32,
     height: Int32,
@@ -215,6 +249,7 @@ def rasterize_kernel(
     mode: Int32,
     texels: MutPointer[UInt8, MutAnyOrigin],
     table: MutPointer[Int32, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
 ):
     """Colour one pixel from the nearest triangle that covers it."""
     var x = Int(global_idx.x)
@@ -228,10 +263,20 @@ def rasterize_kernel(
 
     var nearest = FURTHEST
     var found = False
+    # True once an *opaque* fragment has claimed this pixel's depth. A
+    # translucent one tests depth without claiming it, exactly as on the host,
+    # so the depth that comes back is the nearest solid surface.
+    var solid = False
     var red = Float32(0)
     var green = Float32(0)
     var blue = Float32(0)
     var alpha = Float32(0)
+    # What the pixel holds so far, in linear light. Starts as the background
+    # decoded, so a translucent surface over nothing mixes with the clear
+    # colour rather than with black.
+    var mixed_r = ramp[unsafe_offset=Int((background >> 24) & 0xFF)]
+    var mixed_g = ramp[unsafe_offset=Int((background >> 16) & 0xFF)]
+    var mixed_b = ramp[unsafe_offset=Int((background >> 8) & 0xFF)]
 
     for index in range(Int(triangles)):
         var base = index * FLOATS_PER_TRIANGLE
@@ -239,14 +284,14 @@ def rasterize_kernel(
         var ay = corners[unsafe_offset=base + 1]
         var az = corners[unsafe_offset=base + 2]
         var aw = corners[unsafe_offset=base + 3]
-        var bx = corners[unsafe_offset=base + 11]
-        var by = corners[unsafe_offset=base + 12]
-        var bz = corners[unsafe_offset=base + 13]
-        var bw = corners[unsafe_offset=base + 14]
-        var cx = corners[unsafe_offset=base + 22]
-        var cy = corners[unsafe_offset=base + 23]
-        var cz = corners[unsafe_offset=base + 24]
-        var cw = corners[unsafe_offset=base + 25]
+        var bx = corners[unsafe_offset=base + 10]
+        var by = corners[unsafe_offset=base + 11]
+        var bz = corners[unsafe_offset=base + 12]
+        var bw = corners[unsafe_offset=base + 13]
+        var cx = corners[unsafe_offset=base + 20]
+        var cy = corners[unsafe_offset=base + 21]
+        var cz = corners[unsafe_offset=base + 22]
+        var cw = corners[unsafe_offset=base + 23]
 
         # Exactly `_Coverage` on the host: snap, normalize the winding, then
         # test with the top-left bias. Only the snapped coordinates are
@@ -298,8 +343,6 @@ def rasterize_kernel(
         var z = wa * az + wb * bz + wc * cz
         if z >= nearest:
             continue
-        nearest = z
-        found = True
 
         # Colour does not: weight by inv_w and divide by the interpolated
         # inv_w, matching `rasterize_shaded`.
@@ -315,37 +358,37 @@ def rasterize_kernel(
         if mode == Int32(SHADE_TEXTURE):
             var u = (
                 corners[unsafe_offset=base + 8] * share_a
-                + corners[unsafe_offset=base + 19] * share_b
-                + corners[unsafe_offset=base + 30] * share_c
+                + corners[unsafe_offset=base + 18] * share_b
+                + corners[unsafe_offset=base + 28] * share_c
             )
             var v = (
                 corners[unsafe_offset=base + 9] * share_a
-                + corners[unsafe_offset=base + 20] * share_b
-                + corners[unsafe_offset=base + 31] * share_c
+                + corners[unsafe_offset=base + 19] * share_b
+                + corners[unsafe_offset=base + 29] * share_c
             )
             red = (
                 corners[unsafe_offset=base + 4] * share_a
-                + corners[unsafe_offset=base + 15] * share_b
-                + corners[unsafe_offset=base + 26] * share_c
+                + corners[unsafe_offset=base + 14] * share_b
+                + corners[unsafe_offset=base + 24] * share_c
             )
             green = (
                 corners[unsafe_offset=base + 5] * share_a
-                + corners[unsafe_offset=base + 16] * share_b
-                + corners[unsafe_offset=base + 27] * share_c
+                + corners[unsafe_offset=base + 15] * share_b
+                + corners[unsafe_offset=base + 25] * share_c
             )
             blue = (
                 corners[unsafe_offset=base + 6] * share_a
-                + corners[unsafe_offset=base + 17] * share_b
-                + corners[unsafe_offset=base + 28] * share_c
+                + corners[unsafe_offset=base + 16] * share_b
+                + corners[unsafe_offset=base + 26] * share_c
             )
             alpha = (
                 corners[unsafe_offset=base + 7] * share_a
-                + corners[unsafe_offset=base + 18] * share_b
-                + corners[unsafe_offset=base + 29] * share_c
+                + corners[unsafe_offset=base + 17] * share_b
+                + corners[unsafe_offset=base + 27] * share_c
             )
-            # Which image, from the vertex; -1 is no texture, which samples
+            # Which image, from the triangle; -1 is no texture, which samples
             # as white and so leaves the lighting alone.
-            var slot = Int(corners[unsafe_offset=base + 10])
+            var slot = Int(maps[unsafe_offset=index])
             if slot != NO_TEXTURE:
                 # Every texture lives in one buffer end to end, so the table
                 # says where this one starts and how to read it.
@@ -355,18 +398,21 @@ def rasterize_kernel(
                 var height = Int(table[unsafe_offset=entry + 2])
                 var wrap = Int(table[unsafe_offset=entry + 3])
                 var filter = Int(table[unsafe_offset=entry + 4])
+                var space = Int(table[unsafe_offset=entry + 5])
                 # v flipped and wrapped by the same routine the host uses,
                 # and blended by the same one -- see render.texture.
                 var sampled = FloatColor(1, 1, 1, 1)
                 if filter == NEAREST:
                     sampled = _fetch(
                         texels,
+                        ramp,
                         start,
                         Int(floor(u * Float32(width))),
                         Int(floor((1 - v) * Float32(height))),
                         width,
                         height,
                         wrap,
+                        space,
                     )
                 else:
                     # Texel centres sit at half-integers; see Texture.sample.
@@ -377,39 +423,47 @@ def rasterize_kernel(
                     sampled = blend(
                         _fetch(
                             texels,
+                            ramp,
                             start,
                             column,
                             row,
                             width,
                             height,
                             wrap,
+                            space,
                         ),
                         _fetch(
                             texels,
+                            ramp,
                             start,
                             column + 1,
                             row,
                             width,
                             height,
                             wrap,
+                            space,
                         ),
                         _fetch(
                             texels,
+                            ramp,
                             start,
                             column,
                             row + 1,
                             width,
                             height,
                             wrap,
+                            space,
                         ),
                         _fetch(
                             texels,
+                            ramp,
                             start,
                             column + 1,
                             row + 1,
                             width,
                             height,
                             wrap,
+                            space,
                         ),
                         across - Float32(column),
                         down - Float32(row),
@@ -419,46 +473,78 @@ def rasterize_kernel(
                 blue *= sampled.b
                 alpha *= sampled.a
         elif mode == Int32(SHADE_UV):
+            # Coordinates, not light; written raw. See rasterize_shaded.
             # Texture coordinates straight out as red and green, matching
             # rasterize_shaded's SHADE_UV.
             red = (
                 corners[unsafe_offset=base + 8] * share_a
-                + corners[unsafe_offset=base + 19] * share_b
-                + corners[unsafe_offset=base + 30] * share_c
+                + corners[unsafe_offset=base + 18] * share_b
+                + corners[unsafe_offset=base + 28] * share_c
             )
             green = (
                 corners[unsafe_offset=base + 9] * share_a
-                + corners[unsafe_offset=base + 20] * share_b
-                + corners[unsafe_offset=base + 31] * share_c
+                + corners[unsafe_offset=base + 19] * share_b
+                + corners[unsafe_offset=base + 29] * share_c
             )
             blue = 0
             alpha = 1
         else:
             red = (
                 corners[unsafe_offset=base + 4] * share_a
-                + corners[unsafe_offset=base + 15] * share_b
-                + corners[unsafe_offset=base + 26] * share_c
+                + corners[unsafe_offset=base + 14] * share_b
+                + corners[unsafe_offset=base + 24] * share_c
             )
             green = (
                 corners[unsafe_offset=base + 5] * share_a
-                + corners[unsafe_offset=base + 16] * share_b
-                + corners[unsafe_offset=base + 27] * share_c
+                + corners[unsafe_offset=base + 15] * share_b
+                + corners[unsafe_offset=base + 25] * share_c
             )
             blue = (
                 corners[unsafe_offset=base + 6] * share_a
-                + corners[unsafe_offset=base + 17] * share_b
-                + corners[unsafe_offset=base + 28] * share_c
+                + corners[unsafe_offset=base + 16] * share_b
+                + corners[unsafe_offset=base + 26] * share_c
             )
             alpha = (
                 corners[unsafe_offset=base + 7] * share_a
-                + corners[unsafe_offset=base + 18] * share_b
-                + corners[unsafe_offset=base + 29] * share_c
+                + corners[unsafe_offset=base + 17] * share_b
+                + corners[unsafe_offset=base + 27] * share_c
             )
+
+        # Opaque replaces what is there; translucent mixes into it. One pass
+        # is enough only because every opaque triangle is submitted before any
+        # translucent one, so `nearest` is already final when the first
+        # blended fragment arrives -- the same guarantee `rasterize_shaded`
+        # relies on, and the reason `Renderer.prepare` sorts.
+        found = True
+        # Read from the first corner, not from the interpolated alpha, for the
+        # same reason `rasterize_shaded` does: transparency comes from the
+        # material, so all three corners agree, and three weights that sum to
+        # one in exact arithmetic sum to 0.99999994 in floating point. Deciding
+        # from that made every opaque triangle translucent and left the depth
+        # buffer empty.
+        if corners[unsafe_offset=base + 7] >= 1 or mode == Int32(SHADE_UV):
+            mixed_r = red
+            mixed_g = green
+            mixed_b = blue
+            nearest = z
+            solid = True
+        else:
+            var keep = 1 - alpha
+            mixed_r = red * alpha + mixed_r * keep
+            mixed_g = green * alpha + mixed_g * keep
+            mixed_b = blue * alpha + mixed_b * keep
 
     var word = background
     var nearest_depth = inf[DType.float32]()
     if found:
-        word = pack(FloatColor(red, green, blue, alpha).quantize())
+        var lit = FloatColor(mixed_r, mixed_g, mixed_b, 1.0)
+        # SHADE_UV writes coordinates rather than light, so it is not encoded;
+        # see rasterize_shaded.
+        if mode == Int32(SHADE_UV):
+            word = pack(lit.quantize())
+        else:
+            word = pack(lit.encode())
+    if solid:
         nearest_depth = nearest
 
     # Every pixel is written, background included. Clearing on the host and
@@ -501,9 +587,14 @@ struct GpuRenderer(Movable):
     var pixels: DeviceBuffer[DType.uint8]
     var depth: DeviceBuffer[DType.float32]
     var corners: DeviceBuffer[DType.float32]
+    # One texture id per triangle, beside the vertex buffer rather than in it.
+    var maps: DeviceBuffer[DType.int32]
     # Every texture the scene can sample, uploaded once rather than per draw.
     var texels: DeviceBuffer[DType.uint8]
     var table: DeviceBuffer[DType.int32]
+    # The 256 linear values an sRGB byte stands for. One copy for every
+    # texture, uploaded once: it is the same table for all of them.
+    var ramp: DeviceBuffer[DType.float32]
     # How many descriptors the table actually holds. The kernel indexes it
     # with a number that arrived on a vertex, so something has to know where
     # the table ends; nothing on the device can find out.
@@ -539,6 +630,7 @@ struct GpuRenderer(Movable):
         self.corners = self.context.enqueue_create_buffer[DType.float32](
             FLOATS_PER_TRIANGLE
         )
+        self.maps = self.context.enqueue_create_buffer[DType.int32](1)
         # One texel's worth, standing in for the blank texture. A zero-length
         # device buffer is not worth the special case, and a width of zero is
         # what the kernel actually reads to mean "no texture".
@@ -549,6 +641,12 @@ struct GpuRenderer(Movable):
         # Allocated but never filled, so until `set_textures` runs the only
         # legal reference is NO_TEXTURE.
         self.uploaded = 0
+        self.ramp = self.context.enqueue_create_buffer[DType.float32](256)
+        var steps = decode_ramp()
+        with self.ramp.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(), src=steps.unsafe_ptr(), count=256
+            )
 
     def draw(
         mut self,
@@ -589,17 +687,15 @@ struct GpuRenderer(Movable):
                     "A vertex names a texture that has not been uploaded;"
                     " call set_textures() first"
                 )
-            # Ids cross to the device as Float32, which represents every
-            # integer exactly only up to 2^24. Far beyond any real scene, and
-            # cheap to refuse rather than silently round.
-            if slot > 16777215:
-                raise Error("Too many textures for the device layout")
 
         if triangles > self.capacity:
             # Grow to exactly what is asked for. Frames tend to submit the
             # same count repeatedly, so this settles after the first one.
             self.corners = self.context.enqueue_create_buffer[DType.float32](
                 triangles * FLOATS_PER_TRIANGLE
+            )
+            self.maps = self.context.enqueue_create_buffer[DType.int32](
+                triangles
             )
             self.capacity = triangles
 
@@ -611,11 +707,19 @@ struct GpuRenderer(Movable):
                     src=flat.unsafe_ptr(),
                     count=len(flat),
                 )
+            var ids = triangle_textures(corners)
+            with self.maps.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=host.unsafe_ptr(),
+                    src=ids.unsafe_ptr(),
+                    count=len(ids),
+                )
 
         self.context.enqueue_function[rasterize_kernel](
             self.pixels.unsafe_ptr(),
             self.depth.unsafe_ptr(),
             self.corners.unsafe_ptr(),
+            self.maps.unsafe_ptr(),
             Int32(triangles),
             Int32(self.width),
             Int32(self.height),
@@ -623,6 +727,7 @@ struct GpuRenderer(Movable):
             Int32(mode),
             self.texels.unsafe_ptr(),
             self.table.unsafe_ptr(),
+            self.ramp.unsafe_ptr(),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -768,7 +873,7 @@ def render(
     Raises:
         Error: If the dimensions are not positive, or no GPU is present.
     """
-    var tint = FloatColor(of=foreground)
+    var tint = FloatColor(srgb=foreground)
     var corners = List[RasterVertex]()
     corners.append(RasterVertex(triangle.a.x, triangle.a.y, 0, 1, tint, 0, 0))
     corners.append(RasterVertex(triangle.b.x, triangle.b.y, 0, 1, tint, 0, 0))

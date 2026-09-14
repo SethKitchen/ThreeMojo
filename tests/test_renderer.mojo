@@ -264,22 +264,25 @@ def test_a_renderer_needs_a_positive_size() raises:
 
 def test_a_face_turned_towards_the_light_keeps_its_colour() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
-    var lit = renderer.shade(Color(200, 100, 50), renderer.light).quantize()
+    var lit = renderer.shade(Color(200, 100, 50), renderer.light).encode()
     assert_equal(lit.r, UInt8(200))
 
 
 def test_a_face_turned_away_keeps_only_the_ambient_share() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var away = Vector3(-renderer.light.x, -renderer.light.y, -renderer.light.z)
-    var dim = renderer.shade(Color(200, 100, 50), away).quantize()
-    # A quarter of 200, the default ambient.
-    assert_equal(dim.r, UInt8(50))
+    var dim = renderer.shade(Color(200, 100, 50), away).encode()
+    # A quarter of the *light* of byte 200, which displays as 106 -- not a
+    # quarter of the byte, which would be 50. Dimming the encoded value is
+    # the classic colour-space error: it makes shadows far too dark, because
+    # halving an sRGB number takes away much more than half the light.
+    assert_equal(dim.r, UInt8(106))
 
 
 def test_a_fully_lit_white_face_clamps_rather_than_wrapping() raises:
     # Rounding pushes 255 to 255.5, which must clamp rather than overflow.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var lit = renderer.shade(Color(255, 255, 255), renderer.light).quantize()
+    var lit = renderer.shade(Color(255, 255, 255), renderer.light).encode()
     assert_equal(lit.r, UInt8(255))
     assert_equal(lit.g, UInt8(255))
 
@@ -288,7 +291,7 @@ def test_shading_preserves_alpha() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var shaded = renderer.shade(
         Color(200, 100, 50, 128), renderer.light
-    ).quantize()
+    ).encode()
     assert_equal(shaded.a, UInt8(128))
 
 
@@ -297,9 +300,9 @@ def test_the_light_can_be_pointed_somewhere_else() raises:
     renderer.set_light(Vector3(0, 0, 5), 0.0)
     # Given as length five, stored as a unit vector.
     assert_almost_equal(renderer.light.length(), Float32(1), atol=TOLERANCE)
-    var facing = renderer.shade(Color(200, 0, 0), Vector3(0, 0, 1)).quantize()
+    var facing = renderer.shade(Color(200, 0, 0), Vector3(0, 0, 1)).encode()
     assert_equal(facing.r, UInt8(200))
-    var away = renderer.shade(Color(200, 0, 0), Vector3(0, 0, -1)).quantize()
+    var away = renderer.shade(Color(200, 0, 0), Vector3(0, 0, -1)).encode()
     assert_equal(away.r, UInt8(0))
 
 
@@ -657,7 +660,7 @@ def test_a_non_uniform_scale_still_shades_the_true_surface() raises:
             world.transform_point(b),
             world.transform_point(c),
         ),
-    ).quantize()
+    ).encode()
 
     var checked = 0
     for y in range(HEIGHT):
@@ -1418,6 +1421,150 @@ def test_a_material_naming_a_texture_that_is_not_there_is_rejected() raises:
     meshes.append(Mesh(box, paint, 0))
     with assert_raises():
         _ = renderer.render(scene_with_node_at(0), assets, meshes, a_camera())
+
+
+# --- transparency -----------------------------------------------------------
+
+
+def test_a_translucent_mesh_lets_the_one_behind_it_show() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var solid = assets.materials.add(Material(Color(0, 255, 0)))
+    var glass = assets.materials.add(
+        Material(Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5)
+    )
+
+    var scene = Scene()
+    var back = Object3D()
+    back.set_position(0, 0, -0.8)
+    var back_node = scene.add(back^)
+    var front = Object3D()
+    front.set_position(0, 0, 0.8)
+    var front_node = scene.add(front^)
+    scene.update()
+
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, solid, back_node))
+    meshes.append(Mesh(box, glass, front_node))
+    var image = renderer.render(scene, assets, meshes, a_camera())
+
+    var centre = image.get_pixel(WIDTH // 2, HEIGHT // 2)
+    # Both the red pane and the green box behind it are in the result.
+    assert_true(centre.r > 0, "the translucent box did not draw")
+    assert_true(centre.g > 0, "the solid box behind it was hidden")
+
+
+def test_an_opaque_mesh_hides_what_is_behind_it() raises:
+    # The same scene with the front box made solid, so the difference is the
+    # opacity and nothing else.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var solid = assets.materials.add(Material(Color(0, 255, 0)))
+    var front_solid = assets.materials.add(Material(Color(255, 0, 0)))
+
+    var scene = Scene()
+    var back = Object3D()
+    back.set_position(0, 0, -0.8)
+    var back_node = scene.add(back^)
+    var front = Object3D()
+    front.set_position(0, 0, 0.8)
+    var front_node = scene.add(front^)
+    scene.update()
+
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, solid, back_node))
+    meshes.append(Mesh(box, front_solid, front_node))
+    var image = renderer.render(scene, assets, meshes, a_camera())
+    assert_equal(image.get_pixel(WIDTH // 2, HEIGHT // 2).g, UInt8(0))
+
+
+def test_translucent_meshes_are_drawn_after_opaque_ones() raises:
+    # Blending is not commutative, so the order is not the caller's. Here the
+    # translucent pane is submitted *first* and the solid box second; drawing
+    # in that order would blend the pane with the background and then paint
+    # the box over it, hiding the pane entirely.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var glass = assets.materials.add(
+        Material(Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5)
+    )
+    var solid = assets.materials.add(Material(Color(0, 255, 0)))
+
+    var scene = Scene()
+    var front = Object3D()
+    front.set_position(0, 0, 0.8)
+    var front_node = scene.add(front^)
+    var back = Object3D()
+    back.set_position(0, 0, -0.8)
+    var back_node = scene.add(back^)
+    scene.update()
+
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, glass, front_node))
+    meshes.append(Mesh(box, solid, back_node))
+    var image = renderer.render(scene, assets, meshes, a_camera())
+    var centre = image.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(centre.r > 0, "the translucent pane was painted over")
+    assert_true(centre.g > 0, "the solid box did not draw")
+
+
+def test_translucent_meshes_are_sorted_back_to_front() raises:
+    # Two panes, submitted near-first. Drawn in that order the far one would
+    # blend over the near one, which is visibly wrong; sorted, the near one
+    # dominates. Comparing the two orders is what shows the sort happened.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var red = assets.materials.add(
+        Material(Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5)
+    )
+    var blue = assets.materials.add(
+        Material(Color(0, 0, 255), NO_TEXTURE, FRONT_SIDE, 0.5)
+    )
+
+    var scene = Scene()
+    var near = Object3D()
+    near.set_position(0, 0, 0.9)
+    var near_node = scene.add(near^)
+    var far = Object3D()
+    far.set_position(0, 0, -0.9)
+    var far_node = scene.add(far^)
+    scene.update()
+
+    var near_first = List[Mesh]()
+    near_first.append(Mesh(box, red, near_node))
+    near_first.append(Mesh(box, blue, far_node))
+    var far_first = List[Mesh]()
+    far_first.append(Mesh(box, blue, far_node))
+    far_first.append(Mesh(box, red, near_node))
+
+    var one = renderer.render(scene, assets, near_first, a_camera())
+    var two = renderer.render(scene, assets, far_first, a_camera())
+    # Sorting makes submission order irrelevant.
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(one.get_pixel(x, y).r, two.get_pixel(x, y).r)
+            assert_equal(one.get_pixel(x, y).b, two.get_pixel(x, y).b)
+    # And the nearer red pane dominates, as the last thing blended in.
+    var centre = one.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(centre.r > centre.b)
+
+
+def test_opacity_outside_zero_to_one_is_rejected() raises:
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), NO_TEXTURE, FRONT_SIDE, -0.1)
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), NO_TEXTURE, FRONT_SIDE, 1.5)
+
+
+def test_a_material_is_opaque_by_default() raises:
+    assert_false(Material(Color(1, 2, 3)).is_transparent())
+    assert_true(
+        Material(Color(1, 2, 3), NO_TEXTURE, FRONT_SIDE, 0.5).is_transparent()
+    )
 
 
 def main() raises:

@@ -47,9 +47,9 @@ promised: `make check-cpu` builds and tests the standard-library-only half, and
 > **Status: early but no longer a toybox.** Scene graph, transforms, camera,
 > geometry, meshes, depth buffering, per-vertex normals, near and far clipping,
 > perspective-correct shading, and both a CPU and a GPU rasterizer are in place
-> and fully tested, along with materials, textures with two filters, backface
-> culling and an orthographic camera. Missing, among much else: mipmaps,
-> transparency, quaternions, and any kind of windowing. This is a learning project in the open, not a
+> and fully tested, along with materials, textures with two filters, alpha
+> blending in linear light, backface culling and an orthographic camera.
+> Missing, among much else: mipmaps, quaternions, and any kind of windowing. This is a learning project in the open, not a
 > drop-in three.js replacement.
 
 ## Rendering a scene
@@ -426,6 +426,71 @@ meshes.append(Mesh(box, paint, node))
 ids, for the reason the first one did: the thing being shared has to be owned
 by exactly one owner, and everything else names it.
 
+## Colour space
+
+**Light adds; sRGB does not.** A pixel value of 128 is not half the light of
+255 — it is about 21.6% of it. sRGB spends more of its 256 steps on dark
+values, where the eye can tell them apart, which is why eight bits look
+acceptable at all. Every image file, and every colour picked in a paint
+program, is encoded that way.
+
+Arithmetic on light has to happen where the numbers are proportional to light:
+filtering blends neighbouring texels, shading multiplies by a Lambert term,
+and blending mixes a translucent surface with what is behind it. So this
+project decodes authored colours and texels on the way in, works in linear
+throughout, and encodes once at the pixel.
+
+Getting it wrong is not subtle. A white surface at a Lambert level of 0.4 used
+to come out as byte 102; the right answer is 170:
+
+```
+level   was   now
+0.25     64   137
+0.40    102   170
+0.60    153   203
+0.80    204   231
+```
+
+Shaded midtones were far too dark, which is the classic symptom — and every
+rendered image in `out/` changed when this landed.
+
+A texture says which space it is in. `SRGB` is the default, because that is
+what an image holds; `LINEAR` is for data that merely happens to be stored in
+an image and must not be decoded. Alpha is never decoded in either case: it is
+coverage, not colour. Decoding is a 256-entry table built once per texture
+rather than a `pow` per fragment, and the same table is uploaded to the device.
+
+## Transparency
+
+A material's `opacity` below one makes its surface translucent, and the
+rasterizer mixes it into what is already there instead of replacing it. Two
+rules follow, and they are the two every renderer has:
+
+**A translucent surface tests depth without claiming it** — hidden by what is
+in front, hiding nothing behind — so two panes one behind the other both show.
+
+**Draw order stops being the caller's business.** Blending is not commutative,
+so `Renderer.prepare` puts every opaque mesh first (they write the depth that
+stops a pane behind a wall from showing through) and then sorts the translucent
+ones back to front. Submitting them in any order gives the same image, which
+is asserted. The sort is per mesh, as three.js's is; a translucent mesh that
+overlaps *itself* is still approximate, and the alternative is sorting every
+triangle every frame.
+
+```mojo
+assets.materials.add(Material(tint, NO_TEXTURE, DOUBLE_SIDE, 0.45))
+```
+
+`make animation` renders `out/glass.png`: three translucent panes turning
+through each other over a solid cube. Where they cross, three colours mix one
+over another — and that is the place the colour space above shows most
+plainly, since half of white over black is 188 and not 128.
+
+The GPU blends in one pass rather than two, which is only correct because the
+renderer guarantees the ordering: every opaque triangle arrives before any
+translucent one, so the nearest solid depth is already final when the first
+blended fragment shows up.
+
 ## Cameras
 
 `PerspectiveCamera` and `OrthographicCamera` are interchangeable because the
@@ -707,6 +772,7 @@ renderers/   Renderer                            scene + camera -> triangles
 materials/   Material, MaterialStore             colour, map and side
 render/      Framebuffer, Color, FloatColor      RGBA, depth, and linear colour
              Texture, TextureStore               two filters, three wraps
+             srgb                                the transfer function
              fillrule                            coverage maths, CPU *and* GPU
              rasterizer                          software rasterization
              gpu                                 the same rasterizer, on the GPU
@@ -717,6 +783,7 @@ examples/    triangle.mojo                       renders triangle.png
              cubes.mojo                          two cubes, depth + hierarchy
              uv.mojo                             perspective-correct vs affine
              textured.mojo                       two cubes, two textures
+             glass.mojo                          translucent panes, sorted
 bench/       raster_bench.mojo                   CPU vs GPU timings
 tools/       gpu_status.mojo                     is there an accelerator?
 out/         rendered images, gitignored

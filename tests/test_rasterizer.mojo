@@ -6,6 +6,7 @@
 """Tests for `render.rasterizer`."""
 
 from math.vector2 import Vector2
+from std.math import inf
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import NO_TEXTURE
 from render.texture import REPEAT, Texture, checkerboard
@@ -213,6 +214,10 @@ def flat_vertex(
     to correct, so these tests measure coverage and blending on their own.
     The tests that do care about perspective pass differing values.
 
+    The colour is decoded from sRGB, so that writing a byte in and reading the
+    same byte out is the round trip it looks like: the rasterizer encodes on
+    the way to the framebuffer.
+
     Args:
         point: Screen x and y with NDC depth in z.
         color: The colour at this corner.
@@ -222,7 +227,7 @@ def flat_vertex(
         The corner as the rasterizer wants it.
     """
     return RasterVertex(
-        point.x, point.y, point.z, inv_w, FloatColor(of=color), 0, 0
+        point.x, point.y, point.z, inv_w, FloatColor(srgb=color), 0, 0
     )
 
 
@@ -370,16 +375,22 @@ def test_a_degenerate_shaded_triangle_draws_nothing() raises:
     assert_equal(fb.get_pixel(2, 2).r, UInt8(1))
 
 
-def test_alpha_is_mixed_like_any_other_channel() raises:
+def test_alpha_decides_how_much_of_a_surface_shows() raises:
+    # Alpha is coverage now, not a channel carried through to the buffer: a
+    # translucent triangle is mixed into what is behind it. Interpolated
+    # across the face, so one corner nearly vanishes and another is solid.
     var fb = Framebuffer(6, 6, Color(0, 0, 0))
     var t = covering(0.5)
     rasterize_shaded(
-        flat_vertex(t[0], Color(0, 0, 0, 0)),
-        flat_vertex(t[1], Color(0, 0, 0, 255)),
-        flat_vertex(t[2], Color(0, 0, 0, 255)),
+        flat_vertex(t[0], Color(255, 255, 255, 0)),
+        flat_vertex(t[1], Color(255, 255, 255, 255)),
+        flat_vertex(t[2], Color(255, 255, 255, 255)),
         fb,
     )
-    assert_true(fb.get_pixel(0, 0).a != fb.get_pixel(5, 5).a)
+    # The transparent corner leaves the black background nearly untouched;
+    # the opaque corners cover it.
+    assert_true(fb.get_pixel(0, 0).r < fb.get_pixel(5, 5).r)
+    assert_true(fb.get_pixel(5, 5).r > 200)
 
 
 def test_a_triangle_above_the_viewport_touches_no_rows() raises:
@@ -760,7 +771,9 @@ def test_a_texture_replaces_a_white_surface() raises:
 
 
 def test_a_texture_is_modulated_by_the_lighting() raises:
-    # Half-lit white surface, fully white texture: the result is half.
+    # Half-lit white surface, fully white texture: half the light, which is
+    # what a display shows as 188. Not 128 -- that is half the *byte*, and a
+    # byte is not proportional to light.
     var pixels = List[UInt8](length=4, fill=255)
     var textures = TextureStore()
     var white = textures.add(Texture(1, 1, pixels^, REPEAT))
@@ -775,7 +788,7 @@ def test_a_texture_is_modulated_by_the_lighting() raises:
         SHADE_TEXTURE,
         textures,
     )
-    assert_equal(fb.get_pixel(4, 4).r, UInt8(128))
+    assert_equal(fb.get_pixel(4, 4).r, UInt8(188))
 
 
 def test_no_texture_leaves_the_lighting_untouched() raises:
@@ -860,6 +873,105 @@ def test_an_unknown_shading_mode_is_refused() raises:
             fb,
             -1,
         )
+
+
+# --- blending ---------------------------------------------------------------
+
+
+def test_a_half_transparent_white_over_black_is_half_the_light() raises:
+    # The number the colour space exists for. Half the light of white over
+    # black displays as 188; 128 would be half the *byte*, which is 21.6% of
+    # the light and the answer a renderer that blends in sRGB gives.
+    var fb = Framebuffer(6, 6, Color(0, 0, 0))
+    var t = covering(0.5)
+    rasterize_shaded(
+        flat_vertex(t[0], Color(255, 255, 255, 128)),
+        flat_vertex(t[1], Color(255, 255, 255, 128)),
+        flat_vertex(t[2], Color(255, 255, 255, 128)),
+        fb,
+    )
+    # 128/255 is the coverage, not a colour, so it is not decoded.
+    var share = Float32(128) / 255
+    var expected = FloatColor(share, share, share, 1.0).encode()
+    assert_equal(fb.get_pixel(3, 3).r, expected.r)
+    assert_true(fb.get_pixel(3, 3).r > 180)
+
+
+def test_a_transparent_surface_does_not_claim_the_depth() raises:
+    # Two panes one behind the other both show, which is the whole point: a
+    # translucent surface is hidden by what is in front of it without hiding
+    # what is behind it.
+    var fb = Framebuffer(6, 6, Color(0, 0, 0))
+    var far = covering(0.8)
+    var near = covering(0.2)
+    rasterize_shaded(
+        flat_vertex(far[0], Color(255, 0, 0, 128)),
+        flat_vertex(far[1], Color(255, 0, 0, 128)),
+        flat_vertex(far[2], Color(255, 0, 0, 128)),
+        fb,
+    )
+    var behind_only = fb.get_pixel(3, 3).r
+    rasterize_shaded(
+        flat_vertex(near[0], Color(0, 0, 255, 128)),
+        flat_vertex(near[1], Color(0, 0, 255, 128)),
+        flat_vertex(near[2], Color(0, 0, 255, 128)),
+        fb,
+    )
+    # The red pane is still contributing under the blue one.
+    assert_true(fb.get_pixel(3, 3).r > 0)
+    assert_true(fb.get_pixel(3, 3).r < behind_only)
+    assert_true(fb.get_pixel(3, 3).b > 0)
+    # And the depth buffer still says nothing is there, so an opaque surface
+    # behind both would still draw.
+    assert_equal(fb.depth_at(3, 3), inf[DType.float32]())
+
+
+def test_an_opaque_surface_in_front_hides_a_transparent_one() raises:
+    var fb = Framebuffer(6, 6, Color(0, 0, 0))
+    var near = covering(0.2)
+    var far = covering(0.8)
+    rasterize_shaded(
+        flat_vertex(near[0], Color(0, 255, 0)),
+        flat_vertex(near[1], Color(0, 255, 0)),
+        flat_vertex(near[2], Color(0, 255, 0)),
+        fb,
+    )
+    rasterize_shaded(
+        flat_vertex(far[0], Color(255, 0, 0, 128)),
+        flat_vertex(far[1], Color(255, 0, 0, 128)),
+        flat_vertex(far[2], Color(255, 0, 0, 128)),
+        fb,
+    )
+    assert_equal(fb.get_pixel(3, 3).r, UInt8(0))
+    assert_equal(fb.get_pixel(3, 3).g, UInt8(255))
+
+
+def test_a_fully_transparent_surface_changes_nothing() raises:
+    var fb = Framebuffer(6, 6, Color(40, 50, 60))
+    var t = covering(0.5)
+    rasterize_shaded(
+        flat_vertex(t[0], Color(255, 255, 255, 0)),
+        flat_vertex(t[1], Color(255, 255, 255, 0)),
+        flat_vertex(t[2], Color(255, 255, 255, 0)),
+        fb,
+    )
+    assert_equal(fb.get_pixel(3, 3).r, UInt8(40))
+    assert_equal(fb.get_pixel(3, 3).g, UInt8(50))
+    assert_equal(fb.get_pixel(3, 3).b, UInt8(60))
+
+
+def test_an_opaque_surface_still_claims_the_depth() raises:
+    # The other side of the depth rule, so blending cannot have been made
+    # unconditional.
+    var fb = Framebuffer(6, 6, Color(0, 0, 0))
+    var t = covering(0.5)
+    rasterize_shaded(
+        flat_vertex(t[0], Color(255, 255, 255)),
+        flat_vertex(t[1], Color(255, 255, 255)),
+        flat_vertex(t[2], Color(255, 255, 255)),
+        fb,
+    )
+    assert_almost_equal(fb.depth_at(3, 3), Float32(0.5), atol=Float64(1e-6))
 
 
 def main() raises:

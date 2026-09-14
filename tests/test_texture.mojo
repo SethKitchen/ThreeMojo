@@ -12,6 +12,7 @@ the implementation happens to do.
 """
 
 from render.framebuffer import Color, FloatColor
+from render.srgb import LINEAR, SRGB, srgb_to_linear
 from render.texture import (
     BILINEAR,
     CLAMP,
@@ -191,16 +192,57 @@ def test_sampling_is_nearest_neighbour_not_blended() raises:
 
 
 def test_eight_bit_texels_come_back_as_fractions() raises:
+    # A LINEAR texture is used as stored, so a byte is just a byte over 255.
     var pixels = List[UInt8]()
     for value in [UInt8(51), UInt8(102), UInt8(153), UInt8(204)]:
         pixels.append(value)
-    var image = Texture(1, 1, pixels^, REPEAT)
+    var image = Texture(1, 1, pixels^, REPEAT, NEAREST, LINEAR)
     assert_almost_equal(
         image.sample(0.5, 0.5).r, Float32(51) / 255, atol=TOLERANCE
     )
     assert_almost_equal(
         image.sample(0.5, 0.5).a, Float32(204) / 255, atol=TOLERANCE
     )
+
+
+def test_a_colour_texture_is_decoded_from_srgb() raises:
+    # The default, because that is what an image file holds. A byte of 128 is
+    # not half the light -- it is about 21.6% of it.
+    var pixels = List[UInt8]()
+    for value in [UInt8(128), UInt8(128), UInt8(128), UInt8(128)]:
+        pixels.append(value)
+    var image = Texture(1, 1, pixels^, REPEAT, NEAREST, SRGB)
+    assert_almost_equal(
+        image.sample(0.5, 0.5).r,
+        srgb_to_linear(Float32(128) / 255),
+        atol=TOLERANCE,
+    )
+    assert_true(image.sample(0.5, 0.5).r < 0.25)
+
+
+def test_alpha_is_never_decoded() raises:
+    # Alpha is coverage, not colour. Decoding it would make a half-transparent
+    # surface a fifth-transparent one.
+    var pixels = List[UInt8]()
+    for value in [UInt8(128), UInt8(128), UInt8(128), UInt8(128)]:
+        pixels.append(value)
+    var image = Texture(1, 1, pixels^, REPEAT, NEAREST, SRGB)
+    assert_almost_equal(
+        image.sample(0.5, 0.5).a, Float32(128) / 255, atol=TOLERANCE
+    )
+
+
+def test_an_unknown_colour_space_is_rejected() raises:
+    var pixels = List[UInt8](length=4, fill=0)
+    with assert_raises():
+        _ = Texture(1, 1, pixels^, REPEAT, NEAREST, 5)
+
+
+def test_a_texture_keeps_the_colour_space_it_was_given() raises:
+    var pixels = List[UInt8](length=4, fill=0)
+    var image = Texture(1, 1, pixels^, REPEAT, NEAREST, LINEAR)
+    assert_equal(image.color_space, LINEAR)
+    assert_equal(Texture().color_space, LINEAR)
 
 
 # --- wrapping ---------------------------------------------------------------
