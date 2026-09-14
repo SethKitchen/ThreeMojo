@@ -19,6 +19,7 @@ own stored-block lengths, which are little-endian.
 """
 
 from render.framebuffer import Framebuffer
+from render.inflate import zlib_inflate
 
 comptime CRC_POLYNOMIAL = UInt32(0xEDB88320)
 comptime ADLER_MODULUS = UInt32(65521)
@@ -232,3 +233,315 @@ def encode(buffer: Framebuffer) raises -> List[UInt8]:
     push_chunk(out, String("IDAT"), frame_data(buffer))
     push_chunk(out, String("IEND"), List[UInt8]())
     return out^
+
+
+# --- Decoding ---------------------------------------------------------------
+#
+# Reading a PNG is not the mirror image of writing one. Writing gets to choose
+# the easiest legal encoding -- filter 0 on every row, stored DEFLATE blocks --
+# and a reader has to accept whatever some other encoder chose, which in
+# practice is always compressed and usually filtered per row. So decoding
+# needs the whole of `render.inflate` and all five filters, and this is much
+# the larger half of the format.
+
+
+def _be32(bytes: List[UInt8], at: Int) raises -> Int:
+    """Return the big-endian 32-bit integer at `at`.
+
+    The caller has already checked there are four bytes there: the chunk loop
+    will not start a chunk without eight bytes of header, and will not reach a
+    CRC it has not confirmed is present. A guard here would be a branch no
+    file could take -- coverage says so.
+    """
+    return (
+        Int(bytes[at]) << 24
+        | Int(bytes[at + 1]) << 16
+        | Int(bytes[at + 2]) << 8
+        | Int(bytes[at + 3])
+    )
+
+
+def _paeth(left: Int, above: Int, corner: Int) -> Int:
+    """Return whichever neighbour the Paeth predictor picks.
+
+    The one filter that is not a plain subtraction: it estimates the current
+    byte as `left + above - corner` and then answers with whichever of the
+    three that estimate is nearest to. Ties go to `left`, then `above`, and
+    getting that order wrong corrupts only some images, which is why it is
+    worth stating.
+    """
+    var estimate = left + above - corner
+    var from_left = abs(estimate - left)
+    var from_above = abs(estimate - above)
+    var from_corner = abs(estimate - corner)
+    if from_left <= from_above and from_left <= from_corner:
+        return left
+    if from_above <= from_corner:
+        return above
+    return corner
+
+
+def _unfilter(
+    var raw: List[UInt8], width: Int, height: Int, stride: Int, step: Int
+) raises -> List[UInt8]:
+    """Undo the per-row filters, returning the rows with no filter bytes.
+
+    Each row is prefixed by the filter it was encoded with, and every filter
+    predicts a byte from its neighbours: the one `step` bytes to the left, the
+    one directly above, and the one above-left. Bytes off the top or left edge
+    count as zero.
+
+    `step` is the distance to the byte that holds the *same channel* of the
+    previous pixel, which is the pixel size in bytes -- not one. Using one
+    gives an image that looks almost right and smears colour sideways.
+
+    Args:
+        raw: The decompressed rows, each with its filter byte.
+        width: Image width in pixels.
+        height: Image height in pixels.
+        stride: Bytes per row, not counting the filter byte.
+        step: Bytes per pixel, at least one.
+
+    Returns:
+        The unfiltered rows, `stride * height` bytes.
+
+    Raises:
+        Error: If the data is the wrong size or names an unknown filter.
+    """
+    if len(raw) != (stride + 1) * height:
+        raise Error("A PNG's pixel data is the wrong size for its header")
+    var out = List[UInt8](length=stride * height, fill=0)
+    for y in range(height):  # pragma: no branch
+        var filter = Int(raw[y * (stride + 1)])
+        var source = y * (stride + 1) + 1
+        var target = y * stride
+        for index in range(stride):  # pragma: no branch
+            var value = Int(raw[source + index])
+            var left = 0
+            if index >= step:
+                left = Int(out[target + index - step])
+            var above = 0
+            if y > 0:
+                above = Int(out[target + index - stride])
+            var corner = 0
+            if y > 0 and index >= step:
+                corner = Int(out[target + index - stride - step])
+            if filter == 0:
+                pass
+            elif filter == 1:
+                value += left
+            elif filter == 2:
+                value += above
+            elif filter == 3:
+                # The average of the two neighbours, rounded down.
+                value += (left + above) // 2
+            elif filter == 4:
+                value += _paeth(left, above, corner)
+            else:
+                raise Error("Unknown PNG row filter")
+            out[target + index] = UInt8(value & 0xFF)
+    _ = raw^
+    return out^
+
+
+def decode(bytes: List[UInt8]) raises -> Framebuffer:
+    """Return the image a PNG file holds, as RGBA.
+
+    Handles the five colour types at eight bits per channel — greyscale, RGB,
+    palette, greyscale with alpha, and RGBA — with or without a `tRNS`
+    transparency chunk, and every row filter. Everything is widened to RGBA,
+    because that is what a `Framebuffer` and a `Texture` both hold and it
+    means one shape reaches the renderer rather than five.
+
+    Chunk CRCs are checked. A corrupt file that is not checked does not fail,
+    it produces a plausible wrong image, and tracking that back to a bad byte
+    later is far harder than refusing it here.
+
+    Args:
+        bytes: The complete file.
+
+    Returns:
+        The image.
+
+    Raises:
+        Error: If the signature, structure, a CRC or the end marker is wrong
+            or missing, or the file uses
+            a feature this decoder does not have: sixteen bits per channel, a
+            sub-byte palette, or Adam7 interlacing. Each is refused by name
+            rather than mis-decoded.
+    """
+    var signature = [
+        UInt8(137),
+        UInt8(80),
+        UInt8(78),
+        UInt8(71),
+        UInt8(13),
+        UInt8(10),
+        UInt8(26),
+        UInt8(10),
+    ]
+    if len(bytes) < 8:
+        raise Error("Too short to be a PNG")
+    for index in range(8):  # pragma: no branch
+        if bytes[index] != signature[index]:
+            raise Error("Not a PNG: the signature does not match")
+
+    var width = 0
+    var height = 0
+    var color_type = -1
+    var palette = List[UInt8]()
+    var alphas = List[UInt8]()
+    var keyed = False
+    var key = List[Int]()
+    var compressed = List[UInt8]()
+    var seen_header = False
+    var seen_end = False
+
+    var at = 8
+    while at + 8 <= len(bytes):
+        var length = _be32(bytes, at)
+        var kind = String()
+        for index in range(4):  # pragma: no branch
+            kind += chr(Int(bytes[at + 4 + index]))
+        var start = at + 8
+        if start + length + 4 > len(bytes):
+            raise Error("A PNG chunk runs past the end of the file")
+
+        var body = List[UInt8]()
+        for index in range(length):  # pragma: no branch
+            body.append(bytes[start + index])
+
+        # The CRC covers the type and the data, not the length.
+        var checked = List[UInt8]()
+        for index in range(4):  # pragma: no branch
+            checked.append(bytes[at + 4 + index])
+        for index in range(length):  # pragma: no branch
+            checked.append(body[index])
+        if UInt32(_be32(bytes, start + length)) != _crc32(checked):
+            raise Error("A PNG chunk failed its CRC")
+
+        if kind == "IHDR":
+            if length != 13:
+                raise Error("A PNG header chunk is the wrong size")
+            width = _be32(body, 0)
+            height = _be32(body, 4)
+            if width <= 0 or height <= 0:
+                raise Error("A PNG's dimensions must be positive")
+            if Int(body[8]) == 16:
+                raise Error("Sixteen bits per channel is not supported")
+            if Int(body[8]) != 8:
+                raise Error("Only eight bits per channel is supported")
+            color_type = Int(body[9])
+            if Int(body[10]) != 0:
+                raise Error("Unknown PNG compression method")
+            if Int(body[11]) != 0:
+                raise Error("Unknown PNG filter method")
+            if Int(body[12]) != 0:
+                raise Error("Interlaced PNGs are not supported")
+            seen_header = True
+        elif kind == "PLTE":
+            palette = body.copy()
+        elif kind == "tRNS":
+            if color_type == 3:
+                alphas = body.copy()
+            else:
+                # One colour is transparent, given as a channel per component
+                # at the file's bit depth -- so the low byte of each pair.
+                keyed = True
+                key = List[Int]()
+                for index in range(len(body) // 2):  # pragma: no branch
+                    key.append(Int(body[index * 2 + 1]))
+        elif kind == "IDAT":
+            for index in range(length):  # pragma: no branch
+                compressed.append(body[index])
+        elif kind == "IEND":
+            seen_end = True
+            break
+
+        at = start + length + 4
+
+    if not seen_header:
+        raise Error("A PNG needs a header chunk")
+    # A file can hold every pixel and still be truncated: lose the last chunk
+    # and the image data is all there, so a decoder that stops when it runs
+    # out of chunks accepts it silently. The end marker is what says the file
+    # is whole.
+    if not seen_end:
+        raise Error("A PNG is missing its end marker; the file is truncated")
+    if len(compressed) == 0:
+        raise Error("A PNG needs pixel data")
+
+    var channels: Int
+    if color_type == 0:
+        channels = 1
+    elif color_type == 2:
+        channels = 3
+    elif color_type == 3:
+        channels = 1
+    elif color_type == 4:
+        channels = 2
+    elif color_type == 6:
+        channels = 4
+    else:
+        raise Error("Unknown PNG colour type")
+    if color_type == 3 and len(palette) == 0:
+        raise Error("A palette PNG needs a palette")
+
+    var rows = _unfilter(
+        zlib_inflate(compressed),
+        width,
+        height,
+        width * channels,
+        channels,
+    )
+
+    var pixels = List[UInt8]()
+    for index in range(width * height):  # pragma: no branch
+        var at_source = index * channels
+        var r: UInt8
+        var g: UInt8
+        var b: UInt8
+        var a = UInt8(255)
+        if color_type == 0:
+            r = rows[at_source]
+            g = r
+            b = r
+            if keyed and Int(r) == key[0]:
+                a = 0
+        elif color_type == 2:
+            r = rows[at_source]
+            g = rows[at_source + 1]
+            b = rows[at_source + 2]
+            if (
+                keyed
+                and Int(r) == key[0]
+                and Int(g) == key[1]
+                and Int(b) == key[2]
+            ):
+                a = 0
+        elif color_type == 3:
+            var slot = Int(rows[at_source])
+            if slot * 3 + 2 >= len(palette):
+                raise Error("A palette index is outside the palette")
+            r = palette[slot * 3]
+            g = palette[slot * 3 + 1]
+            b = palette[slot * 3 + 2]
+            # A tRNS shorter than the palette leaves the rest opaque.
+            if slot < len(alphas):
+                a = alphas[slot]
+        elif color_type == 4:
+            r = rows[at_source]
+            g = r
+            b = r
+            a = rows[at_source + 1]
+        else:
+            r = rows[at_source]
+            g = rows[at_source + 1]
+            b = rows[at_source + 2]
+            a = rows[at_source + 3]
+        pixels.append(r)
+        pixels.append(g)
+        pixels.append(b)
+        pixels.append(a)
+
+    return Framebuffer(width, height, pixels^)

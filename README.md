@@ -499,6 +499,54 @@ lamp, an additive quarter plus three quarters is algebraically the same
 `0.25 + 0.75 * lambert` the fixed light gave, and every rendered image in
 `out/` is byte for byte what it was.
 
+## Reading a PNG
+
+Writing a PNG needs no compression at all: DEFLATE has a *stored* block type,
+so `render/png.mojo` builds a legal file from a header, raw bytes and a
+checksum. Reading one someone else wrote gets no such shortcut — every encoder
+in the world uses the compressed block types, so a decoder that understood only
+stored blocks could not open a single real file.
+
+So `render/inflate.mojo` is the whole of RFC 1951: stored, fixed-Huffman and
+dynamic-Huffman blocks, and the LZ77 back-references inside the last two.
+
+```mojo
+var image = decode(Path("assets/brick.png").read_bytes())
+var skin = assets.textures.add(texture_from(image, REPEAT, BILINEAR, mipmapped=True))
+```
+
+Two things in DEFLATE are easy to get backwards, and both are stated where they
+are relied on. **Bits run low to high within a byte, but Huffman codes are
+packed most significant bit first** — the extra bits after a length or distance
+are ordinary little-endian integers, while the codes themselves are walked one
+bit at a time the other way. And **a back-reference may overlap the output's own
+end**: a run of identical bytes is stored as one byte and a distance of one, so
+the copy has to proceed a byte at a time. Capturing the source slice up front
+gives three correct bytes and then garbage.
+
+Decoding accepts the five colour types at eight bits — greyscale, RGB, palette,
+greyscale with alpha, and RGBA — with or without a `tRNS` chunk, and all five
+row filters. Everything is widened to RGBA, so one shape reaches the renderer
+rather than five, and `texture_from` is then a copy rather than a conversion.
+
+Sixteen-bit channels, sub-byte palettes and Adam7 interlacing are legal PNG
+that this decoder does not have. Each is **refused by name** rather than
+mis-decoded, as is a chunk that fails its CRC: a corrupt file that is not
+checked does not fail, it produces a plausible wrong image, and tracing that
+back to a bad byte later is far harder than refusing it here. A file missing
+only its end marker is refused too — it can hold every pixel and still be
+truncated.
+
+The tests decode real files written by a conforming encoder and embedded as
+bytes, because a decoder checked only against this project's own encoder would
+never see a Huffman code or a row filter at all. They cover both compressed
+block types, every filter, an overlapping run, each colour type, and twenty-odd
+malformed files each aimed at one specific refusal.
+
+`make animation` renders `out/photo.png`: a cube wearing `assets/brick.png`,
+which is dynamic-Huffman compressed and Sub-filtered — neither of which this
+project's encoder can produce.
+
 ## Materials
 
 `Material` was refused three times before it was written, on the grounds that a

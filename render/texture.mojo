@@ -35,7 +35,7 @@ the edge colour, and `MIRROR` alternates direction each tile — the same three
 three.js offers.
 """
 
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, Framebuffer
 from render.srgb import LINEAR, SRGB, decode_ramp, linear_to_srgb
 from std.math import floor
 
@@ -742,6 +742,45 @@ struct Texture(Movable):
             across - Float32(column),
             down - Float32(row),
         )
+
+
+def texture_from(
+    image: Framebuffer,
+    wrap: Int = REPEAT,
+    filter: Int = BILINEAR,
+    color_space: Int = SRGB,
+    mipmapped: Bool = False,
+) raises -> Texture:
+    """Return a texture holding a decoded image's pixels.
+
+    The join between `render.png`'s decoder and this module. Both already hold
+    eight-bit RGBA in row-major order from the top, so there is nothing to
+    convert -- which is the point of widening every colour type to RGBA while
+    decoding rather than carrying five shapes through the renderer.
+
+    Args:
+        image: The decoded image.
+        wrap: How coordinates outside the unit square are resolved.
+        filter: `NEAREST` or `BILINEAR`.
+        color_space: `SRGB` for a colour image, `LINEAR` for data that merely
+            happens to be stored in one.
+        mipmapped: Build the chain of halved copies.
+
+    Returns:
+        The texture.
+
+    Raises:
+        Error: If any argument is not one this module knows.
+    """
+    return Texture(
+        image.width,
+        image.height,
+        image.pixels.copy(),
+        wrap,
+        filter,
+        color_space,
+        mipmapped,
+    )
 
 
 def checkerboard(
