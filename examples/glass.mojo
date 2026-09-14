@@ -29,6 +29,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from lights.light import ambient_light, directional_light
 from geometries.box import cube
 from materials.material import DOUBLE_SIDE, NO_TEXTURE, Material
 from math.vector3 import Vector3
@@ -115,6 +116,14 @@ def frame_at(
         )
         node.set_position(0, 0, 0)
         _ = scene.add(node^)
+    # The lamp is a node like any other, so it could be parented to something
+    # that moves. Added last, leaving the node ids the meshes name untouched.
+    var lamp = Object3D()
+    lamp.set_position(0.4, 0.8, 0.5)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
+
     scene.update()
 
     return renderer.render(scene, assets, meshes, camera)

@@ -32,6 +32,7 @@ from core.assets import Assets
 from materials.material import Material
 from core.object3d import Object3D
 from core.scene import Scene
+from lights.light import ambient_light, directional_light
 from geometries.box import cube
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -86,6 +87,14 @@ def frame_at(
         Angle(26.0, DEGREE), Angle(-turn, DEGREE), Angle(0.0, DEGREE)
     )
     _ = scene.add(right^)
+    # The lamp is a node like any other, so it could be parented to something
+    # that moves. Added last, leaving the node ids the meshes name untouched.
+    var lamp = Object3D()
+    lamp.set_position(0.4, 0.8, 0.5)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
+
     scene.update()
     return renderer.render(scene, assets, meshes, camera)
 

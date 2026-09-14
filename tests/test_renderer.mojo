@@ -22,6 +22,8 @@ from materials.material import (
     Material,
 )
 from core.scene import Scene
+from lights.light import ambient_light, directional_light
+from lights.lighting import Lighting
 from geometries.box import cube
 from geometries.sphere import sphere
 from math.vector3 import Vector3
@@ -40,6 +42,49 @@ from std.testing import (
     assert_true,
 )
 from units.si import Angle, DEGREE, Length, METRE
+
+
+def light_from(
+    mut scene: Scene,
+    x: Float32,
+    y: Float32,
+    z: Float32,
+    ambient: Float32,
+) raises:
+    """Add a white lamp at a point, plus white ambient, matching the old fixed
+    light exactly.
+
+    `Renderer.set_light(direction, ambient)` gave every surface
+    `ambient + (1 - ambient) * lambert`. For a white lamp that is an additive
+    ambient of `ambient` plus a directional of `1 - ambient`, so the tests
+    below expect the colours they always did.
+    """
+    var lamp = Object3D()
+    lamp.set_position(x, y, z)
+    var node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(255, 255, 255), ambient))
+    scene.add_light(directional_light(Color(255, 255, 255), node, 1 - ambient))
+
+
+def light_the(mut scene: Scene) raises:
+    """Add the lighting these tests were written against.
+
+    White ambient at a quarter plus a white directional at three quarters,
+    from up and to the right. That is exactly the fixed light `Renderer` used
+    to carry -- its `0.25 + 0.75 * lambert` is what an additive quarter and
+    three quarters come to for a white lamp -- so every expected colour in
+    this file is unchanged by lights becoming scene objects. A colour that
+    moves here is a bug, not the redesign.
+
+    Adds the lamp's node last, so the node ids meshes already name still
+    point at the same nodes.
+    """
+    var lamp = Object3D()
+    lamp.set_position(0.4, 0.8, 0.5)
+    var node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
+    scene.add_light(directional_light(Color(255, 255, 255), node, 0.75))
+
 
 comptime TOLERANCE = Float64(1e-5)
 # Small on purpose. These tests cover the renderer's logic, not its output at
@@ -86,6 +131,7 @@ def scene_with_node_at(z: Float32) raises -> Scene:
     var node = Object3D()
     node.set_position(0, 0, z)
     _ = scene.add(node^)
+    light_the(scene)
     scene.update()
     return scene^
 
@@ -231,6 +277,7 @@ def test_two_meshes_can_share_one_geometry() raises:
     var right = Object3D()
     right.set_position(1.2, 0, 0)
     var right_node = scene.add(right^)
+    light_the(scene)
     scene.update()
 
     var meshes = List[Mesh]()
@@ -275,64 +322,6 @@ def test_a_renderer_needs_a_positive_size() raises:
         _ = Renderer(0, 10)
     with assert_raises():
         _ = Renderer(10, -1)
-
-
-def test_a_face_turned_towards_the_light_keeps_its_colour() raises:
-    var renderer = Renderer(WIDTH, HEIGHT)
-    var lit = renderer.shade(Color(200, 100, 50), renderer.light).encode()
-    assert_equal(lit.r, UInt8(200))
-
-
-def test_a_face_turned_away_keeps_only_the_ambient_share() raises:
-    var renderer = Renderer(WIDTH, HEIGHT)
-    var away = Vector3(-renderer.light.x, -renderer.light.y, -renderer.light.z)
-    var dim = renderer.shade(Color(200, 100, 50), away).encode()
-    # A quarter of the *light* of byte 200, which displays as 106 -- not a
-    # quarter of the byte, which would be 50. Dimming the encoded value is
-    # the classic colour-space error: it makes shadows far too dark, because
-    # halving an sRGB number takes away much more than half the light.
-    assert_equal(dim.r, UInt8(106))
-
-
-def test_a_fully_lit_white_face_clamps_rather_than_wrapping() raises:
-    # Rounding pushes 255 to 255.5, which must clamp rather than overflow.
-    var renderer = Renderer(WIDTH, HEIGHT)
-    var lit = renderer.shade(Color(255, 255, 255), renderer.light).encode()
-    assert_equal(lit.r, UInt8(255))
-    assert_equal(lit.g, UInt8(255))
-
-
-def test_shading_preserves_alpha() raises:
-    var renderer = Renderer(WIDTH, HEIGHT)
-    var shaded = renderer.shade(
-        Color(200, 100, 50, 128), renderer.light
-    ).encode()
-    assert_equal(shaded.a, UInt8(128))
-
-
-def test_the_light_can_be_pointed_somewhere_else() raises:
-    var renderer = Renderer(WIDTH, HEIGHT)
-    renderer.set_light(Vector3(0, 0, 5), 0.0)
-    # Given as length five, stored as a unit vector.
-    assert_almost_equal(renderer.light.length(), Float32(1), atol=TOLERANCE)
-    var facing = renderer.shade(Color(200, 0, 0), Vector3(0, 0, 1)).encode()
-    assert_equal(facing.r, UInt8(200))
-    var away = renderer.shade(Color(200, 0, 0), Vector3(0, 0, -1)).encode()
-    assert_equal(away.r, UInt8(0))
-
-
-def test_a_light_with_no_direction_is_rejected() raises:
-    var renderer = Renderer(WIDTH, HEIGHT)
-    with assert_raises():
-        renderer.set_light(Vector3(0, 0, 0), 0.5)
-
-
-def test_ambient_outside_zero_to_one_is_rejected() raises:
-    var renderer = Renderer(WIDTH, HEIGHT)
-    with assert_raises():
-        renderer.set_light(Vector3(0, 1, 0), -0.1)
-    with assert_raises():
-        renderer.set_light(Vector3(0, 1, 0), 1.5)
 
 
 def test_an_empty_scene_renders_pure_background() raises:
@@ -380,6 +369,7 @@ def test_a_nearer_mesh_hides_a_further_one_whatever_the_order() raises:
     var far = Object3D()
     far.set_position(0, 0, -1)
     var far_node = scene.add(far^)
+    light_the(scene)
     scene.update()
 
     var near_first = List[Mesh]()
@@ -432,6 +422,7 @@ def test_the_scene_transform_is_what_places_a_mesh() raises:
     var node = Object3D()
     node.set_position(-6, 0, 0)
     _ = scene.add(node^)
+    light_the(scene)
     scene.update()
     var meshes = List[Mesh]()
     meshes.append(
@@ -653,6 +644,7 @@ def test_a_non_uniform_scale_still_shades_the_true_surface() raises:
     var node = Object3D()
     node.set_scale(2.0, 0.5, 1.5)
     _ = scene.add(node^)
+    light_the(scene)
     scene.update()
 
     var base = Color(255, 200, 120)
@@ -668,14 +660,18 @@ def test_a_non_uniform_scale_still_shades_the_true_surface() raises:
 
     # What the scaled triangle's own geometry says its colour must be.
     var world = scene.world_matrix(NodeId(0))
-    var expected = renderer.shade(
-        base,
-        face_normal(
-            world.transform_point(a),
-            world.transform_point(b),
-            world.transform_point(c),
-        ),
-    ).encode()
+    var expected = (
+        Lighting(scene)
+        .shade(
+            base,
+            face_normal(
+                world.transform_point(a),
+                world.transform_point(b),
+                world.transform_point(c),
+            ),
+        )
+        .encode()
+    )
 
     var checked = 0
     for y in range(HEIGHT):
@@ -977,6 +973,7 @@ def scaled_scene(x: Float32, y: Float32, z: Float32) raises -> Scene:
     var node = Object3D()
     node.set_scale(x, y, z)
     _ = scene.add(node^)
+    light_the(scene)
     scene.update()
     return scene^
 
@@ -1034,6 +1031,7 @@ def test_a_reflection_inherited_from_a_parent_counts_too() raises:
     parent.set_scale(-1, 1, 1)
     var root = scene.add(parent^)
     _ = scene.attach(Object3D(), root)
+    light_the(scene)
     scene.update()
 
     var assets = Assets()
@@ -1186,6 +1184,7 @@ def test_two_meshes_can_carry_different_textures() raises:
     var right = Object3D()
     right.set_position(0.9, 0, 0)
     var right_node = scene.add(right^)
+    light_the(scene)
     scene.update()
 
     var meshes = List[Mesh]()
@@ -1337,7 +1336,6 @@ def test_a_back_side_surface_is_lit_from_the_side_you_can_see() raises:
     # -z with the light shining along -z, is lit square-on from the camera's
     # side -- and rendered black until the normal was flipped with it.
     var renderer = Renderer(WIDTH, HEIGHT)
-    renderer.set_light(Vector3(0, 0, -1), 0.0)
     var assets = Assets()
     var tri = assets.geometries.add(lone_triangle(True))
     var paint = assets.materials.add(
@@ -1345,6 +1343,7 @@ def test_a_back_side_surface_is_lit_from_the_side_you_can_see() raises:
     )
     var scene = Scene()
     _ = scene.add(Object3D())
+    light_from(scene, 0, 0, -1, 0.0)
     scene.update()
     var meshes = List[Mesh]()
     meshes.append(Mesh(tri, paint, NodeId(0)))
@@ -1376,7 +1375,6 @@ def test_a_back_side_surface_lit_from_behind_stays_dark() raises:
     # The other direction, so the fix cannot have been to light both sides.
     # Same geometry, light now on the side nobody is looking at.
     var renderer = Renderer(WIDTH, HEIGHT)
-    renderer.set_light(Vector3(0, 0, 1), 0.0)
     var assets = Assets()
     var tri = assets.geometries.add(lone_triangle(True))
     var paint = assets.materials.add(
@@ -1384,6 +1382,7 @@ def test_a_back_side_surface_lit_from_behind_stays_dark() raises:
     )
     var scene = Scene()
     _ = scene.add(Object3D())
+    light_from(scene, 0, 0, 1, 0.0)
     scene.update()
     var meshes = List[Mesh]()
     meshes.append(Mesh(tri, paint, NodeId(0)))
@@ -1417,7 +1416,6 @@ def test_a_double_side_surface_lights_each_half_on_its_own_side() raises:
     # The camera sits inside a ten-metre cube, four metres from the centre,
     # so every visible surface is the *inside* of a wall -- a back face. The
     # light is behind the camera, shining at the far wall's visible side.
-    renderer.set_light(Vector3(0, 0, 1), 0.0)
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(10.0, METRE)))
     var paint = assets.materials.add(
@@ -1425,9 +1423,11 @@ def test_a_double_side_surface_lights_each_half_on_its_own_side() raises:
     )
     var meshes = List[Mesh]()
     meshes.append(Mesh(box, paint, NodeId(0)))
-    var image = renderer.render(
-        scene_with_node_at(0), assets, meshes, a_camera()
-    )
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    light_from(scene, 0, 0, 1, 0.0)
+    scene.update()
+    var image = renderer.render(scene, assets, meshes, a_camera())
     # The far wall's visible side faces the light square-on, so with no
     # ambient it is fully lit. Using the authored outward normal instead
     # would light the side facing away and leave it black.
@@ -1473,6 +1473,7 @@ def test_a_translucent_mesh_lets_the_one_behind_it_show() raises:
     var front = Object3D()
     front.set_position(0, 0, 0.8)
     var front_node = scene.add(front^)
+    light_the(scene)
     scene.update()
 
     var meshes = List[Mesh]()
@@ -1502,6 +1503,7 @@ def test_an_opaque_mesh_hides_what_is_behind_it() raises:
     var front = Object3D()
     front.set_position(0, 0, 0.8)
     var front_node = scene.add(front^)
+    light_the(scene)
     scene.update()
 
     var meshes = List[Mesh]()
@@ -1531,6 +1533,7 @@ def test_translucent_meshes_are_drawn_after_opaque_ones() raises:
     var back = Object3D()
     back.set_position(0, 0, -0.8)
     var back_node = scene.add(back^)
+    light_the(scene)
     scene.update()
 
     var meshes = List[Mesh]()
@@ -1563,6 +1566,7 @@ def test_translucent_meshes_are_sorted_back_to_front() raises:
     var far = Object3D()
     far.set_position(0, 0, -0.9)
     var far_node = scene.add(far^)
+    light_the(scene)
     scene.update()
 
     var near_first = List[Mesh]()
@@ -1604,7 +1608,6 @@ def test_a_translucent_base_colour_sorts_and_rasterizes_the_same_way() raises:
     # so whatever was submitted after it painted straight over the top, and
     # the image depended on submission order.
     var renderer = Renderer(WIDTH, HEIGHT)
-    renderer.set_light(Vector3(0, 0, 1), 1.0)
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.0, METRE)))
     var red = assets.materials.add(Material(Color(255, 0, 0, 128)))
@@ -1621,6 +1624,7 @@ def test_a_translucent_base_colour_sorts_and_rasterizes_the_same_way() raises:
     var back = Object3D()
     back.set_position(0, 0, -0.9)
     var back_node = scene.add(back^)
+    light_from(scene, 0, 0, 1, 1.0)
     scene.update()
 
     var red_first = List[Mesh]()

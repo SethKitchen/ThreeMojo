@@ -56,6 +56,7 @@ a legitimate thing to want; three.js expresses the same choice as a material's
 from cameras.camera import Camera
 from core.buffer_geometry import NORMAL, POSITION, UV
 from core.assets import Assets
+from lights.lighting import Lighting
 from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -259,8 +260,6 @@ struct Renderer(Movable):
     var width: Int
     var height: Int
     var background: Color
-    var light: Vector3
-    var ambient: Float32
     # What a fragment's colour comes from. `SHADE_TEXTURE` is the default and
     # means "follow the material": a material with a map is sampled, one
     # without is not, which is what three.js does by having a map at all.
@@ -269,7 +268,7 @@ struct Renderer(Movable):
     var shading: Int
 
     def __init__(out self, width: Int, height: Int) raises:
-        """Create a renderer with a dark background and a default light.
+        """Create a renderer with a dark background.
 
         Args:
             width: Image width in pixels.
@@ -283,12 +282,6 @@ struct Renderer(Movable):
         self.width = width
         self.height = height
         self.background = Color(16, 18, 26)
-        # Pointing from the scene towards the light, up and to the right.
-        var direction = Vector3(0.4, 0.8, 0.5)
-        direction.normalize()
-        self.light = direction
-        # Enough fill that a face turned away is still legible, not black.
-        self.ambient = 0.25
         self.shading = SHADE_TEXTURE
 
     def set_background(mut self, color: Color):
@@ -309,45 +302,6 @@ struct Renderer(Movable):
         if mode != SHADE_LIT and mode != SHADE_UV and mode != SHADE_TEXTURE:
             raise Error("Unknown shading mode")
         self.shading = mode
-
-    def set_light(mut self, direction: Vector3, ambient: Float32) raises:
-        """Point the light and set how much the unlit side keeps.
-
-        Args:
-            direction: From the scene towards the light; normalized here.
-            ambient: Fraction of the base colour a face turned away keeps.
-
-        Raises:
-            Error: If the direction has no length, or ambient is outside
-                zero to one.
-        """
-        if direction.length() == 0:
-            raise Error("The light needs a direction")
-        if ambient < 0 or ambient > 1:
-            raise Error("Ambient light must be between zero and one")
-        var pointing = direction
-        pointing.normalize()
-        self.light = pointing
-        self.ambient = ambient
-
-    def shade(self, base: Color, normal: Vector3) -> FloatColor:
-        """Return `base` dimmed by how far the face is turned from the light.
-
-        A face turned away keeps the ambient fraction rather than going black,
-        because a scene lit by one light and nothing else reads as broken.
-
-        The base colour is decoded from sRGB first: an authored byte is not
-        proportional to light, and multiplying it by a Lambert term would be
-        arithmetic on the wrong numbers. See `render.srgb`.
-
-        The result stays in floating point. It is about to be interpolated
-        across a triangle and possibly cut by a clipping plane first, and
-        rounding to eight bits before either of those throws away precision
-        that those steps would have used.
-        """
-        var lambert = max(Float32(0), normal.dot(self.light))
-        var level = self.ambient + (1 - self.ambient) * lambert
-        return FloatColor(srgb=base).scaled(level)
 
     def prepare[
         C: Camera
@@ -392,6 +346,9 @@ struct Renderer(Movable):
                 if its geometry has no positions.
         """
         var corners = List[RasterVertex]()
+        # Resolved once: a light's direction comes from its node's world
+        # matrix, and that cannot change within a frame.
+        var lighting = Lighting(scene)
         var view = camera.view_matrix()
         var to_screen = camera.view_to_screen_matrix(self.width, self.height)
         var near = camera.near_distance()
@@ -481,14 +438,14 @@ struct Renderer(Movable):
                     direction.normalize()
                     vertex_colors.append(
                         _with_opacity(
-                            self.shade(material.color, direction),
+                            lighting.shade(material.color, direction),
                             material.opacity,
                         )
                     )
                     if two_sided:
                         vertex_back_colors.append(
                             _with_opacity(
-                                self.shade(
+                                lighting.shade(
                                     material.color,
                                     Vector3(
                                         -direction.x,
@@ -542,13 +499,13 @@ struct Renderer(Movable):
                             -geometric.x, -geometric.y, -geometric.z
                         )
                     color_a = _with_opacity(
-                        self.shade(material.color, geometric),
+                        lighting.shade(material.color, geometric),
                         material.opacity,
                     )
                     color_b = color_a
                     color_c = color_a
                     back_a = _with_opacity(
-                        self.shade(
+                        lighting.shade(
                             material.color,
                             Vector3(-geometric.x, -geometric.y, -geometric.z),
                         ),

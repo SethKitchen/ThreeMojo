@@ -452,6 +452,53 @@ pixel to pixel.
 horizon, mipmapped on the right and not on the left. Both halves are sharp at
 the bottom of the frame and tell you everything at the top.
 
+## Lights
+
+A colour lived on `Mesh`. A texture lived on `Renderer`, so a scene could have
+exactly one image. A light lived on `Renderer` too — one direction and one
+ambient fraction — so a scene could have exactly one light, and two is the
+first thing anyone tries.
+
+```mojo
+var lamp = Object3D()
+lamp.set_position(0.4, 0.8, 0.5)
+var node = scene.add(lamp^)
+scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
+scene.add_light(directional_light(Color(255, 255, 255), node, 0.75))
+```
+
+A light is scene content, as it is in three.js where `scene.add` takes one.
+That fixes a second problem that is easy to miss: a light on the renderer has
+no transform, so it cannot be *moved* by the scene. A `DirectionalLight` here
+names a node exactly as a `Mesh` does, and its direction is read from that
+node's world matrix — so a lamp can be parented to a turning object and carried
+along by it. Adding a light does not make the scene stale, because a light
+holds no transform of its own, only the id of a node that does.
+
+**Ambient is a light now, not a fudge.** It used to be the fraction an unlit
+surface kept, mixed as `ambient + (1 - ambient) * lambert`. That is a lerp
+towards the surface's own colour: it cannot have a colour of its own, and a
+scene with no light at all came out half-lit. Here it is what three.js has — a
+constant term *added* to everything. A scene with no lights renders black, and
+a blue ambient tints the shadows blue.
+
+**Lights add, and they add in linear light.** Two white lamps at half strength
+make one at full strength, which is only true of the numbers this renderer
+keeps. Summing encoded bytes would repeat exactly the mistake `render.srgb`
+exists to prevent: half plus half would come to 128 rather than 255.
+
+**A light has a colour**, so it multiplies the surface's per channel. The old
+scalar dimming could not express a red lamp at all.
+
+Nothing is clamped until `RenderTarget.resolve`. Two lamps really can
+overexpose a white surface, and the headroom survives every step in between
+rather than being flattened at each one.
+
+The change is behaviour-preserving for the light it replaced: for a *white*
+lamp, an additive quarter plus three quarters is algebraically the same
+`0.25 + 0.75 * lambert` the fixed light gave, and every rendered image in
+`out/` is byte for byte what it was.
+
 ## Materials
 
 `Material` was refused three times before it was written, on the grounds that a

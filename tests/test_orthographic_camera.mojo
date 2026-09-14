@@ -17,6 +17,7 @@ from core.assets import Assets
 from materials.material import Material
 from core.object3d import Object3D
 from core.scene import Scene
+from lights.light import ambient_light, directional_light
 from geometries.box import cube
 from math.projection import orthographic
 from math.vector3 import Vector3
@@ -31,6 +32,27 @@ from std.testing import (
     assert_true,
 )
 from units.si import Length, METRE
+
+
+def light_the(mut scene: Scene) raises:
+    """Add the lighting these tests were written against.
+
+    White ambient at a quarter plus a white directional at three quarters,
+    from up and to the right. That is exactly the fixed light `Renderer` used
+    to carry -- its `0.25 + 0.75 * lambert` is what an additive quarter and
+    three quarters come to for a white lamp -- so every expected colour in
+    this file is unchanged by lights becoming scene objects. A colour that
+    moves here is a bug, not the redesign.
+
+    Adds the lamp's node last, so the node ids meshes already name still
+    point at the same nodes.
+    """
+    var lamp = Object3D()
+    lamp.set_position(0.4, 0.8, 0.5)
+    var node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
+    scene.add_light(directional_light(Color(255, 255, 255), node, 0.75))
+
 
 comptime TOLERANCE = Float64(1e-5)
 comptime WIDTH = 32
@@ -262,6 +284,7 @@ def test_the_renderer_accepts_an_orthographic_camera() raises:
     var scene = Scene()
     var node = Object3D()
     _ = scene.add(node^)
+    light_the(scene)
     scene.update()
     var meshes = List[Mesh]()
     meshes.append(
@@ -278,6 +301,7 @@ def a_scene_at(z: Float32) raises -> Scene:
     var node = Object3D()
     node.set_position(0, 0, z)
     _ = scene.add(node^)
+    light_the(scene)
     scene.update()
     return scene^
 

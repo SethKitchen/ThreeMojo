@@ -32,6 +32,7 @@ from core.assets import Assets
 from materials.material import Material
 from core.object3d import Object3D
 from core.scene import Scene
+from lights.light import ambient_light, directional_light
 from geometries.box import cube
 from geometries.sphere import sphere
 from math.vector2 import Vector2
@@ -78,6 +79,27 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+
+
+def light_the(mut scene: Scene) raises:
+    """Add the lighting these tests were written against.
+
+    White ambient at a quarter plus a white directional at three quarters,
+    from up and to the right. That is exactly the fixed light `Renderer` used
+    to carry -- its `0.25 + 0.75 * lambert` is what an additive quarter and
+    three quarters come to for a white lamp -- so every expected colour in
+    this file is unchanged by lights becoming scene objects. A colour that
+    moves here is a bug, not the redesign.
+
+    Adds the lamp's node last, so the node ids meshes already name still
+    point at the same nodes.
+    """
+    var lamp = Object3D()
+    lamp.set_position(0.4, 0.8, 0.5)
+    var node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
+    scene.add_light(directional_light(Color(255, 255, 255), node, 0.75))
+
 
 comptime BACKGROUND = Color(20, 24, 32)
 comptime FOREGROUND = Color(255, 128, 32)
@@ -570,6 +592,7 @@ def test_both_backends_agree_on_a_whole_prepared_scene() raises:
     var right = Object3D()
     right.set_position(0.9, 0, 0.4)
     var right_node = scene.add(right^)
+    light_the(scene)
     scene.update()
 
     var camera = PerspectiveCamera(
@@ -763,6 +786,7 @@ def test_both_backends_agree_on_a_prepared_orthographic_uv_scene() raises:
     var right = Object3D()
     right.set_position(0.9, 0.2, -0.5)
     var right_node = scene.add(right^)
+    light_the(scene)
     scene.update()
 
     var camera = centred(

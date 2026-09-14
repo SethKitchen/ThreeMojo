@@ -37,6 +37,7 @@ to catch the case where something reached past it anyway.
 """
 
 from core.object3d import NO_PARENT, NodeId, Object3D
+from lights.light import Light
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 
@@ -46,6 +47,12 @@ struct Scene(Movable):
 
     var _nodes: List[Object3D]
     var _world: List[Matrix4]
+    # What lights the scene. Public because it is read-only content rather
+    # than a derived cache: a light is scene content in three.js too, where
+    # `scene.add` takes one. Kept here rather than on the renderer so a scene
+    # can have more than one, and so a light can be carried by a node -- see
+    # `lights.light`.
+    var lights: List[Light]
     # False only when every world matrix reflects every node as it stands.
     var _stale: Bool
 
@@ -53,12 +60,26 @@ struct Scene(Movable):
         """Create an empty scene."""
         self._nodes = List[Object3D]()
         self._world = List[Matrix4]()
+        self.lights = List[Light]()
         # An empty scene has nothing to recompute, so it starts current.
         self._stale = False
 
     def count(self) -> Int:
         """Return how many nodes the scene holds."""
         return len(self._nodes)
+
+    def add_light(mut self, light: Light):
+        """Add a light to the scene.
+
+        Unlike `add`, this does not make the scene stale: a light holds no
+        transform of its own, only the id of a node that does, so adding one
+        cannot invalidate a world matrix.
+
+        Args:
+            light: The light to add. Build one with `ambient_light` or
+                `directional_light`.
+        """
+        self.lights.append(light)
 
     def is_stale(self) -> Bool:
         """Return True if a node has changed since the last `update`."""
