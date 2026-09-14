@@ -11,6 +11,7 @@ depths, because "the matrix has the right numbers in it" is a weaker claim
 than "the picture has no perspective in it".
 """
 
+from core.object3d import NodeId
 from cameras.orthographic_camera import OrthographicCamera, centred
 from core.assets import Assets
 from materials.material import Material
@@ -241,7 +242,7 @@ def test_a_camera_with_a_zero_near_plane_renders() raises:
         Mesh(
             assets.geometries.add(cube(Length(2.0, METRE))),
             assets.materials.add(Material(Color(9, 9, 9))),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(a_scene_at(0), assets, meshes, camera)
@@ -264,7 +265,9 @@ def test_the_renderer_accepts_an_orthographic_camera() raises:
     scene.update()
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(box, assets.materials.add(Material(Color(255, 140, 40))), 0)
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 140, 40))), NodeId(0)
+        )
     )
     assert_true(drawn_pixels(renderer, scene, assets, meshes) > 0)
 
@@ -289,7 +292,9 @@ def test_distance_does_not_change_which_pixels_a_cube_covers() raises:
 
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(box, assets.materials.add(Material(Color(255, 140, 40))), 0)
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 140, 40))), NodeId(0)
+        )
     )
     var near = renderer.render(a_scene_at(0), assets, meshes, a_camera())
     var far = renderer.render(a_scene_at(-8), assets, meshes, a_camera())
@@ -320,7 +325,9 @@ def test_moving_away_still_changes_the_depth_buffer() raises:
     var box = assets.geometries.add(cube(Length(2.0, METRE)))
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(box, assets.materials.add(Material(Color(255, 140, 40))), 0)
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 140, 40))), NodeId(0)
+        )
     )
 
     var near = renderer.render(a_scene_at(0), assets, meshes, a_camera())

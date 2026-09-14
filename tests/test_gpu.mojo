@@ -42,7 +42,7 @@ from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METRE
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, NO_TEXTURE, OPAQUE
-from render.texture_store import TextureStore
+from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.texture import (
     BILINEAR,
     NEAREST,
@@ -819,13 +819,15 @@ def lit_corner(
     inv_w: Float32,
     u: Float32,
     v: Float32,
-    texture: Int = NO_TEXTURE,
+    texture: TextureId = NO_TEXTURE,
 ) -> RasterVertex:
     """Return a white raster vertex carrying texture coordinates."""
     return RasterVertex(x, y, 0.5, inv_w, FloatColor(1, 1, 1), u, v, texture)
 
 
-def mapped_quad(size: Float32, texture: Int = NO_TEXTURE) -> List[RasterVertex]:
+def mapped_quad(
+    size: Float32, texture: TextureId = NO_TEXTURE
+) -> List[RasterVertex]:
     """Return two triangles covering a square image, mapped once across it."""
     var corners = List[RasterVertex]()
     corners.append(lit_corner(0, 0, 1, 0, 1, texture))
@@ -1064,15 +1066,15 @@ def test_drawing_a_texture_that_was_never_uploaded_is_rejected() raises:
         return
     var renderer = GpuRenderer(16, 16)
     with assert_raises():
-        renderer.draw(mapped_quad(16, 0), BACKGROUND, SHADE_TEXTURE)
+        renderer.draw(mapped_quad(16, TextureId(0)), BACKGROUND, SHADE_TEXTURE)
 
     var textures = TextureStore()
     _ = textures.add(checkerboard(4, 2, Color(255, 0, 0), Color(0, 0, 255)))
     renderer.set_textures(textures)
     # One texture uploaded, so id 0 is fine and id 1 is not.
-    renderer.draw(mapped_quad(16, 0), BACKGROUND, SHADE_TEXTURE)
+    renderer.draw(mapped_quad(16, TextureId(0)), BACKGROUND, SHADE_TEXTURE)
     with assert_raises():
-        renderer.draw(mapped_quad(16, 1), BACKGROUND, SHADE_TEXTURE)
+        renderer.draw(mapped_quad(16, TextureId(1)), BACKGROUND, SHADE_TEXTURE)
 
 
 def test_an_unknown_shading_mode_is_rejected_by_both_backends() raises:

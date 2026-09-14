@@ -27,7 +27,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
-from core.object3d import Object3D
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
 from materials.material import DOUBLE_SIDE, NO_TEXTURE, Material
@@ -135,7 +135,11 @@ def main() raises:
 
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(solid, assets.materials.add(Material(Color(235, 235, 240))), 0)
+        Mesh(
+            solid,
+            assets.materials.add(Material(Color(235, 235, 240))),
+            NodeId(0),
+        )
     )
     var tints = [Color(255, 60, 60), Color(60, 255, 90), Color(70, 120, 255)]
     for pane_index in range(3):
@@ -145,7 +149,7 @@ def main() raises:
                 assets.materials.add(
                     Material(tints[pane_index], NO_TEXTURE, DOUBLE_SIDE, 0.45)
                 ),
-                pane_index + 1,
+                NodeId(pane_index + 1),
             )
         )
 

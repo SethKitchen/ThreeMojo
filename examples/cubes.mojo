@@ -21,6 +21,7 @@ projection loop and its own per-face colour table. Those became
 left is the scene itself.
 """
 
+from core.object3d import NodeId
 from cameras.perspective_camera import PerspectiveCamera
 from core.object3d import Object3D
 from core.assets import Assets
@@ -123,12 +124,12 @@ def main() raises:
     var centre_mesh = Mesh(
         assets.geometries.add(cube(Length(1.1, METRE))),
         assets.materials.add(Material(Color(255, 140, 40))),
-        1,
+        NodeId(1),
     )
     var moon_mesh = Mesh(
         assets.geometries.add(cube(Length(0.44, METRE))),
         assets.materials.add(Material(Color(90, 190, 255))),
-        2,
+        NodeId(2),
     )
 
     var frames = List[Framebuffer]()

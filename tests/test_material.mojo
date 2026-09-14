@@ -5,19 +5,20 @@
 
 """Tests for `materials.material`, `render.texture_store` and `core.assets`."""
 
+from materials.material import MaterialId
 from core.assets import Assets
 from geometries.box import cube
 from materials.material import (
     BACK_SIDE,
+    MaterialId,
     DOUBLE_SIDE,
     FRONT_SIDE,
-    NO_TEXTURE,
     Material,
     MaterialStore,
 )
 from render.framebuffer import Color
 from render.texture import Texture, checkerboard
-from render.texture_store import TextureStore
+from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -45,8 +46,8 @@ def test_a_material_is_a_colour_by_default() raises:
 
 
 def test_a_material_can_name_a_texture() raises:
-    var paint = Material(Color(1, 2, 3), 4)
-    assert_equal(paint.map, 4)
+    var paint = Material(Color(1, 2, 3), TextureId(4))
+    assert_equal(paint.map, TextureId(4))
     assert_true(paint.is_textured())
 
 
@@ -66,7 +67,7 @@ def test_a_negative_texture_id_that_is_not_absence_is_rejected() raises:
     # -1 means "no texture"; -2 is an id nothing can ever hold, which is a
     # mistake rather than a deliberate absence.
     with assert_raises():
-        _ = Material(Color(0, 0, 0), -2)
+        _ = Material(Color(0, 0, 0), TextureId(-2))
 
 
 # --- MaterialStore ----------------------------------------------------------
@@ -75,8 +76,8 @@ def test_a_negative_texture_id_that_is_not_absence_is_rejected() raises:
 def test_a_material_store_hands_out_increasing_ids() raises:
     var store = MaterialStore()
     assert_equal(store.count(), 0)
-    assert_equal(store.add(Material(Color(1, 0, 0))), 0)
-    assert_equal(store.add(Material(Color(0, 1, 0))), 1)
+    assert_equal(store.add(Material(Color(1, 0, 0))), MaterialId(0))
+    assert_equal(store.add(Material(Color(0, 1, 0))), MaterialId(1))
     assert_equal(store.count(), 2)
 
 
@@ -90,9 +91,9 @@ def test_a_material_comes_back_as_it_went_in() raises:
 def test_an_unknown_material_id_is_rejected() raises:
     var store = MaterialStore()
     with assert_raises():
-        _ = store.get(0)
+        _ = store.get(MaterialId(0))
     with assert_raises():
-        _ = store.get(-1)
+        _ = store.get(MaterialId(-1))
 
 
 # --- TextureStore -----------------------------------------------------------
@@ -101,8 +102,8 @@ def test_an_unknown_material_id_is_rejected() raises:
 def test_a_texture_store_hands_out_increasing_ids() raises:
     var store = TextureStore()
     assert_equal(store.count(), 0)
-    assert_equal(store.add(a_board()), 0)
-    assert_equal(store.add(a_board()), 1)
+    assert_equal(store.add(a_board()), TextureId(0))
+    assert_equal(store.add(a_board()), TextureId(1))
     assert_equal(store.count(), 2)
 
 
@@ -118,9 +119,9 @@ def test_a_stored_texture_is_borrowed_not_copied() raises:
 def test_an_unknown_texture_id_is_rejected() raises:
     var store = TextureStore()
     with assert_raises():
-        _ = store.get(0)
+        _ = store.get(TextureId(0))
     with assert_raises():
-        _ = store.get(-1)
+        _ = store.get(TextureId(-1))
 
 
 # --- Assets -----------------------------------------------------------------

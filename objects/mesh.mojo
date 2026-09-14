@@ -21,8 +21,10 @@ moved it in, so two meshes meant two copies of the vertex array and sharing was
 impossible however the comment read. Naming it by id is what made the claim
 true.
 
-A mesh is three indices and nothing else — where it is, what shape it is, and
-what it is made of — which is as small as identity gets.
+A mesh is three ids and nothing else — where it is, what shape it is, and what
+it is made of — which is as small as identity gets. They are three *different*
+types rather than three integers, because adjacent same-typed parameters are
+transposable and these three used to be exactly that; see `core.object3d`.
 
 Colour used to live here, with a note saying a `Material` would be ceremony
 until there was a second property to put in it. Textures were that second
@@ -30,6 +32,7 @@ property, and `side` a third; see `materials.material`.
 """
 
 from core.geometry_store import GeometryId
+from core.object3d import NodeId
 from materials.material import MaterialId
 
 
@@ -38,10 +41,10 @@ struct Mesh(ImplicitlyCopyable):
 
     var geometry: GeometryId
     var material: MaterialId
-    var node: Int
+    var node: NodeId
 
     def __init__(
-        out self, geometry: GeometryId, material: MaterialId, node: Int
+        out self, geometry: GeometryId, material: MaterialId, node: NodeId
     ) raises:
         """Bind a stored geometry and material to a scene node.
 
@@ -57,11 +60,11 @@ struct Mesh(ImplicitlyCopyable):
         Raises:
             Error: If any id is negative.
         """
-        if node < 0:
+        if node.value < 0:
             raise Error("A mesh must name a scene node")
-        if geometry < 0:
+        if geometry.value < 0:
             raise Error("A mesh must name a geometry")
-        if material < 0:
+        if material.value < 0:
             raise Error("A mesh must name a material")
         self.geometry = geometry
         self.material = material

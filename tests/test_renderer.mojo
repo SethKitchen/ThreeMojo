@@ -5,6 +5,8 @@
 
 """Tests for `objects.mesh` and `renderers.renderer`."""
 
+from core.geometry_store import GeometryId
+from core.object3d import NodeId
 from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
@@ -13,10 +15,10 @@ from core.assets import Assets
 from materials.material import (
     BACK_SIDE,
     BLEND,
+    MaterialId,
     OPAQUE,
     DOUBLE_SIDE,
     FRONT_SIDE,
-    NO_TEXTURE,
     Material,
 )
 from core.scene import Scene
@@ -27,6 +29,7 @@ from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
 from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV
 from render.texture import checkerboard
+from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import Renderer, face_normal
 from std.testing import (
     TestSuite,
@@ -155,9 +158,9 @@ def test_a_mesh_binds_geometry_to_a_node() raises:
     var mesh = Mesh(
         assets.geometries.add(cube(Length(1.0, METRE))),
         assets.materials.add(Material(Color(1, 2, 3))),
-        4,
+        NodeId(4),
     )
-    assert_equal(mesh.node, 4)
+    assert_equal(mesh.node, NodeId(4))
     assert_equal(assets.materials.get(mesh.material).color.r, UInt8(1))
     assert_equal(assets.geometries.get(mesh.geometry).triangle_count(), 12)
 
@@ -166,21 +169,25 @@ def test_a_mesh_must_name_a_node() raises:
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.0, METRE)))
     with assert_raises():
-        _ = Mesh(box, assets.materials.add(Material(Color(1, 2, 3))), -1)
+        _ = Mesh(
+            box,
+            assets.materials.add(Material(Color(1, 2, 3))),
+            NodeId(-1),
+        )
 
 
 def test_a_mesh_must_name_a_geometry() raises:
     var assets = Assets()
     var paint = assets.materials.add(Material(Color(1, 2, 3)))
     with assert_raises():
-        _ = Mesh(-1, paint, 0)
+        _ = Mesh(GeometryId(-1), paint, NodeId(0))
 
 
 def test_a_mesh_must_name_a_material() raises:
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.0, METRE)))
     with assert_raises():
-        _ = Mesh(box, -1, 0)
+        _ = Mesh(box, MaterialId(-1), NodeId(0))
 
 
 def test_a_mesh_naming_a_material_that_is_not_there_is_rejected() raises:
@@ -188,7 +195,7 @@ def test_a_mesh_naming_a_material_that_is_not_there_is_rejected() raises:
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.0, METRE)))
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, 7, 0))
+    meshes.append(Mesh(box, MaterialId(7), NodeId(0)))
     with assert_raises():
         _ = renderer.render(scene_with_node_at(0), assets, meshes, a_camera())
 
@@ -197,7 +204,13 @@ def test_a_mesh_naming_a_geometry_that_is_not_there_is_rejected() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var meshes = List[Mesh]()
-    meshes.append(Mesh(7, assets.materials.add(Material(Color(255, 0, 0))), 0))
+    meshes.append(
+        Mesh(
+            GeometryId(7),
+            assets.materials.add(Material(Color(255, 0, 0))),
+            NodeId(0),
+        )
+    )
     with assert_raises():
         _ = renderer.render(scene_with_node_at(0), assets, meshes, a_camera())
 
@@ -249,9 +262,9 @@ def test_a_geometry_id_that_is_out_of_range_is_rejected() raises:
     var assets = Assets()
     assert_equal(assets.geometries.count(), 0)
     with assert_raises():
-        _ = assets.geometries.get(0)
+        _ = assets.geometries.get(GeometryId(0))
     with assert_raises():
-        _ = assets.geometries.get(-1)
+        _ = assets.geometries.get(GeometryId(-1))
 
 
 # --- Renderer ---------------------------------------------------------------
@@ -340,7 +353,7 @@ def test_a_mesh_actually_covers_some_pixels() raises:
         Mesh(
             assets.geometries.add(cube(Length(1.0, METRE))),
             assets.materials.add(Material(Color(255, 0, 0))),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(scene, assets, meshes, a_camera())
@@ -425,7 +438,7 @@ def test_the_scene_transform_is_what_places_a_mesh() raises:
         Mesh(
             assets.geometries.add(cube(Length(0.5, METRE))),
             assets.materials.add(Material(Color(255, 0, 0))),
-            0,
+            NodeId(0),
         )
     )
     # Moved well off to the side, it leaves the frame entirely.
@@ -446,7 +459,7 @@ def test_a_mesh_with_no_vertices_draws_nothing() raises:
         Mesh(
             assets.geometries.add(empty^),
             assets.materials.add(Material(Color(255, 0, 0))),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(scene, assets, meshes, a_camera())
@@ -461,7 +474,7 @@ def test_a_mesh_naming_a_node_that_is_not_there_is_rejected() raises:
         Mesh(
             assets.geometries.add(cube(Length(1.0, METRE))),
             assets.materials.add(Material(Color(255, 0, 0))),
-            3,
+            NodeId(3),
         )
     )
     with assert_raises():
@@ -484,7 +497,7 @@ def test_a_geometry_without_normals_shades_flat() raises:
         Mesh(
             assets.geometries.add(plain^),
             assets.materials.add(Material(Color(200, 200, 200))),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(scene, assets, meshes, a_camera())
@@ -502,7 +515,7 @@ def test_a_sphere_shades_smoothly_across_a_triangle() raises:
         Mesh(
             assets.geometries.add(sphere(Length(1.0, METRE), 16, 12)),
             assets.materials.add(Material(Color(200, 200, 200))),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(scene, assets, meshes, a_camera())
@@ -540,7 +553,7 @@ def test_geometry_crossing_the_near_plane_is_clipped_not_mangled() raises:
             assets.materials.add(
                 Material(Color(255, 140, 40), NO_TEXTURE, DOUBLE_SIDE)
             ),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(scene, assets, meshes, a_camera())
@@ -570,7 +583,7 @@ def test_geometry_beyond_the_far_plane_is_not_drawn() raises:
         Mesh(
             assets.geometries.add(cube(Length(6.0, METRE))),
             assets.materials.add(Material(Color(255, 140, 40))),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(scene, assets, meshes, camera)
@@ -596,7 +609,7 @@ def test_geometry_inside_the_far_plane_is_still_drawn() raises:
         Mesh(
             assets.geometries.add(cube(Length(6.0, METRE))),
             assets.materials.add(Material(Color(255, 140, 40))),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(scene, assets, meshes, camera)
@@ -648,13 +661,13 @@ def test_a_non_uniform_scale_still_shades_the_true_surface() raises:
         Mesh(
             assets.geometries.add(geometry^),
             assets.materials.add(Material(base)),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(scene, assets, meshes, a_camera())
 
     # What the scaled triangle's own geometry says its colour must be.
-    var world = scene.world_matrix(0)
+    var world = scene.world_matrix(NodeId(0))
     var expected = renderer.shade(
         base,
         face_normal(
@@ -693,7 +706,7 @@ def test_a_smooth_geometry_with_no_vertices_draws_nothing() raises:
         Mesh(
             assets.geometries.add(empty^),
             assets.materials.add(Material(Color(255, 0, 0))),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(
@@ -716,7 +729,7 @@ def test_a_front_side_material_hides_the_inside_of_a_cube() raises:
         Mesh(
             assets.geometries.add(cube(Length(8.0, METRE))),
             assets.materials.add(Material(Color(255, 140, 40))),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(
@@ -734,7 +747,7 @@ def test_culling_does_not_change_a_solid_seen_from_outside() raises:
     var box = assets.geometries.add(cube(Length(1.0, METRE)))
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), 0)
+        Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), NodeId(0))
     )
     var scene = scene_with_node_at(0)
 
@@ -746,7 +759,7 @@ def test_culling_does_not_change_a_solid_seen_from_outside() raises:
             assets.materials.add(
                 Material(Color(255, 0, 0), NO_TEXTURE, DOUBLE_SIDE)
             ),
-            0,
+            NodeId(0),
         )
     )
     var complete = renderer.render(scene, assets, both, a_camera())
@@ -770,7 +783,11 @@ def test_culling_halves_the_triangles_of_a_closed_mesh() raises:
     var ball = assets.geometries.add(sphere(Length(1.0, METRE), 16, 12))
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(ball, assets.materials.add(Material(Color(200, 200, 200))), 0)
+        Mesh(
+            ball,
+            assets.materials.add(Material(Color(200, 200, 200))),
+            NodeId(0),
+        )
     )
     var scene = scene_with_node_at(0)
 
@@ -782,7 +799,7 @@ def test_culling_halves_the_triangles_of_a_closed_mesh() raises:
             assets.materials.add(
                 Material(Color(200, 200, 200), NO_TEXTURE, DOUBLE_SIDE)
             ),
-            0,
+            NodeId(0),
         )
     )
     var everything = renderer.prepare(scene, assets, both, a_camera())
@@ -803,7 +820,7 @@ def test_uv_mode_draws_texture_coordinates_instead_of_lighting() raises:
     var scene = scene_with_node_at(0)
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), 0)
+        Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), NodeId(0))
     )
 
     var lit = renderer.render(scene, assets, meshes, a_camera())
@@ -859,7 +876,7 @@ def test_a_mapped_geometry_with_no_vertices_draws_nothing() raises:
         Mesh(
             assets.geometries.add(empty^),
             assets.materials.add(Material(Color(255, 0, 0))),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(
@@ -893,7 +910,7 @@ def test_a_geometry_without_uv_maps_to_the_texture_origin() raises:
         Mesh(
             assets.geometries.add(plain^),
             assets.materials.add(Material(Color(200, 200, 200))),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(
@@ -986,7 +1003,7 @@ def rendered_triangle(
         Mesh(
             assets.geometries.add(lone_triangle(with_normals)),
             assets.materials.add(Material(Color(200, 200, 200))),
-            0,
+            NodeId(0),
         )
     )
     return renderer.render(scene, assets, meshes, a_camera())
@@ -1025,7 +1042,7 @@ def test_a_reflection_inherited_from_a_parent_counts_too() raises:
         Mesh(
             assets.geometries.add(lone_triangle(False)),
             assets.materials.add(Material(Color(200, 200, 200))),
-            1,
+            NodeId(1),
         )
     )
     var image = renderer.render(scene, assets, meshes, a_camera())
@@ -1095,7 +1112,7 @@ def test_a_material_without_a_map_shades_as_plain_colour() raises:
     var paint = assets.materials.add(Material(Color(220, 160, 80)))
     var scene = scene_with_node_at(0)
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, paint, 0))
+    meshes.append(Mesh(box, paint, NodeId(0)))
 
     var followed = renderer.render(scene, assets, meshes, a_camera())
     renderer.set_shading(SHADE_LIT)
@@ -1114,7 +1131,9 @@ def test_a_map_changes_what_a_mesh_looks_like() raises:
 
     var plain_meshes = List[Mesh]()
     plain_meshes.append(
-        Mesh(box, assets.materials.add(Material(Color(255, 255, 255))), 0)
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 255, 255))), NodeId(0)
+        )
     )
     var board = assets.textures.add(
         checkerboard(8, 4, Color(255, 255, 255), Color(20, 20, 20))
@@ -1122,7 +1141,9 @@ def test_a_map_changes_what_a_mesh_looks_like() raises:
     var mapped_meshes = List[Mesh]()
     mapped_meshes.append(
         Mesh(
-            box, assets.materials.add(Material(Color(255, 255, 255), board)), 0
+            box,
+            assets.materials.add(Material(Color(255, 255, 255), board)),
+            NodeId(0),
         )
     )
 
@@ -1215,12 +1236,16 @@ def test_lit_shading_ignores_every_map() raises:
 
     var plain = List[Mesh]()
     plain.append(
-        Mesh(box, assets.materials.add(Material(Color(255, 255, 255))), 0)
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 255, 255))), NodeId(0)
+        )
     )
     var mapped = List[Mesh]()
     mapped.append(
         Mesh(
-            box, assets.materials.add(Material(Color(255, 255, 255), board)), 0
+            box,
+            assets.materials.add(Material(Color(255, 255, 255), board)),
+            NodeId(0),
         )
     )
 
@@ -1251,7 +1276,9 @@ def test_a_back_side_material_draws_what_front_side_hides() raises:
     var scene = scene_with_node_at(0)
 
     var front = List[Mesh]()
-    front.append(Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), 0))
+    front.append(
+        Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), NodeId(0))
+    )
     var back = List[Mesh]()
     back.append(
         Mesh(
@@ -1259,7 +1286,7 @@ def test_a_back_side_material_draws_what_front_side_hides() raises:
             assets.materials.add(
                 Material(Color(255, 0, 0), NO_TEXTURE, BACK_SIDE)
             ),
-            0,
+            NodeId(0),
         )
     )
 
@@ -1295,7 +1322,7 @@ def test_a_back_side_material_shows_the_inside_of_a_cube() raises:
             assets.materials.add(
                 Material(Color(255, 140, 40), NO_TEXTURE, BACK_SIDE)
             ),
-            0,
+            NodeId(0),
         )
     )
     var image = renderer.render(
@@ -1320,7 +1347,7 @@ def test_a_back_side_surface_is_lit_from_the_side_you_can_see() raises:
     _ = scene.add(Object3D())
     scene.update()
     var meshes = List[Mesh]()
-    meshes.append(Mesh(tri, paint, 0))
+    meshes.append(Mesh(tri, paint, NodeId(0)))
 
     var behind = PerspectiveCamera(
         Angle(45.0, DEGREE),
@@ -1359,7 +1386,7 @@ def test_a_back_side_surface_lit_from_behind_stays_dark() raises:
     _ = scene.add(Object3D())
     scene.update()
     var meshes = List[Mesh]()
-    meshes.append(Mesh(tri, paint, 0))
+    meshes.append(Mesh(tri, paint, NodeId(0)))
 
     var behind = PerspectiveCamera(
         Angle(45.0, DEGREE),
@@ -1397,7 +1424,7 @@ def test_a_double_side_surface_lights_each_half_on_its_own_side() raises:
         Material(Color(255, 255, 255), NO_TEXTURE, DOUBLE_SIDE)
     )
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, paint, 0))
+    meshes.append(Mesh(box, paint, NodeId(0)))
     var image = renderer.render(
         scene_with_node_at(0), assets, meshes, a_camera()
     )
@@ -1418,9 +1445,11 @@ def test_a_material_naming_a_texture_that_is_not_there_is_rejected() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.0, METRE)))
-    var paint = assets.materials.add(Material(Color(255, 255, 255), 3))
+    var paint = assets.materials.add(
+        Material(Color(255, 255, 255), TextureId(3))
+    )
     var meshes = List[Mesh]()
-    meshes.append(Mesh(box, paint, 0))
+    meshes.append(Mesh(box, paint, NodeId(0)))
     with assert_raises():
         _ = renderer.render(scene_with_node_at(0), assets, meshes, a_camera())
 

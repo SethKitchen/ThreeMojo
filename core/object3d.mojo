@@ -26,8 +26,26 @@ from math.matrix4 import translation
 from math.vector3 import Vector3
 from units.si import Angle
 
+
+@fieldwise_init
+struct NodeId(Equatable, ImplicitlyCopyable, Writable):
+    """Which node in a `Scene`, as a type rather than a bare integer.
+
+    A scene index, a geometry id, a material id and a texture id are all small
+    integers, and `Mesh` takes three of them in a row. As plain `Int`s any two
+    could be transposed and the result would compile and render nonsense.
+    Wrapped, the compiler refuses; `tests/compile_fail/` has the proof.
+
+    The wrapper costs nothing at runtime — it is one integer in a struct — and
+    `value` is there for the few places that genuinely need the number: array
+    indexing inside `Scene`, and packing for the device.
+    """
+
+    var value: Int
+
+
 # A node with no parent. Roots carry this instead of an index.
-comptime NO_PARENT = -1
+comptime NO_PARENT = NodeId(-1)
 
 
 struct Object3D(ImplicitlyCopyable):
@@ -38,7 +56,7 @@ struct Object3D(ImplicitlyCopyable):
     # Held as a matrix rather than Euler angles or a quaternion: three.js has
     # both, and porting either properly is its own step.
     var rotation: Matrix4
-    var parent: Int
+    var parent: NodeId
 
     def __init__(out self):
         """Create an untransformed node with no parent."""

@@ -25,6 +25,7 @@ perspective a single triangle spans, so it is invisible on a finely subdivided
 sphere and unmissable on two triangles stretching to the horizon.
 """
 
+from core.object3d import NodeId
 from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION, UV
@@ -159,7 +160,11 @@ def main() raises:
 
     var meshes = List[Mesh]()
     meshes.append(
-        Mesh(plane, assets.materials.add(Material(Color(255, 255, 255))), 0)
+        Mesh(
+            plane,
+            assets.materials.add(Material(Color(255, 255, 255))),
+            NodeId(0),
+        )
     )
 
     # Low and close, so the far edge of the plane runs away to a vanishing

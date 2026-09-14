@@ -26,9 +26,9 @@ asserts pixel for pixel.
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
-from materials.material import BLEND, NO_TEXTURE, OPAQUE
+from materials.material import BLEND, OPAQUE
 from render.target import RenderTarget
-from render.texture_store import TextureStore
+from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, max, min
 
@@ -308,7 +308,7 @@ struct RasterVertex(ImplicitlyCopyable):
     # Which texture to sample, or `NO_TEXTURE` for none. It travels with the
     # vertex because `Renderer.prepare` returns one flat list of triangles for
     # a whole scene, and the meshes in a scene need not share a material.
-    var texture: Int
+    var texture: TextureId
 
     def __init__(
         out self,
@@ -319,7 +319,7 @@ struct RasterVertex(ImplicitlyCopyable):
         color: FloatColor,
         u: Float32 = 0,
         v: Float32 = 0,
-        texture: Int = NO_TEXTURE,
+        texture: TextureId = NO_TEXTURE,
         blend: Int = OPAQUE,
     ):
         """Create a corner. Texture coordinates and map default to none."""

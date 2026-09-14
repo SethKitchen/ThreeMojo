@@ -15,14 +15,27 @@ Append-only. Nothing here reference-counts or reuses an id, because nothing yet
 removes a texture — and an id that cannot dangle needs no generation counter to
 prove it. When deletion arrives, that is the moment to add one.
 
-The blank texture is always id `NO_TEXTURE`, which is not an id at all but the
-absence of one; see `materials.material`.
+`NO_TEXTURE` lives here rather than with `Material`, because it is a value of
+this type: the absence of a texture is a fact about textures.
 """
 
 from render.texture import Texture
 
-# An index into a `TextureStore`.
-comptime TextureId = Int
+
+@fieldwise_init
+struct TextureId(Equatable, ImplicitlyCopyable, Writable):
+    """Which texture in a `TextureStore`, as a type rather than a bare int.
+
+    See `core.object3d.NodeId` for why these are wrapped.
+    """
+
+    var value: Int
+
+
+# What a material holds when it names no texture. Not an id at all but the
+# absence of one, which is why it is a value rather than a negative number
+# anybody could invent.
+comptime NO_TEXTURE = TextureId(-1)
 
 
 struct TextureStore(Movable):
@@ -48,7 +61,7 @@ struct TextureStore(Movable):
             Its id, valid for the life of the store.
         """
         self.textures.append(texture^)
-        return len(self.textures) - 1
+        return TextureId(len(self.textures) - 1)
 
     def get(
         self, id: TextureId
@@ -68,6 +81,6 @@ struct TextureStore(Movable):
         Raises:
             Error: If no texture has that id.
         """
-        if id < 0 or id >= len(self.textures):
+        if id.value < 0 or id.value >= len(self.textures):
             raise Error("No texture has that id")
-        return self.textures[id]
+        return self.textures[id.value]

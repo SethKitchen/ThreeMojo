@@ -26,9 +26,16 @@ that is the moment to add one, not before.
 
 from core.buffer_geometry import BufferGeometry
 
-# What `Mesh.geometry` holds. An index into a `GeometryStore`, not a pointer:
-# named so that a bare `Int` in a signature says which kind of integer it is.
-comptime GeometryId = Int
+
+@fieldwise_init
+struct GeometryId(Equatable, ImplicitlyCopyable, Writable):
+    """Which geometry in a `GeometryStore`, as a type rather than a bare int.
+
+    An index, not a pointer, and not interchangeable with the other three
+    small integers a `Mesh` carries. See `core.object3d.NodeId`.
+    """
+
+    var value: Int
 
 
 struct GeometryStore(Movable):
@@ -54,7 +61,7 @@ struct GeometryStore(Movable):
             Its id, which stays valid for the life of the store.
         """
         self.geometries.append(geometry^)
-        return len(self.geometries) - 1
+        return GeometryId(len(self.geometries) - 1)
 
     def get(
         self, id: GeometryId
@@ -74,6 +81,6 @@ struct GeometryStore(Movable):
         Raises:
             Error: If no geometry has that id.
         """
-        if id < 0 or id >= len(self.geometries):
+        if id.value < 0 or id.value >= len(self.geometries):
             raise Error("No geometry has that id")
-        return self.geometries[id]
+        return self.geometries[id.value]

@@ -36,6 +36,7 @@ renderer each worked it out from a different number.
 """
 
 from render.framebuffer import Color
+from render.texture_store import NO_TEXTURE, TextureId
 
 # Draw only surfaces turned towards the camera. three.js's default.
 comptime FRONT_SIDE = 0
@@ -44,25 +45,28 @@ comptime BACK_SIDE = 1
 # Draw both, which is what any open surface needs.
 comptime DOUBLE_SIDE = 2
 
-# What `Material.map` holds when there is no texture. Sampling one gives the
-# blank texture, which is opaque white, which leaves the colour alone.
-comptime NO_TEXTURE = -1
-
 # Replace whatever is behind: depth is tested and claimed.
 comptime OPAQUE = 0
 # Mix with whatever is behind, source-over: depth is tested but not claimed,
 # so the caller owns draw order. `Renderer.prepare` sorts.
 comptime BLEND = 1
 
-# An index into a `MaterialStore`.
-comptime MaterialId = Int
+
+@fieldwise_init
+struct MaterialId(Equatable, ImplicitlyCopyable, Writable):
+    """Which material in a `MaterialStore`, as a type rather than a bare int.
+
+    See `core.object3d.NodeId`.
+    """
+
+    var value: Int
 
 
 struct Material(ImplicitlyCopyable):
     """A colour, optionally an image, and which faces to draw."""
 
     var color: Color
-    var map: Int
+    var map: TextureId
     var side: Int
     # How much of the light reaching this surface it stops. One is opaque;
     # anything less mixes with what is behind. Separate from the texture's
@@ -80,7 +84,7 @@ struct Material(ImplicitlyCopyable):
     def __init__(
         out self,
         color: Color,
-        map: Int = NO_TEXTURE,
+        map: TextureId = NO_TEXTURE,
         side: Int = FRONT_SIDE,
         opacity: Float32 = 1.0,
         blending: Int = -1,
@@ -106,7 +110,7 @@ struct Material(ImplicitlyCopyable):
         """
         if side != FRONT_SIDE and side != BACK_SIDE and side != DOUBLE_SIDE:
             raise Error("Unknown material side")
-        if map < 0 and map != NO_TEXTURE:
+        if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
         if opacity < 0 or opacity > 1:
             raise Error("Opacity must be between zero and one")
@@ -164,7 +168,7 @@ struct MaterialStore(Movable):
             Its id, valid for the life of the store.
         """
         self.materials.append(material)
-        return len(self.materials) - 1
+        return MaterialId(len(self.materials) - 1)
 
     def get(self, id: MaterialId) raises -> Material:
         """Return the material with that id.
@@ -182,6 +186,6 @@ struct MaterialStore(Movable):
         Raises:
             Error: If no material has that id.
         """
-        if id < 0 or id >= len(self.materials):
+        if id.value < 0 or id.value >= len(self.materials):
             raise Error("No material has that id")
-        return self.materials[id]
+        return self.materials[id.value]

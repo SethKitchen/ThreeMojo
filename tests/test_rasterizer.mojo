@@ -10,7 +10,7 @@ from std.math import inf
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, NO_TEXTURE, OPAQUE
 from render.texture import REPEAT, Texture, checkerboard
-from render.texture_store import TextureStore
+from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from math.vector3 import Vector3
 from render.target import RenderTarget
 from render.rasterizer import (
@@ -724,7 +724,7 @@ def lit_uv_vertex(
     inv_w: Float32,
     u: Float32,
     v: Float32,
-    texture: Int = NO_TEXTURE,
+    texture: TextureId = NO_TEXTURE,
 ) -> RasterVertex:
     """Return a white raster vertex carrying texture coordinates.
 
@@ -734,7 +734,9 @@ def lit_uv_vertex(
     return RasterVertex(x, y, 0.5, inv_w, FloatColor(1, 1, 1), u, v, texture)
 
 
-def mapped_quad(size: Float32, texture: Int = NO_TEXTURE) -> List[RasterVertex]:
+def mapped_quad(
+    size: Float32, texture: TextureId = NO_TEXTURE
+) -> List[RasterVertex]:
     """Return two triangles covering a square image, mapped once across it.
 
     One oversized triangle would be simpler and would not do: it covers the

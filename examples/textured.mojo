@@ -26,6 +26,7 @@ squares therefore run straight across a face and meet at right angles at its
 edges, rather than continuing around the cube.
 """
 
+from core.object3d import NodeId
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from materials.material import Material
@@ -121,14 +122,16 @@ def main() raises:
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            box, assets.materials.add(Material(Color(255, 255, 255), sharp)), 0
+            box,
+            assets.materials.add(Material(Color(255, 255, 255), sharp)),
+            NodeId(0),
         )
     )
     meshes.append(
         Mesh(
             box,
             assets.materials.add(Material(Color(255, 255, 255), smooth)),
-            1,
+            NodeId(1),
         )
     )
 

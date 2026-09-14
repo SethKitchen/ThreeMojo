@@ -50,7 +50,8 @@ from render.rasterizer import (
     RasterVertex,
     Triangle,
 )
-from materials.material import NO_TEXTURE, OPAQUE
+from materials.material import OPAQUE
+from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.srgb import LINEAR, decode_ramp
 from render.texture import (
     BILINEAR,
@@ -59,7 +60,6 @@ from render.texture import (
     blend_texels,
     wrap_index,
 )
-from render.texture_store import TextureStore
 from std.gpu import global_idx
 from std.math import ceildiv, floor, inf
 from std.memory import unsafe_memcpy
@@ -108,7 +108,7 @@ def flatten_textures(
     var texels = List[UInt8]()
     var table = List[Int32]()
     for id in range(textures.count()):
-        ref image = textures.get(id)
+        ref image = textures.get(TextureId(id))
         table.append(Int32(len(texels)))
         if image.is_blank():
             # A blank texture is a legitimate thing to store, and on the host
@@ -242,7 +242,7 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
-        state.append(Int32(corners[triangle * 3].texture))
+        state.append(Int32(corners[triangle * 3].texture.value))
         state.append(Int32(corners[triangle * 3].blend))
     return state^
 
@@ -405,7 +405,7 @@ def rasterize_kernel(
             # Which image, from the triangle; -1 is no texture, which samples
             # as white and so leaves the lighting alone.
             var slot = Int(maps[unsafe_offset=index * 2])
-            if slot != NO_TEXTURE:
+            if slot != NO_TEXTURE.value:
                 # Every texture lives in one buffer end to end, so the table
                 # says where this one starts and how to read it.
                 var entry = slot * TABLE_COLUMNS
@@ -709,7 +709,7 @@ struct GpuRenderer(Movable):
             var slot = corners[index].texture
             if slot == NO_TEXTURE:
                 continue
-            if slot < 0 or slot >= self.uploaded:
+            if slot.value < 0 or slot.value >= self.uploaded:
                 raise Error(
                     "A vertex names a texture that has not been uploaded;"
                     " call set_textures() first"

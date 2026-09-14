@@ -60,12 +60,8 @@ from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from materials.material import (
-    BACK_SIDE,
-    DOUBLE_SIDE,
-    FRONT_SIDE,
-    NO_TEXTURE,
-)
+from materials.material import BACK_SIDE, DOUBLE_SIDE, FRONT_SIDE
+from render.texture_store import NO_TEXTURE, TextureId
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
 from math.vector2 import Vector2
@@ -227,7 +223,7 @@ def _relit(corner: RasterVertex, color: FloatColor) -> RasterVertex:
 
 
 def _to_raster(
-    vertex: ClipVertex, to_screen: Matrix4, texture: Int, blend: Int
+    vertex: ClipVertex, to_screen: Matrix4, texture: TextureId, blend: Int
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -425,7 +421,7 @@ struct Renderer(Movable):
             # naming nothing is only detectable once both are together. It is
             # checked before rasterization rather than during, so the answer
             # does not depend on whether the mesh happened to cover a pixel.
-            if map != NO_TEXTURE and map >= assets.textures.count():
+            if map != NO_TEXTURE and map.value >= assets.textures.count():
                 raise Error("A material names a texture that is not there")
             if self.shading != SHADE_TEXTURE:
                 map = NO_TEXTURE

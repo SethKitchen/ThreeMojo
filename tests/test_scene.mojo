@@ -5,6 +5,7 @@
 
 """Tests for `core.object3d` and `core.scene`."""
 
+from core.object3d import NodeId
 from core.object3d import NO_PARENT, Object3D
 from core.scene import Scene
 from math.vector3 import Vector3
@@ -107,8 +108,8 @@ def test_a_new_scene_is_empty() raises:
 
 def test_adding_returns_increasing_indices() raises:
     var scene = Scene()
-    assert_equal(scene.add(Object3D()), 0)
-    assert_equal(scene.add(Object3D()), 1)
+    assert_equal(scene.add(Object3D()), NodeId(0))
+    assert_equal(scene.add(Object3D()), NodeId(1))
     assert_equal(scene.count(), 2)
 
 
@@ -204,14 +205,14 @@ def test_get_returns_a_copy_not_a_handle() raises:
 def test_attaching_to_a_node_that_does_not_exist_is_rejected() raises:
     var scene = Scene()
     with assert_raises():
-        _ = scene.attach(Object3D(), 0)
+        _ = scene.attach(Object3D(), NodeId(0))
 
 
 def test_attaching_to_a_negative_index_is_rejected() raises:
     var scene = Scene()
     _ = scene.add(Object3D())
     with assert_raises():
-        _ = scene.attach(Object3D(), -5)
+        _ = scene.attach(Object3D(), NodeId(-5))
 
 
 def test_a_parent_must_come_before_its_child() raises:
@@ -234,7 +235,7 @@ def test_replacing_a_node_with_a_negative_parent_is_rejected() raises:
     var a = scene.add(Object3D())
     var _b = scene.attach(Object3D(), a)
     var broken = scene.get(a)
-    broken.parent = -2
+    broken.parent = NodeId(-2)
     with assert_raises():
         scene.set(a, broken^)
 
@@ -255,19 +256,19 @@ def test_replacing_a_root_with_no_parent_is_allowed() raises:
 def test_reading_a_node_out_of_range_is_rejected() raises:
     var scene = Scene()
     with assert_raises():
-        _ = scene.get(0)
+        _ = scene.get(NodeId(0))
     with assert_raises():
-        _ = scene.world_matrix(0)
+        _ = scene.world_matrix(NodeId(0))
     with assert_raises():
-        _ = scene.get(-1)
+        _ = scene.get(NodeId(-1))
 
 
 def test_replacing_a_node_out_of_range_is_rejected() raises:
     var scene = Scene()
     with assert_raises():
-        scene.set(0, Object3D())
+        scene.set(NodeId(0), Object3D())
     with assert_raises():
-        scene.set(-1, Object3D())
+        scene.set(NodeId(-1), Object3D())
 
 
 def test_updating_an_empty_scene_does_nothing() raises:
@@ -293,7 +294,7 @@ def test_a_negative_world_matrix_index_is_rejected() raises:
     _ = scene.add(Object3D())
     scene.update()
     with assert_raises():
-        _ = scene.world_matrix(-1)
+        _ = scene.world_matrix(NodeId(-1))
 
 
 # --- staleness and invariants -----------------------------------------------
@@ -342,7 +343,7 @@ def test_an_out_of_range_index_is_rejected_before_staleness() raises:
     var scene = Scene()
     _ = scene.add(Object3D())
     with assert_raises():
-        _ = scene.world_matrix(7)
+        _ = scene.world_matrix(NodeId(7))
 
 
 def test_an_empty_scene_validates() raises:
@@ -367,7 +368,7 @@ def test_validate_catches_a_parent_that_is_not_earlier() raises:
     var scene = Scene()
     _ = scene.add(Object3D())
     _ = scene.add(Object3D())
-    scene._nodes[0].parent = 1
+    scene._nodes[0].parent = NodeId(1)
     with assert_raises():
         scene.validate()
 
@@ -375,7 +376,7 @@ def test_validate_catches_a_parent_that_is_not_earlier() raises:
 def test_validate_catches_a_negative_parent() raises:
     var scene = Scene()
     _ = scene.add(Object3D())
-    scene._nodes[0].parent = -4
+    scene._nodes[0].parent = NodeId(-4)
     with assert_raises():
         scene.validate()
 

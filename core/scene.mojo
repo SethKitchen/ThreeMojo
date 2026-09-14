@@ -36,7 +36,7 @@ private fields, so that is a convention and not a guarantee — `validate` exist
 to catch the case where something reached past it anyway.
 """
 
-from core.object3d import NO_PARENT, Object3D
+from core.object3d import NO_PARENT, NodeId, Object3D
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 
@@ -64,7 +64,7 @@ struct Scene(Movable):
         """Return True if a node has changed since the last `update`."""
         return self._stale
 
-    def add(mut self, var node: Object3D) raises -> Int:
+    def add(mut self, var node: Object3D) raises -> NodeId:
         """Add `node` and return the index it was given.
 
         Args:
@@ -77,14 +77,14 @@ struct Scene(Movable):
             Error: If the parent index is not an existing earlier node.
         """
         if node.parent != NO_PARENT:
-            if node.parent < 0 or node.parent >= len(self._nodes):
+            if node.parent.value < 0 or node.parent.value >= len(self._nodes):
                 raise Error("A node's parent must already be in the scene")
         self._nodes.append(node^)
         self._world.append(Matrix4())
         self._stale = True
-        return len(self._nodes) - 1
+        return NodeId(len(self._nodes) - 1)
 
-    def attach(mut self, var node: Object3D, parent: Int) raises -> Int:
+    def attach(mut self, var node: Object3D, parent: NodeId) raises -> NodeId:
         """Add `node` as a child of `parent` and return its index.
 
         Args:
@@ -100,7 +100,7 @@ struct Scene(Movable):
         node.parent = parent
         return self.add(node^)
 
-    def get(self, index: Int) raises -> Object3D:
+    def get(self, index: NodeId) raises -> Object3D:
         """Return a copy of the node at `index`.
 
         A copy rather than a reference, so editing it does not silently change
@@ -115,11 +115,11 @@ struct Scene(Movable):
         Raises:
             Error: If the index is out of range.
         """
-        if index < 0 or index >= len(self._nodes):
+        if index.value < 0 or index.value >= len(self._nodes):
             raise Error("Scene node index out of range")
-        return Object3D(copy=self._nodes[index])
+        return Object3D(copy=self._nodes[index.value])
 
-    def set(mut self, index: Int, var node: Object3D) raises:
+    def set(mut self, index: NodeId, var node: Object3D) raises:
         """Replace the node at `index`, keeping its place in the order.
 
         Args:
@@ -131,16 +131,16 @@ struct Scene(Movable):
                 is not earlier in the array, which would break the ordering
                 the single-pass update depends on.
         """
-        if index < 0 or index >= len(self._nodes):
+        if index.value < 0 or index.value >= len(self._nodes):
             raise Error("Scene node index out of range")
         # Both halves matter. `>= index` keeps the parent-before-child order
         # the single-pass update depends on; `< 0` catches a parent that is
         # neither NO_PARENT nor a real node, which `add` already refuses.
         # Without it a parent of -2 reached `self._world[parent]` in `update`.
         if node.parent != NO_PARENT:
-            if node.parent < 0 or node.parent >= index:
+            if node.parent.value < 0 or node.parent.value >= index.value:
                 raise Error("A node's parent must be an earlier existing node")
-        self._nodes[index] = node^
+        self._nodes[index.value] = node^
         self._stale = True
 
     def update(mut self) raises:
@@ -158,7 +158,7 @@ struct Scene(Movable):
             if parent == NO_PARENT:
                 self._world[index] = local^
             else:
-                var combined = Matrix4(copy=self._world[parent])
+                var combined = Matrix4(copy=self._world[parent.value])
                 combined.multiply(local)
                 self._world[index] = combined^
         self._stale = False
@@ -180,10 +180,10 @@ struct Scene(Movable):
             var parent = self._nodes[index].parent
             if parent == NO_PARENT:
                 continue
-            if parent < 0 or parent >= index:
+            if parent.value < 0 or parent.value >= index:
                 raise Error("A node's parent must be an earlier existing node")
 
-    def world_matrix(self, index: Int) raises -> Matrix4:
+    def world_matrix(self, index: NodeId) raises -> Matrix4:
         """Return the world transform computed for `index` by `update`.
 
         Args:
@@ -196,16 +196,16 @@ struct Scene(Movable):
             Error: If the index is out of range, or the scene has changed
                 since `update` was last called — see the module docstring.
         """
-        if index < 0 or index >= len(self._world):
+        if index.value < 0 or index.value >= len(self._world):
             raise Error("Scene node index out of range")
         if self._stale:
             raise Error(
                 "The scene has changed since update(); call scene.update()"
                 " before reading a world matrix"
             )
-        return Matrix4(copy=self._world[index])
+        return Matrix4(copy=self._world[index.value])
 
-    def world_position(self, index: Int) raises -> Vector3:
+    def world_position(self, index: NodeId) raises -> Vector3:
         """Return where `index` sits in world space.
 
         Args:
