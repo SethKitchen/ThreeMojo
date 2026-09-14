@@ -406,17 +406,29 @@ def mip_level(
 ) -> Float32:
     """Return how far down the mip chain one pixel's footprint reaches.
 
-    A hardware rasterizer shades pixels in 2x2 quads and takes the derivative
-    by subtracting a neighbour's value from its own. This one shades each
-    pixel alone — and does not need to borrow, because the function is known:
-    texture coordinates across a triangle are an analytic expression, so the
-    neighbouring values can simply be evaluated. That is exact rather than
-    approximate, and it still works at a silhouette, where a quad would be
-    reaching for fragments that were never shaded.
+    A hardware rasterizer shades pixels in 2x2 quads and estimates the
+    derivative by subtracting a neighbour's value from its own, running extra
+    *helper invocations* outside the primitive where a quad is not fully
+    covered so that those neighbours exist. This one shades each pixel alone
+    and needs no helpers, because the function is known: texture coordinates
+    across a triangle are an analytic expression, so the value one pixel over
+    can simply be evaluated.
+
+    What that buys is independence from neighbouring threads, not extra
+    precision. The footprint is still a finite difference — the *exact*
+    displacement to the next pixel centre, which is what a footprint is, but
+    not the exact derivative of a perspective-correct coordinate, which
+    curves between the two samples. For `u(x) = x / (1 + x)` at `x = 0` the
+    difference over one pixel is 0.5 where the derivative is 1. That is the
+    same estimate hardware makes, and it is the right order of magnitude for
+    choosing between levels that differ by a factor of two.
 
     The level is the log of the longer footprint edge measured in texels: a
     pixel covering two texels across is one level down, four is two, and so
-    on, which is exactly the halving the chain stores.
+    on, which is exactly the halving the chain stores. The longer edge rather
+    than the shorter or an average, because a surface seen edge-on is
+    compressed in one direction only and it is the compressed direction that
+    has to stop aliasing.
 
     Args:
         along_x: How far the coordinates move over one pixel in x, in uv.
@@ -453,6 +465,43 @@ def _raw(u: Float32, v: Float32) -> Color:
     decode and encode cancel and the bytes arrive unchanged.
     """
     return FloatColor(u, v, 0.0, 1.0).quantize()
+
+
+def check_triangle_state(
+    a: RasterVertex, b: RasterVertex, c: RasterVertex
+) raises:
+    """Reject per-triangle metadata neither backend could agree on.
+
+    Both rasterizers read a triangle's texture and blend policy from its
+    *first* corner, because both come from the material and are therefore the
+    same on all three. That shortcut is only safe if the three really do
+    agree and the value really is one of the two policies, and neither was
+    checked.
+
+    `Material` validates its own `blending`, but `RasterVertex` is public and
+    takes a bare integer, and the two backends read an unknown one in
+    opposite directions: the CPU asked "is it `BLEND`?" and treated anything
+    else as opaque, while the GPU asked "is it `OPAQUE`?" and treated
+    anything else as blended. A triangle with a blend policy of 7 therefore
+    drew solid on one backend and composited on the other -- silently, and
+    only on input nobody meant to write, which is the worst kind of
+    divergence. Shared here so that both refuse the same thing.
+
+    Args:
+        a: The triangle's first corner, whose state is the authoritative one.
+        b: Its second corner.
+        c: Its third corner.
+
+    Raises:
+        Error: If the blend policy is not `OPAQUE` or `BLEND`, or the three
+            corners do not agree on it or on their texture.
+    """
+    if a.blend != OPAQUE and a.blend != BLEND:
+        raise Error("Unknown triangle blend policy")
+    if b.blend != a.blend or c.blend != a.blend:
+        raise Error("A triangle's corners disagree about blending")
+    if b.texture != a.texture or c.texture != a.texture:
+        raise Error("A triangle's corners disagree about their texture")
 
 
 def rasterize_shaded(
@@ -516,21 +565,13 @@ def rasterize_shaded(
     if mode != SHADE_LIT and mode != SHADE_UV and mode != SHADE_TEXTURE:
         raise Error("Unknown shading mode")
 
-    # Alpha below one means the surface is translucent, which changes two
-    # things: the fragment is mixed into what is already there rather than
-    # replacing it, and it tests depth without *claiming* it, so a second
-    # translucent surface behind this one still contributes. Read from the
-    # first corner, like the texture id, because both come from the material
-    # and are therefore the same on all three.
-    #
-    # The consequence is that the caller owns draw order: translucent
-    # surfaces have to arrive after the opaque ones and back to front.
-    # `Renderer.prepare` sorts them.
+    check_triangle_state(a, b, c)
+
     # Whether this surface composites, decided by the material and carried
-    # here rather than inferred from a colour. It changes two things together:
-    # the fragment is mixed into what is already there rather than replacing
-    # it, and it tests depth without *claiming* it, so a second translucent
-    # surface behind this one still contributes.
+    # here rather than inferred from a colour. It changes two things
+    # together: the fragment is mixed into what is already there rather than
+    # replacing it, and it tests depth without *claiming* it, so a second
+    # translucent surface behind this one still contributes.
     #
     # A debug view of texture coordinates is always opaque: it shows the
     # nearest surface's coordinates, and averaging several surfaces' would

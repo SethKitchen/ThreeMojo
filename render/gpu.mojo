@@ -49,6 +49,7 @@ from render.rasterizer import (
     SHADE_UV,
     RasterVertex,
     Triangle,
+    check_triangle_state,
 )
 from materials.material import OPAQUE
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
@@ -295,7 +296,8 @@ def _uv_at(
 
     Coverage is not tested: this is called for the pixels either side, which
     are routinely outside the triangle. Barycentric coordinates extrapolate
-    perfectly well; it is only coverage that stops at the edge.
+    perfectly well; it is only coverage that stops at the edge. That is what
+    replaces the helper invocations a hardware quad would need.
     """
     var e_ab = edge_at(ax, ay, bx, by, px, py)
     var e_bc = edge_at(bx, by, cx, cy, px, py)
@@ -651,56 +653,81 @@ def rasterize_kernel(
                 var space = Int(table[unsafe_offset=entry + 5])
                 var levels = Int(table[unsafe_offset=entry + 6])
 
-                # Where the coordinates land one pixel over and one down. The
-                # expression is analytic, so the neighbours are evaluated
-                # rather than borrowed from fragments that may not exist --
-                # see render.rasterizer.mip_level.
-                var along_x = _uv_at(
-                    corners,
-                    base,
-                    sax,
-                    say,
-                    sbx,
-                    sby,
-                    scx,
-                    scy,
-                    span,
-                    swapped,
-                    px + SUBPIXEL,
-                    py,
-                )
-                var along_y = _uv_at(
-                    corners,
-                    base,
-                    sax,
-                    say,
-                    sbx,
-                    sby,
-                    scx,
-                    scy,
-                    span,
-                    swapped,
-                    px,
-                    py + SUBPIXEL,
-                )
-                # v flipped and wrapped by the same routine the host uses,
-                # and blended by the same one -- see render.texture.
-                var sampled = _sample_level(
-                    texels,
-                    ramp,
-                    start,
-                    width,
-                    height,
-                    wrap,
-                    filter,
-                    space,
-                    levels,
-                    u,
-                    v,
-                    _mip_level(
-                        u, v, along_x, along_y, Float32(width), Float32(height)
-                    ),
-                )
+                var sampled = FloatColor(1.0, 1.0, 1.0, 1.0)
+                if levels == 1:
+                    # No chain to choose from, so no footprint to measure.
+                    # The CPU takes the same shortcut; without it the two
+                    # neighbour evaluations and the log below are computed
+                    # and then thrown away.
+                    sampled = _sample_at(
+                        texels,
+                        ramp,
+                        start,
+                        width,
+                        height,
+                        wrap,
+                        filter,
+                        space,
+                        u,
+                        v,
+                        0,
+                    )
+                else:
+                    # Where the coordinates land one pixel over and one down,
+                    # evaluated from the triangle's own uv function rather
+                    # than read from a neighbouring thread -- see
+                    # render.rasterizer.mip_level.
+                    var along_x = _uv_at(
+                        corners,
+                        base,
+                        sax,
+                        say,
+                        sbx,
+                        sby,
+                        scx,
+                        scy,
+                        span,
+                        swapped,
+                        px + SUBPIXEL,
+                        py,
+                    )
+                    var along_y = _uv_at(
+                        corners,
+                        base,
+                        sax,
+                        say,
+                        sbx,
+                        sby,
+                        scx,
+                        scy,
+                        span,
+                        swapped,
+                        px,
+                        py + SUBPIXEL,
+                    )
+                    # v flipped and wrapped by the same routine the host uses,
+                    # and blended by the same one -- see render.texture.
+                    sampled = _sample_level(
+                        texels,
+                        ramp,
+                        start,
+                        width,
+                        height,
+                        wrap,
+                        filter,
+                        space,
+                        levels,
+                        u,
+                        v,
+                        _mip_level(
+                            u,
+                            v,
+                            along_x,
+                            along_y,
+                            Float32(width),
+                            Float32(height),
+                        ),
+                    )
                 red *= sampled.r
                 green *= sampled.g
                 blue *= sampled.b
@@ -907,14 +934,26 @@ struct GpuRenderer(Movable):
             mode: `SHADE_LIT` or `SHADE_UV`, as `rasterize_shaded` takes.
 
         Raises:
-            Error: If the corner count is not a multiple of three, the mode is
-                unknown, or a vertex names a texture that is not uploaded.
+            Error: If the corner count is not a multiple of three, the mode
+                is unknown, a triangle's blend policy is unknown or disagrees
+                between its corners, or a vertex names a texture that is not
+                uploaded.
         """
         if len(corners) % 3 != 0:
             raise Error("Rasterizing needs whole triangles")
         if mode != SHADE_LIT and mode != SHADE_UV and mode != SHADE_TEXTURE:
             raise Error("Unknown shading mode")
         var triangles = len(corners) // 3
+
+        # The same per-triangle check the CPU makes, from the same function,
+        # so an unknown blend policy cannot mean one thing here and another
+        # there -- see `check_triangle_state`.
+        for triangle in range(triangles):
+            check_triangle_state(
+                corners[triangle * 3],
+                corners[triangle * 3 + 1],
+                corners[triangle * 3 + 2],
+            )
 
         # Every texture reference is checked here because it cannot be checked
         # on the device: the kernel reads the descriptor table at whatever

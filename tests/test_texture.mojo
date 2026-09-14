@@ -734,5 +734,178 @@ def test_a_level_is_filtered_within_itself_as_well() raises:
     )
 
 
+# --- Odd extents in the chain -----------------------------------------------
+
+
+def grey_strip(wide: Int, tall: Int, shades: List[UInt8]) raises -> Texture:
+    """Return a mipmapped linear greyscale image from one byte per texel."""
+    var pixels = List[UInt8]()
+    for shade in shades:
+        for _ in range(3):  # pragma: no branch
+            pixels.append(shade)
+        pixels.append(255)
+    return Texture(wide, tall, pixels^, CLAMP, NEAREST, LINEAR, mipmapped=True)
+
+
+def test_an_odd_width_keeps_its_last_column() raises:
+    # A fixed 2x2 source block reads columns 0 and 1 of a three-wide image and
+    # drops the third entirely: this reduced to black rather than to a third
+    # of the light. Nothing reports it, because the block is in bounds.
+    var strip = grey_strip(3, 1, [UInt8(0), UInt8(0), UInt8(255)])
+    assert_equal(strip.levels, 2)
+    assert_almost_equal(
+        strip.wrapped_texel(0, 0, 1).r,
+        Float32(1) / 3,
+        atol=Float64(0.004),
+    )
+
+
+def test_an_odd_height_keeps_its_last_row() raises:
+    # The same the other way up, because width and height reduce separately.
+    var strip = grey_strip(1, 3, [UInt8(0), UInt8(0), UInt8(255)])
+    assert_equal(strip.levels, 2)
+    assert_almost_equal(
+        strip.wrapped_texel(0, 0, 1).r,
+        Float32(1) / 3,
+        atol=Float64(0.004),
+    )
+
+
+def test_an_even_size_is_no_protection_against_an_odd_level() raises:
+    # 6 -> 3 -> 1. The base is even and the first reduction is clean; the
+    # second is the odd one, and it used to lose the last third of the image.
+    # An even base size proves nothing about the rest of the chain.
+    var strip = grey_strip(
+        6, 1, [UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(255), UInt8(255)]
+    )
+    assert_equal(strip.levels, 3)
+    # Level 1 is three texels: black, black, white.
+    assert_almost_equal(
+        strip.wrapped_texel(2, 0, 1).r, Float32(1), atol=Float64(0.004)
+    )
+    assert_almost_equal(
+        strip.wrapped_texel(0, 0, 2).r,
+        Float32(1) / 3,
+        atol=Float64(0.004),
+    )
+
+
+def test_a_source_texel_can_be_shared_between_two_destinations() raises:
+    # 5 -> 2. The middle column falls half in each half, and taking it wholly
+    # into one would bias that side. Left half covers [0, 2.5) of five
+    # columns: two black and half a white, so a fifth of the light.
+    var strip = grey_strip(
+        5, 1, [UInt8(0), UInt8(0), UInt8(255), UInt8(255), UInt8(255)]
+    )
+    assert_equal(strip.level_width(1), 2)
+    assert_almost_equal(
+        strip.wrapped_texel(0, 0, 1).r,
+        Float32(0.5) / 2.5,
+        atol=Float64(0.004),
+    )
+    assert_almost_equal(
+        strip.wrapped_texel(1, 0, 1).r,
+        Float32(2.5) / 2.5,
+        atol=Float64(0.004),
+    )
+
+
+def test_an_odd_reduction_carries_alpha_by_area_too() raises:
+    # The weights apply to coverage as well as colour: three texels at alpha
+    # 0, 0 and 1 average to a third covered, and the surviving colour is the
+    # one that was actually there.
+    var pixels = List[UInt8]()
+    for value in [UInt8(255), UInt8(0), UInt8(0), UInt8(0)]:
+        pixels.append(value)
+    for value in [UInt8(255), UInt8(0), UInt8(0), UInt8(0)]:
+        pixels.append(value)
+    for value in [UInt8(0), UInt8(255), UInt8(0), UInt8(255)]:
+        pixels.append(value)
+    var strip = Texture(3, 1, pixels^, CLAMP, NEAREST, LINEAR, mipmapped=True)
+    var mixed = strip.wrapped_texel(0, 0, 1)
+    assert_almost_equal(mixed.a, Float32(1) / 3, atol=Float64(0.004))
+    # Green, not the red that contributes no light.
+    assert_almost_equal(mixed.g, Float32(1), atol=Float64(0.01))
+    assert_almost_equal(mixed.r, Float32(0), atol=Float64(0.01))
+
+
+def test_a_non_square_odd_image_reduces_on_both_axes() raises:
+    # 5x3: both extents are odd, and the two reductions have to agree about
+    # which source rectangle a destination texel owns. A uniform image is the
+    # check that no weight is lost or double counted -- any error in the area
+    # arithmetic shows up as a level that is not the colour it started as.
+    var shades = List[UInt8]()
+    for _ in range(15):  # pragma: no branch
+        shades.append(UInt8(160))
+    var image = grey_strip(5, 3, shades)
+    for level in range(image.levels):  # pragma: no branch
+        assert_almost_equal(
+            image.wrapped_texel(0, 0, level).r,
+            Float32(160) / 255,
+            atol=Float64(0.004),
+        )
+
+
+# --- Direct level access ----------------------------------------------------
+
+
+def test_reading_a_level_the_chain_does_not_have_is_rejected() raises:
+    # An 8x8 chain is four levels and 340 bytes. Level 4's offset is exactly
+    # 340 -- one past the end -- so this used to compute an out-of-range
+    # index and read it.
+    var board = checkerboard(
+        8, 2, Color(255, 255, 255), Color(0, 0, 0), mipmapped=True
+    )
+    assert_equal(board.levels, 4)
+    with assert_raises():
+        _ = board.wrapped_texel(0, 0, 4)
+    with assert_raises():
+        _ = board.sample_at(0.5, 0.5, 4)
+    with assert_raises():
+        _ = board.wrapped_texel(0, 0, -1)
+    with assert_raises():
+        _ = board.sample_at(0.5, 0.5, -1)
+
+
+def test_a_texture_without_a_chain_has_only_level_zero() raises:
+    var plain = checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
+    _ = plain.sample_at(0.5, 0.5, 0)
+    with assert_raises():
+        _ = plain.sample_at(0.5, 0.5, 1)
+
+
+def test_a_fractional_level_outside_the_chain_is_clamped_not_rejected() raises:
+    # The other interface, and deliberately more forgiving: a footprint
+    # routinely lands outside the chain and clamping is the answer there.
+    var board = checkerboard(
+        8, 2, Color(255, 255, 255), Color(0, 0, 0), mipmapped=True
+    )
+    assert_equal(
+        board.sample_level(0.5, 0.5, 99.0).r, board.sample_at(0.5, 0.5, 3).r
+    )
+
+
+def test_a_fractional_level_lands_on_an_independently_worked_out_value() raises:
+    # The other fractional-level test computes its expectation with the same
+    # `mix_colour` the implementation uses, so it checks the wiring and not
+    # the arithmetic. This one is worked out by hand.
+    #
+    # A 4x1 linear strip of 0, 0, 255, 255 reduces to two texels of 0 and
+    # 255, then to one of (0 + 1) / 2 = 0.5, which stores as byte
+    # 0.5 * 255 + 0.5 = 128 and reads back as 128 / 255.
+    #
+    # At u = 0.25, nearest takes texel 0 of each level: 0 at level 1 and
+    # 128 / 255 at level 2. A quarter of the way between them is
+    # 128 / 255 * 0.25, every texel being opaque so alpha does not enter.
+    var strip = grey_strip(4, 1, [UInt8(0), UInt8(0), UInt8(255), UInt8(255)])
+    assert_equal(strip.levels, 3)
+    assert_equal(strip.pixels[strip.level_offset(2)], UInt8(128))
+    assert_almost_equal(
+        strip.sample_level(0.25, 0.5, 1.25).r,
+        Float32(128) / 255 * 0.25,
+        atol=Float64(1e-6),
+    )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

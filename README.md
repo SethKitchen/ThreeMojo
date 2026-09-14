@@ -433,14 +433,20 @@ the case a surface seen edge-on is in — and takes the log, because the chain
 halves. Sampling is trilinear: bilinear within the two levels either side, then
 between them, so the change from one level to the next is not a visible band.
 
-Hardware rasterizers get that derivative by shading pixels in 2x2 quads and
-subtracting a neighbour's value. This one **evaluates the neighbours
-analytically**: texture coordinates across a triangle are a known expression, so
-the value one pixel over can simply be computed — perspective divide included.
-That is exact rather than approximate, and it still works at a silhouette, where
-a quad would be reaching for fragments that were never shaded. Both backends
-compute it the same way and are held to it in parity tests, including a
-perspective quad where the level changes from pixel to pixel.
+Hardware rasterizers estimate that derivative by shading pixels in 2x2 quads and
+subtracting a neighbour's value, running extra *helper invocations* outside the
+primitive so the neighbours exist where a quad is only partly covered. This one
+**evaluates the neighbours from the triangle's own uv function**: that expression
+is known, so the value one pixel over can simply be computed, perspective divide
+included, without any inter-thread quad operation.
+
+What that buys is independence from neighbouring threads, not extra precision.
+The footprint is still a finite difference — the exact displacement to the next
+pixel centre, which is what a footprint is, but not the exact derivative of a
+perspective-correct coordinate, which curves between the two samples. It is the
+same estimate hardware makes. Both backends compute it the same way and are held
+to it in parity tests, including a perspective quad where the level changes from
+pixel to pixel.
 
 `make animation` renders `out/floor.png`: one checkerboard floor running to the
 horizon, mipmapped on the right and not on the left. Both halves are sharp at

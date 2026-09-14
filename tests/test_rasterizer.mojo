@@ -1215,5 +1215,107 @@ def test_a_mipmapped_surface_with_no_depth_at_all_still_samples() raises:
     assert_true(fb.shown(4, 4).r > 0 or fb.shown(4, 4).b > 0)
 
 
+# --- Per-triangle state -----------------------------------------------------
+
+
+def stated_corner(
+    point: Vector3, texture: TextureId, blend: Int
+) -> RasterVertex:
+    """Return a white corner carrying a given texture and blend policy."""
+    return RasterVertex(
+        point.x, point.y, 0.5, 1, FloatColor(1, 1, 1), 0, 0, texture, blend
+    )
+
+
+def test_an_unknown_blend_policy_is_rejected() raises:
+    # `Material` validates its own, but `RasterVertex` takes a bare integer
+    # and is public. The two backends read an unknown one in opposite
+    # directions -- the CPU asked "is it BLEND?", the GPU "is it OPAQUE?" --
+    # so a policy of 7 drew solid on one and composited on the other.
+    var textures = TextureStore()
+    var fb = RenderTarget(8, 8, Color(0, 0, 0))
+    var t = covering(0.5)
+    with assert_raises():
+        rasterize_shaded(
+            stated_corner(t[0], NO_TEXTURE, 7),
+            stated_corner(t[1], NO_TEXTURE, 7),
+            stated_corner(t[2], NO_TEXTURE, 7),
+            fb,
+            SHADE_TEXTURE,
+            textures,
+        )
+
+
+def test_both_blend_policies_are_accepted() raises:
+    # Each operand of the check has to be able to decide the outcome alone.
+    var textures = TextureStore()
+    var t = covering(0.5)
+    for policy in [OPAQUE, BLEND]:
+        var fb = RenderTarget(8, 8, Color(0, 0, 0))
+        rasterize_shaded(
+            stated_corner(t[0], NO_TEXTURE, policy),
+            stated_corner(t[1], NO_TEXTURE, policy),
+            stated_corner(t[2], NO_TEXTURE, policy),
+            fb,
+            SHADE_TEXTURE,
+            textures,
+        )
+        assert_equal(fb.shown(4, 4).r, UInt8(255))
+
+
+def test_corners_that_disagree_about_blending_are_rejected() raises:
+    # Both backends read the policy from the first corner because it comes
+    # from the material and is the same on all three. If that stops being
+    # true there is no single answer, and guessing is how the two drift apart.
+    var textures = TextureStore()
+    var fb = RenderTarget(8, 8, Color(0, 0, 0))
+    var t = covering(0.5)
+    with assert_raises():
+        rasterize_shaded(
+            stated_corner(t[0], NO_TEXTURE, OPAQUE),
+            stated_corner(t[1], NO_TEXTURE, BLEND),
+            stated_corner(t[2], NO_TEXTURE, OPAQUE),
+            fb,
+            SHADE_TEXTURE,
+            textures,
+        )
+    with assert_raises():
+        rasterize_shaded(
+            stated_corner(t[0], NO_TEXTURE, OPAQUE),
+            stated_corner(t[1], NO_TEXTURE, OPAQUE),
+            stated_corner(t[2], NO_TEXTURE, BLEND),
+            fb,
+            SHADE_TEXTURE,
+            textures,
+        )
+
+
+def test_corners_that_disagree_about_their_texture_are_rejected() raises:
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(4, 2, Color(255, 0, 0), Color(0, 0, 255))
+    )
+    var fb = RenderTarget(8, 8, Color(0, 0, 0))
+    var t = covering(0.5)
+    with assert_raises():
+        rasterize_shaded(
+            stated_corner(t[0], board, OPAQUE),
+            stated_corner(t[1], NO_TEXTURE, OPAQUE),
+            stated_corner(t[2], board, OPAQUE),
+            fb,
+            SHADE_TEXTURE,
+            textures,
+        )
+    with assert_raises():
+        rasterize_shaded(
+            stated_corner(t[0], board, OPAQUE),
+            stated_corner(t[1], board, OPAQUE),
+            stated_corner(t[2], NO_TEXTURE, OPAQUE),
+            fb,
+            SHADE_TEXTURE,
+            textures,
+        )
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

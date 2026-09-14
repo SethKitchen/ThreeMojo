@@ -43,6 +43,7 @@ from units.si import Angle, DEGREE, Length, METRE
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, NO_TEXTURE, OPAQUE
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
+from render.srgb import SRGB
 from render.texture import (
     BILINEAR,
     NEAREST,
@@ -840,7 +841,10 @@ def mapped_quad(
 
 
 def cpu_textured(
-    corners: List[RasterVertex], size: Int, textures: TextureStore
+    corners: List[RasterVertex],
+    size: Int,
+    textures: TextureStore,
+    clear: Color = BACKGROUND,
 ) raises -> Framebuffer:
     """Return the CPU rasterizer's textured output.
 
@@ -848,6 +852,7 @@ def cpu_textured(
         corners: Raster vertices, three per triangle.
         size: Image width and height.
         textures: The images to sample.
+        clear: The colour to start from, alpha included.
 
     Returns:
         The rendered framebuffer.
@@ -855,7 +860,7 @@ def cpu_textured(
     Raises:
         Error: If the dimensions are invalid.
     """
-    var target = RenderTarget(size, size, BACKGROUND)
+    var target = RenderTarget(size, size, clear)
     for triangle in range(len(corners) // 3):
         rasterize_shaded(
             corners[triangle * 3],
@@ -1019,6 +1024,118 @@ def test_a_mipmapped_and_a_plain_texture_can_be_drawn_together() raises:
         corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
     )
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_reject_an_unknown_blend_policy() raises:
+    # The divergence this closes: the CPU treated an unknown policy as
+    # opaque and the GPU as blended, so the same triangle drew differently on
+    # each. Both now refuse it, through the same shared check.
+    if skipped_for_lack_of_a_gpu("both backends reject an unknown blend"):
+        return
+    var textures = TextureStore()
+    var corners = List[RasterVertex]()
+    for corner in mapped_quad(24):
+        corners.append(
+            RasterVertex(
+                corner.x,
+                corner.y,
+                corner.z,
+                corner.inv_w,
+                corner.color,
+                corner.u,
+                corner.v,
+                corner.texture,
+                7,
+            )
+        )
+    var renderer = GpuRenderer(24, 24)
+    renderer.set_textures(textures)
+    with assert_raises():
+        renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
+    with assert_raises():
+        _ = cpu_textured(corners, 24, textures)
+
+
+def test_both_backends_reject_corners_that_disagree() raises:
+    if skipped_for_lack_of_a_gpu("both backends reject disagreeing corners"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(8, 2, Color(240, 60, 20), Color(20, 40, 200))
+    )
+    var corners = mapped_quad(24, board)
+    # One corner of the first triangle names no texture at all.
+    corners[1] = RasterVertex(
+        corners[1].x,
+        corners[1].y,
+        corners[1].z,
+        corners[1].inv_w,
+        corners[1].color,
+        corners[1].u,
+        corners[1].v,
+        NO_TEXTURE,
+        corners[1].blend,
+    )
+    var renderer = GpuRenderer(24, 24)
+    renderer.set_textures(textures)
+    with assert_raises():
+        renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
+    with assert_raises():
+        _ = cpu_textured(corners, 24, textures)
+
+
+def test_both_backends_agree_on_mipmapped_transparency() raises:
+    # Everything at once: a texture with varying alpha, a mipmapped chain, a
+    # BLEND surface composited over a transparent clear colour, and depth.
+    # Each of those has its own test; this is the one that puts them in the
+    # same fragment, where a premultiply applied once too often or a level
+    # chosen from the wrong footprint would show.
+    if skipped_for_lack_of_a_gpu("both backends agree on mipmapped alpha"):
+        return
+    var textures = TextureStore()
+    # A checkerboard whose dark squares are half transparent.
+    var pixels = List[UInt8]()
+    for y in range(32):  # pragma: no branch
+        for x in range(32):  # pragma: no branch
+            if (x // 4 + y // 4) % 2 == 0:
+                for value in [UInt8(240), UInt8(200), UInt8(60), UInt8(255)]:
+                    pixels.append(value)
+            else:
+                for value in [UInt8(30), UInt8(60), UInt8(220), UInt8(128)]:
+                    pixels.append(value)
+    var board = textures.add(
+        Texture(32, 32, pixels^, REPEAT, BILINEAR, SRGB, mipmapped=True)
+    )
+
+    # Minified two and a half times over, and translucent on top of that.
+    var corners = List[RasterVertex]()
+    var quad = mapped_quad(24, board)
+    for corner in quad:
+        corners.append(
+            RasterVertex(
+                corner.x,
+                corner.y,
+                corner.z,
+                corner.inv_w,
+                FloatColor(1, 1, 1, 0.6),
+                corner.u * 2.5,
+                corner.v * 2.5,
+                corner.texture,
+                BLEND,
+            )
+        )
+
+    var clear = Color(0, 0, 0, 0)
+    var cpu = cpu_textured(corners, 24, textures, clear)
+    var gpu = render_triangles(corners, 24, 24, clear, SHADE_TEXTURE, textures)
+
+    # It really is translucent over nothing, and really is filtered.
+    var seen = cpu.get_pixel(12, 12)
+    assert_true(seen.a > 0 and seen.a < 255, "the surface resolved opaque")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    for y in range(24):
+        for x in range(24):
+            assert_equal(cpu.depth_at(x, y), gpu.depth_at(x, y))
 
 
 def test_both_backends_agree_on_every_wrap_mode() raises:

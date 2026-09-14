@@ -190,6 +190,36 @@ def _to_byte(value: Float32, space: Int) -> UInt8:
     return UInt8(scaled)
 
 
+def _ceiling(value: Int, divisor: Int) -> Int:
+    """Return `value` divided by `divisor`, rounded up. Both are positive."""
+    return (value + divisor - 1) // divisor
+
+
+def _overlap(low: Int, high: Int, start: Int, extent: Int) -> Int:
+    """Return how much of `[start, start + extent)` lies in `[low, high)`.
+
+    The weight one source texel carries into one destination texel, in the
+    scaled units `_build_mipmaps` works in. Never negative: the caller only
+    visits texels the range actually reaches.
+
+    Args:
+        low: Start of the destination's range.
+        high: One past its end.
+        start: Start of the source texel's range.
+        extent: Its length.
+
+    Returns:
+        The length they share.
+    """
+    var near = low
+    if start > near:
+        near = start
+    var far = high
+    if start + extent < far:
+        far = start + extent
+    return far - near
+
+
 def _identity_ramp() -> List[Float32]:
     """Return the 256 values a byte stands for when nothing is encoded."""
     var ramp = List[Float32]()
@@ -399,16 +429,43 @@ struct Texture(Movable):
     def _build_mipmaps(mut self) raises:
         """Append each halved copy of the image to the texel buffer.
 
-        Box filter: each texel of a level is the average of the four beneath
-        it. Averaged in premultiplied linear light, for the two reasons
-        everything else in this file is — a hidden colour must weigh nothing,
-        and light is what averages — and encoded back to bytes at each level,
-        which is what a GPU stores too.
+        Box filter: each texel of a level is the average of the region of the
+        level above that it stands for. Averaged in premultiplied linear
+        light, for the two reasons everything else in this file is — a hidden
+        colour must weigh nothing, and light is what averages — and encoded
+        back to bytes at each level, which is what a GPU stores too.
 
         A chain exists to answer a question the full-size image cannot: when
         one pixel covers many texels, which one is the colour? Any single
         answer sparkles as the surface moves. The average of all of them does
         not, and each level is the average already taken.
+
+        **Odd extents.** "The four beneath it" is only true when the extent
+        halves evenly. An extent of three halves to one, and a destination
+        texel that reads a fixed 2x2 block drops the third column entirely —
+        silently, because the block is in bounds and there is nothing to
+        report. That was a live bug: a 3x1 image of black, black, white
+        reduced to black rather than to a third of the light, and a 6x1 image
+        lost its last third one level down, at the 3 to 1 step. An even base
+        size is no protection, because an even level can halve to an odd one.
+
+        So a destination texel covers its *proportionate* rectangle of the
+        whole source — columns `x * W / W'` up to `(x + 1) * W / W'` — and
+        each source texel is weighted by how much of that rectangle it
+        occupies. A 5 to 2 reduction gives the middle column to both halves,
+        half each. Nothing is dropped, and the weights sum to the whole image.
+
+        The arithmetic is integers scaled by the destination extent, so the
+        weights are exact rather than nearly-exact: every destination texel
+        accumulates a total weight of exactly `wide * tall`. Where the extent
+        does halve evenly the weights come out equal and this is the plain
+        average of four, which is why there is no separate fast path.
+
+        The two innermost loops are `while` rather than `for ... in range`.
+        That is not a style choice: with `range` over computed bounds at this
+        nesting depth the Mojo compiler stops making progress, and building
+        this file goes from three seconds to not finishing. The loops are
+        otherwise identical.
         """
         var level = 0
         while self.level_width(level) > 1 or self.level_height(level) > 1:
@@ -418,15 +475,31 @@ struct Texture(Movable):
             var next_tall = self.level_height(level + 1)
             var base = self.level_offset(level)
             for y in range(next_tall):  # pragma: no branch
+                # The rows this destination stands for, in source rows scaled
+                # by the destination extent so the bounds stay exact.
+                var top = y * tall
+                var bottom = top + tall
                 for x in range(next_wide):  # pragma: no branch
+                    var left = x * wide
+                    var right = left + wide
                     var total = FloatColor(0.0, 0.0, 0.0, 0.0)
-                    var taken = 0
-                    for dy in range(2):  # pragma: no branch
-                        for dx in range(2):  # pragma: no branch
-                            var sx = x * 2 + dx
-                            var sy = y * 2 + dy
-                            if sx >= wide or sy >= tall:
-                                continue
+                    var first_row = top // next_tall
+                    var past_row = _ceiling(bottom, next_tall)
+                    var first_col = left // next_wide
+                    var past_col = _ceiling(right, next_wide)
+                    var sy = first_row
+                    while sy < past_row:
+                        var weight_y = _overlap(
+                            top, bottom, sy * next_tall, next_tall
+                        )
+                        var sx = first_col
+                        while sx < past_col:
+                            var weight = Float32(
+                                weight_y
+                                * _overlap(
+                                    left, right, sx * next_wide, next_wide
+                                )
+                            )
                             var at = base + (sy * wide + sx) * Self.CHANNELS
                             var texel = FloatColor(
                                 self.ramp[Int(self.pixels[at])],
@@ -435,13 +508,14 @@ struct Texture(Movable):
                                 Float32(self.pixels[at + 3]) / 255,
                             ).premultiplied()
                             total = FloatColor(
-                                total.r + texel.r,
-                                total.g + texel.g,
-                                total.b + texel.b,
-                                total.a + texel.a,
+                                total.r + texel.r * weight,
+                                total.g + texel.g * weight,
+                                total.b + texel.b * weight,
+                                total.a + texel.a * weight,
                             )
-                            taken += 1
-                    var share = 1 / Float32(taken)
+                            sx += 1
+                        sy += 1
+                    var share = 1 / Float32(wide * tall)
                     var mixed = FloatColor(
                         total.r * share,
                         total.g * share,
@@ -455,14 +529,25 @@ struct Texture(Movable):
             level += 1
             self.levels = level + 1
 
-    def wrapped_texel(self, x: Int, y: Int, level: Int = 0) -> FloatColor:
+    def _has_level(self, level: Int) -> Bool:
+        """Return True if `level` names an image this texture actually holds."""
+        return level >= 0 and level < self.levels
+
+    def wrapped_texel(
+        self, x: Int, y: Int, level: Int = 0
+    ) raises -> FloatColor:
         """Return a texel by index, with the wrap mode applied first.
 
-        Unlike `texel`, this cannot fail: every index has an answer once a
-        wrap mode is chosen, which is what a sampler needs. The blank texture
-        has no texels to wrap into, so it answers white like `sample` does —
-        the guard is here as well as there because this is public and a
-        caller reaching it directly would otherwise divide by a zero extent.
+        No index is out of range: every column and row has an answer once a
+        wrap mode is chosen, which is what a sampler needs. A *level* is a
+        different matter — it names an image rather than a position in one,
+        and a level the chain does not hold is a mistake with no sensible
+        answer. Asking an 8x8 chain for level 4 used to compute an offset one
+        past the end of the texel buffer and read it.
+
+        The blank texture is the deliberate exception: it holds no images at
+        all and answers white for any request, the identity that lets "no
+        texture" be a value rather than a branch.
 
         Args:
             x: Column, possibly outside the image.
@@ -471,9 +556,27 @@ struct Texture(Movable):
 
         Returns:
             The colour found there, or opaque white if the texture is blank.
+
+        Raises:
+            Error: If the texture is not blank and has no such level.
         """
         if self.is_blank():
             return FloatColor(1.0, 1.0, 1.0, 1.0)
+        if not self._has_level(level):
+            raise Error("No such mip level")
+        return self._wrapped_texel(x, y, level)
+
+    def _wrapped_texel(self, x: Int, y: Int, level: Int) -> FloatColor:
+        """Return a texel by index without checking that `level` exists.
+
+        The innermost read, and the reason the checks are not here: sampling
+        calls this once per texel per fragment. Its two preconditions — the
+        texture is not blank, and `level` is one the chain holds — are
+        established by every caller. `wrapped_texel` validates both for
+        callers from outside; `_sample_at` and `sample` answer white for a
+        blank texture before they get this far, and `sample_level` clamps the
+        level into range. Coverage confirms a blank one never arrives here.
+        """
         var wide = self.level_width(level)
         var tall = self.level_height(level)
         var offset = (
@@ -492,8 +595,15 @@ struct Texture(Movable):
             Float32(self.pixels[offset + 3]) / 255,
         )
 
-    def sample_at(self, u: Float32, v: Float32, level: Int) -> FloatColor:
+    def sample_at(
+        self, u: Float32, v: Float32, level: Int
+    ) raises -> FloatColor:
         """Return the colour at a coordinate, read from one mip level.
+
+        An explicit level lookup, so a level the chain does not hold is
+        rejected rather than clamped. `sample_level` is the other interface:
+        it takes a fractional level of the kind a footprint produces, where
+        landing outside the chain is ordinary and clamping is the answer.
 
         Args:
             u: Horizontal coordinate, 0 at the left edge.
@@ -502,6 +612,21 @@ struct Texture(Movable):
 
         Returns:
             The colour found there, or opaque white if the texture is blank.
+
+        Raises:
+            Error: If the texture is not blank and has no such level.
+        """
+        if self.is_blank():
+            return FloatColor(1.0, 1.0, 1.0, 1.0)
+        if not self._has_level(level):
+            raise Error("No such mip level")
+        return self._sample_at(u, v, level)
+
+    def _sample_at(self, u: Float32, v: Float32, level: Int) -> FloatColor:
+        """Return the colour at a coordinate without checking `level` exists.
+
+        The hot path, called up to twice per fragment by `sample_level` with
+        a level it has already clamped.
         """
         if self.is_blank():
             return FloatColor(1.0, 1.0, 1.0, 1.0)
@@ -509,7 +634,7 @@ struct Texture(Movable):
         var tall = self.level_height(level)
 
         if self.filter == NEAREST:
-            return self.wrapped_texel(
+            return self._wrapped_texel(
                 Int(floor(u * Float32(wide))),
                 Int(floor((1 - v) * Float32(tall))),
                 level,
@@ -522,10 +647,10 @@ struct Texture(Movable):
         var column = Int(floor(across))
         var row = Int(floor(down))
         return blend_texels(
-            self.wrapped_texel(column, row, level),
-            self.wrapped_texel(column + 1, row, level),
-            self.wrapped_texel(column, row + 1, level),
-            self.wrapped_texel(column + 1, row + 1, level),
+            self._wrapped_texel(column, row, level),
+            self._wrapped_texel(column + 1, row, level),
+            self._wrapped_texel(column, row + 1, level),
+            self._wrapped_texel(column + 1, row + 1, level),
             across - Float32(column),
             down - Float32(row),
         )
@@ -554,13 +679,13 @@ struct Texture(Movable):
             The colour found there, or opaque white if the texture is blank.
         """
         if self.is_blank() or self.levels == 1 or level <= 0:
-            return self.sample_at(u, v, 0)
+            return self._sample_at(u, v, 0)
         if level >= Float32(self.levels - 1):
-            return self.sample_at(u, v, self.levels - 1)
+            return self._sample_at(u, v, self.levels - 1)
         var lower = Int(floor(level))
         return mix_colour(
-            self.sample_at(u, v, lower),
-            self.sample_at(u, v, lower + 1),
+            self._sample_at(u, v, lower),
+            self._sample_at(u, v, lower + 1),
             level - Float32(lower),
         )
 
@@ -597,9 +722,10 @@ struct Texture(Movable):
             return FloatColor(1.0, 1.0, 1.0, 1.0)
 
         if self.filter == NEAREST:
-            return self.wrapped_texel(
+            return self._wrapped_texel(
                 Int(floor(u * Float32(self.width))),
                 Int(floor((1 - v) * Float32(self.height))),
+                0,
             )
 
         # Texel centres are at half-integers, so shift the sample into a space
@@ -609,10 +735,10 @@ struct Texture(Movable):
         var column = Int(floor(across))
         var row = Int(floor(down))
         return blend_texels(
-            self.wrapped_texel(column, row),
-            self.wrapped_texel(column + 1, row),
-            self.wrapped_texel(column, row + 1),
-            self.wrapped_texel(column + 1, row + 1),
+            self._wrapped_texel(column, row, 0),
+            self._wrapped_texel(column + 1, row, 0),
+            self._wrapped_texel(column, row + 1, 0),
+            self._wrapped_texel(column + 1, row + 1, 0),
             across - Float32(column),
             down - Float32(row),
         )
