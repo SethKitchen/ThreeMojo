@@ -533,8 +533,11 @@ def rasterize_shaded(
     """Fill a triangle whose corners each carry their own colour.
 
     The colour is mixed across the face by the triangle's barycentric weights,
-    which is Gouraud shading: lighting is evaluated per corner and interpolated
-    between, rather than once for the whole face.
+    which is how the surface's own colour reaches a fragment. The *lighting*
+    is not mixed: each fragment interpolates the normal instead, makes it a
+    unit vector again, and evaluates every light there. Interpolating light
+    computed at the corners is cheaper and is what this used to do, but a
+    triangle can then only be as round as its corners.
 
     The mix is *perspective correct*. Screen-space barycentric weights are not
     the weights the surface itself sees — perspective compresses the far half

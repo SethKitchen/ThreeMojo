@@ -41,6 +41,10 @@ from std.math import pow
 comptime SRGB = 0
 # Data that is not colour, or colour already linear: used as stored.
 comptime LINEAR = 1
+# A file said something about its colour that could not be interpreted -- an
+# ICC profile, say. Not a third transfer function: a refusal to guess, which
+# the caller has to settle before the samples can be used as colour.
+comptime UNKNOWN_SPACE = 2
 
 
 def srgb_to_linear(value: Float32) -> Float32:

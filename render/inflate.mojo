@@ -37,6 +37,11 @@ is allocated per symbol, and a malformed stream runs out of lengths rather
 than reading off the end of anything.
 """
 
+from render.checksum import adler32
+
+# Let a stream produce whatever it likes. Only safe for one you wrote.
+comptime NO_LIMIT = 0x7FFFFFFFFFFFFFF
+
 # The end-of-block symbol. Everything below it is a literal byte.
 comptime END_OF_BLOCK = 256
 # The longest Huffman code DEFLATE allows.
@@ -429,11 +434,34 @@ def _read_dynamic_lengths(mut reader: BitReader) raises -> List[List[Int]]:
     return both^
 
 
+def _room_for(produced: Int, more: Int, limit: Int) raises:
+    """Raise if producing `more` bytes would take the output past `limit`.
+
+    Checked *before* the bytes are produced, not after. A decompressor that
+    expands everything and then compares the length has already done the work
+    and already holds the memory: a stream declaring a one-pixel image can
+    expand to any size at all, and the mismatch is only discovered once it
+    has. A few bytes of arithmetic per block is the whole cost of not being
+    at the mercy of the file.
+
+    Args:
+        produced: How many bytes have been produced so far.
+        more: How many bytes are about to be added.
+        limit: The most this stream is allowed to produce.
+
+    Raises:
+        Error: If the total would exceed the limit.
+    """
+    if produced + more > limit:
+        raise Error("A compressed stream expands to more than was expected")
+
+
 def _inflate_block(
     mut reader: BitReader,
     mut out: List[UInt8],
     literals: Huffman,
     distances: Huffman,
+    limit: Int,
 ) raises:
     """Expand one Huffman-coded block into `out`.
 
@@ -442,6 +470,7 @@ def _inflate_block(
         out: What has been produced so far; appended to.
         literals: The literal and length code.
         distances: The distance code.
+        limit: The most the whole stream may produce.
 
     Raises:
         Error: If a symbol is unknown, or a back-reference points further back
@@ -455,6 +484,7 @@ def _inflate_block(
     while True:
         var symbol = literals.decode(reader)
         if symbol < END_OF_BLOCK:
+            _room_for(len(out), 1, limit)
             out.append(UInt8(symbol))
         elif symbol == END_OF_BLOCK:
             return
@@ -473,6 +503,7 @@ def _inflate_block(
             )
             if distance > len(out):
                 raise Error("A back-reference points before the start")
+            _room_for(len(out), length, limit)
             # One byte at a time, deliberately: the source may overlap the
             # destination, which is how a run of identical bytes is stored.
             var from_index = len(out) - distance
@@ -480,21 +511,35 @@ def _inflate_block(
                 out.append(out[from_index + step])
 
 
-def inflate(bytes: List[UInt8], start: Int = 0) raises -> List[UInt8]:
+def inflate(
+    bytes: List[UInt8], start: Int = 0, limit: Int = NO_LIMIT
+) raises -> List[UInt8]:
     """Return the bytes a DEFLATE stream expands to.
 
     Args:
         bytes: The buffer holding the stream.
         start: Where the stream begins in it.
+        limit: The most it may produce. `NO_LIMIT` to let it produce whatever
+            it likes, which is only safe for a stream you wrote yourself.
 
     Returns:
         The decompressed bytes.
 
     Raises:
-        Error: If the stream is truncated, uses the reserved block type, or is
-            otherwise malformed.
+        Error: If the stream is truncated, uses the reserved block type,
+            expands past `limit`, or is otherwise malformed.
     """
     var reader = BitReader(bytes, start)
+    return _inflate(reader, limit)
+
+
+def _inflate(mut reader: BitReader, limit: Int) raises -> List[UInt8]:
+    """Expand every block, leaving `reader` just past the last one.
+
+    Separate from `inflate` because the zlib wrapper needs to know where the
+    compressed data stopped: its Adler-32 sits immediately after, and a
+    checker that guesses the position is not checking anything.
+    """
     var out = List[UInt8]()
     while True:
         var final = reader.read_bits(1)
@@ -516,6 +561,7 @@ def inflate(bytes: List[UInt8], start: Int = 0) raises -> List[UInt8]:
             reader.position += 4
             if reader.position + length > len(reader.bytes):
                 raise Error("A stored block runs past the end of the stream")
+            _room_for(len(out), length, limit)
             for step in range(length):  # pragma: no branch
                 out.append(reader.bytes[reader.position + step])
             reader.position += length
@@ -529,43 +575,76 @@ def inflate(bytes: List[UInt8], start: Int = 0) raises -> List[UInt8]:
                 # guard in `_inflate_block` rather than fail as an unmatched
                 # code, which says something different and less true.
                 Huffman(List[Int](length=32, fill=5)),
+                limit,
             )
         elif kind == 2:
             var tables = _read_dynamic_lengths(reader)
-            _inflate_block(reader, out, Huffman(tables[0]), Huffman(tables[1]))
+            _inflate_block(
+                reader, out, Huffman(tables[0]), Huffman(tables[1]), limit
+            )
         else:
             raise Error("Reserved DEFLATE block type")
         if final == 1:
             return out^
 
 
-def zlib_inflate(bytes: List[UInt8]) raises -> List[UInt8]:
-    """Return the bytes a zlib stream expands to, checking its header.
+def zlib_inflate(
+    bytes: List[UInt8], limit: Int = NO_LIMIT
+) raises -> List[UInt8]:
+    """Return the bytes a zlib stream expands to, checking it throughout.
 
     zlib (RFC 1950) wraps DEFLATE in a two-byte header and a trailing
-    Adler-32. The header says which compression method was used and how large
-    a window the encoder assumed; a decoder that keeps the whole output, as
-    this one does, does not care about the window but must still reject a
-    method it cannot read.
+    Adler-32 of the *uncompressed* data. All of it is checked here, and the
+    checksum is the reason: a PNG's chunk CRC covers the compressed bytes, so
+    it catches damage to the file, and says nothing about whether those bytes
+    decompress to what the encoder meant. They are two layers and only one of
+    them was being checked -- a stream with its Adler-32 removed, or changed,
+    decoded happily.
+
+    The window size is checked too. `CINFO` above seven asks for a window
+    larger than DEFLATE defines, and a decoder that keeps the whole output, as
+    this one does, would quietly ignore it rather than notice the stream is
+    not the format it claims.
 
     Args:
         bytes: The complete zlib stream.
+        limit: The most it may produce; see `inflate`.
 
     Returns:
         The decompressed bytes.
 
     Raises:
-        Error: If the stream is too short, is not DEFLATE, has a corrupt
-            header check, or declares a preset dictionary — which PNG never
-            uses and which there would be no way to supply.
+        Error: If the stream is too short, is not DEFLATE, declares an
+            impossible window, has a corrupt header check, declares a preset
+            dictionary -- which PNG never uses and which there would be no way
+            to supply -- expands past `limit`, or ends with a missing or
+            wrong Adler-32.
     """
     if len(bytes) < 2:
         raise Error("A zlib stream needs at least a header")
     var method = Int(bytes[0]) & 0x0F
     if method != 8:
         raise Error("A zlib stream must use DEFLATE")
+    if (Int(bytes[0]) >> 4) > 7:
+        raise Error("A zlib stream declares a window DEFLATE does not have")
     if (Int(bytes[0]) << 8 | Int(bytes[1])) % 31 != 0:
         raise Error("A zlib header failed its check")
     if (Int(bytes[1]) >> 5) & 1 == 1:
         raise Error("A zlib stream with a preset dictionary cannot be read")
-    return inflate(bytes, 2)
+
+    var reader = BitReader(bytes, 2)
+    var out = _inflate(reader, limit)
+
+    # The checksum sits on the next byte boundary after the last block.
+    reader.align()
+    if reader.position + 4 > len(bytes):
+        raise Error("A zlib stream is missing its checksum")
+    var stated = (
+        UInt32(bytes[reader.position]) << 24
+        | UInt32(bytes[reader.position + 1]) << 16
+        | UInt32(bytes[reader.position + 2]) << 8
+        | UInt32(bytes[reader.position + 3])
+    )
+    if stated != adler32(out):
+        raise Error("A zlib stream's checksum does not match its data")
+    return out^

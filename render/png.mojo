@@ -18,47 +18,16 @@ Byte order is big-endian throughout, as PNG requires, except inside DEFLATE's
 own stored-block lengths, which are little-endian.
 """
 
-from render.framebuffer import Framebuffer
+from render.checksum import adler32, crc32
+from render.framebuffer import Color, Framebuffer
+from render.srgb import LINEAR, SRGB, UNKNOWN_SPACE
 from render.inflate import zlib_inflate
 
-comptime CRC_POLYNOMIAL = UInt32(0xEDB88320)
-comptime ADLER_MODULUS = UInt32(65521)
 # The largest payload a single stored DEFLATE block can carry.
 comptime MAX_STORED_BLOCK = 65535
 # Color type 6 is truecolor with alpha; 8 bits per channel.
 comptime COLOR_TYPE_RGBA = UInt8(6)
 comptime BIT_DEPTH = UInt8(8)
-
-
-def _crc32(bytes: List[UInt8]) -> UInt32:
-    """Return the PNG CRC-32 of `bytes`.
-
-    Computed bitwise rather than from a lookup table. Mojo has no global
-    variables, so a table would have to be rebuilt on every call — a fixed
-    2048 iterations whatever the input size. Chunks here are small enough that
-    the bitwise loop is cheaper, and far cheaper under coverage
-    instrumentation, where every iteration costs a write to stderr.
-    """
-    var crc = UInt32(0xFFFFFFFF)
-    # Every chunk checksums at least its four-byte type, so never empty.
-    for index in range(len(bytes)):  # pragma: no branch
-        crc ^= UInt32(bytes[index])
-        for _ in range(8):  # pragma: no branch
-            if (crc & UInt32(1)) != 0:
-                crc = (crc >> 1) ^ CRC_POLYNOMIAL
-            else:
-                crc = crc >> 1
-    return crc ^ UInt32(0xFFFFFFFF)
-
-
-def _adler32(bytes: List[UInt8]) -> UInt32:
-    """Return the Adler-32 checksum zlib requires over the raw data."""
-    var low = UInt32(1)
-    var high = UInt32(0)
-    for index in range(len(bytes)):
-        low = (low + UInt32(bytes[index])) % ADLER_MODULUS
-        high = (high + low) % ADLER_MODULUS
-    return (high << 16) | low
 
 
 def push_be32(mut out: List[UInt8], value: UInt32):
@@ -99,7 +68,7 @@ def push_chunk(mut out: List[UInt8], kind: String, data: List[UInt8]) raises:
     # `checked` holds the type as well as the data, so at least four bytes.
     for index in range(len(checked)):  # pragma: no branch
         out.append(checked[index])
-    push_be32(out, _crc32(checked))
+    push_be32(out, crc32(checked))
 
 
 def raw_scanlines(buffer: Framebuffer) raises -> List[UInt8]:
@@ -168,7 +137,7 @@ def zlib_stream(
         if final:
             break
 
-    push_be32(out, _adler32(raw))
+    push_be32(out, adler32(raw))
     return out^
 
 
@@ -243,6 +212,70 @@ def encode(buffer: Framebuffer) raises -> List[UInt8]:
 # practice is always compressed and usually filtered per row. So decoding
 # needs the whole of `render.inflate` and all five filters, and this is much
 # the larger half of the format.
+
+
+struct DecodedImage(Movable):
+    """An image read from a file: its samples, and what they mean.
+
+    Not a `Framebuffer`, deliberately. A framebuffer is this renderer's own
+    output and carries a settled convention -- eight-bit sRGB with
+    unassociated alpha, which is what `resolve` produced and what `encode`
+    will write back. Bytes that came out of somebody else's file have no such
+    guarantee, and quietly giving them the same meaning is how a linear image
+    ends up being decoded through the sRGB curve a second time.
+
+    So the declared interpretation travels with the samples, and
+    `render.texture.texture_from` uses it rather than assuming.
+    """
+
+    comptime CHANNELS = 4
+
+    var width: Int
+    var height: Int
+    # Eight-bit RGBA, row-major from the top: every colour type is widened to
+    # this, so one shape reaches the renderer rather than five.
+    var pixels: List[UInt8]
+    # `SRGB`, `LINEAR`, or `UNKNOWN_SPACE` when the file declares something
+    # this decoder cannot interpret -- an ICC profile, or a gamma that is
+    # neither of the two. Unknown is not a guess: it is the file saying
+    # something and this decoder admitting it did not understand.
+    var color_space: Int
+
+    def __init__(
+        out self,
+        width: Int,
+        height: Int,
+        var pixels: List[UInt8],
+        color_space: Int,
+    ):
+        """Adopt decoded samples and their declared interpretation."""
+        self.width = width
+        self.height = height
+        self.pixels = pixels^
+        self.color_space = color_space
+
+    def get_pixel(self, x: Int, y: Int) raises -> Color:
+        """Return the sample at (x, y).
+
+        Args:
+            x: Column.
+            y: Row from the top.
+
+        Returns:
+            The four channels as stored, undecoded.
+
+        Raises:
+            Error: If the coordinate is outside the image.
+        """
+        if x < 0 or x >= self.width or y < 0 or y >= self.height:
+            raise Error("Pixel coordinate out of bounds")
+        var at = (y * self.width + x) * Self.CHANNELS
+        return Color(
+            self.pixels[at],
+            self.pixels[at + 1],
+            self.pixels[at + 2],
+            self.pixels[at + 3],
+        )
 
 
 def _be32(bytes: List[UInt8], at: Int) raises -> Int:
@@ -344,31 +377,85 @@ def _unfilter(
     return out^
 
 
-def decode(bytes: List[UInt8]) raises -> Framebuffer:
-    """Return the image a PNG file holds, as RGBA.
+# The largest image this decoder will build. A header is four bytes per
+# dimension, so a file can ask for billions of pixels in a handful of bytes,
+# and the multiply that sizes the buffer overflows long before the allocation
+# fails. Refused up front, by name, rather than discovered as a bad_alloc.
+comptime MAX_DIMENSION = 1 << 16
+comptime MAX_PIXELS = 1 << 28
+
+
+def _channels_for(color_type: Int) raises -> Int:
+    """Return how many samples per pixel a colour type stores."""
+    if color_type == 0:
+        return 1
+    if color_type == 2:
+        return 3
+    if color_type == 3:
+        return 1
+    if color_type == 4:
+        return 2
+    if color_type == 6:
+        return 4
+    raise Error("Unknown PNG colour type")
+
+
+def _space_from_gamma(gamma: Int) -> Int:
+    """Return which colour space a `gAMA` value describes, if either.
+
+    PNG stores the gamma of the *source*, times 100000. Two values matter
+    here: 45455 is the 1/2.2 that stands for ordinary sRGB-ish content, and
+    100000 is a gamma of one, which is linear. Anything else is a transfer
+    function this renderer has no code for, and guessing between the two it
+    does have would be worse than saying so.
+    """
+    if gamma == 100000:
+        return LINEAR
+    if gamma >= 45000 and gamma <= 46000:
+        return SRGB
+    return UNKNOWN_SPACE
+
+
+def decode(bytes: List[UInt8]) raises -> DecodedImage:
+    """Return the image a PNG file holds, as RGBA plus its declared meaning.
 
     Handles the five colour types at eight bits per channel — greyscale, RGB,
     palette, greyscale with alpha, and RGBA — with or without a `tRNS`
     transparency chunk, and every row filter. Everything is widened to RGBA,
-    because that is what a `Framebuffer` and a `Texture` both hold and it
-    means one shape reaches the renderer rather than five.
+    because that is what a `Texture` holds and it means one shape reaches the
+    renderer rather than five.
 
-    Chunk CRCs are checked. A corrupt file that is not checked does not fail,
-    it produces a plausible wrong image, and tracking that back to a bad byte
-    later is far harder than refusing it here.
+    **Structure is checked, not merely walked.** A PNG is an ordered sequence
+    and the order carries meaning: a header first and once, a palette before
+    the data that indexes it, image data in one consecutive run, an end
+    marker. Reading chunks in whatever order they arrive and using whatever
+    they contain is how a malformed file reaches arithmetic that was written
+    assuming a well-formed one — a `tRNS` one byte long used to leave an
+    empty key that the pixel loop then indexed, which is not an error but an
+    out-of-range read.
+
+    **An unknown chunk is not automatically ignorable.** PNG says so in the
+    chunk name itself: a lowercase first letter means ancillary, and those
+    may be skipped; an uppercase one is critical, and a decoder that does not
+    understand it cannot claim to have decoded the file.
+
+    **Chunk CRCs are checked, and so is the zlib stream inside them.** Those
+    are two layers. A CRC says the compressed bytes survived the journey; the
+    Adler-32 inside says they decompress to what the encoder meant.
 
     Args:
         bytes: The complete file.
 
     Returns:
-        The image.
+        The image, with the colour space the file declared.
 
     Raises:
-        Error: If the signature, structure, a CRC or the end marker is wrong
-            or missing, or the file uses
-            a feature this decoder does not have: sixteen bits per channel, a
-            sub-byte palette, or Adam7 interlacing. Each is refused by name
-            rather than mis-decoded.
+        Error: If the signature, structure, ordering, a chunk length, a CRC,
+            the checksum or the end marker is wrong or missing, if a critical
+            chunk is not understood, if the image is larger than this decoder
+            will build, or if the file uses a feature this decoder does not
+            have: sixteen bits per channel, a sub-byte palette, or Adam7
+            interlacing. Each is refused by name rather than mis-decoded.
     """
     var signature = [
         UInt8(137),
@@ -389,16 +476,34 @@ def decode(bytes: List[UInt8]) raises -> Framebuffer:
     var width = 0
     var height = 0
     var color_type = -1
+    var channels = 0
     var palette = List[UInt8]()
     var alphas = List[UInt8]()
     var keyed = False
     var key = List[Int]()
     var compressed = List[UInt8]()
+    var color_space = SRGB
+    # An explicit sRGB chunk outranks a gamma, which is what the
+    # specification says: the gamma is there for decoders with no colour
+    # handling at all, and the two can disagree in the same file.
+    var stated_srgb = False
+    # Where in the file's structure we are. A PNG is ordered, so this is a
+    # small state machine rather than a set of flags that can contradict.
     var seen_header = False
+    var seen_data = False
+    var data_closed = False
     var seen_end = False
+    var expected = 0
 
     var at = 8
     while at + 8 <= len(bytes):
+        if seen_end:
+            raise Error("A PNG has chunks after its end marker")
+        # PNG caps a length at 2^31 - 1 and this reads four bytes into a
+        # 64-bit Int, so the value is always non-negative and a guard against
+        # a negative one would be a branch no file could take -- coverage says
+        # so. What actually bounds it is the check below that the chunk fits
+        # inside the file, which a four-billion-byte length fails at once.
         var length = _be32(bytes, at)
         var kind = String()
         for index in range(4):  # pragma: no branch
@@ -417,46 +522,125 @@ def decode(bytes: List[UInt8]) raises -> Framebuffer:
             checked.append(bytes[at + 4 + index])
         for index in range(length):  # pragma: no branch
             checked.append(body[index])
-        if UInt32(_be32(bytes, start + length)) != _crc32(checked):
+        if UInt32(_be32(bytes, start + length)) != crc32(checked):
             raise Error("A PNG chunk failed its CRC")
 
         if kind == "IHDR":
+            if seen_header:
+                raise Error("A PNG has more than one header chunk")
             if length != 13:
                 raise Error("A PNG header chunk is the wrong size")
             width = _be32(body, 0)
             height = _be32(body, 4)
             if width <= 0 or height <= 0:
                 raise Error("A PNG's dimensions must be positive")
+            if width > MAX_DIMENSION or height > MAX_DIMENSION:
+                raise Error("A PNG larger than this decoder will build")
+            if width * height > MAX_PIXELS:
+                raise Error("A PNG larger than this decoder will build")
             if Int(body[8]) == 16:
                 raise Error("Sixteen bits per channel is not supported")
             if Int(body[8]) != 8:
                 raise Error("Only eight bits per channel is supported")
             color_type = Int(body[9])
+            channels = _channels_for(color_type)
             if Int(body[10]) != 0:
                 raise Error("Unknown PNG compression method")
             if Int(body[11]) != 0:
                 raise Error("Unknown PNG filter method")
             if Int(body[12]) != 0:
                 raise Error("Interlaced PNGs are not supported")
+            # Exactly what the pixel data must decompress to: one filter byte
+            # per row, then the row. Known before a single byte is inflated,
+            # which is what lets the stream be bounded rather than measured
+            # after the fact.
+            expected = height * (1 + width * channels)
             seen_header = True
+        elif not seen_header:
+            raise Error("A PNG must begin with its header chunk")
         elif kind == "PLTE":
-            palette = body.copy()
+            if seen_data:
+                raise Error("A PNG palette must come before its pixel data")
+            if len(palette) > 0:
+                raise Error("A PNG has more than one palette")
+            if length == 0 or length % 3 != 0:
+                raise Error("A PNG palette must be whole three-byte entries")
+            if color_type == 0 or color_type == 4:
+                raise Error("A greyscale PNG cannot carry a palette")
+            palette = body^
         elif kind == "tRNS":
+            if seen_data:
+                raise Error("A PNG tRNS must come before its pixel data")
+            if keyed or len(alphas) > 0:
+                raise Error("A PNG has more than one tRNS chunk")
+            if color_type == 4 or color_type == 6:
+                raise Error(
+                    "A PNG with an alpha channel cannot also carry tRNS"
+                )
             if color_type == 3:
-                alphas = body.copy()
+                if len(palette) == 0:
+                    raise Error("A palette tRNS must follow its palette")
+                if length > len(palette) // 3:
+                    raise Error("A PNG tRNS is longer than its palette")
+                alphas = body^
             else:
                 # One colour is transparent, given as a channel per component
                 # at the file's bit depth -- so the low byte of each pair.
+                # Two bytes for grey, six for RGB, and nothing else: a short
+                # one used to leave a key the pixel loop then indexed past.
+                if length != channels * 2:
+                    raise Error("A PNG tRNS is the wrong size for its colour")
                 keyed = True
                 key = List[Int]()
-                for index in range(len(body) // 2):  # pragma: no branch
+                for index in range(channels):  # pragma: no branch
                     key.append(Int(body[index * 2 + 1]))
+        elif kind == "sRGB":
+            if seen_data:
+                raise Error("A PNG sRGB chunk must come before its pixel data")
+            color_space = SRGB
+            stated_srgb = True
+        elif kind == "gAMA":
+            if seen_data:
+                raise Error("A PNG gAMA chunk must come before its pixel data")
+            if length != 4:
+                raise Error("A PNG gAMA chunk is the wrong size")
+            if not stated_srgb:
+                color_space = _space_from_gamma(_be32(body, 0))
+        elif kind == "iCCP":
+            if seen_data:
+                raise Error("A PNG iCCP chunk must come before its pixel data")
+            # A profile this renderer has no way to apply. Saying so beats
+            # both ignoring it and refusing the file: the caller can state an
+            # interpretation, and `texture_from` will insist they do.
+            color_space = UNKNOWN_SPACE
         elif kind == "IDAT":
+            if data_closed:
+                raise Error("A PNG's pixel data must be in one run")
+            if color_type == 3 and len(palette) == 0:
+                raise Error("A palette PNG needs a palette before its data")
+            seen_data = True
             for index in range(length):  # pragma: no branch
                 compressed.append(body[index])
         elif kind == "IEND":
+            if length != 0:
+                raise Error("A PNG end marker must be empty")
+            if not seen_data:
+                raise Error("A PNG needs pixel data")
             seen_end = True
-            break
+        else:
+            # A chunk whose first letter is uppercase is critical: the file
+            # cannot be read correctly without understanding it, and a
+            # decoder that skips one is guessing. Lowercase is ancillary and
+            # may be ignored, which is what tEXt and friends are for.
+            if Int(bytes[at + 4]) < 97:
+                raise Error(
+                    "A PNG uses a critical chunk this decoder does not know"
+                )
+
+        # The pixel data has to arrive in one consecutive run, so anything
+        # else after it closes the run and a later IDAT is an error.
+        if kind != "IDAT" and seen_data:
+            data_closed = True
 
         at = start + length + 4
 
@@ -468,27 +652,11 @@ def decode(bytes: List[UInt8]) raises -> Framebuffer:
     # is whole.
     if not seen_end:
         raise Error("A PNG is missing its end marker; the file is truncated")
-    if len(compressed) == 0:
-        raise Error("A PNG needs pixel data")
 
-    var channels: Int
-    if color_type == 0:
-        channels = 1
-    elif color_type == 2:
-        channels = 3
-    elif color_type == 3:
-        channels = 1
-    elif color_type == 4:
-        channels = 2
-    elif color_type == 6:
-        channels = 4
-    else:
-        raise Error("Unknown PNG colour type")
-    if color_type == 3 and len(palette) == 0:
-        raise Error("A palette PNG needs a palette")
-
+    # Bounded by the size the header already committed to, so a stream that
+    # expands without limit is stopped as it does rather than afterwards.
     var rows = _unfilter(
-        zlib_inflate(compressed),
+        zlib_inflate(compressed, expected),
         width,
         height,
         width * channels,
@@ -544,4 +712,4 @@ def decode(bytes: List[UInt8]) raises -> Framebuffer:
         pixels.append(b)
         pixels.append(a)
 
-    return Framebuffer(width, height, pixels^)
+    return DecodedImage(width, height, pixels^, color_space)

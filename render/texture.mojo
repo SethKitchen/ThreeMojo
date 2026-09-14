@@ -35,8 +35,15 @@ the edge colour, and `MIRROR` alternates direction each tile — the same three
 three.js offers.
 """
 
-from render.framebuffer import Color, FloatColor, Framebuffer
-from render.srgb import LINEAR, SRGB, decode_ramp, linear_to_srgb
+from render.framebuffer import Color, FloatColor
+from render.png import DecodedImage
+from render.srgb import (
+    LINEAR,
+    SRGB,
+    UNKNOWN_SPACE,
+    decode_ramp,
+    linear_to_srgb,
+)
 from std.math import floor
 
 # How a coordinate outside the unit square is resolved.
@@ -745,40 +752,60 @@ struct Texture(Movable):
 
 
 def texture_from(
-    image: Framebuffer,
+    image: DecodedImage,
     wrap: Int = REPEAT,
     filter: Int = BILINEAR,
-    color_space: Int = SRGB,
+    color_space: Int = -1,
     mipmapped: Bool = False,
 ) raises -> Texture:
     """Return a texture holding a decoded image's pixels.
 
-    The join between `render.png`'s decoder and this module. Both already hold
+    The join between `render.png`'s decoder and this module. Both hold
     eight-bit RGBA in row-major order from the top, so there is nothing to
-    convert -- which is the point of widening every colour type to RGBA while
-    decoding rather than carrying five shapes through the renderer.
+    convert — which is the point of widening every colour type while decoding
+    rather than carrying five shapes through the renderer.
+
+    **The colour space comes from the file unless you say otherwise.** A PNG
+    does not imply sRGB: it can declare a gamma of one, which is linear, and
+    decoding that through the sRGB curve turns a mid grey of 128 into a fifth
+    of the light instead of half of it. Passing `color_space` overrides what
+    the file said, which is what a normal map stored without any tag needs.
+
+    A file that declared something this decoder could not interpret — an ICC
+    profile, or a gamma that is neither sRGB's nor one — arrives as
+    `UNKNOWN_SPACE` and must be settled here. Refusing beats guessing: the
+    caller knows what the image is for and the decoder does not.
 
     Args:
         image: The decoded image.
         wrap: How coordinates outside the unit square are resolved.
         filter: `NEAREST` or `BILINEAR`.
-        color_space: `SRGB` for a colour image, `LINEAR` for data that merely
-            happens to be stored in one.
+        color_space: `SRGB` or `LINEAR` to override, or -1 to use whatever
+            the file declared.
         mipmapped: Build the chain of halved copies.
 
     Returns:
         The texture.
 
     Raises:
-        Error: If any argument is not one this module knows.
+        Error: If any argument is not one this module knows, or the file's
+            declared colour space could not be interpreted and none was given.
     """
+    var space = color_space
+    if space == -1:
+        space = image.color_space
+    if space == UNKNOWN_SPACE:
+        raise Error(
+            "This image declares a colour space that cannot be interpreted;"
+            " pass SRGB or LINEAR to say how to read it"
+        )
     return Texture(
         image.width,
         image.height,
         image.pixels.copy(),
         wrap,
         filter,
-        color_space,
+        space,
         mipmapped,
     )
 

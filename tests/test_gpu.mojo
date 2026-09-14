@@ -630,12 +630,26 @@ def test_both_backends_agree_on_a_whole_prepared_scene() raises:
     assert_true(len(corners) > 0, "the scene prepared no triangles")
     assert_equal(len(corners) % 3, 0)
 
-    var cpu = renderer.render(scene, assets, meshes, camera)
-    # The same lights the CPU path resolves. Lighting is per fragment now, so
-    # it is no longer baked into the prepared corners: hand it to both or they
-    # are not being asked the same question.
+    # "Prepared once, filled twice" has to be literally true or the test is
+    # weaker than it reads: calling `render` here would prepare the scene a
+    # second time and compare two pipelines rather than two rasterizers.
+    # Lighting is per fragment now and is no longer baked into the corners,
+    # so both sides get the same resolved lights as well as the same list.
+    var lighting = Lighting(scene)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    for triangle in range(len(corners) // 3):  # pragma: no branch
+        rasterize_shaded(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+            target,
+            SHADE_LIT,
+            assets.textures,
+            lighting,
+        )
+    var cpu = target.resolve()
     var gpu = render_triangles(
-        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), Lighting(scene)
+        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), lighting
     )
 
     # A real image: both meshes visible, and plenty of background left.
@@ -1328,6 +1342,95 @@ def cpu_textured_lit(
             lighting,
         )
     return target.resolve()
+
+
+def test_both_backends_match_a_hand_computed_shaded_pixel() raises:
+    # An answer worked out on paper rather than taken from either backend,
+    # which is what makes this different from the parity tests around it:
+    # they prove the two agree, and this proves what they agree *on*.
+    #
+    # Three corners with inv_w of 1, 0.5 and 0.25, so the perspective
+    # correction actually bites. At pixel (1, 1) the sample is (1.5, 1.5) and
+    # the screen-space weights are (0.5, 0.25, 0.25); weighting each by its
+    # own inv_w and renormalizing gives (8/11, 2/11, 1/11).
+    #
+    # The normals are the three axes, so the interpolated normal is
+    # (2, 1, 8) / 11, whose length is sqrt(69) / 11. Against a unit white
+    # light along +z the Lambert term is 8 / sqrt(69) = 0.963087, and 0.963087
+    # of the light displays as 251.
+    #
+    # Interpolating lighting computed at the corners instead would give
+    # (8/11) * 1 + (2/11) * 0 + (1/11) * 0 = 0.727, which displays as 224.
+    if skipped_for_lack_of_a_gpu("a hand-computed shaded pixel"):
+        return
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    _ = scene.add(lamp^)
+    scene.update()
+    scene.add_light(directional_light(Color(255, 255, 255), NodeId(0)))
+    var lighting = Lighting(scene)
+
+    var corners = List[RasterVertex]()
+    corners.append(
+        RasterVertex(
+            0.5,
+            0.5,
+            0.5,
+            1.0,
+            FloatColor(1, 1, 1),
+            0,
+            0,
+            NO_TEXTURE,
+            OPAQUE,
+            Vector3(0, 0, 1),
+        )
+    )
+    corners.append(
+        RasterVertex(
+            4.5,
+            0.5,
+            0.5,
+            0.5,
+            FloatColor(1, 1, 1),
+            0,
+            0,
+            NO_TEXTURE,
+            OPAQUE,
+            Vector3(1, 0, 0),
+        )
+    )
+    corners.append(
+        RasterVertex(
+            0.5,
+            4.5,
+            0.5,
+            0.25,
+            FloatColor(1, 1, 1),
+            0,
+            0,
+            NO_TEXTURE,
+            OPAQUE,
+            Vector3(0, 1, 0),
+        )
+    )
+
+    var target = RenderTarget(6, 6, BACKGROUND)
+    rasterize_shaded(
+        corners[0],
+        corners[1],
+        corners[2],
+        target,
+        SHADE_LIT,
+        TextureStore(),
+        lighting,
+    )
+    assert_equal(target.shown(1, 1).r, UInt8(251))
+
+    var gpu = render_triangles(
+        corners, 6, 6, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    assert_equal(gpu.get_pixel(1, 1).r, UInt8(251))
 
 
 def test_both_backends_agree_on_every_wrap_mode() raises:

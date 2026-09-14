@@ -531,17 +531,71 @@ rather than five, and `texture_from` is then a copy rather than a conversion.
 
 Sixteen-bit channels, sub-byte palettes and Adam7 interlacing are legal PNG
 that this decoder does not have. Each is **refused by name** rather than
-mis-decoded, as is a chunk that fails its CRC: a corrupt file that is not
-checked does not fail, it produces a plausible wrong image, and tracing that
-back to a bad byte later is far harder than refusing it here. A file missing
-only its end marker is refused too — it can hold every pixel and still be
-truncated.
+mis-decoded.
+
+### A file is structure, not a bag of chunks
+
+A PNG is an *ordered* sequence and the order carries meaning: a header first
+and once, a palette before the data that indexes it, image data in one
+consecutive run, an end marker. Reading chunks in whatever order they arrive
+and using whatever they contain is how a malformed file reaches arithmetic
+written for a well-formed one — a `tRNS` chunk one byte long left an empty
+colour key that the pixel loop then indexed, so a file with entirely valid
+CRCs reached an out-of-range read.
+
+So ordering, duplication, applicability and length are all checked per chunk,
+and **an unknown chunk is not automatically ignorable**. PNG says which is
+which in the name itself: a lowercase first letter means ancillary and may be
+skipped, an uppercase one is critical and a decoder that does not understand it
+cannot claim to have decoded the file.
+
+Dimensions are bounded before anything is allocated. A header asks for its size
+in four bytes per side, so a thirteen-byte chunk can demand ten billion pixels,
+and the multiply that sizes the buffer overflows long before the allocation
+fails.
+
+### Three layers of integrity, not one
+
+```
+chunk CRC     the compressed bytes survived the journey
+Adler-32      they decompress to what the encoder meant
+output bound  they decompress to the size the header promised
+```
+
+These are genuinely separate, and only the first was being checked. A stream
+with its Adler-32 removed, or altered, decoded happily inside a CRC-valid
+chunk. And the expansion limit has to be enforced *as* bytes are produced: a
+decompressor that expands everything and then compares the length has already
+done the work and already holds the memory. The exact size is known before a
+single byte is inflated — `height * (1 + width * channels)` — so there is
+nothing to estimate.
+
+A file missing only its end marker is refused too: it can hold every pixel and
+still be truncated.
+
+### What the samples mean
+
+**PNG does not imply sRGB.** A file can declare a gamma of one, which is
+linear, and decoding that through the sRGB curve turns a mid grey of 128 from
+half the light into a fifth of it — with nothing downstream able to tell.
+
+So `decode` returns a `DecodedImage`, which is samples *plus their declared
+interpretation*, rather than a `Framebuffer`. A framebuffer is this renderer's
+own output and carries a settled convention; bytes out of somebody else's file
+carry whatever that file said. `texture_from` uses the declared space unless
+you override it.
+
+A file that declares something this decoder cannot interpret — an ICC profile,
+or a gamma that is neither sRGB's nor one — arrives as `UNKNOWN_SPACE` and must
+be settled by the caller. That is neither ignoring it nor refusing the file:
+the caller knows what the image is for and the decoder does not.
 
 The tests decode real files written by a conforming encoder and embedded as
 bytes, because a decoder checked only against this project's own encoder would
 never see a Huffman code or a row filter at all. They cover both compressed
-block types, every filter, an overlapping run, each colour type, and twenty-odd
-malformed files each aimed at one specific refusal.
+block types, every filter, an overlapping run, each colour type, and some fifty
+malformed files — each with correct chunk CRCs, damaged in exactly one way, so
+each reaches the check it is aimed at rather than tripping an earlier one.
 
 `make animation` renders `out/photo.png`: a cube wearing `assets/brick.png`,
 which is dynamic-Huffman compressed and Sub-filtered — neither of which this

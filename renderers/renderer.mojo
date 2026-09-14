@@ -10,8 +10,10 @@ mesh's world transform, project its vertices, and rasterize its triangles with
 depth. Having it in one place is what lets an example say `render(scene,
 meshes, camera)` instead of spelling all that out.
 
-Lighting is evaluated per vertex and interpolated across the triangle, which
-is Gouraud shading. A geometry's `normal` attribute decides how it looks: a
+Lighting is evaluated per *fragment*: what a corner carries is a world-space
+normal, which is interpolated across the triangle and made unit length again
+at every pixel before the lights are summed. A geometry's `normal` attribute
+decides how it looks: a
 box gives each of a face's four corners that face's own normal, so the four
 agree and the face comes out flat with a crisp edge; a sphere gives each
 vertex the direction it points from the centre, so neighbouring triangles
@@ -333,6 +335,13 @@ struct Renderer(Movable):
         rather than merely similar: a parity test can hand both the identical
         input and demand identical output.
 
+        **Prepared triangles are no longer the whole of a frame.** Lighting
+        used to be evaluated here and baked into each corner; it is now
+        evaluated per fragment, so a rasterizer needs the scene's resolved
+        `Lighting` alongside this list. Handing one backend the lights and
+        letting the other fall back to `Lighting.uniform` is not a parity
+        test, it is two different questions.
+
         `scene.update()` must have been called since the last transform
         change; this reads world matrices rather than recomputing them, so a
         stale scene renders stale positions.
@@ -354,9 +363,6 @@ struct Renderer(Movable):
                 if its geometry has no positions.
         """
         var corners = List[RasterVertex]()
-        # Resolved once: a light's direction comes from its node's world
-        # matrix, and that cannot change within a frame.
-        var lighting = Lighting(scene)
         var view = camera.view_matrix()
         var to_screen = camera.view_to_screen_matrix(self.width, self.height)
         var near = camera.near_distance()
