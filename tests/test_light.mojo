@@ -24,7 +24,7 @@ from lights.light import (
 from lights.lighting import Lighting
 from math.vector3 import Vector3
 from units.si import Angle, DEGREE
-from render.framebuffer import Color
+from render.framebuffer import Color, FloatColor
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -276,6 +276,35 @@ def test_shading_preserves_alpha() raises:
         Color(200, 100, 50, 128), Vector3(0, 1, 0)
     ).encode()
     assert_equal(shaded.a, UInt8(128))
+
+
+def test_uniform_lighting_leaves_a_colour_alone() raises:
+    # The identity for the multiply a fragment does, and the default both
+    # rasterizers take. The same idea as the blank texture sampling opaque
+    # white: it makes "no lighting" a value rather than a branch, so a
+    # hand-built triangle asking about coverage or depth gets the colours it
+    # passed in rather than black.
+    var plain = Lighting.uniform()
+    assert_equal(plain.count(), 0)
+    var arriving = plain.intensity_at(Vector3(0, 1, 0))
+    assert_almost_equal(arriving.r, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(arriving.b, Float32(1), atol=TOLERANCE)
+    # Whichever way the surface faces: there is no direction in it.
+    var behind = plain.intensity_at(Vector3(0, -1, 0))
+    assert_almost_equal(behind.g, Float32(1), atol=TOLERANCE)
+    # And a surface keeps its own colour exactly.
+    var kept = plain.shade(Color(200, 100, 50), Vector3(0, 0, -1)).encode()
+    assert_equal(kept.r, UInt8(200))
+    assert_equal(kept.g, UInt8(100))
+    assert_equal(kept.b, UInt8(50))
+
+
+def test_lighting_can_be_built_from_an_ambient_term_alone() raises:
+    var dim = Lighting(ambient=FloatColor(0.25, 0.5, 0.75, 1.0))
+    assert_equal(dim.count(), 0)
+    assert_almost_equal(
+        dim.intensity_at(Vector3(1, 0, 0)).g, Float32(0.5), atol=TOLERANCE
+    )
 
 
 def main() raises:
