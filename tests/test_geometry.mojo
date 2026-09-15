@@ -11,9 +11,11 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from geometries.box import box, cube
 from geometries.circle import circle, ring
+from geometries.cylinder import cone, cylinder
 from geometries.plane import plane
 from geometries.sphere import sphere
 from math.vector3 import Vector3
+from std.math import cos, pi, sin, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -79,6 +81,55 @@ def signed_area(geometry: BufferGeometry) raises -> Float32:
         var c = geometry.corner(triangle, 2)
         total += ((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) / 2
     return total
+
+
+def surface_area(geometry: BufferGeometry) raises -> Float32:
+    """Return the summed area of every triangle, in three dimensions."""
+    var total = Float32(0)
+    for triangle in range(geometry.triangle_count()):
+        var a = geometry.corner(triangle, 0)
+        var first = geometry.corner(triangle, 1)
+        first.sub(a)
+        var second = geometry.corner(triangle, 2)
+        second.sub(a)
+        first.cross(second)
+        total += first.length() / 2
+    return total
+
+
+def assert_faces_wind_with_their_normals(geometry: BufferGeometry) raises:
+    """Assert every triangle's winding faces the way its corners' normals
+    point: the cross product of its edges has a positive dot with the sum
+    of the three normals."""
+    ref normals = geometry.attribute_view(String(NORMAL))
+    for triangle in range(geometry.triangle_count()):
+        var a = geometry.corner(triangle, 0)
+        var first = geometry.corner(triangle, 1)
+        first.sub(a)
+        var second = geometry.corner(triangle, 2)
+        second.sub(a)
+        first.cross(second)
+        var stated = normals.vector3(geometry.corner_index(triangle, 0))
+        stated.add(normals.vector3(geometry.corner_index(triangle, 1)))
+        stated.add(normals.vector3(geometry.corner_index(triangle, 2)))
+        assert_true(first.dot(stated) > 0, "a face winds against its normals")
+
+
+def assert_no_degenerate_triangle(geometry: BufferGeometry) raises:
+    """Assert every triangle has some area."""
+    for triangle in range(geometry.triangle_count()):
+        var a = geometry.corner(triangle, 0)
+        var first = geometry.corner(triangle, 1)
+        first.sub(a)
+        var second = geometry.corner(triangle, 2)
+        second.sub(a)
+        first.cross(second)
+        assert_true(first.length() > Float32(1e-6), "a triangle has no area")
+
+
+def assert_unit(normal: Vector3) raises:
+    """Assert a normal has unit length."""
+    assert_almost_equal(normal.length(), Float32(1), atol=Float64(1e-5))
 
 
 def triangle_attribute() raises -> BufferAttribute:
@@ -822,15 +873,9 @@ def test_ring_triangles_wind_counter_clockwise_from_the_front() raises:
 
 
 def test_no_ring_triangle_is_degenerate() raises:
-    var washer = ring(Length(1.0, METER), Length(2.0, METER), 6, 2)
-    for triangle in range(washer.triangle_count()):
-        var a = washer.corner(triangle, 0)
-        var first = washer.corner(triangle, 1)
-        first.sub(a)
-        var second = washer.corner(triangle, 2)
-        second.sub(a)
-        first.cross(second)
-        assert_true(first.length() > Float32(1e-6))
+    assert_no_degenerate_triangle(
+        ring(Length(1.0, METER), Length(2.0, METER), 6, 2)
+    )
 
 
 def test_a_ring_maps_the_outer_bounding_square_onto_the_image() raises:
@@ -913,6 +958,314 @@ def test_a_ring_needs_enough_segments() raises:
         _ = ring(Length(1.0, METER), Length(2.0, METER), 2, 1)
     with assert_raises():
         _ = ring(Length(1.0, METER), Length(2.0, METER), 8, 0)
+
+
+# --- cylinder ---------------------------------------------------------------
+
+
+def a_can(radial: Int = 8, rows: Int = 2) raises -> BufferGeometry:
+    """Return a cylinder of radius one and height two."""
+    return cylinder(
+        Length(1.0, METER), Length(1.0, METER), Length(2.0, METER), radial, rows
+    )
+
+
+def test_a_cylinder_is_a_bent_grid_with_a_cap_at_each_end() raises:
+    var can = a_can(8, 2)
+    # Three rows of nine down the side, then each cap: eight centers and a
+    # rim of nine, as three.js emits them.
+    assert_equal(can.vertex_count(), 9 * 3 + 2 * (8 + 9))
+    assert_equal(can.triangle_count(), 2 * 8 * 2 + 8 + 8)
+    assert_equal(
+        cylinder(
+            Length(1.0, METER), Length(1.0, METER), Length(1.0, METER)
+        ).triangle_count(),
+        2 * 32 + 64,
+    )
+
+
+def test_a_cylinders_side_lies_at_its_radius_between_its_ends() raises:
+    var can = a_can(8, 2)
+    ref positions = can.attribute_view(String(POSITION))
+    for vertex in range(27):
+        var p = positions.vector3(vertex)
+        assert_almost_equal(
+            sqrt(p.x * p.x + p.z * p.z), Float32(1), atol=Float64(1e-5)
+        )
+        assert_true(p.y >= -1 and p.y <= 1)
+    # Rows run from the top down.
+    assert_equal(positions.vector3(0).y, Float32(1))
+    assert_equal(positions.vector3(9).y, Float32(0))
+    assert_equal(positions.vector3(18).y, Float32(-1))
+
+
+def test_a_cylinder_starts_at_plus_z_and_runs_toward_plus_x() raises:
+    # three.js's convention, and not the circle's: x = r sin, z = r cos.
+    var can = cylinder(
+        Length(2.0, METER), Length(2.0, METER), Length(1.0, METER), 4, 1
+    )
+    ref positions = can.attribute_view(String(POSITION))
+    var first = positions.vector3(0)
+    assert_almost_equal(first.x, Float32(0), atol=Float64(1e-5))
+    assert_almost_equal(first.z, Float32(2), atol=Float64(1e-5))
+    var quarter = positions.vector3(1)
+    assert_almost_equal(quarter.x, Float32(2), atol=Float64(1e-5))
+    assert_almost_equal(quarter.z, Float32(0), atol=Float64(1e-5))
+    var half = positions.vector3(2)
+    assert_almost_equal(half.z, Float32(-2), atol=Float64(1e-5))
+    # The seam: the last column sits on the first.
+    var seam = positions.vector3(4)
+    assert_almost_equal(seam.x, Float32(0), atol=Float64(1e-5))
+    assert_almost_equal(seam.z, Float32(2), atol=Float64(1e-5))
+
+
+def test_cylinder_normals_are_horizontal_on_the_side_and_axial_on_the_caps() raises:
+    var can = a_can(8, 1)
+    ref normals = can.attribute_view(String(NORMAL))
+    for vertex in range(18):
+        var n = normals.vector3(vertex)
+        assert_unit(n)
+        assert_equal(n.y, Float32(0))
+    # The first side normal points along +z, where the sweep starts.
+    assert_almost_equal(normals.vector3(0).z, Float32(1), atol=Float64(1e-6))
+    # Top cap: eight centers and nine rim vertices, all facing +y.
+    for vertex in range(18, 35):
+        var n = normals.vector3(vertex)
+        assert_equal(n.x, Float32(0))
+        assert_equal(n.y, Float32(1))
+    for vertex in range(35, 52):
+        assert_equal(normals.vector3(vertex).y, Float32(-1))
+
+
+def test_a_cylinder_maps_u_around_and_v_down_and_each_cap_to_a_square() raises:
+    var can = cylinder(
+        Length(2.0, METER), Length(2.0, METER), Length(1.0, METER), 4, 1
+    )
+    ref uvs = can.attribute_view(String(UV))
+    ref positions = can.attribute_view(String(POSITION))
+    # The side: u from zero at the first column to one at the seam, v from
+    # one at the top row to zero at the bottom.
+    assert_equal(uvs.component(0, 0), Float32(0))
+    assert_equal(uvs.component(0, 1), Float32(1))
+    assert_equal(uvs.component(4, 0), Float32(1))
+    assert_equal(uvs.component(5, 1), Float32(0))
+    # The top cap's centers are the middle of the image.
+    assert_equal(uvs.component(10, 0), Float32(0.5))
+    assert_equal(uvs.component(10, 1), Float32(0.5))
+    assert_equal(positions.vector3(10).y, Float32(0.5))
+    # Its rim starts at +z, which maps to the right edge halfway up.
+    assert_almost_equal(uvs.component(14, 0), Float32(1), atol=TOLERANCE)
+    assert_almost_equal(uvs.component(14, 1), Float32(0.5), atol=TOLERANCE)
+    # The bottom cap is seen from below, so its v runs the other way: the
+    # +x rim vertex maps to the bottom edge.
+    assert_almost_equal(uvs.component(24, 0), Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(uvs.component(24, 1), Float32(0), atol=TOLERANCE)
+    assert_almost_equal(positions.vector3(24).x, Float32(2), atol=TOLERANCE)
+    assert_texture_coordinates_in_range(can)
+
+
+def test_every_cylinder_face_winds_outward() raises:
+    assert_faces_wind_with_their_normals(a_can(8, 2))
+    assert_no_degenerate_triangle(a_can(8, 2))
+
+
+def test_a_cylinders_area_is_its_facets_and_its_caps() raises:
+    # Eight flat facets of chord 2 r sin(pi / 8) by the height, and two fans
+    # of eight triangles each.
+    var can = a_can(8, 1)
+    var chord = 2 * sin(Float32(pi) / 8)
+    var side = 8 * chord * 2
+    var caps = 2 * (Float32(8) / 2 * sin(Float32(pi) / 4))
+    assert_almost_equal(surface_area(can), side + caps, atol=Float64(1e-4))
+
+
+def test_a_frustum_leans_its_normals_with_its_side() raises:
+    # Top radius one, bottom radius two, height one: the side leans out at
+    # 45 degrees on its way down, and so does every normal, up.
+    var bucket = cylinder(
+        Length(1.0, METER), Length(2.0, METER), Length(1.0, METER), 8, 1
+    )
+    ref normals = bucket.attribute_view(String(NORMAL))
+    var lean = Float32(0.70710678)
+    for vertex in range(18):
+        var n = normals.vector3(vertex)
+        assert_unit(n)
+        assert_almost_equal(n.y, lean, atol=Float64(1e-5))
+    assert_almost_equal(normals.vector3(0).z, lean, atol=Float64(1e-5))
+    ref positions = bucket.attribute_view(String(POSITION))
+    assert_almost_equal(positions.vector3(0).z, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(positions.vector3(9).z, Float32(2), atol=TOLERANCE)
+    assert_faces_wind_with_their_normals(bucket)
+
+
+def test_an_open_cylinder_has_no_caps() raises:
+    var pipe = cylinder(
+        Length(1.0, METER),
+        Length(1.0, METER),
+        Length(2.0, METER),
+        8,
+        1,
+        open_ended=True,
+    )
+    assert_equal(pipe.vertex_count(), 9 * 2)
+    assert_equal(pipe.triangle_count(), 2 * 8)
+
+
+def test_a_partial_sweep_makes_a_section() raises:
+    var half = cylinder(
+        Length(1.0, METER),
+        Length(1.0, METER),
+        Length(1.0, METER),
+        4,
+        1,
+        False,
+        Angle(0.0, DEGREE),
+        Angle(180.0, DEGREE),
+    )
+    ref positions = half.attribute_view(String(POSITION))
+    # The last column stops at -z, halfway round from +z.
+    var end = positions.vector3(4)
+    assert_almost_equal(end.x, Float32(0), atol=Float64(1e-5))
+    assert_almost_equal(end.z, Float32(-1), atol=Float64(1e-5))
+    # The caps are half disks, still one center per segment.
+    assert_equal(half.vertex_count(), 5 * 2 + 2 * (4 + 5))
+    assert_equal(half.triangle_count(), 2 * 4 + 4 + 4)
+    assert_faces_wind_with_their_normals(half)
+
+
+def test_a_cylinder_can_be_measured_in_feet() raises:
+    var can = cylinder(
+        Length(1.0, FOOT), Length(1.0, FOOT), Length(2.0, FOOT), 8
+    )
+    var top = can.attribute_view(String(POSITION)).vector3(0)
+    assert_almost_equal(top.y, Float32(0.3048), atol=Float64(1e-5))
+    assert_almost_equal(top.z, Float32(0.3048), atol=Float64(1e-5))
+
+
+def test_a_cylinder_needs_a_radius_a_height_and_enough_segments() raises:
+    var one = Length(1.0, METER)
+    var none = Length(0.0, METER)
+    with assert_raises():
+        _ = cylinder(Length(-1.0, METER), one, one)
+    with assert_raises():
+        _ = cylinder(one, Length(-1.0, METER), one)
+    with assert_raises():
+        _ = cylinder(none, none, one)
+    with assert_raises():
+        _ = cylinder(one, one, none)
+    with assert_raises():
+        _ = cylinder(one, one, one, 2)
+    with assert_raises():
+        _ = cylinder(one, one, one, 8, 0)
+    with assert_raises():
+        _ = cylinder(
+            one, one, one, 8, 1, False, Angle(0.0, DEGREE), Angle(0.0, TURN)
+        )
+    with assert_raises():
+        _ = cylinder(
+            one, one, one, 8, 1, False, Angle(0.0, DEGREE), Angle(2.0, TURN)
+        )
+
+
+# --- cone -------------------------------------------------------------------
+
+
+def test_a_cone_is_a_cylinder_with_no_top() raises:
+    var spike = cone(Length(1.0, METER), Length(2.0, METER), 8, 1)
+    # Two rows of nine down the side and one cap: the top has no radius, so
+    # it gets no cap, and each side cell is one triangle rather than two.
+    assert_equal(spike.vertex_count(), 9 * 2 + (8 + 9))
+    assert_equal(spike.triangle_count(), 8 + 8)
+    ref positions = spike.attribute_view(String(POSITION))
+    for vertex in range(9):
+        assert_almost_equal(
+            positions.vector3(vertex).x, Float32(0), atol=TOLERANCE
+        )
+        assert_equal(positions.vector3(vertex).y, Float32(1))
+        assert_almost_equal(
+            positions.vector3(vertex).z, Float32(0), atol=TOLERANCE
+        )
+    assert_no_degenerate_triangle(spike)
+    assert_faces_wind_with_their_normals(spike)
+
+
+def test_a_cones_point_has_one_normal_per_column() raises:
+    # Radius one over height two: the side climbs at a slope of a half, and
+    # every normal leans up by that much, at the point as on the side.
+    var spike = cone(Length(1.0, METER), Length(2.0, METER), 8, 1)
+    ref normals = spike.attribute_view(String(NORMAL))
+    var up = Float32(0.5) / sqrt(Float32(1.25))
+    for vertex in range(18):
+        var n = normals.vector3(vertex)
+        assert_unit(n)
+        assert_almost_equal(n.y, up, atol=Float64(1e-5))
+    # The point's first normal leans toward +z, its third toward +x.
+    assert_true(normals.vector3(0).z > 0.8)
+    assert_true(normals.vector3(2).x > 0.8)
+
+
+def test_a_cone_with_rows_keeps_every_whole_cell() raises:
+    # Only the cells against the point lose a triangle.
+    var spike = cone(Length(1.0, METER), Length(2.0, METER), 8, 2)
+    assert_equal(spike.vertex_count(), 9 * 3 + (8 + 9))
+    assert_equal(spike.triangle_count(), 8 + 16 + 8)
+    assert_no_degenerate_triangle(spike)
+    assert_faces_wind_with_their_normals(spike)
+
+
+def test_a_cylinder_with_no_bottom_radius_is_a_cone_the_other_way_up() raises:
+    var funnel = cylinder(
+        Length(1.0, METER), Length(0.0, METER), Length(2.0, METER), 8, 2
+    )
+    assert_equal(funnel.vertex_count(), 9 * 3 + (8 + 9))
+    assert_equal(funnel.triangle_count(), 16 + 8 + 8)
+    ref positions = funnel.attribute_view(String(POSITION))
+    for vertex in range(18, 27):
+        assert_equal(positions.vector3(vertex).y, Float32(-1))
+    # The one cap is on top, facing +y.
+    assert_equal(
+        funnel.attribute_view(String(NORMAL)).vector3(27).y, Float32(1)
+    )
+    assert_no_degenerate_triangle(funnel)
+    assert_faces_wind_with_their_normals(funnel)
+
+
+def test_a_cones_area_is_its_facets_and_its_base() raises:
+    # Eight triangles from the base chord up to the point, plus the base fan.
+    var spike = cone(Length(1.0, METER), Length(2.0, METER), 8, 1)
+    var chord = 2 * sin(Float32(pi) / 8)
+    var apothem = cos(Float32(pi) / 8)
+    var slant = sqrt(apothem * apothem + 4)
+    var side = 8 * chord * slant / 2
+    var base = Float32(8) / 2 * sin(Float32(pi) / 4)
+    assert_almost_equal(surface_area(spike), side + base, atol=Float64(1e-4))
+
+
+def test_a_cone_can_be_open_and_partial() raises:
+    var shell = cone(
+        Length(1.0, METER),
+        Length(1.0, METER),
+        6,
+        1,
+        True,
+        Angle(90.0, DEGREE),
+        Angle(90.0, DEGREE),
+    )
+    assert_equal(shell.vertex_count(), 7 * 2)
+    assert_equal(shell.triangle_count(), 6)
+    # The sweep starts a quarter turn on from +z: at +x.
+    var start = shell.attribute_view(String(POSITION)).vector3(7)
+    assert_almost_equal(start.x, Float32(1), atol=Float64(1e-5))
+    assert_almost_equal(start.z, Float32(0), atol=Float64(1e-5))
+
+
+def test_a_cone_needs_a_radius_and_a_height() raises:
+    with assert_raises():
+        _ = cone(Length(0.0, METER), Length(1.0, METER))
+    with assert_raises():
+        _ = cone(Length(1.0, METER), Length(0.0, METER))
+    with assert_raises():
+        _ = cone(Length(1.0, METER), Length(1.0, METER), 2)
 
 
 def main() raises:

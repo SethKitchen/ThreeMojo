@@ -1,8 +1,8 @@
 # Geometry
 
-`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. Five builders make a box, a sphere, a plane, a circle and a ring.
+`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. Seven builders make a box, a sphere, a plane, a circle, a ring, a cylinder and a cone.
 
-three.js: `BufferGeometry`, `BufferAttribute`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`.
+three.js: `BufferGeometry`, `BufferAttribute`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`.
 
 ## BufferAttribute
 
@@ -88,6 +88,28 @@ The texture coordinates map the square around the outer edge onto the image, as 
 
 A ring with no hole is a disk. Use `circle` for it.
 
+## Cylinder
+
+```mojo
+var can = cylinder(Length(1.0, METER), Length(1.0, METER), Length(2.0, METER), 32, 1)  # top radius, bottom radius, height
+var bucket = cylinder(Length(0.8, METER), Length(1.2, METER), Length(2.0, METER))
+var pipe = cylinder(Length(1.0, METER), Length(1.0, METER), Length(2.0, METER), 32, 1, open_ended=True)
+```
+
+A cylinder stands on the y axis, centered on the origin. The first radius is at the top and the second at the bottom. Different radii make a frustum. The side comes first, in rows from the top down, one vertex per segment around and one more for the seam. A cap follows at each end unless `open_ended` is true. Each cap has one center vertex per segment, as in three.js.
+
+Side normals lean with the side, so a frustum shades smoothly. Cap normals point along the axis. `u` runs once around the side. `v` runs from one at the top to zero at the bottom. Each cap maps the square around it onto the image.
+
+The sweep starts at +z and runs toward +x, as in three.js. The circle starts at +x instead. A shorter sweep makes a section with open sides.
+
+## Cone
+
+```mojo
+var spike = cone(Length(1.0, METER), Length(2.0, METER), 32)
+```
+
+A cone is a cylinder with a top radius of zero. Its point is at +y. The point has one vertex per segment, each with its own normal. A cylinder with a bottom radius of zero is a cone the other way up. An end with no radius gets no cap.
+
 ## Errors
 
 - A negative or zero extent raises.
@@ -95,5 +117,7 @@ A ring with no hole is a disk. Use `circle` for it.
 - A plane with fewer than one segment raises.
 - A circle needs a positive radius and at least three segments.
 - A ring needs a positive inner radius, a larger outer radius, three segments around and one across.
+- A cylinder needs a positive height, radii that are not negative and not both zero, three segments around and one down the side.
+- A cone needs a positive radius and a positive height.
 - A sweep must be positive and at most one turn.
 - An index entry beyond the last vertex raises.

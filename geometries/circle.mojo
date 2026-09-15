@@ -42,8 +42,19 @@ from units.si import Angle, Length, RADIAN, TURN
 comptime FULL_TURN = Angle(1.0, TURN)
 
 
-def _check_sweep(sweep: Angle) raises:
-    """Refuse a sweep that is not positive or is more than a full turn."""
+def check_sweep(sweep: Angle) raises:
+    """Refuse a sweep that is not positive or is more than a full turn.
+
+    Shared by every builder that takes a start angle and a sweep, so they all
+    draw the line in the same place.
+
+    Args:
+        sweep: How far around the shape runs.
+
+    Raises:
+        Error: If the sweep is zero or negative, or more than one turn,
+            which would lay the shape over itself.
+    """
     if sweep.value <= 0:
         raise Error("A sweep must be positive")
     if sweep.value > FULL_TURN.value:
@@ -101,7 +112,7 @@ def circle(
         raise Error("A circle needs a positive radius")
     if segments < 3:
         raise Error("A circle needs at least three segments")
-    _check_sweep(theta_length)
+    check_sweep(theta_length)
 
     var r = radius.value
     var data = List[Float32]()
@@ -174,7 +185,7 @@ def ring(
         raise Error("A ring needs at least three segments around")
     if phi_segments < 1:
         raise Error("A ring needs at least one segment across")
-    _check_sweep(theta_length)
+    check_sweep(theta_length)
 
     var outer = outer_radius.value
     var radius_step = (outer - inner_radius.value) / Float32(phi_segments)
