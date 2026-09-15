@@ -51,9 +51,10 @@ to catch the case where something reached past it anyway, and `update` runs it
 first, because a mutable reference to a node is also a way past it.
 """
 
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import NO_PARENT, NodeId, Object3D, facing
 from lights.light import Light
 from math.matrix4 import Matrix4
+from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 
@@ -237,11 +238,18 @@ struct Scene(Movable):
         """Turn a node to face a point given in *world* space.
 
         `Object3D.look_at` works in the node's parent frame, which is only
-        the world for a root node. This walks the difference: the target is
-        taken into the parent's frame through the inverse of the parent's
-        world matrix, then the node looks at it there. That is what three.js
-        does inside `lookAt`, and it is why a camera parented to a moving
-        pivot can still be told to watch the origin.
+        the world for a root node. This does what three.js's `lookAt` does:
+        builds the facing in world space -- where the node is, what it should
+        face, and which way is up, all in world terms -- and then undoes the
+        parent's rotation to get the node's own. It is why a camera parented
+        to a moving pivot can still be told to watch the origin.
+
+        The first version of this took the *target* into the parent's frame
+        and built the basis there. That carries the target across correctly
+        and the up direction not at all: it stays the parent's +y, so a
+        parent rolled about z rolled the child's view with it, and a parent
+        that swapped the axes round could make an ordinary view look like
+        one straight along up and refuse it.
 
         Args:
             index: Which node to turn.
@@ -250,19 +258,28 @@ struct Scene(Movable):
                 `Object3D.look_at`.
 
         Raises:
-            Error: If the index is out of range, the scene is stale — the
-                parent's world matrix has to be current — or the target
-                leaves the orientation undefined.
+            Error: If the index is out of range; the scene is stale, since
+                the node's and its parent's world matrices have to be
+                current; the parent's transform reflects or flattens, which
+                leaves no rotation to undo; or the target leaves the
+                orientation undefined.
         """
         if index.value < 0 or index.value >= len(self._nodes):
             raise Error("Scene node index out of range")
-        var local = target
+        var eye = self.world_position(index)
+        var desired = facing(eye, target, Vector3(0, 1, 0), camera)
         var parent = self._nodes[index.value].parent
         if parent != NO_PARENT:
-            var into_parent = self.world_matrix(parent)
-            into_parent.invert()
-            local = into_parent.transform_point(target)
-        self.node(index).look_at(local, camera=camera)
+            var frame = self.world_matrix(parent)
+            # Undo the parent's rotation and nothing else. Its scale is
+            # normalized away, as three.js's `extractRotation` does; a
+            # reflection is refused, because what `extract_rotation` leaves
+            # of a mirrored frame is not the rotation that frame applies.
+            if frame.determinant() < 0:
+                raise Error("A mirrored parent leaves the facing undefined")
+            var undo = Quaternion.from_matrix(frame.extract_rotation())
+            desired.premultiply(undo.conjugate())
+        self.node(index).set_quaternion(desired)
 
     def update(mut self) raises:
         """Recompute every node's world matrix.

@@ -303,5 +303,47 @@ def test_an_attached_camera_needs_a_current_scene_and_a_real_node() raises:
         _ = camera.view_matrix_in(scene)
 
 
+def test_an_attached_camera_takes_position_and_turn_but_not_scale() raises:
+    # three.js drops scale from a camera's world matrix before inverting it,
+    # and so does `node_view_matrix`: a scaled group carries the camera but
+    # must not change its lens.
+    var scene = Scene()
+    var group = Object3D()
+    group.set_scale(3, 3, 3)
+    var rig = scene.add(group^)
+    var eye = Object3D()
+    eye.set_position(0, 0, 5)
+    eye.set_scale(2, 1, 1)
+    var node = scene.attach(eye^, rig)
+    scene.update()
+    var camera = square_camera()
+    camera.attach(node)
+    # Position is inherited, scale included: the eye sits at (0, 0, 15).
+    assert_same_matrix(
+        camera.view_matrix_in(scene),
+        look_at(Vector3(0, 0, 15), Vector3(0, 0, 0), Vector3(0, 1, 0)),
+    )
+
+
+def test_a_mirrored_or_flattened_camera_node_is_refused() raises:
+    var scene = Scene()
+    var mirror = Object3D()
+    mirror.set_position(0, 0, 5)
+    mirror.set_scale(-1, 1, 1)
+    var mirrored = scene.add(mirror^)
+    var flat = Object3D()
+    flat.set_position(0, 0, 5)
+    flat.set_scale(1, 0, 1)
+    var flattened = scene.add(flat^)
+    scene.update()
+    var camera = square_camera()
+    camera.attach(mirrored)
+    with assert_raises():
+        _ = camera.view_matrix_in(scene)
+    camera.attach(flattened)
+    with assert_raises():
+        _ = camera.view_matrix_in(scene)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -54,9 +54,9 @@ from render.rasterizer import (
     Triangle,
     check_triangle_state,
 )
-from materials.material import OPAQUE
+from materials.material import BLEND
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
-from render.srgb import LINEAR, ColorSpace, decode_ramp
+from render.srgb import SRGB, ColorSpace, decode_ramp
 from render.texture import (
     BILINEAR,
     NEAREST,
@@ -129,12 +129,16 @@ def flatten_textures(
         and how many mip levels follow.
 
     Raises:
-        Error: If a texture cannot be read.
+        Error: If a texture cannot be read, or its wrap, filter or colour
+            space is none of the named values -- a texture's fields are open,
+            so one can have been edited since it was built, and the kernel
+            cannot raise on what it finds in the table.
     """
     var texels = List[UInt8]()
     var table = List[Int32]()
     for id in range(textures.count()):
         ref image = textures.get(TextureId(id))
+        image.validate()
         table.append(Int32(len(texels)))
         if image.is_blank():
             # A blank texture is a legitimate thing to store, and on the host
@@ -364,17 +368,20 @@ def _fetch(
         + _level_start(width, height, level)
         + (wrap_index(y, tall, wrap) * wide + wrap_index(x, wide, wrap)) * 4
     )
-    if space == LINEAR:
+    # Asked the way the host asks it when it picks a ramp -- "is it SRGB?"
+    # -- so a value that is neither reads as stored on both sides rather
+    # than decoded on one.
+    if space == SRGB:
         return FloatColor(
-            Float32(texels[unsafe_offset=offset]) / 255,
-            Float32(texels[unsafe_offset=offset + 1]) / 255,
-            Float32(texels[unsafe_offset=offset + 2]) / 255,
+            ramp[unsafe_offset=Int(texels[unsafe_offset=offset])],
+            ramp[unsafe_offset=Int(texels[unsafe_offset=offset + 1])],
+            ramp[unsafe_offset=Int(texels[unsafe_offset=offset + 2])],
             Float32(texels[unsafe_offset=offset + 3]) / 255,
         )
     return FloatColor(
-        ramp[unsafe_offset=Int(texels[unsafe_offset=offset])],
-        ramp[unsafe_offset=Int(texels[unsafe_offset=offset + 1])],
-        ramp[unsafe_offset=Int(texels[unsafe_offset=offset + 2])],
+        Float32(texels[unsafe_offset=offset]) / 255,
+        Float32(texels[unsafe_offset=offset + 1]) / 255,
+        Float32(texels[unsafe_offset=offset + 2]) / 255,
         Float32(texels[unsafe_offset=offset + 3]) / 255,
     )
 
@@ -996,8 +1003,10 @@ def rasterize_kernel(
             share = 1
         if share < 0:
             share = 0
-        if maps[unsafe_offset=index * 3 + 1] == Int32(
-            OPAQUE.value
+        # Asked the way the host asks it -- "is it BLEND?" -- so anything
+        # else is opaque on both sides rather than opaque on one.
+        if maps[unsafe_offset=index * 3 + 1] != Int32(
+            BLEND.value
         ) or mode == Int32(SHADE_UV.value):
             # Nothing behind contributes. The surface's own alpha is kept
             # rather than forced to one, so an opaque material drawn with a
@@ -1223,12 +1232,15 @@ struct GpuRenderer(Movable):
                 exactly as the CPU rasterizer's does.
 
         Raises:
-            Error: If the corner count is not a multiple of three, a
-                triangle's blend policy or texture disagrees between its
-                corners, or a vertex names a texture that is not uploaded.
+            Error: If the corner count is not a multiple of three, the mode
+                is none of the three, a triangle's blend policy or texture
+                disagrees between its corners or is a value neither backend
+                knows, or a vertex names a texture that is not uploaded.
         """
         if len(corners) % 3 != 0:
             raise Error("Rasterizing needs whole triangles")
+        if not mode.is_valid():
+            raise Error("A shading mode that is none of the three")
         var triangles = len(corners) // 3
 
         # The same per-triangle check the CPU makes, from the same function,
@@ -1316,35 +1328,51 @@ struct GpuRenderer(Movable):
         every frame, and re-uploading them each time would cost more than the
         rasterization does.
 
+        **The replacement is all or nothing.** The new texel buffer and the
+        new descriptor table are built and filled as locals, and only once
+        both exist are they moved into place together with the count that
+        describes them. This used to replace the fields one at a time and
+        set the count last, which kept the old *count* after a failure but
+        not the old *resources*: a table allocation that failed left the new
+        texels under the old table, and a draw that passed the id check then
+        read the new bytes with the old offsets. What a failure leaves now is
+        the previous upload, whole.
+
         Args:
             textures: The store to upload. An empty one is allowed and means
                 no mesh can be textured.
 
         Raises:
-            Error: If the device buffers cannot be filled.
+            Error: If a texture holds a wrap, filter or colour space that is
+                none of the named values, or the device buffers cannot be
+                made or filled. Either way nothing on the device has changed.
         """
         var flattened = flatten_textures(textures)
         ref bytes = flattened[0]
         ref rows = flattened[1]
 
-        self.texels = self.context.enqueue_create_buffer[DType.uint8](
-            len(bytes)
-        )
-        with self.texels.map_to_host() as host:
+        var texels = self.context.enqueue_create_buffer[DType.uint8](len(bytes))
+        with texels.map_to_host() as host:
             unsafe_memcpy(
                 dest=host.unsafe_ptr(),
                 src=bytes.unsafe_ptr(),
                 count=len(bytes),
             )
-        self.table = self.context.enqueue_create_buffer[DType.int32](len(rows))
-        with self.table.map_to_host() as host:
+        var table = self.context.enqueue_create_buffer[DType.int32](len(rows))
+        with table.map_to_host() as host:
             unsafe_memcpy(
                 dest=host.unsafe_ptr(),
                 src=rows.unsafe_ptr(),
                 count=len(rows),
             )
-        # Set last, so a failed upload leaves the previous count rather than
-        # advertising descriptors that are not there.
+        # Everything that can fail has. A draw already in flight may still be
+        # reading the old buffers, so let it finish before they are released
+        # by the moves below; replacing a resource and tearing the renderer
+        # down are two different lifetimes, and `__deinit__` only covers the
+        # second.
+        self.context.synchronize()
+        self.texels = texels^
+        self.table = table^
         self.uploaded = textures.count()
 
     def read_back(self) raises -> Framebuffer:

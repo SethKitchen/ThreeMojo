@@ -31,7 +31,7 @@ passed where radians are meant.
 """
 
 from math.vector3 import Vector3
-from std.math import cos, sin
+from std.math import cos, sin, sqrt
 from units.si import Angle
 
 
@@ -506,6 +506,42 @@ struct Matrix4(ImplicitlyCopyable):
             e[1] * x + e[5] * y + e[9] * z,
             e[2] * x + e[6] * y + e[10] * z,
         )
+
+    def extract_rotation(self) raises -> Matrix4:
+        """Return the rotation this matrix applies, with scale and translation
+        removed.
+
+        three.js's `extractRotation`: each of the three axis columns is scaled
+        back to unit length and the translation column is dropped. What is
+        left is a pure rotation if this was a rotation times a positive scale.
+        Shear is not undone, and a reflection stays one, so a caller that
+        needs a rotation checks the determinant's sign first.
+
+        Returns:
+            The rotation matrix.
+
+        Raises:
+            Error: If an axis column has zero length -- a scale of zero on
+                that axis -- which leaves no direction to normalize.
+        """
+        ref e = self.elements
+        var out = Matrix4()
+        for axis in range(3):  # pragma: no branch
+            var start = axis * 4
+            var length = sqrt(
+                e[start] * e[start]
+                + e[start + 1] * e[start + 1]
+                + e[start + 2] * e[start + 2]
+            )
+            if length == 0:
+                raise Error(
+                    "A transform with no extent along an axis has no rotation"
+                    " to extract"
+                )
+            out.elements[start] = e[start] / length
+            out.elements[start + 1] = e[start + 1] / length
+            out.elements[start + 2] = e[start + 2] / length
+        return out^
 
 
 def translation(x: Float32, y: Float32, z: Float32) -> Matrix4:

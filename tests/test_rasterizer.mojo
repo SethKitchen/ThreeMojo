@@ -23,6 +23,7 @@ from render.rasterizer import (
     SHADE_TEXTURE,
     SHADE_UV,
     RasterVertex,
+    ShadeMode,
     Triangle,
     edge,
     mip_level,
@@ -1252,6 +1253,74 @@ def test_corners_that_disagree_about_blending_are_rejected() raises:
         )
 
 
+def test_an_unknown_blend_policy_is_refused_even_when_agreed() raises:
+    # `Blending(7)` constructs -- a struct's fields are open -- and the two
+    # backends once read it in opposite directions. Agreement between the
+    # corners is not enough; the value has to be one of the two. A texture
+    # id below zero that is not `NO_TEXTURE` is the same kind of nonsense.
+    var textures = TextureStore()
+    var fb = RenderTarget(8, 8, Color(0, 0, 0))
+    var t = covering(0.5)
+    with assert_raises():
+        rasterize_shaded(
+            stated_corner(t[0], NO_TEXTURE, Blending(7)),
+            stated_corner(t[1], NO_TEXTURE, Blending(7)),
+            stated_corner(t[2], NO_TEXTURE, Blending(7)),
+            fb,
+            SHADE_TEXTURE,
+            textures,
+        )
+    with assert_raises():
+        rasterize_shaded(
+            stated_corner(t[0], TextureId(-3), OPAQUE),
+            stated_corner(t[1], TextureId(-3), OPAQUE),
+            stated_corner(t[2], TextureId(-3), OPAQUE),
+            fb,
+            SHADE_TEXTURE,
+            textures,
+        )
+
+
+def test_an_unknown_shading_mode_is_refused() raises:
+    assert_true(SHADE_LIT.is_valid())
+    assert_true(SHADE_UV.is_valid())
+    assert_true(SHADE_TEXTURE.is_valid())
+    assert_false(ShadeMode(99).is_valid())
+    var fb = RenderTarget(8, 8, Color(0, 0, 0))
+    var t = covering(0.5)
+    var corners = List[RasterVertex]()
+    for index in range(3):
+        corners.append(stated_corner(t[index], NO_TEXTURE, OPAQUE))
+    with assert_raises():
+        rasterize_shaded(corners[0], corners[1], corners[2], fb, ShadeMode(99))
+    with assert_raises():
+        rasterize_all(corners, fb, ShadeMode(99))
+    with assert_raises():
+        rasterize_all(corners, fb, ShadeMode(99), workers=2)
+
+
+def test_malformed_state_is_refused_whether_or_not_it_is_visible() raises:
+    # A band skips triangles outside its rows before the rasterizer sees
+    # them, so an off-screen triangle with bad metadata used to raise on one
+    # worker and pass on several. The answer must not depend on where the
+    # triangle is or how many threads there are.
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var corners = List[RasterVertex]()
+    corners.append(stated_corner(Vector3(0, -100, 0), NO_TEXTURE, Blending(7)))
+    corners.append(stated_corner(Vector3(8, -100, 0), NO_TEXTURE, Blending(7)))
+    corners.append(stated_corner(Vector3(0, -92, 0), NO_TEXTURE, Blending(7)))
+    for workers in [1, 2, 4, 16]:
+        with assert_raises():
+            rasterize_all(corners, target, workers=workers)
+    # And a disagreement, which is what the check was first written for.
+    corners[1] = stated_corner(Vector3(8, -100, 0), NO_TEXTURE, BLEND)
+    corners[0] = stated_corner(Vector3(0, -100, 0), NO_TEXTURE, OPAQUE)
+    corners[2] = stated_corner(Vector3(0, -92, 0), NO_TEXTURE, OPAQUE)
+    for workers in [1, 4]:
+        with assert_raises():
+            rasterize_all(corners, target, workers=workers)
+
+
 def test_corners_that_disagree_about_being_lit_are_rejected() raises:
     # Lit or not is per triangle, like the blend policy, and read from the
     # first corner; so the other two have to agree with it.
@@ -1480,18 +1549,21 @@ def test_rasterize_all_with_nothing_to_draw_leaves_the_target_alone() raises:
 
 
 def test_rasterize_all_carries_a_workers_error_back() raises:
-    # A triangle whose corners disagree is refused by `rasterize_shaded`. On
-    # a worker that raise cannot propagate, so it is carried back and raised
-    # once every band is done -- and must not be dropped on the way.
+    # A triangle naming a texture the store does not have is refused when a
+    # fragment tries to sample it. On a worker that raise cannot propagate,
+    # so it is carried back and raised once every band is done -- and must
+    # not be dropped on the way. Malformed metadata no longer reaches a band
+    # at all: `rasterize_all` refuses it before any band starts.
     var corners = List[RasterVertex]()
-    corners.append(stated_corner(Vector3(0, 0, 0), NO_TEXTURE, OPAQUE))
-    corners.append(stated_corner(Vector3(8, 0, 0), NO_TEXTURE, BLEND))
-    corners.append(stated_corner(Vector3(0, 8, 0), NO_TEXTURE, OPAQUE))
+    corners.append(stated_corner(Vector3(-2, -2, 0), TextureId(0), OPAQUE))
+    corners.append(stated_corner(Vector3(20, -2, 0), TextureId(0), OPAQUE))
+    corners.append(stated_corner(Vector3(-2, 20, 0), TextureId(0), OPAQUE))
     var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var none = TextureStore()
     with assert_raises():
-        rasterize_all(corners, target, workers=2)
+        rasterize_all(corners, target, SHADE_TEXTURE, none, workers=2)
     with assert_raises():
-        rasterize_all(corners, target)
+        rasterize_all(corners, target, SHADE_TEXTURE, none)
 
 
 def test_rasterize_all_needs_whole_triangles_and_a_worker() raises:

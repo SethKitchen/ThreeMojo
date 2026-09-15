@@ -441,5 +441,25 @@ def test_a_collapsed_transform_has_no_normal_matrix() raises:
         _ = scaling(0, 0, 0).normal_matrix()
 
 
+# --- extracting a rotation ---------------------------------------------------
+
+
+def test_extract_rotation_drops_scale_and_translation() raises:
+    var m = translation(1, 2, 3)
+    m.multiply(rotation_y(Angle(90.0, DEGREE)))
+    m.multiply(scaling(2, 3, 4))
+    var r = m.extract_rotation()
+    var expected = rotation_y(Angle(90.0, DEGREE))
+    for index in range(16):
+        assert_almost_equal(
+            r.elements[index], expected.elements[index], atol=TOLERANCE
+        )
+
+
+def test_extract_rotation_refuses_a_flattened_axis() raises:
+    with assert_raises():
+        _ = scaling(1, 0, 1).extract_rotation()
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

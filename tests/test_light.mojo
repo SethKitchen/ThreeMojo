@@ -19,6 +19,7 @@ from lights.light import (
     DIRECTIONAL,
     POINT,
     Light,
+    LightKind,
     ambient_light,
     directional_light,
     point_light,
@@ -457,6 +458,18 @@ def test_point_light_shades_a_colour_at_a_position() raises:
     assert_equal(lit.r, UInt8(255))
     var dim = lighting.shade(WHITE, Vector3(0, 1, 0), ORIGIN)
     assert_almost_equal(dim.r, Float32(0.25), atol=TOLERANCE)
+
+
+def test_a_light_of_an_unknown_kind_is_refused() raises:
+    # `LightKind(7)` constructs; resolving the scene is where it is caught.
+    assert_true(AMBIENT.is_valid())
+    assert_true(DIRECTIONAL.is_valid())
+    assert_true(POINT.is_valid())
+    assert_true(not LightKind(7).is_valid())
+    var scene = Scene()
+    scene.add_light(Light(LightKind(7), WHITE, 1.0, NO_PARENT, 0.0, 0.0))
+    with assert_raises():
+        _ = Lighting(scene)
 
 
 def main() raises:

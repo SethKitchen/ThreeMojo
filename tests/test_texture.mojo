@@ -11,8 +11,8 @@ to. Both are asserted against worked-out answers rather than against whatever
 the implementation happens to do.
 """
 
-from render.srgb import UNKNOWN_SPACE
-from render.texture import Wrap
+from render.srgb import UNKNOWN_SPACE, ColorSpace
+from render.texture import Filter, Wrap
 from render.framebuffer import Color, FloatColor
 from render.srgb import LINEAR, SRGB, srgb_to_linear
 from render.texture import (
@@ -898,6 +898,46 @@ def test_a_texture_refuses_a_colour_space_it_cannot_decode() raises:
     var pixels = List[UInt8](length=4, fill=255)
     with assert_raises():
         _ = Texture(1, 1, pixels^, REPEAT, NEAREST, UNKNOWN_SPACE)
+
+
+def test_a_wrong_value_in_the_right_type_is_refused() raises:
+    # `Wrap(9)` constructs, because a struct's fields are open; the texture
+    # is where it is caught, and each named value has to pass on its own.
+    assert_true(REPEAT.is_valid())
+    assert_true(CLAMP.is_valid())
+    assert_true(MIRROR.is_valid())
+    assert_true(not Wrap(9).is_valid())
+    assert_true(NEAREST.is_valid())
+    assert_true(BILINEAR.is_valid())
+    assert_true(not Filter(5).is_valid())
+    assert_true(SRGB.is_decodable())
+    assert_true(LINEAR.is_decodable())
+    assert_true(not UNKNOWN_SPACE.is_decodable())
+    assert_true(not ColorSpace(99).is_decodable())
+    var pixels = List[UInt8](length=4, fill=255)
+    with assert_raises():
+        _ = Texture(1, 1, pixels.copy(), Wrap(9))
+    with assert_raises():
+        _ = Texture(1, 1, pixels.copy(), REPEAT, Filter(5))
+    with assert_raises():
+        _ = Texture(1, 1, pixels.copy(), REPEAT, NEAREST, ColorSpace(99))
+
+
+def test_a_texture_edited_after_construction_can_be_checked_again() raises:
+    # What the GPU upload does before it trusts the fields.
+    var image = quad(REPEAT)
+    image.validate()
+    image.filter = Filter(5)
+    with assert_raises():
+        image.validate()
+    image.filter = NEAREST
+    image.wrap = Wrap(9)
+    with assert_raises():
+        image.validate()
+    image.wrap = REPEAT
+    image.color_space = ColorSpace(99)
+    with assert_raises():
+        image.validate()
 
 
 def main() raises:

@@ -404,10 +404,16 @@ def _space_from_gamma(gamma: Int) -> ColorSpace:
     """Return which colour space a `gAMA` value describes, if either.
 
     PNG stores the gamma of the *source*, times 100000. Two values matter
-    here: 45455 is the 1/2.2 that stands for ordinary sRGB-ish content, and
-    100000 is a gamma of one, which is linear. Anything else is a transfer
-    function this renderer has no code for, and guessing between the two it
-    does have would be worse than saying so.
+    here: 100000 is a gamma of one, which is linear, and 45455 is the 1/2.2
+    that ordinary sRGB-ish content declares. "Ish" is doing work in that
+    sentence. The sRGB transfer function is a short linear toe and a 2.4
+    power, not a pure power, and a file declaring a gamma of 1/2.2 describes
+    a pure power; reading it as sRGB is off by about a percent at midtones.
+    Faithful colour management would keep the gamma and apply it. This does
+    not: it settles the question well enough to light with, and says so here
+    rather than pretending in the type. Anything else is a transfer function
+    this renderer has no code for, and guessing between the two it does have
+    would be worse than saying so.
     """
     if gamma == 100000:
         return LINEAR

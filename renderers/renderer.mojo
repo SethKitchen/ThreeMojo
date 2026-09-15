@@ -365,14 +365,20 @@ struct Renderer(Movable):
         """Set the colour the image is cleared to."""
         self.background = color
 
-    def set_shading(mut self, mode: ShadeMode):
+    def set_shading(mut self, mode: ShadeMode) raises:
         """Choose what a fragment's colour is taken from.
 
         Args:
             mode: `SHADE_TEXTURE` to follow each material, `SHADE_LIT` to
                 ignore every texture, or `SHADE_UV` to write texture
                 coordinates as red and green instead.
+
+        Raises:
+            Error: If the mode is none of those three. The type stops a bare
+                integer; it does not stop `ShadeMode(99)`.
         """
+        if not mode.is_valid():
+            raise Error("A shading mode that is none of the three")
         self.shading = mode
 
     def prepare[

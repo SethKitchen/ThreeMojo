@@ -5,6 +5,7 @@
 
 """Tests for `materials.material`, `render.texture_store` and `core.assets`."""
 
+from materials.material import BLEND, OPAQUE, Blending, MaterialKind, Side
 from materials.material import BASIC, LAMBERT
 from materials.material import MaterialId
 from core.assets import Assets
@@ -59,6 +60,32 @@ def test_a_basic_material_is_not_lit() raises:
     # Everything else is untouched by the choice.
     assert_equal(flat.opacity, Float32(1))
     assert_true(not flat.is_transparent())
+
+
+def test_a_wrong_value_in_the_right_type_is_refused() raises:
+    # The types stop a bare integer at compile time; they do not stop a
+    # struct built from one, because Mojo's fields are open. So the
+    # constructor asks, and each named value has to pass on its own.
+    assert_true(FRONT_SIDE.is_valid())
+    assert_true(BACK_SIDE.is_valid())
+    assert_true(DOUBLE_SIDE.is_valid())
+    assert_false(Side(99).is_valid())
+    assert_true(OPAQUE.is_valid())
+    assert_true(BLEND.is_valid())
+    assert_false(Blending(7).is_valid())
+    assert_true(BASIC.is_valid())
+    assert_true(LAMBERT.is_valid())
+    assert_false(MaterialKind(7).is_valid())
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), NO_TEXTURE, Side(99))
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), blending=Blending(7))
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), kind=MaterialKind(7))
+    # Editing one after the fact is possible too; the rasterizers check.
+    var changed = OPAQUE
+    changed.value = 7
+    assert_false(changed.is_valid())
 
 
 def test_a_material_can_name_a_texture() raises:

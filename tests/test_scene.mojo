@@ -604,6 +604,94 @@ def test_a_scene_look_at_is_in_world_space() raises:
     assert_point(facing, 0, 0, -1)
 
 
+def test_a_scene_look_at_keeps_world_up_under_a_rolled_parent() raises:
+    # The parent is rolled a quarter turn about z. That moves neither the
+    # child nor the target, so the view must not change either -- and it
+    # did, when the up direction was taken as the parent's +y.
+    var scene = Scene()
+    var pivot = Object3D()
+    pivot.set_euler(Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(90.0, DEGREE))
+    var rig = scene.add(pivot^)
+    var child = scene.attach(node_at(0, 0, 5), rig)
+    scene.update()
+    scene.look_at(child, Vector3(0, 0, 0), camera=True)
+    scene.update()
+    var world = scene.world_matrix(child)
+    assert_point(world.transform_direction(Vector3(0, 0, -1)), 0, 0, -1)
+    assert_point(world.transform_direction(Vector3(0, 1, 0)), 0, 1, 0)
+
+
+def test_a_scene_look_at_is_not_fooled_by_a_parent_that_swaps_axes() raises:
+    # This parent sends x to y, y to z and z to x. The child sits on the
+    # parent's y, which is the world's z, and looks at the origin: an
+    # ordinary view, which the parent-space calculation mistook for looking
+    # straight along up and refused.
+    var scene = Scene()
+    var pivot = Object3D()
+    pivot.set_quaternion(Quaternion(0.5, 0.5, 0.5, 0.5))
+    var rig = scene.add(pivot^)
+    var child = scene.attach(node_at(0, 5, 0), rig)
+    scene.update()
+    assert_point(scene.world_position(child), 0, 0, 5)
+    scene.look_at(child, Vector3(0, 0, 0))
+    scene.update()
+    var world = scene.world_matrix(child)
+    assert_point(world.transform_direction(Vector3(0, 0, 1)), 0, 0, -1)
+    assert_point(world.transform_direction(Vector3(0, 1, 0)), 0, 1, 0)
+
+
+def test_a_scene_look_at_undoes_only_the_parents_rotation() raises:
+    # A scaled and turned parent: the scale is normalized away before its
+    # rotation is undone, as three.js does, so the child still faces the
+    # target in the world.
+    var scene = Scene()
+    var pivot = Object3D()
+    pivot.set_scale(2, 2, 2)
+    pivot.set_euler(Angle(0.0, DEGREE), Angle(90.0, DEGREE), Angle(0.0, DEGREE))
+    var rig = scene.add(pivot^)
+    var child = scene.attach(node_at(0, 0, 3), rig)
+    scene.update()
+    assert_point(scene.world_position(child), 6, 0, 0)
+    scene.look_at(child, Vector3(6, 0, -4))
+    scene.update()
+    var forward = scene.world_matrix(child).transform_direction(
+        Vector3(0, 0, 1)
+    )
+    forward.normalize()
+    assert_point(forward, 0, 0, -1)
+    # Non-uniform scale with no rotation: the direction survives it.
+    var flat = Scene()
+    var squash = Object3D()
+    squash.set_scale(3, 1, 0.5)
+    var base = flat.add(squash^)
+    var eye = flat.attach(node_at(0, 0, 4), base)
+    flat.update()
+    flat.look_at(eye, Vector3(5, 0, 2))
+    flat.update()
+    var toward = flat.world_matrix(eye).transform_direction(Vector3(0, 0, 1))
+    toward.normalize()
+    assert_point(toward, 1, 0, 0)
+
+
+def test_a_scene_look_at_refuses_a_mirrored_or_flattened_parent() raises:
+    var scene = Scene()
+    var mirror = Object3D()
+    mirror.set_scale(-1, 1, 1)
+    var rig = scene.add(mirror^)
+    var child = scene.attach(node_at(0, 0, 5), rig)
+    scene.update()
+    with assert_raises():
+        scene.look_at(child, Vector3(0, 0, 0))
+    var flat = Scene()
+    var squash = Object3D()
+    squash.set_scale(0, 1, 1)
+    var base = flat.add(squash^)
+    var eye = flat.attach(node_at(0, 0, 5), base)
+    flat.update()
+    with assert_raises():
+        flat.look_at(eye, Vector3(0, 0, 0))
+
+
 def test_a_root_scene_look_at_matches_the_node_form() raises:
     var scene = Scene()
     var id = scene.add(node_at(3, 0, 0))

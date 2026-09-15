@@ -16,7 +16,7 @@ light adds.
 """
 
 from core.scene import Scene
-from lights.light import AMBIENT, DIRECTIONAL, Light
+from lights.light import AMBIENT, DIRECTIONAL, POINT, Light
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from std.math import exp2, log2, max, min
@@ -88,9 +88,10 @@ struct Lighting(Movable):
 
         Raises:
             Error: If a directional or point light names a node the scene
-                does not have, or a directional light's node sits exactly at
+                does not have, a directional light's node sits exactly at
                 the origin — which gives no direction to shine from, and is a
-                mistake rather than a dark light.
+                mistake rather than a dark light — or a light's kind is none
+                of the three.
         """
         self.ambient = FloatColor(0.0, 0.0, 0.0, 1.0)
         self.directions = List[Vector3]()
@@ -116,15 +117,18 @@ struct Lighting(Movable):
                 pointing.normalize()
                 self.directions.append(pointing)
                 self.radiances.append(light.radiance())
-            else:
-                # Point: the only other kind there is, since `LightKind` is a
-                # type and a fourth value does not compile. Its node's
-                # position is the answer itself, and the origin is as good a
-                # place for a bulb as any.
+            elif light.kind == POINT:
+                # Its node's position is the answer itself, and the origin
+                # is as good a place for a bulb as any.
                 self.positions.append(scene.world_position(light.node))
                 self.point_radiances.append(light.radiance())
                 self.decays.append(light.decay)
                 self.cutoffs.append(light.distance)
+            else:
+                # The type stops a bare integer; it does not stop
+                # `LightKind(7)`, and a light that is none of the three has
+                # nothing here that knows how to evaluate it.
+                raise Error("A light of an unknown kind cannot be resolved")
 
     def __init__(out self, *, ambient: FloatColor):
         """Create lighting with a fill term and no other lights.

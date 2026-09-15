@@ -62,12 +62,16 @@ struct LightKind(Equatable, ImplicitlyCopyable, Writable):
     """Which of the three kinds of light this is, as a type rather than an
     int.
 
-    See `core.object3d.NodeId` for why. A light whose kind was none of them
-    used to be refused when the lights were resolved; now it does not
-    compile.
+    See `core.object3d.NodeId` for why. The type stops a bare integer at
+    compile time; it does not stop `LightKind(7)`, which `Lighting` refuses
+    when the lights are resolved.
     """
 
     var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `AMBIENT`, `DIRECTIONAL` or `POINT`."""
+        return self == AMBIENT or self == DIRECTIONAL or self == POINT
 
 
 # Fills every surface equally, whichever way it faces. No direction, no node.

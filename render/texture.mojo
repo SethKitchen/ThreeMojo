@@ -53,10 +53,15 @@ struct Wrap(Equatable, ImplicitlyCopyable, Writable):
     """How a coordinate outside the unit square is resolved, as a type.
 
     See `core.object3d.NodeId` for why these are wrapped rather than bare
-    integers. `value` is what the GPU's descriptor table stores.
+    integers. `value` is what the GPU's descriptor table stores. The type
+    does not stop `Wrap(9)`, so `Texture.validate` asks `is_valid`.
     """
 
     var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `REPEAT`, `CLAMP` or `MIRROR`."""
+        return self == REPEAT or self == CLAMP or self == MIRROR
 
 
 # Tile the image; 1.5 reads the same texel as 0.5.
@@ -72,6 +77,10 @@ struct Filter(Equatable, ImplicitlyCopyable, Writable):
     """How a sample between texel centres is resolved, as a type."""
 
     var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `NEAREST` or `BILINEAR`."""
+        return self == NEAREST or self == BILINEAR
 
 
 # Take whichever texel the sample lands in. Hard edges, visible texels.
@@ -364,14 +373,13 @@ struct Texture(Movable):
 
         Raises:
             Error: If the dimensions are not positive, the buffer length
-                disagrees with them, or the colour space is unknown.
+                disagrees with them, or the wrap, filter or colour space is
+                none of the named values -- see `validate`.
         """
         if width <= 0 or height <= 0:
             raise Error("Texture dimensions must be positive")
         if len(pixels) != width * height * Self.CHANNELS:
             raise Error("Texture buffer length does not match the dimensions")
-        if color_space == UNKNOWN_SPACE:
-            raise Error("A texture needs a colour space it can decode")
         self.color_space = color_space
         if color_space == SRGB:
             self.ramp = decode_ramp()
@@ -384,8 +392,37 @@ struct Texture(Movable):
         self.filter = filter
         self.levels = 1
         self.offsets = [0]
+        # After every field is set, so it is the same check the GPU upload
+        # makes on a texture that may have been edited since.
+        self.validate()
         if mipmapped:
             self._build_mipmaps()
+
+    def validate(self) raises:
+        """Refuse a wrap, filter or colour space that is none of the named
+        values.
+
+        The types stop a bare integer at compile time and nothing else: a
+        struct's fields are open, so `Wrap(9)` constructs, and so does
+        `image.filter = Filter(5)` after the image was checked. The
+        constructor calls this, and `render.gpu.flatten_textures` calls it
+        again on the way to the device, because a value that is neither of
+        two things was once read one way by the host and the other way by
+        the kernel.
+
+        Raises:
+            Error: If the wrap mode, the filter or the colour space is not
+                one of its named constants. `UNKNOWN_SPACE` counts: it is a
+                decoder's admission, not a way to read texels.
+        """
+        if not self.wrap.is_valid():
+            raise Error("A texture's wrap mode must be REPEAT, CLAMP or MIRROR")
+        if not self.filter.is_valid():
+            raise Error("A texture's filter must be NEAREST or BILINEAR")
+        if not self.color_space.is_decodable():
+            raise Error(
+                "A texture needs a colour space it can decode: SRGB or LINEAR"
+            )
 
     def __init__(out self, *, copy: Self):
         """Copy another texture, image data included."""

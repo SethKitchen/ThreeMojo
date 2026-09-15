@@ -483,11 +483,18 @@ struct ShadeMode(Equatable, ImplicitlyCopyable, Writable):
 
     A type because an unrecognised integer here was once read in opposite
     directions by the two backends: the CPU's last branch treated it as
-    textured and the GPU's as lit. Both then checked for it at runtime; now
-    it does not compile, and `value` is what crosses to the kernel.
+    textured and the GPU's as lit. The type stops a bare integer at compile
+    time. It does not stop `ShadeMode(99)` -- a struct's fields are open --
+    so both rasterizers refuse one with `is_valid` before drawing, and their
+    branches now ask for each mode by name rather than falling through.
+    `value` is what crosses to the kernel.
     """
 
     var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the three modes there are."""
+        return self == SHADE_LIT or self == SHADE_UV or self == SHADE_TEXTURE
 
 
 comptime SHADE_LIT = ShadeMode(0)
@@ -599,13 +606,14 @@ def check_triangle_state(
     same on all three. That shortcut is only safe if the three really do
     agree, and that was not checked.
 
-    The policy's *value* used to need checking too: `RasterVertex` took a
-    bare integer, and the two backends read an unknown one in opposite
-    directions -- the CPU asked "is it `BLEND`?" and treated anything else as
-    opaque, the GPU asked "is it `OPAQUE`?" and treated anything else as
-    blended. `Blending` is a type now, so a policy of 7 does not compile and
-    that half of the check is gone. Shared here so that both refuse the
-    same thing.
+    The policy's *value* needs checking as well. The two backends once read
+    an unknown one in opposite directions -- the CPU asked "is it `BLEND`?"
+    and treated anything else as opaque, the GPU asked "is it `OPAQUE`?" and
+    treated anything else as blended. `Blending` is a type now, which stops
+    a bare 7 at compile time but not `Blending(7)`: a struct's fields are
+    open, so the value check was wrongly dropped and is back. Shared here so
+    that both refuse the same thing, and both now ask the host's question of
+    whatever gets through.
 
     Args:
         a: The triangle's first corner, whose state is the authoritative one.
@@ -614,7 +622,9 @@ def check_triangle_state(
 
     Raises:
         Error: If the three corners do not agree on their blend policy, on
-            their texture, or on whether they are lit.
+            their texture, or on whether they are lit; if the agreed policy
+            is neither `OPAQUE` nor `BLEND`; or if the texture id is a
+            negative other than `NO_TEXTURE`, which nothing can ever hold.
     """
     if b.blend != a.blend or c.blend != a.blend:
         raise Error("A triangle's corners disagree about blending")
@@ -622,6 +632,10 @@ def check_triangle_state(
         raise Error("A triangle's corners disagree about their texture")
     if b.lit != a.lit or c.lit != a.lit:
         raise Error("A triangle's corners disagree about being lit")
+    if not a.blend.is_valid():
+        raise Error("A triangle's blend policy is neither OPAQUE nor BLEND")
+    if a.texture != NO_TEXTURE and a.texture.value < 0:
+        raise Error("A triangle names a texture id that nothing can hold")
 
 
 def rasterize_shaded(
@@ -690,10 +704,13 @@ def rasterize_shaded(
         last_row: The last row it may write, or -1 for the bottom.
 
     Raises:
-        Error: If a vertex names a texture the store does not have, the
-            corners disagree about their texture or blend policy, or a pixel
-            write lands out of bounds — the last of which the loop prevents.
+        Error: If the mode is none of the three, a vertex names a texture the
+            store does not have, the corners disagree about their texture or
+            blend policy or hold one that is neither, or a pixel write lands
+            out of bounds — the last of which the loop prevents.
     """
+    if not mode.is_valid():
+        raise Error("A shading mode that is none of the three")
     check_triangle_state(a, b, c)
 
     # Whether this surface composites, decided by the material and carried
@@ -810,7 +827,9 @@ def rasterize_shaded(
                 base.b * arriving.b,
                 base.a,
             )
-            if mode != SHADE_LIT:
+            # Each mode by name, as the kernel does, so there is no "else"
+            # for an unrecognised one to fall into differently on each side.
+            if mode == SHADE_UV or mode == SHADE_TEXTURE:
                 var u = a.u * share_a + b.u * share_b + c.u * share_c
                 var v = a.v * share_a + b.v * share_b + c.v * share_c
                 if mode == SHADE_UV:
@@ -962,14 +981,33 @@ def rasterize_all(
 
     Raises:
         Error: If the corner count is not a multiple of three, `workers` is
-            less than one, or any triangle is refused by `rasterize_shaded`
-            -- on a worker that error is carried back and raised here.
+            less than one, the mode is none of the three, any triangle's
+            metadata is refused by `check_triangle_state`, or any triangle is
+            refused by `rasterize_shaded` -- on a worker that error is
+            carried back and raised here.
     """
     if len(corners) % 3 != 0:
         raise Error("Rasterizing needs whole triangles")
     if workers < 1:
         raise Error("Rasterizing needs at least one worker")
+    if not mode.is_valid():
+        raise Error("A shading mode that is none of the three")
     var triangles = len(corners) // 3
+    # Every triangle's metadata is checked here, before any band starts, so
+    # malformed input is refused whether or not the triangle is visible and
+    # however many workers there are. A band skips triangles outside its
+    # rows before `rasterize_shaded` can look at them, and a single worker
+    # does not, so without this the same bad input raised on one thread and
+    # passed on four. A texture the store lacks is still found only when a
+    # fragment samples it -- `Renderer.prepare` refuses one long before here
+    # -- and that answer is the same on any number of workers, because some
+    # band covers whatever is visible.
+    for triangle in range(triangles):
+        check_triangle_state(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+        )
     var bands = min(workers, target.height)
     if bands == 1:
         for triangle in range(triangles):

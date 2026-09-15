@@ -51,11 +51,18 @@ struct Side(Equatable, ImplicitlyCopyable, Writable):
 
     The same argument as `core.object3d.NodeId`: three small integers that
     mean three different things should not be interchangeable, and a bare
-    `Int` accepted anything. `Material` used to check the value at runtime
-    and raise; now a wrong one does not compile, and the check is gone.
+    `Int` accepted anything. The type stops a bare integer at compile time.
+    It does not stop `Side(99)`: a struct's fields are open in Mojo, so a
+    wrong value in the right type is still constructible, and `Material`
+    refuses one with `is_valid`. The two checks catch different mistakes,
+    and for a while only the first was made.
     """
 
     var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the three sides there are."""
+        return self == FRONT_SIDE or self == BACK_SIDE or self == DOUBLE_SIDE
 
 
 # Draw only surfaces turned towards the camera. three.js's default.
@@ -72,10 +79,15 @@ struct Blending(Equatable, ImplicitlyCopyable, Writable):
 
     A type for the reason `Side` is one. Both rasterizers read this from a
     vertex, and a bare integer neither of them recognised was once read in
-    opposite directions by the two -- see `render.rasterizer`.
+    opposite directions by the two -- see `render.rasterizer`. The type does
+    not stop `Blending(7)`, so `check_triangle_state` asks `is_valid`.
     """
 
     var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `OPAQUE` or `BLEND`."""
+        return self == OPAQUE or self == BLEND
 
 
 # Replace whatever is behind: depth is tested and claimed.
@@ -95,6 +107,10 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     """
 
     var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `BASIC` or `LAMBERT`."""
+        return self == BASIC or self == LAMBERT
 
 
 # Unlit: the surface's own colour, and its texture, reach the pixel as they
@@ -163,13 +179,21 @@ struct Material(ImplicitlyCopyable):
         Raises:
             Error: If `map` is a negative other than `NO_TEXTURE` — which
                 would be an id nothing can ever hold rather than a deliberate
-                absence — or `opacity` is outside zero to one. A wrong `side`
-                or `blending` is a compile error now, not a runtime one.
+                absence — `opacity` is outside zero to one, or `side`,
+                `blending` or `kind` holds a value that is none of its named
+                constants. A bare integer in their place is a compile error;
+                a wrong value inside the right type is refused here.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
         if opacity < 0 or opacity > 1:
             raise Error("Opacity must be between zero and one")
+        if not side.is_valid():
+            raise Error(
+                "A material's side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE"
+            )
+        if not kind.is_valid():
+            raise Error("A material's kind must be BASIC or LAMBERT")
         self.color = color
         self.map = map
         self.side = side
@@ -180,7 +204,10 @@ struct Material(ImplicitlyCopyable):
         # takes a Bool, and an Optional does not convert to one implicitly.
         var stated = Bool(blending)
         if stated:
-            self.blending = blending.value()
+            var chosen = blending.value()
+            if not chosen.is_valid():
+                raise Error("A material's blending must be OPAQUE or BLEND")
+            self.blending = chosen
         elif opacity < 1 or color.a < 255:
             self.blending = BLEND
         else:

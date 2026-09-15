@@ -21,9 +21,11 @@ node every frame, because editing one meant copying it out and putting it
 back; `Scene.node` is what made the persistent scene the easy version.
 
 Each frame turns the nodes a little further rather than setting them to an
-angle, which is three.js's `mesh.rotation.y += 0.01` and what a quaternion is
-for: `rotate_y` is one multiply, about the node's *own* y, so the large cube's
-tilt is set once and its spin follows the tilted axis from then on.
+angle, which is three.js's `rotateY` and what a quaternion is for: `rotate_y`
+is one multiply, about the node's *own* y, so the large cube's tilt is set
+once and its spin follows the tilted axis from then on. For this particular
+tilt `rotation.y += 0.01` in the `XYZ` order would come to the same turn; it
+does not in general, and `core.object3d` says why.
 """
 
 from cameras.perspective_camera import PerspectiveCamera

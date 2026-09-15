@@ -43,10 +43,20 @@ struct ColorSpace(Equatable, ImplicitlyCopyable, Writable):
     """What a stored sample means, as a type rather than a bare int.
 
     See `core.object3d.NodeId` for why these are wrapped. `value` is what
-    crosses to the GPU, where a descriptor table holds plain integers.
+    crosses to the GPU, where a descriptor table holds plain integers. The
+    type does not stop `ColorSpace(99)`, so a texture asks `is_decodable`
+    of the space it is given, and the GPU upload asks again.
     """
 
     var value: Int
+
+    def is_decodable(self) -> Bool:
+        """Return True if samples in this space can be read as colour.
+
+        `SRGB` or `LINEAR`. `UNKNOWN_SPACE` is a decoder's admission rather
+        than a transfer function, and any other value is no space at all.
+        """
+        return self == SRGB or self == LINEAR
 
 
 # A colour image: stored encoded, decoded when read.

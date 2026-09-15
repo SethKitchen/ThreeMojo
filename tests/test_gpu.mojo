@@ -64,17 +64,21 @@ from render.gpu import (
     GpuRenderer,
     available,
     flatten,
+    flatten_textures,
     pack,
     render,
     render_triangles,
 )
-from render.srgb import LINEAR
+from render.srgb import LINEAR, ColorSpace
+from geometries.plane import plane
+from materials.material import BASIC, DOUBLE_SIDE
 from render.target import RenderTarget
 from render.rasterizer import (
     SHADE_LIT,
     SHADE_TEXTURE,
     SHADE_UV,
     RasterVertex,
+    ShadeMode,
     Triangle,
     rasterize,
     rasterize_shaded,
@@ -1910,6 +1914,204 @@ def test_both_backends_composite_over_a_transparent_clear_colour() raises:
     assert_equal(cpu.get_pixel(2, 2).b, UInt8(0))
     assert_equal(cpu.get_pixel(2, 2).a, UInt8(128))
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- the review's regressions ------------------------------------------------
+
+
+def test_the_gpu_refuses_an_unknown_mode_or_blend_policy() raises:
+    # `ShadeMode(99)` and `Blending(7)` construct, and each was once read
+    # one way by the host and the other way by the kernel. Both backends now
+    # refuse them before drawing.
+    if skipped_for_lack_of_a_gpu("the gpu refuses unknown metadata"):
+        return
+    var corners = overlapping_pair()
+    with assert_raises():
+        _ = render_triangles(corners, 24, 18, BACKGROUND, ShadeMode(99))
+    var odd = List[RasterVertex]()
+    for index in range(3):
+        var base = corners[index]
+        odd.append(
+            RasterVertex(
+                base.x,
+                base.y,
+                base.z,
+                base.inv_w,
+                base.color,
+                0,
+                0,
+                NO_TEXTURE,
+                Blending(7),
+            )
+        )
+    with assert_raises():
+        _ = render_triangles(odd, 24, 18, BACKGROUND)
+    with assert_raises():
+        _ = cpu_render_triangles(odd, 24, 18)
+
+
+def test_flattening_refuses_a_texture_edited_into_nonsense() raises:
+    # Host side, so it runs without a GPU: the upload checks every texture
+    # again, because the kernel cannot raise on what it finds in the table.
+    var textures = TextureStore()
+    var board = checkerboard(
+        4, 2, Color(255, 255, 255), Color(0, 0, 0), REPEAT, NEAREST
+    )
+    board.color_space = ColorSpace(99)
+    _ = textures.add(board^)
+    with assert_raises():
+        _ = flatten_textures(textures)
+
+
+def test_a_failed_texture_upload_leaves_the_old_set_in_place() raises:
+    # The failure injected here is the one the host can inject -- a texture
+    # that fails validation -- and it lands before any device work. What the
+    # test pins is the invariant every failure point now shares: nothing on
+    # the device has changed, so the previous upload is whole and the same
+    # draw gives the same image. A device allocation failing between the two
+    # buffers is not reproducible on demand; `set_textures` builds both as
+    # locals and commits them together so that it lands on the same
+    # invariant.
+    if skipped_for_lack_of_a_gpu("a failed texture upload leaves the old set"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            8, 4, Color(255, 255, 255), Color(0, 0, 0), REPEAT, NEAREST
+        )
+    )
+    var corners = mapped_quad(24, board)
+    var renderer = GpuRenderer(24, 24)
+    renderer.set_textures(textures)
+    renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
+    var before = renderer.read_back()
+
+    var broken = TextureStore()
+    _ = broken.add(
+        checkerboard(8, 4, Color(255, 0, 0), Color(0, 0, 255), REPEAT, NEAREST)
+    )
+    var bad = checkerboard(
+        4, 2, Color(255, 255, 255), Color(0, 0, 0), REPEAT, NEAREST
+    )
+    bad.color_space = ColorSpace(99)
+    _ = broken.add(bad^)
+    with assert_raises():
+        renderer.set_textures(broken)
+
+    renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
+    var after = renderer.read_back()
+    assert_equal(count_mismatches(before, after), 0)
+    # And the old count still bounds what a vertex may name.
+    with assert_raises():
+        renderer.draw(mapped_quad(24, TextureId(1)), BACKGROUND, SHADE_TEXTURE)
+
+
+def test_both_backends_agree_on_every_new_feature_at_once() raises:
+    # A camera riding a node under a turned pivot, aimed by `Scene.look_at`;
+    # a mipmapped checkerboard floor that runs behind the camera and is
+    # clipped; an unlit sphere and a lit cube; a bulb, a sun and some fill.
+    # Colour to one level, depth to rounding.
+    if skipped_for_lack_of_a_gpu("both backends agree on every new feature"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var ball = assets.geometries.add(sphere(Length(0.6, METRE), 12, 8))
+    var floor = assets.geometries.add(
+        plane(Length(20.0, METRE), Length(20.0, METRE), 4, 4)
+    )
+    var board = assets.textures.add(
+        checkerboard(
+            64,
+            8,
+            Color(240, 240, 240),
+            Color(40, 60, 120),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    var tiled = assets.materials.add(
+        Material(Color(255, 255, 255), board, DOUBLE_SIDE)
+    )
+    var orange = assets.materials.add(Material(Color(255, 140, 40)))
+    var plain = assets.materials.add(Material(Color(90, 190, 255), kind=BASIC))
+
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_position(0, -0.6, 0)
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var left = Object3D()
+    left.set_position(-0.9, 0, 0)
+    left.set_euler(Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.9, 0, 0.4)
+    var right_node = scene.add(right^)
+    var bulb = Object3D()
+    bulb.set_position(0.5, 1.0, 1.5)
+    var bulb_node = scene.add(bulb^)
+    scene.add_light(point_light(Color(255, 220, 180), bulb_node, 0.8))
+    var sun = Object3D()
+    sun.set_position(0.4, 0.8, 0.5)
+    var sun_node = scene.add(sun^)
+    scene.add_light(directional_light(Color(255, 255, 255), sun_node, 0.5))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.1))
+    var pivot = Object3D()
+    pivot.set_euler(Angle(0.0, DEGREE), Angle(30.0, DEGREE), Angle(0.0, DEGREE))
+    var rig = scene.add(pivot^)
+    var eye = Object3D()
+    eye.set_position(0, 0.6, 3.0)
+    var eye_node = scene.attach(eye^, rig)
+    scene.update()
+    scene.look_at(eye_node, Vector3(0, 0, 0), camera=True)
+    scene.update()
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METRE),
+        Length(100.0, METRE),
+    )
+    camera.attach(eye_node)
+
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(floor, tiled, ground_node))
+    meshes.append(Mesh(box, orange, left_node))
+    meshes.append(Mesh(ball, plain, right_node))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    var lighting = Lighting(scene)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    for triangle in range(len(corners) // 3):  # pragma: no branch
+        rasterize_shaded(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+            target,
+            SHADE_TEXTURE,
+            assets.textures,
+            lighting,
+        )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_TEXTURE, assets.textures, lighting
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 300, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    for y in range(36):
+        for x in range(48):
+            var theirs = cpu.depth_at(x, y)
+            var ours = gpu.depth_at(x, y)
+            if theirs == inf[DType.float32]():
+                assert_equal(ours, theirs)
+            else:
+                assert_almost_equal(ours, theirs, atol=Float64(1e-5))
 
 
 def main() raises:

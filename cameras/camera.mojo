@@ -24,11 +24,11 @@ whose bottom row is (0, 0, 0, 1) simply does not divide.
 The first answer takes the scene, because a camera can ride a scene node.
 three.js's camera *is* an `Object3D`: it has a parent, it is carried by a
 pivot like anything else, and its view matrix is the inverse of its world
-matrix. Here a camera is not a node -- a `Mesh` is not one either -- but it
-can name one with `attach`, and then its view comes from that node's world
-matrix rather than from `place`. A camera that names no node answers from
-where it was placed, and `view_matrix` is the same answer without the scene
-for the many callers that only ever place a camera.
+position and rotation. Here a camera is not a node -- a `Mesh` is not one
+either -- but it can name one with `attach`, and then its view comes from
+that node's world matrix rather than from `place`. A camera that names no
+node answers from where it was placed, and `view_matrix` is the same answer
+without the scene for the many callers that only ever place a camera.
 
 The two distances are methods rather than fields because a trait can require
 behaviour but not storage, and because the cameras hold them as `Length`
@@ -93,10 +93,18 @@ trait Camera(Copyable, Movable):
 def node_view_matrix(scene: Scene, node: NodeId) raises -> Matrix4:
     """Return the view matrix of a camera riding `node`.
 
-    The inverse of the node's world matrix, which is what three.js keeps as
-    `camera.matrixWorldInverse`: the transform that takes the world into the
-    camera's own frame is the undoing of the one that put the camera in the
-    world. Shared by both cameras so that "attached" means one thing.
+    The inverse of the node's world *position and rotation*, which is what
+    three.js keeps as `camera.matrixWorldInverse`: the transform that takes
+    the world into the camera's own frame is the undoing of the one that put
+    the camera in the world. Shared by both cameras so that "attached" means
+    one thing.
+
+    Scale is left out, as three.js leaves it out before inverting. A camera
+    parented to a scaled group inherits the group's position and turn, but
+    not its size: scale in a view matrix squashes camera space, which is what
+    a field of view and an aspect ratio are for, and along z it changes what
+    the near and far distances mean in metres. The first version inverted the
+    whole world matrix and did all of that silently.
 
     Args:
         scene: The scene the node is in, updated.
@@ -108,8 +116,19 @@ def node_view_matrix(scene: Scene, node: NodeId) raises -> Matrix4:
     Raises:
         Error: If the node is not in the scene, or the scene is stale -- a
             camera on a node that has moved since the last `update` would
-            otherwise look from where it used to be.
+            otherwise look from where it used to be -- or the node's world
+            transform reflects or flattens. A mirrored view reverses the
+            screen winding the culler reads, and the culler corrects only for
+            the mesh's own transform; a flattened one has no rotation left.
     """
-    var view = scene.world_matrix(node)
+    var world = scene.world_matrix(node)
+    if world.determinant() < 0:
+        raise Error(
+            "A mirrored camera node would reverse the winding the culler reads"
+        )
+    var view = world.extract_rotation()
+    view.elements[12] = world.elements[12]
+    view.elements[13] = world.elements[13]
+    view.elements[14] = world.elements[14]
     view.invert()
     return view^

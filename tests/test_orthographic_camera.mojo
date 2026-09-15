@@ -254,6 +254,23 @@ def test_an_orthographic_camera_can_ride_a_node() raises:
         )
 
 
+def test_an_orthographic_camera_on_a_scaled_node_keeps_its_lens() raises:
+    var scene = Scene()
+    var eye = Object3D()
+    eye.set_position(0, 0, 5)
+    eye.set_scale(2, 2, 0.5)
+    var node = scene.add(eye^)
+    scene.update()
+    var camera = a_camera()
+    camera.attach(node)
+    var view = camera.view_matrix_in(scene)
+    var expected = look_at(Vector3(0, 0, 5), Vector3(0, 0, 0), Vector3(0, 1, 0))
+    for index in range(16):
+        assert_almost_equal(
+            view.elements[index], expected.elements[index], atol=TOLERANCE
+        )
+
+
 def test_an_unusable_camera_is_rejected() raises:
     with assert_raises():
         _ = centred(

@@ -33,7 +33,7 @@ from geometries.sphere import sphere
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, Framebuffer
-from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV
+from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV, ShadeMode
 from render.texture import checkerboard
 from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import Renderer, available_workers, face_normal
@@ -1869,19 +1869,28 @@ def test_several_workers_draw_the_same_image_as_one() raises:
 
     var alone = Renderer(WIDTH, HEIGHT)
     var crowd = Renderer(WIDTH, HEIGHT, workers=3)
+    # More workers than rows: one band per row, the most the image allows.
+    var mob = Renderer(WIDTH, HEIGHT, workers=HEIGHT + 5)
     var one = alone.render(scene, assets, a_camera())
     var many = crowd.render(scene, assets, a_camera())
+    var most = mob.render(scene, assets, a_camera())
     assert_true(count_background(one, alone.background) < WIDTH * HEIGHT)
     for y in range(HEIGHT):
         for x in range(WIDTH):
             var here = one.get_pixel(x, y)
             var there = many.get_pixel(x, y)
+            var yonder = most.get_pixel(x, y)
             var spot = "pixel " + String(x) + "," + String(y)
             assert_equal(here.r, there.r, spot)
             assert_equal(here.g, there.g, spot)
             assert_equal(here.b, there.b, spot)
             assert_equal(here.a, there.a, spot)
             assert_equal(one.depth_at(x, y), many.depth_at(x, y), spot)
+            assert_equal(here.r, yonder.r, spot)
+            assert_equal(here.g, yonder.g, spot)
+            assert_equal(here.b, yonder.b, spot)
+            assert_equal(here.a, yonder.a, spot)
+            assert_equal(one.depth_at(x, y), most.depth_at(x, y), spot)
 
 
 def test_more_workers_than_rows_still_renders() raises:
@@ -2009,6 +2018,13 @@ def test_a_basic_material_ignores_the_lights() raises:
     assert_equal(centre_plain.r, UInt8(200))
     assert_equal(centre_plain.g, UInt8(100))
     assert_equal(centre_plain.b, UInt8(50))
+
+
+def test_an_unknown_shading_mode_is_refused_by_the_renderer() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    with assert_raises():
+        renderer.set_shading(ShadeMode(99))
+    renderer.set_shading(SHADE_LIT)
 
 
 def main() raises:

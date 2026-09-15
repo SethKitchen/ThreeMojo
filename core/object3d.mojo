@@ -23,8 +23,13 @@ three.js: a point is scaled first, then rotated, then moved.
 The rotation is a quaternion, as three.js's `Object3D.quaternion` is. Euler
 angles are one way to *set* it -- `set_euler`, the order being three.js's --
 and `rotate_x`, `rotate_y`, `rotate_z` and `rotate_on_axis` turn it further
-by one multiply each, which is what `mesh.rotation.y += 0.01` does there.
-`look_at` orients it towards a point.
+by one multiply each, about the node's *own* axes, which is three.js's
+`rotateY` and friends. That is not `rotation.y += 0.01` there, except while
+the other two angles are zero: an Euler component is not a local axis in
+general. From `XYZ` angles of (0, 0, 90) a turn of 90 about the local y
+sends +x to -z, while raising the Euler y to 90 sends it to +y. `look_at`
+orients a node towards a point in its parent's frame; `Scene.look_at` does
+it in world space.
 """
 
 from math.euler import XYZ, Euler, EulerOrder
@@ -53,6 +58,67 @@ struct NodeId(Equatable, ImplicitlyCopyable, Writable):
 
 # A node with no parent. Roots carry this instead of an index.
 comptime NO_PARENT = NodeId(-1)
+
+
+def facing(
+    eye: Vector3, target: Vector3, up: Vector3, camera: Bool
+) raises -> Quaternion:
+    """Return the rotation that turns something at `eye` to face `target`.
+
+    The basis three.js's `Matrix4.lookAt` builds, as a quaternion: z along
+    the line of sight, x perpendicular to it and to `up`, y completing the
+    frame. All three vectors have to be given in one frame, and the answer
+    is a rotation in that frame -- which is why `Scene.look_at` calls this
+    with world-space values and only then takes the result into the parent's
+    frame, rather than taking the target across first and building the
+    basis there with the wrong up.
+
+    Args:
+        eye: Where the thing is.
+        target: The point it should face.
+        up: Which way is up; need not be perpendicular to the line of sight.
+        camera: True to face the target down -z, as a camera does; else +z.
+
+    Returns:
+        The rotation.
+
+    Raises:
+        Error: If the target is at the eye, or the line of sight runs along
+            `up`, either of which leaves the roll undefined.
+    """
+    var z = target - eye
+    if z.length() == 0:
+        raise Error("A node cannot look at its own position")
+    z.normalize()
+    if camera:
+        z = -z
+    var x = up
+    x.cross(z)
+    if x.length() == 0:
+        raise Error("Looking straight along up leaves the roll undefined")
+    x.normalize()
+    var y = z
+    y.cross(x)
+    var basis = Matrix4()
+    basis.set(
+        x.x,
+        y.x,
+        z.x,
+        0,
+        x.y,
+        y.y,
+        z.y,
+        0,
+        x.z,
+        y.z,
+        z.z,
+        0,
+        0,
+        0,
+        0,
+        1,
+    )
+    return Quaternion.from_matrix(basis)
 
 
 struct Object3D(ImplicitlyCopyable):
@@ -143,15 +209,15 @@ struct Object3D(ImplicitlyCopyable):
         self.quaternion.premultiply(Quaternion.from_axis_angle(axis, angle))
 
     def rotate_x(mut self, angle: Angle):
-        """Turn about the node's own x axis; `rotation.x += angle` there."""
+        """Turn about the node's own x axis: three.js's `rotateX`."""
         self.rotate_on_axis(Vector3(1, 0, 0), angle)
 
     def rotate_y(mut self, angle: Angle):
-        """Turn about the node's own y axis."""
+        """Turn about the node's own y axis: three.js's `rotateY`."""
         self.rotate_on_axis(Vector3(0, 1, 0), angle)
 
     def rotate_z(mut self, angle: Angle):
-        """Turn about the node's own z axis."""
+        """Turn about the node's own z axis: three.js's `rotateZ`."""
         self.rotate_on_axis(Vector3(0, 0, 1), angle)
 
     def look_at(mut self, target: Vector3, *, camera: Bool = False) raises:
@@ -159,14 +225,15 @@ struct Object3D(ImplicitlyCopyable):
 
         three.js's `Object3D.lookAt` with one difference worth knowing: it
         works in world space, walking the parents to get there, and this one
-        works in the frame the node's position is in. For a root node the two
-        are the same; for a child, `Scene.look_at` does the walk.
+        works entirely in the frame the node's position is in -- the target,
+        and the up direction, which is that frame's +y. For a root node the
+        two are the same; for a child, `Scene.look_at` does the walk, up
+        direction included.
 
         Which way "facing" is depends on what the node is, exactly as there.
         An object points its +z axis at the target. A camera points its -z
         axis at the target, because a camera looks down -z; three.js decides
-        by `isCamera`, and here you say so. Up stays as close to +y as the
-        target allows.
+        by `isCamera`, and here you say so.
 
         Args:
             target: The point to face, in the parent's frame.
@@ -174,43 +241,14 @@ struct Object3D(ImplicitlyCopyable):
 
         Raises:
             Error: If the target is at the node's own position, or straight
-                above or below it, either of which leaves the orientation
-                undefined. three.js nudges the axis by a small amount instead;
-                refusing is consistent with `math.projection.look_at`.
+                along the parent's y from it, either of which leaves the
+                orientation undefined. three.js nudges the axis by a small
+                amount instead; refusing is consistent with
+                `math.projection.look_at`.
         """
-        var z = target - self.position
-        if z.length() == 0:
-            raise Error("A node cannot look at its own position")
-        z.normalize()
-        if camera:
-            z = -z
-        var x = Vector3(0, 1, 0)
-        x.cross(z)
-        if x.length() == 0:
-            raise Error("Looking straight up or down leaves the roll undefined")
-        x.normalize()
-        var y = z
-        y.cross(x)
-        var basis = Matrix4()
-        basis.set(
-            x.x,
-            y.x,
-            z.x,
-            0,
-            x.y,
-            y.y,
-            z.y,
-            0,
-            x.z,
-            y.z,
-            z.z,
-            0,
-            0,
-            0,
-            0,
-            1,
+        self.quaternion = facing(
+            self.position, target, Vector3(0, 1, 0), camera
         )
-        self.quaternion = Quaternion.from_matrix(basis)
 
     def local_matrix(self) raises -> Matrix4:
         """Return this node's transform relative to its parent.

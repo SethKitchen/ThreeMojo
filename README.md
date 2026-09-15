@@ -227,10 +227,13 @@ too. A matrix composes but does not interpolate; Euler angles interpolate but
 lock up; a unit quaternion does both. Euler angles are one way to *set* it —
 `set_euler`, or `set_rotation(Euler(x, y, z, order))` — and `rotate_x`,
 `rotate_y`, `rotate_z` and `rotate_on_axis` turn it further by one multiply
-each, about the node's *own* axes, which is what `mesh.rotation.y += 0.01`
-does there; `rotate_on_world_axis` turns about the parent's. `look_at`
-orients a node towards a point, +z forward for an object and −z for a camera,
-and `Scene.look_at` does it in world space through the parent's inverse.
+each, about the node's *own* axes — three.js's `rotateY` — which is
+`rotation.y += 0.01` there only while the other two angles are zero, since an
+Euler component is not a local axis; `rotate_on_world_axis` turns about the
+parent's. `look_at` orients a node towards a point, +z forward for an object
+and −z for a camera, with up being the parent's +y. `Scene.look_at` does it in
+world space, world up included, and then undoes the parent's rotation to get
+the node's own — scale normalized away, a reflection refused.
 `Quaternion.slerp` blends two rotations along the shortest arc at constant
 speed. `math/euler.mojo` converts *to* a quaternion or a matrix; reading
 Euler angles back out of a rotation is not ported.
@@ -650,6 +653,12 @@ or a gamma that is neither sRGB's nor one — arrives as `UNKNOWN_SPACE` and mus
 be settled by the caller. That is neither ignoring it nor refusing the file:
 the caller knows what the image is for and the decoder does not.
 
+A `gAMA` near 1/2.2 is read as `SRGB`, and that is an approximation: a gamma
+is a pure power and the sRGB curve is not, so the two differ by about a
+percent at midtones. It is sRGB-ish, which is enough to light with. Faithful
+colour management would keep the gamma and apply it, and nothing here claims
+to.
+
 The tests decode real files written by a conforming encoder and embedded as
 bytes, because a decoder checked only against this project's own encoder would
 never see a Huffman code or a row filter at all. They cover both compressed
@@ -738,8 +747,14 @@ a texture's `Wrap` and `Filter`, a `ColorSpace`, a `ShadeMode` and a
 `LightKind`. That is
 the same discipline the resource ids and the units follow: a value that is
 one of three things should not be interchangeable with one that is one of
-two. Each used to be an `Int` checked at runtime; now a wrong one does not
-compile, `tests/compile_fail/` proves it, and the checks are gone.
+two. A bare integer in their place does not compile, and `tests/compile_fail/`
+proves it. A wrong value *inside* the right type — `Blending(7)` — still
+constructs, because a struct's fields are open in Mojo, so every boundary that
+reads one asks `is_valid` and refuses: the material and texture constructors,
+the light resolver, both rasterizers, the GPU upload. For a while only the
+compile-time half was in place, and the two backends could once again read a
+value neither knew in opposite directions. The types stop transpositions and
+the checks stop nonsense; they are different jobs.
 
 A `Mesh` is now three ids and nothing else — where it is, what shape it is,
 what it is made of:
@@ -890,13 +905,16 @@ because a reversed pair mirrors the projection, and mirrored winding is
 exactly what backface culling reads.
 
 **A camera can ride a scene node.** three.js's camera is an `Object3D`, and
-its view matrix is the inverse of its world matrix. Here a camera is not a
-node — a `Mesh` is not one either — but `camera.attach(node)` makes it look
-from one, so a camera parented to a pivot orbits with it, and
-`Scene.look_at(node, target, camera=True)` aims it. The trait's first answer
-is therefore `view_matrix_in(scene)`; `view_matrix()` still answers for a
-placed camera and refuses for an attached one, because only the scene knows
-where the node is. `examples/photo.mojo` circles its cube this way.
+its view matrix is the inverse of its world position and rotation. Here a
+camera is not a node — a `Mesh` is not one either — but `camera.attach(node)`
+makes it look from one, so a camera parented to a pivot orbits with it, and
+`Scene.look_at(node, target, camera=True)` aims it. Scale is dropped on the
+way, as three.js drops it: a scaled group carries the camera but does not
+change its lens, and a mirrored node is refused because the culler corrects
+winding only for the mesh's own transform. The trait's first answer is
+therefore `view_matrix_in(scene)`; `view_matrix()` still answers for a placed
+camera and refuses for an attached one, because only the scene knows where the
+node is. `examples/photo.mojo` circles its cube this way.
 
 ## Threads
 
