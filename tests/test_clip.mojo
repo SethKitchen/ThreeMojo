@@ -357,5 +357,54 @@ def test_a_cut_carries_the_normal_across() raises:
     assert_true(found, "no corner landed on the near plane")
 
 
+def test_a_cut_carries_the_world_position_across() raises:
+    # A point light needs to know where the surface really is, and a cut
+    # corner is somewhere between the two it was cut from.
+    var near_end = ClipVertex(
+        Vector3(0, 0, -0.5),
+        FloatColor(1, 1, 1),
+        Vector3(0, 0, 1),
+        0,
+        0,
+        Vector3(4, 0, 0),
+    )
+    var far_end = ClipVertex(
+        Vector3(0, 0, -2.5),
+        FloatColor(1, 1, 1),
+        Vector3(0, 0, 1),
+        0,
+        0,
+        Vector3(0, 0, 8),
+    )
+    # The third corner shares the far end's world position, so both cut
+    # corners land at the same place and one check covers them.
+    var side = ClipVertex(
+        Vector3(1, 0, -2.5),
+        FloatColor(1, 1, 1),
+        Vector3(0, 0, 1),
+        0,
+        0,
+        Vector3(0, 0, 8),
+    )
+    var pieces = clip_depth(near_end, far_end, side, NEAR, FAR)
+    var found = False
+    for index in range(len(pieces)):
+        var corner = pieces[index]
+        if corner.position.z > Float32(-1.01) and (
+            corner.position.z < Float32(-0.99)
+        ):
+            # A quarter of the way from (4, 0, 0) towards (0, 0, 8).
+            assert_almost_equal(corner.world.x, Float32(3), atol=Float64(1e-5))
+            assert_almost_equal(corner.world.z, Float32(2), atol=Float64(1e-5))
+            found = True
+    assert_true(found, "no corner landed on the near plane")
+    # A corner built without a world position sits at the origin.
+    var bare = ClipVertex(
+        Vector3(1, 0, -2.5), FloatColor(1, 1, 1), Vector3(0, 0, 1), 0, 0
+    )
+    assert_equal(bare.world.x, Float32(0))
+    assert_equal(bare.world.z, Float32(0))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -8,7 +8,7 @@
 The loop here is the one both cube examples had grown by hand: take each
 mesh's world transform, project its vertices, and rasterize its triangles with
 depth. Having it in one place is what lets an example say `render(scene,
-meshes, camera)` instead of spelling all that out.
+assets, camera)` instead of spelling all that out.
 
 Lighting is evaluated per *fragment*: what a corner carries is a world-space
 normal, which is interpolated across the triangle and made unit length again
@@ -63,7 +63,7 @@ from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from materials.material import BACK_SIDE, DOUBLE_SIDE, FRONT_SIDE
+from materials.material import BACK_SIDE, DOUBLE_SIDE, FRONT_SIDE, Blending
 from render.texture_store import NO_TEXTURE, TextureId
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
@@ -73,11 +73,13 @@ from render.rasterizer import (
     SHADE_TEXTURE,
     SHADE_UV,
     RasterVertex,
+    ShadeMode,
     edge,
-    rasterize_shaded,
+    rasterize_all,
 )
 from renderers.clip import ClipVertex, clip_depth
 from std.math import max
+from std.sys import num_logical_cores
 
 
 def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
@@ -86,11 +88,8 @@ def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     Wound counter-clockwise seen from the front, so the normal points at the
     viewer for a front-facing triangle.
     """
-    var first = b
-    first.sub(a)
-    var second = c
-    second.sub(a)
-    first.cross(second)
+    var first = b - a
+    first.cross(c - a)
     # normalize leaves a zero vector alone, so a degenerate triangle gives a
     # zero normal rather than a division by zero.
     first.normalize()
@@ -146,10 +145,10 @@ def _with_opacity(color: FloatColor, opacity: Float32) -> FloatColor:
 def _draw_order(
     scene: Scene,
     assets: Assets,
-    meshes: List[Mesh],
     view: Matrix4,
 ) raises -> List[Int]:
-    """Return the order to draw meshes in: opaque first, then back to front.
+    """Return the order to draw meshes in: opaque nearest first, then the
+    translucent ones furthest first.
 
     Blending is not commutative, so a translucent surface only looks right if
     what is behind it is already there. Two rules follow, and they are the
@@ -157,7 +156,13 @@ def _draw_order(
 
     Opaque first, because a translucent surface has to mix with the solid
     thing behind it, and because opaque surfaces write depth — which is what
-    stops a translucent surface behind a wall from showing through it.
+    stops a translucent surface behind a wall from showing through it. Among
+    themselves the opaque meshes go nearest first. The image does not depend
+    on it, since the depth test settles every pixel whatever the order, but
+    the cost does: a fragment that fails the depth test is skipped *before*
+    it is lit and sampled, so drawing the near things first means the far
+    things' hidden fragments are never shaded at all. three.js sorts its
+    opaque list front to back for the same reason.
 
     Then translucent, furthest first, because each one mixes into the result
     of the ones beyond it. Sorted by the camera-space depth of the mesh's
@@ -167,47 +172,62 @@ def _draw_order(
     the alternative is sorting every triangle every frame.
 
     Args:
-        scene: The transform hierarchy.
+        scene: The transform hierarchy, and the meshes to draw.
         assets: Where the materials live.
-        meshes: What to draw.
         view: The world-to-camera transform, for measuring depth.
 
     Returns:
-        Indices into `meshes`, in the order they should be drawn.
+        Indices into `scene.meshes`, in the order they should be drawn.
 
     Raises:
         Error: If a mesh names a node or material that is not there.
     """
-    var order = List[Int]()
+    ref meshes = scene.meshes
+    var solid = List[Int]()
+    var solid_depths = List[Float32]()
     var clear = List[Int]()
-    var depths = List[Float32]()
+    var clear_depths = List[Float32]()
     for index in range(len(meshes)):
-        if not assets.materials.get(meshes[index].material).is_transparent():
-            order.append(index)
-            continue
-        clear.append(index)
         # The camera looks down -z, so a smaller z is further away.
-        depths.append(
-            view.transform_point(scene.world_position(meshes[index].node)).z
-        )
+        var depth = view.transform_point(
+            scene.world_position(meshes[index].node)
+        ).z
+        if assets.materials.get(meshes[index].material).is_transparent():
+            clear.append(index)
+            clear_depths.append(depth)
+        else:
+            solid.append(index)
+            # Negated, so one ascending sort serves both lists: the nearest
+            # opaque mesh has the largest z and must come first.
+            solid_depths.append(-depth)
 
-    # Insertion sort: the list is one entry per translucent mesh, which is
-    # small, and a stable order keeps equally distant meshes in the order the
-    # caller gave them.
-    for position in range(len(clear)):
-        var mesh = clear[position]
-        var depth = depths[position]
-        var slot = position
-        while slot > 0 and depths[slot - 1] > depth:
-            clear[slot] = clear[slot - 1]
-            depths[slot] = depths[slot - 1]
-            slot -= 1
-        clear[slot] = mesh
-        depths[slot] = depth
-
+    _sort_by(solid, solid_depths)
+    _sort_by(clear, clear_depths)
+    var order = List[Int]()
+    for position in range(len(solid)):
+        order.append(solid[position])
     for position in range(len(clear)):
         order.append(clear[position])
     return order^
+
+
+def _sort_by(mut items: List[Int], mut keys: List[Float32]):
+    """Sort `items` by `keys`, ascending, in place and stably.
+
+    Insertion sort: the lists are one entry per mesh, which is small, and a
+    stable order keeps meshes at equal depth in the order the caller gave
+    them.
+    """
+    for position in range(len(items)):
+        var item = items[position]
+        var key = keys[position]
+        var slot = position
+        while slot > 0 and keys[slot - 1] > key:
+            items[slot] = items[slot - 1]
+            keys[slot] = keys[slot - 1]
+            slot -= 1
+        items[slot] = item
+        keys[slot] = key
 
 
 def _turned_around(corner: RasterVertex) -> RasterVertex:
@@ -215,7 +235,7 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
 
     For a surface being seen from its far side. Every other field is carried
     across unchanged, which is why this exists rather than a mutation: a
-    `RasterVertex` has nine fields and rebuilding one by hand at three call
+    `RasterVertex` has eleven fields and rebuilding one by hand at three call
     sites is three chances to drop one.
     """
     return RasterVertex(
@@ -228,12 +248,18 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
         corner.v,
         corner.texture,
         corner.blend,
-        Vector3(-corner.normal.x, -corner.normal.y, -corner.normal.z),
+        -corner.normal,
+        corner.world,
+        corner.lit,
     )
 
 
 def _to_raster(
-    vertex: ClipVertex, to_screen: Matrix4, texture: TextureId, blend: Int
+    vertex: ClipVertex,
+    to_screen: Matrix4,
+    texture: TextureId,
+    blend: Blending,
+    lit: Bool,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -261,7 +287,18 @@ def _to_raster(
         texture,
         blend,
         vertex.normal,
+        vertex.world,
+        lit,
     )
+
+
+def available_workers() -> Int:
+    """Return how many rasterizer workers this machine can run at once.
+
+    One per logical core. The bands are independent and memory-light, so
+    hyperthreads help rather than hurt.
+    """
+    return num_logical_cores()
 
 
 struct Renderer(Movable):
@@ -275,42 +312,67 @@ struct Renderer(Movable):
     # without is not, which is what three.js does by having a map at all.
     # `SHADE_LIT` and `SHADE_UV` are overrides for looking at something —
     # ignore every texture, or draw texture coordinates instead of colour.
-    var shading: Int
+    var shading: ShadeMode
+    # How many threads rasterize a frame. One by default, deliberately: the
+    # coverage tool reconstructs MC/DC vectors from the *order* probe
+    # records arrive in, and two threads reporting the same decision at once
+    # would interleave them. Everything that wants speed rather than
+    # measurement -- the examples, the benchmark -- asks for
+    # `available_workers()`.
+    var workers: Int
 
-    def __init__(out self, width: Int, height: Int) raises:
+    def __init__(out self, width: Int, height: Int, workers: Int = 1) raises:
         """Create a renderer with a dark background.
 
         Args:
             width: Image width in pixels.
             height: Image height in pixels.
+            workers: How many threads rasterize a frame; see `set_workers`.
 
         Raises:
-            Error: If either dimension is not positive.
+            Error: If either dimension is not positive, or `workers` is.
         """
         if width <= 0 or height <= 0:
             raise Error("Renderer dimensions must be positive")
+        if workers < 1:
+            raise Error("A renderer needs at least one worker")
         self.width = width
         self.height = height
         self.background = Color(16, 18, 26)
         self.shading = SHADE_TEXTURE
+        self.workers = workers
+
+    def set_workers(mut self, workers: Int) raises:
+        """Choose how many threads rasterize a frame.
+
+        The image is cut into that many horizontal bands and every triangle
+        is rasterized once per band, each on its own thread. The result is
+        byte for byte what one thread produces, because a band owns its rows
+        and draws in the same order; only the wall clock changes. More
+        bands than rows collapse to one band per row.
+
+        Args:
+            workers: At least one. `available_workers()` is one per core.
+
+        Raises:
+            Error: If `workers` is less than one.
+        """
+        if workers < 1:
+            raise Error("A renderer needs at least one worker")
+        self.workers = workers
 
     def set_background(mut self, color: Color):
         """Set the colour the image is cleared to."""
         self.background = color
 
-    def set_shading(mut self, mode: Int) raises:
+    def set_shading(mut self, mode: ShadeMode):
         """Choose what a fragment's colour is taken from.
 
         Args:
             mode: `SHADE_TEXTURE` to follow each material, `SHADE_LIT` to
                 ignore every texture, or `SHADE_UV` to write texture
                 coordinates as red and green instead.
-
-        Raises:
-            Error: If the mode is not one this renderer knows.
         """
-        if mode != SHADE_LIT and mode != SHADE_UV and mode != SHADE_TEXTURE:
-            raise Error("Unknown shading mode")
         self.shading = mode
 
     def prepare[
@@ -319,9 +381,10 @@ struct Renderer(Movable):
         self,
         scene: Scene,
         assets: Assets,
-        meshes: List[Mesh],
         camera: C,
-    ) raises -> List[RasterVertex]:
+    ) raises -> List[
+        RasterVertex
+    ]:
         """Turn a scene into the triangles a rasterizer can fill.
 
         Everything that is not filling pixels happens here: world transforms,
@@ -347,12 +410,12 @@ struct Renderer(Movable):
         stale scene renders stale positions.
 
         Args:
-            scene: The transform hierarchy the meshes sit in.
+            scene: The transform hierarchy, and the meshes and lights in it.
             assets: The geometry, materials and textures the meshes name.
                 Two meshes naming the same id share one copy of it.
-            meshes: What to draw, each naming a node and a geometry.
             camera: The camera to project through — anything satisfying
-                `cameras.camera.Camera`, perspective or orthographic.
+                `cameras.camera.Camera`, perspective or orthographic, placed
+                or riding one of the scene's nodes.
 
         Returns:
             Raster vertices, three per triangle, in submission order.
@@ -363,13 +426,16 @@ struct Renderer(Movable):
                 if its geometry has no positions.
         """
         var corners = List[RasterVertex]()
-        var view = camera.view_matrix()
+        # Asked of the scene as well as the camera: a camera riding a node
+        # looks from wherever the scene put that node.
+        var view = camera.view_matrix_in(scene)
         var to_screen = camera.view_to_screen_matrix(self.width, self.height)
         var near = camera.near_distance()
         var far = camera.far_distance()
 
+        ref meshes = scene.meshes
         # Worked out once, not once per mesh.
-        var order = _draw_order(scene, assets, meshes, view)
+        var order = _draw_order(scene, assets, view)
         for ordered in range(len(meshes)):
             var index = order[ordered]
             var world = scene.world_matrix(meshes[index].node)
@@ -387,6 +453,9 @@ struct Renderer(Movable):
             # can hold a scene whose meshes use different images.
             var blending = material.blending
             var map = material.map
+            # Whether the lights reach this surface at all; a `BASIC`
+            # material shows its own colour. Per triangle, like the blend.
+            var lit = material.is_lit()
             # Checked here because here is the first place that can: a
             # material is built without the store in reach, so a positive id
             # naming nothing is only detectable once both are together. It is
@@ -455,11 +524,24 @@ struct Renderer(Movable):
                 FloatColor(srgb=material.color), material.opacity
             )
 
+            # The index buffer is read directly, checked once up front.
+            # `corner_index` does the same checks per corner, but reaches
+            # the vertex count through a string lookup of the position
+            # attribute, and three of those per triangle was measurable.
+            var indexed = geometry.is_indexed()
+            ref indices = geometry.index
+            for slot in range(len(indices)):
+                if indices[slot] >= vertex_count:
+                    raise Error("An index entry points past the last vertex")
             var triangles = geometry.triangle_count()
             for triangle in range(triangles):
-                var first = geometry.corner_index(triangle, 0)
-                var second = geometry.corner_index(triangle, 1)
-                var third = geometry.corner_index(triangle, 2)
+                var first = triangle * 3
+                var second = first + 1
+                var third = first + 2
+                if indexed:
+                    first = indices[triangle * 3]
+                    second = indices[triangle * 3 + 1]
+                    third = indices[triangle * 3 + 2]
 
                 var normal_a: Vector3
                 var normal_b: Vector3
@@ -483,9 +565,7 @@ struct Renderer(Movable):
                         # not flip, and the two paths have to mean the same
                         # side or an object would shade differently purely
                         # for having normals.
-                        geometric = Vector3(
-                            -geometric.x, -geometric.y, -geometric.z
-                        )
+                        geometric = -geometric
                     normal_a = geometric
                     normal_b = geometric
                     normal_c = geometric
@@ -497,6 +577,7 @@ struct Renderer(Movable):
                         normal_a,
                         vertex_u[first],
                         vertex_v[first],
+                        world_points[first],
                     ),
                     ClipVertex(
                         view_points[second],
@@ -504,6 +585,7 @@ struct Renderer(Movable):
                         normal_b,
                         vertex_u[second],
                         vertex_v[second],
+                        world_points[second],
                     ),
                     ClipVertex(
                         view_points[third],
@@ -511,19 +593,20 @@ struct Renderer(Movable):
                         normal_c,
                         vertex_u[third],
                         vertex_v[third],
+                        world_points[third],
                     ),
                     near,
                     far,
                 )
                 for piece in range(len(pieces) // 3):
                     var one = _to_raster(
-                        pieces[piece * 3], to_screen, map, blending
+                        pieces[piece * 3], to_screen, map, blending, lit
                     )
                     var two = _to_raster(
-                        pieces[piece * 3 + 1], to_screen, map, blending
+                        pieces[piece * 3 + 1], to_screen, map, blending, lit
                     )
                     var three = _to_raster(
-                        pieces[piece * 3 + 2], to_screen, map, blending
+                        pieces[piece * 3 + 2], to_screen, map, blending, lit
                     )
                     # Which way this piece ends up facing decides two things
                     # at once: whether it survives, and which side of it is
@@ -556,21 +639,16 @@ struct Renderer(Movable):
 
     def render[
         C: Camera
-    ](
-        self,
-        scene: Scene,
-        assets: Assets,
-        meshes: List[Mesh],
-        camera: C,
-    ) raises -> Framebuffer:
-        """Draw every mesh on the CPU and return the finished image.
+    ](self, scene: Scene, assets: Assets, camera: C,) raises -> Framebuffer:
+        """Draw every mesh in the scene on the CPU and return the image.
 
-        `prepare` does the work; this fills the triangles it produces.
+        `prepare` does the work; this fills the triangles it produces. The
+        shape is three.js's `renderer.render(scene, camera)` plus the one
+        argument Mojo needs and JavaScript does not: who owns the geometry.
 
         Args:
-            scene: The transform hierarchy the meshes sit in.
+            scene: The transform hierarchy, and the meshes and lights in it.
             assets: The geometry, materials and textures the meshes name.
-            meshes: What to draw, each naming a node and a geometry.
             camera: The camera to project through.
 
         Returns:
@@ -580,20 +658,19 @@ struct Renderer(Movable):
             Error: If a mesh names a node or a geometry that is not there, or
                 its geometry has no positions.
         """
-        var corners = self.prepare(scene, assets, meshes, camera)
+        var corners = self.prepare(scene, assets, camera)
         # Resolved here as well as in `prepare`, because the fragments need
         # it: lighting is no longer baked into the corners on the way past.
         var lighting = Lighting(scene)
         var target = RenderTarget(self.width, self.height, self.background)
-        for triangle in range(len(corners) // 3):
-            rasterize_shaded(
-                corners[triangle * 3],
-                corners[triangle * 3 + 1],
-                corners[triangle * 3 + 2],
-                target,
-                self.shading,
-                assets.textures,
-                lighting,
-            )
-        # Linear light becomes an image exactly once, here.
-        return target.resolve()
+        rasterize_all(
+            corners,
+            target,
+            self.shading,
+            assets.textures,
+            lighting,
+            self.workers,
+        )
+        # Linear light becomes an image exactly once, here, on as many
+        # threads as drew it.
+        return target.resolve(self.workers)

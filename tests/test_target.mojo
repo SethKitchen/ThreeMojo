@@ -166,5 +166,40 @@ def test_writing_depth_claims_it_and_passing_does_not() raises:
     assert_true(target.depth_passes(0, 0, 0.1))
 
 
+def test_resolving_on_several_workers_matches_one() raises:
+    var target = RenderTarget(7, 5, Color(20, 24, 32, 200))
+    for y in range(5):
+        for x in range(7):
+            target.blend(
+                x,
+                y,
+                FloatColor(
+                    Float32(x) / 7, Float32(y) / 5, 0.5, Float32(x + y) / 12
+                ),
+            )
+    var alone = target.resolve()
+    var crowd = target.resolve(4)
+    for y in range(5):
+        for x in range(7):
+            var one = alone.get_pixel(x, y)
+            var many = crowd.get_pixel(x, y)
+            assert_equal(one.r, many.r)
+            assert_equal(one.g, many.g)
+            assert_equal(one.b, many.b)
+            assert_equal(one.a, many.a)
+
+
+def test_more_workers_than_pixels_still_resolves() raises:
+    var target = RenderTarget(2, 1, Color(200, 100, 50))
+    var image = target.resolve(16)
+    assert_equal(image.get_pixel(1, 0).r, UInt8(200))
+
+
+def test_resolving_needs_at_least_one_worker() raises:
+    var target = RenderTarget(2, 2, Color(0, 0, 0))
+    with assert_raises():
+        _ = target.resolve(0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

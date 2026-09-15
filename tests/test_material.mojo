@@ -5,6 +5,7 @@
 
 """Tests for `materials.material`, `render.texture_store` and `core.assets`."""
 
+from materials.material import BASIC, LAMBERT
 from materials.material import MaterialId
 from core.assets import Assets
 from geometries.box import cube
@@ -45,6 +46,21 @@ def test_a_material_is_a_colour_by_default() raises:
     assert_false(paint.is_textured())
 
 
+def test_a_material_is_lit_by_default() raises:
+    var paint = Material(Color(10, 20, 30))
+    assert_equal(paint.kind, LAMBERT)
+    assert_true(paint.is_lit())
+
+
+def test_a_basic_material_is_not_lit() raises:
+    var flat = Material(Color(10, 20, 30), kind=BASIC)
+    assert_equal(flat.kind, BASIC)
+    assert_false(flat.is_lit())
+    # Everything else is untouched by the choice.
+    assert_equal(flat.opacity, Float32(1))
+    assert_true(not flat.is_transparent())
+
+
 def test_a_material_can_name_a_texture() raises:
     var paint = Material(Color(1, 2, 3), TextureId(4))
     assert_equal(paint.map, TextureId(4))
@@ -53,14 +69,15 @@ def test_a_material_can_name_a_texture() raises:
 
 def test_every_side_is_accepted() raises:
     # Each operand of the check has to be able to decide the outcome alone.
-    assert_equal(Material(Color(0, 0, 0), NO_TEXTURE, FRONT_SIDE).side, 0)
-    assert_equal(Material(Color(0, 0, 0), NO_TEXTURE, BACK_SIDE).side, 1)
-    assert_equal(Material(Color(0, 0, 0), NO_TEXTURE, DOUBLE_SIDE).side, 2)
-
-
-def test_an_unknown_side_is_rejected() raises:
-    with assert_raises():
-        _ = Material(Color(0, 0, 0), NO_TEXTURE, 7)
+    assert_equal(
+        Material(Color(0, 0, 0), NO_TEXTURE, FRONT_SIDE).side, FRONT_SIDE
+    )
+    assert_equal(
+        Material(Color(0, 0, 0), NO_TEXTURE, BACK_SIDE).side, BACK_SIDE
+    )
+    assert_equal(
+        Material(Color(0, 0, 0), NO_TEXTURE, DOUBLE_SIDE).side, DOUBLE_SIDE
+    )
 
 
 def test_a_negative_texture_id_that_is_not_absence_is_rejected() raises:

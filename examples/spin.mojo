@@ -7,9 +7,9 @@
 
     mojo run -I . examples/spin.mojo [path.png]
 
-The rotation is done by hand here rather than with a matrix, because there is
-no Matrix4 yet. When there is, this example is the first thing that should be
-rewritten to use it.
+The rotation is done by hand rather than with a matrix, because this is the
+smallest thing that animates: three points on a circle and the flat
+rasterizer. `Matrix4` exists now, and everything above `cube.mojo` uses it.
 """
 
 from math.vector2 import Vector2

@@ -26,20 +26,19 @@ squares therefore run straight across a face and meet at right angles at its
 edges, rather than continuing around the cube.
 """
 
-from core.object3d import NodeId
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from materials.material import Material
-from core.object3d import Object3D
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from lights.light import ambient_light, directional_light
 from geometries.box import cube
+from lights.light import ambient_light, directional_light
+from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.texture import BILINEAR, REPEAT, checkerboard
-from renderers.renderer import Renderer
+from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, Length, METRE
@@ -55,16 +54,20 @@ def frame_at(
     renderer: Renderer,
     camera: PerspectiveCamera,
     assets: Assets,
-    meshes: List[Mesh],
+    mut scene: Scene,
+    left: NodeId,
+    right: NodeId,
     turn: Float32,
 ) raises -> Framebuffer:
-    """Render one frame with the cube turned to `turn` degrees.
+    """Render one frame with the cubes turned to `turn` degrees.
 
     Args:
         renderer: The renderer to draw with.
         camera: The camera to view through.
         assets: The geometry, materials and textures.
-        meshes: The two cubes, already bound to nodes 0 and 1.
+        scene: The persistent scene, edited in place.
+        left: The sharp cube's node.
+        right: The blended cube's node.
         turn: How far the cubes have turned, in degrees.
 
     Returns:
@@ -73,30 +76,17 @@ def frame_at(
     Raises:
         Error: If the scene or the render is invalid.
     """
-    var scene = Scene()
     # Tilted as well as spun, so a top face comes into view and its own copy
     # of the pattern can be seen meeting a side's at the edge. The two turn
     # opposite ways, which keeps them from looking like one object.
-    var left = Object3D()
-    left.set_position(-0.95, 0, 0)
-    left.set_euler(Angle(26.0, DEGREE), Angle(turn, DEGREE), Angle(0.0, DEGREE))
-    _ = scene.add(left^)
-    var right = Object3D()
-    right.set_position(0.95, 0, 0)
-    right.set_euler(
+    scene.node(left).set_euler(
+        Angle(26.0, DEGREE), Angle(turn, DEGREE), Angle(0.0, DEGREE)
+    )
+    scene.node(right).set_euler(
         Angle(26.0, DEGREE), Angle(-turn, DEGREE), Angle(0.0, DEGREE)
     )
-    _ = scene.add(right^)
-    # The lamp is a node like any other, so it could be parented to something
-    # that moves. Added last, leaving the node ids the meshes name untouched.
-    var lamp = Object3D()
-    lamp.set_position(0.4, 0.8, 0.5)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
-
     scene.update()
-    return renderer.render(scene, assets, meshes, camera)
+    return renderer.render(scene, assets, camera)
 
 
 def main() raises:
@@ -105,7 +95,7 @@ def main() raises:
     if len(args) > 1:
         destination = String(args[1])
 
-    var renderer = Renderer(WIDTH, HEIGHT)
+    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_background(Color(14, 16, 22))
 
     var assets = Assets()
@@ -128,21 +118,30 @@ def main() raises:
     )
     # White base colours, so each texture arrives unmodulated by anything but
     # the lighting.
-    var meshes = List[Mesh]()
-    meshes.append(
-        Mesh(
-            box,
-            assets.materials.add(Material(Color(255, 255, 255), sharp)),
-            NodeId(0),
-        )
+    var sharp_paint = assets.materials.add(
+        Material(Color(255, 255, 255), sharp)
     )
-    meshes.append(
-        Mesh(
-            box,
-            assets.materials.add(Material(Color(255, 255, 255), smooth)),
-            NodeId(1),
-        )
+    var smooth_paint = assets.materials.add(
+        Material(Color(255, 255, 255), smooth)
     )
+
+    var scene = Scene()
+    var left_node = Object3D()
+    left_node.set_position(-0.95, 0, 0)
+    var left = scene.add(left_node^)
+    var right_node = Object3D()
+    right_node.set_position(0.95, 0, 0)
+    var right = scene.add(right_node^)
+    scene.add_mesh(Mesh(box, sharp_paint, left))
+    scene.add_mesh(Mesh(box, smooth_paint, right))
+
+    # The lamp is a node like any other, so it could be parented to something
+    # that moves.
+    var lamp = Object3D()
+    lamp.set_position(0.4, 0.8, 0.5)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
 
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
@@ -159,7 +158,9 @@ def main() raises:
                 renderer,
                 camera,
                 assets,
-                meshes,
+                scene,
+                left,
+                right,
                 Float32(360) * Float32(index) / Float32(FRAMES),
             )
         )

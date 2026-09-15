@@ -37,38 +37,83 @@ touches a byte until `RenderTarget.resolve`.
 **A light has a colour.** The old one had only a direction, so lighting was
 scalar dimming and a red lamp was impossible. A light's colour multiplies the
 surface's, per channel, which is what makes coloured lighting work at all.
+
+**A point light is the third kind.** A directional light is the sun: parallel
+rays, one direction, the same everywhere. A point light is a bulb: it sits
+somewhere, its light spreads out from there, and a surface gets less of it the
+further away it is and none of it if it faces away. Its node gives it a
+*position* rather than a direction, which is the whole difference on the scene
+side. On the shading side it is the reason every fragment now knows where it
+is in the world -- see `render.rasterizer.RasterVertex.world`.
+
+Its falloff is three.js's: the light divided by distance raised to `decay`,
+with the physically correct default of two, and optionally faded to nothing
+at `distance`. Both numbers live on `Light` so a list of lights stays a list
+of one type; the other two kinds carry zeros they never read.
 """
 
 from core.object3d import NO_PARENT, NodeId
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
 
+
+@fieldwise_init
+struct LightKind(Equatable, ImplicitlyCopyable, Writable):
+    """Which of the three kinds of light this is, as a type rather than an
+    int.
+
+    See `core.object3d.NodeId` for why. A light whose kind was none of them
+    used to be refused when the lights were resolved; now it does not
+    compile.
+    """
+
+    var value: Int
+
+
 # Fills every surface equally, whichever way it faces. No direction, no node.
-comptime AMBIENT = 0
+comptime AMBIENT = LightKind(0)
 # Parallel rays from infinitely far away: the sun. Its direction comes from
 # its node's world position, pointing from there towards the world origin,
 # which is what three.js's default target gives.
-comptime DIRECTIONAL = 1
+comptime DIRECTIONAL = LightKind(1)
+# Light spreading out from a point: a bulb. Its node's world position is where
+# it is, and its light falls off with distance from there.
+comptime POINT = LightKind(2)
+
+# three.js's default `decay`: the inverse-square law, which is what light does
+# in the real world.
+comptime PHYSICAL_DECAY = Float32(2.0)
+# three.js's default `distance`: no cutoff, the light reaches everything.
+comptime NO_CUTOFF = Float32(0.0)
 
 
 @fieldwise_init
 struct Light(ImplicitlyCopyable):
     """One light in a scene: a kind, a colour, a strength, and maybe a node.
 
-    A tagged struct rather than a trait with two implementations, for the
-    reason `Material.side` is an integer: there are two kinds, they differ by
-    one field's meaning, and a list of them has to be a list of one type.
+    A tagged struct rather than a trait with three implementations, for the
+    reason `Material.side` is a small value type: there are three kinds, they
+    differ by what they read from their node, and a list of them has to be a
+    list of one type.
     """
 
-    var kind: Int
+    var kind: LightKind
     var color: Color
     # How bright, multiplying the colour. Above one is allowed: two lamps can
     # overexpose a white surface, and clamping here would hide that rather
     # than let `resolve` do it once at the end.
     var intensity: Float32
-    # Which node gives this light its direction. `NO_PARENT` for an ambient
-    # light, which has none.
+    # Which node gives this light its direction, or its position. `NO_PARENT`
+    # for an ambient light, which has neither.
     var node: NodeId
+    # How fast a point light's light falls off: it is divided by distance to
+    # this power. Two is physically correct and the default; zero means it
+    # does not fall off at all. Read only by a point light.
+    var decay: Float32
+    # Beyond this distance a point light contributes nothing, and it fades
+    # smoothly to nothing on the way there. Zero, the default, means no
+    # cutoff. Read only by a point light.
+    var distance: Float32
 
     def radiance(self) -> FloatColor:
         """Return the light this contributes, decoded and scaled.
@@ -101,7 +146,7 @@ def ambient_light(color: Color, intensity: Float32 = 1.0) raises -> Light:
     """
     if intensity < 0:
         raise Error("A light's intensity cannot be negative")
-    return Light(AMBIENT, color, intensity, NO_PARENT)
+    return Light(AMBIENT, color, intensity, NO_PARENT, 0.0, 0.0)
 
 
 def directional_light(
@@ -128,4 +173,44 @@ def directional_light(
     """
     if intensity < 0:
         raise Error("A light's intensity cannot be negative")
-    return Light(DIRECTIONAL, color, intensity, node)
+    return Light(DIRECTIONAL, color, intensity, node, 0.0, 0.0)
+
+
+def point_light(
+    color: Color,
+    node: NodeId,
+    intensity: Float32 = 1.0,
+    decay: Float32 = PHYSICAL_DECAY,
+    distance: Float32 = NO_CUTOFF,
+) raises -> Light:
+    """Return a light shining out from a node's position in every direction.
+
+    three.js's `PointLight`, with the same three numbers and the same
+    defaults. The node is where the bulb is, and this time its position is
+    what matters and not merely its direction: a surface twice as far away
+    gets a quarter of the light, and a surface behind the bulb gets none.
+
+    Args:
+        color: Its colour.
+        node: The node whose world position the light shines from.
+        intensity: How bright at one metre, multiplying the colour.
+        decay: The power of distance the light is divided by. Two is the
+            inverse-square law of a real bulb; one falls off gently; zero not
+            at all.
+        distance: Where the light stops, fading smoothly to nothing as it
+            gets there. Zero for no cutoff, which is the physical answer and
+            the default.
+
+    Returns:
+        The light.
+
+    Raises:
+        Error: If the intensity, decay or distance is negative.
+    """
+    if intensity < 0:
+        raise Error("A light's intensity cannot be negative")
+    if decay < 0:
+        raise Error("A point light's decay cannot be negative")
+    if distance < 0:
+        raise Error("A point light's distance cannot be negative")
+    return Light(POINT, color, intensity, node, decay, distance)

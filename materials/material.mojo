@@ -33,23 +33,76 @@ rather than inferred. Whether a surface is composited decides two things at
 once — how its colour is combined, and whether it writes depth — and those
 have to be the same answer everywhere. They were not: three parts of the
 renderer each worked it out from a different number.
+
+`kind` is the fifth, and the first that three.js expresses as a *class*
+rather than a property: `MeshBasicMaterial` shows its own colour whatever the
+lights do, `MeshLambertMaterial` catches light. Every other property is
+shared between the two, so here they are one struct and a tag, for the reason
+`Light` is -- a store has to hold one type.
 """
 
 from render.framebuffer import Color
 from render.texture_store import NO_TEXTURE, TextureId
 
+
+@fieldwise_init
+struct Side(Equatable, ImplicitlyCopyable, Writable):
+    """Which faces of a surface are drawn, as a type rather than a bare int.
+
+    The same argument as `core.object3d.NodeId`: three small integers that
+    mean three different things should not be interchangeable, and a bare
+    `Int` accepted anything. `Material` used to check the value at runtime
+    and raise; now a wrong one does not compile, and the check is gone.
+    """
+
+    var value: Int
+
+
 # Draw only surfaces turned towards the camera. three.js's default.
-comptime FRONT_SIDE = 0
+comptime FRONT_SIDE = Side(0)
 # Draw only surfaces turned away: the inside of a closed mesh.
-comptime BACK_SIDE = 1
+comptime BACK_SIDE = Side(1)
 # Draw both, which is what any open surface needs.
-comptime DOUBLE_SIDE = 2
+comptime DOUBLE_SIDE = Side(2)
+
+
+@fieldwise_init
+struct Blending(Equatable, ImplicitlyCopyable, Writable):
+    """Whether a surface replaces what is behind it or mixes into it.
+
+    A type for the reason `Side` is one. Both rasterizers read this from a
+    vertex, and a bare integer neither of them recognised was once read in
+    opposite directions by the two -- see `render.rasterizer`.
+    """
+
+    var value: Int
+
 
 # Replace whatever is behind: depth is tested and claimed.
-comptime OPAQUE = 0
+comptime OPAQUE = Blending(0)
 # Mix with whatever is behind, source-over: depth is tested but not claimed,
 # so the caller owns draw order. `Renderer.prepare` sorts.
-comptime BLEND = 1
+comptime BLEND = Blending(1)
+
+
+@fieldwise_init
+struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
+    """Whether a surface is lit, as a type rather than a bare int.
+
+    three.js has a class per answer and this has a tag, for the reason
+    `Light` is one struct with a kind rather than a trait with three
+    implementations: a `MaterialStore` has to hold one type.
+    """
+
+    var value: Int
+
+
+# Unlit: the surface's own colour, and its texture, reach the pixel as they
+# are. three.js's `MeshBasicMaterial` -- a sky, a sprite, an overlay.
+comptime BASIC = MaterialKind(0)
+# Lit per fragment by every light in the scene. three.js's
+# `MeshLambertMaterial`, and the default here because every example wants it.
+comptime LAMBERT = MaterialKind(1)
 
 
 @fieldwise_init
@@ -67,7 +120,7 @@ struct Material(ImplicitlyCopyable):
 
     var color: Color
     var map: TextureId
-    var side: Int
+    var side: Side
     # How much of the light reaching this surface it stops. One is opaque;
     # anything less mixes with what is behind. Separate from the texture's
     # own alpha, and multiplied by it.
@@ -79,15 +132,18 @@ struct Material(ImplicitlyCopyable):
     # but a translucent base colour sorted as opaque and rasterized as
     # blended, so it did not write depth and whatever was submitted after it
     # painted straight over the top.
-    var blending: Int
+    var blending: Blending
+    # `LAMBERT` or `BASIC`: whether the lights reach this surface at all.
+    var kind: MaterialKind
 
     def __init__(
         out self,
         color: Color,
         map: TextureId = NO_TEXTURE,
-        side: Int = FRONT_SIDE,
+        side: Side = FRONT_SIDE,
         opacity: Float32 = 1.0,
-        blending: Int = -1,
+        blending: Optional[Blending] = None,
+        kind: MaterialKind = LAMBERT,
     ) raises:
         """Describe a surface.
 
@@ -101,31 +157,38 @@ struct Material(ImplicitlyCopyable):
                 colour with alpha — blends. Set it to say so explicitly: a
                 texture's own alpha cannot be inferred from here, so a cut-out
                 image needs `BLEND` even when the material looks opaque.
+            kind: `LAMBERT` to be lit by the scene's lights, `BASIC` to show
+                the colour and texture as they are.
 
         Raises:
-            Error: If `side` is not one of the three, or `map` is a negative
-                other than `NO_TEXTURE` — which would be an id nothing can
-                ever hold rather than a deliberate absence, `opacity` is
-                outside zero to one, or `blending` is not one of the two.
+            Error: If `map` is a negative other than `NO_TEXTURE` — which
+                would be an id nothing can ever hold rather than a deliberate
+                absence — or `opacity` is outside zero to one. A wrong `side`
+                or `blending` is a compile error now, not a runtime one.
         """
-        if side != FRONT_SIDE and side != BACK_SIDE and side != DOUBLE_SIDE:
-            raise Error("Unknown material side")
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
         if opacity < 0 or opacity > 1:
             raise Error("Opacity must be between zero and one")
-        if blending != -1 and blending != OPAQUE and blending != BLEND:
-            raise Error("Unknown material blending")
         self.color = color
         self.map = map
         self.side = side
         self.opacity = opacity
-        if blending != -1:
-            self.blending = blending
+        self.kind = kind
+        # Spelled as a Bool rather than testing the Optional directly, because
+        # the coverage instrumenter wraps every condition in a probe that
+        # takes a Bool, and an Optional does not convert to one implicitly.
+        var stated = Bool(blending)
+        if stated:
+            self.blending = blending.value()
         elif opacity < 1 or color.a < 255:
             self.blending = BLEND
         else:
             self.blending = OPAQUE
+
+    def is_lit(self) -> Bool:
+        """Return True if the scene's lights reach this surface."""
+        return self.kind == LAMBERT
 
     def is_textured(self) -> Bool:
         """Return True if this material names a texture."""

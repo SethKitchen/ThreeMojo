@@ -20,7 +20,7 @@ own stored-block lengths, which are little-endian.
 
 from render.checksum import adler32, crc32
 from render.framebuffer import Color, Framebuffer
-from render.srgb import LINEAR, SRGB, UNKNOWN_SPACE
+from render.srgb import LINEAR, SRGB, UNKNOWN_SPACE, ColorSpace
 from render.inflate import zlib_inflate
 
 # The largest payload a single stored DEFLATE block can carry.
@@ -239,14 +239,14 @@ struct DecodedImage(Movable):
     # this decoder cannot interpret -- an ICC profile, or a gamma that is
     # neither of the two. Unknown is not a guess: it is the file saying
     # something and this decoder admitting it did not understand.
-    var color_space: Int
+    var color_space: ColorSpace
 
     def __init__(
         out self,
         width: Int,
         height: Int,
         var pixels: List[UInt8],
-        color_space: Int,
+        color_space: ColorSpace,
     ):
         """Adopt decoded samples and their declared interpretation."""
         self.width = width
@@ -400,7 +400,7 @@ def _channels_for(color_type: Int) raises -> Int:
     raise Error("Unknown PNG colour type")
 
 
-def _space_from_gamma(gamma: Int) -> Int:
+def _space_from_gamma(gamma: Int) -> ColorSpace:
     """Return which colour space a `gAMA` value describes, if either.
 
     PNG stores the gamma of the *source*, times 100000. Two values matter

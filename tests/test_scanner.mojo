@@ -232,5 +232,11 @@ def test_a_struct_implementing_a_trait_is_still_measured() raises:
     assert_true(scanner.is_executable("        return self.near"))
 
 
+def test_an_async_def_body_is_executable() raises:
+    var scanner = Scanner()
+    assert_false(scanner.is_executable("async def band(index: Int):"))
+    assert_true(scanner.is_executable("    print(index)"))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

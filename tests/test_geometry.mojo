@@ -9,6 +9,7 @@
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from geometries.box import box, cube
+from geometries.plane import plane
 from geometries.sphere import sphere
 from math.vector3 import Vector3
 from std.testing import (
@@ -505,6 +506,91 @@ def test_sphere_texture_coordinates_cover_the_whole_range() raises:
         tallest = max(tallest, uvs.component(vertex, 1))
     assert_equal(widest, Float32(1))
     assert_equal(tallest, Float32(1))
+
+
+# --- plane -------------------------------------------------------------------
+
+
+def test_a_plane_has_a_vertex_per_grid_point() raises:
+    var sheet = plane(Length(2.0, METRE), Length(1.0, METRE), 3, 2)
+    assert_equal(sheet.vertex_count(), 12)
+    assert_equal(sheet.triangle_count(), 12)
+    assert_equal(
+        plane(Length(1.0, METRE), Length(1.0, METRE)).triangle_count(), 2
+    )
+
+
+def test_a_plane_is_flat_and_faces_plus_z() raises:
+    var sheet = plane(Length(2.0, METRE), Length(1.0, METRE), 3, 2)
+    ref normals = sheet.attribute_view(String(NORMAL))
+    for vertex in range(sheet.vertex_count()):
+        assert_equal(
+            sheet.attribute_view(String(POSITION)).vector3(vertex).z, Float32(0)
+        )
+        var normal = normals.vector3(vertex)
+        assert_equal(normal.x, Float32(0))
+        assert_equal(normal.y, Float32(0))
+        assert_equal(normal.z, Float32(1))
+
+
+def test_a_plane_is_centred_and_spans_its_extents() raises:
+    var sheet = plane(Length(2.0, METRE), Length(1.0, METRE), 4, 3)
+    ref positions = sheet.attribute_view(String(POSITION))
+    var left = Float32(0)
+    var right = Float32(0)
+    var top = Float32(0)
+    var bottom = Float32(0)
+    for vertex in range(sheet.vertex_count()):
+        var p = positions.vector3(vertex)
+        left = min(left, p.x)
+        right = max(right, p.x)
+        bottom = min(bottom, p.y)
+        top = max(top, p.y)
+    assert_almost_equal(left, Float32(-1), atol=TOLERANCE)
+    assert_almost_equal(right, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(bottom, Float32(-0.5), atol=TOLERANCE)
+    assert_almost_equal(top, Float32(0.5), atol=TOLERANCE)
+
+
+def test_a_plane_covers_the_whole_image_once_from_the_top_left() raises:
+    var sheet = plane(Length(2.0, METRE), Length(1.0, METRE), 2, 2)
+    ref uvs = sheet.attribute_view(String(UV))
+    ref positions = sheet.attribute_view(String(POSITION))
+    # The first vertex is the top-left corner: u is zero, v is one.
+    assert_equal(uvs.component(0, 0), Float32(0))
+    assert_equal(uvs.component(0, 1), Float32(1))
+    assert_almost_equal(positions.vector3(0).y, Float32(0.5), atol=TOLERANCE)
+    # The last is the bottom-right: u is one, v is zero.
+    var last = sheet.vertex_count() - 1
+    assert_equal(uvs.component(last, 0), Float32(1))
+    assert_equal(uvs.component(last, 1), Float32(0))
+
+
+def test_plane_triangles_wind_counter_clockwise_from_the_front() raises:
+    var sheet = plane(Length(2.0, METRE), Length(1.0, METRE), 3, 2)
+    for triangle in range(sheet.triangle_count()):
+        var a = sheet.corner(triangle, 0)
+        var b = sheet.corner(triangle, 1)
+        var c = sheet.corner(triangle, 2)
+        var area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+        assert_true(area > 0, "a plane triangle winds clockwise")
+
+
+def test_a_plane_can_be_measured_in_feet() raises:
+    var sheet = plane(Length(2.0, FOOT), Length(2.0, FOOT))
+    var corner = sheet.attribute_view(String(POSITION)).vector3(0)
+    assert_almost_equal(corner.x, Float32(-0.3048), atol=TOLERANCE)
+
+
+def test_a_plane_needs_positive_extents_and_segments() raises:
+    with assert_raises():
+        _ = plane(Length(0.0, METRE), Length(1.0, METRE))
+    with assert_raises():
+        _ = plane(Length(1.0, METRE), Length(-1.0, METRE))
+    with assert_raises():
+        _ = plane(Length(1.0, METRE), Length(1.0, METRE), 0, 1)
+    with assert_raises():
+        _ = plane(Length(1.0, METRE), Length(1.0, METRE), 1, 0)
 
 
 def main() raises:

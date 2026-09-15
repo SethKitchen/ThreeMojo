@@ -11,6 +11,8 @@ to. Both are asserted against worked-out answers rather than against whatever
 the implementation happens to do.
 """
 
+from render.srgb import UNKNOWN_SPACE
+from render.texture import Wrap
 from render.framebuffer import Color, FloatColor
 from render.srgb import LINEAR, SRGB, srgb_to_linear
 from render.texture import (
@@ -37,7 +39,7 @@ from std.testing import (
 comptime TOLERANCE = Float64(1e-6)
 
 
-def quad(wrap: Int = REPEAT) raises -> Texture:
+def quad(wrap: Wrap = REPEAT) raises -> Texture:
     """Return a 2x2 texture with four distinguishable texels.
 
     Laid out by row from the top, as the image is stored:
@@ -107,12 +109,6 @@ def test_the_buffer_must_match_the_dimensions() raises:
     var short = List[UInt8](length=15, fill=0)
     with assert_raises():
         _ = Texture(2, 2, short^, REPEAT)
-
-
-def test_an_unknown_wrap_mode_is_rejected() raises:
-    var pixels = List[UInt8](length=16, fill=0)
-    with assert_raises():
-        _ = Texture(2, 2, pixels^, 42)
 
 
 def test_every_known_wrap_mode_is_accepted() raises:
@@ -231,12 +227,6 @@ def test_alpha_is_never_decoded() raises:
     assert_almost_equal(
         image.sample(0.5, 0.5).a, Float32(128) / 255, atol=TOLERANCE
     )
-
-
-def test_an_unknown_colour_space_is_rejected() raises:
-    var pixels = List[UInt8](length=4, fill=0)
-    with assert_raises():
-        _ = Texture(1, 1, pixels^, REPEAT, NEAREST, 5)
 
 
 def test_a_texture_keeps_the_colour_space_it_was_given() raises:
@@ -453,12 +443,6 @@ def test_a_repeating_bilinear_texture_blends_across_its_seam() raises:
     var seam = strip.sample(0.0, 0.5)
     assert_almost_equal(seam.r, Float32(0.5), atol=TOLERANCE)
     assert_almost_equal(seam.b, Float32(0.5), atol=TOLERANCE)
-
-
-def test_an_unknown_filter_mode_is_rejected() raises:
-    var pixels = List[UInt8](length=16, fill=0)
-    with assert_raises():
-        _ = Texture(2, 2, pixels^, REPEAT, 9)
 
 
 def test_a_texture_keeps_the_filter_it_was_given() raises:
@@ -905,6 +889,15 @@ def test_a_fractional_level_lands_on_an_independently_worked_out_value() raises:
         Float32(128) / 255 * 0.25,
         atol=Float64(1e-6),
     )
+
+
+def test_a_texture_refuses_a_colour_space_it_cannot_decode() raises:
+    # `UNKNOWN_SPACE` is a decoder's admission, not a way to read texels: it
+    # has no ramp. `texture_from` refuses it with a message; the constructor
+    # has to as well, since it is reachable directly.
+    var pixels = List[UInt8](length=4, fill=255)
+    with assert_raises():
+        _ = Texture(1, 1, pixels^, REPEAT, NEAREST, UNKNOWN_SPACE)
 
 
 def main() raises:

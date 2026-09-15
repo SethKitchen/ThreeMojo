@@ -181,9 +181,11 @@ struct Scanner(Movable):
             self._scopes.append(_Scope(indent, False, True))
             return False
 
-        if stripped.startswith("def "):
+        if stripped.startswith("def ") or stripped.startswith("async def "):
             # A `def` inherits its enclosing trait-ness: the body of a trait
             # method is a declaration however much it looks like a function.
+            # An `async def` is a function body like any other; the renderer
+            # has one per rasterizer band.
             self._scopes.append(_Scope(indent, True, self._inside_trait()))
             return False
 

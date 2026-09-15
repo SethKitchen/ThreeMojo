@@ -19,10 +19,17 @@ is checkable rather than assumed.
 
 A node's local transform composes as translation * rotation * scale, matching
 three.js: a point is scaled first, then rotated, then moved.
+
+The rotation is a quaternion, as three.js's `Object3D.quaternion` is. Euler
+angles are one way to *set* it -- `set_euler`, the order being three.js's --
+and `rotate_x`, `rotate_y`, `rotate_z` and `rotate_on_axis` turn it further
+by one multiply each, which is what `mesh.rotation.y += 0.01` does there.
+`look_at` orients it towards a point.
 """
 
-from math.matrix4 import Matrix4, rotation_x, rotation_y, rotation_z, scaling
-from math.matrix4 import translation
+from math.euler import XYZ, Euler, EulerOrder
+from math.matrix4 import Matrix4, scaling, translation
+from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from units.si import Angle
 
@@ -53,23 +60,24 @@ struct Object3D(ImplicitlyCopyable):
 
     var position: Vector3
     var scale: Vector3
-    # Held as a matrix rather than Euler angles or a quaternion: three.js has
-    # both, and porting either properly is its own step.
-    var rotation: Matrix4
+    # The rotation, as three.js holds it. A matrix would compose but not
+    # interpolate; Euler angles would interpolate but lock up. See
+    # `math.quaternion`.
+    var quaternion: Quaternion
     var parent: NodeId
 
     def __init__(out self):
         """Create an untransformed node with no parent."""
         self.position = Vector3(0, 0, 0)
         self.scale = Vector3(1, 1, 1)
-        self.rotation = Matrix4()
+        self.quaternion = Quaternion.identity()
         self.parent = NO_PARENT
 
     def __init__(out self, *, copy: Self):
         """Copy another node, parent link included."""
         self.position = copy.position
         self.scale = copy.scale
-        self.rotation = Matrix4(copy=copy.rotation)
+        self.quaternion = copy.quaternion
         self.parent = copy.parent
 
     def set_position(mut self, x: Float32, y: Float32, z: Float32):
@@ -80,21 +88,129 @@ struct Object3D(ImplicitlyCopyable):
         """Scale this node, relative to its parent."""
         self.scale = Vector3(x, y, z)
 
-    def set_euler(mut self, x: Angle, y: Angle, z: Angle) raises:
-        """Set the rotation from three angles, applied x, then y, then z.
+    def set_euler(
+        mut self, x: Angle, y: Angle, z: Angle, order: EulerOrder = XYZ
+    ):
+        """Set the rotation from three angles, composed in `order`.
+
+        The default is three.js's default, `XYZ`, and means what it means
+        there: turn about x, then about the turned y, then about the
+        twice-turned z, which as a matrix is Rx * Ry * Rz. This used to
+        compose Rz * Ry * Rx, three.js's `ZYX`, so the same three numbers
+        gave a different orientation from the same code in three.js whenever
+        two of them were non-zero. `ZYX` is still available by name.
 
         Args:
-            x: Rotation about the x axis, applied first.
+            x: Rotation about the x axis.
             y: Rotation about the y axis.
-            z: Rotation about the z axis, applied last.
+            z: Rotation about the z axis.
+            order: Which axis comes first, second and third.
+        """
+        self.quaternion = Euler(x, y, z, order).to_quaternion()
+
+    def set_rotation(mut self, euler: Euler):
+        """Set the rotation from an `Euler`, three.js's `rotation.set`."""
+        self.quaternion = euler.to_quaternion()
+
+    def set_quaternion(mut self, quaternion: Quaternion):
+        """Set the rotation directly, three.js's `quaternion.copy`."""
+        self.quaternion = quaternion
+
+    def rotate_on_axis(mut self, axis: Vector3, angle: Angle):
+        """Turn this node about one of its *own* axes.
+
+        Local, as three.js's `rotateOnAxis` is: the axis is in the node's
+        current frame, so turning about (0, 1, 0) after a tilt turns about
+        the tilted up. A post-multiply, for the same reason `Matrix4.multiply`
+        applies the right-hand matrix first.
+
+        Args:
+            axis: The axis, unit length, in the node's own frame.
+            angle: How far to turn.
+        """
+        self.quaternion.multiply(Quaternion.from_axis_angle(axis, angle))
+
+    def rotate_on_world_axis(mut self, axis: Vector3, angle: Angle):
+        """Turn this node about an axis of its *parent's* frame.
+
+        three.js's `rotateOnWorldAxis`, and like it named for the common
+        case: a root node's parent frame is the world.
+
+        Args:
+            axis: The axis, unit length, in the parent's frame.
+            angle: How far to turn.
+        """
+        self.quaternion.premultiply(Quaternion.from_axis_angle(axis, angle))
+
+    def rotate_x(mut self, angle: Angle):
+        """Turn about the node's own x axis; `rotation.x += angle` there."""
+        self.rotate_on_axis(Vector3(1, 0, 0), angle)
+
+    def rotate_y(mut self, angle: Angle):
+        """Turn about the node's own y axis."""
+        self.rotate_on_axis(Vector3(0, 1, 0), angle)
+
+    def rotate_z(mut self, angle: Angle):
+        """Turn about the node's own z axis."""
+        self.rotate_on_axis(Vector3(0, 0, 1), angle)
+
+    def look_at(mut self, target: Vector3, *, camera: Bool = False) raises:
+        """Turn this node to face `target`, given in the parent's frame.
+
+        three.js's `Object3D.lookAt` with one difference worth knowing: it
+        works in world space, walking the parents to get there, and this one
+        works in the frame the node's position is in. For a root node the two
+        are the same; for a child, `Scene.look_at` does the walk.
+
+        Which way "facing" is depends on what the node is, exactly as there.
+        An object points its +z axis at the target. A camera points its -z
+        axis at the target, because a camera looks down -z; three.js decides
+        by `isCamera`, and here you say so. Up stays as close to +y as the
+        target allows.
+
+        Args:
+            target: The point to face, in the parent's frame.
+            camera: True to face the target the way a camera does.
 
         Raises:
-            Error: Never; present to match the matrix helpers.
+            Error: If the target is at the node's own position, or straight
+                above or below it, either of which leaves the orientation
+                undefined. three.js nudges the axis by a small amount instead;
+                refusing is consistent with `math.projection.look_at`.
         """
-        var combined = rotation_z(z)
-        combined.multiply(rotation_y(y))
-        combined.multiply(rotation_x(x))
-        self.rotation = combined^
+        var z = target - self.position
+        if z.length() == 0:
+            raise Error("A node cannot look at its own position")
+        z.normalize()
+        if camera:
+            z = -z
+        var x = Vector3(0, 1, 0)
+        x.cross(z)
+        if x.length() == 0:
+            raise Error("Looking straight up or down leaves the roll undefined")
+        x.normalize()
+        var y = z
+        y.cross(x)
+        var basis = Matrix4()
+        basis.set(
+            x.x,
+            y.x,
+            z.x,
+            0,
+            x.y,
+            y.y,
+            z.y,
+            0,
+            x.z,
+            y.z,
+            z.z,
+            0,
+            0,
+            0,
+            0,
+            1,
+        )
+        self.quaternion = Quaternion.from_matrix(basis)
 
     def local_matrix(self) raises -> Matrix4:
         """Return this node's transform relative to its parent.
@@ -109,6 +225,6 @@ struct Object3D(ImplicitlyCopyable):
         var matrix = translation(
             self.position.x, self.position.y, self.position.z
         )
-        matrix.multiply(self.rotation)
+        matrix.multiply(self.quaternion.to_matrix())
         matrix.multiply(scaling(self.scale.x, self.scale.y, self.scale.z))
         return matrix^

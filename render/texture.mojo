@@ -41,24 +41,43 @@ from render.srgb import (
     LINEAR,
     SRGB,
     UNKNOWN_SPACE,
+    ColorSpace,
     decode_ramp,
     linear_to_srgb,
 )
 from std.math import floor
 
-# How a coordinate outside the unit square is resolved.
-# Tile the image; 1.5 reads the same texel as 0.5.
-comptime REPEAT = 0
-# Hold the edge texel; 1.5 reads the same texel as 1.0.
-comptime CLAMP = 1
-# Tile, flipping direction every other tile, so tiles meet without a seam.
-comptime MIRROR = 2
 
-# How a sample between texel centres is resolved.
+@fieldwise_init
+struct Wrap(Equatable, ImplicitlyCopyable, Writable):
+    """How a coordinate outside the unit square is resolved, as a type.
+
+    See `core.object3d.NodeId` for why these are wrapped rather than bare
+    integers. `value` is what the GPU's descriptor table stores.
+    """
+
+    var value: Int
+
+
+# Tile the image; 1.5 reads the same texel as 0.5.
+comptime REPEAT = Wrap(0)
+# Hold the edge texel; 1.5 reads the same texel as 1.0.
+comptime CLAMP = Wrap(1)
+# Tile, flipping direction every other tile, so tiles meet without a seam.
+comptime MIRROR = Wrap(2)
+
+
+@fieldwise_init
+struct Filter(Equatable, ImplicitlyCopyable, Writable):
+    """How a sample between texel centres is resolved, as a type."""
+
+    var value: Int
+
+
 # Take whichever texel the sample lands in. Hard edges, visible texels.
-comptime NEAREST = 0
+comptime NEAREST = Filter(0)
 # Blend the four texels around the sample by how close it is to each.
-comptime BILINEAR = 1
+comptime BILINEAR = Filter(1)
 
 
 def mix(near: Float32, far: Float32, t: Float32) -> Float32:
@@ -173,7 +192,7 @@ def blend(
     )
 
 
-def _to_byte(value: Float32, space: Int) -> UInt8:
+def _to_byte(value: Float32, space: ColorSpace) -> UInt8:
     """Return a linear channel as the byte that stores it in `space`.
 
     Only the top is clamped. The one caller averages values that came from
@@ -235,7 +254,7 @@ def _identity_ramp() -> List[Float32]:
     return ramp^
 
 
-def wrap_index(coordinate: Int, extent: Int, mode: Int) -> Int:
+def wrap_index(coordinate: Int, extent: Int, mode: Wrap) -> Int:
     """Return `coordinate` brought inside [0, extent) under a wrap mode.
 
     Public, and pure, because the GPU kernel calls it too. Sampling has to
@@ -285,12 +304,17 @@ struct Texture(Movable):
     # Row-major RGBA from the top, the same layout `Framebuffer` uses, so an
     # image rendered by this project can be fed straight back in as a texture.
     var pixels: List[UInt8]
-    var wrap: Int
-    var filter: Int
-    var color_space: Int
+    var wrap: Wrap
+    var filter: Filter
+    var color_space: ColorSpace
     # How many images the chain holds: the full-size one, then each halving
     # down to a single texel. One means no chain.
     var levels: Int
+    # Where each level starts in the texel buffer, one entry per level.
+    # `level_offset` can work it out from the sizes, and does when the chain
+    # is being built; a fetch happens per texel per fragment and reads the
+    # table instead of walking the chain each time.
+    var offsets: List[Int]
     # The 256 linear values this texture's bytes stand for. Built once here
     # rather than per fragment, because `pow` has only 256 possible inputs
     # and sampling happens per pixel.
@@ -311,15 +335,16 @@ struct Texture(Movable):
         self.color_space = LINEAR
         self.ramp = _identity_ramp()
         self.levels = 1
+        self.offsets = [0]
 
     def __init__(
         out self,
         width: Int,
         height: Int,
         var pixels: List[UInt8],
-        wrap: Int = REPEAT,
-        filter: Int = NEAREST,
-        color_space: Int = SRGB,
+        wrap: Wrap = REPEAT,
+        filter: Filter = NEAREST,
+        color_space: ColorSpace = SRGB,
         mipmapped: Bool = False,
     ) raises:
         """Create a texture from RGBA bytes.
@@ -332,24 +357,21 @@ struct Texture(Movable):
             filter: `NEAREST` or `BILINEAR`.
             color_space: `SRGB` for a colour image, the default because that
                 is what an image file holds; `LINEAR` for data that is not
-                colour and must not be decoded.
+                colour and must not be decoded. `UNKNOWN_SPACE` is refused:
+                it is a decoder's admission, not a way to read texels.
             mipmapped: Build the chain of halved copies. Costs a third more
                 memory and is what stops a distant surface from sparkling.
 
         Raises:
             Error: If the dimensions are not positive, the buffer length
-                disagrees with them, or either mode is not one this knows.
+                disagrees with them, or the colour space is unknown.
         """
         if width <= 0 or height <= 0:
             raise Error("Texture dimensions must be positive")
         if len(pixels) != width * height * Self.CHANNELS:
             raise Error("Texture buffer length does not match the dimensions")
-        if wrap != REPEAT and wrap != CLAMP and wrap != MIRROR:
-            raise Error("Unknown texture wrap mode")
-        if filter != NEAREST and filter != BILINEAR:
-            raise Error("Unknown texture filter mode")
-        if color_space != SRGB and color_space != LINEAR:
-            raise Error("Unknown texture colour space")
+        if color_space == UNKNOWN_SPACE:
+            raise Error("A texture needs a colour space it can decode")
         self.color_space = color_space
         if color_space == SRGB:
             self.ramp = decode_ramp()
@@ -361,6 +383,7 @@ struct Texture(Movable):
         self.wrap = wrap
         self.filter = filter
         self.levels = 1
+        self.offsets = [0]
         if mipmapped:
             self._build_mipmaps()
 
@@ -374,6 +397,7 @@ struct Texture(Movable):
         self.color_space = copy.color_space
         self.ramp = copy.ramp.copy()
         self.levels = copy.levels
+        self.offsets = copy.offsets.copy()
 
     def is_blank(self) -> Bool:
         """Return True if this is the blank texture."""
@@ -481,6 +505,8 @@ struct Texture(Movable):
             var next_wide = self.level_width(level + 1)
             var next_tall = self.level_height(level + 1)
             var base = self.level_offset(level)
+            # The next level begins where this buffer currently ends.
+            self.offsets.append(len(self.pixels))
             for y in range(next_tall):  # pragma: no branch
                 # The rows this destination stands for, in source rows scaled
                 # by the destination extent so the bounds stay exact.
@@ -587,7 +613,7 @@ struct Texture(Movable):
         var wide = self.level_width(level)
         var tall = self.level_height(level)
         var offset = (
-            self.level_offset(level)
+            self.offsets[level]
             + (
                 wrap_index(y, tall, self.wrap) * wide
                 + wrap_index(x, wide, self.wrap)
@@ -716,7 +742,9 @@ struct Texture(Movable):
         `CLAMP` one holds its edge instead of fading out of it.
 
         Does not raise: a fragment shader is not a place to handle errors, and
-        every coordinate has an answer once the modes are chosen.
+        every coordinate has an answer once the modes are chosen. This is
+        `sample_at` for level zero without the level check, and used to be a
+        second copy of it.
 
         Args:
             u: Horizontal coordinate, 0 at the left edge.
@@ -728,34 +756,14 @@ struct Texture(Movable):
         if self.is_blank():
             return FloatColor(1.0, 1.0, 1.0, 1.0)
 
-        if self.filter == NEAREST:
-            return self._wrapped_texel(
-                Int(floor(u * Float32(self.width))),
-                Int(floor((1 - v) * Float32(self.height))),
-                0,
-            )
-
-        # Texel centres are at half-integers, so shift the sample into a space
-        # where they are at integers, and blend between the two either side.
-        var across = u * Float32(self.width) - 0.5
-        var down = (1 - v) * Float32(self.height) - 0.5
-        var column = Int(floor(across))
-        var row = Int(floor(down))
-        return blend_texels(
-            self._wrapped_texel(column, row, 0),
-            self._wrapped_texel(column + 1, row, 0),
-            self._wrapped_texel(column, row + 1, 0),
-            self._wrapped_texel(column + 1, row + 1, 0),
-            across - Float32(column),
-            down - Float32(row),
-        )
+        return self._sample_at(u, v, 0)
 
 
 def texture_from(
     image: DecodedImage,
-    wrap: Int = REPEAT,
-    filter: Int = BILINEAR,
-    color_space: Int = -1,
+    wrap: Wrap = REPEAT,
+    filter: Filter = BILINEAR,
+    color_space: Optional[ColorSpace] = None,
     mipmapped: Bool = False,
 ) raises -> Texture:
     """Return a texture holding a decoded image's pixels.
@@ -780,20 +788,18 @@ def texture_from(
         image: The decoded image.
         wrap: How coordinates outside the unit square are resolved.
         filter: `NEAREST` or `BILINEAR`.
-        color_space: `SRGB` or `LINEAR` to override, or -1 to use whatever
-            the file declared.
+        color_space: `SRGB` or `LINEAR` to override, or nothing to use
+            whatever the file declared.
         mipmapped: Build the chain of halved copies.
 
     Returns:
         The texture.
 
     Raises:
-        Error: If any argument is not one this module knows, or the file's
-            declared colour space could not be interpreted and none was given.
+        Error: If the file's declared colour space could not be interpreted
+            and none was given.
     """
-    var space = color_space
-    if space == -1:
-        space = image.color_space
+    var space = color_space.or_else(image.color_space)
     if space == UNKNOWN_SPACE:
         raise Error(
             "This image declares a colour space that cannot be interpreted;"
@@ -815,9 +821,9 @@ def checkerboard(
     squares: Int,
     light: Color,
     dark: Color,
-    wrap: Int = REPEAT,
-    filter: Int = NEAREST,
-    color_space: Int = SRGB,
+    wrap: Wrap = REPEAT,
+    filter: Filter = NEAREST,
+    color_space: ColorSpace = SRGB,
     mipmapped: Bool = False,
 ) raises -> Texture:
     """Return a square checkerboard, the traditional mapping test image.

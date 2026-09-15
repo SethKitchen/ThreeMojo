@@ -34,7 +34,6 @@ from math.vector3 import Vector3
 from render.framebuffer import FloatColor
 
 
-@fieldwise_init
 struct ClipVertex(ImplicitlyCopyable):
     """A camera-space position with the varyings that travel with it."""
 
@@ -53,6 +52,33 @@ struct ClipVertex(ImplicitlyCopyable):
     # leaving them behind would slide the texture across the cut.
     var u: Float32
     var v: Float32
+    # Where this corner is in the world, for the lights that have a position.
+    # A directional light needs only the normal; a point light needs to know
+    # how far the surface is from the bulb and in which direction, and the
+    # projection threw that away. Carried through a cut like every other
+    # varying, so a clipped triangle is lit from where it really is.
+    var world: Vector3
+
+    def __init__(
+        out self,
+        position: Vector3,
+        color: FloatColor,
+        normal: Vector3,
+        u: Float32,
+        v: Float32,
+        world: Vector3 = Vector3(0, 0, 0),
+    ):
+        """Create a corner.
+
+        The world position defaults to the origin, which is what a hand-built
+        triangle with no point lights in reach wants.
+        """
+        self.position = position
+        self.color = color
+        self.normal = normal
+        self.u = u
+        self.v = v
+        self.world = world
 
 
 def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
@@ -107,6 +133,11 @@ def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
         ),
         _mix(a.u, b.u, t),
         _mix(a.v, b.v, t),
+        Vector3(
+            _mix(a.world.x, b.world.x, t),
+            _mix(a.world.y, b.world.y, t),
+            _mix(a.world.z, b.world.z, t),
+        ),
     )
 
 

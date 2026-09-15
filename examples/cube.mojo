@@ -11,11 +11,12 @@ This is the first example that draws a *scene* rather than screen-space
 shapes: world-space corners in metres, turned by a model matrix, projected by
 the camera, and rasterized where they land in pixels.
 
-There is no depth buffer yet, so hidden faces are dealt with by backface
-culling instead: a face whose screen-space winding has reversed is pointing
-away and is skipped. For a convex solid like a cube that is exactly right, and
-it costs one sign test that `Triangle.area2` already computes. A concave model,
-or two objects overlapping, would need real depth.
+It deliberately stays below `Renderer` and draws with the flat rasterizer, so
+hidden faces are dealt with by backface culling alone: a face whose
+screen-space winding has reversed is pointing away and is skipped. For a
+convex solid like a cube that is exactly right, and it costs one sign test
+that `Triangle.area2` already computes. A concave model, or two objects
+overlapping, needs the depth buffer, which is what `cubes.mojo` adds.
 """
 
 from cameras.perspective_camera import PerspectiveCamera

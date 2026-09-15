@@ -17,11 +17,15 @@ white — which is true of light and is not true of the encoded bytes a display
 shows. Summing those instead would make every overlap too dark, in the same
 specific way `render.srgb` exists to prevent.
 
-**A lamp parented to a turning node.** The fourth is dim and warm and hangs
-from the same turntable the sphere is on, so it travels with the surface
-instead of sweeping across it: the highlight it leaves stays put while the
-other three slide past. A light on the renderer could not do that, because it
-had no transform to inherit.
+**A lamp parented to a turning node, and it is a point light.** The fourth
+is warm and hangs from the same turntable the sphere is on, so it travels
+with the surface instead of sweeping across it: the pool of light it leaves
+stays put while the other three slide past. A light on the renderer could not
+do that, because it had no transform to inherit. It is a bulb rather than a
+sun -- its light spreads out from where it is and falls off with the square
+of the distance -- so it lights the part of the sphere nearest it and little
+else, which is what makes it read as a small warm lamp rather than a fourth
+colour wash.
 
 **Shading per fragment.** The sphere is deliberately coarse — twelve segments
 around, eight from pole to pole — so its triangles are large enough to see.
@@ -37,13 +41,13 @@ from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.sphere import sphere
-from lights.light import ambient_light, directional_light
+from lights.light import ambient_light, directional_light, point_light
 from materials.material import Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer
+from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, Length, METRE
@@ -63,7 +67,8 @@ def frame_at(
     renderer: Renderer,
     camera: PerspectiveCamera,
     assets: Assets,
-    meshes: List[Mesh],
+    mut scene: Scene,
+    table: NodeId,
     turn: Float32,
 ) raises -> Framebuffer:
     """Render one frame with the turntable at `turn` degrees.
@@ -72,7 +77,8 @@ def frame_at(
         renderer: The renderer to draw with.
         camera: The camera to view through.
         assets: The geometry, materials and textures.
-        meshes: The sphere, bound to node 0.
+        scene: The persistent scene, edited in place.
+        table: The turntable node the sphere and the fourth lamp ride on.
         turn: How far the turntable has turned, in degrees.
 
     Returns:
@@ -81,12 +87,33 @@ def frame_at(
     Raises:
         Error: If the scene or the render is invalid.
     """
-    var scene = Scene()
+    scene.node(table).set_euler(
+        Angle(0.0, DEGREE), Angle(turn, DEGREE), Angle(0.0, DEGREE)
+    )
+    scene.update()
+    return renderer.render(scene, assets, camera)
 
-    # Node 0 is the turntable, and the sphere rides on it.
-    var table = Object3D()
-    table.set_euler(Angle(0.0, DEGREE), Angle(turn, DEGREE), Angle(0.0, DEGREE))
-    var pivot = scene.add(table^)
+
+def main() raises:
+    var args = argv()
+    var destination = String(DEFAULT_OUTPUT)
+    if len(args) > 1:
+        destination = String(args[1])
+
+    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
+    renderer.set_background(Color(10, 11, 16))
+
+    var assets = Assets()
+    var ball = assets.geometries.add(
+        sphere(Length(1.0, METRE), AROUND, POLE_TO_POLE)
+    )
+    # White, so what you see is the light and nothing else.
+    var white = assets.materials.add(Material(Color(255, 255, 255)))
+
+    # The turntable, and the sphere riding on it.
+    var scene = Scene()
+    var table = scene.add(Object3D())
+    scene.add_mesh(Mesh(ball, white, table))
 
     # Three fixed lamps, each its own node so each has a direction.
     var places = [
@@ -106,42 +133,16 @@ def frame_at(
         scene.add_light(directional_light(tints[lamp], id, 0.9))
 
     # The fourth hangs from the turntable, so it turns with the sphere and its
-    # highlight stays in the same place on the surface.
+    # pool of light stays in the same place on the surface. A bulb, held just
+    # off the surface: close enough that the inverse-square falloff makes it
+    # a spot rather than a wash.
     var carried = Object3D()
-    carried.set_position(0, -0.4, 1.0)
-    carried.parent = pivot
-    var carried_id = scene.add(carried^)
-    scene.add_light(directional_light(Color(255, 200, 120), carried_id, 0.35))
+    carried.set_position(0, -0.6, 1.6)
+    var carried_id = scene.attach(carried^, table)
+    scene.add_light(point_light(Color(255, 200, 120), carried_id, 0.5))
 
     # Just enough fill that the unlit side is a shape rather than a hole.
     scene.add_light(ambient_light(Color(30, 34, 48), 1.0))
-
-    scene.update()
-    return renderer.render(scene, assets, meshes, camera)
-
-
-def main() raises:
-    var args = argv()
-    var destination = String(DEFAULT_OUTPUT)
-    if len(args) > 1:
-        destination = String(args[1])
-
-    var renderer = Renderer(WIDTH, HEIGHT)
-    renderer.set_background(Color(10, 11, 16))
-
-    var assets = Assets()
-    var ball = assets.geometries.add(
-        sphere(Length(1.0, METRE), AROUND, POLE_TO_POLE)
-    )
-    # White, so what you see is the light and nothing else.
-    var meshes = List[Mesh]()
-    meshes.append(
-        Mesh(
-            ball,
-            assets.materials.add(Material(Color(255, 255, 255))),
-            NodeId(0),
-        )
-    )
 
     var camera = PerspectiveCamera(
         Angle(40.0, DEGREE),
@@ -158,7 +159,8 @@ def main() raises:
                 renderer,
                 camera,
                 assets,
-                meshes,
+                scene,
+                table,
                 Float32(360) * Float32(index) / Float32(FRAMES),
             )
         )

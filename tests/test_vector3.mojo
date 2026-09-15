@@ -106,5 +106,41 @@ def test_normalize_leaves_zero_vector_unchanged() raises:
     assert_true(v.x == 0 and v.y == 0 and v.z == 0)
 
 
+def test_operators_agree_with_the_mutating_methods() raises:
+    var a = Vector3(1, 2, 3)
+    var b = Vector3(10, 20, 30)
+    var summed = a
+    summed.add(b)
+    var total = a + b
+    assert_equal(total.x, summed.x)
+    assert_equal(total.y, summed.y)
+    assert_equal(total.z, summed.z)
+    var lessened = b
+    lessened.sub(a)
+    var difference = b - a
+    assert_equal(difference.x, lessened.x)
+    assert_equal(difference.y, lessened.y)
+    assert_equal(difference.z, lessened.z)
+
+
+def test_scaling_and_negation() raises:
+    var v = Vector3(1, -2, 3) * 2
+    assert_equal(v.x, Float32(2))
+    assert_equal(v.y, Float32(-4))
+    assert_equal(v.z, Float32(6))
+    var back = -v
+    assert_equal(back.x, Float32(-2))
+    assert_equal(back.y, Float32(4))
+    assert_equal(back.z, Float32(-6))
+
+
+def test_operators_leave_their_operands_alone() raises:
+    var a = Vector3(1, 2, 3)
+    _ = a + Vector3(9, 9, 9)
+    _ = -a
+    assert_equal(a.x, Float32(1))
+    assert_equal(a.z, Float32(3))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

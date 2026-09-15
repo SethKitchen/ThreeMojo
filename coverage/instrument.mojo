@@ -328,6 +328,7 @@ def _opens_top_level_block(line: String) -> Bool:
     var stripped = String(line.strip())
     return (
         stripped.startswith("def ")
+        or stripped.startswith("async def ")
         or stripped.startswith("struct ")
         or stripped.startswith("@")
     )

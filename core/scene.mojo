@@ -31,15 +31,31 @@ the dependency order. Nothing needs it yet. When something does, the fix is to
 separate a stable node id from the position a node occupies in traversal
 order, rather than to relax the check.
 
+**Meshes and lights are scene content.** three.js's `scene.add` takes either,
+and a renderer is handed the scene and a camera and nothing else. For a while
+meshes travelled in a separate list beside the scene while lights lived
+inside it, which was two answers to one question. `add_mesh` is the
+counterpart of `add_light`, and `Renderer.render(scene, assets, camera)` reads
+both from here.
+
+**Nodes can be edited in place.** `node(id)` hands back a mutable reference
+and marks the scene stale, which is what `mesh.rotation.y += 0.01` needs: a
+persistent scene, one field changed, one `update`, one render. Before it
+existed every example rebuilt its entire scene each frame, because copying a
+node out with `get` and putting it back with `set` was more ceremony than
+starting over.
+
 The two arrays are named with a leading underscore. Mojo does not enforce
 private fields, so that is a convention and not a guarantee — `validate` exists
-to catch the case where something reached past it anyway.
+to catch the case where something reached past it anyway, and `update` runs it
+first, because a mutable reference to a node is also a way past it.
 """
 
 from core.object3d import NO_PARENT, NodeId, Object3D
 from lights.light import Light
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
+from objects.mesh import Mesh
 
 
 struct Scene(Movable):
@@ -53,6 +69,11 @@ struct Scene(Movable):
     # can have more than one, and so a light can be carried by a node -- see
     # `lights.light`.
     var lights: List[Light]
+    # What the scene draws, each naming a node here and a geometry and
+    # material in an `Assets`. Public for the reason `lights` is, and
+    # assignable, so a caller comparing two draw lists against one scene can
+    # swap them without rebuilding it.
+    var meshes: List[Mesh]
     # False only when every world matrix reflects every node as it stands.
     var _stale: Bool
 
@@ -61,12 +82,58 @@ struct Scene(Movable):
         self._nodes = List[Object3D]()
         self._world = List[Matrix4]()
         self.lights = List[Light]()
+        self.meshes = List[Mesh]()
         # An empty scene has nothing to recompute, so it starts current.
         self._stale = False
 
     def count(self) -> Int:
         """Return how many nodes the scene holds."""
         return len(self._nodes)
+
+    def add_mesh(mut self, mesh: Mesh) raises:
+        """Add something to draw.
+
+        Does not make the scene stale: a mesh holds no transform of its own,
+        only the id of a node that does, exactly as a light does.
+
+        Args:
+            mesh: The mesh to draw. Its node must already be in the scene;
+                its geometry and material are checked when rendered, because
+                the scene has no view of the `Assets` they live in.
+
+        Raises:
+            Error: If the mesh names a node the scene does not have.
+        """
+        if mesh.node.value >= len(self._nodes):
+            raise Error("A mesh must name a node that is in the scene")
+        self.meshes.append(mesh)
+
+    def node(
+        mut self, index: NodeId
+    ) raises -> ref[origin_of(self._nodes[0])] Object3D:
+        """Return the node at `index`, for editing in place.
+
+        The three.js way to move something -- change a field on the object
+        and render again -- and what `get` followed by `set` was standing in
+        for. A mutable reference means the scene cannot see what is done
+        through it, so it is marked stale on the way out and the next
+        `update` recomputes everything. A caller that only wants to look
+        should use `get`, which costs nothing later.
+
+        Args:
+            index: Which node to edit.
+
+        Returns:
+            A reference to it, valid as long as the scene is not otherwise
+            touched.
+
+        Raises:
+            Error: If the index is out of range.
+        """
+        if index.value < 0 or index.value >= len(self._nodes):
+            raise Error("Scene node index out of range")
+        self._stale = True
+        return self._nodes[index.value]
 
     def add_light(mut self, light: Light):
         """Add a light to the scene.
@@ -164,15 +231,54 @@ struct Scene(Movable):
         self._nodes[index.value] = node^
         self._stale = True
 
+    def look_at(
+        mut self, index: NodeId, target: Vector3, *, camera: Bool = False
+    ) raises:
+        """Turn a node to face a point given in *world* space.
+
+        `Object3D.look_at` works in the node's parent frame, which is only
+        the world for a root node. This walks the difference: the target is
+        taken into the parent's frame through the inverse of the parent's
+        world matrix, then the node looks at it there. That is what three.js
+        does inside `lookAt`, and it is why a camera parented to a moving
+        pivot can still be told to watch the origin.
+
+        Args:
+            index: Which node to turn.
+            target: The point to face, in world space.
+            camera: True to face it the way a camera does; see
+                `Object3D.look_at`.
+
+        Raises:
+            Error: If the index is out of range, the scene is stale — the
+                parent's world matrix has to be current — or the target
+                leaves the orientation undefined.
+        """
+        if index.value < 0 or index.value >= len(self._nodes):
+            raise Error("Scene node index out of range")
+        var local = target
+        var parent = self._nodes[index.value].parent
+        if parent != NO_PARENT:
+            var into_parent = self.world_matrix(parent)
+            into_parent.invert()
+            local = into_parent.transform_point(target)
+        self.node(index).look_at(local, camera=camera)
+
     def update(mut self) raises:
         """Recompute every node's world matrix.
 
         One forward pass is enough: a parent always sits earlier in the array,
         so its world matrix is already final by the time a child is reached.
 
+        Validates first. Every other mutation checks the parent links as it
+        goes, but a reference from `node` can set one to anything, and the
+        pass below indexes by it.
+
         Raises:
-            Error: If a node's local matrix cannot be built.
+            Error: If a node's parent link no longer points at an earlier
+                node, or a node's local matrix cannot be built.
         """
+        self.validate()
         for index in range(len(self._nodes)):
             var local = self._nodes[index].local_matrix()
             var parent = self._nodes[index].parent

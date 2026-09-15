@@ -145,7 +145,9 @@ struct Matrix4(ImplicitlyCopyable):
 
     def determinant(self) -> Float32:
         """Return this matrix's determinant."""
-        var e = self.elements.copy()
+        # Read in place: a copy of sixteen floats per call was the whole
+        # cost of asking a matrix a question.
+        ref e = self.elements
         var n11 = e[0]
         var n21 = e[1]
         var n31 = e[2]
@@ -395,7 +397,7 @@ struct Matrix4(ImplicitlyCopyable):
                 which leaves the surface with no direction to be perpendicular
                 to and no inverse to build the answer from.
         """
-        var e = self.elements.copy()
+        ref e = self.elements
         # Rows of the upper-left 3x3, remembering storage is column-major.
         var a = e[0]
         var b = e[4]
@@ -455,7 +457,7 @@ struct Matrix4(ImplicitlyCopyable):
         The result is divided by the transformed w, which is what makes a
         perspective matrix produce perspective.
         """
-        var e = self.elements.copy()
+        ref e = self.elements
         var x = point.x
         var y = point.y
         var z = point.z
@@ -486,7 +488,7 @@ struct Matrix4(ImplicitlyCopyable):
             makes the perspective correction a no-op when there is no
             perspective.
         """
-        var e = self.elements.copy()
+        ref e = self.elements
         return e[3] * point.x + e[7] * point.y + e[11] * point.z + e[15]
 
     def transform_direction(self, direction: Vector3) -> Vector3:
@@ -495,7 +497,7 @@ struct Matrix4(ImplicitlyCopyable):
         A direction has no position, so the translation column must not apply
         to it. The result is not renormalized.
         """
-        var e = self.elements.copy()
+        ref e = self.elements
         var x = direction.x
         var y = direction.y
         var z = direction.z

@@ -29,7 +29,9 @@ one. A backend that special-cased it would be two code paths where the maths
 already gives one.
 """
 
-from cameras.camera import Camera
+from cameras.camera import Camera, node_view_matrix
+from core.object3d import NO_PARENT, NodeId
+from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.projection import look_at, orthographic, viewport
 from math.vector3 import Vector3
@@ -48,6 +50,9 @@ struct OrthographicCamera(Camera):
     var position: Vector3
     var target: Vector3
     var up: Vector3
+    # The scene node this camera rides, or `NO_PARENT` for a camera that is
+    # placed. See `PerspectiveCamera.attach`.
+    var node: NodeId
 
     def __init__(
         out self,
@@ -92,11 +97,25 @@ struct OrthographicCamera(Camera):
         self.position = Vector3(0, 0, 0)
         self.target = Vector3(0, 0, -1)
         self.up = Vector3(0, 1, 0)
+        self.node = NO_PARENT
 
     def place(mut self, position: Vector3, target: Vector3):
-        """Move the camera to `position` and aim it at `target`."""
+        """Move the camera to `position` and aim it at `target`.
+
+        Also lets go of any node it was riding, as `PerspectiveCamera.place`
+        does.
+        """
         self.position = position
         self.target = target
+        self.node = NO_PARENT
+
+    def attach(mut self, node: NodeId):
+        """Ride `node`, looking down its -z with its +y up.
+
+        Args:
+            node: The scene node to ride. See `PerspectiveCamera.attach`.
+        """
+        self.node = node
 
     def projection_matrix(self) raises -> Matrix4:
         """Return the matrix taking camera space to normalized device space.
@@ -120,13 +139,37 @@ struct OrthographicCamera(Camera):
         """Return the matrix taking world space to camera space.
 
         Returns:
-            The view matrix.
+            The view matrix, from where the camera was placed.
 
         Raises:
             Error: If the camera sits at its own target, or up is parallel to
-                the view direction.
+                the view direction, or the camera rides a node -- ask
+                `view_matrix_in`.
         """
+        if self.node != NO_PARENT:
+            raise Error(
+                "An attached camera's view comes from its node; call"
+                " view_matrix_in(scene)"
+            )
         return look_at(self.position, self.target, self.up)
+
+    def view_matrix_in(self, scene: Scene) raises -> Matrix4:
+        """Return the matrix taking world space to camera space.
+
+        Args:
+            scene: The scene, updated, for a camera riding one of its nodes.
+
+        Returns:
+            The inverse of the node's world matrix if attached, else what
+            `view_matrix` gives.
+
+        Raises:
+            Error: If the placement is degenerate, the node is not in the
+                scene, or the scene is stale.
+        """
+        if self.node == NO_PARENT:
+            return self.view_matrix()
+        return node_view_matrix(scene, self.node)
 
     def view_to_screen_matrix(self, width: Int, height: Int) raises -> Matrix4:
         """Return the transform from camera space to pixels.

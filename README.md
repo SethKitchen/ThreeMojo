@@ -45,31 +45,44 @@ promised: `make check-cpu` builds and tests the standard-library-only half, and
 `make check-gpu` the rest.
 
 > **Status: early but no longer a toybox.** Scene graph, transforms, camera,
-> geometry, meshes, depth buffering, per-vertex normals, near and far clipping,
-> perspective-correct shading, and both a CPU and a GPU rasterizer are in place
-> and fully tested, along with materials, textures with two filters, alpha
-> blending in linear light, backface culling and an orthographic camera.
-> Missing, among much else: mipmaps, quaternions, and any kind of windowing. This is a learning project in the open, not a
-> drop-in three.js replacement.
+> geometry, meshes, depth buffering, per-fragment lighting, near and far
+> clipping, perspective-correct shading, and both a CPU and a GPU rasterizer
+> are in place and fully tested, along with materials, textures with two
+> filters and mip chains, a PNG decoder, alpha blending in linear light,
+> backface culling, an orthographic camera, a multithreaded CPU path,
+> quaternion rotations, point lights, unlit materials and cameras that ride
+> the scene graph. The GPU backend has run on Metal and on CUDA. Missing,
+> among much else: spot lights, shadows, and any kind of windowing. This is a
+> learning project in the open, not a drop-in three.js replacement.
 
 ## Rendering a scene
 
 ```mojo
-var scene = Scene()
-var node = scene.add(spinning_object)
-scene.update()
-
 var assets = Assets()
 var box = assets.geometries.add(cube(Length(1.0, METRE)))
 var orange = assets.materials.add(Material(Color(255, 140, 40)))
 var blue = assets.materials.add(Material(Color(90, 190, 255)))
 
-var meshes = List[Mesh]()
-meshes.append(Mesh(box, orange, node))
-meshes.append(Mesh(box, blue, other_node))   # same vertices, same geometry id
+var scene = Scene()
+var node = scene.add(spinning_object)
+var other = scene.add(Object3D())
+scene.add_mesh(Mesh(box, orange, node))
+scene.add_mesh(Mesh(box, blue, other))    # same vertices, same geometry id
+scene.update()
 
-var renderer = Renderer(260, 200)
-var image = renderer.render(scene, assets, meshes, camera)
+var renderer = Renderer(260, 200, workers=available_workers())
+var image = renderer.render(scene, assets, camera)
+```
+
+That is three.js's `renderer.render(scene, camera)` plus the one argument Mojo
+needs and JavaScript does not: who owns the geometry. Meshes and lights are
+scene content, as they are there, and a frame is edited in place rather than
+rebuilt:
+
+```mojo
+scene.node(node).set_euler(Angle(0.0, DEGREE), Angle(turn, DEGREE), Angle(0.0, DEGREE))
+scene.update()
+var frame = renderer.render(scene, assets, camera)
 ```
 
 A `Mesh` names the scene node it is drawn at rather than owning a transform.
@@ -83,11 +96,12 @@ That is what makes the second half of that sentence true: a mesh is three
 indices and nothing else, so the two meshes above share one copy of the box's
 vertices rather than holding one each.
 
-Shading is Lambert against one directional light plus ambient, evaluated per
-vertex and interpolated across the face — Gouraud shading. A geometry's
-`normal` attribute decides how it looks: a box gives each of a face's four
-corners that face's own normal, so the face comes out flat with a crisp edge;
-a sphere gives each vertex the direction it points from the centre, so
+Shading is Lambert against the scene's lights plus ambient, evaluated per
+*fragment*: the normal is interpolated across the face, made unit length
+again at every pixel, and the lights are summed there. A geometry's `normal`
+attribute decides how it looks: a box gives each of a face's four corners
+that face's own normal, so the face comes out flat with a crisp edge; a
+sphere gives each vertex the direction it points from the centre, so
 neighbouring triangles agree along their shared edge and the facets vanish.
 A geometry with no normals falls back to the triangle's *geometric* normal,
 which is faceted by construction and the honest result for geometry that never
@@ -105,9 +119,6 @@ transpose of its rotation and scale — not by the world matrix itself. Under a
 uniform scale the two agree up to a length that normalizing removes; under a
 non-uniform scale they do not, and `Object3D.set_scale` takes three separate
 factors.
-
-Colour lives on the mesh rather than in a `Material`. A material with one
-field would be ceremony; it earns a type when there is a second property.
 
 ## Geometry
 
@@ -129,6 +140,14 @@ A box uses twenty-four vertices, not eight. Sharing corners would be smaller,
 but a corner shared between three faces can carry only one normal and one
 texture coordinate, so the faces could never be shaded separately — which is
 why three.js splits them too.
+
+`plane(width, height, width_segments, height_segments)` is three.js's
+`PlaneGeometry`: a rectangle in the xy plane facing +z, with the same vertex
+order, winding and texture coordinates, subdivided into a grid if asked. Lay
+it flat with a quarter turn about x. Three examples had each built one by
+hand with their own corner order; `glass.mojo`, `uv.mojo` and `floor.mojo`
+now share it, and the floor rescales its `uv` attribute to tile, which is
+what `BufferGeometry` exists to allow.
 
 ## Rasterization
 
@@ -188,7 +207,33 @@ var pivot = scene.add(spinning_node)
 var moon  = scene.attach(node_at(1.6, 0, 0), pivot)   # orbits for free
 scene.update()
 scene.world_matrix(moon)
+
+scene.node(pivot).rotate_y(Angle(30.0, DEGREE))        # about its own y
+scene.update()                                          # the moon moved too
 ```
+
+`node` hands back a mutable reference and marks the scene stale, which is
+what `mesh.rotation.y += 0.01` needs: a persistent scene, one field changed,
+one `update`, one render. Every example used to rebuild its whole scene each
+frame because the alternative was copying a node out and putting it back.
+
+Euler angles compose in three.js's default order. `set_euler(x, y, z)` is
+`XYZ`: turn about x, then about the turned y, then about the twice-turned z,
+which as a matrix is Rx · Ry · Rz. The other five orders are there by name,
+and `ZYX` is what this port did before it matched three.js.
+
+**A rotation is a quaternion.** `Object3D.quaternion` is what three.js holds
+too. A matrix composes but does not interpolate; Euler angles interpolate but
+lock up; a unit quaternion does both. Euler angles are one way to *set* it —
+`set_euler`, or `set_rotation(Euler(x, y, z, order))` — and `rotate_x`,
+`rotate_y`, `rotate_z` and `rotate_on_axis` turn it further by one multiply
+each, about the node's *own* axes, which is what `mesh.rotation.y += 0.01`
+does there; `rotate_on_world_axis` turns about the parent's. `look_at`
+orients a node towards a point, +z forward for an object and −z for a camera,
+and `Scene.look_at` does it in world space through the parent's inverse.
+`Quaternion.slerp` blends two rotations along the shortest arc at constant
+speed. `math/euler.mojo` converts *to* a quaternion or a matrix; reading
+Euler angles back out of a rotation is not ported.
 
 `make animation` renders `out/cubes.png`, where a small cube orbits a large one
 and passes behind it. The depth buffer carries that result on its own, which
@@ -490,6 +535,21 @@ exists to prevent: half plus half would come to 128 rather than 255.
 **A light has a colour**, so it multiplies the surface's per channel. The old
 scalar dimming could not express a red lamp at all.
 
+**A point light is a bulb.** `point_light(color, node, intensity, decay,
+distance)` is three.js's `PointLight` with its defaults: the light is divided
+by distance to the power of `decay`, two being the inverse-square law, and
+fades smoothly to nothing at `distance` if one is given. Its node's world
+*position* is what matters, so every fragment now carries where it is in the
+world — `RasterVertex.world`, three more lanes on the GPU — and
+`Lighting.intensity_at` takes a position as well as a normal. `falloff` is one
+function called from both rasterizers, and the parity test holds them to it.
+`examples/lamps.mojo` hangs one off the turntable.
+
+```mojo
+var bulb = scene.attach(node_at(0, -0.6, 1.6), table)
+scene.add_light(point_light(Color(255, 200, 120), bulb, 0.5))
+```
+
 Nothing is clamped until `RenderTarget.resolve`. Two lamps really can
 overexpose a white surface, and the headroom survives every step in between
 rather than being flattened at each one.
@@ -655,14 +715,31 @@ different textures was impossible.
 
 ```mojo
 struct Material:
-    var color: Color   # was on Mesh
-    var map: Int       # was on Renderer: one texture, whole scene
-    var side: Int      # was a Bool on Renderer: could not express BackSide
+    var color: Color        # was on Mesh
+    var map: TextureId      # was on Renderer: one texture, whole scene
+    var side: Side          # was a Bool on Renderer: could not express BackSide
+    var opacity: Float32
+    var blending: Blending
+    var kind: MaterialKind  # LAMBERT (lit) or BASIC (shows its own colour)
 ```
 
 `side` stops being a flag and becomes what three.js has: `FRONT_SIDE` draws
 surfaces facing the camera, `BACK_SIDE` only those facing away, `DOUBLE_SIDE`
 both. A Bool could express the first and last; the middle is a third state.
+
+`kind` is where three.js has a class per answer: `MeshBasicMaterial` shows
+its own colour and texture whatever the lights do, `MeshLambertMaterial`
+catches light. Every other property is shared, so here it is one struct and a
+tag. The tag travels with each triangle like the blend policy, and both
+rasterizers skip the lights for a `BASIC` surface.
+
+`Side` is a type rather than an integer, and so are `Blending`, `MaterialKind`,
+a texture's `Wrap` and `Filter`, a `ColorSpace`, a `ShadeMode` and a
+`LightKind`. That is
+the same discipline the resource ids and the units follow: a value that is
+one of three things should not be interchangeable with one that is one of
+two. Each used to be an `Int` checked at runtime; now a wrong one does not
+compile, `tests/compile_fail/` proves it, and the checks are gone.
 
 A `Mesh` is now three ids and nothing else — where it is, what shape it is,
 what it is made of:
@@ -812,6 +889,51 @@ edges must be properly ordered, though — right beyond left, top above bottom �
 because a reversed pair mirrors the projection, and mirrored winding is
 exactly what backface culling reads.
 
+**A camera can ride a scene node.** three.js's camera is an `Object3D`, and
+its view matrix is the inverse of its world matrix. Here a camera is not a
+node — a `Mesh` is not one either — but `camera.attach(node)` makes it look
+from one, so a camera parented to a pivot orbits with it, and
+`Scene.look_at(node, target, camera=True)` aims it. The trait's first answer
+is therefore `view_matrix_in(scene)`; `view_matrix()` still answers for a
+placed camera and refuses for an attached one, because only the scene knows
+where the node is. `examples/photo.mojo` circles its cube this way.
+
+## Threads
+
+The CPU renderer draws a frame on as many threads as you give it:
+
+```mojo
+var renderer = Renderer(1280, 720, workers=available_workers())
+```
+
+The image is cut into that many horizontal bands and every triangle is
+offered to every band, each band on its own task from the standard library's
+thread pool. A band owns its rows outright, so no two threads ever touch one
+pixel, the depth test needs no atomics, and draw order within a band is
+submission order — which is what keeps blending correct. The result is byte
+for byte what one thread produces; only the wall clock changes. The final
+encode from linear light to sRGB, three `pow` calls per pixel, is split the
+same way.
+
+One worker is the default, deliberately. The coverage tool reconstructs
+MC/DC vectors from the order its probe records arrive in, and two threads
+reporting one decision at once would interleave them; the examples and the
+benchmark ask for every core.
+
+`make bench-scene` renders a mipmapped, bilinear checkerboard sphere of some
+twelve thousand triangles and times the stages apart:
+
+```
+$ make bench-scene
+1280x720  workers 1    prepare 6852 us   clear+resolve 47933 us   render 117565 us
+1280x720  workers 24   prepare 6844 us   clear+resolve  5592 us   render  18465 us
+```
+
+Rasterization and the resolve were the frame and now scale with cores.
+`prepare` — transforms, clipping and projection, per vertex — is single
+threaded and is now the largest single piece, which is what the next
+optimization should be aimed at.
+
 ## GPU
 
 `render/gpu.mojo` runs the same edge test as the CPU rasterizer — the same
@@ -838,6 +960,15 @@ $ make bench
 GPU timings include device allocation and the copy back, because that is what
 it costs to get a usable image. Timing the kernel alone would flatter it: at
 1080p the kernel is ~600 us and the transfer is the rest.
+
+Those timings are from an Apple M-series GPU under Metal. The same suite
+passes on an NVIDIA GPU under CUDA on WSL 2, which is how it was found that a
+`DeviceContext` torn down before the buffers it owns hangs the next context's
+first allocation there, and that a context with a launch still in flight
+must be waited on before it goes. `GpuRenderer` now releases its buffers
+first and drains its queue, `make test-gpu` runs under a time budget so a
+hang fails instead of looking slow, and `docs/max-gpu-teardown-issue/` holds
+the reproducer.
 
 Requires the Mojo GPU libraries (`uv pip install "max==26.5.0"`), which are
 **not** needed for anything else — see `make check-cpu`. On macOS it also
@@ -979,6 +1110,7 @@ Every command below is identical on macOS, Linux, and WSL.
 | `make example` | Render `out/triangle.png`. |
 | `make animation` | Render the animated examples into `out/`. |
 | `make bench` | CPU vs GPU rasterization across image sizes. |
+| `make bench-scene` | A textured sphere through the CPU renderer, stage by stage, one worker and every core. Standard library only. |
 | `make compile-fail` | Assert every unit error is still rejected by the compiler. |
 | `make clean` | Remove the coverage build and the task cache. Keeps `out/`. |
 | `make clean-images` | Remove the rendered images in `out/`. |
@@ -1047,27 +1179,32 @@ units/       Quantity, Unit                      compile-time dimensions
              si                                  metres, feet, degrees, ...
 math/        Vector2, Vector3                    ported from three.js
              Matrix4                             4x4 transforms, column-major
-             projection                          perspective, look_at, viewport
-cameras/     Camera                              the trait a renderer needs
+             projection                          perspective, orthographic, look_at, viewport
+             Quaternion, Euler                   rotations that compose and interpolate
+cameras/     Camera                              the trait a renderer needs; rides a node
              PerspectiveCamera                   fov in Angle, planes in Length
              OrthographicCamera                  no perspective; w stays 1
 core/        Assets                              the three stores together
-             Object3D, Scene                     transform hierarchy
+             Object3D, Scene                     transform hierarchy, meshes and lights
              BufferGeometry, BufferAttribute     vertex data, borrowed on read
              GeometryStore                       owns geometry; meshes share it
 geometries/  box                                 a box, four vertices per face
              sphere                              latitude/longitude, smooth
-objects/     Mesh                                geometry id + colour at a node
-renderers/   Renderer                            scene + camera -> triangles
+             plane                               a rectangle, subdividable
+objects/     Mesh                                geometry, material and node ids
+lights/      Light, Lighting                     ambient, directional and point, resolved per frame
+renderers/   Renderer                            scene + camera -> triangles -> image
              clip                                near and far plane clipping
-materials/   Material, MaterialStore             colour, map and side
+materials/   Material, MaterialStore             colour, map, side, opacity, blending, kind
 render/      Framebuffer, Color, FloatColor      RGBA, depth, and linear colour
-             Texture, TextureStore               two filters, three wraps
+             RenderTarget                        premultiplied linear light, resolved once
+             Texture, TextureStore               two filters, three wraps, mip chains
              srgb                                the transfer function
              fillrule                            coverage maths, CPU *and* GPU
-             rasterizer                          software rasterization
+             rasterizer                          software rasterization, banded across threads
              gpu                                 the same rasterizer, on the GPU
              png, apng, ppm                      encoders that read the buffer
+             png, inflate                        a PNG decoder and the DEFLATE under it
 examples/    triangle.mojo                       renders triangle.png
              spin.mojo                           renders spin.png, animated
              cube.mojo                           a 3D cube, animated
@@ -1075,8 +1212,14 @@ examples/    triangle.mojo                       renders triangle.png
              uv.mojo                             perspective-correct vs affine
              textured.mojo                       two cubes, two textures
              glass.mojo                          translucent panes, sorted
+             floor.mojo                          mipmapped vs not, to the horizon
+             photo.mojo                          a decoded PNG on a cube, camera on a node
+             lamps.mojo                          coloured lights, per-fragment shading
 bench/       raster_bench.mojo                   CPU vs GPU timings
+             scene_bench.mojo                    a whole scene, stage by stage
 tools/       gpu_status.mojo                     is there an accelerator?
+docs/        mojo-compiler-issue/                a compiler hang, bisected and reported
+             max-gpu-teardown-issue/             a CUDA teardown hang, reproduced
 out/         rendered images, gitignored
 tests/       one suite per module
              compile_fail/                       files that must NOT compile
@@ -1089,15 +1232,16 @@ scene into screen-space triangles — transforms, lighting, clipping, projection
 parity tests mean something:
 
 ```
-scene + geometries + meshes + camera
+scene (nodes, meshes, lights) + assets + camera
                 |
         Renderer.prepare
                 |
-        List[RasterVertex]        <- screen x/y, NDC z, 1/w, linear colour
+        List[RasterVertex]        <- screen x/y, NDC z, 1/w, colour, normal, uv
            /           \
-   rasterize_shaded   GpuRenderer.draw
+   rasterize_all      GpuRenderer.draw
+   (bands, threads)         |
            |                |
-      Framebuffer      device target -> read_back()
+   RenderTarget.resolve  device target -> read_back()
 ```
 
 ## Coverage
@@ -1122,17 +1266,17 @@ Four metrics, all gating:
 
 ```
 $ make coverage
-Instrumented 23 files: 913 lines, 117 decisions, 59 conditions.
+Instrumented 35 files: 1913 lines, 340 decisions, 132 conditions.
 math/matrix4        lines 169/169 100%  branches 28/28 100%  mcdc 8/8   100%
-render/rasterizer   lines  97/97  100%  branches 40/40 100%  mcdc 0/0   100%
+render/rasterizer   lines 215/215 100%  branches 98/98 100%  mcdc 6/6   100%
 render/fillrule     lines   9/9   100%  branches  4/4  100%  mcdc 0/0   100%
-render/framebuffer  lines  57/57  100%  branches 50/50 100%  mcdc 16/16 100%
-core/scene          lines  47/47  100%  branches 52/52 100%  mcdc 12/12 100%
-renderers/renderer  lines  83/83  100%  branches 30/30 100%  mcdc 4/4   100%
-TOTAL               1324/1324 100%
+render/target       lines  50/50  100%  branches 30/30 100%  mcdc 6/6   100%
+core/scene          lines  58/58  100%  branches 60/60 100%  mcdc 14/14 100%
+renderers/renderer  lines 146/146 100%  branches 70/70 100%  mcdc 10/10 100%
+TOTAL               2985/2985 100%
 ```
 
-(Abridged — the run covers twenty-one modules.)
+(Abridged — the run covers thirty-five modules.)
 
 A decision whose second outcome is genuinely unreachable — a loop over a length
 an invariant already proves non-zero — is opted out explicitly, so it is visible

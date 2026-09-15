@@ -18,25 +18,24 @@ place a renderer's colour space shows most plainly: half of white over black is
 gives 128 — a fifth of the light, wearing the label of a half. Every mix here
 happens in linear light and is encoded once at the pixel; see `render.srgb`.
 
-Each pane is `DOUBLE_SIDE`, because a single flat quad has no inside and no
-outside and you should be able to see it from either. Its lighting follows
-whichever side you are looking at.
+Each pane is a `plane`, `DOUBLE_SIDE`, because a single flat quad has no inside
+and no outside and you should be able to see it from either. Its lighting
+follows whichever side you are looking at.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, POSITION
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
 from geometries.box import cube
+from geometries.plane import plane
 from materials.material import DOUBLE_SIDE, NO_TEXTURE, Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
-from renderers.renderer import Renderer
+from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, Length, METRE
@@ -48,44 +47,12 @@ comptime FRAMES = 36
 comptime DELAY_MS = 60
 
 
-def pane(size: Float32) raises -> BufferGeometry:
-    """Return a flat square in the xy plane, two triangles, no normals.
-
-    With no `normal` attribute the renderer uses the triangle's own geometric
-    normal, which is what a flat quad wants: it has exactly one.
-
-    Args:
-        size: The square's width and height.
-
-    Returns:
-        The geometry.
-
-    Raises:
-        Error: If the attributes are malformed, which they are not.
-    """
-    var half = size / 2
-    var positions = List[Float32]()
-    var xs = [-half, half, half, -half]
-    var ys = [-half, -half, half, half]
-    for corner in range(4):
-        positions.append(xs[corner])
-        positions.append(ys[corner])
-        positions.append(0)
-
-    var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    var index = List[Int]()
-    for entry in [0, 1, 2, 0, 2, 3]:
-        index.append(entry)
-    geometry.set_index(index^)
-    return geometry^
-
-
 def frame_at(
     renderer: Renderer,
     camera: PerspectiveCamera,
     assets: Assets,
-    meshes: List[Mesh],
+    mut scene: Scene,
+    panes: List[NodeId],
     turn: Float32,
 ) raises -> Framebuffer:
     """Render one frame with the panes turned to `turn` degrees.
@@ -94,7 +61,8 @@ def frame_at(
         renderer: The renderer to draw with.
         camera: The camera to view through.
         assets: The geometry, materials and textures.
-        meshes: The cube and the three panes, bound to nodes 0 to 3.
+        scene: The persistent scene, edited in place.
+        panes: The three pane nodes, a third of a turn apart.
         turn: How far the panes have turned, in degrees.
 
     Returns:
@@ -103,30 +71,15 @@ def frame_at(
     Raises:
         Error: If the scene or the render is invalid.
     """
-    var scene = Scene()
-    _ = scene.add(Object3D())
-
     # Three panes on a shared turntable, a third of a turn apart, each also
     # leaning so they cross rather than merely overlapping.
-    for pane_index in range(3):
-        var node = Object3D()
+    for pane_index in range(len(panes)):
         var angle = turn + Float32(120) * Float32(pane_index)
-        node.set_euler(
+        scene.node(panes[pane_index]).set_euler(
             Angle(24.0, DEGREE), Angle(angle, DEGREE), Angle(0.0, DEGREE)
         )
-        node.set_position(0, 0, 0)
-        _ = scene.add(node^)
-    # The lamp is a node like any other, so it could be parented to something
-    # that moves. Added last, leaving the node ids the meshes name untouched.
-    var lamp = Object3D()
-    lamp.set_position(0.4, 0.8, 0.5)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
-
     scene.update()
-
-    return renderer.render(scene, assets, meshes, camera)
+    return renderer.render(scene, assets, camera)
 
 
 def main() raises:
@@ -135,32 +88,42 @@ def main() raises:
     if len(args) > 1:
         destination = String(args[1])
 
-    var renderer = Renderer(WIDTH, HEIGHT)
+    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_background(Color(16, 18, 26))
 
     var assets = Assets()
     var solid = assets.geometries.add(cube(Length(0.9, METRE)))
-    var sheet = assets.geometries.add(pane(2.0))
-
-    var meshes = List[Mesh]()
-    meshes.append(
-        Mesh(
-            solid,
-            assets.materials.add(Material(Color(235, 235, 240))),
-            NodeId(0),
-        )
+    var sheet = assets.geometries.add(
+        plane(Length(2.0, METRE), Length(2.0, METRE))
     )
+    var white = assets.materials.add(Material(Color(235, 235, 240)))
+
+    var scene = Scene()
+    var block = scene.add(Object3D())
+    scene.add_mesh(Mesh(solid, white, block))
+
     var tints = [Color(255, 60, 60), Color(60, 255, 90), Color(70, 120, 255)]
+    var panes = List[NodeId]()
     for pane_index in range(3):
-        meshes.append(
+        var node = scene.add(Object3D())
+        panes.append(node)
+        scene.add_mesh(
             Mesh(
                 sheet,
                 assets.materials.add(
                     Material(tints[pane_index], NO_TEXTURE, DOUBLE_SIDE, 0.45)
                 ),
-                NodeId(pane_index + 1),
+                node,
             )
         )
+
+    # The lamp is a node like any other, so it could be parented to something
+    # that moves.
+    var lamp = Object3D()
+    lamp.set_position(0.4, 0.8, 0.5)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
 
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
@@ -177,7 +140,8 @@ def main() raises:
                 renderer,
                 camera,
                 assets,
-                meshes,
+                scene,
+                panes,
                 Float32(360) * Float32(index) / Float32(FRAMES),
             )
         )

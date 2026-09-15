@@ -17,9 +17,11 @@ from core.scene import Scene
 from lights.light import (
     AMBIENT,
     DIRECTIONAL,
+    POINT,
     Light,
     ambient_light,
     directional_light,
+    point_light,
 )
 from lights.lighting import Lighting
 from math.vector3 import Vector3
@@ -35,6 +37,7 @@ from std.testing import (
 
 comptime TOLERANCE = Float64(1e-6)
 comptime WHITE = Color(255, 255, 255)
+comptime ORIGIN = Vector3(0, 0, 0)
 
 
 def scene_with_lamp_at(x: Float32, y: Float32, z: Float32) raises -> Scene:
@@ -45,6 +48,12 @@ def scene_with_lamp_at(x: Float32, y: Float32, z: Float32) raises -> Scene:
     _ = scene.add(lamp^)
     scene.update()
     return scene^
+
+
+def shaded(lighting: Lighting, base: Color, normal: Vector3) -> FloatColor:
+    """Shade a surface at the origin, which is where every directional test
+    puts it; only a point light would care."""
+    return lighting.shade(base, normal, ORIGIN)
 
 
 def lit_from(x: Float32, y: Float32, z: Float32) raises -> Scene:
@@ -109,7 +118,7 @@ def test_an_unlit_scene_renders_black() raises:
     # What "no lights" means, and the clearest consequence of ambient being a
     # light rather than a fraction the surface keeps.
     var lighting = Lighting(Scene())
-    var shaded = lighting.shade(Color(200, 100, 50), Vector3(0, 1, 0))
+    var shaded = shaded(lighting, Color(200, 100, 50), Vector3(0, 1, 0))
     assert_almost_equal(shaded.r, Float32(0), atol=TOLERANCE)
     assert_almost_equal(shaded.g, Float32(0), atol=TOLERANCE)
 
@@ -147,13 +156,6 @@ def test_a_light_naming_a_node_that_is_not_there_is_rejected() raises:
         _ = Lighting(scene)
 
 
-def test_an_unknown_light_kind_is_rejected() raises:
-    var scene = scene_with_lamp_at(0, 1, 0)
-    scene.add_light(Light(9, WHITE, 1.0, NodeId(0)))
-    with assert_raises():
-        _ = Lighting(scene)
-
-
 def test_a_light_is_carried_by_the_node_it_hangs_from() raises:
     # The reason a light names a node rather than a bare direction: turn the
     # parent and the lamp turns with it. A light on the renderer could not do
@@ -184,7 +186,7 @@ def test_a_light_is_carried_by_the_node_it_hangs_from() raises:
 
 def test_a_face_turned_towards_the_light_keeps_its_colour() raises:
     var lighting = Lighting(lit_from(0, 1, 0))
-    var lit = lighting.shade(Color(200, 100, 50), Vector3(0, 1, 0)).encode()
+    var lit = shaded(lighting, Color(200, 100, 50), Vector3(0, 1, 0)).encode()
     assert_equal(lit.r, UInt8(200))
 
 
@@ -195,14 +197,14 @@ def test_a_face_turned_away_gets_only_the_ambient() raises:
     var scene = lit_from(0, 1, 0)
     scene.add_light(ambient_light(WHITE, 0.25))
     var lighting = Lighting(scene)
-    var dim = lighting.shade(Color(200, 100, 50), Vector3(0, -1, 0)).encode()
+    var dim = shaded(lighting, Color(200, 100, 50), Vector3(0, -1, 0)).encode()
     assert_equal(dim.r, UInt8(106))
 
 
 def test_lambert_falls_off_with_the_angle() raises:
     # Ninety degrees away catches nothing; the surface is edge-on.
     var lighting = Lighting(lit_from(0, 1, 0))
-    var edge = lighting.shade(Color(200, 0, 0), Vector3(1, 0, 0)).encode()
+    var edge = shaded(lighting, Color(200, 0, 0), Vector3(1, 0, 0)).encode()
     assert_equal(edge.r, UInt8(0))
 
 
@@ -216,7 +218,7 @@ def test_two_lights_add_their_light_and_not_their_bytes() raises:
     scene.add_light(directional_light(WHITE, NodeId(0), 0.5))
     var lighting = Lighting(scene)
     assert_equal(lighting.count(), 2)
-    var lit = lighting.shade(WHITE, Vector3(0, 1, 0)).encode()
+    var lit = shaded(lighting, WHITE, Vector3(0, 1, 0)).encode()
     assert_equal(lit.r, UInt8(255))
 
 
@@ -234,7 +236,7 @@ def test_a_coloured_light_tints_the_surface() raises:
     var scene = scene_with_lamp_at(0, 1, 0)
     scene.add_light(directional_light(Color(255, 0, 0), NodeId(0)))
     var lighting = Lighting(scene)
-    var lit = lighting.shade(WHITE, Vector3(0, 1, 0)).encode()
+    var lit = shaded(lighting, WHITE, Vector3(0, 1, 0)).encode()
     assert_equal(lit.r, UInt8(255))
     assert_equal(lit.g, UInt8(0))
     assert_equal(lit.b, UInt8(0))
@@ -244,7 +246,7 @@ def test_a_blue_ambient_tints_the_shadows() raises:
     var scene = Scene()
     scene.add_light(ambient_light(Color(0, 0, 255), 0.5))
     var lighting = Lighting(scene)
-    var shadow = lighting.shade(WHITE, Vector3(0, -1, 0)).encode()
+    var shadow = shaded(lighting, WHITE, Vector3(0, -1, 0)).encode()
     assert_equal(shadow.r, UInt8(0))
     assert_true(shadow.b > 180)
 
@@ -252,7 +254,7 @@ def test_a_blue_ambient_tints_the_shadows() raises:
 def test_a_fully_lit_white_face_clamps_rather_than_wrapping() raises:
     # Rounding pushes 255 to 255.5, which must clamp rather than overflow.
     var lighting = Lighting(lit_from(0, 1, 0))
-    var lit = lighting.shade(WHITE, Vector3(0, 1, 0)).encode()
+    var lit = shaded(lighting, WHITE, Vector3(0, 1, 0)).encode()
     assert_equal(lit.r, UInt8(255))
     assert_equal(lit.g, UInt8(255))
 
@@ -265,15 +267,15 @@ def test_an_overexposed_surface_clamps_once_at_the_end() raises:
     scene.add_light(directional_light(WHITE, NodeId(0)))
     scene.add_light(directional_light(WHITE, NodeId(0)))
     var lighting = Lighting(scene)
-    var over = lighting.shade(WHITE, Vector3(0, 1, 0))
+    var over = shaded(lighting, WHITE, Vector3(0, 1, 0))
     assert_almost_equal(over.r, Float32(2), atol=TOLERANCE)
     assert_equal(over.encode().r, UInt8(255))
 
 
 def test_shading_preserves_alpha() raises:
     var lighting = Lighting(lit_from(0, 1, 0))
-    var shaded = lighting.shade(
-        Color(200, 100, 50, 128), Vector3(0, 1, 0)
+    var shaded = shaded(
+        lighting, Color(200, 100, 50, 128), Vector3(0, 1, 0)
     ).encode()
     assert_equal(shaded.a, UInt8(128))
 
@@ -286,14 +288,14 @@ def test_uniform_lighting_leaves_a_colour_alone() raises:
     # passed in rather than black.
     var plain = Lighting.uniform()
     assert_equal(plain.count(), 0)
-    var arriving = plain.intensity_at(Vector3(0, 1, 0))
+    var arriving = plain.intensity_at(Vector3(0, 1, 0), ORIGIN)
     assert_almost_equal(arriving.r, Float32(1), atol=TOLERANCE)
     assert_almost_equal(arriving.b, Float32(1), atol=TOLERANCE)
     # Whichever way the surface faces: there is no direction in it.
-    var behind = plain.intensity_at(Vector3(0, -1, 0))
+    var behind = plain.intensity_at(Vector3(0, -1, 0), ORIGIN)
     assert_almost_equal(behind.g, Float32(1), atol=TOLERANCE)
     # And a surface keeps its own colour exactly.
-    var kept = plain.shade(Color(200, 100, 50), Vector3(0, 0, -1)).encode()
+    var kept = shaded(plain, Color(200, 100, 50), Vector3(0, 0, -1)).encode()
     assert_equal(kept.r, UInt8(200))
     assert_equal(kept.g, UInt8(100))
     assert_equal(kept.b, UInt8(50))
@@ -303,8 +305,158 @@ def test_lighting_can_be_built_from_an_ambient_term_alone() raises:
     var dim = Lighting(ambient=FloatColor(0.25, 0.5, 0.75, 1.0))
     assert_equal(dim.count(), 0)
     assert_almost_equal(
-        dim.intensity_at(Vector3(1, 0, 0)).g, Float32(0.5), atol=TOLERANCE
+        dim.intensity_at(Vector3(1, 0, 0), ORIGIN).g,
+        Float32(0.5),
+        atol=TOLERANCE,
     )
+
+
+# --- point lights ------------------------------------------------------------
+
+
+def bulb_at(
+    x: Float32,
+    y: Float32,
+    z: Float32,
+    intensity: Float32 = 1.0,
+    decay: Float32 = 2.0,
+    distance: Float32 = 0.0,
+) raises -> Lighting:
+    """Return lighting with one white point light at a position and nothing
+    else."""
+    var scene = scene_with_lamp_at(x, y, z)
+    scene.add_light(point_light(WHITE, NodeId(0), intensity, decay, distance))
+    return Lighting(scene)
+
+
+def test_a_point_light_falls_off_with_the_square_of_distance() raises:
+    var lighting = bulb_at(0, 2, 0)
+    assert_equal(lighting.point_count(), 1)
+    assert_equal(lighting.count(), 0)
+    # Two metres below the bulb, facing up: a quarter of it.
+    var below = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(below.r, Float32(0.25), atol=TOLERANCE)
+    # One metre away: all of it.
+    var near = lighting.intensity_at(Vector3(0, 1, 0), Vector3(0, 1, 0))
+    assert_almost_equal(near.g, Float32(1), atol=TOLERANCE)
+
+
+def test_a_point_light_shines_from_where_its_node_is() raises:
+    var lighting = bulb_at(1, 0, 0)
+    # Facing the bulb catches it; facing away catches nothing.
+    var towards = lighting.intensity_at(Vector3(1, 0, 0), ORIGIN)
+    assert_almost_equal(towards.r, Float32(1), atol=TOLERANCE)
+    var away = lighting.intensity_at(Vector3(-1, 0, 0), ORIGIN)
+    assert_almost_equal(away.r, Float32(0), atol=TOLERANCE)
+    # Edge-on, Lambert says nothing arrives.
+    var edge = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(edge.r, Float32(0), atol=TOLERANCE)
+
+
+def test_lambert_applies_to_the_direction_from_the_surface() raises:
+    # The bulb is off to one side and up: the surface faces up, so it catches
+    # the cosine of the angle between up and the way to the bulb, and the
+    # falloff is over the real distance rather than the height.
+    var lighting = bulb_at(3, 4, 0)
+    var arriving = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    # Distance five; cosine four fifths; one over twenty-five.
+    assert_almost_equal(arriving.r, Float32(0.8 / 25), atol=TOLERANCE)
+
+
+def test_a_point_lights_decay_is_adjustable() raises:
+    var gentle = bulb_at(0, 2, 0, 1.0, 1.0)
+    var arriving = gentle.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(arriving.r, Float32(0.5), atol=TOLERANCE)
+    var flat = bulb_at(0, 2, 0, 1.0, 0.0)
+    var undimmed = flat.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(undimmed.r, Float32(1), atol=TOLERANCE)
+
+
+def test_a_point_light_with_a_distance_fades_to_nothing_at_it() raises:
+    # Cut off at four metres, measured at two: the inverse square quarter is
+    # scaled by the square of one minus a half to the fourth.
+    var lighting = bulb_at(0, 2, 0, 1.0, 2.0, 4.0)
+    var halfway = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(
+        halfway.r, Float32(0.25 * 0.9375 * 0.9375), atol=TOLERANCE
+    )
+    # At the cutoff itself, and beyond it, nothing.
+    var at_edge = lighting.intensity_at(Vector3(0, 1, 0), Vector3(0, -2, 0))
+    assert_almost_equal(at_edge.r, Float32(0), atol=TOLERANCE)
+    var beyond = lighting.intensity_at(Vector3(0, 1, 0), Vector3(0, -3, 0))
+    assert_almost_equal(beyond.r, Float32(0), atol=TOLERANCE)
+
+
+def test_a_surface_touching_the_bulb_is_bright_but_finite() raises:
+    # Five centimetres away the inverse square would be four hundred; the
+    # floor holds it to a hundred. Still overexposed, still a number.
+    var lighting = bulb_at(0, 0.05, 0)
+    var arriving = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(arriving.r, Float32(100), atol=Float64(1e-3))
+
+
+def test_a_surface_exactly_on_the_bulb_gets_only_the_ambient() raises:
+    # No direction to be lit from, so the bulb is skipped rather than
+    # dividing by zero.
+    var scene = scene_with_lamp_at(1, 1, 1)
+    scene.add_light(point_light(WHITE, NodeId(0)))
+    scene.add_light(ambient_light(WHITE, 0.25))
+    var lighting = Lighting(scene)
+    var arriving = lighting.intensity_at(Vector3(0, 1, 0), Vector3(1, 1, 1))
+    assert_almost_equal(arriving.r, Float32(0.25), atol=TOLERANCE)
+
+
+def test_a_point_light_is_carried_by_its_node() raises:
+    var scene = Scene()
+    var pivot = Object3D()
+    pivot.set_position(0, 5, 0)
+    var parent = scene.add(pivot^)
+    var bulb = Object3D()
+    bulb.set_position(0, 1, 0)
+    var child = scene.attach(bulb^, parent)
+    scene.add_light(point_light(WHITE, child))
+    scene.update()
+    var lighting = Lighting(scene)
+    assert_almost_equal(lighting.positions[0].y, Float32(6), atol=TOLERANCE)
+    var arriving = lighting.intensity_at(Vector3(0, 1, 0), Vector3(0, 4, 0))
+    assert_almost_equal(arriving.r, Float32(0.25), atol=TOLERANCE)
+
+
+def test_a_point_light_carries_its_kind_and_its_falloff() raises:
+    var light = point_light(Color(255, 200, 120), NodeId(3), 0.5, 1.5, 9.0)
+    assert_equal(light.kind, POINT)
+    assert_equal(light.node, NodeId(3))
+    assert_equal(light.intensity, Float32(0.5))
+    assert_equal(light.decay, Float32(1.5))
+    assert_equal(light.distance, Float32(9))
+    # The defaults are three.js's: inverse square, no cutoff.
+    var plain = point_light(WHITE, NodeId(0))
+    assert_equal(plain.decay, Float32(2))
+    assert_equal(plain.distance, Float32(0))
+
+
+def test_a_point_light_rejects_negative_numbers() raises:
+    with assert_raises():
+        _ = point_light(WHITE, NodeId(0), -1.0)
+    with assert_raises():
+        _ = point_light(WHITE, NodeId(0), 1.0, -1.0)
+    with assert_raises():
+        _ = point_light(WHITE, NodeId(0), 1.0, 2.0, -1.0)
+
+
+def test_a_point_light_naming_a_missing_node_is_rejected() raises:
+    var scene = Scene()
+    scene.add_light(point_light(WHITE, NodeId(4)))
+    with assert_raises():
+        _ = Lighting(scene)
+
+
+def test_point_light_shades_a_colour_at_a_position() raises:
+    var lighting = bulb_at(0, 2, 0)
+    var lit = lighting.shade(WHITE, Vector3(0, 1, 0), Vector3(0, 1, 0)).encode()
+    assert_equal(lit.r, UInt8(255))
+    var dim = lighting.shade(WHITE, Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(dim.r, Float32(0.25), atol=TOLERANCE)
 
 
 def main() raises:

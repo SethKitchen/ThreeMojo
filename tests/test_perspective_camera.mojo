@@ -12,6 +12,10 @@ image — no tolerance-fudging required to see whether it is right.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
+from core.object3d import NO_PARENT, NodeId, Object3D
+from core.scene import Scene
+from math.matrix4 import Matrix4
+from math.projection import look_at
 from math.vector3 import Vector3
 from std.testing import (
     TestSuite,
@@ -218,6 +222,85 @@ def test_an_invalid_viewport_is_rejected() raises:
     var camera = square_camera()
     with assert_raises():
         _ = camera.project(Vector3(0, 0, 0), 0, 100)
+
+
+def assert_same_matrix(a: Matrix4, b: Matrix4) raises:
+    """Assert two matrices agree element by element."""
+    for index in range(16):
+        assert_almost_equal(
+            a.elements[index], b.elements[index], atol=TOLERANCE
+        )
+
+
+# --- riding a node -----------------------------------------------------------
+
+
+def test_a_placed_camera_answers_the_same_with_or_without_a_scene() raises:
+    var camera = square_camera()
+    assert_equal(camera.node, NO_PARENT)
+    assert_same_matrix(camera.view_matrix_in(Scene()), camera.view_matrix())
+
+
+def test_an_attached_camera_looks_from_its_node() raises:
+    # A node five metres up +z with no rotation looks down -z at the origin,
+    # which is exactly where `place` put the square camera.
+    var scene = Scene()
+    var eye = Object3D()
+    eye.set_position(0, 0, 5)
+    var node = scene.add(eye^)
+    scene.update()
+    var camera = square_camera()
+    camera.attach(node)
+    assert_equal(camera.node, node)
+    assert_same_matrix(
+        camera.view_matrix_in(scene),
+        look_at(Vector3(0, 0, 5), Vector3(0, 0, 0), Vector3(0, 1, 0)),
+    )
+
+
+def test_an_attached_camera_is_carried_by_its_parent() raises:
+    # The eye hangs off a pivot turned a quarter turn about y, so it ends up
+    # on +x, still facing the origin.
+    var scene = Scene()
+    var pivot = Object3D()
+    pivot.set_euler(Angle(0.0, DEGREE), Angle(90.0, DEGREE), Angle(0.0, DEGREE))
+    var rig = scene.add(pivot^)
+    var eye = Object3D()
+    eye.set_position(0, 0, 5)
+    var node = scene.attach(eye^, rig)
+    scene.update()
+    var camera = square_camera()
+    camera.attach(node)
+    assert_same_matrix(
+        camera.view_matrix_in(scene),
+        look_at(Vector3(5, 0, 0), Vector3(0, 0, 0), Vector3(0, 1, 0)),
+    )
+
+
+def test_an_attached_camera_refuses_to_answer_without_the_scene() raises:
+    var camera = square_camera()
+    camera.attach(NodeId(0))
+    with assert_raises():
+        _ = camera.view_matrix()
+    # Placing it again lets go of the node.
+    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
+    assert_equal(camera.node, NO_PARENT)
+    _ = camera.view_matrix()
+
+
+def test_an_attached_camera_needs_a_current_scene_and_a_real_node() raises:
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var camera = square_camera()
+    camera.attach(node)
+    # Stale: the node was added and nothing has been updated since.
+    with assert_raises():
+        _ = camera.view_matrix_in(scene)
+    scene.update()
+    _ = camera.view_matrix_in(scene)
+    camera.attach(NodeId(7))
+    with assert_raises():
+        _ = camera.view_matrix_in(scene)
 
 
 def main() raises:

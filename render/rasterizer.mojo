@@ -26,12 +26,13 @@ asserts pixel for pixel.
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
-from materials.material import BLEND, OPAQUE
+from materials.material import BLEND, OPAQUE, Blending
 from render.target import RenderTarget
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.lighting import Lighting
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, log2, max, min, sqrt
+from std.runtime.asyncrt import TaskGroup
 
 
 def edge(a: Vector2, b: Vector2, p: Vector2) -> Float32:
@@ -62,6 +63,11 @@ struct _Coverage(ImplicitlyCopyable):
     var cx: Int
     var cy: Int
     var area: Int
+    # One over the area, taken once per triangle. Every covered pixel
+    # multiplies three edge values by it; dividing by the area instead was
+    # three divides per pixel, and a divide is several times the cost of a
+    # multiply. The GPU kernel does the same, so the two still agree.
+    var inv_area: Float32
     var bias_ab: Int
     var bias_bc: Int
     var bias_ca: Int
@@ -89,6 +95,11 @@ struct _Coverage(ImplicitlyCopyable):
             self.cy = ty
             area = -area
         self.area = area
+        # A degenerate triangle has no area and is never scanned, so the
+        # reciprocal of zero is never read; it is kept finite anyway.
+        self.inv_area = Float32(0)
+        if area != 0:
+            self.inv_area = Float32(1) / Float32(area)
 
         # A pixel exactly on an edge has an edge value of zero. Top and left
         # edges keep it; the others need a strictly positive value, which a
@@ -112,70 +123,98 @@ struct _Fragment(ImplicitlyCopyable):
     var wc: Float32
 
 
+@fieldwise_init
+struct _Edges(ImplicitlyCopyable):
+    """The three edge functions of a prepared triangle at one sample point.
+
+    Held as a value so that a scan can *step* them rather than recompute
+    them. Each edge function is linear in the sample point, so moving one
+    pixel right or one pixel down changes it by a constant, and the constant
+    is an exact integer. Adding it is one instruction per edge per pixel
+    where evaluating from scratch was six, and because every quantity is an
+    integer the stepped value is bit-for-bit what a fresh evaluation gives;
+    the fill rule reads the same numbers either way.
+    """
+
+    var ab: Int
+    var bc: Int
+    var ca: Int
+
+    def __add__(self, other: Self) -> Self:
+        """Return these edge values moved by `other`, a step."""
+        return _Edges(
+            self.ab + other.ab, self.bc + other.bc, self.ca + other.ca
+        )
+
+
+def _edges_at(coverage: _Coverage, x: Int, y: Int) -> _Edges:
+    """Evaluate the three edge functions at pixel (x, y)'s centre."""
+    var px = sample(x)
+    var py = sample(y)
+    return _Edges(
+        edge_at(coverage.ax, coverage.ay, coverage.bx, coverage.by, px, py),
+        edge_at(coverage.bx, coverage.by, coverage.cx, coverage.cy, px, py),
+        edge_at(coverage.cx, coverage.cy, coverage.ax, coverage.ay, px, py),
+    )
+
+
+def _step_right(coverage: _Coverage) -> _Edges:
+    """Return how each edge value changes from one pixel to the next right.
+
+    `edge_at(a, b, p)` is `(bx - ax) * (py - ay) - (by - ay) * (px - ax)`, so
+    moving `px` by one pixel, which is `SUBPIXEL` grid steps, changes it by
+    `-(by - ay) * SUBPIXEL`.
+    """
+    return _Edges(
+        -(coverage.by - coverage.ay) * SUBPIXEL,
+        -(coverage.cy - coverage.by) * SUBPIXEL,
+        -(coverage.ay - coverage.cy) * SUBPIXEL,
+    )
+
+
+def _step_down(coverage: _Coverage) -> _Edges:
+    """Return how each edge value changes from one row to the next down."""
+    return _Edges(
+        (coverage.bx - coverage.ax) * SUBPIXEL,
+        (coverage.cx - coverage.bx) * SUBPIXEL,
+        (coverage.ax - coverage.cx) * SUBPIXEL,
+    )
+
+
+def _covers(coverage: _Coverage, edges: _Edges) -> Bool:
+    """Return True if a sample with these edge values is inside.
+
+    The top-left rule is in the biases: a pixel exactly on an edge has an
+    edge value of zero, and only a top or left edge keeps it.
+    """
+    return not (
+        edges.ab + coverage.bias_ab < 0
+        or edges.bc + coverage.bias_bc < 0
+        or edges.ca + coverage.bias_ca < 0
+    )
+
+
+def _weights_of(coverage: _Coverage, edges: _Edges) -> _Fragment:
+    """Return the barycentric weights for these edge values, covered or not.
+
+    Coverage is not tested here, because mip selection needs the weights at
+    the *neighbouring* pixels and those are routinely outside the triangle.
+    Barycentric coordinates extrapolate perfectly well; it is only coverage
+    that stops at the edge. The edge opposite a corner is that corner's
+    weight, and the winding swap is undone so the caller gets its own
+    corner order back.
+    """
+    var first = Float32(edges.bc) * coverage.inv_area
+    var second = Float32(edges.ca) * coverage.inv_area
+    var third = Float32(edges.ab) * coverage.inv_area
+    if coverage.swapped:
+        return _Fragment(True, first, third, second)
+    return _Fragment(True, first, second, third)
+
+
 def _weights(coverage: _Coverage, x: Int, y: Int) -> _Fragment:
-    """Return a pixel centre's barycentric weights, covered or not.
-
-    The same arithmetic as `_test` without the fill-rule rejection, because
-    mip selection needs the weights at the *neighbouring* pixels and those are
-    routinely outside the triangle. Barycentric coordinates extrapolate
-    perfectly well; it is only coverage that stops at the edge.
-    """
-    var px = sample(x)
-    var py = sample(y)
-
-    var e_ab = edge_at(
-        coverage.ax, coverage.ay, coverage.bx, coverage.by, px, py
-    )
-    var e_bc = edge_at(
-        coverage.bx, coverage.by, coverage.cx, coverage.cy, px, py
-    )
-    var e_ca = edge_at(
-        coverage.cx, coverage.cy, coverage.ax, coverage.ay, px, py
-    )
-
-    var area = Float32(coverage.area)
-    var first = Float32(e_bc) / area
-    var second = Float32(e_ca) / area
-    var third = Float32(e_ab) / area
-    if coverage.swapped:
-        return _Fragment(True, first, third, second)
-    return _Fragment(True, first, second, third)
-
-
-def _test(coverage: _Coverage, x: Int, y: Int) -> _Fragment:
-    """Test one pixel centre against a prepared triangle.
-
-    Returns the weights of the caller's original corners, undoing the winding
-    swap if there was one.
-    """
-    var px = sample(x)
-    var py = sample(y)
-
-    var e_ab = edge_at(
-        coverage.ax, coverage.ay, coverage.bx, coverage.by, px, py
-    )
-    var e_bc = edge_at(
-        coverage.bx, coverage.by, coverage.cx, coverage.cy, px, py
-    )
-    var e_ca = edge_at(
-        coverage.cx, coverage.cy, coverage.ax, coverage.ay, px, py
-    )
-
-    if (
-        e_ab + coverage.bias_ab < 0
-        or e_bc + coverage.bias_bc < 0
-        or e_ca + coverage.bias_ca < 0
-    ):
-        return _Fragment(False, Float32(0), Float32(0), Float32(0))
-
-    # The edge opposite a corner is that corner's weight.
-    var area = Float32(coverage.area)
-    var first = Float32(e_bc) / area
-    var second = Float32(e_ca) / area
-    var third = Float32(e_ab) / area
-    if coverage.swapped:
-        return _Fragment(True, first, third, second)
-    return _Fragment(True, first, second, third)
+    """Return a pixel centre's barycentric weights, covered or not."""
+    return _weights_of(coverage, _edges_at(coverage, x, y))
 
 
 @fieldwise_init
@@ -222,17 +261,39 @@ struct _Bounds(ImplicitlyCopyable):
     var bottom: Int
 
 
-def _bounds(triangle: Triangle, width: Int, height: Int) -> _Bounds:
-    """Return the triangle's bounding box, clamped to the framebuffer."""
+def _bounds(
+    triangle: Triangle,
+    width: Int,
+    height: Int,
+    first_row: Int = 0,
+    last_row: Int = -1,
+) -> _Bounds:
+    """Return the triangle's bounding box, clamped to the framebuffer.
+
+    Args:
+        triangle: The screen-space triangle.
+        width: Framebuffer width.
+        height: Framebuffer height.
+        first_row: The first row this scan may touch, for a caller that has
+            split the image into bands.
+        last_row: The last row it may touch, or -1 for the bottom of the
+            image.
+
+    Returns:
+        The rows and columns to scan, possibly empty.
+    """
     var left = min(triangle.a.x, min(triangle.b.x, triangle.c.x))
     var right = max(triangle.a.x, max(triangle.b.x, triangle.c.x))
     var top = min(triangle.a.y, min(triangle.b.y, triangle.c.y))
     var bottom = max(triangle.a.y, max(triangle.b.y, triangle.c.y))
+    var lowest = height - 1
+    if last_row >= 0:
+        lowest = min(lowest, last_row)
     return _Bounds(
         max(0, Int(floor(left))),
         min(width - 1, Int(ceil(right))),
-        max(0, Int(floor(top))),
-        min(height - 1, Int(ceil(bottom))),
+        max(first_row, Int(floor(top))),
+        min(lowest, Int(ceil(bottom))),
     )
 
 
@@ -246,12 +307,18 @@ def rasterize(triangle: Triangle, mut target: Framebuffer, color: Color) raises:
         return
 
     var box = _bounds(triangle, target.width, target.height)
+    var right = _step_right(coverage)
+    var down = _step_down(coverage)
+    var row = _edges_at(coverage, box.left, box.top)
     # A triangle entirely off-screen leaves an empty box, so these can run
     # zero times.
     for y in range(box.top, box.bottom + 1):
+        var edges = row
         for x in range(box.left, box.right + 1):
-            if _test(coverage, x, y).covered:
+            if _covers(coverage, edges):
                 target.set_pixel(x, y, color)
+            edges = edges + right
+        row = row + down
 
 
 def rasterize_depth(
@@ -290,16 +357,23 @@ def rasterize_depth(
         return
 
     var box = _bounds(flat, target.width, target.height)
+    var right = _step_right(coverage)
+    var down = _step_down(coverage)
+    var row = _edges_at(coverage, box.left, box.top)
     # A triangle entirely off-screen leaves an empty box, so these can run
     # zero times.
     for y in range(box.top, box.bottom + 1):
+        var edges = row
         for x in range(box.left, box.right + 1):
-            var fragment = _test(coverage, x, y)
-            if not fragment.covered:
-                continue
-            var z = fragment.wa * a.z + fragment.wb * b.z + fragment.wc * c.z
-            if target.test_depth(x, y, z):
-                target.set_pixel(x, y, color)
+            if _covers(coverage, edges):
+                var fragment = _weights_of(coverage, edges)
+                var z = (
+                    fragment.wa * a.z + fragment.wb * b.z + fragment.wc * c.z
+                )
+                if target.test_depth(x, y, z):
+                    target.set_pixel(x, y, color)
+            edges = edges + right
+        row = row + down
 
 
 struct RasterVertex(ImplicitlyCopyable):
@@ -344,11 +418,22 @@ struct RasterVertex(ImplicitlyCopyable):
     # rather than guessed at from this vertex's alpha. Per-triangle metadata,
     # like the texture below: the whole triangle comes from one material, so
     # all three corners carry the same answer and the first is read.
-    var blend: Int
+    var blend: Blending
     # Which texture to sample, or `NO_TEXTURE` for none. It travels with the
     # vertex because `Renderer.prepare` returns one flat list of triangles for
     # a whole scene, and the meshes in a scene need not share a material.
     var texture: TextureId
+    # Where this corner is in the world, for lights that have a position. A
+    # directional light needs only the normal; a point light needs to know
+    # how far the surface is from the bulb and in which direction, and the
+    # projection threw that away. Interpolated perspective-correctly like the
+    # normal, so a fragment knows where *it* is.
+    var world: Vector3
+    # Whether the lights reach this surface at all. three.js's
+    # `MeshBasicMaterial`: a surface that shows its own colour whatever the
+    # lights do -- a sky, a sprite, an overlay. Per-triangle metadata like
+    # the blend policy: read from the first corner, checked to agree.
+    var lit: Bool
 
     def __init__(
         out self,
@@ -360,14 +445,18 @@ struct RasterVertex(ImplicitlyCopyable):
         u: Float32 = 0,
         v: Float32 = 0,
         texture: TextureId = NO_TEXTURE,
-        blend: Int = OPAQUE,
+        blend: Blending = OPAQUE,
         normal: Vector3 = Vector3(0, 0, 1),
+        world: Vector3 = Vector3(0, 0, 0),
+        lit: Bool = True,
     ):
         """Create a corner. Texture coordinates and map default to none.
 
         The normal defaults to facing the camera, so a hand-built triangle
         that does not care about lighting is lit square-on rather than edge-on
-        or, worse, from behind.
+        or, worse, from behind. The world position defaults to the origin,
+        which only a point light would notice, and the corner defaults to
+        lit, which under `Lighting.uniform` changes nothing.
         """
         self.x = x
         self.y = y
@@ -379,16 +468,31 @@ struct RasterVertex(ImplicitlyCopyable):
         self.v = v
         self.texture = texture
         self.blend = blend
+        self.world = world
+        self.lit = lit
 
 
-# What a fragment's colour is taken from. Still an Int: the three cases differ
-# in which numbers they read, not in what the rasterizer does around them.
-# `SHADE_TEXTURE` multiplies the sampled texel by the interpolated lighting,
-# so a white texture shades exactly as `SHADE_LIT` does and an unlit white
-# mesh shows the image unchanged.
-comptime SHADE_LIT = 0
-comptime SHADE_UV = 1
-comptime SHADE_TEXTURE = 2
+@fieldwise_init
+struct ShadeMode(Equatable, ImplicitlyCopyable, Writable):
+    """What a fragment's colour is taken from, as a type rather than an int.
+
+    The three cases differ in which numbers they read, not in what the
+    rasterizer does around them. `SHADE_TEXTURE` multiplies the sampled texel
+    by the interpolated lighting, so a white texture shades exactly as
+    `SHADE_LIT` does and an unlit white mesh shows the image unchanged.
+
+    A type because an unrecognised integer here was once read in opposite
+    directions by the two backends: the CPU's last branch treated it as
+    textured and the GPU's as lit. Both then checked for it at runtime; now
+    it does not compile, and `value` is what crosses to the kernel.
+    """
+
+    var value: Int
+
+
+comptime SHADE_LIT = ShadeMode(0)
+comptime SHADE_UV = ShadeMode(1)
+comptime SHADE_TEXTURE = ShadeMode(2)
 
 
 def _coordinates_at(
@@ -409,9 +513,10 @@ def _coordinates_at(
     var share_b = weights.wb
     var share_c = weights.wc
     if inv_w != 0:
-        share_a = weights.wa * a.inv_w / inv_w
-        share_b = weights.wb * b.inv_w / inv_w
-        share_c = weights.wc * c.inv_w / inv_w
+        var rcp = Float32(1) / inv_w
+        share_a = weights.wa * a.inv_w * rcp
+        share_b = weights.wb * b.inv_w * rcp
+        share_c = weights.wc * c.inv_w * rcp
     return Vector2(
         a.u * share_a + b.u * share_b + c.u * share_c,
         a.v * share_a + b.v * share_b + c.v * share_c,
@@ -492,17 +597,15 @@ def check_triangle_state(
     Both rasterizers read a triangle's texture and blend policy from its
     *first* corner, because both come from the material and are therefore the
     same on all three. That shortcut is only safe if the three really do
-    agree and the value really is one of the two policies, and neither was
-    checked.
+    agree, and that was not checked.
 
-    `Material` validates its own `blending`, but `RasterVertex` is public and
-    takes a bare integer, and the two backends read an unknown one in
-    opposite directions: the CPU asked "is it `BLEND`?" and treated anything
-    else as opaque, while the GPU asked "is it `OPAQUE`?" and treated
-    anything else as blended. A triangle with a blend policy of 7 therefore
-    drew solid on one backend and composited on the other -- silently, and
-    only on input nobody meant to write, which is the worst kind of
-    divergence. Shared here so that both refuse the same thing.
+    The policy's *value* used to need checking too: `RasterVertex` took a
+    bare integer, and the two backends read an unknown one in opposite
+    directions -- the CPU asked "is it `BLEND`?" and treated anything else as
+    opaque, the GPU asked "is it `OPAQUE`?" and treated anything else as
+    blended. `Blending` is a type now, so a policy of 7 does not compile and
+    that half of the check is gone. Shared here so that both refuse the
+    same thing.
 
     Args:
         a: The triangle's first corner, whose state is the authoritative one.
@@ -510,15 +613,15 @@ def check_triangle_state(
         c: Its third corner.
 
     Raises:
-        Error: If the blend policy is not `OPAQUE` or `BLEND`, or the three
-            corners do not agree on it or on their texture.
+        Error: If the three corners do not agree on their blend policy, on
+            their texture, or on whether they are lit.
     """
-    if a.blend != OPAQUE and a.blend != BLEND:
-        raise Error("Unknown triangle blend policy")
     if b.blend != a.blend or c.blend != a.blend:
         raise Error("A triangle's corners disagree about blending")
     if b.texture != a.texture or c.texture != a.texture:
         raise Error("A triangle's corners disagree about their texture")
+    if b.lit != a.lit or c.lit != a.lit:
+        raise Error("A triangle's corners disagree about being lit")
 
 
 def rasterize_shaded(
@@ -526,9 +629,11 @@ def rasterize_shaded(
     b: RasterVertex,
     c: RasterVertex,
     mut target: RenderTarget,
-    mode: Int = SHADE_LIT,
+    mode: ShadeMode = SHADE_LIT,
     textures: TextureStore = TextureStore(),
     lighting: Lighting = Lighting.uniform(),
+    first_row: Int = 0,
+    last_row: Int = -1,
 ) raises:
     """Fill a triangle whose corners each carry their own colour.
 
@@ -573,24 +678,22 @@ def rasterize_shaded(
             so leaves the lighting untouched — "no texture" is a value here
             rather than a branch.
         lighting: The scene's lights, resolved to world space. Evaluated once
-            per fragment against the interpolated normal. Defaults to
-            `Lighting.uniform`, which leaves the corner colours alone — the
-            same identity the blank texture provides, and what a hand-built
-            triangle asking about coverage or depth wants.
+            per fragment against the interpolated normal and world position.
+            Defaults to `Lighting.uniform`, which leaves the corner colours
+            alone — the same identity the blank texture provides, and what a
+            hand-built triangle asking about coverage or depth wants. A
+            triangle whose corners are not `lit` skips it altogether.
+        first_row: The first row this call may write. `Renderer.render`
+            splits the image into horizontal bands and rasterizes every
+            triangle once per band on its own thread; a band owns its rows
+            outright, so no two threads ever touch one pixel.
+        last_row: The last row it may write, or -1 for the bottom.
 
     Raises:
-        Error: If the mode is not one of the three, a vertex names a texture
-            the store does not have, or a pixel write lands out of bounds —
-            the last of which the loop prevents.
+        Error: If a vertex names a texture the store does not have, the
+            corners disagree about their texture or blend policy, or a pixel
+            write lands out of bounds — the last of which the loop prevents.
     """
-    # An unknown mode is refused rather than guessed at. Without this the two
-    # rasterizers disagreed about it: the CPU's last branch treated anything
-    # unrecognised as textured and the GPU's treated it as lit, which is the
-    # worst kind of divergence -- silent, and only on input nobody meant to
-    # write. `Renderer.set_shading` checks too, but it is not the only caller.
-    if mode != SHADE_LIT and mode != SHADE_UV and mode != SHADE_TEXTURE:
-        raise Error("Unknown shading mode")
-
     check_triangle_state(a, b, c)
 
     # Whether this surface composites, decided by the material and carried
@@ -612,14 +715,22 @@ def rasterize_shaded(
     if coverage.is_degenerate():
         return
 
-    var box = _bounds(flat, target.width, target.height)
+    var box = _bounds(flat, target.width, target.height, first_row, last_row)
+    # The edge functions are evaluated once, at the box's top-left pixel,
+    # and stepped from there: one integer add per edge per pixel, exact.
+    var right = _step_right(coverage)
+    var down = _step_down(coverage)
+    var row = _edges_at(coverage, box.left, box.top)
     # A triangle entirely off-screen leaves an empty box, so these can run
     # zero times.
     for y in range(box.top, box.bottom + 1):
+        var edges = row
         for x in range(box.left, box.right + 1):
-            var fragment = _test(coverage, x, y)
-            if not fragment.covered:
+            var here = edges
+            edges = edges + right
+            if not _covers(coverage, here):
                 continue
+            var fragment = _weights_of(coverage, here)
             var wa = fragment.wa
             var wb = fragment.wb
             var wc = fragment.wc
@@ -644,9 +755,12 @@ def rasterize_shaded(
             var share_b = wb
             var share_c = wc
             if inv_w != 0:
-                share_a = wa * a.inv_w / inv_w
-                share_b = wb * b.inv_w / inv_w
-                share_c = wc * c.inv_w / inv_w
+                # One reciprocal, three multiplies: the same arithmetic the
+                # GPU kernel does, so the two still round alike.
+                var rcp = Float32(1) / inv_w
+                share_a = wa * a.inv_w * rcp
+                share_b = wb * b.inv_w * rcp
+                share_c = wc * c.inv_w * rcp
 
             var base = FloatColor(
                 a.color.r * share_a + b.color.r * share_b + c.color.r * share_c,
@@ -654,25 +768,42 @@ def rasterize_shaded(
                 a.color.b * share_a + b.color.b * share_b + c.color.b * share_c,
                 a.color.a * share_a + b.color.a * share_b + c.color.a * share_c,
             )
-            # The normal is interpolated like every other varying and made a
-            # unit vector again here. That renormalization is the whole
-            # difference between this and shading at the corners: the average
-            # of two unit vectors is shorter than either, so a normal
-            # interpolated and left alone dims the middle of every triangle.
-            var facing = Vector3(
-                a.normal.x * share_a
-                + b.normal.x * share_b
-                + c.normal.x * share_c,
-                a.normal.y * share_a
-                + b.normal.y * share_b
-                + c.normal.y * share_c,
-                a.normal.z * share_a
-                + b.normal.z * share_b
-                + c.normal.z * share_c,
-            )
-            if facing.length() != 0:
-                facing.normalize()
-            var arriving = lighting.intensity_at(facing)
+            # An unlit surface shows its own colour: neither the lights nor
+            # the normal are consulted.
+            var arriving = FloatColor(1.0, 1.0, 1.0, 1.0)
+            if a.lit:
+                # The normal is interpolated like every other varying and
+                # made a unit vector again here. That renormalization is the
+                # whole difference between this and shading at the corners:
+                # the average of two unit vectors is shorter than either, so
+                # a normal interpolated and left alone dims the middle of
+                # every triangle.
+                var facing = Vector3(
+                    a.normal.x * share_a
+                    + b.normal.x * share_b
+                    + c.normal.x * share_c,
+                    a.normal.y * share_a
+                    + b.normal.y * share_b
+                    + c.normal.y * share_c,
+                    a.normal.z * share_a
+                    + b.normal.z * share_b
+                    + c.normal.z * share_c,
+                )
+                if facing.length() != 0:
+                    facing.normalize()
+                # Where this fragment is in the world, for the point lights.
+                var spot = Vector3(
+                    a.world.x * share_a
+                    + b.world.x * share_b
+                    + c.world.x * share_c,
+                    a.world.y * share_a
+                    + b.world.y * share_b
+                    + c.world.y * share_c,
+                    a.world.z * share_a
+                    + b.world.z * share_b
+                    + c.world.z * share_c,
+                )
+                arriving = lighting.intensity_at(facing, spot)
             var shaded = FloatColor(
                 base.r * arriving.r,
                 base.g * arriving.g,
@@ -739,3 +870,142 @@ def rasterize_shaded(
                 target.blend(x, y, shaded)
             else:
                 target.write(x, y, shaded)
+        row = row + down
+
+
+async def _band(
+    corners: Pointer[RasterVertex, ImmutAnyOrigin],
+    triangles: Int,
+    target: MutPointer[RenderTarget, MutAnyOrigin],
+    mode: ShadeMode,
+    textures: Pointer[TextureStore, ImmutAnyOrigin],
+    lighting: Pointer[Lighting, ImmutAnyOrigin],
+    errors: MutPointer[String, MutAnyOrigin],
+    band: Int,
+    first_row: Int,
+    last_row: Int,
+):
+    """Rasterize every triangle into one horizontal band of the target.
+
+    One of these runs per worker, as a task on the standard library's thread
+    pool. It takes pointers rather than references because a coroutine
+    outlives the call that made it and must not borrow from it; `rasterize_all`
+    keeps everything alive until `TaskGroup.wait` returns.
+
+    A band owns its rows outright, so the threads never touch the same
+    pixel and the depth test needs no atomics -- the same argument the GPU
+    kernel makes with one thread per pixel. Draw order within a band is
+    submission order, exactly as on one thread, which is what keeps blending
+    correct: the sort `Renderer.prepare` did still holds row by row.
+
+    A task cannot raise, so an error is written into this band's slot and
+    raised by `rasterize_all` once every band has finished.
+    """
+    try:
+        for triangle in range(triangles):
+            var a = corners[unsafe_offset=triangle * 3]
+            var b = corners[unsafe_offset=triangle * 3 + 1]
+            var c = corners[unsafe_offset=triangle * 3 + 2]
+            # Most triangles miss most bands. Saying so here, from three
+            # corners, is cheaper than letting `rasterize_shaded` snap the
+            # triangle, bias its edges and clamp an empty box before finding
+            # out.
+            var top = min(a.y, min(b.y, c.y))
+            var bottom = max(a.y, max(b.y, c.y))
+            if Int(floor(top)) > last_row or Int(ceil(bottom)) < first_row:
+                continue
+            rasterize_shaded(
+                a,
+                b,
+                c,
+                target[],
+                mode,
+                textures[],
+                lighting[],
+                first_row,
+                last_row,
+            )
+    except e:
+        errors[unsafe_offset=band] = String(e)
+
+
+def rasterize_all(
+    corners: List[RasterVertex],
+    mut target: RenderTarget,
+    mode: ShadeMode = SHADE_LIT,
+    textures: TextureStore = TextureStore(),
+    lighting: Lighting = Lighting.uniform(),
+    workers: Int = 1,
+) raises:
+    """Draw every triangle in `corners` into `target`, on `workers` threads.
+
+    `rasterize_shaded` for a whole list. With one worker it is exactly the
+    loop a caller would write. With more, the image is cut into that many
+    horizontal bands, each drawn by its own task on the standard library's
+    thread pool, and every triangle is offered to every band. The result is
+    byte for byte what one thread produces -- a band owns its rows and draws
+    in the same order -- so only the wall clock changes. More bands than
+    rows collapse to one band per row.
+
+    Threads rather than SIMD, first, because a band is the same code with a
+    row range and needs no new arithmetic, and because the scene benchmark
+    showed rasterization and the sRGB resolve were the frame; `prepare`,
+    still single-threaded, is now the largest single piece.
+
+    Args:
+        corners: Raster vertices, three per triangle.
+        target: The linear render target to draw into.
+        mode: What a fragment's colour comes from; see `rasterize_shaded`.
+        textures: Where `SHADE_TEXTURE` looks the triangles' maps up.
+        lighting: The scene's lights, resolved to world space.
+        workers: How many threads to draw with, at least one.
+
+    Raises:
+        Error: If the corner count is not a multiple of three, `workers` is
+            less than one, or any triangle is refused by `rasterize_shaded`
+            -- on a worker that error is carried back and raised here.
+    """
+    if len(corners) % 3 != 0:
+        raise Error("Rasterizing needs whole triangles")
+    if workers < 1:
+        raise Error("Rasterizing needs at least one worker")
+    var triangles = len(corners) // 3
+    var bands = min(workers, target.height)
+    if bands == 1:
+        for triangle in range(triangles):
+            rasterize_shaded(
+                corners[triangle * 3],
+                corners[triangle * 3 + 1],
+                corners[triangle * 3 + 2],
+                target,
+                mode,
+                textures,
+                lighting,
+            )
+        return
+
+    # Every pointer below is to an argument or a local that outlives `wait`,
+    # which is what makes handing it to a coroutine sound.
+    var errors = List[String](length=bands, fill=String(""))
+    var group = TaskGroup()
+    # At least two bands past the early return above, so neither loop can
+    # run zero times.
+    for band in range(bands):  # pragma: no branch
+        group.create_task(
+            _band(
+                corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+                triangles,
+                Pointer(to=target).unsafe_origin_cast[MutAnyOrigin](),
+                mode,
+                Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=lighting).unsafe_origin_cast[ImmutAnyOrigin](),
+                errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                band,
+                band * target.height // bands,
+                (band + 1) * target.height // bands - 1,
+            )
+        )
+    group.wait()
+    for band in range(bands):  # pragma: no branch
+        if errors[band] != "":
+            raise Error(errors[band])

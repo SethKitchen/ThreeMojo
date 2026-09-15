@@ -11,6 +11,8 @@ depths, because "the matrix has the right numbers in it" is a weaker claim
 than "the picture has no perspective in it".
 """
 
+from cameras.camera import Camera
+from render.framebuffer import Framebuffer
 from core.object3d import NodeId
 from cameras.orthographic_camera import OrthographicCamera, centred
 from core.assets import Assets
@@ -19,7 +21,7 @@ from core.object3d import Object3D
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
 from geometries.box import cube
-from math.projection import orthographic
+from math.projection import look_at, orthographic
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color
@@ -32,6 +34,67 @@ from std.testing import (
     assert_true,
 )
 from units.si import Length, METRE
+
+
+def rendered[
+    C: Camera
+](
+    renderer: Renderer,
+    mut scene: Scene,
+    assets: Assets,
+    meshes: List[Mesh],
+    camera: C,
+) raises -> Framebuffer:
+    """Render `meshes` in `scene`, the way this suite was written to.
+
+    Meshes live in the scene now, as lights do, and the renderer takes only
+    the scene. These tests were written passing a list alongside it, and
+    several render one scene with two different lists to compare them, which
+    is exactly what assigning `scene.meshes` here preserves.
+
+    Args:
+        renderer: The renderer to draw with.
+        scene: The scene to draw; its mesh list is replaced.
+        assets: The geometry, materials and textures the meshes name.
+        meshes: What to draw.
+        camera: The camera to project through.
+
+    Returns:
+        The rendered image.
+
+    Raises:
+        Error: If the render fails.
+    """
+    scene.meshes = meshes.copy()
+    return renderer.render(scene, assets, camera)
+
+
+def rendered_new[
+    C: Camera
+](
+    renderer: Renderer,
+    var scene: Scene,
+    assets: Assets,
+    meshes: List[Mesh],
+    camera: C,
+) raises -> Framebuffer:
+    """`rendered`, for a scene built in the call itself.
+
+    Args:
+        renderer: The renderer to draw with.
+        scene: The scene to draw, consumed.
+        assets: The geometry, materials and textures the meshes name.
+        meshes: What to draw.
+        camera: The camera to project through.
+
+    Returns:
+        The rendered image.
+
+    Raises:
+        Error: If the render fails.
+    """
+    scene.meshes = meshes.copy()
+    return renderer.render(scene, assets, camera)
 
 
 def light_the(mut scene: Scene) raises:
@@ -166,6 +229,31 @@ def test_a_camera_reports_its_clipping_distances() raises:
     assert_equal(camera.far_distance(), Float32(100))
 
 
+def test_an_orthographic_camera_can_ride_a_node() raises:
+    var scene = Scene()
+    var eye = Object3D()
+    eye.set_position(0, 0, 5)
+    var node = scene.add(eye^)
+    scene.update()
+    var camera = a_camera()
+    camera.attach(node)
+    with assert_raises():
+        _ = camera.view_matrix()
+    var view = camera.view_matrix_in(scene)
+    var expected = look_at(Vector3(0, 0, 5), Vector3(0, 0, 0), Vector3(0, 1, 0))
+    for index in range(16):
+        assert_almost_equal(
+            view.elements[index], expected.elements[index], atol=TOLERANCE
+        )
+    # Placed again, it answers from the placement and needs no scene.
+    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
+    var placed = camera.view_matrix_in(Scene())
+    for index in range(16):
+        assert_almost_equal(
+            placed.elements[index], expected.elements[index], atol=TOLERANCE
+        )
+
+
 def test_an_unusable_camera_is_rejected() raises:
     with assert_raises():
         _ = centred(
@@ -217,7 +305,7 @@ def test_an_unusable_camera_is_rejected() raises:
 
 
 def drawn_pixels(
-    renderer: Renderer, scene: Scene, assets: Assets, meshes: List[Mesh]
+    renderer: Renderer, mut scene: Scene, assets: Assets, meshes: List[Mesh]
 ) raises -> Int:
     """Return how many pixels a scene covers through an orthographic camera.
 
@@ -233,7 +321,7 @@ def drawn_pixels(
     Raises:
         Error: If the render fails.
     """
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     var drawn = 0
     for y in range(HEIGHT):
         for x in range(WIDTH):
@@ -267,7 +355,7 @@ def test_a_camera_with_a_zero_near_plane_renders() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(a_scene_at(0), assets, meshes, camera)
+    var image = rendered_new(renderer, a_scene_at(0), assets, meshes, camera)
     var drawn = 0
     for y in range(HEIGHT):
         for x in range(WIDTH):
@@ -320,8 +408,8 @@ def test_distance_does_not_change_which_pixels_a_cube_covers() raises:
             box, assets.materials.add(Material(Color(255, 140, 40))), NodeId(0)
         )
     )
-    var near = renderer.render(a_scene_at(0), assets, meshes, a_camera())
-    var far = renderer.render(a_scene_at(-8), assets, meshes, a_camera())
+    var near = rendered_new(renderer, a_scene_at(0), assets, meshes, a_camera())
+    var far = rendered_new(renderer, a_scene_at(-8), assets, meshes, a_camera())
 
     var covered = 0
     for y in range(HEIGHT):
@@ -354,8 +442,8 @@ def test_moving_away_still_changes_the_depth_buffer() raises:
         )
     )
 
-    var near = renderer.render(a_scene_at(0), assets, meshes, a_camera())
-    var far = renderer.render(a_scene_at(-8), assets, meshes, a_camera())
+    var near = rendered_new(renderer, a_scene_at(0), assets, meshes, a_camera())
+    var far = rendered_new(renderer, a_scene_at(-8), assets, meshes, a_camera())
 
     var compared = 0
     for y in range(HEIGHT):

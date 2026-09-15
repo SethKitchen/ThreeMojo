@@ -29,14 +29,21 @@ nothing to approximate and nothing to borrow at a silhouette.
 The camera slides forward rather than the floor turning, because the artefact
 this is about is one of *motion*. A still frame shows a busy left half and a
 smooth right half; the animation shows the left half boiling.
+
+Each half is a `plane` laid flat and positioned, with its texture coordinates
+rescaled so one copy of the image covers one metre of floor and the two halves
+tile in step across the seam. three.js would express that as `texture.repeat`;
+here it is a pass over the `uv` attribute, which `BufferGeometry` exists to
+allow.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, POSITION, UV
+from core.buffer_geometry import BufferGeometry, UV
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
+from geometries.plane import plane
 from lights.light import ambient_light, directional_light
 from materials.material import DOUBLE_SIDE, Material
 from math.vector3 import Vector3
@@ -44,7 +51,7 @@ from objects.mesh import Mesh
 from render.apng import encode
 from render.framebuffer import Color, Framebuffer
 from render.texture import BILINEAR, REPEAT, checkerboard
-from renderers.renderer import Renderer
+from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, Length, METRE
@@ -73,56 +80,43 @@ comptime TILE_METRES = Float32(1)
 def half_floor(
     left_edge: Float32, right_edge: Float32
 ) raises -> BufferGeometry:
-    """Return a long flat quad in the xz plane, tiled with texture coordinates.
+    """Return one half of the floor, tiled with texture coordinates.
+
+    A `plane` the width of the half and the length of the floor, with its
+    `uv` rewritten so `u` counts metres from the world's x = 0 -- not from
+    the half's own left edge -- and `v` counts metres from the near end. Both
+    halves therefore tile in step and the seam between them is invisible.
 
     Args:
-        left_edge: Its near-left x coordinate.
-        right_edge: Its near-right x coordinate.
+        left_edge: The half's left edge, in world x.
+        right_edge: Its right edge.
 
     Returns:
-        The geometry, two triangles with `uv` and no normals — a flat quad has
-        one geometric normal and the renderer will work it out.
+        The geometry, in the xy plane; the caller lays it flat.
 
     Raises:
         Error: If the attributes are malformed, which they are not.
     """
-    var positions = List[Float32]()
-    var coordinates = List[Float32]()
-    # Near left, near right, far right, far left. z runs away from the camera.
-    var xs = [left_edge, right_edge, right_edge, left_edge]
-    var zs = [NEAR_Z, NEAR_Z, FAR_Z, FAR_Z]
-    # Coordinates follow the world rather than the corner index, so both
-    # halves tile in step and the seam is invisible.
-    var us = [
-        left_edge / TILE_METRES,
-        right_edge / TILE_METRES,
-        right_edge / TILE_METRES,
-        left_edge / TILE_METRES,
-    ]
-    var along = (NEAR_Z - FAR_Z) / TILE_METRES
-    var vs = [Float32(0), Float32(0), along, along]
-    for corner in range(4):
-        positions.append(xs[corner])
-        positions.append(0)
-        positions.append(zs[corner])
-        coordinates.append(us[corner])
-        coordinates.append(vs[corner])
-
-    var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(coordinates^, 2))
-    var index = List[Int]()
-    for entry in [0, 1, 2, 0, 2, 3]:
-        index.append(entry)
-    geometry.set_index(index^)
-    return geometry^
+    var width = right_edge - left_edge
+    var length = NEAR_Z - FAR_Z
+    var sheet = plane(Length(width, METRE), Length(length, METRE))
+    var tiled = List[Float32]()
+    ref uvs = sheet.attribute_view(String(UV))
+    for vertex in range(uvs.count()):
+        var u = uvs.component(vertex, 0)
+        var v = uvs.component(vertex, 1)
+        tiled.append((left_edge + u * width) / TILE_METRES)
+        tiled.append(v * length / TILE_METRES)
+    sheet.set_attribute(String(UV), BufferAttribute(tiled^, 2))
+    return sheet^
 
 
 def frame_at(
     renderer: Renderer,
     camera: PerspectiveCamera,
     assets: Assets,
-    meshes: List[Mesh],
+    mut scene: Scene,
+    halves: List[NodeId],
     travelled: Float32,
 ) raises -> Framebuffer:
     """Render one frame with the floor slid `travelled` metres towards us.
@@ -131,7 +125,8 @@ def frame_at(
         renderer: The renderer to draw with.
         camera: The camera to view through.
         assets: The geometry, materials and textures.
-        meshes: The two halves, bound to nodes 0 and 1.
+        scene: The persistent scene, edited in place.
+        halves: The two floor nodes, which move together.
         travelled: How far the floor has moved along z.
 
     Returns:
@@ -140,21 +135,11 @@ def frame_at(
     Raises:
         Error: If the scene or the render is invalid.
     """
-    var scene = Scene()
-    for _ in range(2):  # pragma: no branch
-        var node = Object3D()
-        node.set_position(0, 0, travelled)
-        _ = scene.add(node^)
-    # The lamp is a node like any other, so it could be parented to something
-    # that moves. Added last, leaving the node ids the meshes name untouched.
-    var lamp = Object3D()
-    lamp.set_position(0.4, 0.8, 0.5)
-    var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
-
+    var centre_z = (NEAR_Z + FAR_Z) / 2 + travelled
+    scene.node(halves[0]).set_position(-HALF_WIDTH / 2, 0, centre_z)
+    scene.node(halves[1]).set_position(HALF_WIDTH / 2, 0, centre_z)
     scene.update()
-    return renderer.render(scene, assets, meshes, camera)
+    return renderer.render(scene, assets, camera)
 
 
 def main() raises:
@@ -163,7 +148,7 @@ def main() raises:
     if len(args) > 1:
         destination = String(args[1])
 
-    var renderer = Renderer(WIDTH, HEIGHT)
+    var renderer = Renderer(WIDTH, HEIGHT, workers=available_workers())
     renderer.set_background(Color(18, 20, 28))
 
     var assets = Assets()
@@ -194,25 +179,33 @@ def main() raises:
 
     # `DOUBLE_SIDE`: a floor is an open surface, and which way its one triangle
     # happens to wind should not decide whether it exists.
-    var meshes = List[Mesh]()
-    meshes.append(
-        Mesh(
-            near_side,
-            assets.materials.add(
-                Material(Color(255, 255, 255), aliased, DOUBLE_SIDE)
-            ),
-            NodeId(0),
-        )
+    var plain = assets.materials.add(
+        Material(Color(255, 255, 255), aliased, DOUBLE_SIDE)
     )
-    meshes.append(
-        Mesh(
-            far_side,
-            assets.materials.add(
-                Material(Color(255, 255, 255), filtered, DOUBLE_SIDE)
-            ),
-            NodeId(1),
-        )
+    var chained = assets.materials.add(
+        Material(Color(255, 255, 255), filtered, DOUBLE_SIDE)
     )
+
+    # Each half is laid flat with a quarter turn about x, so the plane's +z
+    # becomes +y and its top edge, where v is one, becomes the far end.
+    var scene = Scene()
+    var halves = List[NodeId]()
+    for _ in range(2):
+        var half = Object3D()
+        half.set_euler(
+            Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+        )
+        halves.append(scene.add(half^))
+    scene.add_mesh(Mesh(near_side, plain, halves[0]))
+    scene.add_mesh(Mesh(far_side, chained, halves[1]))
+
+    # The lamp is a node like any other, so it could be parented to something
+    # that moves.
+    var lamp = Object3D()
+    lamp.set_position(0.4, 0.8, 0.5)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
 
     var camera = PerspectiveCamera(
         Angle(50.0, DEGREE),
@@ -233,7 +226,8 @@ def main() raises:
                 renderer,
                 camera,
                 assets,
-                meshes,
+                scene,
+                halves,
                 TILE_METRES * Float32(index) / Float32(FRAMES),
             )
         )

@@ -174,8 +174,7 @@ def look_at(eye: Vector3, target: Vector3, up: Vector3) raises -> Matrix4:
             view direction, either of which leaves the basis undefined.
     """
     # z points back towards the camera, because the camera looks down -z.
-    var forward = eye
-    forward.sub(target)
+    var forward = eye - target
     if forward.length() == 0:
         raise Error("The camera cannot sit at its own target")
     forward.normalize()

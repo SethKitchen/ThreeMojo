@@ -5,6 +5,8 @@
 
 """Tests for `objects.mesh` and `renderers.renderer`."""
 
+from cameras.camera import Camera
+from render.rasterizer import RasterVertex
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from cameras.perspective_camera import PerspectiveCamera
@@ -21,6 +23,8 @@ from materials.material import (
     FRONT_SIDE,
     Material,
 )
+from lights.light import point_light
+from materials.material import BASIC
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
 from lights.lighting import Lighting
@@ -32,7 +36,7 @@ from render.framebuffer import Color, Framebuffer
 from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV
 from render.texture import checkerboard
 from render.texture_store import NO_TEXTURE, TextureId
-from renderers.renderer import Renderer, face_normal
+from renderers.renderer import Renderer, available_workers, face_normal
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -42,6 +46,95 @@ from std.testing import (
     assert_true,
 )
 from units.si import Angle, DEGREE, Length, METRE
+
+
+def rendered[
+    C: Camera
+](
+    renderer: Renderer,
+    mut scene: Scene,
+    assets: Assets,
+    meshes: List[Mesh],
+    camera: C,
+) raises -> Framebuffer:
+    """Render `meshes` in `scene`, the way this suite was written to.
+
+    Meshes live in the scene now, as lights do, and the renderer takes only
+    the scene. These tests were written passing a list alongside it, and
+    several render one scene with two different lists to compare them, which
+    is exactly what assigning `scene.meshes` here preserves.
+
+    Args:
+        renderer: The renderer to draw with.
+        scene: The scene to draw; its mesh list is replaced.
+        assets: The geometry, materials and textures the meshes name.
+        meshes: What to draw.
+        camera: The camera to project through.
+
+    Returns:
+        The rendered image.
+
+    Raises:
+        Error: If the render fails.
+    """
+    scene.meshes = meshes.copy()
+    return renderer.render(scene, assets, camera)
+
+
+def rendered_new[
+    C: Camera
+](
+    renderer: Renderer,
+    var scene: Scene,
+    assets: Assets,
+    meshes: List[Mesh],
+    camera: C,
+) raises -> Framebuffer:
+    """`rendered`, for a scene built in the call itself.
+
+    Args:
+        renderer: The renderer to draw with.
+        scene: The scene to draw, consumed.
+        assets: The geometry, materials and textures the meshes name.
+        meshes: What to draw.
+        camera: The camera to project through.
+
+    Returns:
+        The rendered image.
+
+    Raises:
+        Error: If the render fails.
+    """
+    scene.meshes = meshes.copy()
+    return renderer.render(scene, assets, camera)
+
+
+def prepared[
+    C: Camera
+](
+    renderer: Renderer,
+    mut scene: Scene,
+    assets: Assets,
+    meshes: List[Mesh],
+    camera: C,
+) raises -> List[RasterVertex]:
+    """`Renderer.prepare` with a mesh list, as `rendered` is for `render`.
+
+    Args:
+        renderer: The renderer to prepare with.
+        scene: The scene to draw; its mesh list is replaced.
+        assets: The geometry, materials and textures the meshes name.
+        meshes: What to draw.
+        camera: The camera to project through.
+
+    Returns:
+        Raster vertices, three per triangle.
+
+    Raises:
+        Error: If preparation fails.
+    """
+    scene.meshes = meshes.copy()
+    return renderer.prepare(scene, assets, camera)
 
 
 def light_from(
@@ -243,7 +336,9 @@ def test_a_mesh_naming_a_material_that_is_not_there_is_rejected() raises:
     var meshes = List[Mesh]()
     meshes.append(Mesh(box, MaterialId(7), NodeId(0)))
     with assert_raises():
-        _ = renderer.render(scene_with_node_at(0), assets, meshes, a_camera())
+        _ = rendered_new(
+            renderer, scene_with_node_at(0), assets, meshes, a_camera()
+        )
 
 
 def test_a_mesh_naming_a_geometry_that_is_not_there_is_rejected() raises:
@@ -258,7 +353,9 @@ def test_a_mesh_naming_a_geometry_that_is_not_there_is_rejected() raises:
         )
     )
     with assert_raises():
-        _ = renderer.render(scene_with_node_at(0), assets, meshes, a_camera())
+        _ = rendered_new(
+            renderer, scene_with_node_at(0), assets, meshes, a_camera()
+        )
 
 
 def test_two_meshes_can_share_one_geometry() raises:
@@ -290,7 +387,7 @@ def test_two_meshes_can_share_one_geometry() raises:
     # Still one geometry after two meshes named it.
     assert_equal(assets.geometries.count(), 1)
 
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     # Both boxes drew, on their own sides, in their own colours.
     var reds = 0
     var blues = 0
@@ -327,7 +424,9 @@ def test_a_renderer_needs_a_positive_size() raises:
 def test_an_empty_scene_renders_pure_background() raises:
     var assets = Assets()
     var renderer = Renderer(WIDTH, HEIGHT)
-    var image = renderer.render(Scene(), assets, List[Mesh](), a_camera())
+    var image = rendered_new(
+        renderer, Scene(), assets, List[Mesh](), a_camera()
+    )
     assert_equal(image.width, WIDTH)
     assert_equal(image.height, HEIGHT)
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
@@ -345,7 +444,7 @@ def test_a_mesh_actually_covers_some_pixels() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     assert_true(count_background(image, renderer.background) < WIDTH * HEIGHT)
 
 
@@ -353,7 +452,9 @@ def test_the_background_colour_is_used() raises:
     var assets = Assets()
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_background(Color(7, 8, 9))
-    var image = renderer.render(Scene(), assets, List[Mesh](), a_camera())
+    var image = rendered_new(
+        renderer, Scene(), assets, List[Mesh](), a_camera()
+    )
     assert_equal(image.get_pixel(0, 0).r, UInt8(7))
     assert_equal(image.get_pixel(0, 0).b, UInt8(9))
 
@@ -404,8 +505,8 @@ def test_a_nearer_mesh_hides_a_further_one_whatever_the_order() raises:
         )
     )
 
-    var a = renderer.render(scene, assets, near_first, a_camera())
-    var b = renderer.render(scene, assets, far_first, a_camera())
+    var a = rendered(renderer, scene, assets, near_first, a_camera())
+    var b = rendered(renderer, scene, assets, far_first, a_camera())
     # The centre pixel belongs to the near cube either way, and both images
     # must agree everywhere.
     var centre = a.get_pixel(WIDTH // 2, HEIGHT // 2)
@@ -433,7 +534,7 @@ def test_the_scene_transform_is_what_places_a_mesh() raises:
         )
     )
     # Moved well off to the side, it leaves the frame entirely.
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
 
@@ -453,7 +554,7 @@ def test_a_mesh_with_no_vertices_draws_nothing() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
 
@@ -469,7 +570,7 @@ def test_a_mesh_naming_a_node_that_is_not_there_is_rejected() raises:
         )
     )
     with assert_raises():
-        _ = renderer.render(Scene(), assets, meshes, a_camera())
+        _ = rendered_new(renderer, Scene(), assets, meshes, a_camera())
 
 
 def test_a_geometry_without_normals_shades_flat() raises:
@@ -491,7 +592,7 @@ def test_a_geometry_without_normals_shades_flat() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     assert_true(count_background(image, renderer.background) < WIDTH * HEIGHT)
 
 
@@ -509,7 +610,7 @@ def test_a_sphere_shades_smoothly_across_a_triangle() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     var shades = 0
     var seen = List[UInt8]()
     for y in range(HEIGHT):
@@ -547,7 +648,7 @@ def test_geometry_crossing_the_near_plane_is_clipped_not_mangled() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     # Every pixel belongs to the cube's inside surface, and every one of them
     # is a real shade rather than a projection artefact.
     assert_true(count_background(image, renderer.background) < 100)
@@ -577,7 +678,7 @@ def test_geometry_beyond_the_far_plane_is_not_drawn() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(scene, assets, meshes, camera)
+    var image = rendered(renderer, scene, assets, meshes, camera)
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
 
@@ -603,7 +704,7 @@ def test_geometry_inside_the_far_plane_is_still_drawn() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(scene, assets, meshes, camera)
+    var image = rendered(renderer, scene, assets, meshes, camera)
     assert_true(count_background(image, renderer.background) < WIDTH * HEIGHT)
 
 
@@ -656,7 +757,7 @@ def test_a_non_uniform_scale_still_shades_the_true_surface() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
 
     # What the scaled triangle's own geometry says its colour must be.
     var world = scene.world_matrix(NodeId(0))
@@ -669,6 +770,7 @@ def test_a_non_uniform_scale_still_shades_the_true_surface() raises:
                 world.transform_point(b),
                 world.transform_point(c),
             ),
+            Vector3(0, 0, 0),
         )
         .encode()
     )
@@ -705,8 +807,8 @@ def test_a_smooth_geometry_with_no_vertices_draws_nothing() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(
-        scene_with_node_at(0), assets, meshes, a_camera()
+    var image = rendered_new(
+        renderer, scene_with_node_at(0), assets, meshes, a_camera()
     )
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
@@ -728,8 +830,8 @@ def test_a_front_side_material_hides_the_inside_of_a_cube() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(
-        scene_with_node_at(0), assets, meshes, a_camera()
+    var image = rendered_new(
+        renderer, scene_with_node_at(0), assets, meshes, a_camera()
     )
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
@@ -747,7 +849,7 @@ def test_culling_does_not_change_a_solid_seen_from_outside() raises:
     )
     var scene = scene_with_node_at(0)
 
-    var culled = renderer.render(scene, assets, meshes, a_camera())
+    var culled = rendered(renderer, scene, assets, meshes, a_camera())
     var both = List[Mesh]()
     both.append(
         Mesh(
@@ -758,7 +860,7 @@ def test_culling_does_not_change_a_solid_seen_from_outside() raises:
             NodeId(0),
         )
     )
-    var complete = renderer.render(scene, assets, both, a_camera())
+    var complete = rendered(renderer, scene, assets, both, a_camera())
 
     var drawn = 0
     for y in range(HEIGHT):
@@ -787,7 +889,7 @@ def test_culling_halves_the_triangles_of_a_closed_mesh() raises:
     )
     var scene = scene_with_node_at(0)
 
-    var kept = renderer.prepare(scene, assets, meshes, a_camera())
+    var kept = prepared(renderer, scene, assets, meshes, a_camera())
     var both = List[Mesh]()
     both.append(
         Mesh(
@@ -798,7 +900,7 @@ def test_culling_halves_the_triangles_of_a_closed_mesh() raises:
             NodeId(0),
         )
     )
-    var everything = renderer.prepare(scene, assets, both, a_camera())
+    var everything = prepared(renderer, scene, assets, both, a_camera())
 
     assert_true(len(kept) > 0)
     assert_true(len(kept) < len(everything))
@@ -819,9 +921,9 @@ def test_uv_mode_draws_texture_coordinates_instead_of_lighting() raises:
         Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), NodeId(0))
     )
 
-    var lit = renderer.render(scene, assets, meshes, a_camera())
+    var lit = rendered(renderer, scene, assets, meshes, a_camera())
     renderer.set_shading(SHADE_UV)
-    var mapped = renderer.render(scene, assets, meshes, a_camera())
+    var mapped = rendered(renderer, scene, assets, meshes, a_camera())
 
     # A box face runs uv from (0,0) to (1,1), so the mapped image has both a
     # red and a green gradient where the lit one has neither.
@@ -837,14 +939,6 @@ def test_uv_mode_draws_texture_coordinates_instead_of_lighting() raises:
                 any_green = True
     assert_true(differing > 0, "the shading mode changed nothing")
     assert_true(any_green, "no texture coordinate reached the image")
-
-
-def test_an_unknown_shading_mode_is_rejected() raises:
-    var renderer = Renderer(WIDTH, HEIGHT)
-    with assert_raises():
-        renderer.set_shading(97)
-    # And the mode is unchanged by the attempt.
-    assert_equal(renderer.shading, SHADE_TEXTURE)
 
 
 def test_every_known_shading_mode_is_accepted() raises:
@@ -875,8 +969,8 @@ def test_a_mapped_geometry_with_no_vertices_draws_nothing() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(
-        scene_with_node_at(0), assets, meshes, a_camera()
+    var image = rendered_new(
+        renderer, scene_with_node_at(0), assets, meshes, a_camera()
     )
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
 
@@ -909,8 +1003,8 @@ def test_a_geometry_without_uv_maps_to_the_texture_origin() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(
-        scene_with_node_at(0), assets, meshes, a_camera()
+    var image = rendered_new(
+        renderer, scene_with_node_at(0), assets, meshes, a_camera()
     )
     var drawn = 0
     for y in range(HEIGHT):
@@ -979,7 +1073,7 @@ def scaled_scene(x: Float32, y: Float32, z: Float32) raises -> Scene:
 
 
 def rendered_triangle(
-    renderer: Renderer, scene: Scene, with_normals: Bool
+    renderer: Renderer, mut scene: Scene, with_normals: Bool
 ) raises -> Framebuffer:
     """Render the lone triangle through `scene`'s only node.
 
@@ -1003,7 +1097,26 @@ def rendered_triangle(
             NodeId(0),
         )
     )
-    return renderer.render(scene, assets, meshes, a_camera())
+    return rendered(renderer, scene, assets, meshes, a_camera())
+
+
+def rendered_triangle_in(
+    renderer: Renderer, var scene: Scene, with_normals: Bool
+) raises -> Framebuffer:
+    """`rendered_triangle` for a scene built in the call itself.
+
+    Args:
+        renderer: The renderer to draw with.
+        scene: The scene to draw, consumed.
+        with_normals: Whether the geometry supplies normals.
+
+    Returns:
+        The rendered image.
+
+    Raises:
+        Error: If the render fails.
+    """
+    return rendered_triangle(renderer, scene, with_normals)
 
 
 def test_a_mirrored_mesh_is_not_culled_away() raises:
@@ -1011,8 +1124,8 @@ def test_a_mirrored_mesh_is_not_culled_away() raises:
     # face and culling removed it entirely. The first version of this drew
     # nothing at all.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var plain = rendered_triangle(renderer, scaled_scene(1, 1, 1), False)
-    var mirrored = rendered_triangle(renderer, scaled_scene(-1, 1, 1), False)
+    var plain = rendered_triangle_in(renderer, scaled_scene(1, 1, 1), False)
+    var mirrored = rendered_triangle_in(renderer, scaled_scene(-1, 1, 1), False)
     var drawn = WIDTH * HEIGHT - count_background(plain, renderer.background)
     var reflected = WIDTH * HEIGHT - count_background(
         mirrored, renderer.background
@@ -1043,7 +1156,7 @@ def test_a_reflection_inherited_from_a_parent_counts_too() raises:
             NodeId(1),
         )
     )
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     assert_true(
         count_background(image, renderer.background) < WIDTH * HEIGHT,
         "an inherited reflection culled the mesh away",
@@ -1055,8 +1168,8 @@ def test_two_reflections_cancel() raises:
     # implementation that looked at any negative scale factor rather than the
     # determinant would get this backwards.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var plain = rendered_triangle(renderer, scaled_scene(1, 1, 1), False)
-    var twice = rendered_triangle(renderer, scaled_scene(-1, -1, 1), False)
+    var plain = rendered_triangle_in(renderer, scaled_scene(1, 1, 1), False)
+    var twice = rendered_triangle_in(renderer, scaled_scene(-1, -1, 1), False)
     var drawn = WIDTH * HEIGHT - count_background(plain, renderer.background)
     var both = WIDTH * HEIGHT - count_background(twice, renderer.background)
     assert_true(drawn > 0)
@@ -1112,9 +1225,9 @@ def test_a_material_without_a_map_shades_as_plain_colour() raises:
     var meshes = List[Mesh]()
     meshes.append(Mesh(box, paint, NodeId(0)))
 
-    var followed = renderer.render(scene, assets, meshes, a_camera())
+    var followed = rendered(renderer, scene, assets, meshes, a_camera())
     renderer.set_shading(SHADE_LIT)
-    var ignored = renderer.render(scene, assets, meshes, a_camera())
+    var ignored = rendered(renderer, scene, assets, meshes, a_camera())
     for y in range(HEIGHT):
         for x in range(WIDTH):
             assert_equal(followed.get_pixel(x, y).r, ignored.get_pixel(x, y).r)
@@ -1145,8 +1258,8 @@ def test_a_map_changes_what_a_mesh_looks_like() raises:
         )
     )
 
-    var plain = renderer.render(scene, assets, plain_meshes, a_camera())
-    var patterned = renderer.render(scene, assets, mapped_meshes, a_camera())
+    var plain = rendered(renderer, scene, assets, plain_meshes, a_camera())
+    var patterned = rendered(renderer, scene, assets, mapped_meshes, a_camera())
 
     var differing = 0
     var dark = 0
@@ -1207,7 +1320,7 @@ def test_two_meshes_can_carry_different_textures() raises:
     assert_equal(assets.materials.count(), 2)
     assert_equal(assets.textures.count(), 2)
 
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     var reddish = 0
     var bluish = 0
     for y in range(HEIGHT):
@@ -1248,8 +1361,8 @@ def test_lit_shading_ignores_every_map() raises:
         )
     )
 
-    var without = renderer.render(scene, assets, plain, a_camera())
-    var with_map = renderer.render(scene, assets, mapped, a_camera())
+    var without = rendered(renderer, scene, assets, plain, a_camera())
+    var with_map = rendered(renderer, scene, assets, mapped, a_camera())
     for y in range(HEIGHT):
         for x in range(WIDTH):
             assert_equal(without.get_pixel(x, y).r, with_map.get_pixel(x, y).r)
@@ -1289,8 +1402,8 @@ def test_a_back_side_material_draws_what_front_side_hides() raises:
         )
     )
 
-    var outside = renderer.render(scene, assets, front, a_camera())
-    var inside = renderer.render(scene, assets, back, a_camera())
+    var outside = rendered(renderer, scene, assets, front, a_camera())
+    var inside = rendered(renderer, scene, assets, back, a_camera())
     var drawn_front = WIDTH * HEIGHT - count_background(
         outside, renderer.background
     )
@@ -1324,8 +1437,8 @@ def test_a_back_side_material_shows_the_inside_of_a_cube() raises:
             NodeId(0),
         )
     )
-    var image = renderer.render(
-        scene_with_node_at(0), assets, meshes, a_camera()
+    var image = rendered_new(
+        renderer, scene_with_node_at(0), assets, meshes, a_camera()
     )
     assert_true(count_background(image, renderer.background) < 100)
 
@@ -1355,7 +1468,7 @@ def test_a_back_side_surface_is_lit_from_the_side_you_can_see() raises:
         Length(100.0, METRE),
     )
     behind.place(Vector3(0, 0, -4), Vector3(0, 0, 0))
-    var image = renderer.render(scene, assets, meshes, behind)
+    var image = rendered(renderer, scene, assets, meshes, behind)
 
     var drawn = 0
     var brightest = UInt8(0)
@@ -1394,7 +1507,7 @@ def test_a_back_side_surface_lit_from_behind_stays_dark() raises:
         Length(100.0, METRE),
     )
     behind.place(Vector3(0, 0, -4), Vector3(0, 0, 0))
-    var image = renderer.render(scene, assets, meshes, behind)
+    var image = rendered(renderer, scene, assets, meshes, behind)
 
     var drawn = 0
     for y in range(HEIGHT):
@@ -1427,7 +1540,7 @@ def test_a_double_side_surface_lights_each_half_on_its_own_side() raises:
     _ = scene.add(Object3D())
     light_from(scene, 0, 0, 1, 0.0)
     scene.update()
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     # The far wall's visible side faces the light square-on, so with no
     # ambient it is fully lit. Using the authored outward normal instead
     # would light the side facing away and leave it black.
@@ -1451,7 +1564,9 @@ def test_a_material_naming_a_texture_that_is_not_there_is_rejected() raises:
     var meshes = List[Mesh]()
     meshes.append(Mesh(box, paint, NodeId(0)))
     with assert_raises():
-        _ = renderer.render(scene_with_node_at(0), assets, meshes, a_camera())
+        _ = rendered_new(
+            renderer, scene_with_node_at(0), assets, meshes, a_camera()
+        )
 
 
 # --- transparency -----------------------------------------------------------
@@ -1479,7 +1594,7 @@ def test_a_translucent_mesh_lets_the_one_behind_it_show() raises:
     var meshes = List[Mesh]()
     meshes.append(Mesh(box, solid, back_node))
     meshes.append(Mesh(box, glass, front_node))
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
 
     var centre = image.get_pixel(WIDTH // 2, HEIGHT // 2)
     # Both the red pane and the green box behind it are in the result.
@@ -1509,7 +1624,7 @@ def test_an_opaque_mesh_hides_what_is_behind_it() raises:
     var meshes = List[Mesh]()
     meshes.append(Mesh(box, solid, back_node))
     meshes.append(Mesh(box, front_solid, front_node))
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     assert_equal(image.get_pixel(WIDTH // 2, HEIGHT // 2).g, UInt8(0))
 
 
@@ -1539,7 +1654,7 @@ def test_translucent_meshes_are_drawn_after_opaque_ones() raises:
     var meshes = List[Mesh]()
     meshes.append(Mesh(box, glass, front_node))
     meshes.append(Mesh(box, solid, back_node))
-    var image = renderer.render(scene, assets, meshes, a_camera())
+    var image = rendered(renderer, scene, assets, meshes, a_camera())
     var centre = image.get_pixel(WIDTH // 2, HEIGHT // 2)
     assert_true(centre.r > 0, "the translucent pane was painted over")
     assert_true(centre.g > 0, "the solid box did not draw")
@@ -1576,8 +1691,8 @@ def test_translucent_meshes_are_sorted_back_to_front() raises:
     far_first.append(Mesh(box, blue, far_node))
     far_first.append(Mesh(box, red, near_node))
 
-    var one = renderer.render(scene, assets, near_first, a_camera())
-    var two = renderer.render(scene, assets, far_first, a_camera())
+    var one = rendered(renderer, scene, assets, near_first, a_camera())
+    var two = rendered(renderer, scene, assets, far_first, a_camera())
     # Sorting makes submission order irrelevant.
     for y in range(HEIGHT):
         for x in range(WIDTH):
@@ -1634,8 +1749,8 @@ def test_a_translucent_base_colour_sorts_and_rasterizes_the_same_way() raises:
     blue_first.append(Mesh(box, blue, back_node))
     blue_first.append(Mesh(box, red, front_node))
 
-    var one = renderer.render(scene, assets, red_first, a_camera())
-    var two = renderer.render(scene, assets, blue_first, a_camera())
+    var one = rendered(renderer, scene, assets, red_first, a_camera())
+    var two = rendered(renderer, scene, assets, blue_first, a_camera())
     for y in range(HEIGHT):
         for x in range(WIDTH):
             assert_equal(one.get_pixel(x, y).r, two.get_pixel(x, y).r)
@@ -1658,9 +1773,242 @@ def test_blending_can_be_named_against_what_the_colour_suggests() raises:
     assert_false(clear_looking.is_transparent())
 
 
-def test_an_unknown_blending_policy_is_rejected() raises:
+# --- workers ----------------------------------------------------------------
+
+
+def test_opaque_meshes_are_drawn_nearest_first() raises:
+    # The image does not depend on it; the work does. A hidden fragment that
+    # fails the depth test is skipped before it is shaded, so the near mesh
+    # goes first and the far one's covered pixels are never lit.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var paint = assets.materials.add(Material(Color(200, 200, 200)))
+    var scene = Scene()
+    var far = Object3D()
+    far.set_position(0, 0, -1.5)
+    var far_node = scene.add(far^)
+    var near = Object3D()
+    near.set_position(0, 0, 1.5)
+    var near_node = scene.add(near^)
+    light_the(scene)
+    scene.update()
+    # Far first, so an unsorted renderer would prepare it first.
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, paint, far_node))
+    meshes.append(Mesh(box, paint, near_node))
+    var corners = prepared(renderer, scene, assets, meshes, a_camera())
+    assert_true(len(corners) >= 6)
+    # NDC depth grows with distance, so the first triangle prepared must be
+    # nearer than the last.
+    assert_true(corners[0].z < corners[len(corners) - 1].z)
+
+
+def test_a_geometry_whose_index_points_past_its_vertices_is_refused() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var geometry = BufferGeometry()
+    var positions = List[Float32]()
+    for value in [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0]:
+        positions.append(Float32(value))
+    geometry.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
+    var index = List[Int]()
+    for entry in [0, 1, 7]:
+        index.append(entry)
+    geometry.set_index(index^)
+    var scene = scene_with_node_at(0)
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(geometry^),
+            assets.materials.add(Material(Color(255, 0, 0))),
+            NodeId(0),
+        )
+    )
     with assert_raises():
-        _ = Material(Color(1, 2, 3), NO_TEXTURE, FRONT_SIDE, 1.0, 7)
+        _ = renderer.render(scene, assets, a_camera())
+
+
+def test_available_workers_is_at_least_one() raises:
+    # One per logical core, and every machine has a core.
+    assert_true(available_workers() >= 1)
+    _ = Renderer(WIDTH, HEIGHT, workers=available_workers())
+
+
+def test_workers_must_be_at_least_one() raises:
+    with assert_raises():
+        _ = Renderer(WIDTH, HEIGHT, workers=0)
+    var renderer = Renderer(WIDTH, HEIGHT)
+    with assert_raises():
+        renderer.set_workers(-3)
+    renderer.set_workers(4)
+    assert_equal(renderer.workers, 4)
+
+
+def test_several_workers_draw_the_same_image_as_one() raises:
+    # Bands own their rows and draw in submission order, so the image must be
+    # byte for byte the same however many threads share it. Textured,
+    # translucent and opaque surfaces together, so blending and sampling
+    # both cross band boundaries.
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var solid = assets.materials.add(Material(Color(255, 255, 255)))
+    var glass = assets.materials.add(
+        Material(Color(255, 80, 80), NO_TEXTURE, DOUBLE_SIDE, 0.5)
+    )
+    var scene = Scene()
+    var back = Object3D()
+    back.set_position(0, 0, -0.8)
+    var back_node = scene.add(back^)
+    var front = Object3D()
+    front.set_position(0.3, 0.2, 0.8)
+    var front_node = scene.add(front^)
+    light_the(scene)
+    scene.update()
+    scene.add_mesh(Mesh(box, solid, back_node))
+    scene.add_mesh(Mesh(box, glass, front_node))
+
+    var alone = Renderer(WIDTH, HEIGHT)
+    var crowd = Renderer(WIDTH, HEIGHT, workers=3)
+    var one = alone.render(scene, assets, a_camera())
+    var many = crowd.render(scene, assets, a_camera())
+    assert_true(count_background(one, alone.background) < WIDTH * HEIGHT)
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var here = one.get_pixel(x, y)
+            var there = many.get_pixel(x, y)
+            var spot = "pixel " + String(x) + "," + String(y)
+            assert_equal(here.r, there.r, spot)
+            assert_equal(here.g, there.g, spot)
+            assert_equal(here.b, there.b, spot)
+            assert_equal(here.a, there.a, spot)
+            assert_equal(one.depth_at(x, y), many.depth_at(x, y), spot)
+
+
+def test_more_workers_than_rows_still_renders() raises:
+    var assets = Assets()
+    var renderer = Renderer(WIDTH, 3, workers=64)
+    var scene = scene_with_node_at(0)
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.materials.add(Material(Color(255, 0, 0))),
+            NodeId(0),
+        )
+    )
+    var image = renderer.render(scene, assets, a_camera())
+    assert_true(count_background(image, renderer.background) < WIDTH * 3)
+
+
+def test_an_empty_scene_renders_with_several_workers() raises:
+    var assets = Assets()
+    var renderer = Renderer(WIDTH, HEIGHT, workers=3)
+    var image = renderer.render(Scene(), assets, a_camera())
+    assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
+
+
+# --- cameras on nodes, point lights, unlit materials -------------------------
+
+
+def eye_camera() raises -> PerspectiveCamera:
+    """Return a camera three metres up +z, looking at the origin."""
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METRE),
+        Length(100.0, METRE),
+    )
+    camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
+    return camera^
+
+
+def test_a_camera_riding_a_node_renders_the_same_image() raises:
+    # A node three metres up +z with no rotation is exactly the placement
+    # `eye_camera` describes, so the two views are the same matrix and the
+    # two images the same pixels.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var paint = assets.materials.add(Material(Color(255, 140, 40)))
+    var scene = Scene()
+    var block = Object3D()
+    block.set_euler(
+        Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var node = scene.add(block^)
+    light_the(scene)
+    var eye = Object3D()
+    eye.set_position(0, 0, 3)
+    var rig = scene.add(eye^)
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, paint, node))
+
+    var placed = eye_camera()
+    var riding = eye_camera()
+    riding.attach(rig)
+    var expected = rendered(renderer, scene, assets, meshes, placed)
+    var got = rendered(renderer, scene, assets, meshes, riding)
+    var drawn = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var want = expected.get_pixel(x, y)
+            var have = got.get_pixel(x, y)
+            assert_equal(have.r, want.r)
+            assert_equal(have.g, want.g)
+            assert_equal(have.b, want.b)
+            if want.r != renderer.background.r:
+                drawn += 1
+    assert_true(drawn > 0, "the cube was not drawn")
+
+
+def test_a_point_light_lights_the_part_of_a_face_nearest_it() raises:
+    # A cube seen square-on, one bulb just in front of the right half of its
+    # near face, and nothing else. The right half is nearer the bulb and
+    # turned towards it; the left half is further. So the right is brighter,
+    # which is only possible if each fragment knows where it is in the world.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var white = assets.materials.add(Material(Color(255, 255, 255)))
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var bulb = Object3D()
+    bulb.set_position(0.4, 0, 1.5)
+    var lamp = scene.add(bulb^)
+    scene.add_light(point_light(Color(255, 255, 255), lamp, 0.25))
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, white, node))
+    var image = rendered(renderer, scene, assets, meshes, eye_camera())
+    var left = image.get_pixel(WIDTH // 2 - 3, HEIGHT // 2).r
+    var right = image.get_pixel(WIDTH // 2 + 2, HEIGHT // 2).r
+    assert_true(left > renderer.background.r, "the face was not lit at all")
+    assert_true(right > left, "the side nearer the bulb is not brighter")
+
+
+def test_a_basic_material_ignores_the_lights() raises:
+    # No lights at all: a Lambert surface renders black, a basic one renders
+    # its own colour, and that is the whole difference between the two.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var lambert = assets.materials.add(Material(Color(200, 100, 50)))
+    var basic = assets.materials.add(Material(Color(200, 100, 50), kind=BASIC))
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    var lit = List[Mesh]()
+    lit.append(Mesh(box, lambert, node))
+    var unlit = List[Mesh]()
+    unlit.append(Mesh(box, basic, node))
+    var dark = rendered(renderer, scene, assets, lit, eye_camera())
+    var plain = rendered(renderer, scene, assets, unlit, eye_camera())
+    var centre_dark = dark.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(centre_dark.r, UInt8(0))
+    var centre_plain = plain.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(centre_plain.r, UInt8(200))
+    assert_equal(centre_plain.g, UInt8(100))
+    assert_equal(centre_plain.b, UInt8(50))
 
 
 def main() raises:

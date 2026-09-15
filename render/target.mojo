@@ -39,7 +39,39 @@ unassociated alpha.
 """
 
 from render.framebuffer import Color, FloatColor, Framebuffer
-from std.math import inf
+from std.math import inf, min
+from std.runtime.asyncrt import TaskGroup
+
+
+def _encode_run(
+    colors: Pointer[FloatColor, ImmutAnyOrigin],
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """Encode the pixels in `[first, past)` from linear light to bytes.
+
+    The body of `RenderTarget.resolve`, shared by the single-threaded path
+    and each band of the parallel one so the two cannot differ.
+    """
+    # A run is never empty: `resolve` never makes more bands than pixels.
+    for slot in range(first, past):  # pragma: no branch
+        var shown = colors[unsafe_offset=slot].unpremultiplied().encode()
+        var at = slot * Framebuffer.CHANNELS
+        pixels[unsafe_offset=at] = shown.r
+        pixels[unsafe_offset=at + 1] = shown.g
+        pixels[unsafe_offset=at + 2] = shown.b
+        pixels[unsafe_offset=at + 3] = shown.a
+
+
+async def _encode_band(
+    colors: Pointer[FloatColor, ImmutAnyOrigin],
+    pixels: MutPointer[UInt8, MutAnyOrigin],
+    first: Int,
+    past: Int,
+):
+    """`_encode_run` as a task, one per worker; see `resolve`."""
+    _encode_run(colors, pixels, first, past)
 
 
 struct RenderTarget(Movable):
@@ -190,26 +222,56 @@ struct RenderTarget(Movable):
         """
         return self.colors[self._slot(x, y)].unpremultiplied().encode()
 
-    def resolve(self) raises -> Framebuffer:
+    def resolve(self, workers: Int = 1) raises -> Framebuffer:
         """Return the finished image, encoded for a display.
 
         The one place linear stops: unpremultiply, encode the colour channels
         through the sRGB curve, and quantize. Alpha is coverage rather than
         colour and is quantized without any transfer function.
 
+        Three `pow` calls per pixel is the most expensive thing a frame does
+        after rasterizing it -- at 1280x720 it is nearly three million of
+        them -- and it parallelizes perfectly, so `Renderer.render` hands it
+        the same worker count it rasterized with. Each band encodes its own
+        run of pixels into a buffer sized up front; nothing is appended.
+
+        Args:
+            workers: How many threads to encode with. One encodes in place
+                on the calling thread.
+
         Returns:
             The image as eight-bit sRGB with unassociated alpha, which is what
             PNG stores.
 
         Raises:
-            Error: If the framebuffer cannot be built.
+            Error: If `workers` is less than one, or the framebuffer cannot
+                be built.
         """
-        var pixels = List[UInt8]()
-        for slot in range(self.width * self.height):  # pragma: no branch
-            var straight = self.colors[slot].unpremultiplied()
-            var shown = straight.encode()
-            pixels.append(shown.r)
-            pixels.append(shown.g)
-            pixels.append(shown.b)
-            pixels.append(shown.a)
+        if workers < 1:
+            raise Error("Resolving needs at least one worker")
+        var count = self.width * self.height
+        var pixels = List[UInt8](length=count * Framebuffer.CHANNELS, fill=0)
+        var bands = min(workers, count)
+        if bands == 1:
+            _encode_run(
+                self.colors.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+                pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                0,
+                count,
+            )
+        else:
+            var group = TaskGroup()
+            # At least two bands on this branch, so never zero.
+            for band in range(bands):  # pragma: no branch
+                group.create_task(
+                    _encode_band(
+                        self.colors.unsafe_ptr().unsafe_origin_cast[
+                            ImmutAnyOrigin
+                        ](),
+                        pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                        band * count // bands,
+                        (band + 1) * count // bands,
+                    )
+                )
+            group.wait()
         return Framebuffer(self.width, self.height, pixels^, self.depth.copy())

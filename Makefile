@@ -151,7 +151,7 @@ endef
 
 .PHONY: help check check-cpu check-gpu ci test test-cpu test-gpu \
         lint lint-cpu lint-gpu gpu-status docstrings fmt fmt-check coverage \
-        compile-fail example animation bench clean clean-images
+        compile-fail example animation bench bench-scene clean clean-images
 
 help:
 	@echo "ThreeMojo tasks ($(TOOLCHAIN), inputs hash to $(HASH))"
@@ -170,6 +170,7 @@ help:
 	@echo "  make example    render out/triangle.png"
 	@echo "  make animation  render the animated examples into out/"
 	@echo "  make bench      CPU vs GPU rasterization across sizes"
+	@echo "  make bench-scene  a textured sphere through the CPU renderer, per stage"
 	@echo "  make clean      remove the coverage build and the cache"
 	@echo "  make clean-images  remove the rendered images in out/"
 	@echo
@@ -210,12 +211,30 @@ $(TEST_CPU_STAMP):
 # anything -- an accelerator being present -- is not in the cache key and
 # cannot easily be put there. Running it every time costs a few seconds and
 # removes a way to be told "passed" by a stamp written on different hardware.
+#
+# Budgeted, because the failure mode a GPU backend actually has is a hang: a
+# driver waiting on a device event that never fires shows no CPU, no output
+# and no error, and looks exactly like a slow kernel compile. One did, for
+# ten minutes, before docs/max-gpu-teardown-issue/ was understood. The
+# budget is generous -- the suite takes seconds -- so exceeding it means
+# something is stuck rather than slow. Override with `make test-gpu
+# GPU_BUDGET=600` on a machine whose first kernel compile is genuinely slow.
+GPU_BUDGET := 300
 test-gpu:
 	@printf '%s\n' $(GPU_TESTS) \
-	  | xargs -P $(JOBS) -I {} \
+	  | perl -e 'alarm shift; exec @ARGV' $(GPU_BUDGET) \
+	      xargs -P $(JOBS) -I {} \
 	      sh -c 'out=$$($(MOJO) run $(MOJOFLAGS) "$$1" 2>&1); rc=$$?; \
 	             printf "%s\n" "$$out" | sed "/Crashpad/d"; exit $$rc' _ {} \
-	  || { echo "Some GPU suites FAILED."; exit 1; }
+	  || { rc=$$?; \
+	       if [ $$rc -eq 142 ]; then \
+	         echo "GPU suite exceeded its $(GPU_BUDGET)s budget. The suite" \
+	              "takes seconds when it runs at all, so this is a hang, not a" \
+	              "slow machine: see docs/max-gpu-teardown-issue/ for the one" \
+	              "already found, and run the suite by hand under 'timeout'."; \
+	       else \
+	         echo "Some GPU suites FAILED."; \
+	       fi; exit 1; }
 	@echo "All $(words $(GPU_TESTS)) GPU suites passed."
 
 gpu-status:
@@ -355,6 +374,13 @@ docstrings:
 
 bench:
 	@$(call run,$(MOJO) run $(MOJOFLAGS) bench/raster_bench.mojo); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Standard library only, unlike `bench`: a whole scene through the CPU
+# renderer, with the transform stage and the rasterization stage timed apart
+# and the frame repeated with one worker per core.
+bench-scene:
+	@$(call run,$(MOJO) run $(MOJOFLAGS) bench/scene_bench.mojo); \
 	[ $$rc -eq 0 ] || exit 1
 
 example: $(OUT_DIR)/triangle.png

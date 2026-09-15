@@ -26,6 +26,8 @@ tool runs, so each pixel costs a record written to stderr. A 320x240
 comparison produced 112 MB of them and dominated the entire coverage run.
 """
 
+from materials.material import Blending
+from cameras.camera import Camera
 from cameras.orthographic_camera import centred
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
@@ -33,7 +35,7 @@ from materials.material import Material
 from core.object3d import Object3D
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
-from lights.light import ambient_light, directional_light
+from lights.light import ambient_light, directional_light, point_light
 from geometries.box import cube
 from geometries.sphere import sphere
 from math.vector2 import Vector2
@@ -55,7 +57,7 @@ from render.texture import (
     Texture,
     checkerboard,
 )
-from lights.light import ambient_light, directional_light
+from lights.light import ambient_light, directional_light, point_light
 from lights.lighting import Lighting
 from render.gpu import (
     FLOATS_PER_VERTEX,
@@ -212,6 +214,62 @@ def assert_partly_covered(image: Framebuffer) raises:
     )
 
 
+def rendered[
+    C: Camera
+](
+    renderer: Renderer,
+    mut scene: Scene,
+    assets: Assets,
+    meshes: List[Mesh],
+    camera: C,
+) raises -> Framebuffer:
+    """Render `meshes` in `scene`; see `prepared`.
+
+    Args:
+        renderer: The renderer to draw with.
+        scene: The scene to draw; its mesh list is replaced.
+        assets: The geometry, materials and textures the meshes name.
+        meshes: What to draw.
+        camera: The camera to project through.
+
+    Returns:
+        The rendered image.
+
+    Raises:
+        Error: If the render fails.
+    """
+    scene.meshes = meshes.copy()
+    return renderer.render(scene, assets, camera)
+
+
+def prepared[
+    C: Camera
+](
+    renderer: Renderer,
+    mut scene: Scene,
+    assets: Assets,
+    meshes: List[Mesh],
+    camera: C,
+) raises -> List[RasterVertex]:
+    """`Renderer.prepare` with a mesh list, as `rendered` is for `render`.
+
+    Args:
+        renderer: The renderer to prepare with.
+        scene: The scene to draw; its mesh list is replaced.
+        assets: The geometry, materials and textures the meshes name.
+        meshes: What to draw.
+        camera: The camera to project through.
+
+    Returns:
+        Raster vertices, three per triangle.
+
+    Raises:
+        Error: If preparation fails.
+    """
+    scene.meshes = meshes.copy()
+    return renderer.prepare(scene, assets, camera)
+
+
 def skipped_for_lack_of_a_gpu(name: String) -> Bool:
     """Return True if there is no accelerator, saying so on the way out.
 
@@ -311,6 +369,22 @@ def test_gpu_matches_the_cpu_when_the_triangle_is_offscreen() raises:
     assert_equal(count_mismatches(cpu, gpu), 0)
 
 
+def test_a_renderer_can_be_created_after_another_was_destroyed() raises:
+    if skipped_for_lack_of_a_gpu(
+        "a renderer can be created after another was destroyed"
+    ):
+        return
+    # `render` builds a GpuRenderer, uses it and lets it die. Under CUDA on
+    # WSL 2 the second one hung in its constructor for as long as the first
+    # released its context before its buffers -- see GpuRenderer.__del__.
+    # The Makefile's budget turns that hang into a failure; this names it.
+    var triangle = Triangle(Vector2(2, 14), Vector2(8, 2), Vector2(14, 14))
+    var first = render(triangle, 16, 16, BACKGROUND, FOREGROUND)
+    var second = render(triangle, 16, 16, BACKGROUND, FOREGROUND)
+    assert_partly_covered(first)
+    assert_equal(count_mismatches(first, second), 0)
+
+
 def test_they_agree_on_pixels_lying_exactly_on_an_edge() raises:
     # Corners on whole pixels put sample points exactly on the edges, which is
     # where the fill rule decides and where a difference between the two
@@ -389,7 +463,7 @@ def corner(
     z: Float32,
     inv_w: Float32,
     color: Color,
-    blend: Int = OPAQUE,
+    blend: Blending = OPAQUE,
 ) -> RasterVertex:
     """Return a raster vertex, for building test triangles.
 
@@ -554,7 +628,7 @@ def test_a_partial_triangle_is_rejected() raises:
         renderer.draw(corners, BACKGROUND)
 
 
-def test_flattening_lays_out_thirteen_floats_per_vertex() raises:
+def test_flattening_lays_out_sixteen_floats_per_vertex() raises:
     # The host side of the kernel's unpacking. If these disagree the image is
     # garbage, so the layout is asserted rather than assumed. The count is
     # spelled out because changing the stride and missing one of the kernel's
@@ -562,7 +636,7 @@ def test_flattening_lays_out_thirteen_floats_per_vertex() raises:
     var corners = List[RasterVertex]()
     corners.append(corner(1, 2, 3, 4, Color(255, 128, 0, 64)))
     var flat = flatten(corners)
-    assert_equal(len(flat), 13)
+    assert_equal(len(flat), 16)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -626,7 +700,7 @@ def test_both_backends_agree_on_a_whole_prepared_scene() raises:
     )
 
     # Prepared once, filled twice.
-    var corners = renderer.prepare(scene, assets, meshes, camera)
+    var corners = prepared(renderer, scene, assets, meshes, camera)
     assert_true(len(corners) > 0, "the scene prepared no triangles")
     assert_equal(len(corners) % 3, 0)
 
@@ -659,6 +733,132 @@ def test_both_backends_agree_on_a_whole_prepared_scene() raises:
     # One level of tolerance: this scene interpolates real shading, and the
     # two do not round identically. See `count_mismatches`.
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_agree_under_point_lights() raises:
+    # The whole-scene test again with bulbs instead of a sun: the fragment's
+    # world position now matters, and so does `falloff`, on both sides. One
+    # bulb falls off freely and one is cut off, so both branches run.
+    if skipped_for_lack_of_a_gpu("both backends agree under point lights"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var ball = assets.geometries.add(sphere(Length(0.7, METRE), 12, 8))
+
+    var scene = Scene()
+    var left = Object3D()
+    left.set_position(-0.9, 0, 0)
+    left.set_euler(Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.9, 0, 0.4)
+    var right_node = scene.add(right^)
+    var warm = Object3D()
+    warm.set_position(0.5, 1.0, 1.5)
+    var warm_node = scene.add(warm^)
+    scene.add_light(point_light(Color(255, 220, 180), warm_node, 0.8))
+    var cool = Object3D()
+    cool.set_position(-1.5, 0.5, 1.0)
+    var cool_node = scene.add(cool^)
+    scene.add_light(point_light(Color(120, 160, 255), cool_node, 1.5, 1.0, 2.5))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.1))
+    scene.update()
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METRE),
+        Length(100.0, METRE),
+    )
+    camera.place(Vector3(0, 0.6, 3.0), Vector3(0, 0, 0))
+
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 140, 40))), left_node
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(Material(Color(90, 190, 255))),
+            right_node,
+        )
+    )
+
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    var lighting = Lighting(scene)
+    assert_equal(lighting.point_count(), 2)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    for triangle in range(len(corners) // 3):  # pragma: no branch
+        rasterize_shaded(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+            target,
+            SHADE_LIT,
+            assets.textures,
+            lighting,
+        )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 100, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_the_gpu_leaves_an_unlit_triangle_its_own_colour() raises:
+    # A BASIC material's triangles carry `lit=False`, and the kernel must
+    # skip the lights for them exactly as the host does.
+    if skipped_for_lack_of_a_gpu("the gpu leaves an unlit triangle alone"):
+        return
+    var corners = List[RasterVertex]()
+    for index in range(len(overlapping_pair())):
+        var base = overlapping_pair()[index]
+        corners.append(
+            RasterVertex(
+                base.x,
+                base.y,
+                base.z,
+                base.inv_w,
+                base.color,
+                base.u,
+                base.v,
+                base.texture,
+                base.blend,
+                base.normal,
+                base.world,
+                False,
+            )
+        )
+    # Lighting that would halve everything if it were applied.
+    var half = Lighting(ambient=FloatColor(0.5, 0.5, 0.5, 1.0))
+    var target = RenderTarget(24, 18, BACKGROUND)
+    for index in range(len(corners) // 3):  # pragma: no branch
+        rasterize_shaded(
+            corners[index * 3],
+            corners[index * 3 + 1],
+            corners[index * 3 + 2],
+            target,
+            SHADE_LIT,
+            TextureStore(),
+            half,
+        )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), half
+    )
+    assert_equal(count_mismatches(cpu, gpu), 0)
+    # And the lit version really is different, or this proves nothing.
+    var lit = render_triangles(
+        overlapping_pair(), 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), half
+    )
+    assert_true(count_mismatches(gpu, lit) > 0, "the lights changed nothing")
 
 
 def count_background(image: Framebuffer, background: Color) raises -> Int:
@@ -838,10 +1038,10 @@ def test_both_backends_agree_on_a_prepared_orthographic_uv_scene() raises:
         )
     )
 
-    var corners = renderer.prepare(scene, assets, meshes, camera)
+    var corners = prepared(renderer, scene, assets, meshes, camera)
     assert_true(len(corners) > 0, "the scene prepared no triangles")
 
-    var cpu = renderer.render(scene, assets, meshes, camera)
+    var cpu = rendered(renderer, scene, assets, meshes, camera)
     var gpu = render_triangles(corners, 48, 36, BACKGROUND, SHADE_UV)
 
     # An orthographic camera leaves every inv_w at one, so the interpolation
@@ -1075,36 +1275,6 @@ def test_a_mipmapped_and_a_plain_texture_can_be_drawn_together() raises:
         corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
     )
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
-
-
-def test_both_backends_reject_an_unknown_blend_policy() raises:
-    # The divergence this closes: the CPU treated an unknown policy as
-    # opaque and the GPU as blended, so the same triangle drew differently on
-    # each. Both now refuse it, through the same shared check.
-    if skipped_for_lack_of_a_gpu("both backends reject an unknown blend"):
-        return
-    var textures = TextureStore()
-    var corners = List[RasterVertex]()
-    for corner in mapped_quad(24):
-        corners.append(
-            RasterVertex(
-                corner.x,
-                corner.y,
-                corner.z,
-                corner.inv_w,
-                corner.color,
-                corner.u,
-                corner.v,
-                corner.texture,
-                7,
-            )
-        )
-    var renderer = GpuRenderer(24, 24)
-    renderer.set_textures(textures)
-    with assert_raises():
-        renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
-    with assert_raises():
-        _ = cpu_textured(corners, 24, textures)
 
 
 def test_both_backends_reject_corners_that_disagree() raises:
@@ -1612,21 +1782,6 @@ def test_drawing_a_texture_that_was_never_uploaded_is_rejected() raises:
     renderer.draw(mapped_quad(16, TextureId(0)), BACKGROUND, SHADE_TEXTURE)
     with assert_raises():
         renderer.draw(mapped_quad(16, TextureId(1)), BACKGROUND, SHADE_TEXTURE)
-
-
-def test_an_unknown_shading_mode_is_rejected_by_both_backends() raises:
-    # Left unchecked the two disagreed: the CPU's last branch treated an
-    # unrecognised mode as textured and the GPU's treated it as lit.
-    var fb = RenderTarget(8, 8, BACKGROUND)
-    var corners = mapped_quad(8)
-    with assert_raises():
-        rasterize_shaded(corners[0], corners[1], corners[2], fb, 99)
-
-    if skipped_for_lack_of_a_gpu("an unknown mode is rejected"):
-        return
-    var renderer = GpuRenderer(8, 8)
-    with assert_raises():
-        renderer.draw(corners, BACKGROUND, 99)
 
 
 # --- blending ---------------------------------------------------------------

@@ -14,12 +14,16 @@ pinned down: **world space is metres**. three.js leaves world units to the
 application, and that works until someone builds a scene in feet and wonders
 why the camera clips. Saying it once, in the type, settles it.
 
-The camera is placed by `position` and `target` rather than by a transform.
-three.js reaches the same place through Object3D and a quaternion, which is
-more general and needs a scene graph this port does not have yet.
+The camera is placed by `position` and `target`, or it rides a scene node.
+three.js's camera is an `Object3D` and is always the second; `place` is the
+shortcut every example wanted, and `attach` is the general case -- a camera
+on a pivot orbits with it, and a camera that is a child of a car looks out
+of the windscreen. See `cameras.camera`.
 """
 
-from cameras.camera import Camera
+from cameras.camera import Camera, node_view_matrix
+from core.object3d import NO_PARENT, NodeId
+from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.projection import look_at, perspective, viewport
 from math.vector3 import Vector3
@@ -37,6 +41,9 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
     var position: Vector3
     var target: Vector3
     var up: Vector3
+    # The scene node this camera rides, or `NO_PARENT` for a camera that is
+    # placed. While attached, `position`, `target` and `up` are not read.
+    var node: NodeId
 
     def __init__(
         out self,
@@ -72,11 +79,30 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         self.position = Vector3(0, 0, 0)
         self.target = Vector3(0, 0, -1)
         self.up = Vector3(0, 1, 0)
+        self.node = NO_PARENT
 
     def place(mut self, position: Vector3, target: Vector3):
-        """Move the camera to `position` and aim it at `target`."""
+        """Move the camera to `position` and aim it at `target`.
+
+        Also lets go of any node it was riding: placing is the other way of
+        saying where a camera is.
+        """
         self.position = position
         self.target = target
+        self.node = NO_PARENT
+
+    def attach(mut self, node: NodeId):
+        """Ride `node`, looking down its -z with its +y up.
+
+        From then on the view comes from the node's world matrix, so parent
+        the node to a pivot and the camera orbits, or `Scene.look_at` it at
+        something with `camera=True`. What `place` set is kept but not read
+        until `place` is called again.
+
+        Args:
+            node: The scene node to ride.
+        """
+        self.node = node
 
     def projection_matrix(self) raises -> Matrix4:
         """Return the matrix taking camera space to normalized device space.
@@ -100,13 +126,37 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         """Return the matrix taking world space to camera space.
 
         Returns:
-            The view matrix.
+            The view matrix, from where the camera was placed.
 
         Raises:
             Error: If the camera sits at its own target, or up is parallel to
-                the view direction.
+                the view direction, or the camera rides a node -- the scene
+                has that answer, so ask `view_matrix_in`.
         """
+        if self.node != NO_PARENT:
+            raise Error(
+                "An attached camera's view comes from its node; call"
+                " view_matrix_in(scene)"
+            )
         return look_at(self.position, self.target, self.up)
+
+    def view_matrix_in(self, scene: Scene) raises -> Matrix4:
+        """Return the matrix taking world space to camera space.
+
+        Args:
+            scene: The scene, updated, for a camera riding one of its nodes.
+
+        Returns:
+            The inverse of the node's world matrix if attached, else what
+            `view_matrix` gives.
+
+        Raises:
+            Error: If the placement is degenerate, the node is not in the
+                scene, or the scene is stale.
+        """
+        if self.node == NO_PARENT:
+            return self.view_matrix()
+        return node_view_matrix(scene, self.node)
 
     def view_projection_matrix(self) raises -> Matrix4:
         """Return projection * view: world space straight to NDC.

@@ -15,6 +15,12 @@ struct Vector3(ImplicitlyCopyable):
     Like three.js, the mutating methods change the vector in place rather than
     returning a new one. Unlike three.js, `ImplicitlyCopyable` means assignment
     makes a real copy, so there is no aliasing to worry about.
+
+    The operators are the other half. three.js has `.clone().sub(a)`; here a
+    value type makes `b - a` the natural spelling, and every "copy, then
+    mutate the copy" pair in the renderer was that expression written long.
+    The mutating methods stay for the port's sake and for hot loops that want
+    to avoid a temporary.
     """
 
     var x: Float32
@@ -58,3 +64,19 @@ struct Vector3(ImplicitlyCopyable):
             self.x /= magnitude
             self.y /= magnitude
             self.z /= magnitude
+
+    def __add__(self, other: Self) -> Self:
+        """Return the component-wise sum."""
+        return Vector3(self.x + other.x, self.y + other.y, self.z + other.z)
+
+    def __sub__(self, other: Self) -> Self:
+        """Return the component-wise difference."""
+        return Vector3(self.x - other.x, self.y - other.y, self.z - other.z)
+
+    def __mul__(self, factor: Float32) -> Self:
+        """Return this vector scaled by a number."""
+        return Vector3(self.x * factor, self.y * factor, self.z * factor)
+
+    def __neg__(self) -> Self:
+        """Return this vector pointing the other way."""
+        return Vector3(-self.x, -self.y, -self.z)

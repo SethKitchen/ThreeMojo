@@ -5,6 +5,7 @@
 
 """Tests for `render.rasterizer`."""
 
+from materials.material import Blending
 from math.vector2 import Vector2
 from std.math import inf
 from render.framebuffer import Color, FloatColor, Framebuffer
@@ -27,6 +28,7 @@ from render.rasterizer import (
     mip_level,
     rasterize,
     rasterize_depth,
+    rasterize_all,
     rasterize_shaded,
 )
 from std.testing import (
@@ -216,7 +218,7 @@ def flat_vertex(
     point: Vector3,
     color: Color,
     inv_w: Float32 = 1.0,
-    blend: Int = OPAQUE,
+    blend: Blending = OPAQUE,
 ) -> RasterVertex:
     """Return a raster vertex at `point` in `color`, with no perspective.
 
@@ -875,32 +877,6 @@ def test_a_texture_is_sampled_with_perspective_correct_coordinates() raises:
     assert_true(differing > 0, "the correction did not reach the sampling")
 
 
-def test_an_unknown_shading_mode_is_refused() raises:
-    # Refused rather than guessed at. Left unchecked the two rasterizers
-    # disagreed about it -- the CPU's last branch treated anything
-    # unrecognised as textured, the GPU's treated it as lit -- which is the
-    # worst kind of divergence: silent, and only on input nobody meant to
-    # write. `Renderer.set_shading` checks too, but it is not the only caller.
-    var fb = RenderTarget(8, 8, Color(0, 0, 0))
-    var t = covering(0.5)
-    with assert_raises():
-        rasterize_shaded(
-            flat_vertex(t[0], Color(255, 0, 0)),
-            flat_vertex(t[1], Color(255, 0, 0)),
-            flat_vertex(t[2], Color(255, 0, 0)),
-            fb,
-            42,
-        )
-    with assert_raises():
-        rasterize_shaded(
-            flat_vertex(t[0], Color(255, 0, 0)),
-            flat_vertex(t[1], Color(255, 0, 0)),
-            flat_vertex(t[2], Color(255, 0, 0)),
-            fb,
-            -1,
-        )
-
-
 # --- blending ---------------------------------------------------------------
 
 
@@ -1224,31 +1200,12 @@ def test_a_mipmapped_surface_with_no_depth_at_all_still_samples() raises:
 
 
 def stated_corner(
-    point: Vector3, texture: TextureId, blend: Int
+    point: Vector3, texture: TextureId, blend: Blending
 ) -> RasterVertex:
     """Return a white corner carrying a given texture and blend policy."""
     return RasterVertex(
         point.x, point.y, 0.5, 1, FloatColor(1, 1, 1), 0, 0, texture, blend
     )
-
-
-def test_an_unknown_blend_policy_is_rejected() raises:
-    # `Material` validates its own, but `RasterVertex` takes a bare integer
-    # and is public. The two backends read an unknown one in opposite
-    # directions -- the CPU asked "is it BLEND?", the GPU "is it OPAQUE?" --
-    # so a policy of 7 drew solid on one and composited on the other.
-    var textures = TextureStore()
-    var fb = RenderTarget(8, 8, Color(0, 0, 0))
-    var t = covering(0.5)
-    with assert_raises():
-        rasterize_shaded(
-            stated_corner(t[0], NO_TEXTURE, 7),
-            stated_corner(t[1], NO_TEXTURE, 7),
-            stated_corner(t[2], NO_TEXTURE, 7),
-            fb,
-            SHADE_TEXTURE,
-            textures,
-        )
 
 
 def test_both_blend_policies_are_accepted() raises:
@@ -1293,6 +1250,25 @@ def test_corners_that_disagree_about_blending_are_rejected() raises:
             SHADE_TEXTURE,
             textures,
         )
+
+
+def test_corners_that_disagree_about_being_lit_are_rejected() raises:
+    # Lit or not is per triangle, like the blend policy, and read from the
+    # first corner; so the other two have to agree with it.
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var a = RasterVertex(0, 0, 0.5, 1, FloatColor(1, 1, 1))
+    var b = RasterVertex(6, 0, 0.5, 1, FloatColor(1, 1, 1))
+    var c = RasterVertex(0, 6, 0.5, 1, FloatColor(1, 1, 1))
+    var unlit_b = RasterVertex(6, 0, 0.5, 1, FloatColor(1, 1, 1), lit=False)
+    var unlit_c = RasterVertex(0, 6, 0.5, 1, FloatColor(1, 1, 1), lit=False)
+    with assert_raises():
+        rasterize_shaded(a, unlit_b, c, target)
+    with assert_raises():
+        rasterize_shaded(a, b, unlit_c, target)
+    # Agreeing on either answer is fine.
+    var unlit_a = RasterVertex(0, 0, 0.5, 1, FloatColor(1, 1, 1), lit=False)
+    rasterize_shaded(unlit_a, unlit_b, unlit_c, target)
+    rasterize_shaded(a, b, c, target)
 
 
 def test_corners_that_disagree_about_their_texture_are_rejected() raises:
@@ -1452,6 +1428,80 @@ def test_a_zero_length_normal_is_left_alone_rather_than_dividing_by_it() raises:
         lit_along_z(),
     )
     assert_equal(fb.shown(2, 2).r, UInt8(0))
+
+
+def test_a_row_range_limits_where_a_triangle_is_drawn() raises:
+    # The band-parallel renderer draws every triangle once per band, so a
+    # call told to stay within rows must write nothing outside them.
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var white = FloatColor(1, 1, 1)
+    var a = RasterVertex(0, 0, 0.5, 1, white)
+    var b = RasterVertex(8, 0, 0.5, 1, white)
+    var c = RasterVertex(0, 8, 0.5, 1, white)
+    rasterize_shaded(a, b, c, target, first_row=2, last_row=4)
+    for y in range(8):
+        var drawn = target.shown(0, y).r > 0
+        assert_equal(drawn, y >= 2 and y <= 4)
+
+
+def test_rasterize_all_on_several_workers_matches_one() raises:
+    # Two overlapping triangles, one translucent, so a band boundary cuts
+    # through blending as well as depth.
+    var corners = List[RasterVertex]()
+    corners.append(flat_vertex(Vector3(0, 0, 0.5), Color(0, 255, 0)))
+    corners.append(flat_vertex(Vector3(12, 0, 0.5), Color(0, 255, 0)))
+    corners.append(flat_vertex(Vector3(0, 12, 0.5), Color(0, 255, 0)))
+    var red = Color(255, 0, 0, 128)
+    corners.append(flat_vertex(Vector3(2, 2, 0.2), red, 1, BLEND))
+    corners.append(flat_vertex(Vector3(12, 2, 0.2), red, 1, BLEND))
+    corners.append(flat_vertex(Vector3(2, 12, 0.2), red, 1, BLEND))
+    var alone = RenderTarget(12, 12, Color(0, 0, 0))
+    rasterize_all(corners, alone)
+    var crowd = RenderTarget(12, 12, Color(0, 0, 0))
+    rasterize_all(corners, crowd, workers=4)
+    var drawn = 0
+    for y in range(12):
+        for x in range(12):
+            var one = alone.shown(x, y)
+            var many = crowd.shown(x, y)
+            assert_equal(one.r, many.r)
+            assert_equal(one.g, many.g)
+            assert_equal(one.b, many.b)
+            assert_equal(alone.depth_at(x, y), crowd.depth_at(x, y))
+            if one.g > 0:
+                drawn += 1
+    assert_true(drawn > 0, "nothing was drawn")
+
+
+def test_rasterize_all_with_nothing_to_draw_leaves_the_target_alone() raises:
+    var target = RenderTarget(4, 4, Color(9, 9, 9))
+    rasterize_all(List[RasterVertex](), target, workers=3)
+    assert_equal(target.shown(1, 1).r, UInt8(9))
+
+
+def test_rasterize_all_carries_a_workers_error_back() raises:
+    # A triangle whose corners disagree is refused by `rasterize_shaded`. On
+    # a worker that raise cannot propagate, so it is carried back and raised
+    # once every band is done -- and must not be dropped on the way.
+    var corners = List[RasterVertex]()
+    corners.append(stated_corner(Vector3(0, 0, 0), NO_TEXTURE, OPAQUE))
+    corners.append(stated_corner(Vector3(8, 0, 0), NO_TEXTURE, BLEND))
+    corners.append(stated_corner(Vector3(0, 8, 0), NO_TEXTURE, OPAQUE))
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    with assert_raises():
+        rasterize_all(corners, target, workers=2)
+    with assert_raises():
+        rasterize_all(corners, target)
+
+
+def test_rasterize_all_needs_whole_triangles_and_a_worker() raises:
+    var target = RenderTarget(4, 4, Color(0, 0, 0))
+    var corners = List[RasterVertex]()
+    corners.append(flat_vertex(Vector3(0, 0, 0), Color(1, 1, 1)))
+    with assert_raises():
+        rasterize_all(corners, target)
+    with assert_raises():
+        rasterize_all(List[RasterVertex](), target, workers=0)
 
 
 def main() raises:
