@@ -2,11 +2,11 @@
 
 `units/quantity.mojo` and `units/si.mojo`. Every measurement carries its dimension in its type. The compiler checks dimensions and erases them. A `Quantity` is the size of the `Float32` inside it.
 
-three.js has no units. It leaves world units to the application. Here world space is metres.
+three.js has no units. It leaves world units to the application. Here world space is meters.
 
 ## Quantity
 
-`Quantity[length, mass, time, angle]` holds one `Float32` in canonical units: metres, kilograms, seconds and radians. The four parameters are exponents.
+`Quantity[length, mass, time, angle]` holds one `Float32` in canonical units: meters, kilograms, seconds and radians. The four parameters are exponents.
 
 | Alias | Exponents |
 |---|---|
@@ -29,8 +29,8 @@ A `Unit` is a factor to the canonical unit and a symbol.
 
 | Dimension | Units |
 |---|---|
-| Length | `METRE`, `KILOMETRE`, `CENTIMETRE`, `MILLIMETRE`, `YARD`, `FOOT`, `INCH`, `MILE` |
-| Area | `SQUARE_METRE`, `SQUARE_FOOT` |
+| Length | `METER`, `KILOMETER`, `CENTIMETER`, `MILLIMETER`, `YARD`, `FOOT`, `INCH`, `MILE` |
+| Area | `SQUARE_METER`, `SQUARE_FOOT` |
 | Mass | `KILOGRAM`, `GRAM`, `POUND` |
 | Duration | `SECOND`, `MILLISECOND`, `MINUTE`, `HOUR` |
 | Angle | `RADIAN`, `DEGREE`, `TURN` |
@@ -38,11 +38,11 @@ A `Unit` is a factor to the canonical unit and a symbol.
 ## Use them
 
 ```mojo
-var height = Length(1.0, METRE)
+var height = Length(1.0, METER)
 height.to(FOOT)                           # 3.2808399
-var area = height * Length(2.0, METRE)    # Area
+var area = height * Length(2.0, METER)    # Area
 var side = area.sqrt()                    # Length
-var total = Length(1.0, METRE) + Length(1.0, FOOT)   # 1.3048 m
+var total = Length(1.0, METER) + Length(1.0, FOOT)   # 1.3048 m
 var turn = Angle(90.0, DEGREE)
 turn.value                                # radians
 ```
@@ -59,8 +59,8 @@ turn.value                                # radians
 ## Compile errors
 
 ```mojo
-Length(1.0, METRE) + Duration(1.0, SECOND)   # error
-Length(1.0, METRE).to(SECOND)                # error
+Length(1.0, METER) + Duration(1.0, SECOND)   # error
+Length(1.0, METER).to(SECOND)                # error
 Volume(8.0).sqrt()                           # error: odd exponent
 rotation_z(90.0)                             # error: needs an Angle
 ```

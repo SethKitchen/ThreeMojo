@@ -43,7 +43,7 @@ from render.target import RenderTarget
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/uv.png"
 comptime WIDTH = 320
@@ -58,7 +58,7 @@ def fill(corners: List[RasterVertex], background: Color) raises -> Framebuffer:
 
     Args:
         corners: Raster vertices, three per triangle.
-        background: The colour to clear to.
+        background: The color to clear to.
 
     Returns:
         The finished frame.
@@ -120,7 +120,7 @@ def main() raises:
 
     var assets = Assets()
     var sheet = assets.geometries.add(
-        plane(Length(EXTENT, METRE), Length(EXTENT, METRE))
+        plane(Length(EXTENT, METER), Length(EXTENT, METER))
     )
     var white = assets.materials.add(Material(Color(255, 255, 255)))
 
@@ -147,8 +147,8 @@ def main() raises:
     var camera = PerspectiveCamera(
         Angle(55.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0.8, 3.4), Vector3(0, 0, -1.5))
 

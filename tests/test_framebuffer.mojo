@@ -38,7 +38,7 @@ def test_set_pixel_roundtrips() raises:
     assert_color(fb.get_pixel(2, 1), Color(255, 128, 32))
 
 
-def test_set_pixel_does_not_disturb_neighbours() raises:
+def test_set_pixel_does_not_disturb_neighbors() raises:
     var fb = Framebuffer(4, 3, Color(1, 2, 3))
     fb.set_pixel(2, 1, Color(255, 128, 32))
     assert_color(fb.get_pixel(1, 1), Color(1, 2, 3))
@@ -194,9 +194,9 @@ def test_depth_tests_out_of_bounds_are_rejected() raises:
 # --- FloatColor -------------------------------------------------------------
 
 
-def test_an_eight_bit_colour_round_trips_through_floats() raises:
+def test_an_eight_bit_color_round_trips_through_floats() raises:
     # Every byte must survive the trip out to 0-1 and back, or shading would
-    # shift colours simply by being computed.
+    # shift colors simply by being computed.
     for value in range(256):
         var byte = UInt8(value)
         var back = FloatColor(of=Color(byte, byte, byte, byte)).quantize()
@@ -233,7 +233,7 @@ def test_scaling_dims_the_channels_and_keeps_alpha() raises:
     assert_equal(half.a, Float32(0.8))
 
 
-def test_a_float_colour_is_opaque_unless_told_otherwise() raises:
+def test_a_float_color_is_opaque_unless_told_otherwise() raises:
     assert_equal(FloatColor(0.0, 0.0, 0.0).a, Float32(1.0))
 
 

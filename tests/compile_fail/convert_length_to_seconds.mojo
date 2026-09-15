@@ -5,8 +5,8 @@
 
 """Reading a length in seconds must not compile."""
 
-from units.si import Length, METRE, SECOND
+from units.si import Length, METER, SECOND
 
 
 def main() raises:
-    print(Length(1.0, METRE).to(SECOND))
+    print(Length(1.0, METER).to(SECOND))

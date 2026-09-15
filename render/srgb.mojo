@@ -3,19 +3,19 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""The sRGB transfer function, and which space a colour is in.
+"""The sRGB transfer function, and which space a color is in.
 
 **Light adds; sRGB does not.** A pixel value of 128 is not half the light of
 255 — it is about 21.6% of it. sRGB spends more of its 256 steps on dark
 values, where the eye can tell them apart, which is why eight bits look
-acceptable at all. Every image you will ever load, and every colour picked in
+acceptable at all. Every image you will ever load, and every color picked in
 a paint program, is encoded that way.
 
 Arithmetic on light has to happen in the other space, where the numbers are
 proportional to how much light there is:
 
-    filtering    blending two neighbouring texels
-    shading      multiplying a colour by a Lambert term
+    filtering    blending two neighboring texels
+    shading      multiplying a color by a Lambert term
     blending     mixing a translucent surface with what is behind it
 
 Doing any of those on encoded values is wrong in a specific, visible way:
@@ -25,9 +25,9 @@ is 188.
 
 So this project decodes on the way in and encodes on the way out, and
 everything between is linear. three.js draws the same distinction, and names
-the same three cases: colour images are `SRGB`, data that merely happens to be
+the same three cases: color images are `SRGB`, data that merely happens to be
 stored in an image — a normal map, a height field — is `LINEAR` and must not
-be decoded, and alpha is never colour and is never decoded either.
+be decoded, and alpha is never color and is never decoded either.
 
 The piecewise curve is the real one rather than a 2.2 power approximation. It
 is four lines, the linear segment near black matters at exactly the values
@@ -51,7 +51,7 @@ struct ColorSpace(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_decodable(self) -> Bool:
-        """Return True if samples in this space can be read as colour.
+        """Return True if samples in this space can be read as color.
 
         `SRGB` or `LINEAR`. `UNKNOWN_SPACE` is a decoder's admission rather
         than a transfer function, and any other value is no space at all.
@@ -59,13 +59,13 @@ struct ColorSpace(Equatable, ImplicitlyCopyable, Writable):
         return self == SRGB or self == LINEAR
 
 
-# A colour image: stored encoded, decoded when read.
+# A color image: stored encoded, decoded when read.
 comptime SRGB = ColorSpace(0)
-# Data that is not colour, or colour already linear: used as stored.
+# Data that is not color, or color already linear: used as stored.
 comptime LINEAR = ColorSpace(1)
-# A file said something about its colour that could not be interpreted -- an
+# A file said something about its color that could not be interpreted -- an
 # ICC profile, say. Not a third transfer function: a refusal to guess, which
-# the caller has to settle before the samples can be used as colour.
+# the caller has to settle before the samples can be used as color.
 comptime UNKNOWN_SPACE = ColorSpace(2)
 
 

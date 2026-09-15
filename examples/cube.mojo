@@ -8,7 +8,7 @@
     mojo run -I . examples/cube.mojo [path.png]
 
 This is the first example that draws a *scene* rather than screen-space
-shapes: world-space corners in metres, turned by a model matrix, projected by
+shapes: world-space corners in meters, turned by a model matrix, projected by
 the camera, and rasterized where they land in pixels.
 
 It deliberately stays below `Renderer` and draws with the flat rasterizer, so
@@ -30,7 +30,7 @@ from render.framebuffer import Color, Framebuffer
 from render.rasterizer import Triangle, rasterize
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/cube.png"
 comptime WIDTH = 240
@@ -40,7 +40,7 @@ comptime DELAY_MS = 55
 
 
 def face_color(face: Int) -> Color:
-    """Return a distinct colour per cube face, two triangles at a time."""
+    """Return a distinct color per cube face, two triangles at a time."""
     var palette = List[Color]()
     palette.append(Color(255, 128, 32))
     palette.append(Color(64, 160, 255))
@@ -105,12 +105,12 @@ def main() raises:
     var camera = PerspectiveCamera(
         Angle(50.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0, 2.5), Vector3(0, 0, 0))
 
-    var geometry = cube_geometry(Length(1.0, METRE))
+    var geometry = cube_geometry(Length(1.0, METER))
 
     var frames = List[Framebuffer]()
     for index in range(FRAMES):

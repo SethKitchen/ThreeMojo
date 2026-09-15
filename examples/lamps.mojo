@@ -3,10 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Three coloured lamps on one white sphere, and a fourth carried by it.
+"""Three colored lamps on one white sphere, and a fourth carried by it.
 
 Everything the lighting rewrite made possible, in one picture. Until lights
-became scene objects, a scene had exactly one of them and it had no colour: the
+became scene objects, a scene had exactly one of them and it had no color: the
 renderer held a direction and an ambient fraction, so this image could not be
 made at all.
 
@@ -25,14 +25,14 @@ do that, because it had no transform to inherit. It is a bulb rather than a
 sun -- its light spreads out from where it is and falls off with the square
 of the distance -- so it lights the part of the sphere nearest it and little
 else, which is what makes it read as a small warm lamp rather than a fourth
-colour wash.
+color wash.
 
 **Shading per fragment.** The sphere is deliberately coarse — twelve segments
 around, eight from pole to pole — so its triangles are large enough to see.
 Lighting is evaluated at every pixel from a normal interpolated across the
 face and made unit length again there, so the terminator between lit and unlit
 curves smoothly across each triangle. Shading only at the corners and
-interpolating the colour, which is what this renderer used to do, puts a
+interpolating the color, which is what this renderer used to do, puts a
 visible crease along every edge instead.
 """
 
@@ -50,7 +50,7 @@ from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/lamps.png"
 comptime WIDTH = 260
@@ -105,7 +105,7 @@ def main() raises:
 
     var assets = Assets()
     var ball = assets.geometries.add(
-        sphere(Length(1.0, METRE), AROUND, POLE_TO_POLE)
+        sphere(Length(1.0, METER), AROUND, POLE_TO_POLE)
     )
     # White, so what you see is the light and nothing else.
     var white = assets.materials.add(Material(Color(255, 255, 255)))
@@ -147,8 +147,8 @@ def main() raises:
     var camera = PerspectiveCamera(
         Angle(40.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0.35, 3.4), Vector3(0, 0, 0))
 

@@ -10,7 +10,7 @@ here as bytes. That is deliberate and is the only way this can be tested
 honestly: a decoder checked solely against this project's own encoder would
 only ever see DEFLATE *stored* blocks and filter 0, which is the one corner
 real files never occupy. These cover fixed and dynamic Huffman codes, all five
-row filters, an overlapping back-reference, and every colour type.
+row filters, an overlapping back-reference, and every color type.
 """
 
 from render.framebuffer import Color, Framebuffer
@@ -151,8 +151,8 @@ def rgba_png() -> List[UInt8]:
     ]
 
 
-def grey_all_filters_png() -> List[UInt8]:
-    """An 8x8 greyscale PNG using all five row filters, one per row."""
+def gray_all_filters_png() -> List[UInt8]:
+    """An 8x8 grayscale PNG using all five row filters, one per row."""
     return [
         UInt8(137),
         UInt8(80),
@@ -376,8 +376,8 @@ def palette_png() -> List[UInt8]:
     ]
 
 
-def grey_alpha_png() -> List[UInt8]:
-    """A 2x2 greyscale-with-alpha PNG."""
+def gray_alpha_png() -> List[UInt8]:
+    """A 2x2 grayscale-with-alpha PNG."""
     return [
         UInt8(137),
         UInt8(80),
@@ -633,7 +633,7 @@ def fixed_huffman_png() -> List[UInt8]:
 
 
 def run_png() -> List[UInt8]:
-    """A 64x1 RGB PNG of one repeated colour: an overlapping LZ77 run."""
+    """A 64x1 RGB PNG of one repeated color: an overlapping LZ77 run."""
     return [
         UInt8(137),
         UInt8(80),
@@ -746,20 +746,20 @@ def test_every_row_filter_is_undone() raises:
     # Eight rows, cycling through filters 0 to 4. The generated value is
     # (x * 31 + y * 17) & 255, so every pixel has an independently known
     # answer -- a filter applied but not undone shows up immediately.
-    var image = decode(grey_all_filters_png())
+    var image = decode(gray_all_filters_png())
     assert_equal(image.width, 8)
     assert_equal(image.height, 8)
     for y in range(8):
         for x in range(8):
             var want = UInt8((x * 31 + y * 17) & 255)
             assert_equal(image.get_pixel(x, y).r, want)
-            # Greyscale widens to RGB, and is opaque with no tRNS.
+            # Grayscale widens to RGB, and is opaque with no tRNS.
             assert_equal(image.get_pixel(x, y).b, want)
             assert_equal(image.get_pixel(x, y).a, UInt8(255))
 
 
 def test_an_overlapping_back_reference_repeats_correctly() raises:
-    # A run of one colour is stored as a byte and a distance of one, so the
+    # A run of one color is stored as a byte and a distance of one, so the
     # copy reads bytes it is itself producing. Capturing the source up front
     # gives three bytes and then garbage.
     var image = decode(run_png())
@@ -790,8 +790,8 @@ def test_a_short_trns_leaves_the_rest_of_the_palette_opaque() raises:
     assert_equal(image.get_pixel(3, 0).a, UInt8(255))
 
 
-def test_greyscale_with_alpha_decodes() raises:
-    var image = decode(grey_alpha_png())
+def test_grayscale_with_alpha_decodes() raises:
+    var image = decode(gray_alpha_png())
     assert_equal(image.get_pixel(0, 0).r, UInt8(10))
     assert_equal(image.get_pixel(0, 0).a, UInt8(255))
     assert_equal(image.get_pixel(1, 0).r, UInt8(200))
@@ -799,8 +799,8 @@ def test_greyscale_with_alpha_decodes() raises:
     assert_equal(image.get_pixel(0, 1).a, UInt8(128))
 
 
-def test_a_colour_key_makes_one_colour_transparent() raises:
-    # tRNS on a truecolour image names a single colour rather than a table.
+def test_a_color_key_makes_one_color_transparent() raises:
+    # tRNS on a truecolor image names a single color rather than a table.
     var image = decode(rgb_keyed_png())
     assert_equal(image.get_pixel(0, 0).r, UInt8(255))
     assert_equal(image.get_pixel(0, 0).a, UInt8(0))
@@ -1422,8 +1422,8 @@ def interlaced_png() -> List[UInt8]:
     ]
 
 
-def odd_colour_type_png() -> List[UInt8]:
-    """A PNG declaring a colour type that does not exist."""
+def odd_color_type_png() -> List[UInt8]:
+    """A PNG declaring a color type that does not exist."""
     return [
         UInt8(137),
         UInt8(80),
@@ -1913,8 +1913,8 @@ def no_header_png() -> List[UInt8]:
 
 
 def paeth_png() -> List[UInt8]:
-    """A 4x2 greyscale PNG, Paeth filtered, chosen so the predictor answers
-    with each of its three neighbours: above, above, left, then corner."""
+    """A 4x2 grayscale PNG, Paeth filtered, chosen so the predictor answers
+    with each of its three neighbors: above, above, left, then corner."""
     return [
         UInt8(137),
         UInt8(80),
@@ -2177,9 +2177,9 @@ def test_interlacing_is_refused_by_name() raises:
         _ = decode(interlaced_png())
 
 
-def test_an_unknown_colour_type_is_rejected() raises:
+def test_an_unknown_color_type_is_rejected() raises:
     with assert_raises():
-        _ = decode(odd_colour_type_png())
+        _ = decode(odd_color_type_png())
 
 
 def test_a_palette_image_without_a_palette_is_rejected() raises:
@@ -2212,7 +2212,7 @@ def test_a_file_with_no_header_is_rejected() raises:
         _ = decode(no_header_png())
 
 
-def test_the_paeth_predictor_answers_with_each_neighbour() raises:
+def test_the_paeth_predictor_answers_with_each_neighbor() raises:
     # The filter with three outcomes, and the only one where getting the tie
     # order wrong corrupts some images and not others. This row is chosen so
     # the predictor picks above, above, left and then above-left in turn, so
@@ -2377,8 +2377,8 @@ def text_chunk_png() -> List[UInt8]:
     ]
 
 
-def grey_keyed_png() -> List[UInt8]:
-    """A 2x1 greyscale PNG whose darker pixel is keyed transparent."""
+def gray_keyed_png() -> List[UInt8]:
+    """A 2x1 grayscale PNG whose darker pixel is keyed transparent."""
     return [
         UInt8(137),
         UInt8(80),
@@ -2542,7 +2542,7 @@ def zero_height_png() -> List[UInt8]:
 
 
 def paeth_corner_png() -> List[UInt8]:
-    """A 2x2 greyscale PNG whose Paeth row needs the above-left neighbour: left 0, above 10, above-left 5.
+    """A 2x2 grayscale PNG whose Paeth row needs the above-left neighbor: left 0, above 10, above-left 5.
     """
     return [
         UInt8(137),
@@ -2677,8 +2677,8 @@ def test_a_chunk_this_decoder_does_not_know_is_skipped() raises:
     assert_equal(image.get_pixel(0, 0).r, UInt8(1))
 
 
-def test_a_greyscale_colour_key_is_honoured() raises:
-    var image = decode(grey_keyed_png())
+def test_a_grayscale_color_key_is_honored() raises:
+    var image = decode(gray_keyed_png())
     assert_equal(image.get_pixel(0, 0).r, UInt8(40))
     assert_equal(image.get_pixel(0, 0).a, UInt8(0))
     assert_equal(image.get_pixel(1, 0).a, UInt8(255))
@@ -2759,7 +2759,7 @@ def test_an_incomplete_huffman_code_refuses_bits_it_cannot_match() raises:
 def test_a_decoded_image_becomes_a_texture() raises:
     # The join the whole decoder exists for. No conversion: both sides already
     # hold eight-bit RGBA rows from the top, which is why decoding widens
-    # every colour type rather than carrying five shapes into the renderer.
+    # every color type rather than carrying five shapes into the renderer.
     var image = decode(rgba_png())
     var skin = texture_from(image, REPEAT, NEAREST, SRGB, True)
     assert_equal(skin.width, 4)
@@ -2770,8 +2770,8 @@ def test_a_decoded_image_becomes_a_texture() raises:
     assert_equal(skin.texel(1, 0).a, UInt8(128))
 
 
-def short_grey_trns_png() -> List[UInt8]:
-    """A greyscale PNG whose tRNS chunk is one byte instead of two."""
+def short_gray_trns_png() -> List[UInt8]:
+    """A grayscale PNG whose tRNS chunk is one byte instead of two."""
     return [
         UInt8(137),
         UInt8(80),
@@ -3924,8 +3924,8 @@ def ragged_palette_png() -> List[UInt8]:
     ]
 
 
-def palette_on_grey_png() -> List[UInt8]:
-    """A greyscale PNG carrying a palette."""
+def palette_on_gray_png() -> List[UInt8]:
+    """A grayscale PNG carrying a palette."""
     return [
         UInt8(137),
         UInt8(80),
@@ -4285,8 +4285,8 @@ def giant_png() -> List[UInt8]:
     ]
 
 
-def linear_grey_png() -> List[UInt8]:
-    """A greyscale PNG explicitly tagged with a gamma of one: its samples are linear.
+def linear_gray_png() -> List[UInt8]:
+    """A grayscale PNG explicitly tagged with a gamma of one: its samples are linear.
     """
     return [
         UInt8(137),
@@ -4687,12 +4687,12 @@ def profiled_png() -> List[UInt8]:
 # malformed file reaches arithmetic written for a well-formed one.
 
 
-def test_a_short_grey_trns_is_rejected_rather_than_read_past() raises:
-    # This aborted the process. tRNS on a greyscale image is two bytes; a
+def test_a_short_gray_trns_is_rejected_rather_than_read_past() raises:
+    # This aborted the process. tRNS on a grayscale image is two bytes; a
     # one-byte chunk left an empty key that the pixel loop then indexed, so a
     # CRC-valid file reached an out-of-range read rather than an error.
     with assert_raises():
-        _ = decode(short_grey_trns_png())
+        _ = decode(short_gray_trns_png())
 
 
 def test_a_short_rgb_trns_is_rejected_rather_than_read_past() raises:
@@ -4740,9 +4740,9 @@ def test_a_palette_that_is_not_whole_entries_is_rejected() raises:
         _ = decode(ragged_palette_png())
 
 
-def test_a_greyscale_image_may_not_carry_a_palette() raises:
+def test_a_grayscale_image_may_not_carry_a_palette() raises:
     with assert_raises():
-        _ = decode(palette_on_grey_png())
+        _ = decode(palette_on_gray_png())
 
 
 def test_an_image_with_alpha_may_not_also_carry_trns() raises:
@@ -4798,7 +4798,7 @@ def run_deflate() -> List[UInt8]:
     """A raw DEFLATE stream expanding to forty identical bytes.
 
     Raw rather than zlib-wrapped so the limit can be tested without the
-    checksum passing judgement first. The run is stored as one byte and a
+    checksum passing judgment first. The run is stored as one byte and a
     back-reference, so expanding it goes through the match path rather
     than the literal path."""
     return [
@@ -4831,10 +4831,10 @@ def test_an_untagged_file_is_taken_as_srgb() raises:
 
 
 def test_a_gamma_of_one_means_the_samples_are_linear() raises:
-    # PNG does not imply sRGB. A mid grey of 128 in a linear image is half
+    # PNG does not imply sRGB. A mid gray of 128 in a linear image is half
     # the light; decoding it through the sRGB curve makes it a fifth, and
     # nothing later can tell the difference.
-    var image = decode(linear_grey_png())
+    var image = decode(linear_gray_png())
     assert_equal(image.color_space, LINEAR)
     assert_equal(image.get_pixel(0, 0).r, UInt8(128))
     # Read as declared, 128 is 0.502 of the light, which displays as 188.
@@ -5334,7 +5334,7 @@ def two_palettes_png() -> List[UInt8]:
 
 
 def late_trns_png() -> List[UInt8]:
-    """A greyscale PNG whose tRNS arrives after its pixel data."""
+    """A grayscale PNG whose tRNS arrives after its pixel data."""
     return [
         UInt8(137),
         UInt8(80),
@@ -5982,7 +5982,7 @@ def late_iccp_png() -> List[UInt8]:
 
 
 def srgb_gamma_png() -> List[UInt8]:
-    """A PNG whose only colour tag is the 1/2.2 gamma that stands for sRGB."""
+    """A PNG whose only color tag is the 1/2.2 gamma that stands for sRGB."""
     return [
         UInt8(137),
         UInt8(80),
@@ -6126,7 +6126,7 @@ def test_a_palette_trns_before_its_palette_is_rejected() raises:
         _ = decode(palette_trns_before_palette_png())
 
 
-def test_colour_chunks_after_the_pixel_data_are_rejected() raises:
+def test_color_chunks_after_the_pixel_data_are_rejected() raises:
     # They describe how to read samples that have already been read.
     with assert_raises():
         _ = decode(late_srgb_png())
@@ -6141,7 +6141,7 @@ def test_a_gama_chunk_of_the_wrong_size_is_rejected() raises:
         _ = decode(short_gama_png())
 
 
-def test_the_sRGB_gamma_is_recognised_on_its_own() raises:
+def test_the_sRGB_gamma_is_recognized_on_its_own() raises:
     # 45455 is the 1/2.2 that stands for ordinary sRGB content, and plenty of
     # files carry it with no sRGB chunk at all.
     var image = decode(srgb_gamma_png())
@@ -6335,8 +6335,8 @@ def empty_palette_png() -> List[UInt8]:
     ]
 
 
-def palette_on_grey_alpha_png() -> List[UInt8]:
-    """A greyscale-with-alpha PNG carrying a palette."""
+def palette_on_gray_alpha_png() -> List[UInt8]:
+    """A grayscale-with-alpha PNG carrying a palette."""
     return [
         UInt8(137),
         UInt8(80),
@@ -6435,9 +6435,9 @@ def test_an_empty_palette_is_rejected() raises:
         _ = decode(empty_palette_png())
 
 
-def test_neither_greyscale_type_may_carry_a_palette() raises:
+def test_neither_grayscale_type_may_carry_a_palette() raises:
     with assert_raises():
-        _ = decode(palette_on_grey_alpha_png())
+        _ = decode(palette_on_gray_alpha_png())
 
 
 def two_palette_trns_png() -> List[UInt8]:
@@ -6555,8 +6555,8 @@ def two_palette_trns_png() -> List[UInt8]:
     ]
 
 
-def trns_on_grey_alpha_png() -> List[UInt8]:
-    """A greyscale-with-alpha PNG that also carries tRNS."""
+def trns_on_gray_alpha_png() -> List[UInt8]:
+    """A grayscale-with-alpha PNG that also carries tRNS."""
     return [
         UInt8(137),
         UInt8(80),
@@ -6644,7 +6644,7 @@ def trns_on_grey_alpha_png() -> List[UInt8]:
 
 
 def test_a_second_palette_trns_is_rejected_too() raises:
-    # The duplicate check has two operands -- a colour key and a palette
+    # The duplicate check has two operands -- a color key and a palette
     # alpha table -- and each has to be able to catch a repeat alone.
     with assert_raises():
         _ = decode(two_palette_trns_png())
@@ -6652,7 +6652,7 @@ def test_a_second_palette_trns_is_rejected_too() raises:
 
 def test_neither_alpha_bearing_type_may_carry_trns() raises:
     with assert_raises():
-        _ = decode(trns_on_grey_alpha_png())
+        _ = decode(trns_on_gray_alpha_png())
 
 
 def main() raises:

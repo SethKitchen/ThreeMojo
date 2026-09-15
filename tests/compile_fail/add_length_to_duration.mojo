@@ -5,9 +5,9 @@
 
 """Adding a length to a duration must not compile."""
 
-from units.si import Duration, Length, METRE, SECOND
+from units.si import Duration, Length, METER, SECOND
 
 
 def main() raises:
-    var bad = Length(1.0, METRE) + Duration(1.0, SECOND)
+    var bad = Length(1.0, METER) + Duration(1.0, SECOND)
     print(bad.value)

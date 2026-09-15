@@ -1,6 +1,6 @@
 # Why shading is per fragment
 
-Every fragment interpolates the normal, normalizes it again, and sums the lights itself. Shading at the corners and interpolating the colour, which is Gouraud shading, gives a coarse sphere a crease along every edge.
+Every fragment interpolates the normal, normalizes it again, and sums the lights itself. Shading at the corners and interpolating the color, which is Gouraud shading, gives a coarse sphere a crease along every edge.
 
 ## Gouraud's limit
 
@@ -22,7 +22,7 @@ The average of two unit vectors is shorter than either. Two normals 45 degrees a
 
 ## Both backends
 
-`Lighting.intensity_at` on the host and `_arriving` in the kernel do the same sum. A parity test with a coloured ambient and a coloured lamp holds them together, so a swapped channel cannot hide.
+`Lighting.intensity_at` on the host and `_arriving` in the kernel do the same sum. A parity test with a colored ambient and a colored lamp holds them together, so a swapped channel cannot hide.
 
 ## What it cost
 

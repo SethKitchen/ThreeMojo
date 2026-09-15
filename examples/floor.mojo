@@ -22,16 +22,16 @@ whose texels are pixel-sized is a lookup rather than a sum.
 
 Which level that is comes from the footprint: `render.rasterizer.mip_level`
 measures how far the coordinates move over one pixel and takes the log. This
-renderer evaluates the neighbouring coordinates analytically rather than
+renderer evaluates the neighboring coordinates analytically rather than
 differencing a 2x2 quad of fragments — the expression is known, so there is
 nothing to approximate and nothing to borrow at a silhouette.
 
-The camera slides forward rather than the floor turning, because the artefact
+The camera slides forward rather than the floor turning, because the artifact
 this is about is one of *motion*. A still frame shows a busy left half and a
 smooth right half; the animation shows the left half boiling.
 
 Each half is a `plane` laid flat and positioned, with its texture coordinates
-rescaled so one copy of the image covers one metre of floor and the two halves
+rescaled so one copy of the image covers one meter of floor and the two halves
 tile in step across the seam. three.js would express that as `texture.repeat`;
 here it is a pass over the `uv` attribute, which `BufferGeometry` exists to
 allow.
@@ -54,7 +54,7 @@ from render.texture import BILINEAR, REPEAT, checkerboard
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/floor.png"
 comptime WIDTH = 320
@@ -71,10 +71,10 @@ comptime FAR_Z = Float32(-70)
 # edges are outside the frame all the way to the horizon, so what the top of
 # the image shows is distance rather than the end of the quad.
 comptime HALF_WIDTH = Float32(60)
-# How many metres one copy of the image covers. Square tiles, which a
+# How many meters one copy of the image covers. Square tiles, which a
 # checkerboard needs -- stretch them and the two directions are minified by
 # different amounts and the picture stops being about the chain.
-comptime TILE_METRES = Float32(1)
+comptime TILE_METERS = Float32(1)
 
 
 def half_floor(
@@ -83,8 +83,8 @@ def half_floor(
     """Return one half of the floor, tiled with texture coordinates.
 
     A `plane` the width of the half and the length of the floor, with its
-    `uv` rewritten so `u` counts metres from the world's x = 0 -- not from
-    the half's own left edge -- and `v` counts metres from the near end. Both
+    `uv` rewritten so `u` counts meters from the world's x = 0 -- not from
+    the half's own left edge -- and `v` counts meters from the near end. Both
     halves therefore tile in step and the seam between them is invisible.
 
     Args:
@@ -99,14 +99,14 @@ def half_floor(
     """
     var width = right_edge - left_edge
     var length = NEAR_Z - FAR_Z
-    var sheet = plane(Length(width, METRE), Length(length, METRE))
+    var sheet = plane(Length(width, METER), Length(length, METER))
     var tiled = List[Float32]()
     ref uvs = sheet.attribute_view(String(UV))
     for vertex in range(uvs.count()):
         var u = uvs.component(vertex, 0)
         var v = uvs.component(vertex, 1)
-        tiled.append((left_edge + u * width) / TILE_METRES)
-        tiled.append(v * length / TILE_METRES)
+        tiled.append((left_edge + u * width) / TILE_METERS)
+        tiled.append(v * length / TILE_METERS)
     sheet.set_attribute(String(UV), BufferAttribute(tiled^, 2))
     return sheet^
 
@@ -117,9 +117,9 @@ def frame_at(
     assets: Assets,
     mut scene: Scene,
     halves: List[NodeId],
-    travelled: Float32,
+    traveled: Float32,
 ) raises -> Framebuffer:
-    """Render one frame with the floor slid `travelled` metres towards us.
+    """Render one frame with the floor slid `traveled` meters towards us.
 
     Args:
         renderer: The renderer to draw with.
@@ -127,7 +127,7 @@ def frame_at(
         assets: The geometry, materials and textures.
         scene: The persistent scene, edited in place.
         halves: The two floor nodes, which move together.
-        travelled: How far the floor has moved along z.
+        traveled: How far the floor has moved along z.
 
     Returns:
         The rendered frame.
@@ -135,9 +135,9 @@ def frame_at(
     Raises:
         Error: If the scene or the render is invalid.
     """
-    var centre_z = (NEAR_Z + FAR_Z) / 2 + travelled
-    scene.node(halves[0]).set_position(-HALF_WIDTH / 2, 0, centre_z)
-    scene.node(halves[1]).set_position(HALF_WIDTH / 2, 0, centre_z)
+    var center_z = (NEAR_Z + FAR_Z) / 2 + traveled
+    scene.node(halves[0]).set_position(-HALF_WIDTH / 2, 0, center_z)
+    scene.node(halves[1]).set_position(HALF_WIDTH / 2, 0, center_z)
     scene.update()
     return renderer.render(scene, assets, camera)
 
@@ -210,8 +210,8 @@ def main() raises:
     var camera = PerspectiveCamera(
         Angle(50.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(200.0, METRE),
+        Length(0.1, METER),
+        Length(200.0, METER),
     )
     # Low and looking slightly down: the horizon sits inside the frame, and
     # everything approaching it is minified without limit.
@@ -228,7 +228,7 @@ def main() raises:
                 assets,
                 scene,
                 halves,
-                TILE_METRES * Float32(index) / Float32(FRAMES),
+                TILE_METERS * Float32(index) / Float32(FRAMES),
             )
         )
 

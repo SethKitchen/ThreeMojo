@@ -37,10 +37,10 @@ comptime DurationUnit = Unit[0, 0, 1, 0]
 comptime AngleUnit = Unit[0, 0, 0, 1]
 
 # --- length -----------------------------------------------------------------
-comptime METRE = LengthUnit(1.0, "m")
-comptime KILOMETRE = LengthUnit(1000.0, "km")
-comptime CENTIMETRE = LengthUnit(0.01, "cm")
-comptime MILLIMETRE = LengthUnit(0.001, "mm")
+comptime METER = LengthUnit(1.0, "m")
+comptime KILOMETER = LengthUnit(1000.0, "km")
+comptime CENTIMETER = LengthUnit(0.01, "cm")
+comptime MILLIMETER = LengthUnit(0.001, "mm")
 
 # Exact by the 1959 international agreement: 1 yd = 0.9144 m exactly.
 comptime YARD = LengthUnit(0.9144, "yd")
@@ -49,7 +49,7 @@ comptime INCH = LengthUnit(0.0254, "in")
 comptime MILE = LengthUnit(1609.344, "mi")
 
 # --- area -------------------------------------------------------------------
-comptime SQUARE_METRE = AreaUnit(1.0, "m^2")
+comptime SQUARE_METER = AreaUnit(1.0, "m^2")
 comptime SQUARE_FOOT = AreaUnit(0.09290304, "ft^2")
 
 # --- mass -------------------------------------------------------------------

@@ -10,9 +10,9 @@ Opaque surfaces draw first because they write the depth that stops a pane behind
 
 ## One answer to one question
 
-Whether a surface composites decides two things together: how its colour combines, and whether it writes depth. It has to be one answer. It was three: the mesh sorter asked the material, and each rasterizer asked a vertex colour. A material with an opaque `opacity` but a translucent base colour sorted as opaque and rasterized as blended. It wrote no depth, and whatever came after painted over it.
+Whether a surface composites decides two things together: how its color combines, and whether it writes depth. It has to be one answer. It was three: the mesh sorter asked the material, and each rasterizer asked a vertex color. A material with an opaque `opacity` but a translucent base color sorted as opaque and rasterized as blended. It wrote no depth, and whatever came after painted over it.
 
-`Material.blending` is now that one answer. It is inferred from the opacity and the colour where it can be. It is stated where it cannot be, because a texture's own alpha is invisible from the material. It travels to both rasterizers as per-triangle state.
+`Material.blending` is now that one answer. It is inferred from the opacity and the color where it can be. It is stated where it cannot be, because a texture's own alpha is invisible from the material. It travels to both rasterizers as per-triangle state.
 
 ## Per mesh
 

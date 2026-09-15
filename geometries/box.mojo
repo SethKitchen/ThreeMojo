@@ -74,7 +74,7 @@ def _quad(mut index: List[Int], start: Int):
 
 
 def box(width: Length, height: Length, depth: Length) raises -> BufferGeometry:
-    """Return a box centred on the origin, in metres.
+    """Return a box centered on the origin, in meters.
 
     Args:
         width: Extent along x.

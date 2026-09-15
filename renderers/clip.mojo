@@ -26,7 +26,7 @@ mean something.
 Clipping a triangle against one plane leaves a polygon of three or four
 corners; against both, up to five. Fanning from the first corner turns whatever
 is left into triangles. The interpolation at each cut carries every varying
-with it -- colour and texture coordinates, in floating point -- so a clipped
+with it -- color and texture coordinates, in floating point -- so a clipped
 triangle shades and maps as though it were never cut.
 """
 
@@ -38,14 +38,14 @@ struct ClipVertex(ImplicitlyCopyable):
     """A camera-space position with the varyings that travel with it."""
 
     var position: Vector3
-    # The surface's own colour, not yet lit. Lighting happens per fragment
+    # The surface's own color, not yet lit. Lighting happens per fragment
     # now, so what travels here is what the material says and not what one
     # corner of it happened to catch.
     var color: FloatColor
     # The world-space normal, interpolated across the triangle and normalized
     # again per fragment. A surface seen from behind is lit with this flipped,
     # which is decided after projection from the screen winding -- so unlike
-    # the two colours this replaces, only one vector has to travel.
+    # the two colors this replaces, only one vector has to travel.
     var normal: Vector3
     # Texture coordinates. A cut has to carry these too: a triangle clipped
     # against the near plane keeps the part of the image that survived, and
@@ -82,7 +82,7 @@ struct ClipVertex(ImplicitlyCopyable):
 
 
 def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
-    """Return one colour channel a fraction `t` of the way from `a` to `b`."""
+    """Return one color channel a fraction `t` of the way from `a` to `b`."""
     # Done in floats and kept there. Rounding to a byte at each cut, as this
     # used to, spent a level of precision every time a triangle crossed a
     # plane — and a triangle can cross two.

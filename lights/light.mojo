@@ -6,7 +6,7 @@
 """What lights a scene, from three.js `src/lights/`.
 
 This is the third thing to be taken off `Renderer`, and it comes off for the
-reason the first two did. A colour lived on `Mesh`, which is otherwise pure
+reason the first two did. A color lived on `Mesh`, which is otherwise pure
 identity; a texture lived on `Renderer`, so a scene could have exactly one
 image. A light lived on `Renderer` too — one direction and one ambient
 fraction — so a scene could have exactly one light, and the first thing anyone
@@ -22,8 +22,8 @@ transform above it.
 
 **Ambient is now a light rather than a fudge.** It used to be a fraction the
 unlit side kept, mixed as `ambient + (1 - ambient) * lambert`. That is a lerp
-towards the surface's own colour, which is not what ambient light is and
-cannot have a colour of its own. Here it is what three.js has: a constant term
+towards the surface's own color, which is not what ambient light is and
+cannot have a color of its own. Here it is what three.js has: a constant term
 *added* to every surface regardless of which way it faces. Two consequences,
 both wanted — a scene with no lights renders black rather than half-lit, and a
 blue ambient tints the shadows blue.
@@ -34,9 +34,9 @@ Summing sRGB bytes would repeat the mistake `render.srgb` exists to prevent:
 half plus half would come to 128 rather than to the full 255. Nothing here
 touches a byte until `RenderTarget.resolve`.
 
-**A light has a colour.** The old one had only a direction, so lighting was
-scalar dimming and a red lamp was impossible. A light's colour multiplies the
-surface's, per channel, which is what makes coloured lighting work at all.
+**A light has a color.** The old one had only a direction, so lighting was
+scalar dimming and a red lamp was impossible. A light's color multiplies the
+surface's, per channel, which is what makes colored lighting work at all.
 
 **A point light is the third kind.** A directional light is the sun: parallel
 rays, one direction, the same everywhere. A point light is a bulb: it sits
@@ -93,7 +93,7 @@ comptime NO_CUTOFF = Float32(0.0)
 
 @fieldwise_init
 struct Light(ImplicitlyCopyable):
-    """One light in a scene: a kind, a colour, a strength, and maybe a node.
+    """One light in a scene: a kind, a color, a strength, and maybe a node.
 
     A tagged struct rather than a trait with three implementations, for the
     reason `Material.side` is a small value type: there are three kinds, they
@@ -103,7 +103,7 @@ struct Light(ImplicitlyCopyable):
 
     var kind: LightKind
     var color: Color
-    # How bright, multiplying the colour. Above one is allowed: two lamps can
+    # How bright, multiplying the color. Above one is allowed: two lamps can
     # overexpose a white surface, and clamping here would hide that rather
     # than let `resolve` do it once at the end.
     var intensity: Float32
@@ -122,7 +122,7 @@ struct Light(ImplicitlyCopyable):
     def radiance(self) -> FloatColor:
         """Return the light this contributes, decoded and scaled.
 
-        Linear, because it is about to be multiplied by a surface colour and
+        Linear, because it is about to be multiplied by a surface color and
         added to other lights, and neither is arithmetic you can do on bytes.
         Alpha is not light and is left at one.
         """
@@ -138,8 +138,8 @@ def ambient_light(color: Color, intensity: Float32 = 1.0) raises -> Light:
     """Return a light that fills every surface equally.
 
     Args:
-        color: Its colour.
-        intensity: How bright, multiplying the colour.
+        color: Its color.
+        intensity: How bright, multiplying the color.
 
     Returns:
         The light.
@@ -165,9 +165,9 @@ def directional_light(
     attached to.
 
     Args:
-        color: Its colour.
+        color: Its color.
         node: The node whose world position points away from the light.
-        intensity: How bright, multiplying the colour.
+        intensity: How bright, multiplying the color.
 
     Returns:
         The light.
@@ -195,9 +195,9 @@ def point_light(
     gets a quarter of the light, and a surface behind the bulb gets none.
 
     Args:
-        color: Its colour.
+        color: Its color.
         node: The node whose world position the light shines from.
-        intensity: How bright at one metre, multiplying the colour.
+        intensity: How bright at one meter, multiplying the color.
         decay: The power of distance the light is divided by. Two is the
             inverse-square law of a real bulb; one falls off gently; zero not
             at all.

@@ -38,7 +38,7 @@ from render.target import RenderTarget
 from render.texture import BILINEAR, REPEAT, checkerboard
 from renderers.renderer import Renderer, available_workers
 from std.time import perf_counter_ns
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 
 comptime REPEATS = 5
 
@@ -53,7 +53,7 @@ def build(mut scene: Scene, mut assets: Assets) raises:
     Raises:
         Error: If any part cannot be built.
     """
-    var ball = assets.geometries.add(sphere(Length(1.0, METRE), 96, 64))
+    var ball = assets.geometries.add(sphere(Length(1.0, METER), 96, 64))
     var board = assets.textures.add(
         checkerboard(
             128,
@@ -169,7 +169,7 @@ def main() raises:
     var assets = Assets()
     build(scene, assets)
     var camera = PerspectiveCamera(
-        Angle(45.0, DEGREE), 4.0 / 3.0, Length(0.1, METRE), Length(100.0, METRE)
+        Angle(45.0, DEGREE), 4.0 / 3.0, Length(0.1, METER), Length(100.0, METER)
     )
     camera.place(Vector3(0, 0.3, 3.0), Vector3(0, 0, 0))
 

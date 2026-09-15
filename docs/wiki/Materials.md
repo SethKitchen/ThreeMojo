@@ -1,6 +1,6 @@
 # Materials
 
-`materials/material.mojo`. A `Material` is a colour, an optional texture, which sides to draw, an opacity, a blend policy and a kind.
+`materials/material.mojo`. A `Material` is a color, an optional texture, which sides to draw, an opacity, a blend policy and a kind.
 
 three.js: `Material`, `MeshLambertMaterial`, `MeshBasicMaterial`, `side`, `opacity`, `transparent`, `map`.
 
@@ -16,8 +16,8 @@ Material(color, kind=BASIC)
 
 | Argument | Type | Default | Meaning |
 |---|---|---|---|
-| `color` | `Color` | required | The base colour, as authored in sRGB. |
-| `map` | `TextureId` | `NO_TEXTURE` | The texture that multiplies the colour. |
+| `color` | `Color` | required | The base color, as authored in sRGB. |
+| `map` | `TextureId` | `NO_TEXTURE` | The texture that multiplies the color. |
 | `side` | `Side` | `FRONT_SIDE` | Which faces are drawn. |
 | `opacity` | `Float32` | `1.0` | One is opaque. Less shows what is behind. |
 | `blending` | `Optional[Blending]` | inferred | `OPAQUE` or `BLEND`. |
@@ -38,11 +38,11 @@ A face seen from behind is lit with its normal flipped. A mirrored mesh, with a 
 | Value | three.js | Meaning |
 |---|---|---|
 | `LAMBERT` | `MeshLambertMaterial` | The lights reach the surface. |
-| `BASIC` | `MeshBasicMaterial` | The colour and texture show as they are. |
+| `BASIC` | `MeshBasicMaterial` | The color and texture show as they are. |
 
 ## Opacity and blending
 
-`opacity` below one, or a colour with alpha below 255, makes the material blend. A blended surface tests depth without writing it, and the renderer draws it after every opaque mesh, furthest first.
+`opacity` below one, or a color with alpha below 255, makes the material blend. A blended surface tests depth without writing it, and the renderer draws it after every opaque mesh, furthest first.
 
 Pass `blending=BLEND` when a texture's own alpha needs blending and the material looks opaque. Pass `blending=OPAQUE` to force an opaque draw.
 

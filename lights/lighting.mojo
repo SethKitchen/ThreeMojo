@@ -146,11 +146,11 @@ struct Lighting(Movable):
 
     @staticmethod
     def uniform() -> Lighting:
-        """Return lighting that leaves a surface's own colour alone.
+        """Return lighting that leaves a surface's own color alone.
 
         Light of one in every channel, from nowhere in particular: the
         identity for the multiply a fragment does, so a caller with no lights
-        in hand gets the colours it passed in rather than black.
+        in hand gets the colors it passed in rather than black.
 
         The same idea as the blank texture sampling opaque white. It makes
         "no lighting" a value rather than a branch, which is what lets
@@ -173,11 +173,11 @@ struct Lighting(Movable):
         return len(self.positions)
 
     def intensity_at(self, normal: Vector3, position: Vector3) -> FloatColor:
-        """Return how much light of each colour reaches a surface here.
+        """Return how much light of each color reaches a surface here.
 
-        The surface's own colour is not in it: this is the light arriving,
+        The surface's own color is not in it: this is the light arriving,
         and multiplying by what the surface reflects is the caller's step.
-        Split out because a fragment already holds its colour in linear form
+        Split out because a fragment already holds its color in linear form
         and has no byte to decode, and because the GPU kernel computes exactly
         this and must compute it the same way.
 
@@ -237,7 +237,7 @@ struct Lighting(Movable):
     ) -> FloatColor:
         """Return `base` lit by every light, in linear light.
 
-        The base colour is decoded from sRGB first: an authored byte is not
+        The base color is decoded from sRGB first: an authored byte is not
         proportional to light, and multiplying it by a Lambert term would be
         arithmetic on the wrong numbers. See `render.srgb`.
 
@@ -247,12 +247,12 @@ struct Lighting(Movable):
         headroom in between.
 
         Args:
-            base: The surface's own colour, as authored.
+            base: The surface's own color, as authored.
             normal: Its unit normal, in world space.
             position: Where it is, in world space, for the point lights.
 
         Returns:
-            The lit colour, linear, with the base colour's alpha.
+            The lit color, linear, with the base color's alpha.
         """
         var total = self.intensity_at(normal, position)
         var surface = FloatColor(srgb=base)

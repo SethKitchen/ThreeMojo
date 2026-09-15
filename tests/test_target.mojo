@@ -30,7 +30,7 @@ comptime TOLERANCE = Float64(1e-5)
 # --- the representation -----------------------------------------------------
 
 
-def test_a_target_starts_at_its_clear_colour() raises:
+def test_a_target_starts_at_its_clear_color() raises:
     var target = RenderTarget(2, 2, Color(40, 50, 60))
     assert_equal(target.shown(0, 0).r, UInt8(40))
     assert_equal(target.shown(1, 1).b, UInt8(60))
@@ -62,7 +62,7 @@ def test_coordinates_outside_the_target_are_rejected() raises:
         _ = target.test_depth(9, 9, 0.5)
 
 
-def test_colour_is_stored_premultiplied_and_linear() raises:
+def test_color_is_stored_premultiplied_and_linear() raises:
     # Both halves of the representation: scaled by coverage, and in light
     # rather than in display values.
     var target = RenderTarget(1, 1, Color(0, 0, 0))
@@ -70,12 +70,12 @@ def test_colour_is_stored_premultiplied_and_linear() raises:
     var stored = target.color_at(0, 0)
     assert_almost_equal(stored.r, Float32(0.5), atol=TOLERANCE)
     assert_almost_equal(stored.a, Float32(0.5), atol=TOLERANCE)
-    # And it comes back out as the straight colour that went in.
+    # And it comes back out as the straight color that went in.
     assert_equal(target.shown(0, 0).r, UInt8(255))
     assert_equal(target.shown(0, 0).a, UInt8(128))
 
 
-def test_resolving_encodes_colour_but_not_alpha() raises:
+def test_resolving_encodes_color_but_not_alpha() raises:
     # Half the light displays as 188; half the coverage is just 128.
     var target = RenderTarget(1, 1, Color(0, 0, 0))
     target.write(0, 0, FloatColor(0.5, 0.5, 0.5, 0.5))

@@ -16,12 +16,12 @@ from geometries.box import cube
 from materials.material import Material
 from objects.mesh import Mesh
 from render.framebuffer import Color
-from units.si import Length, METRE
+from units.si import Length, METER
 
 
 def main() raises:
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var paint = assets.materials.add(Material(Color(255, 0, 0)))
     var scene = Scene()
     var node = scene.add(Object3D())

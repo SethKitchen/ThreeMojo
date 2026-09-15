@@ -23,7 +23,7 @@ from render.framebuffer import Color, Framebuffer
 from render.texture import BILINEAR, REPEAT, checkerboard
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 ```
 
 ## 2. Add a texture
@@ -33,7 +33,7 @@ A texture is an asset too. Make a checkerboard with a mip chain, and a white mat
 ```mojo
 def main() raises:
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var board = assets.textures.add(
         checkerboard(
             64,
@@ -48,7 +48,7 @@ def main() raises:
     var tiled = assets.materials.add(Material(Color(255, 255, 255), board))
 ```
 
-The material colour multiplies the texture. White shows the image as it is. The mip chain keeps the far side of the cube smooth.
+The material color multiplies the texture. White shows the image as it is. The mip chain keeps the far side of the cube smooth.
 
 ## 3. Build the scene
 
@@ -74,13 +74,13 @@ A point light sits at a position and falls off with distance:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.15))
 ```
 
-The third argument is the intensity at one metre. The default decay is the inverse-square law.
+The third argument is the intensity at one meter. The default decay is the inverse-square law.
 
 ## 5. Place the camera and the renderer
 
 ```mojo
     var camera = PerspectiveCamera(
-        Angle(45.0, DEGREE), 4.0 / 3.0, Length(0.1, METRE), Length(100.0, METRE)
+        Angle(45.0, DEGREE), 4.0 / 3.0, Length(0.1, METER), Length(100.0, METER)
     )
     camera.place(Vector3(0, 0.6, 3), Vector3(0, 0, 0))
 
@@ -119,7 +119,7 @@ Open `out/lit_scene.png` in a browser or in VS Code. The cube turns. The bulb li
 
 ## What you learned
 
-- A texture belongs to a material, and the material colour multiplies it.
+- A texture belongs to a material, and the material color multiplies it.
 - A point light needs a node for its position. Its light falls off with distance.
 - Edit a node in place with `scene.node(id)`. Then call `scene.update()`.
 - An APNG holds many frames. The first frame is a plain PNG.

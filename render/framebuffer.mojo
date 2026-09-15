@@ -16,11 +16,11 @@ can be tested without capturing stdout, and later lets a GPU kernel fill the
 same bytes.
 
 Compositing does not happen here. Blending and depth-passing live on
-`render.target`, which keeps colour as linear light at full precision until an
+`render.target`, which keeps color as linear light at full precision until an
 image is finished; a byte buffer is the wrong place to accumulate, because
 every layer would round and the losses compound. This type is the *result*.
 
-Colour has two forms here. `Color` is the eight bits per channel the buffer
+Color has two forms here. `Color` is the eight bits per channel the buffer
 actually stores — sRGB encoded, ready for a display. `FloatColor` is *linear*
 light, which is what lighting, filtering, clipping and interpolation must work
 in, because those are arithmetic on light and sRGB is not proportional to
@@ -54,7 +54,7 @@ struct Color(ImplicitlyCopyable):
 
 
 struct FloatColor(ImplicitlyCopyable):
-    """An RGBA colour with channels as floats, nominally zero to one.
+    """An RGBA color with channels as floats, nominally zero to one.
 
     Lighting multiplies, interpolation mixes, and clipping mixes again. Doing
     any of that in eight bits throws away precision at every step: the old
@@ -62,7 +62,7 @@ struct FloatColor(ImplicitlyCopyable):
     clipped corner was built, so a gradient crossing the near plane could
     band before it was ever rasterized.
 
-    Colour stays in this form all the way to the framebuffer, where
+    Color stays in this form all the way to the framebuffer, where
     `quantize` converts once. Values may exceed one on the way — a bright
     light, an accumulated highlight — and are clamped only at that final step
     rather than after each operation.
@@ -76,19 +76,19 @@ struct FloatColor(ImplicitlyCopyable):
     def __init__(
         out self, r: Float32, g: Float32, b: Float32, a: Float32 = 1.0
     ):
-        """Create a colour, opaque unless an alpha is given."""
+        """Create a color, opaque unless an alpha is given."""
         self.r = r
         self.g = g
         self.b = b
         self.a = a
 
     def __init__(out self, *, srgb: Color):
-        """Decode an authored eight-bit colour into linear light.
+        """Decode an authored eight-bit color into linear light.
 
-        Colours written as bytes — in a paint program, in a hex literal, in
+        Colors written as bytes — in a paint program, in a hex literal, in
         this source — are sRGB encoded, so shading them without decoding
         multiplies light by a number that is not proportional to light. Alpha
-        is not colour and is not decoded; see `render.srgb`.
+        is not color and is not decoded; see `render.srgb`.
         """
         self.r = srgb_to_linear(Float32(srgb.r) / 255)
         self.g = srgb_to_linear(Float32(srgb.g) / 255)
@@ -96,10 +96,10 @@ struct FloatColor(ImplicitlyCopyable):
         self.a = Float32(srgb.a) / 255
 
     def __init__(out self, *, of: Color):
-        """Convert an eight-bit colour, mapping 0-255 onto 0-1.
+        """Convert an eight-bit color, mapping 0-255 onto 0-1.
 
         No transfer function: this is for values that are already linear, or
-        that are not colour at all. `srgb=` is what an authored colour wants.
+        that are not color at all. `srgb=` is what an authored color wants.
         """
         self.r = Float32(of.r) / 255
         self.g = Float32(of.g) / 255
@@ -107,12 +107,12 @@ struct FloatColor(ImplicitlyCopyable):
         self.a = Float32(of.a) / 255
 
     def premultiplied(self) -> Self:
-        """Return this colour with its channels scaled by its own alpha.
+        """Return this color with its channels scaled by its own alpha.
 
         *Associated* alpha: the stored numbers are the light the surface
         actually contributes, rather than the light it would contribute if it
         were opaque. Compositing and filtering both want this form, because
-        both are weighted sums and a hidden colour must weigh nothing. See
+        both are weighted sums and a hidden color must weigh nothing. See
         `render.target`.
         """
         return FloatColor(
@@ -120,10 +120,10 @@ struct FloatColor(ImplicitlyCopyable):
         )
 
     def unpremultiplied(self) -> Self:
-        """Return the colour this would be if it were opaque, with its alpha.
+        """Return the color this would be if it were opaque, with its alpha.
 
         The inverse of `premultiplied`, undefined where nothing is covered —
-        a colour that contributes no light has no colour to recover — so a
+        a color that contributes no light has no color to recover — so a
         zero alpha gives transparent black, which is what PNG wants written.
         """
         if self.a <= 0:
@@ -133,17 +133,17 @@ struct FloatColor(ImplicitlyCopyable):
         )
 
     def scaled(self, factor: Float32) -> Self:
-        """Return this colour with its three channels scaled, alpha kept."""
+        """Return this color with its three channels scaled, alpha kept."""
         return FloatColor(
             self.r * factor, self.g * factor, self.b * factor, self.a
         )
 
     def encode(self) -> Color:
-        """Return the eight-bit colour a display should show for this light.
+        """Return the eight-bit color a display should show for this light.
 
         The other end of `FloatColor(srgb=...)`, applied once at the very end.
         A framebuffer holds what a display should show, not what the light
-        was, so this is where linear stops. Alpha is not colour and is not
+        was, so this is where linear stops. Alpha is not color and is not
         encoded.
         """
         return Color(
@@ -154,10 +154,10 @@ struct FloatColor(ImplicitlyCopyable):
         )
 
     def quantize(self) -> Color:
-        """Return the eight-bit colour nearest this one.
+        """Return the eight-bit color nearest this one.
 
         No transfer function. `encode` is what a pixel bound for a display
-        wants; this is for values that were never in a colour space.
+        wants; this is for values that were never in a color space.
 
         Rounds rather than truncates. Truncating costs a level everywhere: a
         face square-on to the light has a Lambert term of 0.99999 rather than

@@ -37,8 +37,8 @@ Attribute names are the constants `POSITION`, `NORMAL` and `UV`. A geometry need
 ## Box
 
 ```mojo
-var solid = cube(Length(1.0, METRE))
-var brick = box(Length(2.0, METRE), Length(1.0, METRE), Length(0.5, METRE))
+var solid = cube(Length(1.0, METER))
+var brick = box(Length(2.0, METER), Length(1.0, METER), Length(0.5, METER))
 ```
 
 A box has twenty-four vertices, four per face. Each face carries its own normal and texture coordinates. The whole image covers each face once.
@@ -46,19 +46,19 @@ A box has twenty-four vertices, four per face. Each face carries its own normal 
 ## Sphere
 
 ```mojo
-var ball = sphere(Length(1.0, METRE), 24, 16)   # segments around, rings down
+var ball = sphere(Length(1.0, METER), 24, 16)   # segments around, rings down
 ```
 
-A latitude and longitude sphere. Each normal points away from the centre, so shading is smooth. `u` runs once around the equator. `v` runs from one at the north pole to zero at the south pole. It needs at least three segments and two rings.
+A latitude and longitude sphere. Each normal points away from the center, so shading is smooth. `u` runs once around the equator. `v` runs from one at the north pole to zero at the south pole. It needs at least three segments and two rings.
 
 ## Plane
 
 ```mojo
-var sheet = plane(Length(2.0, METRE), Length(1.0, METRE))        # one quad
-var grid = plane(Length(20.0, METRE), Length(20.0, METRE), 4, 4)  # sixteen quads
+var sheet = plane(Length(2.0, METER), Length(1.0, METER))        # one quad
+var grid = plane(Length(20.0, METER), Length(20.0, METER), 4, 4)  # sixteen quads
 ```
 
-A rectangle in the xy plane, facing +z, centred on the origin. The vertex order, winding and texture coordinates match three.js. Turn the node a quarter turn about x to make a floor.
+A rectangle in the xy plane, facing +z, centered on the origin. The vertex order, winding and texture coordinates match three.js. Turn the node a quarter turn about x to make a floor.
 
 The texture coordinates run once across the rectangle. To tile an image, rewrite the `uv` attribute, as `examples/floor.mojo` does.
 

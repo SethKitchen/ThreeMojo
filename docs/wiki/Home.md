@@ -51,7 +51,7 @@ Understand why.
 
 - [Why a software rasterizer](Why-a-software-rasterizer)
 - [Why the scene graph is an array](Why-the-scene-graph-is-an-array)
-- [Why colour is linear](Why-colour-is-linear)
+- [Why color is linear](Why-color-is-linear)
 - [Why interpolation is perspective-correct](Why-interpolation-is-perspective-correct)
 - [Why coverage uses fixed point](Why-coverage-uses-fixed-point)
 - [Why shading is per fragment](Why-shading-is-per-fragment)

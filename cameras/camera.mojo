@@ -31,8 +31,8 @@ node answers from where it was placed, and `view_matrix` is the same answer
 without the scene for the many callers that only ever place a camera.
 
 The two distances are methods rather than fields because a trait can require
-behaviour but not storage, and because the cameras hold them as `Length`
-quantities while the clipper wants bare metres.
+behavior but not storage, and because the cameras hold them as `Length`
+quantities while the clipper wants bare meters.
 """
 
 from core.object3d import NodeId
@@ -82,11 +82,11 @@ trait Camera(Copyable, Movable):
         ...
 
     def near_distance(self) -> Float32:
-        """Return the near clipping distance, in metres."""
+        """Return the near clipping distance, in meters."""
         ...
 
     def far_distance(self) -> Float32:
-        """Return the far clipping distance, in metres."""
+        """Return the far clipping distance, in meters."""
         ...
 
 
@@ -103,7 +103,7 @@ def node_view_matrix(scene: Scene, node: NodeId) raises -> Matrix4:
     parented to a scaled group inherits the group's position and turn, but
     not its size: scale in a view matrix squashes camera space, which is what
     a field of view and an aspect ratio are for, and along z it changes what
-    the near and far distances mean in metres. The first version inverted the
+    the near and far distances mean in meters. The first version inverted the
     whole world matrix and did all of that silently.
 
     Args:

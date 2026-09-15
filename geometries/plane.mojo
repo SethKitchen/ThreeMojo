@@ -9,7 +9,7 @@ The most used geometry after the box, and the one three examples had each
 built by hand with their own corner order, winding and texture coordinates.
 A floor, a wall, a pane of glass and a sprite are all this, positioned.
 
-It lies in the xy plane facing +z and is centred on the origin, as three.js's
+It lies in the xy plane facing +z and is centered on the origin, as three.js's
 is. To make a floor, rotate its node a quarter turn about x so +z becomes +y.
 Subdividing it into a grid is what makes a large ground plane light well and
 clip cleanly: one quad to the horizon spans a lot of perspective and a lot of
@@ -18,7 +18,7 @@ exactly.
 
 Texture coordinates run once across the whole rectangle, (0, 0) at the bottom
 left and (1, 1) at the top right, which is what a texture expects and what
-`box` does per face. A floor that wants its image tiled every metre scales
+`box` does per face. A floor that wants its image tiled every meter scales
 these itself, as `examples/floor.mojo` does; three.js would reach for
 `texture.repeat`, which is not ported yet.
 """
@@ -34,7 +34,7 @@ def plane(
     width_segments: Int = 1,
     height_segments: Int = 1,
 ) raises -> BufferGeometry:
-    """Return a rectangle in the xy plane, facing +z, centred on the origin.
+    """Return a rectangle in the xy plane, facing +z, centered on the origin.
 
     Args:
         width: Extent along x.

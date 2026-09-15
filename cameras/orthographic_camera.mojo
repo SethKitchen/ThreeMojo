@@ -12,7 +12,7 @@ measurements have to survive the trip to the image.
 
 The view volume is a box rather than a pyramid, so it is given by its edges in
 world units rather than by an angle. three.js takes those four edges directly
-and so does this; `centred` is here for the common case of a symmetric box,
+and so does this; `centered` is here for the common case of a symmetric box,
 which is the shape `PerspectiveCamera` always has.
 
 `near` may be zero. A perspective camera cannot allow that because projection
@@ -25,7 +25,7 @@ Everything after the projection matrix is shared with the perspective path,
 including the clipper and the perspective-correct interpolation. The latter
 costs nothing here and is not special-cased: an orthographic matrix leaves the
 transformed w at one, so every `inv_w` is one and the correction divides by
-one. A backend that special-cased it would be two code paths where the maths
+one. A backend that special-cased it would be two code paths where the math
 already gives one.
 """
 
@@ -35,11 +35,11 @@ from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.projection import look_at, orthographic, viewport
 from math.vector3 import Vector3
-from units.si import Length, METRE
+from units.si import Length, METER
 
 
 struct OrthographicCamera(Camera):
-    """A camera that renders without perspective, in metres."""
+    """A camera that renders without perspective, in meters."""
 
     var left: Length
     var right: Length
@@ -189,15 +189,15 @@ struct OrthographicCamera(Camera):
         return combined^
 
     def near_distance(self) -> Float32:
-        """Return the near clipping distance, in metres."""
+        """Return the near clipping distance, in meters."""
         return self.near.value
 
     def far_distance(self) -> Float32:
-        """Return the far clipping distance, in metres."""
+        """Return the far clipping distance, in meters."""
         return self.far.value
 
 
-def centred(
+def centered(
     height: Length, aspect: Float32, near: Length, far: Length
 ) raises -> OrthographicCamera:
     """Return a symmetric orthographic camera of a given visible height.
@@ -225,10 +225,10 @@ def centred(
     var half = height.value / 2
     var wide = half * aspect
     return OrthographicCamera(
-        Length(-wide, METRE),
-        Length(wide, METRE),
-        Length(half, METRE),
-        Length(-half, METRE),
+        Length(-wide, METER),
+        Length(wide, METER),
+        Length(half, METER),
+        Length(-half, METER),
         near,
         far,
     )

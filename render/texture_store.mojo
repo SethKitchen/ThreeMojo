@@ -8,7 +8,7 @@
 The third store, after `GeometryStore` and `MaterialStore`, and the same shape
 for the same reason: an image is large, several materials will want the same
 one, and exactly one thing should own it. A `Material` names its texture by id
-rather than holding it, so two materials differing only in colour cost one copy
+rather than holding it, so two materials differing only in color cost one copy
 of the image between them rather than two.
 
 Append-only. Nothing here reference-counts or reuses an id, because nothing yet

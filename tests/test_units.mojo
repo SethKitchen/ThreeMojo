@@ -16,7 +16,7 @@ from units.si import (
     Acceleration,
     Angle,
     Area,
-    CENTIMETRE,
+    CENTIMETER,
     DEGREE,
     Duration,
     FOOT,
@@ -24,18 +24,18 @@ from units.si import (
     HOUR,
     INCH,
     KILOGRAM,
-    KILOMETRE,
+    KILOMETER,
     Length,
-    METRE,
+    METER,
     MILE,
-    MILLIMETRE,
+    MILLIMETER,
     MINUTE,
     Mass,
     POUND,
     RADIAN,
     SECOND,
     SQUARE_FOOT,
-    SQUARE_METRE,
+    SQUARE_METER,
     Scalar,
     TURN,
     Velocity,
@@ -57,12 +57,12 @@ def test_canonical_construction_needs_no_unit() raises:
     assert_equal(Length(2.5).value, Float32(2.5))
 
 
-def test_metre_is_the_canonical_length() raises:
-    assert_equal(Length(1.0, METRE).value, Float32(1.0))
+def test_meter_is_the_canonical_length() raises:
+    assert_equal(Length(1.0, METER).value, Float32(1.0))
 
 
-def test_a_metre_in_imperial_units() raises:
-    var height = Length(1.0, METRE)
+def test_a_meter_in_imperial_units() raises:
+    var height = Length(1.0, METER)
     assert_almost_equal(height.to(FOOT), Float32(3.2808399))
     assert_almost_equal(height.to(INCH), Float32(39.37008))
     assert_almost_equal(height.to(YARD), Float32(1.0936133))
@@ -80,9 +80,9 @@ def test_twelve_inches_make_a_foot() raises:
 
 
 def test_metric_prefixes() raises:
-    assert_equal(Length(1.0, KILOMETRE).value, Float32(1000.0))
-    assert_almost_equal(Length(1.0, METRE).to(CENTIMETRE), Float32(100.0))
-    assert_almost_equal(Length(1.0, METRE).to(MILLIMETRE), Float32(1000.0))
+    assert_equal(Length(1.0, KILOMETER).value, Float32(1000.0))
+    assert_almost_equal(Length(1.0, METER).to(CENTIMETER), Float32(100.0))
+    assert_almost_equal(Length(1.0, METER).to(MILLIMETER), Float32(1000.0))
 
 
 def test_a_mile_in_feet() raises:
@@ -95,14 +95,14 @@ def test_conversion_round_trips() raises:
 
 
 def test_units_can_be_mixed_in_one_sum() raises:
-    # Both operands are metres internally, so this is just a float add.
-    var total = Length(1.0, METRE) + Length(1.0, FOOT)
+    # Both operands are meters internally, so this is just a float add.
+    var total = Length(1.0, METER) + Length(1.0, FOOT)
     assert_almost_equal(total.value, Float32(1.3048))
     assert_almost_equal(total.to(FOOT), Float32(4.2808399))
 
 
 def test_subtraction() raises:
-    var remaining = Length(1.0, METRE) - Length(30.0, CENTIMETRE)
+    var remaining = Length(1.0, METER) - Length(30.0, CENTIMETER)
     assert_almost_equal(remaining.value, Float32(0.7))
 
 
@@ -113,20 +113,20 @@ def test_negation_and_absolute_value() raises:
 
 
 def test_scaling_by_a_plain_number_keeps_the_dimension() raises:
-    var tripled = Length(2.0, METRE).scaled(3.0)
+    var tripled = Length(2.0, METER).scaled(3.0)
     assert_equal(tripled.value, Float32(6.0))
     assert_equal(tripled.length, 1)
 
 
 def test_multiplying_lengths_gives_an_area() raises:
-    var area = Length(3.0, METRE) * Length(4.0, METRE)
+    var area = Length(3.0, METER) * Length(4.0, METER)
     assert_equal(area.value, Float32(12.0))
     assert_equal(area.length, 2)
     assert_equal(area.time, 0)
 
 
 def test_area_converts_to_square_feet() raises:
-    var area = Length(1.0, METRE) * Length(1.0, METRE)
+    var area = Length(1.0, METER) * Length(1.0, METER)
     assert_almost_equal(area.to(SQUARE_FOOT), Float32(10.76391))
 
 
@@ -137,7 +137,7 @@ def test_multiplying_three_lengths_gives_a_volume() raises:
 
 
 def test_dividing_length_by_time_gives_velocity() raises:
-    var speed = Length(100.0, METRE) / Duration(10.0, SECOND)
+    var speed = Length(100.0, METER) / Duration(10.0, SECOND)
     assert_equal(speed.value, Float32(10.0))
     assert_equal(speed.length, 1)
     assert_equal(speed.time, -1)
@@ -190,9 +190,9 @@ def test_radian_is_the_canonical_angle() raises:
 
 
 def test_comparisons_use_the_canonical_value() raises:
-    # A foot is shorter than a metre however each was written.
-    assert_true(Length(1.0, FOOT) < Length(1.0, METRE))
-    assert_true(Length(1.0, METRE) > Length(1.0, FOOT))
+    # A foot is shorter than a meter however each was written.
+    assert_true(Length(1.0, FOOT) < Length(1.0, METER))
+    assert_true(Length(1.0, METER) > Length(1.0, FOOT))
     assert_true(Length(12.0, INCH) <= Length(1.0, FOOT))
     assert_true(Length(12.0, INCH) >= Length(1.0, FOOT))
 
@@ -200,11 +200,11 @@ def test_comparisons_use_the_canonical_value() raises:
 def test_equality_across_units() raises:
     assert_true(Length(1.0, YARD) == Length(3.0, FOOT))
     assert_false(Length(1.0, YARD) != Length(3.0, FOOT))
-    assert_true(Length(1.0, METRE) != Length(1.0, FOOT))
+    assert_true(Length(1.0, METER) != Length(1.0, FOOT))
 
 
 def test_units_expose_their_symbol() raises:
-    assert_equal(METRE.symbol, "m")
+    assert_equal(METER.symbol, "m")
     assert_equal(FOOT.symbol, "ft")
     assert_equal(DEGREE.symbol, "deg")
 

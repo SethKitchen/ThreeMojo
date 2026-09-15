@@ -1,6 +1,6 @@
 # Textures
 
-`render/texture.mojo` and `render/texture_store.mojo`. A `Texture` is an RGBA image with a wrap mode, a filter, a colour space and an optional mip chain. A material names one by id.
+`render/texture.mojo` and `render/texture_store.mojo`. A `Texture` is an RGBA image with a wrap mode, a filter, a color space and an optional mip chain. A material names one by id.
 
 three.js: `Texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`.
 
@@ -37,7 +37,7 @@ Under `REPEAT`, coordinates 0 and 1 name the same texel. Under `CLAMP` they name
 
 The chain costs a third more memory. It is built in premultiplied linear light.
 
-## Colour space
+## Color space
 
 | Value | Meaning |
 |---|---|
@@ -45,7 +45,7 @@ The chain costs a third more memory. It is built in premultiplied linear light.
 | `LINEAR` | Data. Bytes are used as stored. |
 | `UNKNOWN_SPACE` | A decoder's answer for a file it cannot interpret. A texture refuses it. |
 
-Alpha is never decoded. It is coverage, not colour.
+Alpha is never decoded. It is coverage, not color.
 
 ## Coordinates
 
@@ -55,11 +55,11 @@ Alpha is never decoded. It is coverage, not colour.
 
 | Member | Meaning |
 |---|---|
-| `sample(u, v) -> FloatColor` | The colour at a coordinate, level zero. |
+| `sample(u, v) -> FloatColor` | The color at a coordinate, level zero. |
 | `sample_level(u, v, level) -> FloatColor` | Trilinear, between two mip levels. |
 | `texel(x, y) -> Color` | One stored texel. |
 | `is_blank() -> Bool` | The blank texture, which samples as opaque white. |
-| `validate()` | Refuse a wrap, filter or colour space that is none of the named values. |
+| `validate()` | Refuse a wrap, filter or color space that is none of the named values. |
 | `levels`, `width`, `height` | The chain length and the base size. |
 
 ## TextureStore
@@ -69,9 +69,9 @@ Alpha is never decoded. It is coverage, not colour.
 ## Errors
 
 - Dimensions must be positive, and the buffer length must match.
-- A wrap, filter or colour space that is none of its named values raises. The GPU upload checks again.
+- A wrap, filter or color space that is none of its named values raises. The GPU upload checks again.
 - A `checkerboard` size must divide evenly by its square count.
 
 ## Why
 
-See [Why mipmaps](Why-mipmaps) and [Why colour is linear](Why-colour-is-linear).
+See [Why mipmaps](Why-mipmaps) and [Why color is linear](Why-color-is-linear).

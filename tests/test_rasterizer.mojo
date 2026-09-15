@@ -227,7 +227,7 @@ def flat_vertex(
     to correct, so these tests measure coverage and blending on their own.
     The tests that do care about perspective pass differing values.
 
-    The colour is decoded from sRGB, so that writing a byte in and reading the
+    The color is decoded from sRGB, so that writing a byte in and reading the
     same byte out is the round trip it looks like: the target encodes on the
     way out.
 
@@ -236,7 +236,7 @@ def flat_vertex(
 
     Args:
         point: Screen x and y with NDC depth in z.
-        color: The colour at this corner.
+        color: The color at this corner.
         inv_w: Reciprocal of the clip-space w; one means no perspective.
         blend: `OPAQUE` or `BLEND`, stated rather than inferred.
 
@@ -342,7 +342,7 @@ def test_depth_rasterization_covers_the_same_pixels_as_the_flat_one() raises:
             )
 
 
-def test_a_single_colour_fills_evenly() raises:
+def test_a_single_color_fills_evenly() raises:
     var fb = RenderTarget(6, 6, Color(0, 0, 0))
     var t = covering(0.5)
     rasterize_shaded(
@@ -355,7 +355,7 @@ def test_a_single_colour_fills_evenly() raises:
     assert_equal(fb.shown(5, 5).r, UInt8(90))
 
 
-def test_colour_is_mixed_across_the_face() raises:
+def test_color_is_mixed_across_the_face() raises:
     # Red at the left corner, blue at the right: the middle is neither.
     var fb = RenderTarget(9, 9, Color(0, 0, 0))
     rasterize_shaded(
@@ -521,7 +521,7 @@ def test_equal_inv_w_everywhere_is_plain_screen_linear_blending() raises:
 def test_the_nearer_corner_holds_more_of_the_screen() raises:
     # A corner four times further away has a quarter the inv_w. Halfway across
     # the screen the surface is only a fifth of the way to it, so the near
-    # colour should still dominate there — which screen-linear blending gets
+    # color should still dominate there — which screen-linear blending gets
     # wrong by putting the two exactly even.
     var t = wide_triangle()
     var linear = RenderTarget(9, 9, Color(0, 0, 0))
@@ -601,7 +601,7 @@ def test_a_zero_inv_w_falls_back_to_screen_linear() raises:
 def uv_vertex(
     x: Float32, y: Float32, inv_w: Float32, u: Float32, v: Float32
 ) -> RasterVertex:
-    """Return a raster vertex carrying texture coordinates and no colour."""
+    """Return a raster vertex carrying texture coordinates and no color."""
     return RasterVertex(x, y, 0.5, inv_w, FloatColor(0, 0, 0), u, v)
 
 
@@ -626,7 +626,7 @@ def test_uv_mode_writes_texture_coordinates_as_red_and_green() raises:
 
 
 def test_lit_mode_ignores_texture_coordinates() raises:
-    # The colour path must not start depending on uv just because it is there.
+    # The color path must not start depending on uv just because it is there.
     var fb = RenderTarget(8, 8, Color(0, 0, 0))
     var t = covering(0.5)
     rasterize_shaded(
@@ -691,7 +691,7 @@ def test_perspective_correct_uv_has_the_exact_value_it_should() raises:
     # pins the number. A wrong formula can easily still produce a gradient in
     # the expected direction.
     #
-    # Corners at (0.5,0.5) (4.5,0.5) (0.5,4.5) put pixel (1,1)'s centre at
+    # Corners at (0.5,0.5) (4.5,0.5) (0.5,4.5) put pixel (1,1)'s center at
     # barycentric (1/2, 1/4, 1/4) exactly, on the subpixel grid. With
     # inv_w of 1, 1/2 and 1/4 the denominator is 11/16, so
     #     u = (1/4 * 1 * 1/2) / (11/16) = 2/11
@@ -808,11 +808,11 @@ def test_a_texture_is_modulated_by_the_lighting() raises:
     var white = textures.add(Texture(1, 1, pixels^, REPEAT))
     var fb = RenderTarget(8, 8, Color(0, 0, 0))
     var t = covering(0.5)
-    var grey = FloatColor(0.5, 0.5, 0.5)
+    var gray = FloatColor(0.5, 0.5, 0.5)
     rasterize_shaded(
-        RasterVertex(t[0].x, t[0].y, 0.5, 1, grey, 0, 0, white),
-        RasterVertex(t[1].x, t[1].y, 0.5, 1, grey, 0, 0, white),
-        RasterVertex(t[2].x, t[2].y, 0.5, 1, grey, 0, 0, white),
+        RasterVertex(t[0].x, t[0].y, 0.5, 1, gray, 0, 0, white),
+        RasterVertex(t[1].x, t[1].y, 0.5, 1, gray, 0, 0, white),
+        RasterVertex(t[2].x, t[2].y, 0.5, 1, gray, 0, 0, white),
         fb,
         SHADE_TEXTURE,
         textures,
@@ -882,7 +882,7 @@ def test_a_texture_is_sampled_with_perspective_correct_coordinates() raises:
 
 
 def test_a_half_transparent_white_over_black_is_half_the_light() raises:
-    # The number the colour space exists for. Half the light of white over
+    # The number the color space exists for. Half the light of white over
     # black displays as 188; 128 would be half the *byte*, which is 21.6% of
     # the light and the answer a renderer that blends in sRGB gives.
     var fb = RenderTarget(6, 6, Color(0, 0, 0))
@@ -893,7 +893,7 @@ def test_a_half_transparent_white_over_black_is_half_the_light() raises:
         flat_vertex(t[2], Color(255, 255, 255, 128), 1.0, BLEND),
         fb,
     )
-    # 128/255 is the coverage, not a colour, so it is not decoded.
+    # 128/255 is the coverage, not a color, so it is not decoded.
     var share = Float32(128) / 255
     var expected = FloatColor(share, share, share, 1.0).encode()
     assert_equal(fb.shown(3, 3).r, expected.r)
@@ -1066,7 +1066,7 @@ def test_a_minified_surface_reads_down_the_chain() raises:
     # A 32-texel board of two-texel squares squeezed into 8 pixels: four
     # texels to a pixel, so level two, where one texel spans four squares and
     # is their average. Without the chain every pixel would be one of the two
-    # extreme colours; with it nothing is extreme.
+    # extreme colors; with it nothing is extreme.
     var textures = TextureStore()
     var board = textures.add(
         checkerboard(
@@ -1091,7 +1091,7 @@ def test_a_minified_surface_reads_down_the_chain() raises:
 
 def test_the_same_surface_without_a_chain_takes_a_single_texel() raises:
     # The control: identical in every way but the chain, and every pixel is
-    # one of the two colours outright. This is what the test above is the
+    # one of the two colors outright. This is what the test above is the
     # absence of, and without it that one would pass on a blurry bug.
     var textures = TextureStore()
     var board = textures.add(
@@ -1132,7 +1132,7 @@ def test_a_magnified_surface_still_reads_the_full_size_image() raises:
 def test_a_mipmapped_surface_drawn_the_other_way_round_looks_the_same() raises:
     # Winding decides the sign of the area, and the two barycentric weights
     # that swap with it. The fragment loop already handles that; the
-    # neighbour lookups mip selection needs are a second place it has to be
+    # neighbor lookups mip selection needs are a second place it has to be
     # got right, and getting it wrong there would pick a level from a
     # footprint with two axes exchanged.
     var textures = TextureStore()
@@ -1394,7 +1394,7 @@ def test_the_middle_of_a_triangle_is_lit_by_its_own_normal() raises:
     # *normal* interpolates to straight at the light, so the middle is
     # brighter than either end.
     #
-    # Shading at the corners and interpolating the colour cannot do this: it
+    # Shading at the corners and interpolating the color cannot do this: it
     # would mix two equal values and give a flat face. Neither can
     # interpolating the normal without normalizing it -- the average of those
     # two unit vectors is (0, 0, 0.707), which is 0.707 long, and its Lambert
@@ -1447,8 +1447,8 @@ def test_a_face_turned_away_from_every_light_is_black() raises:
 
 
 def test_lighting_modulates_a_texture_rather_than_replacing_it() raises:
-    # The texel says what colour the surface is; the light says how much of
-    # it arrives. A half-lit red texel is a darker red, not grey.
+    # The texel says what color the surface is; the light says how much of
+    # it arrives. A half-lit red texel is a darker red, not gray.
     var textures = TextureStore()
     var pixels = List[UInt8]()
     for value in [UInt8(255), UInt8(0), UInt8(0), UInt8(255)]:

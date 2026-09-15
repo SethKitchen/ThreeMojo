@@ -11,16 +11,16 @@ the arithmetic on them happens in the type system and nothing survives to
 runtime: a `Quantity` is the same size as the float inside it, and adding two
 lengths compiles to a float add.
 
-    var height = Length(1.0, METRE)
+    var height = Length(1.0, METER)
     print(height.to(FOOT))        # 3.2808399
 
-    var area = height * Length(2.0, METRE)   # Area, exponent 2
+    var area = height * Length(2.0, METER)   # Area, exponent 2
     var bad  = height + Duration(1.0)        # does not compile
 
-Values are stored in canonical units — metres, kilograms, seconds, radians —
+Values are stored in canonical units — meters, kilograms, seconds, radians —
 so a `Quantity` never remembers which unit it was written in. `FOOT` is a
 scale factor applied on the way in and out, not a property of the value. That
-makes every comparison and sum trivially correct and means feet and metres can
+makes every comparison and sum trivially correct and means feet and meters can
 be mixed freely in one expression.
 
 Angle is treated as a base dimension here, which strict SI does not do: a

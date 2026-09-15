@@ -14,7 +14,7 @@ than "the picture has no perspective in it".
 from cameras.camera import Camera
 from render.framebuffer import Framebuffer
 from core.object3d import NodeId
-from cameras.orthographic_camera import OrthographicCamera, centred
+from cameras.orthographic_camera import OrthographicCamera, centered
 from core.assets import Assets
 from materials.material import Material
 from core.object3d import Object3D
@@ -33,7 +33,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length, METRE
+from units.si import Length, METER
 
 
 def rendered[
@@ -103,8 +103,8 @@ def light_the(mut scene: Scene) raises:
     White ambient at a quarter plus a white directional at three quarters,
     from up and to the right. That is exactly the fixed light `Renderer` used
     to carry -- its `0.25 + 0.75 * lambert` is what an additive quarter and
-    three quarters come to for a white lamp -- so every expected colour in
-    this file is unchanged by lights becoming scene objects. A colour that
+    three quarters come to for a white lamp -- so every expected color in
+    this file is unchanged by lights becoming scene objects. A color that
     moves here is a bug, not the redesign.
 
     Adds the lamp's node last, so the node ids meshes already name still
@@ -123,12 +123,12 @@ comptime HEIGHT = 24
 
 
 def a_camera() raises -> OrthographicCamera:
-    """Return a symmetric camera four metres back, six metres tall."""
-    var camera = centred(
-        Length(6.0, METRE),
+    """Return a symmetric camera four meters back, six meters tall."""
+    var camera = centered(
+        Length(6.0, METER),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
     return camera^
@@ -171,7 +171,7 @@ def test_depth_does_not_change_size() raises:
     assert_almost_equal(near.x, far.x, atol=TOLERANCE)
 
 
-def test_an_off_centre_volume_shifts_the_view() raises:
+def test_an_off_center_volume_shifts_the_view() raises:
     # Not every orthographic camera is symmetric; a shadow map's rarely is.
     var m = orthographic(0, 4, 1.5, -1.5, 1, 10)
     assert_almost_equal(
@@ -212,9 +212,9 @@ def test_a_near_plane_of_zero_is_allowed() raises:
 # --- the camera -------------------------------------------------------------
 
 
-def test_a_centred_camera_has_the_height_it_was_asked_for() raises:
-    var camera = centred(
-        Length(6.0, METRE), 2.0, Length(0.1, METRE), Length(100.0, METRE)
+def test_a_centered_camera_has_the_height_it_was_asked_for() raises:
+    var camera = centered(
+        Length(6.0, METER), 2.0, Length(0.1, METER), Length(100.0, METER)
     )
     assert_equal(camera.top.value, Float32(3))
     assert_equal(camera.bottom.value, Float32(-3))
@@ -273,48 +273,48 @@ def test_an_orthographic_camera_on_a_scaled_node_keeps_its_lens() raises:
 
 def test_an_unusable_camera_is_rejected() raises:
     with assert_raises():
-        _ = centred(
-            Length(0.0, METRE), 1.0, Length(0.1, METRE), Length(10.0, METRE)
+        _ = centered(
+            Length(0.0, METER), 1.0, Length(0.1, METER), Length(10.0, METER)
         )
     with assert_raises():
-        _ = centred(
-            Length(6.0, METRE), 0.0, Length(0.1, METRE), Length(10.0, METRE)
-        )
-    with assert_raises():
-        _ = OrthographicCamera(
-            Length(-1.0, METRE),
-            Length(-1.0, METRE),
-            Length(1.0, METRE),
-            Length(-1.0, METRE),
-            Length(0.1, METRE),
-            Length(10.0, METRE),
+        _ = centered(
+            Length(6.0, METER), 0.0, Length(0.1, METER), Length(10.0, METER)
         )
     with assert_raises():
         _ = OrthographicCamera(
-            Length(-1.0, METRE),
-            Length(1.0, METRE),
-            Length(1.0, METRE),
-            Length(1.0, METRE),
-            Length(0.1, METRE),
-            Length(10.0, METRE),
+            Length(-1.0, METER),
+            Length(-1.0, METER),
+            Length(1.0, METER),
+            Length(-1.0, METER),
+            Length(0.1, METER),
+            Length(10.0, METER),
         )
     with assert_raises():
         _ = OrthographicCamera(
-            Length(-1.0, METRE),
-            Length(1.0, METRE),
-            Length(1.0, METRE),
-            Length(-1.0, METRE),
-            Length(-1.0, METRE),
-            Length(10.0, METRE),
+            Length(-1.0, METER),
+            Length(1.0, METER),
+            Length(1.0, METER),
+            Length(1.0, METER),
+            Length(0.1, METER),
+            Length(10.0, METER),
         )
     with assert_raises():
         _ = OrthographicCamera(
-            Length(-1.0, METRE),
-            Length(1.0, METRE),
-            Length(1.0, METRE),
-            Length(-1.0, METRE),
-            Length(1.0, METRE),
-            Length(1.0, METRE),
+            Length(-1.0, METER),
+            Length(1.0, METER),
+            Length(1.0, METER),
+            Length(-1.0, METER),
+            Length(-1.0, METER),
+            Length(10.0, METER),
+        )
+    with assert_raises():
+        _ = OrthographicCamera(
+            Length(-1.0, METER),
+            Length(1.0, METER),
+            Length(1.0, METER),
+            Length(-1.0, METER),
+            Length(1.0, METER),
+            Length(1.0, METER),
         )
 
 
@@ -356,18 +356,18 @@ def test_a_camera_with_a_zero_near_plane_renders() raises:
     # The whole chain has to agree that zero is acceptable: the camera, the
     # projection matrix and the shared clipper.
     var renderer = Renderer(WIDTH, HEIGHT)
-    var camera = centred(
-        Length(6.0, METRE),
+    var camera = centered(
+        Length(6.0, METER),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.0, METRE),
-        Length(100.0, METRE),
+        Length(0.0, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
     var assets = Assets()
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            assets.geometries.add(cube(Length(2.0, METRE))),
+            assets.geometries.add(cube(Length(2.0, METER))),
             assets.materials.add(Material(Color(9, 9, 9))),
             NodeId(0),
         )
@@ -385,7 +385,7 @@ def test_the_renderer_accepts_an_orthographic_camera() raises:
     # The trait doing its job: `Renderer` never mentions either camera type.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(2.0, METRE)))
+    var box = assets.geometries.add(cube(Length(2.0, METER)))
     var scene = Scene()
     var node = Object3D()
     _ = scene.add(node^)
@@ -417,7 +417,7 @@ def test_distance_does_not_change_which_pixels_a_cube_covers() raises:
     # cover the same number of pixels. These must be the same pixels.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(2.0, METRE)))
+    var box = assets.geometries.add(cube(Length(2.0, METER)))
 
     var meshes = List[Mesh]()
     meshes.append(
@@ -451,7 +451,7 @@ def test_moving_away_still_changes_the_depth_buffer() raises:
     # test above would pass for the wrong reason.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(2.0, METRE)))
+    var box = assets.geometries.add(cube(Length(2.0, METER)))
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(

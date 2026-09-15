@@ -11,8 +11,8 @@ three.js: `Camera`, `PerspectiveCamera`, `OrthographicCamera`.
 | `view_matrix_in(scene) -> Matrix4` | World space to camera space. Reads the scene when the camera rides a node. |
 | `view_matrix() -> Matrix4` | The same, for a placed camera. Raises for an attached one. |
 | `view_to_screen_matrix(width, height) -> Matrix4` | Camera space to pixels. |
-| `near_distance() -> Float32` | The near clipping distance, in metres. |
-| `far_distance() -> Float32` | The far clipping distance, in metres. |
+| `near_distance() -> Float32` | The near clipping distance, in meters. |
+| `far_distance() -> Float32` | The far clipping distance, in meters. |
 
 ## PerspectiveCamera
 
@@ -20,8 +20,8 @@ three.js: `Camera`, `PerspectiveCamera`, `OrthographicCamera`.
 var camera = PerspectiveCamera(
     Angle(45.0, DEGREE),     # vertical field of view
     4.0 / 3.0,               # aspect ratio, width over height
-    Length(0.1, METRE),      # near plane
-    Length(100.0, METRE),    # far plane
+    Length(0.1, METER),      # near plane
+    Length(100.0, METER),    # far plane
 )
 camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
 ```
@@ -39,12 +39,12 @@ The field of view is an `Angle`. A bare number does not compile. The near plane 
 ## OrthographicCamera
 
 ```mojo
-var flat = centred(
-    Length(6.0, METRE), aspect, Length(0.1, METRE), Length(100.0, METRE)
+var flat = centered(
+    Length(6.0, METER), aspect, Length(0.1, METER), Length(100.0, METER)
 )
 ```
 
-`OrthographicCamera(left, right, top, bottom, near, far)` takes the volume's edges as lengths. `centred(height, aspect, near, far)` builds a symmetric one. `near` can be zero. The edges must be ordered: right beyond left, top above bottom.
+`OrthographicCamera(left, right, top, bottom, near, far)` takes the volume's edges as lengths. `centered(height, aspect, near, far)` builds a symmetric one. `near` can be zero. The edges must be ordered: right beyond left, top above bottom.
 
 An orthographic projection leaves `w` at one. The perspective correction then divides by one, so no code path is special.
 

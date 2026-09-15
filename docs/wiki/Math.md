@@ -56,4 +56,4 @@ m.multiply(translation(-10, 0, 0))     # a rotation about (10, 0, 0)
 
 Each raises for a degenerate volume, a camera at its own target, or an up vector along the view direction.
 
-Normalized device space is unitless. World space is metres and screen space is pixels. The matrices meet in the middle.
+Normalized device space is unitless. World space is meters and screen space is pixels. The matrices meet in the middle.

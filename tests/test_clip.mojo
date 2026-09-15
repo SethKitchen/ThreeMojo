@@ -33,7 +33,7 @@ def at(x: Float32, y: Float32, z: Float32) -> ClipVertex:
     )
 
 
-def coloured(z: Float32, value: Float32) -> ClipVertex:
+def colored(z: Float32, value: Float32) -> ClipVertex:
     """Return a vertex at depth `z` whose red channel is `value`."""
     return ClipVertex(
         Vector3(0, 0, z), FloatColor(value, 0, 0), Vector3(0, 0, 1), 0, 0
@@ -91,10 +91,10 @@ def test_a_corner_exactly_on_the_plane_counts_as_in_front() raises:
     assert_equal(len(pieces), 3)
 
 
-def test_colour_is_carried_to_the_cut() raises:
-    # Halfway along the edge in depth, so halfway in colour.
+def test_color_is_carried_to_the_cut() raises:
+    # Halfway along the edge in depth, so halfway in color.
     var pieces = clip_depth(
-        coloured(-3, 0),
+        colored(-3, 0),
         ClipVertex(
             Vector3(1, 0, 1), FloatColor(200, 0, 0), Vector3(0, 0, 1), 0, 0
         ),
@@ -193,12 +193,12 @@ def test_a_triangle_spanning_both_planes_is_cut_at_both() raises:
         assert_true(pieces[index].position.z >= -Float32(10) - Float32(1e-5))
 
 
-def test_colour_is_carried_to_a_far_plane_cut() raises:
+def test_color_is_carried_to_a_far_plane_cut() raises:
     # From red 0 at z = -5 to red 200 at z = -15; the plane at z = -10 is
-    # halfway, so the new corner is halfway in colour too.
+    # halfway, so the new corner is halfway in color too.
     var pieces = clip_depth(
-        coloured(-5, 0),
-        coloured(-15, 200),
+        colored(-5, 0),
+        colored(-15, 200),
         ClipVertex(
             Vector3(0, 1, -5), FloatColor(0, 0, 0), Vector3(0, 0, 1), 0, 0
         ),

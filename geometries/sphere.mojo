@@ -16,8 +16,8 @@ The poles are where this gets fiddly. A quad against a pole has two of its
 corners in the same spot, so one of its two triangles is degenerate and is
 skipped rather than emitted with zero area.
 
-Each vertex's normal is simply the direction it lies from the centre, so
-neighbouring triangles agree along their shared edges and the renderer's
+Each vertex's normal is simply the direction it lies from the center, so
+neighboring triangles agree along their shared edges and the renderer's
 interpolation hides the facets. That is the whole difference between this and
 a box, where the four corners of a face deliberately agree with each other and
 disagree with the next face.
@@ -32,10 +32,10 @@ from units.si import Length
 def sphere(
     radius: Length, width_segments: Int = 24, height_segments: Int = 16
 ) raises -> BufferGeometry:
-    """Return a sphere centred on the origin.
+    """Return a sphere centered on the origin.
 
     Args:
-        radius: How far the surface lies from the centre.
+        radius: How far the surface lies from the center.
         width_segments: Divisions around the equator; at least three.
         height_segments: Divisions from pole to pole; at least two.
 

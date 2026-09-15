@@ -41,6 +41,7 @@ Follow ASD-STE100:
 - Use one term for one thing. A scene node is a "node". A texture is a "texture", not an "image".
 - Keep paragraphs to six sentences and one topic.
 - Put code, file names and commands in code spans.
+- Write American English: "color", "meter", "center", "gray", "-ize". This applies to code and identifiers too.
 
 ## Check the rules
 
@@ -48,7 +49,7 @@ Follow ASD-STE100:
 make docs-check
 ```
 
-The tool reports each sentence over the limit, each paragraph over six sentences, and each forbidden word. It skips code blocks, tables and headings.
+The tool reports each sentence over the limit, each paragraph over six sentences, each forbidden word, and each British spelling. It skips code blocks, tables and headings.
 
 ## Publish the wiki
 

@@ -67,7 +67,7 @@ def lit_from(x: Float32, y: Float32, z: Float32) raises -> Scene:
 # --- A light on its own -----------------------------------------------------
 
 
-def test_a_light_carries_its_kind_and_colour() raises:
+def test_a_light_carries_its_kind_and_color() raises:
     var fill = ambient_light(Color(10, 20, 30), 0.5)
     assert_equal(fill.kind, AMBIENT)
     assert_equal(fill.color.g, UInt8(20))
@@ -83,10 +83,10 @@ def test_a_lights_radiance_is_decoded_and_scaled() raises:
     # 128, which is about a fifth of the light.
     var half = ambient_light(WHITE, 0.5).radiance()
     assert_almost_equal(half.r, Float32(0.5), atol=TOLERANCE)
-    # And a mid-grey light is decoded before being scaled: byte 128 is about
+    # And a mid-gray light is decoded before being scaled: byte 128 is about
     # 0.2158 of the light.
-    var grey = ambient_light(Color(128, 128, 128)).radiance()
-    assert_almost_equal(grey.r, Float32(0.215861), atol=Float64(1e-5))
+    var gray = ambient_light(Color(128, 128, 128)).radiance()
+    assert_almost_equal(gray.r, Float32(0.215861), atol=Float64(1e-5))
 
 
 def test_a_negative_intensity_is_rejected() raises:
@@ -185,7 +185,7 @@ def test_a_light_is_carried_by_the_node_it_hangs_from() raises:
 # --- Shading ----------------------------------------------------------------
 
 
-def test_a_face_turned_towards_the_light_keeps_its_colour() raises:
+def test_a_face_turned_towards_the_light_keeps_its_color() raises:
     var lighting = Lighting(lit_from(0, 1, 0))
     var lit = shaded(lighting, Color(200, 100, 50), Vector3(0, 1, 0)).encode()
     assert_equal(lit.r, UInt8(200))
@@ -194,7 +194,7 @@ def test_a_face_turned_towards_the_light_keeps_its_colour() raises:
 def test_a_face_turned_away_gets_only_the_ambient() raises:
     # A quarter of the *light* of byte 200 displays as 106 -- not a quarter
     # of the byte, which would be 50. Dimming the encoded value is the
-    # classic colour-space error: it makes shadows far too dark.
+    # classic color-space error: it makes shadows far too dark.
     var scene = lit_from(0, 1, 0)
     scene.add_light(ambient_light(WHITE, 0.25))
     var lighting = Lighting(scene)
@@ -231,7 +231,7 @@ def test_ambient_lights_sum_as_well() raises:
     assert_almost_equal(lighting.ambient.r, Float32(0.5), atol=TOLERANCE)
 
 
-def test_a_coloured_light_tints_the_surface() raises:
+def test_a_colored_light_tints_the_surface() raises:
     # What the old scalar dimming could not do at all: a red lamp on a white
     # surface leaves red and nothing else.
     var scene = scene_with_lamp_at(0, 1, 0)
@@ -281,11 +281,11 @@ def test_shading_preserves_alpha() raises:
     assert_equal(shaded.a, UInt8(128))
 
 
-def test_uniform_lighting_leaves_a_colour_alone() raises:
+def test_uniform_lighting_leaves_a_color_alone() raises:
     # The identity for the multiply a fragment does, and the default both
     # rasterizers take. The same idea as the blank texture sampling opaque
     # white: it makes "no lighting" a value rather than a branch, so a
-    # hand-built triangle asking about coverage or depth gets the colours it
+    # hand-built triangle asking about coverage or depth gets the colors it
     # passed in rather than black.
     var plain = Lighting.uniform()
     assert_equal(plain.count(), 0)
@@ -295,7 +295,7 @@ def test_uniform_lighting_leaves_a_colour_alone() raises:
     # Whichever way the surface faces: there is no direction in it.
     var behind = plain.intensity_at(Vector3(0, -1, 0), ORIGIN)
     assert_almost_equal(behind.g, Float32(1), atol=TOLERANCE)
-    # And a surface keeps its own colour exactly.
+    # And a surface keeps its own color exactly.
     var kept = shaded(plain, Color(200, 100, 50), Vector3(0, 0, -1)).encode()
     assert_equal(kept.r, UInt8(200))
     assert_equal(kept.g, UInt8(100))
@@ -334,10 +334,10 @@ def test_a_point_light_falls_off_with_the_square_of_distance() raises:
     var lighting = bulb_at(0, 2, 0)
     assert_equal(lighting.point_count(), 1)
     assert_equal(lighting.count(), 0)
-    # Two metres below the bulb, facing up: a quarter of it.
+    # Two meters below the bulb, facing up: a quarter of it.
     var below = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
     assert_almost_equal(below.r, Float32(0.25), atol=TOLERANCE)
-    # One metre away: all of it.
+    # One meter away: all of it.
     var near = lighting.intensity_at(Vector3(0, 1, 0), Vector3(0, 1, 0))
     assert_almost_equal(near.g, Float32(1), atol=TOLERANCE)
 
@@ -374,7 +374,7 @@ def test_a_point_lights_decay_is_adjustable() raises:
 
 
 def test_a_point_light_with_a_distance_fades_to_nothing_at_it() raises:
-    # Cut off at four metres, measured at two: the inverse square quarter is
+    # Cut off at four meters, measured at two: the inverse square quarter is
     # scaled by the square of one minus a half to the fourth.
     var lighting = bulb_at(0, 2, 0, 1.0, 2.0, 4.0)
     var halfway = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
@@ -389,7 +389,7 @@ def test_a_point_light_with_a_distance_fades_to_nothing_at_it() raises:
 
 
 def test_a_surface_touching_the_bulb_is_bright_but_finite() raises:
-    # Five centimetres away the inverse square would be four hundred; the
+    # Five centimeters away the inverse square would be four hundred; the
     # floor holds it to a hundred. Still overexposed, still a number.
     var lighting = bulb_at(0, 0.05, 0)
     var arriving = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
@@ -452,7 +452,7 @@ def test_a_point_light_naming_a_missing_node_is_rejected() raises:
         _ = Lighting(scene)
 
 
-def test_point_light_shades_a_colour_at_a_position() raises:
+def test_point_light_shades_a_color_at_a_position() raises:
     var lighting = bulb_at(0, 2, 0)
     var lit = lighting.shade(WHITE, Vector3(0, 1, 0), Vector3(0, 1, 0)).encode()
     assert_equal(lit.r, UInt8(255))

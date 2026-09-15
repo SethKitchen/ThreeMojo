@@ -16,7 +16,7 @@ at every pixel before the lights are summed. A geometry's `normal` attribute
 decides how it looks: a
 box gives each of a face's four corners that face's own normal, so the four
 agree and the face comes out flat with a crisp edge; a sphere gives each
-vertex the direction it points from the centre, so neighbouring triangles
+vertex the direction it points from the center, so neighboring triangles
 agree along their shared edge and the facets disappear.
 
 A geometry with no normals falls back to the triangle's *geometric* normal,
@@ -137,7 +137,7 @@ def _with_opacity(color: FloatColor, opacity: Float32) -> FloatColor:
     """Return `color` with the material's opacity folded into its alpha.
 
     Alpha reaching the rasterizer is how much of the surface shows, so the
-    material's opacity multiplies whatever the base colour already carried.
+    material's opacity multiplies whatever the base color already carried.
     """
     return FloatColor(color.r, color.g, color.b, color.a * opacity)
 
@@ -307,11 +307,11 @@ struct Renderer(Movable):
     var width: Int
     var height: Int
     var background: Color
-    # What a fragment's colour comes from. `SHADE_TEXTURE` is the default and
+    # What a fragment's color comes from. `SHADE_TEXTURE` is the default and
     # means "follow the material": a material with a map is sampled, one
     # without is not, which is what three.js does by having a map at all.
     # `SHADE_LIT` and `SHADE_UV` are overrides for looking at something —
-    # ignore every texture, or draw texture coordinates instead of colour.
+    # ignore every texture, or draw texture coordinates instead of color.
     var shading: ShadeMode
     # How many threads rasterize a frame. One by default, deliberately: the
     # coverage tool reconstructs MC/DC vectors from the *order* probe
@@ -362,11 +362,11 @@ struct Renderer(Movable):
         self.workers = workers
 
     def set_background(mut self, color: Color):
-        """Set the colour the image is cleared to."""
+        """Set the color the image is cleared to."""
         self.background = color
 
     def set_shading(mut self, mode: ShadeMode) raises:
-        """Choose what a fragment's colour is taken from.
+        """Choose what a fragment's color is taken from.
 
         Args:
             mode: `SHADE_TEXTURE` to follow each material, `SHADE_LIT` to
@@ -460,7 +460,7 @@ struct Renderer(Movable):
             var blending = material.blending
             var map = material.map
             # Whether the lights reach this surface at all; a `BASIC`
-            # material shows its own colour. Per triangle, like the blend.
+            # material shows its own color. Per triangle, like the blend.
             var lit = material.is_lit()
             # Checked here because here is the first place that can: a
             # material is built without the store in reach, so a positive id
@@ -523,7 +523,7 @@ struct Renderer(Movable):
                     direction.normalize()
                     vertex_normals.append(direction)
 
-            # One colour for the whole mesh now: the material's, decoded to
+            # One color for the whole mesh now: the material's, decoded to
             # linear once with its opacity folded into alpha. Every corner
             # carries this same value and the fragment lights it.
             var base = _with_opacity(
@@ -617,7 +617,7 @@ struct Renderer(Movable):
                     # Which way this piece ends up facing decides two things
                     # at once: whether it survives, and which side of it is
                     # being lit. Read from the screen winding, so it is known
-                    # only now -- which is why the normal travelled this far
+                    # only now -- which is why the normal traveled this far
                     # unflipped.
                     var away = _faces_away(one, two, three, mirrored)
                     if material.side == FRONT_SIDE and away:
@@ -630,7 +630,7 @@ struct Renderer(Movable):
                         # front of it renders black: the Lambert term is taken
                         # against the normal pointing away from the camera.
                         #
-                        # One flip replaces the two colours this used to carry
+                        # One flip replaces the two colors this used to carry
                         # from the vertex stage, because the far side's normal
                         # is just this one negated -- which the lighting was
                         # not, once it had been applied.

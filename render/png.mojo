@@ -232,7 +232,7 @@ struct DecodedImage(Movable):
 
     var width: Int
     var height: Int
-    # Eight-bit RGBA, row-major from the top: every colour type is widened to
+    # Eight-bit RGBA, row-major from the top: every color type is widened to
     # this, so one shape reaches the renderer rather than five.
     var pixels: List[UInt8]
     # `SRGB`, `LINEAR`, or `UNKNOWN_SPACE` when the file declares something
@@ -295,7 +295,7 @@ def _be32(bytes: List[UInt8], at: Int) raises -> Int:
 
 
 def _paeth(left: Int, above: Int, corner: Int) -> Int:
-    """Return whichever neighbour the Paeth predictor picks.
+    """Return whichever neighbor the Paeth predictor picks.
 
     The one filter that is not a plain subtraction: it estimates the current
     byte as `left + above - corner` and then answers with whichever of the
@@ -320,13 +320,13 @@ def _unfilter(
     """Undo the per-row filters, returning the rows with no filter bytes.
 
     Each row is prefixed by the filter it was encoded with, and every filter
-    predicts a byte from its neighbours: the one `step` bytes to the left, the
+    predicts a byte from its neighbors: the one `step` bytes to the left, the
     one directly above, and the one above-left. Bytes off the top or left edge
     count as zero.
 
     `step` is the distance to the byte that holds the *same channel* of the
     previous pixel, which is the pixel size in bytes -- not one. Using one
-    gives an image that looks almost right and smears colour sideways.
+    gives an image that looks almost right and smears color sideways.
 
     Args:
         raw: The decompressed rows, each with its filter byte.
@@ -366,7 +366,7 @@ def _unfilter(
             elif filter == 2:
                 value += above
             elif filter == 3:
-                # The average of the two neighbours, rounded down.
+                # The average of the two neighbors, rounded down.
                 value += (left + above) // 2
             elif filter == 4:
                 value += _paeth(left, above, corner)
@@ -386,7 +386,7 @@ comptime MAX_PIXELS = 1 << 28
 
 
 def _channels_for(color_type: Int) raises -> Int:
-    """Return how many samples per pixel a colour type stores."""
+    """Return how many samples per pixel a color type stores."""
     if color_type == 0:
         return 1
     if color_type == 2:
@@ -397,11 +397,11 @@ def _channels_for(color_type: Int) raises -> Int:
         return 2
     if color_type == 6:
         return 4
-    raise Error("Unknown PNG colour type")
+    raise Error("Unknown PNG color type")
 
 
 def _space_from_gamma(gamma: Int) -> ColorSpace:
-    """Return which colour space a `gAMA` value describes, if either.
+    """Return which color space a `gAMA` value describes, if either.
 
     PNG stores the gamma of the *source*, times 100000. Two values matter
     here: 100000 is a gamma of one, which is linear, and 45455 is the 1/2.2
@@ -409,7 +409,7 @@ def _space_from_gamma(gamma: Int) -> ColorSpace:
     sentence. The sRGB transfer function is a short linear toe and a 2.4
     power, not a pure power, and a file declaring a gamma of 1/2.2 describes
     a pure power; reading it as sRGB is off by about a percent at midtones.
-    Faithful colour management would keep the gamma and apply it. This does
+    Faithful color management would keep the gamma and apply it. This does
     not: it settles the question well enough to light with, and says so here
     rather than pretending in the type. Anything else is a transfer function
     this renderer has no code for, and guessing between the two it does have
@@ -425,8 +425,8 @@ def _space_from_gamma(gamma: Int) -> ColorSpace:
 def decode(bytes: List[UInt8]) raises -> DecodedImage:
     """Return the image a PNG file holds, as RGBA plus its declared meaning.
 
-    Handles the five colour types at eight bits per channel — greyscale, RGB,
-    palette, greyscale with alpha, and RGBA — with or without a `tRNS`
+    Handles the five color types at eight bits per channel — grayscale, RGB,
+    palette, grayscale with alpha, and RGBA — with or without a `tRNS`
     transparency chunk, and every row filter. Everything is widened to RGBA,
     because that is what a `Texture` holds and it means one shape reaches the
     renderer rather than five.
@@ -453,7 +453,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         bytes: The complete file.
 
     Returns:
-        The image, with the colour space the file declared.
+        The image, with the color space the file declared.
 
     Raises:
         Error: If the signature, structure, ordering, a chunk length, a CRC,
@@ -490,7 +490,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     var compressed = List[UInt8]()
     var color_space = SRGB
     # An explicit sRGB chunk outranks a gamma, which is what the
-    # specification says: the gamma is there for decoders with no colour
+    # specification says: the gamma is there for decoders with no color
     # handling at all, and the two can disagree in the same file.
     var stated_srgb = False
     # Where in the file's structure we are. A PNG is ordered, so this is a
@@ -572,7 +572,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
             if length == 0 or length % 3 != 0:
                 raise Error("A PNG palette must be whole three-byte entries")
             if color_type == 0 or color_type == 4:
-                raise Error("A greyscale PNG cannot carry a palette")
+                raise Error("A grayscale PNG cannot carry a palette")
             palette = body^
         elif kind == "tRNS":
             if seen_data:
@@ -590,12 +590,12 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
                     raise Error("A PNG tRNS is longer than its palette")
                 alphas = body^
             else:
-                # One colour is transparent, given as a channel per component
+                # One color is transparent, given as a channel per component
                 # at the file's bit depth -- so the low byte of each pair.
-                # Two bytes for grey, six for RGB, and nothing else: a short
+                # Two bytes for gray, six for RGB, and nothing else: a short
                 # one used to leave a key the pixel loop then indexed past.
                 if length != channels * 2:
-                    raise Error("A PNG tRNS is the wrong size for its colour")
+                    raise Error("A PNG tRNS is the wrong size for its color")
                 keyed = True
                 key = List[Int]()
                 for index in range(channels):  # pragma: no branch

@@ -5,8 +5,8 @@
 
 """Ordering a length against an angle must not compile."""
 
-from units.si import Angle, Length, METRE, RADIAN
+from units.si import Angle, Length, METER, RADIAN
 
 
 def main() raises:
-    print(Length(1.0, METRE) < Angle(1.0, RADIAN))
+    print(Length(1.0, METER) < Angle(1.0, RADIAN))

@@ -79,7 +79,7 @@ def is_top_left(ax: Int, ay: Int, bx: Int, by: Int) -> Bool:
     anything — swapping top for bottom is still a consistent tie-break, so
     each shared edge still belongs to exactly one triangle. It shows up
     instead as a triangle silently losing its top row of pixels whenever that
-    edge lands exactly on pixel centres.
+    edge lands exactly on pixel centers.
     """
     if ay == by:
         return bx > ax
@@ -99,9 +99,9 @@ def bias(ax: Int, ay: Int, bx: Int, by: Int) -> Int:
 
 
 def sample(index: Int) -> Int:
-    """Return the grid coordinate of the centre of pixel row/column `index`.
+    """Return the grid coordinate of the center of pixel row/column `index`.
 
-    Sampling at the centre rather than the corner is why a half-step is added;
+    Sampling at the center rather than the corner is why a half-step is added;
     the same arithmetic serves both axes.
     """
     return index * SUBPIXEL + SUBPIXEL // 2

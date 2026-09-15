@@ -13,7 +13,7 @@ index.
 
 That is the same trade `core.scene` makes for nodes, for the same reason, and
 it answers the same question: who owns this buffer? Exactly one thing does, and
-a `Mesh` is three integers and a colour rather than a copy of a vertex array.
+a `Mesh` is three integers and a color rather than a copy of a vertex array.
 `Mesh` used to take its geometry by value, so the comment promising that "one
 geometry can be drawn at many nodes without being copied" was not true of the
 code beneath it.

@@ -38,7 +38,7 @@ MC/DC is the masking variant. Short-circuit evaluation makes unique-cause MC/DC 
 
 - The Makefile's `COVERED` list is every CPU module. `COVERAGE_EXCLUDE` names `render/gpu.mojo`, because a kernel has no `stderr`.
 - `# pragma: no branch` opts one decision out. Use it only when the other outcome is provably unreachable.
-- Probes cannot reach compile-time code, and the instrumenter recognises `def` and `async def` only.
+- Probes cannot reach compile-time code, and the instrumenter recognizes `def` and `async def` only.
 - The tool does not measure itself.
 
 ## Limits

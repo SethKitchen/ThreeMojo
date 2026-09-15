@@ -14,7 +14,7 @@ again, once per translucent layer. Each round trip loses a little, and the loss
 compounds: a hundred layers of alpha 0.0001 over black should come to about
 0.00995 of the light, which displays as byte 25 — and rounding after every
 layer gives 0, because each contribution on its own rounds back down to black.
-The GPU kept its running colour in registers and resolved once, so the two
+The GPU kept its running color in registers and resolved once, so the two
 backends did not merely round differently, they had different contracts.
 
 **Alpha.** Compositing two translucent things needs the *destination's* alpha
@@ -22,10 +22,10 @@ as well as the source's, and a byte buffer that has already been flattened to
 opaque has thrown it away. Blending 50% red over transparent blue used to give
 opaque purple; the blue was invisible and should have contributed nothing.
 
-So colour lives here as linear `FloatColor` until the image is finished, and
+So color lives here as linear `FloatColor` until the image is finished, and
 `resolve` converts once.
 
-**Premultiplied.** The stored colour is the light a pixel actually contributes,
+**Premultiplied.** The stored color is the light a pixel actually contributes,
 already scaled by its coverage — `(r*a, g*a, b*a, a)`. Source-over in that form
 is a weighted sum with no special cases:
 
@@ -33,8 +33,8 @@ is a weighted sum with no special cases:
     out.a   = src.a   + dst.a   * (1 - src.a)
 
 Straight alpha needs a divide to recover the same answer, and gets it wrong
-wherever alpha is zero, because a colour that contributes no light has no
-colour to recover. `resolve` unpremultiplies at the end, because PNG stores
+wherever alpha is zero, because a color that contributes no light has no
+color to recover. `resolve` unpremultiplies at the end, because PNG stores
 unassociated alpha.
 """
 
@@ -75,7 +75,7 @@ async def _encode_band(
 
 
 struct RenderTarget(Movable):
-    """A width x height buffer of premultiplied linear colour, plus depth."""
+    """A width x height buffer of premultiplied linear color, plus depth."""
 
     var width: Int
     var height: Int
@@ -89,7 +89,7 @@ struct RenderTarget(Movable):
         Args:
             width: Image width in pixels.
             height: Image height in pixels.
-            clear: The colour to fill with, decoded from sRGB. Its alpha is
+            clear: The color to fill with, decoded from sRGB. Its alpha is
                 kept, so clearing to something transparent gives a target that
                 stays transparent where nothing is drawn.
 
@@ -118,7 +118,7 @@ struct RenderTarget(Movable):
         return self.depth[self._slot(x, y)]
 
     def color_at(self, x: Int, y: Int) raises -> FloatColor:
-        """Return the premultiplied linear colour at pixel (x, y)."""
+        """Return the premultiplied linear color at pixel (x, y)."""
         return self.colors[self._slot(x, y)]
 
     def test_depth(mut self, x: Int, y: Int, z: Float32) raises -> Bool:
@@ -166,7 +166,7 @@ struct RenderTarget(Movable):
         Args:
             x: Column.
             y: Row.
-            color: Linear colour with straight (unassociated) alpha.
+            color: Linear color with straight (unassociated) alpha.
 
         Raises:
             Error: If the coordinate is out of bounds.
@@ -180,7 +180,7 @@ struct RenderTarget(Movable):
         Args:
             x: Column.
             y: Row.
-            color: Linear colour with straight (unassociated) alpha, where
+            color: Linear color with straight (unassociated) alpha, where
                 alpha is how much of what is behind it is hidden.
 
         Raises:
@@ -215,7 +215,7 @@ struct RenderTarget(Movable):
             y: Row.
 
         Returns:
-            The resolved eight-bit colour.
+            The resolved eight-bit color.
 
         Raises:
             Error: If the coordinate is out of bounds.
@@ -225,9 +225,9 @@ struct RenderTarget(Movable):
     def resolve(self, workers: Int = 1) raises -> Framebuffer:
         """Return the finished image, encoded for a display.
 
-        The one place linear stops: unpremultiply, encode the colour channels
+        The one place linear stops: unpremultiply, encode the color channels
         through the sRGB curve, and quantize. Alpha is coverage rather than
-        colour and is quantized without any transfer function.
+        color and is quantized without any transfer function.
 
         Three `pow` calls per pixel is the most expensive thing a frame does
         after rasterizing it -- at 1280x720 it is nearly three million of

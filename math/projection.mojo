@@ -15,7 +15,7 @@ Three transforms in sequence, each answering one question:
 Between the second and third, coordinates are in **normalized device
 coordinates**: x and y run -1 to +1 across the visible frustum, and z runs
 -1 (near plane) to +1 (far plane). NDC is dimensionless, which is the point.
-World space is metres, screen space is pixels, and NDC is the neutral ground
+World space is meters, screen space is pixels, and NDC is the neutral ground
 between them where neither unit applies.
 
 `perspective` matches three.js's `Matrix4.makePerspective` with the WebGL
@@ -38,7 +38,7 @@ def perspective(
     """Return a perspective projection for an arbitrary view frustum.
 
     The frustum is given by where its edges cut the near plane, which allows
-    an off-centre projection; `PerspectiveCamera` builds a symmetric one.
+    an off-center projection; `PerspectiveCamera` builds a symmetric one.
 
     Args:
         left: Left edge of the frustum at the near plane.
@@ -66,7 +66,7 @@ def perspective(
 
     var x = 2 * near / (right - left)
     var y = 2 * near / (top - bottom)
-    # How far the frustum's centre line is skewed from straight ahead.
+    # How far the frustum's center line is skewed from straight ahead.
     var a = (right + left) / (right - left)
     var b = (top + bottom) / (top - bottom)
     var c = -(far + near) / (far - near)

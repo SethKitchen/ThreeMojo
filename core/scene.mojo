@@ -33,7 +33,7 @@ order, rather than to relax the check.
 
 **Meshes and lights are scene content.** three.js's `scene.add` takes either,
 and a renderer is handed the scene and a camera and nothing else. For a while
-meshes travelled in a separate list beside the scene while lights lived
+meshes traveled in a separate list beside the scene while lights lived
 inside it, which was two answers to one question. `add_mesh` is the
 counterpart of `add_light`, and `Renderer.render(scene, assets, camera)` reads
 both from here.

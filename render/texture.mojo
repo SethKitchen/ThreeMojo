@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""An image to look colours up in, from three.js `src/textures/Texture.js`.
+"""An image to look colors up in, from three.js `src/textures/Texture.js`.
 
 The payoff for carrying texture coordinates all the way to the fragment: a `uv`
 pair names a place in an image, and this is what reads it.
@@ -15,7 +15,7 @@ is where those two disagree, so sampling is where it is reconciled, once:
 `1 - v` turns one into the other. three.js spells the same reconciliation
 `flipY`, and has it on by default.
 
-**Two filters.** `NEAREST` takes the colour of whichever texel the sample
+**Two filters.** `NEAREST` takes the color of whichever texel the sample
 lands in; `BILINEAR` blends the four around it. Nearest keeps a checkerboard's
 edges hard, which is what makes a mapping error legible — a wrong `uv` shows a
 misplaced square rather than a vague blur — and it is exact, so both backends
@@ -26,12 +26,12 @@ pattern into noise.
 **Texels are decoded before anything is done with them.** An image file holds
 sRGB, and filtering or lighting encoded values is arithmetic on the wrong
 numbers — see `render.srgb`. A texture therefore carries which space it is in,
-and colour textures decode by default. Alpha never does: it is not colour.
+and color textures decode by default. Alpha never does: it is not color.
 
 **Out-of-range coordinates wrap.** Nothing constrains `uv` to the unit square:
 a geometry can ask for its texture five times across, and clipping can produce
 coordinates outside anything the author wrote. `REPEAT` tiles, `CLAMP` holds
-the edge colour, and `MIRROR` alternates direction each tile — the same three
+the edge color, and `MIRROR` alternates direction each tile — the same three
 three.js offers.
 """
 
@@ -74,7 +74,7 @@ comptime MIRROR = Wrap(2)
 
 @fieldwise_init
 struct Filter(Equatable, ImplicitlyCopyable, Writable):
-    """How a sample between texel centres is resolved, as a type."""
+    """How a sample between texel centers is resolved, as a type."""
 
     var value: Int
 
@@ -94,10 +94,10 @@ def mix(near: Float32, far: Float32, t: Float32) -> Float32:
     return near + (far - near) * t
 
 
-def mix_colour(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
-    """Return one colour a fraction `t` of the way to another.
+def mix_color(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
+    """Return one color a fraction `t` of the way to another.
 
-    Mixed premultiplied, so a transparent colour contributes no colour — the
+    Mixed premultiplied, so a transparent color contributes no color — the
     same reason `blend_texels` does. Shared with the GPU kernel, which blends
     between mip levels with it.
     """
@@ -119,12 +119,12 @@ def blend_texels(
     across: Float32,
     down: Float32,
 ) -> FloatColor:
-    """Bilinear blend of four texels, done where hidden colour weighs nothing.
+    """Bilinear blend of four texels, done where hidden color weighs nothing.
 
-    Filtering is a weighted sum, and a weighted sum of *straight* colours lets
-    an invisible texel contribute its colour anyway. An opaque red beside a
+    Filtering is a weighted sum, and a weighted sum of *straight* colors lets
+    an invisible texel contribute its color anyway. An opaque red beside a
     fully transparent green averages to half red and half green, so a fringe
-    of a colour nobody put there appears along every transparent edge — the
+    of a color nobody put there appears along every transparent edge — the
     classic halo around a cut-out sprite.
 
     Premultiplied, the transparent texel contributes nothing but its alpha,
@@ -141,7 +141,7 @@ def blend_texels(
         down: How far between the two rows, 0 to 1.
 
     Returns:
-        The blended colour, with straight alpha.
+        The blended color, with straight alpha.
     """
     return blend(
         lower_left.premultiplied(),
@@ -179,7 +179,7 @@ def blend(
         down: How far between the two rows, 0 to 1.
 
     Returns:
-        The blended colour.
+        The blended color.
     """
     var top = FloatColor(
         mix(lower_left.r, lower_right.r, across),
@@ -364,16 +364,16 @@ struct Texture(Movable):
             pixels: Row-major RGBA bytes from the top, width * height * 4.
             wrap: How coordinates outside the unit square are resolved.
             filter: `NEAREST` or `BILINEAR`.
-            color_space: `SRGB` for a colour image, the default because that
+            color_space: `SRGB` for a color image, the default because that
                 is what an image file holds; `LINEAR` for data that is not
-                colour and must not be decoded. `UNKNOWN_SPACE` is refused:
+                color and must not be decoded. `UNKNOWN_SPACE` is refused:
                 it is a decoder's admission, not a way to read texels.
             mipmapped: Build the chain of halved copies. Costs a third more
                 memory and is what stops a distant surface from sparkling.
 
         Raises:
             Error: If the dimensions are not positive, the buffer length
-                disagrees with them, or the wrap, filter or colour space is
+                disagrees with them, or the wrap, filter or color space is
                 none of the named values -- see `validate`.
         """
         if width <= 0 or height <= 0:
@@ -399,7 +399,7 @@ struct Texture(Movable):
             self._build_mipmaps()
 
     def validate(self) raises:
-        """Refuse a wrap, filter or colour space that is none of the named
+        """Refuse a wrap, filter or color space that is none of the named
         values.
 
         The types stop a bare integer at compile time and nothing else: a
@@ -411,7 +411,7 @@ struct Texture(Movable):
         the kernel.
 
         Raises:
-            Error: If the wrap mode, the filter or the colour space is not
+            Error: If the wrap mode, the filter or the color space is not
                 one of its named constants. `UNKNOWN_SPACE` counts: it is a
                 decoder's admission, not a way to read texels.
         """
@@ -421,7 +421,7 @@ struct Texture(Movable):
             raise Error("A texture's filter must be NEAREST or BILINEAR")
         if not self.color_space.is_decodable():
             raise Error(
-                "A texture needs a colour space it can decode: SRGB or LINEAR"
+                "A texture needs a color space it can decode: SRGB or LINEAR"
             )
 
     def __init__(out self, *, copy: Self):
@@ -441,14 +441,14 @@ struct Texture(Movable):
         return self.width == 0
 
     def texel(self, x: Int, y: Int) raises -> Color:
-        """Return the colour at a texel, by row and column from the top.
+        """Return the color at a texel, by row and column from the top.
 
         Args:
             x: Column, from the left.
             y: Row, from the top.
 
         Returns:
-            The colour stored there.
+            The color stored there.
 
         Raises:
             Error: If the texture is blank or the coordinates are outside it.
@@ -500,11 +500,11 @@ struct Texture(Movable):
         Box filter: each texel of a level is the average of the region of the
         level above that it stands for. Averaged in premultiplied linear
         light, for the two reasons everything else in this file is — a hidden
-        colour must weigh nothing, and light is what averages — and encoded
+        color must weigh nothing, and light is what averages — and encoded
         back to bytes at each level, which is what a GPU stores too.
 
         A chain exists to answer a question the full-size image cannot: when
-        one pixel covers many texels, which one is the colour? Any single
+        one pixel covers many texels, which one is the color? Any single
         answer sparkles as the surface moves. The average of all of them does
         not, and each level is the average already taken.
 
@@ -625,7 +625,7 @@ struct Texture(Movable):
             level: Which image of the mip chain to read, zero being full size.
 
         Returns:
-            The colour found there, or opaque white if the texture is blank.
+            The color found there, or opaque white if the texture is blank.
 
         Raises:
             Error: If the texture is not blank and has no such level.
@@ -657,7 +657,7 @@ struct Texture(Movable):
             )
             * Self.CHANNELS
         )
-        # Colour through the ramp; alpha is not colour and never decoded.
+        # Color through the ramp; alpha is not color and never decoded.
         return FloatColor(
             self.ramp[Int(self.pixels[offset])],
             self.ramp[Int(self.pixels[offset + 1])],
@@ -668,7 +668,7 @@ struct Texture(Movable):
     def sample_at(
         self, u: Float32, v: Float32, level: Int
     ) raises -> FloatColor:
-        """Return the colour at a coordinate, read from one mip level.
+        """Return the color at a coordinate, read from one mip level.
 
         An explicit level lookup, so a level the chain does not hold is
         rejected rather than clamped. `sample_level` is the other interface:
@@ -681,7 +681,7 @@ struct Texture(Movable):
             level: Which image of the chain, zero being full size.
 
         Returns:
-            The colour found there, or opaque white if the texture is blank.
+            The color found there, or opaque white if the texture is blank.
 
         Raises:
             Error: If the texture is not blank and has no such level.
@@ -693,7 +693,7 @@ struct Texture(Movable):
         return self._sample_at(u, v, level)
 
     def _sample_at(self, u: Float32, v: Float32, level: Int) -> FloatColor:
-        """Return the colour at a coordinate without checking `level` exists.
+        """Return the color at a coordinate without checking `level` exists.
 
         The hot path, called up to twice per fragment by `sample_level` with
         a level it has already clamped.
@@ -710,7 +710,7 @@ struct Texture(Movable):
                 level,
             )
 
-        # Texel centres are at half-integers, so shift the sample into a space
+        # Texel centers are at half-integers, so shift the sample into a space
         # where they are at integers, and blend between the two either side.
         var across = u * Float32(wide) - 0.5
         var down = (1 - v) * Float32(tall) - 0.5
@@ -728,7 +728,7 @@ struct Texture(Movable):
     def sample_level(
         self, u: Float32, v: Float32, level: Float32
     ) -> FloatColor:
-        """Return the colour at a coordinate, blended between two mip levels.
+        """Return the color at a coordinate, blended between two mip levels.
 
         Trilinear: bilinear within each of the two levels either side of
         `level`, then linearly between them. The blend between levels is what
@@ -746,21 +746,21 @@ struct Texture(Movable):
                 already the right answer.
 
         Returns:
-            The colour found there, or opaque white if the texture is blank.
+            The color found there, or opaque white if the texture is blank.
         """
         if self.is_blank() or self.levels == 1 or level <= 0:
             return self._sample_at(u, v, 0)
         if level >= Float32(self.levels - 1):
             return self._sample_at(u, v, self.levels - 1)
         var lower = Int(floor(level))
-        return mix_colour(
+        return mix_color(
             self._sample_at(u, v, lower),
             self._sample_at(u, v, lower + 1),
             level - Float32(lower),
         )
 
     def sample(self, u: Float32, v: Float32) -> FloatColor:
-        """Return the colour at a texture coordinate.
+        """Return the color at a texture coordinate.
 
         `v` is flipped because rows run down from the top while texture space
         counts up from the bottom.
@@ -771,10 +771,10 @@ struct Texture(Movable):
         of the range name the same texel, which is what makes a tiled texture
         seamless; under `CLAMP` they name opposite edges.
 
-        Under `BILINEAR` it blends the four texels around it. Texel *centres*
+        Under `BILINEAR` it blends the four texels around it. Texel *centers*
         sit at half-integers, which is the whole reason for the half subtracted
         below: without it the blend is offset by half a texel and every image
-        drifts diagonally. The four neighbours are fetched through the wrap
+        drifts diagonally. The four neighbors are fetched through the wrap
         mode, so a bilinear `REPEAT` texture blends across its own seam and a
         `CLAMP` one holds its edge instead of fading out of it.
 
@@ -788,7 +788,7 @@ struct Texture(Movable):
             v: Vertical coordinate, 0 at the *bottom* edge.
 
         Returns:
-            The colour found there, or opaque white if the texture is blank.
+            The color found there, or opaque white if the texture is blank.
         """
         if self.is_blank():
             return FloatColor(1.0, 1.0, 1.0, 1.0)
@@ -807,12 +807,12 @@ def texture_from(
 
     The join between `render.png`'s decoder and this module. Both hold
     eight-bit RGBA in row-major order from the top, so there is nothing to
-    convert — which is the point of widening every colour type while decoding
+    convert — which is the point of widening every color type while decoding
     rather than carrying five shapes through the renderer.
 
-    **The colour space comes from the file unless you say otherwise.** A PNG
+    **The color space comes from the file unless you say otherwise.** A PNG
     does not imply sRGB: it can declare a gamma of one, which is linear, and
-    decoding that through the sRGB curve turns a mid grey of 128 into a fifth
+    decoding that through the sRGB curve turns a mid gray of 128 into a fifth
     of the light instead of half of it. Passing `color_space` overrides what
     the file said, which is what a normal map stored without any tag needs.
 
@@ -833,13 +833,13 @@ def texture_from(
         The texture.
 
     Raises:
-        Error: If the file's declared colour space could not be interpreted
+        Error: If the file's declared color space could not be interpreted
             and none was given.
     """
     var space = color_space.or_else(image.color_space)
     if space == UNKNOWN_SPACE:
         raise Error(
-            "This image declares a colour space that cannot be interpreted;"
+            "This image declares a color space that cannot be interpreted;"
             " pass SRGB or LINEAR to say how to read it"
         )
     return Texture(
@@ -872,8 +872,8 @@ def checkerboard(
     Args:
         size: The image's width and height in texels.
         squares: How many squares fit across it; must divide `size`.
-        light: Colour of the square at the top left.
-        dark: Colour of its neighbours.
+        light: Color of the square at the top left.
+        dark: Color of its neighbors.
         wrap: How coordinates outside the unit square are resolved.
         filter: `NEAREST` or `BILINEAR`.
         color_space: `SRGB` or `LINEAR`.

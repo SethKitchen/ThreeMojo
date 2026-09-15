@@ -10,7 +10,7 @@ A node is a transform relative to its parent: a position, a quaternion and a sca
 
 | Member | Meaning |
 |---|---|
-| `position: Vector3` | Offset from the parent, in metres. |
+| `position: Vector3` | Offset from the parent, in meters. |
 | `quaternion: Quaternion` | Rotation. See [Rotations](Rotations). |
 | `scale: Vector3` | Scale factors along the node's own axes. |
 | `parent: NodeId` | The parent's index, or `NO_PARENT`. |

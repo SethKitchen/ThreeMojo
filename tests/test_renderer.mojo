@@ -45,7 +45,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 
 
 def rendered[
@@ -150,7 +150,7 @@ def light_from(
     `Renderer.set_light(direction, ambient)` gave every surface
     `ambient + (1 - ambient) * lambert`. For a white lamp that is an additive
     ambient of `ambient` plus a directional of `1 - ambient`, so the tests
-    below expect the colours they always did.
+    below expect the colors they always did.
     """
     var lamp = Object3D()
     lamp.set_position(x, y, z)
@@ -165,8 +165,8 @@ def light_the(mut scene: Scene) raises:
     White ambient at a quarter plus a white directional at three quarters,
     from up and to the right. That is exactly the fixed light `Renderer` used
     to carry -- its `0.25 + 0.75 * lambert` is what an additive quarter and
-    three quarters come to for a white lamp -- so every expected colour in
-    this file is unchanged by lights becoming scene objects. A colour that
+    three quarters come to for a white lamp -- so every expected color in
+    this file is unchanged by lights becoming scene objects. A color that
     moves here is a bug, not the redesign.
 
     Adds the lamp's node last, so the node ids meshes already name still
@@ -201,8 +201,8 @@ def a_camera() raises -> PerspectiveCamera:
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
     return camera^
@@ -230,11 +230,11 @@ def scene_with_node_at(z: Float32) raises -> Scene:
 
 
 def count_background(image: Framebuffer, background: Color) raises -> Int:
-    """Return how many pixels still hold the clear colour.
+    """Return how many pixels still hold the clear color.
 
     Args:
         image: The rendered image.
-        background: The colour it was cleared to.
+        background: The color it was cleared to.
 
     Returns:
         The number of untouched pixels.
@@ -295,7 +295,7 @@ def test_a_degenerate_triangle_has_no_normal() raises:
 def test_a_mesh_binds_geometry_to_a_node() raises:
     var assets = Assets()
     var mesh = Mesh(
-        assets.geometries.add(cube(Length(1.0, METRE))),
+        assets.geometries.add(cube(Length(1.0, METER))),
         assets.materials.add(Material(Color(1, 2, 3))),
         NodeId(4),
     )
@@ -306,7 +306,7 @@ def test_a_mesh_binds_geometry_to_a_node() raises:
 
 def test_a_mesh_must_name_a_node() raises:
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     with assert_raises():
         _ = Mesh(
             box,
@@ -324,7 +324,7 @@ def test_a_mesh_must_name_a_geometry() raises:
 
 def test_a_mesh_must_name_a_material() raises:
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     with assert_raises():
         _ = Mesh(box, MaterialId(-1), NodeId(0))
 
@@ -332,7 +332,7 @@ def test_a_mesh_must_name_a_material() raises:
 def test_a_mesh_naming_a_material_that_is_not_there_is_rejected() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var meshes = List[Mesh]()
     meshes.append(Mesh(box, MaterialId(7), NodeId(0)))
     with assert_raises():
@@ -360,11 +360,11 @@ def test_a_mesh_naming_a_geometry_that_is_not_there_is_rejected() raises:
 
 def test_two_meshes_can_share_one_geometry() raises:
     # The whole reason the store exists. One box, added once, drawn at two
-    # different nodes in two different colours — and the geometry is borrowed
+    # different nodes in two different colors — and the geometry is borrowed
     # by both rather than copied into either.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     assert_equal(assets.geometries.count(), 1)
 
     var scene = Scene()
@@ -388,7 +388,7 @@ def test_two_meshes_can_share_one_geometry() raises:
     assert_equal(assets.geometries.count(), 1)
 
     var image = rendered(renderer, scene, assets, meshes, a_camera())
-    # Both boxes drew, on their own sides, in their own colours.
+    # Both boxes drew, on their own sides, in their own colors.
     var reds = 0
     var blues = 0
     for y in range(HEIGHT):
@@ -439,7 +439,7 @@ def test_a_mesh_actually_covers_some_pixels() raises:
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.geometries.add(cube(Length(1.0, METER))),
             assets.materials.add(Material(Color(255, 0, 0))),
             NodeId(0),
         )
@@ -448,7 +448,7 @@ def test_a_mesh_actually_covers_some_pixels() raises:
     assert_true(count_background(image, renderer.background) < WIDTH * HEIGHT)
 
 
-def test_the_background_colour_is_used() raises:
+def test_the_background_color_is_used() raises:
     var assets = Assets()
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_background(Color(7, 8, 9))
@@ -476,14 +476,14 @@ def test_a_nearer_mesh_hides_a_further_one_whatever_the_order() raises:
     var near_first = List[Mesh]()
     near_first.append(
         Mesh(
-            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.geometries.add(cube(Length(1.0, METER))),
             assets.materials.add(Material(Color(255, 0, 0))),
             near_node,
         )
     )
     near_first.append(
         Mesh(
-            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.geometries.add(cube(Length(1.0, METER))),
             assets.materials.add(Material(Color(0, 255, 0))),
             far_node,
         )
@@ -492,14 +492,14 @@ def test_a_nearer_mesh_hides_a_further_one_whatever_the_order() raises:
     var far_first = List[Mesh]()
     far_first.append(
         Mesh(
-            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.geometries.add(cube(Length(1.0, METER))),
             assets.materials.add(Material(Color(0, 255, 0))),
             far_node,
         )
     )
     far_first.append(
         Mesh(
-            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.geometries.add(cube(Length(1.0, METER))),
             assets.materials.add(Material(Color(255, 0, 0))),
             near_node,
         )
@@ -507,10 +507,10 @@ def test_a_nearer_mesh_hides_a_further_one_whatever_the_order() raises:
 
     var a = rendered(renderer, scene, assets, near_first, a_camera())
     var b = rendered(renderer, scene, assets, far_first, a_camera())
-    # The centre pixel belongs to the near cube either way, and both images
+    # The center pixel belongs to the near cube either way, and both images
     # must agree everywhere.
-    var centre = a.get_pixel(WIDTH // 2, HEIGHT // 2)
-    assert_true(centre.r > centre.g)
+    var center = a.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(center.r > center.g)
     for y in range(HEIGHT):
         for x in range(WIDTH):
             assert_equal(a.get_pixel(x, y).r, b.get_pixel(x, y).r)
@@ -528,7 +528,7 @@ def test_the_scene_transform_is_what_places_a_mesh() raises:
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            assets.geometries.add(cube(Length(0.5, METRE))),
+            assets.geometries.add(cube(Length(0.5, METER))),
             assets.materials.add(Material(Color(255, 0, 0))),
             NodeId(0),
         )
@@ -564,7 +564,7 @@ def test_a_mesh_naming_a_node_that_is_not_there_is_rejected() raises:
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.geometries.add(cube(Length(1.0, METER))),
             assets.materials.add(Material(Color(255, 0, 0))),
             NodeId(3),
         )
@@ -576,7 +576,7 @@ def test_a_mesh_naming_a_node_that_is_not_there_is_rejected() raises:
 def test_a_geometry_without_normals_shades_flat() raises:
     var assets = Assets()
     # No normal attribute, so each face supplies its own and the triangle
-    # takes one colour throughout.
+    # takes one color throughout.
     var renderer = Renderer(WIDTH, HEIGHT)
     var scene = scene_with_node_at(0)
     var plain = BufferGeometry()
@@ -598,14 +598,14 @@ def test_a_geometry_without_normals_shades_flat() raises:
 
 def test_a_sphere_shades_smoothly_across_a_triangle() raises:
     var assets = Assets()
-    # Per-vertex normals mean neighbouring pixels differ, where a flat face
-    # would hold one colour.
+    # Per-vertex normals mean neighboring pixels differ, where a flat face
+    # would hold one color.
     var renderer = Renderer(WIDTH, HEIGHT)
     var scene = scene_with_node_at(0)
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            assets.geometries.add(sphere(Length(1.0, METRE), 16, 12)),
+            assets.geometries.add(sphere(Length(1.0, METER), 16, 12)),
             assets.materials.add(Material(Color(200, 200, 200))),
             NodeId(0),
         )
@@ -641,7 +641,7 @@ def test_geometry_crossing_the_near_plane_is_clipped_not_mangled() raises:
     # nothing to judge the clipping by.
     meshes.append(
         Mesh(
-            assets.geometries.add(cube(Length(8.0, METRE))),
+            assets.geometries.add(cube(Length(8.0, METER))),
             assets.materials.add(
                 Material(Color(255, 140, 40), NO_TEXTURE, DOUBLE_SIDE)
             ),
@@ -650,7 +650,7 @@ def test_geometry_crossing_the_near_plane_is_clipped_not_mangled() raises:
     )
     var image = rendered(renderer, scene, assets, meshes, a_camera())
     # Every pixel belongs to the cube's inside surface, and every one of them
-    # is a real shade rather than a projection artefact.
+    # is a real shade rather than a projection artifact.
     assert_true(count_background(image, renderer.background) < 100)
 
 
@@ -663,17 +663,17 @@ def test_geometry_beyond_the_far_plane_is_not_drawn() raises:
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(10.0, METRE),
+        Length(0.1, METER),
+        Length(10.0, METER),
     )
     camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
-    # Twenty metres from a camera four metres out is well past a far plane of
+    # Twenty meters from a camera four meters out is well past a far plane of
     # ten, and big enough to fill the image if it were drawn at all.
     var scene = scene_with_node_at(-20)
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            assets.geometries.add(cube(Length(6.0, METRE))),
+            assets.geometries.add(cube(Length(6.0, METER))),
             assets.materials.add(Material(Color(255, 140, 40))),
             NodeId(0),
         )
@@ -691,15 +691,15 @@ def test_geometry_inside_the_far_plane_is_still_drawn() raises:
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
     var scene = scene_with_node_at(-20)
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            assets.geometries.add(cube(Length(6.0, METRE))),
+            assets.geometries.add(cube(Length(6.0, METER))),
             assets.materials.add(Material(Color(255, 140, 40))),
             NodeId(0),
         )
@@ -759,7 +759,7 @@ def test_a_non_uniform_scale_still_shades_the_true_surface() raises:
     )
     var image = rendered(renderer, scene, assets, meshes, a_camera())
 
-    # What the scaled triangle's own geometry says its colour must be.
+    # What the scaled triangle's own geometry says its color must be.
     var world = scene.world_matrix(NodeId(0))
     var expected = (
         Lighting(scene)
@@ -825,7 +825,7 @@ def test_a_front_side_material_hides_the_inside_of_a_cube() raises:
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            assets.geometries.add(cube(Length(8.0, METRE))),
+            assets.geometries.add(cube(Length(8.0, METER))),
             assets.materials.add(Material(Color(255, 140, 40))),
             NodeId(0),
         )
@@ -842,7 +842,7 @@ def test_culling_does_not_change_a_solid_seen_from_outside() raises:
     # must come out identical either way.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(box, assets.materials.add(Material(Color(255, 0, 0))), NodeId(0))
@@ -878,7 +878,7 @@ def test_culling_halves_the_triangles_of_a_closed_mesh() raises:
     # property of the renderer.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var ball = assets.geometries.add(sphere(Length(1.0, METRE), 16, 12))
+    var ball = assets.geometries.add(sphere(Length(1.0, METER), 16, 12))
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
@@ -914,7 +914,7 @@ def test_culling_halves_the_triangles_of_a_closed_mesh() raises:
 def test_uv_mode_draws_texture_coordinates_instead_of_lighting() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.5, METRE)))
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
     var scene = scene_with_node_at(0)
     var meshes = List[Mesh]()
     meshes.append(
@@ -1213,13 +1213,13 @@ def test_an_unmirrored_mesh_still_agrees_between_the_normal_paths() raises:
 # --- textures ---------------------------------------------------------------
 
 
-def test_a_material_without_a_map_shades_as_plain_colour() raises:
+def test_a_material_without_a_map_shades_as_plain_color() raises:
     # The blank texture samples as white and white is the identity for
     # modulation, so a material with no map costs nothing and needs no branch:
     # following the material and ignoring every texture agree exactly.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.5, METRE)))
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
     var paint = assets.materials.add(Material(Color(220, 160, 80)))
     var scene = scene_with_node_at(0)
     var meshes = List[Mesh]()
@@ -1237,7 +1237,7 @@ def test_a_material_without_a_map_shades_as_plain_colour() raises:
 def test_a_map_changes_what_a_mesh_looks_like() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.5, METRE)))
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
     var scene = scene_with_node_at(0)
 
     var plain_meshes = List[Mesh]()
@@ -1282,7 +1282,7 @@ def test_two_meshes_can_carry_different_textures() raises:
     # scene shared a single texture and this test could not be written.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(0.8, METRE)))
+    var box = assets.geometries.add(cube(Length(0.8, METER)))
     var reds = assets.textures.add(
         checkerboard(8, 2, Color(255, 40, 40), Color(90, 10, 10))
     )
@@ -1340,7 +1340,7 @@ def test_lit_shading_ignores_every_map() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_shading(SHADE_LIT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.5, METRE)))
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
     var board = assets.textures.add(
         checkerboard(8, 4, Color(255, 255, 255), Color(20, 20, 20))
     )
@@ -1384,7 +1384,7 @@ def test_a_back_side_material_draws_what_front_side_hides() raises:
     # far half, so something is drawn, and it is not what FrontSide drew.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var scene = scene_with_node_at(0)
 
     var front = List[Mesh]()
@@ -1430,7 +1430,7 @@ def test_a_back_side_material_shows_the_inside_of_a_cube() raises:
     var meshes = List[Mesh]()
     meshes.append(
         Mesh(
-            assets.geometries.add(cube(Length(8.0, METRE))),
+            assets.geometries.add(cube(Length(8.0, METER))),
             assets.materials.add(
                 Material(Color(255, 140, 40), NO_TEXTURE, BACK_SIDE)
             ),
@@ -1464,8 +1464,8 @@ def test_a_back_side_surface_is_lit_from_the_side_you_can_see() raises:
     var behind = PerspectiveCamera(
         Angle(45.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     behind.place(Vector3(0, 0, -4), Vector3(0, 0, 0))
     var image = rendered(renderer, scene, assets, meshes, behind)
@@ -1503,8 +1503,8 @@ def test_a_back_side_surface_lit_from_behind_stays_dark() raises:
     var behind = PerspectiveCamera(
         Angle(45.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     behind.place(Vector3(0, 0, -4), Vector3(0, 0, 0))
     var image = rendered(renderer, scene, assets, meshes, behind)
@@ -1526,11 +1526,11 @@ def test_a_double_side_surface_lights_each_half_on_its_own_side() raises:
     # the front and some from behind, and each must use its own side's
     # lighting. A geometry with no normals exercises the fallback path.
     var renderer = Renderer(WIDTH, HEIGHT)
-    # The camera sits inside a ten-metre cube, four metres from the centre,
+    # The camera sits inside a ten-meter cube, four meters from the center,
     # so every visible surface is the *inside* of a wall -- a back face. The
     # light is behind the camera, shining at the far wall's visible side.
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(10.0, METRE)))
+    var box = assets.geometries.add(cube(Length(10.0, METER)))
     var paint = assets.materials.add(
         Material(Color(255, 255, 255), NO_TEXTURE, DOUBLE_SIDE)
     )
@@ -1557,7 +1557,7 @@ def test_a_material_naming_a_texture_that_is_not_there_is_rejected() raises:
     # nothing is only detectable once both are together.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var paint = assets.materials.add(
         Material(Color(255, 255, 255), TextureId(3))
     )
@@ -1575,7 +1575,7 @@ def test_a_material_naming_a_texture_that_is_not_there_is_rejected() raises:
 def test_a_translucent_mesh_lets_the_one_behind_it_show() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var solid = assets.materials.add(Material(Color(0, 255, 0)))
     var glass = assets.materials.add(
         Material(Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5)
@@ -1596,10 +1596,10 @@ def test_a_translucent_mesh_lets_the_one_behind_it_show() raises:
     meshes.append(Mesh(box, glass, front_node))
     var image = rendered(renderer, scene, assets, meshes, a_camera())
 
-    var centre = image.get_pixel(WIDTH // 2, HEIGHT // 2)
+    var center = image.get_pixel(WIDTH // 2, HEIGHT // 2)
     # Both the red pane and the green box behind it are in the result.
-    assert_true(centre.r > 0, "the translucent box did not draw")
-    assert_true(centre.g > 0, "the solid box behind it was hidden")
+    assert_true(center.r > 0, "the translucent box did not draw")
+    assert_true(center.g > 0, "the solid box behind it was hidden")
 
 
 def test_an_opaque_mesh_hides_what_is_behind_it() raises:
@@ -1607,7 +1607,7 @@ def test_an_opaque_mesh_hides_what_is_behind_it() raises:
     # opacity and nothing else.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var solid = assets.materials.add(Material(Color(0, 255, 0)))
     var front_solid = assets.materials.add(Material(Color(255, 0, 0)))
 
@@ -1635,7 +1635,7 @@ def test_translucent_meshes_are_drawn_after_opaque_ones() raises:
     # the box over it, hiding the pane entirely.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var glass = assets.materials.add(
         Material(Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5)
     )
@@ -1655,9 +1655,9 @@ def test_translucent_meshes_are_drawn_after_opaque_ones() raises:
     meshes.append(Mesh(box, glass, front_node))
     meshes.append(Mesh(box, solid, back_node))
     var image = rendered(renderer, scene, assets, meshes, a_camera())
-    var centre = image.get_pixel(WIDTH // 2, HEIGHT // 2)
-    assert_true(centre.r > 0, "the translucent pane was painted over")
-    assert_true(centre.g > 0, "the solid box did not draw")
+    var center = image.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(center.r > 0, "the translucent pane was painted over")
+    assert_true(center.g > 0, "the solid box did not draw")
 
 
 def test_translucent_meshes_are_sorted_back_to_front() raises:
@@ -1666,7 +1666,7 @@ def test_translucent_meshes_are_sorted_back_to_front() raises:
     # dominates. Comparing the two orders is what shows the sort happened.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var red = assets.materials.add(
         Material(Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5)
     )
@@ -1699,8 +1699,8 @@ def test_translucent_meshes_are_sorted_back_to_front() raises:
             assert_equal(one.get_pixel(x, y).r, two.get_pixel(x, y).r)
             assert_equal(one.get_pixel(x, y).b, two.get_pixel(x, y).b)
     # And the nearer red pane dominates, as the last thing blended in.
-    var centre = one.get_pixel(WIDTH // 2, HEIGHT // 2)
-    assert_true(centre.r > centre.b)
+    var center = one.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(center.r > center.b)
 
 
 def test_opacity_outside_zero_to_one_is_rejected() raises:
@@ -1717,19 +1717,19 @@ def test_a_material_is_opaque_by_default() raises:
     )
 
 
-def test_a_translucent_base_colour_sorts_and_rasterizes_the_same_way() raises:
-    # One material, one answer. A base colour with alpha but an opacity of one
+def test_a_translucent_base_color_sorts_and_rasterizes_the_same_way() raises:
+    # One material, one answer. A base color with alpha but an opacity of one
     # used to sort as opaque and rasterize as blended: it did not write depth,
     # so whatever was submitted after it painted straight over the top, and
     # the image depended on submission order.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var red = assets.materials.add(Material(Color(255, 0, 0, 128)))
     var blue = assets.materials.add(Material(Color(0, 0, 255)))
     assert_true(
         assets.materials.get(red).is_transparent(),
-        "a base colour with alpha must count as transparent",
+        "a base color with alpha must count as transparent",
     )
 
     var scene = Scene()
@@ -1756,11 +1756,11 @@ def test_a_translucent_base_colour_sorts_and_rasterizes_the_same_way() raises:
             assert_equal(one.get_pixel(x, y).r, two.get_pixel(x, y).r)
             assert_equal(one.get_pixel(x, y).b, two.get_pixel(x, y).b)
     # And the translucent red really is mixed with the blue behind it.
-    var centre = one.get_pixel(WIDTH // 2, HEIGHT // 2)
-    assert_true(centre.r > 0 and centre.b > 0)
+    var center = one.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(center.r > 0 and center.b > 0)
 
 
-def test_blending_can_be_named_against_what_the_colour_suggests() raises:
+def test_blending_can_be_named_against_what_the_color_suggests() raises:
     # A texture's own alpha cannot be inferred from the material, so the
     # policy has to be sayable. Both directions, so neither is the only path.
     var opaque_looking = Material(
@@ -1782,7 +1782,7 @@ def test_opaque_meshes_are_drawn_nearest_first() raises:
     # goes first and the far one's covered pixels are never lit.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var paint = assets.materials.add(Material(Color(200, 200, 200)))
     var scene = Scene()
     var far = Object3D()
@@ -1850,7 +1850,7 @@ def test_several_workers_draw_the_same_image_as_one() raises:
     # translucent and opaque surfaces together, so blending and sampling
     # both cross band boundaries.
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var solid = assets.materials.add(Material(Color(255, 255, 255)))
     var glass = assets.materials.add(
         Material(Color(255, 80, 80), NO_TEXTURE, DOUBLE_SIDE, 0.5)
@@ -1899,7 +1899,7 @@ def test_more_workers_than_rows_still_renders() raises:
     var scene = scene_with_node_at(0)
     scene.add_mesh(
         Mesh(
-            assets.geometries.add(cube(Length(1.0, METRE))),
+            assets.geometries.add(cube(Length(1.0, METER))),
             assets.materials.add(Material(Color(255, 0, 0))),
             NodeId(0),
         )
@@ -1919,24 +1919,24 @@ def test_an_empty_scene_renders_with_several_workers() raises:
 
 
 def eye_camera() raises -> PerspectiveCamera:
-    """Return a camera three metres up +z, looking at the origin."""
+    """Return a camera three meters up +z, looking at the origin."""
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
     return camera^
 
 
 def test_a_camera_riding_a_node_renders_the_same_image() raises:
-    # A node three metres up +z with no rotation is exactly the placement
+    # A node three meters up +z with no rotation is exactly the placement
     # `eye_camera` describes, so the two views are the same matrix and the
     # two images the same pixels.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var paint = assets.materials.add(Material(Color(255, 140, 40)))
     var scene = Scene()
     var block = Object3D()
@@ -1977,7 +1977,7 @@ def test_a_point_light_lights_the_part_of_a_face_nearest_it() raises:
     # which is only possible if each fragment knows where it is in the world.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var white = assets.materials.add(Material(Color(255, 255, 255)))
     var scene = Scene()
     var node = scene.add(Object3D())
@@ -1997,10 +1997,10 @@ def test_a_point_light_lights_the_part_of_a_face_nearest_it() raises:
 
 def test_a_basic_material_ignores_the_lights() raises:
     # No lights at all: a Lambert surface renders black, a basic one renders
-    # its own colour, and that is the whole difference between the two.
+    # its own color, and that is the whole difference between the two.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var lambert = assets.materials.add(Material(Color(200, 100, 50)))
     var basic = assets.materials.add(Material(Color(200, 100, 50), kind=BASIC))
     var scene = Scene()
@@ -2012,12 +2012,12 @@ def test_a_basic_material_ignores_the_lights() raises:
     unlit.append(Mesh(box, basic, node))
     var dark = rendered(renderer, scene, assets, lit, eye_camera())
     var plain = rendered(renderer, scene, assets, unlit, eye_camera())
-    var centre_dark = dark.get_pixel(WIDTH // 2, HEIGHT // 2)
-    assert_equal(centre_dark.r, UInt8(0))
-    var centre_plain = plain.get_pixel(WIDTH // 2, HEIGHT // 2)
-    assert_equal(centre_plain.r, UInt8(200))
-    assert_equal(centre_plain.g, UInt8(100))
-    assert_equal(centre_plain.b, UInt8(50))
+    var center_dark = dark.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(center_dark.r, UInt8(0))
+    var center_plain = plain.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(center_plain.r, UInt8(200))
+    assert_equal(center_plain.g, UInt8(100))
+    assert_equal(center_plain.b, UInt8(50))
 
 
 def test_an_unknown_shading_mode_is_refused_by_the_renderer() raises:

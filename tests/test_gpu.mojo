@@ -28,7 +28,7 @@ comparison produced 112 MB of them and dominated the entire coverage run.
 
 from materials.material import Blending
 from cameras.camera import Camera
-from cameras.orthographic_camera import centred
+from cameras.orthographic_camera import centered
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from materials.material import Material
@@ -43,7 +43,7 @@ from std.math import inf
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from renderers.renderer import Renderer
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, NO_TEXTURE, OPAQUE
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
@@ -98,8 +98,8 @@ def light_the(mut scene: Scene) raises:
     White ambient at a quarter plus a white directional at three quarters,
     from up and to the right. That is exactly the fixed light `Renderer` used
     to carry -- its `0.25 + 0.75 * lambert` is what an additive quarter and
-    three quarters come to for a white lamp -- so every expected colour in
-    this file is unchanged by lights becoming scene objects. A colour that
+    three quarters come to for a white lamp -- so every expected color in
+    this file is unchanged by lights becoming scene objects. A color that
     moves here is a bug, not the redesign.
 
     Adds the lamp's node last, so the node ids meshes already name still
@@ -131,7 +131,7 @@ def count_mismatches(
     **On tolerance.** Which pixels a triangle covers is decided in integer
     arithmetic by `render.fillrule`, so the two renderers agree there
     exactly, and every coverage test below demands it with the default of
-    zero. What a covered pixel is *coloured* is floating point, and there the
+    zero. What a covered pixel is *colored* is floating point, and there the
     two cannot be held to the last bit: a GPU contracts `a * b + c` into a
     fused multiply-add, which rounds once instead of twice, so an interpolated
     channel can land one ULP either side of the CPU's value. That is
@@ -141,14 +141,14 @@ def count_mismatches(
 
     So tests that interpolate real shading allow one level, and say so. A
     tolerance wide enough to hide a genuine disagreement would defeat the
-    point; one level cannot hide a wrong colour, a wrong depth or a wrong
+    point; one level cannot hide a wrong color, a wrong depth or a wrong
     pixel.
 
     Args:
         left: First image.
         right: Second image.
         tolerance: How many levels a channel may differ by and still count as
-            a match. Zero, unless the test interpolates colour.
+            a match. Zero, unless the test interpolates color.
 
     Returns:
         The number of differing pixels.
@@ -172,7 +172,7 @@ def count_mismatches(
 
 
 def count_foreground(image: Framebuffer) raises -> Int:
-    """Return how many pixels hold the foreground colour.
+    """Return how many pixels hold the foreground color.
 
     Parity between two renderers says nothing if both drew nothing, so the
     comparison tests assert on this as well. Two of them used to fill zero
@@ -491,7 +491,7 @@ def cpu_render_triangles(
         corners: Raster vertices, three per triangle.
         width: Image width.
         height: Image height.
-        clear: The colour to clear to.
+        clear: The color to clear to.
 
     Returns:
         The rendered framebuffer.
@@ -530,7 +530,7 @@ def test_the_gpu_resolves_depth_between_overlapping_triangles() raises:
     var corners = overlapping_pair()
     var gpu = render_triangles(corners, 36, 30, BACKGROUND)
     var cpu = cpu_render_triangles(corners, 36, 30)
-    # Both colours are visible, so the overlap really is partial.
+    # Both colors are visible, so the overlap really is partial.
     var reds = 0
     var greens = 0
     for y in range(30):
@@ -667,8 +667,8 @@ def test_both_backends_agree_on_a_whole_prepared_scene() raises:
     renderer.set_background(BACKGROUND)
 
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
-    var ball = assets.geometries.add(sphere(Length(0.7, METRE), 12, 8))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
 
     var scene = Scene()
     var left = Object3D()
@@ -684,8 +684,8 @@ def test_both_backends_agree_on_a_whole_prepared_scene() raises:
     var camera = PerspectiveCamera(
         Angle(50.0, DEGREE),
         Float32(48) / Float32(36),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0.6, 3.0), Vector3(0, 0, 0))
 
@@ -749,8 +749,8 @@ def test_both_backends_agree_under_point_lights() raises:
     renderer.set_background(BACKGROUND)
 
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
-    var ball = assets.geometries.add(sphere(Length(0.7, METRE), 12, 8))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
 
     var scene = Scene()
     var left = Object3D()
@@ -774,8 +774,8 @@ def test_both_backends_agree_under_point_lights() raises:
     var camera = PerspectiveCamera(
         Angle(50.0, DEGREE),
         Float32(48) / Float32(36),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0.6, 3.0), Vector3(0, 0, 0))
 
@@ -816,7 +816,7 @@ def test_both_backends_agree_under_point_lights() raises:
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
-def test_the_gpu_leaves_an_unlit_triangle_its_own_colour() raises:
+def test_the_gpu_leaves_an_unlit_triangle_its_own_color() raises:
     # A BASIC material's triangles carry `lit=False`, and the kernel must
     # skip the lights for them exactly as the host does.
     if skipped_for_lack_of_a_gpu("the gpu leaves an unlit triangle alone"):
@@ -866,11 +866,11 @@ def test_the_gpu_leaves_an_unlit_triangle_its_own_colour() raises:
 
 
 def count_background(image: Framebuffer, background: Color) raises -> Int:
-    """Return how many pixels still hold the clear colour.
+    """Return how many pixels still hold the clear color.
 
     Args:
         image: The rendered image.
-        background: The colour it was cleared to.
+        background: The color it was cleared to.
 
     Returns:
         The number of untouched pixels.
@@ -894,7 +894,7 @@ def count_background(image: Framebuffer, background: Color) raises -> Int:
 # --- the readback contract --------------------------------------------------
 
 
-def test_the_gpu_reads_back_depth_and_not_just_colour() raises:
+def test_the_gpu_reads_back_depth_and_not_just_color() raises:
     # `read_back` returns a Framebuffer, and a Framebuffer promises depth. It
     # used to hand back one whose depth was infinity everywhere, so drawing a
     # further depth-tested triangle into it would paint straight over a nearer
@@ -916,7 +916,7 @@ def test_the_gpu_reads_back_depth_and_not_just_colour() raises:
             else:
                 covered += 1
                 # Interpolated in floating point, so the same one-ULP caveat
-                # applies as to colour; see `count_mismatches`.
+                # applies as to color; see `count_mismatches`.
                 assert_almost_equal(ours, theirs, atol=Float64(1e-5))
     assert_true(covered > 0, "nothing was drawn, so nothing was compared")
 
@@ -1006,8 +1006,8 @@ def test_both_backends_agree_on_a_prepared_orthographic_uv_scene() raises:
     renderer.set_shading(SHADE_UV)
 
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.4, METRE)))
-    var ball = assets.geometries.add(sphere(Length(0.8, METRE), 10, 6))
+    var box = assets.geometries.add(cube(Length(1.4, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.8, METER), 10, 6))
 
     var scene = Scene()
     var left = Object3D()
@@ -1020,11 +1020,11 @@ def test_both_backends_agree_on_a_prepared_orthographic_uv_scene() raises:
     light_the(scene)
     scene.update()
 
-    var camera = centred(
-        Length(4.0, METRE),
+    var camera = centered(
+        Length(4.0, METER),
         Float32(48) / Float32(36),
-        Length(0.0, METRE),
-        Length(50.0, METRE),
+        Length(0.0, METER),
+        Length(50.0, METER),
     )
     camera.place(Vector3(0, 0.5, 4), Vector3(0, 0, 0))
 
@@ -1107,7 +1107,7 @@ def cpu_textured(
         corners: Raster vertices, three per triangle.
         size: Image width and height.
         textures: The images to sample.
-        clear: The colour to start from, alpha included.
+        clear: The color to start from, alpha included.
 
     Returns:
         The rendered framebuffer.
@@ -1129,7 +1129,7 @@ def cpu_textured(
 
 
 def test_both_backends_sample_a_texture_identically() raises:
-    # Nearest-neighbour sampling is integer arithmetic once the coordinate is
+    # Nearest-neighbor sampling is integer arithmetic once the coordinate is
     # floored, so unlike interpolated shading this has to agree exactly.
     if skipped_for_lack_of_a_gpu("both backends sample a texture"):
         return
@@ -1143,7 +1143,7 @@ def test_both_backends_sample_a_texture_identically() raises:
     )
     var cpu = cpu_textured(corners, 24, textures)
 
-    # A real pattern: both colours present, so the mapping did something.
+    # A real pattern: both colors present, so the mapping did something.
     var light = 0
     var dark = 0
     for y in range(24):
@@ -1190,7 +1190,7 @@ def test_both_backends_choose_and_blend_mip_levels_identically() raises:
     )
 
     # The surface really is minified: level zero would be sampling one texel
-    # in ten and the two colours would still be at full strength.
+    # in ten and the two colors would still be at full strength.
     var extreme = 0
     for y in range(24):
         for x in range(24):
@@ -1205,7 +1205,7 @@ def test_both_backends_agree_when_a_mipmapped_surface_recedes() raises:
     # Perspective: `inv_w` differs across the quad, so the footprint grows
     # towards the far edge and the level changes from pixel to pixel. That
     # exercises the part neither a flat quad nor a uniform level can -- the
-    # neighbouring coordinates are perspective-corrected before the
+    # neighboring coordinates are perspective-corrected before the
     # derivative is taken.
     if skipped_for_lack_of_a_gpu("both backends agree on a receding surface"):
         return
@@ -1234,8 +1234,8 @@ def test_both_backends_agree_when_a_mipmapped_surface_recedes() raises:
     var gpu = render_triangles(
         corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
     )
-    # Anything that is not the clear colour: a textured surface holds no one
-    # foreground colour, so `count_foreground` has nothing to count.
+    # Anything that is not the clear color: a textured surface holds no one
+    # foreground color, so `count_foreground` has nothing to count.
     var drawn = 0
     for y in range(24):
         for x in range(24):
@@ -1311,7 +1311,7 @@ def test_both_backends_reject_corners_that_disagree() raises:
 
 def test_both_backends_agree_on_mipmapped_transparency() raises:
     # Everything at once: a texture with varying alpha, a mipmapped chain, a
-    # BLEND surface composited over a transparent clear colour, and depth.
+    # BLEND surface composited over a transparent clear color, and depth.
     # Each of those has its own test; this is the one that puts them in the
     # same fragment, where a premultiply applied once too often or a level
     # chosen from the wrong footprint would show.
@@ -1386,7 +1386,7 @@ def test_both_backends_shade_each_fragment_by_its_own_normal() raises:
     # Lighting is no longer baked into the corners, so both backends now
     # interpolate a normal, renormalize it and evaluate every light per
     # fragment. Two implementations of that -- one in Mojo, one in a kernel --
-    # have to agree, and a coloured ambient plus a coloured lamp means a
+    # have to agree, and a colored ambient plus a colored lamp means a
     # channel swapped anywhere shows up.
     if skipped_for_lack_of_a_gpu("both backends shade per fragment"):
         return
@@ -1689,7 +1689,7 @@ def test_both_backends_filter_a_texture_identically() raises:
     )
     var cpu = cpu_textured(corners, 24, textures)
 
-    # Blended, not stepped: there are colours between the two.
+    # Blended, not stepped: there are colors between the two.
     var between = 0
     for y in range(24):
         for x in range(24):
@@ -1811,7 +1811,7 @@ def test_both_backends_blend_identically() raises:
     var corners = translucent_pair()
     var gpu = render_triangles(corners, 16, 16, BACKGROUND)
     var cpu = cpu_render_triangles(corners, 16, 16)
-    # Both colours present at once, which is what blending means.
+    # Both colors present at once, which is what blending means.
     assert_true(cpu.get_pixel(2, 2).r > 0)
     assert_true(cpu.get_pixel(2, 2).g > 0)
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
@@ -1832,7 +1832,7 @@ def test_both_backends_agree_that_a_blend_claims_no_depth() raises:
 
 def test_both_backends_blend_a_translucent_surface_over_nothing() raises:
     # Over the background rather than over black, which is what the kernel
-    # has to decode the clear colour for.
+    # has to decode the clear color for.
     if skipped_for_lack_of_a_gpu("a blend over the background"):
         return
     var corners = List[RasterVertex]()
@@ -1899,7 +1899,7 @@ def test_both_backends_keep_a_texture_alpha_on_an_opaque_surface() raises:
     assert_equal(count_mismatches(cpu, gpu), 0)
 
 
-def test_both_backends_composite_over_a_transparent_clear_colour() raises:
+def test_both_backends_composite_over_a_transparent_clear_color() raises:
     # Nothing behind means nothing contributes, on both sides.
     if skipped_for_lack_of_a_gpu("compositing over a transparent clear"):
         return
@@ -2010,17 +2010,17 @@ def test_both_backends_agree_on_every_new_feature_at_once() raises:
     # A camera riding a node under a turned pivot, aimed by `Scene.look_at`;
     # a mipmapped checkerboard floor that runs behind the camera and is
     # clipped; an unlit sphere and a lit cube; a bulb, a sun and some fill.
-    # Colour to one level, depth to rounding.
+    # Color to one level, depth to rounding.
     if skipped_for_lack_of_a_gpu("both backends agree on every new feature"):
         return
     var renderer = Renderer(48, 36)
     renderer.set_background(BACKGROUND)
 
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
-    var ball = assets.geometries.add(sphere(Length(0.6, METRE), 12, 8))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.6, METER), 12, 8))
     var floor = assets.geometries.add(
-        plane(Length(20.0, METRE), Length(20.0, METRE), 4, 4)
+        plane(Length(20.0, METER), Length(20.0, METER), 4, 4)
     )
     var board = assets.textures.add(
         checkerboard(
@@ -2075,8 +2075,8 @@ def test_both_backends_agree_on_every_new_feature_at_once() raises:
     var camera = PerspectiveCamera(
         Angle(50.0, DEGREE),
         Float32(48) / Float32(36),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.attach(eye_node)
 

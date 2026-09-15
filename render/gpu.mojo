@@ -15,11 +15,11 @@ not a copy of it.
 **One owner per pixel.** A thread per pixel is not the only way to divide the
 work — a thread per triangle is the obvious alternative, and faster when
 triangles are large — but it is the only one of the two that is correct
-without synchronization. Independent triangle threads writing a shared colour
+without synchronization. Independent triangle threads writing a shared color
 and depth buffer race: `Framebuffer.test_depth` is a read followed by a write,
 which is a depth test, not an atomic. Because each pixel here is owned
 outright, its depth lives in a register that nothing else can touch. That
-depth is written out alongside the colour, so what comes back is a framebuffer
+depth is written out alongside the color, so what comes back is a framebuffer
 in the same sense the CPU produces one — a result that reports no depth at all
 would silently let a later depth-tested triangle paint over a nearer surface.
 Tiling and per-triangle binning can come later; they are optimizations of a
@@ -31,7 +31,7 @@ triangles come here. That is a deliberate stage, not an unfinished one: it
 makes the GPU a second implementation of exactly one well-defined step, which
 is what lets the parity tests be meaningful.
 
-Colours cross the boundary packed into a `UInt32`. Kernel arguments must
+Colors cross the boundary packed into a `UInt32`. Kernel arguments must
 conform to `DevicePassable`, which rules out the `Color` struct and, less
 obviously, plain `Int` — the compiler asks for a fixed-width type instead.
 
@@ -64,7 +64,7 @@ from render.texture import (
     Texture,
     Wrap,
     blend_texels,
-    mix_colour,
+    mix_color,
     wrap_index,
 )
 from std.gpu import global_idx
@@ -82,7 +82,7 @@ comptime TILE = 16
 # floats to cross to the device — so each field's lane is named once here
 # and used by both the host's `flatten` and the kernel's reads. Adding a
 # varying means adding a lane, not editing offsets in two places; a stride
-# change once meant missing one, which silently read a neighbouring field as
+# change once meant missing one, which silently read a neighboring field as
 # a coordinate. tests/test_gpu.mojo asserts the layout.
 comptime LANE_X = 0
 comptime LANE_Y = 1
@@ -125,11 +125,11 @@ def flatten_textures(
 
     Returns:
         The concatenated texels, and `TABLE_COLUMNS` entries per texture:
-        byte offset, width, height, wrap mode, filter mode, colour space,
+        byte offset, width, height, wrap mode, filter mode, color space,
         and how many mip levels follow.
 
     Raises:
-        Error: If a texture cannot be read, or its wrap, filter or colour
+        Error: If a texture cannot be read, or its wrap, filter or color
             space is none of the named values -- a texture's fields are open,
             so one can have been edited since it was built, and the kernel
             cannot raise on what it finds in the table.
@@ -229,7 +229,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     Three floats of ambient, then six per directional light -- a unit
     direction and the light it carries -- then eight per point light: where
     it is, the light it carries, its decay and its cutoff. Already decoded
-    and scaled by `Lighting`, so the device does no colour-space work and
+    and scaled by `Lighting`, so the device does no color-space work and
     both backends sum exactly the same numbers.
 
     Args:
@@ -280,7 +280,7 @@ def _arriving(
 
     The device counterpart of `Lighting.intensity_at`, and held to the same
     answer by the parity tests. A `Vector3` only because the kernel has no
-    colour type; the three components are red, green and blue.
+    color type; the three components are red, green and blue.
     """
     var red = lights[unsafe_offset=0]
     var green = lights[unsafe_offset=1]
@@ -358,7 +358,7 @@ def _fetch(
     The device counterpart of `Texture.wrapped_texel`. Only the memory access
     differs between the two: the index arithmetic is `wrap_index`, shared; the
     decode is the same 256-entry table the host builds, uploaded once; and the
-    blend on top of them is `blend`, also shared. Alpha is not colour and is
+    blend on top of them is `blend`, also shared. Alpha is not color and is
     never decoded.
     """
     var wide = _extent(width, level)
@@ -395,7 +395,7 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
     first — which is to say it was already per-triangle in a per-vertex
     costume, and losing exactness above 2^24 on the way. Whether a surface
     composites is the same kind of thing, and worse to infer: it decides both
-    how the colour is combined *and* whether depth is written, so guessing it
+    how the color is combined *and* whether depth is written, so guessing it
     from a float alpha in one place and a material in another is how the two
     came to disagree.
 
@@ -504,7 +504,7 @@ def _sample_at(
             space,
             level,
         )
-    # Texel centres sit at half-integers; see Texture.sample.
+    # Texel centers sit at half-integers; see Texture.sample.
     var across = u * Float32(wide) - 0.5
     var down = (1 - v) * Float32(tall) - 0.5
     var column = Int(floor(across))
@@ -594,7 +594,7 @@ def _sample_level(
     var far = _sample_at(
         texels, ramp, start, width, height, wrap, filter, space, u, v, lower + 1
     )
-    return mix_colour(near, far, level - Float32(lower))
+    return mix_color(near, far, level - Float32(lower))
 
 
 def _mip_level(
@@ -607,7 +607,7 @@ def _mip_level(
 ) -> Float32:
     """How far down the chain this pixel's footprint reaches.
 
-    `along_x` and `along_y` already hold the coordinates at the neighbouring
+    `along_x` and `along_y` already hold the coordinates at the neighboring
     pixels, worked out from the same analytic expression the host uses; see
     `render.rasterizer.mip_level`.
     """
@@ -642,7 +642,7 @@ def rasterize_kernel(
     light_count: Int32,
     point_count: Int32,
 ):
-    """Colour one pixel from the nearest triangle that covers it."""
+    """Color one pixel from the nearest triangle that covers it."""
     var x = Int(global_idx.x)
     var y = Int(global_idx.y)
     # The grid is rounded up to whole tiles, so the edges overhang the image.
@@ -668,7 +668,7 @@ def rasterize_kernel(
     # What the pixel holds so far, in *premultiplied* linear light — the
     # light it actually contributes, already scaled by its coverage. Starts as
     # the background decoded, so a translucent surface over nothing mixes with
-    # the clear colour rather than with black, and a transparent clear colour
+    # the clear color rather than with black, and a transparent clear color
     # contributes nothing rather than black. See render.target.
     var mixed_a = Float32(background & 0xFF) / 255
     var mixed_r = ramp[unsafe_offset=Int((background >> 24) & 0xFF)] * mixed_a
@@ -679,7 +679,7 @@ def rasterize_kernel(
         var base = index * FLOATS_PER_TRIANGLE
         # Derived rather than written out: every offset past the first corner
         # used to be a literal, and changing the stride meant changing all of
-        # them. Twice it meant missing one, which reads a neighbouring field
+        # them. Twice it meant missing one, which reads a neighboring field
         # as a coordinate and is invisible until a parity test disagrees.
         var b_base = base + FLOATS_PER_VERTEX
         var c_base = base + 2 * FLOATS_PER_VERTEX
@@ -749,7 +749,7 @@ def rasterize_kernel(
         if z >= nearest:
             continue
 
-        # Colour does not: weight by inv_w and divide by the interpolated
+        # Color does not: weight by inv_w and divide by the interpolated
         # inv_w, matching `rasterize_shaded`.
         var inv_w = wa * aw + wb * bw + wc * cw
         var share_a = wa
@@ -770,7 +770,7 @@ def rasterize_kernel(
         var arriving = Vector3(1, 1, 1)
         # Only the two lit modes need it, and only a lit surface: SHADE_UV
         # writes coordinates rather than light, and a BASIC material shows its
-        # own colour. Lit or not is per triangle, from the state table.
+        # own color. Lit or not is per triangle, from the state table.
         if (
             mode != Int32(SHADE_UV.value)
             and maps[unsafe_offset=index * 3 + 2] != 0
@@ -876,7 +876,7 @@ def rasterize_kernel(
                 if levels == 1:
                     # No chain to choose from, so no footprint to measure.
                     # The CPU takes the same shortcut; without it the two
-                    # neighbour evaluations and the log below are computed
+                    # neighbor evaluations and the log below are computed
                     # and then thrown away.
                     sampled = _sample_at(
                         texels,
@@ -894,7 +894,7 @@ def rasterize_kernel(
                 else:
                     # Where the coordinates land one pixel over and one down,
                     # evaluated from the triangle's own uv function rather
-                    # than read from a neighbouring thread -- see
+                    # than read from a neighboring thread -- see
                     # render.rasterizer.mip_level.
                     var along_x = _uv_at(
                         corners,
@@ -1029,7 +1029,7 @@ def rasterize_kernel(
     var nearest_depth = inf[DType.float32]()
     if found:
         # Unpremultiply, then encode. PNG stores unassociated alpha, and alpha
-        # is coverage rather than colour so it skips the transfer function.
+        # is coverage rather than color so it skips the transfer function.
         var lit = FloatColor(
             mixed_r, mixed_g, mixed_b, mixed_a
         ).unpremultiplied()
@@ -1044,7 +1044,7 @@ def rasterize_kernel(
 
     # Every pixel is written, background included. Clearing on the host and
     # uploading that buffer would cost more than the render; letting each
-    # thread decide its own colour costs nothing.
+    # thread decide its own color costs nothing.
     var slot = y * Int(width) + x
     # The depth this thread settled on, written out rather than discarded.
     # A framebuffer that reports infinity everywhere would let a later
@@ -1224,7 +1224,7 @@ struct GpuRenderer(Movable):
         Args:
             corners: Raster vertices, three per triangle. An empty list is
                 allowed and clears the target to `background`.
-            background: Colour for pixels no triangle covers.
+            background: Color for pixels no triangle covers.
             mode: `SHADE_LIT` or `SHADE_UV`, as `rasterize_shaded` takes.
             lighting: The scene's lights, resolved to world space and
                 evaluated per fragment against the interpolated normal.
@@ -1343,7 +1343,7 @@ struct GpuRenderer(Movable):
                 no mesh can be textured.
 
         Raises:
-            Error: If a texture holds a wrap, filter or colour space that is
+            Error: If a texture holds a wrap, filter or color space that is
                 none of the named values, or the device buffers cannot be
                 made or filled. Either way nothing on the device has changed.
         """
@@ -1378,7 +1378,7 @@ struct GpuRenderer(Movable):
     def read_back(self) raises -> Framebuffer:
         """Copy the device render target into a host framebuffer.
 
-        Both the colour and the depth come back, so the result is the same
+        Both the color and the depth come back, so the result is the same
         kind of thing the CPU renderer produces and can be drawn into again.
 
         Returns:
@@ -1432,11 +1432,11 @@ def render_triangles(
         corners: Raster vertices, three per triangle.
         width: Image width in pixels.
         height: Image height in pixels.
-        background: Colour for pixels no triangle covers.
+        background: Color for pixels no triangle covers.
         mode: `SHADE_LIT`, `SHADE_UV` or `SHADE_TEXTURE`.
         textures: The images `SHADE_TEXTURE` samples, named per vertex.
         lighting: The scene's lights, evaluated per fragment. Defaults to
-            `Lighting.uniform`, which leaves the corner colours alone.
+            `Lighting.uniform`, which leaves the corner colors alone.
 
     Returns:
         The rendered image.
@@ -1458,7 +1458,7 @@ def render(
     background: Color,
     foreground: Color,
 ) raises -> Framebuffer:
-    """Rasterize one flat triangle on the GPU, in a single colour.
+    """Rasterize one flat triangle on the GPU, in a single color.
 
     The shape the benchmark and the parity tests use. Depth and perspective
     are neutral here — one triangle at a constant depth with no perspective —
@@ -1468,8 +1468,8 @@ def render(
         triangle: Screen-space triangle to fill.
         width: Image width in pixels.
         height: Image height in pixels.
-        background: Colour for pixels the triangle does not cover.
-        foreground: Colour for pixels it does.
+        background: Color for pixels the triangle does not cover.
+        foreground: Color for pixels it does.
 
     Returns:
         A framebuffer holding the rendered image.

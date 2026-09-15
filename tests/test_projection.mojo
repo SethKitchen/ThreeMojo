@@ -39,12 +39,12 @@ def assert_point(got: Vector3, x: Float32, y: Float32, z: Float32) raises:
 # --- perspective ------------------------------------------------------------
 
 
-def test_near_plane_centre_maps_to_minus_one_depth() raises:
+def test_near_plane_center_maps_to_minus_one_depth() raises:
     var m = perspective(-1, 1, 1, -1, 1, 100)
     assert_point(m.transform_point(Vector3(0, 0, -1)), 0, 0, -1)
 
 
-def test_far_plane_centre_maps_to_plus_one_depth() raises:
+def test_far_plane_center_maps_to_plus_one_depth() raises:
     var m = perspective(-1, 1, 1, -1, 1, 100)
     assert_point(m.transform_point(Vector3(0, 0, -100)), 0, 0, 1)
 
@@ -72,8 +72,8 @@ def test_distant_things_appear_smaller() raises:
     assert_true(abs(far.x) < abs(near.x))
 
 
-def test_an_off_centre_frustum_shifts_the_axis() raises:
-    # Shifting both edges right moves what counts as the centre of the image.
+def test_an_off_center_frustum_shifts_the_axis() raises:
+    # Shifting both edges right moves what counts as the center of the image.
     var m = perspective(0, 2, 1, -1, 1, 100)
     assert_almost_equal(
         m.transform_point(Vector3(1, 0, -1)).x, Float32(0), atol=TOLERANCE
@@ -149,7 +149,7 @@ def test_up_parallel_to_the_view_direction_is_rejected() raises:
 # --- viewport ---------------------------------------------------------------
 
 
-def test_ndc_centre_maps_to_the_image_centre() raises:
+def test_ndc_center_maps_to_the_image_center() raises:
     assert_point(
         viewport(200, 100).transform_point(Vector3(0, 0, 0)), 100, 50, 0
     )

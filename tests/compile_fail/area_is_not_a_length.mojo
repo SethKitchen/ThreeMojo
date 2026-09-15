@@ -5,7 +5,7 @@
 
 """An area must not silently pass where a length is wanted."""
 
-from units.si import Area, Length, METRE
+from units.si import Area, Length, METER
 
 
 def describe(value: Length):
@@ -13,4 +13,4 @@ def describe(value: Length):
 
 
 def main() raises:
-    describe(Length(2.0, METRE) * Length(3.0, METRE))
+    describe(Length(2.0, METER) * Length(3.0, METER))

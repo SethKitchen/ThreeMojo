@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A bare integer must not stand in for a colour space."""
+"""A bare integer must not stand in for a color space."""
 
 from render.framebuffer import Color
 from render.texture import NEAREST, REPEAT, checkerboard

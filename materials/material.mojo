@@ -7,11 +7,11 @@
 
 This type was refused three times before it was written, and the refusals are
 worth keeping: a material with one field would have been ceremony, and a
-renderer that already knew the colour had nothing to gain from wrapping it.
+renderer that already knew the color had nothing to gain from wrapping it.
 What changed is that three properties turned up which are plainly per-surface
 and had nowhere per-surface to live:
 
-    colour   was on `Mesh`, which is otherwise pure identity
+    color   was on `Mesh`, which is otherwise pure identity
     map      was on `Renderer`, so a scene could have exactly one texture
     side     was a Bool on `Renderer`, so a scene could not mix them
 
@@ -30,12 +30,12 @@ copying it.
 
 `blending` is the fourth property, and the one that had to become explicit
 rather than inferred. Whether a surface is composited decides two things at
-once — how its colour is combined, and whether it writes depth — and those
+once — how its color is combined, and whether it writes depth — and those
 have to be the same answer everywhere. They were not: three parts of the
 renderer each worked it out from a different number.
 
 `kind` is the fifth, and the first that three.js expresses as a *class*
-rather than a property: `MeshBasicMaterial` shows its own colour whatever the
+rather than a property: `MeshBasicMaterial` shows its own color whatever the
 lights do, `MeshLambertMaterial` catches light. Every other property is
 shared between the two, so here they are one struct and a tag, for the reason
 `Light` is -- a store has to hold one type.
@@ -78,7 +78,7 @@ struct Blending(Equatable, ImplicitlyCopyable, Writable):
     """Whether a surface replaces what is behind it or mixes into it.
 
     A type for the reason `Side` is one. Both rasterizers read this from a
-    vertex, and a bare integer neither of them recognised was once read in
+    vertex, and a bare integer neither of them recognized was once read in
     opposite directions by the two -- see `render.rasterizer`. The type does
     not stop `Blending(7)`, so `check_triangle_state` asks `is_valid`.
     """
@@ -113,7 +113,7 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
         return self == BASIC or self == LAMBERT
 
 
-# Unlit: the surface's own colour, and its texture, reach the pixel as they
+# Unlit: the surface's own color, and its texture, reach the pixel as they
 # are. three.js's `MeshBasicMaterial` -- a sky, a sprite, an overlay.
 comptime BASIC = MaterialKind(0)
 # Lit per fragment by every light in the scene. three.js's
@@ -132,7 +132,7 @@ struct MaterialId(Equatable, ImplicitlyCopyable, Writable):
 
 
 struct Material(ImplicitlyCopyable):
-    """A colour, optionally an image, and which faces to draw."""
+    """A color, optionally an image, and which faces to draw."""
 
     var color: Color
     var map: TextureId
@@ -144,8 +144,8 @@ struct Material(ImplicitlyCopyable):
     # `OPAQUE` or `BLEND`, decided once here and read by everything else.
     # It used to be rediscovered from a float alpha at three separate points —
     # the mesh sorter asked the material, and both rasterizers asked the
-    # vertex colour — and they disagreed. A material with an opaque `opacity`
-    # but a translucent base colour sorted as opaque and rasterized as
+    # vertex color — and they disagreed. A material with an opaque `opacity`
+    # but a translucent base color sorted as opaque and rasterized as
     # blended, so it did not write depth and whatever was submitted after it
     # painted straight over the top.
     var blending: Blending
@@ -164,17 +164,17 @@ struct Material(ImplicitlyCopyable):
         """Describe a surface.
 
         Args:
-            color: The base colour, modulated by any texture and by lighting.
+            color: The base color, modulated by any texture and by lighting.
             map: Id of the texture to sample, or `NO_TEXTURE`.
             side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
             opacity: One for an opaque surface, less to see through it.
             blending: `OPAQUE` or `BLEND`. Left unset it is inferred, and
                 anything that can see through — an opacity below one or a base
-                colour with alpha — blends. Set it to say so explicitly: a
+                color with alpha — blends. Set it to say so explicitly: a
                 texture's own alpha cannot be inferred from here, so a cut-out
                 image needs `BLEND` even when the material looks opaque.
             kind: `LAMBERT` to be lit by the scene's lights, `BASIC` to show
-                the colour and texture as they are.
+                the color and texture as they are.
 
         Raises:
             Error: If `map` is a negative other than `NO_TEXTURE` — which
@@ -225,7 +225,7 @@ struct Material(ImplicitlyCopyable):
         """Return True if this surface is composited over what is behind it.
 
         The single answer. Everything that needs to know — the mesh sorter,
-        both rasterizers — asks this rather than inspecting a colour.
+        both rasterizers — asks this rather than inspecting a color.
         """
         return self.blending == BLEND
 
@@ -264,7 +264,7 @@ struct MaterialStore(Movable):
         """Return the material with that id.
 
         A copy rather than a reference, unlike geometry and textures: a
-        material is a colour and two integers, so copying one is cheaper than
+        material is a color and two integers, so copying one is cheaper than
         the borrow that would avoid it.
 
         Args:

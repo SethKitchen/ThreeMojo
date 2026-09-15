@@ -7,7 +7,7 @@
 
 This is the whole difficulty of the coverage tool. A probe can only be inserted
 before a line that is a statement inside a function body, so everything else
-must be recognised and skipped: blank lines, comments, docstrings, decorators,
+must be recognized and skipped: blank lines, comments, docstrings, decorators,
 imports, struct field declarations, `def`/`struct`/`trait` headers, trait
 method bodies, block-continuation
 keywords like `else:`, and any line that is the tail of a multi-line statement.

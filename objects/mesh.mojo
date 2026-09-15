@@ -26,7 +26,7 @@ it is made of — which is as small as identity gets. They are three *different*
 types rather than three integers, because adjacent same-typed parameters are
 transposable and these three used to be exactly that; see `core.object3d`.
 
-Colour used to live here, with a note saying a `Material` would be ceremony
+Color used to live here, with a note saying a `Material` would be ceremony
 until there was a second property to put in it. Textures were that second
 property, and `side` a third; see `materials.material`.
 """

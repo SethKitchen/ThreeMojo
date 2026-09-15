@@ -1,6 +1,6 @@
 # Why interpolation is perspective-correct
 
-Colour, normals, texture coordinates and world positions are interpolated through `1 / w`, not straight across the screen. Depth is not. Both choices are what a graphics API does, for the same reasons.
+Color, normals, texture coordinates and world positions are interpolated through `1 / w`, not straight across the screen. Depth is not. Both choices are what a graphics API does, for the same reasons.
 
 ## Screen weights are not surface weights
 
@@ -26,6 +26,6 @@ An orthographic projection leaves `w` at one. Every `inv_w` is one, and the corr
 
 ## See it
 
-`make animation` renders `out/uv.png`: two frames of one floor plane with its texture coordinates written out as colour. The first is correct. The second forces every `inv_w` to one. Every covered pixel differs, by up to 142 levels of 255.
+`make animation` renders `out/uv.png`: two frames of one floor plane with its texture coordinates written out as color. The first is correct. The second forces every `inv_w` to one. Every covered pixel differs, by up to 142 levels of 255.
 
 Both frames come from one `Renderer.prepare` call. That is why `prepare` is public. The affine frame is the same prepared triangles with the perspective thrown away. Nothing but the correction can account for the difference.

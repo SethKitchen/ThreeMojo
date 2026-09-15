@@ -28,7 +28,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length, METRE
+from units.si import Length, METER
 
 
 def a_board() raises -> Texture:
@@ -39,7 +39,7 @@ def a_board() raises -> Texture:
 # --- Material ---------------------------------------------------------------
 
 
-def test_a_material_is_a_colour_by_default() raises:
+def test_a_material_is_a_color_by_default() raises:
     var paint = Material(Color(10, 20, 30))
     assert_equal(paint.color.r, UInt8(10))
     assert_equal(paint.map, NO_TEXTURE)
@@ -181,7 +181,7 @@ def test_assets_start_empty() raises:
 def test_assets_hold_the_three_stores_independently() raises:
     # One of each, and adding to one must not disturb the others.
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var board = assets.textures.add(a_board())
     var paint = assets.materials.add(
         Material(Color(200, 100, 50), board, DOUBLE_SIDE)
@@ -196,7 +196,7 @@ def test_assets_hold_the_three_stores_independently() raises:
 
 def test_two_materials_can_share_one_texture() raises:
     # Why the texture store exists: an image is large, and two materials
-    # differing only in colour should cost one copy of it between them.
+    # differing only in color should cost one copy of it between them.
     var assets = Assets()
     var board = assets.textures.add(a_board())
     var first = assets.materials.add(Material(Color(255, 0, 0), board))

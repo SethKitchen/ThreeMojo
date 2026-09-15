@@ -13,12 +13,12 @@ from core.assets import Assets
 from geometries.box import cube
 from render.framebuffer import Color
 from render.texture import checkerboard
-from units.si import Length, METRE
+from units.si import Length, METER
 
 
 def main() raises:
     var assets = Assets()
-    _ = assets.geometries.add(cube(Length(1.0, METRE)))
+    _ = assets.geometries.add(cube(Length(1.0, METER)))
     var board = assets.textures.add(
         checkerboard(4, 2, Color(255, 255, 255), Color(0, 0, 0))
     )

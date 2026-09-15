@@ -70,7 +70,7 @@ CPU_DOC_SOURCES  := $(CPU_LIB_SOURCES) $(TOOL_LIBS)
 # probe writes a record to stderr, and a GPU kernel has no stderr. It is
 # covered instead by tests/test_gpu.mojo asserting its output matches the CPU
 # rasterizer pixel for pixel, and by tests/test_fillrule.mojo pinning the
-# coverage maths the two now share.
+# coverage math the two now share.
 #
 # Five modules used to sit here as well -- render/png.mojo among them -- because
 # instrumenting them made the *compile* take minutes. The cause turned out to be
@@ -377,9 +377,13 @@ wiki-publish:
 	       "browser once, then run this again."; exit 1; }; \
 	rm -f $(CACHE_DIR)/wiki/*.md; \
 	cp docs/wiki/*.md $(CACHE_DIR)/wiki/; \
+	name=$$(git config user.name || echo "ThreeMojo"); \
+	email=$$(git config user.email || echo "threemojo@users.noreply.github.com"); \
+	from=$$(git rev-parse --short HEAD 2>/dev/null || echo "docs/wiki"); \
 	cd $(CACHE_DIR)/wiki && git add -A && \
 	if git diff --cached --quiet; then echo "Wiki already up to date."; \
-	else git commit -q -m "Publish docs/wiki from $$(git -C ../.. rev-parse --short HEAD)" \
+	else git -c user.name="$$name" -c user.email="$$email" \
+	  commit -q -m "Publish docs/wiki from $$from" \
 	  && git push -q && echo "Wiki published."; fi
 
 # --- uncached tasks ---------------------------------------------------------
@@ -435,7 +439,7 @@ $(OUT_DIR)/glass.png: $(LIB_SOURCES) examples/glass.mojo
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/glass.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
-# Three coloured lamps on a coarse sphere: many lights, and per-fragment shading.
+# Three colored lamps on a coarse sphere: many lights, and per-fragment shading.
 $(OUT_DIR)/lamps.png: $(LIB_SOURCES) examples/lamps.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/lamps.mojo $@); \

@@ -20,7 +20,7 @@ mkdir -p out
 | `glass.mojo` | `glass.png` | Three translucent panes over a solid cube, sorted and blended. |
 | `floor.mojo` | `floor.png` | A floor to the horizon, mipmapped on one side. |
 | `photo.mojo` | `photo.png` | A decoded PNG on a cube, with the camera on an orbiting node. |
-| `lamps.mojo` | `lamps.png` | Three coloured lights and a point light on a coarse sphere. |
+| `lamps.mojo` | `lamps.png` | Three colored lights and a point light on a coarse sphere. |
 | `first_scene.mojo` | `first_scene.png` | The [first tutorial](Tutorial-Render-your-first-scene). |
 | `lit_scene.mojo` | `lit_scene.png` | The [second tutorial](Tutorial-Light-texture-and-animate). |
 

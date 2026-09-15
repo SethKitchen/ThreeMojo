@@ -14,7 +14,7 @@ dynamic Huffman codes, and every row uses the Sub filter, which
 
 The image is decoded once, turned into a texture with a mip chain, and mapped
 onto a cube. Nothing about that is new -- which is the point: a decoded image
-is an ordinary texture, because the decoder widens every colour type to the
+is an ordinary texture, because the decoder widens every color type to the
 RGBA that `Texture` already holds.
 
 What moves is the camera, not the cube. three.js's camera is an `Object3D`:
@@ -41,7 +41,7 @@ from render.texture import BILINEAR, REPEAT, texture_from
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_IMAGE = "assets/brick.png"
 comptime DEFAULT_OUTPUT = "out/photo.png"
@@ -97,7 +97,7 @@ def main() raises:
     renderer.set_background(Color(14, 16, 22))
 
     var assets = Assets()
-    var block = assets.geometries.add(cube(Length(1.2, METRE)))
+    var block = assets.geometries.add(cube(Length(1.2, METER)))
     var skin = assets.textures.add(
         texture_from(image, REPEAT, BILINEAR, mipmapped=True)
     )
@@ -118,7 +118,7 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
     scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
 
-    # The camera rig: a pivot at the origin and an eye three metres out along
+    # The camera rig: a pivot at the origin and an eye three meters out along
     # its +z, looking back down -z at the cube. Turning the pivot carries the
     # eye round, exactly as the moon in `cubes.mojo` is carried.
     var pivot = scene.add(Object3D())
@@ -129,8 +129,8 @@ def main() raises:
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.attach(eye_node)
 

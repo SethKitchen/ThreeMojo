@@ -7,7 +7,7 @@ The CPU rasterizer and the GPU kernel call the same functions for the fill rule,
 | Module | Shared functions |
 |---|---|
 | `render/fillrule.mojo` | Snapping, the edge function, the top-left bias, the sample position. |
-| `render/texture.mojo` | `wrap_index`, `blend_texels`, `mix_colour`. |
+| `render/texture.mojo` | `wrap_index`, `blend_texels`, `mix_color`. |
 | `lights/lighting.mojo` | `falloff`. |
 
 Each allocates nothing, prints nothing and raises nothing. That is what lets it compile for a device.
@@ -20,7 +20,7 @@ The rasterizer writes pixels and the kernel writes device memory. The lighting s
 
 Coverage is integer arithmetic. The two backends must agree exactly, and the tests demand it.
 
-Shading is floating point. A GPU contracts `a * b + c` into a fused multiply-add that rounds once where the CPU rounds twice. A channel whose exact value lands on a quantization midpoint can fall either side. Tests that interpolate shading allow one level per channel, and say so. One level cannot hide a wrong colour, a wrong depth or a wrong pixel.
+Shading is floating point. A GPU contracts `a * b + c` into a fused multiply-add that rounds once where the CPU rounds twice. A channel whose exact value lands on a quantization midpoint can fall either side. Tests that interpolate shading allow one level per channel, and say so. One level cannot hide a wrong color, a wrong depth or a wrong pixel.
 
 ## What parity cannot catch
 

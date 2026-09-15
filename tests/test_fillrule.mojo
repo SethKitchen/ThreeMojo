@@ -57,7 +57,7 @@ def test_snap_handles_coordinates_left_of_the_origin() raises:
     assert_equal(snap(-0.5), -8)
 
 
-def test_sample_lands_on_the_pixel_centre() raises:
+def test_sample_lands_on_the_pixel_center() raises:
     # Half a pixel in, on the same grid: sampling at the corner would put the
     # sample point exactly on shared edges for every pixel.
     assert_equal(sample(0), SUBPIXEL // 2)
@@ -167,14 +167,14 @@ def test_exactly_one_of_two_triangles_claims_a_shared_edge() raises:
     assert_equal(claims, 16)
 
 
-def test_a_horizontal_top_edge_on_pixel_centres_keeps_its_row() raises:
+def test_a_horizontal_top_edge_on_pixel_centers_keeps_its_row() raises:
     # The symptom the reversed rule actually produced. A triangle whose top
-    # edge lies exactly on a row of pixel centres must keep that row; with
+    # edge lies exactly on a row of pixel centers must keep that row; with
     # top and bottom swapped it lost the row entirely and nothing else
     # looked wrong.
     #
     # Corners at (0.5, 0.5), (4.5, 0.5), (0.5, 4.5): the top edge runs along
-    # y = 0.5, which is the centre of pixel row 0.
+    # y = 0.5, which is the center of pixel row 0.
     var ax = snap(0.5)
     var ay = snap(0.5)
     var bx = snap(4.5)

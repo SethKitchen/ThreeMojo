@@ -24,7 +24,7 @@ from render.texture import (
     Texture,
     blend,
     checkerboard,
-    mix_colour,
+    mix_color,
     wrap_index,
 )
 from std.testing import (
@@ -57,17 +57,17 @@ def quad(wrap: Wrap = REPEAT) raises -> Texture:
         Error: If the texture is malformed, which it is not.
     """
     var pixels = List[UInt8]()
-    var colours = [
+    var colors = [
         Color(255, 0, 0),
         Color(0, 255, 0),
         Color(0, 0, 255),
         Color(255, 255, 255),
     ]
     for index in range(4):
-        pixels.append(colours[index].r)
-        pixels.append(colours[index].g)
-        pixels.append(colours[index].b)
-        pixels.append(colours[index].a)
+        pixels.append(colors[index].r)
+        pixels.append(colors[index].g)
+        pixels.append(colors[index].b)
+        pixels.append(colors[index].a)
     return Texture(2, 2, pixels^, wrap)
 
 
@@ -177,7 +177,7 @@ def test_each_quarter_samples_its_own_texel() raises:
     assert_equal(image.sample(0.75, 0.25).r, Float32(1))
 
 
-def test_sampling_is_nearest_neighbour_not_blended() raises:
+def test_sampling_is_nearest_neighbor_not_blended() raises:
     # Either side of the midline gives one texel or the other, never a mix.
     var image = quad()
     var left = image.sample(0.49, 0.75)
@@ -202,7 +202,7 @@ def test_eight_bit_texels_come_back_as_fractions() raises:
     )
 
 
-def test_a_colour_texture_is_decoded_from_srgb() raises:
+def test_a_color_texture_is_decoded_from_srgb() raises:
     # The default, because that is what an image file holds. A byte of 128 is
     # not half the light -- it is about 21.6% of it.
     var pixels = List[UInt8]()
@@ -218,7 +218,7 @@ def test_a_colour_texture_is_decoded_from_srgb() raises:
 
 
 def test_alpha_is_never_decoded() raises:
-    # Alpha is coverage, not colour. Decoding it would make a half-transparent
+    # Alpha is coverage, not color. Decoding it would make a half-transparent
     # surface a fifth-transparent one.
     var pixels = List[UInt8]()
     for value in [UInt8(128), UInt8(128), UInt8(128), UInt8(128)]:
@@ -229,7 +229,7 @@ def test_alpha_is_never_decoded() raises:
     )
 
 
-def test_a_texture_keeps_the_colour_space_it_was_given() raises:
+def test_a_texture_keeps_the_color_space_it_was_given() raises:
     var pixels = List[UInt8](length=4, fill=0)
     var image = Texture(1, 1, pixels^, REPEAT, NEAREST, LINEAR)
     assert_equal(image.color_space, LINEAR)
@@ -327,7 +327,7 @@ def test_a_checkerboard_alternates_from_the_top_left() raises:
 
 
 def test_a_checkerboards_squares_are_whole() raises:
-    # Every texel inside one square is the same colour; the edge is hard.
+    # Every texel inside one square is the same color; the edge is hard.
     var board = checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
     for y in range(4):
         for x in range(4):
@@ -356,22 +356,22 @@ def test_a_checkerboard_carries_its_wrap_mode() raises:
 def smooth_quad() raises -> Texture:
     """Return the 2x2 texture again, blended rather than stepped."""
     var pixels = List[UInt8]()
-    var colours = [
+    var colors = [
         Color(255, 0, 0),
         Color(0, 255, 0),
         Color(0, 0, 255),
         Color(255, 255, 255),
     ]
     for index in range(4):
-        pixels.append(colours[index].r)
-        pixels.append(colours[index].g)
-        pixels.append(colours[index].b)
-        pixels.append(colours[index].a)
+        pixels.append(colors[index].r)
+        pixels.append(colors[index].g)
+        pixels.append(colors[index].b)
+        pixels.append(colors[index].a)
     return Texture(2, 2, pixels^, CLAMP, BILINEAR)
 
 
-def test_a_bilinear_sample_on_a_texel_centre_is_that_texel() raises:
-    # Texel centres sit at 0.25 and 0.75 on a 2x2 image. Landing exactly on
+def test_a_bilinear_sample_on_a_texel_center_is_that_texel() raises:
+    # Texel centers sit at 0.25 and 0.75 on a 2x2 image. Landing exactly on
     # one must give it back unblended, or every image is offset.
     var image = smooth_quad()
     var middle = image.sample(0.25, 0.75)
@@ -382,7 +382,7 @@ def test_a_bilinear_sample_on_a_texel_centre_is_that_texel() raises:
 
 def test_a_bilinear_sample_between_two_texels_is_their_mean() raises:
     # Halfway between the top-left red and top-right green, along the row of
-    # texel centres: half of each and nothing of the bottom row.
+    # texel centers: half of each and nothing of the bottom row.
     var image = smooth_quad()
     var between = image.sample(0.5, 0.75)
     assert_almost_equal(between.r, Float32(0.5), atol=TOLERANCE)
@@ -391,17 +391,17 @@ def test_a_bilinear_sample_between_two_texels_is_their_mean() raises:
 
 
 def test_a_bilinear_sample_in_the_middle_is_all_four() raises:
-    # The centre of the image is equidistant from all four texel centres.
+    # The center of the image is equidistant from all four texel centers.
     # red + green + blue + white, quartered: r = (1 + 0 + 0 + 1) / 4 = 0.5.
     var image = smooth_quad()
-    var centre = image.sample(0.5, 0.5)
-    assert_almost_equal(centre.r, Float32(0.5), atol=TOLERANCE)
-    assert_almost_equal(centre.g, Float32(0.5), atol=TOLERANCE)
-    assert_almost_equal(centre.b, Float32(0.5), atol=TOLERANCE)
+    var center = image.sample(0.5, 0.5)
+    assert_almost_equal(center.r, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(center.g, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(center.b, Float32(0.5), atol=TOLERANCE)
 
 
-def test_nearest_and_bilinear_agree_on_texel_centres() raises:
-    # The filters differ between centres, not at them.
+def test_nearest_and_bilinear_agree_on_texel_centers() raises:
+    # The filters differ between centers, not at them.
     var stepped = quad(CLAMP)
     var smooth = smooth_quad()
     assert_equal(stepped.sample(0.25, 0.75).r, smooth.sample(0.25, 0.75).r)
@@ -419,7 +419,7 @@ def test_bilinear_blends_where_nearest_steps() raises:
 
 def test_bilinear_blends_through_the_wrap_mode() raises:
     # Beyond the edge, a clamped texture holds its edge texel rather than
-    # fading out of it -- the neighbours are fetched through the wrap mode,
+    # fading out of it -- the neighbors are fetched through the wrap mode,
     # not clamped to the image after the fact.
     var image = smooth_quad()
     var beyond = image.sample(1.4, 0.75)
@@ -431,12 +431,12 @@ def test_a_repeating_bilinear_texture_blends_across_its_seam() raises:
     # The other side of the same rule: a tiled image's left edge blends with
     # its own right edge, which is what keeps a tiled surface seamless.
     var pixels = List[UInt8]()
-    var colours = [Color(255, 0, 0), Color(0, 0, 255)]
+    var colors = [Color(255, 0, 0), Color(0, 0, 255)]
     for index in range(2):
-        pixels.append(colours[index].r)
-        pixels.append(colours[index].g)
-        pixels.append(colours[index].b)
-        pixels.append(colours[index].a)
+        pixels.append(colors[index].r)
+        pixels.append(colors[index].g)
+        pixels.append(colors[index].b)
+        pixels.append(colors[index].a)
     var strip = Texture(2, 1, pixels^, REPEAT, BILINEAR)
     # At u = 0 the sample sits between the right-hand texel of the previous
     # tile and the left-hand texel of this one: half red, half blue.
@@ -476,11 +476,11 @@ def test_the_blank_texture_wraps_to_white_rather_than_dividing_by_zero() raises:
     assert_equal(nothing.wrapped_texel(0, 0).a, Float32(1))
 
 
-def test_filtering_does_not_drag_hidden_colour_into_view() raises:
+def test_filtering_does_not_drag_hidden_color_into_view() raises:
     # An opaque red beside a fully transparent green. Filtering the straight
-    # colours averages them and puts a green fringe along a transparent edge,
+    # colors averages them and puts a green fringe along a transparent edge,
     # which is the halo around every badly filtered cut-out sprite. Blended
-    # where hidden colour weighs nothing, the answer is half-covered red.
+    # where hidden color weighs nothing, the answer is half-covered red.
     var pixels = List[UInt8]()
     for value in [UInt8(255), UInt8(0), UInt8(0), UInt8(255)]:
         pixels.append(value)
@@ -488,7 +488,7 @@ def test_filtering_does_not_drag_hidden_colour_into_view() raises:
         pixels.append(value)
     var strip = Texture(2, 1, pixels^, CLAMP, BILINEAR, LINEAR)
 
-    # Halfway between the two texel centres.
+    # Halfway between the two texel centers.
     var between = strip.sample(0.5, 0.5)
     assert_almost_equal(between.a, Float32(0.5), atol=TOLERANCE)
     assert_almost_equal(between.g, Float32(0), atol=TOLERANCE)
@@ -562,7 +562,7 @@ def test_a_level_is_the_average_of_the_light_beneath_it() raises:
 
 def test_a_uniform_image_survives_the_whole_chain() raises:
     # Averaging equal values changes nothing, so every level of a flat image
-    # is the colour it started as. Catches an offset or extent that is wrong
+    # is the color it started as. Catches an offset or extent that is wrong
     # in a way a gradient would hide.
     var board = checkerboard(
         4, 1, Color(30, 90, 210), Color(30, 90, 210), mipmapped=True
@@ -577,7 +577,7 @@ def test_a_uniform_image_survives_the_whole_chain() raises:
         )
 
 
-def test_a_hidden_colour_weighs_nothing_when_a_level_is_built() raises:
+def test_a_hidden_color_weighs_nothing_when_a_level_is_built() raises:
     # The premultiplied reason, one level up: a transparent red next to an
     # opaque white must average to white at half alpha, not to pink. Two
     # texels wide, so level 1 is a single texel holding the average.
@@ -590,7 +590,7 @@ def test_a_hidden_colour_weighs_nothing_when_a_level_is_built() raises:
     assert_equal(strip.levels, 2)
     var mixed = strip.wrapped_texel(0, 0, 1)
     assert_almost_equal(mixed.a, Float32(0.5), atol=Float64(0.004))
-    # Levels are stored straight, like every other texel, so the colour that
+    # Levels are stored straight, like every other texel, so the color that
     # comes back is the white one alone -- pink would mean the red had been
     # averaged in despite contributing no light.
     assert_almost_equal(mixed.r, Float32(1.0), atol=Float64(0.01))
@@ -605,7 +605,7 @@ def test_a_fractional_level_lands_between_the_two_either_side() raises:
     var upper = board.sample_at(0.3, 0.7, 2)
     var between = board.sample_level(0.3, 0.7, 1.25)
     assert_almost_equal(
-        between.r, mix_colour(lower, upper, 0.25).r, atol=TOLERANCE
+        between.r, mix_color(lower, upper, 0.25).r, atol=TOLERANCE
     )
 
 
@@ -706,7 +706,7 @@ def test_a_level_is_filtered_within_itself_as_well() raises:
         BILINEAR,
         mipmapped=True,
     )
-    # A quarter of the way between two texel centres of level 1, which under
+    # A quarter of the way between two texel centers of level 1, which under
     # nearest would give one of them exactly.
     var between = board.sample_at(0.3125, 0.5, 1)
     var nearer = board.wrapped_texel(1, 1, 1)
@@ -721,8 +721,8 @@ def test_a_level_is_filtered_within_itself_as_well() raises:
 # --- Odd extents in the chain -----------------------------------------------
 
 
-def grey_strip(wide: Int, tall: Int, shades: List[UInt8]) raises -> Texture:
-    """Return a mipmapped linear greyscale image from one byte per texel."""
+def gray_strip(wide: Int, tall: Int, shades: List[UInt8]) raises -> Texture:
+    """Return a mipmapped linear grayscale image from one byte per texel."""
     var pixels = List[UInt8]()
     for shade in shades:
         for _ in range(3):  # pragma: no branch
@@ -735,7 +735,7 @@ def test_an_odd_width_keeps_its_last_column() raises:
     # A fixed 2x2 source block reads columns 0 and 1 of a three-wide image and
     # drops the third entirely: this reduced to black rather than to a third
     # of the light. Nothing reports it, because the block is in bounds.
-    var strip = grey_strip(3, 1, [UInt8(0), UInt8(0), UInt8(255)])
+    var strip = gray_strip(3, 1, [UInt8(0), UInt8(0), UInt8(255)])
     assert_equal(strip.levels, 2)
     assert_almost_equal(
         strip.wrapped_texel(0, 0, 1).r,
@@ -746,7 +746,7 @@ def test_an_odd_width_keeps_its_last_column() raises:
 
 def test_an_odd_height_keeps_its_last_row() raises:
     # The same the other way up, because width and height reduce separately.
-    var strip = grey_strip(1, 3, [UInt8(0), UInt8(0), UInt8(255)])
+    var strip = gray_strip(1, 3, [UInt8(0), UInt8(0), UInt8(255)])
     assert_equal(strip.levels, 2)
     assert_almost_equal(
         strip.wrapped_texel(0, 0, 1).r,
@@ -759,7 +759,7 @@ def test_an_even_size_is_no_protection_against_an_odd_level() raises:
     # 6 -> 3 -> 1. The base is even and the first reduction is clean; the
     # second is the odd one, and it used to lose the last third of the image.
     # An even base size proves nothing about the rest of the chain.
-    var strip = grey_strip(
+    var strip = gray_strip(
         6, 1, [UInt8(0), UInt8(0), UInt8(0), UInt8(0), UInt8(255), UInt8(255)]
     )
     assert_equal(strip.levels, 3)
@@ -778,7 +778,7 @@ def test_a_source_texel_can_be_shared_between_two_destinations() raises:
     # 5 -> 2. The middle column falls half in each half, and taking it wholly
     # into one would bias that side. Left half covers [0, 2.5) of five
     # columns: two black and half a white, so a fifth of the light.
-    var strip = grey_strip(
+    var strip = gray_strip(
         5, 1, [UInt8(0), UInt8(0), UInt8(255), UInt8(255), UInt8(255)]
     )
     assert_equal(strip.level_width(1), 2)
@@ -795,8 +795,8 @@ def test_a_source_texel_can_be_shared_between_two_destinations() raises:
 
 
 def test_an_odd_reduction_carries_alpha_by_area_too() raises:
-    # The weights apply to coverage as well as colour: three texels at alpha
-    # 0, 0 and 1 average to a third covered, and the surviving colour is the
+    # The weights apply to coverage as well as color: three texels at alpha
+    # 0, 0 and 1 average to a third covered, and the surviving color is the
     # one that was actually there.
     var pixels = List[UInt8]()
     for value in [UInt8(255), UInt8(0), UInt8(0), UInt8(0)]:
@@ -817,11 +817,11 @@ def test_a_non_square_odd_image_reduces_on_both_axes() raises:
     # 5x3: both extents are odd, and the two reductions have to agree about
     # which source rectangle a destination texel owns. A uniform image is the
     # check that no weight is lost or double counted -- any error in the area
-    # arithmetic shows up as a level that is not the colour it started as.
+    # arithmetic shows up as a level that is not the color it started as.
     var shades = List[UInt8]()
     for _ in range(15):  # pragma: no branch
         shades.append(UInt8(160))
-    var image = grey_strip(5, 3, shades)
+    var image = gray_strip(5, 3, shades)
     for level in range(image.levels):  # pragma: no branch
         assert_almost_equal(
             image.wrapped_texel(0, 0, level).r,
@@ -871,7 +871,7 @@ def test_a_fractional_level_outside_the_chain_is_clamped_not_rejected() raises:
 
 def test_a_fractional_level_lands_on_an_independently_worked_out_value() raises:
     # The other fractional-level test computes its expectation with the same
-    # `mix_colour` the implementation uses, so it checks the wiring and not
+    # `mix_color` the implementation uses, so it checks the wiring and not
     # the arithmetic. This one is worked out by hand.
     #
     # A 4x1 linear strip of 0, 0, 255, 255 reduces to two texels of 0 and
@@ -881,7 +881,7 @@ def test_a_fractional_level_lands_on_an_independently_worked_out_value() raises:
     # At u = 0.25, nearest takes texel 0 of each level: 0 at level 1 and
     # 128 / 255 at level 2. A quarter of the way between them is
     # 128 / 255 * 0.25, every texel being opaque so alpha does not enter.
-    var strip = grey_strip(4, 1, [UInt8(0), UInt8(0), UInt8(255), UInt8(255)])
+    var strip = gray_strip(4, 1, [UInt8(0), UInt8(0), UInt8(255), UInt8(255)])
     assert_equal(strip.levels, 3)
     assert_equal(strip.pixels[strip.level_offset(2)], UInt8(128))
     assert_almost_equal(
@@ -891,7 +891,7 @@ def test_a_fractional_level_lands_on_an_independently_worked_out_value() raises:
     )
 
 
-def test_a_texture_refuses_a_colour_space_it_cannot_decode() raises:
+def test_a_texture_refuses_a_color_space_it_cannot_decode() raises:
     # `UNKNOWN_SPACE` is a decoder's admission, not a way to read texels: it
     # has no ramp. `texture_from` refuses it with a message; the constructor
     # has to as well, since it is reachable directly.

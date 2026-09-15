@@ -1,10 +1,10 @@
-# Why colour is linear
+# Why color is linear
 
-Every colour in the renderer is decoded to linear light on the way in, mixed there, and encoded to sRGB once at the pixel. Arithmetic on encoded bytes gives shaded midtones that are far too dark.
+Every color in the renderer is decoded to linear light on the way in, mixed there, and encoded to sRGB once at the pixel. Arithmetic on encoded bytes gives shaded midtones that are far too dark.
 
 ## Light adds and sRGB does not
 
-A byte value of 128 is not half the light of 255. It is about 21.6 percent of it. sRGB spends more of its 256 steps on dark values, where the eye can tell them apart. Every image file and every authored colour is encoded that way.
+A byte value of 128 is not half the light of 255. It is about 21.6 percent of it. sRGB spends more of its 256 steps on dark values, where the eye can tell them apart. Every image file and every authored color is encoded that way.
 
 Filtering blends texels. Shading multiplies by a Lambert term. Blending mixes a translucent surface with what is behind it. Each is arithmetic on light, and it is only right where the numbers are proportional to light.
 
@@ -21,21 +21,21 @@ A white surface at a Lambert level of 0.4 used to come out as byte 102. The righ
 
 ## Where decoding happens
 
-- A material colour is decoded once in `Renderer.prepare`.
+- A material color is decoded once in `Renderer.prepare`.
 - A texture is decoded through a 256-entry table built once per texture. The same table goes to the GPU.
-- Alpha is never decoded. It is coverage, not colour.
+- Alpha is never decoded. It is coverage, not color.
 - A `LINEAR` texture holds data and is not decoded.
 
 ## Premultiplied alpha
 
-The `RenderTarget` holds premultiplied linear RGBA at float precision. Compositing and filtering are both weighted sums, and a hidden colour must weigh nothing:
+The `RenderTarget` holds premultiplied linear RGBA at float precision. Compositing and filtering are both weighted sums, and a hidden color must weigh nothing:
 
 ```
 out.rgb = src.rgb + dst.rgb * (1 - src.a)
 out.a   = src.a   + dst.a   * (1 - src.a)
 ```
 
-Two bugs forced this. Rounding to a byte after every translucent layer lost a hundred faint layers entirely. And blending half-transparent red over fully transparent blue gave opaque purple, because the invisible blue contributed colour.
+Two bugs forced this. Rounding to a byte after every translucent layer lost a hundred faint layers entirely. And blending half-transparent red over fully transparent blue gave opaque purple, because the invisible blue contributed color.
 
 ## Where linear stops
 

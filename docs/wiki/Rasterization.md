@@ -13,7 +13,7 @@ One corner as the rasterizer wants it:
 | `x`, `y` | Pixel coordinates. |
 | `z` | Depth in normalized device space. |
 | `inv_w` | One over the clip-space `w`. |
-| `color` | The material colour, linear, with opacity in alpha. |
+| `color` | The material color, linear, with opacity in alpha. |
 | `normal` | The world-space normal. |
 | `u`, `v` | Texture coordinates. |
 | `world` | The world-space position, for point lights. |
@@ -52,11 +52,11 @@ The material's `side` decides which faces are drawn. `FRONT_SIDE` culls faces th
 
 ## Interpolation
 
-Colour, normal, texture coordinates and world position are interpolated with perspective correction. Each corner's value is weighted by `inv_w`, and the sum is divided by the interpolated `inv_w`. See [Why interpolation is perspective-correct](Why-interpolation-is-perspective-correct).
+Color, normal, texture coordinates and world position are interpolated with perspective correction. Each corner's value is weighted by `inv_w`, and the sum is divided by the interpolated `inv_w`. See [Why interpolation is perspective-correct](Why-interpolation-is-perspective-correct).
 
 ## Shading
 
-At each fragment the interpolated normal is normalized again, and `Lighting.intensity_at` sums every light. The material colour, the sampled texel and the light multiply. An unlit triangle skips the lights. See [Why shading is per fragment](Why-shading-is-per-fragment).
+At each fragment the interpolated normal is normalized again, and `Lighting.intensity_at` sums every light. The material color, the sampled texel and the light multiply. An unlit triangle skips the lights. See [Why shading is per fragment](Why-shading-is-per-fragment).
 
 ## Transparency
 

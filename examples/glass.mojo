@@ -12,8 +12,8 @@ front and mixes each into what the ones beyond it left. Submitting them in any
 order gives the same image, which is the point of the sort and is asserted in
 the tests.
 
-Where the panes cross, three colours are mixed one over another. That is the
-place a renderer's colour space shows most plainly: half of white over black is
+Where the panes cross, three colors are mixed one over another. That is the
+place a renderer's color space shows most plainly: half of white over black is
 *half the light*, which displays as 188, and blending the encoded bytes instead
 gives 128 — a fifth of the light, wearing the label of a half. Every mix here
 happens in linear light and is encoded once at the pixel; see `render.srgb`.
@@ -38,7 +38,7 @@ from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/glass.png"
 comptime WIDTH = 260
@@ -92,9 +92,9 @@ def main() raises:
     renderer.set_background(Color(16, 18, 26))
 
     var assets = Assets()
-    var solid = assets.geometries.add(cube(Length(0.9, METRE)))
+    var solid = assets.geometries.add(cube(Length(0.9, METER)))
     var sheet = assets.geometries.add(
-        plane(Length(2.0, METRE), Length(2.0, METRE))
+        plane(Length(2.0, METER), Length(2.0, METER))
     )
     var white = assets.materials.add(Material(Color(235, 235, 240)))
 
@@ -128,8 +128,8 @@ def main() raises:
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0.5, 3.4), Vector3(0, 0, 0))
 

@@ -15,8 +15,8 @@ var fast = Renderer(1280, 720, workers=available_workers())
 |---|---|
 | `Renderer(width, height, workers=1)` | An image size and a thread count. |
 | `set_workers(workers)` | Change the thread count. At least one. |
-| `set_background(color)` | The clear colour. |
-| `set_shading(mode)` | What a fragment's colour comes from. See below. |
+| `set_background(color)` | The clear color. |
+| `set_shading(mode)` | What a fragment's color comes from. See below. |
 | `prepare(scene, assets, camera) -> List[RasterVertex]` | Transform, clip and project every mesh. |
 | `render(scene, assets, camera) -> Framebuffer` | `prepare`, then rasterize and resolve. |
 | `available_workers() -> Int` | One per logical core. |
@@ -25,10 +25,10 @@ var fast = Renderer(1280, 720, workers=available_workers())
 
 ## Shading modes
 
-| Mode | A fragment's colour is |
+| Mode | A fragment's color is |
 |---|---|
-| `SHADE_TEXTURE` | The material colour, times its texture, times the light. The default. |
-| `SHADE_LIT` | The material colour times the light. Textures are ignored. |
+| `SHADE_TEXTURE` | The material color, times its texture, times the light. The default. |
+| `SHADE_LIT` | The material color times the light. Textures are ignored. |
 | `SHADE_UV` | The texture coordinates, as red and green. A debug view. |
 
 `set_shading` refuses a mode that is none of the three.

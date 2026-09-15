@@ -35,7 +35,7 @@
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)
 - [Scene graph as an array](Why-the-scene-graph-is-an-array)
-- [Linear colour](Why-colour-is-linear)
+- [Linear color](Why-color-is-linear)
 - [Perspective correction](Why-interpolation-is-perspective-correct)
 - [Fixed-point coverage](Why-coverage-uses-fixed-point)
 - [Per-fragment shading](Why-shading-is-per-fragment)

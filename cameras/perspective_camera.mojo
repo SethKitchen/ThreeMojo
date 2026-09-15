@@ -10,7 +10,7 @@ Here it is an `Angle`, so the unit is carried by the value and
 `PerspectiveCamera(50.0, ...)` does not compile — you have to say which.
 
 `near` and `far` are `Length`, which is where this project's world units get
-pinned down: **world space is metres**. three.js leaves world units to the
+pinned down: **world space is meters**. three.js leaves world units to the
 application, and that works until someone builds a scene in feet and wonders
 why the camera clips. Saying it once, in the type, settles it.
 
@@ -32,7 +32,7 @@ from units.si import Angle, Length
 
 
 struct PerspectiveCamera(Camera, ImplicitlyCopyable):
-    """A camera that renders with perspective, in metres and radians."""
+    """A camera that renders with perspective, in meters and radians."""
 
     var fov: Angle
     var aspect: Float32
@@ -211,11 +211,11 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         return combined^
 
     def near_distance(self) -> Float32:
-        """Return the near clipping distance, in metres."""
+        """Return the near clipping distance, in meters."""
         return self.near.value
 
     def far_distance(self) -> Float32:
-        """Return the far clipping distance, in metres."""
+        """Return the far clipping distance, in meters."""
         return self.far.value
 
     def project(
@@ -228,7 +228,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         the far plane, which is what a depth buffer would compare.
 
         Args:
-            point: A position in world space, in metres.
+            point: A position in world space, in meters.
             width: Image width in pixels.
             height: Image height in pixels.
 

@@ -42,7 +42,7 @@ from render.framebuffer import Color, Framebuffer
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, Length, METRE, RADIAN
+from units.si import Angle, DEGREE, Length, METER, RADIAN
 
 comptime DEFAULT_OUTPUT = "out/cubes.png"
 comptime WIDTH = 260
@@ -58,7 +58,7 @@ def frame_at(
     assets: Assets,
     mut scene: Scene,
     pivot: NodeId,
-    centre: NodeId,
+    center: NodeId,
     moon: NodeId,
     step: Angle,
 ) raises -> Framebuffer:
@@ -74,7 +74,7 @@ def frame_at(
         assets: The stores owning both cubes and their materials.
         scene: The persistent scene, edited in place.
         pivot: The node the moon orbits about.
-        centre: The large cube's node.
+        center: The large cube's node.
         moon: The small cube's node, a child of `pivot`.
         step: How much further round the orbit goes this frame.
 
@@ -85,7 +85,7 @@ def frame_at(
         Error: If the scene or the render is invalid.
     """
     scene.node(pivot).rotate_y(step)
-    scene.node(centre).rotate_y(Angle(step.value / 2, RADIAN))
+    scene.node(center).rotate_y(Angle(step.value / 2, RADIAN))
     scene.node(moon).rotate_z(Angle(step.value * 2, RADIAN))
     scene.update()
     return renderer.render(scene, assets, camera)
@@ -100,8 +100,8 @@ def main() raises:
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 1.2, 4.5), Vector3(0, 0, 0))
 
@@ -109,8 +109,8 @@ def main() raises:
 
     # Built once and shared by every frame.
     var assets = Assets()
-    var large = assets.geometries.add(cube(Length(1.1, METRE)))
-    var small = assets.geometries.add(cube(Length(0.44, METRE)))
+    var large = assets.geometries.add(cube(Length(1.1, METER)))
+    var small = assets.geometries.add(cube(Length(0.44, METER)))
     var orange = assets.materials.add(Material(Color(255, 140, 40)))
     var blue = assets.materials.add(Material(Color(90, 190, 255)))
 
@@ -122,7 +122,7 @@ def main() raises:
     large_node.set_euler(
         Angle(20.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
     )
-    var centre = scene.add(large_node^)
+    var center = scene.add(large_node^)
     var moon_node = Object3D()
     moon_node.set_position(ORBIT_RADIUS, 0, 0)
     var moon = scene.attach(moon_node^, pivot)
@@ -135,7 +135,7 @@ def main() raises:
     scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
     scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
 
-    scene.add_mesh(Mesh(large, orange, centre))
+    scene.add_mesh(Mesh(large, orange, center))
     scene.add_mesh(Mesh(small, blue, moon))
 
     # One full orbit over the loop, so the animation repeats seamlessly.
@@ -143,7 +143,7 @@ def main() raises:
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
         frames.append(
-            frame_at(renderer, camera, assets, scene, pivot, centre, moon, step)
+            frame_at(renderer, camera, assets, scene, pivot, center, moon, step)
         )
 
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))

@@ -8,7 +8,7 @@ three.js: `Mesh`. three.js has no assets store. A JavaScript mesh holds referenc
 
 ```mojo
 var assets = Assets()
-var box = assets.geometries.add(cube(Length(1.0, METRE)))
+var box = assets.geometries.add(cube(Length(1.0, METER)))
 var paint = assets.materials.add(Material(Color(255, 140, 40)))
 var board = assets.textures.add(checkerboard(64, 8, white, blue))
 ```

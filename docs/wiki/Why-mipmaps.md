@@ -14,7 +14,7 @@ The chain is opt-in. It costs a third more memory and buys nothing for an image 
 
 ## Built in linear light
 
-Each level is built in premultiplied linear light. Averaging sRGB bytes makes every level darker than the one before, so a receding surface dims. Averaging straight alpha drags the colour of transparent texels into view. Each level is re-encoded to bytes, which is what a GPU stores.
+Each level is built in premultiplied linear light. Averaging sRGB bytes makes every level darker than the one before, so a receding surface dims. Averaging straight alpha drags the color of transparent texels into view. Each level is re-encoded to bytes, which is what a GPU stores.
 
 ## Choosing the level
 
@@ -24,7 +24,7 @@ Sampling is trilinear: bilinear within the two levels either side, then linear b
 
 ## The footprint
 
-Hardware estimates the footprint by shading pixels in 2 by 2 quads and subtracting a neighbour's value. This renderer evaluates the neighbours from the triangle's own coordinate function, perspective divide included. It needs no inter-thread operation. The estimate is the same finite difference that hardware makes, and both backends compute it the same way.
+Hardware estimates the footprint by shading pixels in 2 by 2 quads and subtracting a neighbor's value. This renderer evaluates the neighbors from the triangle's own coordinate function, perspective divide included. It needs no inter-thread operation. The estimate is the same finite difference that hardware makes, and both backends compute it the same way.
 
 ## See it
 

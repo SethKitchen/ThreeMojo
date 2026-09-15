@@ -14,7 +14,7 @@ A back-reference can overlap the output's own end. A run of identical bytes is s
 
 ## A file is a structure
 
-A PNG is an ordered sequence. The header comes first and once. A palette comes before the data that indexes it. The image data is one run, and an end marker closes the file. A `tRNS` chunk one byte long once left an empty colour key that the pixel loop then indexed. Every chunk CRC in that file was valid.
+A PNG is an ordered sequence. The header comes first and once. A palette comes before the data that indexes it. The image data is one run, and an end marker closes the file. A `tRNS` chunk one byte long once left an empty color key that the pixel loop then indexed. Every chunk CRC in that file was valid.
 
 So order, duplication, applicability and length are checked per chunk. An unknown chunk with an uppercase first letter is critical, and the decoder refuses the file rather than pretend to have read it.
 
@@ -32,7 +32,7 @@ Only the first was checked at first. The bound is enforced as bytes are produced
 
 ## What the samples mean
 
-PNG does not imply sRGB. A file can declare a gamma of one. Decoding that through the sRGB curve turns a mid grey from half the light into a fifth of it, with nothing downstream able to tell. `decode` returns the samples with their declared interpretation, and `texture_from` refuses to guess. See [Image files](Image-files).
+PNG does not imply sRGB. A file can declare a gamma of one. Decoding that through the sRGB curve turns a mid gray from half the light into a fifth of it, with nothing downstream able to tell. `decode` returns the samples with their declared interpretation, and `texture_from` refuses to guess. See [Image files](Image-files).
 
 ## Tested against real files
 

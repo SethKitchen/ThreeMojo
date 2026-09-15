@@ -19,7 +19,7 @@ chunks and shows frame one as a still image.
 
 GIF would be the obvious alternative and is a worse fit: it carries only 1-bit
 transparency, so a pixel is either fully opaque or fully invisible, and caps
-each frame at a 256-colour palette that rendered output would have to be
+each frame at a 256-color palette that rendered output would have to be
 quantized into.
 
 Every frame here is full-size at offset (0, 0) with dispose NONE and blend

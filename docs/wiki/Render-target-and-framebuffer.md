@@ -12,7 +12,7 @@ three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as 
 
 | Constructor or method | Meaning |
 |---|---|
-| `FloatColor(srgb=color)` | Decode an sRGB colour to linear. Alpha is not decoded. |
+| `FloatColor(srgb=color)` | Decode an sRGB color to linear. Alpha is not decoded. |
 | `FloatColor(of=color)` | Divide each byte by 255 without decoding. |
 | `encode() -> Color` | Encode linear light to sRGB bytes, clamped. |
 | `quantize() -> Color` | Bytes without the transfer function, for data. |
@@ -23,7 +23,7 @@ three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as 
 
 | Member | Meaning |
 |---|---|
-| `RenderTarget(width, height, clear)` | A target cleared to a colour. |
+| `RenderTarget(width, height, clear)` | A target cleared to a color. |
 | `write(x, y, color)` | Replace a pixel. |
 | `blend(x, y, color)` | Source-over in premultiplied linear light. |
 | `test_depth(x, y, z) -> Bool` | Keep and record `z` when it is nearer. |
@@ -38,7 +38,7 @@ Nothing is clamped before `resolve`. Overexposed light survives every step.
 
 | Member | Meaning |
 |---|---|
-| `Framebuffer(width, height, clear)` | An image cleared to a colour, with infinite depth. |
+| `Framebuffer(width, height, clear)` | An image cleared to a color, with infinite depth. |
 | `get_pixel(x, y) -> Color`, `set_pixel(x, y, color)` | Read and write a pixel. |
 | `depth_at(x, y) -> Float32` | The depth, or infinity where nothing was drawn. |
 | `test_depth(x, y, z) -> Bool` | The depth test, for the flat rasterizer. |
@@ -50,4 +50,4 @@ Every accessor raises for a coordinate outside the image.
 
 ## Why
 
-See [Why colour is linear](Why-colour-is-linear).
+See [Why color is linear](Why-color-is-linear).

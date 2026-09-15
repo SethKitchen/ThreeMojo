@@ -13,6 +13,7 @@ The rules come from ASD-STE100, Simplified Technical English:
 - A paragraph has at most `MAX_SENTENCES` sentences.
 - The words "should", "may" and "might" do not appear. Use "must" for a
   requirement and "can" for a possibility.
+- The spelling is American English: "color", "meter", "center", "gray".
 
 Code blocks, tables, headings, badges and HTML comments are not checked.
 Inline code and link targets do not count as words. The tool prints one
@@ -104,6 +105,176 @@ def _is_list_item(stripped: String) -> Bool:
     return False
 
 
+def _british() -> List[String]:
+    """Return British spellings that the documentation must not use.
+
+    Stems, so that a plural or a past tense is caught too. Each is chosen so
+    that no American word contains it.
+    """
+    return [
+        "colour",
+        "metre",
+        "centre",
+        "centred",
+        "grey",
+        "recognise",
+        "recognising",
+        "behaviour",
+        "artefact",
+        "travelled",
+        "travelling",
+        "neighbour",
+        "honour",
+        "favour",
+        "analyse",
+        "analysing",
+        "maths",
+        "judgement",
+        "licence",
+        "practise",
+        "catalogue",
+        "whilst",
+        "amongst",
+        "learnt",
+        "orientated",
+        "anticlockwise",
+        "cancelled",
+        "labelled",
+        "modelling",
+        "optimise",
+        "optimising",
+        "optimisation",
+        "normalise",
+        "normalising",
+        "normalisation",
+        "initialise",
+        "initialising",
+        "initialisation",
+        "minimise",
+        "minimising",
+        "maximise",
+        "maximising",
+        "organise",
+        "organising",
+        "organisation",
+        "summarise",
+        "summarising",
+        "prioritise",
+        "prioritising",
+        "emphasise",
+        "emphasising",
+        "characterise",
+        "characterising",
+        "characterisation",
+        "utilise",
+        "utilising",
+        "utilisation",
+        "specialise",
+        "specialising",
+        "specialisation",
+        "standardise",
+        "standardising",
+        "visualise",
+        "visualising",
+        "visualisation",
+        "serialise",
+        "serialising",
+        "serialisation",
+        "synchronise",
+        "synchronising",
+        "synchronisation",
+        "customise",
+        "customising",
+        "finalise",
+        "finalising",
+        "categorise",
+        "categorising",
+    ]
+
+
+def _american() -> List[String]:
+    """Return the American spelling for each entry of `_british`."""
+    return [
+        "color",
+        "meter",
+        "center",
+        "centered",
+        "gray",
+        "recognize",
+        "recognizing",
+        "behavior",
+        "artifact",
+        "traveled",
+        "traveling",
+        "neighbor",
+        "honor",
+        "favor",
+        "analyze",
+        "analyzing",
+        "math",
+        "judgment",
+        "license",
+        "practice",
+        "catalog",
+        "while",
+        "among",
+        "learned",
+        "oriented",
+        "counterclockwise",
+        "canceled",
+        "labeled",
+        "modeling",
+        "optimize",
+        "optimizing",
+        "optimization",
+        "normalize",
+        "normalizing",
+        "normalization",
+        "initialize",
+        "initializing",
+        "initialization",
+        "minimize",
+        "minimizing",
+        "maximize",
+        "maximizing",
+        "organize",
+        "organizing",
+        "organization",
+        "summarize",
+        "summarizing",
+        "prioritize",
+        "prioritizing",
+        "emphasize",
+        "emphasizing",
+        "characterize",
+        "characterizing",
+        "characterization",
+        "utilize",
+        "utilizing",
+        "utilization",
+        "specialize",
+        "specializing",
+        "specialization",
+        "standardize",
+        "standardizing",
+        "visualize",
+        "visualizing",
+        "visualization",
+        "serialize",
+        "serializing",
+        "serialization",
+        "synchronize",
+        "synchronizing",
+        "synchronization",
+        "customize",
+        "customizing",
+        "finalize",
+        "finalizing",
+        "categorize",
+        "categorizing",
+    ]
+
+
 def _check_paragraph(
     path: String, first_line: Int, text: String, is_item: Bool
 ) -> List[String]:
@@ -138,6 +309,18 @@ def _check_paragraph(
                 + "'"
                 + word
                 + "' is not Simplified Technical English; use 'must' or 'can'"
+            )
+    var british = _british()
+    var american = _american()
+    for index in range(len(british)):
+        if lowered.find(british[index]) >= 0:
+            problems.append(
+                place
+                + "'"
+                + british[index]
+                + "' is British English; write '"
+                + american[index]
+                + "'"
             )
     return problems^
 

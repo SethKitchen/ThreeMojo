@@ -41,7 +41,7 @@ from render.texture import BILINEAR, REPEAT, checkerboard
 from renderers.renderer import Renderer, available_workers
 from std.pathlib import Path
 from std.sys import argv
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 
 comptime DEFAULT_OUTPUT = "out/textured.png"
 comptime WIDTH = 260
@@ -100,7 +100,7 @@ def main() raises:
 
     var assets = Assets()
     # One geometry, drawn twice.
-    var box = assets.geometries.add(cube(Length(1.1, METRE)))
+    var box = assets.geometries.add(cube(Length(1.1, METER)))
     # Two images, one sharp and one blended, so the difference between the
     # filters is visible side by side on the same shape.
     var sharp = assets.textures.add(
@@ -116,7 +116,7 @@ def main() raises:
             BILINEAR,
         )
     )
-    # White base colours, so each texture arrives unmodulated by anything but
+    # White base colors, so each texture arrives unmodulated by anything but
     # the lighting.
     var sharp_paint = assets.materials.add(
         Material(Color(255, 255, 255), sharp)
@@ -146,8 +146,8 @@ def main() raises:
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.1, METRE),
-        Length(100.0, METRE),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0, 3.2), Vector3(0, 0, 0))
 

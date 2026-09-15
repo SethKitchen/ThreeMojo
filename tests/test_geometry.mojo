@@ -20,7 +20,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import FOOT, Length, METRE
+from units.si import FOOT, Length, METER
 
 comptime TOLERANCE = Float64(1e-6)
 
@@ -228,13 +228,13 @@ def test_a_triangle_has_exactly_three_corners() raises:
 
 def test_a_cube_has_four_vertices_per_face() raises:
     # Twenty-four, not eight: a shared corner could carry only one normal.
-    var geometry = cube(Length(1.0, METRE))
+    var geometry = cube(Length(1.0, METER))
     assert_equal(geometry.vertex_count(), 24)
     assert_equal(geometry.triangle_count(), 12)
 
 
 def test_every_cube_corner_sits_on_the_box() raises:
-    var geometry = cube(Length(2.0, METRE))
+    var geometry = cube(Length(2.0, METER))
     for triangle in range(geometry.triangle_count()):
         for corner in range(3):
             var point = geometry.corner(triangle, corner)
@@ -245,7 +245,7 @@ def test_every_cube_corner_sits_on_the_box() raises:
 
 def test_a_box_can_have_three_different_extents() raises:
     var geometry = box(
-        Length(2.0, METRE), Length(4.0, METRE), Length(6.0, METRE)
+        Length(2.0, METER), Length(4.0, METER), Length(6.0, METER)
     )
     var widest = Float32(0)
     var tallest = Float32(0)
@@ -260,8 +260,8 @@ def test_a_box_can_have_three_different_extents() raises:
     assert_almost_equal(deepest, Float32(3), atol=TOLERANCE)
 
 
-def test_a_box_is_centred_on_the_origin() raises:
-    var geometry = cube(Length(3.0, METRE))
+def test_a_box_is_centered_on_the_origin() raises:
+    var geometry = cube(Length(3.0, METER))
     var total = Vector3(0, 0, 0)
     for vertex in range(geometry.vertex_count()):
         total.add(geometry.attribute_view(String(POSITION)).vector3(vertex))
@@ -269,7 +269,7 @@ def test_a_box_is_centred_on_the_origin() raises:
 
 
 def test_a_box_can_be_specified_in_feet() raises:
-    # World units are metres, so a one-foot cube is 0.3048 m across.
+    # World units are meters, so a one-foot cube is 0.3048 m across.
     var geometry = cube(Length(1.0, FOOT))
     assert_almost_equal(
         abs(geometry.corner(0, 0).x), Float32(0.1524), atol=TOLERANCE
@@ -278,7 +278,7 @@ def test_a_box_can_be_specified_in_feet() raises:
 
 def test_each_face_is_two_consecutive_triangles() raises:
     # examples/cubes.mojo shades by triangle // 2, which relies on this.
-    var geometry = cube(Length(1.0, METRE))
+    var geometry = cube(Length(1.0, METER))
     for face in range(6):
         var first = geometry.corner(face * 2, 0)
         var second = geometry.corner(face * 2 + 1, 0)
@@ -289,22 +289,22 @@ def test_each_face_is_two_consecutive_triangles() raises:
 
 def test_a_box_with_no_extent_is_rejected() raises:
     with assert_raises():
-        _ = box(Length(0.0, METRE), Length(1.0, METRE), Length(1.0, METRE))
+        _ = box(Length(0.0, METER), Length(1.0, METER), Length(1.0, METER))
     with assert_raises():
-        _ = box(Length(1.0, METRE), Length(-1.0, METRE), Length(1.0, METRE))
+        _ = box(Length(1.0, METER), Length(-1.0, METER), Length(1.0, METER))
     with assert_raises():
-        _ = box(Length(1.0, METRE), Length(1.0, METRE), Length(0.0, METRE))
+        _ = box(Length(1.0, METER), Length(1.0, METER), Length(0.0, METER))
 
 
 def test_a_box_carries_a_normal_per_vertex() raises:
-    var geometry = cube(Length(1.0, METRE))
+    var geometry = cube(Length(1.0, METER))
     assert_true(geometry.has_attribute(String(NORMAL)))
     assert_equal(geometry.attribute_view(String(NORMAL)).count(), 24)
 
 
 def test_a_face_four_vertices_share_one_normal() raises:
     # What keeps a cube's edges crisp when normals are interpolated.
-    var geometry = cube(Length(1.0, METRE))
+    var geometry = cube(Length(1.0, METER))
     ref normals = geometry.attribute_view(String(NORMAL))
     for corner in range(4):
         var direction = normals.vector3(corner)
@@ -312,7 +312,7 @@ def test_a_face_four_vertices_share_one_normal() raises:
 
 
 def test_box_normals_point_outwards_and_are_unit_length() raises:
-    var geometry = cube(Length(2.0, METRE))
+    var geometry = cube(Length(2.0, METER))
     ref normals = geometry.attribute_view(String(NORMAL))
     for vertex in range(normals.count()):
         assert_almost_equal(
@@ -321,7 +321,7 @@ def test_box_normals_point_outwards_and_are_unit_length() raises:
 
 
 def test_the_six_faces_point_six_different_ways() raises:
-    var geometry = cube(Length(1.0, METRE))
+    var geometry = cube(Length(1.0, METER))
     ref normals = geometry.attribute_view(String(NORMAL))
     var seen = List[Float32]()
     for face in range(6):
@@ -336,7 +336,7 @@ def test_the_six_faces_point_six_different_ways() raises:
 
 
 def test_every_sphere_vertex_lies_on_the_surface() raises:
-    var geometry = sphere(Length(3.0, METRE), 12, 8)
+    var geometry = sphere(Length(3.0, METER), 12, 8)
     ref positions = geometry.attribute_view(String(POSITION))
     for vertex in range(positions.count()):
         assert_almost_equal(
@@ -344,9 +344,9 @@ def test_every_sphere_vertex_lies_on_the_surface() raises:
         )
 
 
-def test_a_sphere_normal_is_the_direction_from_the_centre() raises:
-    # Which is what makes neighbouring triangles agree and the facets vanish.
-    var geometry = sphere(Length(2.0, METRE), 12, 8)
+def test_a_sphere_normal_is_the_direction_from_the_center() raises:
+    # Which is what makes neighboring triangles agree and the facets vanish.
+    var geometry = sphere(Length(2.0, METER), 12, 8)
     ref positions = geometry.attribute_view(String(POSITION))
     ref normals = geometry.attribute_view(String(NORMAL))
     for vertex in range(positions.count()):
@@ -358,7 +358,7 @@ def test_a_sphere_normal_is_the_direction_from_the_centre() raises:
 
 def test_the_seam_has_a_vertex_on_each_side() raises:
     # One extra column per ring, so longitude can wrap.
-    var geometry = sphere(Length(1.0, METRE), 8, 4)
+    var geometry = sphere(Length(1.0, METER), 8, 4)
     assert_equal(geometry.vertex_count(), (8 + 1) * (4 + 1))
 
 
@@ -366,13 +366,13 @@ def test_the_poles_contribute_only_one_triangle_per_quad() raises:
     # A quad at a pole is degenerate on one side, so it is not emitted.
     var segments = 8
     var rings = 4
-    var geometry = sphere(Length(1.0, METRE), segments, rings)
+    var geometry = sphere(Length(1.0, METER), segments, rings)
     # Two triangles per quad everywhere except the two polar rings.
     assert_equal(geometry.triangle_count(), segments * (2 * rings - 2))
 
 
 def test_no_sphere_triangle_is_degenerate() raises:
-    var geometry = sphere(Length(1.0, METRE), 10, 6)
+    var geometry = sphere(Length(1.0, METER), 10, 6)
     for triangle in range(geometry.triangle_count()):
         var a = geometry.corner(triangle, 0)
         var b = geometry.corner(triangle, 1)
@@ -396,16 +396,16 @@ def test_a_sphere_can_be_measured_in_feet() raises:
 
 def test_a_sphere_with_no_radius_is_rejected() raises:
     with assert_raises():
-        _ = sphere(Length(0.0, METRE), 8, 4)
+        _ = sphere(Length(0.0, METER), 8, 4)
     with assert_raises():
-        _ = sphere(Length(-1.0, METRE), 8, 4)
+        _ = sphere(Length(-1.0, METER), 8, 4)
 
 
 def test_a_sphere_needs_enough_segments_to_close() raises:
     with assert_raises():
-        _ = sphere(Length(1.0, METRE), 2, 4)
+        _ = sphere(Length(1.0, METER), 2, 4)
     with assert_raises():
-        _ = sphere(Length(1.0, METRE), 8, 1)
+        _ = sphere(Length(1.0, METER), 8, 1)
 
 
 def test_cloning_an_attribute_gives_an_independent_copy() raises:
@@ -443,7 +443,7 @@ def test_a_geometry_counts_the_attributes_it_holds() raises:
 
 
 def test_a_box_gives_every_face_the_whole_image() raises:
-    var geometry = cube(Length(1.0, METRE))
+    var geometry = cube(Length(1.0, METER))
     assert_true(geometry.has_attribute(String(UV)))
     ref uvs = geometry.attribute_view(String(UV))
     assert_equal(uvs.count(), 24)
@@ -462,7 +462,7 @@ def test_a_box_gives_every_face_the_whole_image() raises:
 
 
 def test_every_box_texture_coordinate_is_in_range() raises:
-    var geometry = cube(Length(2.0, METRE))
+    var geometry = cube(Length(2.0, METER))
     ref uvs = geometry.attribute_view(String(UV))
     for vertex in range(uvs.count()):
         assert_true(uvs.component(vertex, 0) >= 0)
@@ -472,7 +472,7 @@ def test_every_box_texture_coordinate_is_in_range() raises:
 
 
 def test_a_sphere_wraps_u_once_around_the_equator() raises:
-    var geometry = sphere(Length(1.0, METRE), 8, 4)
+    var geometry = sphere(Length(1.0, METER), 8, 4)
     assert_true(geometry.has_attribute(String(UV)))
     ref uvs = geometry.attribute_view(String(UV))
     # One row is width_segments + 1 vertices, the last repeating the first in
@@ -489,7 +489,7 @@ def test_a_sphere_wraps_u_once_around_the_equator() raises:
 def test_a_sphere_runs_v_from_one_at_the_north_pole_to_zero_at_the_south() raises:
     # Texture space has its origin at the bottom while `ring` counts down from
     # the top, so v is the complement of the ring fraction.
-    var geometry = sphere(Length(1.0, METRE), 8, 4)
+    var geometry = sphere(Length(1.0, METER), 8, 4)
     ref uvs = geometry.attribute_view(String(UV))
     assert_equal(uvs.component(0, 1), Float32(1))
     # Last row: ring == height_segments, so the final vertex.
@@ -497,7 +497,7 @@ def test_a_sphere_runs_v_from_one_at_the_north_pole_to_zero_at_the_south() raise
 
 
 def test_sphere_texture_coordinates_cover_the_whole_range() raises:
-    var geometry = sphere(Length(1.0, METRE), 12, 6)
+    var geometry = sphere(Length(1.0, METER), 12, 6)
     ref uvs = geometry.attribute_view(String(UV))
     var widest = Float32(0)
     var tallest = Float32(0)
@@ -512,16 +512,16 @@ def test_sphere_texture_coordinates_cover_the_whole_range() raises:
 
 
 def test_a_plane_has_a_vertex_per_grid_point() raises:
-    var sheet = plane(Length(2.0, METRE), Length(1.0, METRE), 3, 2)
+    var sheet = plane(Length(2.0, METER), Length(1.0, METER), 3, 2)
     assert_equal(sheet.vertex_count(), 12)
     assert_equal(sheet.triangle_count(), 12)
     assert_equal(
-        plane(Length(1.0, METRE), Length(1.0, METRE)).triangle_count(), 2
+        plane(Length(1.0, METER), Length(1.0, METER)).triangle_count(), 2
     )
 
 
 def test_a_plane_is_flat_and_faces_plus_z() raises:
-    var sheet = plane(Length(2.0, METRE), Length(1.0, METRE), 3, 2)
+    var sheet = plane(Length(2.0, METER), Length(1.0, METER), 3, 2)
     ref normals = sheet.attribute_view(String(NORMAL))
     for vertex in range(sheet.vertex_count()):
         assert_equal(
@@ -533,8 +533,8 @@ def test_a_plane_is_flat_and_faces_plus_z() raises:
         assert_equal(normal.z, Float32(1))
 
 
-def test_a_plane_is_centred_and_spans_its_extents() raises:
-    var sheet = plane(Length(2.0, METRE), Length(1.0, METRE), 4, 3)
+def test_a_plane_is_centered_and_spans_its_extents() raises:
+    var sheet = plane(Length(2.0, METER), Length(1.0, METER), 4, 3)
     ref positions = sheet.attribute_view(String(POSITION))
     var left = Float32(0)
     var right = Float32(0)
@@ -553,7 +553,7 @@ def test_a_plane_is_centred_and_spans_its_extents() raises:
 
 
 def test_a_plane_covers_the_whole_image_once_from_the_top_left() raises:
-    var sheet = plane(Length(2.0, METRE), Length(1.0, METRE), 2, 2)
+    var sheet = plane(Length(2.0, METER), Length(1.0, METER), 2, 2)
     ref uvs = sheet.attribute_view(String(UV))
     ref positions = sheet.attribute_view(String(POSITION))
     # The first vertex is the top-left corner: u is zero, v is one.
@@ -567,7 +567,7 @@ def test_a_plane_covers_the_whole_image_once_from_the_top_left() raises:
 
 
 def test_plane_triangles_wind_counter_clockwise_from_the_front() raises:
-    var sheet = plane(Length(2.0, METRE), Length(1.0, METRE), 3, 2)
+    var sheet = plane(Length(2.0, METER), Length(1.0, METER), 3, 2)
     for triangle in range(sheet.triangle_count()):
         var a = sheet.corner(triangle, 0)
         var b = sheet.corner(triangle, 1)
@@ -584,13 +584,13 @@ def test_a_plane_can_be_measured_in_feet() raises:
 
 def test_a_plane_needs_positive_extents_and_segments() raises:
     with assert_raises():
-        _ = plane(Length(0.0, METRE), Length(1.0, METRE))
+        _ = plane(Length(0.0, METER), Length(1.0, METER))
     with assert_raises():
-        _ = plane(Length(1.0, METRE), Length(-1.0, METRE))
+        _ = plane(Length(1.0, METER), Length(-1.0, METER))
     with assert_raises():
-        _ = plane(Length(1.0, METRE), Length(1.0, METRE), 0, 1)
+        _ = plane(Length(1.0, METER), Length(1.0, METER), 0, 1)
     with assert_raises():
-        _ = plane(Length(1.0, METRE), Length(1.0, METRE), 1, 0)
+        _ = plane(Length(1.0, METER), Length(1.0, METER), 1, 0)
 
 
 def main() raises:

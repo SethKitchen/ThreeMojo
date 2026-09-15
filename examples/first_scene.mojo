@@ -26,12 +26,12 @@ from render.framebuffer import Color
 from render.png import encode
 from renderers.renderer import Renderer
 from std.pathlib import Path
-from units.si import Angle, DEGREE, Length, METRE
+from units.si import Angle, DEGREE, Length, METER
 
 
 def main() raises:
     var assets = Assets()
-    var box = assets.geometries.add(cube(Length(1.0, METRE)))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
     var orange = assets.materials.add(Material(Color(255, 140, 40)))
 
     var scene = Scene()
@@ -50,7 +50,7 @@ def main() raises:
     scene.update()
 
     var camera = PerspectiveCamera(
-        Angle(45.0, DEGREE), 4.0 / 3.0, Length(0.1, METRE), Length(100.0, METRE)
+        Angle(45.0, DEGREE), 4.0 / 3.0, Length(0.1, METER), Length(100.0, METER)
     )
     camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
 

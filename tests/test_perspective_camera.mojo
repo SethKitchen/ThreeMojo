@@ -24,7 +24,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, FOOT, Length, METRE, RADIAN
+from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN
 
 comptime TOLERANCE = Float64(1e-4)
 
@@ -39,13 +39,13 @@ def square_camera() raises -> PerspectiveCamera:
         Error: If the camera parameters are invalid.
     """
     var camera = PerspectiveCamera(
-        Angle(90.0, DEGREE), 1.0, Length(1.0, METRE), Length(100.0, METRE)
+        Angle(90.0, DEGREE), 1.0, Length(1.0, METER), Length(100.0, METER)
     )
     camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
     return camera^
 
 
-def test_the_origin_projects_to_the_image_centre() raises:
+def test_the_origin_projects_to_the_image_center() raises:
     var point = square_camera().project(Vector3(0, 0, 0), 200, 200)
     assert_almost_equal(point.x, Float32(100), atol=TOLERANCE)
     assert_almost_equal(point.y, Float32(100), atol=TOLERANCE)
@@ -77,7 +77,7 @@ def test_a_wider_aspect_ratio_fits_more_in_horizontally() raises:
     # Same point, wider camera: it lands closer to the middle.
     var square = square_camera()
     var wide = PerspectiveCamera(
-        Angle(90.0, DEGREE), 2.0, Length(1.0, METRE), Length(100.0, METRE)
+        Angle(90.0, DEGREE), 2.0, Length(1.0, METER), Length(100.0, METER)
     )
     wide.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
     var from_square = square.project(Vector3(2, 0, 0), 200, 200).x - 100
@@ -87,7 +87,7 @@ def test_a_wider_aspect_ratio_fits_more_in_horizontally() raises:
 
 def test_a_wider_field_of_view_shrinks_what_is_on_screen() raises:
     var narrow = PerspectiveCamera(
-        Angle(45.0, DEGREE), 1.0, Length(1.0, METRE), Length(100.0, METRE)
+        Angle(45.0, DEGREE), 1.0, Length(1.0, METER), Length(100.0, METER)
     )
     narrow.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
     var wide = square_camera()
@@ -96,7 +96,7 @@ def test_a_wider_field_of_view_shrinks_what_is_on_screen() raises:
     assert_true(abs(wide_y) < abs(narrow_y))
 
 
-def test_distant_points_move_towards_the_centre() raises:
+def test_distant_points_move_towards_the_center() raises:
     var camera = square_camera()
     var near = camera.project(Vector3(1, 0, 0), 200, 200)
     var far = camera.project(Vector3(1, 0, -10), 200, 200)
@@ -130,7 +130,7 @@ def test_depth_increases_with_distance() raises:
 def test_moving_the_camera_moves_the_view() raises:
     var camera = square_camera()
     camera.place(Vector3(2, 0, 5), Vector3(2, 0, 0))
-    # The new target is what sits at the centre now.
+    # The new target is what sits at the center now.
     var point = camera.project(Vector3(2, 0, 0), 200, 200)
     assert_almost_equal(point.x, Float32(100), atol=TOLERANCE)
 
@@ -146,7 +146,7 @@ def test_looking_from_the_side() raises:
 def test_degrees_and_radians_describe_the_same_camera() raises:
     var from_degrees = square_camera()
     var from_radians = PerspectiveCamera(
-        Angle(1.5707963, RADIAN), 1.0, Length(1.0, METRE), Length(100.0, METRE)
+        Angle(1.5707963, RADIAN), 1.0, Length(1.0, METER), Length(100.0, METER)
     )
     from_radians.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
     assert_almost_equal(
@@ -156,20 +156,20 @@ def test_degrees_and_radians_describe_the_same_camera() raises:
     )
 
 
-def test_feet_and_metres_describe_the_same_clipping_planes() raises:
+def test_feet_and_meters_describe_the_same_clipping_planes() raises:
     # A camera specified in feet must behave identically.
     var camera = PerspectiveCamera(
         Angle(90.0, DEGREE),
         1.0,
-        Length(1.0, METRE),
-        Length(100.0, METRE),
+        Length(1.0, METER),
+        Length(100.0, METER),
     )
     camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
     var same = PerspectiveCamera(
         Angle(90.0, DEGREE),
         1.0,
         Length(3.2808399, FOOT),
-        Length(100.0, METRE),
+        Length(100.0, METER),
     )
     same.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
     assert_almost_equal(
@@ -182,32 +182,32 @@ def test_feet_and_metres_describe_the_same_clipping_planes() raises:
 def test_a_non_positive_aspect_ratio_is_rejected() raises:
     with assert_raises():
         _ = PerspectiveCamera(
-            Angle(90.0, DEGREE), 0.0, Length(1.0, METRE), Length(100.0, METRE)
+            Angle(90.0, DEGREE), 0.0, Length(1.0, METER), Length(100.0, METER)
         )
     with assert_raises():
         _ = PerspectiveCamera(
-            Angle(90.0, DEGREE), -1.0, Length(1.0, METRE), Length(100.0, METRE)
+            Angle(90.0, DEGREE), -1.0, Length(1.0, METER), Length(100.0, METER)
         )
 
 
 def test_a_non_positive_field_of_view_is_rejected() raises:
     with assert_raises():
         _ = PerspectiveCamera(
-            Angle(0.0, DEGREE), 1.0, Length(1.0, METRE), Length(100.0, METRE)
+            Angle(0.0, DEGREE), 1.0, Length(1.0, METER), Length(100.0, METER)
         )
 
 
 def test_a_near_plane_behind_the_camera_is_rejected() raises:
     with assert_raises():
         _ = PerspectiveCamera(
-            Angle(90.0, DEGREE), 1.0, Length(0.0, METRE), Length(100.0, METRE)
+            Angle(90.0, DEGREE), 1.0, Length(0.0, METER), Length(100.0, METER)
         )
 
 
 def test_a_far_plane_not_beyond_near_is_rejected() raises:
     with assert_raises():
         _ = PerspectiveCamera(
-            Angle(90.0, DEGREE), 1.0, Length(10.0, METRE), Length(10.0, METRE)
+            Angle(90.0, DEGREE), 1.0, Length(10.0, METER), Length(10.0, METER)
         )
 
 
@@ -242,7 +242,7 @@ def test_a_placed_camera_answers_the_same_with_or_without_a_scene() raises:
 
 
 def test_an_attached_camera_looks_from_its_node() raises:
-    # A node five metres up +z with no rotation looks down -z at the origin,
+    # A node five meters up +z with no rotation looks down -z at the origin,
     # which is exactly where `place` put the square camera.
     var scene = Scene()
     var eye = Object3D()

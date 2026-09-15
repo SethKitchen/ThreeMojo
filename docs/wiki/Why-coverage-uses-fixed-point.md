@@ -24,4 +24,4 @@ The top-left fill rule gives such a pixel to one triangle: the one whose edge is
 
 ## A bug that parity could not see
 
-A shared implementation means a parity test cannot catch a bug inside it, because both sides are wrong together. The fill-rule tests therefore pin the module against values derived from the definitions. That caught the horizontal half of the top-left rule reversed. A reversed rule is still a consistent tie-break, so no crack test sees it. It silently lost a triangle's top row when that edge landed on pixel centres.
+A shared implementation means a parity test cannot catch a bug inside it, because both sides are wrong together. The fill-rule tests therefore pin the module against values derived from the definitions. That caught the horizontal half of the top-left rule reversed. A reversed rule is still a consistent tie-break, so no crack test sees it. It silently lost a triangle's top row when that edge landed on pixel centers.

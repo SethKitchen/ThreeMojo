@@ -9,7 +9,7 @@
 `rasterize_depth` takes the same triangle with a depth per corner and writes a
 pixel only when it is nearer than what is already there, which is what lets
 geometry be submitted in any order. `rasterize_shaded` additionally mixes a
-colour given per corner, and blends rather than replaces when that colour is
+color given per corner, and blends rather than replaces when that color is
 translucent.
 
 Each triangle is scanned only inside its own bounding box. Walking the whole
@@ -148,7 +148,7 @@ struct _Edges(ImplicitlyCopyable):
 
 
 def _edges_at(coverage: _Coverage, x: Int, y: Int) -> _Edges:
-    """Evaluate the three edge functions at pixel (x, y)'s centre."""
+    """Evaluate the three edge functions at pixel (x, y)'s center."""
     var px = sample(x)
     var py = sample(y)
     return _Edges(
@@ -198,7 +198,7 @@ def _weights_of(coverage: _Coverage, edges: _Edges) -> _Fragment:
     """Return the barycentric weights for these edge values, covered or not.
 
     Coverage is not tested here, because mip selection needs the weights at
-    the *neighbouring* pixels and those are routinely outside the triangle.
+    the *neighboring* pixels and those are routinely outside the triangle.
     Barycentric coordinates extrapolate perfectly well; it is only coverage
     that stops at the edge. The edge opposite a corner is that corner's
     weight, and the winding swap is undone so the caller gets its own
@@ -213,7 +213,7 @@ def _weights_of(coverage: _Coverage, edges: _Edges) -> _Fragment:
 
 
 def _weights(coverage: _Coverage, x: Int, y: Int) -> _Fragment:
-    """Return a pixel centre's barycentric weights, covered or not."""
+    """Return a pixel center's barycentric weights, covered or not."""
     return _weights_of(coverage, _edges_at(coverage, x, y))
 
 
@@ -334,7 +334,7 @@ def rasterize_depth(
     exactly what `PerspectiveCamera.project` returns.
 
     Interpolating that z linearly across the screen is correct, and worth being
-    explicit about because the neighbouring rule is the opposite: *world* depth
+    explicit about because the neighboring rule is the opposite: *world* depth
     and attributes like texture coordinates need perspective-correct
     interpolation through 1/w. NDC depth does not, because the perspective
     divide has already happened, and the result is a function that varies
@@ -346,7 +346,7 @@ def rasterize_depth(
         b: Second corner.
         c: Third corner.
         target: The framebuffer to draw into.
-        color: The colour to write where the triangle wins.
+        color: The color to write where the triangle wins.
 
     Raises:
         Error: If a pixel write lands out of bounds, which the loop prevents.
@@ -399,7 +399,7 @@ struct RasterVertex(ImplicitlyCopyable):
     var z: Float32
     # The reciprocal of the clip-space w this corner was divided by.
     var inv_w: Float32
-    # The surface's own colour, in linear light, with the material's opacity
+    # The surface's own color, in linear light, with the material's opacity
     # already in its alpha. Not lit: lighting happens per fragment now, so
     # what a corner carries is what the material says rather than what that
     # one corner caught.
@@ -410,8 +410,8 @@ struct RasterVertex(ImplicitlyCopyable):
     # triangle is being seen from behind.
     var normal: Vector3
     # Texture coordinates, interpolated the same perspective-correct way the
-    # colour is. They reach the fragment rather than being folded into the
-    # colour at the vertex, because that is what sampling a texture will need.
+    # color is. They reach the fragment rather than being folded into the
+    # color at the vertex, because that is what sampling a texture will need.
     var u: Float32
     var v: Float32
     # `OPAQUE` or `BLEND`, resolved from the material by `Renderer.prepare`
@@ -430,7 +430,7 @@ struct RasterVertex(ImplicitlyCopyable):
     # normal, so a fragment knows where *it* is.
     var world: Vector3
     # Whether the lights reach this surface at all. three.js's
-    # `MeshBasicMaterial`: a surface that shows its own colour whatever the
+    # `MeshBasicMaterial`: a surface that shows its own color whatever the
     # lights do -- a sky, a sprite, an overlay. Per-triangle metadata like
     # the blend policy: read from the first corner, checked to agree.
     var lit: Bool
@@ -474,14 +474,14 @@ struct RasterVertex(ImplicitlyCopyable):
 
 @fieldwise_init
 struct ShadeMode(Equatable, ImplicitlyCopyable, Writable):
-    """What a fragment's colour is taken from, as a type rather than an int.
+    """What a fragment's color is taken from, as a type rather than an int.
 
     The three cases differ in which numbers they read, not in what the
     rasterizer does around them. `SHADE_TEXTURE` multiplies the sampled texel
     by the interpolated lighting, so a white texture shades exactly as
     `SHADE_LIT` does and an unlit white mesh shows the image unchanged.
 
-    A type because an unrecognised integer here was once read in opposite
+    A type because an unrecognized integer here was once read in opposite
     directions by the two backends: the CPU's last branch treated it as
     textured and the GPU's as lit. The type stops a bare integer at compile
     time. It does not stop `ShadeMode(99)` -- a struct's fields are open --
@@ -510,7 +510,7 @@ def _coordinates_at(
 ) -> Vector2:
     """Return the perspective-correct texture coordinates at one sample.
 
-    The same correction `rasterize_shaded` applies to colour, factored out
+    The same correction `rasterize_shaded` applies to color, factored out
     because mip selection needs it at three sample points rather than one.
     """
     var inv_w = (
@@ -536,16 +536,16 @@ def mip_level(
     """Return how far down the mip chain one pixel's footprint reaches.
 
     A hardware rasterizer shades pixels in 2x2 quads and estimates the
-    derivative by subtracting a neighbour's value from its own, running extra
+    derivative by subtracting a neighbor's value from its own, running extra
     *helper invocations* outside the primitive where a quad is not fully
-    covered so that those neighbours exist. This one shades each pixel alone
+    covered so that those neighbors exist. This one shades each pixel alone
     and needs no helpers, because the function is known: texture coordinates
     across a triangle are an analytic expression, so the value one pixel over
     can simply be evaluated.
 
-    What that buys is independence from neighbouring threads, not extra
+    What that buys is independence from neighboring threads, not extra
     precision. The footprint is still a finite difference — the *exact*
-    displacement to the next pixel centre, which is what a footprint is, but
+    displacement to the next pixel center, which is what a footprint is, but
     not the exact derivative of a perspective-correct coordinate, which
     curves between the two samples. For `u(x) = x / (1 + x)` at `x = 0` the
     difference over one pixel is 0.5 where the derivative is 1. That is the
@@ -649,10 +649,10 @@ def rasterize_shaded(
     first_row: Int = 0,
     last_row: Int = -1,
 ) raises:
-    """Fill a triangle whose corners each carry their own colour.
+    """Fill a triangle whose corners each carry their own color.
 
-    The colour is mixed across the face by the triangle's barycentric weights,
-    which is how the surface's own colour reaches a fragment. The *lighting*
+    The color is mixed across the face by the triangle's barycentric weights,
+    which is how the surface's own color reaches a fragment. The *lighting*
     is not mixed: each fragment interpolates the normal instead, makes it a
     unit vector again, and evaluates every light there. Interpolating light
     computed at the corners is cheaper and is what this used to do, but a
@@ -677,13 +677,13 @@ def rasterize_shaded(
         b: Second corner.
         c: Third corner.
         target: The framebuffer to draw into.
-        mode: `SHADE_LIT` to write the interpolated colour, `SHADE_UV` to
+        mode: `SHADE_LIT` to write the interpolated color, `SHADE_UV` to
             write the interpolated texture coordinates as red and green, or
-            `SHADE_TEXTURE` to look the colour up in `texture` and modulate
+            `SHADE_TEXTURE` to look the color up in `texture` and modulate
             it by the lighting. `SHADE_UV` exists to make the perspective
             correction visible: with it a floor plane drawn as two large
             triangles shows the difference between a correct interpolation
-            and an affine one directly, which no assertion about a colour
+            and an affine one directly, which no assertion about a color
             channel really does.
         textures: Where `SHADE_TEXTURE` looks the triangle's map up. Which
             one it wants is on the vertices, so a single call can draw a
@@ -693,7 +693,7 @@ def rasterize_shaded(
             rather than a branch.
         lighting: The scene's lights, resolved to world space. Evaluated once
             per fragment against the interpolated normal and world position.
-            Defaults to `Lighting.uniform`, which leaves the corner colours
+            Defaults to `Lighting.uniform`, which leaves the corner colors
             alone — the same identity the blank texture provides, and what a
             hand-built triangle asking about coverage or depth wants. A
             triangle whose corners are not `lit` skips it altogether.
@@ -714,7 +714,7 @@ def rasterize_shaded(
     check_triangle_state(a, b, c)
 
     # Whether this surface composites, decided by the material and carried
-    # here rather than inferred from a colour. It changes two things
+    # here rather than inferred from a color. It changes two things
     # together: the fragment is mixed into what is already there rather than
     # replacing it, and it tests depth without *claiming* it, so a second
     # translucent surface behind this one still contributes.
@@ -785,7 +785,7 @@ def rasterize_shaded(
                 a.color.b * share_a + b.color.b * share_b + c.color.b * share_c,
                 a.color.a * share_a + b.color.a * share_b + c.color.a * share_c,
             )
-            # An unlit surface shows its own colour: neither the lights nor
+            # An unlit surface shows its own color: neither the lights nor
             # the normal are consulted.
             var arriving = FloatColor(1.0, 1.0, 1.0, 1.0)
             if a.lit:
@@ -828,7 +828,7 @@ def rasterize_shaded(
                 base.a,
             )
             # Each mode by name, as the kernel does, so there is no "else"
-            # for an unrecognised one to fall into differently on each side.
+            # for an unrecognized one to fall into differently on each side.
             if mode == SHADE_UV or mode == SHADE_TEXTURE:
                 var u = a.u * share_a + b.u * share_b + c.u * share_c
                 var v = a.v * share_a + b.v * share_b + c.v * share_c
@@ -852,7 +852,7 @@ def rasterize_shaded(
                     continue
                 else:
                     # Modulate rather than replace: the texture says what
-                    # colour the surface is, the lighting says how much of it
+                    # color the surface is, the lighting says how much of it
                     # reaches the camera, and a renderer needs both.
                     var texel = FloatColor(1.0, 1.0, 1.0, 1.0)
                     if a.texture != NO_TEXTURE:
@@ -974,7 +974,7 @@ def rasterize_all(
     Args:
         corners: Raster vertices, three per triangle.
         target: The linear render target to draw into.
-        mode: What a fragment's colour comes from; see `rasterize_shaded`.
+        mode: What a fragment's color comes from; see `rasterize_shaded`.
         textures: Where `SHADE_TEXTURE` looks the triangles' maps up.
         lighting: The scene's lights, resolved to world space.
         workers: How many threads to draw with, at least one.

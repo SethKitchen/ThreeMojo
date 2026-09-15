@@ -5,10 +5,13 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 
 # ThreeMojo
 
-[![check](https://github.com/SethKitchen/ThreeMojo/actions/workflows/ci.yml/badge.svg)](https://github.com/SethKitchen/ThreeMojo/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-orange)](LICENSE)
 [![mojo](https://img.shields.io/badge/Mojo-1.0.0-fe5c1c)](https://mojolang.org)
 [![coverage](https://img.shields.io/badge/coverage-100%25%20line%20%7C%20branch%20%7C%20condition%20%7C%20MC%2FDC-brightgreen)](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool)
+
+![A brick-textured cube, lit by a lamp, with the camera circling it](out/photo.png)
+
+Rendered by `examples/photo.mojo`: a PNG decoded by this project, on a cube, seen from a camera that rides the scene graph.
 
 ThreeMojo is a port of [three.js](https://threejs.org) to [Mojo](https://mojolang.org). It renders 3D scenes in software on the CPU, or on a GPU, and writes PNG files. It depends on the Mojo standard library and nothing else. The GPU backend is one file and needs MAX.
 
@@ -95,7 +98,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
 - [x] [Front, back and double side](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#side) [#34](https://github.com/SethKitchen/ThreeMojo/issues/34)
 - [x] [Opacity and blending](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#opacity-and-blending) [#35](https://github.com/SethKitchen/ThreeMojo/issues/35)
-- [x] [Colour map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials): a texture on a material [#36](https://github.com/SethKitchen/ThreeMojo/issues/36)
+- [x] [Color map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials): a texture on a material [#36](https://github.com/SethKitchen/ThreeMojo/issues/36)
 - [ ] MeshPhongMaterial [#37](https://github.com/SethKitchen/ThreeMojo/issues/37)
 - [ ] MeshStandardMaterial and MeshPhysicalMaterial [#38](https://github.com/SethKitchen/ThreeMojo/issues/38)
 - [ ] MeshNormalMaterial and MeshDepthMaterial [#39](https://github.com/SethKitchen/ThreeMojo/issues/39)
@@ -104,9 +107,9 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] PointsMaterial and SpriteMaterial [#42](https://github.com/SethKitchen/ThreeMojo/issues/42)
 - [ ] ShadowMaterial [#43](https://github.com/SethKitchen/ThreeMojo/issues/43)
 - [ ] Normal maps and bump maps [#44](https://github.com/SethKitchen/ThreeMojo/issues/44)
-- [ ] Emissive colour and emissive map [#45](https://github.com/SethKitchen/ThreeMojo/issues/45)
+- [ ] Emissive color and emissive map [#45](https://github.com/SethKitchen/ThreeMojo/issues/45)
 - [ ] Alpha map and alpha test [#46](https://github.com/SethKitchen/ThreeMojo/issues/46)
-- [ ] Vertex colours [#47](https://github.com/SethKitchen/ThreeMojo/issues/47)
+- [ ] Vertex colors [#47](https://github.com/SethKitchen/ThreeMojo/issues/47)
 - [ ] Wireframe rendering [#48](https://github.com/SethKitchen/ThreeMojo/issues/48)
 - [ ] Texture transforms: repeat, offset, rotation [#49](https://github.com/SethKitchen/ThreeMojo/issues/49)
 
@@ -126,8 +129,8 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Texture with repeat, clamp and mirror wrapping](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#wrap) [#58](https://github.com/SethKitchen/ThreeMojo/issues/58)
 - [x] [Nearest and bilinear filters](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#filter) [#59](https://github.com/SethKitchen/ThreeMojo/issues/59)
 - [x] [Mipmaps and trilinear filtering](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#mipmaps) [#60](https://github.com/SethKitchen/ThreeMojo/issues/60)
-- [x] [sRGB and linear colour spaces](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#colour-space) [#61](https://github.com/SethKitchen/ThreeMojo/issues/61)
-- [x] [PNG loader](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files#read-a-png): every 8-bit colour type, every filter, both Huffman block types [#62](https://github.com/SethKitchen/ThreeMojo/issues/62)
+- [x] [sRGB and linear color spaces](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#color-space) [#61](https://github.com/SethKitchen/ThreeMojo/issues/61)
+- [x] [PNG loader](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files#read-a-png): every 8-bit color type, every filter, both Huffman block types [#62](https://github.com/SethKitchen/ThreeMojo/issues/62)
 - [ ] CubeTexture and environment maps [#63](https://github.com/SethKitchen/ThreeMojo/issues/63)
 - [ ] DataTexture [#64](https://github.com/SethKitchen/ThreeMojo/issues/64)
 - [ ] CompressedTexture [#65](https://github.com/SethKitchen/ThreeMojo/issues/65)
@@ -166,7 +169,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 ### Math and foundations
 
 - [x] [Vector2, Vector3, Matrix4 and projection matrices](https://github.com/SethKitchen/ThreeMojo/wiki/Math) [#91](https://github.com/SethKitchen/ThreeMojo/issues/91)
-- [x] [Compile-time units](https://github.com/SethKitchen/ThreeMojo/wiki/Units): metres, degrees, dimension checks [#92](https://github.com/SethKitchen/ThreeMojo/issues/92)
+- [x] [Compile-time units](https://github.com/SethKitchen/ThreeMojo/wiki/Units): meters, degrees, dimension checks [#92](https://github.com/SethKitchen/ThreeMojo/issues/92)
 - [x] [Coverage tool](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool): line, branch, condition and MC/DC [#93](https://github.com/SethKitchen/ThreeMojo/issues/93)
 - [ ] Euler angles from a quaternion [#94](https://github.com/SethKitchen/ThreeMojo/issues/94)
 - [ ] Matrix3 and Vector4 [#95](https://github.com/SethKitchen/ThreeMojo/issues/95)

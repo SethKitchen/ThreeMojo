@@ -51,12 +51,12 @@ var skin = assets.textures.add(texture_from(image, REPEAT, BILINEAR, mipmapped=T
 
 | Supported | Refused by name |
 |---|---|
-| Greyscale, RGB, palette, greyscale with alpha, RGBA, all at 8 bits | 16-bit channels |
+| Grayscale, RGB, palette, grayscale with alpha, RGBA, all at 8 bits | 16-bit channels |
 | A `tRNS` transparency chunk | Palettes below 8 bits |
 | Every row filter | Adam7 interlacing |
 | Stored, fixed-Huffman and dynamic-Huffman DEFLATE blocks | |
 
-## Colour space of a decoded file
+## Color space of a decoded file
 
 | The file says | `color_space` |
 |---|---|

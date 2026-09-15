@@ -18,7 +18,7 @@ scene.add_light(point_light(Color(255, 200, 120), bulb_node, 0.5))
 | `directional_light(color, node, intensity=1.0)` | | Parallel rays from the node's world position towards the origin. |
 | `point_light(color, node, intensity=1.0, decay=2.0, distance=0.0)` | | A bulb at the node's world position. |
 
-Intensity multiplies the colour. Values above one are allowed. A negative intensity, decay or distance raises.
+Intensity multiplies the color. Values above one are allowed. A negative intensity, decay or distance raises.
 
 ## Ambient
 
@@ -59,4 +59,4 @@ A surface facing away from the bulb gets nothing from it. A surface on top of th
 
 ## Example
 
-`examples/lamps.mojo` shows three coloured directional lights and a point light carried by a turntable.
+`examples/lamps.mojo` shows three colored directional lights and a point light carried by a turntable.
