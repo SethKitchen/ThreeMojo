@@ -149,7 +149,7 @@ mkdir -p $(CACHE_DIR) && rm -f $(CACHE_DIR)/$(1)-* \
   && touch $(CACHE_DIR)/$(1)-$(HASH)
 endef
 
-.PHONY: help check check-cpu check-gpu ci test test-cpu test-gpu \
+.PHONY: help check check-cpu check-gpu ci test test-cpu test-gpu docs-check wiki-publish \
         lint lint-cpu lint-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation bench bench-scene clean clean-images
 
@@ -167,6 +167,8 @@ help:
 	@echo "  make coverage   line / branch / condition / MC-DC coverage"
 	@echo "  make compile-fail  assert unit errors are rejected"
 	@echo "  make docstrings strict docstring audit (not part of check)"
+	@echo "  make docs-check check the documentation against the writing rules"
+	@echo "  make wiki-publish  copy docs/wiki/ to the GitHub wiki"
 	@echo "  make example    render out/triangle.png"
 	@echo "  make animation  render the animated examples into out/"
 	@echo "  make bench      CPU vs GPU rasterization across sizes"
@@ -182,7 +184,7 @@ check: check-cpu check-gpu
 # The half that needs nothing but the Mojo toolchain. This is what to run when
 # MAX is not installed, and what proves the no-dependencies claim is still
 # true.
-check-cpu: fmt-check lint-cpu test-cpu compile-fail
+check-cpu: fmt-check lint-cpu test-cpu compile-fail docs-check
 
 # The half that needs MAX and, to be worth anything, a GPU. The status line
 # comes first so a suite that skipped every hardware test cannot be mistaken
@@ -352,6 +354,33 @@ $(NEG_STAMP):
 	if [ $$fail -ne 0 ]; then exit 1; fi; \
 	echo "All $(words $(COMPILE_FAIL)) unit errors rejected."
 	@$(call stamp,compile-fail)
+
+# --- documentation ----------------------------------------------------------
+# The wiki pages live in docs/wiki/ so that they are versioned, reviewed and
+# checked with the code. Uncached: the check takes a second, and the docs are
+# not part of the source hash the cache is keyed on.
+DOCS := README.md CONTRIBUTING.md $(wildcard docs/wiki/*.md)
+WIKI_REMOTE := https://github.com/SethKitchen/ThreeMojo.wiki.git
+
+docs-check:
+	@$(call run,$(MOJO) run $(MOJOFLAGS) tools/doc_lint.mojo $(DOCS)); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Replaces every page in the wiki with the copies in docs/wiki/. GitHub
+# creates the wiki repository when its first page is saved in the browser, so
+# that one step is manual; after it, this target and the CI job keep the
+# wiki in step with main.
+wiki-publish:
+	@rm -rf $(CACHE_DIR)/wiki; \
+	git clone -q $(WIKI_REMOTE) $(CACHE_DIR)/wiki || { \
+	  echo "The wiki repository does not exist yet. Create the Home page in the" \
+	       "browser once, then run this again."; exit 1; }; \
+	rm -f $(CACHE_DIR)/wiki/*.md; \
+	cp docs/wiki/*.md $(CACHE_DIR)/wiki/; \
+	cd $(CACHE_DIR)/wiki && git add -A && \
+	if git diff --cached --quiet; then echo "Wiki already up to date."; \
+	else git commit -q -m "Publish docs/wiki from $$(git -C ../.. rev-parse --short HEAD)" \
+	  && git push -q && echo "Wiki published."; fi
 
 # --- uncached tasks ---------------------------------------------------------
 # fmt rewrites files, so caching it would be caching a side effect.

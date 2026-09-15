@@ -3,7 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Reproduce the CUDA device-context teardown hang. See README.md here.
+"""Reproduce the CUDA device-context teardown hang.
+
+The write-up is the wiki page "The CUDA teardown hang", whose source is
+docs/wiki/The-CUDA-teardown-hang.md.
 
     mojo run -I . docs/max-gpu-teardown-issue/repro.mojo buffers_first
     mojo run -I . docs/max-gpu-teardown-issue/repro.mojo context_first

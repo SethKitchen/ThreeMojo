@@ -3,1364 +3,193 @@ Copyright (c) 2026 Seth Kitchen, PE
 SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 -->
 
-```
-   ████████╗██╗  ██╗██████╗ ███████╗███████╗
-   ╚══██╔══╝██║  ██║██╔══██╗██╔════╝██╔════╝
-      ██║   ███████║██████╔╝█████╗  █████╗
-      ██║   ██╔══██║██╔══██╗██╔══╝  ██╔══╝
-      ██║   ██║  ██║██║  ██║███████╗███████╗
-      ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚══════╝
-   ███╗   ███╗ ██████╗      ██╗ ██████╗
-   ████╗ ████║██╔═══██╗     ██║██╔═══██╗
-   ██╔████╔██║██║   ██║     ██║██║   ██║
-   ██║╚██╔╝██║██║   ██║██   ██║██║   ██║
-   ██║ ╚═╝ ██║╚██████╔╝╚█████╔╝╚██████╔╝
-   ╚═╝     ╚═╝ ╚═════╝  ╚════╝  ╚═════╝
+# ThreeMojo
 
-                      █
-                    █████                  three.js, ported to Mojo.
-                  █████████                Zero dependencies.
-                █████████████              Software rasterized.
-              █████████████████
-            █████████████████████          ▲ rendered by this repo,
-          █████████████████████████          by the same edge function
-        █████████████████████████████        the rasterizer uses
-      █████████████████████████████████
-    █████████████████████████████████████
-  █████████████████████████████████████████
-```
-
+[![check](https://github.com/SethKitchen/ThreeMojo/actions/workflows/ci.yml/badge.svg)](https://github.com/SethKitchen/ThreeMojo/actions/workflows/ci.yml)
 [![license](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-orange)](LICENSE)
 [![mojo](https://img.shields.io/badge/Mojo-1.0.0-fe5c1c)](https://mojolang.org)
-[![coverage](https://img.shields.io/badge/coverage-100%25%20line%20%7C%20branch%20%7C%20condition%20%7C%20MC%2FDC-brightgreen)](#coverage)
+[![coverage](https://img.shields.io/badge/coverage-100%25%20line%20%7C%20branch%20%7C%20condition%20%7C%20MC%2FDC-brightgreen)](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool)
 
-A port of [three.js](https://threejs.org) to [Mojo](https://mojolang.org), built
-to learn both graphics and the language from first principles.
+ThreeMojo is a port of [three.js](https://threejs.org) to [Mojo](https://mojolang.org). It renders 3D scenes in software on the CPU, or on a GPU, and writes PNG files. It depends on the Mojo standard library and nothing else. The GPU backend is one file and needs MAX.
 
-**Dependencies: the Mojo standard library, and nothing else** — for everything
-except one file. `render/gpu.mojo` imports `max.gpu.host`, so the optional GPU
-backend needs MAX installed; every other module, and every other test, builds
-and runs against the toolchain alone. The split is enforced rather than
-promised: `make check-cpu` builds and tests the standard-library-only half, and
-`make check-gpu` the rest.
+The project exists to learn graphics and Mojo from first principles. It is not a drop-in replacement for three.js. The [feature checklist](#features) says what is ported.
 
-> **Status: early but no longer a toybox.** Scene graph, transforms, camera,
-> geometry, meshes, depth buffering, per-fragment lighting, near and far
-> clipping, perspective-correct shading, and both a CPU and a GPU rasterizer
-> are in place and fully tested, along with materials, textures with two
-> filters and mip chains, a PNG decoder, alpha blending in linear light,
-> backface culling, an orthographic camera, a multithreaded CPU path,
-> quaternion rotations, point lights, unlit materials and cameras that ride
-> the scene graph. The GPU backend has run on Metal and on CUDA. Missing,
-> among much else: spot lights, shadows, and any kind of windowing. This is a
-> learning project in the open, not a drop-in three.js replacement.
+## Install
 
-## Rendering a scene
-
-```mojo
-var assets = Assets()
-var box = assets.geometries.add(cube(Length(1.0, METRE)))
-var orange = assets.materials.add(Material(Color(255, 140, 40)))
-var blue = assets.materials.add(Material(Color(90, 190, 255)))
-
-var scene = Scene()
-var node = scene.add(spinning_object)
-var other = scene.add(Object3D())
-scene.add_mesh(Mesh(box, orange, node))
-scene.add_mesh(Mesh(box, blue, other))    # same vertices, same geometry id
-scene.update()
-
-var renderer = Renderer(260, 200, workers=available_workers())
-var image = renderer.render(scene, assets, camera)
-```
-
-That is three.js's `renderer.render(scene, camera)` plus the one argument Mojo
-needs and JavaScript does not: who owns the geometry. Meshes and lights are
-scene content, as they are there, and a frame is edited in place rather than
-rebuilt:
-
-```mojo
-scene.node(node).set_euler(Angle(0.0, DEGREE), Angle(turn, DEGREE), Angle(0.0, DEGREE))
-scene.update()
-var frame = renderer.render(scene, assets, camera)
-```
-
-A `Mesh` names the scene node it is drawn at rather than owning a transform.
-three.js has `Mesh` inherit from `Object3D`; Mojo has no inheritance and the
-transforms already live in the scene's flat array. The split is worth keeping
-anyway — not every node has geometry (the pivot a cube orbits is a node and
-nothing else), and one geometry can be drawn at many nodes without copying.
-
-A mesh names its *geometry* by id too, into a `GeometryStore` that owns it.
-That is what makes the second half of that sentence true: a mesh is three
-indices and nothing else, so the two meshes above share one copy of the box's
-vertices rather than holding one each.
-
-Shading is Lambert against the scene's lights plus ambient, evaluated per
-*fragment*: the normal is interpolated across the face, made unit length
-again at every pixel, and the lights are summed there. A geometry's `normal`
-attribute decides how it looks: a box gives each of a face's four corners
-that face's own normal, so the face comes out flat with a crisp edge; a
-sphere gives each vertex the direction it points from the centre, so
-neighbouring triangles agree along their shared edge and the facets vanish.
-A geometry with no normals falls back to the triangle's *geometric* normal,
-which is faceted by construction and the honest result for geometry that never
-said which way it faces.
-
-Which normal is used also depends on which side you can see. A `BACK_SIDE` or
-`DOUBLE_SIDE` surface seen from behind is lit with the normal flipped, because
-lighting the side nobody is looking at renders it black — the Lambert term is
-taken against a normal pointing away from the camera. Both variants are carried
-through clipping, since which one a triangle needs is not known until its
-screen winding has been read.
-
-Normals are carried by the world matrix's **normal matrix** — the inverse
-transpose of its rotation and scale — not by the world matrix itself. Under a
-uniform scale the two agree up to a length that normalizing removes; under a
-non-uniform scale they do not, and `Object3D.set_scale` takes three separate
-factors.
-
-## Geometry
-
-A `BufferGeometry` is named attributes — `position` at minimum — plus an
-optional index buffer. Flat float arrays rather than lists of `Vector3`,
-because that is the layout a GPU wants and can be uploaded without
-rearranging. Indexing means a vertex shared by several triangles is stored
-once.
-
-```mojo
-var geometry = cube(Length(1.0, METRE))
-geometry.vertex_count()          # 24
-geometry.triangle_count()        # 12
-geometry.corner(0, 1)            # a corner position
-geometry.corner_index(0, 1)      # which vertex that was, to project once
-```
-
-A box uses twenty-four vertices, not eight. Sharing corners would be smaller,
-but a corner shared between three faces can carry only one normal and one
-texture coordinate, so the faces could never be shaded separately — which is
-why three.js splits them too.
-
-`plane(width, height, width_segments, height_segments)` is three.js's
-`PlaneGeometry`: a rectangle in the xy plane facing +z, with the same vertex
-order, winding and texture coordinates, subdivided into a grid if asked. Lay
-it flat with a quarter turn about x. Three examples had each built one by
-hand with their own corner order; `glass.mojo`, `uv.mojo` and `floor.mojo`
-now share it, and the floor rescales its `uv` attribute to tile, which is
-what `BufferGeometry` exists to allow.
-
-## Rasterization
-
-Coverage is decided in fixed point. Two triangles sharing an edge test it from
-opposite corner orderings — one asks `edge(A, B, p)`, the other `edge(B, A, p)`
-— and in floating point those need not negate exactly, so a pixel almost on
-the edge could come out negative for *both* and be drawn by neither. That left
-one-pixel cracks along the shared diagonal of a quad: two in a large quad,
-forty-four with the camera inside a cube.
-
-Snapping vertices to a 1/16-pixel grid makes the edge function exact integer
-arithmetic, where the orderings do negate exactly and no pixel can be missed.
-The **top-left fill rule** then handles the opposite problem, giving a pixel
-lying exactly on a shared edge to one triangle rather than both. Drawing twice
-is invisible under an opaque depth test but doubles every shared edge once
-anything is blended.
-
-The GPU kernel applies the same rule by calling the same code: it lives in
-`render/fillrule.mojo`, which allocates nothing, prints nothing and raises
-nothing, so it compiles for a device as readily as for the host. It was
-duplicated for a while under a comment explaining that a kernel cannot call
-into a module that prints — true of the rasterizer, which writes pixels, and
-not of arithmetic.
-
-That closes one failure mode and opens another: a CPU/GPU parity test can no
-longer catch a bug *inside* the shared rule, because both sides would be wrong
-together and agree perfectly. `tests/test_fillrule.mojo` therefore pins it
-against values derived from the definitions — and caught exactly that, once:
-the horizontal half of the top-left rule was reversed, which is invisible to
-parity and to any crack-or-double-draw test (swapping top for bottom is still
-a consistent tie-break) and showed up as a triangle silently losing its top
-row when that edge landed on pixel centres.
-
-## Scene graph and depth
-
-`rasterize_depth` interpolates NDC depth across the triangle and keeps a
-fragment only when it is nearer than what is there, so geometry can be
-submitted in any order. Worth being explicit about why linear interpolation is
-correct here: *world* depth and attributes like texture coordinates need
-perspective-correct interpolation through 1/w, but NDC depth does not, because
-the perspective divide has already happened. That is exactly why hardware
-depth buffers store this value rather than distance.
-
-three.js gives every object a `children` array. **Mojo cannot express that** —
-a struct may not contain a `List` of itself, which the compiler rejects with
-*"field 'children' has non-'Deinitable' type"*. So the tree is stored inverted:
-each node records its parent's index and `Scene` owns the flat array.
-
-That turns out better than a workaround. `add` refuses a parent that does not
-already exist, so a parent always precedes its children, so updating every
-world matrix is a single forward pass — no recursion, no visited set, and
-cycles are impossible by construction rather than by checking.
-
-```mojo
-var scene = Scene()
-var pivot = scene.add(spinning_node)
-var moon  = scene.attach(node_at(1.6, 0, 0), pivot)   # orbits for free
-scene.update()
-scene.world_matrix(moon)
-
-scene.node(pivot).rotate_y(Angle(30.0, DEGREE))        # about its own y
-scene.update()                                          # the moon moved too
-```
-
-`node` hands back a mutable reference and marks the scene stale, which is
-what `mesh.rotation.y += 0.01` needs: a persistent scene, one field changed,
-one `update`, one render. Every example used to rebuild its whole scene each
-frame because the alternative was copying a node out and putting it back.
-
-Euler angles compose in three.js's default order. `set_euler(x, y, z)` is
-`XYZ`: turn about x, then about the turned y, then about the twice-turned z,
-which as a matrix is Rx · Ry · Rz. The other five orders are there by name,
-and `ZYX` is what this port did before it matched three.js.
-
-**A rotation is a quaternion.** `Object3D.quaternion` is what three.js holds
-too. A matrix composes but does not interpolate; Euler angles interpolate but
-lock up; a unit quaternion does both. Euler angles are one way to *set* it —
-`set_euler`, or `set_rotation(Euler(x, y, z, order))` — and `rotate_x`,
-`rotate_y`, `rotate_z` and `rotate_on_axis` turn it further by one multiply
-each, about the node's *own* axes — three.js's `rotateY` — which is
-`rotation.y += 0.01` there only while the other two angles are zero, since an
-Euler component is not a local axis; `rotate_on_world_axis` turns about the
-parent's. `look_at` orients a node towards a point, +z forward for an object
-and −z for a camera, with up being the parent's +y. `Scene.look_at` does it in
-world space, world up included, and then undoes the parent's rotation to get
-the node's own — scale normalized away, a reflection refused.
-`Quaternion.slerp` blends two rotations along the shortest arc at constant
-speed. `math/euler.mojo` converts *to* a quaternion or a matrix; reading
-Euler angles back out of a rotation is not ported.
-
-`make animation` renders `out/cubes.png`, where a small cube orbits a large one
-and passes behind it. The depth buffer carries that result on its own, which
-the earlier `cube.png` could not have done.
-
-## Camera
-
-Three matrices take a scene from world space onto a screen, and the middle
-ground between them is deliberately unitless:
-
-```
-look_at      where the camera is and which way it faces
-perspective  how distance shrinks things          -> normalized device coords
-viewport     where a normalized point lands       -> pixels
-```
-
-World space is **metres** — the camera's `near` and `far` are `Length`, which
-is where this project pins down what three.js leaves to the application. The
-field of view is an `Angle`, so `PerspectiveCamera(50.0, ...)` does not
-compile; you have to say degrees or radians. NDC in the middle is
-dimensionless, which is exactly right: it is the neutral ground where neither
-metres nor pixels apply.
-
-```mojo
-var camera = PerspectiveCamera(
-    Angle(50.0, DEGREE), 4.0 / 3.0, Length(0.1, METRE), Length(100.0, METRE)
-)
-camera.place(Vector3(0, 0, 2.5), Vector3(0, 0, 0))
-camera.project(Vector3(0, 0, 0), 240, 180)   # -> pixels, plus NDC depth
-```
-
-`make animation` renders `out/cube.png`, the first example that draws a *scene*:
-world-space corners in metres, turned by a model matrix, projected, and
-rasterized where they land. Hidden surfaces are removed by the depth buffer,
-which is what lets geometry be submitted in any order and what makes a
-non-convex scene come out right.
-
-Backface culling sits on top of that as an optimization rather than a
-substitute for it. `FRONT_SIDE`, the default as in three.js, discards roughly
-half the triangles of a closed mesh before they are rasterized — the same ones
-the depth buffer was already hiding, so the image is unchanged. It is a
-property of the material, because a camera inside a closed mesh sees nothing
-*but* back faces:
-
-```mojo
-assets.materials.add(Material(Color(255, 140, 40), NO_TEXTURE, DOUBLE_SIDE))
-```
-
-`BACK_SIDE` draws only the faces pointing away; `DOUBLE_SIDE` draws both. That
-is why `side` is not a Bool: two of the three fit, and the middle one does
-not.
-
-A mesh whose world transform reflects it — `set_scale(-1, 1, 1)`, or any odd
-number of reflections inherited from parents — has its winding reversed, so
-the convention inverts with it. The sign of the world matrix's determinant is
-what says so, asked once per mesh; three.js asks the same question of the same
-quantity. Without it a mirrored single-sided mesh is culled exactly when it
-should be drawn, and disappears.
-
-## Matrix4
-
-Column-major storage, as three.js and OpenGL both are — element (row, col)
-lives at `col * 4 + row`, and the translation sits in `e[12..14]` where a GPU
-expects it. `set()` nevertheless takes **row-major** arguments, so a matrix
-written in source reads the way it would on paper while landing transposed in
-memory. That asymmetry is three.js's, kept deliberately, and asserted by tests
-in both directions because it is exactly the sort of thing that silently
-transposes a scene.
-
-```mojo
-var m = translation(10, 0, 0)
-m.multiply(rotation_z(Angle(90.0, DEGREE)))   # right-hand matrix applies first
-m.multiply(translation(-10, 0, 0))            # rotation about (10, 0, 0)
-
-m.transform_point(Vector3(11, 0, 0))          # (10, 1, 0)
-m.transform_direction(v)                      # ignores translation
-```
-
-Rotations take an `Angle`, so `rotation_z(90.0)` does not compile — there is
-no way to be unsure whether a rotation is in degrees or radians. Matrices
-themselves are not unit-tagged: a transform mixes dimensions by nature, with a
-dimensionless rotation part and a translation column in length units, and
-expressing that needs per-element dimensions rather than per-value.
-
-A singular matrix inverts to all zeros, as in three.js — deliberately
-conspicuous, since everything transformed by it collapses to the origin
-rather than quietly coming back unchanged.
-
-## Units
-
-Every measurement carries its dimension, checked at compile time and erased
-before runtime — a `Quantity` is exactly the size of the `Float32` inside it.
-
-```mojo
-var height = Length(1.0, METRE)
-print(height.to(FOOT))              # 3.2808399
-print(height.to(INCH))              # 39.37008
-
-var area = height * Length(2.0, METRE)   # Area: length exponent 2
-var side = area.sqrt()                   # back to a Length
-var speed = Length(100.0) / Duration(9.58)   # Velocity: [1, 0, -1, 0]
-
-var total = Length(1.0, METRE) + Length(1.0, FOOT)   # 1.3048 m
-```
-
-Values are stored canonically (metres, kilograms, seconds, radians), so units
-mix freely in one expression and comparisons are always right. Mistakes are
-compile errors, not runtime checks:
-
-```mojo
-Length(1.0, METRE) + Duration(1.0, SECOND)   # error
-Length(1.0, METRE).to(SECOND)                # error
-Volume(8.0).sqrt()                           # error: odd exponent
-rotate(90.0)                                 # error: needs an Angle
-```
-
-Angle is carried as a base dimension, which strict SI does not do — a radian
-is properly dimensionless. It earns its place by making degrees-for-radians a
-compile error, which is a common enough graphics bug to be worth the deviation.
-
-Because those failures cannot be exercised from inside a test suite — a file
-containing one would not build — each lives in `tests/compile_fail/` and
-`make compile-fail` asserts every one still fails to compile.
-
-## Texture coordinates, and why interpolation is not obvious
-
-`box` and `sphere` carry a `uv` attribute, and it travels to the *fragment* —
-through clipping, through the perspective divide — rather than being folded
-into a colour at the vertex. That is what sampling a texture will need, and it
-is already enough to see the thing the rasterizer works hardest at.
-
-Screen-space barycentric weights are not the weights the surface sees:
-perspective squeezes the far half of a triangle into fewer pixels. Interpolate
-an attribute straight across the screen and it drifts from what the geometry
-says. The correction weights by `inv_w` and divides by the interpolated
-`inv_w`. Depth is deliberately *not* corrected — the projection makes it linear
-in screen space precisely so a depth buffer can work that way.
-
-`make animation` renders `out/uv.png`: two frames of one floor plane, drawn as
-two large triangles at a grazing angle with its texture coordinates written out
-as red and green. The first is correct, the second has every `inv_w` forced to
-one. Every covered pixel differs between them, by up to 142 levels of 255 —
-the warped, sliding textures of a PlayStation 1 game.
-
-Both frames come from a single `Renderer.prepare` call, which is why that seam
-is public: the affine frame is the same prepared triangles with the perspective
-thrown away, so nothing but the correction can account for the difference.
-
-```mojo
-var corners = renderer.prepare(scene, geometries, meshes, camera)
-```
-
-A floor plane is the worst case on purpose. The error grows with how much
-perspective one triangle spans, so it is invisible on a subdivided sphere and
-unmissable on two triangles running to the horizon.
-
-### Reading an image with them
-
-`render/texture.mojo` is what turns a `uv` pair into a colour: two filters,
-three wrap modes, and an optional mip chain.
-
-```mojo
-var board = assets.textures.add(
-    checkerboard(64, 8, Color(245, 245, 250), Color(40, 90, 170))
-)
-var paint = assets.materials.add(Material(Color(255, 255, 255), board))
-meshes.append(Mesh(box, paint, node))
-```
-
-A sampled texel *modulates* the lighting rather than replacing it — the image
-says what colour the surface is, the lighting says how much of it reaches the
-camera, and a renderer needs both. The blank texture samples as opaque white,
-which is the identity for that, so "no texture" is a value rather than a branch
-and a renderer that never sets one shades exactly as it did before textures
-existed.
-
-Two things are easy to get backwards here and neither reports an error. **Rows
-run down from the top while `v` runs up from the bottom**, so sampling flips it
-once — three.js calls the same reconciliation `flipY`. And **a coordinate of
-exactly 0 or 1 sits on a tile boundary**, where the wrap mode decides which
-side it belongs to: under `REPEAT` both ends name the same texel, which is what
-seamless means, while under `CLAMP` they name opposite edges.
-
-Two filters. `NEAREST` takes whichever texel the sample lands in; `BILINEAR`
-blends the four around it, shifting the sample by half a texel first because
-texel *centres* sit at half-integers. Nearest is exact and keeps a
-checkerboard's edges hard, which is what makes a mapping error legible — a
-wrong `uv` moves a square somewhere obviously wrong, where a blurred one would
-just look soft. Bilinear is what you want once the image is meant to be looked
-at: at a glancing angle nearest turns a fine pattern into noise.
-
-`make animation` renders `out/textured.png`: two checkerboard cubes turning,
-one sharp and one blended, which is only one render because a texture belongs
-to a material.
-
-The GPU samples the same way, calling the same `wrap_index` and the same
-`blend` the CPU does — the `fillrule` argument again. The two agree texel for
-texel in all three wrap modes, including coordinates well outside the unit
-square, and under both filters. Nearest *must* agree, being integer arithmetic
-once the coordinate is floored; bilinear is floating point and agrees anyway,
-which is measured rather than guaranteed.
-
-Every texture in a scene crosses to the device as one buffer with a table
-saying where each image starts, because a device cannot hold a list of lists.
-A vertex carries the id of the image it wants.
-
-### Mipmaps, and the footprint that chooses one
-
-Filtering fixes magnification — a pixel covering less than a texel. The
-opposite case is worse and bilinear does nothing for it. When a surface recedes,
-a pixel comes to cover dozens of texels, and reading one of them is a point
-sample of a signal far finer than the pixel grid can carry. Which texel it lands
-on swings wildly for a coordinate that barely moved, so the result is noise, and
-the noise *crawls* as the camera moves. That is aliasing, and it is the loudest
-artefact a texture mapper has.
-
-The answer is to average every texel under the pixel, and a mip chain is those
-averages taken in advance: each level is the one above it halved, so the level
-whose texels are pixel-sized is a lookup instead of a sum.
-
-```mojo
-var board = assets.textures.add(
-    checkerboard(
-        64, 8, Color(245, 245, 250), Color(35, 70, 150),
-        REPEAT, BILINEAR, mipmapped=True,
-    )
-)
-```
-
-The chain is opt-in because it costs a third more memory and buys nothing for
-an image that is never minified. It is built in premultiplied linear light, for
-the two reasons everything else in this renderer is: **light is what averages**,
-and **a hidden colour must weigh nothing**. Averaging sRGB bytes makes every
-level darker than the one before, so a receding surface dims as it goes — and
-averaging straight alpha drags the colour of fully transparent texels into view.
-Each level is re-encoded to bytes, which is what a GPU stores too.
-
-Which level to read comes from the *footprint*: how far the texture coordinates
-move over one pixel. `mip_level` measures both directions, takes the longer —
-the shorter one would leave the compressed direction aliasing, which is exactly
-the case a surface seen edge-on is in — and takes the log, because the chain
-halves. Sampling is trilinear: bilinear within the two levels either side, then
-between them, so the change from one level to the next is not a visible band.
-
-Hardware rasterizers estimate that derivative by shading pixels in 2x2 quads and
-subtracting a neighbour's value, running extra *helper invocations* outside the
-primitive so the neighbours exist where a quad is only partly covered. This one
-**evaluates the neighbours from the triangle's own uv function**: that expression
-is known, so the value one pixel over can simply be computed, perspective divide
-included, without any inter-thread quad operation.
-
-What that buys is independence from neighbouring threads, not extra precision.
-The footprint is still a finite difference — the exact displacement to the next
-pixel centre, which is what a footprint is, but not the exact derivative of a
-perspective-correct coordinate, which curves between the two samples. It is the
-same estimate hardware makes. Both backends compute it the same way and are held
-to it in parity tests, including a perspective quad where the level changes from
-pixel to pixel.
-
-`make animation` renders `out/floor.png`: one checkerboard floor running to the
-horizon, mipmapped on the right and not on the left. Both halves are sharp at
-the bottom of the frame and tell you everything at the top.
-
-## Lights
-
-A colour lived on `Mesh`. A texture lived on `Renderer`, so a scene could have
-exactly one image. A light lived on `Renderer` too — one direction and one
-ambient fraction — so a scene could have exactly one light, and two is the
-first thing anyone tries.
-
-```mojo
-var lamp = Object3D()
-lamp.set_position(0.4, 0.8, 0.5)
-var node = scene.add(lamp^)
-scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
-scene.add_light(directional_light(Color(255, 255, 255), node, 0.75))
-```
-
-A light is scene content, as it is in three.js where `scene.add` takes one.
-That fixes a second problem that is easy to miss: a light on the renderer has
-no transform, so it cannot be *moved* by the scene. A `DirectionalLight` here
-names a node exactly as a `Mesh` does, and its direction is read from that
-node's world matrix — so a lamp can be parented to a turning object and carried
-along by it. Adding a light does not make the scene stale, because a light
-holds no transform of its own, only the id of a node that does.
-
-**Ambient is a light now, not a fudge.** It used to be the fraction an unlit
-surface kept, mixed as `ambient + (1 - ambient) * lambert`. That is a lerp
-towards the surface's own colour: it cannot have a colour of its own, and a
-scene with no light at all came out half-lit. Here it is what three.js has — a
-constant term *added* to everything. A scene with no lights renders black, and
-a blue ambient tints the shadows blue.
-
-**Lights add, and they add in linear light.** Two white lamps at half strength
-make one at full strength, which is only true of the numbers this renderer
-keeps. Summing encoded bytes would repeat exactly the mistake `render.srgb`
-exists to prevent: half plus half would come to 128 rather than 255.
-
-**A light has a colour**, so it multiplies the surface's per channel. The old
-scalar dimming could not express a red lamp at all.
-
-**A point light is a bulb.** `point_light(color, node, intensity, decay,
-distance)` is three.js's `PointLight` with its defaults: the light is divided
-by distance to the power of `decay`, two being the inverse-square law, and
-fades smoothly to nothing at `distance` if one is given. Its node's world
-*position* is what matters, so every fragment now carries where it is in the
-world — `RasterVertex.world`, three more lanes on the GPU — and
-`Lighting.intensity_at` takes a position as well as a normal. `falloff` is one
-function called from both rasterizers, and the parity test holds them to it.
-`examples/lamps.mojo` hangs one off the turntable.
-
-```mojo
-var bulb = scene.attach(node_at(0, -0.6, 1.6), table)
-scene.add_light(point_light(Color(255, 200, 120), bulb, 0.5))
-```
-
-Nothing is clamped until `RenderTarget.resolve`. Two lamps really can
-overexpose a white surface, and the headroom survives every step in between
-rather than being flattened at each one.
-
-The change is behaviour-preserving for the light it replaced: for a *white*
-lamp, an additive quarter plus three quarters is algebraically the same
-`0.25 + 0.75 * lambert` the fixed light gave, and every rendered image in
-`out/` is byte for byte what it was.
-
-## Reading a PNG
-
-Writing a PNG needs no compression at all: DEFLATE has a *stored* block type,
-so `render/png.mojo` builds a legal file from a header, raw bytes and a
-checksum. Reading one someone else wrote gets no such shortcut — every encoder
-in the world uses the compressed block types, so a decoder that understood only
-stored blocks could not open a single real file.
-
-So `render/inflate.mojo` is the whole of RFC 1951: stored, fixed-Huffman and
-dynamic-Huffman blocks, and the LZ77 back-references inside the last two.
-
-```mojo
-var image = decode(Path("assets/brick.png").read_bytes())
-var skin = assets.textures.add(texture_from(image, REPEAT, BILINEAR, mipmapped=True))
-```
-
-Two things in DEFLATE are easy to get backwards, and both are stated where they
-are relied on. **Bits run low to high within a byte, but Huffman codes are
-packed most significant bit first** — the extra bits after a length or distance
-are ordinary little-endian integers, while the codes themselves are walked one
-bit at a time the other way. And **a back-reference may overlap the output's own
-end**: a run of identical bytes is stored as one byte and a distance of one, so
-the copy has to proceed a byte at a time. Capturing the source slice up front
-gives three correct bytes and then garbage.
-
-Decoding accepts the five colour types at eight bits — greyscale, RGB, palette,
-greyscale with alpha, and RGBA — with or without a `tRNS` chunk, and all five
-row filters. Everything is widened to RGBA, so one shape reaches the renderer
-rather than five, and `texture_from` is then a copy rather than a conversion.
-
-Sixteen-bit channels, sub-byte palettes and Adam7 interlacing are legal PNG
-that this decoder does not have. Each is **refused by name** rather than
-mis-decoded.
-
-### A file is structure, not a bag of chunks
-
-A PNG is an *ordered* sequence and the order carries meaning: a header first
-and once, a palette before the data that indexes it, image data in one
-consecutive run, an end marker. Reading chunks in whatever order they arrive
-and using whatever they contain is how a malformed file reaches arithmetic
-written for a well-formed one — a `tRNS` chunk one byte long left an empty
-colour key that the pixel loop then indexed, so a file with entirely valid
-CRCs reached an out-of-range read.
-
-So ordering, duplication, applicability and length are all checked per chunk,
-and **an unknown chunk is not automatically ignorable**. PNG says which is
-which in the name itself: a lowercase first letter means ancillary and may be
-skipped, an uppercase one is critical and a decoder that does not understand it
-cannot claim to have decoded the file.
-
-Dimensions are bounded before anything is allocated. A header asks for its size
-in four bytes per side, so a thirteen-byte chunk can demand ten billion pixels,
-and the multiply that sizes the buffer overflows long before the allocation
-fails.
-
-### Three layers of integrity, not one
-
-```
-chunk CRC     the compressed bytes survived the journey
-Adler-32      they decompress to what the encoder meant
-output bound  they decompress to the size the header promised
-```
-
-These are genuinely separate, and only the first was being checked. A stream
-with its Adler-32 removed, or altered, decoded happily inside a CRC-valid
-chunk. And the expansion limit has to be enforced *as* bytes are produced: a
-decompressor that expands everything and then compares the length has already
-done the work and already holds the memory. The exact size is known before a
-single byte is inflated — `height * (1 + width * channels)` — so there is
-nothing to estimate.
-
-A file missing only its end marker is refused too: it can hold every pixel and
-still be truncated.
-
-### What the samples mean
-
-**PNG does not imply sRGB.** A file can declare a gamma of one, which is
-linear, and decoding that through the sRGB curve turns a mid grey of 128 from
-half the light into a fifth of it — with nothing downstream able to tell.
-
-So `decode` returns a `DecodedImage`, which is samples *plus their declared
-interpretation*, rather than a `Framebuffer`. A framebuffer is this renderer's
-own output and carries a settled convention; bytes out of somebody else's file
-carry whatever that file said. `texture_from` uses the declared space unless
-you override it.
-
-A file that declares something this decoder cannot interpret — an ICC profile,
-or a gamma that is neither sRGB's nor one — arrives as `UNKNOWN_SPACE` and must
-be settled by the caller. That is neither ignoring it nor refusing the file:
-the caller knows what the image is for and the decoder does not.
-
-A `gAMA` near 1/2.2 is read as `SRGB`, and that is an approximation: a gamma
-is a pure power and the sRGB curve is not, so the two differ by about a
-percent at midtones. It is sRGB-ish, which is enough to light with. Faithful
-colour management would keep the gamma and apply it, and nothing here claims
-to.
-
-The tests decode real files written by a conforming encoder and embedded as
-bytes, because a decoder checked only against this project's own encoder would
-never see a Huffman code or a row filter at all. They cover both compressed
-block types, every filter, an overlapping run, each colour type, and some fifty
-malformed files — each with correct chunk CRCs, damaged in exactly one way, so
-each reaches the check it is aimed at rather than tripping an earlier one.
-
-`make animation` renders `out/photo.png`: a cube wearing `assets/brick.png`,
-which is dynamic-Huffman compressed and Sub-filtered — neither of which this
-project's encoder can produce.
-
-## Shading per fragment
-
-Lighting used to be worked out at each corner and the resulting *colour*
-interpolated across the triangle. That is Gouraud shading, and it is cheap for
-a reason: a triangle can only be as round as its corners, so a coarse sphere
-gets a visible crease along every edge and a highlight that lands between two
-vertices is simply lost.
-
-Now the **normal** is what travels, and every fragment evaluates the lights
-itself:
-
-```
-interpolate the normal  ->  make it unit length again  ->  sum the lights
-```
-
-That middle step is the whole difference and is easy to leave out. The average
-of two unit vectors is *shorter* than either — two normals 45 degrees apart
-average to a vector 0.92 long — so an interpolated normal used as-is dims the
-middle of every triangle, and the result is neither Gouraud nor Phong but a
-third, wrong thing. `tests/test_rasterizer.mojo` pins this with a triangle
-whose two leaning corners each catch cos(45) of the light while the point
-between them catches all of it; without the renormalization that point catches
-cos(45) too and the test fails.
-
-Both backends do it, from the same definition: `Lighting.intensity_at` on the
-host and `_arriving` in the kernel, checked against each other per pixel with a
-coloured ambient and a coloured lamp so a swapped channel cannot hide.
-
-**What it cost, measured.** Every existing demo is flat-faced — cubes, quads,
-a floor — and for a constant normal the two methods are algebraically the same.
-So four of the seven images are byte-for-byte unchanged, and the other three
-differ in exactly **one byte each, by one**, from the multiplies being
-reassociated: `(base x light) x texel` became `base x light x texel`. That is
-the expected size of the change, and finding a larger one would have meant a
-bug.
-
-The vertex stride grew from ten floats to thirteen. Every offset past the first
-corner used to be a literal in the kernel, and changing the stride meant
-changing all of them — twice that meant missing one, which silently reads a
-neighbouring field as a coordinate. They are derived from `FLOATS_PER_VERTEX`
-now, so that class of bug is gone rather than merely fixed.
-
-`make animation` renders `out/lamps.png`: three coloured lamps and a fourth
-parented to the turntable, on a sphere coarse enough to see the triangles.
-
-## Materials
-
-`Material` was refused three times before it was written, on the grounds that a
-material with one field is ceremony. Textures are what changed that: a texture
-on the renderer meant one image for an entire scene, and two meshes with
-different textures was impossible.
-
-```mojo
-struct Material:
-    var color: Color        # was on Mesh
-    var map: TextureId      # was on Renderer: one texture, whole scene
-    var side: Side          # was a Bool on Renderer: could not express BackSide
-    var opacity: Float32
-    var blending: Blending
-    var kind: MaterialKind  # LAMBERT (lit) or BASIC (shows its own colour)
-```
-
-`side` stops being a flag and becomes what three.js has: `FRONT_SIDE` draws
-surfaces facing the camera, `BACK_SIDE` only those facing away, `DOUBLE_SIDE`
-both. A Bool could express the first and last; the middle is a third state.
-
-`kind` is where three.js has a class per answer: `MeshBasicMaterial` shows
-its own colour and texture whatever the lights do, `MeshLambertMaterial`
-catches light. Every other property is shared, so here it is one struct and a
-tag. The tag travels with each triangle like the blend policy, and both
-rasterizers skip the lights for a `BASIC` surface.
-
-`Side` is a type rather than an integer, and so are `Blending`, `MaterialKind`,
-a texture's `Wrap` and `Filter`, a `ColorSpace`, a `ShadeMode` and a
-`LightKind`. That is
-the same discipline the resource ids and the units follow: a value that is
-one of three things should not be interchangeable with one that is one of
-two. A bare integer in their place does not compile, and `tests/compile_fail/`
-proves it. A wrong value *inside* the right type — `Blending(7)` — still
-constructs, because a struct's fields are open in Mojo, so every boundary that
-reads one asks `is_valid` and refuses: the material and texture constructors,
-the light resolver, both rasterizers, the GPU upload. For a while only the
-compile-time half was in place, and the two backends could once again read a
-value neither knew in opposite directions. The types stop transpositions and
-the checks stop nonsense; they are different jobs.
-
-A `Mesh` is now three ids and nothing else — where it is, what shape it is,
-what it is made of:
-
-```mojo
-var box = assets.geometries.add(cube(Length(1.0, METRE)))
-var paint = assets.materials.add(Material(Color(255, 140, 40)))
-meshes.append(Mesh(box, paint, node))
-```
-
-`Assets` holds the three stores together. Each is append-only and hands out
-ids, for the reason the first one did: the thing being shared has to be owned
-by exactly one owner, and everything else names it.
-
-## Colour space
-
-**Light adds; sRGB does not.** A pixel value of 128 is not half the light of
-255 — it is about 21.6% of it. sRGB spends more of its 256 steps on dark
-values, where the eye can tell them apart, which is why eight bits look
-acceptable at all. Every image file, and every colour picked in a paint
-program, is encoded that way.
-
-Arithmetic on light has to happen where the numbers are proportional to light:
-filtering blends neighbouring texels, shading multiplies by a Lambert term,
-and blending mixes a translucent surface with what is behind it. So this
-project decodes authored colours and texels on the way in, works in linear
-throughout, and encodes once at the pixel.
-
-Getting it wrong is not subtle. A white surface at a Lambert level of 0.4 used
-to come out as byte 102; the right answer is 170:
-
-```
-level   was   now
-0.25     64   137
-0.40    102   170
-0.60    153   203
-0.80    204   231
-```
-
-Shaded midtones were far too dark, which is the classic symptom — and every
-rendered image in `out/` changed when this landed.
-
-A texture says which space it is in. `SRGB` is the default, because that is
-what an image holds; `LINEAR` is for data that merely happens to be stored in
-an image and must not be decoded. Alpha is never decoded in either case: it is
-coverage, not colour. Decoding is a 256-entry table built once per texture
-rather than a `pow` per fragment, and the same table is uploaded to the device.
-
-## Transparency
-
-A material's `opacity` below one makes its surface translucent, and the
-rasterizer mixes it into what is already there instead of replacing it. Two
-rules follow, and they are the two every renderer has:
-
-**A translucent surface tests depth without claiming it** — hidden by what is
-in front, hiding nothing behind — so two panes one behind the other both show.
-
-**Whether a surface composites is a property of its material**, resolved once
-and carried to both rasterizers as per-triangle state. It decides two things
-together — how the colour combines, and whether depth is written — so it has
-to be one answer. It was three: the mesh sorter asked the material, and each
-rasterizer asked a vertex colour. A material with an opaque `opacity` but a
-translucent base colour sorted as opaque and rasterized as blended, so it wrote
-no depth and whatever came after painted over it. `blending` is inferred where
-it can be and sayable where it cannot — a texture's own alpha is invisible from
-the material.
-
-**Draw order stops being the caller's business.** Blending is not commutative,
-so `Renderer.prepare` puts every opaque mesh first (they write the depth that
-stops a pane behind a wall from showing through) and then sorts the translucent
-ones back to front. Submitting them in any order gives the same image, which
-is asserted. The sort is per mesh, as three.js's is; a translucent mesh that
-overlaps *itself* is still approximate, and the alternative is sorting every
-triangle every frame.
-
-```mojo
-assets.materials.add(Material(tint, NO_TEXTURE, DOUBLE_SIDE, 0.45))
-```
-
-`make animation` renders `out/glass.png`: three translucent panes turning
-through each other over a solid cube. Where they cross, three colours mix one
-over another — and that is the place the colour space above shows most
-plainly, since half of white over black is 188 and not 128.
-
-The GPU blends in one pass rather than two, which is only correct because the
-renderer guarantees the ordering: every opaque triangle arrives before any
-translucent one, so the nearest solid depth is already final when the first
-blended fragment shows up.
-
-## Compositing, and where linear stops
-
-Rasterization draws into a `RenderTarget`: **premultiplied linear RGBA**, at
-full float precision, resolved to an image exactly once. A `Framebuffer` is the
-result rather than the workspace, and two things went wrong while it was both.
-
-**Rounding compounds.** Blending used to read the byte back, decode, mix and
-re-encode for every translucent layer. A hundred layers of alpha 0.0001 over
-black come to about 0.00995 of the light, which displays as byte 25 — and
-rounding after each layer gives 0, because each contribution alone rounds back
-to black. The GPU accumulated in registers and resolved once, so the backends
-did not merely round differently; they had different contracts.
-
-**Alpha needs both sides.** Source-over needs the destination's alpha as well
-as the source's. Blending 50% red over transparent blue gave opaque purple: the
-invisible blue contributed colour, and the result was forced opaque.
-
-Premultiplied because compositing and filtering are both weighted sums, and a
-hidden colour must weigh nothing:
-
-```
-out.rgb = src.rgb + dst.rgb * (1 - src.a)
-out.a   = src.a   + dst.a   * (1 - src.a)
-```
-
-`resolve` unpremultiplies and encodes at the end, because PNG stores
-unassociated alpha and alpha is coverage rather than colour — it never goes
-through the sRGB curve. Texture filtering blends in the same space, so a
-transparent texel contributes no colour and a cut-out gets no halo.
-
-## Cameras
-
-`PerspectiveCamera` and `OrthographicCamera` are interchangeable because the
-renderer asks for neither. `cameras/camera.mojo` declares a `Camera` trait with
-the four things a renderer actually needs — a view matrix, a camera-to-pixels
-matrix, and the two clipping distances — and `Renderer.render` is generic over
-it. three.js reaches the same place by having both extend a `Camera` base
-class; Mojo has no inheritance, and the trait describes the relationship
-better anyway.
-
-```mojo
-var flat = centred(
-    Length(6.0, METRE), aspect, Length(0.1, METRE), Length(100.0, METRE)
-)
-```
-
-Orthographic projection leaves the transformed `w` at one, so every `inv_w` is
-one and the perspective correction divides by one. It is not special-cased
-anywhere: the maths already collapses, and a backend that branched on it would
-be two code paths where there is one. A happy consequence is that the CPU and
-GPU rasterizers agree bit-for-bit on an orthographic scene, interpolated
-colour included — affine interpolation leaves no room for a fused multiply-add
-to round differently.
-
-`near` may be zero here, as in three.js: nothing divides by depth, so the
-perspective camera's reason for forbidding it does not apply. The volume's
-edges must be properly ordered, though — right beyond left, top above bottom —
-because a reversed pair mirrors the projection, and mirrored winding is
-exactly what backface culling reads.
-
-**A camera can ride a scene node.** three.js's camera is an `Object3D`, and
-its view matrix is the inverse of its world position and rotation. Here a
-camera is not a node — a `Mesh` is not one either — but `camera.attach(node)`
-makes it look from one, so a camera parented to a pivot orbits with it, and
-`Scene.look_at(node, target, camera=True)` aims it. Scale is dropped on the
-way, as three.js drops it: a scaled group carries the camera but does not
-change its lens, and a mirrored node is refused because the culler corrects
-winding only for the mesh's own transform. The trait's first answer is
-therefore `view_matrix_in(scene)`; `view_matrix()` still answers for a placed
-camera and refuses for an attached one, because only the scene knows where the
-node is. `examples/photo.mojo` circles its cube this way.
-
-## Threads
-
-The CPU renderer draws a frame on as many threads as you give it:
-
-```mojo
-var renderer = Renderer(1280, 720, workers=available_workers())
-```
-
-The image is cut into that many horizontal bands and every triangle is
-offered to every band, each band on its own task from the standard library's
-thread pool. A band owns its rows outright, so no two threads ever touch one
-pixel, the depth test needs no atomics, and draw order within a band is
-submission order — which is what keeps blending correct. The result is byte
-for byte what one thread produces; only the wall clock changes. The final
-encode from linear light to sRGB, three `pow` calls per pixel, is split the
-same way.
-
-One worker is the default, deliberately. The coverage tool reconstructs
-MC/DC vectors from the order its probe records arrive in, and two threads
-reporting one decision at once would interleave them; the examples and the
-benchmark ask for every core.
-
-`make bench-scene` renders a mipmapped, bilinear checkerboard sphere of some
-twelve thousand triangles and times the stages apart:
-
-```
-$ make bench-scene
-1280x720  workers 1    prepare 6852 us   clear+resolve 47933 us   render 117565 us
-1280x720  workers 24   prepare 6844 us   clear+resolve  5592 us   render  18465 us
-```
-
-Rasterization and the resolve were the frame and now scale with cores.
-`prepare` — transforms, clipping and projection, per vertex — is single
-threaded and is now the largest single piece, which is what the next
-optimization should be aimed at.
-
-## GPU
-
-`render/gpu.mojo` runs the same edge test as the CPU rasterizer — the same
-module, not a copy — with one thread per pixel owning that pixel for the whole
-draw, so depth needs no synchronization. Colour and depth both come back.
-
-Its output is asserted **pixel-identical to the CPU path for coverage**, which
-is integer arithmetic and admits no disagreement. *Shading* is held to one
-level per channel instead: a GPU contracts `a * b + c` into a fused
-multiply-add that rounds once where the CPU rounds twice, and an interpolated
-channel whose exact value lands on a quantization midpoint can fall either
-side. The tests say which standard they are applying and why at each
-assertion.
-
-```
-$ make bench
-320x240   (76k px)   CPU   513 us   GPU   485 us
-640x480  (307k px)   CPU  2032 us   GPU   611 us    GPU wins by 3x
-1280x720 (921k px)   CPU  6302 us   GPU  1107 us    GPU wins by 5x
-1920x1080 (2M px)    CPU 14593 us   GPU  1892 us    GPU wins by 7x
-3840x2160 (8M px)    CPU 56479 us   GPU 11360 us    GPU wins by 4x
-```
-
-GPU timings include device allocation and the copy back, because that is what
-it costs to get a usable image. Timing the kernel alone would flatter it: at
-1080p the kernel is ~600 us and the transfer is the rest.
-
-Those timings are from an Apple M-series GPU under Metal. The same suite
-passes on an NVIDIA GPU under CUDA on WSL 2, which is how it was found that a
-`DeviceContext` torn down before the buffers it owns hangs the next context's
-first allocation there, and that a context with a launch still in flight
-must be waited on before it goes. `GpuRenderer` now releases its buffers
-first and drains its queue, `make test-gpu` runs under a time budget so a
-hang fails instead of looking slow, and `docs/max-gpu-teardown-issue/` holds
-the reproducer.
-
-Requires the Mojo GPU libraries (`uv pip install "max==26.5.0"`), which are
-**not** needed for anything else — see `make check-cpu`. On macOS it also
-needs
-Apple's Metal toolchain, which Xcode does **not** install by default:
+Supported platforms: macOS on Apple Silicon, Linux on x86-64 or aarch64, and Windows through WSL 2. You need Python 3.9 or later, `git`, `make` and [uv](https://docs.astral.sh/uv/).
 
 ```bash
-xcodebuild -downloadComponent MetalToolchain
-```
-
-Without it every kernel fails with `Metal Compiler failed to compile metallib`,
-which looks like a code error and is not.
-
-## Why it isn't a WebGL renderer
-
-Mojo's GPU support is compute-only, in the CUDA sense: kernels, buffers, and
-thread indexing. There is no rasterization pipeline, no vertex or fragment
-shaders, no window or swapchain. So three.js's `WebGLRenderer` cannot be ported
-directly.
-
-Instead ThreeMojo rasterizes in software into a plain RGBA byte buffer. That
-turns out to be the more instructive version: you write the inside-triangle
-test yourself, and the per-pixel loop is exactly the shape that later maps to
-one GPU thread per pixel.
-
-The buffer is the product. Displaying it belongs to whatever is presenting —
-a canvas, an NSWindow, a DIB, a texture upload — so `Framebuffer` knows nothing
-about file formats, and the encoders read it rather than the other way round.
-
-## Requirements
-
-| | Supported | Notes |
-|---|---|---|
-| **macOS** | Yes | Apple Silicon (M-series). Intel Macs are not supported by Mojo. |
-| **Linux** | Yes | x86-64 and aarch64. |
-| **Windows** | Via WSL 2 | Mojo has no native Windows build; run inside a WSL 2 Linux distro. |
-
-You also need Python 3.9+ (to install Mojo from PyPI) and `make`.
-
-## Setup
-
-ThreeMojo pins its toolchain in a local `.venv`, so nothing is installed
-system-wide. [`uv`](https://docs.astral.sh/uv/) is the quickest way in, but
-plain `venv` works identically.
-
-### macOS
-
-```bash
-# Install uv and make (make ships with the Xcode command line tools)
-brew install uv
-xcode-select --install          # if `make` is missing
-
 git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
 uv venv --prompt ThreeMojo
-uv pip install "mojo==1.0.0"          # the pinned toolchain
+uv pip install "mojo==1.0.0"
+uv pip install "max==26.5.0"      # optional: the GPU backend
 ```
 
-### Linux
+[How to install](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-install) covers WSL 2, the Metal toolchain and the editor setup.
+
+## Start
 
 ```bash
-# Debian / Ubuntu
-sudo apt update && sudo apt install -y build-essential curl git
-# Fedora:  sudo dnf install -y make gcc git curl
-# Arch:    sudo pacman -S --needed base-devel git curl
-
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-git clone https://github.com/SethKitchen/ThreeMojo.git
-cd ThreeMojo
-uv venv --prompt ThreeMojo
-uv pip install "mojo==1.0.0"          # the pinned toolchain
+make check-cpu                                            # format, lint, tests, docs
+make animation                                            # every example, into out/
+.venv/bin/mojo run -I . examples/cubes.mojo out/cubes.png
 ```
 
-### Windows (WSL 2)
+Then follow [Tutorial: render your first scene](https://github.com/SethKitchen/ThreeMojo/wiki/Tutorial-Render-your-first-scene).
 
-Mojo does not run natively on Windows. Install WSL 2 first, from PowerShell
-**as Administrator**:
+## Documentation
 
-```powershell
-wsl --install -d Ubuntu
-```
+The [wiki](https://github.com/SethKitchen/ThreeMojo/wiki) follows [Diátaxis](https://diataxis.fr). Tutorials teach. How-to guides solve one task. Reference pages describe each feature. Explanation pages say why the design is what it is.
 
-Reboot, open the Ubuntu terminal, then follow the **Linux** steps above.
+The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on every push to `main`. `make docs-check` enforces the [writing rules](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-write-documentation).
 
-> Clone into the Linux filesystem (`~/ThreeMojo`), **not** `/mnt/c/...`.
-> Building across the Windows/Linux filesystem boundary is dramatically slower.
+## Features
 
-### Without uv
+A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-```bash
-python3 -m venv .venv
-.venv/bin/pip install "mojo==1.0.0"   # same pin as the uv path above
-```
+<!-- features -->
+### Scene
 
-### Verify
+- [x] [Scene graph](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph): `Object3D`, `Scene`, parent and child transforms [#1](https://github.com/SethKitchen/ThreeMojo/issues/1)
+- [x] [Quaternion and Euler rotations](https://github.com/SethKitchen/ThreeMojo/wiki/Rotations): six Euler orders, `rotate_x`, `rotate_y`, `rotate_z`, `look_at`, `slerp` [#2](https://github.com/SethKitchen/ThreeMojo/issues/2)
+- [x] [PerspectiveCamera](https://github.com/SethKitchen/ThreeMojo/wiki/Cameras#perspectivecamera) [#3](https://github.com/SethKitchen/ThreeMojo/issues/3)
+- [x] [OrthographicCamera](https://github.com/SethKitchen/ThreeMojo/wiki/Cameras#orthographiccamera) [#4](https://github.com/SethKitchen/ThreeMojo/issues/4)
+- [x] [Camera on a scene node](https://github.com/SethKitchen/ThreeMojo/wiki/Cameras#attach-a-camera-to-a-node): `attach`, orbit with a pivot [#5](https://github.com/SethKitchen/ThreeMojo/issues/5)
+- [ ] CubeCamera [#6](https://github.com/SethKitchen/ThreeMojo/issues/6)
+- [ ] ArrayCamera and StereoCamera [#7](https://github.com/SethKitchen/ThreeMojo/issues/7)
+- [ ] Fog and FogExp2 [#8](https://github.com/SethKitchen/ThreeMojo/issues/8)
+- [ ] Scene background and environment [#9](https://github.com/SethKitchen/ThreeMojo/issues/9)
+- [ ] Layers [#10](https://github.com/SethKitchen/ThreeMojo/issues/10)
+- [ ] Clock [#11](https://github.com/SethKitchen/ThreeMojo/issues/11)
 
-```bash
-.venv/bin/mojo --version            # Mojo 1.0.0 (ed45d567)
-make check-cpu                      # no MAX needed
-make check                          # adds the GPU half
-```
+### Geometry
 
-### Pinned versions
+- [x] [BufferGeometry and BufferAttribute](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry) [#12](https://github.com/SethKitchen/ThreeMojo/issues/12)
+- [x] [BoxGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#box) [#13](https://github.com/SethKitchen/ThreeMojo/issues/13)
+- [x] [SphereGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#sphere) [#14](https://github.com/SethKitchen/ThreeMojo/issues/14)
+- [x] [PlaneGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#plane) [#15](https://github.com/SethKitchen/ThreeMojo/issues/15)
+- [ ] CircleGeometry and RingGeometry [#16](https://github.com/SethKitchen/ThreeMojo/issues/16)
+- [ ] CylinderGeometry and ConeGeometry [#17](https://github.com/SethKitchen/ThreeMojo/issues/17)
+- [ ] TorusGeometry and TorusKnotGeometry [#18](https://github.com/SethKitchen/ThreeMojo/issues/18)
+- [ ] Polyhedron geometries: Icosahedron, Octahedron, Tetrahedron, Dodecahedron [#19](https://github.com/SethKitchen/ThreeMojo/issues/19)
+- [ ] CapsuleGeometry [#20](https://github.com/SethKitchen/ThreeMojo/issues/20)
+- [ ] LatheGeometry and TubeGeometry [#21](https://github.com/SethKitchen/ThreeMojo/issues/21)
+- [ ] ShapeGeometry and ExtrudeGeometry [#22](https://github.com/SethKitchen/ThreeMojo/issues/22)
+- [ ] EdgesGeometry and WireframeGeometry [#23](https://github.com/SethKitchen/ThreeMojo/issues/23)
+- [ ] computeVertexNormals and bounding volumes [#24](https://github.com/SethKitchen/ThreeMojo/issues/24)
 
-| Component | Version | Needed for |
-|---|---|---|
-| Mojo | `1.0.0` (`ed45d567`) | everything |
-| MAX | `26.5.0` | `render/gpu.mojo` and its tests only |
-| Metal toolchain | Xcode component, macOS only | running GPU kernels on a Mac |
+### Objects
 
-The toolchain version is part of the build cache key, so upgrading Mojo
-invalidates every cached result rather than letting a stale pass count for the
-new compiler. `make help` prints the version it is hashing.
+- [x] [Mesh, with geometry, material and texture stores](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets) [#25](https://github.com/SethKitchen/ThreeMojo/issues/25)
+- [ ] Line and LineSegments [#26](https://github.com/SethKitchen/ThreeMojo/issues/26)
+- [ ] Points [#27](https://github.com/SethKitchen/ThreeMojo/issues/27)
+- [ ] Sprite [#28](https://github.com/SethKitchen/ThreeMojo/issues/28)
+- [ ] InstancedMesh and BatchedMesh [#29](https://github.com/SethKitchen/ThreeMojo/issues/29)
+- [ ] SkinnedMesh, Bone and Skeleton [#30](https://github.com/SethKitchen/ThreeMojo/issues/30)
+- [ ] LOD [#31](https://github.com/SethKitchen/ThreeMojo/issues/31)
 
-The `Makefile` calls `.venv/bin/mojo` by path, so **you never need to activate
-the virtualenv**. If you prefer to anyway:
+### Materials
 
-| Shell | Command |
-|---|---|
-| bash / zsh (macOS, Linux, WSL) | `source .venv/bin/activate` |
-| fish | `source .venv/bin/activate.fish` |
-| PowerShell | `.venv\Scripts\Activate.ps1` |
+- [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
+- [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
+- [x] [Front, back and double side](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#side) [#34](https://github.com/SethKitchen/ThreeMojo/issues/34)
+- [x] [Opacity and blending](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#opacity-and-blending) [#35](https://github.com/SethKitchen/ThreeMojo/issues/35)
+- [x] [Colour map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials): a texture on a material [#36](https://github.com/SethKitchen/ThreeMojo/issues/36)
+- [ ] MeshPhongMaterial [#37](https://github.com/SethKitchen/ThreeMojo/issues/37)
+- [ ] MeshStandardMaterial and MeshPhysicalMaterial [#38](https://github.com/SethKitchen/ThreeMojo/issues/38)
+- [ ] MeshNormalMaterial and MeshDepthMaterial [#39](https://github.com/SethKitchen/ThreeMojo/issues/39)
+- [ ] MeshToonMaterial and MeshMatcapMaterial [#40](https://github.com/SethKitchen/ThreeMojo/issues/40)
+- [ ] LineBasicMaterial and LineDashedMaterial [#41](https://github.com/SethKitchen/ThreeMojo/issues/41)
+- [ ] PointsMaterial and SpriteMaterial [#42](https://github.com/SethKitchen/ThreeMojo/issues/42)
+- [ ] ShadowMaterial [#43](https://github.com/SethKitchen/ThreeMojo/issues/43)
+- [ ] Normal maps and bump maps [#44](https://github.com/SethKitchen/ThreeMojo/issues/44)
+- [ ] Emissive colour and emissive map [#45](https://github.com/SethKitchen/ThreeMojo/issues/45)
+- [ ] Alpha map and alpha test [#46](https://github.com/SethKitchen/ThreeMojo/issues/46)
+- [ ] Vertex colours [#47](https://github.com/SethKitchen/ThreeMojo/issues/47)
+- [ ] Wireframe rendering [#48](https://github.com/SethKitchen/ThreeMojo/issues/48)
+- [ ] Texture transforms: repeat, offset, rotation [#49](https://github.com/SethKitchen/ThreeMojo/issues/49)
 
-## Commands
+### Lights
 
-Every command below is identical on macOS, Linux, and WSL.
+- [x] [AmbientLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#ambient) [#50](https://github.com/SethKitchen/ThreeMojo/issues/50)
+- [x] [DirectionalLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#directional) [#51](https://github.com/SethKitchen/ThreeMojo/issues/51)
+- [x] [PointLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#point): inverse-square falloff, decay, cutoff distance [#52](https://github.com/SethKitchen/ThreeMojo/issues/52)
+- [x] [Per-fragment Lambert shading](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#shading) [#53](https://github.com/SethKitchen/ThreeMojo/issues/53)
+- [ ] SpotLight [#54](https://github.com/SethKitchen/ThreeMojo/issues/54)
+- [ ] HemisphereLight [#55](https://github.com/SethKitchen/ThreeMojo/issues/55)
+- [ ] RectAreaLight [#56](https://github.com/SethKitchen/ThreeMojo/issues/56)
+- [ ] Shadow maps [#57](https://github.com/SethKitchen/ThreeMojo/issues/57)
 
-| Command | What it does |
-|---|---|
-| `make help` | List the tasks and the current input hash. |
-| `make check` | Format check + lint + tests. **Run this before committing.** |
-| `make test` | Run every `tests/test_*.mojo` suite. |
-| `make lint` | Compile everything with warnings promoted to errors. |
-| `make fmt` | Reformat all sources in place. |
-| `make fmt-check` | Verify formatting without modifying anything. |
-| `make coverage` | Line, branch, condition and MC/DC coverage, ~5s. Exits non-zero on any gap or if it exceeds one second per suite. |
-| `make docstrings` | Strict docstring audit (`Args:`/`Returns:`/`Raises:` on every public symbol). |
-| `make example` | Render `out/triangle.png`. |
-| `make animation` | Render the animated examples into `out/`. |
-| `make bench` | CPU vs GPU rasterization across image sizes. |
-| `make bench-scene` | A textured sphere through the CPU renderer, stage by stage, one worker and every core. Standard library only. |
-| `make compile-fail` | Assert every unit error is still rejected by the compiler. |
-| `make clean` | Remove the coverage build and the task cache. Keeps `out/`. |
-| `make clean-images` | Remove the rendered images in `out/`. |
+### Textures
 
-Task results are cached on a SHA-256 of the source contents, so a task whose
-inputs have not changed is skipped entirely — a warm `make check` is instant.
-Because the key is content and not modification time, `make fmt` rewriting a
-file byte-identically keeps the cache warm, and a fresh clone does not throw it
-away. Force a re-run with `make -B <task>`.
+- [x] [Texture with repeat, clamp and mirror wrapping](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#wrap) [#58](https://github.com/SethKitchen/ThreeMojo/issues/58)
+- [x] [Nearest and bilinear filters](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#filter) [#59](https://github.com/SethKitchen/ThreeMojo/issues/59)
+- [x] [Mipmaps and trilinear filtering](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#mipmaps) [#60](https://github.com/SethKitchen/ThreeMojo/issues/60)
+- [x] [sRGB and linear colour spaces](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#colour-space) [#61](https://github.com/SethKitchen/ThreeMojo/issues/61)
+- [x] [PNG loader](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files#read-a-png): every 8-bit colour type, every filter, both Huffman block types [#62](https://github.com/SethKitchen/ThreeMojo/issues/62)
+- [ ] CubeTexture and environment maps [#63](https://github.com/SethKitchen/ThreeMojo/issues/63)
+- [ ] DataTexture [#64](https://github.com/SethKitchen/ThreeMojo/issues/64)
+- [ ] CompressedTexture [#65](https://github.com/SethKitchen/ThreeMojo/issues/65)
+- [ ] DepthTexture [#66](https://github.com/SethKitchen/ThreeMojo/issues/66)
+- [ ] Anisotropic filtering [#67](https://github.com/SethKitchen/ThreeMojo/issues/67)
+- [ ] Render target as a texture [#68](https://github.com/SethKitchen/ThreeMojo/issues/68)
+- [ ] JPEG loader [#69](https://github.com/SethKitchen/ThreeMojo/issues/69)
+- [ ] GLTF loader [#70](https://github.com/SethKitchen/ThreeMojo/issues/70)
+- [ ] OBJ loader [#71](https://github.com/SethKitchen/ThreeMojo/issues/71)
 
-### Running something directly
+### Rendering
 
-Mojo needs the repo root on its import path, which is what `-I .` does. Without
-it you get `unable to locate module 'math'`.
+- [x] [Depth buffer](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#depth) [#72](https://github.com/SethKitchen/ThreeMojo/issues/72)
+- [x] [Backface culling](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#culling) [#73](https://github.com/SethKitchen/ThreeMojo/issues/73)
+- [x] [Near and far clipping](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#clipping) [#74](https://github.com/SethKitchen/ThreeMojo/issues/74)
+- [x] [Perspective-correct interpolation](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#interpolation) [#75](https://github.com/SethKitchen/ThreeMojo/issues/75)
+- [x] [Alpha blending with sorted draw order](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#transparency) [#76](https://github.com/SethKitchen/ThreeMojo/issues/76)
+- [x] [Linear-light compositing and sRGB output](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer) [#77](https://github.com/SethKitchen/ThreeMojo/issues/77)
+- [x] [Multithreaded CPU renderer](https://github.com/SethKitchen/ThreeMojo/wiki/Renderer#workers) [#78](https://github.com/SethKitchen/ThreeMojo/issues/78)
+- [x] [GPU rasterizer](https://github.com/SethKitchen/ThreeMojo/wiki/GPU-backend): the same rasterizer as a MAX kernel [#79](https://github.com/SethKitchen/ThreeMojo/issues/79)
+- [x] [PNG, APNG and PPM writers](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files) [#80](https://github.com/SethKitchen/ThreeMojo/issues/80)
+- [ ] Frustum culling [#81](https://github.com/SethKitchen/ThreeMojo/issues/81)
+- [ ] Tone mapping [#82](https://github.com/SethKitchen/ThreeMojo/issues/82)
+- [ ] Anti-aliasing [#83](https://github.com/SethKitchen/ThreeMojo/issues/83)
+- [ ] Scissor and viewport [#84](https://github.com/SethKitchen/ThreeMojo/issues/84)
+- [ ] Post-processing [#85](https://github.com/SethKitchen/ThreeMojo/issues/85)
+- [ ] Helpers: axes, grid, box, camera [#86](https://github.com/SethKitchen/ThreeMojo/issues/86)
+- [ ] Windowing and interactive controls [#87](https://github.com/SethKitchen/ThreeMojo/issues/87)
 
-```bash
-.venv/bin/mojo run -I . tests/test_vector3.mojo
-.venv/bin/mojo run -I . examples/triangle.mojo out/triangle.png
-.venv/bin/mojo run -I . examples/triangle.mojo out/triangle.ppm  # text
-```
+### Animation
 
-### Image formats
+- [ ] AnimationMixer, AnimationClip and KeyframeTrack [#88](https://github.com/SethKitchen/ThreeMojo/issues/88)
+- [ ] Morph targets [#89](https://github.com/SethKitchen/ThreeMojo/issues/89)
+- [ ] Skinning [#90](https://github.com/SethKitchen/ThreeMojo/issues/90)
 
-| | Alpha | Previews in VS Code | Notes |
-|---|---|---|---|
-| **PNG** (`render/png.mojo`) | Yes, 8-bit | Yes | The default. Written with no compression library — see below. |
-| **APNG** (`render/apng.mojo`) | Yes, 8-bit | Yes, animated | Several frames in one file, for watching a sequence. |
-| **PPM** (`render/ppm.mojo`) | No | No | Plain text, so you can read pixel values in an editor. Debugging only. |
+### Math and foundations
 
-APNG is a plain PNG with three extra chunks (`acTL`, `fcTL`, `fdAT`), so it
-reuses the still encoder untouched, and the first frame stays in the ordinary
-`IDAT` — a viewer that has never heard of APNG just shows frame one. GIF would
-be the obvious alternative and is a worse fit: 1-bit transparency only, and a
-256-colour palette per frame that rendered output would have to be quantized
-into.
+- [x] [Vector2, Vector3, Matrix4 and projection matrices](https://github.com/SethKitchen/ThreeMojo/wiki/Math) [#91](https://github.com/SethKitchen/ThreeMojo/issues/91)
+- [x] [Compile-time units](https://github.com/SethKitchen/ThreeMojo/wiki/Units): metres, degrees, dimension checks [#92](https://github.com/SethKitchen/ThreeMojo/issues/92)
+- [x] [Coverage tool](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool): line, branch, condition and MC/DC [#93](https://github.com/SethKitchen/ThreeMojo/issues/93)
+- [ ] Euler angles from a quaternion [#94](https://github.com/SethKitchen/ThreeMojo/issues/94)
+- [ ] Matrix3 and Vector4 [#95](https://github.com/SethKitchen/ThreeMojo/issues/95)
+- [ ] Box3, Sphere and Plane [#96](https://github.com/SethKitchen/ThreeMojo/issues/96)
+- [ ] Ray and Raycaster [#97](https://github.com/SethKitchen/ThreeMojo/issues/97)
+- [ ] Curves and paths [#98](https://github.com/SethKitchen/ThreeMojo/issues/98)
+- [ ] Color as floats [#99](https://github.com/SethKitchen/ThreeMojo/issues/99)
+<!-- /features -->
 
-PNG normally implies zlib, which would be a dependency. It is avoidable:
-DEFLATE (RFC 1951) defines a *stored* block that holds raw bytes, so a valid
-zlib stream needs only a two-byte header, a run of stored blocks, and an
-Adler-32 checksum. Files are larger than a real encoder's and legal everywhere
-— `zlib.decompress` accepts them, which the test suite relies on.
+### Out of scope
 
-## Editor setup
-
-The Mojo language server resolves imports with its own search path and does
-**not** inherit `-I .`, so project imports show red squiggles until you tell it
-about the repo root. This repo ships `.vscode/settings.json` with:
-
-```json
-{ "mojo.lsp.includeDirs": ["."] }
-```
-
-It has to be `"."`, not `"${workspaceFolder}"` — the extension performs no
-variable substitution, so it would pass that string to the server as a literal
-directory name and the imports would still fail. `"."` resolves because the
-server runs with the workspace folder as its working directory.
-
-Install the **Mojo** extension by Modular, then reload the window
-(`Ctrl/Cmd+Shift+P` → *Developer: Reload Window*). The setting is only read at
-language-server startup.
-
-## Layout
-
-```
-units/       Quantity, Unit                      compile-time dimensions
-             si                                  metres, feet, degrees, ...
-math/        Vector2, Vector3                    ported from three.js
-             Matrix4                             4x4 transforms, column-major
-             projection                          perspective, orthographic, look_at, viewport
-             Quaternion, Euler                   rotations that compose and interpolate
-cameras/     Camera                              the trait a renderer needs; rides a node
-             PerspectiveCamera                   fov in Angle, planes in Length
-             OrthographicCamera                  no perspective; w stays 1
-core/        Assets                              the three stores together
-             Object3D, Scene                     transform hierarchy, meshes and lights
-             BufferGeometry, BufferAttribute     vertex data, borrowed on read
-             GeometryStore                       owns geometry; meshes share it
-geometries/  box                                 a box, four vertices per face
-             sphere                              latitude/longitude, smooth
-             plane                               a rectangle, subdividable
-objects/     Mesh                                geometry, material and node ids
-lights/      Light, Lighting                     ambient, directional and point, resolved per frame
-renderers/   Renderer                            scene + camera -> triangles -> image
-             clip                                near and far plane clipping
-materials/   Material, MaterialStore             colour, map, side, opacity, blending, kind
-render/      Framebuffer, Color, FloatColor      RGBA, depth, and linear colour
-             RenderTarget                        premultiplied linear light, resolved once
-             Texture, TextureStore               two filters, three wraps, mip chains
-             srgb                                the transfer function
-             fillrule                            coverage maths, CPU *and* GPU
-             rasterizer                          software rasterization, banded across threads
-             gpu                                 the same rasterizer, on the GPU
-             png, apng, ppm                      encoders that read the buffer
-             png, inflate                        a PNG decoder and the DEFLATE under it
-examples/    triangle.mojo                       renders triangle.png
-             spin.mojo                           renders spin.png, animated
-             cube.mojo                           a 3D cube, animated
-             cubes.mojo                          two cubes, depth + hierarchy
-             uv.mojo                             perspective-correct vs affine
-             textured.mojo                       two cubes, two textures
-             glass.mojo                          translucent panes, sorted
-             floor.mojo                          mipmapped vs not, to the horizon
-             photo.mojo                          a decoded PNG on a cube, camera on a node
-             lamps.mojo                          coloured lights, per-fragment shading
-bench/       raster_bench.mojo                   CPU vs GPU timings
-             scene_bench.mojo                    a whole scene, stage by stage
-tools/       gpu_status.mojo                     is there an accelerator?
-docs/        mojo-compiler-issue/                a compiler hang, bisected and reported
-             max-gpu-teardown-issue/             a CUDA teardown hang, reproduced
-out/         rendered images, gitignored
-tests/       one suite per module
-             compile_fail/                       files that must NOT compile
-coverage/    line / branch / condition / MC-DC coverage tooling
-```
-
-`Renderer.prepare` is the seam between the two halves of rendering. It turns a
-scene into screen-space triangles — transforms, lighting, clipping, projection
-— and both rasterizers consume that same list, which is what makes the CPU/GPU
-parity tests mean something:
-
-```
-scene (nodes, meshes, lights) + assets + camera
-                |
-        Renderer.prepare
-                |
-        List[RasterVertex]        <- screen x/y, NDC z, 1/w, colour, normal, uv
-           /           \
-   rasterize_all      GpuRenderer.draw
-   (bands, threads)         |
-           |                |
-   RenderTarget.resolve  device target -> read_back()
-```
-
-## Coverage
-
-Mojo 1.0 ships no coverage tool, and there is no `llvm-cov` or `llvm-profdata`
-in the toolchain to build one on. It also has **no global variables at all**, so
-a probe has nowhere to accumulate counts.
-
-ThreeMojo works around this by rewriting sources into instrumented copies whose
-probes write one record per event to *stderr*, which the report then groups and
-deduplicates. `stdout` stays byte-for-byte identical, so an instrumented run
-still produces a valid PPM.
-
-Four metrics, all gating:
-
-| Metric | Question it answers |
-|---|---|
-| **Line** | Did this statement ever run? |
-| **Branch** | Did this decision go both ways? (`for` loops included — did it ever run zero times?) |
-| **Condition** | Did each `and`/`or` operand take both values? |
-| **MC/DC** | Was each operand shown to change the outcome *on its own*? |
-
-```
-$ make coverage
-Instrumented 35 files: 1913 lines, 340 decisions, 132 conditions.
-math/matrix4        lines 169/169 100%  branches 28/28 100%  mcdc 8/8   100%
-render/rasterizer   lines 215/215 100%  branches 98/98 100%  mcdc 6/6   100%
-render/fillrule     lines   9/9   100%  branches  4/4  100%  mcdc 0/0   100%
-render/target       lines  50/50  100%  branches 30/30 100%  mcdc 6/6   100%
-core/scene          lines  58/58  100%  branches 60/60 100%  mcdc 14/14 100%
-renderers/renderer  lines 146/146 100%  branches 70/70 100%  mcdc 10/10 100%
-TOTAL               2985/2985 100%
-```
-
-(Abridged — the run covers thirty-five modules.)
-
-A decision whose second outcome is genuinely unreachable — a loop over a length
-an invariant already proves non-zero — is opted out explicitly, so it is visible
-in review rather than silently dropped from the denominator:
-
-```mojo
-for y in range(self.height):  # pragma: no branch
-```
-
-One module is excluded, `render/gpu.mojo`, and for a structural reason: the
-probes write to stderr, and a GPU kernel has no stderr. Device code cannot be
-instrumented under this design at all. It is covered instead by tests
-asserting its output matches the CPU rasterizer — exactly for coverage, and
-within one level per channel for interpolated shading.
-
-Everything else — including the rasterizer, the renderer, the PNG encoder and
-`Matrix4` — is measured, and the whole run takes about five seconds. The
-Makefile gives it a budget of one second per test suite and fails it loudly
-past that, on the principle that slow coverage means something is being
-instrumented that should not be.
-
-For a while five more modules were excluded — the PNG encoder among them —
-because instrumenting them made compilation take minutes. That turned out to be a **Mojo compiler issue**
-triggered by one construct the instrumenter emitted — a `Bool` loop flag read
-after nested loops — not anything about those modules. The bisection, the
-one-line workaround, a standalone reproducer and a draft upstream report are
-in [`docs/mojo-compiler-issue/`](docs/mojo-compiler-issue/README.md).
-
-Known limits. MC/DC is the **masking** variant, since short-circuit evaluation
-makes strict unique-cause MC/DC unreachable for most compound decisions. The
-coverage tool does not measure itself, so a bug in it cannot flatter its own
-numbers.
-
-And now that the CPU and GPU rasterizers share `render/fillrule.mojo` rather
-than each carrying a copy of it, a CPU/GPU parity test can no longer catch a
-bug inside it — both sides would be wrong together and agree perfectly. So
-`tests/test_fillrule.mojo` pins that module against values worked out from the
-definitions instead, and asserts the two properties the design rests on: that
-reversing an edge negates it *exactly*, and that a shared edge is claimed by
-exactly one of the two triangles meeting along it.
+Browser-only features have no place in a software renderer: the WebGL and WebGPU renderers, the CSS renderers, WebXR, audio, and video and canvas textures.
 
 ## Contributing
 
-Open an issue before a large change — the project is following a deliberate
-port order and welcomes company, but not surprise rewrites.
-
-`make check` must pass and `make coverage` must stay at 100% before anything
-merges. New code needs tests covering every branch and condition, not just
-every line.
-
-By contributing you agree your contribution is licensed on the same terms as
-the project, including the commercial-licensing arrangement described below.
+Open an issue before a large change. Run `make check` before you commit. Coverage must stay at 100%. Documentation must pass `make docs-check`. [CONTRIBUTING.md](CONTRIBUTING.md) has the rules and the steps to add a feature.
 
 ## License
 
-ThreeMojo is **free for noncommercial use** under the
-[PolyForm Noncommercial License 1.0.0](LICENSE) — personal projects, study,
-research, and use by charities, schools, and government bodies.
+ThreeMojo is free for noncommercial use under the [PolyForm Noncommercial License 1.0.0](LICENSE): personal projects, study, research, and use by charities, schools and government bodies.
 
-**Commercial use requires a paid license.** See
-[LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
+Commercial use requires a paid license. See [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
 
-Copyright © 2026 Seth Kitchen, PE
+Copyright © 2026 Seth Kitchen, PE.
 
-`math/` and `render/` are ported from three.js, which is MIT licensed. Those
-notices are preserved in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
-Nothing here restricts your rights in three.js itself, which you may always use
-under the MIT License directly. `coverage/` is entirely original work with no
-three.js lineage.
+`math/` and `render/` are ported from three.js, which is MIT licensed. Those notices are preserved in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md). Nothing here restricts your rights in three.js itself. `coverage/` is original work with no three.js lineage.

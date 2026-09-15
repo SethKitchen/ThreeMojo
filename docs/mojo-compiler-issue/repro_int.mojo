@@ -3,6 +3,14 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
+"""Reproducer for the Mojo compiler hang: this variant builds.
+
+The write-up is the wiki page "The Mojo compiler hang", whose source is
+docs/wiki/The-Mojo-compiler-hang.md. Do not add this file to a build
+target; build it by hand under a time limit.
+"""
+
+
 @no_inline
 def observe(id: StaticString, value: Bool) -> Bool:
     print(id, value)
