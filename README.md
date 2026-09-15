@@ -72,7 +72,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [BoxGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#box) [#13](https://github.com/SethKitchen/ThreeMojo/issues/13)
 - [x] [SphereGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#sphere) [#14](https://github.com/SethKitchen/ThreeMojo/issues/14)
 - [x] [PlaneGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#plane) [#15](https://github.com/SethKitchen/ThreeMojo/issues/15)
-- [ ] CircleGeometry and RingGeometry [#16](https://github.com/SethKitchen/ThreeMojo/issues/16)
+- [x] [CircleGeometry and RingGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#circle): pie slices and arcs with a start angle and a sweep [#16](https://github.com/SethKitchen/ThreeMojo/issues/16)
 - [ ] CylinderGeometry and ConeGeometry [#17](https://github.com/SethKitchen/ThreeMojo/issues/17)
 - [ ] TorusGeometry and TorusKnotGeometry [#18](https://github.com/SethKitchen/ThreeMojo/issues/18)
 - [ ] Polyhedron geometries: Icosahedron, Octahedron, Tetrahedron, Dodecahedron [#19](https://github.com/SethKitchen/ThreeMojo/issues/19)

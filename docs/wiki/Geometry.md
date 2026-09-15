@@ -1,8 +1,8 @@
 # Geometry
 
-`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. Three builders make a box, a sphere and a plane.
+`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. Five builders make a box, a sphere, a plane, a circle and a ring.
 
-three.js: `BufferGeometry`, `BufferAttribute`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`.
+three.js: `BufferGeometry`, `BufferAttribute`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`.
 
 ## BufferAttribute
 
@@ -62,9 +62,38 @@ A rectangle in the xy plane, facing +z, centered on the origin. The vertex order
 
 The texture coordinates run once across the rectangle. To tile an image, rewrite the `uv` attribute, as `examples/floor.mojo` does.
 
+## Circle
+
+```mojo
+var disk = circle(Length(1.0, METER), 32)                                       # a full disk
+var slice = circle(Length(1.0, METER), 8, Angle(90.0, DEGREE), Angle(180.0, DEGREE))  # a pie slice
+```
+
+A disk in the xy plane, facing +z, centered on the origin. Vertex zero is the center. The rim follows it, one vertex per segment and one more to close the seam. Each triangle runs from a rim vertex to the next one and back to the center.
+
+The third argument is where the rim starts, counter-clockwise from +x. The fourth is how far it sweeps. A full turn is the default. A shorter sweep makes a pie slice.
+
+The texture coordinates map the square around the disk onto the image. The center is `(0.5, 0.5)`. A pie slice shows its part of the image.
+
+## Ring
+
+```mojo
+var washer = ring(Length(0.5, METER), Length(1.0, METER), 32, 1)   # segments around, then across
+var arc = ring(Length(0.5, METER), Length(1.0, METER), 16, 1, Angle(0.0, DEGREE), Angle(90.0, DEGREE))
+```
+
+A flat ring in the xy plane, facing +z, centered on the origin. The first radius is the hole. The second is the outer edge. Vertices run in rows from the inner edge outwards, one per segment around and one more for the seam. The start angle and the sweep work as they do for the circle. A shorter sweep makes an arc.
+
+The texture coordinates map the square around the outer edge onto the image, as the circle's do.
+
+A ring with no hole is a disk. Use `circle` for it.
+
 ## Errors
 
 - A negative or zero extent raises.
 - A sphere with too few segments or rings raises.
 - A plane with fewer than one segment raises.
+- A circle needs a positive radius and at least three segments.
+- A ring needs a positive inner radius, a larger outer radius, three segments around and one across.
+- A sweep must be positive and at most one turn.
 - An index entry beyond the last vertex raises.

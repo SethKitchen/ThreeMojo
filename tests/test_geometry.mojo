@@ -3,12 +3,14 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Tests for `core.buffer_attribute`, `core.buffer_geometry` and `geometries.box`.
+"""Tests for `core.buffer_attribute`, `core.buffer_geometry` and the builders
+in `geometries`.
 """
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from geometries.box import box, cube
+from geometries.circle import circle, ring
 from geometries.plane import plane
 from geometries.sphere import sphere
 from math.vector3 import Vector3
@@ -20,7 +22,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import FOOT, Length, METER
+from units.si import Angle, DEGREE, FOOT, Length, METER, TURN
 
 comptime TOLERANCE = Float64(1e-6)
 
@@ -28,6 +30,44 @@ comptime TOLERANCE = Float64(1e-6)
 def floats(values: List[Float32]) -> List[Float32]:
     """Return a copy of `values`, for building attributes inline."""
     return values.copy()
+
+
+def assert_xy(got: Vector3, x: Float32, y: Float32) raises:
+    """Assert a flat vertex lies at (x, y, 0), within tolerance."""
+    assert_almost_equal(got.x, x, atol=Float64(1e-5))
+    assert_almost_equal(got.y, y, atol=Float64(1e-5))
+    assert_equal(got.z, Float32(0))
+
+
+def assert_flat_and_facing_plus_z(geometry: BufferGeometry) raises:
+    """Assert every vertex has z zero and the normal (0, 0, 1)."""
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref normals = geometry.attribute_view(String(NORMAL))
+    for vertex in range(geometry.vertex_count()):
+        assert_equal(positions.vector3(vertex).z, Float32(0))
+        var normal = normals.vector3(vertex)
+        assert_equal(normal.x, Float32(0))
+        assert_equal(normal.y, Float32(0))
+        assert_equal(normal.z, Float32(1))
+
+
+def assert_winds_counter_clockwise(geometry: BufferGeometry) raises:
+    """Assert every triangle has positive signed area seen from +z."""
+    for triangle in range(geometry.triangle_count()):
+        var a = geometry.corner(triangle, 0)
+        var b = geometry.corner(triangle, 1)
+        var c = geometry.corner(triangle, 2)
+        var area = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)
+        assert_true(area > 0, "a triangle winds clockwise")
+
+
+def assert_texture_coordinates_in_range(geometry: BufferGeometry) raises:
+    """Assert every texture coordinate lies between zero and one."""
+    ref uvs = geometry.attribute_view(String(UV))
+    for vertex in range(geometry.vertex_count()):
+        for axis in range(2):
+            var value = uvs.component(vertex, axis)
+            assert_true(value >= Float32(-1e-6) and value <= Float32(1 + 1e-6))
 
 
 def triangle_attribute() raises -> BufferAttribute:
@@ -591,6 +631,235 @@ def test_a_plane_needs_positive_extents_and_segments() raises:
         _ = plane(Length(1.0, METER), Length(1.0, METER), 0, 1)
     with assert_raises():
         _ = plane(Length(1.0, METER), Length(1.0, METER), 1, 0)
+
+
+# --- circle -----------------------------------------------------------------
+
+
+def test_a_circle_is_a_fan_around_a_center_vertex() raises:
+    var disk = circle(Length(1.0, METER), 8)
+    # The center, then a rim of nine: one per segment and one to close.
+    assert_equal(disk.vertex_count(), 8 + 2)
+    assert_equal(disk.triangle_count(), 8)
+    assert_xy(disk.attribute_view(String(POSITION)).vector3(0), 0, 0)
+    for triangle in range(disk.triangle_count()):
+        assert_equal(disk.corner_index(triangle, 2), 0)
+
+
+def test_a_circle_is_flat_and_faces_plus_z() raises:
+    assert_flat_and_facing_plus_z(circle(Length(1.0, METER), 8))
+
+
+def test_every_circle_rim_vertex_lies_on_the_rim() raises:
+    var disk = circle(Length(3.0, METER), 12)
+    ref positions = disk.attribute_view(String(POSITION))
+    for vertex in range(1, disk.vertex_count()):
+        assert_almost_equal(
+            positions.vector3(vertex).length(), Float32(3), atol=Float64(1e-5)
+        )
+
+
+def test_a_circle_starts_at_plus_x_and_runs_counter_clockwise() raises:
+    var disk = circle(Length(2.0, METER), 4)
+    ref positions = disk.attribute_view(String(POSITION))
+    # Rim vertices at 0, 90, 180 and 270 degrees, then the seam.
+    assert_xy(positions.vector3(1), 2, 0)
+    assert_xy(positions.vector3(2), 0, 2)
+    assert_xy(positions.vector3(3), -2, 0)
+    assert_xy(positions.vector3(4), 0, -2)
+    # The last rim vertex sits on the first, as the sphere's seam does.
+    assert_xy(positions.vector3(5), 2, 0)
+
+
+def test_circle_triangles_wind_counter_clockwise_from_the_front() raises:
+    assert_winds_counter_clockwise(circle(Length(1.0, METER), 7))
+
+
+def test_a_circle_maps_its_bounding_square_onto_the_image() raises:
+    var disk = circle(Length(2.0, METER), 4)
+    ref uvs = disk.attribute_view(String(UV))
+    # The center is the middle of the image.
+    assert_equal(uvs.component(0, 0), Float32(0.5))
+    assert_equal(uvs.component(0, 1), Float32(0.5))
+    # The +x rim vertex touches the right edge, halfway up.
+    assert_almost_equal(uvs.component(1, 0), Float32(1), atol=TOLERANCE)
+    assert_almost_equal(uvs.component(1, 1), Float32(0.5), atol=TOLERANCE)
+    # The +y rim vertex touches the top edge, halfway across.
+    assert_almost_equal(uvs.component(2, 0), Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(uvs.component(2, 1), Float32(1), atol=TOLERANCE)
+    assert_texture_coordinates_in_range(disk)
+
+
+def test_a_circle_with_a_partial_sweep_is_a_pie_slice() raises:
+    var slice = circle(
+        Length(1.0, METER), 4, Angle(90.0, DEGREE), Angle(180.0, DEGREE)
+    )
+    assert_equal(slice.triangle_count(), 4)
+    ref positions = slice.attribute_view(String(POSITION))
+    # Four segments from +y round through -x to -y.
+    assert_xy(positions.vector3(1), 0, 1)
+    assert_xy(positions.vector3(3), -1, 0)
+    assert_xy(positions.vector3(5), 0, -1)
+    assert_winds_counter_clockwise(slice)
+
+
+def test_a_full_turn_in_degrees_closes_a_circle() raises:
+    var disk = circle(
+        Length(1.0, METER), 8, Angle(0.0, DEGREE), Angle(360.0, DEGREE)
+    )
+    assert_xy(disk.attribute_view(String(POSITION)).vector3(9), 1, 0)
+
+
+def test_a_circle_can_be_measured_in_feet() raises:
+    var disk = circle(Length(1.0, FOOT), 8)
+    assert_almost_equal(
+        disk.attribute_view(String(POSITION)).vector3(1).x,
+        Float32(0.3048),
+        atol=Float64(1e-5),
+    )
+
+
+def test_a_circle_with_no_radius_is_rejected() raises:
+    with assert_raises():
+        _ = circle(Length(0.0, METER))
+    with assert_raises():
+        _ = circle(Length(-1.0, METER))
+
+
+def test_a_circle_needs_three_segments() raises:
+    with assert_raises():
+        _ = circle(Length(1.0, METER), 2)
+
+
+def test_a_sweep_must_be_positive_and_at_most_a_turn() raises:
+    var radius = Length(1.0, METER)
+    var start = Angle(0.0, DEGREE)
+    with assert_raises():
+        _ = circle(radius, 8, start, Angle(0.0, DEGREE))
+    with assert_raises():
+        _ = circle(radius, 8, start, Angle(-90.0, DEGREE))
+    with assert_raises():
+        _ = circle(radius, 8, start, Angle(361.0, DEGREE))
+    with assert_raises():
+        _ = ring(radius, Length(2.0, METER), 8, 1, start, Angle(2.0, TURN))
+    with assert_raises():
+        _ = ring(radius, Length(2.0, METER), 8, 1, start, Angle(0.0, TURN))
+
+
+# --- ring -------------------------------------------------------------------
+
+
+def test_a_ring_has_a_row_of_vertices_per_radius() raises:
+    var washer = ring(Length(1.0, METER), Length(2.0, METER), 8, 3)
+    assert_equal(washer.vertex_count(), (8 + 1) * (3 + 1))
+    assert_equal(washer.triangle_count(), 2 * 8 * 3)
+    assert_equal(
+        ring(Length(1.0, METER), Length(2.0, METER)).triangle_count(), 64
+    )
+
+
+def test_a_ring_is_flat_and_faces_plus_z() raises:
+    assert_flat_and_facing_plus_z(
+        ring(Length(1.0, METER), Length(2.0, METER), 8, 2)
+    )
+
+
+def test_ring_rows_step_from_the_inner_radius_to_the_outer() raises:
+    var washer = ring(Length(1.0, METER), Length(3.0, METER), 6, 4)
+    ref positions = washer.attribute_view(String(POSITION))
+    for row in range(5):
+        var expected = Float32(1) + Float32(row) * Float32(0.5)
+        for column in range(7):
+            assert_almost_equal(
+                positions.vector3(row * 7 + column).length(),
+                expected,
+                atol=Float64(1e-5),
+            )
+
+
+def test_a_ring_starts_at_plus_x_and_closes_at_the_seam() raises:
+    var washer = ring(Length(1.0, METER), Length(2.0, METER), 4, 1)
+    ref positions = washer.attribute_view(String(POSITION))
+    # The inner row first: 0, 90, 180 and 270 degrees, then the seam.
+    assert_xy(positions.vector3(0), 1, 0)
+    assert_xy(positions.vector3(1), 0, 1)
+    assert_xy(positions.vector3(4), 1, 0)
+    # Then the outer row.
+    assert_xy(positions.vector3(5), 2, 0)
+    assert_xy(positions.vector3(7), -2, 0)
+
+
+def test_ring_triangles_wind_counter_clockwise_from_the_front() raises:
+    assert_winds_counter_clockwise(
+        ring(Length(1.0, METER), Length(2.0, METER), 5, 2)
+    )
+
+
+def test_no_ring_triangle_is_degenerate() raises:
+    var washer = ring(Length(1.0, METER), Length(2.0, METER), 6, 2)
+    for triangle in range(washer.triangle_count()):
+        var a = washer.corner(triangle, 0)
+        var first = washer.corner(triangle, 1)
+        first.sub(a)
+        var second = washer.corner(triangle, 2)
+        second.sub(a)
+        first.cross(second)
+        assert_true(first.length() > Float32(1e-6))
+
+
+def test_a_ring_maps_the_outer_bounding_square_onto_the_image() raises:
+    var washer = ring(Length(1.0, METER), Length(2.0, METER), 4, 1)
+    ref uvs = washer.attribute_view(String(UV))
+    # The inner vertex at +x is three quarters of the way across, halfway up.
+    assert_almost_equal(uvs.component(0, 0), Float32(0.75), atol=TOLERANCE)
+    assert_almost_equal(uvs.component(0, 1), Float32(0.5), atol=TOLERANCE)
+    # The outer vertex at +x touches the right edge.
+    assert_almost_equal(uvs.component(5, 0), Float32(1), atol=TOLERANCE)
+    assert_texture_coordinates_in_range(washer)
+
+
+def test_a_ring_with_a_partial_sweep_is_an_arc() raises:
+    var arc = ring(
+        Length(1.0, METER),
+        Length(2.0, METER),
+        4,
+        1,
+        Angle(0.0, DEGREE),
+        Angle(90.0, DEGREE),
+    )
+    ref positions = arc.attribute_view(String(POSITION))
+    assert_xy(positions.vector3(0), 1, 0)
+    # Each row ends at +y: the inner row at its radius, the outer at its.
+    assert_xy(positions.vector3(4), 0, 1)
+    assert_xy(positions.vector3(9), 0, 2)
+    assert_winds_counter_clockwise(arc)
+
+
+def test_a_ring_can_be_measured_in_feet() raises:
+    var washer = ring(Length(1.0, FOOT), Length(2.0, FOOT), 8)
+    assert_almost_equal(
+        washer.attribute_view(String(POSITION)).vector3(0).x,
+        Float32(0.3048),
+        atol=Float64(1e-5),
+    )
+
+
+def test_a_ring_needs_a_hole_inside_its_rim() raises:
+    with assert_raises():
+        _ = ring(Length(0.0, METER), Length(1.0, METER))
+    with assert_raises():
+        _ = ring(Length(-1.0, METER), Length(1.0, METER))
+    with assert_raises():
+        _ = ring(Length(1.0, METER), Length(1.0, METER))
+    with assert_raises():
+        _ = ring(Length(2.0, METER), Length(1.0, METER))
+
+
+def test_a_ring_needs_enough_segments() raises:
+    with assert_raises():
+        _ = ring(Length(1.0, METER), Length(2.0, METER), 2, 1)
+    with assert_raises():
+        _ = ring(Length(1.0, METER), Length(2.0, METER), 8, 0)
 
 
 def main() raises:
