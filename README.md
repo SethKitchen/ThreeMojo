@@ -171,7 +171,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Vector2, Vector3, Matrix4 and projection matrices](https://github.com/SethKitchen/ThreeMojo/wiki/Math) [#91](https://github.com/SethKitchen/ThreeMojo/issues/91)
 - [x] [Compile-time units](https://github.com/SethKitchen/ThreeMojo/wiki/Units): meters, degrees, dimension checks [#92](https://github.com/SethKitchen/ThreeMojo/issues/92)
 - [x] [Coverage tool](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool): line, branch, condition and MC/DC [#93](https://github.com/SethKitchen/ThreeMojo/issues/93)
-- [ ] Euler angles from a quaternion [#94](https://github.com/SethKitchen/ThreeMojo/issues/94)
+- [x] [Euler angles from a quaternion](https://github.com/SethKitchen/ThreeMojo/wiki/Rotations#euler-and-eulerorder): all six orders, gimbal lock as in three.js, `Object3D.rotation` [#94](https://github.com/SethKitchen/ThreeMojo/issues/94)
 - [ ] Matrix3 and Vector4 [#95](https://github.com/SethKitchen/ThreeMojo/issues/95)
 - [ ] Box3, Sphere and Plane [#96](https://github.com/SethKitchen/ThreeMojo/issues/96)
 - [ ] Ray and Raycaster [#97](https://github.com/SethKitchen/ThreeMojo/issues/97)

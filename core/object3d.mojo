@@ -182,6 +182,27 @@ struct Object3D(ImplicitlyCopyable):
         """Set the rotation directly, three.js's `quaternion.copy`."""
         self.quaternion = quaternion
 
+    def rotation(self, order: EulerOrder = XYZ) raises -> Euler:
+        """Return the rotation as three angles, three.js's `Object3D.rotation`.
+
+        Read out of the quaternion, which is the truth: `rotate_y` and
+        `look_at` change the quaternion, and this decomposes whatever they
+        left. `set_rotation` with the result gives the same rotation back.
+        The numbers can differ from the ones that were set: past a right
+        angle on the middle axis, and at gimbal lock, more than one triple
+        makes the same rotation and this returns three.js's.
+
+        Args:
+            order: Which axis the angles turn about first, second and third.
+
+        Returns:
+            The angles, in `order`.
+
+        Raises:
+            Error: If `order` does not name three different axes.
+        """
+        return Euler.from_quaternion(self.quaternion, order)
+
     def rotate_on_axis(mut self, axis: Vector3, angle: Angle):
         """Turn this node about one of its *own* axes.
 

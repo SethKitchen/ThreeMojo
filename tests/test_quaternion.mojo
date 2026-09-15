@@ -5,7 +5,18 @@
 
 """Tests for `math.quaternion` and `math.euler`."""
 
-from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler
+from math.euler import (
+    AXIS_X,
+    AXIS_Y,
+    XYZ,
+    XZY,
+    YXZ,
+    YZX,
+    ZXY,
+    ZYX,
+    Euler,
+    EulerOrder,
+)
 from math.matrix4 import Matrix4, rotation_x, rotation_y, rotation_z
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
@@ -13,11 +24,46 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
+    assert_raises,
     assert_true,
 )
 from units.si import Angle, DEGREE
 
 comptime TOLERANCE = Float64(1e-5)
+
+
+def angle_about(euler: Euler, axis: Int) -> Angle:
+    """Return the angle `euler` holds for one axis index."""
+    if axis == AXIS_X:
+        return euler.x
+    if axis == AXIS_Y:
+        return euler.y
+    return euler.z
+
+
+def euler_in(
+    order: EulerOrder, first: Float32, second: Float32, third: Float32
+) -> Euler:
+    """Return an `Euler` with these angles, in degrees, about the axes
+    `order` names first, second and third."""
+    var degrees = Array[Float32, 3](fill=0.0)
+    degrees[order.first] = first
+    degrees[order.second] = second
+    degrees[order.third] = third
+    return Euler(
+        Angle(degrees[0], DEGREE),
+        Angle(degrees[1], DEGREE),
+        Angle(degrees[2], DEGREE),
+        order,
+    )
+
+
+def assert_angles(euler: Euler, x: Float32, y: Float32, z: Float32) raises:
+    """Assert three angles, in degrees, within a thousandth of a degree."""
+    assert_almost_equal(euler.x.to(DEGREE), x, atol=Float64(1e-3))
+    assert_almost_equal(euler.y.to(DEGREE), y, atol=Float64(1e-3))
+    assert_almost_equal(euler.z.to(DEGREE), z, atol=Float64(1e-3))
 
 
 def assert_point(got: Vector3, x: Float32, y: Float32, z: Float32) raises:
@@ -239,6 +285,125 @@ def test_the_six_orders_are_six_rotations() raises:
                 ):
                     differ = True
             assert_true(differ, "two orders gave the same matrix")
+
+
+# --- euler from a rotation --------------------------------------------------
+
+
+def test_every_order_reads_its_own_angles_back() raises:
+    # Angles all inside a right angle, where the decomposition is unique.
+    var orders = [XYZ, YXZ, ZXY, ZYX, YZX, XZY]
+    for order in orders:
+        var euler = Euler(
+            Angle(31.0, DEGREE),
+            Angle(-47.0, DEGREE),
+            Angle(63.0, DEGREE),
+            order,
+        )
+        var back = Euler.from_matrix(euler.to_matrix(), order)
+        assert_angles(back, 31, -47, 63)
+        assert_true(back.order == order)
+
+
+def test_angles_read_from_a_matrix_rebuild_it_for_every_order() raises:
+    # Past a right angle the numbers come back different, and the rotation
+    # the same.
+    var orders = [XYZ, YXZ, ZXY, ZYX, YZX, XZY]
+    for order in orders:
+        var matrix = Euler(
+            Angle(31.0, DEGREE),
+            Angle(-47.0, DEGREE),
+            Angle(113.0, DEGREE),
+            order,
+        ).to_matrix()
+        assert_same_matrix(
+            Euler.from_matrix(matrix, order).to_matrix(), matrix, Float64(1e-4)
+        )
+
+
+def test_from_quaternion_reads_the_same_angles_as_from_matrix() raises:
+    var orders = [XYZ, YXZ, ZXY, ZYX, YZX, XZY]
+    for order in orders:
+        var euler = Euler(
+            Angle(31.0, DEGREE),
+            Angle(-47.0, DEGREE),
+            Angle(63.0, DEGREE),
+            order,
+        )
+        var back = Euler.from_quaternion(euler.to_quaternion(), order)
+        assert_angles(back, 31, -47, 63)
+
+
+def test_the_identity_reads_as_three_zero_angles_in_xyz() raises:
+    var back = Euler.from_quaternion(Quaternion.identity())
+    assert_angles(back, 0, 0, 0)
+    assert_true(back.order == XYZ)
+
+
+def test_a_turn_about_one_axis_reads_back_on_that_axis() raises:
+    assert_angles(Euler.from_matrix(rotation_x(Angle(40.0, DEGREE))), 40, 0, 0)
+    assert_angles(
+        Euler.from_matrix(rotation_y(Angle(40.0, DEGREE)), ZYX), 0, 40, 0
+    )
+    assert_angles(
+        Euler.from_matrix(rotation_z(Angle(-40.0, DEGREE)), YZX), 0, 0, -40
+    )
+
+
+def test_gimbal_lock_puts_everything_in_the_first_angle() raises:
+    var orders = [XYZ, YXZ, ZXY, ZYX, YZX, XZY]
+    for order in orders:
+        # A right angle in the middle folds the first axis onto the third,
+        # so the first and third angles add when the axes run x, y, z round
+        # and subtract when they run backwards.
+        var locked = euler_in(order, 30, 90, 25)
+        var expected = Float32(55)
+        if not order.is_cyclic():
+            expected = 5
+        var back = Euler.from_matrix(locked.to_matrix(), order)
+        assert_almost_equal(
+            angle_about(back, order.first).to(DEGREE),
+            expected,
+            atol=Float64(1e-3),
+        )
+        assert_almost_equal(
+            angle_about(back, order.second).to(DEGREE),
+            Float32(90),
+            atol=Float64(1e-3),
+        )
+        assert_equal(angle_about(back, order.third).value, Float32(0))
+        # And the rotation is unchanged.
+        assert_same_matrix(back.to_matrix(), locked.to_matrix(), Float64(1e-4))
+
+
+def test_gimbal_lock_the_other_way_round() raises:
+    var locked = euler_in(XYZ, 30, -90, 25)
+    var back = Euler.from_matrix(locked.to_matrix())
+    assert_angles(back, 5, -90, 0)
+    assert_same_matrix(back.to_matrix(), locked.to_matrix(), Float64(1e-4))
+
+
+def test_an_order_must_name_three_different_axes() raises:
+    assert_true(XYZ.is_valid())
+    assert_false(EulerOrder(-1, 1, 2).is_valid())
+    assert_false(EulerOrder(0, 3, 2).is_valid())
+    assert_false(EulerOrder(0, 1, -1).is_valid())
+    assert_false(EulerOrder(0, 0, 1).is_valid())
+    assert_false(EulerOrder(0, 1, 1).is_valid())
+    assert_false(EulerOrder(0, 1, 0).is_valid())
+    with assert_raises():
+        _ = Euler.from_matrix(Matrix4(), EulerOrder(0, 0, 1))
+    with assert_raises():
+        _ = Euler.from_quaternion(Quaternion.identity(), EulerOrder(2, 2, 2))
+
+
+def test_three_orders_run_the_axes_round_and_three_run_them_back() raises:
+    assert_true(XYZ.is_cyclic())
+    assert_true(YZX.is_cyclic())
+    assert_true(ZXY.is_cyclic())
+    assert_false(YXZ.is_cyclic())
+    assert_false(ZYX.is_cyclic())
+    assert_false(XZY.is_cyclic())
 
 
 def main() raises:

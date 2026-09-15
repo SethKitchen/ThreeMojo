@@ -8,7 +8,7 @@
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from core.object3d import NO_PARENT, Object3D
-from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler
+from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.projection import look_at
 from math.quaternion import Quaternion
 from core.scene import Scene
@@ -536,6 +536,30 @@ def test_set_rotation_takes_an_euler() raises:
         Euler(Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(90.0, DEGREE), XYZ)
     )
     assert_point(node.local_matrix().transform_point(Vector3(1, 0, 0)), 0, 1, 0)
+
+
+def test_rotation_reads_the_angles_back_from_the_quaternion() raises:
+    var node = Object3D()
+    node.set_euler(
+        Angle(20.0, DEGREE), Angle(-35.0, DEGREE), Angle(50.0, DEGREE), ZYX
+    )
+    var back = node.rotation(ZYX)
+    assert_almost_equal(back.x.to(DEGREE), Float32(20), atol=Float64(1e-3))
+    assert_almost_equal(back.y.to(DEGREE), Float32(-35), atol=Float64(1e-3))
+    assert_almost_equal(back.z.to(DEGREE), Float32(50), atol=Float64(1e-3))
+    # After a turn about the local y the angles still compose to the
+    # quaternion, and the order defaults to XYZ as three.js's does.
+    node.rotate_y(Angle(10.0, DEGREE))
+    var turned = node.rotation()
+    assert_true(turned.order == XYZ)
+    var rebuilt = turned.to_quaternion().to_matrix()
+    var truth = node.quaternion.to_matrix()
+    for index in range(16):
+        assert_almost_equal(
+            rebuilt.elements[index], truth.elements[index], atol=Float64(1e-4)
+        )
+    with assert_raises():
+        _ = node.rotation(EulerOrder(1, 1, 1))
 
 
 def test_set_quaternion_is_taken_as_given() raises:

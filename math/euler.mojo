@@ -12,23 +12,32 @@ intrinsic axes -- `XYZ` turns about x, then about the y axis as it now lies,
 then about the z axis as it now lies -- which as a matrix is Rx * Ry * Rz, the
 last-named rotation being the one a point meets first.
 
-An `Euler` converts *to* a quaternion or a matrix; it does not come back
-from one. three.js reads angles out of a rotation matrix for all six orders,
-and `Object3D.rotation` there stays in step with the quaternion by doing so.
-Here `Object3D` holds the quaternion as the truth and an `Euler` is a thing
-you set it from, which is all the examples and the tests have needed. The
-decomposition is a well-defined next step, not a missing half.
+An `Euler` converts to a quaternion or a matrix and comes back from either,
+for all six orders, as three.js's `setFromRotationMatrix` and
+`setFromQuaternion` do. `Object3D` holds the quaternion as the truth and
+`rotation()` decomposes it on request, so the angles are never stale and
+never stored twice. Reading them back is exact away from gimbal lock. At
+lock, where the middle angle is a right angle, the first and third axes lie
+along one line and only one combination of their angles is defined; all of
+it goes to the first angle and the third is zero, as in three.js.
 """
 
 from math.matrix4 import Matrix4, rotation_x, rotation_y, rotation_z
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from units.si import Angle
+from std.math import asin, atan2
+from units.si import Angle, RADIAN
 
 # The three axes, as the index each rotation helper answers to.
 comptime AXIS_X = 0
 comptime AXIS_Y = 1
 comptime AXIS_Z = 2
+
+# Past this the middle angle's sine is one to Float32 precision: the outer
+# two axes have folded onto each other and only one combination of their
+# angles is defined. three.js's threshold, so both ports lock at the same
+# angle.
+comptime LOCK_THRESHOLD = Float32(0.9999999)
 
 
 @fieldwise_init
@@ -43,6 +52,43 @@ struct EulerOrder(Equatable, ImplicitlyCopyable, Writable):
     var first: Int
     var second: Int
     var third: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names three different axes.
+
+        The six named orders are valid. `EulerOrder(0, 0, 1)` is the right
+        type holding a wrong value, and `Euler.from_matrix` refuses it.
+        """
+        var each_an_axis = (
+            _is_axis(self.first)
+            and _is_axis(self.second)
+            and _is_axis(self.third)
+        )
+        return (
+            each_an_axis
+            and self.first != self.second
+            and self.second != self.third
+            and self.first != self.third
+        )
+
+    def is_cyclic(self) -> Bool:
+        """Return True if the axes run x, y, z round: `XYZ`, `YZX` or `ZXY`.
+
+        The other three run the cycle backwards, and every sign in the
+        decomposition flips with them.
+        """
+        return self.second == (self.first + 1) % 3
+
+
+def _is_axis(axis: Int) -> Bool:
+    """Return True if `axis` is one of the three axis indices."""
+    return axis >= AXIS_X and axis <= AXIS_Z
+
+
+def _clamp_unit(value: Float32) -> Float32:
+    """Return `value` held to minus one through one, so `asin` never sees a
+    rounding error past the edge."""
+    return max(Float32(-1), min(Float32(1), value))
 
 
 # The six orders three.js accepts. `XYZ` is its default and this port's.
@@ -71,6 +117,82 @@ struct Euler(ImplicitlyCopyable):
     var y: Angle
     var z: Angle
     var order: EulerOrder
+
+    @staticmethod
+    def from_matrix(matrix: Matrix4, order: EulerOrder = XYZ) raises -> Euler:
+        """Return the angles that compose, in `order`, to the rotation in
+        `matrix`.
+
+        three.js's `setFromRotationMatrix`, with its six cases folded into
+        one. For an order (i, j, k) the product Ri * Rj * Rk puts the sine
+        of the middle angle, alone, at row i column k: with a plus sign when
+        the axes run x, y, z round and a minus sign when they run backwards.
+        The outer two angles come out of the same row and column as an
+        `atan2` each, under the same sign rule. The six cases three.js
+        spells out are this formula six times, and a test holds it to
+        `to_matrix` for every one.
+
+        When the middle angle is a right angle the first and third axes lie
+        along one line and only one combination of their angles is defined:
+        gimbal lock. All of it goes to the first angle and the third is
+        zero, as in three.js, at the same threshold.
+
+        Args:
+            matrix: A pure rotation. A scale in it comes out as wrong angles
+                rather than an error, as in three.js and in
+                `Quaternion.from_matrix`.
+            order: Which axis the returned angles turn about first, second
+                and third.
+
+        Returns:
+            Three angles that `to_matrix` turns back into `matrix`.
+
+        Raises:
+            Error: If `order` does not name three different axes.
+        """
+        if not order.is_valid():
+            raise Error("An Euler order must name three different axes")
+        var i = order.first
+        var j = order.second
+        var k = order.third
+        var sign = Float32(1)
+        if not order.is_cyclic():
+            sign = -1
+        var middle_sine = sign * matrix.get(i, k)
+        var middle = asin(_clamp_unit(middle_sine))
+        var first: Float32
+        var third: Float32
+        if abs(middle_sine) < LOCK_THRESHOLD:
+            first = atan2(-sign * matrix.get(j, k), matrix.get(k, k))
+            third = atan2(-sign * matrix.get(i, j), matrix.get(i, i))
+        else:
+            first = atan2(sign * matrix.get(k, j), matrix.get(j, j))
+            third = 0
+        return _angles_by_axis(order, first, middle, third)
+
+    @staticmethod
+    def from_quaternion(
+        quaternion: Quaternion, order: EulerOrder = XYZ
+    ) raises -> Euler:
+        """Return the angles that compose, in `order`, to `quaternion`.
+
+        three.js's `setFromQuaternion`: the quaternion becomes a matrix and
+        `from_matrix` reads the angles out of that. The quaternion must be
+        unit length, as every one this library makes is.
+
+        Args:
+            quaternion: A unit quaternion.
+            order: Which axis the returned angles turn about first, second
+                and third.
+
+        Returns:
+            Three angles that `to_quaternion` turns back into the same
+            rotation.
+
+        Raises:
+            Error: If `order` does not name three different axes.
+        """
+        return Euler.from_matrix(quaternion.to_matrix(), order)
 
     def _angle_about(self, axis: Int) -> Angle:
         """Return the angle this holds for one axis."""
@@ -135,3 +257,20 @@ def _rotation_about(axis: Int, euler: Euler) -> Matrix4:
     if axis == AXIS_Y:
         return rotation_y(euler.y)
     return rotation_z(euler.z)
+
+
+def _angles_by_axis(
+    order: EulerOrder, first: Float32, second: Float32, third: Float32
+) -> Euler:
+    """Return an `Euler` whose x, y and z are the radians about the axes
+    `order` names first, second and third."""
+    var about = Array[Float32, 3](fill=0.0)
+    about[order.first] = first
+    about[order.second] = second
+    about[order.third] = third
+    return Euler(
+        Angle(about[0], RADIAN),
+        Angle(about[1], RADIAN),
+        Angle(about[2], RADIAN),
+        order,
+    )
