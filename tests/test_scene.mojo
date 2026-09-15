@@ -562,6 +562,39 @@ def test_rotation_reads_the_angles_back_from_the_quaternion() raises:
         _ = node.rotation(EulerOrder(1, 1, 1))
 
 
+def test_rotation_is_a_snapshot_to_edit_and_set_back() raises:
+    # three.js's `rotation.y += angle`, in three steps: nothing moves until
+    # the edited angles are set back.
+    var node = Object3D()
+    node.set_euler(Angle(20.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE))
+    var angles = node.rotation()
+    angles.y = Angle(30.0, DEGREE)
+    assert_almost_equal(
+        node.rotation().y.to(DEGREE), Float32(0), atol=Float64(1e-3)
+    )
+    node.set_rotation(angles)
+    assert_almost_equal(
+        node.rotation().y.to(DEGREE), Float32(30), atol=Float64(1e-3)
+    )
+    assert_almost_equal(
+        node.rotation().x.to(DEGREE), Float32(20), atol=Float64(1e-3)
+    )
+
+
+def test_setting_a_rotation_needs_an_order_of_three_different_axes() raises:
+    var node = Object3D()
+    var angle = Angle(10.0, DEGREE)
+    with assert_raises():
+        node.set_euler(angle, angle, angle, EulerOrder(0, 0, 1))
+    with assert_raises():
+        node.set_rotation(Euler(angle, angle, angle, EulerOrder(2, 2, 2)))
+    # And the rotation is as it was.
+    var back = node.rotation()
+    assert_almost_equal(back.x.value, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(back.y.value, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(back.z.value, Float32(0), atol=TOLERANCE)
+
+
 def test_set_quaternion_is_taken_as_given() raises:
     var node = Object3D()
     node.set_quaternion(
@@ -665,9 +698,9 @@ def test_a_scene_look_at_is_not_fooled_by_a_parent_that_swaps_axes() raises:
 
 
 def test_a_scene_look_at_undoes_only_the_parents_rotation() raises:
-    # A scaled and turned parent: the scale is normalized away before its
-    # rotation is undone, as three.js does, so the child still faces the
-    # target in the world.
+    # A uniformly scaled and turned parent: the scale is normalized away
+    # before its rotation is undone, as three.js does, so the child still
+    # faces the target in the world.
     var scene = Scene()
     var pivot = Object3D()
     pivot.set_scale(2, 2, 2)
@@ -683,18 +716,43 @@ def test_a_scene_look_at_undoes_only_the_parents_rotation() raises:
     )
     forward.normalize()
     assert_point(forward, 0, 0, -1)
-    # Non-uniform scale with no rotation: the direction survives it.
+
+
+def test_a_scene_look_at_refuses_a_nonuniformly_scaled_or_sheared_parent() raises:
+    # A parent scaled (2, 1, 1) bends every direction that is not along one
+    # of its axes. A child at its origin told to face (1, 1, 0) would, with
+    # the scale normalized away as three.js does, face (2, 1, 0) in the
+    # world instead: eighteen degrees off. So the parent is refused.
+    var scene = Scene()
+    var stretch = Object3D()
+    stretch.set_scale(2, 1, 1)
+    var base = scene.add(stretch^)
+    var child = scene.attach(node_at(0, 0, 0), base)
+    scene.update()
+    with assert_raises():
+        scene.look_at(child, Vector3(1, 1, 0))
+    # Even for a target along one of the parent's axes, where the direction
+    # would have survived: the rule is about the parent, not the target.
     var flat = Scene()
     var squash = Object3D()
     squash.set_scale(3, 1, 0.5)
-    var base = flat.add(squash^)
-    var eye = flat.attach(node_at(0, 0, 4), base)
+    var floor = flat.add(squash^)
+    var eye = flat.attach(node_at(0, 0, 4), floor)
     flat.update()
-    flat.look_at(eye, Vector3(5, 0, 2))
-    flat.update()
-    var toward = flat.world_matrix(eye).transform_direction(Vector3(0, 0, 1))
-    toward.normalize()
-    assert_point(toward, 1, 0, 0)
+    with assert_raises():
+        flat.look_at(eye, Vector3(5, 0, 2))
+    # A sheared parent: a nonuniform scale above a turn.
+    var skew = Scene()
+    var group = Object3D()
+    group.set_scale(2, 1, 1)
+    var top = skew.add(group^)
+    var pivot = Object3D()
+    pivot.set_euler(Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(45.0, DEGREE))
+    var rig = skew.attach(pivot^, top)
+    var leaf = skew.attach(node_at(0, 0, 1), rig)
+    skew.update()
+    with assert_raises():
+        skew.look_at(leaf, Vector3(0, 0, 0))
 
 
 def test_a_scene_look_at_refuses_a_mirrored_or_flattened_parent() raises:

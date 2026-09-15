@@ -70,6 +70,17 @@ def assert_texture_coordinates_in_range(geometry: BufferGeometry) raises:
             assert_true(value >= Float32(-1e-6) and value <= Float32(1 + 1e-6))
 
 
+def signed_area(geometry: BufferGeometry) raises -> Float32:
+    """Return the summed signed area of every triangle, seen from +z."""
+    var total = Float32(0)
+    for triangle in range(geometry.triangle_count()):
+        var a = geometry.corner(triangle, 0)
+        var b = geometry.corner(triangle, 1)
+        var c = geometry.corner(triangle, 2)
+        total += ((b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x)) / 2
+    return total
+
+
 def triangle_attribute() raises -> BufferAttribute:
     """Return one triangle's worth of positions.
 
@@ -703,6 +714,21 @@ def test_a_circle_with_a_partial_sweep_is_a_pie_slice() raises:
     assert_winds_counter_clockwise(slice)
 
 
+def test_a_circles_area_is_its_fan_of_triangles() raises:
+    # N triangles of radius r over a sweep cover N / 2 * r^2 * sin(sweep / N),
+    # which tends to pi r^2 as N grows. Twelve segments at a radius of one
+    # and a half: 6 * 2.25 * sin(30 degrees).
+    var disk = circle(Length(1.5, METER), 12)
+    assert_almost_equal(signed_area(disk), Float32(6.75), atol=Float64(1e-4))
+    # Four segments over a half turn at a radius of two: 2 * 4 * sin(45).
+    var half = circle(
+        Length(2.0, METER), 4, Angle(0.0, DEGREE), Angle(180.0, DEGREE)
+    )
+    assert_almost_equal(
+        signed_area(half), Float32(8 * 0.70710678), atol=Float64(1e-4)
+    )
+
+
 def test_a_full_turn_in_degrees_closes_a_circle() raises:
     var disk = circle(
         Length(1.0, METER), 8, Angle(0.0, DEGREE), Angle(360.0, DEGREE)
@@ -833,6 +859,33 @@ def test_a_ring_with_a_partial_sweep_is_an_arc() raises:
     assert_xy(positions.vector3(4), 0, 1)
     assert_xy(positions.vector3(9), 0, 2)
     assert_winds_counter_clockwise(arc)
+
+
+def test_a_rings_area_is_the_outer_fan_less_the_inner() raises:
+    # N cells round cover N / 2 * (R^2 - r^2) * sin(sweep / N), however
+    # many rows they are cut into. Eight cells from one to two:
+    # 4 * 3 * sin(45 degrees).
+    var expected = Float32(12 * 0.70710678)
+    assert_almost_equal(
+        signed_area(ring(Length(1.0, METER), Length(2.0, METER), 8, 1)),
+        expected,
+        atol=Float64(1e-4),
+    )
+    assert_almost_equal(
+        signed_area(ring(Length(1.0, METER), Length(2.0, METER), 8, 3)),
+        expected,
+        atol=Float64(1e-4),
+    )
+    # Three cells over a quarter turn from one to three: 1.5 * 8 * sin(30).
+    var arc = ring(
+        Length(1.0, METER),
+        Length(3.0, METER),
+        3,
+        2,
+        Angle(30.0, DEGREE),
+        Angle(90.0, DEGREE),
+    )
+    assert_almost_equal(signed_area(arc), Float32(6), atol=Float64(1e-4))
 
 
 def test_a_ring_can_be_measured_in_feet() raises:

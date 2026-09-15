@@ -15,8 +15,12 @@ the outer, a column at each angle, and two triangles per cell.
 A circle with a partial sweep is a pie slice and a ring with one is an arc.
 The sweep starts at `theta_start`, measured counter-clockwise from +x, and
 runs for `theta_length`. A full turn puts the first and last vertex of a rim
-in the same place, as the sphere's seam does: three.js emits both, and so
-does this, because a texture coordinate cannot be both zero and one.
+in the same place. three.js emits both, and so does this, so that a rim is
+one run of `segments + 1` vertices and the index one plain sequence whether
+the sweep closes or not. The two seam vertices carry the same texture
+coordinate, because the coordinates come from the position and not from the
+angle; the sphere's seam, whose u comes from the angle, is the one that
+needs two vertices to hold both zero and one.
 
 Texture coordinates map the bounding square of the outer radius onto the
 image: the center is (0.5, 0.5) and the rim of a full circle touches the four

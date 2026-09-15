@@ -325,6 +325,46 @@ def test_an_attached_camera_takes_position_and_turn_but_not_scale() raises:
     )
 
 
+def test_a_scale_along_the_nodes_own_axes_drops_out_even_beside_a_turn() raises:
+    # A node turned 45 degrees about z and scaled (2, 1, 1) along its own
+    # axes still has world axes at right angles: the scale drops out and the
+    # turn stays, so the camera's up is the turned +y.
+    var scene = Scene()
+    var eye = Object3D()
+    eye.set_position(0, 0, 5)
+    eye.set_euler(Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(45.0, DEGREE))
+    eye.set_scale(2, 1, 1)
+    var node = scene.add(eye^)
+    scene.update()
+    var camera = square_camera()
+    camera.attach(node)
+    var up = Vector3(-0.70710678, 0.70710678, 0)
+    assert_same_matrix(
+        camera.view_matrix_in(scene),
+        look_at(Vector3(0, 0, 5), Vector3(0, 0, 0), up),
+    )
+
+
+def test_a_sheared_camera_node_is_refused() raises:
+    # A group scaled (2, 1, 1) above a node turned 45 degrees about z: the
+    # node's world x and y axes are no longer at right angles, and no
+    # rotation has axes like that. Normalizing them and inverting the result
+    # as a view, as the first version did, skewed the image.
+    var scene = Scene()
+    var group = Object3D()
+    group.set_scale(2, 1, 1)
+    var rig = scene.add(group^)
+    var eye = Object3D()
+    eye.set_position(0, 0, 5)
+    eye.set_euler(Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(45.0, DEGREE))
+    var node = scene.attach(eye^, rig)
+    scene.update()
+    var camera = square_camera()
+    camera.attach(node)
+    with assert_raises():
+        _ = camera.view_matrix_in(scene)
+
+
 def test_a_mirrored_or_flattened_camera_node_is_refused() raises:
     var scene = Scene()
     var mirror = Object3D()

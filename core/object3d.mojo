@@ -156,7 +156,7 @@ struct Object3D(ImplicitlyCopyable):
 
     def set_euler(
         mut self, x: Angle, y: Angle, z: Angle, order: EulerOrder = XYZ
-    ):
+    ) raises:
         """Set the rotation from three angles, composed in `order`.
 
         The default is three.js's default, `XYZ`, and means what it means
@@ -171,11 +171,23 @@ struct Object3D(ImplicitlyCopyable):
             y: Rotation about the y axis.
             z: Rotation about the z axis.
             order: Which axis comes first, second and third.
+
+        Raises:
+            Error: If `order` does not name three different axes. The
+                rotation is left as it was.
         """
         self.quaternion = Euler(x, y, z, order).to_quaternion()
 
-    def set_rotation(mut self, euler: Euler):
-        """Set the rotation from an `Euler`, three.js's `rotation.set`."""
+    def set_rotation(mut self, euler: Euler) raises:
+        """Set the rotation from an `Euler`, three.js's `rotation.set`.
+
+        Args:
+            euler: The angles and their order.
+
+        Raises:
+            Error: If the order does not name three different axes. The
+                rotation is left as it was.
+        """
         self.quaternion = euler.to_quaternion()
 
     def set_quaternion(mut self, quaternion: Quaternion):
@@ -190,7 +202,12 @@ struct Object3D(ImplicitlyCopyable):
         left. `set_rotation` with the result gives the same rotation back.
         The numbers can differ from the ones that were set: past a right
         angle on the middle axis, and at gimbal lock, more than one triple
-        makes the same rotation and this returns three.js's.
+        makes the same rotation and this returns three.js's. Whole turns
+        are gone, because a rotation does not remember them.
+
+        The result is a snapshot, not three.js's live `rotation` object.
+        Changing it changes nothing; `rotation.y += angle` in three.js is
+        three steps here: read the angles, change one, and `set_rotation`.
 
         Args:
             order: Which axis the angles turn about first, second and third.

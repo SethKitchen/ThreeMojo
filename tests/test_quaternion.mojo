@@ -377,10 +377,116 @@ def test_gimbal_lock_puts_everything_in_the_first_angle() raises:
 
 
 def test_gimbal_lock_the_other_way_round() raises:
-    var locked = euler_in(XYZ, 30, -90, 25)
-    var back = Euler.from_matrix(locked.to_matrix())
-    assert_angles(back, 5, -90, 0)
-    assert_same_matrix(back.to_matrix(), locked.to_matrix(), Float64(1e-4))
+    # At minus a right angle the fold goes the other way: the two angles
+    # subtract when the axes run round and add when they run back.
+    var orders = [XYZ, YXZ, ZXY, ZYX, YZX, XZY]
+    for order in orders:
+        var locked = euler_in(order, 30, -90, 25)
+        var expected = Float32(5)
+        if not order.is_cyclic():
+            expected = 55
+        var back = Euler.from_matrix(locked.to_matrix(), order)
+        assert_almost_equal(
+            angle_about(back, order.first).to(DEGREE),
+            expected,
+            atol=Float64(1e-3),
+        )
+        assert_almost_equal(
+            angle_about(back, order.second).to(DEGREE),
+            Float32(-90),
+            atol=Float64(1e-3),
+        )
+        assert_equal(angle_about(back, order.third).value, Float32(0))
+        assert_same_matrix(back.to_matrix(), locked.to_matrix(), Float64(1e-4))
+
+
+def test_gimbal_lock_reads_through_a_quaternion_too() raises:
+    # Through a quaternion the middle sine is one only to rounding, so the
+    # reading can land just inside the lock or just outside it. Either way
+    # the one combination the lock leaves defined survives, and the
+    # rotation comes back.
+    var orders = [XYZ, YXZ, ZXY, ZYX, YZX, XZY]
+    for order in orders:
+        for middle in [Float32(90), Float32(-90)]:
+            var locked = euler_in(order, 30, middle, 25)
+            var back = Euler.from_quaternion(locked.to_quaternion(), order)
+            var first = angle_about(back, order.first).to(DEGREE)
+            var third = angle_about(back, order.third).to(DEGREE)
+            # The angles add for a cyclic order at plus a right angle and
+            # for the others at minus one, and subtract otherwise.
+            var combined = first - third
+            var expected = Float32(5)
+            if order.is_cyclic() == (middle > 0):
+                combined = first + third
+                expected = 55
+            assert_almost_equal(combined, expected, atol=Float64(0.05))
+            assert_almost_equal(
+                angle_about(back, order.second).to(DEGREE),
+                middle,
+                atol=Float64(0.05),
+            )
+            assert_same_matrix(
+                back.to_matrix(), locked.to_matrix(), Float64(1e-3)
+            )
+
+
+def test_just_inside_the_lock_reads_as_locked() raises:
+    # The sine of 89.99 degrees is one in Float32, so this is at lock as far
+    # as the decomposition can tell: the third angle is zero, and the
+    # rotation comes back to about the hundredth of a degree rounded away.
+    var orders = [XYZ, YXZ, ZXY, ZYX, YZX, XZY]
+    for order in orders:
+        for middle in [Float32(89.99), Float32(-89.99)]:
+            var near = euler_in(order, 30, middle, 25)
+            var back = Euler.from_matrix(near.to_matrix(), order)
+            assert_equal(angle_about(back, order.third).value, Float32(0))
+            assert_almost_equal(
+                angle_about(back, order.second).to(DEGREE),
+                middle,
+                atol=Float64(0.03),
+            )
+            assert_same_matrix(
+                back.to_matrix(), near.to_matrix(), Float64(1e-3)
+            )
+
+
+def test_just_outside_the_lock_reads_the_angles_back() raises:
+    # The sine of 89.9 degrees is short of the threshold, so the split
+    # between the first and third angles is still defined: read back to a
+    # twentieth of a degree, and the rotation to Float32.
+    var orders = [XYZ, YXZ, ZXY, ZYX, YZX, XZY]
+    for order in orders:
+        for middle in [Float32(89.9), Float32(-89.9)]:
+            var near = euler_in(order, 30, middle, 25)
+            var back = Euler.from_matrix(near.to_matrix(), order)
+            assert_almost_equal(
+                angle_about(back, order.first).to(DEGREE),
+                Float32(30),
+                atol=Float64(0.05),
+            )
+            assert_almost_equal(
+                angle_about(back, order.second).to(DEGREE),
+                middle,
+                atol=Float64(0.05),
+            )
+            assert_almost_equal(
+                angle_about(back, order.third).to(DEGREE),
+                Float32(25),
+                atol=Float64(0.05),
+            )
+            assert_same_matrix(
+                back.to_matrix(), near.to_matrix(), Float64(1e-4)
+            )
+
+
+def test_whole_turns_are_not_read_back() raises:
+    # A rotation does not remember how many times it went round.
+    var wound = Euler(
+        Angle(390.0, DEGREE), Angle(20.0, DEGREE), Angle(-350.0, DEGREE), XYZ
+    )
+    var back = Euler.from_matrix(wound.to_matrix())
+    assert_angles(back, 30, 20, 10)
+    assert_same_matrix(back.to_matrix(), wound.to_matrix(), Float64(1e-4))
 
 
 def test_an_order_must_name_three_different_axes() raises:
@@ -395,6 +501,20 @@ def test_an_order_must_name_three_different_axes() raises:
         _ = Euler.from_matrix(Matrix4(), EulerOrder(0, 0, 1))
     with assert_raises():
         _ = Euler.from_quaternion(Quaternion.identity(), EulerOrder(2, 2, 2))
+    # Composing refuses the same orders, including one changed after the
+    # angles were set.
+    var angles = Euler(
+        Angle(10.0, DEGREE), Angle(20.0, DEGREE), Angle(30.0, DEGREE), XYZ
+    )
+    _ = angles.to_matrix()
+    angles.order = EulerOrder(0, 0, 1)
+    with assert_raises():
+        _ = angles.to_matrix()
+    with assert_raises():
+        _ = angles.to_quaternion()
+    angles.order = EulerOrder(3, 1, 2)
+    with assert_raises():
+        _ = angles.to_quaternion()
 
 
 def test_three_orders_run_the_axes_round_and_three_run_them_back() raises:

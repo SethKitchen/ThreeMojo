@@ -251,6 +251,13 @@ struct Scene(Movable):
         that swapped the axes round could make an ordinary view look like
         one straight along up and refuse it.
 
+        The parent's world transform must be a rotation and a positive
+        uniform scale. three.js normalizes the parent's axes and carries on,
+        which aims the child wrong whenever the parent's scale is not
+        uniform: the child's own axes are stretched unequally on the way
+        back into the world, and only a direction along one of the parent's
+        axes survives that. This refuses such a parent instead.
+
         Args:
             index: Which node to turn.
             target: The point to face, in world space.
@@ -260,9 +267,11 @@ struct Scene(Movable):
         Raises:
             Error: If the index is out of range; the scene is stale, since
                 the node's and its parent's world matrices have to be
-                current; the parent's transform reflects or flattens, which
-                leaves no rotation to undo; or the target leaves the
-                orientation undefined.
+                current; the parent's world transform is not a rotation and
+                a positive uniform scale -- a nonuniform scale, a shear, a
+                mirror or a flattened axis leaves no frame the facing
+                survives the trip into; or the target leaves the orientation
+                undefined.
         """
         if index.value < 0 or index.value >= len(self._nodes):
             raise Error("Scene node index out of range")
@@ -271,12 +280,19 @@ struct Scene(Movable):
         var parent = self._nodes[index.value].parent
         if parent != NO_PARENT:
             var frame = self.world_matrix(parent)
-            # Undo the parent's rotation and nothing else. Its scale is
-            # normalized away, as three.js's `extractRotation` does; a
-            # reflection is refused, because what `extract_rotation` leaves
-            # of a mirrored frame is not the rotation that frame applies.
-            if frame.determinant() < 0:
-                raise Error("A mirrored parent leaves the facing undefined")
+            # The facing was built in the world, and only a rotation and a
+            # uniform scale carry it into the parent's frame unchanged. A
+            # parent scaled (2, 1, 1) bends every direction that is not
+            # along one of its axes: a child at its origin told to face
+            # (1, 1, 0) would face (2, 1, 0) instead, eighteen degrees off.
+            # Normalizing the axes and carrying on, as three.js does, gives
+            # exactly that wrong answer.
+            if not frame.is_scaled_rotation():
+                raise Error(
+                    "A parent must be a rotation and a uniform scale for the"
+                    " facing to be defined: no nonuniform scale, shear or"
+                    " mirror"
+                )
             var undo = Quaternion.from_matrix(frame.extract_rotation())
             desired.premultiply(undo.conjugate())
         self.node(index).set_quaternion(desired)

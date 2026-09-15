@@ -117,9 +117,11 @@ def node_view_matrix(scene: Scene, node: NodeId) raises -> Matrix4:
         Error: If the node is not in the scene, or the scene is stale -- a
             camera on a node that has moved since the last `update` would
             otherwise look from where it used to be -- or the node's world
-            transform reflects or flattens. A mirrored view reverses the
-            screen winding the culler reads, and the culler corrects only for
-            the mesh's own transform; a flattened one has no rotation left.
+            transform reflects, flattens or shears. A mirrored view reverses
+            the screen winding the culler reads, and the culler corrects only
+            for the mesh's own transform; a flattened one has no rotation
+            left; a sheared one, a nonuniform scale above a turn, has axes
+            that are not at right angles, which no rotation matches.
     """
     var world = scene.world_matrix(node)
     if world.determinant() < 0:
@@ -127,6 +129,16 @@ def node_view_matrix(scene: Scene, node: NodeId) raises -> Matrix4:
             "A mirrored camera node would reverse the winding the culler reads"
         )
     var view = world.extract_rotation()
+    # Unit axes are not always a rotation. A group scaled (2, 1, 1) above a
+    # node turned about z leaves the node's world x and y axes off right
+    # angles, and normalizing them keeps that angle: inverted as a view it
+    # would skew the whole image. A scale along the node's own world axes
+    # drops out cleanly; this is the case that does not.
+    if not view.is_rotation():
+        raise Error(
+            "A sheared camera node has no rotation to look from: a nonuniform"
+            " scale above a turn takes its axes off right angles"
+        )
     view.elements[12] = world.elements[12]
     view.elements[13] = world.elements[13]
     view.elements[14] = world.elements[14]

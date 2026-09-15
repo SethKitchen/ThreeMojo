@@ -18,6 +18,7 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -459,6 +460,67 @@ def test_extract_rotation_drops_scale_and_translation() raises:
 def test_extract_rotation_refuses_a_flattened_axis() raises:
     with assert_raises():
         _ = scaling(1, 0, 1).extract_rotation()
+
+
+# --- telling a rotation from a frame that only looks like one ---------------
+
+
+def sheared() -> Matrix4:
+    """Return a frame of three unit axes, two of them 53 degrees apart."""
+    var m = Matrix4()
+    m.set(1, 0.6, 0, 0, 0, 0.8, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+    return m^
+
+
+def test_a_rotation_is_a_rotation_with_or_without_translation() raises:
+    assert_true(Matrix4().is_rotation())
+    var m = translation(1, 2, 3)
+    m.multiply(rotation_y(Angle(37.0, DEGREE)))
+    m.multiply(rotation_x(Angle(-70.0, DEGREE)))
+    assert_true(m.is_rotation())
+    assert_true(m.is_scaled_rotation())
+
+
+def test_a_scale_is_a_scaled_rotation_only_when_it_is_uniform() raises:
+    assert_false(scaling(2, 2, 2).is_rotation())
+    assert_true(scaling(2, 2, 2).is_scaled_rotation())
+    var turned = rotation_z(Angle(45.0, DEGREE))
+    turned.multiply(scaling(3, 3, 3))
+    assert_true(turned.is_scaled_rotation())
+    # Nonuniform on either later axis: neither.
+    assert_false(scaling(1, 2, 1).is_rotation())
+    assert_false(scaling(1, 2, 1).is_scaled_rotation())
+    assert_false(scaling(1, 1, 2).is_scaled_rotation())
+
+
+def test_a_shear_has_unit_axes_and_is_still_not_a_rotation() raises:
+    # A group scaled (2, 1, 1) above a node turned 45 degrees about z, the
+    # case a camera and a look_at must refuse: after normalizing, the x and
+    # y axes are still not at right angles.
+    var m = scaling(2, 1, 1)
+    m.multiply(rotation_z(Angle(45.0, DEGREE)))
+    assert_false(m.is_scaled_rotation())
+    var normalized = m.extract_rotation()
+    assert_false(normalized.is_rotation())
+    assert_false(normalized.is_scaled_rotation())
+    assert_false(sheared().is_rotation())
+
+
+def test_a_mirror_or_a_flattened_axis_is_not_a_rotation() raises:
+    assert_false(scaling(-1, 1, 1).is_rotation())
+    assert_false(scaling(-1, -1, -1).is_scaled_rotation())
+    assert_false(scaling(1, 0, 1).is_rotation())
+    assert_false(scaling(0, 1, 1).is_scaled_rotation())
+    assert_false(scaling(0, 0, 0).is_scaled_rotation())
+
+
+def test_the_tolerance_is_the_callers_to_widen() raises:
+    # Axes a hundredth off right angles: not a rotation by default, and one
+    # to a caller that allows that much.
+    var m = Matrix4()
+    m.set(1, 0.01, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+    assert_false(m.is_rotation())
+    assert_true(m.is_rotation(Float32(0.02)))
 
 
 def main() raises:

@@ -16,10 +16,23 @@ An `Euler` converts to a quaternion or a matrix and comes back from either,
 for all six orders, as three.js's `setFromRotationMatrix` and
 `setFromQuaternion` do. `Object3D` holds the quaternion as the truth and
 `rotation()` decomposes it on request, so the angles are never stale and
-never stored twice. Reading them back is exact away from gimbal lock. At
-lock, where the middle angle is a right angle, the first and third axes lie
-along one line and only one combination of their angles is defined; all of
-it goes to the first angle and the third is zero, as in three.js.
+never stored twice. What comes back is a snapshot that rebuilds the rotation
+to Float32 precision, not the numbers that went in: past a right angle on
+the middle axis more than one triple makes the same rotation, and whole
+turns are gone, because a rotation does not remember them.
+
+At gimbal lock, where the middle angle is a right angle, the first and third
+axes lie along one line and only one combination of their angles is defined;
+all of it goes to the first angle and the third is zero, as in three.js. A
+middle angle within about three hundredths of a degree of a right angle
+reads as locked, and the rotation that reading rebuilds is off by up to that
+much. Just outside the lock the split between the first and third angles is
+defined but sensitive: a rounding error in the rotation moves angle from one
+to the other, while the rotation they rebuild stays right.
+
+Every conversion refuses an order that does not name three different axes.
+`EulerOrder(0, 0, 1)` is the right type holding a wrong value, and composing
+Rx * Rx * Ry for it would be a rotation nobody asked for.
 """
 
 from math.matrix4 import Matrix4, rotation_x, rotation_y, rotation_z
@@ -57,7 +70,7 @@ struct EulerOrder(Equatable, ImplicitlyCopyable, Writable):
         """Return True if this names three different axes.
 
         The six named orders are valid. `EulerOrder(0, 0, 1)` is the right
-        type holding a wrong value, and `Euler.from_matrix` refuses it.
+        type holding a wrong value, and every `Euler` conversion refuses it.
         """
         var each_an_axis = (
             _is_axis(self.first)
@@ -89,6 +102,12 @@ def _clamp_unit(value: Float32) -> Float32:
     """Return `value` held to minus one through one, so `asin` never sees a
     rounding error past the edge."""
     return max(Float32(-1), min(Float32(1), value))
+
+
+def _check_order(order: EulerOrder) raises:
+    """Refuse an order that does not name three different axes."""
+    if not order.is_valid():
+        raise Error("An Euler order must name three different axes")
 
 
 # The six orders three.js accepts. `XYZ` is its default and this port's.
@@ -140,18 +159,20 @@ struct Euler(ImplicitlyCopyable):
         Args:
             matrix: A pure rotation. A scale in it comes out as wrong angles
                 rather than an error, as in three.js and in
-                `Quaternion.from_matrix`.
+                `Quaternion.from_matrix`; `Matrix4.is_rotation` tells.
             order: Which axis the returned angles turn about first, second
                 and third.
 
         Returns:
-            Three angles that `to_matrix` turns back into `matrix`.
+            Three angles that `to_matrix` turns back into `matrix`, to
+            Float32 precision away from lock and to the width of the lock
+            at it. Not the angles that built it: whole turns are gone, and
+            past a right angle in the middle another triple may come back.
 
         Raises:
             Error: If `order` does not name three different axes.
         """
-        if not order.is_valid():
-            raise Error("An Euler order must name three different axes")
+        _check_order(order)
         var i = order.first
         var j = order.second
         var k = order.third
@@ -202,7 +223,7 @@ struct Euler(ImplicitlyCopyable):
             return self.y
         return self.z
 
-    def to_quaternion(self) -> Quaternion:
+    def to_quaternion(self) raises -> Quaternion:
         """Return the rotation these angles describe.
 
         Composed from three axis-angle rotations in the named order, which
@@ -213,7 +234,13 @@ struct Euler(ImplicitlyCopyable):
 
         Returns:
             The unit quaternion.
+
+        Raises:
+            Error: If the order does not name three different axes. The
+                order is a plain field, so it can be wrong after the angles
+                were set, and this is where that is caught.
         """
+        _check_order(self.order)
         var combined = Quaternion.identity()
         combined.multiply(
             Quaternion.from_axis_angle(
@@ -235,7 +262,7 @@ struct Euler(ImplicitlyCopyable):
         )
         return combined
 
-    def to_matrix(self) -> Matrix4:
+    def to_matrix(self) raises -> Matrix4:
         """Return the rotation these angles describe, as a matrix.
 
         The product of the three axis rotations in the named order, which is
@@ -243,7 +270,11 @@ struct Euler(ImplicitlyCopyable):
 
         Returns:
             The rotation matrix.
+
+        Raises:
+            Error: If the order does not name three different axes.
         """
+        _check_order(self.order)
         var combined = _rotation_about(self.order.first, self)
         combined.multiply(_rotation_about(self.order.second, self))
         combined.multiply(_rotation_about(self.order.third, self))

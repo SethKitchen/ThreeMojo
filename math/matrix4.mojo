@@ -34,6 +34,12 @@ from math.vector3 import Vector3
 from std.math import cos, sin, sqrt
 from units.si import Angle
 
+# How far a frame can be from a rotation before `is_rotation` says it is not
+# one: the cosine between two of its axes, or the relative error in an
+# axis's length. Float32 rounding leaves errors near 1e-7 even down a long
+# chain of products; a real shear or scale is thousands of times past this.
+comptime FRAME_TOLERANCE = Float32(1e-4)
+
 
 struct Matrix4(ImplicitlyCopyable):
     """A 4x4 matrix in column-major order."""
@@ -514,8 +520,9 @@ struct Matrix4(ImplicitlyCopyable):
         three.js's `extractRotation`: each of the three axis columns is scaled
         back to unit length and the translation column is dropped. What is
         left is a pure rotation if this was a rotation times a positive scale.
-        Shear is not undone, and a reflection stays one, so a caller that
-        needs a rotation checks the determinant's sign first.
+        Shear is not undone, and a reflection stays one: the result then has
+        unit axes that are not at right angles, or a left-handed set, and
+        `is_rotation` on it says so. A caller that needs a rotation asks.
 
         Returns:
             The rotation matrix.
@@ -528,11 +535,7 @@ struct Matrix4(ImplicitlyCopyable):
         var out = Matrix4()
         for axis in range(3):  # pragma: no branch
             var start = axis * 4
-            var length = sqrt(
-                e[start] * e[start]
-                + e[start + 1] * e[start + 1]
-                + e[start + 2] * e[start + 2]
-            )
+            var length = self._axis_length(axis)
             if length == 0:
                 raise Error(
                     "A transform with no extent along an axis has no rotation"
@@ -542,6 +545,88 @@ struct Matrix4(ImplicitlyCopyable):
             out.elements[start + 1] = e[start + 1] / length
             out.elements[start + 2] = e[start + 2] / length
         return out^
+
+    def is_rotation(self, tolerance: Float32 = FRAME_TOLERANCE) -> Bool:
+        """Return True if the upper-left three by three is a rotation.
+
+        Three unit axes, each at right angles to the other two, in a
+        right-handed set. `extract_rotation` returns one of these when it was
+        given a rotation times a positive scale, and something else from a
+        sheared transform such as a nonuniform scale above a turn: unit axes
+        that are not at right angles. A camera that inverts the result as
+        its view asks this first, because a sheared view skews the image.
+
+        Args:
+            tolerance: How far an axis can be from unit length, and the
+                cosine between two axes from zero. The default allows
+                Float32 rounding and refuses any real shear or scale.
+
+        Returns:
+            True for a rotation, within `tolerance`. Translation is not
+            looked at.
+        """
+        var unit = abs(self._axis_length(0) - 1) <= tolerance
+        return unit and self.is_scaled_rotation(tolerance)
+
+    def is_scaled_rotation(self, tolerance: Float32 = FRAME_TOLERANCE) -> Bool:
+        """Return True if the upper-left three by three is a rotation times
+        a positive uniform scale.
+
+        Those are the transforms that carry every direction faithfully: a
+        vector goes in and comes out turned and longer, at the same angle to
+        every other vector as before. A nonuniform scale bends any direction
+        that is not along one of its axes, a shear bends every direction,
+        and a mirror turns the frame inside out, so all three fail.
+        `Scene.look_at` asks this of a parent, because it builds a facing in
+        the world and carries it into the parent's frame.
+
+        Args:
+            tolerance: How far the axes can be from equal length, relative
+                to the first, and the cosine between two of them from zero.
+                The default allows Float32 rounding and refuses any real
+                shear or nonuniform scale.
+
+        Returns:
+            True for three axes of one positive length at right angles to
+            each other, in a right-handed set. Translation is not looked at.
+        """
+        var first = self._axis_length(0)
+        for axis in range(1, 3):  # pragma: no branch
+            if abs(self._axis_length(axis) - first) > tolerance * first:
+                return False
+        return (
+            self._axes_are_perpendicular(tolerance) and self.determinant() > 0
+        )
+
+    def _axis_length(self, axis: Int) -> Float32:
+        """Return the length of one axis column: the scale along that axis."""
+        ref e = self.elements
+        var start = axis * 4
+        return sqrt(
+            e[start] * e[start]
+            + e[start + 1] * e[start + 1]
+            + e[start + 2] * e[start + 2]
+        )
+
+    def _axes_dot(self, a: Int, b: Int) -> Float32:
+        """Return the dot product of two axis columns."""
+        ref e = self.elements
+        var i = a * 4
+        var j = b * 4
+        return e[i] * e[j] + e[i + 1] * e[j + 1] + e[i + 2] * e[j + 2]
+
+    def _axes_are_perpendicular(self, tolerance: Float32) -> Bool:
+        """Return True if each axis column is at right angles to the other
+        two, within `tolerance` on the cosine between them. An axis of zero
+        length has no direction, so it fails."""
+        for axis in range(3):  # pragma: no branch
+            var other = (axis + 1) % 3
+            var lengths = self._axis_length(axis) * self._axis_length(other)
+            if lengths == 0:
+                return False
+            if abs(self._axes_dot(axis, other) / lengths) > tolerance:
+                return False
+        return True
 
 
 def translation(x: Float32, y: Float32, z: Float32) -> Matrix4:

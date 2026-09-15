@@ -32,7 +32,9 @@ Column-major storage, as three.js and OpenGL. Element `(row, col)` is at `col * 
 | `premultiply(other)` | `self = other * self`. |
 | `transpose()`, `invert()`, `determinant()` | As named. A singular matrix inverts to zeros. |
 | `normal_matrix() -> Matrix4` | The inverse transpose, for normals. |
-| `extract_rotation() -> Matrix4` | The rotation with scale and translation removed. |
+| `extract_rotation() -> Matrix4` | The rotation with scale and translation removed. A shear or a mirror stays. |
+| `is_rotation(tolerance=1e-4) -> Bool` | Whether the upper-left 3 by 3 is a rotation: unit axes at right angles, right-handed. |
+| `is_scaled_rotation(tolerance=1e-4) -> Bool` | Whether it is a rotation times a positive uniform scale. |
 | `transform_point(p) -> Vector3` | Apply with `w = 1` and divide by `w`. |
 | `transform_w(p) -> Float32` | The `w` that `transform_point` divides by. |
 | `transform_direction(d) -> Vector3` | Apply with `w = 0`. |

@@ -22,7 +22,7 @@ A rotation as `(x, y, z, w)`. The identity is `(0, 0, 0, 1)`. `a * b` applies `b
 | `slerp(other, t) -> Quaternion` | The rotation a fraction `t` along the shortest arc to `other`. |
 | `dot(other)`, `length()` | The four-component dot product and length. |
 
-`from_matrix` expects a pure rotation. Use `Matrix4.extract_rotation` first when the matrix carries scale.
+`from_matrix` expects a pure rotation. When the matrix is a rotation times a positive scale, `Matrix4.extract_rotation` removes the scale first. It does not remove a shear or a mirror, and `from_matrix` does not detect one. `Matrix4.is_rotation` tells a rotation from a frame that only has unit axes.
 
 ## Euler and EulerOrder
 
@@ -39,30 +39,40 @@ A rotation as `(x, y, z, w)`. The identity is `(0, 0, 0, 1)`. `a * b` applies `b
 
 The six orders are `XYZ`, `YXZ`, `ZXY`, `ZYX`, `YZX` and `XZY`. `XYZ` is the default, as in three.js. It turns about x, then about the turned y, then about the twice-turned z. As a matrix that is `Rx * Ry * Rz`.
 
-`from_matrix` and `from_quaternion` are three.js's `setFromRotationMatrix` and `setFromQuaternion`. They work for all six orders. The angles they return rebuild the rotation. The numbers can differ from the ones that made it. Past a right angle on the middle axis, more than one triple makes the same rotation.
+`from_matrix` and `from_quaternion` are three.js's `setFromRotationMatrix` and `setFromQuaternion`. They work for all six orders. The angles they return rebuild the rotation to Float32 precision. They are a snapshot, not the numbers that made the rotation. Past a right angle on the middle axis, more than one triple makes the same rotation. Whole turns are not read back, because a rotation does not remember them.
 
-At a right angle exactly, the first and third axes fold onto one line, and only one combination of their angles is defined. That is gimbal lock. The whole combination goes to the first angle, and the third angle is zero, as in three.js.
+At a right angle exactly, the first and third axes fold onto one line, and only one combination of their angles is defined. That is gimbal lock. The whole combination goes to the first angle, and the third angle is zero, as in three.js. A middle angle within about three hundredths of a degree of a right angle reads as locked. The rotation that reading rebuilds is off by up to that angle.
 
-Both refuse an `EulerOrder` that does not name three different axes.
+All four conversions refuse an `EulerOrder` that does not name three different axes. `to_matrix` and `to_quaternion` check the order they hold, so an order changed after construction is caught too.
 
 ## Object3D methods
 
 | Method | Meaning |
 |---|---|
-| `set_euler(x, y, z, order=XYZ)` | Set the rotation from three angles. |
-| `set_rotation(euler)` | Set the rotation from an `Euler`. |
+| `set_euler(x, y, z, order=XYZ)` | Set the rotation from three angles. Refuses a bad order. |
+| `set_rotation(euler)` | Set the rotation from an `Euler`. Refuses a bad order. |
 | `set_quaternion(q)` | Set the rotation directly. |
-| `rotation(order=XYZ) -> Euler` | The rotation as three angles, read from the quaternion. three.js's `Object3D.rotation`. |
+| `rotation(order=XYZ) -> Euler` | The rotation as three angles, read from the quaternion. A snapshot. three.js's `Object3D.rotation`. |
 | `rotate_x(angle)`, `rotate_y(angle)`, `rotate_z(angle)` | Turn about the node's own axis. three.js's `rotateX`, `rotateY`, `rotateZ`. |
 | `rotate_on_axis(axis, angle)` | Turn about a unit axis in the node's own frame. |
 | `rotate_on_world_axis(axis, angle)` | Turn about a unit axis in the parent's frame. |
 | `look_at(target, camera=False)` | Face a point given in the parent's frame. Up is the parent's +y. |
 
+`rotation()` is not three.js's live `rotation` object. Changing the result changes nothing. three.js's `rotation.y += angle` is three steps here:
+
+```mojo
+var angles = node.rotation()
+angles.y = Angle(angles.y.to(DEGREE) + 10, DEGREE)
+node.set_rotation(angles)
+```
+
 `rotate_y` is not `rotation.y += angle` in three.js terms. The two agree only while the other two angles are zero. An Euler component is not a local axis.
 
 ## Scene.look_at
 
-`scene.look_at(id, target, camera=False)` faces a world-space point. It builds the facing in world space with world up, then undoes the parent's rotation. The parent's scale is normalized away. A mirrored or flattened parent is refused.
+`scene.look_at(id, target, camera=False)` faces a world-space point. It builds the facing in world space with world up, then undoes the parent's rotation. The parent's world transform must be a rotation and a positive uniform scale. The scale is normalized away. A nonuniform scale, a shear, a mirror or a flattened axis is refused.
+
+three.js normalizes the parent's axes and carries on. Under a parent scaled `(2, 1, 1)`, that aims a child told to face `(1, 1, 0)` at `(2, 1, 0)` instead, eighteen degrees off. ThreeMojo refuses the parent. The table in [Cameras](Cameras#attach-a-camera-to-a-node) lists what `look_at` and an attached camera accept.
 
 An object faces the target with its +z axis. A camera faces it with its -z axis. Pass `camera=True` for a node that a camera rides.
 
