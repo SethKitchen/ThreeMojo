@@ -32,7 +32,7 @@ from geometries.box import cube
 from geometries.sphere import sphere
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV, ShadeMode
 from render.texture import checkerboard
 from render.texture_store import NO_TEXTURE, TextureId
@@ -2018,6 +2018,214 @@ def test_a_basic_material_ignores_the_lights() raises:
     assert_equal(center_plain.r, UInt8(200))
     assert_equal(center_plain.g, UInt8(100))
     assert_equal(center_plain.b, UInt8(50))
+
+
+# --- emissive ---------------------------------------------------------------
+
+
+def count_bright(image: Framebuffer) raises -> Int:
+    """Return how many pixels have a red channel above 200."""
+    var bright = 0
+    for y in range(image.height):
+        for x in range(image.width):
+            if image.get_pixel(x, y).r > 200:
+                bright += 1
+    return bright
+
+
+def unlit_scene_with_a_node() raises -> Scene:
+    """Return a scene with one node at the origin and no lights at all."""
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene.update()
+    return scene^
+
+
+def test_an_emissive_material_shows_in_the_dark() raises:
+    # No lights at all: a Lambert surface renders black, and the same
+    # surface giving off light renders that light, as authored.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var dull = assets.materials.add(Material(Color(200, 100, 50)))
+    var glowing = assets.materials.add(
+        Material(Color(200, 100, 50), emissive=Color(60, 120, 180))
+    )
+    var scene = unlit_scene_with_a_node()
+    var dark = List[Mesh]()
+    dark.append(Mesh(box, dull, NodeId(0)))
+    var lit = List[Mesh]()
+    lit.append(Mesh(box, glowing, NodeId(0)))
+    var black = rendered(renderer, scene, assets, dark, eye_camera())
+    assert_equal(black.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(0))
+    var shown = rendered(renderer, scene, assets, lit, eye_camera())
+    var glow = shown.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(glow.r, UInt8(60))
+    assert_equal(glow.g, UInt8(120))
+    assert_equal(glow.b, UInt8(180))
+
+
+def test_the_emissive_adds_to_the_lit_color() raises:
+    # Under the suite's lights, a quarter of white in linear light lands on
+    # top of whatever the lights left.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
+    var plain = assets.materials.add(Material(Color(120, 120, 120)))
+    var glowing = assets.materials.add(
+        Material(
+            Color(120, 120, 120),
+            emissive=Color(255, 255, 255),
+            emissive_intensity=0.25,
+        )
+    )
+    var scene = scene_with_node_at(0)
+    var without = List[Mesh]()
+    without.append(Mesh(box, plain, NodeId(0)))
+    var with_glow = List[Mesh]()
+    with_glow.append(Mesh(box, glowing, NodeId(0)))
+    var lit = rendered(renderer, scene, assets, without, a_camera())
+    var brighter = rendered(renderer, scene, assets, with_glow, a_camera())
+    var center = lit.get_pixel(WIDTH // 2, HEIGHT // 2)
+    var glow = brighter.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(glow.r > center.r, "the glow added nothing")
+    var expected = FloatColor(FloatColor(srgb=center).r + 0.25, 0, 0).encode()
+    assert_true(abs(Int(glow.r) - Int(expected.r)) <= 2)
+
+
+def test_emissive_intensity_scales_the_glow() raises:
+    # No lights, a white glow at a quarter and at a half: each is that much
+    # linear light, which the resolve encodes.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var quarter = assets.materials.add(
+        Material(
+            Color(0, 0, 0),
+            emissive=Color(255, 255, 255),
+            emissive_intensity=0.25,
+        )
+    )
+    var half = assets.materials.add(
+        Material(
+            Color(0, 0, 0),
+            emissive=Color(255, 255, 255),
+            emissive_intensity=0.5,
+        )
+    )
+    var scene = unlit_scene_with_a_node()
+    var dim = List[Mesh]()
+    dim.append(Mesh(box, quarter, NodeId(0)))
+    var bright = List[Mesh]()
+    bright.append(Mesh(box, half, NodeId(0)))
+    var low = rendered(renderer, scene, assets, dim, eye_camera()).get_pixel(
+        WIDTH // 2, HEIGHT // 2
+    )
+    var high = rendered(
+        renderer, scene, assets, bright, eye_camera()
+    ).get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(low.r, FloatColor(0.25, 0.25, 0.25).encode().r)
+    assert_equal(high.r, FloatColor(0.5, 0.5, 0.5).encode().r)
+    assert_true(high.r > low.r)
+
+
+def test_an_emissive_map_glows_only_where_it_is_bright() raises:
+    # No lights, a white glow through a white-and-black board: the box shows
+    # the board where it is light and nothing where it is dark. A black glow
+    # through the same board shows nothing at all, because the map
+    # multiplies the color, as in three.js.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
+    var board = assets.textures.add(
+        checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0))
+    )
+    var glowing = assets.materials.add(
+        Material(
+            Color(0, 0, 0), emissive=Color(255, 255, 255), emissive_map=board
+        )
+    )
+    var whole = assets.materials.add(
+        Material(Color(0, 0, 0), emissive=Color(255, 255, 255))
+    )
+    var unlit = assets.materials.add(
+        Material(Color(0, 0, 0), emissive_map=board)
+    )
+    var scene = unlit_scene_with_a_node()
+    var mapped = List[Mesh]()
+    mapped.append(Mesh(box, glowing, NodeId(0)))
+    var plain = List[Mesh]()
+    plain.append(Mesh(box, whole, NodeId(0)))
+    var black = List[Mesh]()
+    black.append(Mesh(box, unlit, NodeId(0)))
+    var through = count_bright(
+        rendered(renderer, scene, assets, mapped, a_camera())
+    )
+    var solid = count_bright(
+        rendered(renderer, scene, assets, plain, a_camera())
+    )
+    var nothing = count_bright(
+        rendered(renderer, scene, assets, black, a_camera())
+    )
+    assert_true(through > 0, "the light squares did not glow")
+    assert_true(through < solid, "the dark squares glowed")
+    assert_equal(nothing, 0)
+
+
+def test_lit_shading_ignores_the_emissive_map_but_keeps_the_glow() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_shading(SHADE_LIT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
+    var board = assets.textures.add(
+        checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0))
+    )
+    var glowing = assets.materials.add(
+        Material(
+            Color(0, 0, 0), emissive=Color(255, 255, 255), emissive_map=board
+        )
+    )
+    var whole = assets.materials.add(
+        Material(Color(0, 0, 0), emissive=Color(255, 255, 255))
+    )
+    var scene = unlit_scene_with_a_node()
+    var mapped = List[Mesh]()
+    mapped.append(Mesh(box, glowing, NodeId(0)))
+    var plain = List[Mesh]()
+    plain.append(Mesh(box, whole, NodeId(0)))
+    var through = rendered(renderer, scene, assets, mapped, a_camera())
+    var solid = rendered(renderer, scene, assets, plain, a_camera())
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(through.get_pixel(x, y).r, solid.get_pixel(x, y).r)
+    assert_equal(solid.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(255))
+
+
+def test_a_material_naming_an_emissive_map_that_is_not_there_is_rejected() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var scene = scene_with_node_at(0)
+    var lost = assets.materials.add(
+        Material(
+            Color(0, 0, 0),
+            emissive=Color(255, 255, 255),
+            emissive_map=TextureId(5),
+        )
+    )
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, lost, NodeId(0)))
+    with assert_raises():
+        _ = rendered(renderer, scene, assets, meshes, a_camera())
+    # A wrong id is a mistake whatever the color: a black glow, which would
+    # never sample the map, does not excuse it.
+    var dark = assets.materials.add(
+        Material(Color(0, 0, 0), emissive_map=TextureId(5))
+    )
+    var unlit = List[Mesh]()
+    unlit.append(Mesh(box, dark, NodeId(0)))
+    with assert_raises():
+        _ = rendered(renderer, scene, assets, unlit, a_camera())
 
 
 def test_an_unknown_shading_mode_is_refused_by_the_renderer() raises:

@@ -39,9 +39,17 @@ rather than a property: `MeshBasicMaterial` shows its own color whatever the
 lights do, `MeshLambertMaterial` catches light. Every other property is
 shared between the two, so here they are one struct and a tag, for the reason
 `Light` is -- a store has to hold one type.
+
+`emissive` is the sixth, with an intensity and a map of its own: three.js's
+`emissive`, `emissiveIntensity` and `emissiveMap` on `MeshLambertMaterial`.
+It is light the surface gives off rather than reflects, so it is added after
+the lights and they do not change it: a glowing surface shows in a dark
+scene. `MeshBasicMaterial` has no such term, because an unlit surface
+already shows its own color, and a `BASIC` material refuses one here rather
+than silently adding it.
 """
 
-from render.framebuffer import Color
+from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
 
 
@@ -151,6 +159,13 @@ struct Material(ImplicitlyCopyable):
     var blending: Blending
     # `LAMBERT` or `BASIC`: whether the lights reach this surface at all.
     var kind: MaterialKind
+    # Light the surface gives off, as authored, scaled by the intensity and
+    # multiplied per texel by the map. Added after the lights and untouched
+    # by them; see `emissive_light`. Black by default, so a material that
+    # says nothing about it glows not at all.
+    var emissive: Color
+    var emissive_intensity: Float32
+    var emissive_map: TextureId
 
     def __init__(
         out self,
@@ -160,6 +175,9 @@ struct Material(ImplicitlyCopyable):
         opacity: Float32 = 1.0,
         blending: Optional[Blending] = None,
         kind: MaterialKind = LAMBERT,
+        emissive: Color = Color(0, 0, 0),
+        emissive_intensity: Float32 = 1.0,
+        emissive_map: TextureId = NO_TEXTURE,
     ) raises:
         """Describe a surface.
 
@@ -175,14 +193,24 @@ struct Material(ImplicitlyCopyable):
                 image needs `BLEND` even when the material looks opaque.
             kind: `LAMBERT` to be lit by the scene's lights, `BASIC` to show
                 the color and texture as they are.
+            emissive: Light the surface gives off, as authored in sRGB.
+                Black, the default, gives off none.
+            emissive_intensity: What `emissive` is scaled by. One leaves it
+                as authored.
+            emissive_map: Id of a texture that multiplies the emissive per
+                texel, or `NO_TEXTURE`. It multiplies `emissive`, so on its
+                own, over black, it adds nothing -- as in three.js.
 
         Raises:
-            Error: If `map` is a negative other than `NO_TEXTURE` — which
-                would be an id nothing can ever hold rather than a deliberate
-                absence — `opacity` is outside zero to one, or `side`,
-                `blending` or `kind` holds a value that is none of its named
-                constants. A bare integer in their place is a compile error;
-                a wrong value inside the right type is refused here.
+            Error: If `map` or `emissive_map` is a negative other than
+                `NO_TEXTURE` — which would be an id nothing can ever hold
+                rather than a deliberate absence — `opacity` is outside zero
+                to one, `emissive_intensity` is negative, `side`, `blending`
+                or `kind` holds a value that is none of its named constants,
+                or `kind` is `BASIC` and any emissive term was given, which
+                three.js's `MeshBasicMaterial` has no place for. A bare
+                integer in their place is a compile error; a wrong value
+                inside the right type is refused here.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -194,11 +222,26 @@ struct Material(ImplicitlyCopyable):
             )
         if not kind.is_valid():
             raise Error("A material's kind must be BASIC or LAMBERT")
+        if emissive_map.value < 0 and emissive_map != NO_TEXTURE:
+            raise Error("A material's emissive map id cannot be negative")
+        if emissive_intensity < 0:
+            raise Error("An emissive intensity cannot be negative")
+        if kind == BASIC and (
+            emissive_map != NO_TEXTURE
+            or _gives_off_light(emissive, emissive_intensity)
+        ):
+            raise Error(
+                "A basic material has no emissive term: its color already"
+                " shows whatever the lights do"
+            )
         self.color = color
         self.map = map
         self.side = side
         self.opacity = opacity
         self.kind = kind
+        self.emissive = emissive
+        self.emissive_intensity = emissive_intensity
+        self.emissive_map = emissive_map
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -228,6 +271,36 @@ struct Material(ImplicitlyCopyable):
         both rasterizers — asks this rather than inspecting a color.
         """
         return self.blending == BLEND
+
+    def is_emissive(self) -> Bool:
+        """Return True if this surface gives off light of its own.
+
+        A map alone does not count: it multiplies the emissive color, and
+        black times anything is black, as in three.js.
+        """
+        return _gives_off_light(self.emissive, self.emissive_intensity)
+
+    def emissive_light(self) -> FloatColor:
+        """Return the light this surface gives off, linear, before its map.
+
+        The authored color decoded from sRGB, as `Lighting.shade` decodes a
+        base color, then scaled by the intensity. Alpha is not light and is
+        left at one: the term never touches a fragment's alpha.
+        """
+        var glow = FloatColor(srgb=self.emissive)
+        return FloatColor(
+            glow.r * self.emissive_intensity,
+            glow.g * self.emissive_intensity,
+            glow.b * self.emissive_intensity,
+            1.0,
+        )
+
+
+def _gives_off_light(emissive: Color, intensity: Float32) -> Bool:
+    """Return True if an emissive color at an intensity adds any light: not
+    black, and not scaled to nothing."""
+    var colored = emissive.r > 0 or emissive.g > 0 or emissive.b > 0
+    return colored and intensity > 0
 
 
 struct MaterialStore(Movable):

@@ -61,6 +61,7 @@ from lights.light import ambient_light, directional_light, point_light
 from lights.lighting import Lighting
 from render.gpu import (
     FLOATS_PER_VERTEX,
+    STATE_PER_TRIANGLE,
     GpuRenderer,
     available,
     flatten,
@@ -68,6 +69,7 @@ from render.gpu import (
     pack,
     render,
     render_triangles,
+    triangle_state,
 )
 from render.srgb import LINEAR, ColorSpace
 from geometries.plane import plane
@@ -632,15 +634,42 @@ def test_a_partial_triangle_is_rejected() raises:
         renderer.draw(corners, BACKGROUND)
 
 
-def test_flattening_lays_out_sixteen_floats_per_vertex() raises:
+def glowing(
+    base: RasterVertex, glow: FloatColor, map: TextureId = NO_TEXTURE
+) -> RasterVertex:
+    """Return `base` giving off `glow`, through `map` if one is named."""
+    return RasterVertex(
+        base.x,
+        base.y,
+        base.z,
+        base.inv_w,
+        base.color,
+        base.u,
+        base.v,
+        base.texture,
+        base.blend,
+        base.normal,
+        base.world,
+        base.lit,
+        glow,
+        map,
+    )
+
+
+def test_flattening_lays_out_nineteen_floats_per_vertex() raises:
     # The host side of the kernel's unpacking. If these disagree the image is
     # garbage, so the layout is asserted rather than assumed. The count is
     # spelled out because changing the stride and missing one of the kernel's
     # offsets is a mistake this project has made twice.
     var corners = List[RasterVertex]()
-    corners.append(corner(1, 2, 3, 4, Color(255, 128, 0, 64)))
+    corners.append(
+        glowing(
+            corner(1, 2, 3, 4, Color(255, 128, 0, 64)),
+            FloatColor(0.25, 0.5, 0.75),
+        )
+    )
     var flat = flatten(corners)
-    assert_equal(len(flat), 16)
+    assert_equal(len(flat), 19)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -650,6 +679,40 @@ def test_flattening_lays_out_sixteen_floats_per_vertex() raises:
     assert_almost_equal(flat[5], Float32(128) / 255, atol=Float64(1e-6))
     assert_equal(flat[6], Float32(0))
     assert_almost_equal(flat[7], Float32(64) / 255, atol=Float64(1e-6))
+    # The emissive rides last, three lanes: it never touches alpha.
+    assert_equal(flat[16], Float32(0.25))
+    assert_equal(flat[17], Float32(0.5))
+    assert_equal(flat[18], Float32(0.75))
+
+
+def test_the_state_table_has_four_entries_per_triangle() raises:
+    # Texture, blend, lit and emissive map, from the first corner.
+    var corners = List[RasterVertex]()
+    for _ in range(3):
+        corners.append(
+            RasterVertex(
+                0,
+                0,
+                0.5,
+                1,
+                FloatColor(1, 1, 1),
+                0,
+                0,
+                TextureId(2),
+                BLEND,
+                Vector3(0, 0, 1),
+                Vector3(0, 0, 0),
+                False,
+                FloatColor(0, 0, 0),
+                TextureId(5),
+            )
+        )
+    var state = triangle_state(corners)
+    assert_equal(len(state), STATE_PER_TRIANGLE)
+    assert_equal(state[0], Int32(2))
+    assert_equal(state[1], Int32(BLEND.value))
+    assert_equal(state[2], Int32(0))
+    assert_equal(state[3], Int32(5))
 
 
 # --- one prepared scene, both backends --------------------------------------
@@ -863,6 +926,145 @@ def test_the_gpu_leaves_an_unlit_triangle_its_own_color() raises:
         overlapping_pair(), 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), half
     )
     assert_true(count_mismatches(gpu, lit) > 0, "the lights changed nothing")
+
+
+def glowing_pair() -> List[RasterVertex]:
+    """Return `overlapping_pair` with every corner giving off a little light."""
+    var corners = List[RasterVertex]()
+    for base in overlapping_pair():
+        corners.append(glowing(base, FloatColor(0.2, 0.1, 0.05)))
+    return corners^
+
+
+def test_both_backends_add_the_emissive_the_same_way() raises:
+    # The glow is added after the lights on both sides, in the same order
+    # of operations, so the two agree to the usual one ULP.
+    if skipped_for_lack_of_a_gpu("both backends add the emissive"):
+        return
+    var half = Lighting(ambient=FloatColor(0.5, 0.5, 0.5, 1.0))
+    var corners = glowing_pair()
+    var target = RenderTarget(24, 18, BACKGROUND)
+    for index in range(len(corners) // 3):  # pragma: no branch
+        rasterize_shaded(
+            corners[index * 3],
+            corners[index * 3 + 1],
+            corners[index * 3 + 2],
+            target,
+            SHADE_LIT,
+            TextureStore(),
+            half,
+        )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), half
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the glow really shows, or this proves nothing.
+    var plain = render_triangles(
+        overlapping_pair(), 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), half
+    )
+    assert_true(count_mismatches(gpu, plain) > 0, "the glow changed nothing")
+
+
+def dark() -> Lighting:
+    """Return lighting under which only an emissive term shows."""
+    return Lighting(ambient=FloatColor(0.0, 0.0, 0.0, 1.0))
+
+
+def test_both_backends_sample_an_emissive_map_identically() raises:
+    # With no light at all the glow is the whole image, so this is the
+    # texture parity test again, through the emissive path.
+    if skipped_for_lack_of_a_gpu("both backends sample an emissive map"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(16, 4, Color(240, 60, 20), Color(20, 40, 200))
+    )
+    var corners = List[RasterVertex]()
+    for base in mapped_quad(24):
+        corners.append(glowing(base, FloatColor(1, 1, 1), board))
+    var cpu = cpu_textured_lit(corners, 24, textures, dark())
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures, dark()
+    )
+    var light = 0
+    var deep = 0
+    for y in range(24):
+        for x in range(24):
+            if cpu.get_pixel(x, y).r > 200:
+                light += 1
+            if cpu.get_pixel(x, y).b > 150:
+                deep += 1
+    assert_true(light > 0 and deep > 0, "the emissive board did not appear")
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_both_backends_agree_on_a_mipmapped_emissive_map() raises:
+    # The receding surface again, with the board as the emissive map: the
+    # level choice runs through the shared sampler on both sides.
+    if skipped_for_lack_of_a_gpu("both backends agree on a mipmapped glow"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            32,
+            8,
+            Color(255, 255, 255),
+            Color(0, 0, 0),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    var flat = List[RasterVertex]()
+    flat.append(lit_corner(2, 22, 1.0, 0, 0))
+    flat.append(lit_corner(16, 4, 0.1, 0.3, 3))
+    flat.append(lit_corner(22, 22, 1.0, 3, 0))
+    flat.append(lit_corner(2, 22, 1.0, 0, 0))
+    flat.append(lit_corner(8, 4, 0.1, 0.0, 3))
+    flat.append(lit_corner(16, 4, 0.1, 0.3, 3))
+    var corners = List[RasterVertex]()
+    for base in flat:
+        corners.append(glowing(base, FloatColor(1, 1, 1), board))
+    var cpu = cpu_textured_lit(corners, 24, textures, dark())
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures, dark()
+    )
+    var drawn = 0
+    for y in range(24):
+        for x in range(24):
+            var shown = cpu.get_pixel(x, y)
+            if shown.r != BACKGROUND.r or shown.b != BACKGROUND.b:
+                drawn += 1
+    assert_true(drawn > 100, "the surface did not appear")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_refuse_an_emissive_map_that_is_not_there() raises:
+    if skipped_for_lack_of_a_gpu("both backends refuse a missing glow map"):
+        return
+    var corners = List[RasterVertex]()
+    for base in mapped_quad(24):
+        corners.append(glowing(base, FloatColor(1, 1, 1), TextureId(3)))
+    var renderer = GpuRenderer(24, 24)
+    with assert_raises():
+        renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
+    with assert_raises():
+        _ = cpu_textured(corners, 24, TextureStore())
+    # And corners that disagree about it are refused before any sampling.
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(8, 2, Color(240, 60, 20), Color(20, 40, 200))
+    )
+    var mixed = List[RasterVertex]()
+    for base in mapped_quad(24):
+        mixed.append(glowing(base, FloatColor(1, 1, 1), board))
+    mixed[1] = glowing(mixed[1], FloatColor(1, 1, 1), NO_TEXTURE)
+    renderer.set_textures(textures)
+    with assert_raises():
+        renderer.draw(mixed, BACKGROUND, SHADE_TEXTURE)
+    with assert_raises():
+        _ = cpu_textured(mixed, 24, textures)
 
 
 def count_background(image: Framebuffer, background: Color) raises -> Int:

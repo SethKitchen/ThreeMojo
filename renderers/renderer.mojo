@@ -235,8 +235,8 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
 
     For a surface being seen from its far side. Every other field is carried
     across unchanged, which is why this exists rather than a mutation: a
-    `RasterVertex` has eleven fields and rebuilding one by hand at three call
-    sites is three chances to drop one.
+    `RasterVertex` has fourteen fields and rebuilding one by hand at three
+    call sites is three chances to drop one.
     """
     return RasterVertex(
         corner.x,
@@ -251,6 +251,8 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
         -corner.normal,
         corner.world,
         corner.lit,
+        corner.emissive,
+        corner.emissive_map,
     )
 
 
@@ -260,6 +262,7 @@ def _to_raster(
     texture: TextureId,
     blend: Blending,
     lit: Bool,
+    emissive_map: TextureId,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -289,6 +292,8 @@ def _to_raster(
         vertex.normal,
         vertex.world,
         lit,
+        vertex.emissive,
+        emissive_map,
     )
 
 
@@ -428,8 +433,8 @@ struct Renderer(Movable):
 
         Raises:
             Error: If a mesh names a node, a geometry or a material that is
-                not there, if a material names a texture that is not there, or
-                if its geometry has no positions.
+                not there, if a material names a texture or an emissive map
+                that is not there, or if its geometry has no positions.
         """
         var corners = List[RasterVertex]()
         # Asked of the scene as well as the camera: a camera riding a node
@@ -471,6 +476,22 @@ struct Renderer(Movable):
                 raise Error("A material names a texture that is not there")
             if self.shading != SHADE_TEXTURE:
                 map = NO_TEXTURE
+            # The emissive map, checked the same way. It multiplies the
+            # emissive color, so a material that gives off no light has no
+            # use for it, and a fragment is spared the sample.
+            var glow_map = material.emissive_map
+            if (
+                glow_map != NO_TEXTURE
+                and glow_map.value >= assets.textures.count()
+            ):
+                raise Error(
+                    "A material names an emissive map that is not there"
+                )
+            if self.shading != SHADE_TEXTURE or not material.is_emissive():
+                glow_map = NO_TEXTURE
+            # Light the surface gives off, decoded to linear once and carried
+            # on every corner like the base color below.
+            var glow = material.emissive_light()
             var smooth = geometry.has_attribute(String(NORMAL))
             var mapped = geometry.has_attribute(String(UV))
 
@@ -584,6 +605,7 @@ struct Renderer(Movable):
                         vertex_u[first],
                         vertex_v[first],
                         world_points[first],
+                        glow,
                     ),
                     ClipVertex(
                         view_points[second],
@@ -592,6 +614,7 @@ struct Renderer(Movable):
                         vertex_u[second],
                         vertex_v[second],
                         world_points[second],
+                        glow,
                     ),
                     ClipVertex(
                         view_points[third],
@@ -600,19 +623,35 @@ struct Renderer(Movable):
                         vertex_u[third],
                         vertex_v[third],
                         world_points[third],
+                        glow,
                     ),
                     near,
                     far,
                 )
                 for piece in range(len(pieces) // 3):
                     var one = _to_raster(
-                        pieces[piece * 3], to_screen, map, blending, lit
+                        pieces[piece * 3],
+                        to_screen,
+                        map,
+                        blending,
+                        lit,
+                        glow_map,
                     )
                     var two = _to_raster(
-                        pieces[piece * 3 + 1], to_screen, map, blending, lit
+                        pieces[piece * 3 + 1],
+                        to_screen,
+                        map,
+                        blending,
+                        lit,
+                        glow_map,
                     )
                     var three = _to_raster(
-                        pieces[piece * 3 + 2], to_screen, map, blending, lit
+                        pieces[piece * 3 + 2],
+                        to_screen,
+                        map,
+                        blending,
+                        lit,
+                        glow_map,
                     )
                     # Which way this piece ends up facing decides two things
                     # at once: whether it survives, and which side of it is

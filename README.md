@@ -107,7 +107,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] PointsMaterial and SpriteMaterial [#42](https://github.com/SethKitchen/ThreeMojo/issues/42)
 - [ ] ShadowMaterial [#43](https://github.com/SethKitchen/ThreeMojo/issues/43)
 - [ ] Normal maps and bump maps [#44](https://github.com/SethKitchen/ThreeMojo/issues/44)
-- [ ] Emissive color and emissive map [#45](https://github.com/SethKitchen/ThreeMojo/issues/45)
+- [x] [Emissive color and emissive map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#emissive): light a surface gives off, added after the lights on both rasterizers [#45](https://github.com/SethKitchen/ThreeMojo/issues/45)
 - [ ] Alpha map and alpha test [#46](https://github.com/SethKitchen/ThreeMojo/issues/46)
 - [ ] Vertex colors [#47](https://github.com/SethKitchen/ThreeMojo/issues/47)
 - [ ] Wireframe rendering [#48](https://github.com/SethKitchen/ThreeMojo/issues/48)

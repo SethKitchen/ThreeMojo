@@ -101,8 +101,22 @@ comptime LANE_NZ = 12
 comptime LANE_WX = 13
 comptime LANE_WY = 14
 comptime LANE_WZ = 15
-comptime FLOATS_PER_VERTEX = LANE_WZ + 1
+# Light the surface gives off, linear. See `RasterVertex.emissive`. Three
+# lanes rather than four: the term never touches alpha.
+comptime LANE_ER = 16
+comptime LANE_EG = 17
+comptime LANE_EB = 18
+comptime FLOATS_PER_VERTEX = LANE_EB + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
+
+# How a triangle's metadata is laid out in the state buffer beside the
+# vertices: one entry per column, per triangle. Named here for the reason
+# the lanes are, and read by `triangle_state` and the kernel alike.
+comptime STATE_TEXTURE = 0
+comptime STATE_BLEND = 1
+comptime STATE_LIT = 2
+comptime STATE_EMISSIVE_MAP = 3
+comptime STATE_PER_TRIANGLE = STATE_EMISSIVE_MAP + 1
 
 # Further than any NDC depth, so the first covering triangle always wins. The
 # host framebuffer uses an actual infinity; a literal keeps the kernel free of
@@ -220,6 +234,9 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.world.x)
         flat.append(corner.world.y)
         flat.append(corner.world.z)
+        flat.append(corner.emissive.r)
+        flat.append(corner.emissive.g)
+        flat.append(corner.emissive.b)
     return flat^
 
 
@@ -387,8 +404,8 @@ def _fetch(
 
 
 def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
-    """Return each triangle's texture, blend policy and lit flag, three
-    entries each.
+    """Return each triangle's texture, blend policy, lit flag and emissive
+    map, `STATE_PER_TRIANGLE` entries each.
 
     Neither is a vertex attribute. A resource id was one for a commit —
     carried on all three corners, crossed as a `Float32`, read back from the
@@ -403,8 +420,8 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
         corners: Raster vertices, three per triangle.
 
     Returns:
-        Texture id, blend policy, then one or zero for lit or not, per
-        triangle, from its first corner.
+        Texture id, blend policy, one or zero for lit or not, then the
+        emissive map id, per triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -414,6 +431,7 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
         if corners[triangle * 3].lit:
             lit = Int32(1)
         state.append(lit)
+        state.append(Int32(corners[triangle * 3].emissive_map.value))
     return state^
 
 
@@ -625,6 +643,96 @@ def _mip_level(
     return log2(longest)
 
 
+def _sample_slot(
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
+    slot: Int,
+    corners: MutPointer[Float32, MutAnyOrigin],
+    base: Int,
+    ax: Int,
+    ay: Int,
+    bx: Int,
+    by: Int,
+    cx: Int,
+    cy: Int,
+    span_inv: Float32,
+    swapped: Bool,
+    px: Int,
+    py: Int,
+    u: Float32,
+    v: Float32,
+) -> FloatColor:
+    """Sample texture `slot` at (u, v) for the pixel at (px, py).
+
+    Every texture lives in one buffer end to end, so the table says where
+    this one starts and how to read it. With one level there is no chain to
+    choose from and so no footprint to measure; the CPU takes the same
+    shortcut. Otherwise the level comes from where the coordinates land one
+    pixel over and one down, evaluated from the triangle's own uv function
+    rather than read from a neighboring thread -- see
+    `render.rasterizer.mip_level`. Shared by the material's map and its
+    emissive map, as `_sample_map` is on the host, so both are filtered
+    alike on both sides.
+    """
+    var entry = slot * TABLE_COLUMNS
+    var start = Int(table[unsafe_offset=entry])
+    var width = Int(table[unsafe_offset=entry + 1])
+    var height = Int(table[unsafe_offset=entry + 2])
+    var wrap = Wrap(Int(table[unsafe_offset=entry + 3]))
+    var filter = Filter(Int(table[unsafe_offset=entry + 4]))
+    var space = ColorSpace(Int(table[unsafe_offset=entry + 5]))
+    var levels = Int(table[unsafe_offset=entry + 6])
+    if levels == 1:
+        return _sample_at(
+            texels, ramp, start, width, height, wrap, filter, space, u, v, 0
+        )
+    var along_x = _uv_at(
+        corners,
+        base,
+        ax,
+        ay,
+        bx,
+        by,
+        cx,
+        cy,
+        span_inv,
+        swapped,
+        px + SUBPIXEL,
+        py,
+    )
+    var along_y = _uv_at(
+        corners,
+        base,
+        ax,
+        ay,
+        bx,
+        by,
+        cx,
+        cy,
+        span_inv,
+        swapped,
+        px,
+        py + SUBPIXEL,
+    )
+    # v flipped and wrapped by the same routine the host uses, and blended
+    # by the same one -- see render.texture.
+    return _sample_level(
+        texels,
+        ramp,
+        start,
+        width,
+        height,
+        wrap,
+        filter,
+        space,
+        levels,
+        u,
+        v,
+        _mip_level(u, v, along_x, along_y, Float32(width), Float32(height)),
+    )
+
+
 def rasterize_kernel(
     pixels: MutPointer[UInt8, MutAnyOrigin],
     depth: MutPointer[Float32, MutAnyOrigin],
@@ -773,7 +881,7 @@ def rasterize_kernel(
         # own color. Lit or not is per triangle, from the state table.
         if (
             mode != Int32(SHADE_UV.value)
-            and maps[unsafe_offset=index * 3 + 2] != 0
+            and maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_LIT] != 0
         ):
             var nx = (
                 corners[unsafe_offset=base + LANE_NX] * share_a
@@ -823,148 +931,27 @@ def rasterize_kernel(
                 wz,
             )
 
-        if mode == Int32(SHADE_TEXTURE.value):
-            var u = (
+        # Texture coordinates, for the two modes that read them.
+        var u = Float32(0)
+        var v = Float32(0)
+        if mode != Int32(SHADE_LIT.value):
+            u = (
                 corners[unsafe_offset=base + LANE_U] * share_a
                 + corners[unsafe_offset=b_base + LANE_U] * share_b
                 + corners[unsafe_offset=c_base + LANE_U] * share_c
             )
-            var v = (
+            v = (
                 corners[unsafe_offset=base + LANE_V] * share_a
                 + corners[unsafe_offset=b_base + LANE_V] * share_b
                 + corners[unsafe_offset=c_base + LANE_V] * share_c
             )
-            red = (
-                corners[unsafe_offset=base + LANE_R] * share_a
-                + corners[unsafe_offset=b_base + LANE_R] * share_b
-                + corners[unsafe_offset=c_base + LANE_R] * share_c
-            )
-            green = (
-                corners[unsafe_offset=base + LANE_G] * share_a
-                + corners[unsafe_offset=b_base + LANE_G] * share_b
-                + corners[unsafe_offset=c_base + LANE_G] * share_c
-            )
-            blue = (
-                corners[unsafe_offset=base + LANE_B] * share_a
-                + corners[unsafe_offset=b_base + LANE_B] * share_b
-                + corners[unsafe_offset=c_base + LANE_B] * share_c
-            )
-            alpha = (
-                corners[unsafe_offset=base + LANE_A] * share_a
-                + corners[unsafe_offset=b_base + LANE_A] * share_b
-                + corners[unsafe_offset=c_base + LANE_A] * share_c
-            )
-            red *= arriving.x
-            green *= arriving.y
-            blue *= arriving.z
-            # Which image, from the triangle; -1 is no texture, which samples
-            # as white and so leaves the lighting alone.
-            var slot = Int(maps[unsafe_offset=index * 3])
-            if slot != NO_TEXTURE.value:
-                # Every texture lives in one buffer end to end, so the table
-                # says where this one starts and how to read it.
-                var entry = slot * TABLE_COLUMNS
-                var start = Int(table[unsafe_offset=entry])
-                var width = Int(table[unsafe_offset=entry + 1])
-                var height = Int(table[unsafe_offset=entry + 2])
-                var wrap = Wrap(Int(table[unsafe_offset=entry + 3]))
-                var filter = Filter(Int(table[unsafe_offset=entry + 4]))
-                var space = ColorSpace(Int(table[unsafe_offset=entry + 5]))
-                var levels = Int(table[unsafe_offset=entry + 6])
 
-                var sampled = FloatColor(1.0, 1.0, 1.0, 1.0)
-                if levels == 1:
-                    # No chain to choose from, so no footprint to measure.
-                    # The CPU takes the same shortcut; without it the two
-                    # neighbor evaluations and the log below are computed
-                    # and then thrown away.
-                    sampled = _sample_at(
-                        texels,
-                        ramp,
-                        start,
-                        width,
-                        height,
-                        wrap,
-                        filter,
-                        space,
-                        u,
-                        v,
-                        0,
-                    )
-                else:
-                    # Where the coordinates land one pixel over and one down,
-                    # evaluated from the triangle's own uv function rather
-                    # than read from a neighboring thread -- see
-                    # render.rasterizer.mip_level.
-                    var along_x = _uv_at(
-                        corners,
-                        base,
-                        sax,
-                        say,
-                        sbx,
-                        sby,
-                        scx,
-                        scy,
-                        span_inv,
-                        swapped,
-                        px + SUBPIXEL,
-                        py,
-                    )
-                    var along_y = _uv_at(
-                        corners,
-                        base,
-                        sax,
-                        say,
-                        sbx,
-                        sby,
-                        scx,
-                        scy,
-                        span_inv,
-                        swapped,
-                        px,
-                        py + SUBPIXEL,
-                    )
-                    # v flipped and wrapped by the same routine the host uses,
-                    # and blended by the same one -- see render.texture.
-                    sampled = _sample_level(
-                        texels,
-                        ramp,
-                        start,
-                        width,
-                        height,
-                        wrap,
-                        filter,
-                        space,
-                        levels,
-                        u,
-                        v,
-                        _mip_level(
-                            u,
-                            v,
-                            along_x,
-                            along_y,
-                            Float32(width),
-                            Float32(height),
-                        ),
-                    )
-                red *= sampled.r
-                green *= sampled.g
-                blue *= sampled.b
-                alpha *= sampled.a
-        elif mode == Int32(SHADE_UV.value):
+        if mode == Int32(SHADE_UV.value):
             # Coordinates, not light; written raw. See rasterize_shaded.
             # Texture coordinates straight out as red and green, matching
             # rasterize_shaded's SHADE_UV.
-            red = (
-                corners[unsafe_offset=base + LANE_U] * share_a
-                + corners[unsafe_offset=b_base + LANE_U] * share_b
-                + corners[unsafe_offset=c_base + LANE_U] * share_c
-            )
-            green = (
-                corners[unsafe_offset=base + LANE_V] * share_a
-                + corners[unsafe_offset=b_base + LANE_V] * share_b
-                + corners[unsafe_offset=c_base + LANE_V] * share_c
-            )
+            red = u
+            green = v
             blue = 0
             alpha = 1
         else:
@@ -991,6 +978,91 @@ def rasterize_kernel(
             red *= arriving.x
             green *= arriving.y
             blue *= arriving.z
+            # Light the surface gives off, interpolated like its color and
+            # added after the lights, exactly as `rasterize_shaded` adds it.
+            var glow_r = (
+                corners[unsafe_offset=base + LANE_ER] * share_a
+                + corners[unsafe_offset=b_base + LANE_ER] * share_b
+                + corners[unsafe_offset=c_base + LANE_ER] * share_c
+            )
+            var glow_g = (
+                corners[unsafe_offset=base + LANE_EG] * share_a
+                + corners[unsafe_offset=b_base + LANE_EG] * share_b
+                + corners[unsafe_offset=c_base + LANE_EG] * share_c
+            )
+            var glow_b = (
+                corners[unsafe_offset=base + LANE_EB] * share_a
+                + corners[unsafe_offset=b_base + LANE_EB] * share_b
+                + corners[unsafe_offset=c_base + LANE_EB] * share_c
+            )
+            if mode == Int32(SHADE_TEXTURE.value):
+                # Which image, from the triangle; -1 is no texture, which
+                # samples as white and so leaves the lighting alone.
+                var slot = Int(
+                    maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE + STATE_TEXTURE
+                    ]
+                )
+                if slot != NO_TEXTURE.value:
+                    var sampled = _sample_slot(
+                        texels,
+                        ramp,
+                        table,
+                        slot,
+                        corners,
+                        base,
+                        sax,
+                        say,
+                        sbx,
+                        sby,
+                        scx,
+                        scy,
+                        span_inv,
+                        swapped,
+                        px,
+                        py,
+                        u,
+                        v,
+                    )
+                    red *= sampled.r
+                    green *= sampled.g
+                    blue *= sampled.b
+                    alpha *= sampled.a
+                # The emissive map multiplies the glow the same way, alpha
+                # aside: light given off has no coverage.
+                var glow_slot = Int(
+                    maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE
+                        + STATE_EMISSIVE_MAP
+                    ]
+                )
+                if glow_slot != NO_TEXTURE.value:
+                    var glowing = _sample_slot(
+                        texels,
+                        ramp,
+                        table,
+                        glow_slot,
+                        corners,
+                        base,
+                        sax,
+                        say,
+                        sbx,
+                        sby,
+                        scx,
+                        scy,
+                        span_inv,
+                        swapped,
+                        px,
+                        py,
+                        u,
+                        v,
+                    )
+                    glow_r *= glowing.r
+                    glow_g *= glowing.g
+                    glow_b *= glowing.b
+            red += glow_r
+            green += glow_g
+            blue += glow_b
 
         # Opaque replaces what is there; translucent mixes into it. One pass
         # is enough only because every opaque triangle is submitted before any
@@ -1005,9 +1077,9 @@ def rasterize_kernel(
             share = 0
         # Asked the way the host asks it -- "is it BLEND?" -- so anything
         # else is opaque on both sides rather than opaque on one.
-        if maps[unsafe_offset=index * 3 + 1] != Int32(
-            BLEND.value
-        ) or mode == Int32(SHADE_UV.value):
+        if maps[
+            unsafe_offset=index * STATE_PER_TRIANGLE + STATE_BLEND
+        ] != Int32(BLEND.value) or mode == Int32(SHADE_UV.value):
             # Nothing behind contributes. The surface's own alpha is kept
             # rather than forced to one, so an opaque material drawn with a
             # partly transparent texture resolves partly transparent.
@@ -1172,7 +1244,9 @@ struct GpuRenderer(Movable):
         self.corners = self.context.enqueue_create_buffer[DType.float32](
             FLOATS_PER_TRIANGLE
         )
-        self.maps = self.context.enqueue_create_buffer[DType.int32](3)
+        self.maps = self.context.enqueue_create_buffer[DType.int32](
+            STATE_PER_TRIANGLE
+        )
         # One texel's worth, standing in for the blank texture. A zero-length
         # device buffer is not worth the special case, and a width of zero is
         # what the kernel actually reads to mean "no texture".
@@ -1233,9 +1307,10 @@ struct GpuRenderer(Movable):
 
         Raises:
             Error: If the corner count is not a multiple of three, the mode
-                is none of the three, a triangle's blend policy or texture
-                disagrees between its corners or is a value neither backend
-                knows, or a vertex names a texture that is not uploaded.
+                is none of the three, a triangle's blend policy, texture or
+                emissive map disagrees between its corners or is a value
+                neither backend knows, or a vertex names a texture or an
+                emissive map that is not uploaded.
         """
         if len(corners) % 3 != 0:
             raise Error("Rasterizing needs whole triangles")
@@ -1260,14 +1335,14 @@ struct GpuRenderer(Movable):
         # `TextureStore.get`, which raises; without this the two backends
         # failed differently on the same bad input.
         for index in range(len(corners)):
-            var slot = corners[index].texture
-            if slot == NO_TEXTURE:
-                continue
-            if slot.value < 0 or slot.value >= self.uploaded:
-                raise Error(
-                    "A vertex names a texture that has not been uploaded;"
-                    " call set_textures() first"
-                )
+            for slot in [corners[index].texture, corners[index].emissive_map]:
+                if slot == NO_TEXTURE:
+                    continue
+                if slot.value < 0 or slot.value >= self.uploaded:
+                    raise Error(
+                        "A vertex names a texture that has not been uploaded;"
+                        " call set_textures() first"
+                    )
 
         if triangles > self.capacity:
             # Grow to exactly what is asked for. Frames tend to submit the
@@ -1276,7 +1351,7 @@ struct GpuRenderer(Movable):
                 triangles * FLOATS_PER_TRIANGLE
             )
             self.maps = self.context.enqueue_create_buffer[DType.int32](
-                triangles * 3
+                triangles * STATE_PER_TRIANGLE
             )
             self.capacity = triangles
 

@@ -1340,6 +1340,129 @@ def test_corners_that_disagree_about_being_lit_are_rejected() raises:
     rasterize_shaded(a, b, c, target)
 
 
+def test_corners_that_disagree_about_their_emissive_map_are_rejected() raises:
+    # Per triangle like the texture, and read from the first corner.
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var white = FloatColor(1, 1, 1)
+    var a = RasterVertex(0, 0, 0.5, 1, white, emissive_map=TextureId(0))
+    var b = RasterVertex(6, 0, 0.5, 1, white, emissive_map=TextureId(0))
+    var c = RasterVertex(0, 6, 0.5, 1, white, emissive_map=TextureId(0))
+    with assert_raises():
+        rasterize_shaded(a, RasterVertex(6, 0, 0.5, 1, white), c, target)
+    with assert_raises():
+        rasterize_shaded(a, b, RasterVertex(0, 6, 0.5, 1, white), target)
+    # Agreeing is fine, and in SHADE_LIT the map is never opened.
+    rasterize_shaded(a, b, c, target)
+    # An id nothing can hold is refused whether or not it is sampled.
+    var held = RasterVertex(0, 0, 0.5, 1, white, emissive_map=TextureId(-2))
+    var held_b = RasterVertex(6, 0, 0.5, 1, white, emissive_map=TextureId(-2))
+    var held_c = RasterVertex(0, 6, 0.5, 1, white, emissive_map=TextureId(-2))
+    with assert_raises():
+        rasterize_shaded(held, held_b, held_c, target)
+
+
+def glowing_corner(
+    x: Float32,
+    y: Float32,
+    u: Float32,
+    v: Float32,
+    glow: FloatColor,
+    map: TextureId = NO_TEXTURE,
+) -> RasterVertex:
+    """Return a white lit corner that gives off `glow`, mapped at (u, v)."""
+    return RasterVertex(
+        x,
+        y,
+        0.5,
+        1,
+        FloatColor(1, 1, 1),
+        u,
+        v,
+        NO_TEXTURE,
+        OPAQUE,
+        Vector3(0, 0, 1),
+        Vector3(0, 0, 0),
+        True,
+        glow,
+        map,
+    )
+
+
+def glowing_quad(glow: FloatColor, map: TextureId) -> List[RasterVertex]:
+    """Return two triangles covering an eight-pixel square, mapped once."""
+    var corners = List[RasterVertex]()
+    corners.append(glowing_corner(0, 0, 0, 1, glow, map))
+    corners.append(glowing_corner(8, 0, 1, 1, glow, map))
+    corners.append(glowing_corner(8, 8, 1, 0, glow, map))
+    corners.append(glowing_corner(0, 0, 0, 1, glow, map))
+    corners.append(glowing_corner(8, 8, 1, 0, glow, map))
+    corners.append(glowing_corner(0, 8, 0, 0, glow, map))
+    return corners^
+
+
+def draw_quad(
+    corners: List[RasterVertex],
+    mode: ShadeMode,
+    textures: TextureStore,
+    lighting: Lighting,
+) raises -> RenderTarget:
+    """Return an eight-pixel target with `corners` drawn into it."""
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    for triangle in range(len(corners) // 3):
+        rasterize_shaded(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+            target,
+            mode,
+            textures,
+            lighting,
+        )
+    return target^
+
+
+def test_the_emissive_is_added_after_the_lights() raises:
+    # Half light on a white surface gives half; a glow of a quarter red on
+    # top gives three quarters red, and the light does not scale the glow.
+    var half = Lighting(ambient=FloatColor(0.5, 0.5, 0.5, 1.0))
+    var target = draw_quad(
+        glowing_quad(FloatColor(0.25, 0.0, 0.0), NO_TEXTURE),
+        SHADE_LIT,
+        TextureStore(),
+        half,
+    )
+    var expected = FloatColor(0.75, 0.5, 0.5, 1.0).encode()
+    var shown = target.shown(4, 4)
+    assert_equal(shown.r, expected.r)
+    assert_equal(shown.g, expected.g)
+    assert_equal(shown.b, expected.b)
+    assert_equal(shown.a, UInt8(255))
+
+
+def test_an_emissive_map_glows_only_where_it_is_bright() raises:
+    # No light at all, so only the glow shows: through a white-and-black
+    # board it shows in the light squares and not in the dark ones.
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
+    )
+    var dark = Lighting(ambient=FloatColor(0.0, 0.0, 0.0, 1.0))
+    var quad = glowing_quad(FloatColor(1.0, 0.5, 0.0), board)
+    var target = draw_quad(quad, SHADE_TEXTURE, textures, dark)
+    var glow = FloatColor(1.0, 0.5, 0.0, 1.0).encode()
+    # Top left and bottom right are the light squares.
+    assert_equal(target.shown(2, 2).r, glow.r)
+    assert_equal(target.shown(2, 2).g, glow.g)
+    assert_equal(target.shown(6, 6).g, glow.g)
+    assert_equal(target.shown(6, 2).r, UInt8(0))
+    assert_equal(target.shown(2, 6).r, UInt8(0))
+    # SHADE_LIT ignores the map, as it ignores the material's, and keeps the
+    # glow everywhere.
+    var flat = draw_quad(quad, SHADE_LIT, textures, dark)
+    assert_equal(flat.shown(6, 2).r, glow.r)
+    assert_equal(flat.shown(2, 6).g, glow.g)
+
+
 def test_corners_that_disagree_about_their_texture_are_rejected() raises:
     var textures = TextureStore()
     var board = textures.add(

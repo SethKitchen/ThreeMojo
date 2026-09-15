@@ -58,6 +58,9 @@ struct ClipVertex(ImplicitlyCopyable):
     # projection threw that away. Carried through a cut like every other
     # varying, so a clipped triangle is lit from where it really is.
     var world: Vector3
+    # Light this surface gives off, linear, from the material. Carried like
+    # the color, so a cut piece glows as the whole did.
+    var emissive: FloatColor
 
     def __init__(
         out self,
@@ -67,11 +70,13 @@ struct ClipVertex(ImplicitlyCopyable):
         u: Float32,
         v: Float32,
         world: Vector3 = Vector3(0, 0, 0),
+        emissive: FloatColor = FloatColor(0.0, 0.0, 0.0),
     ):
         """Create a corner.
 
         The world position defaults to the origin, which is what a hand-built
-        triangle with no point lights in reach wants.
+        triangle with no point lights in reach wants, and the emissive to
+        black, which is no light at all.
         """
         self.position = position
         self.color = color
@@ -79,6 +84,7 @@ struct ClipVertex(ImplicitlyCopyable):
         self.u = u
         self.v = v
         self.world = world
+        self.emissive = emissive
 
 
 def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
@@ -137,6 +143,12 @@ def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
             _mix(a.world.x, b.world.x, t),
             _mix(a.world.y, b.world.y, t),
             _mix(a.world.z, b.world.z, t),
+        ),
+        FloatColor(
+            _mix(a.emissive.r, b.emissive.r, t),
+            _mix(a.emissive.g, b.emissive.g, t),
+            _mix(a.emissive.b, b.emissive.b, t),
+            _mix(a.emissive.a, b.emissive.a, t),
         ),
     )
 

@@ -357,6 +357,48 @@ def test_a_cut_carries_the_normal_across() raises:
     assert_true(found, "no corner landed on the near plane")
 
 
+def test_a_cut_carries_the_emissive_across() raises:
+    # The glowing corner is behind the near plane and the dark ones in
+    # front; the crossing is halfway along the edge, so half the glow.
+    var bright = ClipVertex(
+        Vector3(0, 0, 1),
+        FloatColor(1, 1, 1),
+        Vector3(0, 0, 1),
+        0,
+        0,
+        Vector3(0, 0, 0),
+        FloatColor(0.8, 0.4, 0.2),
+    )
+    var pieces = clip_depth(
+        bright,
+        ClipVertex(
+            Vector3(1, 0, -3), FloatColor(1, 1, 1), Vector3(0, 0, 1), 0, 0
+        ),
+        ClipVertex(
+            Vector3(0, 1, -3), FloatColor(1, 1, 1), Vector3(0, 0, 1), 0, 0
+        ),
+        NEAR,
+        FAR,
+    )
+    var found = False
+    for index in range(len(pieces)):
+        if pieces[index].position.z == -NEAR:
+            assert_almost_equal(
+                pieces[index].emissive.r, Float32(0.4), atol=TOLERANCE
+            )
+            assert_almost_equal(
+                pieces[index].emissive.g, Float32(0.2), atol=TOLERANCE
+            )
+            assert_almost_equal(
+                pieces[index].emissive.b, Float32(0.1), atol=TOLERANCE
+            )
+            found = True
+        else:
+            # A corner that survives whole keeps its own, which is none.
+            assert_equal(pieces[index].emissive.r, Float32(0))
+    assert_true(found)
+
+
 def test_a_cut_carries_the_world_position_across() raises:
     # A point light needs to know where the surface really is, and a cut
     # corner is somewhere between the two it was cut from.

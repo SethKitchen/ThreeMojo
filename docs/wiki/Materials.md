@@ -1,8 +1,8 @@
 # Materials
 
-`materials/material.mojo`. A `Material` is a color, an optional texture, which sides to draw, an opacity, a blend policy and a kind.
+`materials/material.mojo`. A `Material` is a color, an optional texture, which sides to draw, an opacity, a blend policy, a kind and an emissive term.
 
-three.js: `Material`, `MeshLambertMaterial`, `MeshBasicMaterial`, `side`, `opacity`, `transparent`, `map`.
+three.js: `Material`, `MeshLambertMaterial`, `MeshBasicMaterial`, `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`.
 
 ## Construct one
 
@@ -12,6 +12,8 @@ Material(color, map)
 Material(color, map, side, opacity)
 Material(color, map, side, opacity, blending, kind)
 Material(color, kind=BASIC)
+Material(color, emissive=Color(255, 200, 120))
+Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_map=glow)
 ```
 
 | Argument | Type | Default | Meaning |
@@ -22,6 +24,9 @@ Material(color, kind=BASIC)
 | `opacity` | `Float32` | `1.0` | One is opaque. Less shows what is behind. |
 | `blending` | `Optional[Blending]` | inferred | `OPAQUE` or `BLEND`. |
 | `kind` | `MaterialKind` | `LAMBERT` | Lit, or unlit. |
+| `emissive` | `Color` | black | Light the surface gives off, as authored in sRGB. |
+| `emissive_intensity` | `Float32` | `1.0` | Scales `emissive`. |
+| `emissive_map` | `TextureId` | `NO_TEXTURE` | The texture that multiplies `emissive`. |
 
 ## Side
 
@@ -40,6 +45,20 @@ A face seen from behind is lit with its normal flipped. A mirrored mesh, with a 
 | `LAMBERT` | `MeshLambertMaterial` | The lights reach the surface. |
 | `BASIC` | `MeshBasicMaterial` | The color and texture show as they are. |
 
+## Emissive
+
+The emissive term is light the surface gives off. Both rasterizers add it after the lights, and the lights do not change it. A glowing surface shows in a dark scene. The term adds to red, green and blue. It does not change alpha.
+
+`emissive` is the color, as authored in sRGB. `emissive_intensity` scales it. `emissive_map` multiplies it per texel, so a map over a black `emissive` adds nothing, as in three.js. `SHADE_LIT` ignores the map and keeps the color.
+
+A `BASIC` material refuses an emissive term. three.js's `MeshBasicMaterial` has none. An unlit surface already shows its own color.
+
+```mojo
+var lamp = assets.materials.add(
+    Material(Color(40, 40, 40), emissive=Color(255, 220, 160), emissive_intensity=0.8)
+)
+```
+
 ## Opacity and blending
 
 `opacity` below one, or a color with alpha below 255, makes the material blend. A blended surface tests depth without writing it, and the renderer draws it after every opaque mesh, furthest first.
@@ -51,13 +70,17 @@ Pass `blending=BLEND` when a texture's own alpha needs blending and the material
 | `is_lit() -> Bool` | `kind == LAMBERT`. |
 | `is_textured() -> Bool` | `map != NO_TEXTURE`. |
 | `is_transparent() -> Bool` | `blending == BLEND`. |
+| `is_emissive() -> Bool` | Whether the emissive color at its intensity adds any light. |
+| `emissive_light() -> FloatColor` | The emissive color decoded to linear light, times the intensity. |
 
 ## Errors
 
 The constructor raises for:
 
-- A texture id below zero that is not `NO_TEXTURE`.
+- A texture id or an emissive map id below zero that is not `NO_TEXTURE`.
 - An opacity outside zero to one.
+- A negative emissive intensity.
+- An emissive color or map on a `BASIC` material.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.
 
 ## MaterialStore

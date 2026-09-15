@@ -27,8 +27,8 @@ var fast = Renderer(1280, 720, workers=available_workers())
 
 | Mode | A fragment's color is |
 |---|---|
-| `SHADE_TEXTURE` | The material color, times its texture, times the light. The default. |
-| `SHADE_LIT` | The material color times the light. Textures are ignored. |
+| `SHADE_TEXTURE` | The material color, times its texture, times the light, plus the emissive times its map. The default. |
+| `SHADE_LIT` | The material color times the light, plus the emissive. Textures are ignored. |
 | `SHADE_UV` | The texture coordinates, as red and green. A debug view. |
 
 `set_shading` refuses a mode that is none of the three.
@@ -58,7 +58,7 @@ The default is one worker. The coverage tool needs probe records in order.
 
 ## Errors
 
-`prepare` raises in three cases. A mesh names a node, geometry or material that does not exist. A material names a texture that does not exist. A geometry has no positions.
+`prepare` raises in three cases. A mesh names a node, geometry or material that does not exist. A material names a texture or an emissive map that does not exist. A geometry has no positions.
 
 ## Performance
 

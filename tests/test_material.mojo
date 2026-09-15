@@ -23,6 +23,7 @@ from render.texture import Texture, checkerboard
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from std.testing import (
     TestSuite,
+    assert_almost_equal,
     assert_equal,
     assert_false,
     assert_raises,
@@ -112,6 +113,92 @@ def test_a_negative_texture_id_that_is_not_absence_is_rejected() raises:
     # mistake rather than a deliberate absence.
     with assert_raises():
         _ = Material(Color(0, 0, 0), TextureId(-2))
+
+
+# --- emissive ---------------------------------------------------------------
+
+
+def test_a_material_gives_off_no_light_by_default() raises:
+    var paint = Material(Color(10, 20, 30))
+    assert_equal(paint.emissive.r, UInt8(0))
+    assert_equal(paint.emissive.g, UInt8(0))
+    assert_equal(paint.emissive.b, UInt8(0))
+    assert_equal(paint.emissive_intensity, Float32(1))
+    assert_equal(paint.emissive_map, NO_TEXTURE)
+    assert_false(paint.is_emissive())
+    var glow = paint.emissive_light()
+    assert_equal(glow.r, Float32(0))
+    assert_equal(glow.g, Float32(0))
+    assert_equal(glow.b, Float32(0))
+
+
+def test_an_emissive_material_glows_by_its_color_times_its_intensity() raises:
+    var lamp = Material(
+        Color(10, 20, 30),
+        emissive=Color(255, 255, 255),
+        emissive_intensity=0.5,
+    )
+    assert_true(lamp.is_emissive())
+    var glow = lamp.emissive_light()
+    assert_almost_equal(glow.r, Float32(0.5), atol=Float64(1e-6))
+    assert_almost_equal(glow.g, Float32(0.5), atol=Float64(1e-6))
+    assert_almost_equal(glow.b, Float32(0.5), atol=Float64(1e-6))
+    assert_equal(glow.a, Float32(1))
+    # Decoded from sRGB, as the base color is: a mid gray is not half light.
+    var dim = Material(Color(0, 0, 0), emissive=Color(128, 128, 128))
+    assert_true(dim.emissive_light().r < 0.25)
+    assert_true(dim.emissive_light().r > 0.2)
+
+
+def test_any_channel_at_any_positive_intensity_is_a_glow() raises:
+    # Each operand of the check has to decide the outcome on its own.
+    assert_true(Material(Color(0, 0, 0), emissive=Color(1, 0, 0)).is_emissive())
+    assert_true(Material(Color(0, 0, 0), emissive=Color(0, 1, 0)).is_emissive())
+    assert_true(Material(Color(0, 0, 0), emissive=Color(0, 0, 1)).is_emissive())
+    assert_false(
+        Material(Color(0, 0, 0), emissive=Color(0, 0, 0)).is_emissive()
+    )
+    assert_false(
+        Material(
+            Color(0, 0, 0), emissive=Color(1, 0, 0), emissive_intensity=0
+        ).is_emissive()
+    )
+
+
+def test_an_emissive_map_alone_adds_nothing() raises:
+    # The map multiplies the emissive color, and black times anything is
+    # black, as in three.js.
+    var mapped = Material(Color(0, 0, 0), emissive_map=TextureId(3))
+    assert_equal(mapped.emissive_map, TextureId(3))
+    assert_false(mapped.is_emissive())
+    var lit = Material(
+        Color(0, 0, 0), emissive=Color(255, 255, 255), emissive_map=TextureId(3)
+    )
+    assert_true(lit.is_emissive())
+
+
+def test_a_basic_material_refuses_an_emissive_term() raises:
+    # three.js's MeshBasicMaterial has none: an unlit surface already shows
+    # its own color. The color alone or the map alone is refused.
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), kind=BASIC, emissive=Color(255, 0, 0))
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), kind=BASIC, emissive_map=TextureId(0))
+    # Black at any intensity is no term at all, and is fine.
+    _ = Material(Color(0, 0, 0), kind=BASIC, emissive_intensity=4.0)
+    # A lit material with the same term is what the term is for.
+    _ = Material(
+        Color(0, 0, 0), emissive=Color(255, 0, 0), emissive_map=TextureId(0)
+    )
+
+
+def test_a_bad_emissive_map_id_or_intensity_is_rejected() raises:
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), emissive_map=TextureId(-2))
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), emissive_intensity=-0.5)
+    # The absence value is fine, and so is an intensity of zero.
+    _ = Material(Color(0, 0, 0), emissive_map=NO_TEXTURE, emissive_intensity=0)
 
 
 # --- MaterialStore ----------------------------------------------------------

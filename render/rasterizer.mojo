@@ -28,6 +28,7 @@ from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, OPAQUE, Blending
 from render.target import RenderTarget
+from render.texture import Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.lighting import Lighting
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
@@ -434,6 +435,13 @@ struct RasterVertex(ImplicitlyCopyable):
     # lights do -- a sky, a sprite, an overlay. Per-triangle metadata like
     # the blend policy: read from the first corner, checked to agree.
     var lit: Bool
+    # Light this surface gives off, linear, added after the lights and
+    # untouched by them: three.js's `emissive`. Interpolated like the color,
+    # and multiplied per fragment by `emissive_map` when there is one.
+    var emissive: FloatColor
+    # Which texture multiplies the emissive, or `NO_TEXTURE`. Per-triangle
+    # metadata like `texture`: read from the first corner, checked to agree.
+    var emissive_map: TextureId
 
     def __init__(
         out self,
@@ -449,14 +457,17 @@ struct RasterVertex(ImplicitlyCopyable):
         normal: Vector3 = Vector3(0, 0, 1),
         world: Vector3 = Vector3(0, 0, 0),
         lit: Bool = True,
+        emissive: FloatColor = FloatColor(0.0, 0.0, 0.0),
+        emissive_map: TextureId = NO_TEXTURE,
     ):
-        """Create a corner. Texture coordinates and map default to none.
+        """Create a corner. Texture coordinates and maps default to none.
 
         The normal defaults to facing the camera, so a hand-built triangle
         that does not care about lighting is lit square-on rather than edge-on
         or, worse, from behind. The world position defaults to the origin,
         which only a point light would notice, and the corner defaults to
-        lit, which under `Lighting.uniform` changes nothing.
+        lit, which under `Lighting.uniform` changes nothing. The emissive
+        defaults to black: no light given off.
         """
         self.x = x
         self.y = y
@@ -470,6 +481,8 @@ struct RasterVertex(ImplicitlyCopyable):
         self.blend = blend
         self.world = world
         self.lit = lit
+        self.emissive = emissive
+        self.emissive_map = emissive_map
 
 
 @fieldwise_init
@@ -527,6 +540,42 @@ def _coordinates_at(
     return Vector2(
         a.u * share_a + b.u * share_b + c.u * share_c,
         a.v * share_a + b.v * share_b + c.v * share_c,
+    )
+
+
+def _sample_map(
+    image: Texture,
+    u: Float32,
+    v: Float32,
+    a: RasterVertex,
+    b: RasterVertex,
+    c: RasterVertex,
+    coverage: _Coverage,
+    x: Int,
+    y: Int,
+) -> FloatColor:
+    """Return `image` sampled at (u, v) for the pixel at (x, y).
+
+    Straight from the one level when the image has one. Otherwise from the
+    level the pixel's footprint chooses, measured from the coordinates at
+    the pixels one over and one down -- see `mip_level`. Shared by the
+    material's map and its emissive map, so both are filtered alike, and
+    mirrored on the device by `render.gpu._sample_slot`.
+    """
+    if image.levels == 1:
+        return image.sample(u, v)
+    var here = Vector2(u, v)
+    var right = _coordinates_at(a, b, c, _weights(coverage, x + 1, y))
+    var below = _coordinates_at(a, b, c, _weights(coverage, x, y + 1))
+    return image.sample_level(
+        u,
+        v,
+        mip_level(
+            Vector2(right.x - here.x, right.y - here.y),
+            Vector2(below.x - here.x, below.y - here.y),
+            image.width,
+            image.height,
+        ),
     )
 
 
@@ -622,20 +671,25 @@ def check_triangle_state(
 
     Raises:
         Error: If the three corners do not agree on their blend policy, on
-            their texture, or on whether they are lit; if the agreed policy
-            is neither `OPAQUE` nor `BLEND`; or if the texture id is a
-            negative other than `NO_TEXTURE`, which nothing can ever hold.
+            their texture or emissive map, or on whether they are lit; if
+            the agreed policy is neither `OPAQUE` nor `BLEND`; or if either
+            texture id is a negative other than `NO_TEXTURE`, which nothing
+            can ever hold.
     """
     if b.blend != a.blend or c.blend != a.blend:
         raise Error("A triangle's corners disagree about blending")
     if b.texture != a.texture or c.texture != a.texture:
         raise Error("A triangle's corners disagree about their texture")
+    if b.emissive_map != a.emissive_map or c.emissive_map != a.emissive_map:
+        raise Error("A triangle's corners disagree about their emissive map")
     if b.lit != a.lit or c.lit != a.lit:
         raise Error("A triangle's corners disagree about being lit")
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is neither OPAQUE nor BLEND")
     if a.texture != NO_TEXTURE and a.texture.value < 0:
         raise Error("A triangle names a texture id that nothing can hold")
+    if a.emissive_map != NO_TEXTURE and a.emissive_map.value < 0:
+        raise Error("A triangle names an emissive map id that nothing can hold")
 
 
 def rasterize_shaded(
@@ -827,6 +881,21 @@ def rasterize_shaded(
                 base.b * arriving.b,
                 base.a,
             )
+            # Light the surface gives off, interpolated like its color. Added
+            # below, after the lights, and multiplied by its own map first
+            # when there is one.
+            var glow = FloatColor(
+                a.emissive.r * share_a
+                + b.emissive.r * share_b
+                + c.emissive.r * share_c,
+                a.emissive.g * share_a
+                + b.emissive.g * share_b
+                + c.emissive.g * share_c,
+                a.emissive.b * share_a
+                + b.emissive.b * share_b
+                + c.emissive.b * share_c,
+                1.0,
+            )
             # Each mode by name, as the kernel does, so there is no "else"
             # for an unrecognized one to fall into differently on each side.
             if mode == SHADE_UV or mode == SHADE_TEXTURE:
@@ -857,34 +926,37 @@ def rasterize_shaded(
                     var texel = FloatColor(1.0, 1.0, 1.0, 1.0)
                     if a.texture != NO_TEXTURE:
                         ref image = textures.get(a.texture)
-                        if image.levels == 1:
-                            texel = image.sample(u, v)
-                        else:
-                            # How much of the texture this one pixel covers,
-                            # from the coordinates at the pixels either side.
-                            var here = Vector2(u, v)
-                            var right = _coordinates_at(
-                                a, b, c, _weights(coverage, x + 1, y)
-                            )
-                            var below = _coordinates_at(
-                                a, b, c, _weights(coverage, x, y + 1)
-                            )
-                            texel = image.sample_level(
-                                u,
-                                v,
-                                mip_level(
-                                    Vector2(right.x - here.x, right.y - here.y),
-                                    Vector2(below.x - here.x, below.y - here.y),
-                                    image.width,
-                                    image.height,
-                                ),
-                            )
+                        texel = _sample_map(
+                            image, u, v, a, b, c, coverage, x, y
+                        )
                     shaded = FloatColor(
                         shaded.r * texel.r,
                         shaded.g * texel.g,
                         shaded.b * texel.b,
                         shaded.a * texel.a,
                     )
+                    # The emissive map multiplies the glow the same way,
+                    # alpha aside: light given off has no coverage.
+                    if a.emissive_map != NO_TEXTURE:
+                        ref glow_image = textures.get(a.emissive_map)
+                        var glowing = _sample_map(
+                            glow_image, u, v, a, b, c, coverage, x, y
+                        )
+                        glow = FloatColor(
+                            glow.r * glowing.r,
+                            glow.g * glowing.g,
+                            glow.b * glowing.b,
+                            1.0,
+                        )
+            # Added after the lights, which do not touch it: a surface that
+            # gives off light is seen in the dark. Alpha is coverage rather
+            # than light, so it stays what the material said.
+            shaded = FloatColor(
+                shaded.r + glow.r,
+                shaded.g + glow.g,
+                shaded.b + glow.b,
+                shaded.a,
+            )
             if blended:
                 target.blend(x, y, shaded)
             else:

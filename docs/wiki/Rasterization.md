@@ -20,8 +20,10 @@ One corner as the rasterizer wants it:
 | `texture` | A `TextureId`, or `NO_TEXTURE`. |
 | `blend` | `OPAQUE` or `BLEND`. |
 | `lit` | Whether the lights reach this surface. |
+| `emissive` | Light the surface gives off, linear. |
+| `emissive_map` | The `TextureId` that multiplies `emissive`, or `NO_TEXTURE`. |
 
-The last three are per-triangle state. All three corners must agree, and the value must be a named one. `check_triangle_state` refuses anything else.
+`texture`, `blend`, `lit` and `emissive_map` are per-triangle state. All three corners must agree, and the value must be a named one. `check_triangle_state` refuses anything else.
 
 ## Functions
 
@@ -56,7 +58,7 @@ Color, normal, texture coordinates and world position are interpolated with pers
 
 ## Shading
 
-At each fragment the interpolated normal is normalized again, and `Lighting.intensity_at` sums every light. The material color, the sampled texel and the light multiply. An unlit triangle skips the lights. See [Why shading is per fragment](Why-shading-is-per-fragment).
+At each fragment the interpolated normal is normalized again, and `Lighting.intensity_at` sums every light. The material color, the sampled texel and the light multiply. The emissive term, times its own map, is then added. The lights do not touch it. An unlit triangle skips the lights. See [Why shading is per fragment](Why-shading-is-per-fragment).
 
 ## Transparency
 
@@ -65,6 +67,6 @@ At each fragment the interpolated normal is normalized again, and `Lighting.inte
 ## Errors
 
 - A mode that is none of the three raises.
-- Corners that disagree about blend, texture or lit raise.
+- Corners that disagree about blend, texture, lit or emissive map raise.
 - A blend value that is neither `OPAQUE` nor `BLEND` raises, on every worker count, whether or not the triangle is visible.
 - A texture the store lacks raises when a fragment samples it.
