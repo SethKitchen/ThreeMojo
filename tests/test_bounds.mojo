@@ -6,8 +6,9 @@
 """Tests for `math.bounds`."""
 
 from math.bounds import Box3, Plane, Sphere
-from math.matrix4 import rotation_z, scaling, translation
+from math.matrix4 import Matrix4, rotation_z, scaling, translation
 from math.vector3 import Vector3
+from std.math import cos, pi, sin
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -240,6 +241,106 @@ def test_a_spheres_box_reaches_its_radius() raises:
     assert_point(box.min, -1, 0, 1)
     assert_point(box.max, 3, 4, 5)
     assert_true(Sphere.empty().bounding_box().is_empty())
+
+
+def test_a_transformed_sphere_still_holds_its_transformed_points() raises:
+    # A scale of (2, 1, 1) above a turn of 45 degrees: the diagonal of the
+    # unit sphere stretches to two while no axis is longer than 1.58, so a
+    # sphere grown by the longest axis, as three.js grows it, misses the
+    # point (1, -1, 0) / root 2, which lands at (2, 0, 0). This one grows
+    # by a bound on the stretch and holds every point it held.
+    var sheared = scaling(2, 1, 1)
+    sheared.multiply(rotation_z(Angle(45.0, DEGREE)))
+    var sphere = Sphere(Vector3(0, 0, 0), 1)
+    sphere.apply_matrix4(sheared)
+    assert_almost_equal(sphere.radius, Float32(2), atol=Float64(1e-4))
+    var corner = sheared.transform_point(Vector3(0.70710678, -0.70710678, 0))
+    assert_point(corner, 2, 0, 0)
+    assert_true(sphere.contains_point(corner))
+    # And all the way round the equator and the meridians.
+    for step in range(36):
+        var angle = Float32(step) / 36 * 2 * Float32(pi)
+        var on_equator = Vector3(cos(angle), sin(angle), 0)
+        var on_meridian = Vector3(cos(angle), 0, sin(angle))
+        assert_true(sphere.contains_point(sheared.transform_point(on_equator)))
+        assert_true(sphere.contains_point(sheared.transform_point(on_meridian)))
+
+
+def test_an_empty_sphere_meets_nothing_and_stays_empty() raises:
+    # The sum of an empty sphere's radius and a real one's is positive, so
+    # the plain test would say they meet; asked outright, they do not.
+    var empty = Sphere.empty()
+    var solid = Sphere(Vector3(0, 0, 0), 2)
+    assert_false(empty.intersects_sphere(solid))
+    assert_false(solid.intersects_sphere(empty))
+    assert_false(empty.intersects_box(unit_box()))
+    assert_false(unit_box().intersects_sphere(empty))
+    assert_false(Plane(Vector3(0, 0, 1), 0).intersects_sphere(empty))
+    # A scale of zero would turn its radius into minus zero, which is not
+    # negative; transformed, it stays empty instead.
+    empty.apply_matrix4(scaling(0, 0, 0))
+    assert_true(empty.is_empty())
+    empty.apply_matrix4(translation(5, 0, 0))
+    assert_true(empty.is_empty())
+
+
+def test_a_finite_inside_out_box_is_as_empty_as_the_empty_box() raises:
+    # Inside out on x alone, with finite corners a plain comparison would
+    # take for a real box.
+    var inverted = Box3(Vector3(3, 8, 8), Vector3(2, 9, 9))
+    assert_true(inverted.is_empty())
+    var big = Box3(Vector3(-10, -10, -10), Vector3(10, 10, 10))
+    assert_false(inverted.intersects_box(big))
+    assert_false(big.intersects_box(inverted))
+    assert_false(inverted.intersects_sphere(Sphere(Vector3(2.5, 8.5, 8.5), 5)))
+    assert_false(Plane(Vector3(0, 0, 1), -8.5).intersects_box(inverted))
+    assert_true(inverted.bounding_sphere().is_empty())
+    # Taking it into a box changes nothing; taking a box into it makes it
+    # that box.
+    var box = unit_box()
+    box.union(inverted)
+    assert_point(box.min, 0, 0, 0)
+    assert_point(box.max, 1, 1, 1)
+    var grown = inverted
+    grown.union(unit_box())
+    assert_point(grown.min, 0, 0, 0)
+    assert_point(grown.max, 1, 1, 1)
+    # Expanded by a point it is the box of that point, not of the point
+    # and its stale corners.
+    var one = inverted
+    one.expand_by_point(Vector3(0, 0, 0))
+    assert_point(one.min, 0, 0, 0)
+    assert_point(one.max, 0, 0, 0)
+    # And a transform leaves it empty.
+    var moved = inverted
+    moved.apply_matrix4(translation(5, 0, 0))
+    assert_true(moved.is_empty())
+
+
+def test_an_empty_bound_has_no_nearest_point() raises:
+    with assert_raises():
+        _ = Box3.empty().clamp_point(Vector3(1, 1, 1))
+    with assert_raises():
+        _ = Box3(Vector3(3, 8, 8), Vector3(2, 9, 9)).distance_to_point(
+            Vector3(1, 1, 1)
+        )
+    with assert_raises():
+        _ = Sphere.empty().distance_to_point(Vector3(1, 1, 1))
+    with assert_raises():
+        _ = Plane(Vector3(0, 0, 1), 0).distance_to_sphere(Sphere.empty())
+
+
+def test_a_projection_cannot_carry_a_bound() raises:
+    # A corner crossing w = 0 has no finite image, so a matrix with a
+    # bottom row that is not (0, 0, 0, 1) is refused by both bounds.
+    var projecting = Matrix4()
+    projecting.put(3, 2, -1)
+    var box = unit_box()
+    with assert_raises():
+        box.apply_matrix4(projecting)
+    var sphere = Sphere(Vector3(0, 0, 0), 1)
+    with assert_raises():
+        sphere.apply_matrix4(projecting)
 
 
 # --- plane ------------------------------------------------------------------

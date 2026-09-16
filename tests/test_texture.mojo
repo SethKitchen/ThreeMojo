@@ -1089,12 +1089,16 @@ def test_ignoring_alpha_copies_a_texture_into_the_other_mode() raises:
     assert_almost_equal(rebuilt.r, Float32(0.5), atol=Float64(0.004))
     assert_almost_equal(rebuilt.g, Float32(0.5), atol=Float64(0.004))
     assert_equal(rebuilt.a, Float32(1))
-    # A copy without a chain has none either, and the blank texture is its
-    # own copy.
+    # A copy without a chain has none either. The blank texture's copy is
+    # blank, and marked to ignore its alpha as any other copy is, so it is
+    # accepted wherever the mode is checked.
     assert_equal(
         red_beside_hidden_green(False, COVERAGE).ignoring_alpha().levels, 1
     )
-    assert_true(Texture().ignoring_alpha().is_blank())
+    var blank = Texture().ignoring_alpha()
+    assert_true(blank.is_blank())
+    assert_equal(blank.alpha, IGNORED)
+    assert_equal(blank.sample(0.3, 0.7).r, Float32(1))
 
 
 def main() raises:

@@ -599,12 +599,13 @@ struct Matrix4(ImplicitlyCopyable):
         )
 
     def max_scale(self) -> Float32:
-        """Return the most this matrix stretches any direction, as the
-        longest of its three axis columns.
+        """Return the longest of this matrix's three axis columns.
 
-        three.js's `getMaxScaleOnAxis`. What a bounding sphere's radius
-        grows by under this transform: a sphere cannot follow a nonuniform
-        scale exactly, so it takes the largest one and stays a bound.
+        three.js's `getMaxScaleOnAxis`. It is the most any direction is
+        stretched only when the axes are at right angles; a nonuniform
+        scale above a turn stretches a diagonal more than any axis, and a
+        bound that grew by this would fall short. `max_stretch` is the
+        answer that never does.
 
         Returns:
             The largest axis length. Zero for a transform that flattens
@@ -616,6 +617,46 @@ struct Matrix4(ImplicitlyCopyable):
             if length > longest:
                 longest = length
         return longest
+
+    def max_stretch(self) -> Float32:
+        """Return a bound on the most this matrix stretches any direction.
+
+        The most any direction is stretched is the largest singular value
+        of the upper-left three by three, which no axis length gives once
+        the axes are off right angles. This needs no decomposition: the
+        largest eigenvalue of the Gram matrix, the axes dotted with each
+        other, is at most its largest row of absolute values summed, so the
+        root of that row is at least the largest singular value. With the
+        axes at right angles the off-diagonal dots vanish and it is the
+        longest axis exactly. Worked in Float64 and nudged up by a part in
+        a million before it is narrowed, so rounding never brings it under.
+
+        Returns:
+            A stretch no direction exceeds. Zero for a transform that
+            flattens everything.
+        """
+        var largest = Float64(0)
+        for row in range(3):  # pragma: no branch
+            var total = Float64(0)
+            for column in range(3):  # pragma: no branch
+                total += abs(Float64(self._axes_dot(row, column)))
+            if total > largest:
+                largest = total
+        return Float32(sqrt(largest) * (1 + 1e-6))
+
+    def is_affine(self) -> Bool:
+        """Return True if the bottom row is (0, 0, 0, 1).
+
+        Such a matrix moves, turns, scales or shears, and keeps `w` at one;
+        a projection does not, and the bounds that transform by carrying
+        corners across refuse one, because a corner crossing `w = 0` has no
+        finite image to bound.
+
+        Returns:
+            Whether the matrix is affine.
+        """
+        ref e = self.elements
+        return e[3] == 0 and e[7] == 0 and e[11] == 0 and e[15] == 1
 
     def _axis_length(self, axis: Int) -> Float32:
         """Return the length of one axis column: the scale along that axis."""

@@ -527,6 +527,48 @@ def test_the_largest_scale_is_the_longest_axis() raises:
     assert_equal(scaling(0, 0, 0).max_scale(), Float32(0))
 
 
+def test_the_stretch_bound_never_falls_short_of_the_longest_axis() raises:
+    # With the axes at right angles the bound is the longest axis, to the
+    # part in a million it is nudged up by.
+    for m in [
+        scaling(3, 1, 2),
+        scaling(1, 2, 3),
+        rotation_y(Angle(30.0, DEGREE)),
+    ]:
+        assert_almost_equal(m.max_stretch(), m.max_scale(), atol=Float64(1e-5))
+        assert_true(m.max_stretch() >= m.max_scale())
+    assert_equal(scaling(0, 0, 0).max_stretch(), Float32(0))
+    # A scale of (2, 1, 1) above a turn of 45 degrees about z stretches the
+    # diagonal to two while no axis is longer than 1.58. The bound sees the
+    # two; the longest axis does not.
+    var sheared = scaling(2, 1, 1)
+    sheared.multiply(rotation_z(Angle(45.0, DEGREE)))
+    assert_almost_equal(
+        sheared.max_scale(), Float32(1.5811388), atol=Float64(1e-5)
+    )
+    assert_almost_equal(sheared.max_stretch(), Float32(2), atol=Float64(1e-4))
+    var diagonal = sheared.transform_direction(
+        Vector3(0.70710678, -0.70710678, 0)
+    )
+    assert_true(diagonal.length() <= sheared.max_stretch())
+
+
+def test_an_affine_matrix_keeps_w_at_one() raises:
+    # Each element of the bottom row has to be able to say no on its own.
+    assert_true(Matrix4().is_affine())
+    var m = translation(1, 2, 3)
+    m.multiply(rotation_x(Angle(20.0, DEGREE)))
+    m.multiply(scaling(2, 1, 0.5))
+    assert_true(m.is_affine())
+    for slot in [3, 7, 11]:
+        var bent = Matrix4()
+        bent.elements[slot] = 0.5
+        assert_false(bent.is_affine())
+    var scaled = Matrix4()
+    scaled.elements[15] = 2
+    assert_false(scaled.is_affine())
+
+
 def test_the_tolerance_is_the_callers_to_widen() raises:
     # Axes a hundredth off right angles: not a rotation by default, and one
     # to a caller that allows that much.

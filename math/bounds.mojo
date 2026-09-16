@@ -8,9 +8,9 @@
 
 The three shapes a renderer asks questions of rather than draws: does this
 mesh lie inside the view, which mesh did the click land on, which side of
-the near plane is this corner. A box and a sphere are *bounds*: the smallest
-of their kind around a set of points, cheap to test and to carry through a
-transform. A plane is the thing a frustum is six of.
+the near plane is this corner. A box and a sphere are *bounds*: shapes that
+enclose a set of points, cheap to test and to carry through a transform. A
+plane is the thing a frustum is six of.
 
 All three hold bare `Float32` meters, as `Vector3` does, because they are
 made of `Vector3`s and are compared with them. The quantities with units
@@ -18,10 +18,17 @@ live at the API's edges -- a geometry builder takes a `Length` -- and the
 math in the middle is plain numbers, which is also where the GPU reads it.
 
 An *empty* bound is one that holds no points at all, and it is a value
-rather than an error, as in three.js: a box whose corners are inside out,
-a sphere with a negative radius. Expanding an empty bound by a point gives
-the bound of that one point, which is what lets a bound be built from any
-number of points, including none, without a special first step.
+rather than an error, as in three.js: a box whose corners are inside out on
+any axis, a sphere with a negative radius. Every operation treats it as the
+set it is. Expanding it by a point gives the bound of that one point, which
+is what lets a bound be built from any number of points, including none,
+without a special first step; a union with it changes nothing; it overlaps
+nothing; a transform leaves it empty. A question that needs a point of it,
+the nearest point or a distance, has no answer and is refused.
+
+Both transforms take an affine matrix, one that keeps `w` at one. A
+projection is refused: a corner crossing `w = 0` has no finite image, and
+carrying corners across is no way to bound what it does.
 
 A plane is stored as a unit normal and a constant, so a point's signed
 distance is one dot product and an add. The constructor normalizes both,
@@ -82,11 +89,16 @@ struct Box3(ImplicitlyCopyable):
         )
 
     def expand_by_point(mut self, point: Vector3):
-        """Grow this box to hold `point` as well.
+        """Grow this box to hold `point` as well. An empty box becomes the
+        box of that one point, whatever its inside-out corners held.
 
         Args:
             point: The point to take in.
         """
+        if self.is_empty():
+            self.min = point
+            self.max = point
+            return
         self.min = Vector3(
             min(self.min.x, point.x),
             min(self.min.y, point.y),
@@ -103,13 +115,19 @@ struct Box3(ImplicitlyCopyable):
         `union`.
 
         The smaller of the two smallest corners and the larger of the two
-        largest, corner by corner rather than point by point: an empty
-        box's inside-out infinities then lose every comparison, and taking
-        one in changes nothing.
+        largest. An empty box holds nothing to take in, so taking one in
+        changes nothing, and an empty box that takes one in becomes it --
+        asked outright rather than left to the arithmetic, which a finite
+        inside-out corner would fool.
 
         Args:
             other: The box to take in.
         """
+        if other.is_empty():
+            return
+        if self.is_empty():
+            self = other
+            return
         self.min = Vector3(
             min(self.min.x, other.min.x),
             min(self.min.y, other.min.y),
@@ -152,7 +170,16 @@ struct Box3(ImplicitlyCopyable):
             and point.z <= self.max.z
         )
 
-    def clamp_point(self, point: Vector3) -> Vector3:
+    def _nearest(self, point: Vector3) -> Vector3:
+        """Return the point of this box nearest `point`, the box assumed
+        not empty: the point itself inside, else the nearest surface point."""
+        return Vector3(
+            min(max(point.x, self.min.x), self.max.x),
+            min(max(point.y, self.min.y), self.max.y),
+            min(max(point.z, self.min.z), self.max.z),
+        )
+
+    def clamp_point(self, point: Vector3) raises -> Vector3:
         """Return the point of this box nearest `point`: the point itself
         if it is inside, else the nearest point on the surface.
 
@@ -161,14 +188,16 @@ struct Box3(ImplicitlyCopyable):
 
         Returns:
             The nearest point of the box.
-        """
-        return Vector3(
-            min(max(point.x, self.min.x), self.max.x),
-            min(max(point.y, self.min.y), self.max.y),
-            min(max(point.z, self.min.z), self.max.z),
-        )
 
-    def distance_to_point(self, point: Vector3) -> Float32:
+        Raises:
+            Error: If the box is empty. It has no points, so none is
+                nearest, and an inside-out corner is not an answer.
+        """
+        if self.is_empty():
+            raise Error("An empty box has no nearest point")
+        return self._nearest(point)
+
+    def distance_to_point(self, point: Vector3) raises -> Float32:
         """Return how far `point` is from this box: zero inside it.
 
         Args:
@@ -176,12 +205,15 @@ struct Box3(ImplicitlyCopyable):
 
         Returns:
             The distance to the nearest point of the box.
+
+        Raises:
+            Error: If the box is empty; see `clamp_point`.
         """
         return (self.clamp_point(point) - point).length()
 
     def intersects_box(self, other: Box3) -> Bool:
         """Return True if the two boxes share any point, a shared face
-        included.
+        included. An empty box shares none.
 
         Args:
             other: The other box.
@@ -189,6 +221,8 @@ struct Box3(ImplicitlyCopyable):
         Returns:
             Whether they overlap.
         """
+        if self.is_empty() or other.is_empty():
+            return False
         return not (
             other.max.x < self.min.x
             or other.min.x > self.max.x
@@ -202,7 +236,7 @@ struct Box3(ImplicitlyCopyable):
         """Return True if `sphere` reaches into this box.
 
         The point of the box nearest the sphere's center is the one that
-        decides it, and `clamp_point` finds that point.
+        decides it. An empty box or an empty sphere reaches nothing.
 
         Args:
             sphere: The sphere.
@@ -210,20 +244,31 @@ struct Box3(ImplicitlyCopyable):
         Returns:
             Whether they overlap.
         """
-        return self.distance_to_point(sphere.center) <= sphere.radius
+        if self.is_empty() or sphere.is_empty():
+            return False
+        return (
+            self._nearest(sphere.center) - sphere.center
+        ).length() <= sphere.radius
 
-    def apply_matrix4(mut self, matrix: Matrix4):
+    def apply_matrix4(mut self, matrix: Matrix4) raises:
         """Transform this box, and take the box around what comes out.
 
         A transformed box is not a box unless the transform only scales and
         translates, so this carries the eight corners across and bounds
         them again. What comes out can be larger than the shape it stood
         for; it is still a bound. An empty box stays empty, because its
-        infinite corners would otherwise become finite nonsense.
+        inside-out corners would otherwise become finite nonsense.
 
         Args:
-            matrix: The transform to apply.
+            matrix: The transform to apply. Affine: it moves, turns, scales
+                or shears, and keeps `w` at one.
+
+        Raises:
+            Error: If the matrix projects. A corner crossing `w = 0` has no
+                finite image, and eight carried corners are no bound on it.
         """
+        if not matrix.is_affine():
+            raise Error("A bound can only be carried through an affine matrix")
         if self.is_empty():
             return
         var corners = List[Vector3]()
@@ -310,7 +355,7 @@ struct Sphere(ImplicitlyCopyable):
         """
         return (point - self.center).length() <= self.radius
 
-    def distance_to_point(self, point: Vector3) -> Float32:
+    def distance_to_point(self, point: Vector3) raises -> Float32:
         """Return how far `point` is outside this sphere: negative inside.
 
         Args:
@@ -318,11 +363,18 @@ struct Sphere(ImplicitlyCopyable):
 
         Returns:
             The distance to the surface, signed.
+
+        Raises:
+            Error: If the sphere is empty. It has no surface to measure
+                from, and its negative radius is not an answer.
         """
+        if self.is_empty():
+            raise Error("An empty sphere has no surface to measure from")
         return (point - self.center).length() - self.radius
 
     def intersects_sphere(self, other: Sphere) -> Bool:
-        """Return True if the two spheres share any point.
+        """Return True if the two spheres share any point. An empty sphere
+        shares none, whatever the sum of the radii says.
 
         Args:
             other: The other sphere.
@@ -330,6 +382,8 @@ struct Sphere(ImplicitlyCopyable):
         Returns:
             Whether they overlap or touch.
         """
+        if self.is_empty() or other.is_empty():
+            return False
         return (
             other.center - self.center
         ).length() <= self.radius + other.radius
@@ -364,18 +418,34 @@ struct Sphere(ImplicitlyCopyable):
             self.center.add(toward * (growth / reach))
             self.radius += growth
 
-    def apply_matrix4(mut self, matrix: Matrix4):
+    def apply_matrix4(mut self, matrix: Matrix4) raises:
         """Transform this sphere: its center goes through the matrix and
-        its radius grows by the most the matrix stretches anything.
+        its radius grows by a bound on the most the matrix stretches any
+        direction.
 
-        A sphere cannot follow a nonuniform scale, so it takes the largest
-        one and stays a bound, as three.js's does.
+        A sphere cannot follow a nonuniform scale, so it grows by the most
+        any direction is stretched and stays a bound. three.js grows by the
+        longest axis, which is that stretch only while the axes are at
+        right angles: a parent scaled (2, 1, 1) above a child turned 45
+        degrees stretches the diagonal to two while no axis is longer than
+        1.58, and a sphere grown by 1.58 misses points it held. This grows
+        by `Matrix4.max_stretch` instead, which never falls short. An empty
+        sphere stays empty, rather than a scale of zero turning its
+        negative radius into a point.
 
         Args:
-            matrix: The transform to apply.
+            matrix: The transform to apply. Affine: it moves, turns, scales
+                or shears, and keeps `w` at one.
+
+        Raises:
+            Error: If the matrix projects; see `Box3.apply_matrix4`.
         """
+        if not matrix.is_affine():
+            raise Error("A bound can only be carried through an affine matrix")
+        if self.is_empty():
+            return
         self.center = matrix.transform_point(self.center)
-        self.radius *= matrix.max_scale()
+        self.radius *= matrix.max_stretch()
 
     def bounding_box(self) -> Box3:
         """Return the box around this sphere. Empty for an empty sphere.
@@ -475,7 +545,7 @@ struct Plane(ImplicitlyCopyable):
         """
         return self.normal.dot(point) + self.constant
 
-    def distance_to_sphere(self, sphere: Sphere) -> Float32:
+    def distance_to_sphere(self, sphere: Sphere) raises -> Float32:
         """Return how far `sphere` is in front of this plane: negative if
         it crosses or lies behind.
 
@@ -484,7 +554,12 @@ struct Plane(ImplicitlyCopyable):
 
         Returns:
             The signed distance of its nearest point.
+
+        Raises:
+            Error: If the sphere is empty: it has no nearest point.
         """
+        if sphere.is_empty():
+            raise Error("An empty sphere has no nearest point to a plane")
         return self.distance_to_point(sphere.center) - sphere.radius
 
     def project_point(self, point: Vector3) -> Vector3:
@@ -516,7 +591,8 @@ struct Plane(ImplicitlyCopyable):
         self.constant -= self.normal.dot(offset)
 
     def intersects_sphere(self, sphere: Sphere) -> Bool:
-        """Return True if `sphere` crosses this plane.
+        """Return True if `sphere` crosses this plane. An empty sphere
+        crosses nothing.
 
         Args:
             sphere: The sphere.
@@ -524,10 +600,13 @@ struct Plane(ImplicitlyCopyable):
         Returns:
             Whether the plane passes through it.
         """
+        if sphere.is_empty():
+            return False
         return abs(self.distance_to_point(sphere.center)) <= sphere.radius
 
     def intersects_box(self, box: Box3) -> Bool:
-        """Return True if `box` crosses this plane.
+        """Return True if `box` crosses this plane. An empty box crosses
+        nothing.
 
         The box's extent along the normal runs from its most-behind corner
         to its most-in-front one, and each axis contributes whichever of its
@@ -539,6 +618,8 @@ struct Plane(ImplicitlyCopyable):
         Returns:
             Whether the plane passes through it, a touching face included.
         """
+        if box.is_empty():
+            return False
         var nearest = Float32(0)
         var farthest = Float32(0)
         if self.normal.x > 0:

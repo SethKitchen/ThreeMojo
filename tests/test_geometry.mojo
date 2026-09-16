@@ -1339,6 +1339,35 @@ def test_a_torus_maps_u_along_and_v_around() raises:
     assert_texture_coordinates_in_range(ring)
 
 
+def assert_same_vertex(
+    geometry: BufferGeometry, one: Int, two: Int, tolerance: Float64
+) raises:
+    """Assert two vertices agree in position and in normal."""
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref normals = geometry.attribute_view(String(NORMAL))
+    var here = positions.vector3(one)
+    var there = positions.vector3(two)
+    assert_almost_equal(here.x, there.x, atol=tolerance)
+    assert_almost_equal(here.y, there.y, atol=tolerance)
+    assert_almost_equal(here.z, there.z, atol=tolerance)
+    var facing = normals.vector3(one)
+    var same = normals.vector3(two)
+    assert_almost_equal(facing.x, same.x, atol=tolerance)
+    assert_almost_equal(facing.y, same.y, atol=tolerance)
+    assert_almost_equal(facing.z, same.z, atol=tolerance)
+
+
+def test_a_torus_agrees_with_itself_across_both_seams() raises:
+    # Every vertex on one side of a seam has its twin on the other, in
+    # position and in normal: the last column of each row against the
+    # first, and the last row against the first.
+    var ring = a_ring()
+    for row in range(9):
+        assert_same_vertex(ring, row * 13, row * 13 + 12, Float64(1e-5))
+    for column in range(13):
+        assert_same_vertex(ring, column, 8 * 13 + column, Float64(1e-5))
+
+
 def test_every_torus_face_winds_outward() raises:
     assert_faces_wind_with_their_normals(a_ring())
     assert_no_degenerate_triangle(a_ring())
@@ -1454,6 +1483,17 @@ def test_a_trefoil_winds_twice_round_and_three_times_through() raises:
     )
     # The last ring is the first: the knot closes.
     assert_xyz(ring_center(knot, 48, 8), 3, 0, 0)
+
+
+def test_a_knot_agrees_with_itself_across_both_seams() raises:
+    # Around each ring, the last vertex is the first; along the tube, the
+    # last ring is the first, vertex for vertex, so the frame comes back
+    # round to where it started and not merely the curve.
+    var knot = a_knot()
+    for ring in range(49):
+        assert_same_vertex(knot, ring * 9, ring * 9 + 8, Float64(1e-5))
+    for step in range(9):
+        assert_same_vertex(knot, step, 48 * 9 + step, Float64(1e-4))
 
 
 def test_every_knot_face_winds_outward() raises:

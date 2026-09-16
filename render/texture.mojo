@@ -512,7 +512,12 @@ struct Texture(Movable):
                 it was built; see `validate`.
         """
         if self.is_blank():
-            return Texture()
+            # Blank, and marked as promised: a renderer that asks whether an
+            # emissive map ignores its alpha gets the same answer here as
+            # for any other copy, and samples opaque white as it would.
+            var blank = Texture()
+            blank.alpha = IGNORED
+            return blank^
         var base = List[UInt8]()
         # The full-size image is the first level: the loop always runs.
         for index in range(

@@ -2309,6 +2309,40 @@ def test_an_emissive_maps_alpha_does_not_darken_or_thin_the_glow() raises:
         assert_equal(shown.a, UInt8(255))
 
 
+def test_a_blank_emissive_map_is_accepted_and_changes_nothing() raises:
+    # A stored blank texture, copied through ignoring_alpha, is a real id
+    # that the check accepts and that samples as white: the glow shows as
+    # if there were no map at all.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var blank = assets.textures.add(Texture().ignoring_alpha())
+    var mapped = assets.materials.add(
+        Material(
+            Color(0, 0, 0), emissive=Color(60, 120, 180), emissive_map=blank
+        )
+    )
+    var plain = assets.materials.add(
+        Material(Color(0, 0, 0), emissive=Color(60, 120, 180))
+    )
+    var scene = unlit_scene_with_a_node()
+    var through = List[Mesh]()
+    through.append(Mesh(box, mapped, NodeId(0)))
+    var bare = List[Mesh]()
+    bare.append(Mesh(box, plain, NodeId(0)))
+    var with_blank = rendered(renderer, scene, assets, through, eye_camera())
+    var without = rendered(renderer, scene, assets, bare, eye_camera())
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(
+                with_blank.get_pixel(x, y).r, without.get_pixel(x, y).r
+            )
+            assert_equal(
+                with_blank.get_pixel(x, y).b, without.get_pixel(x, y).b
+            )
+    assert_equal(with_blank.get_pixel(WIDTH // 2, HEIGHT // 2).g, UInt8(120))
+
+
 def test_emission_survives_clipping_and_the_back_side() raises:
     # The camera sits inside a large cube and sees its inside, which is its
     # back side, with no lights: every covered pixel is the glow, clipped at
