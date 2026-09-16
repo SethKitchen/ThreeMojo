@@ -7,7 +7,7 @@
 
 from std.math import inf
 from render.framebuffer import Color, FloatColor, Framebuffer, HSL
-from render.srgb import srgb_to_linear
+from render.srgb import LINEAR, SRGB, UNKNOWN_SPACE, srgb_to_linear
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -334,22 +334,49 @@ def test_hsl_gives_the_primaries_and_wraps_the_hue() raises:
     assert_linear(FloatColor(hue=1, saturation=1, lightness=0.5), 1, 0, 0)
 
 
-def test_hsl_lightness_and_saturation_are_clamped_and_decoded() raises:
-    # No saturation is a gray, decoded from sRGB: half is not half.
+def test_hsl_is_in_the_linear_working_space_unless_told_srgb() raises:
+    # three.js's setHSL takes its three numbers in the working space, so a
+    # half-lightness gray is linear 0.5 and encodes to 188. Asked in sRGB
+    # it is the gray 0x808080 decodes to, 0.21404, and encodes to 128.
     var gray = FloatColor(hue=0.3, saturation=0, lightness=0.5)
-    assert_linear(
-        gray, srgb_to_linear(0.5), srgb_to_linear(0.5), srgb_to_linear(0.5)
-    )
+    assert_linear(gray, 0.5, 0.5, 0.5)
+    assert_equal(gray.encode().r, UInt8(188))
+    var encoded = FloatColor(hue=0.3, saturation=0, lightness=0.5, space=SRGB)
+    assert_linear(encoded, 0.21404, 0.21404, 0.21404)
+    assert_equal(encoded.encode().r, UInt8(128))
+    # A pastel, by hand: hue 0.1 at saturation 0.5 and lightness 0.7 has a
+    # ceiling of 0.85 and a floor of 0.55, and the hue puts red at the
+    # ceiling, green on the ramp at 0.73 and blue at the floor.
+    var pastel = FloatColor(hue=0.1, saturation=0.5, lightness=0.7)
+    assert_linear(pastel, 0.85, 0.73, 0.55)
+    var decoded = FloatColor(hue=0.1, saturation=0.5, lightness=0.7, space=SRGB)
+    assert_almost_equal(decoded.r, Float32(0.6920), atol=1e-3)
+    assert_almost_equal(decoded.g, Float32(0.4919), atol=1e-3)
+    assert_almost_equal(decoded.b, Float32(0.2633), atol=1e-3)
+    # The getter has the same default and the same option.
+    assert_hsl(FloatColor(0.5, 0.5, 0.5).hsl(), 0, 0, 0.5)
+    assert_hsl(FloatColor(0.5, 0.5, 0.5).hsl(space=LINEAR), 0, 0, 0.5)
+    assert_hsl(FloatColor(0.5, 0.5, 0.5).hsl(space=SRGB), 0, 0, 0.73536)
+    assert_hsl(pastel.hsl(space=LINEAR), 0.1, 0.5, 0.7)
+    assert_hsl(decoded.hsl(space=SRGB), 0.1, 0.5, 0.7)
+    # Neither space is refused, in both directions.
+    with assert_raises():
+        _ = FloatColor(hue=0, saturation=1, lightness=0.5, space=UNKNOWN_SPACE)
+    with assert_raises():
+        _ = FloatColor(1, 0, 0).hsl(space=UNKNOWN_SPACE)
+
+
+def test_hsl_lightness_and_saturation_are_clamped() raises:
     assert_linear(FloatColor(hue=0, saturation=1, lightness=1), 1, 1, 1)
     assert_linear(FloatColor(hue=0, saturation=1, lightness=0), 0, 0, 0)
     # A lightness above a half takes the other formula for the ceiling.
     var pale = FloatColor(hue=0, saturation=1, lightness=0.75)
-    assert_linear(pale, 1, srgb_to_linear(0.5), srgb_to_linear(0.5))
+    assert_linear(pale, 1, 0.5, 0.5)
     # Out of range is clamped, not wrapped.
     var over = FloatColor(hue=0, saturation=2, lightness=0.5)
     assert_linear(over, 1, 0, 0)
     assert_linear(
-        FloatColor(hue=0, saturation=-1, lightness=0.5), gray.r, gray.g, gray.b
+        FloatColor(hue=0, saturation=-1, lightness=0.5), 0.5, 0.5, 0.5
     )
     assert_linear(FloatColor(hue=0, saturation=1, lightness=-1), 0, 0, 0)
     assert_linear(FloatColor(hue=0, saturation=1, lightness=2), 1, 1, 1)
@@ -358,6 +385,7 @@ def test_hsl_lightness_and_saturation_are_clamped_and_decoded() raises:
 def test_hsl_round_trips_through_every_branch() raises:
     # One case per way the largest channel can fall: red with green
     # above blue and below it, green, blue; and either half of lightness.
+    # In both spaces, since each is its own pair of conversions.
     var cases = List[HSL]()
     cases.append(HSL(0.05, 0.8, 0.3))
     cases.append(HSL(0.95, 0.6, 0.6))
@@ -371,6 +399,18 @@ def test_hsl_round_trips_through_every_branch() raises:
             lightness=wanted.lightness,
         )
         assert_hsl(color.hsl(), wanted.hue, wanted.saturation, wanted.lightness)
+        var encoded = FloatColor(
+            hue=wanted.hue,
+            saturation=wanted.saturation,
+            lightness=wanted.lightness,
+            space=SRGB,
+        )
+        assert_hsl(
+            encoded.hsl(space=SRGB),
+            wanted.hue,
+            wanted.saturation,
+            wanted.lightness,
+        )
     # A gray has no hue and no saturation, whatever it was built with.
     assert_hsl(
         FloatColor(hue=0.3, saturation=0, lightness=0.25).hsl(), 0, 0, 0.25
@@ -395,9 +435,9 @@ def test_offset_hsl_turns_the_hue_and_shifts_the_rest() raises:
     var color = FloatColor(1, 0, 0, 0.5)
     color.offset_hsl(1.0 / 3, 0, 0)
     assert_linear(color, 0, 1, 0, 0.5)
+    # Drained of saturation it is the linear half gray, not the sRGB one.
     color.offset_hsl(0, -1, 0)
-    var gray = FloatColor(hue=0, saturation=0, lightness=0.5)
-    assert_linear(color, gray.r, gray.g, gray.b, 0.5)
+    assert_linear(color, 0.5, 0.5, 0.5, 0.5)
     color.offset_hsl(0, 0, 1)
     assert_linear(color, 1, 1, 1, 0.5)
 

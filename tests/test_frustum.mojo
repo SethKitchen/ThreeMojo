@@ -217,6 +217,63 @@ def test_a_box_is_tested_by_the_corner_nearest_each_tilted_plane() raises:
     )
 
 
+def test_a_camera_frustum_takes_its_depth_planes_from_the_distances() raises:
+    # A far plane fifty thousand times the near one. Read back off the
+    # Float32 projection it lands seven meters short, and a point in those
+    # seven meters is wrongly out of view; from the distances themselves it
+    # sits where it was asked to be, and the sides are still the same.
+    var view = look_at(Vector3(0, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0))
+    var clip = perspective(-0.1, 0.1, 0.1, -0.1, 0.1, 5000)
+    clip.multiply(view)
+    var read_back = Frustum.from_projection_matrix(clip)
+    assert_true(read_back.planes[FAR].constant < 4995)
+    assert_false(read_back.contains_point(Vector3(0, 0, -4997)))
+    var exact = Frustum.from_camera(clip, view, 0.1, 5000)
+    assert_plane(exact, FAR, 0, 0, 1, 5000)
+    assert_plane(exact, NEAR, 0, 0, -1, -0.1)
+    assert_true(exact.contains_point(Vector3(0, 0, -4997)))
+    assert_true(exact.contains_point(Vector3(0, 0, -5000)))
+    assert_false(exact.contains_point(Vector3(0, 0, -5001)))
+    assert_true(exact.contains_point(Vector3(0, 0, -0.1)))
+    assert_false(exact.contains_point(Vector3(0, 0, -0.09)))
+    for side in [RIGHT, LEFT, BOTTOM, TOP]:
+        ref wanted = read_back.planes[side]
+        assert_plane(
+            exact,
+            side,
+            wanted.normal.x,
+            wanted.normal.y,
+            wanted.normal.z,
+            wanted.constant,
+        )
+
+
+def test_a_camera_frustums_depth_planes_follow_the_camera() raises:
+    # From four meters up z looking at the origin, with the view between
+    # one and ten meters, the near plane is at z = 3 and the far at z = -6.
+    var view = look_at(Vector3(0, 0, 4), Vector3(0, 0, 0), Vector3(0, 1, 0))
+    var clip = perspective(-1, 1, 1, -1, 1, 10)
+    clip.multiply(view)
+    var frustum = Frustum.from_camera(clip, view, 1, 10)
+    assert_plane(frustum, NEAR, 0, 0, -1, 3)
+    assert_plane(frustum, FAR, 0, 0, 1, 6)
+    assert_true(frustum.contains_point(Vector3(0, 0, 3)))
+    assert_false(frustum.contains_point(Vector3(0, 0, 3.1)))
+    assert_true(frustum.contains_point(Vector3(0, 0, -5.9)))
+    assert_false(frustum.contains_point(Vector3(0, 0, -6.1)))
+
+
+def test_a_camera_frustum_refuses_a_projecting_view_and_reversed_planes() raises:
+    var view = look_at(Vector3(0, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0))
+    var clip = perspective(-1, 1, 1, -1, 1, 10)
+    with assert_raises():
+        _ = Frustum.from_camera(clip, clip, 1, 10)
+    with assert_raises():
+        _ = Frustum.from_camera(clip, view, 10, 1)
+    with assert_raises():
+        _ = Frustum.from_camera(clip, view, 1, 1)
+
+
 def test_a_matrix_that_describes_no_volume_is_refused() raises:
     # A scale of zero leaves the bottom row alone and empties the others,
     # so the right plane has no normal.

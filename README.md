@@ -152,7 +152,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Multithreaded CPU renderer](https://github.com/SethKitchen/ThreeMojo/wiki/Renderer#workers) [#78](https://github.com/SethKitchen/ThreeMojo/issues/78)
 - [x] [GPU rasterizer](https://github.com/SethKitchen/ThreeMojo/wiki/GPU-backend): the same rasterizer as a MAX kernel [#79](https://github.com/SethKitchen/ThreeMojo/issues/79)
 - [x] [PNG, APNG and PPM writers](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files) [#80](https://github.com/SethKitchen/ThreeMojo/issues/80)
-- [x] [Frustum culling](https://github.com/SethKitchen/ThreeMojo/wiki/Renderer#frustum-culling): a mesh whose bounding sphere lies outside the view is skipped before a vertex of it is read [#81](https://github.com/SethKitchen/ThreeMojo/issues/81)
+- [x] [Frustum culling](https://github.com/SethKitchen/ThreeMojo/wiki/Renderer#frustum-culling): a mesh whose bounding sphere lies outside the view is skipped before a vertex of it is transformed [#81](https://github.com/SethKitchen/ThreeMojo/issues/81)
 - [ ] Tone mapping [#82](https://github.com/SethKitchen/ThreeMojo/issues/82)
 - [ ] Anti-aliasing [#83](https://github.com/SethKitchen/ThreeMojo/issues/83)
 - [ ] Scissor and viewport [#84](https://github.com/SethKitchen/ThreeMojo/issues/84)

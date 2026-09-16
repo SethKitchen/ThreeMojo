@@ -24,6 +24,14 @@ renderer can carry through a transform for the cost of a matrix
 multiply. That is what makes culling by bounds cheaper than the clipping
 it saves: a mesh with a thousand triangles that lies wholly to the left of
 the view is settled by six multiplies rather than a thousand clips.
+
+The renderer does not read its near and far planes off the projection,
+though; `from_camera` takes them from the camera's own distances, for a
+reason of precision spelled out there. A projection keeps its depth range
+as two coefficients that rounding has already touched, and the far plane
+read back from them can sit meters short of the far distance the clipper
+is given. A culler and a clipper that disagree about where the view ends
+change the image, which is the one thing culling must not do.
 """
 
 from math.bounds import Box3, Plane, Sphere
@@ -81,6 +89,62 @@ struct Frustum(Copyable, Movable):
             Frustum._plane(e, 2, 1),
         ]
         return Frustum(planes^)
+
+    @staticmethod
+    def from_camera(
+        clip: Matrix4, view: Matrix4, near: Float32, far: Float32
+    ) raises -> Frustum:
+        """Return the frustum a camera sees, with its near and far planes
+        set from the camera's own distances rather than read back off the
+        projection.
+
+        The four side planes come from `clip`, as `from_projection_matrix`
+        reads them. The two depth planes are the view's z row, which is the
+        camera's forward axis reversed, at `near` and `far` along it: the
+        distances the renderer's clipper is given, so that the culler and
+        the clipper agree about where the view ends.
+
+        Read back off the projection they would not. A perspective matrix
+        keeps its depth range as `-(far + near) / (far - near)` and
+        `-2 far near / (far - near)`, and the far plane read back is
+        `row 3 - row 2`, a difference of two numbers that agree to four
+        decimals once `far` is thousands of times `near`. For a near plane
+        at 0.1 and a far one at 5000 the plane read back in Float32 sits at
+        4993, seven meters short, and a mesh in those seven meters would be
+        culled while the clipper, given 5000, draws it. Nothing is lost by
+        taking the distances themselves.
+
+        Args:
+            clip: The projection times the view, for the side planes.
+            view: The world-to-camera transform: affine, with its bottom
+                row (0, 0, 0, 1), so that its z row dotted with a point is
+                the point's camera-space z.
+            near: The near distance the clipper uses, in meters.
+            far: The far distance, beyond it.
+
+        Returns:
+            The frustum, in world space.
+
+        Raises:
+            Error: If the view is not affine, whose z row is then not a
+                depth; if `far` is not beyond `near`; or if a side plane
+                has no normal, as `from_projection_matrix` refuses.
+        """
+        if not view.is_affine():
+            raise Error(
+                "A view matrix must be affine to place the depth planes"
+            )
+        if far <= near:
+            raise Error("The far plane must be beyond the near plane")
+        var frustum = Frustum.from_projection_matrix(clip)
+        ref e = view.elements
+        # Camera-space z is the view's third row dotted with a point:
+        # e[2] x + e[6] y + e[10] z + e[14]. In view it is at most -near
+        # and at least -far.
+        var forward = Vector3(e[2], e[6], e[10])
+        frustum.planes[NEAR] = Plane(-forward, -e[14] - near)
+        frustum.planes[FAR] = Plane(forward, e[14] + far)
+        return frustum^
 
     @staticmethod
     def _plane(e: Array[Float32, 16], row: Int, sign: Float32) raises -> Plane:

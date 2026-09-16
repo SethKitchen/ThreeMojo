@@ -40,6 +40,7 @@ from core.layers import Layers
 from core.object3d import NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
+from math.vector3 import Vector3
 
 
 trait Camera(Copyable, Movable):
@@ -165,8 +166,22 @@ def node_view_matrix(scene: Scene, node: NodeId) raises -> Matrix4:
             "A sheared camera node has no rotation to look from: a nonuniform"
             " scale above a turn takes its axes off right angles"
         )
-    view.elements[12] = world.elements[12]
-    view.elements[13] = world.elements[13]
-    view.elements[14] = world.elements[14]
-    view.invert()
-    return view^
+    # The inverse of a rotation and a translation, taken exactly: the
+    # rotation transposed, and the translation turned back through it and
+    # negated. The general inverse gives the same numbers to within
+    # rounding, but rounding is the point: it leaves a bottom row of
+    # (1e-8, 0, 0, 0.9999999) where a rigid inverse has (0, 0, 0, 1), and
+    # the frustum the renderer builds from a view asks for that row exactly
+    # before it trusts the view's z row as a depth. This is the row it
+    # promises.
+    var inverse = Matrix4()
+    for row in range(3):  # pragma: no branch
+        for column in range(3):  # pragma: no branch
+            inverse.elements[column * 4 + row] = view.elements[row * 4 + column]
+    var back = inverse.transform_direction(
+        Vector3(world.elements[12], world.elements[13], world.elements[14])
+    )
+    inverse.elements[12] = -back.x
+    inverse.elements[13] = -back.y
+    inverse.elements[14] = -back.z
+    return inverse^

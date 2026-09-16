@@ -47,6 +47,7 @@ from render.texture import (
 )
 from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import Renderer, available_workers, face_normal
+from std.math import inf
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -2650,6 +2651,145 @@ def test_a_mesh_outside_the_view_is_not_prepared() raises:
     assert_equal(len(prepared(renderer, above, assets, culled, camera)), 0)
 
 
+def assert_same_image(tested: Framebuffer, untested: Framebuffer) raises:
+    """Assert two images agree in every channel and every depth.
+
+    Args:
+        tested: The image with frustum culling on.
+        untested: The image with it off.
+
+    Raises:
+        Error: If any pixel or depth differs.
+    """
+    for y in range(tested.height):
+        for x in range(tested.width):
+            var a = tested.get_pixel(x, y)
+            var b = untested.get_pixel(x, y)
+            assert_equal(a.r, b.r)
+            assert_equal(a.g, b.g)
+            assert_equal(a.b, b.b)
+            assert_equal(a.a, b.a)
+            assert_equal(tested.depth_at(x, y), untested.depth_at(x, y))
+
+
+def test_a_mesh_near_the_far_plane_is_drawn_with_the_test_and_without() raises:
+    # A long lens: one degree of view, a near plane at a tenth of a meter
+    # and a far one at five kilometers. Read back off the Float32
+    # projection the far plane would sit seven meters short, and a sheet
+    # a meter and a half inside the far distance would be culled while
+    # the clipper draws it. The two images must agree pixel for pixel and
+    # depth for depth, with the camera at the origin and moved, and with
+    # the sheet touching the far plane and the near one.
+    var renderer = Renderer(64, 64)
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER))
+    )
+    var speck = assets.geometries.add(
+        plane(Length(0.001, METER), Length(0.001, METER))
+    )
+    var paint = assets.materials.add(Material(Color(220, 160, 80), kind=BASIC))
+    var camera = PerspectiveCamera(
+        Angle(1.0, DEGREE),
+        1.0,
+        Length(0.1, METER),
+        Length(5000.0, METER),
+    )
+    camera.place(Vector3(0, 0, 0), Vector3(0, 0, -1))
+    var culled = List[Mesh]()
+    culled.append(Mesh(sheet, paint, NodeId(0)))
+    var kept = List[Mesh]()
+    kept.append(Mesh(sheet, paint, NodeId(0), frustum_culled=False))
+    var inside = scene_with_node_placed(0, 0, -4998.5, 1)
+    var tested = rendered(renderer, inside, assets, culled, camera)
+    assert_true(
+        count_background(tested, renderer.background) < 64 * 64,
+        "the sheet near the far plane was culled",
+    )
+    assert_same_image(tested, rendered(renderer, inside, assets, kept, camera))
+    # Touching the far plane exactly: the clipper keeps what lies on it.
+    var touching = scene_with_node_placed(0, 0, -5000, 1)
+    assert_same_image(
+        rendered(renderer, touching, assets, culled, camera),
+        rendered(renderer, touching, assets, kept, camera),
+    )
+    # The camera moved four meters up z: the same sheet, the same depth.
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var moved = scene_with_node_placed(0, 0, 4 - 4998.5, 1)
+    var followed = rendered(renderer, moved, assets, culled, camera)
+    assert_true(
+        count_background(followed, renderer.background) < 64 * 64,
+        "the sheet was culled after the camera moved",
+    )
+    assert_same_image(followed, rendered(renderer, moved, assets, kept, camera))
+    # A speck a tenth of a millimeter inside the near plane, where the view
+    # is two millimeters tall, drawn either way. Not on the plane itself:
+    # the clipper's rounding of a vertex exactly on it goes either way,
+    # with the test and without alike.
+    var near_culled = List[Mesh]()
+    near_culled.append(Mesh(speck, paint, NodeId(0)))
+    var near_kept = List[Mesh]()
+    near_kept.append(Mesh(speck, paint, NodeId(0), frustum_culled=False))
+    var grazing = scene_with_node_placed(0, 0, 4 - 0.1001, 1)
+    var close = rendered(renderer, grazing, assets, near_culled, camera)
+    assert_true(
+        count_background(close, renderer.background) < 64 * 64,
+        "the speck at the near plane was culled",
+    )
+    assert_same_image(
+        close, rendered(renderer, grazing, assets, near_kept, camera)
+    )
+
+
+def test_an_attached_camera_culls_by_its_nodes_view() raises:
+    # The same long lens riding a node under a turned, moved pivot. Its
+    # view is the exact inverse of a rotation and a translation, with the
+    # bottom row the frustum asks for, and the sheet a meter and a half
+    # inside the far plane is drawn with the test and without.
+    var renderer = Renderer(64, 64)
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER))
+    )
+    var paint = assets.materials.add(Material(Color(220, 160, 80), kind=BASIC))
+    var scene = Scene()
+    var pivot = Object3D()
+    pivot.set_position(1, 2, 3)
+    pivot.set_euler(Angle(0.0, DEGREE), Angle(90.0, DEGREE), Angle(0.0, DEGREE))
+    var pivot_node = scene.add(pivot^)
+    var eye = Object3D()
+    eye.set_position(0, 0, 4)
+    var eye_node = scene.attach(eye^, pivot_node)
+    # The pivot's quarter turn about y takes the eye's -z to world -x, so
+    # the sheet stands 4998.5 meters down -x from the eye, facing it.
+    var target = Object3D()
+    target.set_position(4 - 4998.5 + 1, 2, 3)
+    target.set_euler(
+        Angle(0.0, DEGREE), Angle(90.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var target_node = scene.add(target^)
+    light_the(scene)
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(1.0, DEGREE),
+        1.0,
+        Length(0.1, METER),
+        Length(5000.0, METER),
+    )
+    camera.attach(eye_node)
+    assert_true(camera.view_matrix_in(scene).is_affine())
+    var culled = List[Mesh]()
+    culled.append(Mesh(sheet, paint, target_node))
+    var kept = List[Mesh]()
+    kept.append(Mesh(sheet, paint, target_node, frustum_culled=False))
+    var tested = rendered(renderer, scene, assets, culled, camera)
+    assert_true(
+        count_background(tested, renderer.background) < 64 * 64,
+        "the sheet was culled through the attached camera",
+    )
+    assert_same_image(tested, rendered(renderer, scene, assets, kept, camera))
+
+
 def test_a_mesh_partly_in_view_is_prepared_whole() raises:
     # Straddling the right edge: the bound crosses the plane, so the mesh
     # is prepared as if there were no test, every triangle of it.
@@ -2843,9 +2983,138 @@ def test_vertex_colors_multiply_the_material_color() raises:
         assert_equal(pixel.b, UInt8(255))
 
 
+def test_vertex_colors_multiply_a_nonwhite_material() raises:
+    # The material's color decoded from sRGB, times its opacity in alpha,
+    # times the vertex's own color: worked out by hand rather than asked of
+    # the renderer. Orange (255, 128, 0) at 0.8 decodes to (1, 0.21586, 0,
+    # 0.8); a vertex color of (0.5, 0.25, 1, 0.5) leaves (0.5, 0.05397, 0,
+    # 0.4) on every corner.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var sheet = plane(Length(1.0, METER), Length(1.0, METER))
+    var tints = List[Float32]()
+    for _ in range(sheet.vertex_count()):
+        for value in [0.5, 0.25, 1.0, 0.5]:
+            tints.append(Float32(value))
+    sheet.set_attribute(String(COLOR), BufferAttribute(tints^, 4))
+    var tinted = assets.geometries.add(sheet^)
+    var orange = assets.materials.add(
+        Material(
+            Color(255, 128, 0), opacity=0.8, kind=BASIC, vertex_colors=True
+        )
+    )
+    var scene = scene_with_node_at(0)
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(tinted, orange, NodeId(0)))
+    var corners = prepared(renderer, scene, assets, meshes, a_camera())
+    assert_equal(len(corners), 6)
+    for index in range(len(corners)):
+        assert_almost_equal(corners[index].color.r, Float32(0.5), atol=1e-4)
+        assert_almost_equal(corners[index].color.g, Float32(0.05397), atol=1e-4)
+        assert_almost_equal(corners[index].color.b, Float32(0), atol=1e-4)
+        assert_almost_equal(corners[index].color.a, Float32(0.4), atol=1e-4)
+
+
+def assert_some_corner_carries(
+    corners: List[RasterVertex], r: Float32, g: Float32, b: Float32, a: Float32
+) raises:
+    """Assert that at least one prepared corner carries the given color.
+
+    Args:
+        corners: The prepared list.
+        r: Expected red.
+        g: Expected green.
+        b: Expected blue.
+        a: Expected alpha.
+
+    Raises:
+        Error: If no corner matches within a tolerance.
+    """
+    for index in range(len(corners)):
+        var color = corners[index].color
+        if (
+            abs(color.r - r) < 1e-4
+            and abs(color.g - g) < 1e-4
+            and abs(color.b - b) < 1e-4
+            and abs(color.a - a) < 1e-4
+        ):
+            return
+    raise Error("No corner carries that color")
+
+
+def test_varying_vertex_colors_survive_the_near_plane() raises:
+    # One triangle with a different color and alpha at each corner, one
+    # corner behind the near plane: the two cut corners carry the colors
+    # mixed four sevenths of the way along the cut edges, exactly as the
+    # positions are, and the corners at two depths carry two values of
+    # 1 / w. The default camera sits at the origin looking down -z with
+    # the near plane one meter out.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var triangle = BufferGeometry()
+    var positions = List[Float32]()
+    for value in [-1.0, -1.0, -3.0, 1.0, -1.0, -3.0, 0.0, 1.0, 0.5]:
+        positions.append(Float32(value))
+    triangle.set_attribute(String(POSITION), BufferAttribute(positions^, 3))
+    var tints = List[Float32]()
+    for value in [1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.5, 0.0, 0.0, 1.0, 0.25]:
+        tints.append(Float32(value))
+    triangle.set_attribute(String(COLOR), BufferAttribute(tints^, 4))
+    var shape = assets.geometries.add(triangle^)
+    var white = assets.materials.add(
+        Material(
+            Color(255, 255, 255),
+            NO_TEXTURE,
+            DOUBLE_SIDE,
+            kind=BASIC,
+            vertex_colors=True,
+        )
+    )
+    var camera = PerspectiveCamera(
+        Angle(90.0, DEGREE),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(1.0, METER),
+        Length(10.0, METER),
+    )
+    var scene = scene_with_node_at(0)
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(shape, white, NodeId(0)))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    # A triangle with one corner cut off is a quad: two triangles.
+    assert_equal(len(corners), 6)
+    # The uncut corners, as given.
+    assert_some_corner_carries(corners, 1, 0, 0, 1)
+    assert_some_corner_carries(corners, 0, 1, 0, 0.5)
+    # The cuts, at t = (-3 + 1) / (-3 - 0.5) = 4 / 7 from the near corner
+    # to the far one.
+    var t = Float32(4) / 7
+    assert_some_corner_carries(corners, 1 - t, 0, t, 1 - 0.75 * t)
+    assert_some_corner_carries(corners, 0, 1 - t, t, 0.5 - 0.25 * t)
+    # Nothing else: every corner is one of those four.
+    for index in range(len(corners)):
+        var color = corners[index].color
+        assert_true(
+            color.b < 1e-4 or abs(color.b - t) < 1e-4,
+            "a corner carries a color that was never given or cut",
+        )
+    # Two depths, three meters and one, so two values of 1 / w.
+    var deep = 0
+    var shallow = 0
+    for index in range(len(corners)):
+        if abs(corners[index].inv_w - 1.0 / 3) < 1e-4:
+            deep += 1
+        if abs(corners[index].inv_w - 1) < 1e-4:
+            shallow += 1
+    assert_true(deep > 0 and shallow > 0, "the corners are not at two depths")
+    assert_equal(deep + shallow, 6)
+
+
 def test_a_vertex_alpha_blends_only_when_the_material_does() raises:
     # A fourth float halves the alpha. Over a blended material the sheet
-    # shows half the background through; over an opaque one it is ignored.
+    # shows half the background through, and writes no depth. An opaque
+    # material does not blend with what is behind: its fragment replaces
+    # the pixel, alpha and all, and claims the depth. So the opaque sheet
+    # is full red with an alpha of a half, not an opaque red.
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_background(Color(0, 0, 0))
     var assets = Assets()
@@ -2866,13 +3135,26 @@ def test_a_vertex_alpha_blends_only_when_the_material_does() raises:
     # Half of linear red over black encodes to 188, not 128.
     assert_true(left.r > 180 and left.r < 196, "the alpha did not blend")
     assert_equal(left.g, UInt8(0))
+    # Over an opaque background the result is opaque, and a blended
+    # fragment leaves the depth as it found it.
+    assert_equal(left.a, UInt8(255))
+    assert_equal(
+        blended.depth_at(WIDTH // 8, HEIGHT // 2), inf[DType.float32]()
+    )
     var solid = assets.materials.add(
         Material(Color(255, 255, 255), kind=BASIC, vertex_colors=True)
     )
     var opaque = List[Mesh]()
     opaque.append(Mesh(sheet, solid, NodeId(0)))
     var covered = rendered(renderer, scene, assets, opaque, a_camera())
-    assert_equal(covered.get_pixel(WIDTH // 8, HEIGHT // 2).r, UInt8(255))
+    var written = covered.get_pixel(WIDTH // 8, HEIGHT // 2)
+    assert_equal(written.r, UInt8(255))
+    assert_equal(written.g, UInt8(0))
+    assert_equal(written.a, UInt8(128))
+    assert_true(
+        covered.depth_at(WIDTH // 8, HEIGHT // 2) < inf[DType.float32](),
+        "an opaque fragment did not claim the depth",
+    )
 
 
 def test_vertex_colors_need_a_color_attribute_of_the_right_shape() raises:

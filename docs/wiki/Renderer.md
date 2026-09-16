@@ -52,9 +52,11 @@ Opaque meshes come first, nearest first. Translucent meshes follow, furthest fir
 
 ## Frustum culling
 
-`prepare` skips a mesh whose bounding sphere lies wholly outside the view. The frustum is the camera's projection matrix times its view matrix, read as six planes in world space. The sphere is the geometry's, carried through the node's world matrix. See [Math](Math#frustum).
+`prepare` skips a mesh whose bounding sphere lies wholly outside the view. The frustum's four sides come from the camera's projection matrix times its view matrix, read as planes in world space. Its near and far planes come from the camera's distances and the view matrix, the same numbers the clipper uses. See [Math](Math#frustum).
 
-The image does not change. Every triangle of such a mesh is clipped away or lands off the image. What the test saves is the transform, the clip and the projection of those triangles.
+The sphere is the geometry's, computed once per geometry per frame and reused by every mesh that draws it. It is carried through each node's world matrix. A sphere within a millionth of the far distance of a plane is kept. The clipper decides such ties.
+
+The image does not change. Every triangle of such a mesh is clipped away or lands off the image. What the test saves is the transform, the clip and the projection of those triangles. The bound itself reads the positions, twice.
 
 `Mesh(geometry, material, node, frustum_culled=False)` opts a mesh out. three.js: `Object3D.frustumCulled`. A mesh that is left out is not read. Its material and its index buffer are checked when it is drawn.
 

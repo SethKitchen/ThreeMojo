@@ -167,19 +167,21 @@ struct Matrix3(ImplicitlyCopyable):
         """Return the transform a texture applies to its coordinates,
         three.js's `setUvTransform`.
 
-        The coordinates are scaled by `repeat` about `center`, turned by
-        `-rotation` about it, and then moved by `offset`. The turn is the
-        negative of the angle asked for so that the *image* appears turned
-        counter-clockwise by `rotation`: turning the coordinates one way
-        turns what they sample the other. Every part of this matrix is
-        three.js's, term for term.
+        The coordinates are moved so that `center` is at the origin, turned
+        by `-rotation`, scaled by `repeat`, and moved back by `center` plus
+        `offset`: the turn comes before the scale, so a nonuniform `repeat`
+        stretches the turned image along its own axes rather than turning
+        a stretched one. The turn is the negative of the angle asked for
+        so that the *image* appears turned counter-clockwise by `rotation`:
+        turning the coordinates one way turns what they sample the other.
+        Every part of this matrix is three.js's, term for term.
 
         Args:
             offset: How far the coordinates are moved, after the rest.
             repeat: How many times the texture fits across each axis: the
-                scale on the coordinates.
+                scale on the coordinates, applied after the turn.
             rotation: How far the image is turned, counter-clockwise.
-            center: The point the scale and the turn are about.
+            center: The point the turn and the scale are about.
 
         Returns:
             The matrix.

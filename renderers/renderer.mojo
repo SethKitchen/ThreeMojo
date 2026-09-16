@@ -54,16 +54,27 @@ because a camera inside a closed mesh sees nothing but back faces, and that is
 a legitimate thing to want; three.js expresses the same choice as a material's
 `side`, which is where this belongs once `Material` exists.
 
-Whole meshes are discarded earlier still, before a vertex of them is read.
-Each mesh's bounding sphere is carried to world space and tested against the
-camera's frustum, three.js's `frustumCulled`, and a mesh wholly outside is
-left out of the draw order. It too is an optimization and not a correctness
-fix: every triangle of such a mesh is clipped away or lands off the image,
-so the frame is the same with the test and without. What the test saves is
-the transform, the clip and the projection of every one of those triangles,
-for the price of six dot products. A mesh can opt out with
+Whole meshes are discarded earlier still, before a vertex of them is
+transformed or clipped. Each geometry's bounding sphere is read off its
+positions once per frame, carried to world space for each mesh that draws
+it, and tested against the camera's frustum, three.js's `frustumCulled`; a
+mesh wholly outside is left out of the draw order. It too is an
+optimization and not a correctness fix: every triangle of such a mesh is
+clipped away or lands off the image, so the frame is the same with the test
+and without. What the test saves is the transform, the clip and the
+projection of every one of those triangles, for the price of two passes
+over the positions and six dot products. A mesh can opt out with
 `Mesh.frustum_culled`, and the renderer's own tests do, to show the image
 does not change.
+
+Two things keep that promise at the edges. The frustum's near and far
+planes are built from the camera's own distances, the numbers the clipper
+is given, rather than read back off the projection, where rounding can
+leave the far plane meters short; see `Frustum.from_camera`. And a sphere
+is kept when it comes within a millionth of the far distance of any plane,
+so that a mesh the culler and the clipper measure by different roundings
+of the same view is left for the clipper to decide. Keeping a mesh costs
+work; dropping one changes the image.
 """
 
 from cameras.camera import Camera
@@ -72,6 +83,7 @@ from core.assets import Assets
 from lights.lighting import Lighting
 from core.layers import Layers
 from core.scene import Scene
+from math.bounds import Sphere
 from math.frustum import Frustum
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -210,25 +222,47 @@ def _vertex_colors(
     return colors^
 
 
+# How far past a frustum plane a bound may lie and still be drawn, as a
+# fraction of the far distance: a sphere that misses a plane by less than
+# this is left for the clipper to settle. Float32 keeps about seven
+# figures, and the culler and the clipper reach a depth by different
+# roundings of the same view; a millionth of the range they measure over
+# is several times the rounding and no distance an image can show.
+comptime CULL_SLACK = Float32(1e-6)
+
+
 def _in_view(
-    scene: Scene, assets: Assets, mesh: Mesh, frustum: Frustum
+    scene: Scene,
+    assets: Assets,
+    mesh: Mesh,
+    frustum: Frustum,
+    slack: Float32,
+    mut bounds: List[Sphere],
+    mut known: List[Bool],
 ) raises -> Bool:
     """Return True if any of `mesh`'s bounding sphere is inside `frustum`.
 
     three.js's `Frustum.intersectsObject`: the geometry's own bounding
     sphere, carried to world space by the node's world matrix, tested
-    against the six planes. The sphere is worked out afresh each frame, as
-    `BufferGeometry.bounding_sphere` says it must be, at two passes over
-    the positions; that is cheaper than the transform, clip and projection
-    of every triangle it stands in for, and the difference grows with the
-    triangle count. A geometry with no vertices has an empty sphere, which
-    is in view nowhere, and a mesh of it draws nothing either way.
+    against the six planes. The sphere is worked out afresh each frame,
+    as `BufferGeometry.bounding_sphere` says it must be, at two passes
+    over the positions, but once per geometry and not once per mesh: the
+    first mesh to draw a geometry this frame records its bound in
+    `bounds`, and every later one reads it back. A forest of one tree
+    drawn two hundred times scans the tree once. A geometry with no
+    vertices has an empty sphere, which is in view nowhere, and a mesh of
+    it draws nothing either way.
 
     Args:
         scene: The transform hierarchy, updated.
         assets: Where the geometry lives.
         mesh: The mesh to test.
         frustum: The camera's frustum, in world space.
+        slack: How far past a plane the bound may lie and still count as
+            in view; see `CULL_SLACK`.
+        bounds: One local bound per geometry in the store, filled in as
+            geometries are met this frame.
+        known: Which entries of `bounds` have been filled in.
 
     Returns:
         Whether the mesh's bound reaches into the view.
@@ -237,8 +271,17 @@ def _in_view(
         Error: If the mesh names a geometry that is not there, or its
             geometry has no positions.
     """
-    var bound = assets.geometries.get(mesh.geometry).bounding_sphere()
+    ref geometry = assets.geometries.get(mesh.geometry)
+    var slot = mesh.geometry.value
+    if not known[slot]:
+        bounds[slot] = geometry.bounding_sphere()
+        known[slot] = True
+    var bound = bounds[slot]
     bound.apply_matrix4(scene.world_matrix(mesh.node))
+    # Grown, not shrunk: the empty sphere is left empty rather than made a
+    # point by the slack.
+    if not bound.is_empty():
+        bound.radius += slack
     return frustum.intersects_sphere(bound)
 
 
@@ -248,6 +291,7 @@ def _draw_order(
     view: Matrix4,
     visible: Layers,
     frustum: Frustum,
+    slack: Float32,
 ) raises -> List[Int]:
     """Return the order to draw the meshes a camera sees in: opaque nearest
     first, then the translucent ones furthest first.
@@ -257,9 +301,10 @@ def _draw_order(
     that is sorted is the list that is drawn, and nothing is measured for a
     mesh that will not be. So is a mesh whose bounding sphere lies wholly
     outside the frustum, three.js's `frustumCulled` test in the same
-    function, unless the mesh has opted out. A mesh left out here is not
-    read at all: its material's textures and its index buffer are checked
-    when it is drawn, as three.js reads nothing of an object it culls.
+    function, unless the mesh has opted out. Of a mesh left out here only
+    the positions are read, for the bound: its material's textures and its
+    index buffer are checked when it is drawn, as three.js reads nothing
+    of an object it culls.
 
     Blending is not commutative, so a translucent surface only looks right if
     what is behind it is already there. Two rules follow, and they are the
@@ -289,6 +334,8 @@ def _draw_order(
         visible: The camera's layers. A mesh on none of them is left out.
         frustum: The camera's frustum, in world space. A mesh whose bound
             lies wholly outside it is left out, unless it opted out.
+        slack: How far past a plane a bound may lie and still be drawn;
+            see `CULL_SLACK`.
 
     Returns:
         Indices into `scene.meshes`, only those the camera draws, in the
@@ -303,11 +350,17 @@ def _draw_order(
     var solid_depths = List[Float32]()
     var clear = List[Int]()
     var clear_depths = List[Float32]()
+    # Each geometry's local bound, found the first time a mesh draws it
+    # this frame and reused by every other mesh that does.
+    var bounds = List[Sphere](
+        length=assets.geometries.count(), fill=Sphere.empty()
+    )
+    var known = List[Bool](length=assets.geometries.count(), fill=False)
     for index in range(len(meshes)):
         if not scene.get(meshes[index].node).layers.test(visible):
             continue
         if meshes[index].frustum_culled and not _in_view(
-            scene, assets, meshes[index], frustum
+            scene, assets, meshes[index], frustum, slack, bounds, known
         ):
             continue
         # The camera looks down -z, so a smaller z is further away.
@@ -574,16 +627,23 @@ struct Renderer(Movable):
         var near = camera.near_distance()
         var far = camera.far_distance()
         # What the camera can see, in world space, where the meshes' bounds
-        # are: three.js's `_projScreenMatrix` read as six planes.
+        # are: three.js's `_projScreenMatrix` read as four side planes, and
+        # the near and far distances the clipper below is given, as the
+        # two depth planes.
         var clip = camera.projection_matrix()
         clip.multiply(view)
-        var frustum = Frustum.from_projection_matrix(clip)
+        var frustum = Frustum.from_camera(clip, view, near, far)
 
         ref meshes = scene.meshes
         # Worked out once, not once per mesh, and already without the
         # meshes the camera does not draw.
         var order = _draw_order(
-            scene, assets, view, camera.visible_layers(), frustum
+            scene,
+            assets,
+            view,
+            camera.visible_layers(),
+            frustum,
+            far * CULL_SLACK,
         )
         for ordered in range(len(order)):
             var index = order[ordered]

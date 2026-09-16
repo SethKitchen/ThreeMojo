@@ -56,7 +56,7 @@ Builders, as static methods:
 | `Matrix3.from_matrix4(m)` | The upper-left 3 by 3 of a `Matrix4`. |
 | `Matrix3.normal_matrix(m)` | The inverse transpose of that corner, for normals. Raises for a collapsed transform. |
 | `Matrix3.translation(x, y)`, `Matrix3.scaling(x, y)`, `Matrix3.rotation(angle)` | The 2D transforms. A rotation takes an `Angle`. |
-| `Matrix3.uv_transform(offset, repeat, rotation, center)` | three.js's `setUvTransform`: scale by `repeat` and turn about `center`, then move by `offset`. |
+| `Matrix3.uv_transform(offset, repeat, rotation, center)` | three.js's `setUvTransform`: turn about `center` by minus `rotation`, then scale by `repeat` about it, then move by `offset`. |
 
 `rotate(angle)` turns by `-angle`, as three.js does. It exists to build a texture transform, where a turn of the coordinates one way shows the image turned the other. `Matrix3.rotation(angle)` turns the coordinates themselves.
 
@@ -149,11 +149,14 @@ A plane refuses a zero normal. Three points on one line do not make a plane.
 | Member | Meaning |
 |---|---|
 | `Frustum.from_projection_matrix(m)` | The frustum a matrix sees. Raises for a matrix that describes no volume. |
+| `Frustum.from_camera(clip, view, near, far)` | The sides from `clip`, the near and far planes from the view matrix and the two distances. Raises for a view that is not affine, or a far plane not beyond the near one. |
 | `contains_point(p)` | Whether `p` is in front of every plane. A point on a plane counts. |
 | `intersects_sphere(s)` | Whether any of `s` is in view. False for an empty sphere. |
 | `intersects_box(b)` | Whether any of `b` is in view. False for an empty box. |
 
 A sphere or a box that crosses a plane is in view as far as the test knows. One that crosses two planes outside their corner is in view too. That is the usual bargain. The renderer uses `intersects_sphere` to skip meshes. See [Renderer](Renderer#frustum-culling).
+
+The renderer builds its frustum with `from_camera`. A far plane read back off a `Float32` projection can sit meters short when `far` is thousands of times `near`. For a near plane at 0.1 and a far one at 5000 it sits at 4993. The camera's own distances put it at 5000, where the clipper has it.
 
 ## Projection
 

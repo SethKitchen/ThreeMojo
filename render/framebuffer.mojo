@@ -28,13 +28,17 @@ light. The two conversions are `FloatColor(srgb=...)` on the way in and
 `encode()` on the way out, each applied exactly once; see `render.srgb`.
 
 `FloatColor` is also three.js's `Color`, which since its color management is
-a float color in the linear working space with setters that take sRGB. The
-hex and HSL constructors decode on the way in, and `hex()` and `hsl()` encode
-on the way out, as `setHex`, `setHSL`, `getHex` and `getHSL` do with their
-default color space; `lerp`, `lerp_hsl`, `offset_hsl`, `multiply` and `add`
-are the same arithmetic on the same numbers. What three.js's `Color` lacks
-is an alpha, which this keeps and the HSL operations leave alone. CSS color
-names and strings are not ported.
+a float color in the linear working space. Its setters and getters each
+have a default color space, and those are kept: the hex constructor decodes
+sRGB on the way in and `hex()` encodes it on the way out, as `setHex` and
+`getHex` do, while the HSL constructor and `hsl()` take and give their three
+numbers in the linear working space, as `setHSL` and `getHSL` do, and in
+sRGB only when asked with `space=SRGB`. A half-lightness gray is therefore
+linear 0.5, which encodes to 188, and not the sRGB gray 128 that `0x808080`
+decodes from. `lerp`, `lerp_hsl`, `offset_hsl`, `multiply` and `add` are the
+same arithmetic on the same numbers, in the working space. What three.js's
+`Color` lacks is an alpha, which this keeps and the HSL operations leave
+alone. CSS color names and strings are not ported.
 
 The depth buffer holds one NDC depth per pixel, cleared to infinity so that
 the first fragment to arrive always wins. Depth is what lets geometry be drawn
@@ -42,7 +46,13 @@ in any order: without it, correctness depends on the draw order or on the
 scene happening to be convex.
 """
 
-from render.srgb import linear_to_srgb, srgb_to_linear
+from render.srgb import (
+    LINEAR,
+    SRGB,
+    ColorSpace,
+    linear_to_srgb,
+    srgb_to_linear,
+)
 from std.math import floor, inf
 
 
@@ -88,8 +98,9 @@ struct Color(ImplicitlyCopyable):
 @fieldwise_init
 struct HSL(ImplicitlyCopyable):
     """A color as hue, saturation and lightness, each nominally zero to
-    one, in sRGB as three.js's `getHSL` gives them. Hue runs once around
-    the wheel from red through green and blue back to red."""
+    one, in whichever color space they were asked in: the linear working
+    space unless `hsl` was told `SRGB`. Hue runs once around the wheel
+    from red through green and blue back to red."""
 
     var hue: Float32
     var saturation: Float32
@@ -97,9 +108,9 @@ struct HSL(ImplicitlyCopyable):
 
 
 def _hue_to_channel(low: Float32, high: Float32, hue: Float32) -> Float32:
-    """Return one sRGB channel of a color from its hue, three.js's
-    `hue2rgb`: `high` for a third of the wheel, `low` for another third,
-    and a ramp between them either side.
+    """Return one channel of a color from its hue, three.js's `hue2rgb`:
+    `high` for a third of the wheel, `low` for another third, and a ramp
+    between them either side. In whatever space the hue was given.
 
     Args:
         low: The channel's floor, from the lightness and saturation.
@@ -199,20 +210,48 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         hue: Float32,
         saturation: Float32,
         lightness: Float32,
-    ):
+        space: ColorSpace = LINEAR,
+    ) raises:
         """Create a color from hue, saturation and lightness, three.js's
         `setHSL`. Opaque.
 
-        The three describe an sRGB color, as three.js's do, which is then
-        decoded to linear light. Hue wraps around the wheel, so 1.25 is
-        0.25; saturation and lightness are clamped to zero to one.
+        The three describe a color in `space`: the linear working space by
+        default, as three.js's `setHSL` defaults to, so that a lightness
+        of a half is linear 0.5; or sRGB when asked, which is then decoded,
+        so that the same half is the gray `0x808080` decodes to. Hue wraps
+        around the wheel, so 1.25 is 0.25; saturation and lightness are
+        clamped to zero to one.
 
         Args:
             hue: Where on the wheel: 0 red, 1/3 green, 2/3 blue, 1 red.
             saturation: Zero for gray, one for the pure hue.
             lightness: Zero for black, a half for the pure hue, one for
                 white.
+            space: `LINEAR` to take the three as they are, `SRGB` to
+                decode the color they describe.
+
+        Raises:
+            Error: If `space` is neither `LINEAR` nor `SRGB`.
         """
+        var raw = FloatColor._from_hsl(hue, saturation, lightness)
+        if space == SRGB:
+            self.r = srgb_to_linear(raw.r)
+            self.g = srgb_to_linear(raw.g)
+            self.b = srgb_to_linear(raw.b)
+        elif space == LINEAR:
+            self.r = raw.r
+            self.g = raw.g
+            self.b = raw.b
+        else:
+            raise Error("An HSL color is given in LINEAR or SRGB")
+        self.a = 1.0
+
+    @staticmethod
+    def _from_hsl(
+        hue: Float32, saturation: Float32, lightness: Float32
+    ) -> FloatColor:
+        """Return the color three numbers describe, in whatever space they
+        are in: three.js's `setHSL` before its color conversion. Opaque."""
         var h = hue - floor(hue)
         var s = min(max(saturation, Float32(0)), Float32(1))
         var l = min(max(lightness, Float32(0)), Float32(1))
@@ -227,27 +266,47 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
             r = _hue_to_channel(low, high, h + 1.0 / 3)
             g = _hue_to_channel(low, high, h)
             b = _hue_to_channel(low, high, h - 1.0 / 3)
-        self.r = srgb_to_linear(r)
-        self.g = srgb_to_linear(g)
-        self.b = srgb_to_linear(b)
-        self.a = 1.0
+        return FloatColor(r, g, b, 1.0)
 
     def hex(self) -> Int:
         """Return this color encoded to sRGB as a 24-bit value, three.js's
         `getHex`: what `encode` gives, packed. Alpha is left out."""
         return self.encode().hex()
 
-    def hsl(self) -> HSL:
+    def hsl(self, space: ColorSpace = LINEAR) raises -> HSL:
         """Return this color as hue, saturation and lightness, three.js's
-        `getHSL`: the color encoded to sRGB first, as three.js encodes it,
-        then taken apart. A gray has a hue and a saturation of zero.
+        `getHSL`: in the linear working space by default, as three.js
+        gives them, or of the color encoded to sRGB when asked. A gray has
+        a hue and a saturation of zero.
+
+        Args:
+            space: `LINEAR` to take the channels apart as they are, `SRGB`
+                to encode them first.
 
         Returns:
             The three, each nominally zero to one.
+
+        Raises:
+            Error: If `space` is neither `LINEAR` nor `SRGB`.
         """
-        var r = linear_to_srgb(self.r)
-        var g = linear_to_srgb(self.g)
-        var b = linear_to_srgb(self.b)
+        if space == SRGB:
+            return FloatColor(
+                linear_to_srgb(self.r),
+                linear_to_srgb(self.g),
+                linear_to_srgb(self.b),
+                self.a,
+            )._to_hsl()
+        if space != LINEAR:
+            raise Error("An HSL color is asked for in LINEAR or SRGB")
+        return self._to_hsl()
+
+    def _to_hsl(self) -> HSL:
+        """Return this color's channels as hue, saturation and lightness,
+        taken apart as they are: three.js's `getHSL` after its color
+        conversion."""
+        var r = self.r
+        var g = self.g
+        var b = self.b
         var high = max(r, max(g, b))
         var low = min(r, min(g, b))
         var lightness = (low + high) / 2
@@ -289,20 +348,19 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
 
         The hue goes the way the numbers say and not the short way round
         the wheel, as in three.js: halfway from red at 0 to blue at 2/3 is
-        green at 1/3. This color's own alpha is kept.
+        green at 1/3. In the linear working space, as three.js's is. This
+        color's own alpha is kept.
 
         Args:
             other: The color to move toward.
             alpha: How far, zero to one.
         """
-        var here = self.hsl()
-        var there = other.hsl()
-        var mixed = FloatColor(
-            hue=here.hue + (there.hue - here.hue) * alpha,
-            saturation=here.saturation
-            + (there.saturation - here.saturation) * alpha,
-            lightness=here.lightness
-            + (there.lightness - here.lightness) * alpha,
+        var here = self._to_hsl()
+        var there = other._to_hsl()
+        var mixed = FloatColor._from_hsl(
+            here.hue + (there.hue - here.hue) * alpha,
+            here.saturation + (there.saturation - here.saturation) * alpha,
+            here.lightness + (there.lightness - here.lightness) * alpha,
         )
         self.r = mixed.r
         self.g = mixed.g
@@ -312,18 +370,19 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         mut self, hue: Float32, saturation: Float32, lightness: Float32
     ):
         """Add to this color's hue, saturation and lightness, three.js's
-        `offsetHSL`. The hue wraps; the other two clamp. Alpha is kept.
+        `offsetHSL`, in the linear working space as three.js's is. The hue
+        wraps; the other two clamp. Alpha is kept.
 
         Args:
             hue: How far round the wheel.
             saturation: How much more saturated.
             lightness: How much lighter.
         """
-        var now = self.hsl()
-        var moved = FloatColor(
-            hue=now.hue + hue,
-            saturation=now.saturation + saturation,
-            lightness=now.lightness + lightness,
+        var now = self._to_hsl()
+        var moved = FloatColor._from_hsl(
+            now.hue + hue,
+            now.saturation + saturation,
+            now.lightness + lightness,
         )
         self.r = moved.r
         self.g = moved.g
