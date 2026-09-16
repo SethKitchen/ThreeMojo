@@ -252,6 +252,12 @@ struct BufferGeometry(Movable):
         polyhedron is, gets its one face's normal and shades flat. A vertex
         no triangle uses keeps a zero normal, as in three.js.
 
+        Faces are joined by index, not by position. The two vertices either
+        side of a texture seam sit in the same place and keep separate
+        sums, so recomputing a seamed sphere's normals shows the seam, as it
+        does in three.js. A builder's own normals know better; replace them
+        only on purpose.
+
         Raises:
             Error: If the geometry has no positions, or an index entry
                 points past the last vertex.
@@ -314,8 +320,16 @@ struct BufferGeometry(Movable):
         Raises:
             Error: If the geometry has no positions.
         """
+        var box = self.bounding_box()
+        if box.is_empty():
+            return Sphere.empty()
+        # Two passes over the borrowed positions rather than a copy of them:
+        # the box's center, then the farthest vertex from it.
         ref positions = self.attribute_view(POSITION)
-        var points = List[Vector3]()
-        for vertex in range(positions.count()):
-            points.append(positions.vector3(vertex))
-        return Sphere.from_points(points)
+        var center = box.center()
+        var farthest = Float32(0)
+        for vertex in range(positions.count()):  # pragma: no branch
+            var reach = (positions.vector3(vertex) - center).length()
+            if reach > farthest:
+                farthest = reach
+        return Sphere(center, farthest)

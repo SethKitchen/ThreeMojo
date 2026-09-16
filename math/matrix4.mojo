@@ -635,11 +635,20 @@ struct Matrix4(ImplicitlyCopyable):
             A stretch no direction exceeds. Zero for a transform that
             flattens everything.
         """
+        # The Gram entries are worked in Float64 from the start: squaring a
+        # Float32 axis first underflows at a scale of 1e-25 and overflows at
+        # 1e20, both finite scales a bound has to survive.
+        ref e = self.elements
         var largest = Float64(0)
         for row in range(3):  # pragma: no branch
             var total = Float64(0)
             for column in range(3):  # pragma: no branch
-                total += abs(Float64(self._axes_dot(row, column)))
+                var dot = Float64(0)
+                for lane in range(3):  # pragma: no branch
+                    dot += Float64(e[row * 4 + lane]) * Float64(
+                        e[column * 4 + lane]
+                    )
+                total += abs(dot)
             if total > largest:
                 largest = total
         return Float32(sqrt(largest) * (1 + 1e-6))

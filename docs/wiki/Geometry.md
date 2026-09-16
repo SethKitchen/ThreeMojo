@@ -35,6 +35,8 @@ Attribute names are the constants `POSITION`, `NORMAL` and `UV`. A geometry need
 
 `compute_vertex_normals` averages the normals of the triangles a vertex is in, weighted by their areas. A shared vertex shades smoothly. A vertex used once shades flat. A vertex no triangle uses keeps a zero normal, as in three.js.
 
+Faces are joined by index, not by position. The two vertices on either side of a texture seam keep separate normals, so a recomputed seamed sphere shows its seam, as in three.js. A builder's own normals are better. Replace them only on purpose.
+
 The bounds are computed each time they are asked for. Nothing is cached. See [Math](Math#box3-sphere-and-plane) for `Box3` and `Sphere`.
 
 ## GeometryStore
@@ -150,7 +152,9 @@ var own = polyhedron(vertices, indices, Length(1.0, METER), detail)
 
 A polyhedron is a list of vertices and a list of triangles over them. Every vertex is pushed out to the radius. `detail` cuts each edge that many times, so each face becomes `(detail + 1)` squared triangles, on the way to a sphere. The four regular solids have three.js's vertices and faces in three.js's order.
 
-The geometry is not indexed. Each triangle owns its three vertices. At a detail of zero the normals are flat, one per face. At a detail of one or more each normal points away from the center. Texture coordinates are longitude and latitude, with the seam repaired per face as three.js repairs it. A coordinate can exceed one on a face that straddles the seam.
+The geometry is not indexed. Each triangle owns its three vertices. At a detail of zero the normals are flat, one per face. At a detail of one or more each normal points away from the center.
+
+Texture coordinates are longitude and latitude, with the seam repaired per face as three.js repairs it. `v` is one at the top pole and zero at the bottom, as on the sphere. A coordinate can exceed one on a face that straddles the seam.
 
 ## Capsule
 
@@ -158,9 +162,11 @@ The geometry is not indexed. Each triangle owns its three vertices. At a detail 
 var pill = capsule(Length(0.5, METER), Length(2.0, METER), 4, 16)   # radius, length, cap rows, around
 ```
 
-A cylinder with a hemisphere on each end, standing on the y axis and centered on the origin. The length is the straight side between the caps. A length of zero is a sphere. Vertices run in columns, one per step around, from the bottom pole to the top. `u` runs around and `v` runs up the profile, from zero at the bottom pole to one at the top.
+A cylinder with a hemisphere on each end, standing on the y axis and centered on the origin. The length is the straight side between the caps. A length of zero is a sphere with one rim, not two. Vertices run in columns, one per step around, from the bottom pole to the top. `u` runs around. `v` runs up the profile by distance along it, from zero at the bottom pole to one at the top. A texture stays put when the segment counts change.
 
 The normals come from the profile exactly. On a cap they run along its radius, and on the side straight out. The caps and the side meet without a crease. The half of each cell against a pole that has no area is left out.
+
+The sweep starts at +z, as the cylinder's does. three.js's current builder starts at -x and gives its pole vertices a half-step `u`. The shape is the same. A texture lands a quarter turn on.
 
 ## Errors
 

@@ -24,7 +24,7 @@ from geometries.polyhedron import (
 from geometries.sphere import sphere
 from geometries.torus import torus, torus_knot
 from math.vector3 import Vector3
-from std.math import cos, pi, sin, sqrt
+from std.math import asin, cos, pi, sin, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -1725,7 +1725,7 @@ def test_a_detail_of_zero_shades_flat_and_more_shades_round() raises:
         assert_xyz(round_normals.vector3(vertex), p.x / 2, p.y / 2, p.z / 2)
 
 
-def test_detail_cuts_each_face_into_four_times_as_many() raises:
+def test_detail_cuts_each_face_into_detail_plus_one_squared() raises:
     var one = Length(1.0, METER)
     assert_equal(octahedron(one, 1).triangle_count(), 8 * 4)
     assert_equal(octahedron(one, 2).triangle_count(), 8 * 9)
@@ -1775,17 +1775,26 @@ def test_polyhedron_texture_coordinates_are_longitude_and_latitude() raises:
     var solid = octahedron(Length(1.0, METER))
     ref uvs = solid.attribute_view(String(UV))
     ref positions = solid.attribute_view(String(POSITION))
-    # v is zero at the top pole and one at the bottom, as three.js has it.
+    # v is one at the top pole and zero at the bottom, as the sphere's is
+    # and as three.js writes it, and latitude in between.
     for vertex in range(solid.vertex_count()):
         var p = positions.vector3(vertex)
         if p.y > 0.99:
             assert_almost_equal(
-                uvs.component(vertex, 1), Float32(0), atol=TOLERANCE
+                uvs.component(vertex, 1), Float32(1), atol=TOLERANCE
             )
         if p.y < -0.99:
             assert_almost_equal(
-                uvs.component(vertex, 1), Float32(1), atol=TOLERANCE
+                uvs.component(vertex, 1), Float32(0), atol=TOLERANCE
             )
+    var tilted = icosahedron(Length(1.0, METER), 1)
+    ref tilted_uvs = tilted.attribute_view(String(UV))
+    ref tilted_positions = tilted.attribute_view(String(POSITION))
+    for vertex in range(tilted.vertex_count()):
+        var latitude = asin(tilted_positions.vector3(vertex).y) / Float32(pi)
+        assert_almost_equal(
+            tilted_uvs.component(vertex, 1), 0.5 + latitude, atol=Float64(1e-5)
+        )
     # The first face is (1, 0, 0), (0, 1, 0), (0, 0, 1), written in the
     # order (0, 1, 0), (0, 0, 1), (1, 0, 0). Its middle lies three eighths
     # of a turn round, so its pole corner takes that longitude; (0, 0, 1)
@@ -1912,9 +1921,30 @@ def test_a_capsule_maps_u_around_and_v_up() raises:
     ref uvs = pill.attribute_view(String(UV))
     assert_equal(uvs.component(0, 0), Float32(0))
     assert_equal(uvs.component(0, 1), Float32(0))
-    assert_equal(uvs.component(9, 1), Float32(1))
+    assert_almost_equal(uvs.component(9, 1), Float32(1), atol=TOLERANCE)
     assert_equal(uvs.component(8 * 10, 0), Float32(1))
     assert_texture_coordinates_in_range(pill)
+
+
+def test_capsule_v_is_distance_along_the_profile() raises:
+    # The rims, where the caps meet the side, sit a quarter circle from
+    # each pole along a profile of pi r plus the length: at 0.3055 and
+    # 0.6945 for a radius of one and a length of two, whatever the segment
+    # counts, so a texture stays put as the mesh is refined.
+    var bottom_rim = Float32(0.30550805)
+    var top_rim = Float32(0.69449195)
+    for caps in [4, 8]:
+        for rows in [1, 3]:
+            var pill = capsule(
+                Length(1.0, METER), Length(2.0, METER), caps, 8, rows
+            )
+            ref uvs = pill.attribute_view(String(UV))
+            assert_almost_equal(
+                uvs.component(caps, 1), bottom_rim, atol=Float64(1e-5)
+            )
+            assert_almost_equal(
+                uvs.component(caps + rows, 1), top_rim, atol=Float64(1e-5)
+            )
 
 
 def test_every_capsule_face_winds_outward() raises:
@@ -1926,12 +1956,21 @@ def test_every_capsule_face_winds_outward() raises:
 
 
 def test_a_capsule_of_no_length_is_a_sphere() raises:
-    var ball = capsule(Length(1.5, METER), Length(0.0, METER), 4, 8)
-    ref positions = ball.attribute_view(String(POSITION))
-    for vertex in range(ball.vertex_count()):
-        assert_almost_equal(
-            positions.vector3(vertex).length(), Float32(1.5), atol=Float64(1e-5)
-        )
+    # One rim rather than two coincident ones, so there is no collapsed
+    # side between the caps, however many rows the side was asked for.
+    for rows in [1, 3]:
+        var ball = capsule(Length(1.5, METER), Length(0.0, METER), 4, 8, rows)
+        assert_equal(ball.vertex_count(), 9 * 9)
+        assert_equal(ball.triangle_count(), 2 * 8 * 8 - 2 * 8)
+        ref positions = ball.attribute_view(String(POSITION))
+        for vertex in range(ball.vertex_count()):
+            assert_almost_equal(
+                positions.vector3(vertex).length(),
+                Float32(1.5),
+                atol=Float64(1e-5),
+            )
+        assert_no_degenerate_triangle(ball)
+        assert_faces_wind_with_their_normals(ball)
 
 
 def test_a_capsules_area_approaches_the_closed_form() raises:

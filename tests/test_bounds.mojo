@@ -266,6 +266,17 @@ def test_a_transformed_sphere_still_holds_its_transformed_points() raises:
         assert_true(sphere.contains_point(sheared.transform_point(on_meridian)))
 
 
+def test_a_transformed_sphere_survives_extreme_scales() raises:
+    # A huge sphere scaled down to a meter, and a tiny one scaled up: the
+    # stretch is worked in Float64, so neither radius is lost on the way.
+    var huge = Sphere(Vector3(0, 0, 0), 1e25)
+    huge.apply_matrix4(scaling(1e-25, 1e-25, 1e-25))
+    assert_almost_equal(huge.radius, Float32(1), atol=Float64(1e-4))
+    var tiny = Sphere(Vector3(0, 0, 0), 1e-20)
+    tiny.apply_matrix4(scaling(1e20, 1e20, 1e20))
+    assert_almost_equal(tiny.radius, Float32(1), atol=Float64(1e-4))
+
+
 def test_an_empty_sphere_meets_nothing_and_stays_empty() raises:
     # The sum of an empty sphere's radius and a real one's is positive, so
     # the plain test would say they meet; asked outright, they do not.

@@ -143,8 +143,8 @@ def polyhedron(
             seen from outside.
         radius: How far every vertex ends up from the origin.
         detail: How many times to cut each edge: zero leaves the faces
-            flat, and each step more cuts every triangle into four times
-            as many, on the way to a sphere.
+            flat, and a detail of `d` cuts every face into `(d + 1)`
+            squared triangles, on the way to a sphere.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes and no
@@ -197,7 +197,9 @@ def polyhedron(
         data[vertex * 3 + 1] = direction.y * radius.value
         data[vertex * 3 + 2] = direction.z * radius.value
         uvs.append(_azimuth(direction) / (2 * Float32(pi)) + 0.5)
-        uvs.append(_inclination(direction) / Float32(pi) + 0.5)
+        # Latitude runs the other way from the inclination: one at the top,
+        # as the sphere's v does and as three.js writes it.
+        uvs.append(0.5 - _inclination(direction) / Float32(pi))
 
     # The seam repairs, per face, in three.js's order.
     for triangle in range(count // 3):  # pragma: no branch

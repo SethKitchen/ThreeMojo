@@ -553,6 +553,15 @@ def test_the_stretch_bound_never_falls_short_of_the_longest_axis() raises:
     assert_true(diagonal.length() <= sheared.max_stretch())
 
 
+def test_the_stretch_bound_survives_extreme_scales() raises:
+    # Squared in Float32 a scale of 1e-25 is nothing and 1e20 is infinite;
+    # worked in Float64 both are what they are.
+    var tiny = scaling(1e-25, 1e-25, 1e-25).max_stretch()
+    assert_true(abs(tiny - Float32(1e-25)) < Float32(1e-30))
+    var vast = scaling(1e20, 1e20, 1e20).max_stretch()
+    assert_true(abs(vast - Float32(1e20)) < Float32(1e15))
+
+
 def test_an_affine_matrix_keeps_w_at_one() raises:
     # Each element of the bottom row has to be able to say no on its own.
     assert_true(Matrix4().is_affine())

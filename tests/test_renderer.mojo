@@ -34,7 +34,15 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV, ShadeMode
-from render.texture import BILINEAR, IGNORED, NEAREST, Texture, checkerboard
+from geometries.polyhedron import octahedron
+from render.texture import (
+    BILINEAR,
+    CLAMP,
+    IGNORED,
+    NEAREST,
+    Texture,
+    checkerboard,
+)
 from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import Renderer, available_workers, face_normal
 from std.testing import (
@@ -2307,6 +2315,30 @@ def test_an_emissive_maps_alpha_does_not_darken_or_thin_the_glow() raises:
         assert_equal(shown.g, UInt8(255))
         assert_equal(shown.b, UInt8(255))
         assert_equal(shown.a, UInt8(255))
+
+
+def test_a_texture_sits_the_same_way_up_on_a_sphere_and_a_polyhedron() raises:
+    # A texture white on top and black underneath, on a sphere and on an
+    # octahedron cut toward a sphere: both show white above the middle and
+    # black below, so v runs the same way up on every builder.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var pixels: List[UInt8] = [255, 255, 255, 255, 0, 0, 0, 255]
+    var halves = assets.textures.add(Texture(1, 2, pixels^, CLAMP, NEAREST))
+    var skin = assets.materials.add(
+        Material(Color(255, 255, 255), halves, kind=BASIC)
+    )
+    var ball = assets.geometries.add(sphere(Length(1.0, METER), 24, 16))
+    var gem = assets.geometries.add(octahedron(Length(1.0, METER), 3))
+    var scene = unlit_scene_with_a_node()
+    for shape in [ball, gem]:
+        var meshes = List[Mesh]()
+        meshes.append(Mesh(shape, skin, NodeId(0)))
+        var image = rendered(renderer, scene, assets, meshes, a_camera())
+        var above = image.get_pixel(WIDTH // 2, HEIGHT // 2 - 3)
+        var below = image.get_pixel(WIDTH // 2, HEIGHT // 2 + 3)
+        assert_true(above.r > 200, "the top of the image did not show")
+        assert_true(below.r < 50, "the bottom of the image did not show")
 
 
 def test_a_blank_emissive_map_is_accepted_and_changes_nothing() raises:

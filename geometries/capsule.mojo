@@ -5,20 +5,28 @@
 
 """A capsule, from three.js `src/geometries/CapsuleGeometry.js`.
 
-A cylinder with a hemisphere on each end, standing on the y axis. three.js
-turns a profile on a lathe: a quarter circle up from the bottom pole, a
-straight run up the side, and a quarter circle in to the top pole, revolved
-around the axis. This builds the same surface the same way, one column of
-vertices per step around and one vertex per profile point up each column,
-but takes its normals from the profile exactly -- along the radius of
-whichever cap a point is on, straight out on the side -- rather than from
-the profile's neighboring points, so the caps and the side meet without a
-crease.
+A cylinder with a hemisphere on each end, standing on the y axis. A profile
+-- a quarter circle up from the bottom pole, a straight run up the side, a
+quarter circle in to the top pole -- revolved around the axis, the way a
+lathe turns it: one column of vertices per step around and one vertex per
+profile point up each column. three.js once built it on its lathe and now
+builds the same surface directly. This takes its normals from the profile
+exactly, along the radius of whichever cap a point is on and straight out
+on the side, rather than from the profile's neighboring points, so the
+caps and the side meet without a crease.
+
+Texture coordinates run around for `u` and up the profile for `v`, by
+distance along it, so the caps and the side keep their share of the image
+whatever the segment counts are. The sweep starts at +z, as the cylinder's
+does; three.js's current builder starts at -x and gives its pole vertices a
+half-step `u`. The shape is the same, and a texture lands a quarter turn
+on.
 
 Each pole is one point that every column repeats, for the reason the
 sphere's are: the columns need a vertex to close on. The half of each cell
 against a pole that has no area is left out, as the cylinder leaves out
-the cells against its apex.
+the cells against its apex. A capsule of no length has one rim, not two:
+its top cap continues from the bottom cap's rim, so nothing collapses.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -32,14 +40,17 @@ def _append_profile_point(
     mut up: List[Float32],
     mut lean_across: List[Float32],
     mut lean_up: List[Float32],
+    mut along: List[Float32],
     x: Float32,
     y: Float32,
     normal_x: Float32,
     normal_y: Float32,
+    distance: Float32,
 ):
-    """Append one point of the profile and the normal it carries, both in
-    the plane the profile is drawn in: `x` out from the axis, `y` along
-    it."""
+    """Append one point of the profile, the normal it carries, both in the
+    plane the profile is drawn in with `x` out from the axis and `y` along
+    it, and how far along the profile it lies from the bottom pole."""
+    along.append(distance)
     across.append(x)
     up.append(y)
     lean_across.append(normal_x)
@@ -68,8 +79,9 @@ def capsule(
         A geometry with `position`, `normal` and `uv` attributes and an
         index buffer, wound counter-clockwise seen from outside. Vertices
         run in columns, one per step around, each from the bottom pole to
-        the top. `u` runs around and `v` up the profile, zero at the bottom
-        pole and one at the top.
+        the top. `u` runs around and `v` up the profile by distance along
+        it, zero at the bottom pole and one at the top, so the caps and the
+        side keep their share of the image whatever the segment counts.
 
     Raises:
         Error: If the radius is not positive, the length is negative, or
@@ -87,42 +99,71 @@ def capsule(
         raise Error("A capsule needs at least one segment up its side")
 
     var r = radius.value
-    var half = length.value / 2
+    var straight = length.value
+    var half = straight / 2
     var quarter = Float32(pi) / 2
+    # The profile's length from pole to pole: two quarter circles and the
+    # side. `v` is a point's distance along it over this.
+    var total = Float32(pi) * r + straight
     # The profile, bottom pole to top pole: a quarter circle around the
     # bottom cap's center, the side, and a quarter circle around the top's.
-    # Each point carries the direction the surface faces there. The segment
-    # counts were checked above, so every loop runs.
+    # Each point carries the direction the surface faces there and how far
+    # along the profile it lies. The segment counts were checked above, so
+    # every cap loop runs.
     var across = List[Float32]()
     var up = List[Float32]()
     var lean_across = List[Float32]()
     var lean_up = List[Float32]()
+    var along = List[Float32]()
     for step in range(cap_segments + 1):  # pragma: no branch
-        var angle = -quarter + Float32(step) / Float32(cap_segments) * quarter
+        var turn = Float32(step) / Float32(cap_segments) * quarter
+        var angle = turn - quarter
         _append_profile_point(
             across,
             up,
             lean_across,
             lean_up,
+            along,
             r * cos(angle),
             -half + r * sin(angle),
             cos(angle),
             sin(angle),
+            r * turn,
         )
-    for step in range(1, height_segments):
-        var y = -half + Float32(step) / Float32(height_segments) * length.value
-        _append_profile_point(across, up, lean_across, lean_up, r, y, 1, 0)
-    for step in range(cap_segments + 1):  # pragma: no branch
-        var angle = Float32(step) / Float32(cap_segments) * quarter
+    if straight > 0:
+        for step in range(1, height_segments):
+            var rise = Float32(step) / Float32(height_segments) * straight
+            _append_profile_point(
+                across,
+                up,
+                lean_across,
+                lean_up,
+                along,
+                r,
+                -half + rise,
+                1,
+                0,
+                quarter * r + rise,
+            )
+    # A capsule of no length has one rim, not two: the top cap continues
+    # from the bottom cap's rim rather than repeating it, so there is no
+    # side of collapsed cells between them.
+    var first = 0
+    if straight == 0:
+        first = 1
+    for step in range(first, cap_segments + 1):  # pragma: no branch
+        var turn = Float32(step) / Float32(cap_segments) * quarter
         _append_profile_point(
             across,
             up,
             lean_across,
             lean_up,
-            r * cos(angle),
-            half + r * sin(angle),
-            cos(angle),
-            sin(angle),
+            along,
+            r * cos(turn),
+            half + r * sin(turn),
+            cos(turn),
+            sin(turn),
+            quarter * r + straight + r * turn,
         )
 
     var points = len(across)
@@ -142,7 +183,7 @@ def capsule(
             normals.append(lean_up[row])
             normals.append(lean_across[row] * cos_phi)
             uvs.append(u)
-            uvs.append(Float32(row) / Float32(points - 1))
+            uvs.append(along[row] / total)
 
     var index = List[Int]()
     for column in range(radial_segments):  # pragma: no branch
