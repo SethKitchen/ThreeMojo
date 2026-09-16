@@ -14,6 +14,7 @@ from geometries.circle import circle, ring
 from geometries.cylinder import cone, cylinder
 from geometries.plane import plane
 from geometries.sphere import sphere
+from geometries.torus import torus, torus_knot
 from math.vector3 import Vector3
 from std.math import cos, pi, sin, sqrt
 from std.testing import (
@@ -130,6 +131,13 @@ def assert_no_degenerate_triangle(geometry: BufferGeometry) raises:
 def assert_unit(normal: Vector3) raises:
     """Assert a normal has unit length."""
     assert_almost_equal(normal.length(), Float32(1), atol=Float64(1e-5))
+
+
+def assert_xyz(got: Vector3, x: Float32, y: Float32, z: Float32) raises:
+    """Assert a point lies at (x, y, z), within a hundred-thousandth."""
+    assert_almost_equal(got.x, x, atol=Float64(1e-5))
+    assert_almost_equal(got.y, y, atol=Float64(1e-5))
+    assert_almost_equal(got.z, z, atol=Float64(1e-5))
 
 
 def triangle_attribute() raises -> BufferAttribute:
@@ -1266,6 +1274,232 @@ def test_a_cone_needs_a_radius_and_a_height() raises:
         _ = cone(Length(1.0, METER), Length(0.0, METER))
     with assert_raises():
         _ = cone(Length(1.0, METER), Length(1.0, METER), 2)
+
+
+# --- torus ------------------------------------------------------------------
+
+
+def a_ring() raises -> BufferGeometry:
+    """Return a torus of radius two with a tube of a half, eight by twelve."""
+    return torus(Length(2.0, METER), Length(0.5, METER), 8, 12)
+
+
+def test_a_torus_is_a_grid_of_rings() raises:
+    var ring = a_ring()
+    assert_equal(ring.vertex_count(), (8 + 1) * (12 + 1))
+    assert_equal(ring.triangle_count(), 2 * 8 * 12)
+    assert_equal(
+        torus(Length(1.0, METER), Length(0.25, METER)).triangle_count(),
+        2 * 12 * 48,
+    )
+
+
+def test_every_torus_vertex_lies_on_its_tube() raises:
+    # A vertex is the tube's radius from the circle the tube follows, and its
+    # normal points straight away from that circle.
+    var ring = a_ring()
+    ref positions = ring.attribute_view(String(POSITION))
+    ref normals = ring.attribute_view(String(NORMAL))
+    for vertex in range(ring.vertex_count()):
+        var p = positions.vector3(vertex)
+        var spoke = sqrt(p.x * p.x + p.y * p.y)
+        var center = Vector3(p.x / spoke * 2, p.y / spoke * 2, 0)
+        var out = p - center
+        assert_almost_equal(out.length(), Float32(0.5), atol=Float64(1e-5))
+        var n = normals.vector3(vertex)
+        assert_unit(n)
+        assert_almost_equal(n.dot(out), Float32(0.5), atol=Float64(1e-5))
+
+
+def test_a_torus_starts_at_plus_x_and_closes_its_seams() raises:
+    var ring = a_ring()
+    ref positions = ring.attribute_view(String(POSITION))
+    # Row zero is the outer equator, and its first vertex the far side of
+    # the tube from the center: radius plus tube along +x.
+    assert_xyz(positions.vector3(0), 2.5, 0, 0)
+    # The last column of a row sits on its first, and the last row on row
+    # zero.
+    assert_xyz(positions.vector3(12), 2.5, 0, 0)
+    assert_xyz(positions.vector3(8 * 13), 2.5, 0, 0)
+    # A quarter of the way around the tube the vertex is on top of it.
+    assert_xyz(positions.vector3(2 * 13), 2, 0, 0.5)
+
+
+def test_a_torus_maps_u_along_and_v_around() raises:
+    var ring = a_ring()
+    ref uvs = ring.attribute_view(String(UV))
+    assert_equal(uvs.component(0, 0), Float32(0))
+    assert_equal(uvs.component(0, 1), Float32(0))
+    assert_equal(uvs.component(12, 0), Float32(1))
+    assert_equal(uvs.component(12, 1), Float32(0))
+    assert_equal(uvs.component(8 * 13, 0), Float32(0))
+    assert_equal(uvs.component(8 * 13, 1), Float32(1))
+    assert_equal(uvs.component(ring.vertex_count() - 1, 0), Float32(1))
+    assert_equal(uvs.component(ring.vertex_count() - 1, 1), Float32(1))
+    assert_texture_coordinates_in_range(ring)
+
+
+def test_every_torus_face_winds_outward() raises:
+    assert_faces_wind_with_their_normals(a_ring())
+    assert_no_degenerate_triangle(a_ring())
+
+
+def test_a_torus_area_approaches_the_closed_form() raises:
+    # Flat cells under a curved surface: within a few percent of the true
+    # area at the default resolution, and closer with more cells.
+    var exact = 4 * Float32(pi) * Float32(pi) * 2 * 0.5
+    var coarse = surface_area(torus(Length(2.0, METER), Length(0.5, METER)))
+    assert_true(abs(coarse - exact) / exact < 0.03)
+    var fine = surface_area(
+        torus(Length(2.0, METER), Length(0.5, METER), 48, 96)
+    )
+    assert_true(abs(fine - exact) < abs(coarse - exact))
+
+
+def test_a_torus_arc_is_a_bent_pipe() raises:
+    var bend = torus(
+        Length(2.0, METER), Length(0.5, METER), 4, 4, Angle(90.0, DEGREE)
+    )
+    # The last column of the outer row is a quarter turn round, at +y.
+    assert_xyz(bend.attribute_view(String(POSITION)).vector3(4), 0, 2.5, 0)
+    assert_faces_wind_with_their_normals(bend)
+
+
+def test_a_torus_can_be_measured_in_feet() raises:
+    var ring = torus(Length(2.0, FOOT), Length(1.0, FOOT), 4, 4)
+    assert_almost_equal(
+        ring.attribute_view(String(POSITION)).vector3(0).x,
+        Float32(3 * 0.3048),
+        atol=Float64(1e-5),
+    )
+
+
+def test_a_torus_needs_radii_and_segments_and_an_arc() raises:
+    var two = Length(2.0, METER)
+    var half = Length(0.5, METER)
+    with assert_raises():
+        _ = torus(Length(0.0, METER), half)
+    with assert_raises():
+        _ = torus(two, Length(0.0, METER))
+    with assert_raises():
+        _ = torus(two, half, 2, 12)
+    with assert_raises():
+        _ = torus(two, half, 8, 2)
+    with assert_raises():
+        _ = torus(two, half, 8, 12, Angle(0.0, TURN))
+    with assert_raises():
+        _ = torus(two, half, 8, 12, Angle(2.0, TURN))
+
+
+# --- torus knot -------------------------------------------------------------
+
+
+def a_knot() raises -> BufferGeometry:
+    """Return a trefoil of radius two and tube a tenth, 48 rings of 8."""
+    return torus_knot(Length(2.0, METER), Length(0.1, METER), 48, 8)
+
+
+def ring_center(knot: BufferGeometry, ring: Int, radial: Int) raises -> Vector3:
+    """Return the mean of a ring's vertices, the seam duplicate left out: the
+    point on the curve the ring was built around, since the vertices are
+    spaced evenly on a circle about it."""
+    ref positions = knot.attribute_view(String(POSITION))
+    var total = Vector3(0, 0, 0)
+    for step in range(radial):
+        total.add(positions.vector3(ring * (radial + 1) + step))
+    return total * (1 / Float32(radial))
+
+
+def test_a_torus_knot_is_a_tube_of_rings() raises:
+    var knot = a_knot()
+    assert_equal(knot.vertex_count(), (48 + 1) * (8 + 1))
+    assert_equal(knot.triangle_count(), 2 * 48 * 8)
+    assert_equal(
+        torus_knot(Length(1.0, METER), Length(0.1, METER)).triangle_count(),
+        2 * 64 * 8,
+    )
+
+
+def test_every_knot_vertex_sits_on_its_ring() raises:
+    # Each ring is a circle of the tube's radius around a point of the
+    # curve, and each normal points straight out from that point.
+    var knot = a_knot()
+    ref positions = knot.attribute_view(String(POSITION))
+    ref normals = knot.attribute_view(String(NORMAL))
+    for ring in range(49):
+        var center = ring_center(knot, ring, 8)
+        for step in range(9):
+            var vertex = ring * 9 + step
+            var out = positions.vector3(vertex) - center
+            assert_almost_equal(out.length(), Float32(0.1), atol=Float64(1e-5))
+            var n = normals.vector3(vertex)
+            assert_unit(n)
+            assert_almost_equal(n.dot(out), Float32(0.1), atol=Float64(1e-5))
+
+
+def test_a_trefoil_winds_twice_round_and_three_times_through() raises:
+    # three.js's curve lies between half and one and a half of the radius
+    # from the axis. Ring zero is at the outer reach on +x; with 48 rings,
+    # ring 8 is a third of the way round the first loop, at the inner reach;
+    # rings 4 and 12 are where the curve is highest and lowest.
+    var knot = a_knot()
+    assert_xyz(ring_center(knot, 0, 8), 3, 0, 0)
+    var inner = ring_center(knot, 8, 8)
+    assert_xyz(inner, -0.5, 0.8660254, 0)
+    assert_almost_equal(
+        ring_center(knot, 4, 8).z, Float32(1), atol=Float64(1e-4)
+    )
+    assert_almost_equal(
+        ring_center(knot, 12, 8).z, Float32(-1), atol=Float64(1e-4)
+    )
+    # The last ring is the first: the knot closes.
+    assert_xyz(ring_center(knot, 48, 8), 3, 0, 0)
+
+
+def test_every_knot_face_winds_outward() raises:
+    assert_faces_wind_with_their_normals(a_knot())
+    assert_no_degenerate_triangle(a_knot())
+    # And with the windings the other way round.
+    var wound = torus_knot(Length(2.0, METER), Length(0.2, METER), 64, 6, 3, 2)
+    assert_faces_wind_with_their_normals(wound)
+    assert_no_degenerate_triangle(wound)
+
+
+def test_a_knot_maps_u_along_and_v_around() raises:
+    var knot = a_knot()
+    ref uvs = knot.attribute_view(String(UV))
+    assert_equal(uvs.component(0, 0), Float32(0))
+    assert_equal(uvs.component(0, 1), Float32(0))
+    assert_equal(uvs.component(8, 0), Float32(0))
+    assert_equal(uvs.component(8, 1), Float32(1))
+    assert_equal(uvs.component(48 * 9, 0), Float32(1))
+    assert_equal(uvs.component(48 * 9, 1), Float32(0))
+    assert_equal(uvs.component(knot.vertex_count() - 1, 1), Float32(1))
+    assert_texture_coordinates_in_range(knot)
+
+
+def test_a_torus_knot_can_be_measured_in_feet() raises:
+    var knot = torus_knot(Length(2.0, FOOT), Length(0.1, FOOT), 12, 4)
+    assert_almost_equal(
+        ring_center(knot, 0, 4).x, Float32(3 * 0.3048), atol=Float64(1e-5)
+    )
+
+
+def test_a_torus_knot_needs_radii_segments_and_windings() raises:
+    var two = Length(2.0, METER)
+    var tenth = Length(0.1, METER)
+    with assert_raises():
+        _ = torus_knot(Length(0.0, METER), tenth)
+    with assert_raises():
+        _ = torus_knot(two, Length(0.0, METER))
+    with assert_raises():
+        _ = torus_knot(two, tenth, 2, 8)
+    with assert_raises():
+        _ = torus_knot(two, tenth, 48, 2)
+    with assert_raises():
+        _ = torus_knot(two, tenth, 48, 8, 0, 3)
+    with assert_raises():
+        _ = torus_knot(two, tenth, 48, 8, 2, 0)
 
 
 def main() raises:

@@ -1,8 +1,8 @@
 # Geometry
 
-`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. Seven builders make a box, a sphere, a plane, a circle, a ring, a cylinder and a cone.
+`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. Nine builders make a box, a sphere, a plane, a circle, a ring, a cylinder, a cone, a torus and a torus knot.
 
-three.js: `BufferGeometry`, `BufferAttribute`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`.
+three.js: `BufferGeometry`, `BufferAttribute`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`.
 
 ## BufferAttribute
 
@@ -112,6 +112,25 @@ var spike = cone(Length(1.0, METER), Length(2.0, METER), 32)
 
 A cone is a cylinder with a top radius of zero. Its point is at +y. The point has one vertex per segment, each with its own normal. A cylinder with a bottom radius of zero is a cone the other way up. An end with no radius gets no cap.
 
+## Torus
+
+```mojo
+var ring = torus(Length(2.0, METER), Length(0.5, METER), 12, 48)   # radius, tube, around the tube, along it
+var bend = torus(Length(2.0, METER), Length(0.5, METER), 12, 48, Angle(90.0, DEGREE))
+```
+
+A tube bent around a circle in the xy plane, centered on the origin. The first radius runs from the center to the middle of the tube. The second is the tube's own. Vertices run in rows, one row per step around the tube, one vertex per step along it and one more for the seam. Each normal points away from the middle of the tube, so the shading is smooth. `u` runs along the tube and `v` around it.
+
+The arc runs from +x toward +y. A full turn is the default. A shorter arc makes a bent pipe with open ends.
+
+## Torus knot
+
+```mojo
+var trefoil = torus_knot(Length(2.0, METER), Length(0.4, METER), 64, 8, 2, 3)   # radius, tube, along, around, p, q
+```
+
+A tube bent around a knot that winds `p` times around the axis and `q` times through the hole. The curve is three.js's. It lies between half and one and a half of the radius from the axis. Vertices run in rings along the curve, one vertex per step around the tube and one more for the seam. Each ring is built in three.js's frame, so a texture lands as it does there.
+
 ## Errors
 
 - A negative or zero extent raises.
@@ -121,5 +140,7 @@ A cone is a cylinder with a top radius of zero. Its point is at +y. The point ha
 - A ring needs a positive inner radius, a larger outer radius, three segments around and one across.
 - A cylinder needs a positive height, radii that are not negative and not both zero, three segments around and one down the side.
 - A cone needs a positive radius and a positive height.
+- A torus needs positive radii and three segments each way.
+- A torus knot needs positive radii, three segments each way, and `p` and `q` of at least one.
 - A sweep must be positive and at most one turn.
 - An index entry beyond the last vertex raises.
