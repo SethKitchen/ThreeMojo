@@ -365,6 +365,14 @@ def test_a_sheared_camera_node_is_refused() raises:
         _ = camera.view_matrix_in(scene)
 
 
+def test_a_camera_draws_layer_zero_unless_told_otherwise() raises:
+    var camera = square_camera()
+    assert_true(camera.visible_layers().is_enabled(0))
+    assert_true(not camera.visible_layers().is_enabled(1))
+    camera.layers.enable(1)
+    assert_true(camera.visible_layers().is_enabled(1))
+
+
 def test_a_mirrored_or_flattened_camera_node_is_refused() raises:
     var scene = Scene()
     var mirror = Object3D()

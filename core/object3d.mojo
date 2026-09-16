@@ -32,6 +32,7 @@ orients a node towards a point in its parent's frame; `Scene.look_at` does
 it in world space.
 """
 
+from core.layers import Layers
 from math.euler import XYZ, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
 from math.quaternion import Quaternion
@@ -131,20 +132,27 @@ struct Object3D(ImplicitlyCopyable):
     # `math.quaternion`.
     var quaternion: Quaternion
     var parent: NodeId
+    # Which layers this node is on, three.js's `Object3D.layers`. A camera
+    # draws a mesh only if its node shares a layer with the camera. Layer
+    # zero alone by default, so a scene that never mentions layers renders
+    # as it always did.
+    var layers: Layers
 
     def __init__(out self):
-        """Create an untransformed node with no parent."""
+        """Create an untransformed node with no parent, on layer zero."""
         self.position = Vector3(0, 0, 0)
         self.scale = Vector3(1, 1, 1)
         self.quaternion = Quaternion.identity()
         self.parent = NO_PARENT
+        self.layers = Layers()
 
     def __init__(out self, *, copy: Self):
-        """Copy another node, parent link included."""
+        """Copy another node, parent link and layers included."""
         self.position = copy.position
         self.scale = copy.scale
         self.quaternion = copy.quaternion
         self.parent = copy.parent
+        self.layers = copy.layers
 
     def set_position(mut self, x: Float32, y: Float32, z: Float32):
         """Move this node, relative to its parent."""

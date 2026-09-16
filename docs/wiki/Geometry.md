@@ -1,8 +1,8 @@
 # Geometry
 
-`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra and capsules.
+`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes.
 
-three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`.
+three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`.
 
 ## BufferAttribute
 
@@ -170,6 +170,28 @@ The normals come from the profile exactly. On a cap they run along its radius, a
 
 The sweep starts at +z, as the cylinder's does. three.js's current builder starts at -x and gives its pole vertices a half-step `u`. The shape is the same. A texture lands a quarter turn on.
 
+## Lathe
+
+```mojo
+var vase = lathe(points, 24)                                        # a profile of Vector2, cells around
+var half = lathe(points, 24, Angle(0.0, DEGREE), Angle(180.0, DEGREE))
+```
+
+A profile revolved around the y axis. Each point has `x` out from the axis and `y` along it, in meters. Vertices run in columns, one per step around, one vertex per point. The normals come from the profile's segments, as in three.js. Each point faces away from the segment after it, averaged with the segment before, so a corner shades smoothly.
+
+A point on the axis is a pole. The half of each cell against it that has no area is left out. `u` runs around and `v` up the profile, one point per equal step. The sweep starts at +z, as the cylinder's does.
+
+## Tube
+
+```mojo
+var pipe = tube(path, Length(0.2, METER), 8)                         # a path of Vector3, cells around
+var loop = tube(path, Length(0.2, METER), 8, closed=True)
+```
+
+A tube of one radius swept along a path of points. Each point gets a ring, built in a frame that follows the path. The frames are three.js's parallel transport, so the tube does not twist where the path only bends. A closed path is given without repeating its first point. Its last ring repeats its first, and the twist the path built up is spread evenly back along it.
+
+three.js samples its path from a curve. There are no curve types here yet, so the path is the points. `u` runs along the path and `v` around the tube.
+
 ## Errors
 
 - A negative or zero extent raises.
@@ -183,6 +205,8 @@ The sweep starts at +z, as the cylinder's does. three.js's current builder start
 - A torus knot needs positive radii, three segments each way, and `p` and `q` of at least one.
 - A polyhedron needs a positive radius, a detail of zero or more, whole vertices and faces, and faces that name vertices it has.
 - A capsule needs a positive radius, a length of zero or more, one cap row, three segments around and one row up its side.
+- A lathe needs at least two points, one segment, and a sweep of at most one turn. No point can have a negative `x`, and no two consecutive points can be the same.
+- A tube needs at least two points, or three when closed, no two consecutive the same, a positive radius and three segments around.
 - A sweep must be positive and at most one turn.
 - An index entry beyond the last vertex raises.
 - `compute_vertex_normals`, `bounding_box` and `bounding_sphere` raise on a geometry with no positions.

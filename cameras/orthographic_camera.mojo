@@ -30,6 +30,7 @@ already gives one.
 """
 
 from cameras.camera import Camera, node_view_matrix
+from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
@@ -53,6 +54,8 @@ struct OrthographicCamera(Camera):
     # The scene node this camera rides, or `NO_PARENT` for a camera that is
     # placed. See `PerspectiveCamera.attach`.
     var node: NodeId
+    # Which layers this camera draws; see `PerspectiveCamera.layers`.
+    var layers: Layers
 
     def __init__(
         out self,
@@ -98,6 +101,11 @@ struct OrthographicCamera(Camera):
         self.target = Vector3(0, 0, -1)
         self.up = Vector3(0, 1, 0)
         self.node = NO_PARENT
+        self.layers = Layers()
+
+    def visible_layers(self) -> Layers:
+        """Return which layers this camera draws; see `core.layers`."""
+        return self.layers
 
     def place(mut self, position: Vector3, target: Vector3):
         """Move the camera to `position` and aim it at `target`.

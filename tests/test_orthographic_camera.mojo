@@ -271,6 +271,15 @@ def test_an_orthographic_camera_on_a_scaled_node_keeps_its_lens() raises:
         )
 
 
+def test_an_orthographic_camera_draws_layer_zero_unless_told_otherwise() raises:
+    var camera = a_camera()
+    assert_true(camera.visible_layers().is_enabled(0))
+    assert_true(not camera.visible_layers().is_enabled(3))
+    camera.layers.set(3)
+    assert_true(camera.visible_layers().is_enabled(3))
+    assert_true(not camera.visible_layers().is_enabled(0))
+
+
 def test_an_unusable_camera_is_rejected() raises:
     with assert_raises():
         _ = centered(

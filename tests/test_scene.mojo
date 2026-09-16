@@ -65,6 +65,20 @@ def test_a_new_node_is_untransformed_and_parentless() raises:
     assert_point(node.local_matrix().transform_point(Vector3(1, 2, 3)), 1, 2, 3)
 
 
+def test_a_new_node_is_on_layer_zero_and_a_copy_keeps_its_layers() raises:
+    var node = Object3D()
+    assert_true(node.layers.is_enabled(0))
+    assert_false(node.layers.is_enabled(1))
+    node.layers.set(1)
+    var copy = Object3D(copy=node)
+    assert_true(copy.layers.is_enabled(1))
+    assert_false(copy.layers.is_enabled(0))
+    # And through the scene, where a mesh's node is read.
+    var scene = Scene()
+    var id = scene.add(node^)
+    assert_true(scene.get(id).layers.is_enabled(1))
+
+
 def test_position_moves_the_local_transform() raises:
     assert_point(
         node_at(5, 6, 7).local_matrix().transform_point(Vector3(0, 0, 0)),

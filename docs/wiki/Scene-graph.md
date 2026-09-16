@@ -14,6 +14,7 @@ A node is a transform relative to its parent: a position, a quaternion and a sca
 | `quaternion: Quaternion` | Rotation. See [Rotations](Rotations). |
 | `scale: Vector3` | Scale factors along the node's own axes. |
 | `parent: NodeId` | The parent's index, or `NO_PARENT`. |
+| `layers: Layers` | Which layers the node is on. Layer zero by default. See below. |
 | `set_position(x, y, z)` | Set the position. |
 | `set_scale(x, y, z)` | Set the scale. Three factors, so a non-uniform scale is possible. |
 | `set_euler(x, y, z, order=XYZ)` | Set the rotation from three angles. |
@@ -38,6 +39,27 @@ A `NodeId` wraps an integer. A bare integer does not compile where a node id is 
 | `look_at(id, target, camera=False)` | Turn a node to face a world-space point. See [Rotations](Rotations). |
 | `is_stale() -> Bool` | True when a node changed after the last `update`. |
 | `validate()` | Check that every parent index is an earlier node. |
+
+## Layers
+
+`core/layers.mojo`. A `Layers` is a set of up to thirty-two layers, held as a bit mask. Every node and every camera has one. A camera draws a mesh only if the mesh's node shares a layer with the camera. Both start on layer zero alone, so a scene that never mentions layers renders as before.
+
+three.js: `Layers`, `Object3D.layers`, `Camera.layers`.
+
+| Member | Meaning |
+|---|---|
+| `set(layer)` | Only that layer. |
+| `enable(layer)`, `disable(layer)`, `toggle(layer)` | One layer at a time. |
+| `enable_all()`, `disable_all()` | Every layer, or none. |
+| `is_enabled(layer) -> Bool` | Whether one layer is in the set. |
+| `test(other) -> Bool` | Whether the two sets share a layer. |
+
+A layer is a number from 0 to 31. Any other number raises. three.js wraps it silently.
+
+```mojo
+scene.node(overlay).layers.set(1)    # only on layer one
+camera.layers.enable(1)              # the camera sees layer one as well
+```
 | `count() -> Int` | The number of nodes. |
 | `meshes`, `lights` | The scene content, as public lists. |
 

@@ -13,6 +13,7 @@ three.js: `Camera`, `PerspectiveCamera`, `OrthographicCamera`.
 | `view_to_screen_matrix(width, height) -> Matrix4` | Camera space to pixels. |
 | `near_distance() -> Float32` | The near clipping distance, in meters. |
 | `far_distance() -> Float32` | The far clipping distance, in meters. |
+| `visible_layers() -> Layers` | Which layers the camera draws. See [Scene graph](Scene-graph#layers). |
 
 ## PerspectiveCamera
 
@@ -32,6 +33,7 @@ The field of view is an `Angle`. A bare number does not compile. The near plane 
 |---|---|
 | `place(position, target)` | Put the camera at `position`, looking at `target`, with +y up. |
 | `attach(node)` | Ride a scene node. See below. |
+| `layers` | The layers it draws. Layer zero by default. Both cameras have it. |
 | `projection_matrix()` | Camera space to normalized device space. |
 | `project(point, width, height) -> Vector3` | A world point in pixels, with NDC depth in z. |
 | `screen_matrix(width, height)` | World space to pixels in one matrix. |

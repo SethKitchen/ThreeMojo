@@ -13,6 +13,7 @@ from geometries.box import box, cube
 from geometries.capsule import capsule
 from geometries.circle import circle, ring
 from geometries.cylinder import cone, cylinder
+from geometries.lathe import lathe
 from geometries.plane import plane
 from geometries.polyhedron import (
     dodecahedron,
@@ -23,6 +24,8 @@ from geometries.polyhedron import (
 )
 from geometries.sphere import sphere
 from geometries.torus import torus, torus_knot
+from geometries.tube import tube
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import asin, cos, pi, sin, sqrt
 from std.testing import (
@@ -2005,6 +2008,270 @@ def test_a_capsule_needs_a_radius_and_enough_segments() raises:
         _ = capsule(one, one, 4, 2)
     with assert_raises():
         _ = capsule(one, one, 4, 8, 0)
+
+
+# --- lathe ------------------------------------------------------------------
+
+
+def profile(pairs: List[Float32]) -> List[Vector2]:
+    """Return a profile from x, y pairs."""
+    var points = List[Vector2]()
+    for index in range(len(pairs) // 2):
+        points.append(Vector2(pairs[index * 2], pairs[index * 2 + 1]))
+    return points^
+
+
+def test_a_lathe_turns_a_profile_into_columns() raises:
+    # Two points make a cylinder's side: one vertex per point per column,
+    # every vertex at the profile's x from the axis, facing straight out.
+    var side = lathe(profile([1, -1, 1, 1]), 8)
+    assert_equal(side.vertex_count(), 9 * 2)
+    assert_equal(side.triangle_count(), 2 * 8)
+    ref positions = side.attribute_view(String(POSITION))
+    ref normals = side.attribute_view(String(NORMAL))
+    for vertex in range(side.vertex_count()):
+        var p = positions.vector3(vertex)
+        assert_almost_equal(
+            sqrt(p.x * p.x + p.z * p.z), Float32(1), atol=Float64(1e-5)
+        )
+        var n = normals.vector3(vertex)
+        assert_unit(n)
+        assert_equal(n.y, Float32(0))
+        assert_almost_equal(
+            n.dot(Vector3(p.x, 0, p.z)), Float32(1), atol=Float64(1e-5)
+        )
+    # The sweep starts at +z, as the cylinder's does.
+    assert_xyz(positions.vector3(0), 0, -1, 1)
+    assert_faces_wind_with_their_normals(side)
+    assert_no_degenerate_triangle(side)
+
+
+def test_lathe_normals_average_at_a_corner() raises:
+    # Out along the base, then up the side: the base faces down, the side
+    # faces out, and the corner between them faces halfway between, as
+    # three.js averages it.
+    var pot = lathe(profile([0.5, 0, 1, 0, 1, 1]), 4)
+    ref normals = pot.attribute_view(String(NORMAL))
+    assert_xyz(normals.vector3(0), 0, -1, 0)
+    assert_xyz(normals.vector3(1), 0, -0.70710678, 0.70710678)
+    assert_xyz(normals.vector3(2), 0, 0, 1)
+
+
+def test_a_lathe_leaves_out_the_cells_against_the_axis() raises:
+    # A diamond: a point on the axis at each end, so each end's half cells
+    # go, and what is left is two cones' worth of facets.
+    var gem = lathe(profile([0, -1, 1, 0, 0, 1]), 6)
+    assert_equal(gem.vertex_count(), 7 * 3)
+    assert_equal(gem.triangle_count(), 2 * 6 * 2 - 2 * 6)
+    assert_no_degenerate_triangle(gem)
+    assert_faces_wind_with_their_normals(gem)
+    var chord = 2 * sin(Float32(pi) / 6)
+    var slant = sqrt(cos(Float32(pi) / 6) * cos(Float32(pi) / 6) + 1)
+    assert_almost_equal(
+        surface_area(gem), 2 * 6 * chord * slant / 2, atol=Float64(1e-4)
+    )
+
+
+def test_a_lathe_maps_u_around_and_v_up_the_profile() raises:
+    var side = lathe(profile([1, -1, 1, 0, 1, 1]), 4)
+    ref uvs = side.attribute_view(String(UV))
+    assert_equal(uvs.component(0, 0), Float32(0))
+    assert_equal(uvs.component(0, 1), Float32(0))
+    assert_equal(uvs.component(1, 1), Float32(0.5))
+    assert_equal(uvs.component(2, 1), Float32(1))
+    assert_equal(uvs.component(4 * 3, 0), Float32(1))
+    assert_texture_coordinates_in_range(side)
+
+
+def test_a_lathe_sweep_makes_a_section() raises:
+    var half = lathe(
+        profile([1, 0, 1, 1]), 4, Angle(0.0, DEGREE), Angle(180.0, DEGREE)
+    )
+    # The last column is half a turn round from +z, at -z.
+    assert_xyz(half.attribute_view(String(POSITION)).vector3(8), 0, 0, -1)
+    assert_faces_wind_with_their_normals(half)
+
+
+def test_a_lathe_needs_a_profile_a_segment_and_a_sweep() raises:
+    with assert_raises():
+        _ = lathe(profile([1, 0]))
+    with assert_raises():
+        _ = lathe(profile([1, 0, -1, 1]))
+    with assert_raises():
+        _ = lathe(profile([1, 0, 1, 0, 1, 1]))
+    with assert_raises():
+        _ = lathe(profile([1, 0, 1, 1]), 0)
+    with assert_raises():
+        _ = lathe(
+            profile([1, 0, 1, 1]), 4, Angle(0.0, DEGREE), Angle(0.0, TURN)
+        )
+    with assert_raises():
+        _ = lathe(
+            profile([1, 0, 1, 1]), 4, Angle(0.0, DEGREE), Angle(2.0, TURN)
+        )
+    # The same x at different heights is a side, not a repeat.
+    _ = lathe(profile([1, 0, 1, 1]), 1)
+
+
+# --- tube -------------------------------------------------------------------
+
+
+def straight_path(count: Int) -> List[Vector3]:
+    """Return `count` points along +x, one meter apart."""
+    var points = List[Vector3]()
+    for index in range(count):
+        points.append(Vector3(Float32(index), 0, 0))
+    return points^
+
+
+def assert_rings_round(
+    geometry: BufferGeometry, rings: Int, radial: Int, radius: Float32
+) raises:
+    """Assert every ring is a circle of `radius` about its center, with
+    every normal unit length and pointing out from that center."""
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref normals = geometry.attribute_view(String(NORMAL))
+    for ring in range(rings):
+        var center = ring_center(geometry, ring, radial)
+        for step in range(radial + 1):
+            var vertex = ring * (radial + 1) + step
+            var out = positions.vector3(vertex) - center
+            assert_almost_equal(out.length(), radius, atol=Float64(1e-5))
+            var n = normals.vector3(vertex)
+            assert_unit(n)
+            assert_almost_equal(n.dot(out), radius, atol=Float64(1e-5))
+
+
+def test_a_straight_tube_is_a_cylinder_along_its_path() raises:
+    var pipe = tube(straight_path(4), Length(0.5, METER), 8)
+    assert_equal(pipe.vertex_count(), 4 * 9)
+    assert_equal(pipe.triangle_count(), 2 * 3 * 8)
+    assert_rings_round(pipe, 4, 8, 0.5)
+    for ring in range(4):
+        assert_xyz(ring_center(pipe, ring, 8), Float32(ring), 0, 0)
+    ref normals = pipe.attribute_view(String(NORMAL))
+    for vertex in range(pipe.vertex_count()):
+        assert_almost_equal(
+            normals.vector3(vertex).x, Float32(0), atol=Float64(1e-5)
+        )
+    assert_faces_wind_with_their_normals(pipe)
+    assert_no_degenerate_triangle(pipe)
+
+
+def test_a_bent_tube_keeps_its_rings_round_and_untwisted() raises:
+    # A quarter circle in the xy plane. Every ring is a circle about its
+    # path point, and the frame follows the bend without turning about the
+    # path: the first vertex of every ring stays on the +z side.
+    var path = List[Vector3]()
+    for step in range(9):
+        var angle = Float32(step) / 8 * Float32(pi) / 2
+        path.append(Vector3(2 * cos(angle), 2 * sin(angle), 0))
+    var bend = tube(path, Length(0.25, METER), 6)
+    assert_rings_round(bend, 9, 6, 0.25)
+    ref positions = bend.attribute_view(String(POSITION))
+    for ring in range(9):
+        var center = ring_center(bend, ring, 6)
+        assert_xyz(center, path[ring].x, path[ring].y, path[ring].z)
+        assert_almost_equal(
+            positions.vector3(ring * 7).z - center.z,
+            Float32(0.25),
+            atol=Float64(1e-5),
+        )
+    assert_faces_wind_with_their_normals(bend)
+    assert_no_degenerate_triangle(bend)
+
+
+def test_a_tube_maps_u_along_and_v_around() raises:
+    var pipe = tube(straight_path(3), Length(0.5, METER), 4)
+    ref uvs = pipe.attribute_view(String(UV))
+    assert_equal(uvs.component(0, 0), Float32(0))
+    assert_equal(uvs.component(0, 1), Float32(0))
+    assert_equal(uvs.component(4, 1), Float32(1))
+    assert_equal(uvs.component(2 * 5, 0), Float32(1))
+    assert_texture_coordinates_in_range(pipe)
+
+
+def test_a_closed_tube_meets_itself() raises:
+    # A circle of twelve points, not repeating the first: thirteen rings,
+    # the last on the first, vertex for vertex.
+    var path = List[Vector3]()
+    for step in range(12):
+        var angle = Float32(step) / 12 * 2 * Float32(pi)
+        path.append(Vector3(2 * cos(angle), 2 * sin(angle), 0))
+    var loop = tube(path, Length(0.3, METER), 8, closed=True)
+    assert_equal(loop.vertex_count(), 13 * 9)
+    assert_equal(loop.triangle_count(), 2 * 12 * 8)
+    assert_rings_round(loop, 13, 8, 0.3)
+    for step in range(9):
+        assert_same_vertex(loop, step, 12 * 9 + step, Float64(1e-4))
+    assert_faces_wind_with_their_normals(loop)
+    assert_no_degenerate_triangle(loop)
+
+
+def test_a_closed_tube_spreads_its_twist_either_way_round() raises:
+    # A loop that leaves its plane builds up a twist by the time it comes
+    # round; spread evenly back along the path, the last ring still lands
+    # on the first. Mirrored, the twist runs the other way, and so does
+    # the correction.
+    for sign in [Float32(1), Float32(-1)]:
+        var path = List[Vector3]()
+        for step in range(16):
+            var angle = Float32(step) / 16 * 2 * Float32(pi)
+            path.append(
+                Vector3(2 * cos(angle), 2 * sin(angle), sign * sin(2 * angle))
+            )
+        var loop = tube(path, Length(0.2, METER), 6, closed=True)
+        assert_rings_round(loop, 17, 6, 0.2)
+        for step in range(7):
+            assert_same_vertex(loop, step, 16 * 7 + step, Float64(1e-3))
+        assert_faces_wind_with_their_normals(loop)
+        assert_no_degenerate_triangle(loop)
+
+
+def test_the_first_frame_leans_on_the_axis_the_path_least_follows() raises:
+    # Paths along x, along z, and leaning two ways: each picks a different
+    # axis to build its first frame on, and every ring is round regardless.
+    var headings = [
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 1),
+        Vector3(0.3, 0.8, 0.5),
+        Vector3(0.5, 0.3, 0.8),
+    ]
+    for heading in headings:
+        var path = List[Vector3]()
+        path.append(Vector3(0, 0, 0))
+        path.append(heading)
+        path.append(heading * 2)
+        var pipe = tube(path, Length(0.1, METER), 4)
+        assert_rings_round(pipe, 3, 4, 0.1)
+        assert_faces_wind_with_their_normals(pipe)
+
+
+def test_a_tube_needs_a_path_a_radius_and_segments() raises:
+    var thin = Length(0.1, METER)
+    with assert_raises():
+        _ = tube(straight_path(1), thin)
+    with assert_raises():
+        _ = tube(straight_path(2), thin, 8, closed=True)
+    _ = tube(straight_path(2), thin)
+    var repeated = List[Vector3]()
+    repeated.append(Vector3(0, 0, 0))
+    repeated.append(Vector3(0, 0, 0))
+    repeated.append(Vector3(1, 0, 0))
+    with assert_raises():
+        _ = tube(repeated, thin)
+    # A closed path that repeats its first point has no last segment.
+    var doubled = List[Vector3]()
+    doubled.append(Vector3(0, 0, 0))
+    doubled.append(Vector3(1, 0, 0))
+    doubled.append(Vector3(1, 1, 0))
+    doubled.append(Vector3(0, 0, 0))
+    with assert_raises():
+        _ = tube(doubled, thin, 8, closed=True)
+    with assert_raises():
+        _ = tube(straight_path(3), Length(0.0, METER))
+    with assert_raises():
+        _ = tube(straight_path(3), thin, 2)
 
 
 def test_a_torus_knot_needs_radii_segments_and_windings() raises:

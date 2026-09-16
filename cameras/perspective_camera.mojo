@@ -22,6 +22,7 @@ of the windscreen. See `cameras.camera`.
 """
 
 from cameras.camera import Camera, node_view_matrix
+from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
@@ -44,6 +45,9 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
     # The scene node this camera rides, or `NO_PARENT` for a camera that is
     # placed. While attached, `position`, `target` and `up` are not read.
     var node: NodeId
+    # Which layers this camera draws, three.js's `camera.layers`: layer
+    # zero alone until told otherwise. See `core.layers`.
+    var layers: Layers
 
     def __init__(
         out self,
@@ -52,7 +56,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         near: Length,
         far: Length,
     ) raises:
-        """Create a camera at the origin looking down -z.
+        """Create a camera at the origin looking down -z, drawing layer zero.
 
         Args:
             fov: Vertical field of view.
@@ -80,6 +84,11 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         self.target = Vector3(0, 0, -1)
         self.up = Vector3(0, 1, 0)
         self.node = NO_PARENT
+        self.layers = Layers()
+
+    def visible_layers(self) -> Layers:
+        """Return which layers this camera draws; see `core.layers`."""
+        return self.layers
 
     def place(mut self, position: Vector3, target: Vector3):
         """Move the camera to `position` and aim it at `target`.

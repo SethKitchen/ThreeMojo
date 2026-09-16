@@ -430,7 +430,8 @@ struct Renderer(Movable):
                 or riding one of the scene's nodes.
 
         Returns:
-            Raster vertices, three per triangle, in submission order.
+            Raster vertices, three per triangle, in submission order. A mesh
+            whose node shares no layer with the camera contributes none.
 
         Raises:
             Error: If a mesh names a node, a geometry or a material that is
@@ -451,6 +452,11 @@ struct Renderer(Movable):
         var order = _draw_order(scene, assets, view)
         for ordered in range(len(meshes)):
             var index = order[ordered]
+            # A camera draws only the meshes on its layers, three.js's
+            # `layers.test`, asked before anything is done for the mesh.
+            var layers = scene.get(meshes[index].node).layers
+            if not layers.test(camera.visible_layers()):
+                continue
             var world = scene.world_matrix(meshes[index].node)
             # An odd number of reflections in the world transform reverses
             # winding, which turns both the culling convention and the

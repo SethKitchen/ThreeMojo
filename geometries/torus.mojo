@@ -28,6 +28,7 @@ sphere's does: one carries zero and the other one.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from geometries.circle import FULL_TURN, check_sweep
+from geometries.grid import grid_index
 from math.vector3 import Vector3
 from std.math import cos, pi, sin
 from units.si import Angle, Length
@@ -58,45 +59,6 @@ def _append_tube_vertex(
     normals.append(normal.z)
     uvs.append(u)
     uvs.append(v)
-
-
-def _grid_index(rows: Int, columns: Int, row_first: Bool) -> List[Int]:
-    """Return the index of a grid of `rows + 1` by `columns + 1` vertices,
-    two triangles per cell.
-
-    three.js winds its two tubes opposite ways round the cell, because their
-    rows run opposite ways round the tube: the torus starts each cell on the
-    current row and the knot on the row before. `row_first` picks which, so
-    both come out counter-clockwise seen from outside and cell for cell what
-    three.js emits.
-    """
-    var stride = columns + 1
-    var index = List[Int]()
-    for row in range(1, rows + 1):  # pragma: no branch
-        var before = stride * (row - 1)
-        var here = stride * row
-        for column in range(1, columns + 1):  # pragma: no branch
-            var a: Int
-            var b: Int
-            var c: Int
-            var d: Int
-            if row_first:
-                a = here + column - 1
-                b = before + column - 1
-                c = before + column
-                d = here + column
-            else:
-                a = before + column - 1
-                b = here + column - 1
-                c = here + column
-                d = before + column
-            index.append(a)
-            index.append(b)
-            index.append(d)
-            index.append(b)
-            index.append(c)
-            index.append(d)
-    return index^
 
 
 def torus(
@@ -165,7 +127,7 @@ def torus(
     geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(_grid_index(radial_segments, tubular_segments, True))
+    geometry.set_index(grid_index(radial_segments, tubular_segments, True))
     return geometry^
 
 
@@ -261,5 +223,5 @@ def torus_knot(
     geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
     geometry.set_attribute(String(NORMAL), BufferAttribute(normals^, 3))
     geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.set_index(_grid_index(tubular_segments, radial_segments, False))
+    geometry.set_index(grid_index(tubular_segments, radial_segments, False))
     return geometry^

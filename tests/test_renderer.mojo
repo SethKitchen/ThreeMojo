@@ -2317,6 +2317,33 @@ def test_an_emissive_maps_alpha_does_not_darken_or_thin_the_glow() raises:
         assert_equal(shown.a, UInt8(255))
 
 
+def test_a_camera_draws_only_the_meshes_on_its_layers() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
+    var paint = assets.materials.add(Material(Color(220, 160, 80)))
+    var scene = scene_with_node_at(0)
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, paint, NodeId(0)))
+    var camera = a_camera()
+    var seen = rendered(renderer, scene, assets, meshes, camera)
+    var untouched = count_background(seen, renderer.background)
+    assert_true(untouched < WIDTH * HEIGHT, "the box did not show")
+    # Moved to layer one, the mesh is not drawn by a camera on layer zero.
+    scene.node(NodeId(0)).layers.set(1)
+    scene.update()
+    var hidden = rendered(renderer, scene, assets, meshes, camera)
+    assert_equal(count_background(hidden, renderer.background), WIDTH * HEIGHT)
+    # Until the camera watches layer one as well.
+    camera.layers.enable(1)
+    var shown = rendered(renderer, scene, assets, meshes, camera)
+    assert_equal(count_background(shown, renderer.background), untouched)
+    # A camera watching no layer draws nothing.
+    camera.layers.disable_all()
+    var nothing = rendered(renderer, scene, assets, meshes, camera)
+    assert_equal(count_background(nothing, renderer.background), WIDTH * HEIGHT)
+
+
 def test_a_texture_sits_the_same_way_up_on_a_sphere_and_a_polyhedron() raises:
     # A texture white on top and black underneath, on a sphere and on an
     # octahedron cut toward a sphere: both show white above the middle and

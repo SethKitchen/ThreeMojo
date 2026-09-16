@@ -63,8 +63,8 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] ArrayCamera and StereoCamera [#7](https://github.com/SethKitchen/ThreeMojo/issues/7)
 - [ ] Fog and FogExp2 [#8](https://github.com/SethKitchen/ThreeMojo/issues/8)
 - [ ] Scene background and environment [#9](https://github.com/SethKitchen/ThreeMojo/issues/9)
-- [ ] Layers [#10](https://github.com/SethKitchen/ThreeMojo/issues/10)
-- [ ] Clock [#11](https://github.com/SethKitchen/ThreeMojo/issues/11)
+- [x] [Layers](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph#layers): a bit mask on nodes and cameras that the renderer filters meshes by [#10](https://github.com/SethKitchen/ThreeMojo/issues/10)
+- [x] [Clock](https://github.com/SethKitchen/ThreeMojo/wiki/Units#clock): elapsed and delta time as Durations, from a monotonic counter [#11](https://github.com/SethKitchen/ThreeMojo/issues/11)
 
 ### Geometry
 
@@ -77,7 +77,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [TorusGeometry and TorusKnotGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#torus): a tube around a circle, or around a p, q knot [#18](https://github.com/SethKitchen/ThreeMojo/issues/18)
 - [x] [Polyhedron geometries: Icosahedron, Octahedron, Tetrahedron, Dodecahedron](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#polyhedra): the four regular solids and any polyhedron, cut toward a sphere by detail [#19](https://github.com/SethKitchen/ThreeMojo/issues/19)
 - [x] [CapsuleGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#capsule): a cylinder with hemisphere caps and exact normals [#20](https://github.com/SethKitchen/ThreeMojo/issues/20)
-- [ ] LatheGeometry and TubeGeometry [#21](https://github.com/SethKitchen/ThreeMojo/issues/21)
+- [x] [LatheGeometry and TubeGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#lathe): a profile revolved, and a tube swept along a path of points with three.js's frames [#21](https://github.com/SethKitchen/ThreeMojo/issues/21)
 - [ ] ShapeGeometry and ExtrudeGeometry [#22](https://github.com/SethKitchen/ThreeMojo/issues/22)
 - [ ] EdgesGeometry and WireframeGeometry [#23](https://github.com/SethKitchen/ThreeMojo/issues/23)
 - [x] [computeVertexNormals and bounding volumes](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#buffergeometry): area-weighted normals, a bounding box and a bounding sphere on any geometry [#24](https://github.com/SethKitchen/ThreeMojo/issues/24)

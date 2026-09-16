@@ -35,6 +35,7 @@ behavior but not storage, and because the cameras hold them as `Length`
 quantities while the clipper wants bare meters.
 """
 
+from core.layers import Layers
 from core.object3d import NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
@@ -87,6 +88,13 @@ trait Camera(Copyable, Movable):
 
     def far_distance(self) -> Float32:
         """Return the far clipping distance, in meters."""
+        ...
+
+    def visible_layers(self) -> Layers:
+        """Return which layers this camera draws, three.js's `camera.layers`.
+
+        `Renderer.prepare` skips a mesh whose node shares none of them.
+        """
         ...
 
 

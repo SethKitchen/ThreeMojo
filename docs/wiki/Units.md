@@ -66,3 +66,22 @@ rotation_z(90.0)                             # error: needs an Angle
 ```
 
 A test suite cannot contain these lines. Each lives in `tests/compile_fail/`, and `make compile-fail` asserts that the compiler rejects every one.
+
+## Clock
+
+`core/clock.mojo`. A `Clock` measures the time an animation loop runs, in `Duration`s. It reads a monotonic counter, so an interval never runs backwards. three.js's `Clock`.
+
+| Member | Meaning |
+|---|---|
+| `Clock(auto_start=True)` | A stopped clock. It starts on its first question unless told not to. |
+| `start()`, `stop()` | Start, or restart, from now. Stop, keeping the elapsed time. |
+| `delta() -> Duration` | The time since the last question. Zero when stopped. |
+| `elapsed() -> Duration` | The time since the clock started. |
+| `start_at(ns)`, `stop_at(ns)`, `delta_at(ns)`, `elapsed_at(ns)` | The same at a given counter reading, for tests. |
+
+```mojo
+var clock = Clock()
+var step = clock.delta()                     # a Duration
+var moved = Velocity(2.0) * step             # a Length: two meters per second, for one step
+node.position.x += moved.value
+```
