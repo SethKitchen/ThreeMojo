@@ -53,6 +53,17 @@ already hides them, and did so alone for several versions. It is switchable
 because a camera inside a closed mesh sees nothing but back faces, and that is
 a legitimate thing to want; three.js expresses the same choice as a material's
 `side`, which is where this belongs once `Material` exists.
+
+Whole meshes are discarded earlier still, before a vertex of them is read.
+Each mesh's bounding sphere is carried to world space and tested against the
+camera's frustum, three.js's `frustumCulled`, and a mesh wholly outside is
+left out of the draw order. It too is an optimization and not a correctness
+fix: every triangle of such a mesh is clipped away or lands off the image,
+so the frame is the same with the test and without. What the test saves is
+the transform, the clip and the projection of every one of those triangles,
+for the price of six dot products. A mesh can opt out with
+`Mesh.frustum_culled`, and the renderer's own tests do, to show the image
+does not change.
 """
 
 from cameras.camera import Camera
@@ -61,6 +72,7 @@ from core.assets import Assets
 from lights.lighting import Lighting
 from core.layers import Layers
 from core.scene import Scene
+from math.frustum import Frustum
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -144,11 +156,44 @@ def _with_opacity(color: FloatColor, opacity: Float32) -> FloatColor:
     return FloatColor(color.r, color.g, color.b, color.a * opacity)
 
 
+def _in_view(
+    scene: Scene, assets: Assets, mesh: Mesh, frustum: Frustum
+) raises -> Bool:
+    """Return True if any of `mesh`'s bounding sphere is inside `frustum`.
+
+    three.js's `Frustum.intersectsObject`: the geometry's own bounding
+    sphere, carried to world space by the node's world matrix, tested
+    against the six planes. The sphere is worked out afresh each frame, as
+    `BufferGeometry.bounding_sphere` says it must be, at two passes over
+    the positions; that is cheaper than the transform, clip and projection
+    of every triangle it stands in for, and the difference grows with the
+    triangle count. A geometry with no vertices has an empty sphere, which
+    is in view nowhere, and a mesh of it draws nothing either way.
+
+    Args:
+        scene: The transform hierarchy, updated.
+        assets: Where the geometry lives.
+        mesh: The mesh to test.
+        frustum: The camera's frustum, in world space.
+
+    Returns:
+        Whether the mesh's bound reaches into the view.
+
+    Raises:
+        Error: If the mesh names a geometry that is not there, or its
+            geometry has no positions.
+    """
+    var bound = assets.geometries.get(mesh.geometry).bounding_sphere()
+    bound.apply_matrix4(scene.world_matrix(mesh.node))
+    return frustum.intersects_sphere(bound)
+
+
 def _draw_order(
     scene: Scene,
     assets: Assets,
     view: Matrix4,
     visible: Layers,
+    frustum: Frustum,
 ) raises -> List[Int]:
     """Return the order to draw the meshes a camera sees in: opaque nearest
     first, then the translucent ones furthest first.
@@ -156,7 +201,11 @@ def _draw_order(
     A mesh whose node shares no layer with the camera is left out here,
     before the sort, three.js's `layers.test` in `projectObject`: the list
     that is sorted is the list that is drawn, and nothing is measured for a
-    mesh that will not be.
+    mesh that will not be. So is a mesh whose bounding sphere lies wholly
+    outside the frustum, three.js's `frustumCulled` test in the same
+    function, unless the mesh has opted out. A mesh left out here is not
+    read at all: its material's textures and its index buffer are checked
+    when it is drawn, as three.js reads nothing of an object it culls.
 
     Blending is not commutative, so a translucent surface only looks right if
     what is behind it is already there. Two rules follow, and they are the
@@ -184,13 +233,16 @@ def _draw_order(
         assets: Where the materials live.
         view: The world-to-camera transform, for measuring depth.
         visible: The camera's layers. A mesh on none of them is left out.
+        frustum: The camera's frustum, in world space. A mesh whose bound
+            lies wholly outside it is left out, unless it opted out.
 
     Returns:
         Indices into `scene.meshes`, only those the camera draws, in the
         order they should be drawn.
 
     Raises:
-        Error: If a mesh names a node or material that is not there.
+        Error: If a mesh names a node, a geometry or a material that is not
+            there, or its geometry has no positions.
     """
     ref meshes = scene.meshes
     var solid = List[Int]()
@@ -199,6 +251,10 @@ def _draw_order(
     var clear_depths = List[Float32]()
     for index in range(len(meshes)):
         if not scene.get(meshes[index].node).layers.test(visible):
+            continue
+        if meshes[index].frustum_culled and not _in_view(
+            scene, assets, meshes[index], frustum
+        ):
             continue
         # The camera looks down -z, so a smaller z is further away.
         var depth = view.transform_point(
@@ -442,13 +498,17 @@ struct Renderer(Movable):
 
         Returns:
             Raster vertices, three per triangle, in submission order. A mesh
-            whose node shares no layer with the camera contributes none.
+            whose node shares no layer with the camera contributes none,
+            and nor does one whose bounding sphere lies wholly outside the
+            camera's frustum, unless it opted out of that test.
 
         Raises:
             Error: If a mesh names a node, a geometry or a material that is
                 not there, if a material names a texture or an emissive map
                 that is not there, if its emissive map does not ignore its
-                alpha, or if its geometry has no positions.
+                alpha, or if its geometry has no positions. The asset
+                checks are made on the meshes that are drawn: a mesh the
+                camera's layers or frustum leave out is not read.
         """
         var corners = List[RasterVertex]()
         # Asked of the scene as well as the camera: a camera riding a node
@@ -457,11 +517,18 @@ struct Renderer(Movable):
         var to_screen = camera.view_to_screen_matrix(self.width, self.height)
         var near = camera.near_distance()
         var far = camera.far_distance()
+        # What the camera can see, in world space, where the meshes' bounds
+        # are: three.js's `_projScreenMatrix` read as six planes.
+        var clip = camera.projection_matrix()
+        clip.multiply(view)
+        var frustum = Frustum.from_projection_matrix(clip)
 
         ref meshes = scene.meshes
         # Worked out once, not once per mesh, and already without the
         # meshes the camera does not draw.
-        var order = _draw_order(scene, assets, view, camera.visible_layers())
+        var order = _draw_order(
+            scene, assets, view, camera.visible_layers(), frustum
+        )
         for ordered in range(len(order)):
             var index = order[ordered]
             var world = scene.world_matrix(meshes[index].node)
@@ -486,7 +553,7 @@ struct Renderer(Movable):
             # material is built without the store in reach, so a positive id
             # naming nothing is only detectable once both are together. It is
             # checked before rasterization rather than during, so the answer
-            # does not depend on whether the mesh happened to cover a pixel.
+            # does not depend on which pixels the mesh happened to cover.
             if map != NO_TEXTURE and map.value >= assets.textures.count():
                 raise Error("A material names a texture that is not there")
             if self.shading != SHADE_TEXTURE:

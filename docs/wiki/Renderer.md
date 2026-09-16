@@ -35,7 +35,7 @@ var fast = Renderer(1280, 720, workers=available_workers())
 
 ## What prepare does
 
-First, leave out every mesh whose node shares no layer with the camera. Then sort the rest into draw order. Then, for each mesh in that order:
+First, leave out every mesh whose node shares no layer with the camera. Then leave out every mesh whose bounding sphere lies wholly outside the camera's frustum. Then sort the rest into draw order. Then, for each mesh in that order:
 
 1. Transform the positions to world space and camera space.
 2. Transform the normals with the normal matrix, or compute a face normal.
@@ -50,6 +50,14 @@ The output is one flat list, three `RasterVertex` per triangle. Both rasterizers
 
 Opaque meshes come first, nearest first. Translucent meshes follow, furthest first. The order is per mesh, by the depth of its node's origin. Only the meshes the camera draws are sorted. See [Why transparency is sorted](Why-transparency-is-sorted).
 
+## Frustum culling
+
+`prepare` skips a mesh whose bounding sphere lies wholly outside the view. The frustum is the camera's projection matrix times its view matrix, read as six planes in world space. The sphere is the geometry's, carried through the node's world matrix. See [Math](Math#frustum).
+
+The image does not change. Every triangle of such a mesh is clipped away or lands off the image. What the test saves is the transform, the clip and the projection of those triangles.
+
+`Mesh(geometry, material, node, frustum_culled=False)` opts a mesh out. three.js: `Object3D.frustumCulled`. A mesh that is left out is not read. Its material and its index buffer are checked when it is drawn.
+
 ## What render does
 
 `render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, visible=camera.visible_layers())`. A light on a layer the camera does not watch lights nothing. See [Lights](Lights#lighting). Then it rasterizes the triangles and resolves the image.
@@ -62,7 +70,7 @@ The default is one worker. The coverage tool needs probe records in order.
 
 ## Errors
 
-`prepare` raises in four cases. A mesh names a node, geometry or material that does not exist. A material names a texture or an emissive map that does not exist. An emissive map reads its alpha as coverage. A geometry has no positions.
+`prepare` raises in four cases. A mesh names a node, geometry or material that does not exist. A material names a texture or an emissive map that does not exist. An emissive map reads its alpha as coverage. A geometry has no positions. A mesh the camera's layers or frustum leave out is not checked.
 
 ## Performance
 

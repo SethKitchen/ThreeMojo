@@ -10,6 +10,7 @@ three.js: `Camera`, `PerspectiveCamera`, `OrthographicCamera`.
 |---|---|
 | `view_matrix_in(scene) -> Matrix4` | World space to camera space. Reads the scene when the camera rides a node. |
 | `view_matrix() -> Matrix4` | The same, for a placed camera. Raises for an attached one. |
+| `projection_matrix() -> Matrix4` | Camera space to normalized device space. The renderer reads its frustum from it. See [Renderer](Renderer#frustum-culling). |
 | `view_to_screen_matrix(width, height) -> Matrix4` | Camera space to pixels. |
 | `near_distance() -> Float32` | The near clipping distance, in meters. |
 | `far_distance() -> Float32` | The far clipping distance, in meters. |

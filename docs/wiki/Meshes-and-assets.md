@@ -27,9 +27,11 @@ Each store is append-only. `add` returns the id. `get(id)` returns the item, or 
 scene.add_mesh(Mesh(box, paint, node))
 ```
 
-`Mesh(geometry, material, node)`. Each argument is a typed id. Swapping two arguments does not compile.
+`Mesh(geometry, material, node, frustum_culled=True)`. The first three arguments are typed ids. Swapping two of them does not compile.
 
 A mesh holds no transform. The node holds it. One geometry can be drawn at many nodes without a copy.
+
+`frustum_culled` lets the renderer skip the mesh when its bounds are out of view. It is on by default, as three.js's `Object3D.frustumCulled` is. See [Renderer](Renderer#frustum-culling).
 
 ## Rules
 

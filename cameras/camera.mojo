@@ -8,9 +8,10 @@
 three.js has `Camera` extend `Object3D` and `PerspectiveCamera` extend that.
 Mojo has no inheritance, so the shared part is a trait instead — which turns
 out to describe the relationship better anyway. A renderer does not need a
-camera to *be* anything; it needs four answers from it:
+camera to *be* anything; it needs five answers from it:
 
     view_matrix_in         where is the camera and which way is it facing?
+    projection_matrix      what volume can it see?
     view_to_screen_matrix  how do camera-space points become pixels?
     near_distance          where does the visible range start...
     far_distance           ...and where does it end?
@@ -70,6 +71,23 @@ trait Camera(Copyable, Movable):
         Raises:
             Error: If the camera is attached to a node the scene does not
                 have, or the scene is stale.
+        """
+        ...
+
+    def projection_matrix(self) raises -> Matrix4:
+        """Return the transform from camera space to normalized device
+        space, three.js's `projectionMatrix`.
+
+        What `view_to_screen_matrix` is before the viewport, and what the
+        renderer reads its `Frustum` from: times the view matrix, it says
+        in world space what the camera can see, and a mesh whose bounds
+        lie outside it is not prepared at all.
+
+        Returns:
+            The projection matrix.
+
+        Raises:
+            Error: If the camera's volume is degenerate.
         """
         ...
 

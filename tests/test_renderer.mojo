@@ -6,6 +6,7 @@
 """Tests for `objects.mesh` and `renderers.renderer`."""
 
 from cameras.camera import Camera
+from cameras.orthographic_camera import centered
 from render.rasterizer import RasterVertex
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
@@ -554,16 +555,22 @@ def test_a_mesh_with_no_vertices_draws_nothing() raises:
     var scene = scene_with_node_at(0)
     var empty = BufferGeometry()
     empty.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
-    var meshes = List[Mesh]()
-    meshes.append(
-        Mesh(
-            assets.geometries.add(empty^),
-            assets.materials.add(Material(Color(255, 0, 0))),
-            NodeId(0),
-        )
-    )
-    var image = rendered(renderer, scene, assets, meshes, a_camera())
+    var nothing = assets.geometries.add(empty^)
+    var paint = assets.materials.add(Material(Color(255, 0, 0)))
+    # Its bounding sphere is empty, so the frustum test leaves it out
+    # before a vertex is read.
+    var culled = List[Mesh]()
+    culled.append(Mesh(nothing, paint, NodeId(0)))
+    var image = rendered(renderer, scene, assets, culled, a_camera())
     assert_equal(count_background(image, renderer.background), WIDTH * HEIGHT)
+    # Opted out of that test, it goes through the whole of `prepare` with
+    # zero vertices, which must be a no-op rather than an error.
+    var kept = List[Mesh]()
+    kept.append(Mesh(nothing, paint, NodeId(0), frustum_culled=False))
+    var unculled = rendered(renderer, scene, assets, kept, a_camera())
+    assert_equal(
+        count_background(unculled, renderer.background), WIDTH * HEIGHT
+    )
 
 
 def test_a_mesh_naming_a_node_that_is_not_there_is_rejected() raises:
@@ -802,6 +809,7 @@ def test_a_non_uniform_scale_still_shades_the_true_surface() raises:
 def test_a_smooth_geometry_with_no_vertices_draws_nothing() raises:
     # A geometry that declares normals but holds no vertices: the shading pass
     # must cope with running zero times rather than assuming at least one.
+    # Opted out of frustum culling, which would otherwise spare it the pass.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var empty = BufferGeometry()
@@ -813,6 +821,7 @@ def test_a_smooth_geometry_with_no_vertices_draws_nothing() raises:
             assets.geometries.add(empty^),
             assets.materials.add(Material(Color(255, 0, 0))),
             NodeId(0),
+            frustum_culled=False,
         )
     )
     var image = rendered_new(
@@ -962,7 +971,8 @@ def test_every_known_shading_mode_is_accepted() raises:
 
 def test_a_mapped_geometry_with_no_vertices_draws_nothing() raises:
     # A geometry that declares texture coordinates but holds no vertices: the
-    # uv-gathering pass must cope with running zero times.
+    # uv-gathering pass must cope with running zero times. Opted out of
+    # frustum culling, which would otherwise spare it the pass.
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_shading(SHADE_UV)
     var assets = Assets()
@@ -975,6 +985,7 @@ def test_a_mapped_geometry_with_no_vertices_draws_nothing() raises:
             assets.geometries.add(empty^),
             assets.materials.add(Material(Color(255, 0, 0))),
             NodeId(0),
+            frustum_culled=False,
         )
     )
     var image = rendered_new(
@@ -2551,6 +2562,214 @@ def test_an_unknown_shading_mode_is_refused_by_the_renderer() raises:
     with assert_raises():
         renderer.set_shading(ShadeMode(99))
     renderer.set_shading(SHADE_LIT)
+
+
+# --- frustum culling --------------------------------------------------------
+#
+# `a_camera` looks at the origin from four meters up z with a 45-degree
+# field of view, so at the origin's depth it sees 1.66 meters up and down
+# and 2.21 to either side. A cube of 1.5 meters has a bounding sphere of
+# radius 1.3, and the right plane is tilted, so five meters to the right
+# is out of view with room to spare and two and a half straddles the edge.
+
+
+def scene_with_node_placed(
+    x: Float32, y: Float32, z: Float32, scale: Float32
+) raises -> Scene:
+    """Return a lit scene holding one node at a point, scaled uniformly.
+
+    Args:
+        x: Where along x.
+        y: Where along y.
+        z: Where along z.
+        scale: The node's scale on every axis.
+
+    Returns:
+        The updated scene, its node at `NodeId(0)`.
+
+    Raises:
+        Error: If the scene is invalid.
+    """
+    var scene = Scene()
+    var node = Object3D()
+    node.set_position(x, y, z)
+    node.set_scale(scale, scale, scale)
+    _ = scene.add(node^)
+    light_the(scene)
+    scene.update()
+    return scene^
+
+
+def test_a_mesh_is_frustum_culled_unless_told_otherwise() raises:
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var paint = assets.materials.add(Material(Color(1, 2, 3)))
+    assert_true(Mesh(box, paint, NodeId(0)).frustum_culled)
+    assert_false(
+        Mesh(box, paint, NodeId(0), frustum_culled=False).frustum_culled
+    )
+
+
+def test_a_mesh_outside_the_view_is_not_prepared() raises:
+    # Five meters to the right: every triangle would land off the image,
+    # so the mesh draws the same nothing with the test and without, and
+    # only without it is the mesh prepared at all.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
+    var paint = assets.materials.add(Material(Color(220, 160, 80)))
+    var camera = a_camera()
+    var scene = scene_with_node_placed(5, 0, 0, 1)
+    var culled = List[Mesh]()
+    culled.append(Mesh(box, paint, NodeId(0)))
+    var kept = List[Mesh]()
+    kept.append(Mesh(box, paint, NodeId(0), frustum_culled=False))
+    assert_equal(len(prepared(renderer, scene, assets, culled, camera)), 0)
+    assert_true(len(prepared(renderer, scene, assets, kept, camera)) > 0)
+    assert_equal(
+        count_background(
+            rendered(renderer, scene, assets, culled, camera),
+            renderer.background,
+        ),
+        WIDTH * HEIGHT,
+    )
+    assert_equal(
+        count_background(
+            rendered(renderer, scene, assets, kept, camera),
+            renderer.background,
+        ),
+        WIDTH * HEIGHT,
+    )
+    # Beyond the far plane, and behind the camera: out on the other axes.
+    var beyond = scene_with_node_placed(0, 0, -200, 1)
+    assert_equal(len(prepared(renderer, beyond, assets, culled, camera)), 0)
+    var behind = scene_with_node_placed(0, 0, 10, 1)
+    assert_equal(len(prepared(renderer, behind, assets, culled, camera)), 0)
+    var above = scene_with_node_placed(0, 5, 0, 1)
+    assert_equal(len(prepared(renderer, above, assets, culled, camera)), 0)
+
+
+def test_a_mesh_partly_in_view_is_prepared_whole() raises:
+    # Straddling the right edge: the bound crosses the plane, so the mesh
+    # is prepared as if there were no test, every triangle of it.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
+    var paint = assets.materials.add(Material(Color(220, 160, 80)))
+    var camera = a_camera()
+    var scene = scene_with_node_placed(2, 0, 0, 1)
+    var culled = List[Mesh]()
+    culled.append(Mesh(box, paint, NodeId(0)))
+    var kept = List[Mesh]()
+    kept.append(Mesh(box, paint, NodeId(0), frustum_culled=False))
+    var tested = len(prepared(renderer, scene, assets, culled, camera))
+    assert_true(tested > 0, "the straddling cube was culled")
+    assert_equal(tested, len(prepared(renderer, scene, assets, kept, camera)))
+    var image = rendered(renderer, scene, assets, culled, camera)
+    assert_true(
+        count_background(image, renderer.background) < WIDTH * HEIGHT,
+        "the straddling cube did not show",
+    )
+
+
+def test_a_scaled_mesh_is_culled_by_its_world_bound() raises:
+    # The same cube at the same place, out of view at its own size and
+    # reaching the axis at three times it: the bound is carried through
+    # the node's world matrix, scale and all.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
+    var paint = assets.materials.add(Material(Color(220, 160, 80)))
+    var camera = a_camera()
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, paint, NodeId(0)))
+    var small = scene_with_node_placed(5, 0, 0, 1)
+    assert_equal(len(prepared(renderer, small, assets, meshes, camera)), 0)
+    var large = scene_with_node_placed(5, 0, 0, 3)
+    assert_true(len(prepared(renderer, large, assets, meshes, camera)) > 0)
+    var image = rendered(renderer, large, assets, meshes, camera)
+    assert_true(
+        count_background(image, renderer.background) < WIDTH * HEIGHT,
+        "the scaled cube did not show",
+    )
+
+
+def test_culling_leaves_the_image_unchanged() raises:
+    # Cubes all around the view -- in it, straddling it, past each side,
+    # and far down the axis -- drawn with the test and without. The images
+    # must agree pixel for pixel, and the test must have left some out.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
+    var paint = assets.materials.add(Material(Color(220, 160, 80)))
+    var glass = assets.materials.add(
+        Material(Color(80, 160, 220), NO_TEXTURE, FRONT_SIDE, 0.5)
+    )
+    var camera = a_camera()
+    var scene = Scene()
+    var places = List[Vector3]()
+    places.append(Vector3(0, 0, 0))
+    places.append(Vector3(2.5, 0, 0))
+    places.append(Vector3(5, 0, 0))
+    places.append(Vector3(-5, 0, 0))
+    places.append(Vector3(0, 5, 0))
+    places.append(Vector3(0, -5, 0))
+    places.append(Vector3(0, 0, -20))
+    places.append(Vector3(0, 0, -200))
+    for index in range(len(places)):
+        var node = Object3D()
+        node.set_position(places[index].x, places[index].y, places[index].z)
+        _ = scene.add(node^)
+    light_the(scene)
+    scene.update()
+    var culled = List[Mesh]()
+    var kept = List[Mesh]()
+    for index in range(len(places)):
+        var material = paint
+        if index % 2 == 1:
+            material = glass
+        culled.append(Mesh(box, material, NodeId(index)))
+        kept.append(Mesh(box, material, NodeId(index), frustum_culled=False))
+    var fewer = len(prepared(renderer, scene, assets, culled, camera))
+    var every = len(prepared(renderer, scene, assets, kept, camera))
+    assert_true(fewer > 0, "everything was culled")
+    assert_true(fewer < every, "nothing was culled")
+    var tested = rendered(renderer, scene, assets, culled, camera)
+    var untested = rendered(renderer, scene, assets, kept, camera)
+    var drawn = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var a = tested.get_pixel(x, y)
+            var b = untested.get_pixel(x, y)
+            assert_equal(a.r, b.r)
+            assert_equal(a.g, b.g)
+            assert_equal(a.b, b.b)
+            assert_equal(a.a, b.a)
+            if a.r != renderer.background.r:
+                drawn += 1
+    assert_true(drawn > 0, "nothing was drawn, so nothing was compared")
+
+
+def test_an_orthographic_camera_culls_by_its_box() raises:
+    # A parallel view six meters tall and eight wide: a cube ten meters to
+    # the right is out of it at any depth, and one on the axis is in it.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
+    var paint = assets.materials.add(Material(Color(220, 160, 80)))
+    var camera = centered(
+        Length(6.0, METER),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(box, paint, NodeId(0)))
+    var aside = scene_with_node_placed(10, 0, 0, 1)
+    assert_equal(len(prepared(renderer, aside, assets, meshes, camera)), 0)
+    var ahead = scene_with_node_placed(0, 0, 0, 1)
+    assert_true(len(prepared(renderer, ahead, assets, meshes, camera)) > 0)
 
 
 def main() raises:

@@ -21,10 +21,19 @@ moved it in, so two meshes meant two copies of the vertex array and sharing was
 impossible however the comment read. Naming it by id is what made the claim
 true.
 
-A mesh is three ids and nothing else — where it is, what shape it is, and what
-it is made of — which is as small as identity gets. They are three *different*
+A mesh is three ids and one flag — where it is, what shape it is, what it is
+made of, and whether the renderer may skip it when its bounds are out of
+view — which is as small as identity gets. The ids are three *different*
 types rather than three integers, because adjacent same-typed parameters are
 transposable and these three used to be exactly that; see `core.object3d`.
+
+The flag is three.js's `Object3D.frustumCulled`, and it lives here rather
+than on the node because here is what is drawn: a node is a transform, and
+a transform has no bounds to be out of view. It is on by default, as in
+three.js, and is turned off for a mesh whose geometry the bound does not
+describe -- none yet, since nothing here moves a vertex after the geometry
+is built -- or to prove the culling changes nothing, which is what the
+renderer's tests use it for.
 
 Color used to live here, with a note saying a `Material` would be ceremony
 until there was a second property to put in it. Textures were that second
@@ -42,9 +51,17 @@ struct Mesh(ImplicitlyCopyable):
     var geometry: GeometryId
     var material: MaterialId
     var node: NodeId
+    # Whether `Renderer.prepare` may leave this mesh out when its bounding
+    # sphere, carried to world space, lies outside the camera's frustum.
+    var frustum_culled: Bool
 
     def __init__(
-        out self, geometry: GeometryId, material: MaterialId, node: NodeId
+        out self,
+        geometry: GeometryId,
+        material: MaterialId,
+        node: NodeId,
+        *,
+        frustum_culled: Bool = True,
     ) raises:
         """Bind a stored geometry and material to a scene node.
 
@@ -56,6 +73,9 @@ struct Mesh(ImplicitlyCopyable):
             geometry: Id of the geometry to draw, from `GeometryStore.add`.
             material: Id of the material to draw it with.
             node: Index of the scene node giving its world transform.
+            frustum_culled: Whether the renderer may skip this mesh when
+                its bounds are out of view. On unless said otherwise, as
+                three.js's `frustumCulled` is.
 
         Raises:
             Error: If any id is negative.
@@ -69,3 +89,4 @@ struct Mesh(ImplicitlyCopyable):
         self.geometry = geometry
         self.material = material
         self.node = node
+        self.frustum_culled = frustum_culled
