@@ -11,8 +11,11 @@ to. Both are asserted against worked-out answers rather than against whatever
 the implementation happens to do.
 """
 
+from math.matrix3 import Matrix3
+from math.vector2 import Vector2
 from render.srgb import UNKNOWN_SPACE, ColorSpace
 from render.texture import Filter, Wrap
+from units.si import Angle, DEGREE
 from render.framebuffer import Color, FloatColor
 from render.srgb import LINEAR, SRGB, srgb_to_linear
 from render.texture import (
@@ -1099,6 +1102,54 @@ def test_ignoring_alpha_copies_a_texture_into_the_other_mode() raises:
     assert_true(blank.is_blank())
     assert_equal(blank.alpha, IGNORED)
     assert_equal(blank.sample(0.3, 0.7).r, Float32(1))
+
+
+def test_a_texture_samples_where_the_geometry_says_until_moved() raises:
+    # The transform is the identity by default, on a built texture and on
+    # the blank one, so a texture that says nothing is sampled as before.
+    assert_true(quad().uv_transform() == Matrix3())
+    assert_true(Texture().uv_transform() == Matrix3())
+    var placed = quad().uv_transform().transform_point(Vector2(0.25, 0.75))
+    assert_almost_equal(placed.x, Float32(0.25), atol=TOLERANCE)
+    assert_almost_equal(placed.y, Float32(0.75), atol=TOLERANCE)
+
+
+def test_a_textures_transform_is_three_js_uv_transform() raises:
+    var image = quad()
+    image.offset = Vector2(0.5, 0.25)
+    image.repeat = Vector2(2, 3)
+    image.rotation = Angle(30.0, DEGREE)
+    image.center = Vector2(0.5, 0.5)
+    assert_true(
+        image.uv_transform()
+        == Matrix3.uv_transform(
+            Vector2(0.5, 0.25),
+            Vector2(2, 3),
+            Angle(30.0, DEGREE),
+            Vector2(0.5, 0.5),
+        )
+    )
+    # Repeat alone scales the coordinates, so the image tiles.
+    var tiled = quad()
+    tiled.repeat = Vector2(2, 3)
+    var placed = tiled.uv_transform().transform_point(Vector2(0.5, 0.5))
+    assert_almost_equal(placed.x, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(placed.y, Float32(1.5), atol=TOLERANCE)
+
+
+def test_a_copy_keeps_the_transform() raises:
+    var image = quad()
+    image.repeat = Vector2(2, 3)
+    image.rotation = Angle(30.0, DEGREE)
+    var copied = Texture(copy=image)
+    assert_true(copied.uv_transform() == image.uv_transform())
+    # The emissive copy too, so a base map and an emissive map from one
+    # image are sampled at one place.
+    var ignoring = image.ignoring_alpha()
+    assert_true(ignoring.uv_transform() == image.uv_transform())
+    assert_true(ignoring.uv_transform() != Matrix3())
+    # The blank texture's copy is blank, and untransformed.
+    assert_true(Texture().ignoring_alpha().uv_transform() == Matrix3())
 
 
 def main() raises:

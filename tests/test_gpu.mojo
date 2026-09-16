@@ -2612,5 +2612,56 @@ def test_both_backends_agree_on_every_new_feature_at_once() raises:
                 assert_almost_equal(ours, theirs, atol=Float64(1e-5))
 
 
+def test_both_backends_agree_on_a_transformed_texture() raises:
+    # A texture's offset, repeat, rotation and center are applied to the
+    # coordinates in prepare, so both rasterizers are handed the same
+    # turned and tiled coordinates and sample the same texels. Nearest
+    # sampling, so exactly.
+    if skipped_for_lack_of_a_gpu(
+        "both backends agree on a transformed texture"
+    ):
+        return
+    var renderer = Renderer(32, 32)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(2.0, METER), Length(2.0, METER))
+    )
+    var board = checkerboard(8, 4, Color(240, 60, 20), Color(20, 40, 200))
+    board.repeat = Vector2(2, 1.5)
+    board.rotation = Angle(30.0, DEGREE)
+    board.center = Vector2(0.5, 0.5)
+    board.offset = Vector2(0.1, -0.2)
+    var skin = assets.materials.add(
+        Material(Color(255, 255, 255), assets.textures.add(board^), kind=BASIC)
+    )
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene.update()
+    var camera = centered(
+        Length(2.0, METER), 1.0, Length(0.1, METER), Length(10.0, METER)
+    )
+    camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(sheet, skin, NodeId(0)))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_equal(len(corners), 6)
+    var cpu = cpu_textured(corners, 32, assets.textures)
+    var gpu = render_triangles(
+        corners, 32, 32, BACKGROUND, SHADE_TEXTURE, assets.textures
+    )
+    # A real pattern: both colors present, so the mapping did something.
+    var light = 0
+    var dark = 0
+    for y in range(32):
+        for x in range(32):
+            if cpu.get_pixel(x, y).r > 200:
+                light += 1
+            if cpu.get_pixel(x, y).b > 150:
+                dark += 1
+    assert_true(light > 0 and dark > 0, "the checkerboard did not appear")
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

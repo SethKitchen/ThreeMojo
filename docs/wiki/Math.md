@@ -1,8 +1,8 @@
 # Math
 
-`math/vector2.mojo`, `math/vector3.mojo`, `math/vector4.mojo`, `math/matrix3.mojo`, `math/matrix4.mojo`, `math/bounds.mojo`, `math/frustum.mojo` and `math/projection.mojo`. Ported from three.js with the same conventions.
+`math/vector2.mojo`, `math/vector3.mojo`, `math/vector4.mojo`, `math/matrix3.mojo`, `math/matrix4.mojo`, `math/bounds.mojo`, `math/frustum.mojo`, `math/ray.mojo` and `math/projection.mojo`. Ported from three.js with the same conventions.
 
-three.js: `Vector2`, `Vector3`, `Vector4`, `Matrix3`, `Matrix4`, `Matrix4.makePerspective`, `makeOrthographic`, `lookAt`, `Box3`, `Sphere`, `Plane`, `Frustum`.
+three.js: `Vector2`, `Vector3`, `Vector4`, `Matrix3`, `Matrix4`, `Matrix4.makePerspective`, `makeOrthographic`, `lookAt`, `Box3`, `Sphere`, `Plane`, `Frustum`, `Ray`.
 
 ## Vector2 and Vector3
 
@@ -48,6 +48,7 @@ It has two jobs, as in three.js. It is the rotation and scale part of a `Matrix4
 | `transform_point(p) -> Vector2` | A 2D point with a third coordinate of one. three.js's `Vector2.applyMatrix3`. |
 | `scale(x, y)`, `rotate(angle)`, `translate(x, y)` | Apply a 2D scale, turn or move after this transform, in place. |
 | `as_matrix4() -> Matrix4` | This matrix in the upper-left corner, with no translation. |
+| `a == b`, `a != b` | Whether every element is equal, exactly. three.js's `equals`. |
 
 Builders, as static methods:
 
@@ -157,6 +158,30 @@ A plane refuses a zero normal. Three points on one line do not make a plane.
 A sphere or a box that crosses a plane is in view as far as the test knows. One that crosses two planes outside their corner is in view too. That is the usual bargain. The renderer uses `intersects_sphere` to skip meshes. See [Renderer](Renderer#frustum-culling).
 
 The renderer builds its frustum with `from_camera`. A far plane read back off a `Float32` projection can sit meters short when `far` is thousands of times `near`. For a near plane at 0.1 and a far one at 5000 it sits at 4993. The camera's own distances put it at 5000, where the clipper has it.
+
+## Ray
+
+`math/ray.mojo`. A `Ray` is an origin and a unit direction: a half-line. The constructor makes the direction unit length and refuses a zero one. Every answer below assumes it.
+
+A hit is an `Optional`. A miss is `None`. Every hit is forward of the origin. A ray inside a sphere or a box hits where it leaves.
+
+| Member | Meaning |
+|---|---|
+| `Ray(origin, direction)` | From `origin`, along `direction`. |
+| `at(t) -> Vector3` | The point `t` meters along the ray. |
+| `look_at(target)`, `recast(t)` | Aim at a point, or move the origin along the ray, in place. |
+| `closest_point_to_point(p)`, `distance_to_point(p)`, `distance_sq_to_point(p)` | The nearest point of the ray, never behind the origin, and the distance to it. |
+| `intersect_sphere(s)`, `intersects_sphere(s)` | Where the ray enters the sphere. |
+| `distance_to_plane(p)`, `intersect_plane(p)`, `intersects_plane(p)` | Where the ray meets the plane. A ray in the plane meets it at its origin. |
+| `intersect_box(b)`, `intersects_box(b)` | Where the ray enters the box. |
+| `intersect_triangle(a, b, c, cull_back)` | Where the ray meets the triangle. With `cull_back`, a hit from behind is a miss. |
+| `apply_matrix4(m)` | Carry the ray through an affine matrix, in place. |
+
+An empty sphere or box is hit nowhere. A ray parallel to a plane meets it only when it lies in it. A ray in a triangle's plane misses the triangle, and so does a degenerate triangle.
+
+`apply_matrix4` raises for a projection, and for a matrix that flattens the direction to nothing. `look_at` raises for the origin itself.
+
+`core.raycaster` carries a ray through a scene. See [Raycasting](Raycasting).
 
 ## Projection
 

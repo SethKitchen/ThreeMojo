@@ -36,7 +36,7 @@ from std.math import cos, sin
 from units.si import Angle
 
 
-struct Matrix3(ImplicitlyCopyable):
+struct Matrix3(Equatable, ImplicitlyCopyable):
     """A 3x3 matrix in column-major order."""
 
     var elements: Array[Float32, 9]
@@ -55,6 +55,37 @@ struct Matrix3(ImplicitlyCopyable):
             copy: The matrix to copy.
         """
         self.elements = copy.elements.copy()
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if every element is equal, three.js's `equals`.
+
+        Exact, as three.js's is: two transforms built the same way are
+        equal, and two built differently that happen to agree to within
+        rounding are not. A texture's transform is compared this way
+        against another's, and both were built by `uv_transform` from
+        their fields.
+
+        Args:
+            other: The matrix to compare with.
+
+        Returns:
+            Whether the nine elements match.
+        """
+        for index in range(9):  # pragma: no branch
+            if self.elements[index] != other.elements[index]:
+                return False
+        return True
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if any element differs.
+
+        Args:
+            other: The matrix to compare with.
+
+        Returns:
+            Whether the two are not equal.
+        """
+        return not (self == other)
 
     @staticmethod
     def from_matrix4(matrix: Matrix4) -> Matrix3:

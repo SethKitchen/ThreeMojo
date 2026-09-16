@@ -85,10 +85,17 @@ from core.layers import Layers
 from core.scene import Scene
 from math.bounds import Sphere
 from math.frustum import Frustum
+from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
-from materials.material import BACK_SIDE, DOUBLE_SIDE, FRONT_SIDE, Blending
+from materials.material import (
+    BACK_SIDE,
+    DOUBLE_SIDE,
+    FRONT_SIDE,
+    Blending,
+    Material,
+)
 from render.texture import IGNORED
 from render.texture_store import NO_TEXTURE, TextureId
 from render.framebuffer import Color, FloatColor, Framebuffer
@@ -220,6 +227,46 @@ def _vertex_colors(
             base.a * alpha,
         )
     return colors^
+
+
+def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
+    """Return the transform a mesh's texture coordinates go through before
+    its maps are sampled with them: its map's `uv_transform`, three.js's
+    `mapTransform`.
+
+    A fragment carries one coordinate pair and samples both maps with it,
+    where three.js carries a pair per map. So the emissive map's transform
+    is the one applied when there is no map, and when there are both they
+    must agree, which is asked here rather than left to sample the
+    emissive map somewhere the author did not say. Two maps from one image
+    agree by construction: `Texture.ignoring_alpha` copies the transform.
+
+    Args:
+        assets: Where the textures live. The ids are already checked.
+        material: The material, for which maps it names.
+
+    Returns:
+        The matrix. The identity for a material with no map at all.
+
+    Raises:
+        Error: If the material names a map and an emissive map whose
+            transforms differ.
+    """
+    var map = material.map
+    var glow_map = material.emissive_map
+    if map == NO_TEXTURE and glow_map == NO_TEXTURE:
+        return Matrix3()
+    if map == NO_TEXTURE:
+        return assets.textures.get(glow_map).uv_transform()
+    var to_uv = assets.textures.get(map).uv_transform()
+    if glow_map != NO_TEXTURE and (
+        assets.textures.get(glow_map).uv_transform() != to_uv
+    ):
+        raise Error(
+            "A material's map and emissive map must share one transform: a"
+            " fragment samples both at one coordinate"
+        )
+    return to_uv^
 
 
 # How far past a frustum plane a bound may lie and still be drawn, as a
@@ -700,6 +747,12 @@ struct Renderer(Movable):
                 )
             if self.shading != SHADE_TEXTURE or not material.is_emissive():
                 glow_map = NO_TEXTURE
+            # Where the maps are moved, tiled and turned on this surface,
+            # asked of the material's own maps whatever the shading mode:
+            # the uv view shows the coordinates the texture would be
+            # sampled with, and a pair of maps that disagree is a wrong
+            # asset under any mode.
+            var to_uv = _uv_transform(assets, material)
             # Light the surface gives off, decoded to linear once and carried
             # on every corner like the base color below.
             var glow = material.emissive_light()
@@ -721,8 +774,11 @@ struct Renderer(Movable):
                 world_points.append(point)
                 view_points.append(view.transform_point(point))
 
-            # Texture coordinates travel untransformed: they name a place in
-            # an image, not a place in the world. A geometry without them
+            # Texture coordinates do not go through the world transform:
+            # they name a place in an image, not a place in the world. They
+            # go through the texture's own transform instead, once per
+            # vertex as three.js's vertex shader does it, so a repeat tiles
+            # the image and an offset slides it. A geometry without them
             # gets zeroes, which map everything to one corner -- harmless
             # until something is actually sampled with them.
             var vertex_u = List[Float32]()
@@ -730,8 +786,13 @@ struct Renderer(Movable):
             if mapped:
                 ref uvs = geometry.attribute_view(String(UV))
                 for vertex in range(vertex_count):
-                    vertex_u.append(uvs.component(vertex, 0))
-                    vertex_v.append(uvs.component(vertex, 1))
+                    var placed = to_uv.transform_point(
+                        Vector2(
+                            uvs.component(vertex, 0), uvs.component(vertex, 1)
+                        )
+                    )
+                    vertex_u.append(placed.x)
+                    vertex_v.append(placed.y)
             else:
                 for _ in range(vertex_count):
                     vertex_u.append(0)

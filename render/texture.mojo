@@ -41,8 +41,20 @@ a geometry can ask for its texture five times across, and clipping can produce
 coordinates outside anything the author wrote. `REPEAT` tiles, `CLAMP` holds
 the edge color, and `MIRROR` alternates direction each tile — the same three
 three.js offers.
+
+**A texture can move, tile and turn on its surface.** three.js's `offset`,
+`repeat`, `rotation` and `center` are fields here as there, and
+`uv_transform` is the 2D affine matrix they come to, three.js's
+`Texture.matrix`. The renderer carries every coordinate of a mesh through
+its texture's matrix before the fragment samples with it, as three.js's
+vertex shader does, so a `repeat` of two tiles the image twice across and an
+`offset` of a half slides it half a tile. The texture itself does not change:
+the transform is on the coordinates that reach it, which is why the wrap
+mode still decides what a coordinate past the edge reads.
 """
 
+from math.matrix3 import Matrix3
+from math.vector2 import Vector2
 from render.framebuffer import Color, FloatColor
 from render.png import DecodedImage
 from render.srgb import (
@@ -54,6 +66,7 @@ from render.srgb import (
     linear_to_srgb,
 )
 from std.math import floor
+from units.si import Angle, RADIAN
 
 
 @fieldwise_init
@@ -373,6 +386,15 @@ struct Texture(Movable):
     # rather than per fragment, because `pow` has only 256 possible inputs
     # and sampling happens per pixel.
     var ramp: List[Float32]
+    # How the coordinates that sample this texture are moved, tiled and
+    # turned first: three.js's fields of the same names, and `uv_transform`
+    # is the matrix they make. Set after construction, as in three.js.
+    # None of them is checked, because every value is a transform: a repeat
+    # of zero collapses the image to one texel, which is what was asked.
+    var offset: Vector2
+    var repeat: Vector2
+    var rotation: Angle
+    var center: Vector2
 
     def __init__(out self):
         """Create the blank texture, which samples as opaque white.
@@ -391,6 +413,10 @@ struct Texture(Movable):
         self.ramp = _identity_ramp()
         self.levels = 1
         self.offsets = [0]
+        self.offset = Vector2(0, 0)
+        self.repeat = Vector2(1, 1)
+        self.rotation = Angle(0.0, RADIAN)
+        self.center = Vector2(0, 0)
 
     def __init__(
         out self,
@@ -445,6 +471,10 @@ struct Texture(Movable):
         self.alpha = alpha
         self.levels = 1
         self.offsets = [0]
+        self.offset = Vector2(0, 0)
+        self.repeat = Vector2(1, 1)
+        self.rotation = Angle(0.0, RADIAN)
+        self.center = Vector2(0, 0)
         # After every field is set, so it is the same check the GPU upload
         # makes on a texture that may have been edited since.
         self.validate()
@@ -492,6 +522,10 @@ struct Texture(Movable):
         self.ramp = copy.ramp.copy()
         self.levels = copy.levels
         self.offsets = copy.offsets.copy()
+        self.offset = copy.offset
+        self.repeat = copy.repeat
+        self.rotation = copy.rotation
+        self.center = copy.center
 
     def ignoring_alpha(self) raises -> Texture:
         """Return a copy of this texture that ignores its alpha.
@@ -505,7 +539,7 @@ struct Texture(Movable):
 
         Returns:
             The copy, with `alpha` set to `IGNORED` and the same wrap,
-            filter, color space and chain length.
+            filter, color space, chain length and transform.
 
         Raises:
             Error: If this texture's fields were edited into nonsense since
@@ -524,7 +558,7 @@ struct Texture(Movable):
             self.width * self.height * Self.CHANNELS
         ):  # pragma: no branch
             base.append(self.pixels[index])
-        return Texture(
+        var copy = Texture(
             self.width,
             self.height,
             base^,
@@ -534,10 +568,37 @@ struct Texture(Movable):
             self.levels > 1,
             IGNORED,
         )
+        # The same image the same way round: a base map and an emissive map
+        # made from one image are sampled at one coordinate, and the
+        # renderer refuses the pair if their transforms differ.
+        copy.offset = self.offset
+        copy.repeat = self.repeat
+        copy.rotation = self.rotation
+        copy.center = self.center
+        return copy^
 
     def is_blank(self) -> Bool:
         """Return True if this is the blank texture."""
         return self.width == 0
+
+    def uv_transform(self) -> Matrix3:
+        """Return the transform the renderer applies to a mesh's texture
+        coordinates before this texture is sampled with them: three.js's
+        `Texture.matrix` after `updateMatrix`, built from `offset`,
+        `repeat`, `rotation` and `center`.
+
+        The identity until a field is set, so a texture that says nothing
+        about it is sampled where the geometry says. Built each time it is
+        asked for rather than cached, because the fields are open and a
+        cached matrix could not know when it had gone stale; the renderer
+        asks once per mesh.
+
+        Returns:
+            The matrix. See `Matrix3.uv_transform` for its order.
+        """
+        return Matrix3.uv_transform(
+            self.offset, self.repeat, self.rotation, self.center
+        )
 
     def _alpha_of(self, byte: UInt8) -> Float32:
         """Return what an alpha byte means: its fraction, or one if alpha is

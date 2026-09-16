@@ -32,6 +32,7 @@ from lights.light import ambient_light, directional_light
 from lights.lighting import Lighting
 from geometries.box import cube
 from geometries.sphere import sphere
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor, Framebuffer
@@ -3201,6 +3202,205 @@ def test_vertex_colors_need_a_color_attribute_of_the_right_shape() raises:
     )
     var blank = rendered(renderer, scene, assets, nothing, a_camera())
     assert_equal(count_background(blank, renderer.background), WIDTH * HEIGHT)
+
+
+def assert_coordinates_span(
+    corners: List[RasterVertex],
+    u_min: Float32,
+    u_max: Float32,
+    v_min: Float32,
+    v_max: Float32,
+) raises:
+    """Assert the prepared corners' texture coordinates run over the given
+    ranges, which is what a transform on them shows up as.
+
+    Args:
+        corners: What `prepare` returned; at least one.
+        u_min: The smallest u expected.
+        u_max: The largest.
+        v_min: The smallest v expected.
+        v_max: The largest.
+
+    Raises:
+        Error: If any bound is off.
+    """
+    var least_u = corners[0].u
+    var most_u = corners[0].u
+    var least_v = corners[0].v
+    var most_v = corners[0].v
+    for index in range(len(corners)):
+        least_u = min(least_u, corners[index].u)
+        most_u = max(most_u, corners[index].u)
+        least_v = min(least_v, corners[index].v)
+        most_v = max(most_v, corners[index].v)
+    assert_almost_equal(least_u, u_min, atol=1e-5)
+    assert_almost_equal(most_u, u_max, atol=1e-5)
+    assert_almost_equal(least_v, v_min, atol=1e-5)
+    assert_almost_equal(most_v, v_max, atol=1e-5)
+
+
+def test_a_textures_transform_moves_the_coordinates_a_mesh_samples_with() raises:
+    # three.js's uv transform, applied in prepare rather than in a vertex
+    # shader: a corner at (1, 1) with a repeat of (2, 3) and an offset of
+    # (0.5, 0.25) reaches the rasterizer at (2.5, 3.25).
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(1.0, METER), Length(1.0, METER))
+    )
+    var board = checkerboard(8, 4, Color(255, 255, 255), Color(20, 20, 20))
+    board.repeat = Vector2(2, 3)
+    board.offset = Vector2(0.5, 0.25)
+    var skin = assets.materials.add(
+        Material(Color(255, 255, 255), assets.textures.add(board^), kind=BASIC)
+    )
+    var scene = unlit_scene_with_a_node()
+    scene.add_mesh(Mesh(sheet, skin, NodeId(0)))
+    var corners = renderer.prepare(scene, assets, a_camera())
+    assert_equal(len(corners), 6)
+    assert_coordinates_span(corners, 0.5, 2.5, 0.25, 3.25)
+    # The uv view shows the same coordinates: the transform is the
+    # material's, whatever the shading mode.
+    renderer.set_shading(SHADE_UV)
+    assert_coordinates_span(
+        renderer.prepare(scene, assets, a_camera()), 0.5, 2.5, 0.25, 3.25
+    )
+
+
+def test_an_emissive_maps_transform_applies_when_there_is_no_map() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(1.0, METER), Length(1.0, METER))
+    )
+    var glow = checkerboard(
+        8, 4, Color(255, 255, 255), Color(0, 0, 0), alpha=IGNORED
+    )
+    glow.repeat = Vector2(2, 3)
+    var skin = assets.materials.add(
+        Material(
+            Color(0, 0, 0),
+            emissive=Color(255, 255, 255),
+            emissive_map=assets.textures.add(glow^),
+        )
+    )
+    var scene = unlit_scene_with_a_node()
+    scene.add_mesh(Mesh(sheet, skin, NodeId(0)))
+    assert_coordinates_span(
+        renderer.prepare(scene, assets, a_camera()), 0, 2, 0, 3
+    )
+
+
+def test_a_map_and_an_emissive_map_must_share_one_transform() raises:
+    # A fragment samples both at one coordinate, so a pair that disagree
+    # is refused; a copy made with ignoring_alpha carries the transform and
+    # is accepted.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.5, METER)))
+    var board = checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0))
+    board.repeat = Vector2(2, 2)
+    var agreeing = assets.textures.add(board.ignoring_alpha())
+    var base = assets.textures.add(board^)
+    var differing = assets.textures.add(
+        checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0), alpha=IGNORED)
+    )
+    var scene = unlit_scene_with_a_node()
+    var fine = List[Mesh]()
+    fine.append(
+        Mesh(
+            box,
+            assets.materials.add(
+                Material(
+                    Color(255, 255, 255),
+                    base,
+                    emissive=Color(255, 255, 255),
+                    emissive_map=agreeing,
+                )
+            ),
+            NodeId(0),
+        )
+    )
+    var image = rendered(renderer, scene, assets, fine, a_camera())
+    var drawn = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var pixel = image.get_pixel(x, y)
+            if (
+                pixel.r != renderer.background.r
+                or pixel.g != renderer.background.g
+                or pixel.b != renderer.background.b
+            ):
+                drawn += 1
+    assert_true(drawn > 0, "the agreeing pair drew nothing")
+    var wrong = List[Mesh]()
+    wrong.append(
+        Mesh(
+            box,
+            assets.materials.add(
+                Material(
+                    Color(255, 255, 255),
+                    base,
+                    emissive=Color(255, 255, 255),
+                    emissive_map=differing,
+                )
+            ),
+            NodeId(0),
+        )
+    )
+    with assert_raises():
+        _ = rendered(renderer, scene, assets, wrong, a_camera())
+
+
+def test_a_repeat_tiles_the_texture_and_an_offset_slides_it() raises:
+    # A two-square board on a sheet wider than the view, face-on to an
+    # orthographic camera. The middle row crosses one square edge as
+    # authored, three with the board repeated twice, and one again with
+    # the board slid half a period, which swaps the squares.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(4.0, METER), Length(3.0, METER))
+    )
+    var scene = unlit_scene_with_a_node()
+    var camera = centered(
+        Length(2.0, METER),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var plain = checkerboard(2, 2, Color(255, 255, 255), Color(0, 0, 0))
+    var tiled = checkerboard(2, 2, Color(255, 255, 255), Color(0, 0, 0))
+    tiled.repeat = Vector2(2, 2)
+    var slid = checkerboard(2, 2, Color(255, 255, 255), Color(0, 0, 0))
+    slid.offset = Vector2(0.5, 0)
+    var boards: List[TextureId] = [
+        assets.textures.add(plain^),
+        assets.textures.add(tiled^),
+        assets.textures.add(slid^),
+    ]
+    var edges = List[Int]()
+    var left_bright = List[Bool]()
+    for index in range(3):
+        var skin = assets.materials.add(
+            Material(Color(255, 255, 255), boards[index], kind=BASIC)
+        )
+        var meshes = List[Mesh]()
+        meshes.append(Mesh(sheet, skin, NodeId(0)))
+        var image = rendered(renderer, scene, assets, meshes, camera)
+        var crossings = 0
+        for x in range(1, WIDTH):
+            var here = image.get_pixel(x, HEIGHT // 2).r > 128
+            var before = image.get_pixel(x - 1, HEIGHT // 2).r > 128
+            if here != before:
+                crossings += 1
+        edges.append(crossings)
+        left_bright.append(image.get_pixel(WIDTH // 4, HEIGHT // 2).r > 128)
+    assert_equal(edges[0], 1)
+    assert_equal(edges[1], 3)
+    assert_equal(edges[2], 1)
+    assert_true(left_bright[0] != left_bright[2], "the offset slid nothing")
 
 
 def main() raises:

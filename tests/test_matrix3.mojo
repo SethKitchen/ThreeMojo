@@ -379,5 +379,29 @@ def test_the_uv_transform_is_the_pieces_composed() raises:
     assert_same(Matrix3.uv_transform(offset, repeat, angle, center), pieces)
 
 
+def test_two_matrices_are_equal_when_every_element_is() raises:
+    var one = Matrix3.uv_transform(
+        Vector2(0.3, -0.2),
+        Vector2(2, 0.5),
+        Angle(33.0, DEGREE),
+        Vector2(0.4, 0.6),
+    )
+    var same = Matrix3.uv_transform(
+        Vector2(0.3, -0.2),
+        Vector2(2, 0.5),
+        Angle(33.0, DEGREE),
+        Vector2(0.4, 0.6),
+    )
+    assert_true(one == same)
+    assert_true(not (one != same))
+    assert_true(Matrix3() == Matrix3())
+    # Any one element differing is enough, the last included.
+    for index in range(9):
+        var other = Matrix3(copy=one)
+        other.elements[index] += 1
+        assert_true(one != other)
+        assert_true(not (one == other))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

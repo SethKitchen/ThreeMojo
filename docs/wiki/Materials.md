@@ -73,6 +73,8 @@ The emissive term is light the surface gives off. Both rasterizers add it after 
 
 An emissive map must ignore its alpha. Build it with `alpha=IGNORED`, or copy one with `ignoring_alpha()`. The renderer refuses a map that reads alpha as coverage, because filtering would darken it wherever its alpha is low. See [Textures](Textures#alpha).
 
+The emissive map is sampled at the same coordinate as `map`. When a material names both, their transforms must agree. See [Textures](Textures#transform).
+
 The term changes the surface's own appearance. It does not light nearby objects, and it does not bloom.
 
 A `BASIC` material refuses an emissive term. three.js's `MeshBasicMaterial` has none. An unlit surface already shows its own color.

@@ -62,6 +62,31 @@ An emissive map must ignore its alpha. Its alpha is not coverage. Filtered as co
 
 `u` runs from left to right and `v` from bottom to top. Rows in memory run from the top. Sampling flips once, as three.js's `flipY` does.
 
+## Transform
+
+A texture can move, tile and turn on a surface. three.js: `offset`, `repeat`, `rotation`, `center`, `matrix`.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `offset` | `Vector2(0, 0)` | How far the coordinates move, after the rest. |
+| `repeat` | `Vector2(1, 1)` | How many times the texture fits across each axis. |
+| `rotation` | zero | How far the image turns, counter-clockwise. An `Angle`. |
+| `center` | `Vector2(0, 0)` | The point the turn and the scale are about. |
+
+Set the fields after construction, as in three.js. `uv_transform()` returns the matrix they make. See [Math](Math#matrix3) for its order.
+
+The renderer carries every coordinate of a mesh through its map's matrix before the fragment samples with it. The texture itself does not change. The wrap mode still decides what a coordinate past the edge reads. Both rasterizers get the same coordinates.
+
+A fragment samples the map and the emissive map at one coordinate. A material that names both must give them the same transform. The renderer refuses the pair otherwise. `ignoring_alpha()` copies the transform, so two maps from one image agree.
+
+```mojo
+var board = checkerboard(64, 8, white, blue)
+board.repeat = Vector2(4, 4)
+board.rotation = Angle(45.0, DEGREE)
+board.center = Vector2(0.5, 0.5)
+var id = assets.textures.add(board^)
+```
+
 ## Members
 
 | Member | Meaning |
@@ -71,8 +96,10 @@ An emissive map must ignore its alpha. Its alpha is not coverage. Filtered as co
 | `texel(x, y) -> Color` | One stored texel. |
 | `is_blank() -> Bool` | The blank texture, which samples as opaque white. |
 | `ignoring_alpha() -> Texture` | A copy that ignores its alpha, with its chain rebuilt. |
+| `uv_transform() -> Matrix3` | The transform on the coordinates, from the four fields above. |
 | `validate()` | Refuse a wrap, filter, color space or alpha mode that is none of the named values. |
 | `levels`, `width`, `height`, `alpha` | The chain length, the base size and the alpha mode. |
+| `offset`, `repeat`, `rotation`, `center` | The transform's fields. |
 
 ## TextureStore
 
@@ -83,6 +110,7 @@ An emissive map must ignore its alpha. Its alpha is not coverage. Filtered as co
 - Dimensions must be positive, and the buffer length must match.
 - A wrap, filter, color space or alpha mode that is none of its named values raises. The GPU upload checks again.
 - A `checkerboard` size must divide evenly by its square count.
+- The renderer refuses a map and an emissive map on one material whose transforms differ.
 
 ## Why
 

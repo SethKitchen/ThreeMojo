@@ -38,11 +38,12 @@ var fast = Renderer(1280, 720, workers=available_workers())
 First, leave out every mesh whose node shares no layer with the camera. Then leave out every mesh whose bounding sphere lies wholly outside the camera's frustum. Then sort the rest into draw order. Then, for each mesh in that order:
 
 1. Transform the positions to world space and camera space.
-2. Transform the normals with the normal matrix, or compute a face normal.
-3. Clip each triangle against the near and far planes.
-4. Project each corner to pixels and keep `1 / w`.
-5. Cull faces that the material's `side` does not draw.
-6. Flip the normal of a face seen from behind.
+2. Carry the texture coordinates through the map's transform. See [Textures](Textures#transform).
+3. Transform the normals with the normal matrix, or compute a face normal.
+4. Clip each triangle against the near and far planes.
+5. Project each corner to pixels and keep `1 / w`.
+6. Cull faces that the material's `side` does not draw.
+7. Flip the normal of a face seen from behind.
 
 The output is one flat list, three `RasterVertex` per triangle. Both rasterizers consume it. See [Rasterization](Rasterization).
 
@@ -72,7 +73,15 @@ The default is one worker. The coverage tool needs probe records in order.
 
 ## Errors
 
-`prepare` raises in four cases. A mesh names a node, geometry or material that does not exist. A material names a texture or an emissive map that does not exist. An emissive map reads its alpha as coverage. A geometry has no positions. A mesh the camera's layers or frustum leave out is not checked.
+`prepare` raises in five cases:
+
+- A mesh names a node, geometry or material that does not exist.
+- A material names a texture or an emissive map that does not exist.
+- An emissive map reads its alpha as coverage.
+- A material names a map and an emissive map whose transforms differ.
+- A geometry has no positions.
+
+A mesh the camera's layers or frustum leave out is not checked.
 
 ## Performance
 
