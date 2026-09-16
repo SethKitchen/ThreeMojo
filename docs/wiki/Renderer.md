@@ -58,7 +58,7 @@ The default is one worker. The coverage tool needs probe records in order.
 
 ## Errors
 
-`prepare` raises in three cases. A mesh names a node, geometry or material that does not exist. A material names a texture or an emissive map that does not exist. A geometry has no positions.
+`prepare` raises in four cases. A mesh names a node, geometry or material that does not exist. A material names a texture or an emissive map that does not exist. An emissive map reads its alpha as coverage. A geometry has no positions.
 
 ## Performance
 

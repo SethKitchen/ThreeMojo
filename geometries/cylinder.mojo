@@ -186,8 +186,12 @@ def cylinder(
 
     var stride = radial_segments + 1
     var index = List[Int]()
-    for row in range(height_segments):  # pragma: no branch
-        for column in range(radial_segments):  # pragma: no branch
+    # Column by column and then down the rows, the order three.js walks the
+    # side in, so the two index buffers match cell for cell. The order shows
+    # only where it is the order things blend in: a translucent pipe's inner
+    # and outer walls.
+    for column in range(radial_segments):  # pragma: no branch
+        for row in range(height_segments):  # pragma: no branch
             var a = column + stride * row
             var b = column + stride * (row + 1)
             var c = column + 1 + stride * (row + 1)

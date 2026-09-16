@@ -59,7 +59,10 @@ from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.srgb import SRGB, ColorSpace, decode_ramp
 from render.texture import (
     BILINEAR,
+    COVERAGE,
+    IGNORED,
     NEAREST,
+    Alpha,
     Filter,
     Texture,
     Wrap,
@@ -126,7 +129,7 @@ comptime FURTHEST = Float32(1.0e30)
 # One row per texture in the store: where its bytes start, how big it is, and
 # how to sample it. A device cannot hold a `List` of `List`s, so every image
 # goes into one buffer end to end and this says where each one begins.
-comptime TABLE_COLUMNS = 7
+comptime TABLE_COLUMNS = 8
 
 
 def flatten_textures(
@@ -140,13 +143,13 @@ def flatten_textures(
     Returns:
         The concatenated texels, and `TABLE_COLUMNS` entries per texture:
         byte offset, width, height, wrap mode, filter mode, color space,
-        and how many mip levels follow.
+        how many mip levels follow, and the alpha mode.
 
     Raises:
-        Error: If a texture cannot be read, or its wrap, filter or color
-            space is none of the named values -- a texture's fields are open,
-            so one can have been edited since it was built, and the kernel
-            cannot raise on what it finds in the table.
+        Error: If a texture cannot be read, or its wrap, filter, color
+            space or alpha mode is none of the named values -- a texture's
+            fields are open, so one can have been edited since it was built,
+            and the kernel cannot raise on what it finds in the table.
     """
     var texels = List[UInt8]()
     var table = List[Int32]()
@@ -169,6 +172,7 @@ def flatten_textures(
             table.append(Int32(image.filter.value))
             table.append(Int32(image.color_space.value))
             table.append(1)
+            table.append(Int32(COVERAGE.value))
             for _ in range(4):
                 texels.append(255)
             continue
@@ -178,6 +182,7 @@ def flatten_textures(
         table.append(Int32(image.filter.value))
         table.append(Int32(image.color_space.value))
         table.append(Int32(image.levels))
+        table.append(Int32(image.alpha.value))
         # One bulk copy rather than an append per byte.
         texels.extend(image.pixels.copy())
     # Never empty: a zero-length device buffer is not worth the special case,
@@ -358,16 +363,46 @@ def _level_start(width: Int, height: Int, level: Int) -> Int:
     return offset
 
 
+@fieldwise_init
+struct _Descriptor(ImplicitlyCopyable):
+    """One texture's row of the table, as the sampler reads it.
+
+    Read once per sample by `_describe` rather than carried through three
+    helpers as seven arguments each, which is what this used to be.
+    """
+
+    var start: Int
+    var width: Int
+    var height: Int
+    var wrap: Wrap
+    var filter: Filter
+    var space: ColorSpace
+    var levels: Int
+    var alpha: Alpha
+
+
+def _describe(table: MutPointer[Int32, MutAnyOrigin], slot: Int) -> _Descriptor:
+    """Return texture `slot`'s row of the table, in the order
+    `flatten_textures` wrote it."""
+    var entry = slot * TABLE_COLUMNS
+    return _Descriptor(
+        Int(table[unsafe_offset=entry]),
+        Int(table[unsafe_offset=entry + 1]),
+        Int(table[unsafe_offset=entry + 2]),
+        Wrap(Int(table[unsafe_offset=entry + 3])),
+        Filter(Int(table[unsafe_offset=entry + 4])),
+        ColorSpace(Int(table[unsafe_offset=entry + 5])),
+        Int(table[unsafe_offset=entry + 6]),
+        Alpha(Int(table[unsafe_offset=entry + 7])),
+    )
+
+
 def _fetch(
     texels: MutPointer[UInt8, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
-    start: Int,
+    image: _Descriptor,
     x: Int,
     y: Int,
-    width: Int,
-    height: Int,
-    wrap: Wrap,
-    space: ColorSpace,
     level: Int,
 ) -> FloatColor:
     """Read one texel from the device buffer, decoded and wrapped.
@@ -376,30 +411,38 @@ def _fetch(
     differs between the two: the index arithmetic is `wrap_index`, shared; the
     decode is the same 256-entry table the host builds, uploaded once; and the
     blend on top of them is `blend`, also shared. Alpha is not color and is
-    never decoded.
+    never decoded, and is not read at all when the texture ignores it, as
+    `Texture._alpha_of` does not read it on the host.
     """
-    var wide = _extent(width, level)
-    var tall = _extent(height, level)
+    var wide = _extent(image.width, level)
+    var tall = _extent(image.height, level)
     var offset = (
-        start
-        + _level_start(width, height, level)
-        + (wrap_index(y, tall, wrap) * wide + wrap_index(x, wide, wrap)) * 4
+        image.start
+        + _level_start(image.width, image.height, level)
+        + (
+            wrap_index(y, tall, image.wrap) * wide
+            + wrap_index(x, wide, image.wrap)
+        )
+        * 4
     )
+    var alpha = Float32(texels[unsafe_offset=offset + 3]) / 255
+    if image.alpha == IGNORED:
+        alpha = 1
     # Asked the way the host asks it when it picks a ramp -- "is it SRGB?"
     # -- so a value that is neither reads as stored on both sides rather
     # than decoded on one.
-    if space == SRGB:
+    if image.space == SRGB:
         return FloatColor(
             ramp[unsafe_offset=Int(texels[unsafe_offset=offset])],
             ramp[unsafe_offset=Int(texels[unsafe_offset=offset + 1])],
             ramp[unsafe_offset=Int(texels[unsafe_offset=offset + 2])],
-            Float32(texels[unsafe_offset=offset + 3]) / 255,
+            alpha,
         )
     return FloatColor(
         Float32(texels[unsafe_offset=offset]) / 255,
         Float32(texels[unsafe_offset=offset + 1]) / 255,
         Float32(texels[unsafe_offset=offset + 2]) / 255,
-        Float32(texels[unsafe_offset=offset + 3]) / 255,
+        alpha,
     )
 
 
@@ -496,30 +539,21 @@ def _uv_at(
 def _sample_at(
     texels: MutPointer[UInt8, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
-    start: Int,
-    width: Int,
-    height: Int,
-    wrap: Wrap,
-    filter: Filter,
-    space: ColorSpace,
+    image: _Descriptor,
     u: Float32,
     v: Float32,
     level: Int,
 ) -> FloatColor:
     """Sample one mip level, the device counterpart of `Texture.sample_at`."""
-    var wide = _extent(width, level)
-    var tall = _extent(height, level)
-    if filter == NEAREST:
+    var wide = _extent(image.width, level)
+    var tall = _extent(image.height, level)
+    if image.filter == NEAREST:
         return _fetch(
             texels,
             ramp,
-            start,
+            image,
             Int(floor(u * Float32(wide))),
             Int(floor((1 - v) * Float32(tall))),
-            width,
-            height,
-            wrap,
-            space,
             level,
         )
     # Texel centers sit at half-integers; see Texture.sample.
@@ -528,45 +562,10 @@ def _sample_at(
     var column = Int(floor(across))
     var row = Int(floor(down))
     return blend_texels(
-        _fetch(
-            texels, ramp, start, column, row, width, height, wrap, space, level
-        ),
-        _fetch(
-            texels,
-            ramp,
-            start,
-            column + 1,
-            row,
-            width,
-            height,
-            wrap,
-            space,
-            level,
-        ),
-        _fetch(
-            texels,
-            ramp,
-            start,
-            column,
-            row + 1,
-            width,
-            height,
-            wrap,
-            space,
-            level,
-        ),
-        _fetch(
-            texels,
-            ramp,
-            start,
-            column + 1,
-            row + 1,
-            width,
-            height,
-            wrap,
-            space,
-            level,
-        ),
+        _fetch(texels, ramp, image, column, row, level),
+        _fetch(texels, ramp, image, column + 1, row, level),
+        _fetch(texels, ramp, image, column, row + 1, level),
+        _fetch(texels, ramp, image, column + 1, row + 1, level),
         across - Float32(column),
         down - Float32(row),
     )
@@ -575,43 +574,19 @@ def _sample_at(
 def _sample_level(
     texels: MutPointer[UInt8, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
-    start: Int,
-    width: Int,
-    height: Int,
-    wrap: Wrap,
-    filter: Filter,
-    space: ColorSpace,
-    levels: Int,
+    image: _Descriptor,
     u: Float32,
     v: Float32,
     level: Float32,
 ) -> FloatColor:
     """Trilinear across two mip levels, matching `Texture.sample_level`."""
-    if levels == 1 or level <= 0:
-        return _sample_at(
-            texels, ramp, start, width, height, wrap, filter, space, u, v, 0
-        )
-    if level >= Float32(levels - 1):
-        return _sample_at(
-            texels,
-            ramp,
-            start,
-            width,
-            height,
-            wrap,
-            filter,
-            space,
-            u,
-            v,
-            levels - 1,
-        )
+    if image.levels == 1 or level <= 0:
+        return _sample_at(texels, ramp, image, u, v, 0)
+    if level >= Float32(image.levels - 1):
+        return _sample_at(texels, ramp, image, u, v, image.levels - 1)
     var lower = Int(floor(level))
-    var near = _sample_at(
-        texels, ramp, start, width, height, wrap, filter, space, u, v, lower
-    )
-    var far = _sample_at(
-        texels, ramp, start, width, height, wrap, filter, space, u, v, lower + 1
-    )
+    var near = _sample_at(texels, ramp, image, u, v, lower)
+    var far = _sample_at(texels, ramp, image, u, v, lower + 1)
     return mix_color(near, far, level - Float32(lower))
 
 
@@ -675,18 +650,9 @@ def _sample_slot(
     emissive map, as `_sample_map` is on the host, so both are filtered
     alike on both sides.
     """
-    var entry = slot * TABLE_COLUMNS
-    var start = Int(table[unsafe_offset=entry])
-    var width = Int(table[unsafe_offset=entry + 1])
-    var height = Int(table[unsafe_offset=entry + 2])
-    var wrap = Wrap(Int(table[unsafe_offset=entry + 3]))
-    var filter = Filter(Int(table[unsafe_offset=entry + 4]))
-    var space = ColorSpace(Int(table[unsafe_offset=entry + 5]))
-    var levels = Int(table[unsafe_offset=entry + 6])
-    if levels == 1:
-        return _sample_at(
-            texels, ramp, start, width, height, wrap, filter, space, u, v, 0
-        )
+    var image = _describe(table, slot)
+    if image.levels == 1:
+        return _sample_at(texels, ramp, image, u, v, 0)
     var along_x = _uv_at(
         corners,
         base,
@@ -720,16 +686,17 @@ def _sample_slot(
     return _sample_level(
         texels,
         ramp,
-        start,
-        width,
-        height,
-        wrap,
-        filter,
-        space,
-        levels,
+        image,
         u,
         v,
-        _mip_level(u, v, along_x, along_y, Float32(width), Float32(height)),
+        _mip_level(
+            u,
+            v,
+            along_x,
+            along_y,
+            Float32(image.width),
+            Float32(image.height),
+        ),
     )
 
 
@@ -1173,6 +1140,10 @@ struct GpuRenderer(Movable):
     # with a number that arrived on a vertex, so something has to know where
     # the table ends; nothing on the device can find out.
     var uploaded: Int
+    # Per uploaded texture, whether it ignores its alpha: what an emissive
+    # map must do, and a question the host answers before the launch, as the
+    # CPU rasterizer answers it before the first fragment.
+    var ignores_alpha: List[Bool]
     # Declared last so that it is released last. See `__del__`.
     var context: DeviceContext
 
@@ -1257,6 +1228,7 @@ struct GpuRenderer(Movable):
         # Allocated but never filled, so until `set_textures` runs the only
         # legal reference is NO_TEXTURE.
         self.uploaded = 0
+        self.ignores_alpha = List[Bool]()
         self.ramp = self.context.enqueue_create_buffer[DType.float32](256)
         var steps = decode_ramp()
         with self.ramp.map_to_host() as host:
@@ -1309,8 +1281,9 @@ struct GpuRenderer(Movable):
             Error: If the corner count is not a multiple of three, the mode
                 is none of the three, a triangle's blend policy, texture or
                 emissive map disagrees between its corners or is a value
-                neither backend knows, or a vertex names a texture or an
-                emissive map that is not uploaded.
+                neither backend knows, a vertex names a texture or an
+                emissive map that is not uploaded, or an emissive map that
+                `SHADE_TEXTURE` would open does not ignore its alpha.
         """
         if len(corners) % 3 != 0:
             raise Error("Rasterizing needs whole triangles")
@@ -1342,6 +1315,18 @@ struct GpuRenderer(Movable):
                     raise Error(
                         "A vertex names a texture that has not been uploaded;"
                         " call set_textures() first"
+                    )
+        # An emissive map's alpha means nothing, and only a texture built to
+        # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
+        # here, before the launch, exactly where `rasterize_shaded` asks it
+        # before the first fragment, and only when the map will be opened.
+        if mode == SHADE_TEXTURE:
+            for triangle in range(triangles):
+                var glow = corners[triangle * 3].emissive_map
+                if glow != NO_TEXTURE and not self.ignores_alpha[glow.value]:
+                    raise Error(
+                        "An emissive map must ignore its alpha; build the"
+                        " texture with alpha=IGNORED"
                     )
 
         if triangles > self.capacity:
@@ -1449,6 +1434,11 @@ struct GpuRenderer(Movable):
         self.texels = texels^
         self.table = table^
         self.uploaded = textures.count()
+        self.ignores_alpha = List[Bool]()
+        for id in range(textures.count()):
+            self.ignores_alpha.append(
+                textures.get(TextureId(id)).alpha == IGNORED
+            )
 
     def read_back(self) raises -> Framebuffer:
         """Copy the device render target into a host framebuffer.

@@ -50,6 +50,8 @@ from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.srgb import SRGB
 from render.texture import (
     BILINEAR,
+    COVERAGE,
+    IGNORED,
     NEAREST,
     CLAMP,
     MIRROR,
@@ -62,6 +64,7 @@ from lights.lighting import Lighting
 from render.gpu import (
     FLOATS_PER_VERTEX,
     STATE_PER_TRIANGLE,
+    TABLE_COLUMNS,
     GpuRenderer,
     available,
     flatten,
@@ -978,7 +981,9 @@ def test_both_backends_sample_an_emissive_map_identically() raises:
         return
     var textures = TextureStore()
     var board = textures.add(
-        checkerboard(16, 4, Color(240, 60, 20), Color(20, 40, 200))
+        checkerboard(
+            16, 4, Color(240, 60, 20), Color(20, 40, 200), alpha=IGNORED
+        )
     )
     var corners = List[RasterVertex]()
     for base in mapped_quad(24):
@@ -1014,6 +1019,7 @@ def test_both_backends_agree_on_a_mipmapped_emissive_map() raises:
             REPEAT,
             BILINEAR,
             mipmapped=True,
+            alpha=IGNORED,
         )
     )
     var flat = List[RasterVertex]()
@@ -1054,7 +1060,9 @@ def test_both_backends_refuse_an_emissive_map_that_is_not_there() raises:
     # And corners that disagree about it are refused before any sampling.
     var textures = TextureStore()
     var board = textures.add(
-        checkerboard(8, 2, Color(240, 60, 20), Color(20, 40, 200))
+        checkerboard(
+            8, 2, Color(240, 60, 20), Color(20, 40, 200), alpha=IGNORED
+        )
     )
     var mixed = List[RasterVertex]()
     for base in mapped_quad(24):
@@ -1065,6 +1073,130 @@ def test_both_backends_refuse_an_emissive_map_that_is_not_there() raises:
         renderer.draw(mixed, BACKGROUND, SHADE_TEXTURE)
     with assert_raises():
         _ = cpu_textured(mixed, 24, textures)
+
+
+def test_the_table_carries_the_alpha_mode() raises:
+    # Host side: eight columns per texture, the last the alpha mode, and the
+    # blank texture crosses as coverage like any opaque image.
+    var textures = TextureStore()
+    _ = textures.add(checkerboard(2, 2, Color(255, 255, 255), Color(0, 0, 0)))
+    _ = textures.add(
+        checkerboard(2, 2, Color(255, 255, 255), Color(0, 0, 0), alpha=IGNORED)
+    )
+    _ = textures.add(Texture())
+    var flattened = flatten_textures(textures)
+    ref table = flattened[1]
+    assert_equal(len(table), 3 * TABLE_COLUMNS)
+    assert_equal(table[7], Int32(COVERAGE.value))
+    assert_equal(table[TABLE_COLUMNS + 7], Int32(IGNORED.value))
+    assert_equal(table[2 * TABLE_COLUMNS + 7], Int32(COVERAGE.value))
+
+
+def test_both_backends_ignore_an_emissive_maps_alpha_alike() raises:
+    # Opaque red beside transparent green as the emissive map, bilinear and
+    # ignoring alpha: both backends filter the color straight, so the middle
+    # of the quad is yellow rather than the red that coverage filtering
+    # gives.
+    if skipped_for_lack_of_a_gpu("both backends ignore a glow map's alpha"):
+        return
+    var textures = TextureStore()
+    var pixels = List[UInt8]()
+    for value in [UInt8(255), UInt8(0), UInt8(0), UInt8(255)]:
+        pixels.append(value)
+    for value in [UInt8(0), UInt8(255), UInt8(0), UInt8(0)]:
+        pixels.append(value)
+    var strip = textures.add(
+        Texture(2, 1, pixels^, CLAMP, BILINEAR, LINEAR, False, IGNORED)
+    )
+    var corners = List[RasterVertex]()
+    for base in mapped_quad(24):
+        corners.append(glowing(base, FloatColor(1, 1, 1), strip))
+    var cpu = cpu_textured_lit(corners, 24, textures, dark())
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures, dark()
+    )
+    var middle = cpu.get_pixel(12, 12)
+    assert_true(middle.r > 100 and middle.g > 100, "the hidden green was lost")
+    assert_equal(middle.b, UInt8(0))
+    assert_equal(middle.a, UInt8(255))
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_base_and_emissive_maps_of_different_sizes_agree() raises:
+    # Each map picks its mip level from its own size, on a receding surface
+    # under real lights, and the two backends still agree.
+    if skipped_for_lack_of_a_gpu("maps of different sizes on one surface"):
+        return
+    var textures = TextureStore()
+    var base = textures.add(
+        checkerboard(
+            16,
+            4,
+            Color(240, 60, 20),
+            Color(20, 40, 200),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    var glow = textures.add(
+        checkerboard(
+            32,
+            8,
+            Color(255, 255, 255),
+            Color(0, 0, 0),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+            alpha=IGNORED,
+        )
+    )
+    var flat = List[RasterVertex]()
+    flat.append(lit_corner(2, 22, 1.0, 0, 0, base))
+    flat.append(lit_corner(16, 4, 0.1, 0.3, 3, base))
+    flat.append(lit_corner(22, 22, 1.0, 3, 0, base))
+    flat.append(lit_corner(2, 22, 1.0, 0, 0, base))
+    flat.append(lit_corner(8, 4, 0.1, 0.0, 3, base))
+    flat.append(lit_corner(16, 4, 0.1, 0.3, 3, base))
+    var corners = List[RasterVertex]()
+    for corner in flat:
+        corners.append(glowing(corner, FloatColor(0.4, 0.4, 0.4), glow))
+    var lighting = gpu_lit_along_z()
+    var cpu = cpu_textured_lit(corners, 24, textures, lighting)
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures, lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # Color, alpha and depth: the maps change what a fragment is colored,
+    # never where it lands.
+    for y in range(24):
+        for x in range(24):
+            var near = cpu.depth_at(x, y)
+            if near < Float32(1e30):
+                assert_almost_equal(
+                    near, gpu.depth_at(x, y), atol=Float64(1e-5)
+                )
+
+
+def test_both_backends_refuse_an_emissive_map_that_reads_alpha_as_coverage() raises:
+    if skipped_for_lack_of_a_gpu("both backends refuse a coverage glow map"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(8, 2, Color(240, 60, 20), Color(20, 40, 200))
+    )
+    var corners = List[RasterVertex]()
+    for base in mapped_quad(24):
+        corners.append(glowing(base, FloatColor(1, 1, 1), board))
+    var renderer = GpuRenderer(24, 24)
+    renderer.set_textures(textures)
+    with assert_raises():
+        renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
+    with assert_raises():
+        _ = cpu_textured(corners, 24, textures)
+    # SHADE_LIT never opens the map, so neither refuses it there.
+    renderer.draw(corners, BACKGROUND, SHADE_LIT)
+    _ = cpu_render_triangles(corners, 24, 24)
 
 
 def count_background(image: Framebuffer, background: Color) raises -> Int:

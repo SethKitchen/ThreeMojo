@@ -34,7 +34,7 @@ from math.vector3 import Vector3
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV, ShadeMode
-from render.texture import checkerboard
+from render.texture import BILINEAR, IGNORED, NEAREST, Texture, checkerboard
 from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import Renderer, available_workers, face_normal
 from std.testing import (
@@ -2138,7 +2138,7 @@ def test_an_emissive_map_glows_only_where_it_is_bright() raises:
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.5, METER)))
     var board = assets.textures.add(
-        checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0))
+        checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0), alpha=IGNORED)
     )
     var glowing = assets.materials.add(
         Material(
@@ -2178,7 +2178,7 @@ def test_lit_shading_ignores_the_emissive_map_but_keeps_the_glow() raises:
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.5, METER)))
     var board = assets.textures.add(
-        checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0))
+        checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0), alpha=IGNORED)
     )
     var glowing = assets.materials.add(
         Material(
@@ -2226,6 +2226,138 @@ def test_a_material_naming_an_emissive_map_that_is_not_there_is_rejected() raise
     unlit.append(Mesh(box, dark, NodeId(0)))
     with assert_raises():
         _ = rendered(renderer, scene, assets, unlit, a_camera())
+
+
+def test_an_emissive_map_must_ignore_its_alpha() raises:
+    # A map that reads alpha as coverage would darken the glow wherever its
+    # alpha is low, so it is refused whatever the shading mode; the same
+    # image built to ignore its alpha is accepted.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var coverage = assets.textures.add(
+        checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0))
+    )
+    var ignored = assets.textures.add(
+        checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0), alpha=IGNORED)
+    )
+    var scene = unlit_scene_with_a_node()
+    var wrong = List[Mesh]()
+    wrong.append(
+        Mesh(
+            box,
+            assets.materials.add(
+                Material(
+                    Color(0, 0, 0),
+                    emissive=Color(255, 255, 255),
+                    emissive_map=coverage,
+                )
+            ),
+            NodeId(0),
+        )
+    )
+    with assert_raises():
+        _ = rendered(renderer, scene, assets, wrong, a_camera())
+    renderer.set_shading(SHADE_LIT)
+    with assert_raises():
+        _ = rendered(renderer, scene, assets, wrong, a_camera())
+    renderer.set_shading(SHADE_TEXTURE)
+    var right = List[Mesh]()
+    right.append(
+        Mesh(
+            box,
+            assets.materials.add(
+                Material(
+                    Color(0, 0, 0),
+                    emissive=Color(255, 255, 255),
+                    emissive_map=ignored,
+                )
+            ),
+            NodeId(0),
+        )
+    )
+    _ = rendered(renderer, scene, assets, right, a_camera())
+
+
+def test_an_emissive_maps_alpha_does_not_darken_or_thin_the_glow() raises:
+    # A one-texel white map with alpha zero, under either filter: white
+    # emission, and the surface's own alpha untouched.
+    for filter in [NEAREST, BILINEAR]:
+        var renderer = Renderer(WIDTH, HEIGHT)
+        var assets = Assets()
+        var box = assets.geometries.add(cube(Length(1.0, METER)))
+        var pixels = List[UInt8]()
+        for value in [UInt8(255), UInt8(255), UInt8(255), UInt8(0)]:
+            pixels.append(value)
+        var map = assets.textures.add(
+            Texture(1, 1, pixels^, filter=filter, alpha=IGNORED)
+        )
+        var glowing = assets.materials.add(
+            Material(
+                Color(0, 0, 0), emissive=Color(255, 255, 255), emissive_map=map
+            )
+        )
+        var scene = unlit_scene_with_a_node()
+        var meshes = List[Mesh]()
+        meshes.append(Mesh(box, glowing, NodeId(0)))
+        var shown = rendered(
+            renderer, scene, assets, meshes, eye_camera()
+        ).get_pixel(WIDTH // 2, HEIGHT // 2)
+        assert_equal(shown.r, UInt8(255))
+        assert_equal(shown.g, UInt8(255))
+        assert_equal(shown.b, UInt8(255))
+        assert_equal(shown.a, UInt8(255))
+
+
+def test_emission_survives_clipping_and_the_back_side() raises:
+    # The camera sits inside a large cube and sees its inside, which is its
+    # back side, with no lights: every covered pixel is the glow, clipped at
+    # the near plane. Translucent, the glow is blended over the background
+    # at the material's opacity; opaque, it is the glow alone.
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(8.0, METER)))
+    var glass = assets.materials.add(
+        Material(
+            Color(0, 0, 0),
+            NO_TEXTURE,
+            BACK_SIDE,
+            0.5,
+            emissive=Color(255, 255, 255),
+        )
+    )
+    var solid = assets.materials.add(
+        Material(
+            Color(0, 0, 0),
+            NO_TEXTURE,
+            BACK_SIDE,
+            1.0,
+            emissive=Color(255, 255, 255),
+        )
+    )
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var scene = unlit_scene_with_a_node()
+    var through = List[Mesh]()
+    through.append(Mesh(box, glass, NodeId(0)))
+    var whole = List[Mesh]()
+    whole.append(Mesh(box, solid, NodeId(0)))
+    var blended = rendered(renderer, scene, assets, through, a_camera())
+    var plain = rendered(renderer, scene, assets, whole, a_camera())
+    # Half the glow over half the background, in linear light.
+    var behind = FloatColor(srgb=renderer.background)
+    var half = FloatColor(0.5 + behind.r * 0.5, 0, 0).encode().r
+    var covered = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var full = plain.get_pixel(x, y)
+            if full.r == renderer.background.r:
+                continue
+            covered += 1
+            assert_equal(full.r, UInt8(255))
+            assert_equal(full.a, UInt8(255))
+            var seen = blended.get_pixel(x, y)
+            assert_true(abs(Int(seen.r) - Int(half)) <= 1)
+            assert_equal(seen.a, UInt8(255))
+    assert_true(covered > 300, "the cube's inside did not fill the view")
 
 
 def test_an_unknown_shading_mode_is_refused_by_the_renderer() raises:

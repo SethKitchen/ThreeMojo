@@ -68,5 +68,6 @@ At each fragment the interpolated normal is normalized again, and `Lighting.inte
 
 - A mode that is none of the three raises.
 - Corners that disagree about blend, texture, lit or emissive map raise.
+- An emissive map that reads its alpha as coverage raises under `SHADE_TEXTURE`, on both backends.
 - A blend value that is neither `OPAQUE` nor `BLEND` raises, on every worker count, whether or not the triangle is visible.
 - A texture the store lacks raises when a fragment samples it.

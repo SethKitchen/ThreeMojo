@@ -1,15 +1,15 @@
 # Textures
 
-`render/texture.mojo` and `render/texture_store.mojo`. A `Texture` is an RGBA image with a wrap mode, a filter, a color space and an optional mip chain. A material names one by id.
+`render/texture.mojo` and `render/texture_store.mojo`. A `Texture` is an RGBA image with a wrap mode, a filter, a color space, an alpha mode and an optional mip chain. A material names one by id.
 
 three.js: `Texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`.
 
 ## Make a texture
 
 ```mojo
-checkerboard(size, squares, first, second, wrap=REPEAT, filter=NEAREST, mipmapped=False)
-texture_from(image, wrap=REPEAT, filter=NEAREST, color_space=None, mipmapped=False)
-Texture(width, height, pixels, wrap=REPEAT, filter=NEAREST, color_space=SRGB, mipmapped=False)
+checkerboard(size, squares, first, second, wrap=REPEAT, filter=NEAREST, mipmapped=False, alpha=COVERAGE)
+texture_from(image, wrap=REPEAT, filter=NEAREST, color_space=None, mipmapped=False, alpha=COVERAGE)
+Texture(width, height, pixels, wrap=REPEAT, filter=NEAREST, color_space=SRGB, mipmapped=False, alpha=COVERAGE)
 ```
 
 `checkerboard` builds a test pattern. `texture_from` takes a `DecodedImage` from the PNG reader. `Texture` takes row-major RGBA bytes from the top.
@@ -35,7 +35,7 @@ Under `REPEAT`, coordinates 0 and 1 name the same texel. Under `CLAMP` they name
 
 `mipmapped=True` builds a chain of halved copies down to one texel. Sampling then picks the level whose texels match the pixel footprint, and blends between the two nearest levels. This stops a distant surface from shimmering.
 
-The chain costs a third more memory. It is built in premultiplied linear light.
+The chain costs a third more memory. It is built in premultiplied linear light, unless the texture ignores its alpha.
 
 ## Color space
 
@@ -46,6 +46,17 @@ The chain costs a third more memory. It is built in premultiplied linear light.
 | `UNKNOWN_SPACE` | A decoder's answer for a file it cannot interpret. A texture refuses it. |
 
 Alpha is never decoded. It is coverage, not color.
+
+## Alpha
+
+| Value | Meaning |
+|---|---|
+| `COVERAGE` | Alpha hides color. Filtering and the mip chain weight each texel by it, and a sample carries it. The default. |
+| `IGNORED` | Alpha is not read. Every alpha byte counts as 255. Color is filtered as it is, and every sample is opaque. |
+
+An emissive map must ignore its alpha. Its alpha is not coverage. Filtered as coverage, a white texel with alpha zero turns black under `BILINEAR`, and the whole mip chain darkens with it. The renderer refuses an emissive map built with `COVERAGE`.
+
+`ignoring_alpha()` copies a texture into the other mode and rebuilds its mip chain from the full-size image. Use it when one image is both a base map and an emissive map.
 
 ## Coordinates
 
@@ -59,8 +70,9 @@ Alpha is never decoded. It is coverage, not color.
 | `sample_level(u, v, level) -> FloatColor` | Trilinear, between two mip levels. |
 | `texel(x, y) -> Color` | One stored texel. |
 | `is_blank() -> Bool` | The blank texture, which samples as opaque white. |
-| `validate()` | Refuse a wrap, filter or color space that is none of the named values. |
-| `levels`, `width`, `height` | The chain length and the base size. |
+| `ignoring_alpha() -> Texture` | A copy that ignores its alpha, with its chain rebuilt. |
+| `validate()` | Refuse a wrap, filter, color space or alpha mode that is none of the named values. |
+| `levels`, `width`, `height`, `alpha` | The chain length, the base size and the alpha mode. |
 
 ## TextureStore
 
@@ -69,7 +81,7 @@ Alpha is never decoded. It is coverage, not color.
 ## Errors
 
 - Dimensions must be positive, and the buffer length must match.
-- A wrap, filter or color space that is none of its named values raises. The GPU upload checks again.
+- A wrap, filter, color space or alpha mode that is none of its named values raises. The GPU upload checks again.
 - A `checkerboard` size must divide evenly by its square count.
 
 ## Why

@@ -28,6 +28,14 @@ sRGB, and filtering or lighting encoded values is arithmetic on the wrong
 numbers — see `render.srgb`. A texture therefore carries which space it is in,
 and color textures decode by default. Alpha never does: it is not color.
 
+**Alpha is coverage unless a texture says otherwise.** Filtering weights
+every texel by its alpha, so a hidden color weighs nothing, and the mip chain
+is averaged the same way. That is right for a cut-out and wrong for an image
+whose alpha means nothing, such as a map of the light a surface gives off: a
+white texel with alpha zero would filter to black. A texture built with
+`alpha=IGNORED` reads every alpha byte as 255 instead, at the fetch and in
+the chain, and so filters its color as it is. See `Alpha`.
+
 **Out-of-range coordinates wrap.** Nothing constrains `uv` to the unit square:
 a geometry can ask for its texture five times across, and clipping can produce
 coordinates outside anything the author wrote. `REPEAT` tiles, `CLAMP` holds
@@ -87,6 +95,38 @@ struct Filter(Equatable, ImplicitlyCopyable, Writable):
 comptime NEAREST = Filter(0)
 # Blend the four texels around the sample by how close it is to each.
 comptime BILINEAR = Filter(1)
+
+
+@fieldwise_init
+struct Alpha(Equatable, ImplicitlyCopyable, Writable):
+    """What a texture's alpha bytes mean, as a type.
+
+    Filtering is a weighted sum, and whether alpha weights it is a property
+    of what the image *is*, not of how it is decoded: `ColorSpace` says how
+    the color bytes turn into light, and this says whether the alpha bytes
+    are coverage that hides color, or nothing at all. An image of light a
+    surface gives off has no coverage, and reading its alpha as coverage
+    turns a white texel with alpha zero into black under a bilinear filter,
+    and down the whole mip chain. `value` is what the GPU's descriptor table
+    stores. The type does not stop `Alpha(9)`, so `Texture.validate` asks
+    `is_valid`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `COVERAGE` or `IGNORED`."""
+        return self == COVERAGE or self == IGNORED
+
+
+# Alpha is coverage: it weights every filter and every mip average, so a
+# hidden color weighs nothing, and a sample carries it. The default, and what
+# a cut-out sprite or a translucent image is.
+comptime COVERAGE = Alpha(0)
+# Alpha is not read: every alpha byte counts as 255, so color is filtered as
+# it is and every sample is opaque. What an emissive map is, and any other
+# image whose alpha channel means nothing.
+comptime IGNORED = Alpha(1)
 
 
 def mix(near: Float32, far: Float32, t: Float32) -> Float32:
@@ -316,6 +356,11 @@ struct Texture(Movable):
     var wrap: Wrap
     var filter: Filter
     var color_space: ColorSpace
+    # Whether the alpha bytes are coverage or nothing at all; see `Alpha`.
+    # Read wherever an alpha byte becomes a number -- the mip build and the
+    # texel fetch, here and on the device -- which is the one place a mode
+    # about reading bytes belongs.
+    var alpha: Alpha
     # How many images the chain holds: the full-size one, then each halving
     # down to a single texel. One means no chain.
     var levels: Int
@@ -342,6 +387,7 @@ struct Texture(Movable):
         self.wrap = REPEAT
         self.filter = NEAREST
         self.color_space = LINEAR
+        self.alpha = COVERAGE
         self.ramp = _identity_ramp()
         self.levels = 1
         self.offsets = [0]
@@ -355,6 +401,7 @@ struct Texture(Movable):
         filter: Filter = NEAREST,
         color_space: ColorSpace = SRGB,
         mipmapped: Bool = False,
+        alpha: Alpha = COVERAGE,
     ) raises:
         """Create a texture from RGBA bytes.
 
@@ -370,11 +417,16 @@ struct Texture(Movable):
                 it is a decoder's admission, not a way to read texels.
             mipmapped: Build the chain of halved copies. Costs a third more
                 memory and is what stops a distant surface from sparkling.
+            alpha: `COVERAGE`, the default, if the alpha bytes hide color,
+                as a cut-out's or a translucent image's do; `IGNORED` if they
+                mean nothing, as an emissive map's do. Decided here rather
+                than at the sample, because a mip chain is averaged as it is
+                built and cannot be unaveraged.
 
         Raises:
             Error: If the dimensions are not positive, the buffer length
-                disagrees with them, or the wrap, filter or color space is
-                none of the named values -- see `validate`.
+                disagrees with them, or the wrap, filter, color space or
+                alpha mode is none of the named values -- see `validate`.
         """
         if width <= 0 or height <= 0:
             raise Error("Texture dimensions must be positive")
@@ -390,6 +442,7 @@ struct Texture(Movable):
         self.pixels = pixels^
         self.wrap = wrap
         self.filter = filter
+        self.alpha = alpha
         self.levels = 1
         self.offsets = [0]
         # After every field is set, so it is the same check the GPU upload
@@ -399,8 +452,8 @@ struct Texture(Movable):
             self._build_mipmaps()
 
     def validate(self) raises:
-        """Refuse a wrap, filter or color space that is none of the named
-        values.
+        """Refuse a wrap, filter, color space or alpha mode that is none of
+        the named values.
 
         The types stop a bare integer at compile time and nothing else: a
         struct's fields are open, so `Wrap(9)` constructs, and so does
@@ -411,9 +464,10 @@ struct Texture(Movable):
         the kernel.
 
         Raises:
-            Error: If the wrap mode, the filter or the color space is not
-                one of its named constants. `UNKNOWN_SPACE` counts: it is a
-                decoder's admission, not a way to read texels.
+            Error: If the wrap mode, the filter, the color space or the
+                alpha mode is not one of its named constants.
+                `UNKNOWN_SPACE` counts: it is a decoder's admission, not a
+                way to read texels.
         """
         if not self.wrap.is_valid():
             raise Error("A texture's wrap mode must be REPEAT, CLAMP or MIRROR")
@@ -423,6 +477,8 @@ struct Texture(Movable):
             raise Error(
                 "A texture needs a color space it can decode: SRGB or LINEAR"
             )
+        if not self.alpha.is_valid():
+            raise Error("A texture's alpha mode must be COVERAGE or IGNORED")
 
     def __init__(out self, *, copy: Self):
         """Copy another texture, image data included."""
@@ -432,13 +488,58 @@ struct Texture(Movable):
         self.wrap = copy.wrap
         self.filter = copy.filter
         self.color_space = copy.color_space
+        self.alpha = copy.alpha
         self.ramp = copy.ramp.copy()
         self.levels = copy.levels
         self.offsets = copy.offsets.copy()
 
+    def ignoring_alpha(self) raises -> Texture:
+        """Return a copy of this texture that ignores its alpha.
+
+        For one image used both as a base map, where its alpha is coverage,
+        and as an emissive map, where alpha means nothing: two textures in
+        the store, one per role, each built once. The copy's mip chain is
+        rebuilt from the full-size image, because the chain this one holds
+        was averaged with alpha as coverage and cannot be unaveraged. The
+        blank texture is its own copy: it has no alpha to ignore.
+
+        Returns:
+            The copy, with `alpha` set to `IGNORED` and the same wrap,
+            filter, color space and chain length.
+
+        Raises:
+            Error: If this texture's fields were edited into nonsense since
+                it was built; see `validate`.
+        """
+        if self.is_blank():
+            return Texture()
+        var base = List[UInt8]()
+        # The full-size image is the first level: the loop always runs.
+        for index in range(
+            self.width * self.height * Self.CHANNELS
+        ):  # pragma: no branch
+            base.append(self.pixels[index])
+        return Texture(
+            self.width,
+            self.height,
+            base^,
+            self.wrap,
+            self.filter,
+            self.color_space,
+            self.levels > 1,
+            IGNORED,
+        )
+
     def is_blank(self) -> Bool:
         """Return True if this is the blank texture."""
         return self.width == 0
+
+    def _alpha_of(self, byte: UInt8) -> Float32:
+        """Return what an alpha byte means: its fraction, or one if alpha is
+        ignored. Never decoded through the ramp -- alpha is not color."""
+        if self.alpha == IGNORED:
+            return 1
+        return Float32(byte) / 255
 
     def texel(self, x: Int, y: Int) raises -> Color:
         """Return the color at a texel, by row and column from the top.
@@ -571,11 +672,14 @@ struct Texture(Movable):
                                 )
                             )
                             var at = base + (sy * wide + sx) * Self.CHANNELS
+                            # An ignored alpha reads as one, so premultiplying
+                            # changes nothing and the color averages as it
+                            # is; the level then stores an opaque alpha.
                             var texel = FloatColor(
                                 self.ramp[Int(self.pixels[at])],
                                 self.ramp[Int(self.pixels[at + 1])],
                                 self.ramp[Int(self.pixels[at + 2])],
-                                Float32(self.pixels[at + 3]) / 255,
+                                self._alpha_of(self.pixels[at + 3]),
                             ).premultiplied()
                             total = FloatColor(
                                 total.r + texel.r * weight,
@@ -657,12 +761,13 @@ struct Texture(Movable):
             )
             * Self.CHANNELS
         )
-        # Color through the ramp; alpha is not color and never decoded.
+        # Color through the ramp; alpha is not color and never decoded, and
+        # is not read at all when the texture ignores it.
         return FloatColor(
             self.ramp[Int(self.pixels[offset])],
             self.ramp[Int(self.pixels[offset + 1])],
             self.ramp[Int(self.pixels[offset + 2])],
-            Float32(self.pixels[offset + 3]) / 255,
+            self._alpha_of(self.pixels[offset + 3]),
         )
 
     def sample_at(
@@ -802,6 +907,7 @@ def texture_from(
     filter: Filter = BILINEAR,
     color_space: Optional[ColorSpace] = None,
     mipmapped: Bool = False,
+    alpha: Alpha = COVERAGE,
 ) raises -> Texture:
     """Return a texture holding a decoded image's pixels.
 
@@ -828,6 +934,8 @@ def texture_from(
         color_space: `SRGB` or `LINEAR` to override, or nothing to use
             whatever the file declared.
         mipmapped: Build the chain of halved copies.
+        alpha: `COVERAGE` if the file's alpha hides color, `IGNORED` if it
+            means nothing; see `Alpha`.
 
     Returns:
         The texture.
@@ -850,6 +958,7 @@ def texture_from(
         filter,
         space,
         mipmapped,
+        alpha,
     )
 
 
@@ -862,6 +971,7 @@ def checkerboard(
     filter: Filter = NEAREST,
     color_space: ColorSpace = SRGB,
     mipmapped: Bool = False,
+    alpha: Alpha = COVERAGE,
 ) raises -> Texture:
     """Return a square checkerboard, the traditional mapping test image.
 
@@ -878,6 +988,7 @@ def checkerboard(
         filter: `NEAREST` or `BILINEAR`.
         color_space: `SRGB` or `LINEAR`.
         mipmapped: Build the chain of halved copies.
+        alpha: `COVERAGE` or `IGNORED`; see `Alpha`.
 
     Returns:
         The texture.
@@ -905,4 +1016,6 @@ def checkerboard(
             pixels.append(shade.g)
             pixels.append(shade.b)
             pixels.append(shade.a)
-    return Texture(size, size, pixels^, wrap, filter, color_space, mipmapped)
+    return Texture(
+        size, size, pixels^, wrap, filter, color_space, mipmapped, alpha
+    )

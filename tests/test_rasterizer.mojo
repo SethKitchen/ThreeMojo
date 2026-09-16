@@ -10,7 +10,7 @@ from math.vector2 import Vector2
 from std.math import inf
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, NO_TEXTURE, OPAQUE
-from render.texture import NEAREST, REPEAT, Texture, checkerboard
+from render.texture import IGNORED, NEAREST, REPEAT, Texture, checkerboard
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.light import directional_light
 from lights.lighting import Lighting
@@ -1444,7 +1444,7 @@ def test_an_emissive_map_glows_only_where_it_is_bright() raises:
     # board it shows in the light squares and not in the dark ones.
     var textures = TextureStore()
     var board = textures.add(
-        checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
+        checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0), alpha=IGNORED)
     )
     var dark = Lighting(ambient=FloatColor(0.0, 0.0, 0.0, 1.0))
     var quad = glowing_quad(FloatColor(1.0, 0.5, 0.0), board)
@@ -1461,6 +1461,22 @@ def test_an_emissive_map_glows_only_where_it_is_bright() raises:
     var flat = draw_quad(quad, SHADE_LIT, textures, dark)
     assert_equal(flat.shown(6, 2).r, glow.r)
     assert_equal(flat.shown(2, 6).g, glow.g)
+
+
+def test_an_emissive_map_that_reads_alpha_as_coverage_is_refused() raises:
+    # Filtered as coverage, a map's low alpha would darken the glow, so only
+    # a texture built to ignore its alpha is accepted, and only where the
+    # map is opened: SHADE_LIT never reads it.
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
+    )
+    var dark = Lighting(ambient=FloatColor(0.0, 0.0, 0.0, 1.0))
+    var quad = glowing_quad(FloatColor(1.0, 1.0, 1.0), board)
+    with assert_raises():
+        _ = draw_quad(quad, SHADE_TEXTURE, textures, dark)
+    var flat = draw_quad(quad, SHADE_LIT, textures, dark)
+    assert_equal(flat.shown(4, 4).r, UInt8(255))
 
 
 def test_corners_that_disagree_about_their_texture_are_rejected() raises:

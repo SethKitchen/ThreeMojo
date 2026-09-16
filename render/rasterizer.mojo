@@ -28,7 +28,7 @@ from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, OPAQUE, Blending
 from render.target import RenderTarget
-from render.texture import Texture
+from render.texture import IGNORED, Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.lighting import Lighting
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
@@ -760,12 +760,23 @@ def rasterize_shaded(
     Raises:
         Error: If the mode is none of the three, a vertex names a texture the
             store does not have, the corners disagree about their texture or
-            blend policy or hold one that is neither, or a pixel write lands
-            out of bounds — the last of which the loop prevents.
+            blend policy or hold one that is neither, an emissive map that
+            `SHADE_TEXTURE` would open does not ignore its alpha, or a pixel
+            write lands out of bounds — the last of which the loop prevents.
     """
     if not mode.is_valid():
         raise Error("A shading mode that is none of the three")
     check_triangle_state(a, b, c)
+    # An emissive map's alpha means nothing, and only a texture built to
+    # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
+    # before the first fragment, as the GPU asks it before the launch, and
+    # only when the map will be opened: SHADE_LIT never reads it.
+    if a.emissive_map != NO_TEXTURE and mode == SHADE_TEXTURE:
+        if textures.get(a.emissive_map).alpha != IGNORED:
+            raise Error(
+                "An emissive map must ignore its alpha; build the texture"
+                " with alpha=IGNORED"
+            )
 
     # Whether this surface composites, decided by the material and carried
     # here rather than inferred from a color. It changes two things

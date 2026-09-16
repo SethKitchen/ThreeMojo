@@ -64,6 +64,7 @@ from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.mesh import Mesh
 from materials.material import BACK_SIDE, DOUBLE_SIDE, FRONT_SIDE, Blending
+from render.texture import IGNORED
 from render.texture_store import NO_TEXTURE, TextureId
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
@@ -434,7 +435,8 @@ struct Renderer(Movable):
         Raises:
             Error: If a mesh names a node, a geometry or a material that is
                 not there, if a material names a texture or an emissive map
-                that is not there, or if its geometry has no positions.
+                that is not there, if its emissive map does not ignore its
+                alpha, or if its geometry has no positions.
         """
         var corners = List[RasterVertex]()
         # Asked of the scene as well as the camera: a camera riding a node
@@ -486,6 +488,19 @@ struct Renderer(Movable):
             ):
                 raise Error(
                     "A material names an emissive map that is not there"
+                )
+            # Its alpha means nothing, and only a texture built to ignore it
+            # filters accordingly; one that reads alpha as coverage would
+            # darken wherever its alpha is low -- see `render.texture.Alpha`.
+            # Refused whatever the shading mode: it is a wrong asset, not a
+            # wrong frame.
+            if (
+                glow_map != NO_TEXTURE
+                and assets.textures.get(glow_map).alpha != IGNORED
+            ):
+                raise Error(
+                    "A material's emissive map must ignore its alpha; build"
+                    " the texture with alpha=IGNORED"
                 )
             if self.shading != SHADE_TEXTURE or not material.is_emissive():
                 glow_map = NO_TEXTURE

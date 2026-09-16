@@ -18,9 +18,12 @@ from render.srgb import LINEAR, SRGB, srgb_to_linear
 from render.texture import (
     BILINEAR,
     CLAMP,
+    COVERAGE,
+    IGNORED,
     NEAREST,
     MIRROR,
     REPEAT,
+    Alpha,
     Texture,
     blend,
     checkerboard,
@@ -914,6 +917,9 @@ def test_a_wrong_value_in_the_right_type_is_refused() raises:
     assert_true(LINEAR.is_decodable())
     assert_true(not UNKNOWN_SPACE.is_decodable())
     assert_true(not ColorSpace(99).is_decodable())
+    assert_true(COVERAGE.is_valid())
+    assert_true(IGNORED.is_valid())
+    assert_true(not Alpha(9).is_valid())
     var pixels = List[UInt8](length=4, fill=255)
     with assert_raises():
         _ = Texture(1, 1, pixels.copy(), Wrap(9))
@@ -921,6 +927,8 @@ def test_a_wrong_value_in_the_right_type_is_refused() raises:
         _ = Texture(1, 1, pixels.copy(), REPEAT, Filter(5))
     with assert_raises():
         _ = Texture(1, 1, pixels.copy(), REPEAT, NEAREST, ColorSpace(99))
+    with assert_raises():
+        _ = Texture(1, 1, pixels.copy(), REPEAT, NEAREST, SRGB, False, Alpha(9))
 
 
 def test_a_texture_edited_after_construction_can_be_checked_again() raises:
@@ -938,6 +946,155 @@ def test_a_texture_edited_after_construction_can_be_checked_again() raises:
     image.color_space = ColorSpace(99)
     with assert_raises():
         image.validate()
+    image.color_space = SRGB
+    image.alpha = Alpha(9)
+    with assert_raises():
+        image.validate()
+
+
+# --- alpha as coverage, or not at all ---------------------------------------
+
+
+def one_texel(color: Color, alpha: Alpha, filter: Filter) raises -> Texture:
+    """Return a one-texel texture of `color`, reading alpha as `alpha`."""
+    var pixels = List[UInt8]()
+    pixels.append(color.r)
+    pixels.append(color.g)
+    pixels.append(color.b)
+    pixels.append(color.a)
+    return Texture(1, 1, pixels^, REPEAT, filter, LINEAR, False, alpha)
+
+
+def red_beside_hidden_green(mipmapped: Bool, alpha: Alpha) raises -> Texture:
+    """Return an opaque red texel beside a fully transparent green one."""
+    var pixels = List[UInt8]()
+    for value in [UInt8(255), UInt8(0), UInt8(0), UInt8(255)]:
+        pixels.append(value)
+    for value in [UInt8(0), UInt8(255), UInt8(0), UInt8(0)]:
+        pixels.append(value)
+    return Texture(2, 1, pixels^, CLAMP, BILINEAR, LINEAR, mipmapped, alpha)
+
+
+def test_a_texture_reads_alpha_as_coverage_by_default() raises:
+    assert_equal(quad().alpha, COVERAGE)
+    assert_equal(Texture().alpha, COVERAGE)
+    assert_equal(
+        checkerboard(
+            2, 2, Color(255, 255, 255), Color(0, 0, 0), alpha=IGNORED
+        ).alpha,
+        IGNORED,
+    )
+
+
+def test_ignoring_alpha_reads_every_alpha_byte_as_one() raises:
+    # A white texel with no alpha. As coverage it is hidden: nearest reads
+    # it straight, but bilinear premultiplies its four samples to nothing
+    # and gives transparent black. Ignored, it is white under either filter,
+    # and opaque.
+    var white = Color(255, 255, 255, 0)
+    var stepped = one_texel(white, COVERAGE, NEAREST).sample(0.5, 0.5)
+    assert_equal(stepped.r, Float32(1))
+    assert_equal(stepped.a, Float32(0))
+    var blended = one_texel(white, COVERAGE, BILINEAR).sample(0.5, 0.5)
+    assert_equal(blended.r, Float32(0))
+    assert_equal(blended.a, Float32(0))
+    for filter in [NEAREST, BILINEAR]:
+        var shown = one_texel(white, IGNORED, filter).sample(0.5, 0.5)
+        assert_equal(shown.r, Float32(1))
+        assert_equal(shown.g, Float32(1))
+        assert_equal(shown.b, Float32(1))
+        assert_equal(shown.a, Float32(1))
+    # The byte is still stored, for anyone reading texels directly.
+    assert_equal(one_texel(white, IGNORED, NEAREST).texel(0, 0).a, UInt8(0))
+
+
+def test_ignored_alpha_filters_color_straight() raises:
+    # Opaque red beside transparent green. As coverage the answer is
+    # half-covered red; ignored, it is the plain mean of the two colors,
+    # which encodes to the (188, 188, 0) an emissive map should show.
+    var covered = red_beside_hidden_green(False, COVERAGE).sample(0.5, 0.5)
+    assert_almost_equal(covered.r, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(covered.g, Float32(0), atol=TOLERANCE)
+    var between = red_beside_hidden_green(False, IGNORED).sample(0.5, 0.5)
+    assert_almost_equal(between.r, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(between.g, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(between.b, Float32(0), atol=TOLERANCE)
+    assert_equal(between.a, Float32(1))
+    var shown = between.encode()
+    assert_equal(shown.r, shown.g)
+    assert_true(shown.r >= 186 and shown.r <= 190)
+    assert_equal(shown.b, UInt8(0))
+
+
+def test_alpha_bytes_do_not_reach_an_ignored_chain() raises:
+    # Two images with the same color and different alpha bytes, both
+    # ignoring alpha: the same at every level, and opaque everywhere.
+    var solid = List[UInt8]()
+    var holed = List[UInt8]()
+    for y in range(4):
+        for x in range(4):
+            for image in [0, 1]:
+                var alpha = UInt8(255)
+                if image == 1:
+                    alpha = UInt8((x * y * 37) % 256)
+                var target = List[UInt8]()
+                target.append(UInt8(x * 60))
+                target.append(UInt8(y * 60))
+                target.append(UInt8(100))
+                target.append(alpha)
+                if image == 0:
+                    solid.extend(target^)
+                else:
+                    holed.extend(target^)
+    var plain = Texture(4, 4, solid^, CLAMP, BILINEAR, LINEAR, True, IGNORED)
+    var pierced = Texture(4, 4, holed^, CLAMP, BILINEAR, LINEAR, True, IGNORED)
+    assert_equal(plain.levels, 3)
+    assert_equal(pierced.levels, plain.levels)
+    for level in range(3):
+        for step in range(5):
+            var u = Float32(step) / 4 + 0.1
+            var v = 1 - u
+            var one = plain.sample_at(u, v, level)
+            var two = pierced.sample_at(u, v, level)
+            assert_almost_equal(one.r, two.r, atol=TOLERANCE)
+            assert_almost_equal(one.g, two.g, atol=TOLERANCE)
+            assert_almost_equal(one.b, two.b, atol=TOLERANCE)
+            assert_equal(two.a, Float32(1))
+    var one = plain.sample_level(0.3, 0.7, 1.5)
+    var two = pierced.sample_level(0.3, 0.7, 1.5)
+    assert_almost_equal(one.r, two.r, atol=TOLERANCE)
+    assert_almost_equal(one.g, two.g, atol=TOLERANCE)
+    # And the chain stores an opaque alpha from level one on.
+    assert_equal(pierced.wrapped_texel(0, 0, 1).a, Float32(1))
+    assert_equal(pierced.texel(3, 3).a, UInt8((3 * 3 * 37) % 256))
+
+
+def test_ignoring_alpha_copies_a_texture_into_the_other_mode() raises:
+    # One image for both roles: the original keeps reading its alpha as
+    # coverage, the copy ignores it, and the copy's chain is rebuilt from
+    # the full-size image rather than inherited already averaged.
+    var original = red_beside_hidden_green(True, COVERAGE)
+    var copy = original.ignoring_alpha()
+    assert_equal(original.alpha, COVERAGE)
+    assert_equal(copy.alpha, IGNORED)
+    assert_equal(copy.levels, original.levels)
+    assert_equal(copy.levels, 2)
+    assert_equal(copy.wrap, CLAMP)
+    assert_equal(copy.filter, BILINEAR)
+    assert_equal(copy.color_space, LINEAR)
+    var kept = original.wrapped_texel(0, 0, 1)
+    assert_almost_equal(kept.r, Float32(1), atol=Float64(0.01))
+    assert_almost_equal(kept.a, Float32(0.5), atol=Float64(0.004))
+    var rebuilt = copy.wrapped_texel(0, 0, 1)
+    assert_almost_equal(rebuilt.r, Float32(0.5), atol=Float64(0.004))
+    assert_almost_equal(rebuilt.g, Float32(0.5), atol=Float64(0.004))
+    assert_equal(rebuilt.a, Float32(1))
+    # A copy without a chain has none either, and the blank texture is its
+    # own copy.
+    assert_equal(
+        red_beside_hidden_green(False, COVERAGE).ignoring_alpha().levels, 1
+    )
+    assert_true(Texture().ignoring_alpha().is_blank())
 
 
 def main() raises:
