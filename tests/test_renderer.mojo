@@ -3267,6 +3267,32 @@ def test_a_textures_transform_moves_the_coordinates_a_mesh_samples_with() raises
     )
 
 
+def test_a_geometry_without_uv_takes_the_transformed_origin() raises:
+    # No uv attribute and an all-zero one name the same place: both go
+    # through the texture's transform, so an offset moves both alike.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var board = checkerboard(8, 4, Color(255, 255, 255), Color(20, 20, 20))
+    board.offset = Vector2(0.75, 0.25)
+    var skin = assets.materials.add(
+        Material(Color(255, 255, 255), assets.textures.add(board^), kind=BASIC)
+    )
+    var scene = unlit_scene_with_a_node()
+    for with_zeros in [False, True]:
+        var triangle = BufferGeometry()
+        var data: List[Float32] = [-1, -1, 0, 1, -1, 0, 0, 1, 0]
+        triangle.set_attribute(String(POSITION), BufferAttribute(data^, 3))
+        if with_zeros:
+            var zeros = List[Float32](length=6, fill=0.0)
+            triangle.set_attribute(String(UV), BufferAttribute(zeros^, 2))
+        var meshes = List[Mesh]()
+        meshes.append(Mesh(assets.geometries.add(triangle^), skin, NodeId(0)))
+        scene.meshes = meshes.copy()
+        var corners = renderer.prepare(scene, assets, a_camera())
+        assert_equal(len(corners), 3)
+        assert_coordinates_span(corners, 0.75, 0.75, 0.25, 0.25)
+
+
 def test_an_emissive_maps_transform_applies_when_there_is_no_map() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()

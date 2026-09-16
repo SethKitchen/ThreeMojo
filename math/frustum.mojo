@@ -114,6 +114,12 @@ struct Frustum(Copyable, Movable):
         culled while the clipper, given 5000, draws it. Nothing is lost by
         taking the distances themselves.
 
+        The depth planes off the projection are not built at all, not even
+        to be replaced: for a near plane at 0.0001 and a far one at 5000
+        the first coefficient rounds to exactly minus one, the far plane
+        read back has no normal, and building it would refuse a camera
+        that is fine.
+
         Args:
             clip: The projection times the view, for the side planes.
             view: The world-to-camera transform: affine, with its bottom
@@ -136,15 +142,23 @@ struct Frustum(Copyable, Movable):
             )
         if far <= near:
             raise Error("The far plane must be beyond the near plane")
-        var frustum = Frustum.from_projection_matrix(clip)
+        ref c = clip.elements
         ref e = view.elements
         # Camera-space z is the view's third row dotted with a point:
         # e[2] x + e[6] y + e[10] z + e[14]. In view it is at most -near
         # and at least -far.
         var forward = Vector3(e[2], e[6], e[10])
-        frustum.planes[NEAR] = Plane(-forward, -e[14] - near)
-        frustum.planes[FAR] = Plane(forward, e[14] + far)
-        return frustum^
+        # The four sides as `from_projection_matrix` reads them, in its
+        # order; the two depth planes from the view, in its slots.
+        var planes: Array[Plane, 6] = [
+            Frustum._plane(c, 0, -1),
+            Frustum._plane(c, 0, 1),
+            Frustum._plane(c, 1, 1),
+            Frustum._plane(c, 1, -1),
+            Plane(forward, e[14] + far),
+            Plane(-forward, -e[14] - near),
+        ]
+        return Frustum(planes^)
 
     @staticmethod
     def _plane(e: Array[Float32, 16], row: Int, sign: Float32) raises -> Plane:

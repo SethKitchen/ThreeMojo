@@ -196,7 +196,14 @@ struct Ray(ImplicitlyCopyable):
             return None
         var toward = sphere.center - self.origin
         var foot = toward.dot(self.direction)
-        var drop_sq = toward.dot(toward) - foot * foot
+        # The drop from the center to the line, as a vector and then
+        # squared, rather than as the difference of two squared lengths
+        # as three.js has it: for a sphere ten kilometers off, those two
+        # agree to every digit a Float32 has, and the two meters that
+        # decide the miss are rounded away. This is the drop
+        # `intersects_sphere` measures, so the two answers agree.
+        var drop = toward - self.direction * foot
+        var drop_sq = drop.dot(drop)
         var radius_sq = sphere.radius * sphere.radius
         if drop_sq > radius_sq:
             return None

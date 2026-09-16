@@ -274,6 +274,28 @@ def test_a_camera_frustum_refuses_a_projecting_view_and_reversed_planes() raises
         _ = Frustum.from_camera(clip, view, 1, 1)
 
 
+def test_a_camera_frustum_survives_a_near_plane_a_millionth_of_the_far() raises:
+    # At this ratio the projection's depth coefficient rounds to exactly
+    # minus one, and the far plane read back off it has no normal at all:
+    # the general reader refuses the matrix, and the camera builder, which
+    # never reads those two planes, does not.
+    var view = look_at(Vector3(0, 0, 4), Vector3(0, 0, 0), Vector3(0, 1, 0))
+    var clip = perspective(-1e-4, 1e-4, 1e-4, -1e-4, 1e-4, 5000)
+    with assert_raises():
+        _ = Frustum.from_projection_matrix(clip)
+    clip.multiply(view)
+    var frustum = Frustum.from_camera(clip, view, 1e-4, 5000)
+    # A point well inside the depth range, and the two ends of it.
+    assert_true(frustum.contains_point(Vector3(0, 0, 0)))
+    assert_true(frustum.contains_point(Vector3(0, 0, 3.999)))
+    assert_false(frustum.contains_point(Vector3(0, 0, 4.001)))
+    assert_true(frustum.contains_point(Vector3(0, 0, -4990)))
+    assert_false(frustum.contains_point(Vector3(0, 0, -5000)))
+    # The sides still come off the projection: a 90 degree view.
+    assert_true(frustum.contains_point(Vector3(3.9, 0, 0)))
+    assert_false(frustum.contains_point(Vector3(4.1, 0, 0)))
+
+
 def test_a_matrix_that_describes_no_volume_is_refused() raises:
     # A scale of zero leaves the bottom row alone and empties the others,
     # so the right plane has no normal.

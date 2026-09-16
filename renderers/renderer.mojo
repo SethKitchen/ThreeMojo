@@ -794,9 +794,13 @@ struct Renderer(Movable):
                     vertex_u.append(placed.x)
                     vertex_v.append(placed.y)
             else:
+                # Through the transform too, so a geometry without
+                # coordinates and one whose coordinates are all zero name
+                # the same place in the image.
+                var fallback = to_uv.transform_point(Vector2(0, 0))
                 for _ in range(vertex_count):
-                    vertex_u.append(0)
-                    vertex_v.append(0)
+                    vertex_u.append(fallback.x)
+                    vertex_v.append(fallback.y)
 
             # World-space normals are their own pass so the normal array can
             # be borrowed only when there is one, and the normal matrix built

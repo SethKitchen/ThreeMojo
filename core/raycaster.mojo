@@ -148,9 +148,15 @@ struct Raycaster(ImplicitlyCopyable):
         """
         var view = camera.view_matrix_in(scene)
         var projection = camera.projection_matrix()
-        # NDC back to the world: the inverse of what the renderer applies.
+        # NDC back to camera space, and camera space back to the world,
+        # kept apart. One inverse of their product mixes a camera meters
+        # away with a near plane millimeters deep, and a Float32 has digits
+        # for one of them: from ten kilometers out, a ray built that way
+        # landed a meter and a half wide at ten meters. In camera space the
+        # point sits at the eye's own scale, and it goes to the world as a
+        # direction, through the rotation alone, with no translation added
+        # and taken away again.
         var unproject = Matrix4(copy=projection)
-        unproject.multiply(view)
         unproject.invert()
         # The camera's own place and facing, in the world.
         var world = Matrix4(copy=view)
@@ -164,13 +170,18 @@ struct Raycaster(ImplicitlyCopyable):
             var origin = unproject.transform_point(
                 Vector3(coords.x, coords.y, (near + far) / (near - far))
             )
-            self.ray = Ray(origin, world.transform_direction(Vector3(0, 0, -1)))
+            self.ray = Ray(
+                world.transform_point(origin),
+                world.transform_direction(Vector3(0, 0, -1)),
+            )
             return
-        # Perspective. From the eye, toward where the point is in the
-        # world at any depth in front of it.
-        var eye = world.transform_point(Vector3(0, 0, 0))
+        # Perspective. From the eye, which is camera space's origin, toward
+        # where the point is at any depth in front of it: a direction.
         var toward = unproject.transform_point(Vector3(coords.x, coords.y, 0.5))
-        self.ray = Ray(eye, toward - eye)
+        self.ray = Ray(
+            world.transform_point(Vector3(0, 0, 0)),
+            world.transform_direction(toward),
+        )
 
     def set_from_pixel[
         C: Camera

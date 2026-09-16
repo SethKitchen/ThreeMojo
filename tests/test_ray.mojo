@@ -134,6 +134,31 @@ def test_a_sphere_beside_or_behind_the_ray_is_missed() raises:
     assert_false(along(3, 0, 0, 1, 0, 0).intersects_sphere(ball))
 
 
+def test_a_distant_sphere_is_hit_or_missed_by_both_answers_alike() raises:
+    # Ten kilometers out, the squared distance to the center and the
+    # squared distance along the ray agree to every digit a Float32 has,
+    # and their difference is zero: a sphere two meters off the ray, of
+    # radius one, was "hit" at the axis. The drop is measured as a vector
+    # now, and the point answer and the yes-or-no answer agree.
+    var ray = along(0, 0, 0, 1, 0, 0)
+    var beside = Sphere(Vector3(10000, 2, 0), 1)
+    assert_miss(ray.intersect_sphere(beside))
+    assert_false(ray.intersects_sphere(beside))
+    # Off center but within reach: the entry is where the chord starts.
+    var reached = Sphere(Vector3(10000, 0.6, 0), 1)
+    assert_hit(ray.intersect_sphere(reached), 9999.2, 0, 0)
+    assert_true(ray.intersects_sphere(reached))
+    # Tangent: one point, and both answers say so.
+    var grazed = Sphere(Vector3(5, 1, 0), 1)
+    assert_hit(ray.intersect_sphere(grazed), 5, 0, 0)
+    assert_true(ray.intersects_sphere(grazed))
+    # From inside a distant sphere, out through its far side.
+    var around = Sphere(Vector3(10000, 0, 0), 3)
+    var inside = along(9999, 0, 0, 1, 0, 0)
+    assert_hit(inside.intersect_sphere(around), 10003, 0, 0)
+    assert_true(inside.intersects_sphere(around))
+
+
 def test_an_empty_sphere_is_hit_nowhere() raises:
     # Its negative radius squares to a real one, so it is asked outright.
     assert_miss(along(-3, 0, 0, 1, 0, 0).intersect_sphere(Sphere.empty()))

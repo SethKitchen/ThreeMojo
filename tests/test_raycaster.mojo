@@ -211,6 +211,36 @@ def test_a_camera_on_a_stale_scene_cannot_aim_a_ray() raises:
     assert_point(caster.ray.origin, 0, 0, 0)
 
 
+def test_a_ray_from_a_distant_camera_keeps_its_direction() raises:
+    # Ten kilometers out with a near plane a millimeter deep: one inverse
+    # of the projection times the view mixed the two and landed this ray
+    # a meter and a half wide at ten meters. Built in camera space, the
+    # direction is the same as from the origin, to a part in ten thousand.
+    var scene = Scene()
+    var camera = PerspectiveCamera(
+        Angle(90.0, DEGREE), 1.0, Length(0.001, METER), Length(1000.0, METER)
+    )
+    camera.place(Vector3(0, 0, 10000), Vector3(0, 0, 9000))
+    var caster = down_z()
+    caster.set_from_camera(Vector2(0.5, 0), camera, scene)
+    assert_point(caster.ray.origin, 0, 0, 10000)
+    assert_point(caster.ray.direction, 0.4472136, 0, -0.8944272)
+    # Ten meters down the view, the ray is five meters across.
+    assert_point(caster.ray.at(Float32(10) / 0.8944272), 5, 0, 9990)
+    camera.place(Vector3(0, 0, 0), Vector3(0, 0, -1))
+    caster.set_from_camera(Vector2(0.5, 0), camera, scene)
+    assert_point(caster.ray.direction, 0.4472136, 0, -0.8944272)
+    # The orthographic ray too: its origin is on the camera's plane, out
+    # where the camera is.
+    var flat = centered(
+        Length(2.0, METER), 1.0, Length(0.1, METER), Length(10.0, METER)
+    )
+    flat.place(Vector3(0, 0, 10000), Vector3(0, 0, 9000))
+    caster.set_from_camera(Vector2(0.5, 0), flat, scene)
+    assert_point(caster.ray.origin, 0.5, 0, 10000)
+    assert_point(caster.ray.direction, 0, 0, -1)
+
+
 # --- one mesh ----------------------------------------------------------------
 
 
@@ -335,6 +365,45 @@ def test_a_moved_and_turned_mesh_is_hit_where_it_is() raises:
     assert_almost_equal(hits[0].distance, Float32(4.5), atol=TOLERANCE)
     assert_point(hits[0].point, 2.1, 0.2, 0.5)
     assert_point(hits[0].normal, 0, 0, 1)
+
+
+def test_a_stretched_and_turned_mesh_reports_world_distances() raises:
+    # A cube stretched to two meters along its own x, then turned a
+    # quarter turn about z, so the stretch runs along world y. The ray
+    # is carried into the cube's space, where its direction is made unit
+    # again and its parameter is no longer meters; the distance comes
+    # from the world point, and the range is measured against that.
+    var assets = Assets()
+    var scene = a_cube_scene(assets, Material(Color(255, 255, 255)))
+    scene.node(NodeId(0)).set_scale(2, 1, 1)
+    scene.node(NodeId(0)).set_euler(
+        Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(90.0, DEGREE)
+    )
+    scene.update()
+    var caster = Raycaster(Vector3(0.1, 0.8, 5), Vector3(0, 0, -1))
+    var hits = caster.intersect_mesh(scene, assets, 0)
+    assert_equal(len(hits), 1)
+    assert_almost_equal(hits[0].distance, Float32(4.5), atol=TOLERANCE)
+    assert_point(hits[0].point, 0.1, 0.8, 0.5)
+    assert_point(hits[0].normal, 0, 0, 1)
+    # The same point, past the stretched extent the other way: a miss.
+    var beyond = Raycaster(Vector3(0.8, 0.1, 5), Vector3(0, 0, -1))
+    assert_equal(len(beyond.intersect_mesh(scene, assets, 0)), 0)
+    # The range is in world meters.
+    var short = Raycaster(
+        Vector3(0.1, 0.8, 5),
+        Vector3(0, 0, -1),
+        Length(0.0, METER),
+        Length(4.4, METER),
+    )
+    assert_equal(len(short.intersect_mesh(scene, assets, 0)), 0)
+    var enough = Raycaster(
+        Vector3(0.1, 0.8, 5),
+        Vector3(0, 0, -1),
+        Length(0.0, METER),
+        Length(4.6, METER),
+    )
+    assert_equal(len(enough.intersect_mesh(scene, assets, 0)), 1)
 
 
 def test_a_mirrored_mesh_is_hit_on_the_face_the_renderer_draws() raises:

@@ -1148,8 +1148,17 @@ def test_a_copy_keeps_the_transform() raises:
     var ignoring = image.ignoring_alpha()
     assert_true(ignoring.uv_transform() == image.uv_transform())
     assert_true(ignoring.uv_transform() != Matrix3())
-    # The blank texture's copy is blank, and untransformed.
+    # The blank texture's copy is blank, and carries the transform too:
+    # a transformed blank base map and its emissive copy must still agree.
     assert_true(Texture().ignoring_alpha().uv_transform() == Matrix3())
+    var blank = Texture()
+    blank.repeat = Vector2(2, 2)
+    blank.offset = Vector2(0.5, 0)
+    var glow = blank.ignoring_alpha()
+    assert_true(glow.is_blank())
+    assert_equal(glow.alpha, IGNORED)
+    assert_true(glow.uv_transform() == blank.uv_transform())
+    assert_true(glow.uv_transform() != Matrix3())
 
 
 def main() raises:

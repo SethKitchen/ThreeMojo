@@ -545,32 +545,34 @@ struct Texture(Movable):
             Error: If this texture's fields were edited into nonsense since
                 it was built; see `validate`.
         """
+        var copy: Texture
         if self.is_blank():
             # Blank, and marked as promised: a renderer that asks whether an
             # emissive map ignores its alpha gets the same answer here as
             # for any other copy, and samples opaque white as it would.
-            var blank = Texture()
-            blank.alpha = IGNORED
-            return blank^
-        var base = List[UInt8]()
-        # The full-size image is the first level: the loop always runs.
-        for index in range(
-            self.width * self.height * Self.CHANNELS
-        ):  # pragma: no branch
-            base.append(self.pixels[index])
-        var copy = Texture(
-            self.width,
-            self.height,
-            base^,
-            self.wrap,
-            self.filter,
-            self.color_space,
-            self.levels > 1,
-            IGNORED,
-        )
-        # The same image the same way round: a base map and an emissive map
-        # made from one image are sampled at one coordinate, and the
-        # renderer refuses the pair if their transforms differ.
+            copy = Texture()
+            copy.alpha = IGNORED
+        else:
+            var base = List[UInt8]()
+            # The full-size image is the first level: the loop always runs.
+            for index in range(
+                self.width * self.height * Self.CHANNELS
+            ):  # pragma: no branch
+                base.append(self.pixels[index])
+            copy = Texture(
+                self.width,
+                self.height,
+                base^,
+                self.wrap,
+                self.filter,
+                self.color_space,
+                self.levels > 1,
+                IGNORED,
+            )
+        # The same image the same way round, the blank one included: a base
+        # map and an emissive map made from one image are sampled at one
+        # coordinate, and the renderer refuses the pair if their transforms
+        # differ.
         copy.offset = self.offset
         copy.repeat = self.repeat
         copy.rotation = self.rotation
