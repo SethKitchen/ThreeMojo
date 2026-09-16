@@ -47,6 +47,12 @@ the lights and they do not change it: a glowing surface shows in a dark
 scene. `MeshBasicMaterial` has no such term, because an unlit surface
 already shows its own color, and a `BASIC` material refuses one here rather
 than silently adding it.
+
+`vertex_colors` is the seventh: three.js's `vertexColors`, a flag rather
+than a value, saying the geometry's `color` attribute multiplies `color` at
+every vertex. It is a property of the material and not of the geometry, as
+in three.js, so one geometry with colors can be drawn tinted by one material
+and plain by another.
 """
 
 from render.framebuffer import Color, FloatColor
@@ -166,6 +172,9 @@ struct Material(ImplicitlyCopyable):
     var emissive: Color
     var emissive_intensity: Float32
     var emissive_map: TextureId
+    # Whether the geometry's `color` attribute multiplies `color` at every
+    # vertex, three.js's `vertexColors`. Off by default, as there.
+    var vertex_colors: Bool
 
     def __init__(
         out self,
@@ -178,6 +187,7 @@ struct Material(ImplicitlyCopyable):
         emissive: Color = Color(0, 0, 0),
         emissive_intensity: Float32 = 1.0,
         emissive_map: TextureId = NO_TEXTURE,
+        vertex_colors: Bool = False,
     ) raises:
         """Describe a surface.
 
@@ -200,6 +210,10 @@ struct Material(ImplicitlyCopyable):
             emissive_map: Id of a texture that multiplies the emissive per
                 texel, or `NO_TEXTURE`. It multiplies `emissive`, so on its
                 own, over black, it adds nothing -- as in three.js.
+            vertex_colors: Whether the geometry's `color` attribute, three
+                or four linear floats per vertex, multiplies `color` at each
+                vertex. The renderer refuses a geometry that has none when
+                this is set.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -242,6 +256,7 @@ struct Material(ImplicitlyCopyable):
         self.emissive = emissive
         self.emissive_intensity = emissive_intensity
         self.emissive_map = emissive_map
+        self.vertex_colors = vertex_colors
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.

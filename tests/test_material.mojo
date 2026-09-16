@@ -89,6 +89,15 @@ def test_a_wrong_value_in_the_right_type_is_refused() raises:
     assert_false(changed.is_valid())
 
 
+def test_a_material_ignores_vertex_colors_unless_asked() raises:
+    assert_false(Material(Color(1, 2, 3)).vertex_colors)
+    assert_true(Material(Color(1, 2, 3), vertex_colors=True).vertex_colors)
+    # On an unlit material too, as three.js's MeshBasicMaterial has it.
+    assert_true(
+        Material(Color(1, 2, 3), kind=BASIC, vertex_colors=True).vertex_colors
+    )
+
+
 def test_a_material_can_name_a_texture() raises:
     var paint = Material(Color(1, 2, 3), TextureId(4))
     assert_equal(paint.map, TextureId(4))

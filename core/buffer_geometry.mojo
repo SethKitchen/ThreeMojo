@@ -45,6 +45,11 @@ comptime NORMAL = "normal"
 # opposite of how a framebuffer's rows are numbered. Sampling is where that
 # gets reconciled, not here.
 comptime UV = "uv"
+# A color per vertex, three or four floats, in linear light as three.js's
+# are since its color management: what a material's `vertex_colors`
+# multiplies the material's color by. Decode an authored sRGB color with
+# `FloatColor(srgb=...)` before storing it here.
+comptime COLOR = "color"
 
 
 struct BufferGeometry(Movable):

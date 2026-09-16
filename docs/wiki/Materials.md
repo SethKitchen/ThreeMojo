@@ -27,6 +27,7 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `emissive` | `Color` | black | Light the surface gives off, as authored in sRGB. |
 | `emissive_intensity` | `Float32` | `1.0` | Scales `emissive`. |
 | `emissive_map` | `TextureId` | `NO_TEXTURE` | The texture that multiplies `emissive`. |
+| `vertex_colors` | `Bool` | `False` | Multiply `color` by the geometry's `color` attribute. |
 
 ## Side
 
@@ -44,6 +45,25 @@ A face seen from behind is lit with its normal flipped. A mirrored mesh, with a 
 |---|---|---|
 | `LAMBERT` | `MeshLambertMaterial` | The lights reach the surface. |
 | `BASIC` | `MeshBasicMaterial` | The color and texture show as they are. |
+
+## Vertex colors
+
+`vertex_colors=True` multiplies the material color by the geometry's `color` attribute at every vertex. three.js: `Material.vertexColors`. The attribute holds three or four floats per vertex, in linear light. A fourth float multiplies the alpha.
+
+The colors are interpolated across each face. Then the lights and the texture apply, as they apply to the material color. A vertex alpha below one blends only when the material blends. Pass `blending=BLEND` for that.
+
+The renderer raises when the material asks and the geometry has no `color` attribute. It raises when the attribute has neither three nor four floats per vertex, or fewer colors than vertices. A `color` attribute on a geometry whose material does not ask is ignored.
+
+```mojo
+var tints = List[Float32]()
+for vertex in range(count):
+    var linear = FloatColor(srgb=Color(255, 128, 0))
+    tints.append(linear.r)
+    tints.append(linear.g)
+    tints.append(linear.b)
+geometry.set_attribute(String(COLOR), BufferAttribute(tints^, 3))
+var painted = assets.materials.add(Material(Color(255, 255, 255), vertex_colors=True))
+```
 
 ## Emissive
 

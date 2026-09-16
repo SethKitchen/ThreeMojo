@@ -109,7 +109,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] Normal maps and bump maps [#44](https://github.com/SethKitchen/ThreeMojo/issues/44)
 - [x] [Emissive color and emissive map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#emissive): light a surface gives off, added after the lights on both rasterizers [#45](https://github.com/SethKitchen/ThreeMojo/issues/45)
 - [ ] Alpha map and alpha test [#46](https://github.com/SethKitchen/ThreeMojo/issues/46)
-- [ ] Vertex colors [#47](https://github.com/SethKitchen/ThreeMojo/issues/47)
+- [x] [Vertex colors](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#vertex-colors): a `color` attribute that multiplies the material color at every vertex, on both rasterizers [#47](https://github.com/SethKitchen/ThreeMojo/issues/47)
 - [ ] Wireframe rendering [#48](https://github.com/SethKitchen/ThreeMojo/issues/48)
 - [ ] Texture transforms: repeat, offset, rotation [#49](https://github.com/SethKitchen/ThreeMojo/issues/49)
 
@@ -176,7 +176,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Box3, Sphere and Plane](https://github.com/SethKitchen/ThreeMojo/wiki/Math#box3-sphere-and-plane): bounds that grow, transform and test each other, and a plane with a signed distance [#96](https://github.com/SethKitchen/ThreeMojo/issues/96)
 - [ ] Ray and Raycaster [#97](https://github.com/SethKitchen/ThreeMojo/issues/97)
 - [ ] Curves and paths [#98](https://github.com/SethKitchen/ThreeMojo/issues/98)
-- [ ] Color as floats [#99](https://github.com/SethKitchen/ThreeMojo/issues/99)
+- [x] [Color as floats](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer#color-and-floatcolor): three.js's hex and HSL setters and getters, lerp, offset and arithmetic on the linear float color [#99](https://github.com/SethKitchen/ThreeMojo/issues/99)
 <!-- /features -->
 
 ### Out of scope

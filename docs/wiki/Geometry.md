@@ -31,7 +31,7 @@ A flat `List[Float32]` with an item size. `BufferAttribute(data, 3)` holds vecto
 | `bounding_box() -> Box3` | The box around the vertices. |
 | `bounding_sphere() -> Sphere` | A sphere around the vertices, centered on that box. |
 
-Attribute names are the constants `POSITION`, `NORMAL` and `UV`. A geometry needs `position`. It needs `normal` for smooth shading and `uv` for a texture.
+Attribute names are the constants `POSITION`, `NORMAL`, `UV` and `COLOR`. A geometry needs `position`. It needs `normal` for smooth shading and `uv` for a texture. It needs `color`, three or four linear floats per vertex, for a material with `vertex_colors`. See [Materials](Materials#vertex-colors).
 
 `compute_vertex_normals` averages the normals of the triangles a vertex is in, weighted by their areas. A shared vertex shades smoothly. A vertex used once shades flat. A vertex no triangle uses keeps a zero normal, as in three.js.
 

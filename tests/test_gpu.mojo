@@ -76,6 +76,8 @@ from render.gpu import (
 )
 from render.srgb import LINEAR, ColorSpace
 from geometries.plane import plane
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import COLOR, POSITION
 from materials.material import BASIC, DOUBLE_SIDE
 from render.target import RenderTarget
 from render.rasterizer import (
@@ -802,6 +804,80 @@ def test_both_backends_agree_on_a_whole_prepared_scene() raises:
     assert_true(drawn < 48 * 36, "the scene filled the whole image")
     # One level of tolerance: this scene interpolates real shading, and the
     # two do not round identically. See `count_mismatches`.
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_agree_on_vertex_colors() raises:
+    # A cube colored by its own vertices, each corner's color taken from
+    # where it sits, lit and turned so several faces show: the per-corner
+    # color both rasterizers interpolate now varies within a mesh, and
+    # they must still fill the same list to the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends agree on vertex colors"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+
+    var assets = Assets()
+    var box = cube(Length(1.2, METER))
+    var tints = List[Float32]()
+    ref positions = box.attribute_view(String(POSITION))
+    for vertex in range(positions.count()):
+        var at = positions.vector3(vertex)
+        tints.append((at.x + 0.6) / 1.2)
+        tints.append((at.y + 0.6) / 1.2)
+        tints.append((at.z + 0.6) / 1.2)
+    box.set_attribute(String(COLOR), BufferAttribute(tints^, 3))
+    var tinted = assets.geometries.add(box^)
+
+    var scene = Scene()
+    var turned = Object3D()
+    turned.set_euler(
+        Angle(30.0, DEGREE), Angle(40.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var node = scene.add(turned^)
+    light_the(scene)
+    scene.update()
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.5, 3.0), Vector3(0, 0, 0))
+
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            tinted,
+            assets.materials.add(
+                Material(Color(255, 255, 255), vertex_colors=True)
+            ),
+            node,
+        )
+    )
+
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the cube prepared no triangles")
+    var lighting = Lighting(scene)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    for triangle in range(len(corners) // 3):  # pragma: no branch
+        rasterize_shaded(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+            target,
+            SHADE_LIT,
+            assets.textures,
+            lighting,
+        )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 100, "the cube barely drew anything")
+    assert_true(drawn < 48 * 36, "the cube filled the whole image")
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 

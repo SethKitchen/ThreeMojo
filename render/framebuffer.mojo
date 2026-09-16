@@ -27,6 +27,15 @@ in, because those are arithmetic on light and sRGB is not proportional to
 light. The two conversions are `FloatColor(srgb=...)` on the way in and
 `encode()` on the way out, each applied exactly once; see `render.srgb`.
 
+`FloatColor` is also three.js's `Color`, which since its color management is
+a float color in the linear working space with setters that take sRGB. The
+hex and HSL constructors decode on the way in, and `hex()` and `hsl()` encode
+on the way out, as `setHex`, `setHSL`, `getHex` and `getHSL` do with their
+default color space; `lerp`, `lerp_hsl`, `offset_hsl`, `multiply` and `add`
+are the same arithmetic on the same numbers. What three.js's `Color` lacks
+is an alpha, which this keeps and the HSL operations leave alone. CSS color
+names and strings are not ported.
+
 The depth buffer holds one NDC depth per pixel, cleared to infinity so that
 the first fragment to arrive always wins. Depth is what lets geometry be drawn
 in any order: without it, correctness depends on the draw order or on the
@@ -34,7 +43,7 @@ scene happening to be convex.
 """
 
 from render.srgb import linear_to_srgb, srgb_to_linear
-from std.math import inf
+from std.math import floor, inf
 
 
 struct Color(ImplicitlyCopyable):
@@ -52,8 +61,69 @@ struct Color(ImplicitlyCopyable):
         self.b = b
         self.a = a
 
+    def __init__(out self, *, hex: Int) raises:
+        """Create an opaque color from a 24-bit value such as `0xFF8000`,
+        three.js's `setHex` at the byte level.
 
-struct FloatColor(ImplicitlyCopyable):
+        Args:
+            hex: Red in the top byte, green in the middle, blue in the
+                bottom.
+
+        Raises:
+            Error: If the value does not fit in 24 bits.
+        """
+        if hex < 0 or hex > 0xFFFFFF:
+            raise Error("A hex color is 24 bits: 0x000000 to 0xFFFFFF")
+        self.r = UInt8((hex >> 16) & 0xFF)
+        self.g = UInt8((hex >> 8) & 0xFF)
+        self.b = UInt8(hex & 0xFF)
+        self.a = 255
+
+    def hex(self) -> Int:
+        """Return this color as a 24-bit value, three.js's `getHex`. Alpha
+        is left out, as there."""
+        return (Int(self.r) << 16) | (Int(self.g) << 8) | Int(self.b)
+
+
+@fieldwise_init
+struct HSL(ImplicitlyCopyable):
+    """A color as hue, saturation and lightness, each nominally zero to
+    one, in sRGB as three.js's `getHSL` gives them. Hue runs once around
+    the wheel from red through green and blue back to red."""
+
+    var hue: Float32
+    var saturation: Float32
+    var lightness: Float32
+
+
+def _hue_to_channel(low: Float32, high: Float32, hue: Float32) -> Float32:
+    """Return one sRGB channel of a color from its hue, three.js's
+    `hue2rgb`: `high` for a third of the wheel, `low` for another third,
+    and a ramp between them either side.
+
+    Args:
+        low: The channel's floor, from the lightness and saturation.
+        high: Its ceiling.
+        hue: Where on the wheel, offset for the channel; wrapped here.
+
+    Returns:
+        The channel, zero to one.
+    """
+    var t = hue
+    if t < 0:
+        t += 1
+    if t > 1:
+        t -= 1
+    if t < 1.0 / 6:
+        return low + (high - low) * 6 * t
+    if t < 0.5:
+        return high
+    if t < 2.0 / 3:
+        return low + (high - low) * 6 * (2.0 / 3 - t)
+    return low
+
+
+struct FloatColor(Equatable, ImplicitlyCopyable):
     """An RGBA color with channels as floats, nominally zero to one.
 
     Lighting multiplies, interpolation mixes, and clipping mixes again. Doing
@@ -105,6 +175,195 @@ struct FloatColor(ImplicitlyCopyable):
         self.g = Float32(of.g) / 255
         self.b = Float32(of.b) / 255
         self.a = Float32(of.a) / 255
+
+    def __init__(out self, *, hex: Int) raises:
+        """Decode a 24-bit sRGB value such as `0xFF8000` to linear light,
+        three.js's `setHex`. Opaque.
+
+        Args:
+            hex: Red in the top byte, green in the middle, blue in the
+                bottom, as authored in sRGB.
+
+        Raises:
+            Error: If the value does not fit in 24 bits.
+        """
+        var bytes = Color(hex=hex)
+        self.r = srgb_to_linear(Float32(bytes.r) / 255)
+        self.g = srgb_to_linear(Float32(bytes.g) / 255)
+        self.b = srgb_to_linear(Float32(bytes.b) / 255)
+        self.a = 1.0
+
+    def __init__(
+        out self,
+        *,
+        hue: Float32,
+        saturation: Float32,
+        lightness: Float32,
+    ):
+        """Create a color from hue, saturation and lightness, three.js's
+        `setHSL`. Opaque.
+
+        The three describe an sRGB color, as three.js's do, which is then
+        decoded to linear light. Hue wraps around the wheel, so 1.25 is
+        0.25; saturation and lightness are clamped to zero to one.
+
+        Args:
+            hue: Where on the wheel: 0 red, 1/3 green, 2/3 blue, 1 red.
+            saturation: Zero for gray, one for the pure hue.
+            lightness: Zero for black, a half for the pure hue, one for
+                white.
+        """
+        var h = hue - floor(hue)
+        var s = min(max(saturation, Float32(0)), Float32(1))
+        var l = min(max(lightness, Float32(0)), Float32(1))
+        var r = l
+        var g = l
+        var b = l
+        if s > 0:
+            var high = l + s - l * s
+            if l <= 0.5:
+                high = l * (1 + s)
+            var low = 2 * l - high
+            r = _hue_to_channel(low, high, h + 1.0 / 3)
+            g = _hue_to_channel(low, high, h)
+            b = _hue_to_channel(low, high, h - 1.0 / 3)
+        self.r = srgb_to_linear(r)
+        self.g = srgb_to_linear(g)
+        self.b = srgb_to_linear(b)
+        self.a = 1.0
+
+    def hex(self) -> Int:
+        """Return this color encoded to sRGB as a 24-bit value, three.js's
+        `getHex`: what `encode` gives, packed. Alpha is left out."""
+        return self.encode().hex()
+
+    def hsl(self) -> HSL:
+        """Return this color as hue, saturation and lightness, three.js's
+        `getHSL`: the color encoded to sRGB first, as three.js encodes it,
+        then taken apart. A gray has a hue and a saturation of zero.
+
+        Returns:
+            The three, each nominally zero to one.
+        """
+        var r = linear_to_srgb(self.r)
+        var g = linear_to_srgb(self.g)
+        var b = linear_to_srgb(self.b)
+        var high = max(r, max(g, b))
+        var low = min(r, min(g, b))
+        var lightness = (low + high) / 2
+        var hue = Float32(0)
+        var saturation = Float32(0)
+        if low != high:
+            var delta = high - low
+            if lightness <= 0.5:
+                saturation = delta / (high + low)
+            else:
+                saturation = delta / (2 - high - low)
+            if high == r:
+                hue = (g - b) / delta
+                if g < b:
+                    hue += 6
+            elif high == g:
+                hue = (b - r) / delta + 2
+            else:
+                hue = (r - g) / delta + 4
+            hue /= 6
+        return HSL(hue, saturation, lightness)
+
+    def lerp(mut self, other: Self, alpha: Float32):
+        """Move this color toward `other` by `alpha`, three.js's `lerp`:
+        zero leaves it, one makes it `other`. Every channel, alpha too.
+
+        Args:
+            other: The color to move toward.
+            alpha: How far, zero to one.
+        """
+        self.r += (other.r - self.r) * alpha
+        self.g += (other.g - self.g) * alpha
+        self.b += (other.b - self.b) * alpha
+        self.a += (other.a - self.a) * alpha
+
+    def lerp_hsl(mut self, other: Self, alpha: Float32):
+        """Move this color toward `other` by `alpha` in hue, saturation and
+        lightness, three.js's `lerpHSL`.
+
+        The hue goes the way the numbers say and not the short way round
+        the wheel, as in three.js: halfway from red at 0 to blue at 2/3 is
+        green at 1/3. This color's own alpha is kept.
+
+        Args:
+            other: The color to move toward.
+            alpha: How far, zero to one.
+        """
+        var here = self.hsl()
+        var there = other.hsl()
+        var mixed = FloatColor(
+            hue=here.hue + (there.hue - here.hue) * alpha,
+            saturation=here.saturation
+            + (there.saturation - here.saturation) * alpha,
+            lightness=here.lightness
+            + (there.lightness - here.lightness) * alpha,
+        )
+        self.r = mixed.r
+        self.g = mixed.g
+        self.b = mixed.b
+
+    def offset_hsl(
+        mut self, hue: Float32, saturation: Float32, lightness: Float32
+    ):
+        """Add to this color's hue, saturation and lightness, three.js's
+        `offsetHSL`. The hue wraps; the other two clamp. Alpha is kept.
+
+        Args:
+            hue: How far round the wheel.
+            saturation: How much more saturated.
+            lightness: How much lighter.
+        """
+        var now = self.hsl()
+        var moved = FloatColor(
+            hue=now.hue + hue,
+            saturation=now.saturation + saturation,
+            lightness=now.lightness + lightness,
+        )
+        self.r = moved.r
+        self.g = moved.g
+        self.b = moved.b
+
+    def multiply(mut self, other: Self):
+        """Multiply this color's red, green and blue by `other`'s,
+        three.js's `multiply`. Alpha is kept.
+
+        Args:
+            other: The color to multiply by.
+        """
+        self.r *= other.r
+        self.g *= other.g
+        self.b *= other.b
+
+    def add(mut self, other: Self):
+        """Add `other`'s red, green and blue to this color's, three.js's
+        `add`. Alpha is kept.
+
+        Args:
+            other: The color to add.
+        """
+        self.r += other.r
+        self.g += other.g
+        self.b += other.b
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if every channel is exactly equal, three.js's
+        `equals`, alpha included."""
+        return (
+            self.r == other.r
+            and self.g == other.g
+            and self.b == other.b
+            and self.a == other.a
+        )
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if any channel differs."""
+        return not self == other
 
     def premultiplied(self) -> Self:
         """Return this color with its channels scaled by its own alpha.

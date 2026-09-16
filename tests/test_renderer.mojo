@@ -12,8 +12,9 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
+from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
 from core.object3d import Object3D
+from geometries.plane import plane
 from core.assets import Assets
 from materials.material import (
     BACK_SIDE,
@@ -2770,6 +2771,154 @@ def test_an_orthographic_camera_culls_by_its_box() raises:
     assert_equal(len(prepared(renderer, aside, assets, meshes, camera)), 0)
     var ahead = scene_with_node_placed(0, 0, 0, 1)
     assert_true(len(prepared(renderer, ahead, assets, meshes, camera)) > 0)
+
+
+# --- vertex colors ----------------------------------------------------------
+
+
+def split_plane(channels: Int, alpha: Float32) raises -> BufferGeometry:
+    """Return a plane that fills the view, red on its left and green on its
+    right, as a `color` attribute.
+
+    Six meters square in three columns, so that the outer columns are one
+    color each and only the middle one ramps between them: from `a_camera`
+    the left quarter of the image is pure red and the right quarter pure
+    green. The colors are chosen by each vertex's own x rather than by its
+    slot, so the test does not depend on the builder's vertex order.
+
+    Args:
+        channels: Three floats per color, or four with `alpha` as the
+            fourth.
+        alpha: The fourth float, when there is one.
+
+    Returns:
+        The geometry, six meters square at the origin.
+
+    Raises:
+        Error: If the geometry cannot be built.
+    """
+    var sheet = plane(Length(6.0, METER), Length(6.0, METER), 3, 1)
+    var tints = List[Float32]()
+    ref positions = sheet.attribute_view(String(POSITION))
+    for vertex in range(positions.count()):
+        var leftward = positions.vector3(vertex).x < 0
+        tints.append(Float32(1) if leftward else Float32(0))
+        tints.append(Float32(0) if leftward else Float32(1))
+        tints.append(0)
+        if channels == 4:
+            tints.append(alpha)
+    sheet.set_attribute(String(COLOR), BufferAttribute(tints^, channels))
+    return sheet^
+
+
+def test_vertex_colors_multiply_the_material_color() raises:
+    # A white unlit sheet, red on the left and green on the right by its
+    # vertices: the left of the image is red and the right is green, and
+    # the same sheet under a material that does not ask is white all over.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var sheet = assets.geometries.add(split_plane(3, 1))
+    var tinted = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, vertex_colors=True)
+    )
+    var plain = assets.materials.add(Material(Color(255, 255, 255), kind=BASIC))
+    var scene = scene_with_node_at(0)
+    var colored = List[Mesh]()
+    colored.append(Mesh(sheet, tinted, NodeId(0)))
+    var image = rendered(renderer, scene, assets, colored, a_camera())
+    var left = image.get_pixel(WIDTH // 8, HEIGHT // 2)
+    var right = image.get_pixel(WIDTH - WIDTH // 8, HEIGHT // 2)
+    assert_true(left.r > 200 and left.g < 60, "the left is not red")
+    assert_true(right.g > 200 and right.r < 60, "the right is not green")
+    # Between the two the color is interpolated: both channels present.
+    var middle = image.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(middle.r > 60 and middle.g > 60, "the middle is not mixed")
+    var uncolored = List[Mesh]()
+    uncolored.append(Mesh(sheet, plain, NodeId(0)))
+    var white = rendered(renderer, scene, assets, uncolored, a_camera())
+    for x in [WIDTH // 8, WIDTH // 2, WIDTH - WIDTH // 8]:
+        var pixel = white.get_pixel(x, HEIGHT // 2)
+        assert_equal(pixel.r, UInt8(255))
+        assert_equal(pixel.g, UInt8(255))
+        assert_equal(pixel.b, UInt8(255))
+
+
+def test_a_vertex_alpha_blends_only_when_the_material_does() raises:
+    # A fourth float halves the alpha. Over a blended material the sheet
+    # shows half the background through; over an opaque one it is ignored.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var sheet = assets.geometries.add(split_plane(4, 0.5))
+    var scene = scene_with_node_at(0)
+    var glass = assets.materials.add(
+        Material(
+            Color(255, 255, 255),
+            kind=BASIC,
+            blending=BLEND,
+            vertex_colors=True,
+        )
+    )
+    var seen_through = List[Mesh]()
+    seen_through.append(Mesh(sheet, glass, NodeId(0)))
+    var blended = rendered(renderer, scene, assets, seen_through, a_camera())
+    var left = blended.get_pixel(WIDTH // 8, HEIGHT // 2)
+    # Half of linear red over black encodes to 188, not 128.
+    assert_true(left.r > 180 and left.r < 196, "the alpha did not blend")
+    assert_equal(left.g, UInt8(0))
+    var solid = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, vertex_colors=True)
+    )
+    var opaque = List[Mesh]()
+    opaque.append(Mesh(sheet, solid, NodeId(0)))
+    var covered = rendered(renderer, scene, assets, opaque, a_camera())
+    assert_equal(covered.get_pixel(WIDTH // 8, HEIGHT // 2).r, UInt8(255))
+
+
+def test_vertex_colors_need_a_color_attribute_of_the_right_shape() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var tinted = assets.materials.add(
+        Material(Color(255, 255, 255), vertex_colors=True)
+    )
+    var scene = scene_with_node_at(0)
+    # No color attribute at all.
+    var bare = assets.geometries.add(cube(Length(1.0, METER)))
+    var without = List[Mesh]()
+    without.append(Mesh(bare, tinted, NodeId(0)))
+    with assert_raises():
+        _ = rendered(renderer, scene, assets, without, a_camera())
+    # Two floats per vertex is neither three nor four.
+    var flat = plane(Length(1.0, METER), Length(1.0, METER))
+    var pairs = List[Float32](length=flat.vertex_count() * 2, fill=1.0)
+    flat.set_attribute(String(COLOR), BufferAttribute(pairs^, 2))
+    var narrow = List[Mesh]()
+    narrow.append(Mesh(assets.geometries.add(flat^), tinted, NodeId(0)))
+    with assert_raises():
+        _ = rendered(renderer, scene, assets, narrow, a_camera())
+    # Three floats per vertex, but for one vertex fewer than there are.
+    var short = plane(Length(1.0, METER), Length(1.0, METER))
+    var few = List[Float32](length=(short.vertex_count() - 1) * 3, fill=1.0)
+    short.set_attribute(String(COLOR), BufferAttribute(few^, 3))
+    var missing = List[Mesh]()
+    missing.append(Mesh(assets.geometries.add(short^), tinted, NodeId(0)))
+    with assert_raises():
+        _ = rendered(renderer, scene, assets, missing, a_camera())
+    # A geometry with no vertices and no colors is not wrong, only empty.
+    var empty = BufferGeometry()
+    empty.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
+    empty.set_attribute(String(COLOR), BufferAttribute(List[Float32](), 3))
+    var nothing = List[Mesh]()
+    nothing.append(
+        Mesh(
+            assets.geometries.add(empty^),
+            tinted,
+            NodeId(0),
+            frustum_culled=False,
+        )
+    )
+    var blank = rendered(renderer, scene, assets, nothing, a_camera())
+    assert_equal(count_background(blank, renderer.background), WIDTH * HEIGHT)
 
 
 def main() raises:

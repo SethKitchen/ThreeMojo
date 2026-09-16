@@ -67,7 +67,7 @@ does not change.
 """
 
 from cameras.camera import Camera
-from core.buffer_geometry import NORMAL, POSITION, UV
+from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.assets import Assets
 from lights.lighting import Lighting
 from core.layers import Layers
@@ -154,6 +154,60 @@ def _with_opacity(color: FloatColor, opacity: Float32) -> FloatColor:
     material's opacity multiplies whatever the base color already carried.
     """
     return FloatColor(color.r, color.g, color.b, color.a * opacity)
+
+
+def _vertex_colors(
+    geometry: BufferGeometry, tinted: Bool, base: FloatColor, count: Int
+) raises -> List[FloatColor]:
+    """Return the color each vertex carries: `base` for every one, or
+    `base` times the geometry's `color` attribute when the material asks,
+    three.js's `vertexColors`.
+
+    The attribute holds three or four floats per vertex in linear light,
+    as three.js's does since its color management, and a fourth float
+    multiplies the alpha. It is checked here, once per mesh, rather than
+    left to read garbage: a material that asks for colors from a geometry
+    without them is a wrong asset, not a wrong frame, and so is an
+    attribute with the wrong shape or too few colors.
+
+    Args:
+        geometry: The geometry, for its `color` attribute.
+        tinted: Whether the material asks for vertex colors.
+        base: The material's color, linear, with its opacity in alpha.
+        count: How many vertices the geometry has.
+
+    Returns:
+        One color per vertex.
+
+    Raises:
+        Error: If `tinted` and the geometry has no `color` attribute, or
+            the attribute holds neither three nor four floats per vertex,
+            or holds a color count that is not the vertex count.
+    """
+    var colors = List[FloatColor](length=count, fill=base)
+    if not tinted:
+        return colors^
+    if not geometry.has_attribute(String(COLOR)):
+        raise Error(
+            "A material asks for vertex colors from a geometry that has none"
+        )
+    ref tints = geometry.attribute_view(String(COLOR))
+    var channels = tints.item_size
+    if channels != 3 and channels != 4:
+        raise Error("A color attribute holds three or four floats per vertex")
+    if tints.count() != count:
+        raise Error("A color attribute must hold one color per vertex")
+    for vertex in range(count):
+        var alpha = Float32(1)
+        if channels == 4:
+            alpha = tints.component(vertex, 3)
+        colors[vertex] = FloatColor(
+            base.r * tints.component(vertex, 0),
+            base.g * tints.component(vertex, 1),
+            base.b * tints.component(vertex, 2),
+            base.a * alpha,
+        )
+    return colors^
 
 
 def _in_view(
@@ -506,7 +560,9 @@ struct Renderer(Movable):
             Error: If a mesh names a node, a geometry or a material that is
                 not there, if a material names a texture or an emissive map
                 that is not there, if its emissive map does not ignore its
-                alpha, or if its geometry has no positions. The asset
+                alpha, if its geometry has no positions, or if its material
+                asks for vertex colors and the geometry has no `color`
+                attribute of three or four floats per vertex. The asset
                 checks are made on the meshes that are drawn: a mesh the
                 camera's layers or frustum leave out is not read.
         """
@@ -639,11 +695,15 @@ struct Renderer(Movable):
                     direction.normalize()
                     vertex_normals.append(direction)
 
-            # One color for the whole mesh now: the material's, decoded to
-            # linear once with its opacity folded into alpha. Every corner
-            # carries this same value and the fragment lights it.
+            # The material's color, decoded to linear once with its opacity
+            # folded into alpha, is what every corner carries -- times the
+            # vertex's own color when the material asks for vertex colors.
+            # The fragment lights whatever arrives.
             var base = _with_opacity(
                 FloatColor(srgb=material.color), material.opacity
+            )
+            var vertex_colors = _vertex_colors(
+                geometry, material.vertex_colors, base, vertex_count
             )
 
             # The index buffer is read directly, checked once up front.
@@ -695,7 +755,7 @@ struct Renderer(Movable):
                 var pieces = clip_depth(
                     ClipVertex(
                         view_points[first],
-                        base,
+                        vertex_colors[first],
                         normal_a,
                         vertex_u[first],
                         vertex_v[first],
@@ -704,7 +764,7 @@ struct Renderer(Movable):
                     ),
                     ClipVertex(
                         view_points[second],
-                        base,
+                        vertex_colors[second],
                         normal_b,
                         vertex_u[second],
                         vertex_v[second],
@@ -713,7 +773,7 @@ struct Renderer(Movable):
                     ),
                     ClipVertex(
                         view_points[third],
-                        base,
+                        vertex_colors[third],
                         normal_c,
                         vertex_u[third],
                         vertex_v[third],

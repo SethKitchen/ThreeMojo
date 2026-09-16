@@ -6,14 +6,59 @@
 """Tests for `render.framebuffer`."""
 
 from std.math import inf
-from render.framebuffer import Color, FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer, HSL
+from render.srgb import srgb_to_linear
 from std.testing import (
     TestSuite,
+    assert_almost_equal,
     assert_equal,
     assert_false,
     assert_raises,
     assert_true,
 )
+
+# Float32 through the sRGB curve and back is good to about six figures.
+comptime TOLERANCE = Float64(1e-4)
+
+
+def assert_linear(
+    got: FloatColor, r: Float32, g: Float32, b: Float32, a: Float32 = 1.0
+) raises:
+    """Assert a float color matches on every channel, within tolerance.
+
+    Args:
+        got: The color to check.
+        r: Expected red.
+        g: Expected green.
+        b: Expected blue.
+        a: Expected alpha.
+
+    Raises:
+        Error: If any channel differs.
+    """
+    assert_almost_equal(got.r, r, atol=TOLERANCE)
+    assert_almost_equal(got.g, g, atol=TOLERANCE)
+    assert_almost_equal(got.b, b, atol=TOLERANCE)
+    assert_almost_equal(got.a, a, atol=TOLERANCE)
+
+
+def assert_hsl(
+    got: HSL, hue: Float32, saturation: Float32, lightness: Float32
+) raises:
+    """Assert hue, saturation and lightness match, within tolerance.
+
+    Args:
+        got: The triple to check.
+        hue: Expected hue.
+        saturation: Expected saturation.
+        lightness: Expected lightness.
+
+    Raises:
+        Error: If any of the three differs.
+    """
+    assert_almost_equal(got.hue, hue, atol=TOLERANCE)
+    assert_almost_equal(got.saturation, saturation, atol=TOLERANCE)
+    assert_almost_equal(got.lightness, lightness, atol=TOLERANCE)
 
 
 def assert_color(got: Color, expected: Color) raises:
@@ -238,6 +283,136 @@ def test_a_float_color_is_opaque_unless_told_otherwise() raises:
 
 
 # --- adopting pixels together with their depth ------------------------------
+
+
+# --- three.js's Color -------------------------------------------------------
+
+
+def test_a_byte_color_from_hex_and_back() raises:
+    assert_color(Color(hex=0xFF8000), Color(255, 128, 0))
+    assert_color(Color(hex=0), Color(0, 0, 0))
+    assert_color(Color(hex=0xFFFFFF), Color(255, 255, 255))
+    assert_equal(Color(255, 128, 0).hex(), 0xFF8000)
+    assert_equal(Color(hex=0x123456).hex(), 0x123456)
+    # Alpha is not part of the number.
+    assert_equal(Color(255, 128, 0, 7).hex(), 0xFF8000)
+    with assert_raises():
+        _ = Color(hex=-1)
+    with assert_raises():
+        _ = Color(hex=0x1000000)
+
+
+def test_a_float_color_from_hex_is_decoded_and_encodes_back() raises:
+    var orange = FloatColor(hex=0xFF8000)
+    assert_linear(orange, 1, srgb_to_linear(Float32(128) / 255), 0, 1)
+    assert_equal(orange.hex(), 0xFF8000)
+    assert_equal(FloatColor(hex=0x808080).hex(), 0x808080)
+    assert_equal(FloatColor(0, 0, 0).hex(), 0)
+    with assert_raises():
+        _ = FloatColor(hex=0x1000000)
+
+
+def test_hsl_gives_the_primaries_and_wraps_the_hue() raises:
+    assert_linear(FloatColor(hue=0, saturation=1, lightness=0.5), 1, 0, 0)
+    assert_linear(FloatColor(hue=1.0 / 3, saturation=1, lightness=0.5), 0, 1, 0)
+    assert_linear(FloatColor(hue=2.0 / 3, saturation=1, lightness=0.5), 0, 0, 1)
+    assert_linear(FloatColor(hue=0.5, saturation=1, lightness=0.5), 0, 1, 1)
+    # Once round the wheel and a quarter is a quarter, either way.
+    var quarter = FloatColor(hue=0.25, saturation=1, lightness=0.5)
+    assert_linear(
+        FloatColor(hue=1.25, saturation=1, lightness=0.5),
+        quarter.r,
+        quarter.g,
+        quarter.b,
+    )
+    assert_linear(
+        FloatColor(hue=-0.75, saturation=1, lightness=0.5),
+        quarter.r,
+        quarter.g,
+        quarter.b,
+    )
+    assert_linear(FloatColor(hue=1, saturation=1, lightness=0.5), 1, 0, 0)
+
+
+def test_hsl_lightness_and_saturation_are_clamped_and_decoded() raises:
+    # No saturation is a gray, decoded from sRGB: half is not half.
+    var gray = FloatColor(hue=0.3, saturation=0, lightness=0.5)
+    assert_linear(
+        gray, srgb_to_linear(0.5), srgb_to_linear(0.5), srgb_to_linear(0.5)
+    )
+    assert_linear(FloatColor(hue=0, saturation=1, lightness=1), 1, 1, 1)
+    assert_linear(FloatColor(hue=0, saturation=1, lightness=0), 0, 0, 0)
+    # A lightness above a half takes the other formula for the ceiling.
+    var pale = FloatColor(hue=0, saturation=1, lightness=0.75)
+    assert_linear(pale, 1, srgb_to_linear(0.5), srgb_to_linear(0.5))
+    # Out of range is clamped, not wrapped.
+    var over = FloatColor(hue=0, saturation=2, lightness=0.5)
+    assert_linear(over, 1, 0, 0)
+    assert_linear(
+        FloatColor(hue=0, saturation=-1, lightness=0.5), gray.r, gray.g, gray.b
+    )
+    assert_linear(FloatColor(hue=0, saturation=1, lightness=-1), 0, 0, 0)
+    assert_linear(FloatColor(hue=0, saturation=1, lightness=2), 1, 1, 1)
+
+
+def test_hsl_round_trips_through_every_branch() raises:
+    # One case per way the largest channel can fall: red with green
+    # above blue and below it, green, blue; and either half of lightness.
+    var cases = List[HSL]()
+    cases.append(HSL(0.05, 0.8, 0.3))
+    cases.append(HSL(0.95, 0.6, 0.6))
+    cases.append(HSL(0.4, 0.5, 0.7))
+    cases.append(HSL(0.7, 0.9, 0.4))
+    for index in range(len(cases)):
+        var wanted = cases[index]
+        var color = FloatColor(
+            hue=wanted.hue,
+            saturation=wanted.saturation,
+            lightness=wanted.lightness,
+        )
+        assert_hsl(color.hsl(), wanted.hue, wanted.saturation, wanted.lightness)
+    # A gray has no hue and no saturation, whatever it was built with.
+    assert_hsl(
+        FloatColor(hue=0.3, saturation=0, lightness=0.25).hsl(), 0, 0, 0.25
+    )
+    assert_hsl(FloatColor(1, 1, 1).hsl(), 0, 0, 1)
+    # A pure primary, from the linear side.
+    assert_hsl(FloatColor(0, 0, 1).hsl(), 2.0 / 3, 1, 0.5)
+
+
+def test_lerp_moves_every_channel_and_lerp_hsl_goes_round_the_wheel() raises:
+    var color = FloatColor(1, 0, 0, 1)
+    color.lerp(FloatColor(0, 0, 1, 0), 0.25)
+    assert_linear(color, 0.75, 0, 0.25, 0.75)
+    # Halfway from red to blue by hue is green, the long way round, as in
+    # three.js; the alpha is this color's own.
+    var red = FloatColor(1, 0, 0, 0.5)
+    red.lerp_hsl(FloatColor(0, 0, 1), 0.5)
+    assert_linear(red, 0, 1, 0, 0.5)
+
+
+def test_offset_hsl_turns_the_hue_and_shifts_the_rest() raises:
+    var color = FloatColor(1, 0, 0, 0.5)
+    color.offset_hsl(1.0 / 3, 0, 0)
+    assert_linear(color, 0, 1, 0, 0.5)
+    color.offset_hsl(0, -1, 0)
+    var gray = FloatColor(hue=0, saturation=0, lightness=0.5)
+    assert_linear(color, gray.r, gray.g, gray.b, 0.5)
+    color.offset_hsl(0, 0, 1)
+    assert_linear(color, 1, 1, 1, 0.5)
+
+
+def test_multiply_add_and_equality() raises:
+    var color = FloatColor(0.5, 1, 0.25, 0.5)
+    color.multiply(FloatColor(2, 0.5, 0, 0.1))
+    assert_linear(color, 1, 0.5, 0, 0.5)
+    color.add(FloatColor(0.5, 0.5, 1, 0.1))
+    assert_linear(color, 1.5, 1, 1, 0.5)
+    assert_true(FloatColor(1, 0.5, 0, 1) == FloatColor(1, 0.5, 0, 1))
+    assert_true(FloatColor(1, 0.5, 0, 1) != FloatColor(1, 0.5, 0, 0.5))
+    assert_false(FloatColor(1, 0.5, 0, 1) == FloatColor(0, 0.5, 0, 1))
+    assert_false(FloatColor(1, 0.5, 0, 1) == FloatColor(1, 0, 0, 1))
+    assert_false(FloatColor(1, 0.5, 0, 1) == FloatColor(1, 0.5, 1, 1))
 
 
 def test_adopting_pixels_and_depth_keeps_both() raises:
