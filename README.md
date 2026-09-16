@@ -173,7 +173,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Coverage tool](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool): line, branch, condition and MC/DC [#93](https://github.com/SethKitchen/ThreeMojo/issues/93)
 - [x] [Euler angles from a quaternion](https://github.com/SethKitchen/ThreeMojo/wiki/Rotations#euler-and-eulerorder): all six orders, gimbal lock as in three.js, `Object3D.rotation` [#94](https://github.com/SethKitchen/ThreeMojo/issues/94)
 - [ ] Matrix3 and Vector4 [#95](https://github.com/SethKitchen/ThreeMojo/issues/95)
-- [ ] Box3, Sphere and Plane [#96](https://github.com/SethKitchen/ThreeMojo/issues/96)
+- [x] [Box3, Sphere and Plane](https://github.com/SethKitchen/ThreeMojo/wiki/Math#box3-sphere-and-plane): bounds that grow, transform and test each other, and a plane with a signed distance [#96](https://github.com/SethKitchen/ThreeMojo/issues/96)
 - [ ] Ray and Raycaster [#97](https://github.com/SethKitchen/ThreeMojo/issues/97)
 - [ ] Curves and paths [#98](https://github.com/SethKitchen/ThreeMojo/issues/98)
 - [ ] Color as floats [#99](https://github.com/SethKitchen/ThreeMojo/issues/99)

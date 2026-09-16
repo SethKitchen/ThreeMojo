@@ -514,6 +514,19 @@ def test_a_mirror_or_a_flattened_axis_is_not_a_rotation() raises:
     assert_false(scaling(0, 0, 0).is_scaled_rotation())
 
 
+def test_the_largest_scale_is_the_longest_axis() raises:
+    assert_almost_equal(
+        scaling(3, 1, 2).max_scale(), Float32(3), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        scaling(1, 2, 3).max_scale(), Float32(3), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        rotation_y(Angle(30.0, DEGREE)).max_scale(), Float32(1), atol=TOLERANCE
+    )
+    assert_equal(scaling(0, 0, 0).max_scale(), Float32(0))
+
+
 def test_the_tolerance_is_the_callers_to_widen() raises:
     # Axes a hundredth off right angles: not a rotation by default, and one
     # to a caller that allows that much.

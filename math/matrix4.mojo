@@ -598,6 +598,25 @@ struct Matrix4(ImplicitlyCopyable):
             self._axes_are_perpendicular(tolerance) and self.determinant() > 0
         )
 
+    def max_scale(self) -> Float32:
+        """Return the most this matrix stretches any direction, as the
+        longest of its three axis columns.
+
+        three.js's `getMaxScaleOnAxis`. What a bounding sphere's radius
+        grows by under this transform: a sphere cannot follow a nonuniform
+        scale exactly, so it takes the largest one and stays a bound.
+
+        Returns:
+            The largest axis length. Zero for a transform that flattens
+            everything.
+        """
+        var longest = self._axis_length(0)
+        for axis in range(1, 3):  # pragma: no branch
+            var length = self._axis_length(axis)
+            if length > longest:
+                longest = length
+        return longest
+
     def _axis_length(self, axis: Int) -> Float32:
         """Return the length of one axis column: the scale along that axis."""
         ref e = self.elements
