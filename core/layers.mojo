@@ -40,6 +40,15 @@ struct Layers(Equatable, ImplicitlyCopyable, Writable):
         """Create a set holding layer zero alone, three.js's default."""
         self.mask = 1
 
+    @staticmethod
+    def all() -> Layers:
+        """Return the set holding every layer.
+
+        What `Lighting` resolves against when no camera is asking: every
+        light, whatever layer it is on.
+        """
+        return Layers(UInt32.MAX)
+
     def set(mut self, layer: Int) raises:
         """Make `layer` the only layer in the set.
 

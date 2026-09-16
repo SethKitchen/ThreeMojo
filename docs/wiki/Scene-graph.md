@@ -42,7 +42,9 @@ A `NodeId` wraps an integer. A bare integer does not compile where a node id is 
 
 ## Layers
 
-`core/layers.mojo`. A `Layers` is a set of up to thirty-two layers, held as a bit mask. Every node and every camera has one. A camera draws a mesh only if the mesh's node shares a layer with the camera. Both start on layer zero alone, so a scene that never mentions layers renders as before.
+`core/layers.mojo`. A `Layers` is a set of up to thirty-two layers, held as a bit mask. Every node, every light and every camera has one. A camera draws a mesh only if the mesh's node shares a layer with the camera. It lights the frame with only the lights that share a layer with it. All start on layer zero alone, so a scene that never mentions layers renders as before.
+
+Layers are each node's own. A child does not take its parent's layers. A child on the camera's layer is drawn under a parent that is not.
 
 three.js: `Layers`, `Object3D.layers`, `Camera.layers`.
 
@@ -58,6 +60,7 @@ A layer is a number from 0 to 31. Any other number raises. three.js wraps it sil
 
 ```mojo
 scene.node(overlay).layers.set(1)    # only on layer one
+scene.lights[0].layers.set(1)        # the first light too
 camera.layers.enable(1)              # the camera sees layer one as well
 ```
 | `count() -> Int` | The number of nodes. |

@@ -27,7 +27,7 @@ Hold one across frames. The device buffers survive between draws.
 |---|---|
 | `GpuRenderer(width, height)` | Create the context and the buffers. Raises without a GPU. |
 | `set_textures(store)` | Upload every texture. All or nothing. |
-| `draw(corners, background, mode, lighting)` | Rasterize into the device target. |
+| `draw(corners, background, mode, lighting)` | Rasterize into the device target. Pass `Lighting(scene, visible=camera.visible_layers())`, the value `Renderer.render` uses. |
 | `read_back() -> Framebuffer` | Copy color and depth to the host. |
 
 `draw` checks every triangle's state and every texture id on the host before it launches. The kernel cannot raise.

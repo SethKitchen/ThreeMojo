@@ -79,6 +79,8 @@ A test suite cannot contain these lines. Each lives in `tests/compile_fail/`, an
 | `elapsed() -> Duration` | The time since the clock started. |
 | `start_at(ns)`, `stop_at(ns)`, `delta_at(ns)`, `elapsed_at(ns)` | The same at a given counter reading, for tests. |
 
+The clock keeps whole nanoseconds. The elapsed time is the counter's reading less the start. It does not drift with the frame rate, as a sum of deltas does. Seconds are made only in the answer.
+
 ```mojo
 var clock = Clock()
 var step = clock.delta()                     # a Duration

@@ -12,10 +12,16 @@ One column of vertices per step around, one vertex per profile point up
 each column, two triangles per cell. The capsule is one of these with its
 profile built in and its normals worked out exactly; this takes any
 profile and works its normals out the way three.js does, from the profile's
-own segments: each point faces away from the segment after it, turned a
-quarter turn, averaged with the segment before it so that a corner between
-two segments shades smoothly, and the last point faces the way its segment
-does.
+own segments: each segment faces away from itself, turned a quarter turn
+and as long as the segment is, and a corner faces the sum of the two
+segments it joins, made unit length. The longer segment pulls the corner
+its way, which is three.js's weighting exactly. The first point faces the
+way its segment does, and the last the way its own does.
+
+A profile that comes back along a segment to exactly the point before it
+leaves that corner facing nowhere: the two normals cancel, and there is no
+direction to make unit length. It is refused, rather than given a normal
+that is not one.
 
 A point on the axis, with `x` of zero, is one point that every column
 repeats, a pole. The half of each cell against it that has no area is left
@@ -36,34 +42,45 @@ from units.si import Angle, RADIAN
 
 
 def _unit(x: Float32, y: Float32) -> Vector2:
-    """Return a direction in the profile's plane made unit length."""
+    """Return a direction in the profile's plane made unit length. The
+    caller has checked the direction is not zero."""
     var length = sqrt(x * x + y * y)
     return Vector2(x / length, y / length)
 
 
-def _profile_normals(points: List[Vector2]) -> List[Vector2]:
+def _profile_normals(points: List[Vector2]) raises -> List[Vector2]:
     """Return the direction each profile point faces, three.js's way.
 
     A segment from one point to the next faces `(dy, -dx)`, its direction
-    turned a quarter turn toward +x. The first point faces the way its
-    segment does; every point after it faces the mean of the segment before
-    it and the segment after it, so a corner shades smoothly; the last
-    point, with no segment after it, faces the way the last segment does.
-    Consecutive points were checked to differ, so every length is positive.
+    turned a quarter turn toward +x and as long as the segment. The first
+    point faces the way its segment does; every point after it faces the
+    sum of the segment before it and the segment after it, so a corner
+    shades smoothly and a longer segment weighs more; the last point, with
+    no segment after it, faces the way the last segment does. The ends are
+    made unit length as well, which three.js leaves undone for the last.
+    Consecutive points were checked to differ, so no segment is zero, but
+    two that cancel are caught here.
+
+    Raises:
+        Error: If a point's two segments face exactly opposite ways, which
+            leaves it no direction to face.
     """
     var normals = List[Vector2]()
     var previous = Vector2(0, 0)
     for index in range(len(points)):  # pragma: no branch
         if index == len(points) - 1:
-            normals.append(previous)
+            normals.append(_unit(previous.x, previous.y))
             continue
         var dx = points[index + 1].x - points[index].x
         var dy = points[index + 1].y - points[index].y
-        var ahead = _unit(dy, -dx)
+        var ahead = Vector2(dy, -dx)
         if index == 0:
-            normals.append(ahead)
+            normals.append(_unit(ahead.x, ahead.y))
         else:
-            normals.append(_unit(ahead.x + previous.x, ahead.y + previous.y))
+            var summed = Vector2(ahead.x + previous.x, ahead.y + previous.y)
+            if summed.x == 0 and summed.y == 0:
+                raise Error("A lathe's profile cannot turn straight back")
+            normals.append(_unit(summed.x, summed.y))
         previous = ahead
     return normals^
 
@@ -93,7 +110,8 @@ def lathe(
 
     Raises:
         Error: If there are fewer than two points, a point has a negative
-            `x`, two consecutive points coincide, there are fewer than one
+            `x`, two consecutive points coincide, the profile turns
+            straight back to the point before, there are fewer than one
             segment, or the sweep is not positive or is more than a turn.
     """
     if len(points) < 2:

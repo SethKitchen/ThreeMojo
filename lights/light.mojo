@@ -52,6 +52,7 @@ at `distance`. Both numbers live on `Light` so a list of lights stays a list
 of one type; the other two kinds carry zeros they never read.
 """
 
+from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
@@ -118,6 +119,13 @@ struct Light(ImplicitlyCopyable):
     # smoothly to nothing on the way there. Zero, the default, means no
     # cutoff. Read only by a point light.
     var distance: Float32
+    # Which layers the light is on. A camera lights its meshes with only
+    # the lights that share a layer with it, as three.js's `projectObject`
+    # tests a light's own `layers` -- the light's, not its node's, so an
+    # ambient light with no node has layers like any other. Layer zero
+    # alone to begin with, so a scene that never mentions layers lights as
+    # it did before.
+    var layers: Layers
 
     def radiance(self) -> FloatColor:
         """Return the light this contributes, decoded and scaled.
@@ -150,7 +158,7 @@ def ambient_light(color: Color, intensity: Float32 = 1.0) raises -> Light:
     """
     if intensity < 0:
         raise Error("A light's intensity cannot be negative")
-    return Light(AMBIENT, color, intensity, NO_PARENT, 0.0, 0.0)
+    return Light(AMBIENT, color, intensity, NO_PARENT, 0.0, 0.0, Layers())
 
 
 def directional_light(
@@ -177,7 +185,7 @@ def directional_light(
     """
     if intensity < 0:
         raise Error("A light's intensity cannot be negative")
-    return Light(DIRECTIONAL, color, intensity, node, 0.0, 0.0)
+    return Light(DIRECTIONAL, color, intensity, node, 0.0, 0.0, Layers())
 
 
 def point_light(
@@ -217,4 +225,4 @@ def point_light(
         raise Error("A point light's decay cannot be negative")
     if distance < 0:
         raise Error("A point light's distance cannot be negative")
-    return Light(POINT, color, intensity, node, decay, distance)
+    return Light(POINT, color, intensity, node, decay, distance, Layers())

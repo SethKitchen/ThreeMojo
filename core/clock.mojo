@@ -19,12 +19,31 @@ zero; `start` again resets everything.
 Every question is also answerable at a given time, in nanoseconds. That is
 how the arithmetic is tested without waiting, and it is what the public
 methods call with the counter's reading.
+
+The state is whole nanoseconds, the counter's own unit, and the elapsed
+time is the reading less the start: one subtraction, exact, however many
+frames have gone by. three.js sums its deltas in floating point instead,
+and a clock asked sixty times a second for an hour is a long sum of
+numbers that each rounded, drifting from the counter by the frame rate.
+Seconds are made from the nanoseconds only on the way out.
 """
 
 from std.time import perf_counter_ns
 from units.si import Duration, SECOND
 
-comptime NANOSECONDS_PER_SECOND = Float32(1e9)
+comptime NANOSECONDS_PER_SECOND = Float64(1e9)
+
+
+def _seconds(nanoseconds: Int) -> Duration:
+    """Return a count of nanoseconds as a `Duration` in seconds.
+
+    Divided in Float64 and rounded to Float32 once: converting the count
+    to Float32 first would round it to the nearest quarter millisecond
+    after an hour, before the divide rounded it again.
+    """
+    return Duration(
+        Float32(Float64(nanoseconds) / NANOSECONDS_PER_SECOND), SECOND
+    )
 
 
 struct Clock(ImplicitlyCopyable):
@@ -42,8 +61,10 @@ struct Clock(ImplicitlyCopyable):
     # The counter's reading at the last question, which the next delta is
     # measured from.
     var previous: Int
-    # Seconds counted so far, summed from the deltas as three.js sums them.
-    var elapsed_seconds: Float32
+    # Nanoseconds from the start to the last question. While the clock
+    # runs it is brought up to date by every question; when it stops it
+    # keeps the value it had, which is what a stopped clock answers.
+    var elapsed_ns: Int
 
     def __init__(out self, auto_start: Bool = True):
         """Create a clock that is not yet running.
@@ -56,7 +77,7 @@ struct Clock(ImplicitlyCopyable):
         self.auto_start = auto_start
         self.started_at = 0
         self.previous = 0
-        self.elapsed_seconds = 0
+        self.elapsed_ns = 0
 
     def start(mut self):
         """Start, or restart, counting from now."""
@@ -91,7 +112,7 @@ struct Clock(ImplicitlyCopyable):
         """
         self.started_at = now
         self.previous = now
-        self.elapsed_seconds = 0
+        self.elapsed_ns = 0
         self.running = True
 
     def stop_at(mut self, now: Int):
@@ -117,18 +138,21 @@ struct Clock(ImplicitlyCopyable):
         Returns:
             The interval, or zero for a clock that is not running.
         """
-        var seconds = Float32(0)
         if self.auto_start and not self.running:
             self.start_at(now)
-            return Duration(0.0, SECOND)
-        if self.running:
-            seconds = Float32(now - self.previous) / NANOSECONDS_PER_SECOND
-            self.previous = now
-            self.elapsed_seconds += seconds
-        return Duration(seconds, SECOND)
+            return _seconds(0)
+        if not self.running:
+            return _seconds(0)
+        var interval = now - self.previous
+        self.previous = now
+        self.elapsed_ns = now - self.started_at
+        return _seconds(interval)
 
     def elapsed_at(mut self, now: Int) -> Duration:
         """Return how long the clock has run, at a given reading.
+
+        The reading less the start, not the sum of the deltas: exact
+        whatever the frame rate.
 
         Args:
             now: The reading, in nanoseconds.
@@ -137,4 +161,4 @@ struct Clock(ImplicitlyCopyable):
             The total, brought up to `now`.
         """
         _ = self.delta_at(now)
-        return Duration(self.elapsed_seconds, SECOND)
+        return _seconds(self.elapsed_ns)

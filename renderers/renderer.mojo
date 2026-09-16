@@ -59,6 +59,7 @@ from cameras.camera import Camera
 from core.buffer_geometry import NORMAL, POSITION, UV
 from core.assets import Assets
 from lights.lighting import Lighting
+from core.layers import Layers
 from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
@@ -147,9 +148,15 @@ def _draw_order(
     scene: Scene,
     assets: Assets,
     view: Matrix4,
+    visible: Layers,
 ) raises -> List[Int]:
-    """Return the order to draw meshes in: opaque nearest first, then the
-    translucent ones furthest first.
+    """Return the order to draw the meshes a camera sees in: opaque nearest
+    first, then the translucent ones furthest first.
+
+    A mesh whose node shares no layer with the camera is left out here,
+    before the sort, three.js's `layers.test` in `projectObject`: the list
+    that is sorted is the list that is drawn, and nothing is measured for a
+    mesh that will not be.
 
     Blending is not commutative, so a translucent surface only looks right if
     what is behind it is already there. Two rules follow, and they are the
@@ -176,9 +183,11 @@ def _draw_order(
         scene: The transform hierarchy, and the meshes to draw.
         assets: Where the materials live.
         view: The world-to-camera transform, for measuring depth.
+        visible: The camera's layers. A mesh on none of them is left out.
 
     Returns:
-        Indices into `scene.meshes`, in the order they should be drawn.
+        Indices into `scene.meshes`, only those the camera draws, in the
+        order they should be drawn.
 
     Raises:
         Error: If a mesh names a node or material that is not there.
@@ -189,6 +198,8 @@ def _draw_order(
     var clear = List[Int]()
     var clear_depths = List[Float32]()
     for index in range(len(meshes)):
+        if not scene.get(meshes[index].node).layers.test(visible):
+            continue
         # The camera looks down -z, so a smaller z is further away.
         var depth = view.transform_point(
             scene.world_position(meshes[index].node)
@@ -448,15 +459,11 @@ struct Renderer(Movable):
         var far = camera.far_distance()
 
         ref meshes = scene.meshes
-        # Worked out once, not once per mesh.
-        var order = _draw_order(scene, assets, view)
-        for ordered in range(len(meshes)):
+        # Worked out once, not once per mesh, and already without the
+        # meshes the camera does not draw.
+        var order = _draw_order(scene, assets, view, camera.visible_layers())
+        for ordered in range(len(order)):
             var index = order[ordered]
-            # A camera draws only the meshes on its layers, three.js's
-            # `layers.test`, asked before anything is done for the mesh.
-            var layers = scene.get(meshes[index].node).layers
-            if not layers.test(camera.visible_layers()):
-                continue
             var world = scene.world_matrix(meshes[index].node)
             # An odd number of reflections in the world transform reverses
             # winding, which turns both the culling convention and the
@@ -727,7 +734,9 @@ struct Renderer(Movable):
         var corners = self.prepare(scene, assets, camera)
         # Resolved here as well as in `prepare`, because the fragments need
         # it: lighting is no longer baked into the corners on the way past.
-        var lighting = Lighting(scene)
+        # Only the lights on the camera's layers, as only its meshes were
+        # prepared: a light the camera does not see lights nothing it draws.
+        var lighting = Lighting(scene, visible=camera.visible_layers())
         var target = RenderTarget(self.width, self.height, self.background)
         rasterize_all(
             corners,

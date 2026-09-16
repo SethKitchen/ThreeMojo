@@ -12,6 +12,7 @@ a quarter of the light of byte 200 displays as 106 and not as 50, and two
 half-strength white lights come to a full one and not to byte 128.
 """
 
+from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from lights.light import (
@@ -467,9 +468,82 @@ def test_a_light_of_an_unknown_kind_is_refused() raises:
     assert_true(POINT.is_valid())
     assert_true(not LightKind(7).is_valid())
     var scene = Scene()
-    scene.add_light(Light(LightKind(7), WHITE, 1.0, NO_PARENT, 0.0, 0.0))
+    scene.add_light(
+        Light(LightKind(7), WHITE, 1.0, NO_PARENT, 0.0, 0.0, Layers())
+    )
     with assert_raises():
         _ = Lighting(scene)
+
+
+# --- layers -----------------------------------------------------------------
+
+
+def test_a_light_starts_on_layer_zero_alone() raises:
+    assert_equal(ambient_light(WHITE).layers, Layers())
+    assert_equal(directional_light(WHITE, NodeId(0)).layers, Layers())
+    assert_equal(point_light(WHITE, NodeId(0)).layers, Layers())
+    assert_true(Layers.all().test(Layers()))
+    assert_true(Layers.all().is_enabled(31))
+
+
+def scene_lit_on_three_layers() raises -> Scene:
+    """Return a scene with an ambient light on layer one, a directional on
+    layer two and a point light on layer three, all white and full."""
+    var scene = scene_with_lamp_at(0, 0, 4)
+    var fill = ambient_light(WHITE)
+    fill.layers.set(1)
+    scene.add_light(fill)
+    var sun = directional_light(WHITE, NodeId(0))
+    sun.layers.set(2)
+    scene.add_light(sun)
+    var bulb = point_light(WHITE, NodeId(0))
+    bulb.layers.set(3)
+    scene.add_light(bulb)
+    return scene^
+
+
+def test_lighting_for_a_camera_leaves_out_the_lights_on_other_layers() raises:
+    # Each kind in turn is the one light a camera on its layer sees, and
+    # the two others are gone: an ambient light has no node, and its layers
+    # are its own like every other light's.
+    var scene = scene_lit_on_three_layers()
+    var watching = Layers()
+    watching.set(1)
+    var fill_only = Lighting(scene, visible=watching)
+    assert_equal(fill_only.ambient.r, Float32(1))
+    assert_equal(fill_only.count(), 0)
+    assert_equal(fill_only.point_count(), 0)
+    watching.set(2)
+    var sun_only = Lighting(scene, visible=watching)
+    assert_equal(sun_only.ambient.r, Float32(0))
+    assert_equal(sun_only.count(), 1)
+    assert_equal(sun_only.point_count(), 0)
+    watching.set(3)
+    var bulb_only = Lighting(scene, visible=watching)
+    assert_equal(bulb_only.ambient.r, Float32(0))
+    assert_equal(bulb_only.count(), 0)
+    assert_equal(bulb_only.point_count(), 1)
+    # A camera on layer zero alone, the default, sees none of them.
+    var dark = Lighting(scene, visible=Layers())
+    assert_equal(dark.ambient.r, Float32(0))
+    assert_equal(dark.count(), 0)
+    assert_equal(dark.point_count(), 0)
+
+
+def test_lighting_with_no_camera_asking_takes_every_light() raises:
+    var scene = scene_lit_on_three_layers()
+    var every = Lighting(scene)
+    assert_equal(every.ambient.r, Float32(1))
+    assert_equal(every.count(), 1)
+    assert_equal(every.point_count(), 1)
+    # A camera watching two of the layers gets those two.
+    var some = Layers()
+    some.set(1)
+    some.enable(3)
+    var two = Lighting(scene, visible=some)
+    assert_equal(two.ambient.r, Float32(1))
+    assert_equal(two.count(), 0)
+    assert_equal(two.point_count(), 1)
 
 
 def main() raises:

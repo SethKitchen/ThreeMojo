@@ -20,6 +20,14 @@ scene.add_light(point_light(Color(255, 200, 120), bulb_node, 0.5))
 
 Intensity multiplies the color. Values above one are allowed. A negative intensity, decay or distance raises.
 
+Every light has `layers`, layer zero alone by default. A camera lights its meshes with only the lights that share a layer with it. Set the layers before you add the light, or through `scene.lights`. See [Layers](Scene-graph#layers).
+
+```mojo
+var sun = directional_light(Color(255, 255, 255), lamp_node)
+sun.layers.set(1)                    # only a camera watching layer one sees it
+scene.add_light(sun)
+```
+
 ## Ambient
 
 A constant term added to every surface. A scene with no lights renders black. A blue ambient tints the shadows blue.
@@ -38,7 +46,7 @@ A surface facing away from the bulb gets nothing from it. A surface on top of th
 
 ## Lighting
 
-`Lighting(scene)` resolves every light against the scene's world matrices. Build it after `scene.update()`.
+`Lighting(scene)` resolves every light against the scene's world matrices. Build it after `scene.update()`. `Lighting(scene, visible=camera.visible_layers())` resolves only the lights on the camera's layers. The renderer builds that one for each frame. Build the same value for `GpuRenderer.draw`, so both backends light a frame with the same lights.
 
 | Member | Meaning |
 |---|---|
@@ -56,6 +64,7 @@ A surface facing away from the bulb gets nothing from it. A surface on top of th
 - Lights add in linear light. Two lamps at half strength make one at full strength.
 - Nothing is clamped until the image is resolved. Two lamps can overexpose a white surface.
 - Adding a light does not make the scene stale.
+- A light's layers are its own, not its node's. An ambient light has no node and has layers like any other light.
 
 ## Example
 

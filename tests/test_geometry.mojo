@@ -2046,15 +2046,35 @@ def test_a_lathe_turns_a_profile_into_columns() raises:
     assert_no_degenerate_triangle(side)
 
 
-def test_lathe_normals_average_at_a_corner() raises:
-    # Out along the base, then up the side: the base faces down, the side
-    # faces out, and the corner between them faces halfway between, as
-    # three.js averages it.
+def test_lathe_corner_normals_sum_the_raw_segment_normals() raises:
+    # Half a meter out along the base, then a meter up the side: the base
+    # faces down, the side faces out, and the corner faces the sum of the
+    # two segments' normals, each as long as its segment -- (0, -0.5) and
+    # (1, 0), so twice as much out as down -- made unit length. three.js's
+    # weighting, and not the mean of the two unit normals.
     var pot = lathe(profile([0.5, 0, 1, 0, 1, 1]), 4)
     ref normals = pot.attribute_view(String(NORMAL))
     assert_xyz(normals.vector3(0), 0, -1, 0)
-    assert_xyz(normals.vector3(1), 0, -0.70710678, 0.70710678)
+    assert_xyz(normals.vector3(1), 0, -0.4472136, 0.8944272)
     assert_xyz(normals.vector3(2), 0, 0, 1)
+    assert_unit(normals.vector3(1))
+
+
+def test_a_lathe_profile_that_turns_straight_back_is_refused() raises:
+    # Up the side and back down the same segment to the same point: the two
+    # normals cancel and the corner faces nowhere.
+    with assert_raises():
+        _ = lathe(profile([1, 0, 1, 1, 1, 0]), 4)
+    # Back down only half way is a corner with a direction: the longer
+    # segment wins, and the corner faces straight out.
+    var folded = lathe(profile([1, 0, 1, 1, 1, 0.5]), 4)
+    ref normals = folded.attribute_view(String(NORMAL))
+    assert_xyz(normals.vector3(1), 0, 0, 1)
+    # A ridge, out and up then out and down: the two normals cancel across
+    # and add downward, and the ridge faces straight down.
+    var tent = lathe(profile([0, 0, 1, 1, 2, 0]), 4)
+    ref ridge = tent.attribute_view(String(NORMAL))
+    assert_xyz(ridge.vector3(1), 0, -1, 0)
 
 
 def test_a_lathe_leaves_out_the_cells_against_the_axis() raises:
@@ -2189,6 +2209,77 @@ def test_a_tube_maps_u_along_and_v_around() raises:
     assert_equal(uvs.component(4, 1), Float32(1))
     assert_equal(uvs.component(2 * 5, 0), Float32(1))
     assert_texture_coordinates_in_range(pipe)
+
+
+def test_a_tube_maps_u_by_distance_along_the_path() raises:
+    # One meter, then nine: the middle ring is a tenth of the way along,
+    # not half, as three.js's arc-length parameter has it.
+    var uneven = List[Vector3]()
+    uneven.append(Vector3(0, 0, 0))
+    uneven.append(Vector3(1, 0, 0))
+    uneven.append(Vector3(10, 0, 0))
+    var pipe = tube(uneven, Length(0.5, METER), 4)
+    ref uvs = pipe.attribute_view(String(UV))
+    assert_equal(uvs.component(0, 0), Float32(0))
+    assert_almost_equal(uvs.component(5, 0), Float32(0.1), atol=TOLERANCE)
+    assert_equal(uvs.component(10, 0), Float32(1))
+    # A closed path counts the segment back to its first point: three,
+    # five and four meters round a triangle.
+    var triangle = List[Vector3]()
+    triangle.append(Vector3(0, 0, 0))
+    triangle.append(Vector3(3, 0, 0))
+    triangle.append(Vector3(0, 4, 0))
+    var loop = tube(triangle, Length(0.2, METER), 4, closed=True)
+    ref loop_uvs = loop.attribute_view(String(UV))
+    assert_almost_equal(loop_uvs.component(5, 0), Float32(0.25), atol=TOLERANCE)
+    assert_almost_equal(
+        loop_uvs.component(10, 0), Float32(8.0 / 12.0), atol=TOLERANCE
+    )
+    assert_equal(loop_uvs.component(15, 0), Float32(1))
+
+
+def test_a_tube_refuses_a_path_with_no_tangent() raises:
+    # Out and straight back to where it came from: the tangent at the
+    # middle point runs from the first point to the last, which is the
+    # same point, so it points nowhere.
+    var thin = Length(0.1, METER)
+    var returning = List[Vector3]()
+    returning.append(Vector3(0, 0, 0))
+    returning.append(Vector3(1, 0, 0))
+    returning.append(Vector3(0, 0, 0))
+    with assert_raises():
+        _ = tube(returning, thin)
+    # The same at one point of a closed path, whose points before and after
+    # coincide though no two consecutive ones do.
+    var pinched = List[Vector3]()
+    pinched.append(Vector3(0, 0, 0))
+    pinched.append(Vector3(1, 0, 0))
+    pinched.append(Vector3(0, 0, 0))
+    pinched.append(Vector3(0, 1, 0))
+    with assert_raises():
+        _ = tube(pinched, thin, 8, closed=True)
+
+
+def test_a_tube_refuses_a_path_that_folds_straight_back() raises:
+    # Two meters out and then back past the first point: the tangents at
+    # the second and third points are opposite, with no axis between them
+    # to turn the frame about.
+    var thin = Length(0.1, METER)
+    var folded = List[Vector3]()
+    folded.append(Vector3(0, 0, 0))
+    folded.append(Vector3(1, 0, 0))
+    folded.append(Vector3(2, 0, 0))
+    folded.append(Vector3(0, 0, 0))
+    with assert_raises():
+        _ = tube(folded, thin)
+    # A sharp bend that is not a fold has an axis, and is fine.
+    var hairpin = List[Vector3]()
+    hairpin.append(Vector3(0, 0, 0))
+    hairpin.append(Vector3(1, 0, 0))
+    hairpin.append(Vector3(2, 0, 0))
+    hairpin.append(Vector3(0.5, 0.5, 0))
+    var bent = tube(hairpin, thin, 6)
+    assert_rings_round(bent, 4, 6, 0.1)
 
 
 def test_a_closed_tube_meets_itself() raises:

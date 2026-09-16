@@ -21,7 +21,15 @@ three.js samples its path from a curve. There are no curve types here yet,
 so the path *is* the points: one ring per point, and the tangent at each
 point runs from the point before to the point after. A closed path is
 given without repeating its first point, and its last ring repeats its
-first.
+first. `u` runs along the path by distance, so a long segment gets a long
+stretch of the texture, as three.js's arc-length parameter gives it.
+
+Two paths have no frame and are refused. One returns to the point before
+the last, so the tangent between them is zero and points nowhere. One
+folds straight back on itself, so two consecutive tangents point opposite
+ways: there is no axis to turn the frame about, and carrying it across
+unturned would flip the binormal by a half turn, which is a choice no
+transport made. three.js checks neither; here both raise.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -47,10 +55,15 @@ def _turned(v: Vector3, axis: Vector3, angle: Float32) -> Vector3:
     return Quaternion.from_axis_angle(axis, Angle(angle, RADIAN)).rotate(v)
 
 
-def _tangents(path: List[Vector3], closed: Bool) -> List[Vector3]:
+def _tangents(path: List[Vector3], closed: Bool) raises -> List[Vector3]:
     """Return a unit tangent per ring: from the point before to the point
     after, one-sided at the ends of an open path, and once more at the end
-    of a closed one, where the ring after the last is the first again."""
+    of a closed one, where the ring after the last is the first again.
+
+    Raises:
+        Error: If the point before and the point after are the same, which
+            leaves the tangent zero.
+    """
     var count = len(path)
     var rings = count
     if not closed:
@@ -69,9 +82,23 @@ def _tangents(path: List[Vector3], closed: Bool) -> List[Vector3]:
             if after >= count:
                 after = count - 1
         var tangent = path[after] - path[before]
+        if tangent.length() == 0:
+            raise Error("A tube's path cannot return to the point before")
         tangent.normalize()
         tangents.append(tangent)
     return tangents^
+
+
+def _distances(path: List[Vector3], rings: Int) -> List[Float32]:
+    """Return how far along the path each ring is, from the first point,
+    the closing segment included for a closed path."""
+    var count = len(path)
+    var along = List[Float32]()
+    along.append(0)
+    for ring in range(1, rings + 1):  # pragma: no branch
+        var step = (path[ring % count] - path[(ring - 1) % count]).length()
+        along.append(along[ring - 1] + step)
+    return along^
 
 
 def _first_normal(tangent: Vector3) -> Vector3:
@@ -112,13 +139,14 @@ def tube(
         A geometry with `position`, `normal` and `uv` attributes and an
         index buffer, wound counter-clockwise seen from outside. Vertices
         run in rings, one per point of the path and one more for a closed
-        path, `radial_segments + 1` to a ring. `u` runs along the path and
-        `v` around the tube.
+        path, `radial_segments + 1` to a ring. `u` runs along the path by
+        distance and `v` around the tube.
 
     Raises:
         Error: If the path is too short, two consecutive points coincide,
-            the radius is not positive, or there are fewer than three
-            segments around.
+            the path returns to the point before the last or folds straight
+            back on itself, the radius is not positive, or there are fewer
+            than three segments around.
     """
     var count = len(path)
     if count < 2 or (closed and count < 3):
@@ -158,6 +186,10 @@ def tube(
                 _clamp_unit(tangents[ring - 1].dot(tangents[ring]))
             )
             normal = _turned(normal, axis, angle)
+        elif tangents[ring - 1].dot(tangents[ring]) < 0:
+            # Parallel but opposite: no axis, and a half turn to account
+            # for that no rule here decides.
+            raise Error("A tube's path cannot fold straight back")
         var binormal = tangents[ring]
         binormal.cross(normal)
         normals.append(normal)
@@ -182,12 +214,13 @@ def tube(
             binormals[ring] = binormal
 
     var thickness = radius.value
+    var along = _distances(path, rings)
     var data = List[Float32]()
     var normal_data = List[Float32]()
     var uvs = List[Float32]()
     for ring in range(rings + 1):  # pragma: no branch
         var center = path[ring % count]
-        var u = Float32(ring) / Float32(rings)
+        var u = along[ring] / along[rings]
         for step in range(radial_segments + 1):  # pragma: no branch
             var v = Float32(step) / Float32(radial_segments)
             var around = v * 2 * Float32(pi)

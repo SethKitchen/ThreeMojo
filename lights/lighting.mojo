@@ -15,6 +15,7 @@ two to the same numbers. It is the one piece of shading arithmetic a point
 light adds.
 """
 
+from core.layers import Layers
 from core.scene import Scene
 from lights.light import AMBIENT, DIRECTIONAL, POINT, Light
 from math.vector3 import Vector3
@@ -79,12 +80,20 @@ struct Lighting(Movable):
     var decays: List[Float32]
     var cutoffs: List[Float32]
 
-    def __init__(out self, scene: Scene) raises:
+    def __init__(out self, scene: Scene, visible: Layers = Layers.all()) raises:
         """Resolve a scene's lights against the world transforms it holds.
+
+        Resolved once per frame for one camera: a light on a layer the
+        camera does not watch is left out here, as three.js's
+        `projectObject` leaves it out of the frame's light list, so a mesh
+        the camera draws is lit by exactly the lights the camera sees.
 
         Args:
             scene: The transform hierarchy, already updated, and the lights
                 added to it.
+            visible: The layers to take lights from, a camera's
+                `visible_layers`. Every layer, the default, resolves every
+                light in the scene.
 
         Raises:
             Error: If a directional or point light names a node the scene
@@ -101,6 +110,8 @@ struct Lighting(Movable):
         self.decays = List[Float32]()
         self.cutoffs = List[Float32]()
         for light in scene.lights:
+            if not light.layers.test(visible):
+                continue
             if light.kind == AMBIENT:
                 var fill = light.radiance()
                 self.ambient = FloatColor(

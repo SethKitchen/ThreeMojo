@@ -805,6 +805,94 @@ def test_both_backends_agree_on_a_whole_prepared_scene() raises:
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def test_both_backends_agree_on_a_layered_scene() raises:
+    # The whole-scene test with the ball and a second sun moved to layer
+    # one, which the camera does not watch. Both backends get the one list
+    # `prepare` made without the ball and the one `Lighting` resolved
+    # without that sun, and fill it to the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends agree on a layered scene"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
+
+    var scene = Scene()
+    var left = Object3D()
+    left.set_position(-0.9, 0, 0)
+    left.set_euler(Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.9, 0, 0.4)
+    right.layers.set(1)
+    var right_node = scene.add(right^)
+    light_the(scene)
+    var extra = Object3D()
+    extra.set_position(-1.0, 0.2, 2.0)
+    var extra_node = scene.add(extra^)
+    var unseen = directional_light(Color(255, 255, 255), extra_node)
+    unseen.layers.set(1)
+    scene.add_light(unseen)
+    scene.update()
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.6, 3.0), Vector3(0, 0, 0))
+
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 140, 40))), left_node
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(Material(Color(90, 190, 255))),
+            right_node,
+        )
+    )
+    var box_alone = List[Mesh]()
+    box_alone.append(meshes[0])
+
+    # The camera's list is the box's list: the ball is not in it.
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    var expected = prepared(renderer, scene, assets, box_alone, camera)
+    assert_equal(len(corners), len(expected))
+    assert_true(len(corners) > 0, "the scene prepared no triangles")
+
+    # And the camera's lights are the two on layer zero, not the three.
+    var lighting = Lighting(scene, visible=camera.visible_layers())
+    assert_equal(lighting.count(), 1)
+    assert_equal(Lighting(scene).count(), 2)
+
+    var target = RenderTarget(48, 36, BACKGROUND)
+    for triangle in range(len(corners) // 3):  # pragma: no branch
+        rasterize_shaded(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+            target,
+            SHADE_LIT,
+            assets.textures,
+            lighting,
+        )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 100, "the scene barely drew anything")
+    assert_true(drawn < 48 * 36, "the scene filled the whole image")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def test_both_backends_agree_under_point_lights() raises:
     # The whole-scene test again with bulbs instead of a sun: the fragment's
     # world position now matters, and so does `falloff`, on both sides. One

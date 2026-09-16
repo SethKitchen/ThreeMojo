@@ -177,7 +177,9 @@ var vase = lathe(points, 24)                                        # a profile 
 var half = lathe(points, 24, Angle(0.0, DEGREE), Angle(180.0, DEGREE))
 ```
 
-A profile revolved around the y axis. Each point has `x` out from the axis and `y` along it, in meters. Vertices run in columns, one per step around, one vertex per point. The normals come from the profile's segments, as in three.js. Each point faces away from the segment after it, averaged with the segment before, so a corner shades smoothly.
+A profile revolved around the y axis. Each point has `x` out from the axis and `y` along it, in meters. Vertices run in columns, one per step around, one vertex per point.
+
+The normals come from the profile's segments, as in three.js. A corner faces the sum of its two segments' normals, each as long as its segment, made unit length. A longer segment pulls the corner its way. The first and last points face the way their own segment does.
 
 A point on the axis is a pole. The half of each cell against it that has no area is left out. `u` runs around and `v` up the profile, one point per equal step. The sweep starts at +z, as the cylinder's does.
 
@@ -190,7 +192,7 @@ var loop = tube(path, Length(0.2, METER), 8, closed=True)
 
 A tube of one radius swept along a path of points. Each point gets a ring, built in a frame that follows the path. The frames are three.js's parallel transport, so the tube does not twist where the path only bends. A closed path is given without repeating its first point. Its last ring repeats its first, and the twist the path built up is spread evenly back along it.
 
-three.js samples its path from a curve. There are no curve types here yet, so the path is the points. `u` runs along the path and `v` around the tube.
+three.js samples its path from a curve. There are no curve types here yet, so the path is the points. `u` runs along the path by distance, the closing segment included. `v` runs around the tube.
 
 ## Errors
 
@@ -205,8 +207,8 @@ three.js samples its path from a curve. There are no curve types here yet, so th
 - A torus knot needs positive radii, three segments each way, and `p` and `q` of at least one.
 - A polyhedron needs a positive radius, a detail of zero or more, whole vertices and faces, and faces that name vertices it has.
 - A capsule needs a positive radius, a length of zero or more, one cap row, three segments around and one row up its side.
-- A lathe needs at least two points, one segment, and a sweep of at most one turn. No point can have a negative `x`, and no two consecutive points can be the same.
-- A tube needs at least two points, or three when closed, no two consecutive the same, a positive radius and three segments around.
+- A lathe needs at least two points, one segment, and a sweep of at most one turn. No point can have a negative `x`, and no two consecutive points can be the same. A profile that turns straight back to the point before raises, because that corner has no normal.
+- A tube needs at least two points, or three when closed, no two consecutive the same, a positive radius and three segments around. A path that returns to the point before the last raises, because that tangent is zero. A path that folds straight back on itself raises, because there is no axis to turn the frame about.
 - A sweep must be positive and at most one turn.
 - An index entry beyond the last vertex raises.
 - `compute_vertex_normals`, `bounding_box` and `bounding_sphere` raise on a geometry with no positions.

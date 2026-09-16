@@ -35,21 +35,24 @@ var fast = Renderer(1280, 720, workers=available_workers())
 
 ## What prepare does
 
-For each mesh, in draw order:
+First, leave out every mesh whose node shares no layer with the camera. Then sort the rest into draw order. Then, for each mesh in that order:
 
-1. Skip the mesh if its node shares no layer with the camera.
-2. Transform the positions to world space and camera space.
-3. Transform the normals with the normal matrix, or compute a face normal.
-4. Clip each triangle against the near and far planes.
-5. Project each corner to pixels and keep `1 / w`.
-6. Cull faces that the material's `side` does not draw.
-7. Flip the normal of a face seen from behind.
+1. Transform the positions to world space and camera space.
+2. Transform the normals with the normal matrix, or compute a face normal.
+3. Clip each triangle against the near and far planes.
+4. Project each corner to pixels and keep `1 / w`.
+5. Cull faces that the material's `side` does not draw.
+6. Flip the normal of a face seen from behind.
 
 The output is one flat list, three `RasterVertex` per triangle. Both rasterizers consume it. See [Rasterization](Rasterization).
 
 ## Draw order
 
-Opaque meshes come first, nearest first. Translucent meshes follow, furthest first. The order is per mesh, by the depth of its node's origin. See [Why transparency is sorted](Why-transparency-is-sorted).
+Opaque meshes come first, nearest first. Translucent meshes follow, furthest first. The order is per mesh, by the depth of its node's origin. Only the meshes the camera draws are sorted. See [Why transparency is sorted](Why-transparency-is-sorted).
+
+## What render does
+
+`render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, visible=camera.visible_layers())`. A light on a layer the camera does not watch lights nothing. See [Lights](Lights#lighting). Then it rasterizes the triangles and resolves the image.
 
 ## Workers
 

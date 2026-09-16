@@ -90,6 +90,52 @@ def test_a_clock_told_not_to_start_itself_waits_for_start() raises:
     )
 
 
+def elapsed_after_an_hour_at(frames_per_second: Int) raises -> Float32:
+    """Run a clock for an hour at a frame rate, asking for the delta every
+    frame, and return what it says has elapsed, in seconds."""
+    var clock = Clock()
+    var start = 7 * SECOND_NS
+    clock.start_at(start)
+    var frames = 3600 * frames_per_second
+    var summed = Float64(0)
+    for frame in range(1, frames + 1):
+        # Whole nanoseconds, the endpoints exact, the frames as even as
+        # integers allow.
+        var now = start + (frame * 3600 * SECOND_NS) // frames
+        summed += Float64(clock.delta_at(now).to(SECOND))
+    # The deltas themselves are sound: summed in Float64 they come to the
+    # hour within what their own Float32 rounding allows.
+    assert_almost_equal(summed, Float64(3600), atol=Float64(1e-2))
+    return clock.elapsed_at(start + 3600 * SECOND_NS).to(SECOND)
+
+
+def test_the_elapsed_time_does_not_depend_on_the_frame_rate() raises:
+    # An hour is an hour whether it was asked about thirty, sixty or a
+    # hundred and twenty times a second. three.js sums its deltas in
+    # floating point and drifts here; the reading less the start does not.
+    assert_equal(elapsed_after_an_hour_at(30), Float32(3600))
+    assert_equal(elapsed_after_an_hour_at(60), Float32(3600))
+    assert_equal(elapsed_after_an_hour_at(120), Float32(3600))
+
+
+def test_a_long_run_keeps_its_precision() raises:
+    # A tenth of a second after an hour is a tenth of a second: the count
+    # is divided in Float64, and only the answer is rounded to Float32.
+    var clock = Clock()
+    clock.start_at(0)
+    _ = clock.delta_at(3600 * SECOND_NS)
+    assert_almost_equal(
+        clock.delta_at(3600 * SECOND_NS + 100_000_000).to(MILLISECOND),
+        Float32(100),
+        atol=Float64(1e-3),
+    )
+    assert_almost_equal(
+        clock.elapsed_at(3600 * SECOND_NS + 100_000_000).to(SECOND),
+        Float32(3600.1),
+        atol=Float64(1e-3),
+    )
+
+
 def test_the_public_methods_read_the_real_counter() raises:
     # No waiting: only that time does not run backwards.
     var clock = Clock()
