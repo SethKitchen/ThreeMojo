@@ -33,6 +33,7 @@ geometry type is for.
 """
 
 from core.buffer_attribute import BufferAttribute
+from math.bounds import Box3, Sphere
 from math.vector3 import Vector3
 
 # The attributes this port knows about, named as three.js names them.
@@ -237,3 +238,84 @@ struct BufferGeometry(Movable):
         """
         var vertex = self.corner_index(triangle, corner)
         return self.attribute_view(POSITION).vector3(vertex)
+
+    def compute_vertex_normals(mut self) raises:
+        """Set the `normal` attribute from the triangles, three.js's
+        `computeVertexNormals`.
+
+        Each triangle's normal -- the cross product of two of its edges,
+        and so twice its area long -- is added to each of its three corners,
+        and every corner's sum is made unit length at the end. A vertex
+        shared by several triangles gets the average of their normals,
+        weighted by their areas, which is what makes a sphere shade
+        smoothly. A vertex used once, as every vertex of a box or a
+        polyhedron is, gets its one face's normal and shades flat. A vertex
+        no triangle uses keeps a zero normal, as in three.js.
+
+        Raises:
+            Error: If the geometry has no positions, or an index entry
+                points past the last vertex.
+        """
+        var count = self.vertex_count()
+        var sums = List[Float32](length=count * 3, fill=0.0)
+        for triangle in range(self.triangle_count()):
+            var a = self.corner_index(triangle, 0)
+            var b = self.corner_index(triangle, 1)
+            var c = self.corner_index(triangle, 2)
+            var origin = self.corner(triangle, 0)
+            var normal = self.corner(triangle, 1) - origin
+            normal.cross(self.corner(triangle, 2) - origin)
+            for vertex in [a, b, c]:  # pragma: no branch
+                sums[vertex * 3] += normal.x
+                sums[vertex * 3 + 1] += normal.y
+                sums[vertex * 3 + 2] += normal.z
+        for vertex in range(count):
+            var unit = Vector3(
+                sums[vertex * 3], sums[vertex * 3 + 1], sums[vertex * 3 + 2]
+            )
+            unit.normalize()
+            sums[vertex * 3] = unit.x
+            sums[vertex * 3 + 1] = unit.y
+            sums[vertex * 3 + 2] = unit.z
+        self.set_attribute(NORMAL, BufferAttribute(sums^, 3))
+
+    def bounding_box(self) raises -> Box3:
+        """Return the smallest box around every vertex, three.js's
+        `computeBoundingBox`.
+
+        Computed each time it is asked for rather than cached: a geometry's
+        attributes are open, so a cached answer could not know when it had
+        gone stale. Empty for a geometry with no vertices.
+
+        Returns:
+            The box.
+
+        Raises:
+            Error: If the geometry has no positions.
+        """
+        ref positions = self.attribute_view(POSITION)
+        var box = Box3.empty()
+        for vertex in range(positions.count()):
+            box.expand_by_point(positions.vector3(vertex))
+        return box
+
+    def bounding_sphere(self) raises -> Sphere:
+        """Return a sphere around every vertex, three.js's
+        `computeBoundingSphere`: centered on the bounding box, reaching the
+        farthest vertex.
+
+        Not the smallest sphere possible, but a bound, as three.js's is; see
+        `Sphere.from_points`. Computed each time, for the reason
+        `bounding_box` is. Empty for a geometry with no vertices.
+
+        Returns:
+            The sphere.
+
+        Raises:
+            Error: If the geometry has no positions.
+        """
+        ref positions = self.attribute_view(POSITION)
+        var points = List[Vector3]()
+        for vertex in range(positions.count()):
+            points.append(positions.vector3(vertex))
+        return Sphere.from_points(points)

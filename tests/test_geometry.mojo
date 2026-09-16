@@ -10,9 +10,17 @@ in `geometries`.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from geometries.box import box, cube
+from geometries.capsule import capsule
 from geometries.circle import circle, ring
 from geometries.cylinder import cone, cylinder
 from geometries.plane import plane
+from geometries.polyhedron import (
+    dodecahedron,
+    icosahedron,
+    octahedron,
+    polyhedron,
+    tetrahedron,
+)
 from geometries.sphere import sphere
 from geometries.torus import torus, torus_knot
 from math.vector3 import Vector3
@@ -1523,6 +1531,441 @@ def test_a_torus_knot_can_be_measured_in_feet() raises:
     assert_almost_equal(
         ring_center(knot, 0, 4).x, Float32(3 * 0.3048), atol=Float64(1e-5)
     )
+
+
+# --- computed normals and bounds --------------------------------------------
+
+
+def bare_copy(source: BufferGeometry) raises -> BufferGeometry:
+    """Return a geometry with `source`'s positions and index and nothing
+    else, as a geometry arrives before its normals are computed."""
+    var bare = BufferGeometry()
+    bare.set_attribute(
+        String(POSITION), source.clone_attribute(String(POSITION))
+    )
+    bare.set_index(source.index.copy())
+    return bare^
+
+
+def test_computed_normals_are_flat_where_vertices_are_not_shared() raises:
+    # A cube gives each face its own four corners, so the computed normals
+    # are the face normals the builder wrote.
+    var solid = cube(Length(1.0, METER))
+    var bare = bare_copy(solid)
+    assert_false(bare.has_attribute(String(NORMAL)))
+    bare.compute_vertex_normals()
+    ref computed = bare.attribute_view(String(NORMAL))
+    ref written = solid.attribute_view(String(NORMAL))
+    for vertex in range(solid.vertex_count()):
+        var got = computed.vector3(vertex)
+        var expected = written.vector3(vertex)
+        assert_xyz(got, expected.x, expected.y, expected.z)
+
+
+def test_computed_normals_are_smooth_where_vertices_are_shared() raises:
+    # A sphere shares its vertices between neighboring triangles, so each
+    # computed normal is the area-weighted mean of its faces': close to the
+    # direction from the center. The two seam vertices no triangle uses,
+    # one at each pole, keep a zero normal, as in three.js.
+    var bare = bare_copy(sphere(Length(1.0, METER), 24, 16))
+    bare.compute_vertex_normals()
+    ref computed = bare.attribute_view(String(NORMAL))
+    ref positions = bare.attribute_view(String(POSITION))
+    var unused = 0
+    for vertex in range(bare.vertex_count()):
+        var normal = computed.vector3(vertex)
+        if normal.length() == 0:
+            unused += 1
+            continue
+        assert_unit(normal)
+        assert_true(normal.dot(positions.vector3(vertex)) > 0.99)
+    assert_equal(unused, 2)
+
+
+def test_an_unindexed_triangle_gets_its_face_normal_three_times() raises:
+    var geometry = BufferGeometry()
+    var corners: List[Float32] = [0, 0, 0, 1, 0, 0, 0, 1, 0]
+    geometry.set_attribute(String(POSITION), BufferAttribute(corners^, 3))
+    geometry.compute_vertex_normals()
+    ref normals = geometry.attribute_view(String(NORMAL))
+    for vertex in range(3):
+        assert_xyz(normals.vector3(vertex), 0, 0, 1)
+
+
+def test_computed_normals_weigh_faces_by_area() raises:
+    # One vertex on a large face in the xy plane and a small one in the xz
+    # plane: its normal leans almost all the way to the large face's.
+    var geometry = BufferGeometry()
+    var corners: List[Float32] = [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 1, 1, 0, 0]
+    geometry.set_attribute(String(POSITION), BufferAttribute(corners^, 3))
+    geometry.set_index([0, 1, 2, 0, 3, 4])
+    geometry.compute_vertex_normals()
+    var shared = geometry.attribute_view(String(NORMAL)).vector3(0)
+    assert_unit(shared)
+    assert_true(shared.z > 0.99)
+    assert_true(shared.y > 0 and shared.y < 0.02)
+
+
+def test_a_vertex_no_triangle_uses_keeps_a_zero_normal() raises:
+    var geometry = BufferGeometry()
+    var corners: List[Float32] = [0, 0, 0, 1, 0, 0, 0, 1, 0, 5, 5, 5]
+    geometry.set_attribute(String(POSITION), BufferAttribute(corners^, 3))
+    geometry.set_index([0, 1, 2])
+    geometry.compute_vertex_normals()
+    assert_xyz(geometry.attribute_view(String(NORMAL)).vector3(3), 0, 0, 0)
+    # A geometry with no vertices gets an empty normal attribute; one with
+    # no positions gets nothing but a refusal.
+    var nothing = BufferGeometry()
+    nothing.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
+    nothing.compute_vertex_normals()
+    assert_equal(nothing.attribute_view(String(NORMAL)).count(), 0)
+    var positionless = BufferGeometry()
+    with assert_raises():
+        positionless.compute_vertex_normals()
+
+
+def test_bounds_wrap_the_vertices() raises:
+    var brick = box(Length(2.0, METER), Length(1.0, METER), Length(0.5, METER))
+    var bounds = brick.bounding_box()
+    assert_xyz(bounds.min, -1, -0.5, -0.25)
+    assert_xyz(bounds.max, 1, 0.5, 0.25)
+    # Around a sphere the sphere is the sphere; around a box it reaches the
+    # corners from the middle.
+    var ball = sphere(Length(2.0, METER), 12, 8).bounding_sphere()
+    assert_xyz(ball.center, 0, 0, 0)
+    assert_almost_equal(ball.radius, Float32(2), atol=Float64(1e-4))
+    var around = brick.bounding_sphere()
+    assert_xyz(around.center, 0, 0, 0)
+    assert_almost_equal(around.radius, Float32(1.1456439), atol=Float64(1e-5))
+    # No vertices: empty bounds. No positions: a refusal.
+    var nothing = BufferGeometry()
+    nothing.set_attribute(String(POSITION), BufferAttribute(List[Float32](), 3))
+    assert_true(nothing.bounding_box().is_empty())
+    assert_true(nothing.bounding_sphere().is_empty())
+    with assert_raises():
+        _ = BufferGeometry().bounding_box()
+    with assert_raises():
+        _ = BufferGeometry().bounding_sphere()
+
+
+# --- polyhedra --------------------------------------------------------------
+
+
+def assert_faces_wind_outward_from_the_origin(geometry: BufferGeometry) raises:
+    """Assert every triangle's cross product points away from the origin,
+    as the faces of a closed solid around it must."""
+    for triangle in range(geometry.triangle_count()):
+        var a = geometry.corner(triangle, 0)
+        var b = geometry.corner(triangle, 1)
+        var c = geometry.corner(triangle, 2)
+        var normal = b - a
+        normal.cross(c - a)
+        var middle = (a + b + c) * (Float32(1) / 3)
+        assert_true(normal.dot(middle) > 0, "a face winds inward")
+
+
+def check_solid(geometry: BufferGeometry, radius: Float32) raises:
+    """Assert a polyhedron's vertices lie on its sphere, its faces wind
+    outward and have area, and its normals are unit length."""
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref normals = geometry.attribute_view(String(NORMAL))
+    for vertex in range(geometry.vertex_count()):
+        assert_almost_equal(
+            positions.vector3(vertex).length(), radius, atol=Float64(1e-5)
+        )
+        assert_unit(normals.vector3(vertex))
+    assert_faces_wind_outward_from_the_origin(geometry)
+    assert_no_degenerate_triangle(geometry)
+    assert_false(geometry.is_indexed())
+
+
+def test_the_four_solids_have_their_faces() raises:
+    # Three vertices per triangle, a face's own, at a detail of zero.
+    var one = Length(1.0, METER)
+    assert_equal(tetrahedron(one).triangle_count(), 4)
+    assert_equal(octahedron(one).triangle_count(), 8)
+    assert_equal(icosahedron(one).triangle_count(), 20)
+    assert_equal(dodecahedron(one).triangle_count(), 36)
+    assert_equal(icosahedron(one).vertex_count(), 60)
+
+
+def test_every_solid_lies_on_its_sphere_and_winds_outward() raises:
+    var two = Length(2.0, METER)
+    check_solid(tetrahedron(two), 2)
+    check_solid(octahedron(two), 2)
+    check_solid(icosahedron(two), 2)
+    check_solid(dodecahedron(two), 2)
+    check_solid(tetrahedron(two, 2), 2)
+    check_solid(octahedron(two, 1), 2)
+    check_solid(icosahedron(two, 2), 2)
+    check_solid(dodecahedron(two, 1), 2)
+
+
+def test_a_detail_of_zero_shades_flat_and_more_shades_round() raises:
+    # Flat: each triangle's three corners carry its own face normal. The
+    # first face of the octahedron, (1, 0, 0), (0, 1, 0), (0, 0, 1), faces
+    # (1, 1, 1) over root three.
+    var flat = octahedron(Length(1.0, METER))
+    ref flat_normals = flat.attribute_view(String(NORMAL))
+    for triangle in range(flat.triangle_count()):
+        var a = flat.corner(triangle, 0)
+        var facing = flat.corner(triangle, 1) - a
+        facing.cross(flat.corner(triangle, 2) - a)
+        facing.normalize()
+        for corner in range(3):
+            var stated = flat_normals.vector3(triangle * 3 + corner)
+            assert_xyz(stated, facing.x, facing.y, facing.z)
+    assert_xyz(flat_normals.vector3(0), 0.57735, 0.57735, 0.57735)
+    # Round: each vertex's normal is its direction from the center.
+    var round = octahedron(Length(2.0, METER), 2)
+    ref positions = round.attribute_view(String(POSITION))
+    ref round_normals = round.attribute_view(String(NORMAL))
+    for vertex in range(round.vertex_count()):
+        var p = positions.vector3(vertex)
+        assert_xyz(round_normals.vector3(vertex), p.x / 2, p.y / 2, p.z / 2)
+
+
+def test_detail_cuts_each_face_into_four_times_as_many() raises:
+    var one = Length(1.0, METER)
+    assert_equal(octahedron(one, 1).triangle_count(), 8 * 4)
+    assert_equal(octahedron(one, 2).triangle_count(), 8 * 9)
+    assert_equal(icosahedron(one, 3).triangle_count(), 20 * 16)
+    # And the area climbs toward the sphere's.
+    var exact = 4 * Float32(pi)
+    var coarse = surface_area(icosahedron(one))
+    var finer = surface_area(icosahedron(one, 2))
+    var finest = surface_area(icosahedron(one, 4))
+    assert_true(coarse < finer and finer < finest and finest < exact)
+    assert_true(finest > 0.97 * exact)
+
+
+def test_the_solids_are_three_js_s_in_three_js_s_order() raises:
+    # The first vertex written for each solid, at unit radius. three.js's
+    # subdivision writes a face's corners as b, c, a, so it is the second
+    # vertex of the first face: for the tetrahedron's (2, 1, 0) that is
+    # vertex 1, (-1, -1, 1); for the octahedron's (0, 2, 4) it is (0, 1, 0);
+    # for the icosahedron's (0, 11, 5) it is (-t, 0, 1); for the
+    # dodecahedron's (3, 11, 7) it is (0, 1 / t, t).
+    var one = Length(1.0, METER)
+    var third = Float32(0.57735027)
+    assert_xyz(
+        tetrahedron(one).attribute_view(String(POSITION)).vector3(0),
+        -third,
+        -third,
+        third,
+    )
+    assert_xyz(
+        octahedron(one).attribute_view(String(POSITION)).vector3(0), 0, 1, 0
+    )
+    assert_xyz(
+        icosahedron(one).attribute_view(String(POSITION)).vector3(0),
+        -0.85065081,
+        0,
+        0.52573111,
+    )
+    assert_xyz(
+        dodecahedron(one).attribute_view(String(POSITION)).vector3(0),
+        0,
+        0.35682209,
+        0.93417236,
+    )
+
+
+def test_polyhedron_texture_coordinates_are_longitude_and_latitude() raises:
+    var solid = octahedron(Length(1.0, METER))
+    ref uvs = solid.attribute_view(String(UV))
+    ref positions = solid.attribute_view(String(POSITION))
+    # v is zero at the top pole and one at the bottom, as three.js has it.
+    for vertex in range(solid.vertex_count()):
+        var p = positions.vector3(vertex)
+        if p.y > 0.99:
+            assert_almost_equal(
+                uvs.component(vertex, 1), Float32(0), atol=TOLERANCE
+            )
+        if p.y < -0.99:
+            assert_almost_equal(
+                uvs.component(vertex, 1), Float32(1), atol=TOLERANCE
+            )
+    # The first face is (1, 0, 0), (0, 1, 0), (0, 0, 1), written in the
+    # order (0, 1, 0), (0, 0, 1), (1, 0, 0). Its middle lies three eighths
+    # of a turn round, so its pole corner takes that longitude; (0, 0, 1)
+    # is a quarter turn on; (1, 0, 0) is on the seam and, with the middle
+    # on the positive side, keeps u of one.
+    assert_almost_equal(uvs.component(0, 0), Float32(0.875), atol=TOLERANCE)
+    assert_almost_equal(uvs.component(1, 0), Float32(0.75), atol=TOLERANCE)
+    assert_almost_equal(uvs.component(2, 0), Float32(1), atol=TOLERANCE)
+    # The third face, (1, 0, 0), (0, -1, 0), (0, 0, -1), has its middle on
+    # the negative side, so its seam corner, written last, takes u of zero.
+    assert_almost_equal(uvs.component(8, 0), Float32(0), atol=TOLERANCE)
+
+
+def test_a_face_across_the_seam_is_moved_a_turn_on() raises:
+    # Two corners just either side of the seam and one on it: the low one
+    # is moved past one, so the face spans a sliver of the image rather
+    # than all of it.
+    var vertices: List[Float32] = [1, 0, 0.1, 1, 0, -0.1, 1, 1, 0]
+    var indices: List[Int] = [0, 1, 2]
+    var face = polyhedron(vertices, indices, Length(1.0, METER))
+    ref uvs = face.attribute_view(String(UV))
+    # Written as b, c, a: the corner just past the seam, the one on it,
+    # and the one just short of it.
+    assert_true(uvs.component(0, 0) > 1)
+    assert_almost_equal(uvs.component(1, 0), Float32(1), atol=TOLERANCE)
+    assert_true(uvs.component(2, 0) > 0.9)
+    var highest = max(
+        uvs.component(0, 0), max(uvs.component(1, 0), uvs.component(2, 0))
+    )
+    var lowest = min(
+        uvs.component(0, 0), min(uvs.component(1, 0), uvs.component(2, 0))
+    )
+    assert_true(highest - lowest < 0.2)
+
+
+def test_a_polyhedron_can_be_measured_in_feet() raises:
+    # The first vertex written is (0, 1, 0), at the radius.
+    var solid = octahedron(Length(1.0, FOOT))
+    assert_almost_equal(
+        solid.attribute_view(String(POSITION)).vector3(0).y,
+        Float32(0.3048),
+        atol=Float64(1e-5),
+    )
+
+
+def test_a_polyhedron_needs_a_radius_a_detail_and_whole_faces() raises:
+    var one = Length(1.0, METER)
+    var vertices: List[Float32] = [1, 0, 0, 0, 1, 0, 0, 0, 1]
+    var indices: List[Int] = [0, 1, 2]
+    with assert_raises():
+        _ = polyhedron(vertices, indices, Length(0.0, METER))
+    with assert_raises():
+        _ = polyhedron(vertices, indices, one, -1)
+    with assert_raises():
+        _ = polyhedron(List[Float32](), indices, one)
+    var ragged: List[Float32] = [1, 0, 0, 0]
+    with assert_raises():
+        _ = polyhedron(ragged, indices, one)
+    with assert_raises():
+        _ = polyhedron(vertices, List[Int](), one)
+    var partial: List[Int] = [0, 1, 2, 0]
+    with assert_raises():
+        _ = polyhedron(vertices, partial, one)
+    var below: List[Int] = [0, 1, -1]
+    with assert_raises():
+        _ = polyhedron(vertices, below, one)
+    var beyond: List[Int] = [0, 1, 3]
+    with assert_raises():
+        _ = polyhedron(vertices, beyond, one)
+    with assert_raises():
+        _ = icosahedron(one, -1)
+
+
+# --- capsule ----------------------------------------------------------------
+
+
+def a_pill() raises -> BufferGeometry:
+    """Return a capsule of radius one and length two, four by eight."""
+    return capsule(Length(1.0, METER), Length(2.0, METER), 4, 8)
+
+
+def test_a_capsule_is_a_lathe_of_its_profile() raises:
+    var pill = a_pill()
+    # Ten profile points, five per cap, in each of nine columns; two
+    # triangles per cell less the half against each pole.
+    assert_equal(pill.vertex_count(), 9 * 10)
+    assert_equal(pill.triangle_count(), 2 * 8 * 9 - 2 * 8)
+    # More rows up the side add profile points between the caps.
+    var tall = capsule(Length(1.0, METER), Length(2.0, METER), 4, 8, 3)
+    assert_equal(tall.vertex_count(), 9 * 12)
+    assert_equal(tall.triangle_count(), 2 * 8 * 11 - 2 * 8)
+
+
+def test_every_capsule_vertex_lies_on_the_surface() raises:
+    # A capsule is every point at the radius from the segment between the
+    # two cap centers, and each normal points away from the nearest point
+    # of that segment.
+    var pill = a_pill()
+    ref positions = pill.attribute_view(String(POSITION))
+    ref normals = pill.attribute_view(String(NORMAL))
+    for vertex in range(pill.vertex_count()):
+        var p = positions.vector3(vertex)
+        var nearest = Vector3(0, min(max(p.y, Float32(-1)), Float32(1)), 0)
+        var out = p - nearest
+        assert_almost_equal(out.length(), Float32(1), atol=Float64(1e-5))
+        var n = normals.vector3(vertex)
+        assert_unit(n)
+        assert_almost_equal(n.dot(out), Float32(1), atol=Float64(1e-5))
+
+
+def test_a_capsule_runs_from_pole_to_pole() raises:
+    var pill = a_pill()
+    ref positions = pill.attribute_view(String(POSITION))
+    assert_xyz(positions.vector3(0), 0, -2, 0)
+    assert_xyz(positions.vector3(9), 0, 2, 0)
+    # The bottom cap's rim sits at the side's radius, on +z in the first
+    # column, and the last column sits on the first.
+    assert_xyz(positions.vector3(4), 0, -1, 1)
+    assert_xyz(positions.vector3(8 * 10 + 4), 0, -1, 1)
+
+
+def test_a_capsule_maps_u_around_and_v_up() raises:
+    var pill = a_pill()
+    ref uvs = pill.attribute_view(String(UV))
+    assert_equal(uvs.component(0, 0), Float32(0))
+    assert_equal(uvs.component(0, 1), Float32(0))
+    assert_equal(uvs.component(9, 1), Float32(1))
+    assert_equal(uvs.component(8 * 10, 0), Float32(1))
+    assert_texture_coordinates_in_range(pill)
+
+
+def test_every_capsule_face_winds_outward() raises:
+    assert_faces_wind_with_their_normals(a_pill())
+    assert_no_degenerate_triangle(a_pill())
+    var tall = capsule(Length(0.5, METER), Length(3.0, METER), 2, 6, 3)
+    assert_faces_wind_with_their_normals(tall)
+    assert_no_degenerate_triangle(tall)
+
+
+def test_a_capsule_of_no_length_is_a_sphere() raises:
+    var ball = capsule(Length(1.5, METER), Length(0.0, METER), 4, 8)
+    ref positions = ball.attribute_view(String(POSITION))
+    for vertex in range(ball.vertex_count()):
+        assert_almost_equal(
+            positions.vector3(vertex).length(), Float32(1.5), atol=Float64(1e-5)
+        )
+
+
+def test_a_capsules_area_approaches_the_closed_form() raises:
+    # A sphere's area plus a cylinder's side, and closer with more cells.
+    var exact = 4 * Float32(pi) + 2 * Float32(pi) * 2
+    var coarse = surface_area(a_pill())
+    var fine = surface_area(
+        capsule(Length(1.0, METER), Length(2.0, METER), 16, 32)
+    )
+    assert_true(abs(fine - exact) / exact < 0.02)
+    assert_true(abs(fine - exact) < abs(coarse - exact))
+
+
+def test_a_capsule_can_be_measured_in_feet() raises:
+    var pill = capsule(Length(1.0, FOOT), Length(2.0, FOOT), 2, 4)
+    assert_almost_equal(
+        pill.attribute_view(String(POSITION)).vector3(0).y,
+        Float32(-2 * 0.3048),
+        atol=Float64(1e-5),
+    )
+
+
+def test_a_capsule_needs_a_radius_and_enough_segments() raises:
+    var one = Length(1.0, METER)
+    with assert_raises():
+        _ = capsule(Length(0.0, METER), one)
+    with assert_raises():
+        _ = capsule(one, Length(-1.0, METER))
+    with assert_raises():
+        _ = capsule(one, one, 0, 8)
+    with assert_raises():
+        _ = capsule(one, one, 4, 2)
+    with assert_raises():
+        _ = capsule(one, one, 4, 8, 0)
 
 
 def test_a_torus_knot_needs_radii_segments_and_windings() raises:

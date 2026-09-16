@@ -75,12 +75,12 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [CircleGeometry and RingGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#circle): pie slices and arcs with a start angle and a sweep [#16](https://github.com/SethKitchen/ThreeMojo/issues/16)
 - [x] [CylinderGeometry and ConeGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#cylinder): frustums, pipes and sections, with caps that match three.js [#17](https://github.com/SethKitchen/ThreeMojo/issues/17)
 - [x] [TorusGeometry and TorusKnotGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#torus): a tube around a circle, or around a p, q knot [#18](https://github.com/SethKitchen/ThreeMojo/issues/18)
-- [ ] Polyhedron geometries: Icosahedron, Octahedron, Tetrahedron, Dodecahedron [#19](https://github.com/SethKitchen/ThreeMojo/issues/19)
-- [ ] CapsuleGeometry [#20](https://github.com/SethKitchen/ThreeMojo/issues/20)
+- [x] [Polyhedron geometries: Icosahedron, Octahedron, Tetrahedron, Dodecahedron](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#polyhedra): the four regular solids and any polyhedron, cut toward a sphere by detail [#19](https://github.com/SethKitchen/ThreeMojo/issues/19)
+- [x] [CapsuleGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#capsule): a cylinder with hemisphere caps and exact normals [#20](https://github.com/SethKitchen/ThreeMojo/issues/20)
 - [ ] LatheGeometry and TubeGeometry [#21](https://github.com/SethKitchen/ThreeMojo/issues/21)
 - [ ] ShapeGeometry and ExtrudeGeometry [#22](https://github.com/SethKitchen/ThreeMojo/issues/22)
 - [ ] EdgesGeometry and WireframeGeometry [#23](https://github.com/SethKitchen/ThreeMojo/issues/23)
-- [ ] computeVertexNormals and bounding volumes [#24](https://github.com/SethKitchen/ThreeMojo/issues/24)
+- [x] [computeVertexNormals and bounding volumes](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#buffergeometry): area-weighted normals, a bounding box and a bounding sphere on any geometry [#24](https://github.com/SethKitchen/ThreeMojo/issues/24)
 
 ### Objects
 
