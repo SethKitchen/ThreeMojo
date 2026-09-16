@@ -162,7 +162,9 @@ Texture coordinates are longitude and latitude, with the seam repaired per face 
 var pill = capsule(Length(0.5, METER), Length(2.0, METER), 4, 16)   # radius, length, cap rows, around
 ```
 
-A cylinder with a hemisphere on each end, standing on the y axis and centered on the origin. The length is the straight side between the caps. A length of zero is a sphere with one rim, not two. Vertices run in columns, one per step around, from the bottom pole to the top. `u` runs around. `v` runs up the profile by distance along it, from zero at the bottom pole to one at the top. A texture stays put when the segment counts change.
+A cylinder with a hemisphere on each end, standing on the y axis and centered on the origin. The length is the straight side between the caps. A length of zero is a sphere with one rim, not two. Vertices run in columns, one per step around, from the bottom pole to the top.
+
+`u` runs around. `v` runs up the profile by distance along it, from zero at the bottom pole to one at the top. A texture stays put when the segment counts change.
 
 The normals come from the profile exactly. On a cap they run along its radius, and on the side straight out. The caps and the side meet without a crease. The half of each cell against a pole that has no area is left out.
 
