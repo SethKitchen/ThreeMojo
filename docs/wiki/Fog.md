@@ -48,7 +48,7 @@ The mix is a weighted sum: `surface * (1 - veil) + fog * veil`. A lerp, `surface
 
 The mix is in linear light, before the image is encoded. three.js mixes after its output color-space conversion, on the encoded color. Halfway into the fog here is half the light of each color. See [Why color is linear](Why-color-is-linear).
 
-Every material is fogged, lit or unlit. three.js's `Material.fog` flag is not ported. The `SHADE_UV` debug view is never fogged. It shows coordinates, not light. Pixels that no triangle covers keep the background color.
+Every material that shows light is fogged, lit or unlit. three.js's `Material.fog` flag is not ported. A `NORMALS` or `DEPTH` material is never fogged, because it shows data. The `SHADE_UV` debug view is never fogged either. It shows coordinates, not light. Pixels that no triangle covers keep the background color.
 
 ## FogView
 

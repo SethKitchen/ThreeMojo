@@ -102,7 +102,7 @@ def flattened(corners: List[RasterVertex]) -> List[RasterVertex]:
                 corner.blend,
                 corner.normal,
                 corner.world,
-                corner.lit,
+                corner.kind,
             )
         )
     return affine^

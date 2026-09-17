@@ -25,6 +25,14 @@ opaque purple; the blue was invisible and should have contributed nothing.
 So color lives here as linear `FloatColor` until the image is finished, and
 `resolve` converts once.
 
+**Data.** Not every pixel holds light. A normal material writes its normal
+as bytes, a depth material its depth, the uv debug view its coordinates,
+and a display must show those bytes as they are. They are stored decoded,
+so the encode gives the bytes back -- see `render.rasterizer.data_color` --
+and a flag per pixel says so, which keeps the tone mapping off them: a
+curve that compresses light would make a normal lie about its own numbers.
+The last fragment written or blended into a pixel decides the flag.
+
 **Premultiplied.** The stored color is the light a pixel actually contributes,
 already scaled by its coverage — `(r*a, g*a, b*a, a)`. Source-over in that form
 is a weighted sum with no special cases:
@@ -51,6 +59,7 @@ from std.runtime.asyncrt import TaskGroup
 
 def _encode_run(
     colors: Pointer[FloatColor, ImmutAnyOrigin],
+    data: Pointer[Bool, ImmutAnyOrigin],
     pixels: MutPointer[UInt8, MutAnyOrigin],
     first: Int,
     past: Int,
@@ -63,13 +72,17 @@ def _encode_run(
     and each band of the parallel one so the two cannot differ. Each
     pixel is unpremultiplied, tone mapped, then encoded, in that order:
     the curve sees the straight color a display is about to show, as the
-    GPU kernel applies it to the same color at the same point.
+    GPU kernel applies it to the same color at the same point. A pixel
+    that holds data skips the curve, as the kernel skips it.
     """
     # A run is never empty: `resolve` never makes more bands than pixels.
     for slot in range(first, past):  # pragma: no branch
+        var curve = tone_mapping
+        if data[unsafe_offset=slot]:
+            curve = NO_TONE_MAPPING
         var shown = tone_map(
             colors[unsafe_offset=slot].unpremultiplied(),
-            tone_mapping,
+            curve,
             exposure,
         ).encode()
         var at = slot * Framebuffer.CHANNELS
@@ -81,6 +94,7 @@ def _encode_run(
 
 async def _encode_band(
     colors: Pointer[FloatColor, ImmutAnyOrigin],
+    data: Pointer[Bool, ImmutAnyOrigin],
     pixels: MutPointer[UInt8, MutAnyOrigin],
     first: Int,
     past: Int,
@@ -88,7 +102,7 @@ async def _encode_band(
     exposure: Float32,
 ):
     """`_encode_run` as a task, one per worker; see `resolve`."""
-    _encode_run(colors, pixels, first, past, tone_mapping, exposure)
+    _encode_run(colors, data, pixels, first, past, tone_mapping, exposure)
 
 
 struct RenderTarget(Movable):
@@ -99,6 +113,10 @@ struct RenderTarget(Movable):
     # Premultiplied linear light, one entry per pixel.
     var colors: List[FloatColor]
     var depth: List[Float32]
+    # Whether each pixel holds data rather than light -- a normal, a depth,
+    # a coordinate -- which the tone mapping must leave alone. Set by the
+    # last `write` or `blend` into the pixel; a cleared pixel holds light.
+    var data: List[Bool]
 
     def __init__(out self, width: Int, height: Int, clear: Color) raises:
         """Create a target cleared to `clear`.
@@ -123,6 +141,7 @@ struct RenderTarget(Movable):
         self.depth = List[Float32](
             length=width * height, fill=inf[DType.float32]()
         )
+        self.data = List[Bool](length=width * height, fill=False)
 
     def _slot(self, x: Int, y: Int) raises -> Int:
         """Return the index of pixel (x, y), checking it is inside."""
@@ -137,6 +156,11 @@ struct RenderTarget(Movable):
     def color_at(self, x: Int, y: Int) raises -> FloatColor:
         """Return the premultiplied linear color at pixel (x, y)."""
         return self.colors[self._slot(x, y)]
+
+    def is_data(self, x: Int, y: Int) raises -> Bool:
+        """Return True if pixel (x, y) holds data rather than light, and
+        so is not tone mapped when resolved."""
+        return self.data[self._slot(x, y)]
 
     def test_depth(mut self, x: Int, y: Int, z: Float32) raises -> Bool:
         """Return True if `z` is nearer than what is stored, and claim it.
@@ -172,7 +196,9 @@ struct RenderTarget(Movable):
         """
         return z < self.depth[self._slot(x, y)]
 
-    def write(mut self, x: Int, y: Int, color: FloatColor) raises:
+    def write(
+        mut self, x: Int, y: Int, color: FloatColor, data: Bool = False
+    ) raises:
         """Replace pixel (x, y) with `color`, given in straight alpha.
 
         What an opaque surface does: it is the only thing visible there, so
@@ -184,14 +210,20 @@ struct RenderTarget(Movable):
             x: Column.
             y: Row.
             color: Linear color with straight (unassociated) alpha.
+            data: True if the color is data rather than light -- a normal,
+                a depth, a coordinate -- which `resolve` must encode
+                without tone mapping. See `render.rasterizer.data_color`.
 
         Raises:
             Error: If the coordinate is out of bounds.
         """
         var slot = self._slot(x, y)
         self.colors[slot] = color.premultiplied()
+        self.data[slot] = data
 
-    def blend(mut self, x: Int, y: Int, color: FloatColor) raises:
+    def blend(
+        mut self, x: Int, y: Int, color: FloatColor, data: Bool = False
+    ) raises:
         """Mix `color` into pixel (x, y) with source-over compositing.
 
         Args:
@@ -199,11 +231,15 @@ struct RenderTarget(Movable):
             y: Row.
             color: Linear color with straight (unassociated) alpha, where
                 alpha is how much of what is behind it is hidden.
+            data: True if the color is data rather than light, as for
+                `write`. The last fragment into a pixel decides whether the
+                pixel is tone mapped.
 
         Raises:
             Error: If the coordinate is out of bounds.
         """
         var slot = self._slot(x, y)
+        self.data[slot] = data
         var share = color.a
         if share > 1:
             share = 1
@@ -248,10 +284,12 @@ struct RenderTarget(Movable):
                 the seven, or the exposure is negative or not finite.
         """
         check_tone_mapping(tone_mapping, exposure)
+        var slot = self._slot(x, y)
+        var curve = tone_mapping
+        if self.data[slot]:
+            curve = NO_TONE_MAPPING
         return tone_map(
-            self.colors[self._slot(x, y)].unpremultiplied(),
-            tone_mapping,
-            exposure,
+            self.colors[slot].unpremultiplied(), curve, exposure
         ).encode()
 
     def resolve(
@@ -269,7 +307,9 @@ struct RenderTarget(Movable):
 
         Tone mapping happens here, to the composited light of each pixel,
         rather than per fragment as three.js does it: the curve sees what
-        reaches the camera, as a camera does. See `render.tonemap`.
+        reaches the camera, as a camera does. See `render.tonemap`. A
+        pixel that holds data rather than light -- see `write` -- is
+        encoded without it.
 
         Three `pow` calls per pixel is the most expensive thing a frame does
         after rasterizing it -- at 1280x720 it is nearly three million of
@@ -305,6 +345,7 @@ struct RenderTarget(Movable):
         if bands == 1:
             _encode_run(
                 self.colors.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+                self.data.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
                 0,
                 count,
@@ -318,6 +359,9 @@ struct RenderTarget(Movable):
                 group.create_task(
                     _encode_band(
                         self.colors.unsafe_ptr().unsafe_origin_cast[
+                            ImmutAnyOrigin
+                        ](),
+                        self.data.unsafe_ptr().unsafe_origin_cast[
                             ImmutAnyOrigin
                         ](),
                         pixels.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),

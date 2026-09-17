@@ -32,11 +32,13 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `SHADE_LIT` | The material color times the light, plus the emissive. Textures are ignored. |
 | `SHADE_UV` | The texture coordinates, as red and green. A debug view. |
 
+A `NORMALS` or `DEPTH` material writes data under either lit mode. See [Materials](Materials#data-materials).
+
 `set_shading` refuses a mode that is none of the three.
 
 ## Tone mapping
 
-`set_tone_mapping` picks one of the seven curves in `render/tonemap.mojo` and an exposure. `NO_TONE_MAPPING` and an exposure of one are the defaults, as in three.js. `render` applies the curve in `RenderTarget.resolve`, once per pixel, after every fragment is composited. The `SHADE_UV` view is never tone mapped. See [Render target](Render-target-and-framebuffer#tone-mapping).
+`set_tone_mapping` picks one of the seven curves in `render/tonemap.mojo` and an exposure. `NO_TONE_MAPPING` and an exposure of one are the defaults, as in three.js. `render` applies the curve in `RenderTarget.resolve`, once per pixel, after every fragment is composited. The `SHADE_UV` view is never tone mapped, and nor is a pixel a data material wrote. See [Render target](Render-target-and-framebuffer#tone-mapping).
 
 `set_tone_mapping` refuses a curve that is none of the seven, and an exposure that is negative or not finite.
 
@@ -48,7 +50,7 @@ Leave out every group whose node shares no layer with the camera. Then leave out
 
 1. Transform the positions to world space and camera space.
 2. Carry the texture coordinates through the map's transform. See [Textures](Textures#transform).
-3. Transform the normals with the normal matrix, or compute a face normal.
+3. Transform the normals with the normal matrix, or compute a face normal. Carry them into view space for a `NORMALS` material.
 4. Clip each triangle against the near and far planes.
 5. Project each corner to pixels and keep `1 / w`.
 6. Cull faces that the material's `side` does not draw.

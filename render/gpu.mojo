@@ -55,8 +55,10 @@ from render.rasterizer import (
     ShadeMode,
     Triangle,
     check_triangle_state,
+    packed_depth,
+    packed_normal,
 )
-from materials.material import BLEND
+from materials.material import BLEND, DEPTH, LAMBERT, NORMALS
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.srgb import SRGB, ColorSpace, decode_ramp
 from render.tonemap import (
@@ -127,7 +129,7 @@ comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 # the lanes are, and read by `triangle_state` and the kernel alike.
 comptime STATE_TEXTURE = 0
 comptime STATE_BLEND = 1
-comptime STATE_LIT = 2
+comptime STATE_KIND = 2
 comptime STATE_EMISSIVE_MAP = 3
 comptime STATE_PER_TRIANGLE = STATE_EMISSIVE_MAP + 1
 
@@ -597,8 +599,8 @@ def _fetch(
 
 
 def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
-    """Return each triangle's texture, blend policy, lit flag and emissive
-    map, `STATE_PER_TRIANGLE` entries each.
+    """Return each triangle's texture, blend policy, material kind and
+    emissive map, `STATE_PER_TRIANGLE` entries each.
 
     Neither is a vertex attribute. A resource id was one for a commit —
     carried on all three corners, crossed as a `Float32`, read back from the
@@ -613,19 +615,36 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
         corners: Raster vertices, three per triangle.
 
     Returns:
-        Texture id, blend policy, one or zero for lit or not, then the
+        Texture id, blend policy, the material kind's value, then the
         emissive map id, per triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
         state.append(Int32(corners[triangle * 3].texture.value))
         state.append(Int32(corners[triangle * 3].blend.value))
-        var lit = Int32(0)
-        if corners[triangle * 3].lit:
-            lit = Int32(1)
-        state.append(lit)
+        state.append(Int32(corners[triangle * 3].kind.value))
         state.append(Int32(corners[triangle * 3].emissive_map.value))
     return state^
+
+
+def _decoded(
+    ramp: MutPointer[Float32, MutAnyOrigin], r: Float32, g: Float32, b: Float32
+) -> FloatColor:
+    """Return three channels of data as the light that encodes to their
+    bytes: the device counterpart of `render.rasterizer.data_color`.
+
+    Quantized to bytes without the curve, then decoded through the uploaded
+    ramp, which holds the same 256 values the host's decode computes, so
+    the two backends store the same light and resolve to the same bytes.
+    Alpha is not touched and is left to the caller.
+    """
+    var bytes = FloatColor(r, g, b, 1.0).quantize()
+    return FloatColor(
+        ramp[unsafe_offset=Int(bytes.r)],
+        ramp[unsafe_offset=Int(bytes.g)],
+        ramp[unsafe_offset=Int(bytes.b)],
+        1.0,
+    )
 
 
 def _uv_at(
@@ -905,9 +924,14 @@ def rasterize_kernel(
     var mixed_r = ramp[unsafe_offset=Int((background >> 24) & 0xFF)] * mixed_a
     var mixed_g = ramp[unsafe_offset=Int((background >> 16) & 0xFF)] * mixed_a
     var mixed_b = ramp[unsafe_offset=Int((background >> 8) & 0xFF)] * mixed_a
-    # Whether the fog reaches these fragments: never in the uv debug view,
-    # exactly as `rasterize_shaded` decides it.
-    var fogged = fog_kind != Int32(NO_FOG.value) and mode != Int32(
+    # Whether the pixel holds data rather than light, decided by the last
+    # fragment into it exactly as `RenderTarget.write` and `blend` decide
+    # it: a normal or a depth, which the tone mapping must leave alone.
+    var data = False
+    # Whether the fog can reach any fragment: never in the uv debug view,
+    # exactly as `rasterize_shaded` decides it. A fragment that shows data
+    # is left out below, per triangle.
+    var fog_on = fog_kind != Int32(NO_FOG.value) and mode != Int32(
         SHADE_UV.value
     )
 
@@ -997,32 +1021,35 @@ def rasterize_kernel(
             share_b = wb * bw * rcp
             share_c = wc * cw * rcp
 
+        # What kind of surface this is, per triangle from the state table:
+        # lit, unlit, or showing its normal or its depth as data.
+        var kind = maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_KIND]
+        var lit = kind == Int32(LAMBERT.value)
+        var shows_normal = kind == Int32(NORMALS.value)
+        var shows_data = shows_normal or kind == Int32(DEPTH.value)
         # The interpolated normal, made a unit vector again here. That
         # renormalization is the difference between per-fragment and
         # per-vertex shading: the average of two unit vectors is shorter than
         # either, so leaving it alone dims the middle of every triangle.
-        # Only the two lit modes need it; SHADE_UV writes coordinates rather
-        # than light, and used to pay for the lighting anyway.
-        # Only the two lit modes light a fragment, and only a lit surface:
-        # SHADE_UV writes coordinates rather than light, and a BASIC
-        # material shows its own color. Lit or not is per triangle, from
-        # the state table.
+        # Only the two lit modes need it, and only a surface that is lit by
+        # it or shows it: SHADE_UV writes coordinates rather than light,
+        # and a BASIC material shows its own color.
         var arriving = Vector3(1, 1, 1)
-        if (
-            mode != Int32(SHADE_UV.value)
-            and maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_LIT] != 0
-        ):
-            var nx = (
+        var nx = Float32(0)
+        var ny = Float32(0)
+        var nz = Float32(1)
+        if mode != Int32(SHADE_UV.value) and (lit or shows_normal):
+            nx = (
                 corners[unsafe_offset=base + LANE_NX] * share_a
                 + corners[unsafe_offset=b_base + LANE_NX] * share_b
                 + corners[unsafe_offset=c_base + LANE_NX] * share_c
             )
-            var ny = (
+            ny = (
                 corners[unsafe_offset=base + LANE_NY] * share_a
                 + corners[unsafe_offset=b_base + LANE_NY] * share_b
                 + corners[unsafe_offset=c_base + LANE_NY] * share_c
             )
-            var nz = (
+            nz = (
                 corners[unsafe_offset=base + LANE_NZ] * share_a
                 + corners[unsafe_offset=b_base + LANE_NZ] * share_b
                 + corners[unsafe_offset=c_base + LANE_NZ] * share_c
@@ -1032,6 +1059,7 @@ def rasterize_kernel(
                 nx /= unit
                 ny /= unit
                 nz /= unit
+        if mode != Int32(SHADE_UV.value) and lit:
             # Where this fragment is in the world, for the lights that have
             # a position.
             var wx = (
@@ -1192,13 +1220,30 @@ def rasterize_kernel(
                     glow_r *= glowing.r
                     glow_g *= glowing.g
                     glow_b *= glowing.b
-            red += glow_r
-            green += glow_g
-            blue += glow_b
+            if shows_data:
+                # Data rather than light, exactly as `rasterize_shaded`
+                # writes it: the packed normal, or the depth as a gray, as
+                # bytes decoded through the ramp. The color and the texture
+                # keep their say over alpha alone, so a cut-out map cuts a
+                # depth out. Neither the glow nor the fog reaches these.
+                var shown: FloatColor
+                if shows_normal:
+                    var packed = packed_normal(Vector3(nx, ny, nz))
+                    shown = _decoded(ramp, packed.x, packed.y, packed.z)
+                else:
+                    var seen = packed_depth(z)
+                    shown = _decoded(ramp, seen, seen, seen)
+                red = shown.r
+                green = shown.g
+                blue = shown.b
+            else:
+                red += glow_r
+                green += glow_g
+                blue += glow_b
             # Veiled by the fog last, in linear light, from the same depth
             # lane and with the same function as `rasterize_shaded`. Alpha
             # is coverage and is left alone.
-            if fogged:
+            if fog_on and not shows_data:
                 var depth = (
                     corners[unsafe_offset=base + LANE_DEPTH] * share_a
                     + corners[unsafe_offset=b_base + LANE_DEPTH] * share_b
@@ -1230,6 +1275,9 @@ def rasterize_kernel(
         # blended fragment arrives -- the same guarantee `rasterize_shaded`
         # relies on, and the reason `Renderer.prepare` sorts.
         found = True
+        # The last fragment in decides whether the pixel holds data, as the
+        # host's target decides it.
+        data = shows_data
         var share = alpha
         if share > 1:
             share = 1
@@ -1274,8 +1322,12 @@ def rasterize_kernel(
         # is a curve, since the host's target holds its clear color as
         # light and resolves it through the curve like any other pixel.
         # Without a curve an uncovered pixel keeps the background's own
-        # bytes rather than a decode and an encode of them.
-        word = pack(tone_map(lit, ToneMapping(Int(tone)), exposure).encode())
+        # bytes rather than a decode and an encode of them. A pixel that
+        # holds data skips the curve, as the host's target skips it.
+        var curve = Int(tone)
+        if data:
+            curve = NO_TONE_MAPPING.value
+        word = pack(tone_map(lit, ToneMapping(curve), exposure).encode())
     if solid:
         nearest_depth = nearest
 
@@ -1495,11 +1547,14 @@ struct GpuRenderer(Movable):
             corners: Raster vertices, three per triangle. An empty list is
                 allowed and clears the target to `background`.
             background: Color for pixels no triangle covers.
-            mode: `SHADE_LIT` or `SHADE_UV`, as `rasterize_shaded` takes.
+            mode: `SHADE_LIT`, `SHADE_UV` or `SHADE_TEXTURE`, as
+                `rasterize_shaded` takes.
             lighting: The scene's lights, resolved to world space and
                 evaluated per fragment against the interpolated normal.
                 Defaults to `Lighting.uniform`, the identity for the multiply,
-                exactly as the CPU rasterizer's does.
+                exactly as the CPU rasterizer's does. A `NORMALS` or `DEPTH`
+                triangle shows data instead, kept out of the lights, the
+                fog and the tone mapping as the CPU keeps it.
             fog: The scene's fog, as `rasterize_shaded` takes it. Defaults
                 to `FogView.none`.
             tone_mapping: The curve that compresses each finished pixel's
@@ -1512,7 +1567,7 @@ struct GpuRenderer(Movable):
                 is none of the three, the tone mapping is none of the
                 seven, the exposure is negative or not finite, the fog
                 view is refused by `FogView.validate`, a triangle's blend
-                policy, texture or
+                policy, material kind, texture or
                 emissive map disagrees between its corners or is a value
                 neither backend knows, a vertex names a texture or an
                 emissive map that is not uploaded, or an emissive map that

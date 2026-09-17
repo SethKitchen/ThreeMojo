@@ -26,7 +26,7 @@ tool runs, so each pixel costs a record written to stderr. A 320x240
 comparison produced 112 MB of them and dominated the entire coverage run.
 """
 
-from materials.material import Blending
+from materials.material import Blending, MaterialKind
 from cameras.camera import Camera
 from cameras.orthographic_camera import centered
 from cameras.perspective_camera import PerspectiveCamera
@@ -102,7 +102,15 @@ from render.srgb import LINEAR, ColorSpace
 from geometries.plane import plane
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION
-from materials.material import BASIC, DOUBLE_SIDE
+from materials.material import (
+    BASIC,
+    DEPTH,
+    DOUBLE_SIDE,
+    LAMBERT,
+    NORMALS,
+    depth_material,
+    normal_material,
+)
 from render.target import RenderTarget
 from render.rasterizer import (
     SHADE_LIT,
@@ -679,7 +687,7 @@ def glowing(
         base.blend,
         base.normal,
         base.world,
-        base.lit,
+        base.kind,
         glow,
         map,
     )
@@ -720,7 +728,7 @@ def test_flattening_lays_out_twenty_floats_per_vertex() raises:
 
 
 def test_the_state_table_has_four_entries_per_triangle() raises:
-    # Texture, blend, lit and emissive map, from the first corner.
+    # Texture, blend, material kind and emissive map, from the first corner.
     var corners = List[RasterVertex]()
     for _ in range(3):
         corners.append(
@@ -736,7 +744,7 @@ def test_the_state_table_has_four_entries_per_triangle() raises:
                 BLEND,
                 Vector3(0, 0, 1),
                 Vector3(0, 0, 0),
-                False,
+                BASIC,
                 FloatColor(0, 0, 0),
                 TextureId(5),
             )
@@ -745,8 +753,16 @@ def test_the_state_table_has_four_entries_per_triangle() raises:
     assert_equal(len(state), STATE_PER_TRIANGLE)
     assert_equal(state[0], Int32(2))
     assert_equal(state[1], Int32(BLEND.value))
-    assert_equal(state[2], Int32(0))
+    assert_equal(state[2], Int32(BASIC.value))
     assert_equal(state[3], Int32(5))
+    # And each of the other three kinds crosses as its own value.
+    for kind in [LAMBERT, NORMALS, DEPTH]:
+        var others = List[RasterVertex]()
+        for _ in range(3):
+            others.append(
+                RasterVertex(0, 0, 0.5, 1, FloatColor(1, 1, 1), kind=kind)
+            )
+        assert_equal(triangle_state(others)[2], Int32(kind.value))
 
 
 # --- one prepared scene, both backends --------------------------------------
@@ -1663,7 +1679,7 @@ def test_both_backends_agree_on_the_whole_pipeline_at_once() raises:
 
 
 def test_the_gpu_leaves_an_unlit_triangle_its_own_color() raises:
-    # A BASIC material's triangles carry `lit=False`, and the kernel must
+    # A BASIC material's triangles carry `kind=BASIC`, and the kernel must
     # skip the lights for them exactly as the host does.
     if skipped_for_lack_of_a_gpu("the gpu leaves an unlit triangle alone"):
         return
@@ -1683,7 +1699,7 @@ def test_the_gpu_leaves_an_unlit_triangle_its_own_color() raises:
                 base.blend,
                 base.normal,
                 base.world,
-                False,
+                BASIC,
             )
         )
     # Lighting that would halve everything if it were applied.
@@ -3328,6 +3344,277 @@ def test_both_backends_agree_on_an_instanced_scene() raises:
     var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
     assert_true(drawn > 100, "the forest barely drew anything")
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- normal and depth materials, both backends ------------------------------
+
+
+def of_kind(
+    base: RasterVertex,
+    kind: MaterialKind,
+    normal: Vector3 = Vector3(0, 0, 1),
+    depth: Float32 = 0,
+) -> RasterVertex:
+    """Return `base` as a surface of `kind`, facing `normal`."""
+    return RasterVertex(
+        base.x,
+        base.y,
+        base.z,
+        base.inv_w,
+        base.color,
+        base.u,
+        base.v,
+        base.texture,
+        base.blend,
+        normal,
+        base.world,
+        kind,
+        base.emissive,
+        base.emissive_map,
+        depth,
+    )
+
+
+def data_pair(kind: MaterialKind, depth: Float32 = 0) -> List[RasterVertex]:
+    """Return `overlapping_pair` as surfaces of `kind`, each corner facing a
+    different way so the normal is really interpolated."""
+    var normals: List[Vector3] = [
+        Vector3(0, 0, 1),
+        Vector3(1, 0, 0.5),
+        Vector3(0, -1, 0.25),
+        Vector3(-0.5, 0.5, 1),
+        Vector3(0, 0.5, 0),
+        Vector3(0.25, 0, -1),
+    ]
+    var corners = List[RasterVertex]()
+    var base = overlapping_pair()
+    for index in range(len(base)):
+        corners.append(of_kind(base[index], kind, normals[index], depth))
+    return corners^
+
+
+def test_both_backends_agree_on_a_normal_material() raises:
+    # The kernel packs the interpolated normal with the host's own
+    # functions, from the state table's kind, and neither lights it.
+    if skipped_for_lack_of_a_gpu("both backends agree on a normal material"):
+        return
+    var corners = data_pair(NORMALS)
+    # Lighting that would halve everything if it reached these fragments.
+    var half = Lighting(ambient=FloatColor(0.5, 0.5, 0.5, 1.0))
+    var target = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(corners, target, SHADE_TEXTURE, TextureStore(), half)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 24, 18, BACKGROUND, SHADE_TEXTURE, TextureStore(), half
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And it really shows the normal rather than the corner colors: the
+    # same triangles as a basic material differ.
+    var plain = render_triangles(
+        corners_of(BASIC),
+        24,
+        18,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        TextureStore(),
+        half,
+    )
+    assert_true(count_mismatches(gpu, plain) > 50, "the normal changed nothing")
+
+
+def corners_of(kind: MaterialKind) -> List[RasterVertex]:
+    """Return `data_pair` of another kind, for comparing one against
+    another."""
+    return data_pair(kind)
+
+
+def test_both_backends_agree_on_a_depth_material() raises:
+    # The depth comes from the same interpolated z on both sides, packed by
+    # the same function, and the normal is not read at all.
+    if skipped_for_lack_of_a_gpu("both backends agree on a depth material"):
+        return
+    var corners = data_pair(DEPTH)
+    var half = Lighting(ambient=FloatColor(0.5, 0.5, 0.5, 1.0))
+    var target = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(corners, target, SHADE_TEXTURE, TextureStore(), half)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 24, 18, BACKGROUND, SHADE_TEXTURE, TextureStore(), half
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # The near triangle is the paler gray on both, as one minus the depth.
+    assert_true(
+        cpu.get_pixel(12, 12).r > cpu.get_pixel(3, 3).r,
+        "the nearer surface was not the paler gray",
+    )
+    var normals = render_triangles(
+        corners_of(NORMALS),
+        24,
+        18,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        TextureStore(),
+        half,
+    )
+    assert_true(
+        count_mismatches(gpu, normals) > 50, "the depth and the normal agreed"
+    )
+
+
+def test_both_backends_keep_data_out_of_the_fog_and_the_curve() raises:
+    # A fog veils light and a curve compresses it, and a normal is neither.
+    # Both backends must leave the same pixels alone.
+    if skipped_for_lack_of_a_gpu("both backends keep data out of the fog"):
+        return
+    var fog = FogView(
+        linear_fog(Color(255, 0, 0), Length(1.0, METER), Length(4.0, METER))
+    )
+    for kind in [NORMALS, DEPTH]:
+        var corners = data_pair(kind, 3.0)
+        var target = RenderTarget(24, 18, BACKGROUND)
+        rasterize_all(
+            corners,
+            target,
+            SHADE_TEXTURE,
+            TextureStore(),
+            Lighting.uniform(),
+            1,
+            fog,
+        )
+        var cpu = target.resolve(1, REINHARD_TONE_MAPPING, 0.8)
+        var gpu = render_triangles(
+            corners,
+            24,
+            18,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            TextureStore(),
+            Lighting.uniform(),
+            fog,
+            REINHARD_TONE_MAPPING,
+            0.8,
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+        # And the data itself came through untouched by either: the same
+        # triangles with no fog and no curve give the same covered pixels.
+        var clear = render_triangles(
+            data_pair(kind, 3.0),
+            24,
+            18,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            TextureStore(),
+            Lighting.uniform(),
+        )
+        assert_equal(clear.get_pixel(12, 12).r, gpu.get_pixel(12, 12).r)
+        assert_equal(clear.get_pixel(12, 12).g, gpu.get_pixel(12, 12).g)
+        assert_equal(clear.get_pixel(12, 12).b, gpu.get_pixel(12, 12).b)
+
+
+def test_the_gpu_refuses_a_material_kind_it_has_no_path_for() raises:
+    if skipped_for_lack_of_a_gpu("the gpu refuses an unknown material kind"):
+        return
+    var renderer = GpuRenderer(8, 8)
+    with assert_raises():
+        renderer.draw(data_pair(MaterialKind(9)), BACKGROUND)
+    # And corners that disagree, which is the check it shares with the CPU.
+    var mixed = data_pair(NORMALS)
+    mixed[1] = of_kind(mixed[1], DEPTH)
+    with assert_raises():
+        renderer.draw(mixed, BACKGROUND)
+
+
+def test_both_backends_agree_on_a_scene_that_mixes_light_and_data() raises:
+    # One frame holding a lit floor, a sphere showing its normals and a box
+    # showing its depth, under a fog and a curve: the light is veiled and
+    # compressed, the data is not, and the two backends decide that per
+    # pixel in the same way.
+    if skipped_for_lack_of_a_gpu("both backends agree on light and data"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var floor = assets.geometries.add(
+        plane(Length(12.0, METER), Length(12.0, METER), 4, 4)
+    )
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_position(0, -1.0, 0)
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var left = Object3D()
+    left.set_position(-1.0, 0, 0)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(1.0, 0, -0.5)
+    right.set_euler(
+        Angle(20.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var right_node = scene.add(right^)
+    light_the(scene)
+    scene.fog = linear_fog(
+        Color(160, 170, 190), Length(2.0, METER), Length(9.0, METER)
+    )
+    scene.update()
+
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            floor,
+            assets.materials.add(Material(Color(200, 200, 200))),
+            ground_node,
+        )
+    )
+    meshes.append(
+        Mesh(ball, assets.materials.add(normal_material()), left_node)
+    )
+    meshes.append(Mesh(box, assets.materials.add(depth_material()), right_node))
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(8.0, METER),
+    )
+    camera.place(Vector3(0, 0.8, 3.2), Vector3(0, 0, 0))
+
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the scene prepared no triangles")
+    var lighting = Lighting(scene)
+    var view = FogView(scene.fog)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_TEXTURE, assets.textures, lighting, 1, view
+    )
+    var cpu = target.resolve(1, ACES_FILMIC_TONE_MAPPING, 1.1)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+        view,
+        ACES_FILMIC_TONE_MAPPING,
+        1.1,
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 300, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # Some pixel held data and some held light, or this proves nothing.
+    var holds_data = 0
+    for y in range(36):
+        for x in range(48):
+            if target.is_data(x, y):
+                holds_data += 1
+    assert_true(holds_data > 50, "no pixel held data")
+    assert_true(holds_data < drawn, "every drawn pixel held data")
 
 
 def main() raises:

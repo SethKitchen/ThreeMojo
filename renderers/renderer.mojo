@@ -96,9 +96,11 @@ from materials.material import (
     BACK_SIDE,
     DOUBLE_SIDE,
     FRONT_SIDE,
+    NORMALS,
     Blending,
     Material,
     MaterialId,
+    MaterialKind,
 )
 from units.si import Length, METER
 from render.texture import IGNORED
@@ -679,7 +681,7 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
         corner.blend,
         -corner.normal,
         corner.world,
-        corner.lit,
+        corner.kind,
         corner.emissive,
         corner.emissive_map,
         corner.view_depth,
@@ -691,7 +693,7 @@ def _to_raster(
     to_screen: Matrix4,
     texture: TextureId,
     blend: Blending,
-    lit: Bool,
+    kind: MaterialKind,
     emissive_map: TextureId,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
@@ -721,7 +723,7 @@ def _to_raster(
         blend,
         vertex.normal,
         vertex.world,
-        lit,
+        kind,
         vertex.emissive,
         emissive_map,
         # How far in front of the camera this corner is, for the fog: the
@@ -959,9 +961,10 @@ struct Renderer(Movable):
             # can hold a scene whose meshes use different images.
             var blending = material.blending
             var map = material.map
-            # Whether the lights reach this surface at all; a `BASIC`
-            # material shows its own color. Per triangle, like the blend.
-            var lit = material.is_lit()
+            # What kind of surface this is: whether the lights reach it, or
+            # whether it shows its normal or its depth instead of a color.
+            # Per triangle, like the blend.
+            var kind = material.kind
             # Checked here because here is the first place that can: a
             # material is built without the store in reach, so a positive id
             # naming nothing is only detectable once both are together. It is
@@ -1057,6 +1060,12 @@ struct Renderer(Movable):
             # once per mesh rather than once per vertex. What used to happen
             # here was the *lighting*; now only the normal is worked out, and
             # the light is applied per fragment.
+            #
+            # A normal material shows the normal as the camera sees it,
+            # three.js's `vNormal` in view space, so its normals are turned
+            # once more, by the view. The view is rigid, so the turn keeps
+            # them unit length, and the fragment normalizes what it gets in
+            # any case. The lights never see these: the kind is unlit.
             var vertex_normals = List[Vector3]()
             if smooth:
                 ref normals = geometry.attribute_view(String(NORMAL))
@@ -1068,6 +1077,8 @@ struct Renderer(Movable):
                         normals.vector3(vertex)
                     )
                     direction.normalize()
+                    if kind == NORMALS:
+                        direction = view.transform_direction(direction)
                     vertex_normals.append(direction)
 
             # The material's color, decoded to linear once with its opacity
@@ -1123,6 +1134,9 @@ struct Renderer(Movable):
                         # side or an object would shade differently purely
                         # for having normals.
                         geometric = -geometric
+                    if kind == NORMALS:
+                        # Into view space, as the supplied normals were.
+                        geometric = view.transform_direction(geometric)
                     normal_a = geometric
                     normal_b = geometric
                     normal_c = geometric
@@ -1164,7 +1178,7 @@ struct Renderer(Movable):
                         to_screen,
                         map,
                         blending,
-                        lit,
+                        kind,
                         glow_map,
                     )
                     var two = _to_raster(
@@ -1172,7 +1186,7 @@ struct Renderer(Movable):
                         to_screen,
                         map,
                         blending,
-                        lit,
+                        kind,
                         glow_map,
                     )
                     var three = _to_raster(
@@ -1180,7 +1194,7 @@ struct Renderer(Movable):
                         to_screen,
                         map,
                         blending,
-                        lit,
+                        kind,
                         glow_map,
                     )
                     # Which way this piece ends up facing decides two things
@@ -1257,7 +1271,9 @@ struct Renderer(Movable):
         # Linear light becomes an image exactly once, here, on as many
         # threads as drew it, through the tone mapping curve on the way --
         # except in the uv view, which is coordinates rather than light and
-        # is never tone mapped, on either backend.
+        # is never tone mapped, background included, on either backend. A
+        # normal or depth material's pixels are data too, and the target
+        # keeps the curve off them by itself.
         var curve = self.tone_mapping
         if self.shading == SHADE_UV:
             curve = NO_TONE_MAPPING

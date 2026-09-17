@@ -26,7 +26,13 @@ from materials.material import (
     Material,
 )
 from lights.light import point_light
-from materials.material import BASIC
+from materials.material import (
+    BASIC,
+    DEPTH,
+    NORMALS,
+    depth_material,
+    normal_material,
+)
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
 from lights.lighting import Lighting
@@ -3686,6 +3692,221 @@ def test_set_tone_mapping_refuses_an_exposure_that_is_not_finite() raises:
     with assert_raises():
         renderer.set_tone_mapping(REINHARD_TONE_MAPPING, nan[DType.float32]())
     assert_equal(renderer.tone_mapping, NO_TONE_MAPPING)
+
+
+# --- normal and depth materials ---------------------------------------------
+
+
+def camera_at(x: Float32, y: Float32, z: Float32) raises -> PerspectiveCamera:
+    """Return a camera at a point, looking at the origin."""
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(x, y, z), Vector3(0, 0, 0))
+    return camera^
+
+
+def turned_scene(turn: Angle) raises -> Scene:
+    """Return a lit scene whose only node is turned that far about y."""
+    var scene = Scene()
+    var node = Object3D()
+    node.set_euler(Angle(0.0, DEGREE), turn, Angle(0.0, DEGREE))
+    _ = scene.add(node^)
+    light_the(scene)
+    scene.update()
+    return scene^
+
+
+def sheet_of(
+    mut assets: Assets, material: MaterialId, node: NodeId = NodeId(0)
+) raises -> List[Mesh]:
+    """Return one two-meter sheet drawn with `material` at `node`."""
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            assets.geometries.add(
+                plane(Length(2.0, METER), Length(2.0, METER))
+            ),
+            material,
+            node,
+        )
+    )
+    return meshes^
+
+
+def test_a_normal_material_shows_the_normal_the_camera_sees() raises:
+    # A sheet square on to the camera is (128, 128, 255), whatever the
+    # lights are doing: three.js's `packNormalToRGB` of (0, 0, 1).
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var shown = assets.materials.add(normal_material())
+    var scene = scene_with_node_at(0)
+    var meshes = sheet_of(assets, shown)
+    var square = rendered(renderer, scene, assets, meshes, camera_at(0, 0, 4))
+    var center = square.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(center.r, UInt8(128))
+    assert_equal(center.g, UInt8(128))
+    assert_equal(center.b, UInt8(255))
+    # Turned an eighth of a turn about y, the normal leans toward the
+    # camera's right: (0.7071, 0, 0.7071) packed.
+    var leaning = turned_scene(Angle(45.0, DEGREE))
+    var tilted = rendered(renderer, leaning, assets, meshes, camera_at(0, 0, 4))
+    var lean = tilted.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(lean.r, UInt8(218))
+    assert_equal(lean.g, UInt8(128))
+    assert_equal(lean.b, UInt8(218))
+
+
+def test_a_normal_material_turns_with_the_camera() raises:
+    # The normal is in view space, three.js's `vNormal`, so moving the
+    # camera changes the color of a sheet that never moved. From up and
+    # back at forty-five degrees the sheet's normal reads
+    # (0, -0.7071, 0.7071).
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var shown = assets.materials.add(normal_material())
+    var scene = scene_with_node_at(0)
+    var meshes = sheet_of(assets, shown)
+    var above = rendered(renderer, scene, assets, meshes, camera_at(0, 4, 4))
+    var center = above.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(center.r, UInt8(128))
+    assert_equal(center.g, UInt8(37))
+    assert_equal(center.b, UInt8(218))
+
+
+def test_a_normal_material_flips_a_face_seen_from_behind() raises:
+    # A sheet turned right around and drawn double sided: the side being
+    # looked at is the one shown, as it is the one lit. Without the flip it
+    # would read (128, 128, 0).
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var shown = assets.materials.add(normal_material(DOUBLE_SIDE))
+    var scene = turned_scene(Angle(180.0, DEGREE))
+    var meshes = sheet_of(assets, shown)
+    var behind = rendered(renderer, scene, assets, meshes, camera_at(0, 0, 4))
+    var center = behind.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(center.r, UInt8(128))
+    assert_equal(center.g, UInt8(128))
+    assert_equal(center.b, UInt8(255))
+
+
+def test_a_normal_material_falls_back_to_the_face_normal() raises:
+    # A geometry that never said which way it faces still shows a normal:
+    # the face's own, computed in world space and carried into view space
+    # like a supplied one.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            assets.geometries.add(lone_triangle(False)),
+            assets.materials.add(normal_material()),
+            NodeId(0),
+        )
+    )
+    var scene = scene_with_node_at(0)
+    var flat = rendered(renderer, scene, assets, meshes, camera_at(0, 0, 4))
+    var inside = flat.get_pixel(WIDTH // 2, HEIGHT // 2 + 2)
+    assert_equal(inside.r, UInt8(128))
+    assert_equal(inside.g, UInt8(128))
+    assert_equal(inside.b, UInt8(255))
+
+
+def test_a_depth_material_is_brighter_near_than_far() raises:
+    # One minus the window-space depth, so the near sheet is the paler
+    # gray. A camera one to ten meters deep puts a sheet four meters out at
+    # two thirds in NDC and one six meters out at 0.8519.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var shown = assets.materials.add(depth_material())
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(1.0, METER),
+        Length(10.0, METER),
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var near_scene = scene_with_node_at(0)
+    var far_scene = scene_with_node_at(-2)
+    var meshes = sheet_of(assets, shown)
+    var near = rendered(renderer, near_scene, assets, meshes, camera)
+    var far = rendered(renderer, far_scene, assets, meshes, camera)
+    var pale = near.get_pixel(WIDTH // 2, HEIGHT // 2)
+    var dark = far.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(pale.r, pale.g)
+    assert_equal(pale.g, pale.b)
+    assert_true(pale.r > dark.r, "the far sheet was not the darker gray")
+    assert_true(
+        abs(Int(pale.r) - 43) <= 1, "the near sheet is not the expected gray"
+    )
+    assert_true(
+        abs(Int(dark.r) - 19) <= 1, "the far sheet is not the expected gray"
+    )
+
+
+def test_a_data_material_ignores_the_lights_and_the_fog() raises:
+    # Neither the lights nor the fog touches a normal or a depth: what the
+    # material writes is data, and a veil of light over it would be a lie.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    for material in [normal_material(), depth_material()]:
+        var shown = assets.materials.add(material)
+        var meshes = sheet_of(assets, shown)
+        var scene = scene_with_node_at(0)
+        var plain = rendered(
+            renderer, scene, assets, meshes, camera_at(0, 0, 4)
+        )
+        var dark = unlit_scene_with_a_node()
+        var unlit = rendered(renderer, dark, assets, meshes, camera_at(0, 0, 4))
+        var fogged = scene_with_node_at(0)
+        fogged.fog = linear_fog(
+            Color(255, 0, 0), Length(0.5, METER), Length(4.5, METER)
+        )
+        var veiled = rendered(
+            renderer, fogged, assets, meshes, camera_at(0, 0, 4)
+        )
+        for y in range(HEIGHT):
+            for x in range(WIDTH):
+                var here = plain.get_pixel(x, y)
+                assert_equal(unlit.get_pixel(x, y).r, here.r)
+                assert_equal(unlit.get_pixel(x, y).g, here.g)
+                assert_equal(unlit.get_pixel(x, y).b, here.b)
+                assert_equal(veiled.get_pixel(x, y).r, here.r)
+                assert_equal(veiled.get_pixel(x, y).g, here.g)
+                assert_equal(veiled.get_pixel(x, y).b, here.b)
+
+
+def test_a_data_material_is_not_tone_mapped_by_the_renderer() raises:
+    # The curve compresses light, and the target keeps it off a pixel that
+    # holds data. A lit sheet at the same place is compressed.
+    var assets = Assets()
+    var shown = assets.materials.add(normal_material())
+    var white = assets.materials.add(Material(Color(255, 255, 255)))
+    var scene = scene_with_node_at(0)
+    var plain = Renderer(WIDTH, HEIGHT)
+    var curved = Renderer(WIDTH, HEIGHT)
+    curved.set_tone_mapping(REINHARD_TONE_MAPPING)
+    var meshes = sheet_of(assets, shown)
+    var flat = rendered(plain, scene, assets, meshes, camera_at(0, 0, 4))
+    var squeezed = rendered(curved, scene, assets, meshes, camera_at(0, 0, 4))
+    var here = WIDTH // 2
+    assert_equal(
+        squeezed.get_pixel(here, HEIGHT // 2).b,
+        flat.get_pixel(here, HEIGHT // 2).b,
+    )
+    var lit_meshes = sheet_of(assets, white)
+    var bright = rendered(plain, scene, assets, lit_meshes, camera_at(0, 0, 4))
+    var compressed = rendered(
+        curved, scene, assets, lit_meshes, camera_at(0, 0, 4)
+    )
+    assert_true(
+        compressed.get_pixel(here, HEIGHT // 2).r
+        < bright.get_pixel(here, HEIGHT // 2).r,
+        "the curve compressed nothing",
+    )
 
 
 def main() raises:

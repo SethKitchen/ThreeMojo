@@ -2,7 +2,7 @@
 
 `materials/material.mojo`. A `Material` is a color, an optional texture, which sides to draw, an opacity, a blend policy, a kind and an emissive term.
 
-three.js: `Material`, `MeshLambertMaterial`, `MeshBasicMaterial`, `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`.
+three.js: `Material`, `MeshLambertMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`.
 
 ## Construct one
 
@@ -23,7 +23,7 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `side` | `Side` | `FRONT_SIDE` | Which faces are drawn. |
 | `opacity` | `Float32` | `1.0` | One is opaque. Less shows what is behind. |
 | `blending` | `Optional[Blending]` | inferred | `OPAQUE` or `BLEND`. |
-| `kind` | `MaterialKind` | `LAMBERT` | Lit, or unlit. |
+| `kind` | `MaterialKind` | `LAMBERT` | Lit, unlit, or showing data. |
 | `emissive` | `Color` | black | Light the surface gives off, as authored in sRGB. |
 | `emissive_intensity` | `Float32` | `1.0` | Scales `emissive`. |
 | `emissive_map` | `TextureId` | `NO_TEXTURE` | The texture that multiplies `emissive`. |
@@ -45,6 +45,50 @@ A face seen from behind is lit with its normal flipped. A mirrored mesh, with a 
 |---|---|---|
 | `LAMBERT` | `MeshLambertMaterial` | The lights reach the surface. |
 | `BASIC` | `MeshBasicMaterial` | The color and texture show as they are. |
+| `NORMALS` | `MeshNormalMaterial` | The normal the camera sees, as a color. |
+| `DEPTH` | `MeshDepthMaterial` | How far away the surface is, as a gray. |
+
+`is_data()` is true for the last two. They show data rather than light. See [Data materials](#data-materials).
+
+## Data materials
+
+A normal material and a depth material write bytes that a display must show as they are. Build one with its own function:
+
+```mojo
+var shown = assets.materials.add(normal_material())
+var seen = assets.materials.add(depth_material())
+var pane = assets.materials.add(normal_material(DOUBLE_SIDE, 0.5))
+var cut = assets.materials.add(depth_material(mask, FRONT_SIDE, 1.0, BLEND))
+```
+
+| Builder | Meaning |
+|---|---|
+| `normal_material(side=FRONT_SIDE, opacity=1.0, blending=None)` | The view-space normal as a color. |
+| `depth_material(map=NO_TEXTURE, side=FRONT_SIDE, opacity=1.0, blending=None)` | The depth as a gray. |
+
+Both take `side`, `opacity` and `blending`, and nothing else. A depth material also takes a `map`.
+
+### Normals
+
+`NORMALS` writes the normal as three.js's `packNormalToRGB` does. Each component is halved and moved up by a half. A surface square on to the camera is (128, 128, 255). One turned to the camera's right is redder. One turned up is greener.
+
+The normal is the one the camera sees, three.js's `vNormal`, not the one the world sees. Moving the camera changes the colors of a surface that never moved. The renderer carries each normal through the view matrix for this material alone.
+
+A face seen from behind shows its normal flipped, as it is lit flipped. The normal is made unit length at every fragment, as it is for a lit surface. A geometry with no normals falls back to its face normal.
+
+### Depth
+
+`DEPTH` writes one minus the window-space depth in every channel. The near plane is white and the far plane is black. This is three.js's `MeshDepthMaterial` under `BasicDepthPacking`. The other packings are not ported.
+
+Set the camera's `near` and `far` close together to see anything. A range of one to a thousand meters puts almost every surface within a few levels of black.
+
+A map's alpha cuts the surface out, as three.js's does. Its color is not read. Pass `blending=BLEND` for the cut to show what is behind it.
+
+### What they refuse
+
+Neither shader reads a color, an emissive term or the vertex colors. A material of either kind refuses all three rather than ignoring them. Pass opaque white as the color, or use the builders, which do. A normal material refuses a map as well.
+
+Neither is lit, fogged nor tone mapped. A veil of light over a normal, or a curve that compresses it, would make the image lie about its own numbers. Both rasterizers decide this per pixel. See [Why a normal is not a color](Why-a-normal-is-not-a-color).
 
 ## Vertex colors
 
@@ -98,6 +142,7 @@ Pass `blending=BLEND` when a texture's own alpha needs blending and the material
 | Method | Meaning |
 |---|---|
 | `is_lit() -> Bool` | `kind == LAMBERT`. |
+| `is_data() -> Bool` | `kind` is `NORMALS` or `DEPTH`. |
 | `is_textured() -> Bool` | `map != NO_TEXTURE`. |
 | `is_transparent() -> Bool` | `blending == BLEND`. |
 | `is_emissive() -> Bool` | Whether the emissive color at its intensity adds any light. |
@@ -111,6 +156,9 @@ The constructor raises for:
 - An opacity outside zero to one.
 - A negative emissive intensity.
 - An emissive color or map on a `BASIC` material.
+- A color that is not opaque white on a `NORMALS` or `DEPTH` material.
+- An emissive term or vertex colors on either of those two kinds.
+- A map on a `NORMALS` material.
 
 `Renderer.prepare` raises for an emissive map that reads its alpha as coverage.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.

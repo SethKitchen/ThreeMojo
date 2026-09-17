@@ -18,7 +18,7 @@ MAX 26.5.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-G
 | `flatten_lights(lighting) -> List[Float32]` | The light buffer: the ambient term, then each directional, point, hemisphere and spot light. |
 | `flatten_fog(fog) -> List[Float32]` | The fog buffer, six floats. The kind crosses as a kernel argument. |
 | `flatten_textures(store)` | Every texture in one buffer, with a descriptor table. |
-| `triangle_state(corners) -> List[Int32]` | Texture, blend and lit per triangle. |
+| `triangle_state(corners) -> List[Int32]` | Texture, blend, material kind and emissive map per triangle. |
 
 ## GpuRenderer
 
@@ -39,7 +39,9 @@ Hold one across frames. The device buffers survive between draws.
 
 Coverage is integer arithmetic and matches the CPU exactly. Shading is floating point and matches within one level per channel, because the device fuses multiply and add. `tests/test_gpu.mojo` holds both backends to those standards on hand-built triangles and on whole prepared scenes.
 
-The kernel calls the same functions as the CPU for the fill rule, texture wrapping and texel blending. It shares the light falloff, the spot light's rim, the fog factor and the tone mapping curves too. See [Why the CPU and GPU share code](Why-the-CPU-and-GPU-share-code).
+The kernel calls the same functions as the CPU for the fill rule, texture wrapping and texel blending. It shares the light falloff, the spot light's rim, the fog factor, the normal and depth packing, and the tone mapping curves too. See [Why the CPU and GPU share code](Why-the-CPU-and-GPU-share-code).
+
+The kernel tracks whether each pixel holds data rather than light, as the host's target does. It keeps the fog and the curve off those pixels.
 
 ## Teardown
 

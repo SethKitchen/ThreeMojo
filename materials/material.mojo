@@ -53,6 +53,15 @@ than a value, saying the geometry's `color` attribute multiplies `color` at
 every vertex. It is a property of the material and not of the geometry, as
 in three.js, so one geometry with colors can be drawn tinted by one material
 and plain by another.
+
+Two more kinds show *data* rather than light: `NORMALS` writes the
+view-space normal as a color, three.js's `MeshNormalMaterial`, and `DEPTH`
+writes how far away the surface is, near white and far black, three.js's
+`MeshDepthMaterial`. Neither has a color, an emissive term or vertex
+colors, because neither shader reads them, and a material of either kind
+refuses them here rather than silently ignoring them. What they write is
+bytes, not light: the rasterizers keep it out of the fog and the tone
+mapping, as they keep the uv debug view out of them.
 """
 
 from render.framebuffer import Color, FloatColor
@@ -123,8 +132,21 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is `BASIC` or `LAMBERT`."""
-        return self == BASIC or self == LAMBERT
+        """Return True if this is `BASIC`, `LAMBERT`, `NORMALS` or `DEPTH`."""
+        return (
+            self == BASIC or self == LAMBERT or self == NORMALS or self == DEPTH
+        )
+
+    def is_data(self) -> Bool:
+        """Return True if a material of this kind shows data rather than
+        light: `NORMALS` or `DEPTH`.
+
+        What such a surface writes is bytes the display must show as they
+        are. Both rasterizers keep those fragments out of the lights, the
+        emissive term, the fog and the tone mapping, as they keep the uv
+        debug view out of them.
+        """
+        return self == NORMALS or self == DEPTH
 
 
 # Unlit: the surface's own color, and its texture, reach the pixel as they
@@ -133,6 +155,13 @@ comptime BASIC = MaterialKind(0)
 # Lit per fragment by every light in the scene. three.js's
 # `MeshLambertMaterial`, and the default here because every example wants it.
 comptime LAMBERT = MaterialKind(1)
+# The view-space normal, written as a color: a surface square-on to the
+# camera is (128, 128, 255). three.js's `MeshNormalMaterial`. Named for what
+# it shows rather than `NORMAL`, which is the geometry attribute.
+comptime NORMALS = MaterialKind(2)
+# The depth, near white and far black: one minus the window-space depth in
+# every channel, three.js's `MeshDepthMaterial` under `BasicDepthPacking`.
+comptime DEPTH = MaterialKind(3)
 
 
 @fieldwise_init
@@ -202,7 +231,13 @@ struct Material(ImplicitlyCopyable):
                 texture's own alpha cannot be inferred from here, so a cut-out
                 image needs `BLEND` even when the material looks opaque.
             kind: `LAMBERT` to be lit by the scene's lights, `BASIC` to show
-                the color and texture as they are.
+                the color and texture as they are, `NORMALS` to show the
+                view-space normal as a color, or `DEPTH` to show how far
+                away the surface is. The last two show data rather than
+                light: they take only `side`, `opacity` and `blending`, and
+                `DEPTH` a `map` whose alpha cuts the surface out; `color`
+                must be opaque white. `normal_material` and
+                `depth_material` build them.
             emissive: Light the surface gives off, as authored in sRGB.
                 Black, the default, gives off none.
             emissive_intensity: What `emissive` is scaled by. One leaves it
@@ -222,7 +257,10 @@ struct Material(ImplicitlyCopyable):
                 to one, `emissive_intensity` is negative, `side`, `blending`
                 or `kind` holds a value that is none of its named constants,
                 or `kind` is `BASIC` and any emissive term was given, which
-                three.js's `MeshBasicMaterial` has no place for. A bare
+                three.js's `MeshBasicMaterial` has no place for. A `NORMALS`
+                or `DEPTH` material refuses a color that is not opaque
+                white, any emissive term and vertex colors, and `NORMALS`
+                refuses a map as well: neither shader reads them. A bare
                 integer in their place is a compile error; a wrong value
                 inside the right type is refused here.
         """
@@ -235,7 +273,9 @@ struct Material(ImplicitlyCopyable):
                 "A material's side must be FRONT_SIDE, BACK_SIDE or DOUBLE_SIDE"
             )
         if not kind.is_valid():
-            raise Error("A material's kind must be BASIC or LAMBERT")
+            raise Error(
+                "A material's kind must be BASIC, LAMBERT, NORMALS or DEPTH"
+            )
         if emissive_map.value < 0 and emissive_map != NO_TEXTURE:
             raise Error("A material's emissive map id cannot be negative")
         if emissive_intensity < 0:
@@ -248,6 +288,32 @@ struct Material(ImplicitlyCopyable):
                 "A basic material has no emissive term: its color already"
                 " shows whatever the lights do"
             )
+        if kind.is_data():
+            # Neither shader reads a color, an emissive term or the vertex
+            # colors, so a value there is a mistake rather than a choice.
+            if not _is_opaque_white(color):
+                raise Error(
+                    "A normal or depth material has no color: pass opaque"
+                    " white, or build it with normal_material or"
+                    " depth_material"
+                )
+            if emissive_map != NO_TEXTURE or _gives_off_light(
+                emissive, emissive_intensity
+            ):
+                raise Error(
+                    "A normal or depth material has no emissive term: it"
+                    " shows data, not light"
+                )
+            if vertex_colors:
+                raise Error(
+                    "A normal or depth material has no vertex colors: it"
+                    " shows data, not light"
+                )
+            if kind == NORMALS and map != NO_TEXTURE:
+                raise Error(
+                    "A normal material has no map: it shows the normal, not"
+                    " an image"
+                )
         self.color = color
         self.map = map
         self.side = side
@@ -274,6 +340,11 @@ struct Material(ImplicitlyCopyable):
     def is_lit(self) -> Bool:
         """Return True if the scene's lights reach this surface."""
         return self.kind == LAMBERT
+
+    def is_data(self) -> Bool:
+        """Return True if this surface shows data rather than light: a
+        `NORMALS` or `DEPTH` material. See `MaterialKind.is_data`."""
+        return self.kind.is_data()
 
     def is_textured(self) -> Bool:
         """Return True if this material names a texture."""
@@ -309,6 +380,93 @@ struct Material(ImplicitlyCopyable):
             glow.b * self.emissive_intensity,
             1.0,
         )
+
+
+def _is_opaque_white(color: Color) -> Bool:
+    """Return True if `color` is white with full alpha, the one color a
+    material that shows data accepts."""
+    return (
+        color.r == 255
+        and color.g == 255
+        and color.b == 255
+        and (color.a == 255)
+    )
+
+
+def normal_material(
+    side: Side = FRONT_SIDE,
+    opacity: Float32 = 1.0,
+    blending: Optional[Blending] = None,
+) raises -> Material:
+    """Return a material that shows the view-space normal as a color,
+    three.js's `MeshNormalMaterial`.
+
+    A surface square-on to the camera is (128, 128, 255); one turned to the
+    camera's right is redder, one turned up greener. The normal is the
+    camera's view of it, so turning the camera turns the colors with it. A
+    face seen from behind shows its normal flipped, as it is lit flipped.
+
+    Args:
+        side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
+        opacity: One for an opaque surface, less to see through it.
+        blending: `OPAQUE` or `BLEND`, or unset to infer it from the
+            opacity.
+
+    Returns:
+        The material, of kind `NORMALS`.
+
+    Raises:
+        Error: If `opacity` is outside zero to one, or `side` or
+            `blending` holds a value that is none of its named constants.
+    """
+    return Material(
+        Color(255, 255, 255),
+        side=side,
+        opacity=opacity,
+        blending=blending,
+        kind=NORMALS,
+    )
+
+
+def depth_material(
+    map: TextureId = NO_TEXTURE,
+    side: Side = FRONT_SIDE,
+    opacity: Float32 = 1.0,
+    blending: Optional[Blending] = None,
+) raises -> Material:
+    """Return a material that shows how far away the surface is, near white
+    and far black: three.js's `MeshDepthMaterial` under `BasicDepthPacking`.
+
+    Every channel holds one minus the window-space depth, which runs from
+    zero at the near plane to one at the far plane. A map's alpha multiplies
+    the opacity, as three.js's does, so a cut-out image cuts the depth out
+    too; its color is not read. The other packings are not ported.
+
+    Args:
+        map: Id of a texture whose alpha cuts the surface out, or
+            `NO_TEXTURE`.
+        side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
+        opacity: One for an opaque surface, less to see through it.
+        blending: `OPAQUE` or `BLEND`, or unset to infer it from the
+            opacity. A map's own alpha cannot be inferred from here, so a
+            cut-out image needs `BLEND` to blend.
+
+    Returns:
+        The material, of kind `DEPTH`.
+
+    Raises:
+        Error: If `map` is a negative other than `NO_TEXTURE`, `opacity` is
+            outside zero to one, or `side` or `blending` holds a value that
+            is none of its named constants.
+    """
+    return Material(
+        Color(255, 255, 255),
+        map=map,
+        side=side,
+        opacity=opacity,
+        blending=blending,
+        kind=DEPTH,
+    )
 
 
 def _gives_off_light(emissive: Color, intensity: Float32) -> Bool:

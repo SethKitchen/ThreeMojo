@@ -35,8 +35,9 @@ three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as 
 | Member | Meaning |
 |---|---|
 | `RenderTarget(width, height, clear)` | A target cleared to a color. |
-| `write(x, y, color)` | Replace a pixel. |
-| `blend(x, y, color)` | Source-over in premultiplied linear light. |
+| `write(x, y, color, data=False)` | Replace a pixel. |
+| `blend(x, y, color, data=False)` | Source-over in premultiplied linear light. |
+| `is_data(x, y) -> Bool` | Whether the pixel holds data rather than light. |
 | `test_depth(x, y, z) -> Bool` | Keep and record `z` when it is nearer. |
 | `depth_passes(x, y, z) -> Bool` | Compare without recording. |
 | `depth_at(x, y)`, `color_at(x, y)` | Read a pixel. |
@@ -44,6 +45,8 @@ three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as 
 | `resolve(workers=1, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Framebuffer` | Unpremultiply, tone map and encode every pixel. |
 
 Nothing is clamped before `resolve`. Overexposed light survives every step.
+
+Pass `data=True` when the color is not light. A normal material, a depth material and the `SHADE_UV` view all do. The last fragment into a pixel decides. `resolve` encodes such a pixel without tone mapping it. See [Why a normal is not a color](Why-a-normal-is-not-a-color).
 
 ## Tone mapping
 
@@ -65,7 +68,7 @@ three.js: `WebGLRenderer.toneMapping` and `toneMappingExposure`.
 
 `check_tone_mapping(mode, exposure)` refuses any other value, and an exposure that is negative or not finite. `resolve`, `shown`, `Renderer.set_tone_mapping` and `GpuRenderer.draw` all call it.
 
-The curve is applied once, to the composited light of each pixel. three.js applies it to each fragment before blending. On an opaque pixel that no fog reaches, the two orders agree up to rounding. A fogged pixel differs: the fog is mixed in linear light before the curve here, and after the encode in three.js. A translucent pixel differs by design.
+The curve is applied once, to the composited light of each pixel. three.js applies it to each fragment before blending. On an opaque pixel that no fog reaches, the two orders agree up to rounding. A fogged pixel differs: the fog is mixed in linear light before the curve here, and after the encode in three.js. A translucent pixel differs by design. A pixel that holds data is not tone mapped at all.
 
 Bit-for-bit equality with another implementation is not promised, because `exp2` of `log2` rounds differently from a `pow`. The background is light in the target and goes through the curve too. The `SHADE_UV` view is never tone mapped. See [Renderer](Renderer#tone-mapping).
 

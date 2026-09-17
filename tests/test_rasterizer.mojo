@@ -5,12 +5,28 @@
 
 """Tests for `render.rasterizer`."""
 
-from materials.material import Blending
+from materials.material import (
+    BASIC,
+    DEPTH,
+    LAMBERT,
+    NORMALS,
+    Blending,
+    MaterialKind,
+    depth_material,
+    normal_material,
+)
 from math.vector2 import Vector2
 from std.math import inf
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, NO_TEXTURE, OPAQUE
-from render.texture import IGNORED, NEAREST, REPEAT, Texture, checkerboard
+from render.texture import (
+    COVERAGE,
+    IGNORED,
+    NEAREST,
+    REPEAT,
+    Texture,
+    checkerboard,
+)
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.light import directional_light
 from lights.lighting import Lighting
@@ -29,8 +45,11 @@ from render.rasterizer import (
     RasterVertex,
     ShadeMode,
     Triangle,
+    data_color,
     edge,
     mip_level,
+    packed_depth,
+    packed_normal,
     rasterize,
     rasterize_depth,
     rasterize_all,
@@ -1325,21 +1344,21 @@ def test_malformed_state_is_refused_whether_or_not_it_is_visible() raises:
             rasterize_all(corners, target, workers=workers)
 
 
-def test_corners_that_disagree_about_being_lit_are_rejected() raises:
-    # Lit or not is per triangle, like the blend policy, and read from the
-    # first corner; so the other two have to agree with it.
+def test_corners_that_disagree_about_their_kind_are_rejected() raises:
+    # The material kind is per triangle, like the blend policy, and read
+    # from the first corner; so the other two have to agree with it.
     var target = RenderTarget(8, 8, Color(0, 0, 0))
     var a = RasterVertex(0, 0, 0.5, 1, FloatColor(1, 1, 1))
     var b = RasterVertex(6, 0, 0.5, 1, FloatColor(1, 1, 1))
     var c = RasterVertex(0, 6, 0.5, 1, FloatColor(1, 1, 1))
-    var unlit_b = RasterVertex(6, 0, 0.5, 1, FloatColor(1, 1, 1), lit=False)
-    var unlit_c = RasterVertex(0, 6, 0.5, 1, FloatColor(1, 1, 1), lit=False)
+    var unlit_b = RasterVertex(6, 0, 0.5, 1, FloatColor(1, 1, 1), kind=BASIC)
+    var unlit_c = RasterVertex(0, 6, 0.5, 1, FloatColor(1, 1, 1), kind=BASIC)
     with assert_raises():
         rasterize_shaded(a, unlit_b, c, target)
     with assert_raises():
         rasterize_shaded(a, b, unlit_c, target)
-    # Agreeing on either answer is fine.
-    var unlit_a = RasterVertex(0, 0, 0.5, 1, FloatColor(1, 1, 1), lit=False)
+    # Agreeing on any of the four is fine.
+    var unlit_a = RasterVertex(0, 0, 0.5, 1, FloatColor(1, 1, 1), kind=BASIC)
     rasterize_shaded(unlit_a, unlit_b, unlit_c, target)
     rasterize_shaded(a, b, c, target)
 
@@ -1386,7 +1405,7 @@ def glowing_corner(
         OPAQUE,
         Vector3(0, 0, 1),
         Vector3(0, 0, 0),
-        True,
+        LAMBERT,
         glow,
         map,
     )
@@ -1726,7 +1745,7 @@ def placed_corner(
     x: Float32,
     y: Float32,
     world: Vector3,
-    lit: Bool = False,
+    kind: MaterialKind = BASIC,
     alpha: Float32 = 1.0,
     blend: Blending = OPAQUE,
     glow: FloatColor = FloatColor(0.0, 0.0, 0.0),
@@ -1746,7 +1765,7 @@ def placed_corner(
         blend,
         Vector3(0, 0, 1),
         world,
-        lit,
+        kind,
         glow,
         NO_TEXTURE,
         depth,
@@ -1755,7 +1774,7 @@ def placed_corner(
 
 def placed_quad(
     depth: Float32,
-    lit: Bool = False,
+    kind: MaterialKind = BASIC,
     alpha: Float32 = 1.0,
     blend: Blending = OPAQUE,
     glow: FloatColor = FloatColor(0.0, 0.0, 0.0),
@@ -1764,12 +1783,12 @@ def placed_quad(
     `depth` meters in front of a camera at the origin looking down -z."""
     var world = Vector3(0, 0, -depth)
     var corners = List[RasterVertex]()
-    corners.append(placed_corner(0, 0, world, lit, alpha, blend, glow, depth))
-    corners.append(placed_corner(8, 0, world, lit, alpha, blend, glow, depth))
-    corners.append(placed_corner(8, 8, world, lit, alpha, blend, glow, depth))
-    corners.append(placed_corner(0, 0, world, lit, alpha, blend, glow, depth))
-    corners.append(placed_corner(8, 8, world, lit, alpha, blend, glow, depth))
-    corners.append(placed_corner(0, 8, world, lit, alpha, blend, glow, depth))
+    corners.append(placed_corner(0, 0, world, kind, alpha, blend, glow, depth))
+    corners.append(placed_corner(8, 0, world, kind, alpha, blend, glow, depth))
+    corners.append(placed_corner(8, 8, world, kind, alpha, blend, glow, depth))
+    corners.append(placed_corner(0, 0, world, kind, alpha, blend, glow, depth))
+    corners.append(placed_corner(8, 8, world, kind, alpha, blend, glow, depth))
+    corners.append(placed_corner(0, 8, world, kind, alpha, blend, glow, depth))
     return corners^
 
 
@@ -1850,7 +1869,7 @@ def test_fog_leaves_alpha_alone_and_mixes_before_blending() raises:
     var fog = gray_fog()
     var target = RenderTarget(8, 8, Color(0, 0, 0, 0))
     rasterize_all(
-        placed_quad(10, False, 0.5, BLEND),
+        placed_quad(10, BASIC, 0.5, BLEND),
         target,
         SHADE_LIT,
         TextureStore(),
@@ -1872,7 +1891,7 @@ def test_a_lit_surface_is_fogged_after_the_lights_and_the_glow() raises:
     # is it mixed half way to gray. Fogging before the glow would leave the
     # glow unveiled.
     var fog = gray_fog()
-    var quad = placed_quad(2, True, 1.0, OPAQUE, FloatColor(0.25, 0.0, 0.0))
+    var quad = placed_quad(2, LAMBERT, 1.0, OPAQUE, FloatColor(0.25, 0.0, 0.0))
     var shown = fogged_pixel(quad, fog, SHADE_LIT, lit_along_z())
     var gray = FloatColor(srgb=Color(128, 128, 128))
     var expected = FloatColor(
@@ -1888,7 +1907,7 @@ def test_fog_is_the_same_on_one_worker_and_on_four() raises:
     var fog = FogView(
         exp2_fog(Color(200, 220, 255), InverseLength(0.3, PER_METER))
     )
-    var quad = placed_quad(3, True)
+    var quad = placed_quad(3, LAMBERT)
     var alone = fogged_pixel(quad, fog, SHADE_LIT, lit_along_z(), 1)
     var crowd = fogged_pixel(quad, fog, SHADE_LIT, lit_along_z(), 4)
     assert_same_color(alone, crowd)
@@ -1902,7 +1921,7 @@ def test_a_blinding_surface_fully_fogged_is_the_fog_color() raises:
     # thousand it lost a level or two.
     var fog = gray_fog()
     var blinding = placed_quad(
-        10, False, 1.0, OPAQUE, FloatColor(1.0e6, 1.0e6, 1.0e6)
+        10, BASIC, 1.0, OPAQUE, FloatColor(1.0e6, 1.0e6, 1.0e6)
     )
     var target = RenderTarget(8, 8, Color(0, 0, 0))
     rasterize_all(
@@ -1914,7 +1933,7 @@ def test_a_blinding_surface_fully_fogged_is_the_fog_color() raises:
     var expected = tone_map(gray, REINHARD_TONE_MAPPING, 1.0).encode()
     assert_same_color(curved.get_pixel(4, 4), expected)
     var bright = placed_quad(
-        10, False, 1.0, OPAQUE, FloatColor(65536.0, 65536.0, 65536.0)
+        10, BASIC, 1.0, OPAQUE, FloatColor(65536.0, 65536.0, 65536.0)
     )
     var again = RenderTarget(8, 8, Color(0, 0, 0))
     rasterize_all(
@@ -1976,6 +1995,287 @@ def test_a_view_built_by_hand_is_refused_before_a_fragment_is_drawn() raises:
             1,
             unknown,
         )
+
+
+# --- data materials: the normal and the depth -------------------------------
+
+
+def data_corner(
+    x: Float32,
+    y: Float32,
+    kind: MaterialKind,
+    normal: Vector3 = Vector3(0, 0, 1),
+    z: Float32 = 0.5,
+    alpha: Float32 = 1.0,
+    blend: Blending = OPAQUE,
+    depth: Float32 = 0,
+    texture: TextureId = NO_TEXTURE,
+) -> RasterVertex:
+    """Return a white corner of a data material, facing `normal`.
+
+    White and opaque, so that anything but white in the image is the data
+    the material shows rather than the color it carries.
+    """
+    return RasterVertex(
+        x,
+        y,
+        z,
+        1,
+        FloatColor(1, 1, 1, alpha),
+        0,
+        0,
+        texture,
+        blend,
+        normal,
+        Vector3(0, 0, 0),
+        kind,
+        FloatColor(0.0, 0.0, 0.0),
+        NO_TEXTURE,
+        depth,
+    )
+
+
+def data_quad(
+    kind: MaterialKind,
+    normal: Vector3 = Vector3(0, 0, 1),
+    z: Float32 = 0.5,
+    alpha: Float32 = 1.0,
+    blend: Blending = OPAQUE,
+    depth: Float32 = 0,
+    texture: TextureId = NO_TEXTURE,
+) -> List[RasterVertex]:
+    """Return two triangles of a data material covering an eight-pixel
+    target."""
+    var corners = List[RasterVertex]()
+    var places: List[Tuple[Float32, Float32]] = [
+        (Float32(0), Float32(0)),
+        (Float32(8), Float32(0)),
+        (Float32(8), Float32(8)),
+        (Float32(0), Float32(0)),
+        (Float32(8), Float32(8)),
+        (Float32(0), Float32(8)),
+    ]
+    for place in places:
+        corners.append(
+            data_corner(
+                place[0],
+                place[1],
+                kind,
+                normal,
+                z,
+                alpha,
+                blend,
+                depth,
+                texture,
+            )
+        )
+    return corners^
+
+
+def data_pixel(
+    corners: List[RasterVertex],
+    fog: FogView = FogView.none(),
+    lighting: Lighting = Lighting.uniform(),
+    mode: ShadeMode = SHADE_TEXTURE,
+    textures: TextureStore = TextureStore(),
+    workers: Int = 1,
+) raises -> RenderTarget:
+    """Draw `corners` into an eight-pixel target and return it."""
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(corners, target, mode, textures, lighting, workers, fog)
+    return target^
+
+
+def test_a_normal_is_packed_into_zero_to_one_per_axis() raises:
+    # three.js's `packNormalToRGB`: halved and moved up by a half, so a
+    # surface square on to the camera is (0.5, 0.5, 1).
+    var square = packed_normal(Vector3(0, 0, 1))
+    assert_equal(square.x, Float32(0.5))
+    assert_equal(square.y, Float32(0.5))
+    assert_equal(square.z, Float32(1.0))
+    var right = packed_normal(Vector3(1, 0, 0))
+    assert_equal(right.x, Float32(1.0))
+    assert_equal(right.y, Float32(0.5))
+    assert_equal(right.z, Float32(0.5))
+    var down = packed_normal(Vector3(0, -1, 0))
+    assert_equal(down.x, Float32(0.5))
+    assert_equal(down.y, Float32(0.0))
+    assert_equal(down.z, Float32(0.5))
+
+
+def test_a_depth_is_one_at_the_near_plane_and_zero_at_the_far_one() raises:
+    # NDC depth runs -1 to 1, and three.js writes one minus the window-space
+    # depth, which is half of it plus a half.
+    assert_equal(packed_depth(-1.0), Float32(1.0))
+    assert_equal(packed_depth(0.0), Float32(0.5))
+    assert_equal(packed_depth(1.0), Float32(0.0))
+    assert_equal(packed_depth(0.5), Float32(0.25))
+
+
+def test_data_resolves_to_the_bytes_it_names() raises:
+    # Data is stored decoded, so `resolve`'s encode gives the bytes back
+    # unchanged. A half is byte 128 whatever the sRGB curve does to light.
+    var shown = data_color(0.5, 0.25, 0.0, 0.75)
+    assert_equal(shown.r, FloatColor(srgb=Color(128, 128, 128)).r)
+    assert_equal(shown.g, FloatColor(srgb=Color(64, 64, 64)).r)
+    assert_equal(shown.b, Float32(0))
+    assert_equal(shown.a, Float32(0.75))
+    var target = RenderTarget(1, 1, Color(0, 0, 0))
+    target.write(0, 0, shown, True)
+    assert_same_color(target.shown(0, 0), Color(128, 64, 0, 191))
+    assert_same_color(target.resolve().get_pixel(0, 0), Color(128, 64, 0, 191))
+
+
+def test_a_normal_material_writes_its_normal_and_not_its_color() raises:
+    # A white surface square on to the camera is (128, 128, 255), whatever
+    # the lights would have done to a white surface.
+    var half = Lighting(ambient=FloatColor(0.5, 0.5, 0.5, 1.0))
+    var facing = data_pixel(data_quad(NORMALS), lighting=half)
+    assert_same_color(facing.shown(4, 4), Color(128, 128, 255))
+    # Turned to the camera's right, and turned down.
+    var right = data_pixel(data_quad(NORMALS, Vector3(1, 0, 0)))
+    assert_same_color(right.shown(4, 4), Color(255, 128, 128))
+    var down = data_pixel(data_quad(NORMALS, Vector3(0, -1, 0)))
+    assert_same_color(down.shown(4, 4), Color(128, 0, 128))
+    # The same surface as a basic material shows the color instead, so the
+    # normal really is what changed.
+    var plain = data_pixel(data_quad(BASIC), lighting=half)
+    assert_same_color(plain.shown(4, 4), Color(255, 255, 255))
+
+
+def test_a_normal_material_makes_the_normal_unit_length_per_fragment() raises:
+    # A normal half a unit long: normalized it is (1, 0, 0) and shows 255,
+    # and packed as it arrives it would show 191.
+    var shown = data_pixel(data_quad(NORMALS, Vector3(0.5, 0, 0)))
+    assert_same_color(shown.shown(4, 4), Color(255, 128, 128))
+    # A normal of no length has no direction to normalize, and is packed as
+    # it is: the middle of every channel.
+    var none = data_pixel(data_quad(NORMALS, Vector3(0, 0, 0)))
+    assert_same_color(none.shown(4, 4), Color(128, 128, 128))
+
+
+def test_a_depth_material_writes_its_depth_as_a_gray() raises:
+    # A quarter of the way from the far plane to the near one is byte 64.
+    var near = data_pixel(data_quad(DEPTH, z=-1.0))
+    assert_same_color(near.shown(4, 4), Color(255, 255, 255))
+    var middle = data_pixel(data_quad(DEPTH, z=0.0))
+    assert_same_color(middle.shown(4, 4), Color(128, 128, 128))
+    var far = data_pixel(data_quad(DEPTH, z=0.5))
+    assert_same_color(far.shown(4, 4), Color(64, 64, 64))
+    var furthest = data_pixel(data_quad(DEPTH, z=1.0))
+    assert_same_color(furthest.shown(4, 4), Color(0, 0, 0))
+    # The normal is not read: a depth material with its surface turned away
+    # shows the same gray.
+    var turned = data_pixel(data_quad(DEPTH, Vector3(1, 0, 0), 0.5))
+    assert_same_color(turned.shown(4, 4), Color(64, 64, 64))
+
+
+def test_a_maps_alpha_cuts_a_depth_out_and_its_color_does_not() raises:
+    # three.js's `MeshDepthMaterial` reads its map's alpha. A red texel at
+    # half alpha halves the coverage and leaves the gray alone.
+    var pixels = List[UInt8]()
+    for value in [255, 0, 0, 128]:
+        pixels.append(UInt8(value))
+    var textures = TextureStore()
+    var cut = textures.add(Texture(1, 1, pixels^))
+    var shown = data_pixel(
+        data_quad(DEPTH, z=0.5, texture=cut), textures=textures
+    )
+    assert_same_color(shown.shown(4, 4), Color(64, 64, 64, 128))
+    # Blended over an opaque black target, half of that gray's light
+    # arrives and the pixel stays opaque, as any half-covered fragment
+    # does. The gray itself is still the depth's.
+    var mixed = data_pixel(
+        data_quad(DEPTH, z=0.5, blend=BLEND, texture=cut), textures=textures
+    )
+    var gray = FloatColor(srgb=Color(64, 64, 64))
+    var share = Float32(128) / 255
+    assert_same_color(
+        mixed.shown(4, 4),
+        FloatColor(
+            gray.r * share, gray.g * share, gray.b * share, 1.0
+        ).encode(),
+    )
+
+
+def test_a_data_material_is_never_fogged() raises:
+    # The fog mixes light, and a normal is not light. A basic surface at the
+    # same depth is veiled, which is what makes this a test.
+    var fog = gray_fog()
+    var veiled = fogged_pixel(placed_quad(2, BASIC), fog)
+    assert_true(veiled.r < 255, "the fog reached nothing")
+    for kind in [NORMALS, DEPTH]:
+        # Half way into the fog, and far past it: the same pixel either way,
+        # and the same as with no fog at all.
+        var clear = data_pixel(data_quad(kind, Vector3(1, 2, 3), 0.25))
+        var halfway = data_pixel(
+            data_quad(kind, Vector3(1, 2, 3), 0.25, depth=2), fog
+        )
+        var swallowed = data_pixel(
+            data_quad(kind, Vector3(1, 2, 3), 0.25, depth=40), fog
+        )
+        assert_same_color(halfway.shown(4, 4), clear.shown(4, 4))
+        assert_same_color(swallowed.shown(4, 4), clear.shown(4, 4))
+
+
+def test_a_data_material_is_never_tone_mapped() raises:
+    # A curve that compresses light would make a normal lie about its own
+    # numbers, so the target keeps it off a pixel that holds data.
+    var facing = data_pixel(data_quad(NORMALS))
+    var curved = facing.resolve(1, REINHARD_TONE_MAPPING)
+    assert_same_color(curved.get_pixel(4, 4), Color(128, 128, 255))
+    assert_true(facing.is_data(4, 4))
+    assert_true(facing.is_data(0, 0))
+    # The same white surface as light really is compressed by that curve.
+    var plain = data_pixel(data_quad(BASIC))
+    assert_false(plain.is_data(4, 4))
+    var squeezed = plain.resolve(1, REINHARD_TONE_MAPPING)
+    assert_true(
+        squeezed.get_pixel(4, 4).b < 255, "the curve compressed nothing"
+    )
+
+
+def test_a_data_material_draws_the_same_on_one_worker_and_on_four() raises:
+    var alone = data_pixel(data_quad(NORMALS, Vector3(1, 2, 3)), workers=1)
+    var crowd = data_pixel(data_quad(NORMALS, Vector3(1, 2, 3)), workers=4)
+    for y in range(8):
+        for x in range(8):
+            assert_same_color(alone.shown(x, y), crowd.shown(x, y))
+            assert_equal(alone.is_data(x, y), crowd.is_data(x, y))
+
+
+def test_an_unknown_material_kind_is_refused_even_when_agreed() raises:
+    # `MaterialKind(9)` constructs, because a struct's fields are open, and
+    # neither backend has a fragment path for it. Agreement is not enough.
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var corners = data_quad(MaterialKind(9))
+    with assert_raises():
+        rasterize_shaded(corners[0], corners[1], corners[2], target)
+    for workers in [1, 4]:
+        with assert_raises():
+            rasterize_all(corners, target, workers=workers)
+
+
+def test_every_material_kind_shades_a_fragment() raises:
+    # Each of the four has its own fragment path, and each has to reach a
+    # pixel rather than fall through to another kind's.
+    var lamp = Lighting(ambient=FloatColor(0.5, 0.5, 0.5, 1.0))
+    assert_same_color(
+        data_pixel(data_quad(LAMBERT), lighting=lamp).shown(4, 4),
+        Color(188, 188, 188),
+    )
+    assert_same_color(
+        data_pixel(data_quad(BASIC), lighting=lamp).shown(4, 4),
+        Color(255, 255, 255),
+    )
+    assert_same_color(
+        data_pixel(data_quad(NORMALS), lighting=lamp).shown(4, 4),
+        Color(128, 128, 255),
+    )
+    assert_same_color(
+        data_pixel(data_quad(DEPTH, z=0.0), lighting=lamp).shown(4, 4),
+        Color(128, 128, 128),
+    )
 
 
 def main() raises:

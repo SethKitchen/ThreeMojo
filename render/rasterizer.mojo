@@ -26,7 +26,15 @@ asserts pixel for pixel.
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
-from materials.material import BLEND, OPAQUE, Blending
+from materials.material import (
+    BLEND,
+    DEPTH,
+    LAMBERT,
+    NORMALS,
+    OPAQUE,
+    Blending,
+    MaterialKind,
+)
 from render.target import RenderTarget
 from render.texture import IGNORED, Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
@@ -431,11 +439,14 @@ struct RasterVertex(ImplicitlyCopyable):
     # projection threw that away. Interpolated perspective-correctly like the
     # normal, so a fragment knows where *it* is.
     var world: Vector3
-    # Whether the lights reach this surface at all. three.js's
-    # `MeshBasicMaterial`: a surface that shows its own color whatever the
-    # lights do -- a sky, a sprite, an overlay. Per-triangle metadata like
-    # the blend policy: read from the first corner, checked to agree.
-    var lit: Bool
+    # What kind of surface this is: `LAMBERT`, lit by the scene's lights;
+    # `BASIC`, its own color whatever the lights do -- a sky, a sprite, an
+    # overlay; `NORMALS`, the normal written as a color; or `DEPTH`, how
+    # far away it is. The last two show data rather than light, and a
+    # `NORMALS` corner's `normal` is in view space rather than world space,
+    # since it is shown rather than lit. Per-triangle metadata like the
+    # blend policy: read from the first corner, checked to agree.
+    var kind: MaterialKind
     # Light this surface gives off, linear, added after the lights and
     # untouched by them: three.js's `emissive`. Interpolated like the color,
     # and multiplied per fragment by `emissive_map` when there is one.
@@ -464,7 +475,7 @@ struct RasterVertex(ImplicitlyCopyable):
         blend: Blending = OPAQUE,
         normal: Vector3 = Vector3(0, 0, 1),
         world: Vector3 = Vector3(0, 0, 0),
-        lit: Bool = True,
+        kind: MaterialKind = LAMBERT,
         emissive: FloatColor = FloatColor(0.0, 0.0, 0.0),
         emissive_map: TextureId = NO_TEXTURE,
         view_depth: Float32 = 0,
@@ -475,9 +486,9 @@ struct RasterVertex(ImplicitlyCopyable):
         that does not care about lighting is lit square-on rather than edge-on
         or, worse, from behind. The world position defaults to the origin,
         which only a point light would notice, and the corner defaults to
-        lit, which under `Lighting.uniform` changes nothing. The emissive
-        defaults to black: no light given off. The depth defaults to
-        zero, which is at the camera and in no fog.
+        `LAMBERT`, lit, which under `Lighting.uniform` changes nothing. The
+        emissive defaults to black: no light given off. The depth defaults
+        to zero, which is at the camera and in no fog.
         """
         self.x = x
         self.y = y
@@ -490,7 +501,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.texture = texture
         self.blend = blend
         self.world = world
-        self.lit = lit
+        self.kind = kind
         self.emissive = emissive
         self.emissive_map = emissive_map
         self.view_depth = view_depth
@@ -646,14 +657,69 @@ def _length(x: Float32, y: Float32) -> Float32:
     return sqrt(x * x + y * y)
 
 
-def _raw(u: Float32, v: Float32) -> Color:
-    """Return texture coordinates as the bytes a debug view should show.
+def data_color(r: Float32, g: Float32, b: Float32, a: Float32) -> FloatColor:
+    """Return three channels of data as the light that resolves to their bytes.
 
-    Quantized without the sRGB curve, because they are coordinates and not
-    light. Handed back through `FloatColor(srgb=...)` so that `resolve`'s
-    decode and encode cancel and the bytes arrive unchanged.
+    Texture coordinates in the uv debug view, a normal under a `NORMALS`
+    material, a depth under a `DEPTH` material: none of them is light, and
+    the sRGB curve describes how a display turns light into brightness.
+    Putting them through it would make the view lie about its own numbers.
+    So each channel is quantized to the byte it should show, without the
+    curve, and that byte is decoded back through the curve into the linear
+    buffer, where `RenderTarget.resolve`'s encode returns it unchanged. The
+    target is told the pixel holds data, and keeps the tone mapping off it.
+
+    The alpha is coverage, not data, and is carried as it is. The kernel
+    does the same through its uploaded ramp, which holds the same 256
+    values this decode computes.
+
+    Args:
+        r: The red channel to show, nominally zero to one.
+        g: The green channel.
+        b: The blue channel.
+        a: The fragment's alpha, kept as it is.
+
+    Returns:
+        The linear color that resolves to those bytes.
     """
-    return FloatColor(u, v, 0.0, 1.0).quantize()
+    var bytes = FloatColor(r, g, b, 1.0).quantize()
+    var decoded = FloatColor(srgb=bytes)
+    return FloatColor(decoded.r, decoded.g, decoded.b, a)
+
+
+def packed_normal(facing: Vector3) -> Vector3:
+    """Return a unit normal mapped into zero to one per axis, three.js's
+    `packNormalToRGB`: each component halved and moved up by a half, so a
+    surface square-on to the camera is (0.5, 0.5, 1).
+
+    Args:
+        facing: The unit normal, in the space it is to be shown in.
+
+    Returns:
+        The three channels, before quantization.
+    """
+    return Vector3(
+        facing.x * 0.5 + 0.5, facing.y * 0.5 + 0.5, facing.z * 0.5 + 0.5
+    )
+
+
+def packed_depth(z: Float32) -> Float32:
+    """Return an NDC depth as the gray a `DEPTH` material shows for it: one
+    at the near plane, zero at the far plane, three.js's `MeshDepthMaterial`
+    under `BasicDepthPacking`.
+
+    three.js reads `gl_FragCoord.z`, the window-space depth from zero to
+    one, and writes one minus it. NDC depth runs from -1 to 1 here, as it
+    does there before the viewport, so the window-space depth is half of
+    it plus a half.
+
+    Args:
+        z: The NDC depth, -1 at the near plane and 1 at the far.
+
+    Returns:
+        The gray, nominally zero to one.
+    """
+    return 1 - (z * 0.5 + 0.5)
 
 
 def check_triangle_state(
@@ -682,10 +748,10 @@ def check_triangle_state(
 
     Raises:
         Error: If the three corners do not agree on their blend policy, on
-            their texture or emissive map, or on whether they are lit; if
-            the agreed policy is neither `OPAQUE` nor `BLEND`; or if either
-            texture id is a negative other than `NO_TEXTURE`, which nothing
-            can ever hold.
+            their texture or emissive map, or on their material kind; if
+            the agreed policy is neither `OPAQUE` nor `BLEND`, or the
+            agreed kind is none of the four; or if either texture id is a
+            negative other than `NO_TEXTURE`, which nothing can ever hold.
     """
     if b.blend != a.blend or c.blend != a.blend:
         raise Error("A triangle's corners disagree about blending")
@@ -693,10 +759,12 @@ def check_triangle_state(
         raise Error("A triangle's corners disagree about their texture")
     if b.emissive_map != a.emissive_map or c.emissive_map != a.emissive_map:
         raise Error("A triangle's corners disagree about their emissive map")
-    if b.lit != a.lit or c.lit != a.lit:
-        raise Error("A triangle's corners disagree about being lit")
+    if b.kind != a.kind or c.kind != a.kind:
+        raise Error("A triangle's corners disagree about their material kind")
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is neither OPAQUE nor BLEND")
+    if not a.kind.is_valid():
+        raise Error("A triangle's material kind is none of the four")
     if a.texture != NO_TEXTURE and a.texture.value < 0:
         raise Error("A triangle names a texture id that nothing can hold")
     if a.emissive_map != NO_TEXTURE and a.emissive_map.value < 0:
@@ -761,8 +829,11 @@ def rasterize_shaded(
             per fragment against the interpolated normal and world position.
             Defaults to `Lighting.uniform`, which leaves the corner colors
             alone — the same identity the blank texture provides, and what a
-            hand-built triangle asking about coverage or depth wants. A
-            triangle whose corners are not `lit` skips it altogether.
+            hand-built triangle asking about coverage or depth wants. Only a
+            `LAMBERT` triangle evaluates it. A `BASIC` one shows its own
+            color; a `NORMALS` one shows its normal as a color and a `DEPTH`
+            one its depth as a gray, both as data the fog and the tone
+            mapping leave alone -- see `data_color`.
         first_row: The first row this call may write. `Renderer.render`
             splits the image into horizontal bands and rasterizes every
             triangle once per band on its own thread; a band owns its rows
@@ -772,14 +843,16 @@ def rasterize_shaded(
             mixed toward its color by its camera-space depth, after the
             lights and the emissive term, in linear light. Defaults to
             `FogView.none`, which leaves every fragment alone. `SHADE_UV`
-            is never fogged: it shows coordinates, not light.
+            is never fogged, and nor is a `NORMALS` or `DEPTH` triangle:
+            they show data, not light.
 
     Raises:
         Error: If the mode is none of the three, the fog view holds a kind
             or a number that `FogView.validate` refuses, a vertex names a
             texture the
-            store does not have, the corners disagree about their texture or
-            blend policy or hold one that is neither, an emissive map that
+            store does not have, the corners disagree about their texture,
+            blend policy or material kind or hold one that is none of the
+            named values, an emissive map that
             `SHADE_TEXTURE` would open does not ignore its alpha, or a pixel
             write lands out of bounds — the last of which the loop prevents.
     """
@@ -814,9 +887,14 @@ def rasterize_shaded(
     # The consequence is that the caller owns draw order: translucent surfaces
     # have to arrive after the opaque ones and back to front. `prepare` sorts.
     var blended = a.blend == BLEND and mode != SHADE_UV
+    # Whether these fragments show data rather than light: a normal or a
+    # depth. The lights, the glow and the fog leave them alone, and the
+    # target keeps the tone mapping off them.
+    var data = a.kind.is_data()
     # Whether the fog reaches these fragments: never in the uv debug view,
-    # which shows coordinates rather than light.
-    var fogged = fog.is_on() and mode != SHADE_UV
+    # which shows coordinates rather than light, and never a surface that
+    # shows data.
+    var fogged = fog.is_on() and mode != SHADE_UV and not data
 
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
@@ -877,16 +955,18 @@ def rasterize_shaded(
                 a.color.a * share_a + b.color.a * share_b + c.color.a * share_c,
             )
             # An unlit surface shows its own color: neither the lights nor
-            # the normal are consulted.
+            # the normal are consulted. A normal material consults the
+            # normal alone, since the normal is what it shows.
             var arriving = FloatColor(1.0, 1.0, 1.0, 1.0)
-            if a.lit:
+            var facing = Vector3(0, 0, 1)
+            if a.kind == LAMBERT or a.kind == NORMALS:
                 # The normal is interpolated like every other varying and
                 # made a unit vector again here. That renormalization is the
                 # whole difference between this and shading at the corners:
                 # the average of two unit vectors is shorter than either, so
                 # a normal interpolated and left alone dims the middle of
                 # every triangle.
-                var facing = Vector3(
+                facing = Vector3(
                     a.normal.x * share_a
                     + b.normal.x * share_b
                     + c.normal.x * share_c,
@@ -899,6 +979,7 @@ def rasterize_shaded(
                 )
                 if facing.length() != 0:
                     facing.normalize()
+            if a.kind == LAMBERT:
                 # Where this fragment is in the world, for the lights that
                 # have a position.
                 var spot = Vector3(
@@ -940,22 +1021,11 @@ def rasterize_shaded(
                 var u = a.u * share_a + b.u * share_b + c.u * share_c
                 var v = a.v * share_a + b.v * share_b + c.v * share_c
                 if mode == SHADE_UV:
-                    # Coordinates, not light. They are written out raw rather
-                    # than encoded, because the sRGB curve describes how a
-                    # display turns numbers into brightness and a texture
-                    # coordinate is not a brightness. Putting them through it
-                    # would make the debug view lie about its own numbers.
-                    # Coordinates rather than light, so they bypass the
-                    # transfer function: `resolve` would otherwise encode
-                    # them and the debug view would lie about its own
-                    # numbers. Written straight into the linear buffer, where
-                    # `unpremultiplied` then `encode` must return them
-                    # unchanged -- which is why the alpha here is one.
-                    target.write(
-                        x,
-                        y,
-                        FloatColor(srgb=_raw(u, v)),
-                    )
+                    # Coordinates, not light: written as data, which
+                    # bypasses the transfer function and the tone mapping
+                    # -- see `data_color`. Opaque, which is why the alpha
+                    # is one.
+                    target.write(x, y, data_color(u, v, 0.0, 1.0), True)
                     continue
                 else:
                     # Modulate rather than replace: the texture says what
@@ -986,15 +1056,31 @@ def rasterize_shaded(
                             glow.b * glowing.b,
                             1.0,
                         )
-            # Added after the lights, which do not touch it: a surface that
-            # gives off light is seen in the dark. Alpha is coverage rather
-            # than light, so it stays what the material said.
-            shaded = FloatColor(
-                shaded.r + glow.r,
-                shaded.g + glow.g,
-                shaded.b + glow.b,
-                shaded.a,
-            )
+            if data:
+                # Data rather than light, as bytes the display shows as they
+                # are: the normal, three.js's `packNormalToRGB`, or the
+                # depth, near white and far black. Whatever the color and
+                # the texture said about red, green and blue is discarded;
+                # what they said about alpha is kept, so a cut-out map cuts
+                # a depth out as three.js's does. Neither the glow nor the
+                # fog reaches these -- see `data_color`.
+                if a.kind == NORMALS:
+                    var packed = packed_normal(facing)
+                    shaded = data_color(packed.x, packed.y, packed.z, shaded.a)
+                else:
+                    var seen = packed_depth(z)
+                    shaded = data_color(seen, seen, seen, shaded.a)
+            else:
+                # Added after the lights, which do not touch it: a surface
+                # that gives off light is seen in the dark. Alpha is
+                # coverage rather than light, so it stays what the material
+                # said.
+                shaded = FloatColor(
+                    shaded.r + glow.r,
+                    shaded.g + glow.g,
+                    shaded.b + glow.b,
+                    shaded.a,
+                )
             # Veiled by the fog last, after the lights and the glow, as
             # three.js mixes its finished color -- but in linear light,
             # before anything is encoded. The depth is a varying of its
@@ -1010,9 +1096,9 @@ def rasterize_shaded(
                 )
                 shaded = fog_mix(shaded, fog.color, fog.factor_at(depth))
             if blended:
-                target.blend(x, y, shaded)
+                target.blend(x, y, shaded, data)
             else:
-                target.write(x, y, shaded)
+                target.write(x, y, shaded, data)
         row = row + down
 
 

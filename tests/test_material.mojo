@@ -6,7 +6,8 @@
 """Tests for `materials.material`, `render.texture_store` and `core.assets`."""
 
 from materials.material import BLEND, OPAQUE, Blending, MaterialKind, Side
-from materials.material import BASIC, LAMBERT
+from materials.material import BASIC, DEPTH, LAMBERT, NORMALS
+from materials.material import depth_material, normal_material
 from materials.material import MaterialId
 from core.assets import Assets
 from geometries.box import cube
@@ -63,6 +64,103 @@ def test_a_basic_material_is_not_lit() raises:
     assert_true(not flat.is_transparent())
 
 
+def test_the_data_kinds_show_data_rather_than_light() raises:
+    # `is_data` is what both rasterizers ask before they light a fragment,
+    # fog it or tone map it, so each kind has to answer for itself.
+    assert_true(NORMALS.is_data())
+    assert_true(DEPTH.is_data())
+    assert_false(BASIC.is_data())
+    assert_false(LAMBERT.is_data())
+    assert_true(normal_material().is_data())
+    assert_true(depth_material().is_data())
+    assert_false(Material(Color(1, 2, 3)).is_data())
+    # Neither is lit: a normal and a depth are not reflections of anything.
+    assert_false(normal_material().is_lit())
+    assert_false(depth_material().is_lit())
+
+
+def test_a_normal_material_is_white_and_front_facing_by_default() raises:
+    var shown = normal_material()
+    assert_equal(shown.kind, NORMALS)
+    assert_equal(shown.color.r, UInt8(255))
+    assert_equal(shown.map, NO_TEXTURE)
+    assert_equal(shown.side, FRONT_SIDE)
+    assert_equal(shown.opacity, Float32(1))
+    assert_false(shown.is_transparent())
+    # And it takes the three properties its shader does read.
+    var pane = normal_material(DOUBLE_SIDE, 0.5)
+    assert_equal(pane.side, DOUBLE_SIDE)
+    assert_equal(pane.opacity, Float32(0.5))
+    assert_true(pane.is_transparent())
+    assert_true(normal_material(FRONT_SIDE, 1.0, BLEND).is_transparent())
+
+
+def test_a_depth_material_takes_a_map_that_cuts_it_out() raises:
+    var shown = depth_material()
+    assert_equal(shown.kind, DEPTH)
+    assert_equal(shown.map, NO_TEXTURE)
+    assert_false(shown.is_textured())
+    # A map is allowed, unlike on a normal material: three.js's
+    # `MeshDepthMaterial` reads its alpha, which cuts the surface out.
+    var cut = depth_material(TextureId(2), BACK_SIDE, 0.25, BLEND)
+    assert_equal(cut.map, TextureId(2))
+    assert_true(cut.is_textured())
+    assert_equal(cut.side, BACK_SIDE)
+    assert_equal(cut.opacity, Float32(0.25))
+    assert_true(cut.is_transparent())
+    # The same refusals every material makes still apply.
+    with assert_raises():
+        _ = depth_material(TextureId(-2))
+    with assert_raises():
+        _ = depth_material(NO_TEXTURE, Side(99))
+    with assert_raises():
+        _ = depth_material(NO_TEXTURE, FRONT_SIDE, 2.0)
+    with assert_raises():
+        _ = normal_material(FRONT_SIDE, 1.0, Blending(7))
+
+
+def test_a_data_material_refuses_a_color_that_is_not_opaque_white() raises:
+    # Neither shader reads a color, so a value there is a mistake rather
+    # than a choice. Each channel has to be able to say so on its own.
+    for kind in [NORMALS, DEPTH]:
+        _ = Material(Color(255, 255, 255), kind=kind)
+        with assert_raises():
+            _ = Material(Color(254, 255, 255), kind=kind)
+        with assert_raises():
+            _ = Material(Color(255, 254, 255), kind=kind)
+        with assert_raises():
+            _ = Material(Color(255, 255, 254), kind=kind)
+        with assert_raises():
+            _ = Material(Color(255, 255, 255, 254), kind=kind)
+
+
+def test_a_data_material_refuses_light_and_vertex_colors() raises:
+    # An emissive color, an emissive map or the vertex colors: each is read
+    # by no shader here, and each is refused on its own.
+    for kind in [NORMALS, DEPTH]:
+        with assert_raises():
+            _ = Material(
+                Color(255, 255, 255), kind=kind, emissive=Color(255, 0, 0)
+            )
+        with assert_raises():
+            _ = Material(
+                Color(255, 255, 255), kind=kind, emissive_map=TextureId(0)
+            )
+        with assert_raises():
+            _ = Material(Color(255, 255, 255), kind=kind, vertex_colors=True)
+        # A black emissive at any intensity is no term at all, and passes.
+        _ = Material(Color(255, 255, 255), kind=kind, emissive_intensity=3.0)
+
+
+def test_a_normal_material_refuses_a_map() raises:
+    # It shows the normal, not an image. A depth material is the one that
+    # reads a map, so the kind decides this on its own.
+    with assert_raises():
+        _ = Material(Color(255, 255, 255), TextureId(0), kind=NORMALS)
+    _ = Material(Color(255, 255, 255), NO_TEXTURE, kind=NORMALS)
+    _ = Material(Color(255, 255, 255), TextureId(0), kind=DEPTH)
+
+
 def test_a_wrong_value_in_the_right_type_is_refused() raises:
     # The types stop a bare integer at compile time; they do not stop a
     # struct built from one, because Mojo's fields are open. So the
@@ -76,6 +174,8 @@ def test_a_wrong_value_in_the_right_type_is_refused() raises:
     assert_false(Blending(7).is_valid())
     assert_true(BASIC.is_valid())
     assert_true(LAMBERT.is_valid())
+    assert_true(NORMALS.is_valid())
+    assert_true(DEPTH.is_valid())
     assert_false(MaterialKind(7).is_valid())
     with assert_raises():
         _ = Material(Color(0, 0, 0), NO_TEXTURE, Side(99))

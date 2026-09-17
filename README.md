@@ -101,7 +101,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Color map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials): a texture on a material [#36](https://github.com/SethKitchen/ThreeMojo/issues/36)
 - [ ] MeshPhongMaterial [#37](https://github.com/SethKitchen/ThreeMojo/issues/37)
 - [ ] MeshStandardMaterial and MeshPhysicalMaterial [#38](https://github.com/SethKitchen/ThreeMojo/issues/38)
-- [ ] MeshNormalMaterial and MeshDepthMaterial [#39](https://github.com/SethKitchen/ThreeMojo/issues/39)
+- [x] [MeshNormalMaterial and MeshDepthMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#data-materials): the view-space normal as a color and the depth as a gray, written as bytes no curve touches [#39](https://github.com/SethKitchen/ThreeMojo/issues/39)
 - [ ] MeshToonMaterial and MeshMatcapMaterial [#40](https://github.com/SethKitchen/ThreeMojo/issues/40)
 - [ ] LineBasicMaterial and LineDashedMaterial [#41](https://github.com/SethKitchen/ThreeMojo/issues/41)
 - [ ] PointsMaterial and SpriteMaterial [#42](https://github.com/SethKitchen/ThreeMojo/issues/42)

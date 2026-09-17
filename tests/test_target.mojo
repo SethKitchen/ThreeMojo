@@ -317,5 +317,85 @@ def test_resolving_refuses_an_exposure_that_is_not_finite() raises:
         _ = target.shown(0, 0, LINEAR_TONE_MAPPING, nan[DType.float32]())
 
 
+# --- pixels that hold data --------------------------------------------------
+
+
+def test_a_cleared_pixel_holds_light_and_not_data() raises:
+    var target = RenderTarget(2, 2, Color(40, 50, 60))
+    assert_false(target.is_data(0, 0))
+    assert_false(target.is_data(1, 1))
+    with assert_raises():
+        _ = target.is_data(2, 0)
+
+
+def test_writing_or_blending_says_whether_a_pixel_holds_data() raises:
+    # A normal material writes bytes a display must show as they are, and
+    # the last fragment into a pixel decides. Either call can say so, and
+    # either can take it back.
+    var target = RenderTarget(2, 1, Color(0, 0, 0))
+    target.write(0, 0, FloatColor(0.5, 0.5, 0.5, 1.0), True)
+    assert_true(target.is_data(0, 0))
+    target.write(0, 0, FloatColor(0.5, 0.5, 0.5, 1.0))
+    assert_false(target.is_data(0, 0))
+    target.blend(1, 0, FloatColor(0.5, 0.5, 0.5, 1.0), True)
+    assert_true(target.is_data(1, 0))
+    target.blend(1, 0, FloatColor(0.5, 0.5, 0.5, 1.0))
+    assert_false(target.is_data(1, 0))
+
+
+def test_a_data_pixel_is_encoded_but_never_tone_mapped() raises:
+    # Twice white through Reinhard is two thirds as light; as data it is
+    # clamped and encoded like any byte, because a curve would make a
+    # normal lie about its own numbers.
+    var target = RenderTarget(2, 1, Color(0, 0, 0))
+    target.write(0, 0, FloatColor(2.0, 2.0, 2.0, 1.0), True)
+    target.write(1, 0, FloatColor(2.0, 2.0, 2.0, 1.0))
+    var squeezed = target.resolve(1, REINHARD_TONE_MAPPING)
+    var compressed = FloatColor(2.0 / 3, 2.0 / 3, 2.0 / 3, 1.0).encode()
+    assert_equal(squeezed.get_pixel(0, 0).r, UInt8(255))
+    assert_equal(squeezed.get_pixel(1, 0).r, compressed.r)
+    # `shown` is the same read for one pixel and must agree.
+    assert_equal(target.shown(0, 0, REINHARD_TONE_MAPPING).r, UInt8(255))
+    assert_equal(target.shown(1, 0, REINHARD_TONE_MAPPING).r, compressed.r)
+    # The exposure does not reach a data pixel either.
+    var exposed = target.resolve(1, LINEAR_TONE_MAPPING, 0.25)
+    assert_equal(exposed.get_pixel(0, 0).r, UInt8(255))
+    assert_equal(
+        exposed.get_pixel(1, 0).r, FloatColor(0.5, 0, 0, 1.0).encode().r
+    )
+
+
+def test_data_pixels_resolve_the_same_on_several_workers() raises:
+    # Each band reads the same flag per pixel, so a curve cannot reach a
+    # data pixel on one thread and miss it on another.
+    var target = RenderTarget(7, 5, Color(20, 24, 32))
+    for y in range(5):
+        for x in range(7):
+            var holds_data = (x + y) % 2 == 0
+            target.write(
+                x,
+                y,
+                FloatColor(Float32(x) * 0.4, Float32(y) * 0.6, 1.5, 1.0),
+                holds_data,
+            )
+    var alone = target.resolve(1, ACES_FILMIC_TONE_MAPPING, 1.3)
+    var crowd = target.resolve(4, ACES_FILMIC_TONE_MAPPING, 1.3)
+    var curved = 0
+    for y in range(5):
+        for x in range(7):
+            var one = alone.get_pixel(x, y)
+            var many = crowd.get_pixel(x, y)
+            assert_equal(one.r, many.r)
+            assert_equal(one.g, many.g)
+            assert_equal(one.b, many.b)
+            if not target.is_data(x, y):
+                curved += 1
+    assert_true(curved > 10, "no pixel was left to the curve")
+    # And the curve really did reach the pixels that hold light: a data
+    # pixel of 1.5 blue clamps to 255, a light one does not.
+    assert_equal(alone.get_pixel(0, 0).b, UInt8(255))
+    assert_true(alone.get_pixel(1, 0).b < 255, "the curve missed a pixel")
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

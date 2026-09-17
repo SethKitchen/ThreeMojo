@@ -19,12 +19,14 @@ One corner as the rasterizer wants it:
 | `world` | The world-space position, for point lights. |
 | `texture` | A `TextureId`, or `NO_TEXTURE`. |
 | `blend` | `OPAQUE` or `BLEND`. |
-| `lit` | Whether the lights reach this surface. |
+| `kind` | The material kind: `LAMBERT`, `BASIC`, `NORMALS` or `DEPTH`. |
 | `emissive` | Light the surface gives off, linear. |
 | `emissive_map` | The `TextureId` that multiplies `emissive`, or `NO_TEXTURE`. |
 | `view_depth` | The camera-space depth in meters, for the fog. See [Fog](Fog#depth). |
 
-`texture`, `blend`, `lit` and `emissive_map` are per-triangle state. All three corners must agree, and the value must be a named one. `check_triangle_state` refuses anything else.
+`texture`, `blend`, `kind` and `emissive_map` are per-triangle state. All three corners must agree, and the value must be a named one. `check_triangle_state` refuses anything else.
+
+A `NORMALS` corner carries its normal in view space, not world space. The normal is shown rather than lit.
 
 ## Functions
 
@@ -36,6 +38,9 @@ One corner as the rasterizer wants it:
 | `rasterize_all(corners, target, mode, textures, lighting, workers, fog)` | Fill a whole list, on one or more threads. |
 | `check_triangle_state(a, b, c)` | Refuse corners that disagree, or hold a value neither backend knows. |
 | `mip_level(du, dv, width, height)` | The mip level for a texture footprint. |
+| `data_color(r, g, b, a)` | Three channels of data as the light that resolves to their bytes. |
+| `packed_normal(normal)` | A unit normal mapped into zero to one per axis. |
+| `packed_depth(z)` | An NDC depth as the gray a `DEPTH` material shows. |
 
 ## Coverage
 
@@ -59,11 +64,19 @@ Color, normal, texture coordinates and world position are interpolated with pers
 
 ## Shading
 
-At each fragment the interpolated normal is normalized again, and `Lighting.intensity_at` sums every light. The material color, the sampled texel and the light multiply. The emissive term, times its own map, is then added. The lights do not touch it. An unlit triangle skips the lights. See [Why shading is per fragment](Why-shading-is-per-fragment).
+At each fragment the interpolated normal is normalized again, and `Lighting.intensity_at` sums every light. The material color, the sampled texel and the light multiply. The emissive term, times its own map, is then added. The lights do not touch it. A `BASIC` triangle skips the lights. See [Why shading is per fragment](Why-shading-is-per-fragment).
+
+## Data
+
+A `NORMALS` or `DEPTH` triangle writes data rather than light. The fragment discards what the color and the texture said about red, green and blue. It keeps what they said about alpha, so a map cuts a depth out.
+
+`data_color` quantizes the three channels to bytes without the sRGB curve, then decodes those bytes back into the linear buffer. `resolve` encodes them and gives the same bytes. The target records that the pixel holds data, and keeps the tone mapping off it. The `SHADE_UV` debug view writes its coordinates the same way. See [Why a normal is not a color](Why-a-normal-is-not-a-color).
+
+Neither the emissive term nor the fog reaches such a fragment.
 
 ## Fog
 
-After the lights and the emissive term, the fragment is mixed toward the fog color by its camera-space depth. The `fog` argument is a `FogView`. The default, `FogView.none()`, changes nothing. `SHADE_UV` is never fogged. See [Fog](Fog).
+After the lights and the emissive term, the fragment is mixed toward the fog color by its camera-space depth. The `fog` argument is a `FogView`. The default, `FogView.none()`, changes nothing. `SHADE_UV` is never fogged, and nor is a `NORMALS` or `DEPTH` triangle. See [Fog](Fog).
 
 ## Transparency
 
@@ -72,7 +85,8 @@ After the lights and the emissive term, the fragment is mixed toward the fog col
 ## Errors
 
 - A mode that is none of the three raises.
-- Corners that disagree about blend, texture, lit or emissive map raise.
+- Corners that disagree about blend, texture, kind or emissive map raise.
+- A material kind that is none of the four raises, on every worker count.
 - An emissive map that reads its alpha as coverage raises under `SHADE_TEXTURE`, on both backends.
 - A blend value that is neither `OPAQUE` nor `BLEND` raises, on every worker count, whether or not the triangle is visible.
 - A texture the store lacks raises when a fragment samples it.
