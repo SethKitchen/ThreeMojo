@@ -81,6 +81,7 @@ from cameras.camera import Camera
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.assets import Assets
 from core.geometry_store import GeometryId
+from core.fog import FogView
 from lights.lighting import Lighting
 from core.layers import Layers
 from core.object3d import NodeId
@@ -1195,8 +1196,10 @@ struct Renderer(Movable):
             The rendered image.
 
         Raises:
-            Error: If a mesh names a node or a geometry that is not there, or
-                its geometry has no positions.
+            Error: If a mesh names a node or a geometry that is not there,
+                its geometry has no positions, or the scene's fog holds a
+                kind that is none of the three or a range that is inside
+                out -- see `core.fog.FogView`.
         """
         var corners = self.prepare(scene, assets, camera)
         # Resolved here as well as in `prepare`, because the fragments need
@@ -1204,6 +1207,10 @@ struct Renderer(Movable):
         # Only the lights on the camera's layers, as only its meshes were
         # prepared: a light the camera does not see lights nothing it draws.
         var lighting = Lighting(scene, visible=camera.visible_layers())
+        # The scene's fog through this camera: the depth every fragment is
+        # veiled by is measured along the same view `prepare` projected
+        # with.
+        var fog = FogView(scene.fog, camera.view_matrix_in(scene))
         var target = RenderTarget(self.width, self.height, self.background)
         rasterize_all(
             corners,
@@ -1212,6 +1219,7 @@ struct Renderer(Movable):
             assets.textures,
             lighting,
             self.workers,
+            fog,
         )
         # Linear light becomes an image exactly once, here, on as many
         # threads as drew it.

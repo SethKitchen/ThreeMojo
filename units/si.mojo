@@ -29,18 +29,23 @@ comptime Angle = Quantity[0, 0, 0, 1]
 comptime Velocity = Quantity[1, 0, -1, 0]
 comptime Acceleration = Quantity[1, 0, -2, 0]
 comptime AngularVelocity = Quantity[0, 0, -1, 1]
+# Per unit of length: how fast an exponential fog thickens with depth.
+comptime InverseLength = Quantity[-1, 0, 0, 0]
 
 comptime LengthUnit = Unit[1, 0, 0, 0]
 comptime AreaUnit = Unit[2, 0, 0, 0]
 comptime MassUnit = Unit[0, 1, 0, 0]
 comptime DurationUnit = Unit[0, 0, 1, 0]
 comptime AngleUnit = Unit[0, 0, 0, 1]
+comptime InverseLengthUnit = Unit[-1, 0, 0, 0]
 
 # --- length -----------------------------------------------------------------
 comptime METER = LengthUnit(1.0, "m")
 comptime KILOMETER = LengthUnit(1000.0, "km")
 comptime CENTIMETER = LengthUnit(0.01, "cm")
 comptime MILLIMETER = LengthUnit(0.001, "mm")
+# The one unit of inverse length: what a fog density is measured in.
+comptime PER_METER = InverseLengthUnit(1.0, "1/m")
 
 # Exact by the 1959 international agreement: 1 yd = 0.9144 m exactly.
 comptime YARD = LengthUnit(0.9144, "yd")

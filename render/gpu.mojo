@@ -43,6 +43,7 @@ from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
+from core.fog import NO_FOG, FogKind, FogView, fog_depth, fog_factor
 from lights.lighting import Lighting, falloff
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
@@ -121,6 +122,22 @@ comptime STATE_BLEND = 1
 comptime STATE_LIT = 2
 comptime STATE_EMISSIVE_MAP = 3
 comptime STATE_PER_TRIANGLE = STATE_EMISSIVE_MAP + 1
+
+# How a `FogView` is laid out in the fog buffer: the view matrix's depth row,
+# the two edges and the density, then the fog color, linear. Ten floats,
+# whatever the kind, which crosses as its own argument. Named here for the
+# reason the lanes are, and read by `flatten_fog` and the kernel alike.
+comptime FOG_ZX = 0
+comptime FOG_ZY = 1
+comptime FOG_ZZ = 2
+comptime FOG_ZW = 3
+comptime FOG_NEAR = 4
+comptime FOG_FAR = 5
+comptime FOG_DENSITY = 6
+comptime FOG_R = 7
+comptime FOG_G = 8
+comptime FOG_B = 9
+comptime FOG_FLOATS = FOG_B + 1
 
 # Further than any NDC depth, so the first covering triangle always wins. The
 # host framebuffer uses an actual infinity; a literal keeps the kernel free of
@@ -320,6 +337,30 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(lighting.spot_cutoffs[index])
         flat.append(lighting.cone_cosines[index])
         flat.append(lighting.penumbra_cosines[index])
+    return flat^
+
+
+def flatten_fog(fog: FogView) -> List[Float32]:
+    """Return a fog view as the flat float buffer the kernel reads.
+
+    Args:
+        fog: The scene's fog, seen through the camera.
+
+    Returns:
+        `FOG_FLOATS` floats, in the order the kernel unpacks them. The
+        kind is not among them: it crosses as a kernel argument of its own.
+    """
+    var flat = List[Float32]()
+    flat.append(fog.zx)
+    flat.append(fog.zy)
+    flat.append(fog.zz)
+    flat.append(fog.zw)
+    flat.append(fog.near)
+    flat.append(fog.far)
+    flat.append(fog.density)
+    flat.append(fog.color.r)
+    flat.append(fog.color.g)
+    flat.append(fog.color.b)
     return flat^
 
 
@@ -826,6 +867,8 @@ def rasterize_kernel(
     point_count: Int32,
     hemisphere_count: Int32,
     spot_count: Int32,
+    fog: MutPointer[Float32, MutAnyOrigin],
+    fog_kind: Int32,
 ):
     """Color one pixel from the nearest triangle that covers it."""
     var x = Int(global_idx.x)
@@ -859,6 +902,11 @@ def rasterize_kernel(
     var mixed_r = ramp[unsafe_offset=Int((background >> 24) & 0xFF)] * mixed_a
     var mixed_g = ramp[unsafe_offset=Int((background >> 16) & 0xFF)] * mixed_a
     var mixed_b = ramp[unsafe_offset=Int((background >> 8) & 0xFF)] * mixed_a
+    # Whether the fog reaches these fragments: never in the uv debug view,
+    # exactly as `rasterize_shaded` decides it.
+    var fogged = fog_kind != Int32(NO_FOG.value) and mode != Int32(
+        SHADE_UV.value
+    )
 
     for index in range(Int(triangles)):
         var base = index * FLOATS_PER_TRIANGLE
@@ -952,14 +1000,38 @@ def rasterize_kernel(
         # either, so leaving it alone dims the middle of every triangle.
         # Only the two lit modes need it; SHADE_UV writes coordinates rather
         # than light, and used to pay for the lighting anyway.
-        var arriving = Vector3(1, 1, 1)
-        # Only the two lit modes need it, and only a lit surface: SHADE_UV
-        # writes coordinates rather than light, and a BASIC material shows its
-        # own color. Lit or not is per triangle, from the state table.
-        if (
+        # Only the two lit modes light a fragment, and only a lit surface:
+        # SHADE_UV writes coordinates rather than light, and a BASIC
+        # material shows its own color. Lit or not is per triangle, from
+        # the state table.
+        var lit = (
             mode != Int32(SHADE_UV.value)
             and maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_LIT] != 0
-        ):
+        )
+        # Where this fragment is in the world, for the lights that have a
+        # position and for the fog, interpolated like every other varying
+        # and only when something will read it.
+        var wx = Float32(0)
+        var wy = Float32(0)
+        var wz = Float32(0)
+        if lit or fogged:
+            wx = (
+                corners[unsafe_offset=base + LANE_WX] * share_a
+                + corners[unsafe_offset=b_base + LANE_WX] * share_b
+                + corners[unsafe_offset=c_base + LANE_WX] * share_c
+            )
+            wy = (
+                corners[unsafe_offset=base + LANE_WY] * share_a
+                + corners[unsafe_offset=b_base + LANE_WY] * share_b
+                + corners[unsafe_offset=c_base + LANE_WY] * share_c
+            )
+            wz = (
+                corners[unsafe_offset=base + LANE_WZ] * share_a
+                + corners[unsafe_offset=b_base + LANE_WZ] * share_b
+                + corners[unsafe_offset=c_base + LANE_WZ] * share_c
+            )
+        var arriving = Vector3(1, 1, 1)
+        if lit:
             var nx = (
                 corners[unsafe_offset=base + LANE_NX] * share_a
                 + corners[unsafe_offset=b_base + LANE_NX] * share_b
@@ -980,22 +1052,6 @@ def rasterize_kernel(
                 nx /= unit
                 ny /= unit
                 nz /= unit
-            # Where this fragment is in the world, for the point lights.
-            var wx = (
-                corners[unsafe_offset=base + LANE_WX] * share_a
-                + corners[unsafe_offset=b_base + LANE_WX] * share_b
-                + corners[unsafe_offset=c_base + LANE_WX] * share_c
-            )
-            var wy = (
-                corners[unsafe_offset=base + LANE_WY] * share_a
-                + corners[unsafe_offset=b_base + LANE_WY] * share_b
-                + corners[unsafe_offset=c_base + LANE_WY] * share_c
-            )
-            var wz = (
-                corners[unsafe_offset=base + LANE_WZ] * share_a
-                + corners[unsafe_offset=b_base + LANE_WZ] * share_b
-                + corners[unsafe_offset=c_base + LANE_WZ] * share_c
-            )
             arriving = _arriving(
                 lights,
                 Int(light_count),
@@ -1142,6 +1198,27 @@ def rasterize_kernel(
             red += glow_r
             green += glow_g
             blue += glow_b
+            # Veiled by the fog last, in linear light, with the expression
+            # `rasterize_shaded` uses. Alpha is coverage and is left alone.
+            if fogged:
+                var veil = fog_factor(
+                    FogKind(Int(fog_kind)),
+                    fog_depth(
+                        fog[unsafe_offset=FOG_ZX],
+                        fog[unsafe_offset=FOG_ZY],
+                        fog[unsafe_offset=FOG_ZZ],
+                        fog[unsafe_offset=FOG_ZW],
+                        wx,
+                        wy,
+                        wz,
+                    ),
+                    fog[unsafe_offset=FOG_NEAR],
+                    fog[unsafe_offset=FOG_FAR],
+                    fog[unsafe_offset=FOG_DENSITY],
+                )
+                red = red + (fog[unsafe_offset=FOG_R] - red) * veil
+                green = green + (fog[unsafe_offset=FOG_G] - green) * veil
+                blue = blue + (fog[unsafe_offset=FOG_B] - blue) * veil
 
         # Opaque replaces what is there; translucent mixes into it. One pass
         # is enough only because every opaque triangle is submitted before any
@@ -1241,6 +1318,9 @@ struct GpuRenderer(Movable):
     # so this settles after the first frame.
     var lights: DeviceBuffer[DType.float32]
     var light_room: Int
+    # The scene's fog seen through the camera, `FOG_FLOATS` floats,
+    # rewritten every draw. Its kind crosses as a kernel argument.
+    var fog: DeviceBuffer[DType.float32]
     # One texture id per triangle, beside the vertex buffer rather than in it.
     var maps: DeviceBuffer[DType.int32]
     # Every texture the scene can sample, uploaded once rather than per draw.
@@ -1287,6 +1367,7 @@ struct GpuRenderer(Movable):
         _ = self.depth^
         _ = self.corners^
         _ = self.lights^
+        _ = self.fog^
         _ = self.maps^
         _ = self.texels^
         _ = self.table^
@@ -1322,6 +1403,7 @@ struct GpuRenderer(Movable):
         self.lights = self.context.enqueue_create_buffer[DType.float32](
             self.light_room
         )
+        self.fog = self.context.enqueue_create_buffer[DType.float32](FOG_FLOATS)
         # One triangle to start with; `draw` grows it as needed. Never zero,
         # because a zero-length device buffer is not worth the special case.
         self.capacity = 1
@@ -1371,12 +1453,30 @@ struct GpuRenderer(Movable):
                 count=len(flat),
             )
 
+    def _upload_fog(mut self, fog: FogView) raises:
+        """Put `fog` on the device.
+
+        Args:
+            fog: The scene's fog, seen through the camera.
+
+        Raises:
+            Error: If the device buffer cannot be written.
+        """
+        var flat = flatten_fog(fog)
+        with self.fog.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=flat.unsafe_ptr(),
+                count=len(flat),
+            )
+
     def draw(
         mut self,
         corners: List[RasterVertex],
         background: Color,
         mode: ShadeMode = SHADE_LIT,
         lighting: Lighting = Lighting.uniform(),
+        fog: FogView = FogView.none(),
     ) raises:
         """Rasterize prepared triangles into the device render target.
 
@@ -1389,6 +1489,8 @@ struct GpuRenderer(Movable):
                 evaluated per fragment against the interpolated normal.
                 Defaults to `Lighting.uniform`, the identity for the multiply,
                 exactly as the CPU rasterizer's does.
+            fog: The scene's fog, seen through the camera, as
+                `rasterize_shaded` takes it. Defaults to `FogView.none`.
 
         Raises:
             Error: If the corner count is not a multiple of three, the mode
@@ -1470,6 +1572,7 @@ struct GpuRenderer(Movable):
                 )
 
         self._upload_lights(lighting)
+        self._upload_fog(fog)
         self.context.enqueue_function[rasterize_kernel](
             self.pixels.unsafe_ptr(),
             self.depth.unsafe_ptr(),
@@ -1488,6 +1591,8 @@ struct GpuRenderer(Movable):
             Int32(lighting.point_count()),
             Int32(lighting.hemisphere_count()),
             Int32(lighting.spot_count()),
+            self.fog.unsafe_ptr(),
+            Int32(fog.kind.value),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -1601,6 +1706,7 @@ def render_triangles(
     mode: ShadeMode = SHADE_LIT,
     textures: TextureStore = TextureStore(),
     lighting: Lighting = Lighting.uniform(),
+    fog: FogView = FogView.none(),
 ) raises -> Framebuffer:
     """Draw prepared triangles on the GPU and read the image back.
 
@@ -1617,6 +1723,8 @@ def render_triangles(
         textures: The images `SHADE_TEXTURE` samples, named per vertex.
         lighting: The scene's lights, evaluated per fragment. Defaults to
             `Lighting.uniform`, which leaves the corner colors alone.
+        fog: The scene's fog, seen through the camera. Defaults to
+            `FogView.none`, which leaves every fragment alone.
 
     Returns:
         The rendered image.
@@ -1627,7 +1735,7 @@ def render_triangles(
     """
     var renderer = GpuRenderer(width, height)
     renderer.set_textures(textures)
-    renderer.draw(corners, background, mode, lighting)
+    renderer.draw(corners, background, mode, lighting, fog)
     return renderer.read_back()
 
 

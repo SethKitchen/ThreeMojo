@@ -67,7 +67,7 @@ Each instance of an instanced or batched mesh is tested on its own, with the ins
 
 ## What render does
 
-`render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, visible=camera.visible_layers())`. A light on a layer the camera does not watch lights nothing. See [Lights](Lights#lighting). Then it rasterizes the triangles and resolves the image.
+`render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, visible=camera.visible_layers())`. A light on a layer the camera does not watch lights nothing. See [Lights](Lights#lighting). It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). Then it rasterizes the triangles and resolves the image.
 
 ## Workers
 
@@ -86,6 +86,8 @@ The default is one worker. The coverage tool needs probe records in order.
 - A geometry has no positions.
 
 A mesh the camera's layers or frustum leave out is not checked.
+
+`render` also raises when `scene.fog` holds an unknown kind or an inside-out range.
 
 ## Performance
 

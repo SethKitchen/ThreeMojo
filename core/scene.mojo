@@ -38,6 +38,10 @@ inside it, which was two answers to one question. `add_mesh` is the
 counterpart of `add_light`, and `Renderer.render(scene, assets, camera)` reads
 both from here.
 
+**Fog is scene content as well.** three.js's `scene.fog` is a field on the
+scene, read by the renderer, and so is `fog` here: `no_fog()` to begin
+with, and `linear_fog` or `exp2_fog` to set. See `core.fog`.
+
 **Nodes can be edited in place.** `node(id)` hands back a mutable reference
 and marks the scene stale, which is what `mesh.rotation.y += 0.01` needs: a
 persistent scene, one field changed, one `update`, one render. Before it
@@ -51,6 +55,7 @@ to catch the case where something reached past it anyway, and `update` runs it
 first, because a mutable reference to a node is also a way past it.
 """
 
+from core.fog import Fog, no_fog
 from core.object3d import NO_PARENT, NodeId, Object3D, facing
 from lights.light import Light
 from math.matrix4 import Matrix4
@@ -85,6 +90,10 @@ struct Scene(Movable):
     var instanced_meshes: List[InstancedMesh]
     var batched_meshes: List[BatchedMesh]
     var lods: List[Lod]
+    # What veils the scene with distance, three.js's `scene.fog`. Public
+    # and assignable, as the lights are: set it to the value `linear_fog`
+    # or `exp2_fog` returns, and the renderer reads it every frame.
+    var fog: Fog
     # False only when every world matrix reflects every node as it stands.
     var _stale: Bool
 
@@ -97,6 +106,7 @@ struct Scene(Movable):
         self.instanced_meshes = List[InstancedMesh]()
         self.batched_meshes = List[BatchedMesh]()
         self.lods = List[Lod]()
+        self.fog = no_fog()
         # An empty scene has nothing to recompute, so it starts current.
         self._stale = False
 

@@ -30,6 +30,8 @@ from materials.material import BASIC
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
 from lights.lighting import Lighting
+from core.fog import FogKind, exp2_fog, linear_fog, no_fog
+from units.si import InverseLength, PER_METER
 from geometries.box import cube
 from geometries.sphere import sphere
 from math.vector2 import Vector2
@@ -3427,6 +3429,126 @@ def test_a_repeat_tiles_the_texture_and_an_offset_slides_it() raises:
     assert_equal(edges[1], 3)
     assert_equal(edges[2], 1)
     assert_true(left_bright[0] != left_bright[2], "the offset slid nothing")
+
+
+# --- fog ----------------------------------------------------------------------
+
+
+def facing_camera() raises -> PerspectiveCamera:
+    """Return a camera five meters out on +z, looking at the origin."""
+    var camera = PerspectiveCamera(
+        Angle(60.0, DEGREE),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
+    return camera
+
+
+def test_the_scenes_fog_veils_a_mesh_by_its_depth() raises:
+    # A white unlit sheet five meters from the camera. A fog from four to
+    # six meters veils it half way; one from ten to twenty does not reach
+    # it; a dense exponential fog swallows it; and no fog leaves it white.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(4.0, METER), Length(4.0, METER), 1, 1)
+    )
+    var white = assets.materials.add(Material(Color(255, 255, 255), kind=BASIC))
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(sheet, white, node))
+    var fog_color = Color(40, 60, 90)
+    var camera = facing_camera()
+
+    scene.fog = linear_fog(fog_color, Length(4.0, METER), Length(6.0, METER))
+    var halfway = rendered(renderer, scene, assets, meshes, camera).get_pixel(
+        WIDTH // 2, HEIGHT // 2
+    )
+    var fog = FloatColor(srgb=fog_color)
+    var expected = FloatColor(
+        1 + (fog.r - 1) * 0.5, 1 + (fog.g - 1) * 0.5, 1 + (fog.b - 1) * 0.5, 1.0
+    ).encode()
+    assert_equal(halfway.r, expected.r)
+    assert_equal(halfway.g, expected.g)
+    assert_equal(halfway.b, expected.b)
+
+    scene.fog = linear_fog(fog_color, Length(10.0, METER), Length(20.0, METER))
+    var clear = rendered(renderer, scene, assets, meshes, camera).get_pixel(
+        WIDTH // 2, HEIGHT // 2
+    )
+    assert_equal(clear.r, UInt8(255))
+    assert_equal(clear.b, UInt8(255))
+
+    scene.fog = exp2_fog(fog_color, InverseLength(5.0, PER_METER))
+    var swallowed = rendered(renderer, scene, assets, meshes, camera).get_pixel(
+        WIDTH // 2, HEIGHT // 2
+    )
+    assert_equal(swallowed.r, fog_color.r)
+    assert_equal(swallowed.g, fog_color.g)
+    assert_equal(swallowed.b, fog_color.b)
+
+    scene.fog = no_fog()
+    var plain = rendered(renderer, scene, assets, meshes, camera).get_pixel(
+        WIDTH // 2, HEIGHT // 2
+    )
+    assert_equal(plain.r, UInt8(255))
+    assert_equal(plain.g, UInt8(255))
+
+
+def test_fog_does_not_reach_the_background_or_the_uv_view() raises:
+    # Only fragments are fogged. Pixels nothing covers stay the clear
+    # color, and the uv debug view writes coordinates whatever the fog.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(10, 20, 30))
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(1.0, METER), Length(1.0, METER), 1, 1)
+    )
+    var white = assets.materials.add(Material(Color(255, 255, 255), kind=BASIC))
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    scene.fog = exp2_fog(Color(200, 200, 200), InverseLength(5.0, PER_METER))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(sheet, white, node))
+    var camera = facing_camera()
+    var image = rendered(renderer, scene, assets, meshes, camera)
+    var corner = image.get_pixel(0, 0)
+    assert_equal(corner.r, UInt8(10))
+    assert_equal(corner.b, UInt8(30))
+    var center = image.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(center.r, UInt8(200))
+    renderer.set_shading(SHADE_UV)
+    var coordinates = rendered(renderer, scene, assets, meshes, camera)
+    scene.fog = no_fog()
+    var unfogged = rendered(renderer, scene, assets, meshes, camera)
+    var veiled = coordinates.get_pixel(WIDTH // 2, HEIGHT // 2)
+    var plain = unfogged.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(veiled.r, plain.r)
+    assert_equal(veiled.g, plain.g)
+    assert_equal(veiled.b, UInt8(0))
+
+
+def test_a_fog_edited_into_nonsense_is_refused_by_render() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene.update()
+    scene.fog = linear_fog(
+        Color(0, 0, 0), Length(1.0, METER), Length(2.0, METER)
+    )
+    scene.fog.far = Length(0.5, METER)
+    with assert_raises():
+        _ = renderer.render(scene, assets, facing_camera())
+    scene.fog = no_fog()
+    scene.fog.kind = FogKind(9)
+    with assert_raises():
+        _ = renderer.render(scene, assets, facing_camera())
 
 
 def main() raises:

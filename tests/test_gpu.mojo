@@ -69,13 +69,18 @@ from lights.light import (
     spot_light,
 )
 from lights.lighting import Lighting
+from core.fog import Fog, FogView, exp2_fog, linear_fog, no_fog
+from render.rasterizer import rasterize_all
+from units.si import InverseLength, PER_METER
 from render.gpu import (
     FLOATS_PER_VERTEX,
+    FOG_FLOATS,
     STATE_PER_TRIANGLE,
     TABLE_COLUMNS,
     GpuRenderer,
     available,
     flatten,
+    flatten_fog,
     flatten_lights,
     flatten_textures,
     pack,
@@ -1229,6 +1234,140 @@ def test_both_backends_agree_under_hemisphere_and_spot_lights() raises:
             brightest = shown.r
     assert_true(Int(brightest) - Int(darkest) > 40, "the cones left no pool")
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_flattening_fog_lays_out_ten_floats() raises:
+    # The depth row, the two edges, the density, then the color, linear.
+    var camera = PerspectiveCamera(
+        Angle(60.0, DEGREE), 1.0, Length(0.1, METER), Length(100.0, METER)
+    )
+    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
+    var view = FogView(
+        linear_fog(Color(128, 0, 255), Length(2.0, METER), Length(9.0, METER)),
+        camera.view_matrix(),
+    )
+    var flat = flatten_fog(view)
+    assert_equal(len(flat), 10)
+    assert_equal(len(flat), FOG_FLOATS)
+    # A camera on +z looking down -z keeps the depth row as (0, 0, 1) with a
+    # translation of minus five: the origin is five deep.
+    assert_almost_equal(flat[0], Float32(0), atol=Float64(1e-6))
+    assert_almost_equal(flat[2], Float32(1), atol=Float64(1e-6))
+    assert_almost_equal(flat[3], Float32(-5), atol=Float64(1e-6))
+    assert_equal(flat[4], Float32(2))
+    assert_equal(flat[5], Float32(9))
+    assert_equal(flat[6], Float32(0))
+    assert_almost_equal(flat[7], Float32(0.215861), atol=Float64(1e-5))
+    assert_equal(flat[8], Float32(0))
+    assert_equal(flat[9], Float32(1))
+
+
+def compare_under_fog(fog: Fog, mode: ShadeMode) raises -> Framebuffer:
+    """Render a floor, a box and a sphere lit by a sun and some fill on both
+    backends under `fog`, assert they agree, and return the CPU image."""
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
+    var floor = assets.geometries.add(
+        plane(Length(30.0, METER), Length(30.0, METER), 3, 3)
+    )
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_position(0, -0.7, 0)
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var left = Object3D()
+    left.set_position(-0.9, 0, 0)
+    left.set_euler(Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.9, 0, -3.0)
+    var right_node = scene.add(right^)
+    var sun = Object3D()
+    sun.set_position(0.4, 0.8, 0.5)
+    var sun_node = scene.add(sun^)
+    scene.add_light(directional_light(Color(255, 255, 255), sun_node, 0.8))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.15))
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            floor,
+            assets.materials.add(Material(Color(200, 200, 200))),
+            ground_node,
+        )
+    )
+    meshes.append(
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 140, 40))), left_node
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(Material(Color(90, 190, 255), kind=BASIC)),
+            right_node,
+        )
+    )
+    scene.fog = fog
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.8, 3.2), Vector3(0, 0, 0))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    var lighting = Lighting(scene)
+    var view = FogView(scene.fog, camera.view_matrix_in(scene))
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(corners, target, mode, assets.textures, lighting, 1, view)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, mode, assets.textures, lighting, view
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 300, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    return cpu^
+
+
+def test_both_backends_agree_under_linear_and_exponential_fog() raises:
+    # A floor running to the horizon, a lit box and an unlit sphere further
+    # back, under each kind of fog: the depth is taken from the interpolated
+    # world position on both sides, and every material is veiled.
+    if skipped_for_lack_of_a_gpu("both backends agree under fog"):
+        return
+    var fog_color = Color(160, 170, 190)
+    var clear = compare_under_fog(no_fog(), SHADE_LIT)
+    var linear = compare_under_fog(
+        linear_fog(fog_color, Length(2.0, METER), Length(9.0, METER)), SHADE_LIT
+    )
+    var thick = compare_under_fog(
+        exp2_fog(fog_color, InverseLength(0.25, PER_METER)), SHADE_LIT
+    )
+    # And the fog really changed the frame, differently for each kind.
+    assert_true(
+        count_mismatches(clear, linear) > 200, "the linear fog did nothing"
+    )
+    assert_true(
+        count_mismatches(clear, thick) > 200, "the exponential fog did nothing"
+    )
+    assert_true(count_mismatches(linear, thick) > 50, "the two fogs agreed")
+
+
+def test_both_backends_leave_the_uv_view_unfogged() raises:
+    if skipped_for_lack_of_a_gpu("both backends leave the uv view unfogged"):
+        return
+    var clear = compare_under_fog(no_fog(), SHADE_UV)
+    var veiled = compare_under_fog(
+        exp2_fog(Color(255, 255, 255), InverseLength(5.0, PER_METER)), SHADE_UV
+    )
+    assert_equal(count_mismatches(clear, veiled), 0)
 
 
 def test_the_gpu_leaves_an_unlit_triangle_its_own_color() raises:

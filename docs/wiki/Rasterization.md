@@ -31,8 +31,8 @@ One corner as the rasterizer wants it:
 |---|---|
 | `rasterize(triangle, framebuffer, color)` | Fill a flat triangle. |
 | `rasterize_depth(...)` | Fill with a depth test. |
-| `rasterize_shaded(a, b, c, target, mode, textures, lighting, first_row, last_row)` | Fill one shaded triangle. |
-| `rasterize_all(corners, target, mode, textures, lighting, workers)` | Fill a whole list, on one or more threads. |
+| `rasterize_shaded(a, b, c, target, mode, textures, lighting, first_row, last_row, fog)` | Fill one shaded triangle. |
+| `rasterize_all(corners, target, mode, textures, lighting, workers, fog)` | Fill a whole list, on one or more threads. |
 | `check_triangle_state(a, b, c)` | Refuse corners that disagree, or hold a value neither backend knows. |
 | `mip_level(du, dv, width, height)` | The mip level for a texture footprint. |
 
@@ -59,6 +59,10 @@ Color, normal, texture coordinates and world position are interpolated with pers
 ## Shading
 
 At each fragment the interpolated normal is normalized again, and `Lighting.intensity_at` sums every light. The material color, the sampled texel and the light multiply. The emissive term, times its own map, is then added. The lights do not touch it. An unlit triangle skips the lights. See [Why shading is per fragment](Why-shading-is-per-fragment).
+
+## Fog
+
+After the lights and the emissive term, the fragment is mixed toward the fog color by its camera-space depth. The `fog` argument is a `FogView`. The default, `FogView.none()`, changes nothing. `SHADE_UV` is never fogged. See [Fog](Fog).
 
 ## Transparency
 

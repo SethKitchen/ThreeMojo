@@ -31,6 +31,7 @@ from render.target import RenderTarget
 from render.texture import IGNORED, Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.lighting import Lighting
+from core.fog import FogView
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, log2, max, min, sqrt
 from std.runtime.asyncrt import TaskGroup
@@ -702,6 +703,7 @@ def rasterize_shaded(
     lighting: Lighting = Lighting.uniform(),
     first_row: Int = 0,
     last_row: Int = -1,
+    fog: FogView = FogView.none(),
 ) raises:
     """Fill a triangle whose corners each carry their own color.
 
@@ -756,6 +758,11 @@ def rasterize_shaded(
             triangle once per band on its own thread; a band owns its rows
             outright, so no two threads ever touch one pixel.
         last_row: The last row it may write, or -1 for the bottom.
+        fog: The scene's fog, seen through the camera. Every fragment is
+            mixed toward its color by its camera-space depth, after the
+            lights and the emissive term, in linear light. Defaults to
+            `FogView.none`, which leaves every fragment alone. `SHADE_UV`
+            is never fogged: it shows coordinates, not light.
 
     Raises:
         Error: If the mode is none of the three, a vertex names a texture the
@@ -791,6 +798,9 @@ def rasterize_shaded(
     # The consequence is that the caller owns draw order: translucent surfaces
     # have to arrive after the opaque ones and back to front. `prepare` sorts.
     var blended = a.blend == BLEND and mode != SHADE_UV
+    # Whether the fog reaches these fragments: never in the uv debug view,
+    # which shows coordinates rather than light.
+    var fogged = fog.is_on() and mode != SHADE_UV
 
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
@@ -850,6 +860,22 @@ def rasterize_shaded(
                 a.color.b * share_a + b.color.b * share_b + c.color.b * share_c,
                 a.color.a * share_a + b.color.a * share_b + c.color.a * share_c,
             )
+            # Where this fragment is in the world, for the lights that have
+            # a position and for the fog. Interpolated like every other
+            # varying, and only when something will read it.
+            var spot = Vector3(0, 0, 0)
+            if a.lit or fogged:
+                spot = Vector3(
+                    a.world.x * share_a
+                    + b.world.x * share_b
+                    + c.world.x * share_c,
+                    a.world.y * share_a
+                    + b.world.y * share_b
+                    + c.world.y * share_c,
+                    a.world.z * share_a
+                    + b.world.z * share_b
+                    + c.world.z * share_c,
+                )
             # An unlit surface shows its own color: neither the lights nor
             # the normal are consulted.
             var arriving = FloatColor(1.0, 1.0, 1.0, 1.0)
@@ -873,18 +899,6 @@ def rasterize_shaded(
                 )
                 if facing.length() != 0:
                     facing.normalize()
-                # Where this fragment is in the world, for the point lights.
-                var spot = Vector3(
-                    a.world.x * share_a
-                    + b.world.x * share_b
-                    + c.world.x * share_c,
-                    a.world.y * share_a
-                    + b.world.y * share_b
-                    + c.world.y * share_c,
-                    a.world.z * share_a
-                    + b.world.z * share_b
-                    + c.world.z * share_c,
-                )
                 arriving = lighting.intensity_at(facing, spot)
             var shaded = FloatColor(
                 base.r * arriving.r,
@@ -968,6 +982,19 @@ def rasterize_shaded(
                 shaded.b + glow.b,
                 shaded.a,
             )
+            # Veiled by the fog last, after the lights and the glow, as
+            # three.js mixes its finished color -- but in linear light,
+            # before anything is encoded. Alpha is coverage, not color, and
+            # the fog leaves it alone. The kernel mixes with this exact
+            # expression.
+            if fogged:
+                var veil = fog.factor_at(spot)
+                shaded = FloatColor(
+                    shaded.r + (fog.color.r - shaded.r) * veil,
+                    shaded.g + (fog.color.g - shaded.g) * veil,
+                    shaded.b + (fog.color.b - shaded.b) * veil,
+                    shaded.a,
+                )
             if blended:
                 target.blend(x, y, shaded)
             else:
@@ -986,6 +1013,7 @@ async def _band(
     band: Int,
     first_row: Int,
     last_row: Int,
+    fog: FogView,
 ):
     """Rasterize every triangle into one horizontal band of the target.
 
@@ -1026,6 +1054,7 @@ async def _band(
                 lighting[],
                 first_row,
                 last_row,
+                fog,
             )
     except e:
         errors[unsafe_offset=band] = String(e)
@@ -1038,6 +1067,7 @@ def rasterize_all(
     textures: TextureStore = TextureStore(),
     lighting: Lighting = Lighting.uniform(),
     workers: Int = 1,
+    fog: FogView = FogView.none(),
 ) raises:
     """Draw every triangle in `corners` into `target`, on `workers` threads.
 
@@ -1061,6 +1091,8 @@ def rasterize_all(
         textures: Where `SHADE_TEXTURE` looks the triangles' maps up.
         lighting: The scene's lights, resolved to world space.
         workers: How many threads to draw with, at least one.
+        fog: The scene's fog, seen through the camera; see
+            `rasterize_shaded`.
 
     Raises:
         Error: If the corner count is not a multiple of three, `workers` is
@@ -1102,6 +1134,7 @@ def rasterize_all(
                 mode,
                 textures,
                 lighting,
+                fog=fog,
             )
         return
 
@@ -1124,6 +1157,7 @@ def rasterize_all(
                 band,
                 band * target.height // bands,
                 (band + 1) * target.height // bands - 1,
+                fog,
             )
         )
     group.wait()

@@ -14,6 +14,9 @@ from render.texture import IGNORED, NEAREST, REPEAT, Texture, checkerboard
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.light import directional_light
 from lights.lighting import Lighting
+from core.fog import FogView, exp2_fog, linear_fog
+from math.matrix4 import Matrix4
+from units.si import InverseLength, Length, METER, PER_METER
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from math.vector3 import Vector3
@@ -1713,6 +1716,182 @@ def test_rasterize_all_needs_whole_triangles_and_a_worker() raises:
         rasterize_all(corners, target)
     with assert_raises():
         rasterize_all(List[RasterVertex](), target, workers=0)
+
+
+# --- fog ----------------------------------------------------------------------
+
+
+def placed_corner(
+    x: Float32,
+    y: Float32,
+    world: Vector3,
+    lit: Bool = False,
+    alpha: Float32 = 1.0,
+    blend: Blending = OPAQUE,
+    glow: FloatColor = FloatColor(0.0, 0.0, 0.0),
+) -> RasterVertex:
+    """Return a white corner at a pixel, standing at `world`, facing +z."""
+    return RasterVertex(
+        x,
+        y,
+        0.5,
+        1,
+        FloatColor(1, 1, 1, alpha),
+        0,
+        0,
+        NO_TEXTURE,
+        blend,
+        Vector3(0, 0, 1),
+        world,
+        lit,
+        glow,
+    )
+
+
+def placed_quad(
+    depth: Float32,
+    lit: Bool = False,
+    alpha: Float32 = 1.0,
+    blend: Blending = OPAQUE,
+    glow: FloatColor = FloatColor(0.0, 0.0, 0.0),
+) -> List[RasterVertex]:
+    """Return two white triangles covering an eight-pixel target, standing
+    `depth` meters in front of a camera at the origin looking down -z."""
+    var world = Vector3(0, 0, -depth)
+    var corners = List[RasterVertex]()
+    corners.append(placed_corner(0, 0, world, lit, alpha, blend, glow))
+    corners.append(placed_corner(8, 0, world, lit, alpha, blend, glow))
+    corners.append(placed_corner(8, 8, world, lit, alpha, blend, glow))
+    corners.append(placed_corner(0, 0, world, lit, alpha, blend, glow))
+    corners.append(placed_corner(8, 8, world, lit, alpha, blend, glow))
+    corners.append(placed_corner(0, 8, world, lit, alpha, blend, glow))
+    return corners^
+
+
+def gray_fog() raises -> FogView:
+    """Return a mid-gray linear fog from one to three meters, through the
+    identity view: a camera at the origin looking down -z."""
+    return FogView(
+        linear_fog(
+            Color(128, 128, 128), Length(1.0, METER), Length(3.0, METER)
+        ),
+        Matrix4(),
+    )
+
+
+def fogged_pixel(
+    corners: List[RasterVertex],
+    fog: FogView,
+    mode: ShadeMode = SHADE_LIT,
+    lighting: Lighting = Lighting.uniform(),
+    workers: Int = 1,
+) raises -> Color:
+    """Draw `corners` under `fog` and return the center pixel."""
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(corners, target, mode, TextureStore(), lighting, workers, fog)
+    return target.shown(4, 4)
+
+
+def assert_same_color(shown: Color, expected: Color) raises:
+    """Assert two colors agree in every channel."""
+    assert_equal(shown.r, expected.r)
+    assert_equal(shown.g, expected.g)
+    assert_equal(shown.b, expected.b)
+    assert_equal(shown.a, expected.a)
+
+
+def test_fog_veils_a_fragment_by_its_depth() raises:
+    # A white unlit surface through a gray fog from one to three meters:
+    # untouched at half a meter, half way to the fog color at two, and the
+    # fog color alone at four. The mix is in linear light, so half way is
+    # half the light of each and not half the bytes.
+    var fog = gray_fog()
+    var near = fogged_pixel(placed_quad(0.5), fog)
+    assert_same_color(near, Color(255, 255, 255))
+    var gray = FloatColor(srgb=Color(128, 128, 128))
+    var halfway = fogged_pixel(placed_quad(2), fog)
+    assert_same_color(
+        halfway,
+        FloatColor(
+            1 + (gray.r - 1) * 0.5,
+            1 + (gray.g - 1) * 0.5,
+            1 + (gray.b - 1) * 0.5,
+            1.0,
+        ).encode(),
+    )
+    assert_true(halfway.r > 128, "the mix was taken on bytes, not on light")
+    var far = fogged_pixel(placed_quad(4), fog)
+    assert_same_color(far, Color(128, 128, 128))
+    # Without fog, or with the view of none, the same surface is white at
+    # any depth.
+    assert_same_color(
+        fogged_pixel(placed_quad(4), FogView.none()), Color(255, 255, 255)
+    )
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(placed_quad(4), target)
+    assert_same_color(target.shown(4, 4), Color(255, 255, 255))
+
+
+def test_the_uv_view_is_never_fogged() raises:
+    # Coordinates, not light: deep in the fog the debug view still writes
+    # the raw coordinates it would write without any fog.
+    var fog = gray_fog()
+    var veiled = fogged_pixel(placed_quad(40), fog, SHADE_UV)
+    var clear = fogged_pixel(placed_quad(40), FogView.none(), SHADE_UV)
+    assert_same_color(veiled, clear)
+    assert_equal(veiled.b, UInt8(0))
+
+
+def test_fog_leaves_alpha_alone_and_mixes_before_blending() raises:
+    # A half-transparent white surface deep in the fog, over black: the
+    # color is fogged to gray first, then half of that light is blended over
+    # the black, and the coverage is what the material said.
+    var fog = gray_fog()
+    var target = RenderTarget(8, 8, Color(0, 0, 0, 0))
+    rasterize_all(
+        placed_quad(10, False, 0.5, BLEND),
+        target,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        1,
+        fog,
+    )
+    var gray = FloatColor(srgb=Color(128, 128, 128))
+    var shown = target.shown(4, 4)
+    assert_same_color(shown, Color(128, 128, 128, 128))
+    assert_almost_equal(
+        target.color_at(4, 4).r, gray.r * 0.5, atol=Float64(1e-6)
+    )
+
+
+def test_a_lit_surface_is_fogged_after_the_lights_and_the_glow() raises:
+    # White, square on to a white lamp, glowing a quarter red, two meters
+    # into the fog: the light and the glow make (1.25, 1, 1), and only then
+    # is it mixed half way to gray. Fogging before the glow would leave the
+    # glow unveiled.
+    var fog = gray_fog()
+    var quad = placed_quad(2, True, 1.0, OPAQUE, FloatColor(0.25, 0.0, 0.0))
+    var shown = fogged_pixel(quad, fog, SHADE_LIT, lit_along_z())
+    var gray = FloatColor(srgb=Color(128, 128, 128))
+    var expected = FloatColor(
+        1.25 + (gray.r - 1.25) * 0.5,
+        1 + (gray.g - 1) * 0.5,
+        1 + (gray.b - 1) * 0.5,
+        1.0,
+    ).encode()
+    assert_same_color(shown, expected)
+
+
+def test_fog_is_the_same_on_one_worker_and_on_four() raises:
+    var fog = FogView(
+        exp2_fog(Color(200, 220, 255), InverseLength(0.3, PER_METER)), Matrix4()
+    )
+    var quad = placed_quad(3, True)
+    var alone = fogged_pixel(quad, fog, SHADE_LIT, lit_along_z(), 1)
+    var crowd = fogged_pixel(quad, fog, SHADE_LIT, lit_along_z(), 4)
+    assert_same_color(alone, crowd)
+    assert_true(alone.b > alone.r, "the exponential fog tinted nothing")
 
 
 def main() raises:

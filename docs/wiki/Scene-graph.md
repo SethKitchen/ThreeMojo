@@ -34,6 +34,7 @@ A `NodeId` wraps an integer. A bare integer does not compile where a node id is 
 | `add_mesh(mesh)` | Add something to draw. See [Meshes and assets](Meshes-and-assets). |
 | `add_instanced_mesh(mesh)`, `add_batched_mesh(mesh)`, `add_lod(lod)` | Add the other things a scene draws. See [Meshes and assets](Meshes-and-assets#instancedmesh). |
 | `add_light(light)` | Add a light. See [Lights](Lights). |
+| `fog: Fog` | The scene's fog. `no_fog()` to begin with. See [Fog](Fog). |
 | `update()` | Compute every world matrix in one forward pass. |
 | `world_matrix(id) -> Matrix4` | A node's world transform. Raises if the scene is stale. |
 | `world_position(id) -> Vector3` | A node's origin in world space. |
@@ -72,7 +73,7 @@ camera.layers.enable(1)              # the camera sees layer one as well
 - A parent is always added before its children. `add` and `set` refuse anything else.
 - Any change to a node makes the scene stale. `world_matrix` refuses to answer until `update` runs.
 - A stale scene renders stale positions. Call `update` before `render`.
-- Adding a mesh or a light does not make the scene stale. Neither holds a transform.
+- Adding a mesh or a light does not make the scene stale. Neither holds a transform. Nor does setting the fog.
 
 ## Example
 

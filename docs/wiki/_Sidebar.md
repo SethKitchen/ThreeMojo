@@ -21,6 +21,7 @@
 - [Raycasting](Raycasting)
 - [Materials](Materials)
 - [Lights](Lights)
+- [Fog](Fog)
 - [Textures](Textures)
 - [Renderer](Renderer)
 - [Rasterization](Rasterization)
