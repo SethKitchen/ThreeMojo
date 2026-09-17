@@ -31,7 +31,7 @@ from render.target import RenderTarget
 from render.texture import IGNORED, Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.lighting import Lighting
-from core.fog import FogView
+from core.fog import FogView, fog_mix
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, log2, max, min, sqrt
 from std.runtime.asyncrt import TaskGroup
@@ -443,6 +443,13 @@ struct RasterVertex(ImplicitlyCopyable):
     # Which texture multiplies the emissive, or `NO_TEXTURE`. Per-triangle
     # metadata like `texture`: read from the first corner, checked to agree.
     var emissive_map: TextureId
+    # How far in front of the camera this corner is, in meters: three.js's
+    # `vFogDepth`, minus the camera-space z, taken from the clipped
+    # position as it is projected. Interpolated with perspective correction
+    # like the color, so a fragment reads its fog off a small number
+    # rather than recovering it from a large world coordinate, which
+    # rounds the depth away far from the origin. Read only by the fog.
+    var view_depth: Float32
 
     def __init__(
         out self,
@@ -460,6 +467,7 @@ struct RasterVertex(ImplicitlyCopyable):
         lit: Bool = True,
         emissive: FloatColor = FloatColor(0.0, 0.0, 0.0),
         emissive_map: TextureId = NO_TEXTURE,
+        view_depth: Float32 = 0,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -468,7 +476,8 @@ struct RasterVertex(ImplicitlyCopyable):
         or, worse, from behind. The world position defaults to the origin,
         which only a point light would notice, and the corner defaults to
         lit, which under `Lighting.uniform` changes nothing. The emissive
-        defaults to black: no light given off.
+        defaults to black: no light given off. The depth defaults to
+        zero, which is at the camera and in no fog.
         """
         self.x = x
         self.y = y
@@ -484,6 +493,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.lit = lit
         self.emissive = emissive
         self.emissive_map = emissive_map
+        self.view_depth = view_depth
 
 
 @fieldwise_init
@@ -765,7 +775,9 @@ def rasterize_shaded(
             is never fogged: it shows coordinates, not light.
 
     Raises:
-        Error: If the mode is none of the three, a vertex names a texture the
+        Error: If the mode is none of the three, the fog view holds a kind
+            or a number that `FogView.validate` refuses, a vertex names a
+            texture the
             store does not have, the corners disagree about their texture or
             blend policy or hold one that is neither, an emissive map that
             `SHADE_TEXTURE` would open does not ignore its alpha, or a pixel
@@ -774,6 +786,10 @@ def rasterize_shaded(
     if not mode.is_valid():
         raise Error("A shading mode that is none of the three")
     check_triangle_state(a, b, c)
+    # A view of the fog can be built by hand, and its fields are open:
+    # refused here, before a fragment reads it, as the GPU refuses it
+    # before the launch.
+    fog.validate()
     # An emissive map's alpha means nothing, and only a texture built to
     # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
     # before the first fragment, as the GPU asks it before the launch, and
@@ -860,22 +876,6 @@ def rasterize_shaded(
                 a.color.b * share_a + b.color.b * share_b + c.color.b * share_c,
                 a.color.a * share_a + b.color.a * share_b + c.color.a * share_c,
             )
-            # Where this fragment is in the world, for the lights that have
-            # a position and for the fog. Interpolated like every other
-            # varying, and only when something will read it.
-            var spot = Vector3(0, 0, 0)
-            if a.lit or fogged:
-                spot = Vector3(
-                    a.world.x * share_a
-                    + b.world.x * share_b
-                    + c.world.x * share_c,
-                    a.world.y * share_a
-                    + b.world.y * share_b
-                    + c.world.y * share_c,
-                    a.world.z * share_a
-                    + b.world.z * share_b
-                    + c.world.z * share_c,
-                )
             # An unlit surface shows its own color: neither the lights nor
             # the normal are consulted.
             var arriving = FloatColor(1.0, 1.0, 1.0, 1.0)
@@ -899,6 +899,19 @@ def rasterize_shaded(
                 )
                 if facing.length() != 0:
                     facing.normalize()
+                # Where this fragment is in the world, for the lights that
+                # have a position.
+                var spot = Vector3(
+                    a.world.x * share_a
+                    + b.world.x * share_b
+                    + c.world.x * share_c,
+                    a.world.y * share_a
+                    + b.world.y * share_b
+                    + c.world.y * share_c,
+                    a.world.z * share_a
+                    + b.world.z * share_b
+                    + c.world.z * share_c,
+                )
                 arriving = lighting.intensity_at(facing, spot)
             var shaded = FloatColor(
                 base.r * arriving.r,
@@ -984,17 +997,18 @@ def rasterize_shaded(
             )
             # Veiled by the fog last, after the lights and the glow, as
             # three.js mixes its finished color -- but in linear light,
-            # before anything is encoded. Alpha is coverage, not color, and
-            # the fog leaves it alone. The kernel mixes with this exact
-            # expression.
+            # before anything is encoded. The depth is a varying of its
+            # own, interpolated like the color: a small number, where a
+            # world coordinate a million meters out rounds it away. The
+            # kernel interpolates the same lane and mixes with the same
+            # function.
             if fogged:
-                var veil = fog.factor_at(spot)
-                shaded = FloatColor(
-                    shaded.r + (fog.color.r - shaded.r) * veil,
-                    shaded.g + (fog.color.g - shaded.g) * veil,
-                    shaded.b + (fog.color.b - shaded.b) * veil,
-                    shaded.a,
+                var depth = (
+                    a.view_depth * share_a
+                    + b.view_depth * share_b
+                    + c.view_depth * share_c
                 )
+                shaded = fog_mix(shaded, fog.color, fog.factor_at(depth))
             if blended:
                 target.blend(x, y, shaded)
             else:
@@ -1096,7 +1110,8 @@ def rasterize_all(
 
     Raises:
         Error: If the corner count is not a multiple of three, `workers` is
-            less than one, the mode is none of the three, any triangle's
+            less than one, the mode is none of the three, the fog view is
+            refused by `FogView.validate`, any triangle's
             metadata is refused by `check_triangle_state`, or any triangle is
             refused by `rasterize_shaded` -- on a worker that error is
             carried back and raised here.
@@ -1107,6 +1122,10 @@ def rasterize_all(
         raise Error("Rasterizing needs at least one worker")
     if not mode.is_valid():
         raise Error("A shading mode that is none of the three")
+    # Refused here, before any band starts, for the reason the triangle
+    # state is: whether or not a triangle is visible, and however many
+    # workers there are.
+    fog.validate()
     var triangles = len(corners) // 3
     # Every triangle's metadata is checked here, before any band starts, so
     # malformed input is refused whether or not the triangle is visible and

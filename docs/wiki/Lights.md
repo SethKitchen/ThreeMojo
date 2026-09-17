@@ -64,6 +64,8 @@ A point light with a cone. The light shines from the node's world position towar
 
 `decay` and `distance` work as they do for a point light. The node must not sit on its target.
 
+The cone must be wide enough to resolve. The fragment compares cosines, and the cosine of a half-angle below about 0.014 degrees rounds to one in `Float32`. Such a light lit nothing on its own axis. `spot_light` and `Lighting` refuse it.
+
 three.js: `SpotLight(color, intensity, distance, angle, penumbra, decay)` and `SpotLight.target`. The spot light's `map` and shadow are not ported.
 
 ## Lighting
@@ -81,13 +83,20 @@ three.js: `SpotLight(color, intensity, distance, angle, penumbra, decay)` and `S
 | `shade(base, normal, position) -> FloatColor` | `base` decoded from sRGB and multiplied by `intensity_at`. |
 | `Lighting.uniform()` | Light of one everywhere. The identity for a hand-built triangle. |
 
-`Lighting(scene)` raises in three cases:
+`Lighting(scene)` raises in four cases:
 
+- A light's numbers are refused by `validate`, on the camera's layers or not.
 - A light names a node or a target the scene does not have.
 - A directional, hemisphere or spot light has no direction. Its node sits at the origin, or on its target.
 - A light's kind is none of the five.
 
 The kinds are summed in one fixed order: ambient, directional, point, hemisphere, spot. Both rasterizers use that order, so their sums round alike.
+
+## Validation
+
+`Light.validate()` refuses the numbers a kind cannot use. An intensity, decay or distance that is negative or not finite raises. A spot angle that is not finite, not above zero, past ninety degrees, or too narrow to resolve raises. A penumbra outside zero to one raises. A number the kind never reads is not checked.
+
+Every builder calls `validate`. `Lighting(scene)` calls it again on every light, because the fields are open and a light in a persistent scene is there to be edited.
 
 ## Rules
 

@@ -61,9 +61,13 @@ three.js: `WebGLRenderer.toneMapping` and `toneMappingExposure`.
 | `AGX_TONE_MAPPING` | Blender's AgX through rec. 2020, as Filament and three.js carry it. |
 | `NEUTRAL_TONE_MAPPING` | The Khronos PBR neutral curve. |
 
-`tone_map(color, mode, exposure)` is the function itself. The GPU kernel calls the same one. `ToneMapping` is a type. `is_valid` names the seven. `resolve` and `shown` refuse any other value, and a negative exposure. A bare integer does not compile.
+`tone_map(color, mode, exposure)` is the function itself. The GPU kernel calls the same one. `ToneMapping` is a type. `is_valid` names the seven. A bare integer does not compile.
 
-The curve is applied once, to the composited light of each pixel. three.js applies it to each fragment before blending. The two agree on every opaque pixel. The background is light in the target and goes through the curve too. The `SHADE_UV` view is never tone mapped. See [Renderer](Renderer#tone-mapping).
+`check_tone_mapping(mode, exposure)` refuses any other value, and an exposure that is negative or not finite. `resolve`, `shown`, `Renderer.set_tone_mapping` and `GpuRenderer.draw` all call it.
+
+The curve is applied once, to the composited light of each pixel. three.js applies it to each fragment before blending. On an opaque pixel that no fog reaches, the two orders agree up to rounding. A fogged pixel differs: the fog is mixed in linear light before the curve here, and after the encode in three.js. A translucent pixel differs by design.
+
+Bit-for-bit equality with another implementation is not promised, because `exp2` of `log2` rounds differently from a `pow`. The background is light in the target and goes through the curve too. The `SHADE_UV` view is never tone mapped. See [Renderer](Renderer#tone-mapping).
 
 ## Framebuffer
 

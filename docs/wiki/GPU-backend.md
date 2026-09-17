@@ -14,9 +14,9 @@ MAX 26.5.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-G
 |---|---|
 | `available() -> Bool` | Whether a GPU is present. |
 | `render_triangles(corners, width, height, background, mode, textures, lighting, fog, tone_mapping, exposure) -> Framebuffer` | One-shot: draw and read back. |
-| `flatten(corners) -> List[Float32]` | The corner buffer the kernel reads, sixteen floats per vertex. |
+| `flatten(corners) -> List[Float32]` | The corner buffer the kernel reads, twenty floats per vertex. |
 | `flatten_lights(lighting) -> List[Float32]` | The light buffer: the ambient term, then each directional, point, hemisphere and spot light. |
-| `flatten_fog(fog) -> List[Float32]` | The fog buffer, ten floats. The kind crosses as a kernel argument. |
+| `flatten_fog(fog) -> List[Float32]` | The fog buffer, six floats. The kind crosses as a kernel argument. |
 | `flatten_textures(store)` | Every texture in one buffer, with a descriptor table. |
 | `triangle_state(corners) -> List[Int32]` | Texture, blend and lit per triangle. |
 

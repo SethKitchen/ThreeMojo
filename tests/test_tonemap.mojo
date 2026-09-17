@@ -21,13 +21,16 @@ from render.tonemap import (
     NO_TONE_MAPPING,
     REINHARD_TONE_MAPPING,
     ToneMapping,
+    check_tone_mapping,
     tone_map,
 )
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
     assert_false,
+    assert_raises,
     assert_true,
 )
 
@@ -228,6 +231,21 @@ def test_every_curve_is_monotonic_and_bounded_on_grays() raises:
             )
             previous = shown.r
         assert_gray(mapped(mode, 3.0, 3.0, 3.0, 0.0), 0.0)
+
+
+def test_the_boundary_check_refuses_an_unknown_curve_or_a_bad_exposure() raises:
+    # The one list every boundary asks: a named curve, and an exposure that
+    # is finite and not negative. Zero is a legal black.
+    check_tone_mapping(NO_TONE_MAPPING, 1.0)
+    check_tone_mapping(AGX_TONE_MAPPING, 0.0)
+    with assert_raises():
+        check_tone_mapping(ToneMapping(9), 1.0)
+    with assert_raises():
+        check_tone_mapping(REINHARD_TONE_MAPPING, -1.0)
+    with assert_raises():
+        check_tone_mapping(REINHARD_TONE_MAPPING, inf[DType.float32]())
+    with assert_raises():
+        check_tone_mapping(REINHARD_TONE_MAPPING, nan[DType.float32]())
 
 
 def main() raises:

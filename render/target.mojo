@@ -39,7 +39,12 @@ unassociated alpha.
 """
 
 from render.framebuffer import Color, FloatColor, Framebuffer
-from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
+from render.tonemap import (
+    NO_TONE_MAPPING,
+    ToneMapping,
+    check_tone_mapping,
+    tone_map,
+)
 from std.math import inf, min
 from std.runtime.asyncrt import TaskGroup
 
@@ -84,26 +89,6 @@ async def _encode_band(
 ):
     """`_encode_run` as a task, one per worker; see `resolve`."""
     _encode_run(colors, pixels, first, past, tone_mapping, exposure)
-
-
-def _check_curve(tone_mapping: ToneMapping, exposure: Float32) raises:
-    """Refuse a curve that is none of the seven, or a negative exposure.
-
-    The type stops a bare integer; it does not stop `ToneMapping(9)`, and
-    `tone_map` cannot raise on what it is handed, so the boundary does.
-
-    Args:
-        tone_mapping: The curve.
-        exposure: What the light is scaled by first.
-
-    Raises:
-        Error: If the curve is not a named one, or the exposure is
-            negative, which would turn light into darkness.
-    """
-    if not tone_mapping.is_valid():
-        raise Error("A tone mapping that is none of the seven")
-    if exposure < 0:
-        raise Error("A tone mapping exposure cannot be negative")
 
 
 struct RenderTarget(Movable):
@@ -260,9 +245,9 @@ struct RenderTarget(Movable):
 
         Raises:
             Error: If the coordinate is out of bounds, the curve is none of
-                the seven, or the exposure is negative.
+                the seven, or the exposure is negative or not finite.
         """
-        _check_curve(tone_mapping, exposure)
+        check_tone_mapping(tone_mapping, exposure)
         return tone_map(
             self.colors[self._slot(x, y)].unpremultiplied(),
             tone_mapping,
@@ -308,12 +293,12 @@ struct RenderTarget(Movable):
 
         Raises:
             Error: If `workers` is less than one, the curve is none of the
-                seven, the exposure is negative, or the framebuffer cannot
-                be built.
+                seven, the exposure is negative or not finite, or the
+                framebuffer cannot be built.
         """
         if workers < 1:
             raise Error("Resolving needs at least one worker")
-        _check_curve(tone_mapping, exposure)
+        check_tone_mapping(tone_mapping, exposure)
         var count = self.width * self.height
         var pixels = List[UInt8](length=count * Framebuffer.CHANNELS, fill=0)
         var bands = min(workers, count)

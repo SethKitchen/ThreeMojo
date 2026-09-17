@@ -31,6 +31,7 @@ from lights.light import (
     spot_light,
 )
 from math.smoothstep import smoothstep
+from std.math import inf, nan
 from lights.lighting import Lighting
 from math.vector3 import Vector3
 from units.si import Angle, DEGREE, RADIAN
@@ -944,6 +945,89 @@ def test_the_new_kinds_start_on_layer_zero_and_follow_the_camera() raises:
     var none = Lighting.uniform()
     assert_equal(none.hemisphere_count(), 0)
     assert_equal(none.spot_count(), 0)
+
+
+# --- validation ----------------------------------------------------------------
+
+
+def not_a_number() -> Float32:
+    """Return a NaN, the value no check by comparison alone catches."""
+    return nan[DType.float32]()
+
+
+def test_a_builder_refuses_a_number_that_is_not_finite() raises:
+    var endless = inf[DType.float32]()
+    with assert_raises():
+        _ = ambient_light(WHITE, not_a_number())
+    with assert_raises():
+        _ = directional_light(WHITE, NodeId(0), endless)
+    with assert_raises():
+        _ = hemisphere_light(WHITE, WHITE, NodeId(0), not_a_number())
+    with assert_raises():
+        _ = point_light(WHITE, NodeId(0), 1.0, not_a_number())
+    with assert_raises():
+        _ = point_light(WHITE, NodeId(0), 1.0, 2.0, endless)
+    with assert_raises():
+        _ = spot_light(WHITE, NodeId(0), 1.0, not_a_number())
+    with assert_raises():
+        _ = spot_light(
+            WHITE, NodeId(0), 1.0, 0.0, Angle(not_a_number(), DEGREE)
+        )
+    with assert_raises():
+        _ = spot_light(
+            WHITE, NodeId(0), 1.0, 0.0, DEFAULT_SPOT_ANGLE, not_a_number()
+        )
+    with assert_raises():
+        _ = spot_light(
+            WHITE, NodeId(0), 1.0, 0.0, DEFAULT_SPOT_ANGLE, 0.5, endless
+        )
+
+
+def test_a_light_edited_after_it_was_built_is_refused_when_resolved() raises:
+    # The builders' checks are `Light.validate`, and `Lighting` asks it
+    # again of every light, on the camera's layers or not: a wrong light is
+    # a wrong asset, not a wrong frame.
+    var scene = scene_with_lamp_at(0, 2, 0)
+    var beam = spot_light(WHITE, NodeId(0))
+    beam.penumbra = 2.0
+    scene.add_light(beam)
+    with assert_raises():
+        _ = Lighting(scene)
+    var hidden = scene_with_lamp_at(0, 2, 0)
+    var bulb = point_light(WHITE, NodeId(0))
+    bulb.decay = not_a_number()
+    bulb.layers.set(3)
+    hidden.add_light(bulb)
+    with assert_raises():
+        _ = Lighting(hidden, visible=Layers())
+    var dim = ambient_light(WHITE)
+    dim.intensity = -1.0
+    with assert_raises():
+        dim.validate()
+    # A placeholder the kind never reads is not checked: a directional
+    # light's angle is nothing to it.
+    var sun = directional_light(WHITE, NodeId(0))
+    sun.angle = Angle(not_a_number(), DEGREE)
+    sun.validate()
+
+
+def test_a_cone_too_narrow_to_resolve_is_refused() raises:
+    # The fragment compares cosines, and the cosine of a hundredth of a
+    # degree rounds to one in Float32: on the axis the surface could not be
+    # told from the rim, and a valid light lit nothing on its own axis. A
+    # degree resolves, and lights the axis fully.
+    with assert_raises():
+        _ = spot_light(WHITE, NodeId(0), 1.0, 0.0, Angle(0.01, DEGREE))
+    var narrow = spot_at(0, 1, 0, Angle(1.0, DEGREE))
+    var on_axis = narrow.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(on_axis.r, Float32(1), atol=TOLERANCE)
+    # And the same narrowing after the fact is caught when resolved.
+    var scene = scene_with_lamp_at(0, 1, 0)
+    var beam = spot_light(WHITE, NodeId(0))
+    beam.angle = Angle(0.005, DEGREE)
+    scene.add_light(beam)
+    with assert_raises():
+        _ = Lighting(scene)
 
 
 def main() raises:

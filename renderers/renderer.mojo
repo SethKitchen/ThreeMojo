@@ -105,7 +105,7 @@ from render.texture import IGNORED
 from render.texture_store import NO_TEXTURE, TextureId
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
-from render.tonemap import NO_TONE_MAPPING, ToneMapping
+from render.tonemap import NO_TONE_MAPPING, ToneMapping, check_tone_mapping
 from math.vector2 import Vector2
 from render.rasterizer import (
     SHADE_LIT,
@@ -664,7 +664,7 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
 
     For a surface being seen from its far side. Every other field is carried
     across unchanged, which is why this exists rather than a mutation: a
-    `RasterVertex` has fourteen fields and rebuilding one by hand at three
+    `RasterVertex` has fifteen fields and rebuilding one by hand at three
     call sites is three chances to drop one.
     """
     return RasterVertex(
@@ -682,6 +682,7 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
         corner.lit,
         corner.emissive,
         corner.emissive_map,
+        corner.view_depth,
     )
 
 
@@ -723,6 +724,9 @@ def _to_raster(
         lit,
         vertex.emissive,
         emissive_map,
+        # How far in front of the camera this corner is, for the fog: the
+        # camera looks down -z, and the position is already in its space.
+        -vertex.position.z,
     )
 
 
@@ -821,13 +825,10 @@ struct Renderer(Movable):
 
         Raises:
             Error: If the mode is none of the seven, or the exposure is
-                negative. The type stops a bare integer; it does not stop
-                `ToneMapping(9)`.
+                negative or not finite; see `check_tone_mapping`. The type
+                stops a bare integer; it does not stop `ToneMapping(9)`.
         """
-        if not mode.is_valid():
-            raise Error("A tone mapping that is none of the seven")
-        if exposure < 0:
-            raise Error("A tone mapping exposure cannot be negative")
+        check_tone_mapping(mode, exposure)
         self.tone_mapping = mode
         self.tone_mapping_exposure = exposure
 
@@ -1240,10 +1241,9 @@ struct Renderer(Movable):
         # Only the lights on the camera's layers, as only its meshes were
         # prepared: a light the camera does not see lights nothing it draws.
         var lighting = Lighting(scene, visible=camera.visible_layers())
-        # The scene's fog through this camera: the depth every fragment is
-        # veiled by is measured along the same view `prepare` projected
-        # with.
-        var fog = FogView(scene.fog, camera.view_matrix_in(scene))
+        # The scene's fog as the rasterizer takes it. Each corner already
+        # carries the depth `prepare` measured for it along this view.
+        var fog = FogView(scene.fog)
         var target = RenderTarget(self.width, self.height, self.background)
         rasterize_all(
             corners,

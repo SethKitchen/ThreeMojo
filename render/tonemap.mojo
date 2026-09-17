@@ -20,9 +20,14 @@ mixes an already-compressed color with the compressed color behind it. Here
 the curve is applied in `RenderTarget.resolve`, to the composited linear
 light of each pixel, just before it is encoded, which is where a
 post-processing tone map sits and what a camera does: it sees the light
-that reaches it, not each surface's separately. The two agree exactly on
-every opaque pixel. Applied at the end, the curve also never sees the uv
-debug view, which is coordinates rather than light.
+that reaches it, not each surface's separately. On an opaque pixel that
+no fog reaches, the two orders give the same answer up to rounding. A
+fogged pixel does not: the fog is mixed in linear light before the
+curve here, and after the encode there. A translucent pixel does not
+either, by design. And no bit-for-bit equality with another
+implementation is promised: `exp2` of `log2` rounds differently from a
+`pow`. Applied at the end, the curve also never sees the uv debug view,
+which is coordinates rather than light.
 
 **Shared with the kernel.** The GPU encodes its own pixels, so it tone maps
 its own pixels, with this module's `tone_map`, from the same numbers. The
@@ -32,7 +37,7 @@ is.
 """
 
 from render.framebuffer import FloatColor
-from std.math import exp2, log2, max, min
+from std.math import exp2, isfinite, log2, max, min
 
 
 @fieldwise_init
@@ -77,6 +82,32 @@ comptime AGX_TONE_MAPPING = ToneMapping(5)
 # The Khronos PBR neutral curve: hue-preserving up to a knee, then a soft
 # roll toward white. three.js's `NeutralToneMapping`.
 comptime NEUTRAL_TONE_MAPPING = ToneMapping(6)
+
+
+def check_tone_mapping(mode: ToneMapping, exposure: Float32) raises:
+    """Refuse a curve that is none of the seven, or an exposure that is
+    negative or not finite.
+
+    The one list, asked by every boundary that takes the pair --
+    `Renderer.set_tone_mapping`, `RenderTarget.resolve` and `shown`, and
+    `GpuRenderer.draw` -- so that they cannot drift apart. The type stops
+    a bare integer; it does not stop `ToneMapping(9)`, and `tone_map`
+    cannot raise on what it is handed, so the boundary does. An infinite
+    exposure is refused as well as a negative one: infinity over one plus
+    infinity is not a number, and nothing downstream could say so.
+
+    Args:
+        mode: The curve.
+        exposure: What the light is scaled by first.
+
+    Raises:
+        Error: If the curve is not a named one, or the exposure is
+            negative or not finite.
+    """
+    if not mode.is_valid():
+        raise Error("A tone mapping that is none of the seven")
+    if not isfinite(exposure) or exposure < 0:
+        raise Error("A tone mapping exposure must be finite and not negative")
 
 
 def _saturate(value: Float32) -> Float32:

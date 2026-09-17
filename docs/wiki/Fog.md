@@ -32,15 +32,19 @@ The defaults are three.js's. `near` and `far` are a `Length`. `density` is an `I
 | `density: InverseLength` | The density of an exponential fog. |
 | `is_on() -> Bool` | Whether the fog changes any fragment. |
 
-The fields are open. The renderer checks them again each frame. It refuses an unknown kind, a negative `near`, a `far` that is not beyond `near`, or a negative density.
+The fields are open. `validate()` checks them, and the renderer calls it again each frame. It refuses an unknown kind, a negative `near`, a `far` that is not beyond `near`, or a negative density. A number that is not finite is refused too.
 
 ## Depth
 
-The depth is the camera-space depth, three.js's `vFogDepth`. It is how far in front of the camera a fragment is, not how far from it. Two fragments at the same depth get the same fog, wherever they are across the image. The renderer takes it from the fragment's interpolated world position and the camera's view matrix.
+The depth is the camera-space depth, three.js's `vFogDepth`. It is how far in front of the camera a fragment is, not how far from it. Two fragments at the same depth get the same fog, wherever they are across the image.
+
+Each corner carries its depth as `RasterVertex.view_depth`. The renderer takes it from the clipped camera-space position, and the rasterizer interpolates it with perspective correction. It is not recovered from the world position. A world coordinate a million meters out rounds by a sixteenth of a meter. A depth recovered from it wandered by an eighth of a meter across one flat sheet. A depth of eight interpolated as eight stays eight.
 
 ## Where the mix happens
 
 A fragment is shaded first: the material color, the texture, the lights and the emissive term. Then it is mixed toward the fog color. Then it is blended or written. Alpha is coverage and the fog leaves it alone.
+
+The mix is a weighted sum: `surface * (1 - veil) + fog * veil`. A lerp, `surface + (fog - surface) * veil`, loses the fog color when the surface is far brighter, because light here has no top. A surface a million times brighter than the fog color is exactly the fog color when fully fogged.
 
 The mix is in linear light, before the image is encoded. three.js mixes after its output color-space conversion, on the encoded color. Halfway into the fog here is half the light of each color. See [Why color is linear](Why-color-is-linear).
 
@@ -48,18 +52,18 @@ Every material is fogged, lit or unlit. three.js's `Material.fog` flag is not po
 
 ## FogView
 
-`FogView(fog, view)` is the fog seen through one camera, as both rasterizers take it. `Renderer.render` builds one each frame from `scene.fog` and the camera's view matrix. Build the same value for `GpuRenderer.draw` and `rasterize_all`.
+`FogView(fog)` is the fog as both rasterizers take it. `Renderer.render` builds one each frame from `scene.fog`. Build the same value for `GpuRenderer.draw` and `rasterize_all`. Both call `validate()` before they draw, because a view can be built by hand.
 
 | Member | Meaning |
 |---|---|
-| `FogView(fog, view)` | Resolve a fog for a view matrix. Raises for a fog the builders refuse. |
+| `FogView(fog)` | Resolve a fog for the rasterizers. Raises for a fog that `validate` refuses. |
 | `FogView.none()` | The view of no fog. The default of every rasterizer. |
 | `is_on() -> Bool` | Whether the fog changes any fragment. |
-| `depth_of(world) -> Float32` | A world position's camera-space depth. |
-| `factor_at(world) -> Float32` | How much of the fog color a fragment there shows, zero to one. |
+| `validate()` | Refuse an unknown kind, an inside-out or non-finite range, or a non-finite color. |
+| `factor_at(depth) -> Float32` | How much of the fog color a fragment at that depth shows, zero to one. |
 | `color: FloatColor` | The fog color, linear. |
 
-`fog_factor(kind, depth, near, far, density)` and `fog_depth(zx, zy, zz, zw, wx, wy, wz)` are the arithmetic. The GPU kernel calls the same two functions. See [Why the CPU and GPU share code](Why-the-CPU-and-GPU-share-code).
+`fog_factor(kind, depth, near, far, density)` and `fog_mix(surface, fog, veil)` are the arithmetic. The GPU kernel calls the same two functions. See [Why the CPU and GPU share code](Why-the-CPU-and-GPU-share-code).
 
 ## Rules
 

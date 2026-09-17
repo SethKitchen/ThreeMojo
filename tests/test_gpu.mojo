@@ -685,7 +685,7 @@ def glowing(
     )
 
 
-def test_flattening_lays_out_nineteen_floats_per_vertex() raises:
+def test_flattening_lays_out_twenty_floats_per_vertex() raises:
     # The host side of the kernel's unpacking. If these disagree the image is
     # garbage, so the layout is asserted rather than assumed. The count is
     # spelled out because changing the stride and missing one of the kernel's
@@ -698,7 +698,7 @@ def test_flattening_lays_out_nineteen_floats_per_vertex() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 19)
+    assert_equal(len(flat), 20)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -708,10 +708,15 @@ def test_flattening_lays_out_nineteen_floats_per_vertex() raises:
     assert_almost_equal(flat[5], Float32(128) / 255, atol=Float64(1e-6))
     assert_equal(flat[6], Float32(0))
     assert_almost_equal(flat[7], Float32(64) / 255, atol=Float64(1e-6))
-    # The emissive rides last, three lanes: it never touches alpha.
+    # The emissive rides after the world position, three lanes: it never
+    # touches alpha. The camera-space depth rides last, for the fog.
     assert_equal(flat[16], Float32(0.25))
     assert_equal(flat[17], Float32(0.5))
     assert_equal(flat[18], Float32(0.75))
+    assert_equal(flat[19], Float32(0))
+    var deep = List[RasterVertex]()
+    deep.append(RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), view_depth=7.5))
+    assert_equal(flatten(deep)[19], Float32(7.5))
 
 
 def test_the_state_table_has_four_entries_per_triangle() raises:
@@ -1246,30 +1251,20 @@ def test_both_backends_agree_under_hemisphere_and_spot_lights() raises:
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
-def test_flattening_fog_lays_out_ten_floats() raises:
-    # The depth row, the two edges, the density, then the color, linear.
-    var camera = PerspectiveCamera(
-        Angle(60.0, DEGREE), 1.0, Length(0.1, METER), Length(100.0, METER)
-    )
-    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
+def test_flattening_fog_lays_out_six_floats() raises:
+    # The two edges, the density, then the color, linear.
     var view = FogView(
-        linear_fog(Color(128, 0, 255), Length(2.0, METER), Length(9.0, METER)),
-        camera.view_matrix(),
+        linear_fog(Color(128, 0, 255), Length(2.0, METER), Length(9.0, METER))
     )
     var flat = flatten_fog(view)
-    assert_equal(len(flat), 10)
+    assert_equal(len(flat), 6)
     assert_equal(len(flat), FOG_FLOATS)
-    # A camera on +z looking down -z keeps the depth row as (0, 0, 1) with a
-    # translation of minus five: the origin is five deep.
-    assert_almost_equal(flat[0], Float32(0), atol=Float64(1e-6))
-    assert_almost_equal(flat[2], Float32(1), atol=Float64(1e-6))
-    assert_almost_equal(flat[3], Float32(-5), atol=Float64(1e-6))
-    assert_equal(flat[4], Float32(2))
-    assert_equal(flat[5], Float32(9))
-    assert_equal(flat[6], Float32(0))
-    assert_almost_equal(flat[7], Float32(0.215861), atol=Float64(1e-5))
-    assert_equal(flat[8], Float32(0))
-    assert_equal(flat[9], Float32(1))
+    assert_equal(flat[0], Float32(2))
+    assert_equal(flat[1], Float32(9))
+    assert_equal(flat[2], Float32(0))
+    assert_almost_equal(flat[3], Float32(0.215861), atol=Float64(1e-5))
+    assert_equal(flat[4], Float32(0))
+    assert_equal(flat[5], Float32(1))
 
 
 def compare_under_fog(fog: Fog, mode: ShadeMode) raises -> Framebuffer:
@@ -1333,7 +1328,7 @@ def compare_under_fog(fog: Fog, mode: ShadeMode) raises -> Framebuffer:
     camera.place(Vector3(0, 0.8, 3.2), Vector3(0, 0, 0))
     var corners = prepared(renderer, scene, assets, meshes, camera)
     var lighting = Lighting(scene)
-    var view = FogView(scene.fog, camera.view_matrix_in(scene))
+    var view = FogView(scene.fog)
     var target = RenderTarget(48, 36, BACKGROUND)
     rasterize_all(corners, target, mode, assets.textures, lighting, 1, view)
     var cpu = target.resolve()
@@ -1526,6 +1521,145 @@ def test_the_gpu_never_tone_maps_the_uv_view() raises:
         0.5,
     )
     assert_equal(count_mismatches(plain, curved), 0)
+
+
+def test_both_backends_agree_on_the_whole_pipeline_at_once() raises:
+    # Every light kind, a mipmapped floor, a lit box, an unlit sphere and a
+    # translucent pane, through a linear fog and the ACES curve: the whole
+    # pipeline under the chosen conventions, in color and alpha to one
+    # level and in depth to rounding.
+    if skipped_for_lack_of_a_gpu("both backends agree on the whole pipeline"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.6, METER), 12, 8))
+    var floor = assets.geometries.add(
+        plane(Length(20.0, METER), Length(20.0, METER), 4, 4)
+    )
+    var pane = assets.geometries.add(
+        plane(Length(1.6, METER), Length(1.2, METER), 1, 1)
+    )
+    var board = assets.textures.add(
+        checkerboard(
+            64,
+            8,
+            Color(240, 240, 240),
+            Color(40, 60, 120),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    var tiled = assets.materials.add(
+        Material(Color(255, 255, 255), board, DOUBLE_SIDE)
+    )
+    var orange = assets.materials.add(Material(Color(255, 140, 40)))
+    var plain = assets.materials.add(Material(Color(90, 190, 255), kind=BASIC))
+    var glass = assets.materials.add(
+        Material(Color(120, 255, 160), NO_TEXTURE, DOUBLE_SIDE, 0.45)
+    )
+
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_position(0, -0.6, 0)
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var left = Object3D()
+    left.set_position(-0.9, 0, 0)
+    left.set_euler(Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.9, 0, -0.4)
+    var right_node = scene.add(right^)
+    var sheet = Object3D()
+    sheet.set_position(0.1, 0.2, 1.2)
+    sheet.set_euler(Angle(0.0, DEGREE), Angle(15.0, DEGREE), Angle(0.0, DEGREE))
+    var sheet_node = scene.add(sheet^)
+    var sun = Object3D()
+    sun.set_position(0.4, 0.8, 0.5)
+    var sun_node = scene.add(sun^)
+    scene.add_light(directional_light(Color(255, 255, 255), sun_node, 0.5))
+    var bulb = Object3D()
+    bulb.set_position(0.5, 1.0, 1.5)
+    var bulb_node = scene.add(bulb^)
+    scene.add_light(point_light(Color(255, 220, 180), bulb_node, 0.8))
+    var sky = Object3D()
+    sky.set_position(0.0, 3.0, 0.2)
+    var sky_node = scene.add(sky^)
+    scene.add_light(
+        hemisphere_light(
+            Color(120, 160, 255), Color(120, 80, 40), sky_node, 0.4
+        )
+    )
+    var beam = Object3D()
+    beam.set_position(-0.5, 2.5, 1.5)
+    var beam_node = scene.add(beam^)
+    scene.add_light(
+        spot_light(
+            Color(255, 240, 200), beam_node, 2.0, 0.0, Angle(35.0, DEGREE), 0.4
+        )
+    )
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.1))
+    scene.fog = linear_fog(
+        Color(160, 170, 190), Length(2.0, METER), Length(9.0, METER)
+    )
+    scene.update()
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.8, 3.4), Vector3(0, 0, 0))
+
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(floor, tiled, ground_node))
+    meshes.append(Mesh(box, orange, left_node))
+    meshes.append(Mesh(ball, plain, right_node))
+    meshes.append(Mesh(pane, glass, sheet_node))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    var lighting = Lighting(scene)
+    assert_equal(lighting.hemisphere_count(), 1)
+    assert_equal(lighting.spot_count(), 1)
+    var view = FogView(scene.fog)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_TEXTURE, assets.textures, lighting, 1, view
+    )
+    var cpu = target.resolve(1, ACES_FILMIC_TONE_MAPPING, 0.9)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+        view,
+        ACES_FILMIC_TONE_MAPPING,
+        0.9,
+    )
+    var drawn = 0
+    for y in range(36):
+        for x in range(48):
+            if cpu.depth_at(x, y) != inf[DType.float32]():
+                drawn += 1
+    assert_true(drawn > 300, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    for y in range(36):
+        for x in range(48):
+            var theirs = cpu.depth_at(x, y)
+            var ours = gpu.depth_at(x, y)
+            if theirs == inf[DType.float32]():
+                assert_equal(ours, theirs)
+            else:
+                assert_almost_equal(ours, theirs, atol=Float64(1e-5))
 
 
 def test_the_gpu_leaves_an_unlit_triangle_its_own_color() raises:

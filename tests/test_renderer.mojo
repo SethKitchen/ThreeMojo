@@ -56,7 +56,7 @@ from render.texture import (
 )
 from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import Renderer, available_workers, face_normal
-from std.math import inf
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -3619,6 +3619,73 @@ def test_a_tone_mapping_that_is_none_of_the_seven_is_refused() raises:
         renderer.set_tone_mapping(REINHARD_TONE_MAPPING, -0.5)
     assert_equal(renderer.tone_mapping, NO_TONE_MAPPING)
     assert_equal(renderer.tone_mapping_exposure, Float32(1))
+
+
+def fogged_sheet_through(
+    camera: PerspectiveCamera, at: Float32
+) raises -> Framebuffer:
+    """Render a white sheet at world z `at`, facing +z, through a black
+    linear fog from six to ten meters."""
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(40.0, METER), Length(40.0, METER), 1, 1)
+    )
+    var white = assets.materials.add(Material(Color(255, 255, 255), kind=BASIC))
+    var scene = Scene()
+    var placed = Object3D()
+    placed.set_position(0, 0, at)
+    var node = scene.add(placed^)
+    scene.update()
+    scene.fog = linear_fog(
+        Color(0, 0, 0), Length(6.0, METER), Length(10.0, METER)
+    )
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(sheet, white, node))
+    return rendered(renderer, scene, assets, meshes, camera)
+
+
+def test_fog_is_uniform_across_a_flat_sheet_far_from_the_origin() raises:
+    # A sheet eight meters in front of a camera a million meters out: every
+    # pixel of it is half way into the fog, one byte, and the same bytes as
+    # the same sheet eight meters in front of a camera at the origin. The
+    # depth is carried from the camera-space position; recovered from a
+    # world coordinate, which rounds by a sixteenth out there, it wandered
+    # by an eighth of a meter across one flat surface.
+    var far = PerspectiveCamera(
+        Angle(60.0, DEGREE),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    far.place(Vector3(0, 0, 1000000), Vector3(0, 0, 999992))
+    var out_there = fogged_sheet_through(far, 999992)
+    var near = PerspectiveCamera(
+        Angle(60.0, DEGREE),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    near.place(Vector3(0, 0, 0), Vector3(0, 0, -8))
+    var at_home = fogged_sheet_through(near, -8)
+    var expected = FloatColor(0.5, 0.5, 0.5, 1.0).encode().r
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var theirs = out_there.get_pixel(x, y)
+            var ours = at_home.get_pixel(x, y)
+            assert_equal(theirs.r, expected)
+            assert_equal(theirs.g, expected)
+            assert_equal(ours.r, theirs.r)
+            assert_equal(ours.b, theirs.b)
+
+
+def test_set_tone_mapping_refuses_an_exposure_that_is_not_finite() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    with assert_raises():
+        renderer.set_tone_mapping(REINHARD_TONE_MAPPING, inf[DType.float32]())
+    with assert_raises():
+        renderer.set_tone_mapping(REINHARD_TONE_MAPPING, nan[DType.float32]())
+    assert_equal(renderer.tone_mapping, NO_TONE_MAPPING)
 
 
 def main() raises:

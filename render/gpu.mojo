@@ -43,7 +43,7 @@ from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
-from core.fog import NO_FOG, FogKind, FogView, fog_depth, fog_factor
+from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.lighting import Lighting, falloff
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
@@ -59,7 +59,12 @@ from render.rasterizer import (
 from materials.material import BLEND
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.srgb import SRGB, ColorSpace, decode_ramp
-from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
+from render.tonemap import (
+    NO_TONE_MAPPING,
+    ToneMapping,
+    check_tone_mapping,
+    tone_map,
+)
 from render.texture import (
     BILINEAR,
     COVERAGE,
@@ -112,7 +117,9 @@ comptime LANE_WZ = 15
 comptime LANE_ER = 16
 comptime LANE_EG = 17
 comptime LANE_EB = 18
-comptime FLOATS_PER_VERTEX = LANE_EB + 1
+# Camera-space depth, for the fog. See `RasterVertex.view_depth`.
+comptime LANE_DEPTH = 19
+comptime FLOATS_PER_VERTEX = LANE_DEPTH + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -124,20 +131,16 @@ comptime STATE_LIT = 2
 comptime STATE_EMISSIVE_MAP = 3
 comptime STATE_PER_TRIANGLE = STATE_EMISSIVE_MAP + 1
 
-# How a `FogView` is laid out in the fog buffer: the view matrix's depth row,
-# the two edges and the density, then the fog color, linear. Ten floats,
-# whatever the kind, which crosses as its own argument. Named here for the
-# reason the lanes are, and read by `flatten_fog` and the kernel alike.
-comptime FOG_ZX = 0
-comptime FOG_ZY = 1
-comptime FOG_ZZ = 2
-comptime FOG_ZW = 3
-comptime FOG_NEAR = 4
-comptime FOG_FAR = 5
-comptime FOG_DENSITY = 6
-comptime FOG_R = 7
-comptime FOG_G = 8
-comptime FOG_B = 9
+# How a `FogView` is laid out in the fog buffer: the two edges and the
+# density, then the fog color, linear. Six floats, whatever the kind,
+# which crosses as its own argument. Named here for the reason the lanes
+# are, and read by `flatten_fog` and the kernel alike.
+comptime FOG_NEAR = 0
+comptime FOG_FAR = 1
+comptime FOG_DENSITY = 2
+comptime FOG_R = 3
+comptime FOG_G = 4
+comptime FOG_B = 5
 comptime FOG_FLOATS = FOG_B + 1
 
 # Further than any NDC depth, so the first covering triangle always wins. The
@@ -261,6 +264,7 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.emissive.r)
         flat.append(corner.emissive.g)
         flat.append(corner.emissive.b)
+        flat.append(corner.view_depth)
     return flat^
 
 
@@ -345,17 +349,13 @@ def flatten_fog(fog: FogView) -> List[Float32]:
     """Return a fog view as the flat float buffer the kernel reads.
 
     Args:
-        fog: The scene's fog, seen through the camera.
+        fog: The scene's fog, as the rasterizers take it.
 
     Returns:
         `FOG_FLOATS` floats, in the order the kernel unpacks them. The
         kind is not among them: it crosses as a kernel argument of its own.
     """
     var flat = List[Float32]()
-    flat.append(fog.zx)
-    flat.append(fog.zy)
-    flat.append(fog.zz)
-    flat.append(fog.zw)
     flat.append(fog.near)
     flat.append(fog.far)
     flat.append(fog.density)
@@ -1007,34 +1007,11 @@ def rasterize_kernel(
         # SHADE_UV writes coordinates rather than light, and a BASIC
         # material shows its own color. Lit or not is per triangle, from
         # the state table.
-        var lit = (
+        var arriving = Vector3(1, 1, 1)
+        if (
             mode != Int32(SHADE_UV.value)
             and maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_LIT] != 0
-        )
-        # Where this fragment is in the world, for the lights that have a
-        # position and for the fog, interpolated like every other varying
-        # and only when something will read it.
-        var wx = Float32(0)
-        var wy = Float32(0)
-        var wz = Float32(0)
-        if lit or fogged:
-            wx = (
-                corners[unsafe_offset=base + LANE_WX] * share_a
-                + corners[unsafe_offset=b_base + LANE_WX] * share_b
-                + corners[unsafe_offset=c_base + LANE_WX] * share_c
-            )
-            wy = (
-                corners[unsafe_offset=base + LANE_WY] * share_a
-                + corners[unsafe_offset=b_base + LANE_WY] * share_b
-                + corners[unsafe_offset=c_base + LANE_WY] * share_c
-            )
-            wz = (
-                corners[unsafe_offset=base + LANE_WZ] * share_a
-                + corners[unsafe_offset=b_base + LANE_WZ] * share_b
-                + corners[unsafe_offset=c_base + LANE_WZ] * share_c
-            )
-        var arriving = Vector3(1, 1, 1)
-        if lit:
+        ):
             var nx = (
                 corners[unsafe_offset=base + LANE_NX] * share_a
                 + corners[unsafe_offset=b_base + LANE_NX] * share_b
@@ -1055,6 +1032,23 @@ def rasterize_kernel(
                 nx /= unit
                 ny /= unit
                 nz /= unit
+            # Where this fragment is in the world, for the lights that have
+            # a position.
+            var wx = (
+                corners[unsafe_offset=base + LANE_WX] * share_a
+                + corners[unsafe_offset=b_base + LANE_WX] * share_b
+                + corners[unsafe_offset=c_base + LANE_WX] * share_c
+            )
+            var wy = (
+                corners[unsafe_offset=base + LANE_WY] * share_a
+                + corners[unsafe_offset=b_base + LANE_WY] * share_b
+                + corners[unsafe_offset=c_base + LANE_WY] * share_c
+            )
+            var wz = (
+                corners[unsafe_offset=base + LANE_WZ] * share_a
+                + corners[unsafe_offset=b_base + LANE_WZ] * share_b
+                + corners[unsafe_offset=c_base + LANE_WZ] * share_c
+            )
             arriving = _arriving(
                 lights,
                 Int(light_count),
@@ -1201,27 +1195,34 @@ def rasterize_kernel(
             red += glow_r
             green += glow_g
             blue += glow_b
-            # Veiled by the fog last, in linear light, with the expression
-            # `rasterize_shaded` uses. Alpha is coverage and is left alone.
+            # Veiled by the fog last, in linear light, from the same depth
+            # lane and with the same function as `rasterize_shaded`. Alpha
+            # is coverage and is left alone.
             if fogged:
-                var veil = fog_factor(
-                    FogKind(Int(fog_kind)),
-                    fog_depth(
-                        fog[unsafe_offset=FOG_ZX],
-                        fog[unsafe_offset=FOG_ZY],
-                        fog[unsafe_offset=FOG_ZZ],
-                        fog[unsafe_offset=FOG_ZW],
-                        wx,
-                        wy,
-                        wz,
-                    ),
-                    fog[unsafe_offset=FOG_NEAR],
-                    fog[unsafe_offset=FOG_FAR],
-                    fog[unsafe_offset=FOG_DENSITY],
+                var depth = (
+                    corners[unsafe_offset=base + LANE_DEPTH] * share_a
+                    + corners[unsafe_offset=b_base + LANE_DEPTH] * share_b
+                    + corners[unsafe_offset=c_base + LANE_DEPTH] * share_c
                 )
-                red = red + (fog[unsafe_offset=FOG_R] - red) * veil
-                green = green + (fog[unsafe_offset=FOG_G] - green) * veil
-                blue = blue + (fog[unsafe_offset=FOG_B] - blue) * veil
+                var veiled = fog_mix(
+                    FloatColor(red, green, blue, alpha),
+                    FloatColor(
+                        fog[unsafe_offset=FOG_R],
+                        fog[unsafe_offset=FOG_G],
+                        fog[unsafe_offset=FOG_B],
+                        1.0,
+                    ),
+                    fog_factor(
+                        FogKind(Int(fog_kind)),
+                        depth,
+                        fog[unsafe_offset=FOG_NEAR],
+                        fog[unsafe_offset=FOG_FAR],
+                        fog[unsafe_offset=FOG_DENSITY],
+                    ),
+                )
+                red = veiled.r
+                green = veiled.g
+                blue = veiled.b
 
         # Opaque replaces what is there; translucent mixes into it. One pass
         # is enough only because every opaque triangle is submitted before any
@@ -1326,7 +1327,7 @@ struct GpuRenderer(Movable):
     # so this settles after the first frame.
     var lights: DeviceBuffer[DType.float32]
     var light_room: Int
-    # The scene's fog seen through the camera, `FOG_FLOATS` floats,
+    # The scene's fog as the rasterizers take it, `FOG_FLOATS` floats,
     # rewritten every draw. Its kind crosses as a kernel argument.
     var fog: DeviceBuffer[DType.float32]
     # One texture id per triangle, beside the vertex buffer rather than in it.
@@ -1465,7 +1466,7 @@ struct GpuRenderer(Movable):
         """Put `fog` on the device.
 
         Args:
-            fog: The scene's fog, seen through the camera.
+            fog: The scene's fog, as the rasterizers take it.
 
         Raises:
             Error: If the device buffer cannot be written.
@@ -1499,8 +1500,8 @@ struct GpuRenderer(Movable):
                 evaluated per fragment against the interpolated normal.
                 Defaults to `Lighting.uniform`, the identity for the multiply,
                 exactly as the CPU rasterizer's does.
-            fog: The scene's fog, seen through the camera, as
-                `rasterize_shaded` takes it. Defaults to `FogView.none`.
+            fog: The scene's fog, as `rasterize_shaded` takes it. Defaults
+                to `FogView.none`.
             tone_mapping: The curve that compresses each finished pixel's
                 light, as `RenderTarget.resolve` takes it. Defaults to
                 `NO_TONE_MAPPING`. The uv view is never tone mapped.
@@ -1509,7 +1510,8 @@ struct GpuRenderer(Movable):
         Raises:
             Error: If the corner count is not a multiple of three, the mode
                 is none of the three, the tone mapping is none of the
-                seven, the exposure is negative, a triangle's blend
+                seven, the exposure is negative or not finite, the fog
+                view is refused by `FogView.validate`, a triangle's blend
                 policy, texture or
                 emissive map disagrees between its corners or is a value
                 neither backend knows, a vertex names a texture or an
@@ -1520,12 +1522,11 @@ struct GpuRenderer(Movable):
             raise Error("Rasterizing needs whole triangles")
         if not mode.is_valid():
             raise Error("A shading mode that is none of the three")
-        # The kernel cannot raise on a curve it does not know, so the same
-        # refusal `RenderTarget.resolve` makes is made here, before the launch.
-        if not tone_mapping.is_valid():
-            raise Error("A tone mapping that is none of the seven")
-        if exposure < 0:
-            raise Error("A tone mapping exposure cannot be negative")
+        # The kernel cannot raise on a curve or a fog it does not know, so
+        # the refusals `RenderTarget.resolve` and `rasterize_all` make are
+        # made here, before the launch, by the same functions.
+        check_tone_mapping(tone_mapping, exposure)
+        fog.validate()
         var triangles = len(corners) // 3
 
         # The same per-triangle check the CPU makes, from the same function,
@@ -1749,7 +1750,7 @@ def render_triangles(
         textures: The images `SHADE_TEXTURE` samples, named per vertex.
         lighting: The scene's lights, evaluated per fragment. Defaults to
             `Lighting.uniform`, which leaves the corner colors alone.
-        fog: The scene's fog, seen through the camera. Defaults to
+        fog: The scene's fog, as the rasterizers take it. Defaults to
             `FogView.none`, which leaves every fragment alone.
         tone_mapping: The curve that compresses each pixel's light, as
             `RenderTarget.resolve` takes it. Defaults to `NO_TONE_MAPPING`.

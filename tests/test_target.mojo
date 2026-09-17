@@ -21,7 +21,7 @@ from render.tonemap import (
     REINHARD_TONE_MAPPING,
     ToneMapping,
 )
-from std.math import inf
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -284,6 +284,37 @@ def test_resolving_refuses_an_unknown_curve_or_a_negative_exposure() raises:
     # A zero exposure is a legal black.
     var black = target.resolve(1, LINEAR_TONE_MAPPING, 0.0)
     assert_equal(black.get_pixel(0, 0).r, UInt8(0))
+
+
+def test_tone_mapping_is_applied_after_compositing_not_per_fragment() raises:
+    # Half-transparent light of two over opaque black, then Reinhard: the
+    # composite is one, and the curve shows a half, byte 188. Tone mapping
+    # each fragment first would give two thirds, then a third, byte 154.
+    # The placement is the policy, and this pins it.
+    var target = RenderTarget(1, 1, Color(0, 0, 0))
+    target.blend(0, 0, FloatColor(2.0, 2.0, 2.0, 0.5))
+    var late = target.shown(0, 0, REINHARD_TONE_MAPPING)
+    assert_equal(late.r, FloatColor(0.5, 0.5, 0.5, 1.0).encode().r)
+    assert_equal(late.r, UInt8(188))
+    var early = FloatColor(1.0 / 3, 1.0 / 3, 1.0 / 3, 1.0).encode().r
+    assert_true(late.r != early, "the curve was applied per fragment")
+    assert_equal(
+        target.resolve(1, REINHARD_TONE_MAPPING).get_pixel(0, 0).r, late.r
+    )
+
+
+def test_resolving_refuses_an_exposure_that_is_not_finite() raises:
+    # Infinity over one plus infinity is not a number, and nothing
+    # downstream could say so.
+    var target = RenderTarget(2, 2, Color(0, 0, 0))
+    with assert_raises():
+        _ = target.resolve(1, REINHARD_TONE_MAPPING, inf[DType.float32]())
+    with assert_raises():
+        _ = target.resolve(1, REINHARD_TONE_MAPPING, nan[DType.float32]())
+    with assert_raises():
+        _ = target.shown(0, 0, LINEAR_TONE_MAPPING, inf[DType.float32]())
+    with assert_raises():
+        _ = target.shown(0, 0, LINEAR_TONE_MAPPING, nan[DType.float32]())
 
 
 def main() raises:

@@ -135,12 +135,13 @@ struct Lighting(Movable):
                 light in the scene.
 
         Raises:
-            Error: If a light names a node or a target the scene does not
-                have; a directional, hemisphere or spot light has no
-                direction, because its node sits exactly where it points
-                from — the origin, or its target — which is a mistake
-                rather than a dark light; or a light's kind is none of the
-                five.
+            Error: If a light's numbers are refused by `Light.validate`,
+                whatever layer it is on; a light names a node or a target
+                the scene does not have; a directional, hemisphere or spot
+                light has no direction, because its node sits exactly
+                where it points from — the origin, or its target — which
+                is a mistake rather than a dark light; or a light's kind
+                is none of the five.
         """
         self.ambient = FloatColor(0.0, 0.0, 0.0, 1.0)
         self.directions = List[Vector3]()
@@ -160,6 +161,11 @@ struct Lighting(Movable):
         self.cone_cosines = List[Float32]()
         self.penumbra_cosines = List[Float32]()
         for light in scene.lights:
+            # Asked of every light, on the camera's layers or not: the
+            # fields are open, a light in a persistent scene is there to
+            # be edited, and a wrong light is a wrong asset rather than a
+            # wrong frame.
+            light.validate()
             if not light.layers.test(visible):
                 continue
             if light.kind == AMBIENT:

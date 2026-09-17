@@ -71,6 +71,7 @@ from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
+from std.math import cos, isfinite
 from units.si import Angle, DEGREE, RADIAN
 
 
@@ -191,6 +192,64 @@ struct Light(ImplicitlyCopyable):
         """
         return _radiance(self.color, self.intensity)
 
+    def validate(self) raises:
+        """Refuse numbers this light's kind cannot use.
+
+        Every builder asks this of what it makes, and `Lighting` asks it
+        again of every light in the scene, because the fields are open
+        and a light in a persistent scene is there to be edited. Only
+        the numbers the kind reads are checked: a point light's angle is
+        a placeholder. The kind itself is not checked here; `Lighting`
+        refuses one it cannot resolve.
+
+        A spot light's cone must be wide enough to resolve. The fragment
+        compares cosines, and the cosine of a half-angle below about
+        fourteen thousandths of a degree rounds to exactly one in
+        `Float32`, where a surface on the axis could not be told from
+        one on the rim and came out dark on the axis of a valid light.
+        Such an angle is refused rather than drawn wrong.
+
+        Raises:
+            Error: If the intensity is negative or not finite; a point or
+                spot light's decay or distance is negative or not finite;
+                or a spot light's angle is not finite, not above zero, or
+                past a quarter turn, its cosine rounds to one, or its
+                penumbra is not finite or outside zero to one.
+        """
+        if not isfinite(self.intensity) or self.intensity < 0:
+            raise Error("A light's intensity must be finite and not negative")
+        if self.kind == POINT or self.kind == SPOT:
+            if not isfinite(self.decay) or self.decay < 0:
+                raise Error("A light's decay must be finite and not negative")
+            if not isfinite(self.distance) or self.distance < 0:
+                raise Error(
+                    "A light's distance must be finite and not negative"
+                )
+        if self.kind == SPOT:
+            var half = self.angle.value
+            if (
+                not isfinite(half)
+                or half <= 0
+                or self.angle > WIDEST_SPOT_ANGLE
+            ):
+                raise Error(
+                    "A spot light's angle must be above zero and at most a"
+                    " quarter turn"
+                )
+            if cos(half) >= 1:
+                raise Error(
+                    "A spot light's angle is too narrow to resolve: its"
+                    " cosine rounds to one"
+                )
+            if (
+                not isfinite(self.penumbra)
+                or self.penumbra < 0
+                or self.penumbra > 1
+            ):
+                raise Error(
+                    "A spot light's penumbra must be between zero and one"
+                )
+
     def ground_radiance(self) -> FloatColor:
         """Return the light a hemisphere light's ground contributes, decoded
         and scaled by the same intensity as its sky.
@@ -242,11 +301,11 @@ def ambient_light(color: Color, intensity: Float32 = 1.0) raises -> Light:
 
     Raises:
         Error: If the intensity is negative, which is not a dimmer light but
-            a light that removes light.
+            a light that removes light, or not finite.
     """
-    if intensity < 0:
-        raise Error("A light's intensity cannot be negative")
-    return _bare(AMBIENT, color, intensity, NO_PARENT)
+    var light = _bare(AMBIENT, color, intensity, NO_PARENT)
+    light.validate()
+    return light
 
 
 def directional_light(
@@ -275,12 +334,11 @@ def directional_light(
         The light.
 
     Raises:
-        Error: If the intensity is negative.
+        Error: If the intensity is negative or not finite.
     """
-    if intensity < 0:
-        raise Error("A light's intensity cannot be negative")
     var light = _bare(DIRECTIONAL, color, intensity, node)
     light.target = target
+    light.validate()
     return light
 
 
@@ -313,17 +371,13 @@ def point_light(
         The light.
 
     Raises:
-        Error: If the intensity, decay or distance is negative.
+        Error: If the intensity, decay or distance is negative or not
+            finite.
     """
-    if intensity < 0:
-        raise Error("A light's intensity cannot be negative")
-    if decay < 0:
-        raise Error("A point light's decay cannot be negative")
-    if distance < 0:
-        raise Error("A point light's distance cannot be negative")
     var light = _bare(POINT, color, intensity, node)
     light.decay = decay
     light.distance = distance
+    light.validate()
     return light
 
 
@@ -351,12 +405,11 @@ def hemisphere_light(
         The light.
 
     Raises:
-        Error: If the intensity is negative.
+        Error: If the intensity is negative or not finite.
     """
-    if intensity < 0:
-        raise Error("A light's intensity cannot be negative")
     var light = _bare(HEMISPHERE, sky, intensity, node)
     light.ground = ground
+    light.validate()
     return light
 
 
@@ -397,27 +450,18 @@ def spot_light(
         The light.
 
     Raises:
-        Error: If the intensity, distance or decay is negative, the angle is
-            not above zero and at most a quarter turn -- a cone of nothing
-            lights nothing, and one past a half space is no longer a cone --
-            or the penumbra is outside zero to one.
+        Error: If the intensity, distance or decay is negative or not
+            finite; the angle is not above zero and at most a quarter
+            turn -- a cone of nothing lights nothing, and one past a half
+            space is no longer a cone -- or so narrow that its cosine
+            rounds to one; or the penumbra is outside zero to one. See
+            `Light.validate`.
     """
-    if intensity < 0:
-        raise Error("A light's intensity cannot be negative")
-    if distance < 0:
-        raise Error("A spot light's distance cannot be negative")
-    if angle.value <= 0 or angle > WIDEST_SPOT_ANGLE:
-        raise Error(
-            "A spot light's angle must be above zero and at most a quarter turn"
-        )
-    if penumbra < 0 or penumbra > 1:
-        raise Error("A spot light's penumbra must be between zero and one")
-    if decay < 0:
-        raise Error("A spot light's decay cannot be negative")
     var light = _bare(SPOT, color, intensity, node)
     light.distance = distance
     light.angle = angle
     light.penumbra = penumbra
     light.decay = decay
     light.target = target
+    light.validate()
     return light

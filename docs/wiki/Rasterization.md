@@ -22,6 +22,7 @@ One corner as the rasterizer wants it:
 | `lit` | Whether the lights reach this surface. |
 | `emissive` | Light the surface gives off, linear. |
 | `emissive_map` | The `TextureId` that multiplies `emissive`, or `NO_TEXTURE`. |
+| `view_depth` | The camera-space depth in meters, for the fog. See [Fog](Fog#depth). |
 
 `texture`, `blend`, `lit` and `emissive_map` are per-triangle state. All three corners must agree, and the value must be a named one. `check_triangle_state` refuses anything else.
 
@@ -75,3 +76,4 @@ After the lights and the emissive term, the fragment is mixed toward the fog col
 - An emissive map that reads its alpha as coverage raises under `SHADE_TEXTURE`, on both backends.
 - A blend value that is neither `OPAQUE` nor `BLEND` raises, on every worker count, whether or not the triangle is visible.
 - A texture the store lacks raises when a fragment samples it.
+- A fog view that `FogView.validate` refuses raises before any fragment is drawn, on every worker count.

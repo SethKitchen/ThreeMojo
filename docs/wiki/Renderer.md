@@ -38,7 +38,7 @@ var fast = Renderer(1280, 720, workers=available_workers())
 
 `set_tone_mapping` picks one of the seven curves in `render/tonemap.mojo` and an exposure. `NO_TONE_MAPPING` and an exposure of one are the defaults, as in three.js. `render` applies the curve in `RenderTarget.resolve`, once per pixel, after every fragment is composited. The `SHADE_UV` view is never tone mapped. See [Render target](Render-target-and-framebuffer#tone-mapping).
 
-`set_tone_mapping` refuses a curve that is none of the seven, and a negative exposure.
+`set_tone_mapping` refuses a curve that is none of the seven, and an exposure that is negative or not finite.
 
 ## What prepare does
 

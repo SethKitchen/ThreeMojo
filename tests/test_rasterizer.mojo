@@ -14,8 +14,9 @@ from render.texture import IGNORED, NEAREST, REPEAT, Texture, checkerboard
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.light import directional_light
 from lights.lighting import Lighting
-from core.fog import FogView, exp2_fog, linear_fog
-from math.matrix4 import Matrix4
+from core.fog import LINEAR_FOG, FogKind, FogView, exp2_fog, linear_fog
+from render.tonemap import REINHARD_TONE_MAPPING, tone_map
+from std.math import nan
 from units.si import InverseLength, Length, METER, PER_METER
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -1729,8 +1730,10 @@ def placed_corner(
     alpha: Float32 = 1.0,
     blend: Blending = OPAQUE,
     glow: FloatColor = FloatColor(0.0, 0.0, 0.0),
+    depth: Float32 = 0,
 ) -> RasterVertex:
-    """Return a white corner at a pixel, standing at `world`, facing +z."""
+    """Return a white corner at a pixel, standing at `world`, facing +z,
+    `depth` meters in front of the camera."""
     return RasterVertex(
         x,
         y,
@@ -1745,6 +1748,8 @@ def placed_corner(
         world,
         lit,
         glow,
+        NO_TEXTURE,
+        depth,
     )
 
 
@@ -1759,23 +1764,19 @@ def placed_quad(
     `depth` meters in front of a camera at the origin looking down -z."""
     var world = Vector3(0, 0, -depth)
     var corners = List[RasterVertex]()
-    corners.append(placed_corner(0, 0, world, lit, alpha, blend, glow))
-    corners.append(placed_corner(8, 0, world, lit, alpha, blend, glow))
-    corners.append(placed_corner(8, 8, world, lit, alpha, blend, glow))
-    corners.append(placed_corner(0, 0, world, lit, alpha, blend, glow))
-    corners.append(placed_corner(8, 8, world, lit, alpha, blend, glow))
-    corners.append(placed_corner(0, 8, world, lit, alpha, blend, glow))
+    corners.append(placed_corner(0, 0, world, lit, alpha, blend, glow, depth))
+    corners.append(placed_corner(8, 0, world, lit, alpha, blend, glow, depth))
+    corners.append(placed_corner(8, 8, world, lit, alpha, blend, glow, depth))
+    corners.append(placed_corner(0, 0, world, lit, alpha, blend, glow, depth))
+    corners.append(placed_corner(8, 8, world, lit, alpha, blend, glow, depth))
+    corners.append(placed_corner(0, 8, world, lit, alpha, blend, glow, depth))
     return corners^
 
 
 def gray_fog() raises -> FogView:
-    """Return a mid-gray linear fog from one to three meters, through the
-    identity view: a camera at the origin looking down -z."""
+    """Return a mid-gray linear fog from one to three meters."""
     return FogView(
-        linear_fog(
-            Color(128, 128, 128), Length(1.0, METER), Length(3.0, METER)
-        ),
-        Matrix4(),
+        linear_fog(Color(128, 128, 128), Length(1.0, METER), Length(3.0, METER))
     )
 
 
@@ -1885,13 +1886,96 @@ def test_a_lit_surface_is_fogged_after_the_lights_and_the_glow() raises:
 
 def test_fog_is_the_same_on_one_worker_and_on_four() raises:
     var fog = FogView(
-        exp2_fog(Color(200, 220, 255), InverseLength(0.3, PER_METER)), Matrix4()
+        exp2_fog(Color(200, 220, 255), InverseLength(0.3, PER_METER))
     )
     var quad = placed_quad(3, True)
     var alone = fogged_pixel(quad, fog, SHADE_LIT, lit_along_z(), 1)
     var crowd = fogged_pixel(quad, fog, SHADE_LIT, lit_along_z(), 4)
     assert_same_color(alone, crowd)
     assert_true(alone.b > alone.r, "the exponential fog tinted nothing")
+
+
+def test_a_blinding_surface_fully_fogged_is_the_fog_color() raises:
+    # A surface a million times brighter than the fog, deep in it: exactly
+    # the fog color, without a curve and through one. The lerp subtracted
+    # the surface from the fog color and came out black; at sixty-five
+    # thousand it lost a level or two.
+    var fog = gray_fog()
+    var blinding = placed_quad(
+        10, False, 1.0, OPAQUE, FloatColor(1.0e6, 1.0e6, 1.0e6)
+    )
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(
+        blinding, target, SHADE_LIT, TextureStore(), Lighting.uniform(), 1, fog
+    )
+    assert_same_color(target.shown(4, 4), Color(128, 128, 128))
+    var gray = FloatColor(srgb=Color(128, 128, 128))
+    var curved = target.resolve(1, REINHARD_TONE_MAPPING)
+    var expected = tone_map(gray, REINHARD_TONE_MAPPING, 1.0).encode()
+    assert_same_color(curved.get_pixel(4, 4), expected)
+    var bright = placed_quad(
+        10, False, 1.0, OPAQUE, FloatColor(65536.0, 65536.0, 65536.0)
+    )
+    var again = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(
+        bright, again, SHADE_LIT, TextureStore(), Lighting.uniform(), 1, fog
+    )
+    assert_same_color(again.shown(4, 4), Color(128, 128, 128))
+
+
+def test_a_view_built_by_hand_is_refused_before_a_fragment_is_drawn() raises:
+    # The low-level entry points take a view directly, and one can hold
+    # anything: refused on one worker and on four, per triangle, and for an
+    # unknown kind as for a color that is not a number.
+    var broken = FogView(
+        LINEAR_FOG, FloatColor(nan[DType.float32](), 0.5, 0.5, 1.0), 1, 5, 0
+    )
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    with assert_raises():
+        rasterize_all(
+            placed_quad(2),
+            target,
+            SHADE_LIT,
+            TextureStore(),
+            Lighting.uniform(),
+            1,
+            broken,
+        )
+    with assert_raises():
+        rasterize_all(
+            placed_quad(2),
+            target,
+            SHADE_LIT,
+            TextureStore(),
+            Lighting.uniform(),
+            4,
+            broken,
+        )
+    var quad = placed_quad(2)
+    with assert_raises():
+        rasterize_shaded(
+            quad[0],
+            quad[1],
+            quad[2],
+            target,
+            SHADE_LIT,
+            TextureStore(),
+            Lighting.uniform(),
+            0,
+            -1,
+            broken,
+        )
+    var unknown = FogView(FogKind(9), FloatColor(0.5, 0.5, 0.5, 1.0), 1, 5, 0)
+    with assert_raises():
+        rasterize_all(
+            placed_quad(2),
+            target,
+            SHADE_LIT,
+            TextureStore(),
+            Lighting.uniform(),
+            1,
+            unknown,
+        )
 
 
 def main() raises:

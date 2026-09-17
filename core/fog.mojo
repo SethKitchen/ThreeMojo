@@ -20,6 +20,17 @@ has no far edge to tune. The depth is the camera-space depth, three.js's
 is, not how far from it, so a fragment off to the side at the same depth
 gets the same fog.
 
+**The depth is a varying of its own.** Each corner carries its camera-space
+depth, `RasterVertex.view_depth`, taken from the clipped camera-space
+position as the renderer projects it, and a fragment interpolates it with
+the same perspective correction as its color. The first version recovered
+the depth from the interpolated *world* position and the view matrix's
+depth row, which comes to the same number on paper and not in `Float32`:
+a plane eight meters in front of a camera a million meters from the origin
+interpolated to world coordinates that rounded by a sixteenth, and the
+depth recovered from them wandered from 7.875 to 8.125 across one flat
+surface. A depth of eight interpolated as eight stays eight.
+
 **Mixed in linear light, before the image is encoded.** three.js applies its
 fog after tone mapping and after the output color-space conversion, on the
 encoded color, a quirk of shader-chunk order that three.js itself has an
@@ -30,20 +41,25 @@ The fog reaches every material, lit or not, since three.js's
 `Material.fog` defaults to on and is not ported. The uv debug view is not
 fogged: it shows coordinates, not light.
 
+**The mix is a weighted sum, not a lerp.** `surface + (fog - surface) * veil`
+is the textbook form and the wrong one for light that has no top: a
+surface a million times brighter than the fog color swallows the fog color
+in the subtraction, and at a veil of one the fragment came out black
+rather than fogged. `fog_mix` weights the two ends instead, so that at one
+the surface is multiplied by zero and only the fog color remains, however
+bright the surface was.
+
 **Two boundaries, one arithmetic.** `Fog` is what a scene holds, in lengths.
-`FogView` is what a rasterizer takes: the same fog seen through one camera,
-as plain floats with the view matrix's depth row folded in, so that a
-fragment's depth is one dot product from its world position. `fog_factor`
-and `fog_depth` are the arithmetic itself, shared with the GPU kernel as
-`lights.lighting.falloff` is, and held to the same numbers by the parity
-tests.
+`FogView` is what a rasterizer takes: the same fog as plain floats, the
+color decoded. Both check their numbers, because both have open fields.
+`fog_factor` and `fog_mix` are the arithmetic itself, shared with the GPU
+kernel as `lights.lighting.falloff` is, and held to the same numbers by the
+parity tests.
 """
 
-from math.matrix4 import Matrix4
 from math.smoothstep import smoothstep
-from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
-from std.math import exp
+from std.math import exp, isfinite
 from units.si import InverseLength, Length, METER, PER_METER
 
 
@@ -52,8 +68,8 @@ struct FogKind(Equatable, ImplicitlyCopyable, Writable):
     """Which of the three fogs this is, as a type rather than an int.
 
     See `core.object3d.NodeId` for why. The type stops a bare integer at
-    compile time; it does not stop `FogKind(7)`, which `FogView` refuses
-    before a fragment is drawn.
+    compile time; it does not stop `FogKind(7)`, which `Fog.validate` and
+    `FogView.validate` refuse before a fragment is drawn.
     """
 
     var value: Int
@@ -81,13 +97,51 @@ comptime _NO_LENGTH = Length(0.0, METER)
 comptime _NO_DENSITY = InverseLength(0.0, PER_METER)
 
 
+def _check_fog_numbers(
+    kind: FogKind, near: Float32, far: Float32, density: Float32
+) raises:
+    """Refuse a kind that is none of the three, and the numbers it reads
+    when they cannot draw.
+
+    One list, asked by `Fog.validate` of the scene's lengths and by
+    `FogView.validate` of the rasterizer's floats, so the two boundaries
+    cannot drift apart. Only the numbers the kind reads are checked: a
+    linear fog's density and an exponential fog's edges are placeholders.
+
+    Args:
+        kind: Which fog.
+        near: Where a linear fog starts, in meters.
+        far: Where a linear fog is complete, in meters.
+        density: How fast an exponential fog thickens, per meter.
+
+    Raises:
+        Error: If the kind is unknown; a linear fog starts at a depth that
+            is negative or not finite, or ends at one that is not finite or
+            not beyond its start; or an exponential fog's density is
+            negative or not finite.
+    """
+    if not kind.is_valid():
+        raise Error("A fog of an unknown kind cannot be drawn")
+    if kind == LINEAR_FOG:
+        if not isfinite(near) or near < 0:
+            raise Error(
+                "A fog must start at a finite depth, not behind the camera"
+            )
+        if not isfinite(far) or far <= near:
+            raise Error(
+                "A fog's far edge must be finite and beyond its near edge"
+            )
+    if kind == EXP2_FOG and (not isfinite(density) or density < 0):
+        raise Error("A fog's density must be finite and not negative")
+
+
 @fieldwise_init
 struct Fog(ImplicitlyCopyable):
     """What a scene holds: a kind, a color, and the numbers that kind reads.
 
-    Build one with `no_fog`, `linear_fog` or `exp2_fog`, which check the
-    numbers. The fields are open, as every struct's are, so `FogView` checks
-    them again where they are read.
+    Build one with `no_fog`, `linear_fog` or `exp2_fog`, which call
+    `validate`. The fields are open, as every struct's are, so `FogView`
+    validates again where they are read.
     """
 
     var kind: FogKind
@@ -104,6 +158,21 @@ struct Fog(ImplicitlyCopyable):
     def is_on(self) -> Bool:
         """Return True if this fog changes any fragment at all."""
         return self.kind != NO_FOG
+
+    def validate(self) raises:
+        """Refuse a fog that cannot draw.
+
+        The builders ask this of what they make, and `FogView` asks it again
+        of what it is handed, because a field can be edited in between.
+
+        Raises:
+            Error: If the kind is none of the three, or the numbers the kind
+                reads are not finite or are inside out; see
+                `_check_fog_numbers`.
+        """
+        _check_fog_numbers(
+            self.kind, self.near.value, self.far.value, self.density.value
+        )
 
 
 def no_fog() -> Fog:
@@ -132,15 +201,13 @@ def linear_fog(
         The fog.
 
     Raises:
-        Error: If `near` is negative, which would put the start behind the
-            camera, or `far` is not beyond `near`, which leaves no room for
-            the rise.
+        Error: If `near` is negative or not finite, which would put the
+            start behind the camera or nowhere, or `far` is not finite or
+            not beyond `near`, which leaves no room for the rise.
     """
-    if near.value < 0:
-        raise Error("A fog cannot start behind the camera")
-    if far.value <= near.value:
-        raise Error("A fog's far edge must be beyond its near edge")
-    return Fog(LINEAR_FOG, color, near, far, _NO_DENSITY)
+    var fog = Fog(LINEAR_FOG, color, near, far, _NO_DENSITY)
+    fog.validate()
+    return fog
 
 
 def exp2_fog(
@@ -157,45 +224,13 @@ def exp2_fog(
         The fog.
 
     Raises:
-        Error: If the density is negative. The square would hide the sign,
-            and a negative density is a mistake rather than a thinner fog.
+        Error: If the density is negative or not finite. The square would
+            hide the sign, and a negative density is a mistake rather than a
+            thinner fog.
     """
-    if density.value < 0:
-        raise Error("A fog's density cannot be negative")
-    return Fog(EXP2_FOG, color, _NO_LENGTH, _NO_LENGTH, density)
-
-
-def fog_depth(
-    zx: Float32,
-    zy: Float32,
-    zz: Float32,
-    zw: Float32,
-    wx: Float32,
-    wy: Float32,
-    wz: Float32,
-) -> Float32:
-    """Return how far in front of the camera a world position is.
-
-    three.js's `vFogDepth = -mvPosition.z`: the view matrix's depth row
-    applied to the position, negated because the camera looks down -z.
-    Taken from the interpolated world position rather than carried as a
-    varying of its own, which comes to the same number: the depth is linear
-    in the world position, and the world position is interpolated with
-    perspective correction.
-
-    Args:
-        zx: The view matrix's depth row, first entry.
-        zy: Its second entry.
-        zz: Its third entry.
-        zw: Its translation, the fourth entry.
-        wx: The position's x, in world space.
-        wy: Its y.
-        wz: Its z.
-
-    Returns:
-        The camera-space depth, positive in front of the camera.
-    """
-    return -(zx * wx + zy * wy + zz * wz + zw)
+    var fog = Fog(EXP2_FOG, color, _NO_LENGTH, _NO_LENGTH, density)
+    fog.validate()
+    return fog
 
 
 def fog_factor(
@@ -210,11 +245,12 @@ def fog_factor(
     three.js's `fog_fragment`, chunk for chunk: a smooth step from `near`
     to `far` for a linear fog, `1 - exp(-(density * depth)^2)` for an
     exponential one, and nothing for no fog or a kind that is none of the
-    three -- which `FogView` refuses before this is ever asked.
+    three -- which `FogView.validate` refuses before this is ever asked.
 
     Args:
         kind: `LINEAR_FOG`, `EXP2_FOG` or `NO_FOG`.
-        depth: The fragment's camera-space depth, from `fog_depth`.
+        depth: The fragment's camera-space depth, interpolated from
+            `RasterVertex.view_depth`.
         near: Where a linear fog starts.
         far: Where a linear fog is complete.
         density: How fast an exponential fog thickens.
@@ -230,16 +266,45 @@ def fog_factor(
     return 0
 
 
+def fog_mix(surface: FloatColor, fog: FloatColor, veil: Float32) -> FloatColor:
+    """Return `surface` veiled by `fog`, `veil` of the way.
+
+    A weighted sum of the two ends, `surface * (1 - veil) + fog * veil`,
+    rather than `surface + (fog - surface) * veil`: the lerp subtracts the
+    surface from the fog color, and a surface bright enough -- light here
+    has no top -- swallows the fog color in that subtraction, so a fully
+    fogged fragment came out black. Weighted, a veil of one multiplies the
+    surface by zero and leaves the fog color exactly, however bright the
+    surface was. Both rasterizers mix with this function.
+
+    Args:
+        surface: The fragment's shaded color, linear, straight alpha.
+        fog: The fog color, linear.
+        veil: How much of the fog color shows, zero to one, from
+            `fog_factor`.
+
+    Returns:
+        The veiled color, with `surface`'s alpha: fog changes the color of
+        a surface and not its coverage.
+    """
+    var keep = 1 - veil
+    return FloatColor(
+        surface.r * keep + fog.r * veil,
+        surface.g * keep + fog.g * veil,
+        surface.b * keep + fog.b * veil,
+        surface.a,
+    )
+
+
 @fieldwise_init
 struct FogView(ImplicitlyCopyable):
-    """A scene's fog seen through one camera, ready to evaluate per fragment.
+    """A scene's fog as a rasterizer takes it, ready to evaluate per fragment.
 
-    What both rasterizers take, as `Lighting` is what they take for the
-    lights: plain floats, the color already linear, and the view matrix's
-    depth row folded in so a fragment's depth is one dot product from its
-    world position. Built once per frame, and checked once: a fog's fields
-    are open, so this is where a wrong kind or an inside-out range is
-    refused, before any fragment reads it.
+    Plain floats, the color already linear, as `Lighting` is for the lights.
+    Built once per frame by `Renderer.render` from `scene.fog`, and checked
+    once there; but its fields are open and it can be built by hand, so
+    `rasterize_all`, `rasterize_shaded` and `GpuRenderer.draw` ask
+    `validate` again before any fragment reads it.
     """
 
     var kind: FogKind
@@ -248,47 +313,26 @@ struct FogView(ImplicitlyCopyable):
     var near: Float32
     var far: Float32
     var density: Float32
-    # The view matrix's depth row: what `fog_depth` applies to a position.
-    var zx: Float32
-    var zy: Float32
-    var zz: Float32
-    var zw: Float32
 
-    def __init__(out self, fog: Fog, view: Matrix4) raises:
-        """Resolve a scene's fog for a camera.
+    def __init__(out self, fog: Fog) raises:
+        """Resolve a scene's fog for the rasterizers.
 
         Args:
             fog: The scene's fog.
-            view: The camera's world-to-camera transform, the one the
-                renderer projects with.
 
         Raises:
-            Error: If the fog's kind is none of the three, a linear fog
-                starts behind the camera or ends before it starts, or an
-                exponential fog has a negative density -- the checks the
-                builders make, made again because the fields are open.
+            Error: If `fog.validate` refuses it: an unknown kind, a linear
+                fog that starts behind the camera or ends before it starts,
+                or an exponential fog with a negative density, or a number
+                that is not finite.
         """
-        if not fog.kind.is_valid():
-            raise Error("A fog of an unknown kind cannot be drawn")
-        if fog.kind == LINEAR_FOG:
-            if fog.near.value < 0:
-                raise Error("A fog cannot start behind the camera")
-            if fog.far.value <= fog.near.value:
-                raise Error("A fog's far edge must be beyond its near edge")
-        if fog.kind == EXP2_FOG and fog.density.value < 0:
-            raise Error("A fog's density cannot be negative")
+        fog.validate()
         self.kind = fog.kind
         self.color = FloatColor(srgb=fog.color)
         self.color.a = 1.0
         self.near = fog.near.value
         self.far = fog.far.value
         self.density = fog.density.value
-        # Column-major, as `Matrix4` is: the depth row is every column's
-        # third entry.
-        self.zx = view.elements[2]
-        self.zy = view.elements[6]
-        self.zz = view.elements[10]
-        self.zw = view.elements[14]
 
     @staticmethod
     def none() -> FogView:
@@ -297,36 +341,40 @@ struct FogView(ImplicitlyCopyable):
         What a rasterizer takes when nothing says otherwise: a value rather
         than an Optional, as `Lighting.uniform` is for the lights.
         """
-        return FogView(
-            NO_FOG, FloatColor(0.0, 0.0, 0.0, 1.0), 0, 0, 0, 0, 0, 0, 0
-        )
+        return FogView(NO_FOG, FloatColor(0.0, 0.0, 0.0, 1.0), 0, 0, 0)
 
     def is_on(self) -> Bool:
         """Return True if this fog changes any fragment at all."""
         return self.kind != NO_FOG
 
-    def depth_of(self, world: Vector3) -> Float32:
-        """Return how far in front of the camera a world position is.
+    def validate(self) raises:
+        """Refuse a view that cannot draw.
 
-        Args:
-            world: The position, in world space.
+        The same list `Fog.validate` asks, of this view's floats, and the
+        color as well: a view built by hand can hold anything, and the
+        kernel cannot raise on what it finds.
 
-        Returns:
-            Its camera-space depth, positive in front of the camera.
+        Raises:
+            Error: If the kind is none of the three, the numbers the kind
+                reads are not finite or are inside out, or a channel of the
+                color is not finite.
         """
-        return fog_depth(
-            self.zx, self.zy, self.zz, self.zw, world.x, world.y, world.z
-        )
+        _check_fog_numbers(self.kind, self.near, self.far, self.density)
+        if (
+            not isfinite(self.color.r)
+            or not isfinite(self.color.g)
+            or not isfinite(self.color.b)
+        ):
+            raise Error("A fog's color must be finite")
 
-    def factor_at(self, world: Vector3) -> Float32:
-        """Return how much of the fog color a fragment at `world` shows.
+    def factor_at(self, depth: Float32) -> Float32:
+        """Return how much of the fog color a fragment at `depth` shows.
 
         Args:
-            world: Where the fragment is, in world space.
+            depth: The fragment's camera-space depth, in meters, positive
+                in front of the camera.
 
         Returns:
             Zero for the fragment's own color, one for the fog color alone.
         """
-        return fog_factor(
-            self.kind, self.depth_of(world), self.near, self.far, self.density
-        )
+        return fog_factor(self.kind, depth, self.near, self.far, self.density)
