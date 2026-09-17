@@ -52,11 +52,14 @@ from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV, ShadeMode
 from geometries.polyhedron import octahedron
+from render.srgb import LINEAR, SRGB
 from render.texture import (
     BILINEAR,
     CLAMP,
+    COVERAGE,
     IGNORED,
     NEAREST,
+    REPEAT,
     Texture,
     checkerboard,
 )
@@ -3907,6 +3910,220 @@ def test_a_data_material_is_not_tone_mapped_by_the_renderer() raises:
         < bright.get_pixel(here, HEIGHT // 2).r,
         "the curve compressed nothing",
     )
+
+
+# --- alpha map and alpha test -----------------------------------------------
+
+
+def a_split_mask() raises -> Texture:
+    """Return a two-texel alpha map: opaque on the left, empty on the right.
+
+    Stored as data -- linear, and ignoring its own alpha -- because its
+    green channel is a coverage rather than a color.
+    """
+    var pixels = List[UInt8]()
+    for green in [255, 0]:
+        pixels.append(0)
+        pixels.append(UInt8(green))
+        pixels.append(255)
+        pixels.append(255)
+    return Texture(2, 1, pixels^, REPEAT, NEAREST, LINEAR, False, IGNORED)
+
+
+def a_flat_mask(green: UInt8) raises -> Texture:
+    """Return a one-texel alpha map, stored as data."""
+    var pixels = List[UInt8]()
+    pixels.append(0)
+    pixels.append(green)
+    pixels.append(255)
+    pixels.append(255)
+    return Texture(1, 1, pixels^, REPEAT, NEAREST, LINEAR, False, IGNORED)
+
+
+def test_an_alpha_map_thins_a_mesh() raises:
+    # The map's green channel multiplies the opacity, so a half map over a
+    # black background shows half the surface's light.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var mask = assets.textures.add(a_flat_mask(128))
+    var thinned = assets.materials.add(
+        Material(
+            Color(255, 255, 255),
+            kind=BASIC,
+            alpha_map=mask,
+            blending=BLEND,
+        )
+    )
+    var solid = assets.materials.add(Material(Color(255, 255, 255), kind=BASIC))
+    var scene = scene_with_node_at(0)
+    var faint = rendered(
+        renderer, scene, assets, sheet_of(assets, thinned), camera_at(0, 0, 4)
+    )
+    var full = rendered(
+        renderer, scene, assets, sheet_of(assets, solid), camera_at(0, 0, 4)
+    )
+    var here = faint.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(full.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(255))
+    var share = Float32(128) / 255
+    assert_equal(here.r, FloatColor(share, share, share, 1.0).encode().r)
+
+
+def test_an_alpha_test_cuts_a_hole_that_shows_what_is_behind() raises:
+    # A near sheet cut in half by its alpha map, over a far red sheet. The
+    # thrown-away fragments claim no depth, so the far sheet shows through.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var mask = assets.textures.add(a_split_mask())
+    var leaf = assets.materials.add(
+        Material(
+            Color(255, 255, 255), kind=BASIC, alpha_map=mask, alpha_test=0.5
+        )
+    )
+    var behind = assets.materials.add(Material(Color(255, 0, 0), kind=BASIC))
+    var scene = Scene()
+    var near = Object3D()
+    var near_node = scene.add(near^)
+    var far = Object3D()
+    far.set_position(0, 0, -1)
+    var far_node = scene.add(far^)
+    scene.update()
+    var meshes = sheet_of(assets, leaf, near_node)
+    for mesh in sheet_of(assets, behind, far_node):
+        meshes.append(mesh)
+    var shown = rendered(renderer, scene, assets, meshes, camera_at(0, 0, 4))
+    var kept = shown.get_pixel(9, HEIGHT // 2)
+    assert_equal(kept.r, UInt8(255))
+    assert_equal(kept.g, UInt8(255))
+    var hole = shown.get_pixel(15, HEIGHT // 2)
+    assert_equal(hole.r, UInt8(255))
+    assert_equal(hole.g, UInt8(0))
+    assert_equal(hole.b, UInt8(0))
+
+
+def test_without_the_test_a_thinned_fragment_still_claims_the_depth() raises:
+    # The same pair with no alpha test: the near sheet writes a transparent
+    # pixel and keeps the depth, so the far sheet is hidden. This is what
+    # the test is for.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var mask = assets.textures.add(a_split_mask())
+    var thinned = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, alpha_map=mask)
+    )
+    var behind = assets.materials.add(Material(Color(255, 0, 0), kind=BASIC))
+    var scene = Scene()
+    var near_node = scene.add(Object3D())
+    var far = Object3D()
+    far.set_position(0, 0, -1)
+    var far_node = scene.add(far^)
+    scene.update()
+    var meshes = sheet_of(assets, thinned, near_node)
+    for mesh in sheet_of(assets, behind, far_node):
+        meshes.append(mesh)
+    var shown = rendered(renderer, scene, assets, meshes, camera_at(0, 0, 4))
+    var hole = shown.get_pixel(15, HEIGHT // 2)
+    assert_equal(hole.a, UInt8(0))
+    assert_equal(hole.r, UInt8(0))
+
+
+def test_a_material_naming_an_alpha_map_that_is_not_there_is_rejected() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var missing = assets.materials.add(
+        Material(Color(255, 255, 255), alpha_map=TextureId(0))
+    )
+    var scene = scene_with_node_at(0)
+    var meshes = sheet_of(assets, missing)
+    with assert_raises():
+        _ = rendered(renderer, scene, assets, meshes, camera_at(0, 0, 4))
+
+
+def test_an_alpha_map_must_be_stored_as_data() raises:
+    # Refused whatever the shading mode: a wrong asset, not a wrong frame.
+    var assets = Assets()
+    var pixels = List[UInt8]()
+    for value in [0, 128, 255, 255]:
+        pixels.append(UInt8(value))
+    var encoded = assets.textures.add(
+        Texture(1, 1, pixels.copy(), REPEAT, NEAREST, SRGB, False, IGNORED)
+    )
+    var covered = assets.textures.add(
+        Texture(1, 1, pixels^, REPEAT, NEAREST, LINEAR, False, COVERAGE)
+    )
+    var scene = scene_with_node_at(0)
+    for slot in [encoded, covered]:
+        var wrong = assets.materials.add(
+            Material(Color(255, 255, 255), alpha_map=slot)
+        )
+        var meshes = sheet_of(assets, wrong)
+        for mode in [SHADE_TEXTURE, SHADE_LIT]:
+            var renderer = Renderer(WIDTH, HEIGHT)
+            renderer.set_shading(mode)
+            with assert_raises():
+                _ = rendered(
+                    renderer, scene, assets, meshes, camera_at(0, 0, 4)
+                )
+
+
+def test_every_map_on_one_material_must_share_one_transform() raises:
+    # A fragment carries one coordinate pair and samples all three maps
+    # with it, so the first map named decides and the others must agree.
+    var assets = Assets()
+    var base = assets.textures.add(
+        checkerboard(4, 2, Color(255, 255, 255), Color(0, 0, 0))
+    )
+    var moved = checkerboard(4, 2, Color(255, 255, 255), Color(0, 0, 0))
+    moved.repeat = Vector2(2, 2)
+    var shifted = assets.textures.add(moved^)
+    var mask = assets.textures.add(a_flat_mask(255))
+    var agreeing = assets.materials.add(
+        Material(Color(255, 255, 255), base, alpha_map=mask)
+    )
+    var disagreeing = assets.materials.add(
+        Material(Color(255, 255, 255), shifted, alpha_map=mask)
+    )
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var scene = scene_with_node_at(0)
+    _ = rendered(
+        renderer, scene, assets, sheet_of(assets, agreeing), camera_at(0, 0, 4)
+    )
+    with assert_raises():
+        _ = rendered(
+            renderer,
+            scene,
+            assets,
+            sheet_of(assets, disagreeing),
+            camera_at(0, 0, 4),
+        )
+    # An alpha map alone still supplies the transform.
+    var alone = assets.materials.add(
+        Material(Color(255, 255, 255), alpha_map=mask)
+    )
+    _ = rendered(
+        renderer, scene, assets, sheet_of(assets, alone), camera_at(0, 0, 4)
+    )
+
+
+def test_lit_shading_ignores_the_alpha_map() raises:
+    # `SHADE_LIT` ignores every texture, so a map that would empty the
+    # surface leaves it whole.
+    var assets = Assets()
+    var mask = assets.textures.add(a_flat_mask(0))
+    var thinned = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, alpha_map=mask)
+    )
+    var scene = scene_with_node_at(0)
+    var meshes = sheet_of(assets, thinned)
+    var sampled = Renderer(WIDTH, HEIGHT)
+    var ignored = Renderer(WIDTH, HEIGHT)
+    ignored.set_shading(SHADE_LIT)
+    var gone = rendered(sampled, scene, assets, meshes, camera_at(0, 0, 4))
+    var whole = rendered(ignored, scene, assets, meshes, camera_at(0, 0, 4))
+    assert_equal(gone.get_pixel(WIDTH // 2, HEIGHT // 2).a, UInt8(0))
+    assert_equal(whole.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(255))
 
 
 def main() raises:

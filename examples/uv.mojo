@@ -103,6 +103,11 @@ def flattened(corners: List[RasterVertex]) -> List[RasterVertex]:
                 corner.normal,
                 corner.world,
                 corner.kind,
+                corner.emissive,
+                corner.emissive_map,
+                corner.view_depth,
+                corner.alpha_map,
+                corner.alpha_test,
             )
         )
     return affine^

@@ -161,6 +161,23 @@ def test_blending_clamps_an_alpha_outside_zero_to_one() raises:
 # --- depth ------------------------------------------------------------------
 
 
+def test_claiming_a_depth_records_it_without_testing() raises:
+    # The other half of a late depth write: a fragment an alpha test can
+    # throw away tests without claiming, then claims once it survives.
+    var target = RenderTarget(2, 1, Color(0, 0, 0))
+    assert_true(target.depth_passes(0, 0, 0.5))
+    assert_equal(target.depth_at(0, 0), inf[DType.float32]())
+    target.claim_depth(0, 0, 0.5)
+    assert_equal(target.depth_at(0, 0), Float32(0.5))
+    assert_false(target.depth_passes(0, 0, 0.7))
+    # It tests nothing, so it can move the depth further away. Only a
+    # fragment that has already passed calls it.
+    target.claim_depth(0, 0, 0.9)
+    assert_equal(target.depth_at(0, 0), Float32(0.9))
+    with assert_raises():
+        target.claim_depth(2, 0, 0.5)
+
+
 def test_writing_depth_claims_it_and_passing_does_not() raises:
     var target = RenderTarget(1, 1, Color(0, 0, 0))
     assert_true(target.depth_passes(0, 0, 0.5))

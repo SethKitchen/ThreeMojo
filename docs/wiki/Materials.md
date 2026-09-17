@@ -28,6 +28,8 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `emissive_intensity` | `Float32` | `1.0` | Scales `emissive`. |
 | `emissive_map` | `TextureId` | `NO_TEXTURE` | The texture that multiplies `emissive`. |
 | `vertex_colors` | `Bool` | `False` | Multiply `color` by the geometry's `color` attribute. |
+| `alpha_map` | `TextureId` | `NO_TEXTURE` | A texture whose green channel thins the surface. |
+| `alpha_test` | `Float32` | `0.0` | The alpha a fragment must reach to be drawn. |
 
 ## Side
 
@@ -63,8 +65,8 @@ var cut = assets.materials.add(depth_material(mask, FRONT_SIDE, 1.0, BLEND))
 
 | Builder | Meaning |
 |---|---|
-| `normal_material(side=FRONT_SIDE, opacity=1.0, blending=None)` | The view-space normal as a color. |
-| `depth_material(map=NO_TEXTURE, side=FRONT_SIDE, opacity=1.0, blending=None)` | The depth as a gray. |
+| `normal_material(side=FRONT_SIDE, opacity=1.0, blending=None, alpha_test=0.0)` | The view-space normal as a color. |
+| `depth_material(map=NO_TEXTURE, side=FRONT_SIDE, opacity=1.0, blending=None, alpha_map=NO_TEXTURE, alpha_test=0.0)` | The depth as a gray. |
 
 Both take `side`, `opacity` and `blending`, and nothing else. A depth material also takes a `map`.
 
@@ -86,7 +88,7 @@ A map's alpha cuts the surface out, as three.js's does. Its color is not read. P
 
 ### What they refuse
 
-Neither shader reads a color, an emissive term or the vertex colors. A material of either kind refuses all three rather than ignoring them. Pass opaque white as the color, or use the builders, which do. A normal material refuses a map as well.
+Neither shader reads a color, an emissive term or the vertex colors. A material of either kind refuses all three rather than ignoring them. Pass opaque white as the color, or use the builders, which do. A normal material refuses a map and an alpha map as well. Both take an alpha test, as three.js's do.
 
 Neither is lit, fogged nor tone mapped. A veil of light over a normal, or a curve that compresses it, would make the image lie about its own numbers. Both rasterizers decide this per pixel. See [Why a normal is not a color](Why-a-normal-is-not-a-color).
 
@@ -133,6 +135,41 @@ var screen = assets.materials.add(
 )
 ```
 
+## Alpha map and alpha test
+
+An alpha map thins a surface and an alpha test cuts it away. Together they make a shape out of a rectangle: a leaf, a fence, a chain link.
+
+```mojo
+var mask = assets.textures.add(
+    Texture(width, height, bytes, REPEAT, NEAREST, LINEAR, False, IGNORED)
+)
+var leaf = assets.materials.add(
+    Material(Color(255, 255, 255), bark, alpha_map=mask, alpha_test=0.5)
+)
+```
+
+three.js: `Material.alphaMap` and `Material.alphaTest`.
+
+### The map
+
+The map's *green* channel multiplies the surface's alpha. three.js reads `.g` and nothing else. Red, blue and the map's own alpha say nothing. The map multiplies whatever alpha reached it, so a half opacity through a half map is a quarter.
+
+An alpha map holds data, not color. Build it with `color_space=LINEAR` and `alpha=IGNORED`. The renderer refuses any other pair, on both backends. A linear texture hands back the byte as it was stored, which is what a coverage means. An sRGB one would turn a byte of 128 into 0.216. A coverage-weighted filter would weight the green by an alpha that means nothing.
+
+The map is sampled at the same coordinate as `map` and `emissive_map`. A material naming more than one must give them all one transform. See [Textures](Textures#transform).
+
+`SHADE_LIT` and `SHADE_UV` ignore the map, as they ignore every texture.
+
+### The test
+
+`alpha_test` is the alpha a fragment must reach to be drawn at all. Zero, the default, draws every fragment, as in three.js. Above zero, a fragment whose alpha falls below it is thrown away.
+
+A thrown-away fragment writes no color and claims no depth. So the hole shows whatever is behind it. Without the test, a fully transparent fragment still claims the depth and hides what is behind it.
+
+The test reaches every kind, a translucent surface and a data material included. The `SHADE_UV` view cuts nothing out: it shows the nearest surface's coordinates and samples no texture.
+
+The comparison is strict, as three.js's is. A fragment whose alpha equals the test survives.
+
 ## Opacity and blending
 
 `opacity` below one, or a color with alpha below 255, makes the material blend. A blended surface tests depth without writing it, and the renderer draws it after every opaque mesh, furthest first.
@@ -143,6 +180,8 @@ Pass `blending=BLEND` when a texture's own alpha needs blending and the material
 |---|---|
 | `is_lit() -> Bool` | `kind == LAMBERT`. |
 | `is_data() -> Bool` | `kind` is `NORMALS` or `DEPTH`. |
+| `has_alpha_map() -> Bool` | `alpha_map != NO_TEXTURE`. |
+| `is_alpha_tested() -> Bool` | `alpha_test > 0`. |
 | `is_textured() -> Bool` | `map != NO_TEXTURE`. |
 | `is_transparent() -> Bool` | `blending == BLEND`. |
 | `is_emissive() -> Bool` | Whether the emissive color at its intensity adds any light. |
@@ -158,7 +197,9 @@ The constructor raises for:
 - An emissive color or map on a `BASIC` material.
 - A color that is not opaque white on a `NORMALS` or `DEPTH` material.
 - An emissive term or vertex colors on either of those two kinds.
-- A map on a `NORMALS` material.
+- A map or an alpha map on a `NORMALS` material.
+- An alpha map id below zero that is not `NO_TEXTURE`.
+- An alpha test outside zero to one, or not finite.
 
 `Renderer.prepare` raises for an emissive map that reads its alpha as coverage.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.

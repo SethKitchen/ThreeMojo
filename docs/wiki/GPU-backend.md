@@ -14,11 +14,11 @@ MAX 26.5.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-G
 |---|---|
 | `available() -> Bool` | Whether a GPU is present. |
 | `render_triangles(corners, width, height, background, mode, textures, lighting, fog, tone_mapping, exposure) -> Framebuffer` | One-shot: draw and read back. |
-| `flatten(corners) -> List[Float32]` | The corner buffer the kernel reads, twenty floats per vertex. |
+| `flatten(corners) -> List[Float32]` | The corner buffer the kernel reads, one lane per varying. |
 | `flatten_lights(lighting) -> List[Float32]` | The light buffer: the ambient term, then each directional, point, hemisphere and spot light. |
 | `flatten_fog(fog) -> List[Float32]` | The fog buffer, six floats. The kind crosses as a kernel argument. |
 | `flatten_textures(store)` | Every texture in one buffer, with a descriptor table. |
-| `triangle_state(corners) -> List[Int32]` | Texture, blend, material kind and emissive map per triangle. |
+| `triangle_state(corners) -> List[Int32]` | Texture, blend, material kind, emissive map and alpha map per triangle. |
 
 ## GpuRenderer
 
@@ -31,7 +31,9 @@ Hold one across frames. The device buffers survive between draws.
 | `draw(corners, background, mode, lighting, fog, tone_mapping, exposure)` | Rasterize into the device target. Pass `Lighting(scene, visible=camera.visible_layers())` and `FogView(scene.fog, view)`, the values `Renderer.render` uses. The kernel tone maps each pixel as `RenderTarget.resolve` does. |
 | `read_back() -> Framebuffer` | Copy color and depth to the host. |
 
-`draw` checks every triangle's state, every texture id, the tone mapping curve and the exposure on the host before it launches. The kernel cannot raise.
+`draw` checks every triangle's state, every texture id, the alpha test, the tone mapping curve and the exposure on the host before it launches. The kernel cannot raise.
+
+An alpha map must be `LINEAR` and `IGNORED`. `draw` asks that of the descriptors it uploaded, as the CPU asks it of the store.
 
 `set_textures` builds the new buffers first and replaces the old ones together with the count. A failed upload leaves the previous upload whole.
 

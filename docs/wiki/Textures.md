@@ -56,6 +56,8 @@ Alpha is never decoded. It is coverage, not color.
 
 An emissive map must ignore its alpha. Its alpha is not coverage. Filtered as coverage, a white texel with alpha zero turns black under `BILINEAR`, and the whole mip chain darkens with it. The renderer refuses an emissive map built with `COVERAGE`.
 
+An alpha map must ignore its alpha too, and must be `LINEAR`. Its green channel is a coverage rather than a color. See [Materials](Materials#alpha-map-and-alpha-test).
+
 `ignoring_alpha()` copies a texture into the other mode and rebuilds its mip chain from the full-size image. Use it when one image is both a base map and an emissive map. The blank texture's copy is blank and ignores its alpha, so it passes as an emissive map and samples as white.
 
 ## Coordinates
@@ -77,7 +79,7 @@ Set the fields after construction, as in three.js. `uv_transform()` returns the 
 
 The renderer carries every coordinate of a mesh through its map's matrix before the fragment samples with it. The texture itself does not change. The wrap mode still decides what a coordinate past the edge reads. Both rasterizers get the same coordinates.
 
-A fragment samples the map and the emissive map at one coordinate. A material that names both must give them the same transform. The renderer refuses the pair otherwise. `ignoring_alpha()` copies the transform, so two maps from one image agree.
+A fragment samples the map, the emissive map and the alpha map at one coordinate. A material that names more than one must give them all the same transform. The renderer refuses them otherwise. `ignoring_alpha()` copies the transform, so two maps from one image agree.
 
 ```mojo
 var board = checkerboard(64, 8, white, blue)

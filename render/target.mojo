@@ -176,6 +176,29 @@ struct RenderTarget(Movable):
         self.depth[slot] = z
         return True
 
+    def claim_depth(mut self, x: Int, y: Int, z: Float32) raises:
+        """Record `z` as this pixel's depth, testing nothing.
+
+        The other half of a *late* depth write. A fragment that an alpha
+        test can throw away must not claim the depth before it is shaded,
+        or the hole it cuts hides whatever is behind it. Such a fragment
+        asks `depth_passes` first and calls this once it survives, which is
+        what a GPU does for a shader that can discard.
+
+        Only safe because a band owns its rows outright: nothing else can
+        write this pixel between the test and the claim. See
+        `render.rasterizer.rasterize_all`.
+
+        Args:
+            x: Column.
+            y: Row.
+            z: The NDC depth to record.
+
+        Raises:
+            Error: If the coordinate is out of bounds.
+        """
+        self.depth[self._slot(x, y)] = z
+
     def depth_passes(self, x: Int, y: Int, z: Float32) raises -> Bool:
         """Return True if `z` is nearer than what is stored, claiming nothing.
 

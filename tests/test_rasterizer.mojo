@@ -24,6 +24,7 @@ from render.texture import (
     IGNORED,
     NEAREST,
     REPEAT,
+    Alpha,
     Texture,
     checkerboard,
 )
@@ -38,6 +39,7 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from math.vector3 import Vector3
 from render.target import RenderTarget
+from render.srgb import LINEAR, SRGB, ColorSpace
 from render.rasterizer import (
     SHADE_LIT,
     SHADE_TEXTURE,
@@ -45,6 +47,7 @@ from render.rasterizer import (
     RasterVertex,
     ShadeMode,
     Triangle,
+    check_alpha_map,
     data_color,
     edge,
     mip_level,
@@ -2010,6 +2013,8 @@ def data_corner(
     blend: Blending = OPAQUE,
     depth: Float32 = 0,
     texture: TextureId = NO_TEXTURE,
+    alpha_map: TextureId = NO_TEXTURE,
+    alpha_test: Float32 = 0,
 ) -> RasterVertex:
     """Return a white corner of a data material, facing `normal`.
 
@@ -2032,6 +2037,8 @@ def data_corner(
         FloatColor(0.0, 0.0, 0.0),
         NO_TEXTURE,
         depth,
+        alpha_map,
+        alpha_test,
     )
 
 
@@ -2043,6 +2050,8 @@ def data_quad(
     blend: Blending = OPAQUE,
     depth: Float32 = 0,
     texture: TextureId = NO_TEXTURE,
+    alpha_map: TextureId = NO_TEXTURE,
+    alpha_test: Float32 = 0,
 ) -> List[RasterVertex]:
     """Return two triangles of a data material covering an eight-pixel
     target."""
@@ -2067,6 +2076,8 @@ def data_quad(
                 blend,
                 depth,
                 texture,
+                alpha_map,
+                alpha_test,
             )
         )
     return corners^
@@ -2276,6 +2287,249 @@ def test_every_material_kind_shades_a_fragment() raises:
         data_pixel(data_quad(DEPTH, z=0.0), lighting=lamp).shown(4, 4),
         Color(128, 128, 128),
     )
+
+
+# --- alpha maps and the alpha test ------------------------------------------
+
+
+def a_mask(
+    green: UInt8,
+    space: ColorSpace = LINEAR,
+    alpha: Alpha = IGNORED,
+) raises -> Texture:
+    """Return a one-texel alpha map whose green channel is `green`.
+
+    Red and blue are deliberately not `green`: three.js reads `.g` and
+    nothing else, and a gray texel could not tell the two apart.
+    """
+    var pixels = List[UInt8]()
+    pixels.append(0)
+    pixels.append(green)
+    pixels.append(255)
+    pixels.append(255)
+    return Texture(1, 1, pixels^, REPEAT, NEAREST, space, False, alpha)
+
+
+def test_an_alpha_map_must_be_stored_as_data() raises:
+    # Its green channel is a coverage. The sRGB curve would turn a byte of
+    # 128 into 0.216, and a coverage-weighted filter would weight it by an
+    # alpha that means nothing.
+    check_alpha_map(a_mask(128))
+    with assert_raises():
+        check_alpha_map(a_mask(128, SRGB, IGNORED))
+    with assert_raises():
+        check_alpha_map(a_mask(128, LINEAR, COVERAGE))
+    with assert_raises():
+        check_alpha_map(a_mask(128, SRGB, COVERAGE))
+
+
+def test_an_alpha_maps_green_channel_thins_the_surface() raises:
+    # three.js's `alphamap_fragment` reads `.g` and multiplies the alpha by
+    # it. The texture is linear, so the byte arrives as it was stored.
+    var textures = TextureStore()
+    var mask = textures.add(a_mask(128))
+    var shown = data_pixel(data_quad(BASIC, alpha_map=mask), textures=textures)
+    assert_same_color(shown.shown(4, 4), Color(255, 255, 255, 128))
+    # A green of 255 leaves the surface alone, and one of zero empties it.
+    var whole = textures.add(a_mask(255))
+    var solid = data_pixel(data_quad(BASIC, alpha_map=whole), textures=textures)
+    assert_same_color(solid.shown(4, 4), Color(255, 255, 255, 255))
+    var empty = textures.add(a_mask(0))
+    var gone = data_pixel(data_quad(BASIC, alpha_map=empty), textures=textures)
+    assert_equal(gone.shown(4, 4).a, UInt8(0))
+
+
+def test_an_alpha_map_multiplies_the_opacity_it_is_given() raises:
+    # The map thins whatever alpha reached it, as three.js multiplies into
+    # `diffuseColor.a`: half an opacity through a half map is a quarter.
+    var textures = TextureStore()
+    var mask = textures.add(a_mask(128))
+    var shown = data_pixel(
+        data_quad(BASIC, alpha=0.5, alpha_map=mask), textures=textures
+    )
+    assert_equal(shown.shown(4, 4).a, UInt8(64))
+
+
+def test_an_alpha_map_leaves_the_color_alone() raises:
+    # Only the alpha. The map's red and blue say nothing, and neither does
+    # its green about the color.
+    var textures = TextureStore()
+    var mask = textures.add(a_mask(128))
+    var shown = data_pixel(data_quad(BASIC, alpha_map=mask), textures=textures)
+    var pixel = shown.shown(4, 4)
+    assert_equal(pixel.r, UInt8(255))
+    assert_equal(pixel.g, UInt8(255))
+    assert_equal(pixel.b, UInt8(255))
+
+
+def test_the_alpha_test_throws_a_fragment_away() raises:
+    # three.js's `alphatest_fragment`: below the test the fragment is
+    # discarded. At the test it survives, because the comparison is strict.
+    var cut = data_pixel(data_quad(BASIC, alpha=0.4, alpha_test=0.5))
+    assert_same_color(cut.shown(4, 4), Color(0, 0, 0))
+    var kept = data_pixel(data_quad(BASIC, alpha=0.4, alpha_test=0.4))
+    assert_equal(kept.shown(4, 4).a, UInt8(102))
+    # A test of zero is no test at all, as in three.js.
+    var every = data_pixel(data_quad(BASIC, alpha=0.0, alpha_test=0.0))
+    assert_equal(every.shown(4, 4).a, UInt8(0))
+    assert_false(every.is_data(4, 4))
+
+
+def test_an_alpha_map_and_the_test_cut_a_shape_out() raises:
+    # The pair together: the map thins the surface and the test throws away
+    # what it thinned too far. This is the cut-out leaf.
+    var textures = TextureStore()
+    var thin = textures.add(a_mask(100))
+    var thick = textures.add(a_mask(200))
+    var gone = data_pixel(
+        data_quad(BASIC, alpha_map=thin, alpha_test=0.5), textures=textures
+    )
+    assert_same_color(gone.shown(4, 4), Color(0, 0, 0))
+    var there = data_pixel(
+        data_quad(BASIC, alpha_map=thick, alpha_test=0.5), textures=textures
+    )
+    assert_equal(there.shown(4, 4).r, UInt8(255))
+
+
+def two_quads(
+    near: List[RasterVertex], far: List[RasterVertex]
+) -> List[RasterVertex]:
+    """Return `near` submitted before `far`, as one triangle list."""
+    var corners = List[RasterVertex]()
+    for corner in near:
+        corners.append(corner)
+    for corner in far:
+        corners.append(corner)
+    return corners^
+
+
+def test_a_discarded_fragment_claims_no_depth() raises:
+    # The whole point of a cut-out: the hole shows what is behind it. The
+    # near surface is drawn first and thrown away, so the far one wins even
+    # though it is further.
+    var near = data_quad(BASIC, z=-0.5, alpha=0.0, alpha_test=0.5)
+    var far = data_quad(LAMBERT, z=0.5)
+    var shown = data_pixel(two_quads(near, far))
+    assert_equal(shown.shown(4, 4).r, UInt8(255))
+    assert_equal(shown.depth_at(4, 4), Float32(0.5))
+    # A fragment that survives does claim it, so the far one is hidden.
+    var solid = data_quad(BASIC, z=-0.5, alpha=1.0, alpha_test=0.5)
+    var hidden = data_pixel(two_quads(solid, far))
+    assert_equal(hidden.depth_at(4, 4), Float32(-0.5))
+    # And nothing is claimed where the near surface never covered.
+    var empty = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(near, empty)
+    assert_true(empty.depth_at(4, 4) > 1.0e30, "the hole claimed a depth")
+
+
+def test_the_alpha_test_reaches_a_translucent_surface_too() raises:
+    # three.js tests every material, not only the opaque ones. A blended
+    # fragment claims no depth either way, so only the color changes.
+    var gone = data_pixel(
+        data_quad(BASIC, alpha=0.2, blend=BLEND, alpha_test=0.5)
+    )
+    assert_same_color(gone.shown(4, 4), Color(0, 0, 0))
+    var mixed = data_pixel(
+        data_quad(BASIC, alpha=0.6, blend=BLEND, alpha_test=0.5)
+    )
+    assert_true(mixed.shown(4, 4).r > 0, "the blended fragment was thrown away")
+
+
+def test_the_alpha_test_applies_to_a_data_material() raises:
+    # A depth material's alpha is its opacity, and three.js's
+    # `MeshDepthMaterial` has an alpha test like any other material.
+    var gone = data_pixel(data_quad(DEPTH, z=0.0, alpha=0.2, alpha_test=0.5))
+    assert_same_color(gone.shown(4, 4), Color(0, 0, 0))
+    var there = data_pixel(data_quad(DEPTH, z=0.0, alpha=0.8, alpha_test=0.5))
+    assert_equal(there.shown(4, 4).r, UInt8(128))
+
+
+def test_lit_shading_ignores_the_alpha_map_but_keeps_the_test() raises:
+    # `SHADE_LIT` ignores every texture, the alpha map included, so the
+    # alpha reaching the test is the material's own.
+    var textures = TextureStore()
+    var mask = textures.add(a_mask(128))
+    var corners = data_quad(BASIC, alpha_map=mask, alpha_test=0.6)
+    var sampled = data_pixel(corners, textures=textures)
+    assert_same_color(sampled.shown(4, 4), Color(0, 0, 0))
+    var ignored = data_pixel(corners, textures=textures, mode=SHADE_LIT)
+    assert_equal(ignored.shown(4, 4).r, UInt8(255))
+
+
+def test_the_uv_view_cuts_nothing_out() raises:
+    # It shows the nearest surface's coordinates and samples no texture, so
+    # neither the map nor the test reaches it.
+    var textures = TextureStore()
+    var mask = textures.add(a_mask(0))
+    var shown = data_pixel(
+        data_quad(BASIC, alpha=0.0, alpha_map=mask, alpha_test=0.9),
+        textures=textures,
+        mode=SHADE_UV,
+    )
+    assert_true(shown.is_data(4, 4))
+    assert_equal(shown.shown(4, 4).a, UInt8(255))
+
+
+def test_corners_that_disagree_about_thinning_are_rejected() raises:
+    # The alpha map and the alpha test are per triangle like the blend
+    # policy, and read from the first corner.
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var corners = data_quad(BASIC)
+    var mapped = data_quad(BASIC, alpha_map=TextureId(0))
+    with assert_raises():
+        rasterize_shaded(corners[0], mapped[1], corners[2], target)
+    with assert_raises():
+        rasterize_shaded(corners[0], corners[1], mapped[2], target)
+    var tested = data_quad(BASIC, alpha_test=0.5)
+    with assert_raises():
+        rasterize_shaded(corners[0], tested[1], corners[2], target)
+    with assert_raises():
+        rasterize_shaded(corners[0], corners[1], tested[2], target)
+
+
+def test_an_alpha_test_outside_zero_to_one_is_refused() raises:
+    # A corner's fields are open, and a threshold nothing can reach is a
+    # mistake rather than a choice. Not a number is worse: every comparison
+    # with it is false, so the test would silently stop testing.
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    for bad in [Float32(-0.5), Float32(1.5), nan[DType.float32]()]:
+        var corners = data_quad(BASIC, alpha_test=bad)
+        with assert_raises():
+            rasterize_shaded(corners[0], corners[1], corners[2], target)
+        for workers in [1, 4]:
+            with assert_raises():
+                rasterize_all(corners, target, workers=workers)
+    # The two ends are legal.
+    var none = data_quad(BASIC, alpha_test=0.0)
+    rasterize_all(none, target)
+    var all_of_it = data_quad(BASIC, alpha_test=1.0)
+    rasterize_all(all_of_it, target)
+
+
+def test_an_alpha_map_id_that_nothing_can_hold_is_refused() raises:
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var corners = data_quad(BASIC, alpha_map=TextureId(-2))
+    with assert_raises():
+        rasterize_shaded(corners[0], corners[1], corners[2], target)
+    # The absence value is fine.
+    rasterize_all(data_quad(BASIC, alpha_map=NO_TEXTURE), target)
+
+
+def test_an_alpha_map_that_is_not_data_is_refused_before_a_fragment() raises:
+    # Asked once per call, before the first fragment, as the GPU asks it
+    # before the launch -- and only when the map will be opened.
+    var textures = TextureStore()
+    var wrong = textures.add(a_mask(128, SRGB, IGNORED))
+    var corners = data_quad(BASIC, alpha_map=wrong)
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    with assert_raises():
+        rasterize_all(corners, target, SHADE_TEXTURE, textures)
+    with assert_raises():
+        rasterize_shaded(
+            corners[0], corners[1], corners[2], target, SHADE_TEXTURE, textures
+        )
+    # `SHADE_LIT` never opens it, so it is not refused there.
+    rasterize_all(corners, target, SHADE_LIT, textures)
 
 
 def main() raises:

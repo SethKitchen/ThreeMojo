@@ -36,12 +36,13 @@ from materials.material import (
     MaterialKind,
 )
 from render.target import RenderTarget
+from render.srgb import LINEAR
 from render.texture import IGNORED, Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.lighting import Lighting
 from core.fog import FogView, fog_mix
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
-from std.math import ceil, floor, log2, max, min, sqrt
+from std.math import ceil, floor, isfinite, log2, max, min, sqrt
 from std.runtime.asyncrt import TaskGroup
 
 
@@ -454,6 +455,14 @@ struct RasterVertex(ImplicitlyCopyable):
     # Which texture multiplies the emissive, or `NO_TEXTURE`. Per-triangle
     # metadata like `texture`: read from the first corner, checked to agree.
     var emissive_map: TextureId
+    # Which texture's green channel thins this surface, or `NO_TEXTURE`:
+    # three.js's `alphaMap`. Per-triangle metadata like `texture`.
+    var alpha_map: TextureId
+    # The alpha a fragment must reach to be drawn, three.js's `alphaTest`.
+    # Zero draws every fragment. Per-triangle metadata rather than a
+    # varying, and the only float among it: all three corners carry the
+    # material's number and the first is read.
+    var alpha_test: Float32
     # How far in front of the camera this corner is, in meters: three.js's
     # `vFogDepth`, minus the camera-space z, taken from the clipped
     # position as it is projected. Interpolated with perspective correction
@@ -479,6 +488,8 @@ struct RasterVertex(ImplicitlyCopyable):
         emissive: FloatColor = FloatColor(0.0, 0.0, 0.0),
         emissive_map: TextureId = NO_TEXTURE,
         view_depth: Float32 = 0,
+        alpha_map: TextureId = NO_TEXTURE,
+        alpha_test: Float32 = 0,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -488,7 +499,8 @@ struct RasterVertex(ImplicitlyCopyable):
         which only a point light would notice, and the corner defaults to
         `LAMBERT`, lit, which under `Lighting.uniform` changes nothing. The
         emissive defaults to black: no light given off. The depth defaults
-        to zero, which is at the camera and in no fog.
+        to zero, which is at the camera and in no fog. The alpha test
+        defaults to zero, which throws no fragment away.
         """
         self.x = x
         self.y = y
@@ -505,6 +517,8 @@ struct RasterVertex(ImplicitlyCopyable):
         self.emissive = emissive
         self.emissive_map = emissive_map
         self.view_depth = view_depth
+        self.alpha_map = alpha_map
+        self.alpha_test = alpha_test
 
 
 @fieldwise_init
@@ -748,10 +762,12 @@ def check_triangle_state(
 
     Raises:
         Error: If the three corners do not agree on their blend policy, on
-            their texture or emissive map, or on their material kind; if
-            the agreed policy is neither `OPAQUE` nor `BLEND`, or the
-            agreed kind is none of the four; or if either texture id is a
-            negative other than `NO_TEXTURE`, which nothing can ever hold.
+            any of their three maps, on their material kind or on their
+            alpha test; if the agreed policy is neither `OPAQUE` nor
+            `BLEND`, the agreed kind is none of the four, or the agreed
+            alpha test is outside zero to one or not finite; or if any
+            texture id is a negative other than `NO_TEXTURE`, which
+            nothing can ever hold.
     """
     if b.blend != a.blend or c.blend != a.blend:
         raise Error("A triangle's corners disagree about blending")
@@ -759,8 +775,17 @@ def check_triangle_state(
         raise Error("A triangle's corners disagree about their texture")
     if b.emissive_map != a.emissive_map or c.emissive_map != a.emissive_map:
         raise Error("A triangle's corners disagree about their emissive map")
+    if b.alpha_map != a.alpha_map or c.alpha_map != a.alpha_map:
+        raise Error("A triangle's corners disagree about their alpha map")
     if b.kind != a.kind or c.kind != a.kind:
         raise Error("A triangle's corners disagree about their material kind")
+    # Before the agreement check below, because not-a-number is not equal
+    # to itself: a NaN threshold would be reported as three corners
+    # disagreeing when what is wrong is the number.
+    if not isfinite(a.alpha_test) or a.alpha_test < 0 or a.alpha_test > 1:
+        raise Error("A triangle's alpha test must be between zero and one")
+    if b.alpha_test != a.alpha_test or c.alpha_test != a.alpha_test:
+        raise Error("A triangle's corners disagree about their alpha test")
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is neither OPAQUE nor BLEND")
     if not a.kind.is_valid():
@@ -769,6 +794,37 @@ def check_triangle_state(
         raise Error("A triangle names a texture id that nothing can hold")
     if a.emissive_map != NO_TEXTURE and a.emissive_map.value < 0:
         raise Error("A triangle names an emissive map id that nothing can hold")
+    if a.alpha_map != NO_TEXTURE and a.alpha_map.value < 0:
+        raise Error("A triangle names an alpha map id that nothing can hold")
+
+
+def check_alpha_map(image: Texture) raises:
+    """Refuse an alpha map that is not stored as data.
+
+    Its green channel is a coverage, so it must be `LINEAR`, or the sRGB
+    decode turns a byte of 128 into 0.216 rather than 0.502. And it must be
+    `IGNORED`, or bilinear filtering and the mip chain weight that green by
+    an alpha that means nothing -- the reason an emissive map asks the same.
+
+    Shared by both backends, so neither can accept what the other refuses.
+
+    Args:
+        image: The texture named as an alpha map.
+
+    Raises:
+        Error: If the texture's color space is not `LINEAR`, or it reads its
+            alpha as coverage.
+    """
+    if image.color_space != LINEAR:
+        raise Error(
+            "An alpha map holds data, not color; build the texture with"
+            " color_space=LINEAR"
+        )
+    if image.alpha != IGNORED:
+        raise Error(
+            "An alpha map must ignore its own alpha; build the texture with"
+            " alpha=IGNORED"
+        )
 
 
 def rasterize_shaded(
@@ -850,10 +906,12 @@ def rasterize_shaded(
         Error: If the mode is none of the three, the fog view holds a kind
             or a number that `FogView.validate` refuses, a vertex names a
             texture the
-            store does not have, the corners disagree about their texture,
-            blend policy or material kind or hold one that is none of the
-            named values, an emissive map that
-            `SHADE_TEXTURE` would open does not ignore its alpha, or a pixel
+            store does not have, the corners disagree about their maps,
+            blend policy, material kind or alpha test or hold one that is
+            none of the named values, an emissive map that
+            `SHADE_TEXTURE` would open does not ignore its alpha, an alpha
+            map it would open is not linear or does not ignore its alpha,
+            or a pixel
             write lands out of bounds — the last of which the loop prevents.
     """
     if not mode.is_valid():
@@ -873,6 +931,12 @@ def rasterize_shaded(
                 "An emissive map must ignore its alpha; build the texture"
                 " with alpha=IGNORED"
             )
+    # An alpha map holds data, and says so twice: linear, or the sRGB curve
+    # changes what its bytes mean, and alpha ignored, or filtering weights
+    # its green by an alpha that means nothing. Asked here, as the GPU asks
+    # it before the launch, and only when the map will be opened.
+    if a.alpha_map != NO_TEXTURE and mode == SHADE_TEXTURE:
+        check_alpha_map(textures.get(a.alpha_map))
 
     # Whether this surface composites, decided by the material and carried
     # here rather than inferred from a color. It changes two things
@@ -895,6 +959,13 @@ def rasterize_shaded(
     # which shows coordinates rather than light, and never a surface that
     # shows data.
     var fogged = fog.is_on() and mode != SHADE_UV and not data
+    # Whether a fragment of this triangle can be thrown away for being too
+    # transparent. Such a fragment must claim no depth until it survives,
+    # or the hole it cuts hides what is behind it: the *late* depth write a
+    # GPU makes for a shader that can discard. The uv debug view shows the
+    # nearest surface's coordinates and cuts nothing out, as it samples no
+    # texture.
+    var tested = a.alpha_test > 0 and mode != SHADE_UV
 
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
@@ -921,8 +992,9 @@ def rasterize_shaded(
             var wb = fragment.wb
             var wc = fragment.wc
             var z = wa * a.z + wb * b.z + wc * c.z
-            if blended:
-                # Hidden by what is in front, but hiding nothing behind.
+            if blended or tested:
+                # Hidden by what is in front, but hiding nothing behind --
+                # a translucent surface never, an alpha-tested one not yet.
                 if not target.depth_passes(x, y, z):
                     continue
             elif not target.test_depth(x, y, z):
@@ -1043,6 +1115,18 @@ def rasterize_shaded(
                         shaded.b * texel.b,
                         shaded.a * texel.a,
                     )
+                    # The alpha map's *green* channel thins the surface,
+                    # three.js's `alphamap_fragment`, which reads `.g` and
+                    # nothing else. It is data, so the texture is linear
+                    # and the byte arrives as it was stored.
+                    if a.alpha_map != NO_TEXTURE:
+                        ref mask = textures.get(a.alpha_map)
+                        var thinning = _sample_map(
+                            mask, u, v, a, b, c, coverage, x, y
+                        )
+                        shaded = FloatColor(
+                            shaded.r, shaded.g, shaded.b, shaded.a * thinning.g
+                        )
                     # The emissive map multiplies the glow the same way,
                     # alpha aside: light given off has no coverage.
                     if a.emissive_map != NO_TEXTURE:
@@ -1056,6 +1140,12 @@ def rasterize_shaded(
                             glow.b * glowing.b,
                             1.0,
                         )
+            # Thrown away for being too transparent, three.js's
+            # `alphatest_fragment`: no color, and no depth either, so what
+            # is behind this hole is drawn instead. Asked once the maps have
+            # had their say over alpha and before anything is written.
+            if tested and shaded.a < a.alpha_test:
+                continue
             if data:
                 # Data rather than light, as bytes the display shows as they
                 # are: the normal, three.js's `packNormalToRGB`, or the
@@ -1098,6 +1188,10 @@ def rasterize_shaded(
             if blended:
                 target.blend(x, y, shaded, data)
             else:
+                # The depth an alpha-tested fragment did not claim before it
+                # was shaded, claimed now that it has survived.
+                if tested:
+                    target.claim_depth(x, y, z)
                 target.write(x, y, shaded, data)
         row = row + down
 

@@ -40,11 +40,14 @@ three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as 
 | `is_data(x, y) -> Bool` | Whether the pixel holds data rather than light. |
 | `test_depth(x, y, z) -> Bool` | Keep and record `z` when it is nearer. |
 | `depth_passes(x, y, z) -> Bool` | Compare without recording. |
+| `claim_depth(x, y, z)` | Record without comparing, for a late depth write. |
 | `depth_at(x, y)`, `color_at(x, y)` | Read a pixel. |
 | `shown(x, y, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Color` | One pixel as it will resolve. |
 | `resolve(workers=1, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Framebuffer` | Unpremultiply, tone map and encode every pixel. |
 
 Nothing is clamped before `resolve`. Overexposed light survives every step.
+
+`claim_depth` is the other half of a late depth write. A fragment an alpha test can throw away tests with `depth_passes` and claims only once it survives. See [Rasterization](Rasterization#depth).
 
 Pass `data=True` when the color is not light. A normal material, a depth material and the `SHADE_UV` view all do. The last fragment into a pixel decides. `resolve` encodes such a pixel without tone mapping it. See [Why a normal is not a color](Why-a-normal-is-not-a-color).
 

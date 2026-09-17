@@ -108,7 +108,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] ShadowMaterial [#43](https://github.com/SethKitchen/ThreeMojo/issues/43)
 - [ ] Normal maps and bump maps [#44](https://github.com/SethKitchen/ThreeMojo/issues/44)
 - [x] [Emissive color and emissive map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#emissive): light a surface gives off, added after the lights on both rasterizers [#45](https://github.com/SethKitchen/ThreeMojo/issues/45)
-- [ ] Alpha map and alpha test [#46](https://github.com/SethKitchen/ThreeMojo/issues/46)
+- [x] [Alpha map and alpha test](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#alpha-map-and-alpha-test): a map's green channel thins a surface, and a test cuts away what claims no depth [#46](https://github.com/SethKitchen/ThreeMojo/issues/46)
 - [x] [Vertex colors](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#vertex-colors): a `color` attribute that multiplies the material color at every vertex, on both rasterizers [#47](https://github.com/SethKitchen/ThreeMojo/issues/47)
 - [ ] Wireframe rendering [#48](https://github.com/SethKitchen/ThreeMojo/issues/48)
 - [x] [Texture transforms: repeat, offset, rotation](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#transform): a texture's own `offset`, `repeat`, `rotation` and `center`, applied to a mesh's coordinates before either rasterizer samples [#49](https://github.com/SethKitchen/ThreeMojo/issues/49)

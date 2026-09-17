@@ -20,11 +20,13 @@ One corner as the rasterizer wants it:
 | `texture` | A `TextureId`, or `NO_TEXTURE`. |
 | `blend` | `OPAQUE` or `BLEND`. |
 | `kind` | The material kind: `LAMBERT`, `BASIC`, `NORMALS` or `DEPTH`. |
+| `alpha_map` | The `TextureId` whose green channel thins the surface, or `NO_TEXTURE`. |
+| `alpha_test` | The alpha a fragment must reach to be drawn. |
 | `emissive` | Light the surface gives off, linear. |
 | `emissive_map` | The `TextureId` that multiplies `emissive`, or `NO_TEXTURE`. |
 | `view_depth` | The camera-space depth in meters, for the fog. See [Fog](Fog#depth). |
 
-`texture`, `blend`, `kind` and `emissive_map` are per-triangle state. All three corners must agree, and the value must be a named one. `check_triangle_state` refuses anything else.
+`texture`, `blend`, `kind`, `emissive_map`, `alpha_map` and `alpha_test` are per-triangle state. All three corners must agree, and the value must be a named one. `check_triangle_state` refuses anything else.
 
 A `NORMALS` corner carries its normal in view space, not world space. The normal is shown rather than lit.
 
@@ -41,6 +43,7 @@ A `NORMALS` corner carries its normal in view space, not world space. The normal
 | `data_color(r, g, b, a)` | Three channels of data as the light that resolves to their bytes. |
 | `packed_normal(normal)` | A unit normal mapped into zero to one per axis. |
 | `packed_depth(z)` | An NDC depth as the gray a `DEPTH` material shows. |
+| `check_alpha_map(texture)` | Refuse an alpha map that is not stored as data. |
 
 ## Coverage
 
@@ -49,6 +52,8 @@ Vertices snap to a 1/16 pixel grid. The edge function is then exact integer arit
 ## Depth
 
 Depth is interpolated linearly in screen space. A fragment is kept when it is nearer than what is there. An opaque fragment writes its depth. A blended fragment tests depth and does not write it.
+
+An alpha-tested fragment writes its depth *late*. It tests without claiming, and claims with `claim_depth` once it survives the test. A fragment the test throws away leaves the depth alone, so the hole shows what is behind it. A GPU does the same for a shader that can discard.
 
 ## Clipping
 
@@ -78,6 +83,12 @@ Neither the emissive term nor the fog reaches such a fragment.
 
 After the lights and the emissive term, the fragment is mixed toward the fog color by its camera-space depth. The `fog` argument is a `FogView`. The default, `FogView.none()`, changes nothing. `SHADE_UV` is never fogged, and nor is a `NORMALS` or `DEPTH` triangle. See [Fog](Fog).
 
+## Alpha
+
+The alpha map's green channel multiplies the fragment's alpha, three.js's `alphamap_fragment`. The map must be `LINEAR` and `IGNORED`: its green is a coverage, not a color. `check_alpha_map` refuses anything else, on both backends, before the first fragment.
+
+A fragment whose alpha then falls below `alpha_test` is thrown away, three.js's `alphatest_fragment`. The comparison is strict. A test of zero throws nothing away. `SHADE_LIT` ignores the map and keeps the test. `SHADE_UV` ignores both.
+
 ## Transparency
 
 `rasterize_shaded` blends a `BLEND` fragment over what is there, in premultiplied linear light. The caller owns the draw order. `Renderer.prepare` sorts.
@@ -90,4 +101,6 @@ After the lights and the emissive term, the fragment is mixed toward the fog col
 - An emissive map that reads its alpha as coverage raises under `SHADE_TEXTURE`, on both backends.
 - A blend value that is neither `OPAQUE` nor `BLEND` raises, on every worker count, whether or not the triangle is visible.
 - A texture the store lacks raises when a fragment samples it.
+- An alpha map that `SHADE_TEXTURE` would open raises unless it is `LINEAR` and `IGNORED`.
+- An alpha test outside zero to one, or not finite, raises on every worker count.
 - A fog view that `FogView.validate` refuses raises before any fragment is drawn, on every worker count.

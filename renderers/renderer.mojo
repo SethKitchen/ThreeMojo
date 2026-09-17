@@ -115,6 +115,7 @@ from render.rasterizer import (
     SHADE_UV,
     RasterVertex,
     ShadeMode,
+    check_alpha_map,
     edge,
     rasterize_all,
 )
@@ -242,12 +243,12 @@ def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
     its maps are sampled with them: its map's `uv_transform`, three.js's
     `mapTransform`.
 
-    A fragment carries one coordinate pair and samples both maps with it,
-    where three.js carries a pair per map. So the emissive map's transform
-    is the one applied when there is no map, and when there are both they
-    must agree, which is asked here rather than left to sample the
-    emissive map somewhere the author did not say. Two maps from one image
-    agree by construction: `Texture.ignoring_alpha` copies the transform.
+    A fragment carries one coordinate pair and samples every map with it,
+    where three.js carries a pair per map. So the first map the material
+    names decides the transform, and the others must agree with it, which
+    is asked here rather than left to sample a map somewhere the author did
+    not say. Two maps from one image agree by construction:
+    `Texture.ignoring_alpha` copies the transform.
 
     Args:
         assets: Where the textures live. The ids are already checked.
@@ -257,24 +258,29 @@ def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
         The matrix. The identity for a material with no map at all.
 
     Raises:
-        Error: If the material names a map and an emissive map whose
-            transforms differ.
+        Error: If the material names two maps whose transforms differ.
     """
-    var map = material.map
-    var glow_map = material.emissive_map
-    if map == NO_TEXTURE and glow_map == NO_TEXTURE:
-        return Matrix3()
-    if map == NO_TEXTURE:
-        return assets.textures.get(glow_map).uv_transform()
-    var to_uv = assets.textures.get(map).uv_transform()
-    if glow_map != NO_TEXTURE and (
-        assets.textures.get(glow_map).uv_transform() != to_uv
-    ):
-        raise Error(
-            "A material's map and emissive map must share one transform: a"
-            " fragment samples both at one coordinate"
-        )
-    return to_uv^
+    var named: List[TextureId] = [
+        material.map,
+        material.emissive_map,
+        material.alpha_map,
+    ]
+    var chosen = Matrix3()
+    var settled = False
+    # Three maps, always, so the loop never runs zero times.
+    for index in range(len(named)):  # pragma: no branch
+        if named[index] == NO_TEXTURE:
+            continue
+        var to_uv = assets.textures.get(named[index]).uv_transform()
+        if not settled:
+            chosen = to_uv^
+            settled = True
+        elif to_uv != chosen:
+            raise Error(
+                "A material's maps must share one transform: a fragment"
+                " samples them all at one coordinate"
+            )
+    return chosen^
 
 
 # How far past a frustum plane a bound may lie and still be drawn, as a
@@ -685,6 +691,8 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
         corner.emissive,
         corner.emissive_map,
         corner.view_depth,
+        corner.alpha_map,
+        corner.alpha_test,
     )
 
 
@@ -695,6 +703,8 @@ def _to_raster(
     blend: Blending,
     kind: MaterialKind,
     emissive_map: TextureId,
+    alpha_map: TextureId,
+    alpha_test: Float32,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -729,6 +739,8 @@ def _to_raster(
         # How far in front of the camera this corner is, for the fog: the
         # camera looks down -z, and the position is already in its space.
         -vertex.position.z,
+        alpha_map,
+        alpha_test,
     )
 
 
@@ -903,9 +915,10 @@ struct Renderer(Movable):
 
         Raises:
             Error: If a mesh names a node, a geometry or a material that is
-                not there, if a material names a texture or an emissive map
-                that is not there, if its emissive map does not ignore its
-                alpha, if its geometry has no positions, or if its material
+                not there, if a material names a texture, an emissive map
+                or an alpha map that is not there, if its emissive map does
+                not ignore its alpha, if its alpha map is not stored as
+                data, if its geometry has no positions, or if its material
                 asks for vertex colors and the geometry has no `color`
                 attribute of three or four floats per vertex. The asset
                 checks are made on the draws that are made: a mesh the
@@ -1000,6 +1013,18 @@ struct Renderer(Movable):
                 )
             if self.shading != SHADE_TEXTURE or not material.is_emissive():
                 glow_map = NO_TEXTURE
+            # The alpha map, checked the same way, and refused unless it is
+            # stored as data: its green channel is a coverage, and the sRGB
+            # curve and a coverage-weighted filter each change what it
+            # means. Refused whatever the shading mode, as the emissive
+            # map's alpha mode is: a wrong asset, not a wrong frame.
+            var mask = material.alpha_map
+            if mask != NO_TEXTURE and mask.value >= assets.textures.count():
+                raise Error("A material names an alpha map that is not there")
+            if mask != NO_TEXTURE:
+                check_alpha_map(assets.textures.get(mask))
+            if self.shading != SHADE_TEXTURE:
+                mask = NO_TEXTURE
             # Where the maps are moved, tiled and turned on this surface,
             # asked of the material's own maps whatever the shading mode:
             # the uv view shows the coordinates the texture would be
@@ -1180,6 +1205,8 @@ struct Renderer(Movable):
                         blending,
                         kind,
                         glow_map,
+                        mask,
+                        material.alpha_test,
                     )
                     var two = _to_raster(
                         pieces[piece * 3 + 1],
@@ -1188,6 +1215,8 @@ struct Renderer(Movable):
                         blending,
                         kind,
                         glow_map,
+                        mask,
+                        material.alpha_test,
                     )
                     var three = _to_raster(
                         pieces[piece * 3 + 2],
@@ -1196,6 +1225,8 @@ struct Renderer(Movable):
                         blending,
                         kind,
                         glow_map,
+                        mask,
+                        material.alpha_test,
                     )
                     # Which way this piece ends up facing decides two things
                     # at once: whether it survives, and which side of it is

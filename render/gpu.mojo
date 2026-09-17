@@ -54,13 +54,14 @@ from render.rasterizer import (
     RasterVertex,
     ShadeMode,
     Triangle,
+    check_alpha_map,
     check_triangle_state,
     packed_depth,
     packed_normal,
 )
 from materials.material import BLEND, DEPTH, LAMBERT, NORMALS
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
-from render.srgb import SRGB, ColorSpace, decode_ramp
+from render.srgb import LINEAR, SRGB, ColorSpace, decode_ramp
 from render.tonemap import (
     NO_TONE_MAPPING,
     ToneMapping,
@@ -121,7 +122,11 @@ comptime LANE_EG = 17
 comptime LANE_EB = 18
 # Camera-space depth, for the fog. See `RasterVertex.view_depth`.
 comptime LANE_DEPTH = 19
-comptime FLOATS_PER_VERTEX = LANE_DEPTH + 1
+# The alpha a fragment must reach to be drawn. Per-triangle rather than a
+# varying, and read from the first corner's lane: it is the only float
+# among the per-triangle state, and the state table holds integers.
+comptime LANE_ALPHA_TEST = 20
+comptime FLOATS_PER_VERTEX = LANE_ALPHA_TEST + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -131,7 +136,8 @@ comptime STATE_TEXTURE = 0
 comptime STATE_BLEND = 1
 comptime STATE_KIND = 2
 comptime STATE_EMISSIVE_MAP = 3
-comptime STATE_PER_TRIANGLE = STATE_EMISSIVE_MAP + 1
+comptime STATE_ALPHA_MAP = 4
+comptime STATE_PER_TRIANGLE = STATE_ALPHA_MAP + 1
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
 # density, then the fog color, linear. Six floats, whatever the kind,
@@ -267,6 +273,7 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.emissive.g)
         flat.append(corner.emissive.b)
         flat.append(corner.view_depth)
+        flat.append(corner.alpha_test)
     return flat^
 
 
@@ -615,8 +622,8 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
         corners: Raster vertices, three per triangle.
 
     Returns:
-        Texture id, blend policy, the material kind's value, then the
-        emissive map id, per triangle, from its first corner.
+        Texture id, blend policy, the material kind's value, the emissive
+        map id, then the alpha map id, per triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -624,6 +631,7 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
         state.append(Int32(corners[triangle * 3].blend.value))
         state.append(Int32(corners[triangle * 3].kind.value))
         state.append(Int32(corners[triangle * 3].emissive_map.value))
+        state.append(Int32(corners[triangle * 3].alpha_map.value))
     return state^
 
 
@@ -1023,6 +1031,11 @@ def rasterize_kernel(
 
         # What kind of surface this is, per triangle from the state table:
         # lit, unlit, or showing its normal or its depth as data.
+        # The alpha a fragment must reach to be drawn, from the first
+        # corner's lane, and whether there is a test at all. The uv debug
+        # view cuts nothing out, as it samples no texture.
+        var threshold = corners[unsafe_offset=base + LANE_ALPHA_TEST]
+        var tested = threshold > 0 and mode != Int32(SHADE_UV.value)
         var kind = maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_KIND]
         var lit = kind == Int32(LAMBERT.value)
         var shows_normal = kind == Int32(NORMALS.value)
@@ -1196,6 +1209,37 @@ def rasterize_kernel(
                         + STATE_EMISSIVE_MAP
                     ]
                 )
+                # The alpha map's green channel thins the surface,
+                # three.js's `alphamap_fragment`, exactly as the host
+                # multiplies it.
+                var mask_slot = Int(
+                    maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE
+                        + STATE_ALPHA_MAP
+                    ]
+                )
+                if mask_slot != NO_TEXTURE.value:
+                    var thinning = _sample_slot(
+                        texels,
+                        ramp,
+                        table,
+                        mask_slot,
+                        corners,
+                        base,
+                        sax,
+                        say,
+                        sbx,
+                        sby,
+                        scx,
+                        scy,
+                        span_inv,
+                        swapped,
+                        px,
+                        py,
+                        u,
+                        v,
+                    )
+                    alpha *= thinning.g
                 if glow_slot != NO_TEXTURE.value:
                     var glowing = _sample_slot(
                         texels,
@@ -1220,6 +1264,12 @@ def rasterize_kernel(
                     glow_r *= glowing.r
                     glow_g *= glowing.g
                     glow_b *= glowing.b
+            # Thrown away for being too transparent, three.js's
+            # `alphatest_fragment`. Leaving `nearest` alone is the late
+            # depth write the host makes with `claim_depth`: the hole
+            # shows whatever is behind it.
+            if tested and alpha < threshold:
+                continue
             if shows_data:
                 # Data rather than light, exactly as `rasterize_shaded`
                 # writes it: the packed normal, or the depth as a gray, as
@@ -1398,6 +1448,9 @@ struct GpuRenderer(Movable):
     # map must do, and a question the host answers before the launch, as the
     # CPU rasterizer answers it before the first fragment.
     var ignores_alpha: List[Bool]
+    # Per uploaded texture, whether it is stored linear. An alpha map must
+    # be, since its green is a coverage rather than a color.
+    var is_linear: List[Bool]
     # Declared last so that it is released last. See `__del__`.
     var context: DeviceContext
 
@@ -1485,6 +1538,7 @@ struct GpuRenderer(Movable):
         # legal reference is NO_TEXTURE.
         self.uploaded = 0
         self.ignores_alpha = List[Bool]()
+        self.is_linear = List[Bool]()
         self.ramp = self.context.enqueue_create_buffer[DType.float32](256)
         var steps = decode_ramp()
         with self.ramp.map_to_host() as host:
@@ -1569,9 +1623,12 @@ struct GpuRenderer(Movable):
                 view is refused by `FogView.validate`, a triangle's blend
                 policy, material kind, texture or
                 emissive map disagrees between its corners or is a value
-                neither backend knows, a vertex names a texture or an
-                emissive map that is not uploaded, or an emissive map that
-                `SHADE_TEXTURE` would open does not ignore its alpha.
+                neither backend knows, a vertex names a texture, an
+                emissive map or an alpha map that is not uploaded, an
+                emissive map that
+                `SHADE_TEXTURE` would open does not ignore its alpha, or an
+                alpha map it would open is not linear or does not ignore
+                its alpha.
         """
         if len(corners) % 3 != 0:
             raise Error("Rasterizing needs whole triangles")
@@ -1601,7 +1658,11 @@ struct GpuRenderer(Movable):
         # `TextureStore.get`, which raises; without this the two backends
         # failed differently on the same bad input.
         for index in range(len(corners)):
-            for slot in [corners[index].texture, corners[index].emissive_map]:
+            for slot in [
+                corners[index].texture,
+                corners[index].emissive_map,
+                corners[index].alpha_map,
+            ]:
                 if slot == NO_TEXTURE:
                     continue
                 if slot.value < 0 or slot.value >= self.uploaded:
@@ -1621,6 +1682,21 @@ struct GpuRenderer(Movable):
                         "An emissive map must ignore its alpha; build the"
                         " texture with alpha=IGNORED"
                     )
+                # An alpha map holds data and must say so twice; the same
+                # question `check_alpha_map` asks on the host, asked of the
+                # descriptors this renderer uploaded.
+                var mask = corners[triangle * 3].alpha_map
+                if mask != NO_TEXTURE:
+                    if not self.is_linear[mask.value]:
+                        raise Error(
+                            "An alpha map holds data, not color; build the"
+                            " texture with color_space=LINEAR"
+                        )
+                    if not self.ignores_alpha[mask.value]:
+                        raise Error(
+                            "An alpha map must ignore its own alpha; build"
+                            " the texture with alpha=IGNORED"
+                        )
 
         if triangles > self.capacity:
             # Grow to exactly what is asked for. Frames tend to submit the
@@ -1735,10 +1811,11 @@ struct GpuRenderer(Movable):
         self.table = table^
         self.uploaded = textures.count()
         self.ignores_alpha = List[Bool]()
+        self.is_linear = List[Bool]()
         for id in range(textures.count()):
-            self.ignores_alpha.append(
-                textures.get(TextureId(id)).alpha == IGNORED
-            )
+            ref image = textures.get(TextureId(id))
+            self.ignores_alpha.append(image.alpha == IGNORED)
+            self.is_linear.append(image.color_space == LINEAR)
 
     def read_back(self) raises -> Framebuffer:
         """Copy the device render target into a host framebuffer.

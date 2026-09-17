@@ -99,6 +99,7 @@ from render.gpu import (
     triangle_state,
 )
 from render.srgb import LINEAR, ColorSpace
+from render.texture import Alpha
 from geometries.plane import plane
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION
@@ -693,7 +694,7 @@ def glowing(
     )
 
 
-def test_flattening_lays_out_twenty_floats_per_vertex() raises:
+def test_flattening_lays_out_a_lane_per_varying() raises:
     # The host side of the kernel's unpacking. If these disagree the image is
     # garbage, so the layout is asserted rather than assumed. The count is
     # spelled out because changing the stride and missing one of the kernel's
@@ -706,7 +707,7 @@ def test_flattening_lays_out_twenty_floats_per_vertex() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 20)
+    assert_equal(len(flat), 21)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -3615,6 +3616,228 @@ def test_both_backends_agree_on_a_scene_that_mixes_light_and_data() raises:
                 holds_data += 1
     assert_true(holds_data > 50, "no pixel held data")
     assert_true(holds_data < drawn, "every drawn pixel held data")
+
+
+# --- alpha maps and the alpha test, both backends ---------------------------
+
+
+def a_gpu_mask(
+    green: UInt8,
+    space: ColorSpace = LINEAR,
+    alpha: Alpha = IGNORED,
+) raises -> Texture:
+    """Return a one-texel alpha map whose green channel is `green`."""
+    var pixels = List[UInt8]()
+    pixels.append(0)
+    pixels.append(green)
+    pixels.append(255)
+    pixels.append(255)
+    return Texture(1, 1, pixels^, REPEAT, NEAREST, space, False, alpha)
+
+
+def thinned(
+    base: RasterVertex, alpha_map: TextureId, alpha_test: Float32
+) -> RasterVertex:
+    """Return `base` thinned by `alpha_map` and cut by `alpha_test`."""
+    return RasterVertex(
+        base.x,
+        base.y,
+        base.z,
+        base.inv_w,
+        base.color,
+        base.u,
+        base.v,
+        base.texture,
+        base.blend,
+        base.normal,
+        base.world,
+        base.kind,
+        base.emissive,
+        base.emissive_map,
+        base.view_depth,
+        alpha_map,
+        alpha_test,
+    )
+
+
+def thinned_pair(
+    alpha_map: TextureId, alpha_test: Float32
+) -> List[RasterVertex]:
+    """Return `mapped_quad` thinned and cut, so the uv really varies."""
+    var corners = List[RasterVertex]()
+    for base in mapped_quad(24):
+        corners.append(thinned(base, alpha_map, alpha_test))
+    return corners^
+
+
+def test_flattening_carries_the_alpha_test_in_its_own_lane() raises:
+    # It is the only float among the per-triangle state, so it rides a lane
+    # of its own rather than the integer state table.
+    var corners = List[RasterVertex]()
+    corners.append(
+        RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), alpha_test=0.375)
+    )
+    var flat = flatten(corners)
+    assert_equal(len(flat), 21)
+    assert_equal(len(flat), FLOATS_PER_VERTEX)
+    assert_equal(flat[20], Float32(0.375))
+    # And a corner that says nothing about it carries zero, no test.
+    var plain = List[RasterVertex]()
+    plain.append(RasterVertex(0, 0, 0.5, 1, FloatColor(1, 1, 1)))
+    assert_equal(flatten(plain)[20], Float32(0))
+
+
+def test_the_state_table_carries_the_alpha_map() raises:
+    var corners = List[RasterVertex]()
+    for _ in range(3):
+        corners.append(
+            RasterVertex(
+                0,
+                0,
+                0.5,
+                1,
+                FloatColor(1, 1, 1),
+                alpha_map=TextureId(7),
+            )
+        )
+    var state = triangle_state(corners)
+    assert_equal(len(state), STATE_PER_TRIANGLE)
+    assert_equal(len(state), 5)
+    assert_equal(state[4], Int32(7))
+    var plain = List[RasterVertex]()
+    for _ in range(3):
+        plain.append(RasterVertex(0, 0, 0.5, 1, FloatColor(1, 1, 1)))
+    assert_equal(triangle_state(plain)[4], Int32(NO_TEXTURE.value))
+
+
+def test_both_backends_thin_a_surface_by_the_same_green() raises:
+    # The kernel reads the map's green channel and multiplies the alpha by
+    # it, exactly as the host does, from the same sampler.
+    if skipped_for_lack_of_a_gpu("both backends thin by the same green"):
+        return
+    var textures = TextureStore()
+    var mask = textures.add(a_gpu_mask(128))
+    var corners = thinned_pair(mask, 0.0)
+    var target = RenderTarget(24, 24, BACKGROUND)
+    rasterize_all(corners, target, SHADE_TEXTURE, textures)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the map really thinned it: the same draw with no map differs.
+    var whole = render_triangles(
+        thinned_pair(NO_TEXTURE, 0.0),
+        24,
+        24,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+    )
+    assert_true(count_mismatches(gpu, whole) > 50, "the map thinned nothing")
+
+
+def test_both_backends_cut_the_same_fragments_out() raises:
+    # The alpha test discards on both sides, and a discarded fragment
+    # claims no depth on either: the kernel leaves `nearest` alone where
+    # the host defers its `claim_depth`.
+    if skipped_for_lack_of_a_gpu("both backends cut the same fragments"):
+        return
+    var textures = TextureStore()
+    var mask = textures.add(a_gpu_mask(128))
+    # A test just above the map's green, so every fragment goes.
+    var corners = thinned_pair(mask, 0.6)
+    var target = RenderTarget(24, 24, BACKGROUND)
+    rasterize_all(corners, target, SHADE_TEXTURE, textures)
+    var cpu = target.resolve()
+    var renderer = GpuRenderer(24, 24)
+    renderer.set_textures(textures)
+    renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
+    var gpu = renderer.read_back()
+    assert_equal(count_mismatches(cpu, gpu), 0)
+    # Nothing survived, so neither backend claimed a depth anywhere.
+    for y in range(24):
+        for x in range(24):
+            assert_true(cpu.depth_at(x, y) > 1.0e30, "the host claimed a depth")
+            assert_true(
+                gpu.depth_at(x, y) > 1.0e30, "the kernel claimed a depth"
+            )
+    # A test just below it keeps every fragment, and both then claim depth.
+    var kept = thinned_pair(mask, 0.4)
+    var second = RenderTarget(24, 24, BACKGROUND)
+    rasterize_all(kept, second, SHADE_TEXTURE, textures)
+    var solid = second.resolve()
+    renderer.draw(kept, BACKGROUND, SHADE_TEXTURE)
+    var device = renderer.read_back()
+    assert_equal(count_mismatches(solid, device, tolerance=1), 0)
+    assert_true(
+        solid.depth_at(12, 12) < 1.0e30, "nothing survived the looser test"
+    )
+    assert_almost_equal(
+        device.depth_at(12, 12), solid.depth_at(12, 12), atol=Float64(1e-6)
+    )
+
+
+def test_both_backends_show_what_is_behind_a_hole() raises:
+    # The near surface is cut away entirely and the far one, submitted
+    # after it and further away, is drawn in its place on both backends.
+    if skipped_for_lack_of_a_gpu("both backends show what is behind a hole"):
+        return
+    var textures = TextureStore()
+    var mask = textures.add(a_gpu_mask(0))
+    var corners = List[RasterVertex]()
+    for base in overlapping_pair():
+        corners.append(thinned(base, mask, 0.5))
+    for base in overlapping_pair():
+        corners.append(thinned(base, NO_TEXTURE, 0.0))
+    var target = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(corners, target, SHADE_TEXTURE, textures)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 24, 18, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # The surviving surface really is there, or the hole showed nothing.
+    var drawn = 24 * 18 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 100, "nothing was drawn through the hole")
+
+
+def test_the_gpu_refuses_an_alpha_map_it_cannot_sample() raises:
+    if skipped_for_lack_of_a_gpu("the gpu refuses a bad alpha map"):
+        return
+    var renderer = GpuRenderer(16, 16)
+    # Never uploaded: the kernel would index the descriptor table past its
+    # end, which is an unchecked read of device memory.
+    with assert_raises():
+        renderer.draw(
+            thinned_pair(TextureId(0), 0.0), BACKGROUND, SHADE_TEXTURE
+        )
+    # Uploaded but not stored as data, each way round.
+    var encoded = TextureStore()
+    var wrong = encoded.add(a_gpu_mask(128, SRGB, IGNORED))
+    renderer.set_textures(encoded)
+    with assert_raises():
+        renderer.draw(thinned_pair(wrong, 0.0), BACKGROUND, SHADE_TEXTURE)
+    var covered = TextureStore()
+    var alpha = covered.add(a_gpu_mask(128, LINEAR, COVERAGE))
+    renderer.set_textures(covered)
+    with assert_raises():
+        renderer.draw(thinned_pair(alpha, 0.0), BACKGROUND, SHADE_TEXTURE)
+    # `SHADE_LIT` never opens it, so it is not refused there.
+    renderer.draw(thinned_pair(alpha, 0.0), BACKGROUND, SHADE_LIT)
+
+
+def test_both_backends_refuse_an_alpha_test_they_cannot_reach() raises:
+    if skipped_for_lack_of_a_gpu("both backends refuse a bad alpha test"):
+        return
+    var renderer = GpuRenderer(8, 8)
+    var target = RenderTarget(8, 8, BACKGROUND)
+    for bad in [Float32(-0.25), Float32(2.0)]:
+        var corners = thinned_pair(NO_TEXTURE, bad)
+        with assert_raises():
+            renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
+        with assert_raises():
+            rasterize_all(corners, target, SHADE_TEXTURE)
 
 
 def main() raises:

@@ -30,6 +30,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from std.math import nan
 from units.si import Length, METER
 
 
@@ -402,6 +403,61 @@ def test_two_materials_can_share_one_texture() raises:
     assert_equal(assets.materials.get(second).map, board)
     assert_true(assets.materials.get(first).color.r > 0)
     assert_true(assets.materials.get(second).color.b > 0)
+
+
+# --- alpha map and alpha test -----------------------------------------------
+
+
+def test_a_material_thins_nothing_by_default() raises:
+    var paint = Material(Color(10, 20, 30))
+    assert_equal(paint.alpha_map, NO_TEXTURE)
+    assert_equal(paint.alpha_test, Float32(0))
+    assert_false(paint.has_alpha_map())
+    assert_false(paint.is_alpha_tested())
+
+
+def test_a_material_can_name_an_alpha_map_and_a_test() raises:
+    var leaf = Material(
+        Color(255, 255, 255), alpha_map=TextureId(3), alpha_test=0.5
+    )
+    assert_equal(leaf.alpha_map, TextureId(3))
+    assert_equal(leaf.alpha_test, Float32(0.5))
+    assert_true(leaf.has_alpha_map())
+    assert_true(leaf.is_alpha_tested())
+    # A test of exactly zero is no test, as in three.js.
+    assert_false(Material(Color(1, 2, 3), alpha_test=0.0).is_alpha_tested())
+
+
+def test_a_bad_alpha_map_id_or_test_is_rejected() raises:
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), alpha_map=TextureId(-2))
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), alpha_test=-0.5)
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), alpha_test=1.5)
+    # Not a number is worse than out of range: every comparison with it is
+    # false, so the test would silently stop testing.
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), alpha_test=nan[DType.float32]())
+    # The absence value and both ends of the range are fine.
+    _ = Material(Color(0, 0, 0), alpha_map=NO_TEXTURE, alpha_test=0.0)
+    _ = Material(Color(0, 0, 0), alpha_test=1.0)
+
+
+def test_a_normal_material_refuses_an_alpha_map_and_takes_a_test() raises:
+    # three.js's MeshNormalMaterial has no alphaMap and does have alphaTest,
+    # which cuts by the opacity alone.
+    with assert_raises():
+        _ = Material(Color(255, 255, 255), kind=NORMALS, alpha_map=TextureId(0))
+    var cut = normal_material(FRONT_SIDE, 0.4, None, 0.5)
+    assert_equal(cut.alpha_test, Float32(0.5))
+    assert_false(cut.has_alpha_map())
+    # A depth material takes both, as three.js's MeshDepthMaterial does.
+    var masked = depth_material(
+        NO_TEXTURE, FRONT_SIDE, 1.0, None, TextureId(1), 0.25
+    )
+    assert_equal(masked.alpha_map, TextureId(1))
+    assert_equal(masked.alpha_test, Float32(0.25))
 
 
 def main() raises:

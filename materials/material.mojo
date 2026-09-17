@@ -54,6 +54,20 @@ every vertex. It is a property of the material and not of the geometry, as
 in three.js, so one geometry with colors can be drawn tinted by one material
 and plain by another.
 
+`alpha_map` and `alpha_test` are the eighth and ninth: three.js's
+`alphaMap` and `alphaTest`. The map's *green* channel multiplies the
+surface's alpha, as three.js's `alphamap_fragment` reads `.g` and nothing
+else, and the test throws a fragment away whose alpha falls below it. Two
+properties rather than one because they are useful apart: a map alone makes
+a soft stencil, and a test alone makes a hard cut at the material's own
+opacity. Together they make the cut-out leaf every tree in every renderer
+is made of.
+
+An alpha map holds data, not color, so it must say so twice: `LINEAR`, or
+the sRGB curve would change what its bytes mean, and `IGNORED`, or
+filtering would weight its green by an alpha that means nothing. The
+emissive map already asks the second of those for the same reason.
+
 Two more kinds show *data* rather than light: `NORMALS` writes the
 view-space normal as a color, three.js's `MeshNormalMaterial`, and `DEPTH`
 writes how far away the surface is, near white and far black, three.js's
@@ -66,6 +80,7 @@ mapping, as they keep the uv debug view out of them.
 
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
+from std.math import isfinite
 
 
 @fieldwise_init
@@ -204,6 +219,16 @@ struct Material(ImplicitlyCopyable):
     # Whether the geometry's `color` attribute multiplies `color` at every
     # vertex, three.js's `vertexColors`. Off by default, as there.
     var vertex_colors: Bool
+    # A texture whose green channel multiplies this surface's alpha,
+    # three.js's `alphaMap`. Sampled at the same coordinate as `map`, so
+    # their transforms must agree. Data rather than color: it must be
+    # `LINEAR` and `IGNORED`, which the renderer checks.
+    var alpha_map: TextureId
+    # The alpha a fragment must reach to be drawn at all, three.js's
+    # `alphaTest`. Zero, the default, draws every fragment; anything above
+    # throws away whatever falls below it, color and depth alike, which is
+    # what cuts a shape out of a rectangle.
+    var alpha_test: Float32
 
     def __init__(
         out self,
@@ -217,6 +242,8 @@ struct Material(ImplicitlyCopyable):
         emissive_intensity: Float32 = 1.0,
         emissive_map: TextureId = NO_TEXTURE,
         vertex_colors: Bool = False,
+        alpha_map: TextureId = NO_TEXTURE,
+        alpha_test: Float32 = 0.0,
     ) raises:
         """Describe a surface.
 
@@ -249,6 +276,15 @@ struct Material(ImplicitlyCopyable):
                 or four linear floats per vertex, multiplies `color` at each
                 vertex. The renderer refuses a geometry that has none when
                 this is set.
+            alpha_map: Id of a texture whose green channel multiplies this
+                surface's alpha, or `NO_TEXTURE`. It must be built
+                `LINEAR` and `alpha=IGNORED`: it holds data, not color.
+                Sampled at the same coordinate as `map`, so a material
+                naming both must give them one transform.
+            alpha_test: The alpha a fragment must reach to be drawn, from
+                zero to one. Zero draws every fragment, as in three.js.
+                Above zero, a fragment below it is thrown away and claims
+                no depth, so what is behind shows through the hole.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -262,7 +298,10 @@ struct Material(ImplicitlyCopyable):
                 white, any emissive term and vertex colors, and `NORMALS`
                 refuses a map as well: neither shader reads them. A bare
                 integer in their place is a compile error; a wrong value
-                inside the right type is refused here.
+                inside the right type is refused here. An `alpha_map` that
+                is a negative other than `NO_TEXTURE`, an `alpha_test`
+                outside zero to one or not finite, and an `alpha_map` on a
+                `NORMALS` material are all refused too.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -278,6 +317,10 @@ struct Material(ImplicitlyCopyable):
             )
         if emissive_map.value < 0 and emissive_map != NO_TEXTURE:
             raise Error("A material's emissive map id cannot be negative")
+        if alpha_map.value < 0 and alpha_map != NO_TEXTURE:
+            raise Error("A material's alpha map id cannot be negative")
+        if not isfinite(alpha_test) or alpha_test < 0 or alpha_test > 1:
+            raise Error("An alpha test must be between zero and one")
         if emissive_intensity < 0:
             raise Error("An emissive intensity cannot be negative")
         if kind == BASIC and (
@@ -309,7 +352,9 @@ struct Material(ImplicitlyCopyable):
                     "A normal or depth material has no vertex colors: it"
                     " shows data, not light"
                 )
-            if kind == NORMALS and map != NO_TEXTURE:
+            if kind == NORMALS and (
+                map != NO_TEXTURE or alpha_map != NO_TEXTURE
+            ):
                 raise Error(
                     "A normal material has no map: it shows the normal, not"
                     " an image"
@@ -323,6 +368,8 @@ struct Material(ImplicitlyCopyable):
         self.emissive_intensity = emissive_intensity
         self.emissive_map = emissive_map
         self.vertex_colors = vertex_colors
+        self.alpha_map = alpha_map
+        self.alpha_test = alpha_test
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -345,6 +392,15 @@ struct Material(ImplicitlyCopyable):
         """Return True if this surface shows data rather than light: a
         `NORMALS` or `DEPTH` material. See `MaterialKind.is_data`."""
         return self.kind.is_data()
+
+    def has_alpha_map(self) -> Bool:
+        """Return True if this material names a texture that thins it."""
+        return self.alpha_map != NO_TEXTURE
+
+    def is_alpha_tested(self) -> Bool:
+        """Return True if a fragment of this surface can be thrown away for
+        being too transparent, three.js's `alphaTest` above zero."""
+        return self.alpha_test > 0
 
     def is_textured(self) -> Bool:
         """Return True if this material names a texture."""
@@ -397,6 +453,7 @@ def normal_material(
     side: Side = FRONT_SIDE,
     opacity: Float32 = 1.0,
     blending: Optional[Blending] = None,
+    alpha_test: Float32 = 0.0,
 ) raises -> Material:
     """Return a material that shows the view-space normal as a color,
     three.js's `MeshNormalMaterial`.
@@ -411,13 +468,16 @@ def normal_material(
         opacity: One for an opaque surface, less to see through it.
         blending: `OPAQUE` or `BLEND`, or unset to infer it from the
             opacity.
+        alpha_test: The alpha a fragment must reach to be drawn. A normal
+            material has no map, so this cuts by the opacity alone.
 
     Returns:
         The material, of kind `NORMALS`.
 
     Raises:
-        Error: If `opacity` is outside zero to one, or `side` or
-            `blending` holds a value that is none of its named constants.
+        Error: If `opacity` or `alpha_test` is outside zero to one, or
+            `side` or `blending` holds a value that is none of its named
+            constants.
     """
     return Material(
         Color(255, 255, 255),
@@ -425,6 +485,7 @@ def normal_material(
         opacity=opacity,
         blending=blending,
         kind=NORMALS,
+        alpha_test=alpha_test,
     )
 
 
@@ -433,6 +494,8 @@ def depth_material(
     side: Side = FRONT_SIDE,
     opacity: Float32 = 1.0,
     blending: Optional[Blending] = None,
+    alpha_map: TextureId = NO_TEXTURE,
+    alpha_test: Float32 = 0.0,
 ) raises -> Material:
     """Return a material that shows how far away the surface is, near white
     and far black: three.js's `MeshDepthMaterial` under `BasicDepthPacking`.
@@ -450,14 +513,18 @@ def depth_material(
         blending: `OPAQUE` or `BLEND`, or unset to infer it from the
             opacity. A map's own alpha cannot be inferred from here, so a
             cut-out image needs `BLEND` to blend.
+        alpha_map: Id of a texture whose green channel thins the surface,
+            or `NO_TEXTURE`. three.js's `MeshDepthMaterial` has one.
+        alpha_test: The alpha a fragment must reach to be drawn.
 
     Returns:
         The material, of kind `DEPTH`.
 
     Raises:
-        Error: If `map` is a negative other than `NO_TEXTURE`, `opacity` is
-            outside zero to one, or `side` or `blending` holds a value that
-            is none of its named constants.
+        Error: If `map` or `alpha_map` is a negative other than
+            `NO_TEXTURE`, `opacity` or `alpha_test` is outside zero to one,
+            or `side` or `blending` holds a value that is none of its named
+            constants.
     """
     return Material(
         Color(255, 255, 255),
@@ -466,6 +533,8 @@ def depth_material(
         opacity=opacity,
         blending=blending,
         kind=DEPTH,
+        alpha_map=alpha_map,
+        alpha_test=alpha_test,
     )
 
 
