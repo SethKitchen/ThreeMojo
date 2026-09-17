@@ -119,8 +119,8 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [DirectionalLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#directional) [#51](https://github.com/SethKitchen/ThreeMojo/issues/51)
 - [x] [PointLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#point): inverse-square falloff, decay, cutoff distance [#52](https://github.com/SethKitchen/ThreeMojo/issues/52)
 - [x] [Per-fragment Lambert shading](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#shading) [#53](https://github.com/SethKitchen/ThreeMojo/issues/53)
-- [ ] SpotLight [#54](https://github.com/SethKitchen/ThreeMojo/issues/54)
-- [ ] HemisphereLight [#55](https://github.com/SethKitchen/ThreeMojo/issues/55)
+- [x] [SpotLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#spot): a bulb with a cone, a penumbra and a target, on both rasterizers [#54](https://github.com/SethKitchen/ThreeMojo/issues/54)
+- [x] [HemisphereLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#hemisphere): a sky color and a ground color, blended by how far a surface is turned toward the sky [#55](https://github.com/SethKitchen/ThreeMojo/issues/55)
 - [ ] RectAreaLight [#56](https://github.com/SethKitchen/ThreeMojo/issues/56)
 - [ ] Shadow maps [#57](https://github.com/SethKitchen/ThreeMojo/issues/57)
 

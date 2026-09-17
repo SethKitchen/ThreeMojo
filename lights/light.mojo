@@ -49,18 +49,34 @@ is in the world -- see `render.rasterizer.RasterVertex.world`.
 Its falloff is three.js's: the light divided by distance raised to `decay`,
 with the physically correct default of two, and optionally faded to nothing
 at `distance`. Both numbers live on `Light` so a list of lights stays a list
-of one type; the other two kinds carry zeros they never read.
+of one type; the other kinds carry zeros they never read.
+
+**A hemisphere light is the fourth: a sky and a ground.** Outdoors, a
+surface that faces up sees the sky and one that faces down sees the ground,
+and they are not the same color. three.js's `HemisphereLight` is two colors
+blended by how far a surface is turned toward the sky, a term that adds like
+the ambient one and, like it, has no Lambert cutoff: a surface facing
+straight down is lit by the ground, not by nothing. Its node says which way
+the sky is, exactly as a directional light's node says which way the sun is.
+
+**A spot light is the fifth: a bulb with a cone.** three.js's `SpotLight`
+is a point light that shines only within `angle` of the way it points, with
+a rim that is hard when `penumbra` is zero and softens toward the axis as it
+grows. It points from its node toward its `target`, which is the world
+origin unless another node is named -- and a directional light can name a
+target the same way, three.js's `DirectionalLight.target`.
 """
 
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
+from units.si import Angle, DEGREE, RADIAN
 
 
 @fieldwise_init
 struct LightKind(Equatable, ImplicitlyCopyable, Writable):
-    """Which of the three kinds of light this is, as a type rather than an
+    """Which of the five kinds of light this is, as a type rather than an
     int.
 
     See `core.object3d.NodeId` for why. The type stops a bare integer at
@@ -71,33 +87,57 @@ struct LightKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is `AMBIENT`, `DIRECTIONAL` or `POINT`."""
-        return self == AMBIENT or self == DIRECTIONAL or self == POINT
+        """Return True if this is `AMBIENT`, `DIRECTIONAL`, `POINT`,
+        `HEMISPHERE` or `SPOT`."""
+        return (
+            self == AMBIENT
+            or self == DIRECTIONAL
+            or self == POINT
+            or self == HEMISPHERE
+            or self == SPOT
+        )
 
 
 # Fills every surface equally, whichever way it faces. No direction, no node.
 comptime AMBIENT = LightKind(0)
 # Parallel rays from infinitely far away: the sun. Its direction comes from
-# its node's world position, pointing from there towards the world origin,
-# which is what three.js's default target gives.
+# its node's world position, pointing from there towards its target, which
+# is the world origin unless a node is named -- what three.js's default
+# target gives.
 comptime DIRECTIONAL = LightKind(1)
 # Light spreading out from a point: a bulb. Its node's world position is where
 # it is, and its light falls off with distance from there.
 comptime POINT = LightKind(2)
+# A sky color from one side and a ground color from the other, blended by
+# how far a surface is turned toward the sky. Its node's world position,
+# seen from the origin, is which way the sky is.
+comptime HEMISPHERE = LightKind(3)
+# A bulb that shines only within a cone: a point light with an angle, a
+# penumbra and a target it points at.
+comptime SPOT = LightKind(4)
 
 # three.js's default `decay`: the inverse-square law, which is what light does
 # in the real world.
 comptime PHYSICAL_DECAY = Float32(2.0)
 # three.js's default `distance`: no cutoff, the light reaches everything.
 comptime NO_CUTOFF = Float32(0.0)
+# three.js's default spot `angle`, a third of pi: sixty degrees from the axis
+# to the rim.
+comptime DEFAULT_SPOT_ANGLE = Angle(60.0, DEGREE)
+# The widest cone three.js allows: a quarter turn from the axis, so the cone
+# is at most a half space.
+comptime WIDEST_SPOT_ANGLE = Angle(90.0, DEGREE)
+# What the kinds that have no cone, no ground and no target carry there.
+comptime _NO_ANGLE = Angle(0.0, RADIAN)
+comptime _BLACK = Color(0, 0, 0)
 
 
 @fieldwise_init
 struct Light(ImplicitlyCopyable):
     """One light in a scene: a kind, a color, a strength, and maybe a node.
 
-    A tagged struct rather than a trait with three implementations, for the
-    reason `Material.side` is a small value type: there are three kinds, they
+    A tagged struct rather than a trait with five implementations, for the
+    reason `Material.side` is a small value type: there are five kinds, they
     differ by what they read from their node, and a list of them has to be a
     list of one type.
     """
@@ -111,13 +151,13 @@ struct Light(ImplicitlyCopyable):
     # Which node gives this light its direction, or its position. `NO_PARENT`
     # for an ambient light, which has neither.
     var node: NodeId
-    # How fast a point light's light falls off: it is divided by distance to
-    # this power. Two is physically correct and the default; zero means it
-    # does not fall off at all. Read only by a point light.
+    # How fast a point or spot light's light falls off: it is divided by
+    # distance to this power. Two is physically correct and the default; zero
+    # means it does not fall off at all. Read only by those two kinds.
     var decay: Float32
-    # Beyond this distance a point light contributes nothing, and it fades
-    # smoothly to nothing on the way there. Zero, the default, means no
-    # cutoff. Read only by a point light.
+    # Beyond this distance a point or spot light contributes nothing, and it
+    # fades smoothly to nothing on the way there. Zero, the default, means no
+    # cutoff. Read only by those two kinds.
     var distance: Float32
     # Which layers the light is on. A camera lights its meshes with only
     # the lights that share a layer with it, as three.js's `projectObject`
@@ -126,6 +166,21 @@ struct Light(ImplicitlyCopyable):
     # alone to begin with, so a scene that never mentions layers lights as
     # it did before.
     var layers: Layers
+    # The color of the light from below, three.js's `groundColor`, scaled by
+    # the same intensity as `color`, which is the sky. Read only by a
+    # hemisphere light; black on every other kind.
+    var ground: Color
+    # Half the width of a spot light's cone, from its axis to its rim.
+    # three.js's `angle`. An `Angle` rather than a number, so degrees and
+    # radians cannot be confused. Read only by a spot light; zero elsewhere.
+    var angle: Angle
+    # How much of a spot light's cone is a soft rim: zero for a hard edge,
+    # one for a fade all the way in from the rim to the axis. three.js's
+    # `penumbra`. Read only by a spot light.
+    var penumbra: Float32
+    # Which node a directional or spot light shines toward, three.js's
+    # `target`, or `NO_PARENT` for the world origin. Read only by those two.
+    var target: NodeId
 
     def radiance(self) -> FloatColor:
         """Return the light this contributes, decoded and scaled.
@@ -134,12 +189,45 @@ struct Light(ImplicitlyCopyable):
         added to other lights, and neither is arithmetic you can do on bytes.
         Alpha is not light and is left at one.
         """
-        return FloatColor(
-            srgb_to_linear(Float32(self.color.r) / 255) * self.intensity,
-            srgb_to_linear(Float32(self.color.g) / 255) * self.intensity,
-            srgb_to_linear(Float32(self.color.b) / 255) * self.intensity,
-            1.0,
-        )
+        return _radiance(self.color, self.intensity)
+
+    def ground_radiance(self) -> FloatColor:
+        """Return the light a hemisphere light's ground contributes, decoded
+        and scaled by the same intensity as its sky.
+
+        Black for every other kind, which carries a black ground.
+        """
+        return _radiance(self.ground, self.intensity)
+
+
+def _radiance(color: Color, intensity: Float32) -> FloatColor:
+    """Return `color` decoded from sRGB and scaled by `intensity`."""
+    return FloatColor(
+        srgb_to_linear(Float32(color.r) / 255) * intensity,
+        srgb_to_linear(Float32(color.g) / 255) * intensity,
+        srgb_to_linear(Float32(color.b) / 255) * intensity,
+        1.0,
+    )
+
+
+def _bare(
+    kind: LightKind, color: Color, intensity: Float32, node: NodeId
+) -> Light:
+    """Return a light of `kind` with every kind-specific number at its zero,
+    on layer zero alone, aimed at the origin."""
+    return Light(
+        kind,
+        color,
+        intensity,
+        node,
+        0.0,
+        0.0,
+        Layers(),
+        _BLACK,
+        _NO_ANGLE,
+        0.0,
+        NO_PARENT,
+    )
 
 
 def ambient_light(color: Color, intensity: Float32 = 1.0) raises -> Light:
@@ -158,13 +246,16 @@ def ambient_light(color: Color, intensity: Float32 = 1.0) raises -> Light:
     """
     if intensity < 0:
         raise Error("A light's intensity cannot be negative")
-    return Light(AMBIENT, color, intensity, NO_PARENT, 0.0, 0.0, Layers())
+    return _bare(AMBIENT, color, intensity, NO_PARENT)
 
 
 def directional_light(
-    color: Color, node: NodeId, intensity: Float32 = 1.0
+    color: Color,
+    node: NodeId,
+    intensity: Float32 = 1.0,
+    target: NodeId = NO_PARENT,
 ) raises -> Light:
-    """Return a light shining from a node's position towards the origin.
+    """Return a light shining from a node's position towards its target.
 
     The node gives the direction and nothing else: a directional light is
     infinitely far away, so only which way it points matters, and moving it
@@ -176,6 +267,9 @@ def directional_light(
         color: Its color.
         node: The node whose world position points away from the light.
         intensity: How bright, multiplying the color.
+        target: The node the light shines toward, three.js's `target`, or
+            `NO_PARENT` for the world origin, which is where three.js's
+            default target sits.
 
     Returns:
         The light.
@@ -185,7 +279,9 @@ def directional_light(
     """
     if intensity < 0:
         raise Error("A light's intensity cannot be negative")
-    return Light(DIRECTIONAL, color, intensity, node, 0.0, 0.0, Layers())
+    var light = _bare(DIRECTIONAL, color, intensity, node)
+    light.target = target
+    return light
 
 
 def point_light(
@@ -225,4 +321,103 @@ def point_light(
         raise Error("A point light's decay cannot be negative")
     if distance < 0:
         raise Error("A point light's distance cannot be negative")
-    return Light(POINT, color, intensity, node, decay, distance, Layers())
+    var light = _bare(POINT, color, intensity, node)
+    light.decay = decay
+    light.distance = distance
+    return light
+
+
+def hemisphere_light(
+    sky: Color, ground: Color, node: NodeId, intensity: Float32 = 1.0
+) raises -> Light:
+    """Return a light that is one color from the sky and another from the
+    ground.
+
+    three.js's `HemisphereLight`. A surface facing the sky gets the sky
+    color, one facing the ground gets the ground color, and one edge-on gets
+    half of each. Neither has a Lambert cutoff: it is the light of a whole
+    hemisphere, not of one lamp, so it adds to every surface as the ambient
+    term does. The node's world position, seen from the origin, is which way
+    the sky is, as a directional light's node is which way the sun is; a
+    node straight above the origin puts the sky up.
+
+    Args:
+        sky: The color from above.
+        ground: The color from below.
+        node: The node whose world position points at the sky.
+        intensity: How bright, multiplying both colors.
+
+    Returns:
+        The light.
+
+    Raises:
+        Error: If the intensity is negative.
+    """
+    if intensity < 0:
+        raise Error("A light's intensity cannot be negative")
+    var light = _bare(HEMISPHERE, sky, intensity, node)
+    light.ground = ground
+    return light
+
+
+def spot_light(
+    color: Color,
+    node: NodeId,
+    intensity: Float32 = 1.0,
+    distance: Float32 = NO_CUTOFF,
+    angle: Angle = DEFAULT_SPOT_ANGLE,
+    penumbra: Float32 = 0.0,
+    decay: Float32 = PHYSICAL_DECAY,
+    target: NodeId = NO_PARENT,
+) raises -> Light:
+    """Return a bulb that shines only within a cone.
+
+    three.js's `SpotLight`, with its numbers in its constructor's order and
+    at its defaults. The node is where the bulb is, and the light points
+    from there toward `target`. A surface is lit as a point light lights it,
+    scaled by how far inside the cone it lies: fully within `angle * (1 -
+    penumbra)` of the axis, not at all beyond `angle`, and smoothly between.
+
+    Args:
+        color: Its color.
+        node: The node whose world position the light shines from.
+        intensity: How bright at one meter, multiplying the color.
+        distance: Where the light stops, fading smoothly to nothing as it
+            gets there. Zero for no cutoff.
+        angle: Half the width of the cone, from its axis to its rim. At most
+            a quarter turn.
+        penumbra: How much of the cone is a soft rim, from zero for a hard
+            edge to one for a fade all the way in to the axis.
+        decay: The power of distance the light is divided by. Two is the
+            inverse-square law of a real bulb.
+        target: The node the light points at, or `NO_PARENT` for the world
+            origin.
+
+    Returns:
+        The light.
+
+    Raises:
+        Error: If the intensity, distance or decay is negative, the angle is
+            not above zero and at most a quarter turn -- a cone of nothing
+            lights nothing, and one past a half space is no longer a cone --
+            or the penumbra is outside zero to one.
+    """
+    if intensity < 0:
+        raise Error("A light's intensity cannot be negative")
+    if distance < 0:
+        raise Error("A spot light's distance cannot be negative")
+    if angle.value <= 0 or angle > WIDEST_SPOT_ANGLE:
+        raise Error(
+            "A spot light's angle must be above zero and at most a quarter turn"
+        )
+    if penumbra < 0 or penumbra > 1:
+        raise Error("A spot light's penumbra must be between zero and one")
+    if decay < 0:
+        raise Error("A spot light's decay cannot be negative")
+    var light = _bare(SPOT, color, intensity, node)
+    light.distance = distance
+    light.angle = angle
+    light.penumbra = penumbra
+    light.decay = decay
+    light.target = target
+    return light

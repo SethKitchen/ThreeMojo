@@ -44,6 +44,7 @@ from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
 from lights.lighting import Lighting, falloff
+from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.rasterizer import (
     SHADE_LIT,
@@ -250,15 +251,20 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
 
     Three floats of ambient, then six per directional light -- a unit
     direction and the light it carries -- then eight per point light: where
-    it is, the light it carries, its decay and its cutoff. Already decoded
-    and scaled by `Lighting`, so the device does no color-space work and
-    both backends sum exactly the same numbers.
+    it is, the light it carries, its decay and its cutoff. Then nine per
+    hemisphere light: which way the sky is, what the sky carries and what
+    the ground carries. Then thirteen per spot light: where it is, which way
+    it points, what it carries, its decay, its cutoff, and the cosines of
+    its cone and of its penumbra. Already decoded and scaled by `Lighting`,
+    so the device does no color-space work and both backends sum exactly
+    the same numbers.
 
     Args:
         lighting: The scene's lights, resolved to world space.
 
     Returns:
-        `3 + 6 * count + 8 * point_count` floats.
+        `3 + 6 * count + 8 * point_count + 9 * hemisphere_count + 13 *
+        spot_count` floats.
     """
     var flat = List[Float32]()
     flat.append(lighting.ambient.r)
@@ -284,6 +290,36 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(radiance.b)
         flat.append(lighting.decays[index])
         flat.append(lighting.cutoffs[index])
+    for index in range(lighting.hemisphere_count()):
+        ref up = lighting.sky_directions[index]
+        flat.append(up.x)
+        flat.append(up.y)
+        flat.append(up.z)
+        ref sky = lighting.skies[index]
+        flat.append(sky.r)
+        flat.append(sky.g)
+        flat.append(sky.b)
+        ref ground = lighting.grounds[index]
+        flat.append(ground.r)
+        flat.append(ground.g)
+        flat.append(ground.b)
+    for index in range(lighting.spot_count()):
+        ref position = lighting.spot_positions[index]
+        flat.append(position.x)
+        flat.append(position.y)
+        flat.append(position.z)
+        ref axis = lighting.spot_directions[index]
+        flat.append(axis.x)
+        flat.append(axis.y)
+        flat.append(axis.z)
+        ref radiance = lighting.spot_radiances[index]
+        flat.append(radiance.r)
+        flat.append(radiance.g)
+        flat.append(radiance.b)
+        flat.append(lighting.spot_decays[index])
+        flat.append(lighting.spot_cutoffs[index])
+        flat.append(lighting.cone_cosines[index])
+        flat.append(lighting.penumbra_cosines[index])
     return flat^
 
 
@@ -291,6 +327,8 @@ def _arriving(
     lights: MutPointer[Float32, MutAnyOrigin],
     count: Int,
     points: Int,
+    hemispheres: Int,
+    spots: Int,
     nx: Float32,
     ny: Float32,
     nz: Float32,
@@ -338,6 +376,76 @@ def _arriving(
         red += lights[unsafe_offset=at + 3] * reach
         green += lights[unsafe_offset=at + 4] * reach
         blue += lights[unsafe_offset=at + 5] * reach
+    var first_sky = first_point + points * 8
+    for index in range(hemispheres):
+        var at = first_sky + index * 9
+        # How far the surface is turned toward the sky, then ground to sky
+        # by that weight, exactly as `Lighting.intensity_at` mixes them.
+        var weight = (
+            0.5
+            * (
+                nx * lights[unsafe_offset=at]
+                + ny * lights[unsafe_offset=at + 1]
+                + nz * lights[unsafe_offset=at + 2]
+            )
+            + 0.5
+        )
+        var lift_r = (
+            lights[unsafe_offset=at + 6]
+            + (lights[unsafe_offset=at + 3] - lights[unsafe_offset=at + 6])
+            * weight
+        )
+        var lift_g = (
+            lights[unsafe_offset=at + 7]
+            + (lights[unsafe_offset=at + 4] - lights[unsafe_offset=at + 7])
+            * weight
+        )
+        var lift_b = (
+            lights[unsafe_offset=at + 8]
+            + (lights[unsafe_offset=at + 5] - lights[unsafe_offset=at + 8])
+            * weight
+        )
+        red += lift_r
+        green += lift_g
+        blue += lift_b
+    var first_spot = first_sky + hemispheres * 9
+    for index in range(spots):
+        var at = first_spot + index * 13
+        var dx = lights[unsafe_offset=at] - px
+        var dy = lights[unsafe_offset=at + 1] - py
+        var dz = lights[unsafe_offset=at + 2] - pz
+        var distance = sqrt(dx * dx + dy * dy + dz * dz)
+        if distance == 0:
+            continue
+        # The cosine of the angle off the cone's axis, and from it how far
+        # inside the cone this is -- the host's arithmetic, in its order.
+        var angle_cos = (
+            dx * lights[unsafe_offset=at + 3]
+            + dy * lights[unsafe_offset=at + 4]
+            + dz * lights[unsafe_offset=at + 5]
+        ) / distance
+        var rim = smoothstep(
+            lights[unsafe_offset=at + 11],
+            lights[unsafe_offset=at + 12],
+            angle_cos,
+        )
+        if rim <= 0:
+            continue
+        var lambert = (nx * dx + ny * dy + nz * dz) / distance
+        if lambert <= 0:
+            continue
+        var reach = (
+            lambert
+            * rim
+            * falloff(
+                distance,
+                lights[unsafe_offset=at + 9],
+                lights[unsafe_offset=at + 10],
+            )
+        )
+        red += lights[unsafe_offset=at + 6] * reach
+        green += lights[unsafe_offset=at + 7] * reach
+        blue += lights[unsafe_offset=at + 8] * reach
     return Vector3(red, green, blue)
 
 
@@ -716,6 +824,8 @@ def rasterize_kernel(
     lights: MutPointer[Float32, MutAnyOrigin],
     light_count: Int32,
     point_count: Int32,
+    hemisphere_count: Int32,
+    spot_count: Int32,
 ):
     """Color one pixel from the nearest triangle that covers it."""
     var x = Int(global_idx.x)
@@ -890,6 +1000,8 @@ def rasterize_kernel(
                 lights,
                 Int(light_count),
                 Int(point_count),
+                Int(hemisphere_count),
+                Int(spot_count),
                 nx,
                 ny,
                 nz,
@@ -1123,9 +1235,10 @@ struct GpuRenderer(Movable):
     var pixels: DeviceBuffer[DType.uint8]
     var depth: DeviceBuffer[DType.float32]
     var corners: DeviceBuffer[DType.float32]
-    # Three floats of ambient, six per directional light and eight per point
-    # light. Grown on demand like the corner buffer; a scene's lights rarely
-    # change count, so this settles after the first frame.
+    # Three floats of ambient, six per directional light, eight per point
+    # light, nine per hemisphere light and thirteen per spot light. Grown on
+    # demand like the corner buffer; a scene's lights rarely change count,
+    # so this settles after the first frame.
     var lights: DeviceBuffer[DType.float32]
     var light_room: Int
     # One texture id per triangle, beside the vertex buffer rather than in it.
@@ -1373,6 +1486,8 @@ struct GpuRenderer(Movable):
             self.lights.unsafe_ptr(),
             Int32(lighting.count()),
             Int32(lighting.point_count()),
+            Int32(lighting.hemisphere_count()),
+            Int32(lighting.spot_count()),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),

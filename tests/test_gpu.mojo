@@ -61,7 +61,13 @@ from render.texture import (
     Texture,
     checkerboard,
 )
-from lights.light import ambient_light, directional_light, point_light
+from lights.light import (
+    ambient_light,
+    directional_light,
+    hemisphere_light,
+    point_light,
+    spot_light,
+)
 from lights.lighting import Lighting
 from render.gpu import (
     FLOATS_PER_VERTEX,
@@ -70,6 +76,7 @@ from render.gpu import (
     GpuRenderer,
     available,
     flatten,
+    flatten_lights,
     flatten_textures,
     pack,
     render,
@@ -1045,6 +1052,182 @@ def test_both_backends_agree_under_point_lights() raises:
     )
     var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
     assert_true(drawn > 100, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_flattening_lights_lays_out_the_sky_and_the_cone() raises:
+    # Nine floats per hemisphere light after the point lights, thirteen per
+    # spot light after those, in the order the kernel unpacks them.
+    var scene = Scene()
+    var up = Object3D()
+    up.set_position(0, 4, 0)
+    var up_node = scene.add(up^)
+    var bulb = Object3D()
+    bulb.set_position(0, 2, 0)
+    var bulb_node = scene.add(bulb^)
+    scene.update()
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.5))
+    scene.add_light(
+        hemisphere_light(Color(255, 255, 255), Color(0, 0, 0), up_node, 0.25)
+    )
+    scene.add_light(
+        spot_light(
+            Color(255, 255, 255),
+            bulb_node,
+            2.0,
+            7.0,
+            Angle(60.0, DEGREE),
+            0.5,
+            1.0,
+        )
+    )
+    var lighting = Lighting(scene)
+    var flat = flatten_lights(lighting)
+    assert_equal(len(flat), 3 + 9 + 13)
+    assert_almost_equal(flat[0], Float32(0.5), atol=Float64(1e-6))
+    # The sky is straight up, white at a quarter, over a black ground.
+    assert_almost_equal(flat[4], Float32(1), atol=Float64(1e-6))
+    assert_almost_equal(flat[6], Float32(0.25), atol=Float64(1e-6))
+    assert_almost_equal(flat[9], Float32(0), atol=Float64(1e-6))
+    # The bulb two meters up, pointing down at the origin, so its axis from
+    # the target toward it is +y; twice white; decay one and a cutoff of
+    # seven; and the cosines of sixty and thirty degrees.
+    assert_almost_equal(flat[13], Float32(2), atol=Float64(1e-6))
+    assert_almost_equal(flat[16], Float32(1), atol=Float64(1e-6))
+    assert_almost_equal(flat[18], Float32(2), atol=Float64(1e-6))
+    assert_almost_equal(flat[21], Float32(1), atol=Float64(1e-6))
+    assert_almost_equal(flat[22], Float32(7), atol=Float64(1e-6))
+    assert_almost_equal(flat[23], Float32(0.5), atol=Float64(1e-6))
+    assert_almost_equal(flat[24], Float32(0.8660254), atol=Float64(1e-6))
+
+
+def test_both_backends_agree_under_hemisphere_and_spot_lights() raises:
+    # The point-light scene again under a sky and two cones: one soft-edged
+    # and aimed at the origin, one hard-edged with a cutoff and aimed at a
+    # node. Every branch of both new kinds runs on both sides -- inside,
+    # on the rim, outside, behind -- and the images must agree.
+    if skipped_for_lack_of_a_gpu(
+        "both backends agree under hemisphere and spot lights"
+    ):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
+    var floor = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER), 2, 2)
+    )
+
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_position(0, -0.7, 0)
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var left = Object3D()
+    left.set_position(-0.9, 0, 0)
+    left.set_euler(Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.9, 0, 0.4)
+    var right_node = scene.add(right^)
+    var sky = Object3D()
+    sky.set_position(0.2, 3.0, 0.1)
+    var sky_node = scene.add(sky^)
+    scene.add_light(
+        hemisphere_light(
+            Color(120, 160, 255), Color(120, 80, 40), sky_node, 0.6
+        )
+    )
+    var soft = Object3D()
+    soft.set_position(0.5, 2.5, 1.5)
+    var soft_node = scene.add(soft^)
+    scene.add_light(
+        spot_light(
+            Color(255, 220, 180), soft_node, 3.0, 0.0, Angle(35.0, DEGREE), 0.4
+        )
+    )
+    var hard = Object3D()
+    hard.set_position(-1.8, 1.2, 1.2)
+    var hard_node = scene.add(hard^)
+    scene.add_light(
+        spot_light(
+            Color(255, 120, 120),
+            hard_node,
+            2.0,
+            4.0,
+            Angle(25.0, DEGREE),
+            0.0,
+            2.0,
+            left_node,
+        )
+    )
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.05))
+    scene.update()
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.8, 3.2), Vector3(0, 0, 0))
+
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            floor,
+            assets.materials.add(Material(Color(200, 200, 200))),
+            ground_node,
+        )
+    )
+    meshes.append(
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 140, 40))), left_node
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(Material(Color(90, 190, 255))),
+            right_node,
+        )
+    )
+
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    var lighting = Lighting(scene)
+    assert_equal(lighting.hemisphere_count(), 1)
+    assert_equal(lighting.spot_count(), 2)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    for triangle in range(len(corners) // 3):  # pragma: no branch
+        rasterize_shaded(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+            target,
+            SHADE_LIT,
+            assets.textures,
+            lighting,
+        )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 300, "the scene barely drew anything")
+    # The cones really show: the floor is not lit evenly.
+    var darkest = UInt8(255)
+    var brightest = UInt8(0)
+    for x in range(48):
+        var shown = cpu.get_pixel(x, 30)
+        if shown.r < darkest:
+            darkest = shown.r
+        if shown.r > brightest:
+            brightest = shown.r
+    assert_true(Int(brightest) - Int(darkest) > 40, "the cones left no pool")
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 

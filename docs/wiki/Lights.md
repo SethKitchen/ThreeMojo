@@ -1,8 +1,8 @@
 # Lights
 
-`lights/light.mojo` and `lights/lighting.mojo`. A scene holds ambient, directional and point lights. The renderer resolves them once per frame and evaluates them at every fragment.
+`lights/light.mojo` and `lights/lighting.mojo`. A scene holds ambient, directional, point, hemisphere and spot lights. The renderer resolves them once per frame and evaluates them at every fragment.
 
-three.js: `AmbientLight`, `DirectionalLight`, `PointLight`.
+three.js: `AmbientLight`, `DirectionalLight`, `PointLight`, `HemisphereLight`, `SpotLight`.
 
 ## Add a light
 
@@ -10,13 +10,17 @@ three.js: `AmbientLight`, `DirectionalLight`, `PointLight`.
 scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
 scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
 scene.add_light(point_light(Color(255, 200, 120), bulb_node, 0.5))
+scene.add_light(hemisphere_light(Color(120, 160, 255), Color(120, 80, 40), sky_node, 0.6))
+scene.add_light(spot_light(Color(255, 220, 180), beam_node, 2.0, angle=Angle(30.0, DEGREE), penumbra=0.3))
 ```
 
-| Builder | Arguments | Meaning |
-|---|---|---|
-| `ambient_light(color, intensity=1.0)` | | The same light on every surface. |
-| `directional_light(color, node, intensity=1.0)` | | Parallel rays from the node's world position towards the origin. |
-| `point_light(color, node, intensity=1.0, decay=2.0, distance=0.0)` | | A bulb at the node's world position. |
+| Builder | Meaning |
+|---|---|
+| `ambient_light(color, intensity=1.0)` | The same light on every surface. |
+| `directional_light(color, node, intensity=1.0, target=NO_PARENT)` | Parallel rays from the node's world position toward its target. |
+| `point_light(color, node, intensity=1.0, decay=2.0, distance=0.0)` | A bulb at the node's world position. |
+| `hemisphere_light(sky, ground, node, intensity=1.0)` | A sky color from the node's direction and a ground color from the other side. |
+| `spot_light(color, node, intensity=1.0, distance=0.0, angle=60°, penumbra=0.0, decay=2.0, target=NO_PARENT)` | A bulb at the node's world position that shines in a cone toward its target. |
 
 Intensity multiplies the color. Values above one are allowed. A negative intensity, decay or distance raises.
 
@@ -34,7 +38,7 @@ A constant term added to every surface. A scene with no lights renders black. A 
 
 ## Directional
 
-Only the direction matters. Moving the node twice as far changes nothing. The node's world position must not be the origin.
+Only the direction matters. Moving the node twice as far changes nothing. The light shines from the node's world position toward its `target`. The target is the world origin by default, as in three.js. Pass a node id as `target` to aim the light at that node. The node must not sit on its target.
 
 Parent the node to a moving object, and the light moves with it.
 
@@ -43,6 +47,24 @@ Parent the node to a moving object, and the light moves with it.
 The light at a surface is the intensity divided by the distance to the power of `decay`. Two is the inverse-square law. Zero is no falloff. With a `distance`, the light fades smoothly to nothing at that range.
 
 A surface facing away from the bulb gets nothing from it. A surface on top of the bulb gets nothing either, because there is no direction.
+
+## Hemisphere
+
+Two colors, blended by how far a surface is turned toward the sky. A surface that faces the sky gets the sky color. A surface that faces the ground gets the ground color. A surface edge-on gets half of each. There is no Lambert cutoff: a surface facing straight down is lit by the ground, not by nothing.
+
+The node's world position, seen from the origin, is the direction of the sky. A node straight above the origin puts the sky up. The node must not sit at the origin. One `intensity` scales both colors.
+
+three.js: `HemisphereLight(skyColor, groundColor, intensity)`.
+
+## Spot
+
+A point light with a cone. The light shines from the node's world position toward its `target`, the world origin by default. `angle` is half the width of the cone, from the axis to the rim, as an `Angle`. The default is sixty degrees. The widest cone is ninety degrees. A bare number does not compile.
+
+`penumbra` is how much of the cone is a soft rim, from zero to one. At zero the rim is hard. At one the light fades from the axis to the rim. Inside `angle * (1 - penumbra)` of the axis the surface gets the full light. Beyond `angle` it gets nothing. Between the two it gets a smooth step.
+
+`decay` and `distance` work as they do for a point light. The node must not sit on its target.
+
+three.js: `SpotLight(color, intensity, distance, angle, penumbra, decay)` and `SpotLight.target`. The spot light's `map` and shadow are not ported.
 
 ## Lighting
 
@@ -53,11 +75,19 @@ A surface facing away from the bulb gets nothing from it. A surface on top of th
 | `ambient: FloatColor` | The sum of the ambient lights, linear. |
 | `count()` | The number of directional lights. |
 | `point_count()` | The number of point lights. |
+| `hemisphere_count()` | The number of hemisphere lights. |
+| `spot_count()` | The number of spot lights. |
 | `intensity_at(normal, position) -> FloatColor` | The light that reaches a surface with that unit normal at that world position. |
 | `shade(base, normal, position) -> FloatColor` | `base` decoded from sRGB and multiplied by `intensity_at`. |
 | `Lighting.uniform()` | Light of one everywhere. The identity for a hand-built triangle. |
 
-`Lighting(scene)` raises in three cases. A light names a node the scene does not have. A directional light sits at the origin. A light's kind is none of the three.
+`Lighting(scene)` raises in three cases:
+
+- A light names a node or a target the scene does not have.
+- A directional, hemisphere or spot light has no direction. Its node sits at the origin, or on its target.
+- A light's kind is none of the five.
+
+The kinds are summed in one fixed order: ambient, directional, point, hemisphere, spot. Both rasterizers use that order, so their sums round alike.
 
 ## Rules
 
@@ -65,6 +95,7 @@ A surface facing away from the bulb gets nothing from it. A surface on top of th
 - Nothing is clamped until the image is resolved. Two lamps can overexpose a white surface.
 - Adding a light does not make the scene stale.
 - A light's layers are its own, not its node's. An ambient light has no node and has layers like any other light.
+- A spot light's angle is an `Angle`. `tests/compile_fail/` proves that a bare float is refused.
 
 ## Example
 

@@ -17,17 +17,23 @@ from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from lights.light import (
     AMBIENT,
+    DEFAULT_SPOT_ANGLE,
     DIRECTIONAL,
+    HEMISPHERE,
     POINT,
+    SPOT,
     Light,
     LightKind,
     ambient_light,
     directional_light,
+    hemisphere_light,
     point_light,
+    spot_light,
 )
+from math.smoothstep import smoothstep
 from lights.lighting import Lighting
 from math.vector3 import Vector3
-from units.si import Angle, DEGREE
+from units.si import Angle, DEGREE, RADIAN
 from render.framebuffer import Color, FloatColor
 from std.testing import (
     TestSuite,
@@ -469,10 +475,24 @@ def test_a_light_of_an_unknown_kind_is_refused() raises:
     assert_true(not LightKind(7).is_valid())
     var scene = Scene()
     scene.add_light(
-        Light(LightKind(7), WHITE, 1.0, NO_PARENT, 0.0, 0.0, Layers())
+        Light(
+            LightKind(7),
+            WHITE,
+            1.0,
+            NO_PARENT,
+            0.0,
+            0.0,
+            Layers(),
+            WHITE,
+            Angle(0.0, DEGREE),
+            0.0,
+            NO_PARENT,
+        )
     )
     with assert_raises():
         _ = Lighting(scene)
+    assert_true(HEMISPHERE.is_valid())
+    assert_true(SPOT.is_valid())
 
 
 # --- layers -----------------------------------------------------------------
@@ -544,6 +564,386 @@ def test_lighting_with_no_camera_asking_takes_every_light() raises:
     assert_equal(two.ambient.r, Float32(1))
     assert_equal(two.count(), 0)
     assert_equal(two.point_count(), 1)
+
+
+# --- hemisphere lights -------------------------------------------------------
+
+
+def sky_from(
+    x: Float32, y: Float32, z: Float32, sky: Color, ground: Color
+) raises -> Lighting:
+    """Return lighting with one hemisphere light whose sky lies toward a
+    point, and nothing else."""
+    var scene = scene_with_lamp_at(x, y, z)
+    scene.add_light(hemisphere_light(sky, ground, NodeId(0)))
+    return Lighting(scene)
+
+
+def test_a_hemisphere_light_carries_a_sky_and_a_ground() raises:
+    var light = hemisphere_light(
+        Color(200, 220, 255), Color(80, 60, 40), NodeId(2), 0.5
+    )
+    assert_equal(light.kind, HEMISPHERE)
+    assert_equal(light.node, NodeId(2))
+    assert_equal(light.color.b, UInt8(255))
+    assert_equal(light.ground.r, UInt8(80))
+    assert_equal(light.intensity, Float32(0.5))
+    # Both colors are decoded and scaled by the one intensity.
+    var white = hemisphere_light(WHITE, WHITE, NodeId(0), 0.5)
+    assert_almost_equal(white.radiance().g, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(white.ground_radiance().g, Float32(0.5), atol=TOLERANCE)
+    # Every other kind carries a black ground it never reads.
+    var sun = directional_light(WHITE, NodeId(0))
+    assert_almost_equal(sun.ground_radiance().r, Float32(0), atol=TOLERANCE)
+    with assert_raises():
+        _ = hemisphere_light(WHITE, WHITE, NodeId(0), -0.5)
+
+
+def test_a_hemisphere_light_lights_each_side_with_its_own_color() raises:
+    # Sky white and ground red, the sky straight up. Facing up sees the sky,
+    # facing down sees the ground -- not nothing: there is no Lambert cutoff
+    # -- and edge-on sees half of each.
+    var lighting = sky_from(0, 1, 0, WHITE, Color(255, 0, 0))
+    assert_equal(lighting.hemisphere_count(), 1)
+    assert_equal(lighting.count(), 0)
+    var up = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(up.r, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(up.g, Float32(1), atol=TOLERANCE)
+    var down = lighting.intensity_at(Vector3(0, -1, 0), ORIGIN)
+    assert_almost_equal(down.r, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(down.g, Float32(0), atol=TOLERANCE)
+    var side = lighting.intensity_at(Vector3(1, 0, 0), ORIGIN)
+    assert_almost_equal(side.r, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(side.g, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(side.b, Float32(0.5), atol=TOLERANCE)
+
+
+def test_a_hemisphere_light_adds_to_the_other_lights() raises:
+    # A quarter of ambient under a white sky: a surface facing the sky gets
+    # one and a quarter, and the light does not clamp.
+    var scene = scene_with_lamp_at(0, 1, 0)
+    scene.add_light(hemisphere_light(WHITE, Color(0, 0, 0), NodeId(0)))
+    scene.add_light(ambient_light(WHITE, 0.25))
+    var lighting = Lighting(scene)
+    var up = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(up.r, Float32(1.25), atol=TOLERANCE)
+
+
+def test_a_hemisphere_lights_sky_is_where_its_node_is() raises:
+    # The node off to +x puts the sky there: a surface facing +x sees it.
+    var lighting = sky_from(3, 0, 0, WHITE, Color(0, 0, 0))
+    assert_almost_equal(
+        lighting.sky_directions[0].x, Float32(1), atol=TOLERANCE
+    )
+    var facing = lighting.intensity_at(Vector3(1, 0, 0), ORIGIN)
+    assert_almost_equal(facing.r, Float32(1), atol=TOLERANCE)
+    var away = lighting.intensity_at(Vector3(-1, 0, 0), ORIGIN)
+    assert_almost_equal(away.r, Float32(0), atol=TOLERANCE)
+
+
+def test_a_hemisphere_light_at_the_origin_is_rejected() raises:
+    # No direction for the sky. A mistake rather than a dark light.
+    var scene = scene_with_lamp_at(0, 0, 0)
+    scene.add_light(hemisphere_light(WHITE, WHITE, NodeId(0)))
+    with assert_raises():
+        _ = Lighting(scene)
+    var missing = Scene()
+    missing.add_light(hemisphere_light(WHITE, WHITE, NodeId(4)))
+    with assert_raises():
+        _ = Lighting(missing)
+
+
+# --- spot lights ---------------------------------------------------------------
+
+
+def spot_at(
+    x: Float32,
+    y: Float32,
+    z: Float32,
+    angle: Angle = DEFAULT_SPOT_ANGLE,
+    penumbra: Float32 = 0.0,
+    decay: Float32 = 2.0,
+    distance: Float32 = 0.0,
+) raises -> Lighting:
+    """Return lighting with one white spot light at a position, aimed at
+    the origin, and nothing else."""
+    var scene = scene_with_lamp_at(x, y, z)
+    scene.add_light(
+        spot_light(WHITE, NodeId(0), 1.0, distance, angle, penumbra, decay)
+    )
+    return Lighting(scene)
+
+
+def test_a_spot_light_carries_its_cone_and_its_target() raises:
+    var light = spot_light(
+        Color(255, 200, 120),
+        NodeId(3),
+        0.5,
+        9.0,
+        Angle(20.0, DEGREE),
+        0.25,
+        1.5,
+        NodeId(7),
+    )
+    assert_equal(light.kind, SPOT)
+    assert_equal(light.node, NodeId(3))
+    assert_equal(light.intensity, Float32(0.5))
+    assert_equal(light.distance, Float32(9))
+    assert_almost_equal(light.angle.to(DEGREE), Float32(20), atol=Float64(1e-4))
+    assert_equal(light.penumbra, Float32(0.25))
+    assert_equal(light.decay, Float32(1.5))
+    assert_equal(light.target, NodeId(7))
+    # The defaults are three.js's: no cutoff, sixty degrees, a hard rim,
+    # the inverse square, aimed at the origin.
+    var plain = spot_light(WHITE, NodeId(0))
+    assert_equal(plain.distance, Float32(0))
+    assert_almost_equal(plain.angle.to(DEGREE), Float32(60), atol=Float64(1e-4))
+    assert_equal(plain.penumbra, Float32(0))
+    assert_equal(plain.decay, Float32(2))
+    assert_equal(plain.target, NO_PARENT)
+
+
+def test_a_spot_light_rejects_bad_numbers() raises:
+    with assert_raises():
+        _ = spot_light(WHITE, NodeId(0), -1.0)
+    with assert_raises():
+        _ = spot_light(WHITE, NodeId(0), 1.0, -1.0)
+    # A cone of nothing lights nothing; one past a half space is not a cone.
+    with assert_raises():
+        _ = spot_light(WHITE, NodeId(0), 1.0, 0.0, Angle(0.0, DEGREE))
+    with assert_raises():
+        _ = spot_light(WHITE, NodeId(0), 1.0, 0.0, Angle(91.0, DEGREE))
+    _ = spot_light(WHITE, NodeId(0), 1.0, 0.0, Angle(90.0, DEGREE))
+    with assert_raises():
+        _ = spot_light(WHITE, NodeId(0), 1.0, 0.0, DEFAULT_SPOT_ANGLE, -0.1)
+    with assert_raises():
+        _ = spot_light(WHITE, NodeId(0), 1.0, 0.0, DEFAULT_SPOT_ANGLE, 1.1)
+    with assert_raises():
+        _ = spot_light(
+            WHITE, NodeId(0), 1.0, 0.0, DEFAULT_SPOT_ANGLE, 0.5, -1.0
+        )
+
+
+def test_a_spot_light_lights_only_inside_its_cone() raises:
+    # Two meters up, pointing down at the origin, thirty degrees to the rim.
+    # Straight below is on the axis and gets the inverse-square quarter. Half
+    # a meter aside is sixteen degrees off the axis, inside: the cosine of
+    # that angle, over the squared distance. Two meters aside is forty-five
+    # degrees off, outside, and gets nothing at all.
+    var lighting = spot_at(0, 2, 0, Angle(30.0, DEGREE))
+    assert_equal(lighting.spot_count(), 1)
+    assert_equal(lighting.point_count(), 0)
+    var below = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(below.r, Float32(0.25), atol=TOLERANCE)
+    var inside = lighting.intensity_at(Vector3(0, 1, 0), Vector3(0.5, 0, 0))
+    assert_almost_equal(inside.r, Float32(0.2282688), atol=Float64(1e-5))
+    var outside = lighting.intensity_at(Vector3(0, 1, 0), Vector3(2, 0, 0))
+    assert_almost_equal(outside.r, Float32(0), atol=TOLERANCE)
+
+
+def test_a_spot_lights_penumbra_softens_the_rim() raises:
+    # Forty-five degrees to the rim, and the inner half of the cone is full:
+    # the rim starts to soften at twenty-two and a half degrees. Half a
+    # meter aside is well inside and full; one meter aside is twenty-six
+    # and a half degrees off, on the soft rim, and gets ninety-five percent
+    # of what the bulb alone would give.
+    var lighting = spot_at(0, 2, 0, Angle(45.0, DEGREE), 0.5)
+    assert_almost_equal(
+        lighting.cone_cosines[0], Float32(0.70710678), atol=Float64(1e-6)
+    )
+    assert_almost_equal(
+        lighting.penumbra_cosines[0], Float32(0.92387953), atol=Float64(1e-6)
+    )
+    var full = lighting.intensity_at(Vector3(0, 1, 0), Vector3(0.5, 0, 0))
+    assert_almost_equal(full.r, Float32(0.2282688), atol=Float64(1e-5))
+    var soft = lighting.intensity_at(Vector3(0, 1, 0), Vector3(1, 0, 0))
+    assert_almost_equal(soft.r, Float32(0.1698761), atol=Float64(1e-5))
+    # Without a penumbra the same point is inside a hard rim and full.
+    var hard = spot_at(0, 2, 0, Angle(45.0, DEGREE))
+    var crisp = hard.intensity_at(Vector3(0, 1, 0), Vector3(1, 0, 0))
+    assert_almost_equal(crisp.r, Float32(0.8944272 / 5), atol=Float64(1e-5))
+    var beyond = hard.intensity_at(Vector3(0, 1, 0), Vector3(3, 0, 0))
+    assert_almost_equal(beyond.r, Float32(0), atol=TOLERANCE)
+
+
+def test_smoothstep_rises_between_its_edges_and_steps_when_they_meet() raises:
+    assert_equal(smoothstep(0.2, 0.8, 0.1), Float32(0))
+    assert_equal(smoothstep(0.2, 0.8, 0.2), Float32(0))
+    assert_almost_equal(smoothstep(0.2, 0.8, 0.5), Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(
+        smoothstep(0.0, 1.0, 0.25), Float32(0.15625), atol=TOLERANCE
+    )
+    assert_equal(smoothstep(0.2, 0.8, 0.8), Float32(1))
+    assert_equal(smoothstep(0.2, 0.8, 0.9), Float32(1))
+    # Two equal edges are a hard step rather than a division by zero: a
+    # spot light with no penumbra.
+    assert_equal(smoothstep(0.5, 0.5, 0.4), Float32(0))
+    assert_equal(smoothstep(0.5, 0.5, 0.5), Float32(0))
+    assert_equal(smoothstep(0.5, 0.5, 0.6), Float32(1))
+
+
+def test_a_spot_light_falls_off_and_cuts_off_like_a_bulb() raises:
+    # The same falloff as a point light, on the axis: decay one halves at
+    # two meters, and a cutoff at four meters scales by the square of one
+    # minus a half to the fourth.
+    var gentle = spot_at(0, 2, 0, DEFAULT_SPOT_ANGLE, 0.0, 1.0)
+    assert_almost_equal(
+        gentle.intensity_at(Vector3(0, 1, 0), ORIGIN).r,
+        Float32(0.5),
+        atol=TOLERANCE,
+    )
+    var cut = spot_at(0, 2, 0, DEFAULT_SPOT_ANGLE, 0.0, 2.0, 4.0)
+    assert_almost_equal(
+        cut.intensity_at(Vector3(0, 1, 0), ORIGIN).r,
+        Float32(0.25 * 0.9375 * 0.9375),
+        atol=TOLERANCE,
+    )
+
+
+def test_a_spot_light_adds_nothing_behind_a_surface_or_on_it() raises:
+    var lighting = spot_at(0, 2, 0)
+    # Facing away from the bulb, inside the cone: Lambert says nothing.
+    var away = lighting.intensity_at(Vector3(0, -1, 0), ORIGIN)
+    assert_almost_equal(away.r, Float32(0), atol=TOLERANCE)
+    # Exactly on the bulb: no direction to be lit from.
+    var on = lighting.intensity_at(Vector3(0, 1, 0), Vector3(0, 2, 0))
+    assert_almost_equal(on.r, Float32(0), atol=TOLERANCE)
+
+
+def test_a_spot_light_points_at_its_target_node() raises:
+    # The bulb at (0, 2, 0) aimed at a node at (2, 2, 0) shines along +x. A
+    # surface a meter along that way, facing back, is on the axis and gets
+    # everything; one a meter the other way is behind the bulb and gets
+    # nothing, cone or no cone.
+    var scene = scene_with_lamp_at(0, 2, 0)
+    var aim = Object3D()
+    aim.set_position(2, 2, 0)
+    var target = scene.add(aim^)
+    scene.update()
+    scene.add_light(spot_light(WHITE, NodeId(0), target=target))
+    var lighting = Lighting(scene)
+    assert_almost_equal(
+        lighting.spot_directions[0].x, Float32(-1), atol=TOLERANCE
+    )
+    var ahead = lighting.intensity_at(Vector3(-1, 0, 0), Vector3(1, 2, 0))
+    assert_almost_equal(ahead.r, Float32(1), atol=TOLERANCE)
+    var behind = lighting.intensity_at(Vector3(1, 0, 0), Vector3(-1, 2, 0))
+    assert_almost_equal(behind.r, Float32(0), atol=TOLERANCE)
+
+
+def test_a_spot_light_needs_a_direction() raises:
+    # On its target there is no way to point: at the origin aimed at the
+    # origin, or on the node it is aimed at.
+    var scene = scene_with_lamp_at(0, 0, 0)
+    scene.add_light(spot_light(WHITE, NodeId(0)))
+    with assert_raises():
+        _ = Lighting(scene)
+    var stacked = scene_with_lamp_at(1, 2, 3)
+    var same = Object3D()
+    same.set_position(1, 2, 3)
+    var target = stacked.add(same^)
+    stacked.update()
+    stacked.add_light(spot_light(WHITE, NodeId(0), target=target))
+    with assert_raises():
+        _ = Lighting(stacked)
+
+
+def test_a_spot_light_naming_a_missing_node_or_target_is_rejected() raises:
+    var scene = Scene()
+    scene.add_light(spot_light(WHITE, NodeId(4)))
+    with assert_raises():
+        _ = Lighting(scene)
+    var aimed = scene_with_lamp_at(0, 2, 0)
+    aimed.add_light(spot_light(WHITE, NodeId(0), target=NodeId(9)))
+    with assert_raises():
+        _ = Lighting(aimed)
+
+
+def test_a_spot_light_is_carried_by_its_node() raises:
+    # Hung a meter below a pivot five meters up, aimed at the origin: the
+    # bulb is four meters up, and a surface below it gets a sixteenth.
+    var scene = Scene()
+    var pivot = Object3D()
+    pivot.set_position(0, 5, 0)
+    var parent = scene.add(pivot^)
+    var bulb = Object3D()
+    bulb.set_position(0, -1, 0)
+    var child = scene.attach(bulb^, parent)
+    scene.add_light(spot_light(WHITE, child))
+    scene.update()
+    var lighting = Lighting(scene)
+    assert_almost_equal(
+        lighting.spot_positions[0].y, Float32(4), atol=TOLERANCE
+    )
+    var below = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    assert_almost_equal(below.r, Float32(1.0 / 16), atol=TOLERANCE)
+
+
+# --- a directional light's target ---------------------------------------------
+
+
+def test_a_directional_light_points_at_its_target_node() raises:
+    # From (0, 5, 0) toward a target at (0, 5, 5): the light travels along
+    # +z, so seen from the target the lamp lies along -z, and that is the
+    # direction the Lambert term is taken against.
+    var scene = scene_with_lamp_at(0, 5, 0)
+    var aim = Object3D()
+    aim.set_position(0, 5, 5)
+    var target = scene.add(aim^)
+    scene.update()
+    scene.add_light(directional_light(WHITE, NodeId(0), target=target))
+    var lighting = Lighting(scene)
+    assert_almost_equal(lighting.directions[0].z, Float32(-1), atol=TOLERANCE)
+    assert_almost_equal(lighting.directions[0].y, Float32(0), atol=TOLERANCE)
+    var facing = lighting.intensity_at(Vector3(0, 0, -1), ORIGIN)
+    assert_almost_equal(facing.r, Float32(1), atol=TOLERANCE)
+    # Aimed at the origin, the default, the same lamp shines straight down.
+    assert_equal(directional_light(WHITE, NodeId(0)).target, NO_PARENT)
+
+
+def test_a_directional_light_on_its_target_is_rejected() raises:
+    var scene = scene_with_lamp_at(0, 5, 0)
+    var same = Object3D()
+    same.set_position(0, 5, 0)
+    var target = scene.add(same^)
+    scene.update()
+    scene.add_light(directional_light(WHITE, NodeId(0), target=target))
+    with assert_raises():
+        _ = Lighting(scene)
+    var missing = scene_with_lamp_at(0, 5, 0)
+    missing.add_light(directional_light(WHITE, NodeId(0), target=NodeId(9)))
+    with assert_raises():
+        _ = Lighting(missing)
+
+
+# --- the new kinds and layers ------------------------------------------------
+
+
+def test_the_new_kinds_start_on_layer_zero_and_follow_the_camera() raises:
+    assert_equal(hemisphere_light(WHITE, WHITE, NodeId(0)).layers, Layers())
+    assert_equal(spot_light(WHITE, NodeId(0)).layers, Layers())
+    var scene = scene_with_lamp_at(0, 2, 0)
+    var sky = hemisphere_light(WHITE, WHITE, NodeId(0))
+    sky.layers.set(4)
+    scene.add_light(sky)
+    var beam = spot_light(WHITE, NodeId(0))
+    beam.layers.set(5)
+    scene.add_light(beam)
+    var watching = Layers()
+    watching.set(4)
+    var sky_only = Lighting(scene, visible=watching)
+    assert_equal(sky_only.hemisphere_count(), 1)
+    assert_equal(sky_only.spot_count(), 0)
+    watching.set(5)
+    var beam_only = Lighting(scene, visible=watching)
+    assert_equal(beam_only.hemisphere_count(), 0)
+    assert_equal(beam_only.spot_count(), 1)
+    var every = Lighting(scene)
+    assert_equal(every.hemisphere_count(), 1)
+    assert_equal(every.spot_count(), 1)
+    var none = Lighting.uniform()
+    assert_equal(none.hemisphere_count(), 0)
+    assert_equal(none.spot_count(), 0)
 
 
 def main() raises:
