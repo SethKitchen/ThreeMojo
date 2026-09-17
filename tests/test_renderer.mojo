@@ -30,8 +30,10 @@ from materials.material import (
     BASIC,
     DEPTH,
     NORMALS,
+    PHONG,
     depth_material,
     normal_material,
+    phong_material,
 )
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
@@ -4124,6 +4126,103 @@ def test_lit_shading_ignores_the_alpha_map() raises:
     var whole = rendered(ignored, scene, assets, meshes, camera_at(0, 0, 4))
     assert_equal(gone.get_pixel(WIDTH // 2, HEIGHT // 2).a, UInt8(0))
     assert_equal(whole.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(255))
+
+
+# --- phong ------------------------------------------------------------------
+
+
+def lamp_scene() raises -> Scene:
+    """Return a scene with a node at the origin and one white lamp up the z
+    axis, so a sheet facing the camera is lit straight on."""
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.update()
+    return scene^
+
+
+def test_a_phong_sheet_is_brighter_seen_head_on() raises:
+    # Nothing moves but the camera, and a highlight is the one term that
+    # answers to where the camera stands. A lambert sheet does not move.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var shiny = assets.materials.add(
+        phong_material(Color(0, 0, 0), NO_TEXTURE, Color(128, 128, 128), 30.0)
+    )
+    var dull = assets.materials.add(Material(Color(120, 120, 120)))
+    var scene = lamp_scene()
+    var glossy = sheet_of(assets, shiny)
+    var plain = sheet_of(assets, dull)
+    var head_on = rendered(renderer, scene, assets, glossy, camera_at(0, 0, 4))
+    var aside = rendered(renderer, scene, assets, glossy, camera_at(4, 0, 4))
+    var bright = head_on.get_pixel(WIDTH // 2, HEIGHT // 2).r
+    var dim = aside.get_pixel(WIDTH // 2, HEIGHT // 2).r
+    assert_true(bright > dim + 40, "the highlight did not follow the camera")
+    assert_true(dim > 0, "the highlight vanished from the side")
+    # The same two cameras on a lambert sheet see the same brightness.
+    var flat_on = rendered(renderer, scene, assets, plain, camera_at(0, 0, 4))
+    var flat_aside = rendered(
+        renderer, scene, assets, plain, camera_at(4, 0, 4)
+    )
+    assert_equal(
+        flat_on.get_pixel(WIDTH // 2, HEIGHT // 2).r,
+        flat_aside.get_pixel(WIDTH // 2, HEIGHT // 2).r,
+    )
+
+
+def test_a_phong_sphere_shows_a_spot_a_lambert_one_does_not() raises:
+    # The same sphere, the same light: the phong one has a bright spot
+    # where the normal points half way between the light and the camera.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var ball = assets.geometries.add(sphere(Length(1.0, METER), 24, 16))
+    var shiny = assets.materials.add(
+        phong_material(
+            Color(60, 60, 60), NO_TEXTURE, Color(255, 255, 255), 40.0
+        )
+    )
+    var dull = assets.materials.add(Material(Color(60, 60, 60)))
+    var scene = lamp_scene()
+    var glossy = List[Mesh]()
+    glossy.append(Mesh(ball, shiny, NodeId(0)))
+    var plain = List[Mesh]()
+    plain.append(Mesh(ball, dull, NodeId(0)))
+    var spotted = rendered(renderer, scene, assets, glossy, camera_at(0, 0, 4))
+    var flat = rendered(renderer, scene, assets, plain, camera_at(0, 0, 4))
+    assert_true(
+        count_bright(spotted) > count_bright(flat) + 10,
+        "the phong sphere had no highlight",
+    )
+    # And away from the spot the two agree: the diffuse term is the same.
+    assert_equal(
+        spotted.get_pixel(WIDTH // 2, HEIGHT // 2 - 6).r,
+        flat.get_pixel(WIDTH // 2, HEIGHT // 2 - 6).r,
+    )
+
+
+def test_a_phong_material_is_lit_like_a_lambert_one() raises:
+    # Without a specular it is a lambert surface, which is what says the
+    # highlight is the only thing the kind adds.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var dull = assets.materials.add(Material(Color(200, 100, 50), kind=PHONG))
+    var lambert = assets.materials.add(Material(Color(200, 100, 50)))
+    var scene = scene_with_node_at(0)
+    var one = rendered(
+        renderer, scene, assets, sheet_of(assets, dull), camera_at(0, 0, 4)
+    )
+    var two = rendered(
+        renderer, scene, assets, sheet_of(assets, lambert), camera_at(0, 0, 4)
+    )
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(one.get_pixel(x, y).r, two.get_pixel(x, y).r)
+            assert_equal(one.get_pixel(x, y).g, two.get_pixel(x, y).g)
 
 
 def main() raises:

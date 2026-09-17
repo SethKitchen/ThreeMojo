@@ -5,11 +5,13 @@
 
 """Tests for `render.rasterizer`."""
 
+from core.layers import Layers
 from materials.material import (
     BASIC,
     DEPTH,
     LAMBERT,
     NORMALS,
+    PHONG,
     Blending,
     MaterialKind,
     depth_material,
@@ -2530,6 +2532,230 @@ def test_an_alpha_map_that_is_not_data_is_refused_before_a_fragment() raises:
         )
     # `SHADE_LIT` never opens it, so it is not refused there.
     rasterize_all(corners, target, SHADE_LIT, textures)
+
+
+# --- the phong highlight ----------------------------------------------------
+
+
+def lit_along_z_from(z: Float32) raises -> Lighting:
+    """Return one white directional light shining from up the z axis, with
+    the camera `z` meters up it."""
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.update()
+    return Lighting(scene, Layers.all(), Vector3(0, 0, z))
+
+
+def test_a_phong_triangle_adds_a_highlight_a_lambert_one_has_not() raises:
+    # The same black surface under the same light: a lambert one is black
+    # and a phong one shows its highlight, which is four times a white
+    # specular head on and so clamps to white.
+    var lighting = lit_along_z_from(4)
+    var dull = data_quad(LAMBERT, alpha=1.0)
+    var flat = data_pixel(dull, lighting=lighting)
+    var shiny = phong_quad(FloatColor(1, 1, 1), 30.0)
+    var bright = data_pixel(shiny, lighting=lighting)
+    # `data_quad` carries a white color, so the lambert one is already
+    # white; a black one shows the difference the highlight makes.
+    var black = black_phong_quad(FloatColor(1, 1, 1), 30.0)
+    var only = data_pixel(black, lighting=lighting)
+    assert_same_color(only.shown(4, 4), Color(255, 255, 255))
+    # A black specular is not quite nothing: three.js's F_Schlick rises
+    # toward one at a grazing angle, and head on it leaves a couple of
+    # levels rather than zero.
+    var none = black_phong_quad(FloatColor(0, 0, 0), 30.0)
+    assert_true(
+        data_pixel(none, lighting=lighting).shown(4, 4).r < 4,
+        "a black specular reflected a visible highlight",
+    )
+    # And the lit white surface is brighter with the highlight than without.
+    assert_true(
+        bright.color_at(4, 4).r > flat.color_at(4, 4).r,
+        "the highlight added nothing",
+    )
+
+
+def test_a_dimmer_specular_gives_a_measurable_highlight() raises:
+    # A black surface with a mid-gray specular, head on: the lobe is
+    # sixteen, the geometric term a quarter, and the Fresnel weight leaves
+    # the gray almost as it is. Four times the decoded gray, near enough.
+    var lighting = lit_along_z_from(4)
+    var sheen = FloatColor(srgb=Color(128, 128, 128)).r
+    var shown = data_pixel(
+        black_phong_quad(FloatColor(sheen, sheen, sheen), 30.0),
+        lighting=lighting,
+    )
+    var expected = FloatColor(sheen * 4, sheen * 4, sheen * 4, 1.0).encode()
+    var pixel = shown.shown(4, 4)
+    assert_true(
+        _apart_by(pixel.r, expected.r) <= 1, "the highlight is the wrong size"
+    )
+    # Half as shiny is half as bright at the center.
+    var wider = data_pixel(
+        black_phong_quad(FloatColor(sheen, sheen, sheen), 14.0),
+        lighting=lighting,
+    )
+    assert_true(wider.color_at(4, 4).r < shown.color_at(4, 4).r)
+
+
+def _apart_by(a: UInt8, b: UInt8) -> Int:
+    """Return how many levels apart two channel values are."""
+    if a > b:
+        return Int(a) - Int(b)
+    return Int(b) - Int(a)
+
+
+def phong_corner(
+    x: Float32,
+    y: Float32,
+    specular: FloatColor,
+    shininess: Float32,
+    color: FloatColor = FloatColor(1, 1, 1),
+    texture: TextureId = NO_TEXTURE,
+    glow: FloatColor = FloatColor(0.0, 0.0, 0.0),
+    depth: Float32 = 0,
+) -> RasterVertex:
+    """Return a phong corner facing the camera, at the world origin."""
+    return RasterVertex(
+        x,
+        y,
+        0.5,
+        1,
+        color,
+        0,
+        0,
+        texture,
+        OPAQUE,
+        Vector3(0, 0, 1),
+        Vector3(0, 0, 0),
+        PHONG,
+        glow,
+        NO_TEXTURE,
+        depth,
+        NO_TEXTURE,
+        0,
+        specular,
+        shininess,
+    )
+
+
+def phong_quad(
+    specular: FloatColor,
+    shininess: Float32,
+    color: FloatColor = FloatColor(1, 1, 1),
+    texture: TextureId = NO_TEXTURE,
+    glow: FloatColor = FloatColor(0.0, 0.0, 0.0),
+    depth: Float32 = 0,
+) -> List[RasterVertex]:
+    """Return two phong triangles covering an eight-pixel target."""
+    var corners = List[RasterVertex]()
+    var places: List[Tuple[Float32, Float32]] = [
+        (Float32(0), Float32(0)),
+        (Float32(8), Float32(0)),
+        (Float32(8), Float32(8)),
+        (Float32(0), Float32(0)),
+        (Float32(8), Float32(8)),
+        (Float32(0), Float32(8)),
+    ]
+    for place in places:
+        corners.append(
+            phong_corner(
+                place[0],
+                place[1],
+                specular,
+                shininess,
+                color,
+                texture,
+                glow,
+                depth,
+            )
+        )
+    return corners^
+
+
+def black_phong_quad(
+    specular: FloatColor, shininess: Float32
+) -> List[RasterVertex]:
+    """Return `phong_quad` with a black base color, so only the highlight
+    reaches the pixel."""
+    return phong_quad(specular, shininess, FloatColor(0, 0, 0))
+
+
+def test_the_highlight_is_not_tinted_by_the_color_or_the_texture() raises:
+    # three.js adds `directSpecular` to the outgoing light rather than
+    # multiplying it into `diffuseColor`, which is why a red plastic ball
+    # has a white highlight. A black surface and a red one send the same.
+    var lighting = lit_along_z_from(4)
+    var sheen = FloatColor(srgb=Color(64, 64, 64)).r
+    var specular = FloatColor(sheen, sheen, sheen)
+    var black = data_pixel(
+        phong_quad(specular, 30.0, FloatColor(0, 0, 0)), lighting=lighting
+    )
+    var red = data_pixel(
+        phong_quad(specular, 30.0, FloatColor(1, 0, 0)), lighting=lighting
+    )
+    # Red keeps its own red and adds the same green as the black one.
+    assert_equal(red.shown(4, 4).g, black.shown(4, 4).g)
+    assert_true(red.shown(4, 4).r > black.shown(4, 4).r)
+    # A texture that empties the color leaves the highlight alone too.
+    var textures = TextureStore()
+    var dark = textures.add(a_mask(0, SRGB, IGNORED))
+    var mapped = data_pixel(
+        phong_quad(specular, 30.0, FloatColor(1, 1, 1), dark),
+        lighting=lighting,
+        textures=textures,
+    )
+    assert_equal(mapped.shown(4, 4).g, black.shown(4, 4).g)
+
+
+def test_the_highlight_is_added_before_the_fog() raises:
+    # The fog veils the finished color, highlight included, as it veils the
+    # glow: three.js mixes it last of all.
+    var lighting = lit_along_z_from(4)
+    var sheen = FloatColor(srgb=Color(128, 128, 128)).r
+    var quad = phong_quad(
+        FloatColor(sheen, sheen, sheen), 30.0, FloatColor(0, 0, 0), depth=2
+    )
+    var clear = data_pixel(quad, lighting=lighting)
+    var veiled = data_pixel(
+        phong_quad(
+            FloatColor(sheen, sheen, sheen), 30.0, FloatColor(0, 0, 0), depth=2
+        ),
+        gray_fog(),
+        lighting,
+    )
+    assert_true(
+        veiled.shown(4, 4).r != clear.shown(4, 4).r,
+        "the fog left the highlight alone",
+    )
+
+
+def test_corners_that_disagree_about_shininess_are_rejected() raises:
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var sharp = phong_quad(FloatColor(1, 1, 1), 30.0)
+    var soft = phong_quad(FloatColor(1, 1, 1), 5.0)
+    with assert_raises():
+        rasterize_shaded(sharp[0], soft[1], sharp[2], target)
+    with assert_raises():
+        rasterize_shaded(sharp[0], sharp[1], soft[2], target)
+    rasterize_shaded(sharp[0], sharp[1], sharp[2], target)
+
+
+def test_a_shininess_that_is_not_a_number_is_refused() raises:
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    for bad in [Float32(-1.0), nan[DType.float32]()]:
+        var corners = phong_quad(FloatColor(1, 1, 1), bad)
+        with assert_raises():
+            rasterize_shaded(corners[0], corners[1], corners[2], target)
+        for workers in [1, 4]:
+            with assert_raises():
+                rasterize_all(corners, target, workers=workers)
+    # Zero and a very tight lobe are both legal.
+    rasterize_all(phong_quad(FloatColor(1, 1, 1), 0.0), target)
+    rasterize_all(phong_quad(FloatColor(1, 1, 1), 1000.0), target)
 
 
 def main() raises:

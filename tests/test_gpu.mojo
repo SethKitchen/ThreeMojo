@@ -82,9 +82,14 @@ from render.tonemap import (
 )
 from render.rasterizer import rasterize_all
 from units.si import InverseLength, PER_METER
+from core.layers import Layers
+from renderers.renderer import camera_position
 from render.gpu import (
     FLOATS_PER_VERTEX,
     FOG_FLOATS,
+    LIGHTS_AMBIENT,
+    LIGHTS_EYE,
+    LIGHTS_FIRST,
     STATE_PER_TRIANGLE,
     TABLE_COLUMNS,
     GpuRenderer,
@@ -109,8 +114,10 @@ from materials.material import (
     DOUBLE_SIDE,
     LAMBERT,
     NORMALS,
+    PHONG,
     depth_material,
     normal_material,
+    phong_material,
 )
 from render.target import RenderTarget
 from render.rasterizer import (
@@ -707,7 +714,7 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 21)
+    assert_equal(len(flat), 25)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -1093,8 +1100,9 @@ def test_both_backends_agree_under_point_lights() raises:
 
 
 def test_flattening_lights_lays_out_the_sky_and_the_cone() raises:
-    # Nine floats per hemisphere light after the point lights, thirteen per
-    # spot light after those, in the order the kernel unpacks them.
+    # The camera first, then the ambient term, then nine floats per
+    # hemisphere light after the point lights and thirteen per spot light
+    # after those, in the order the kernel unpacks them.
     var scene = Scene()
     var up = Object3D()
     up.set_position(0, 4, 0)
@@ -1120,22 +1128,24 @@ def test_flattening_lights_lays_out_the_sky_and_the_cone() raises:
     )
     var lighting = Lighting(scene)
     var flat = flatten_lights(lighting)
-    assert_equal(len(flat), 3 + 9 + 13)
-    assert_almost_equal(flat[0], Float32(0.5), atol=Float64(1e-6))
+    assert_equal(len(flat), LIGHTS_FIRST + 9 + 13)
+    assert_almost_equal(flat[LIGHTS_AMBIENT], Float32(0.5), atol=Float64(1e-6))
     # The sky is straight up, white at a quarter, over a black ground.
-    assert_almost_equal(flat[4], Float32(1), atol=Float64(1e-6))
-    assert_almost_equal(flat[6], Float32(0.25), atol=Float64(1e-6))
-    assert_almost_equal(flat[9], Float32(0), atol=Float64(1e-6))
+    var sky = LIGHTS_FIRST
+    assert_almost_equal(flat[sky + 1], Float32(1), atol=Float64(1e-6))
+    assert_almost_equal(flat[sky + 3], Float32(0.25), atol=Float64(1e-6))
+    assert_almost_equal(flat[sky + 6], Float32(0), atol=Float64(1e-6))
     # The bulb two meters up, pointing down at the origin, so its axis from
     # the target toward it is +y; twice white; decay one and a cutoff of
     # seven; and the cosines of sixty and thirty degrees.
-    assert_almost_equal(flat[13], Float32(2), atol=Float64(1e-6))
-    assert_almost_equal(flat[16], Float32(1), atol=Float64(1e-6))
-    assert_almost_equal(flat[18], Float32(2), atol=Float64(1e-6))
-    assert_almost_equal(flat[21], Float32(1), atol=Float64(1e-6))
-    assert_almost_equal(flat[22], Float32(7), atol=Float64(1e-6))
-    assert_almost_equal(flat[23], Float32(0.5), atol=Float64(1e-6))
-    assert_almost_equal(flat[24], Float32(0.8660254), atol=Float64(1e-6))
+    var beam = sky + 9
+    assert_almost_equal(flat[beam + 1], Float32(2), atol=Float64(1e-6))
+    assert_almost_equal(flat[beam + 4], Float32(1), atol=Float64(1e-6))
+    assert_almost_equal(flat[beam + 6], Float32(2), atol=Float64(1e-6))
+    assert_almost_equal(flat[beam + 9], Float32(1), atol=Float64(1e-6))
+    assert_almost_equal(flat[beam + 10], Float32(7), atol=Float64(1e-6))
+    assert_almost_equal(flat[beam + 11], Float32(0.5), atol=Float64(1e-6))
+    assert_almost_equal(flat[beam + 12], Float32(0.8660254), atol=Float64(1e-6))
 
 
 def test_both_backends_agree_under_hemisphere_and_spot_lights() raises:
@@ -3678,7 +3688,7 @@ def test_flattening_carries_the_alpha_test_in_its_own_lane() raises:
         RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), alpha_test=0.375)
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 21)
+    assert_equal(len(flat), 25)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[20], Float32(0.375))
     # And a corner that says nothing about it carries zero, no test.
@@ -3838,6 +3848,289 @@ def test_both_backends_refuse_an_alpha_test_they_cannot_reach() raises:
             renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
         with assert_raises():
             rasterize_all(corners, target, SHADE_TEXTURE)
+
+
+# --- the phong highlight, both backends -------------------------------------
+
+
+def test_flattening_carries_the_specular_and_the_shininess() raises:
+    # Four more lanes: the specular as three, like the emissive, and the
+    # shininess as one per-triangle float, like the alpha test.
+    var corners = List[RasterVertex]()
+    corners.append(
+        RasterVertex(
+            1,
+            2,
+            3,
+            4,
+            FloatColor(1, 1, 1),
+            specular=FloatColor(0.25, 0.5, 0.75),
+            shininess=30.0,
+        )
+    )
+    var flat = flatten(corners)
+    assert_equal(len(flat), 25)
+    assert_equal(len(flat), FLOATS_PER_VERTEX)
+    assert_equal(flat[21], Float32(0.25))
+    assert_equal(flat[22], Float32(0.5))
+    assert_equal(flat[23], Float32(0.75))
+    assert_equal(flat[24], Float32(30.0))
+
+
+def test_the_light_buffer_begins_with_the_camera() raises:
+    # A highlight is measured from there, and putting the camera at the
+    # head leaves every light's offset one named constant away.
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(255, 255, 255), 1.0))
+    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.update()
+    var flat = flatten_lights(Lighting(scene, Layers.all(), Vector3(7, 8, 9)))
+    assert_equal(len(flat), LIGHTS_FIRST + 6)
+    assert_equal(flat[LIGHTS_EYE], Float32(7))
+    assert_equal(flat[LIGHTS_EYE + 1], Float32(8))
+    assert_equal(flat[LIGHTS_EYE + 2], Float32(9))
+    assert_equal(flat[LIGHTS_AMBIENT], Float32(1))
+    # The one directional light follows, its unit direction then its light.
+    assert_equal(flat[LIGHTS_FIRST + 2], Float32(1))
+    assert_equal(flat[LIGHTS_FIRST + 3], Float32(1))
+
+
+def phong_pair(specular: FloatColor, shininess: Float32) -> List[RasterVertex]:
+    """Return `overlapping_pair` as phong surfaces, each corner facing a
+    different way so the highlight really varies across the triangles."""
+    var normals: List[Vector3] = [
+        Vector3(0, 0, 1),
+        Vector3(0.3, 0, 1),
+        Vector3(0, 0.4, 1),
+        Vector3(-0.2, 0.1, 1),
+        Vector3(0.1, -0.3, 1),
+        Vector3(0, 0, 1),
+    ]
+    var corners = List[RasterVertex]()
+    var base = overlapping_pair()
+    for index in range(len(base)):
+        var here = base[index]
+        corners.append(
+            RasterVertex(
+                here.x,
+                here.y,
+                here.z,
+                here.inv_w,
+                here.color,
+                here.u,
+                here.v,
+                here.texture,
+                here.blend,
+                normals[index],
+                Vector3(Float32(index) * 0.2 - 0.5, Float32(index) * 0.1, 0.0),
+                PHONG,
+                here.emissive,
+                here.emissive_map,
+                here.view_depth,
+                NO_TEXTURE,
+                0,
+                specular,
+                shininess,
+            )
+        )
+    return corners^
+
+
+def phong_lighting() raises -> Lighting:
+    """Return a sun, a bulb and a cone, with the camera up the z axis."""
+    var scene = Scene()
+    var sun = Object3D()
+    sun.set_position(0.4, 0.8, 0.6)
+    var sun_node = scene.add(sun^)
+    scene.add_light(directional_light(Color(255, 250, 240), sun_node, 0.9))
+    var bulb = Object3D()
+    bulb.set_position(-0.8, 0.5, 1.2)
+    var bulb_node = scene.add(bulb^)
+    scene.add_light(point_light(Color(255, 210, 170), bulb_node, 2.0))
+    var beam = Object3D()
+    beam.set_position(0.6, 1.0, 1.4)
+    var beam_node = scene.add(beam^)
+    scene.add_light(
+        spot_light(
+            Color(200, 220, 255), beam_node, 3.0, angle=Angle(50.0, DEGREE)
+        )
+    )
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.2))
+    scene.update()
+    return Lighting(scene, Layers.all(), Vector3(0, 0, 3))
+
+
+def test_both_backends_agree_on_a_phong_highlight() raises:
+    # Blinn's half vector, three.js's Fresnel, geometric term and lobe,
+    # summed over the lights that have a direction: the kernel calls the
+    # same function as the host and must reach the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends agree on a phong highlight"):
+        return
+    var lighting = phong_lighting()
+    var corners = phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0)
+    var target = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(corners, target, SHADE_LIT, TextureStore(), lighting)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the highlight really is there: the same surfaces as lambert ones
+    # differ.
+    var plain = List[RasterVertex]()
+    for here in phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0):
+        plain.append(of_kind(here, LAMBERT, here.normal))
+    var flat = render_triangles(
+        plain, 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    assert_true(
+        count_mismatches(gpu, flat) > 50, "the highlight changed nothing"
+    )
+
+
+def test_both_backends_agree_on_every_shininess() raises:
+    # The lobe is a power, spelled as exp2 of log2 on both sides so the
+    # two round alike, and a wide lobe and a tight one take that path
+    # differently.
+    if skipped_for_lack_of_a_gpu("both backends agree on every shininess"):
+        return
+    var lighting = phong_lighting()
+    for shininess in [
+        Float32(0.0),
+        Float32(1.0),
+        Float32(30.0),
+        Float32(200.0),
+    ]:
+        var corners = phong_pair(FloatColor(0.6, 0.5, 0.4), shininess)
+        var target = RenderTarget(24, 18, BACKGROUND)
+        rasterize_all(corners, target, SHADE_LIT, TextureStore(), lighting)
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners, 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_agree_on_a_prepared_phong_scene() raises:
+    # A whole frame: a lit floor, a phong sphere and a phong box, through a
+    # fog and a curve, prepared once and filled twice.
+    if skipped_for_lack_of_a_gpu("both backends agree on a phong scene"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var floor = assets.geometries.add(
+        plane(Length(12.0, METER), Length(12.0, METER), 4, 4)
+    )
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 16, 12))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_position(0, -1.0, 0)
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var left = Object3D()
+    left.set_position(-1.0, 0, 0)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(1.0, 0, -0.4)
+    right.set_euler(
+        Angle(20.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var right_node = scene.add(right^)
+    light_the(scene)
+    var bulb = Object3D()
+    bulb.set_position(0.5, 1.2, 1.5)
+    var bulb_node = scene.add(bulb^)
+    scene.add_light(point_light(Color(255, 220, 180), bulb_node, 2.0))
+    scene.fog = linear_fog(
+        Color(160, 170, 190), Length(3.0, METER), Length(12.0, METER)
+    )
+    scene.update()
+
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            floor,
+            assets.materials.add(Material(Color(200, 200, 200))),
+            ground_node,
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(
+                phong_material(
+                    Color(200, 60, 60), NO_TEXTURE, Color(255, 255, 255), 60.0
+                )
+            ),
+            left_node,
+        )
+    )
+    meshes.append(
+        Mesh(
+            box,
+            assets.materials.add(
+                phong_material(
+                    Color(60, 120, 200), NO_TEXTURE, Color(80, 80, 80), 8.0
+                )
+            ),
+            right_node,
+        )
+    )
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0, 0.8, 3.2), Vector3(0, 0, 0))
+
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the scene prepared no triangles")
+    var lighting = Lighting(
+        scene, camera.visible_layers(), camera_position(scene, camera)
+    )
+    var view = FogView(scene.fog)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_TEXTURE, assets.textures, lighting, 1, view
+    )
+    var cpu = target.resolve(1, ACES_FILMIC_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+        view,
+        ACES_FILMIC_TONE_MAPPING,
+        1.0,
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 300, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_refuse_a_shininess_they_cannot_reach() raises:
+    if skipped_for_lack_of_a_gpu("both backends refuse a bad shininess"):
+        return
+    var renderer = GpuRenderer(8, 8)
+    var target = RenderTarget(8, 8, BACKGROUND)
+    var corners = phong_pair(FloatColor(1, 1, 1), -1.0)
+    with assert_raises():
+        renderer.draw(corners, BACKGROUND)
+    with assert_raises():
+        rasterize_all(corners, target)
 
 
 def main() raises:

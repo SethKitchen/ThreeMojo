@@ -32,6 +32,7 @@ from materials.material import (
     LAMBERT,
     NORMALS,
     OPAQUE,
+    PHONG,
     Blending,
     MaterialKind,
 )
@@ -463,6 +464,14 @@ struct RasterVertex(ImplicitlyCopyable):
     # varying, and the only float among it: all three corners carry the
     # material's number and the first is read.
     var alpha_test: Float32
+    # How much light this surface sends toward the camera, linear: a
+    # `PHONG` material's `specular`. Interpolated like the emissive, which
+    # is also one color per material, and for the same reason -- a varying
+    # costs the same as a constant here and needs no second mechanism.
+    var specular: FloatColor
+    # How tight that highlight is, three.js's `shininess`. Per-triangle
+    # like the alpha test, and read from the first corner.
+    var shininess: Float32
     # How far in front of the camera this corner is, in meters: three.js's
     # `vFogDepth`, minus the camera-space z, taken from the clipped
     # position as it is projected. Interpolated with perspective correction
@@ -490,6 +499,8 @@ struct RasterVertex(ImplicitlyCopyable):
         view_depth: Float32 = 0,
         alpha_map: TextureId = NO_TEXTURE,
         alpha_test: Float32 = 0,
+        specular: FloatColor = FloatColor(0.0, 0.0, 0.0),
+        shininess: Float32 = 0,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -500,7 +511,8 @@ struct RasterVertex(ImplicitlyCopyable):
         `LAMBERT`, lit, which under `Lighting.uniform` changes nothing. The
         emissive defaults to black: no light given off. The depth defaults
         to zero, which is at the camera and in no fog. The alpha test
-        defaults to zero, which throws no fragment away.
+        defaults to zero, which throws no fragment away, and the specular
+        to black, which is no highlight.
         """
         self.x = x
         self.y = y
@@ -519,6 +531,8 @@ struct RasterVertex(ImplicitlyCopyable):
         self.view_depth = view_depth
         self.alpha_map = alpha_map
         self.alpha_test = alpha_test
+        self.specular = specular
+        self.shininess = shininess
 
 
 @fieldwise_init
@@ -784,6 +798,12 @@ def check_triangle_state(
     # disagreeing when what is wrong is the number.
     if not isfinite(a.alpha_test) or a.alpha_test < 0 or a.alpha_test > 1:
         raise Error("A triangle's alpha test must be between zero and one")
+    # Before its agreement check for the reason above: not a number is not
+    # equal to itself.
+    if not isfinite(a.shininess) or a.shininess < 0:
+        raise Error("A triangle's shininess cannot be negative")
+    if b.shininess != a.shininess or c.shininess != a.shininess:
+        raise Error("A triangle's corners disagree about their shininess")
     if b.alpha_test != a.alpha_test or c.alpha_test != a.alpha_test:
         raise Error("A triangle's corners disagree about their alpha test")
     if not a.blend.is_valid():
@@ -907,8 +927,8 @@ def rasterize_shaded(
             or a number that `FogView.validate` refuses, a vertex names a
             texture the
             store does not have, the corners disagree about their maps,
-            blend policy, material kind or alpha test or hold one that is
-            none of the named values, an emissive map that
+            blend policy, material kind, alpha test or shininess or hold
+            one that is none of the named values, an emissive map that
             `SHADE_TEXTURE` would open does not ignore its alpha, an alpha
             map it would open is not linear or does not ignore its alpha,
             or a pixel
@@ -1030,8 +1050,12 @@ def rasterize_shaded(
             # the normal are consulted. A normal material consults the
             # normal alone, since the normal is what it shows.
             var arriving = FloatColor(1.0, 1.0, 1.0, 1.0)
+            # The highlight a `PHONG` surface sends toward the camera, added
+            # after the texture has had its say over the diffuse color and
+            # before the emissive, exactly where three.js sums it.
+            var highlight = FloatColor(0.0, 0.0, 0.0, 1.0)
             var facing = Vector3(0, 0, 1)
-            if a.kind == LAMBERT or a.kind == NORMALS:
+            if a.kind.is_lit() or a.kind == NORMALS:
                 # The normal is interpolated like every other varying and
                 # made a unit vector again here. That renormalization is the
                 # whole difference between this and shading at the corners:
@@ -1051,9 +1075,10 @@ def rasterize_shaded(
                 )
                 if facing.length() != 0:
                     facing.normalize()
-            if a.kind == LAMBERT:
+            if a.kind.is_lit():
                 # Where this fragment is in the world, for the lights that
-                # have a position.
+                # have a position, and for the direction the camera sees it
+                # along.
                 var spot = Vector3(
                     a.world.x * share_a
                     + b.world.x * share_b
@@ -1066,6 +1091,27 @@ def rasterize_shaded(
                     + c.world.z * share_c,
                 )
                 arriving = lighting.intensity_at(facing, spot)
+                if a.kind == PHONG:
+                    # Interpolated like the emissive, and summed over the
+                    # lights that have a direction; see `specular_at`.
+                    var sheen = FloatColor(
+                        a.specular.r * share_a
+                        + b.specular.r * share_b
+                        + c.specular.r * share_c,
+                        a.specular.g * share_a
+                        + b.specular.g * share_b
+                        + c.specular.g * share_c,
+                        a.specular.b * share_a
+                        + b.specular.b * share_b
+                        + c.specular.b * share_c,
+                        1.0,
+                    )
+                    highlight = lighting.specular_at(
+                        facing,
+                        spot,
+                        Vector3(sheen.r, sheen.g, sheen.b),
+                        a.shininess,
+                    )
             var shaded = FloatColor(
                 base.r * arriving.r,
                 base.g * arriving.g,
@@ -1161,14 +1207,15 @@ def rasterize_shaded(
                     var seen = packed_depth(z)
                     shaded = data_color(seen, seen, seen, shaded.a)
             else:
-                # Added after the lights, which do not touch it: a surface
-                # that gives off light is seen in the dark. Alpha is
-                # coverage rather than light, so it stays what the material
-                # said.
+                # The highlight and then the glow, both added after the
+                # lights and neither touched by the texture: three.js sums
+                # `directSpecular` and `totalEmissiveRadiance` into the
+                # outgoing light the same way. Alpha is coverage rather
+                # than light, so it stays what the material said.
                 shaded = FloatColor(
-                    shaded.r + glow.r,
-                    shaded.g + glow.g,
-                    shaded.b + glow.b,
+                    shaded.r + highlight.r + glow.r,
+                    shaded.g + highlight.g + glow.g,
+                    shaded.b + highlight.b + glow.b,
                     shaded.a,
                 )
             # Veiled by the fog last, after the lights and the glow, as

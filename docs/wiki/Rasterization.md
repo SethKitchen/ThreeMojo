@@ -19,14 +19,16 @@ One corner as the rasterizer wants it:
 | `world` | The world-space position, for point lights. |
 | `texture` | A `TextureId`, or `NO_TEXTURE`. |
 | `blend` | `OPAQUE` or `BLEND`. |
-| `kind` | The material kind: `LAMBERT`, `BASIC`, `NORMALS` or `DEPTH`. |
+| `kind` | The material kind: `LAMBERT`, `PHONG`, `BASIC`, `NORMALS` or `DEPTH`. |
+| `specular` | How much a `PHONG` surface sends to the camera, linear. |
+| `shininess` | How tight its highlight is. |
 | `alpha_map` | The `TextureId` whose green channel thins the surface, or `NO_TEXTURE`. |
 | `alpha_test` | The alpha a fragment must reach to be drawn. |
 | `emissive` | Light the surface gives off, linear. |
 | `emissive_map` | The `TextureId` that multiplies `emissive`, or `NO_TEXTURE`. |
 | `view_depth` | The camera-space depth in meters, for the fog. See [Fog](Fog#depth). |
 
-`texture`, `blend`, `kind`, `emissive_map`, `alpha_map` and `alpha_test` are per-triangle state. All three corners must agree, and the value must be a named one. `check_triangle_state` refuses anything else.
+`texture`, `blend`, `kind`, `emissive_map`, `alpha_map`, `alpha_test` and `shininess` are per-triangle state. All three corners must agree, and the value must be a named one. `check_triangle_state` refuses anything else.
 
 A `NORMALS` corner carries its normal in view space, not world space. The normal is shown rather than lit.
 
@@ -69,7 +71,9 @@ Color, normal, texture coordinates and world position are interpolated with pers
 
 ## Shading
 
-At each fragment the interpolated normal is normalized again, and `Lighting.intensity_at` sums every light. The material color, the sampled texel and the light multiply. The emissive term, times its own map, is then added. The lights do not touch it. A `BASIC` triangle skips the lights. See [Why shading is per fragment](Why-shading-is-per-fragment).
+At each fragment the interpolated normal is normalized again, and `Lighting.intensity_at` sums every light. The material color, the sampled texel and the light multiply. A `PHONG` triangle then adds its highlight, which `Lighting.specular_at` sums. The texture does not tint it. The emissive term, times its own map, is added next, and the lights do not touch it.
+
+A `BASIC` triangle skips all of this. See [Why shading is per fragment](Why-shading-is-per-fragment).
 
 ## Data
 
@@ -96,7 +100,8 @@ A fragment whose alpha then falls below `alpha_test` is thrown away, three.js's 
 ## Errors
 
 - A mode that is none of the three raises.
-- Corners that disagree about blend, texture, kind or emissive map raise.
+- Corners that disagree about blend, texture, kind, emissive map or shininess raise.
+- A negative or non-finite shininess raises, on every worker count.
 - A material kind that is none of the four raises, on every worker count.
 - An emissive map that reads its alpha as coverage raises under `SHADE_TEXTURE`, on both backends.
 - A blend value that is neither `OPAQUE` nor `BLEND` raises, on every worker count, whether or not the triangle is visible.

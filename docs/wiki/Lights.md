@@ -70,7 +70,7 @@ three.js: `SpotLight(color, intensity, distance, angle, penumbra, decay)` and `S
 
 ## Lighting
 
-`Lighting(scene)` resolves every light against the scene's world matrices. Build it after `scene.update()`. `Lighting(scene, visible=camera.visible_layers())` resolves only the lights on the camera's layers. The renderer builds that one for each frame. Build the same value for `GpuRenderer.draw`, so both backends light a frame with the same lights.
+`Lighting(scene)` resolves every light against the scene's world matrices. Build it after `scene.update()`. `Lighting(scene, visible=camera.visible_layers())` resolves only the lights on the camera's layers. Pass the camera's world position as `eye` as well, which a `PHONG` material measures its highlight from. `Renderer.render` builds that value for each frame with `camera_position(scene, camera)`. Build the same one for `GpuRenderer.draw`.
 
 | Member | Meaning |
 |---|---|
@@ -80,6 +80,8 @@ three.js: `SpotLight(color, intensity, distance, angle, penumbra, decay)` and `S
 | `hemisphere_count()` | The number of hemisphere lights. |
 | `spot_count()` | The number of spot lights. |
 | `intensity_at(normal, position) -> FloatColor` | The light that reaches a surface with that unit normal at that world position. |
+| `specular_at(normal, position, specular, shininess) -> FloatColor` | The highlight a `PHONG` surface there sends to the camera. |
+| `eye: Vector3` | Where the camera is, in world space. Only a highlight reads it. |
 | `shade(base, normal, position) -> FloatColor` | `base` decoded from sRGB and multiplied by `intensity_at`. |
 | `Lighting.uniform()` | Light of one everywhere. The identity for a hand-built triangle. |
 
@@ -97,6 +99,12 @@ The kinds are summed in one fixed order: ambient, directional, point, hemisphere
 `Light.validate()` refuses the numbers a kind cannot use. An intensity, decay or distance that is negative or not finite raises. A spot angle that is not finite, not above zero, past ninety degrees, or too narrow to resolve raises. A penumbra outside zero to one raises. A number the kind never reads is not checked.
 
 Every builder calls `validate`. `Lighting(scene)` calls it again on every light, because the fields are open and a light in a persistent scene is there to be edited.
+
+## Highlights
+
+A `PHONG` material adds a highlight to the diffuse term. `specular_at` sums it over the lights that have a direction: directional, point and spot. An ambient light and a hemisphere light make none. See [Materials](Materials#phong).
+
+`blinn_phong(toward_light, toward_eye, normal, specular, shininess)` is three.js's `BRDF_BlinnPhong`, shared with the GPU kernel as `falloff` is.
 
 ## Rules
 

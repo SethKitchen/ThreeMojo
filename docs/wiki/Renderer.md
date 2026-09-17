@@ -21,6 +21,7 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `prepare(scene, assets, camera) -> List[RasterVertex]` | Transform, clip and project every mesh. |
 | `render(scene, assets, camera) -> Framebuffer` | `prepare`, then rasterize and resolve. |
 | `available_workers() -> Int` | One per logical core. |
+| `camera_position(scene, camera) -> Vector3` | Where the camera stands, in world space. |
 
 `scene.update()` must run before `prepare` or `render`. The renderer reads world matrices and does not recompute them.
 
@@ -28,8 +29,8 @@ var fast = Renderer(1280, 720, workers=available_workers())
 
 | Mode | A fragment's color is |
 |---|---|
-| `SHADE_TEXTURE` | The material color, times its texture, times the light, plus the emissive times its map. The default. |
-| `SHADE_LIT` | The material color times the light, plus the emissive. Textures are ignored. |
+| `SHADE_TEXTURE` | The material color, times its texture, times the light, plus the highlight and the emissive times its map. The default. |
+| `SHADE_LIT` | The material color times the light, plus the highlight and the emissive. Textures are ignored. |
 | `SHADE_UV` | The texture coordinates, as red and green. A debug view. |
 
 A `NORMALS` or `DEPTH` material writes data under either lit mode. See [Materials](Materials#data-materials).
@@ -76,7 +77,9 @@ Each instance of an instanced or batched mesh is tested on its own, with the ins
 
 ## What render does
 
-`render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, visible=camera.visible_layers())`. A light on a layer the camera does not watch lights nothing. See [Lights](Lights#lighting). It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). Then it rasterizes the triangles and resolves the image through the tone mapping curve.
+`render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, camera.visible_layers(), camera_position(scene, camera))`. A light on a layer the camera does not watch lights nothing. The camera's position goes with the lights because a `PHONG` material measures its highlight from there. See [Lights](Lights#lighting).
+
+It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). Then it rasterizes the triangles and resolves the image through the tone mapping curve.
 
 ## Workers
 

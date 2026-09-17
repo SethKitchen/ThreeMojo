@@ -693,6 +693,8 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
         corner.view_depth,
         corner.alpha_map,
         corner.alpha_test,
+        corner.specular,
+        corner.shininess,
     )
 
 
@@ -705,6 +707,8 @@ def _to_raster(
     emissive_map: TextureId,
     alpha_map: TextureId,
     alpha_test: Float32,
+    specular: FloatColor,
+    shininess: Float32,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -741,7 +745,33 @@ def _to_raster(
         -vertex.position.z,
         alpha_map,
         alpha_test,
+        specular,
+        shininess,
     )
+
+
+def camera_position[C: Camera](scene: Scene, camera: C) raises -> Vector3:
+    """Return where `camera` stands, in world space.
+
+    three.js's `cameraPosition` uniform. A `PHONG` material measures its
+    highlight along the direction from the surface to here, and an `Lod`
+    measures its distance from here, so both `prepare` and `render` ask it.
+    The view transform is rigid, so its inverse's translation is the eye.
+
+    Args:
+        scene: The scene the camera may be riding a node of, updated.
+        camera: The camera to ask.
+
+    Returns:
+        The camera's world-space position.
+
+    Raises:
+        Error: If the camera rides a node the scene does not have, or the
+            scene is stale.
+    """
+    var to_world = camera.view_matrix_in(scene)
+    to_world.invert()
+    return to_world.transform_point(Vector3(0, 0, 0))
 
 
 def available_workers() -> Int:
@@ -940,8 +970,7 @@ struct Renderer(Movable):
         var frustum = Frustum.from_camera(clip, view, near, far)
 
         # Where the camera is, in the world: what an LOD measures its
-        # distance from. The view is rigid, so its inverse's translation
-        # is the eye.
+        # distance from, and what a highlight is measured toward.
         var to_world = Matrix4(copy=view)
         to_world.invert()
         var eye = to_world.transform_point(Vector3(0, 0, 0))
@@ -1034,6 +1063,10 @@ struct Renderer(Movable):
             # Light the surface gives off, decoded to linear once and carried
             # on every corner like the base color below.
             var glow = material.emissive_light()
+            # How much the surface sends toward the camera, decoded once and
+            # carried the same way. Black unless the material is `PHONG`,
+            # which is the only kind the constructor lets carry one.
+            var sheen = material.specular_light()
             var smooth = geometry.has_attribute(String(NORMAL))
             var mapped = geometry.has_attribute(String(UV))
 
@@ -1207,6 +1240,8 @@ struct Renderer(Movable):
                         glow_map,
                         mask,
                         material.alpha_test,
+                        sheen,
+                        material.shininess,
                     )
                     var two = _to_raster(
                         pieces[piece * 3 + 1],
@@ -1217,6 +1252,8 @@ struct Renderer(Movable):
                         glow_map,
                         mask,
                         material.alpha_test,
+                        sheen,
+                        material.shininess,
                     )
                     var three = _to_raster(
                         pieces[piece * 3 + 2],
@@ -1227,6 +1264,8 @@ struct Renderer(Movable):
                         glow_map,
                         mask,
                         material.alpha_test,
+                        sheen,
+                        material.shininess,
                     )
                     # Which way this piece ends up facing decides two things
                     # at once: whether it survives, and which side of it is
@@ -1285,7 +1324,13 @@ struct Renderer(Movable):
         # it: lighting is no longer baked into the corners on the way past.
         # Only the lights on the camera's layers, as only its meshes were
         # prepared: a light the camera does not see lights nothing it draws.
-        var lighting = Lighting(scene, visible=camera.visible_layers())
+        # The camera's own position goes with them, because a `PHONG`
+        # surface's highlight is measured from wherever the camera stands.
+        var lighting = Lighting(
+            scene,
+            visible=camera.visible_layers(),
+            eye=camera_position(scene, camera),
+        )
         # The scene's fog as the rasterizer takes it. Each corner already
         # carries the depth `prepare` measured for it along this view.
         var fog = FogView(scene.fog)

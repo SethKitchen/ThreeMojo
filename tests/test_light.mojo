@@ -32,7 +32,7 @@ from lights.light import (
 )
 from math.smoothstep import smoothstep
 from std.math import inf, nan
-from lights.lighting import Lighting
+from lights.lighting import Lighting, blinn_phong
 from math.vector3 import Vector3
 from units.si import Angle, DEGREE, RADIAN
 from render.framebuffer import Color, FloatColor
@@ -1028,6 +1028,212 @@ def test_a_cone_too_narrow_to_resolve_is_refused() raises:
     scene.add_light(beam)
     with assert_raises():
         _ = Lighting(scene)
+
+
+# --- the Blinn-Phong highlight ----------------------------------------------
+
+
+comptime UP_Z = Vector3(0, 0, 1)
+comptime WHITE_SHEEN = Vector3(1, 1, 1)
+
+
+def test_a_highlight_head_on_is_the_lobe_times_the_geometric_term() raises:
+    # Light, eye and normal all along z, so the half vector is the normal
+    # and both of three.js's dots saturate to one. The lobe is then
+    # `shininess * 0.5 + 1` and the geometric term a quarter, and a
+    # specular of one leaves the Fresnel weight exactly one. Sixteen
+    # quarters is four.
+    var sent = blinn_phong(UP_Z, UP_Z, UP_Z, WHITE_SHEEN, 30.0)
+    assert_almost_equal(sent.x, Float32(4.0), atol=TOLERANCE)
+    assert_almost_equal(sent.y, Float32(4.0), atol=TOLERANCE)
+    assert_almost_equal(sent.z, Float32(4.0), atol=TOLERANCE)
+    # Twice as shiny is twice as tight a lobe and twice as bright a center.
+    var tighter = blinn_phong(UP_Z, UP_Z, UP_Z, WHITE_SHEEN, 62.0)
+    assert_almost_equal(tighter.x, Float32(8.0), atol=TOLERANCE)
+    # A shininess of zero is the widest lobe three.js allows, and is one.
+    var widest = blinn_phong(UP_Z, UP_Z, UP_Z, WHITE_SHEEN, 0.0)
+    assert_almost_equal(widest.x, Float32(0.25), atol=TOLERANCE)
+    # three.js saturates the dot, so a normal longer than one reflects no
+    # more than a unit one does.
+    var stretched = blinn_phong(UP_Z, UP_Z, Vector3(0, 0, 2), WHITE_SHEEN, 30.0)
+    assert_almost_equal(stretched.x, Float32(4.0), atol=TOLERANCE)
+
+
+def test_a_highlight_is_tinted_by_the_specular_it_is_given() raises:
+    # Each channel on its own, so a green specular gives a green highlight.
+    var sent = blinn_phong(UP_Z, UP_Z, UP_Z, Vector3(0, 1, 0), 30.0)
+    assert_true(sent.y > 3.9, "the green channel lost its highlight")
+    # The other two keep only the Fresnel term, which head on is tiny.
+    assert_true(sent.x < 0.01, "a black channel reflected too much")
+    assert_true(sent.x > 0, "a black channel reflected nothing at all")
+
+
+def test_a_black_specular_still_catches_the_grazing_rim() raises:
+    # three.js's F_Schlick rises to one at a grazing angle whatever the
+    # surface reflects head on. Eye and light a third of a turn apart put
+    # the half vector sixty degrees from each, so the Fresnel weight is
+    # what is left.
+    var aside = Vector3(0.8660254, 0, -0.5)
+    var sent = blinn_phong(
+        UP_Z, aside, Vector3(0.5, 0, 0.8660254), Vector3(0, 0, 0), 30.0
+    )
+    assert_true(sent.x > 0, "the rim reflected nothing")
+    # Head on the same black surface reflects almost nothing.
+    var straight = blinn_phong(UP_Z, UP_Z, UP_Z, Vector3(0, 0, 0), 30.0)
+    assert_true(sent.x > straight.x, "the rim was no brighter than head on")
+
+
+def test_a_surface_turned_away_from_the_half_vector_reflects_nothing() raises:
+    # three.js saturates the dot to zero and the lobe follows.
+    var behind = blinn_phong(UP_Z, UP_Z, Vector3(0, 0, -1), WHITE_SHEEN, 30.0)
+    assert_equal(behind.x, Float32(0))
+    assert_equal(behind.y, Float32(0))
+    assert_equal(behind.z, Float32(0))
+    # Edge on is the boundary and reflects nothing either.
+    var edge = blinn_phong(UP_Z, UP_Z, Vector3(1, 0, 0), WHITE_SHEEN, 30.0)
+    assert_equal(edge.x, Float32(0))
+
+
+def test_a_light_opposite_the_eye_leaves_no_half_direction() raises:
+    var opposite = blinn_phong(UP_Z, Vector3(0, 0, -1), UP_Z, WHITE_SHEEN, 30.0)
+    assert_equal(opposite.x, Float32(0))
+    assert_equal(opposite.y, Float32(0))
+    assert_equal(opposite.z, Float32(0))
+
+
+def test_lighting_remembers_where_the_camera_is() raises:
+    # A highlight is measured from there, so `Lighting` carries it. The
+    # origin by default, which a scene with no phong surface never reads.
+    var scene = lit_from(0, 0, 1)
+    assert_equal(Lighting(scene).eye.z, Float32(0))
+    var placed = Lighting(scene, Layers.all(), Vector3(1, 2, 3))
+    assert_equal(placed.eye.x, Float32(1))
+    assert_equal(placed.eye.y, Float32(2))
+    assert_equal(placed.eye.z, Float32(3))
+    assert_equal(Lighting.uniform().eye.z, Float32(0))
+
+
+def test_a_directional_light_makes_a_highlight_from_where_you_stand() raises:
+    # The same surface under the same light, seen from two places: the
+    # highlight is four head on and almost nothing from the side, which is
+    # the whole difference between a phong surface and a lambert one.
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(WHITE, node, 1.0))
+    scene.update()
+    var head_on = Lighting(scene, Layers.all(), Vector3(0, 0, 4))
+    var sent = head_on.specular_at(UP_Z, ORIGIN, WHITE_SHEEN, 30.0)
+    assert_almost_equal(sent.r, Float32(4.0), atol=TOLERANCE)
+    assert_equal(sent.a, Float32(1))
+    var aside = Lighting(scene, Layers.all(), Vector3(4, 0, 4))
+    var dim = aside.specular_at(UP_Z, ORIGIN, WHITE_SHEEN, 30.0)
+    assert_true(dim.r < 1.0, "the highlight did not follow the camera")
+    assert_true(dim.r > 0, "the highlight vanished entirely")
+    # And the diffuse term did not move, because a lambert term cannot.
+    assert_equal(
+        head_on.intensity_at(UP_Z, ORIGIN).r,
+        aside.intensity_at(UP_Z, ORIGIN).r,
+    )
+
+
+def test_a_surface_turned_from_the_light_takes_no_highlight() raises:
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(WHITE, node, 1.0))
+    scene.update()
+    var lighting = Lighting(scene, Layers.all(), Vector3(0, 0, 4))
+    var away = lighting.specular_at(
+        Vector3(0, 0, -1), ORIGIN, WHITE_SHEEN, 30.0
+    )
+    assert_equal(away.r, Float32(0))
+    # Edge on to the light is the boundary, and takes none either.
+    var edge = lighting.specular_at(Vector3(1, 0, 0), ORIGIN, WHITE_SHEEN, 30.0)
+    assert_equal(edge.r, Float32(0))
+
+
+def test_a_point_light_highlight_falls_off_with_distance() raises:
+    var scene = Scene()
+    var bulb = Object3D()
+    bulb.set_position(0, 0, 2)
+    var node = scene.add(bulb^)
+    scene.add_light(point_light(WHITE, node, 1.0))
+    scene.update()
+    var lighting = Lighting(scene, Layers.all(), Vector3(0, 0, 2))
+    # Two meters away under the inverse square, so a quarter of the light,
+    # and the eye is on the bulb so the half vector is still the normal.
+    var sent = lighting.specular_at(UP_Z, ORIGIN, WHITE_SHEEN, 30.0)
+    assert_almost_equal(sent.r, Float32(1.0), atol=TOLERANCE)
+    # A surface exactly on the bulb has no direction to be lit from. The
+    # camera stands further back, so it is the bulb's distance that is zero
+    # and not the camera's.
+    var behind = Lighting(scene, Layers.all(), Vector3(0, 0, 5))
+    var on_it = behind.specular_at(UP_Z, Vector3(0, 0, 2), WHITE_SHEEN, 30.0)
+    assert_equal(on_it.r, Float32(0))
+    # And a surface turned away from the bulb takes no highlight from it.
+    var away = behind.specular_at(Vector3(0, 0, -1), ORIGIN, WHITE_SHEEN, 30.0)
+    assert_equal(away.r, Float32(0))
+
+
+def test_a_spot_light_highlight_stops_at_its_cone() raises:
+    var scene = Scene()
+    var beam = Object3D()
+    beam.set_position(0, 0, 2)
+    var node = scene.add(beam^)
+    scene.add_light(spot_light(WHITE, node, 1.0, angle=Angle(20.0, DEGREE)))
+    scene.update()
+    var lighting = Lighting(scene, Layers.all(), Vector3(0, 0, 2))
+    var inside = lighting.specular_at(UP_Z, ORIGIN, WHITE_SHEEN, 30.0)
+    assert_true(inside.r > 0, "the axis of the cone took no highlight")
+    # A meter to the side of a two-meter throw is well past twenty degrees.
+    var outside = lighting.specular_at(
+        UP_Z, Vector3(2, 0, 0), WHITE_SHEEN, 30.0
+    )
+    assert_equal(outside.r, Float32(0))
+    # A surface on the bulb has no direction, as under a point light, and
+    # one turned away takes none either. The camera stands further back so
+    # that it is the bulb's distance that is zero.
+    var behind = Lighting(scene, Layers.all(), Vector3(0, 0, 5))
+    var on_it = behind.specular_at(UP_Z, Vector3(0, 0, 2), WHITE_SHEEN, 30.0)
+    assert_equal(on_it.r, Float32(0))
+    var away = behind.specular_at(Vector3(0, 0, -1), ORIGIN, WHITE_SHEEN, 30.0)
+    assert_equal(away.r, Float32(0))
+
+
+def test_a_light_with_no_direction_makes_no_highlight() raises:
+    # An ambient light has none, and a hemisphere light is an ambient term
+    # with a gradient: three.js reflects both diffusely and nothing else.
+    var scene = Scene()
+    var sky = Object3D()
+    sky.set_position(0, 1, 0)
+    var node = scene.add(sky^)
+    scene.add_light(ambient_light(WHITE, 1.0))
+    scene.add_light(hemisphere_light(WHITE, WHITE, node, 1.0))
+    scene.update()
+    var lighting = Lighting(scene, Layers.all(), Vector3(0, 0, 4))
+    var sent = lighting.specular_at(UP_Z, ORIGIN, WHITE_SHEEN, 30.0)
+    assert_equal(sent.r, Float32(0))
+    assert_equal(sent.g, Float32(0))
+    assert_equal(sent.b, Float32(0))
+    # They do light it diffusely, or this would prove nothing.
+    assert_true(lighting.intensity_at(UP_Z, ORIGIN).r > 1)
+
+
+def test_a_surface_at_the_camera_takes_no_highlight() raises:
+    # There is no direction to be seen along from there.
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(WHITE, node, 1.0))
+    scene.update()
+    var lighting = Lighting(scene, Layers.all(), ORIGIN)
+    var sent = lighting.specular_at(UP_Z, ORIGIN, WHITE_SHEEN, 30.0)
+    assert_equal(sent.r, Float32(0))
+    assert_equal(sent.a, Float32(1))
 
 
 def main() raises:

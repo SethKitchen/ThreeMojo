@@ -68,6 +68,14 @@ the sRGB curve would change what its bytes mean, and `IGNORED`, or
 filtering would weight its green by an alpha that means nothing. The
 emissive map already asks the second of those for the same reason.
 
+`specular` and `shininess` are the tenth and eleventh, and they belong to
+one more kind: `PHONG`, three.js's `MeshPhongMaterial`. A Lambert surface
+scatters light equally in every direction, so it looks the same from
+anywhere; a Phong surface also sends a highlight toward the camera, which
+moves as the camera does. The highlight is tinted by `specular` and not by
+`color`, which is why a red plastic ball has a white spot on it. A material
+of any other kind refuses both, because no other shader here reads them.
+
 Two more kinds show *data* rather than light: `NORMALS` writes the
 view-space normal as a color, three.js's `MeshNormalMaterial`, and `DEPTH`
 writes how far away the surface is, near white and far black, three.js's
@@ -147,10 +155,23 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is `BASIC`, `LAMBERT`, `NORMALS` or `DEPTH`."""
+        """Return True if this is one of the five kinds there are."""
         return (
-            self == BASIC or self == LAMBERT or self == NORMALS or self == DEPTH
+            self == BASIC
+            or self == LAMBERT
+            or self == NORMALS
+            or self == DEPTH
+            or self == PHONG
         )
+
+    def is_lit(self) -> Bool:
+        """Return True if the scene's lights reach a surface of this kind:
+        `LAMBERT` or `PHONG`.
+
+        Both rasterizers ask this before they evaluate a light, so a kind
+        that is lit in one place and not the other is not expressible.
+        """
+        return self == LAMBERT or self == PHONG
 
     def is_data(self) -> Bool:
         """Return True if a material of this kind shows data rather than
@@ -177,6 +198,9 @@ comptime NORMALS = MaterialKind(2)
 # The depth, near white and far black: one minus the window-space depth in
 # every channel, three.js's `MeshDepthMaterial` under `BasicDepthPacking`.
 comptime DEPTH = MaterialKind(3)
+# Lit per fragment like `LAMBERT`, plus a highlight that follows the camera:
+# three.js's `MeshPhongMaterial`, with Blinn's half vector as three.js uses.
+comptime PHONG = MaterialKind(4)
 
 
 @fieldwise_init
@@ -229,6 +253,15 @@ struct Material(ImplicitlyCopyable):
     # throws away whatever falls below it, color and depth alike, which is
     # what cuts a shape out of a rectangle.
     var alpha_test: Float32
+    # How much light this surface sends toward the camera rather than
+    # scattering, three.js's `MeshPhongMaterial.specular`, as authored.
+    # Black by default, so a material that says nothing about it has no
+    # highlight. Only a `PHONG` material reads it.
+    var specular: Color
+    # How tight that highlight is, three.js's `shininess`. Zero spreads it
+    # over the whole lit side; thirty is three.js's default and is what
+    # `phong_material` passes.
+    var shininess: Float32
 
     def __init__(
         out self,
@@ -244,6 +277,8 @@ struct Material(ImplicitlyCopyable):
         vertex_colors: Bool = False,
         alpha_map: TextureId = NO_TEXTURE,
         alpha_test: Float32 = 0.0,
+        specular: Color = Color(0, 0, 0),
+        shininess: Float32 = 0.0,
     ) raises:
         """Describe a surface.
 
@@ -257,7 +292,8 @@ struct Material(ImplicitlyCopyable):
                 color with alpha — blends. Set it to say so explicitly: a
                 texture's own alpha cannot be inferred from here, so a cut-out
                 image needs `BLEND` even when the material looks opaque.
-            kind: `LAMBERT` to be lit by the scene's lights, `BASIC` to show
+            kind: `LAMBERT` to be lit by the scene's lights, `PHONG` to be
+                lit and to carry a highlight as well, `BASIC` to show
                 the color and texture as they are, `NORMALS` to show the
                 view-space normal as a color, or `DEPTH` to show how far
                 away the surface is. The last two show data rather than
@@ -285,6 +321,14 @@ struct Material(ImplicitlyCopyable):
                 zero to one. Zero draws every fragment, as in three.js.
                 Above zero, a fragment below it is thrown away and claims
                 no depth, so what is behind shows through the hole.
+            specular: How much light the surface sends toward the camera,
+                as authored in sRGB. Black, the default, gives no
+                highlight. Only a `PHONG` material has one, and any other
+                kind refuses a color here. `phong_material` passes
+                three.js's own default.
+            shininess: How tight the highlight is; must not be negative.
+                Zero spreads it over the whole lit side, as three.js
+                allows. Only a `PHONG` material reads it.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -301,7 +345,10 @@ struct Material(ImplicitlyCopyable):
                 inside the right type is refused here. An `alpha_map` that
                 is a negative other than `NO_TEXTURE`, an `alpha_test`
                 outside zero to one or not finite, and an `alpha_map` on a
-                `NORMALS` material are all refused too.
+                `NORMALS` material are all refused too. A `shininess`
+                that is negative or not finite is refused, and so is any
+                highlight -- a `specular` that is not black, or a positive
+                `shininess` -- on a kind that is not `PHONG`.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -321,6 +368,13 @@ struct Material(ImplicitlyCopyable):
             raise Error("A material's alpha map id cannot be negative")
         if not isfinite(alpha_test) or alpha_test < 0 or alpha_test > 1:
             raise Error("An alpha test must be between zero and one")
+        if not isfinite(shininess) or shininess < 0:
+            raise Error("A shininess cannot be negative")
+        if kind != PHONG and (_gives_off_light(specular, 1.0) or shininess > 0):
+            raise Error(
+                "Only a phong material has a highlight: give it kind=PHONG,"
+                " or build it with phong_material"
+            )
         if emissive_intensity < 0:
             raise Error("An emissive intensity cannot be negative")
         if kind == BASIC and (
@@ -370,6 +424,8 @@ struct Material(ImplicitlyCopyable):
         self.vertex_colors = vertex_colors
         self.alpha_map = alpha_map
         self.alpha_test = alpha_test
+        self.specular = specular
+        self.shininess = shininess
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -386,7 +442,26 @@ struct Material(ImplicitlyCopyable):
 
     def is_lit(self) -> Bool:
         """Return True if the scene's lights reach this surface."""
-        return self.kind == LAMBERT
+        return self.kind.is_lit()
+
+    def has_highlight(self) -> Bool:
+        """Return True if this surface sends a highlight to the camera.
+
+        A `PHONG` material whose `specular` is not black. The shininess
+        alone does not count: it says how tight the highlight is, and black
+        times anything is black -- the same rule `is_emissive` follows.
+        """
+        return self.kind == PHONG and _gives_off_light(self.specular, 1.0)
+
+    def specular_light(self) -> FloatColor:
+        """Return how much light this surface sends toward the camera,
+        linear, as `emissive_light` returns what it gives off.
+
+        The authored color decoded from sRGB. Alpha is not light and is
+        left at one: the highlight never touches a fragment's alpha.
+        """
+        var sheen = FloatColor(srgb=self.specular)
+        return FloatColor(sheen.r, sheen.g, sheen.b, 1.0)
 
     def is_data(self) -> Bool:
         """Return True if this surface shows data rather than light: a
@@ -436,6 +511,58 @@ struct Material(ImplicitlyCopyable):
             glow.b * self.emissive_intensity,
             1.0,
         )
+
+
+def phong_material(
+    color: Color,
+    map: TextureId = NO_TEXTURE,
+    specular: Color = Color(17, 17, 17),
+    shininess: Float32 = 30.0,
+    side: Side = FRONT_SIDE,
+    opacity: Float32 = 1.0,
+    blending: Optional[Blending] = None,
+) raises -> Material:
+    """Return a lit material with a highlight, three.js's
+    `MeshPhongMaterial` at three.js's defaults.
+
+    The defaults are three.js's own: a specular of `0x111111` and a
+    shininess of thirty. `Material(color, kind=PHONG)` is the same surface
+    with no highlight at all, because this project's defaults are neutral
+    and three.js's are not.
+
+    three.js's `specularMap`, which would vary the highlight per texel, is
+    not ported.
+
+    Args:
+        color: The base color, as authored in sRGB.
+        map: Id of the texture that multiplies the color, or `NO_TEXTURE`.
+            It does not tint the highlight.
+        specular: How much light the surface sends toward the camera.
+        shininess: How tight the highlight is.
+        side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
+        opacity: One for an opaque surface, less to see through it.
+        blending: `OPAQUE` or `BLEND`, or unset to infer it from the
+            opacity.
+
+    Returns:
+        The material, of kind `PHONG`.
+
+    Raises:
+        Error: If `map` is a negative other than `NO_TEXTURE`, `opacity` is
+            outside zero to one, `shininess` is negative or not finite, or
+            `side` or `blending` holds a value that is none of its named
+            constants.
+    """
+    return Material(
+        color,
+        map=map,
+        side=side,
+        opacity=opacity,
+        blending=blending,
+        kind=PHONG,
+        specular=specular,
+        shininess=shininess,
+    )
 
 
 def _is_opaque_white(color: Color) -> Bool:

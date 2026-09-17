@@ -13,7 +13,17 @@ would make the two import each other.
 it -- one on the host, one inside the kernel -- and the parity tests hold the
 two to the same numbers. It is the one piece of shading arithmetic a point
 light adds. A spot light adds one more, the rim of its cone, and that is
-`math.smoothstep`, shared the same way.
+`math.smoothstep`, shared the same way. `blinn_phong` is the third, and
+belongs to a `PHONG` material rather than to a light.
+
+**On three.js's reciprocal pi.** three.js divides its diffuse term by pi,
+`BRDF_Lambert`, and its specular lobe too, `D_BlinnPhong`. The diffuse term
+here does not: `intensity_at` returns what a surface facing a white light of
+one reflects, which is its own color rather than that over pi. So
+`blinn_phong` drops the same factor, which keeps the *ratio* of highlight to
+diffuse exactly three.js's -- the number that decides how a surface looks.
+Both conventions are consistent on their own; mixing them is what would not
+be.
 """
 
 from core.layers import Layers
@@ -69,6 +79,79 @@ def falloff(distance: Float32, decay: Float32, cutoff: Float32) -> Float32:
     return attenuation
 
 
+# three.js's `G_BlinnPhong_Implicit`: the geometric term of the Blinn-Phong
+# BRDF, a constant there and here.
+comptime BLINN_PHONG_G = Float32(0.25)
+# The two numbers in three.js's `F_Schlick`, which approximates how much
+# more a surface reflects at a grazing angle.
+comptime _FRESNEL_SLOPE = Float32(-5.55473)
+comptime _FRESNEL_OFFSET = Float32(-6.98316)
+
+
+def blinn_phong(
+    toward_light: Vector3,
+    toward_eye: Vector3,
+    normal: Vector3,
+    specular: Vector3,
+    shininess: Float32,
+) -> Vector3:
+    """Return the fraction of light arriving from one direction that a
+    surface sends toward another: three.js's `BRDF_BlinnPhong`.
+
+    Blinn's half vector rather than Phong's reflection, as three.js uses:
+    the highlight is brightest where the normal points half way between the
+    light and the eye. Three factors multiply, each three.js's own --
+    `F_Schlick` for the Fresnel rise at a grazing angle, the constant
+    `G_BlinnPhong_Implicit`, and `D_BlinnPhong` for the lobe -- with one
+    factor of pi dropped from the last, for the reason the module docstring
+    gives.
+
+    The power is spelled as `exp2` of `log2` rather than a power function,
+    so the kernel and the host compute it from two intrinsics both already
+    have, as `falloff` is. A surface turned away from the half vector
+    reflects nothing and returns early, which also keeps `log2` off zero.
+
+    Args:
+        toward_light: Unit vector from the surface toward the light.
+        toward_eye: Unit vector from the surface toward the camera.
+        normal: The surface's unit normal.
+        specular: How much the surface reflects in each channel, linear.
+        shininess: How tight the highlight is; must not be negative. Zero
+            spreads it over the whole lit side, as three.js allows.
+
+    Returns:
+        The reflected fraction per channel. Above one at the center of a
+        tight highlight, which is what a highlight is; `RenderTarget.resolve`
+        decides what a display can show.
+    """
+    var half = toward_light + toward_eye
+    # Light and eye exactly opposite leave no half direction, and nothing is
+    # reflected toward the camera from there.
+    if half.length() == 0:
+        return Vector3(0, 0, 0)
+    half.normalize()
+    var facing = normal.dot(half)
+    # three.js saturates both dots. Below zero the lobe is zero anyway, and
+    # returning here keeps the logarithm off it.
+    if facing <= 0:
+        return Vector3(0, 0, 0)
+    if facing > 1:
+        facing = 1
+    var grazing = max(Float32(0), min(Float32(1), toward_eye.dot(half)))
+    # three.js's F_Schlick with an f90 of one: the surface reflects its own
+    # color head on and white at a grazing angle.
+    var fresnel = exp2((_FRESNEL_SLOPE * grazing + _FRESNEL_OFFSET) * grazing)
+    var keep = 1 - fresnel
+    # three.js's D_BlinnPhong, without its reciprocal pi.
+    var lobe = (shininess * 0.5 + 1) * exp2(shininess * log2(facing))
+    var scale = BLINN_PHONG_G * lobe
+    return Vector3(
+        (specular.x * keep + fresnel) * scale,
+        (specular.y * keep + fresnel) * scale,
+        (specular.z * keep + fresnel) * scale,
+    )
+
+
 def _aimed_at(scene: Scene, light: Light) raises -> Vector3:
     """Return where `light` points, in world space: its target node's
     position, or the origin when it names none.
@@ -90,6 +173,11 @@ struct Lighting(Movable):
     change within a frame.
     """
 
+    # Where the camera is, in world space: what a `PHONG` material measures
+    # its highlight against, three.js's `cameraPosition`. Camera-dependent
+    # like `visible` is, and set by `Renderer.render` from the camera it
+    # draws through. The origin by default, which only a highlight notices.
+    var eye: Vector3
     # The sum of every ambient light, already decoded and scaled.
     var ambient: FloatColor
     # One entry per directional light, parallel lists.
@@ -119,7 +207,12 @@ struct Lighting(Movable):
     var cone_cosines: List[Float32]
     var penumbra_cosines: List[Float32]
 
-    def __init__(out self, scene: Scene, visible: Layers = Layers.all()) raises:
+    def __init__(
+        out self,
+        scene: Scene,
+        visible: Layers = Layers.all(),
+        eye: Vector3 = Vector3(0, 0, 0),
+    ) raises:
         """Resolve a scene's lights against the world transforms it holds.
 
         Resolved once per frame for one camera: a light on a layer the
@@ -133,6 +226,11 @@ struct Lighting(Movable):
             visible: The layers to take lights from, a camera's
                 `visible_layers`. Every layer, the default, resolves every
                 light in the scene.
+            eye: Where the camera is, in world space. Only a `PHONG`
+                material reads it, for the direction its highlight is
+                measured along. `Renderer.render` passes the camera's own
+                position; the origin, the default, is what a scene with no
+                Phong surface wants.
 
         Raises:
             Error: If a light's numbers are refused by `Light.validate`,
@@ -143,6 +241,7 @@ struct Lighting(Movable):
                 is a mistake rather than a dark light; or a light's kind
                 is none of the five.
         """
+        self.eye = eye
         self.ambient = FloatColor(0.0, 0.0, 0.0, 1.0)
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()
@@ -240,6 +339,7 @@ struct Lighting(Movable):
         Args:
             ambient: The light arriving everywhere, already linear.
         """
+        self.eye = Vector3(0, 0, 0)
         self.ambient = ambient
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()
@@ -409,6 +509,115 @@ struct Lighting(Movable):
                 1.0,
             )
         return total
+
+    def specular_at(
+        self,
+        normal: Vector3,
+        position: Vector3,
+        specular: Vector3,
+        shininess: Float32,
+    ) -> FloatColor:
+        """Return the highlight a `PHONG` surface here sends to the camera.
+
+        The specular half of three.js's `RE_Direct_BlinnPhong`, summed over
+        the lights that have a direction. An ambient light has none, and a
+        hemisphere light is an ambient term with a gradient, so neither
+        makes a highlight; three.js reflects both through
+        `RE_IndirectDiffuse` and nothing else.
+
+        Separate from `intensity_at` rather than folded into it, so that a
+        `LAMBERT` surface pays nothing for a term it has not got and every
+        number this project already asserts stays where it was. The kinds
+        are summed in the same fixed order, for the same reason.
+
+        The surface's own color is not in it. A highlight is light bouncing
+        off the surface rather than coming out of it, so the material's
+        `specular` tints it and its `color` does not -- which is why a red
+        plastic ball has a white highlight.
+
+        Args:
+            normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space.
+            specular: How much the surface reflects per channel, linear.
+            shininess: How tight the highlight is.
+
+        Returns:
+            The reflected light, linear. Alpha is not light and stays at one.
+        """
+        var toward_eye = self.eye - position
+        # A surface exactly at the camera has no direction to be seen along.
+        if toward_eye.length() == 0:
+            return FloatColor(0.0, 0.0, 0.0, 1.0)
+        toward_eye.normalize()
+        var red = Float32(0)
+        var green = Float32(0)
+        var blue = Float32(0)
+        for index in range(len(self.directions)):
+            var lambert = max(Float32(0), normal.dot(self.directions[index]))
+            if lambert == 0:
+                continue
+            var sent = blinn_phong(
+                self.directions[index],
+                toward_eye,
+                normal,
+                specular,
+                shininess,
+            )
+            ref light = self.radiances[index]
+            red += light.r * lambert * sent.x
+            green += light.g * lambert * sent.y
+            blue += light.b * lambert * sent.z
+        for index in range(len(self.positions)):
+            var toward = self.positions[index] - position
+            var distance = toward.length()
+            if distance == 0:
+                continue
+            var lambert = normal.dot(toward) / distance
+            if lambert <= 0:
+                continue
+            var reach = lambert * falloff(
+                distance, self.decays[index], self.cutoffs[index]
+            )
+            toward.normalize()
+            var sent = blinn_phong(
+                toward, toward_eye, normal, specular, shininess
+            )
+            ref bulb = self.point_radiances[index]
+            red += bulb.r * reach * sent.x
+            green += bulb.g * reach * sent.y
+            blue += bulb.b * reach * sent.z
+        for index in range(len(self.spot_positions)):
+            var toward = self.spot_positions[index] - position
+            var distance = toward.length()
+            if distance == 0:
+                continue
+            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var rim = smoothstep(
+                self.cone_cosines[index],
+                self.penumbra_cosines[index],
+                angle_cos,
+            )
+            if rim <= 0:
+                continue
+            var lambert = normal.dot(toward) / distance
+            if lambert <= 0:
+                continue
+            var reach = (
+                lambert
+                * rim
+                * falloff(
+                    distance, self.spot_decays[index], self.spot_cutoffs[index]
+                )
+            )
+            toward.normalize()
+            var sent = blinn_phong(
+                toward, toward_eye, normal, specular, shininess
+            )
+            ref bulb = self.spot_radiances[index]
+            red += bulb.r * reach * sent.x
+            green += bulb.g * reach * sent.y
+            blue += bulb.b * reach * sent.z
+        return FloatColor(red, green, blue, 1.0)
 
     def shade(
         self, base: Color, normal: Vector3, position: Vector3

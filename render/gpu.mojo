@@ -44,7 +44,7 @@ from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
-from lights.lighting import Lighting, falloff
+from lights.lighting import Lighting, blinn_phong, falloff
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.rasterizer import (
@@ -59,7 +59,7 @@ from render.rasterizer import (
     packed_depth,
     packed_normal,
 )
-from materials.material import BLEND, DEPTH, LAMBERT, NORMALS
+from materials.material import BLEND, DEPTH, LAMBERT, NORMALS, PHONG
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.srgb import LINEAR, SRGB, ColorSpace, decode_ramp
 from render.tonemap import (
@@ -126,7 +126,16 @@ comptime LANE_DEPTH = 19
 # varying, and read from the first corner's lane: it is the only float
 # among the per-triangle state, and the state table holds integers.
 comptime LANE_ALPHA_TEST = 20
-comptime FLOATS_PER_VERTEX = LANE_ALPHA_TEST + 1
+# How much light the surface sends toward the camera, linear: a `PHONG`
+# material's `specular`. Three lanes rather than four, as the emissive is:
+# a highlight never touches alpha.
+comptime LANE_SPECULAR_R = 21
+comptime LANE_SPECULAR_G = 22
+comptime LANE_SPECULAR_B = 23
+# How tight the highlight is. Per-triangle, read from the first corner's
+# lane like the alpha test.
+comptime LANE_SHININESS = 24
+comptime FLOATS_PER_VERTEX = LANE_SHININESS + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -150,6 +159,13 @@ comptime FOG_R = 3
 comptime FOG_G = 4
 comptime FOG_B = 5
 comptime FOG_FLOATS = FOG_B + 1
+
+# How the light buffer begins: where the camera is, then the ambient term,
+# then the directional lights. Named here for the reason the vertex lanes
+# are, and read by `flatten_lights`, `_arriving` and `_highlight` alike.
+comptime LIGHTS_EYE = 0
+comptime LIGHTS_AMBIENT = 3
+comptime LIGHTS_FIRST = 6
 
 # Further than any NDC depth, so the first covering triangle always wins. The
 # host framebuffer uses an actual infinity; a literal keeps the kernel free of
@@ -274,13 +290,18 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.emissive.b)
         flat.append(corner.view_depth)
         flat.append(corner.alpha_test)
+        flat.append(corner.specular.r)
+        flat.append(corner.specular.g)
+        flat.append(corner.specular.b)
+        flat.append(corner.shininess)
     return flat^
 
 
 def flatten_lights(lighting: Lighting) -> List[Float32]:
     """Return a scene's lights as the flat float buffer the kernel reads.
 
-    Three floats of ambient, then six per directional light -- a unit
+    Three floats of camera position, then three of ambient, then six per
+    directional light -- a unit
     direction and the light it carries -- then eight per point light: where
     it is, the light it carries, its decay and its cutoff. Then nine per
     hemisphere light: which way the sky is, what the sky carries and what
@@ -290,14 +311,21 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     so the device does no color-space work and both backends sum exactly
     the same numbers.
 
+    The camera comes first because a `PHONG` material measures its
+    highlight from there, and because putting it at the head leaves every
+    light's offset one named constant away.
+
     Args:
         lighting: The scene's lights, resolved to world space.
 
     Returns:
-        `3 + 6 * count + 8 * point_count + 9 * hemisphere_count + 13 *
-        spot_count` floats.
+        `LIGHTS_FIRST + 6 * count + 8 * point_count + 9 * hemisphere_count
+        + 13 * spot_count` floats.
     """
     var flat = List[Float32]()
+    flat.append(lighting.eye.x)
+    flat.append(lighting.eye.y)
+    flat.append(lighting.eye.z)
     flat.append(lighting.ambient.r)
     flat.append(lighting.ambient.g)
     flat.append(lighting.ambient.b)
@@ -393,11 +421,11 @@ def _arriving(
     answer by the parity tests. A `Vector3` only because the kernel has no
     color type; the three components are red, green and blue.
     """
-    var red = lights[unsafe_offset=0]
-    var green = lights[unsafe_offset=1]
-    var blue = lights[unsafe_offset=2]
+    var red = lights[unsafe_offset=LIGHTS_AMBIENT]
+    var green = lights[unsafe_offset=LIGHTS_AMBIENT + 1]
+    var blue = lights[unsafe_offset=LIGHTS_AMBIENT + 2]
     for index in range(count):
-        var at = 3 + index * 6
+        var at = LIGHTS_FIRST + index * 6
         var lambert = (
             nx * lights[unsafe_offset=at]
             + ny * lights[unsafe_offset=at + 1]
@@ -408,7 +436,7 @@ def _arriving(
         red += lights[unsafe_offset=at + 3] * lambert
         green += lights[unsafe_offset=at + 4] * lambert
         blue += lights[unsafe_offset=at + 5] * lambert
-    var first_point = 3 + count * 6
+    var first_point = LIGHTS_FIRST + count * 6
     for index in range(points):
         var at = first_point + index * 8
         # From the surface to the bulb: how far, and which way.
@@ -497,6 +525,119 @@ def _arriving(
         red += lights[unsafe_offset=at + 6] * reach
         green += lights[unsafe_offset=at + 7] * reach
         blue += lights[unsafe_offset=at + 8] * reach
+    return Vector3(red, green, blue)
+
+
+def _highlight(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    count: Int,
+    points: Int,
+    hemispheres: Int,
+    spots: Int,
+    nx: Float32,
+    ny: Float32,
+    nz: Float32,
+    px: Float32,
+    py: Float32,
+    pz: Float32,
+    specular: Vector3,
+    shininess: Float32,
+) -> Vector3:
+    """Return the highlight a `PHONG` surface sends toward the camera.
+
+    The device counterpart of `Lighting.specular_at`, held to the same
+    answer by the parity tests and summing the kinds in the same order.
+    The ambient and hemisphere terms are absent from both: neither has a
+    direction, so neither makes a highlight.
+    """
+    var toward_eye = Vector3(
+        lights[unsafe_offset=LIGHTS_EYE] - px,
+        lights[unsafe_offset=LIGHTS_EYE + 1] - py,
+        lights[unsafe_offset=LIGHTS_EYE + 2] - pz,
+    )
+    if toward_eye.length() == 0:
+        return Vector3(0, 0, 0)
+    toward_eye.normalize()
+    var normal = Vector3(nx, ny, nz)
+    var red = Float32(0)
+    var green = Float32(0)
+    var blue = Float32(0)
+    for index in range(count):
+        var at = LIGHTS_FIRST + index * 6
+        var toward = Vector3(
+            lights[unsafe_offset=at],
+            lights[unsafe_offset=at + 1],
+            lights[unsafe_offset=at + 2],
+        )
+        var lambert = normal.dot(toward)
+        if lambert <= 0:
+            continue
+        var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
+        red += lights[unsafe_offset=at + 3] * lambert * sent.x
+        green += lights[unsafe_offset=at + 4] * lambert * sent.y
+        blue += lights[unsafe_offset=at + 5] * lambert * sent.z
+    var first_point = LIGHTS_FIRST + count * 6
+    for index in range(points):
+        var at = first_point + index * 8
+        var toward = Vector3(
+            lights[unsafe_offset=at] - px,
+            lights[unsafe_offset=at + 1] - py,
+            lights[unsafe_offset=at + 2] - pz,
+        )
+        var distance = toward.length()
+        if distance == 0:
+            continue
+        var lambert = normal.dot(toward) / distance
+        if lambert <= 0:
+            continue
+        var reach = lambert * falloff(
+            distance, lights[unsafe_offset=at + 6], lights[unsafe_offset=at + 7]
+        )
+        toward.normalize()
+        var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
+        red += lights[unsafe_offset=at + 3] * reach * sent.x
+        green += lights[unsafe_offset=at + 4] * reach * sent.y
+        blue += lights[unsafe_offset=at + 5] * reach * sent.z
+    var first_spot = first_point + points * 8 + hemispheres * 9
+    for index in range(spots):
+        var at = first_spot + index * 13
+        var toward = Vector3(
+            lights[unsafe_offset=at] - px,
+            lights[unsafe_offset=at + 1] - py,
+            lights[unsafe_offset=at + 2] - pz,
+        )
+        var distance = toward.length()
+        if distance == 0:
+            continue
+        var angle_cos = (
+            toward.x * lights[unsafe_offset=at + 3]
+            + toward.y * lights[unsafe_offset=at + 4]
+            + toward.z * lights[unsafe_offset=at + 5]
+        ) / distance
+        var rim = smoothstep(
+            lights[unsafe_offset=at + 11],
+            lights[unsafe_offset=at + 12],
+            angle_cos,
+        )
+        if rim <= 0:
+            continue
+        var lambert = normal.dot(toward) / distance
+        if lambert <= 0:
+            continue
+        var reach = (
+            lambert
+            * rim
+            * falloff(
+                distance,
+                lights[unsafe_offset=at + 9],
+                lights[unsafe_offset=at + 10],
+            )
+        )
+        toward.normalize()
+        var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
+        red += lights[unsafe_offset=at + 6] * reach * sent.x
+        green += lights[unsafe_offset=at + 7] * reach * sent.y
+        blue += lights[unsafe_offset=at + 8] * reach * sent.z
     return Vector3(red, green, blue)
 
 
@@ -1037,7 +1178,7 @@ def rasterize_kernel(
         var threshold = corners[unsafe_offset=base + LANE_ALPHA_TEST]
         var tested = threshold > 0 and mode != Int32(SHADE_UV.value)
         var kind = maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_KIND]
-        var lit = kind == Int32(LAMBERT.value)
+        var lit = kind == Int32(LAMBERT.value) or kind == Int32(PHONG.value)
         var shows_normal = kind == Int32(NORMALS.value)
         var shows_data = shows_normal or kind == Int32(DEPTH.value)
         # The interpolated normal, made a unit vector again here. That
@@ -1048,6 +1189,7 @@ def rasterize_kernel(
         # it or shows it: SHADE_UV writes coordinates rather than light,
         # and a BASIC material shows its own color.
         var arriving = Vector3(1, 1, 1)
+        var highlight = Vector3(0, 0, 0)
         var nx = Float32(0)
         var ny = Float32(0)
         var nz = Float32(1)
@@ -1103,6 +1245,35 @@ def rasterize_kernel(
                 wy,
                 wz,
             )
+            if kind == Int32(PHONG.value):
+                # Interpolated like the emissive, and summed over the
+                # lights that have a direction; see `_highlight`.
+                var sheen = Vector3(
+                    corners[unsafe_offset=base + LANE_SPECULAR_R] * share_a
+                    + corners[unsafe_offset=b_base + LANE_SPECULAR_R] * share_b
+                    + corners[unsafe_offset=c_base + LANE_SPECULAR_R] * share_c,
+                    corners[unsafe_offset=base + LANE_SPECULAR_G] * share_a
+                    + corners[unsafe_offset=b_base + LANE_SPECULAR_G] * share_b
+                    + corners[unsafe_offset=c_base + LANE_SPECULAR_G] * share_c,
+                    corners[unsafe_offset=base + LANE_SPECULAR_B] * share_a
+                    + corners[unsafe_offset=b_base + LANE_SPECULAR_B] * share_b
+                    + corners[unsafe_offset=c_base + LANE_SPECULAR_B] * share_c,
+                )
+                highlight = _highlight(
+                    lights,
+                    Int(light_count),
+                    Int(point_count),
+                    Int(hemisphere_count),
+                    Int(spot_count),
+                    nx,
+                    ny,
+                    nz,
+                    wx,
+                    wy,
+                    wz,
+                    sheen,
+                    corners[unsafe_offset=base + LANE_SHININESS],
+                )
 
         # Texture coordinates, for the two modes that read them.
         var u = Float32(0)
@@ -1287,9 +1458,11 @@ def rasterize_kernel(
                 green = shown.g
                 blue = shown.b
             else:
-                red += glow_r
-                green += glow_g
-                blue += glow_b
+                # The highlight and then the glow, exactly as
+                # `rasterize_shaded` sums them.
+                red += highlight.x + glow_r
+                green += highlight.y + glow_g
+                blue += highlight.z + glow_b
             # Veiled by the fog last, in linear light, from the same depth
             # lane and with the same function as `rasterize_shaded`. Alpha
             # is coverage and is left alone.
@@ -1423,10 +1596,11 @@ struct GpuRenderer(Movable):
     var pixels: DeviceBuffer[DType.uint8]
     var depth: DeviceBuffer[DType.float32]
     var corners: DeviceBuffer[DType.float32]
-    # Three floats of ambient, six per directional light, eight per point
-    # light, nine per hemisphere light and thirteen per spot light. Grown on
-    # demand like the corner buffer; a scene's lights rarely change count,
-    # so this settles after the first frame.
+    # The camera's position, then the ambient term, then six floats per
+    # directional light, eight per point light, nine per hemisphere light
+    # and thirteen per spot light. Grown on demand like the corner buffer;
+    # a scene's lights rarely change count, so this settles after the first
+    # frame.
     var lights: DeviceBuffer[DType.float32]
     var light_room: Int
     # The scene's fog as the rasterizers take it, `FOG_FLOATS` floats,
@@ -1512,8 +1686,9 @@ struct GpuRenderer(Movable):
         self.depth = self.context.enqueue_create_buffer[DType.float32](
             width * height
         )
-        # Room for the ambient term and one directional light to begin with.
-        self.light_room = 9
+        # Room for the camera, the ambient term and one directional light
+        # to begin with.
+        self.light_room = LIGHTS_FIRST + 6
         self.lights = self.context.enqueue_create_buffer[DType.float32](
             self.light_room
         )

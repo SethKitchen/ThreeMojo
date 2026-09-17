@@ -2,7 +2,7 @@
 
 `materials/material.mojo`. A `Material` is a color, an optional texture, which sides to draw, an opacity, a blend policy, a kind and an emissive term.
 
-three.js: `Material`, `MeshLambertMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`.
+three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`.
 
 ## Construct one
 
@@ -30,6 +30,8 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `vertex_colors` | `Bool` | `False` | Multiply `color` by the geometry's `color` attribute. |
 | `alpha_map` | `TextureId` | `NO_TEXTURE` | A texture whose green channel thins the surface. |
 | `alpha_test` | `Float32` | `0.0` | The alpha a fragment must reach to be drawn. |
+| `specular` | `Color` | black | How much light a `PHONG` surface sends to the camera. |
+| `shininess` | `Float32` | `0.0` | How tight that highlight is. |
 
 ## Side
 
@@ -46,11 +48,50 @@ A face seen from behind is lit with its normal flipped. A mirrored mesh, with a 
 | Value | three.js | Meaning |
 |---|---|---|
 | `LAMBERT` | `MeshLambertMaterial` | The lights reach the surface. |
+| `PHONG` | `MeshPhongMaterial` | Lit, and with a highlight that follows the camera. |
 | `BASIC` | `MeshBasicMaterial` | The color and texture show as they are. |
 | `NORMALS` | `MeshNormalMaterial` | The normal the camera sees, as a color. |
 | `DEPTH` | `MeshDepthMaterial` | How far away the surface is, as a gray. |
 
-`is_data()` is true for the last two. They show data rather than light. See [Data materials](#data-materials).
+`is_lit()` is true for the first two. `is_data()` is true for the last two, which show data rather than light. See [Data materials](#data-materials).
+
+## Phong
+
+A Phong surface is a Lambert surface with a highlight. Build one with its own function:
+
+```mojo
+var plastic = assets.materials.add(phong_material(Color(200, 60, 60)))
+var glossy = assets.materials.add(
+    phong_material(Color(60, 120, 200), bark, Color(255, 255, 255), 60.0)
+)
+```
+
+`phong_material(color, map=NO_TEXTURE, specular=Color(17, 17, 17), shininess=30.0, side=FRONT_SIDE, opacity=1.0, blending=None)`.
+
+The specular and the shininess are three.js's own defaults. `Material(color, kind=PHONG)` is the same surface with no highlight, because this project's defaults are neutral and three.js's are not.
+
+| Property | Meaning |
+|---|---|
+| `specular` | How much light the surface sends toward the camera, as authored in sRGB. |
+| `shininess` | How tight the highlight is. Zero spreads it over the whole lit side. |
+
+### What the highlight is
+
+The highlight is light bouncing off the surface rather than coming out of it. So `specular` tints it and `color` does not, and neither does the texture. A red plastic ball has a white highlight.
+
+It is Blinn's half vector, as three.js uses: the highlight is brightest where the normal points half way between the light and the camera. Move the camera and the highlight moves. The diffuse term does not, because a Lambert term cannot.
+
+Only the lights that have a direction make one. An ambient light has none, and a hemisphere light is an ambient term with a gradient. Both light a Phong surface diffusely and nothing more.
+
+`blinn_phong(toward_light, toward_eye, normal, specular, shininess)` is the arithmetic, in `lights/lighting.mojo`. The GPU kernel calls the same function. `Lighting.specular_at(normal, position, specular, shininess)` sums it over the lights.
+
+### One difference from three.js
+
+three.js divides both its diffuse and its specular term by pi. The diffuse term here does not, so the specular term drops the same factor. That keeps the ratio of highlight to diffuse exactly three.js's, which is what decides how a surface looks. See the module docstring in `lights/lighting.mojo`.
+
+The highlight can exceed one. That is what a highlight is. Set a tone mapping curve to bring it back. See [Render target](Render-target-and-framebuffer#tone-mapping).
+
+three.js's `specularMap`, which varies the highlight per texel, is not ported.
 
 ## Data materials
 
@@ -178,7 +219,9 @@ Pass `blending=BLEND` when a texture's own alpha needs blending and the material
 
 | Method | Meaning |
 |---|---|
-| `is_lit() -> Bool` | `kind == LAMBERT`. |
+| `is_lit() -> Bool` | `kind` is `LAMBERT` or `PHONG`. |
+| `has_highlight() -> Bool` | A `PHONG` material whose `specular` is not black. |
+| `specular_light() -> FloatColor` | The specular color decoded to linear light. |
 | `is_data() -> Bool` | `kind` is `NORMALS` or `DEPTH`. |
 | `has_alpha_map() -> Bool` | `alpha_map != NO_TEXTURE`. |
 | `is_alpha_tested() -> Bool` | `alpha_test > 0`. |
@@ -200,6 +243,8 @@ The constructor raises for:
 - A map or an alpha map on a `NORMALS` material.
 - An alpha map id below zero that is not `NO_TEXTURE`.
 - An alpha test outside zero to one, or not finite.
+- A negative or non-finite shininess.
+- A specular that is not black, or a positive shininess, on a kind that is not `PHONG`.
 
 `Renderer.prepare` raises for an emissive map that reads its alpha as coverage.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.

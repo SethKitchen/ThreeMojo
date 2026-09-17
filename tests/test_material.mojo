@@ -6,8 +6,8 @@
 """Tests for `materials.material`, `render.texture_store` and `core.assets`."""
 
 from materials.material import BLEND, OPAQUE, Blending, MaterialKind, Side
-from materials.material import BASIC, DEPTH, LAMBERT, NORMALS
-from materials.material import depth_material, normal_material
+from materials.material import BASIC, DEPTH, LAMBERT, NORMALS, PHONG
+from materials.material import depth_material, normal_material, phong_material
 from materials.material import MaterialId
 from core.assets import Assets
 from geometries.box import cube
@@ -458,6 +458,124 @@ def test_a_normal_material_refuses_an_alpha_map_and_takes_a_test() raises:
     )
     assert_equal(masked.alpha_map, TextureId(1))
     assert_equal(masked.alpha_test, Float32(0.25))
+
+
+# --- phong ------------------------------------------------------------------
+
+
+def test_a_phong_material_is_lit_and_shows_no_data() raises:
+    assert_true(PHONG.is_valid())
+    assert_true(PHONG.is_lit())
+    assert_false(PHONG.is_data())
+    assert_true(LAMBERT.is_lit())
+    assert_false(BASIC.is_lit())
+    assert_false(NORMALS.is_lit())
+    assert_false(DEPTH.is_lit())
+    var shiny = phong_material(Color(200, 40, 40))
+    assert_equal(shiny.kind, PHONG)
+    assert_true(shiny.is_lit())
+    assert_false(shiny.is_data())
+
+
+def test_a_phong_material_carries_three_js_defaults() raises:
+    # three.js's MeshPhongMaterial: a specular of 0x111111 and a shininess
+    # of thirty.
+    var shiny = phong_material(Color(200, 40, 40))
+    assert_equal(shiny.specular.r, UInt8(17))
+    assert_equal(shiny.specular.g, UInt8(17))
+    assert_equal(shiny.specular.b, UInt8(17))
+    assert_equal(shiny.shininess, Float32(30))
+    assert_true(shiny.has_highlight())
+    # And every other property comes through as it does on any material.
+    var pane = phong_material(
+        Color(1, 2, 3),
+        TextureId(4),
+        Color(255, 255, 255),
+        5.0,
+        DOUBLE_SIDE,
+        0.5,
+    )
+    assert_equal(pane.map, TextureId(4))
+    assert_equal(pane.shininess, Float32(5))
+    assert_equal(pane.side, DOUBLE_SIDE)
+    assert_true(pane.is_transparent())
+    assert_true(
+        phong_material(
+            Color(1, 2, 3),
+            NO_TEXTURE,
+            Color(0, 0, 0),
+            30.0,
+            FRONT_SIDE,
+            1.0,
+            BLEND,
+        ).is_transparent()
+    )
+
+
+def test_a_phong_material_without_a_specular_has_no_highlight() raises:
+    # The project's defaults are neutral where three.js's are not, so a
+    # bare phong material is a lambert one with a term of zero.
+    var dull = Material(Color(200, 40, 40), kind=PHONG)
+    assert_equal(dull.specular.r, UInt8(0))
+    assert_equal(dull.shininess, Float32(0))
+    assert_false(dull.has_highlight())
+    # A shininess alone is not a highlight: black times anything is black.
+    var tight = Material(Color(1, 2, 3), kind=PHONG, shininess=90.0)
+    assert_false(tight.has_highlight())
+    # Any channel above zero is.
+    for sheen in [Color(1, 0, 0), Color(0, 1, 0), Color(0, 0, 1)]:
+        assert_true(
+            Material(Color(1, 2, 3), kind=PHONG, specular=sheen).has_highlight()
+        )
+
+
+def test_a_specular_is_decoded_to_linear_light() raises:
+    # As the emissive is: an authored byte is not proportional to light.
+    var shiny = Material(
+        Color(0, 0, 0), kind=PHONG, specular=Color(255, 255, 255)
+    )
+    var sheen = shiny.specular_light()
+    assert_equal(sheen.r, Float32(1))
+    assert_equal(sheen.a, Float32(1))
+    var dim = Material(
+        Color(0, 0, 0), kind=PHONG, specular=Color(128, 128, 128)
+    )
+    assert_true(dim.specular_light().r < 0.25)
+    assert_true(dim.specular_light().r > 0.2)
+    # A material with no highlight sends nothing.
+    assert_equal(Material(Color(1, 2, 3)).specular_light().r, Float32(0))
+
+
+def test_only_a_phong_material_has_a_highlight() raises:
+    # No other shader here reads either property, so a value in one is a
+    # mistake rather than a choice. Each refuses on its own.
+    for kind in [BASIC, LAMBERT, NORMALS, DEPTH]:
+        var color = Color(255, 255, 255)
+        with assert_raises():
+            _ = Material(color, kind=kind, specular=Color(17, 17, 17))
+        with assert_raises():
+            _ = Material(color, kind=kind, shininess=30.0)
+        # Black at a shininess of zero is no highlight, and is fine.
+        _ = Material(color, kind=kind, specular=Color(0, 0, 0), shininess=0.0)
+    # A phong material takes both, which is what they are for.
+    _ = Material(
+        Color(255, 255, 255),
+        kind=PHONG,
+        specular=Color(17, 17, 17),
+        shininess=30.0,
+    )
+
+
+def test_a_shininess_that_is_not_a_number_is_rejected() raises:
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), kind=PHONG, shininess=-1.0)
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), kind=PHONG, shininess=nan[DType.float32]())
+    with assert_raises():
+        _ = phong_material(Color(1, 2, 3), NO_TEXTURE, Color(17, 17, 17), -5.0)
+    # Zero is the widest lobe three.js allows, and any size above it is fine.
+    _ = Material(Color(1, 2, 3), kind=PHONG, shininess=0.0)
+    _ = Material(Color(1, 2, 3), kind=PHONG, shininess=1000.0)
 
 
 def main() raises:
