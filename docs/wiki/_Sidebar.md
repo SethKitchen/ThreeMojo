@@ -27,6 +27,7 @@
 - [GPU backend](GPU-backend)
 - [Render target](Render-target-and-framebuffer)
 - [Image files](Image-files)
+- [Model files](Model-files)
 - [Math](Math)
 - [Units](Units)
 - [Coverage tool](Coverage-tool)

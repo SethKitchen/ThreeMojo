@@ -40,6 +40,7 @@ Look something up.
 - [GPU backend](GPU-backend)
 - [Render target and framebuffer](Render-target-and-framebuffer)
 - [Image files](Image-files)
+- [Model files](Model-files)
 - [Math](Math)
 - [Units](Units)
 - [Coverage tool](Coverage-tool)

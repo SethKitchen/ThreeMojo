@@ -88,9 +88,9 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] Line and LineSegments [#26](https://github.com/SethKitchen/ThreeMojo/issues/26)
 - [ ] Points [#27](https://github.com/SethKitchen/ThreeMojo/issues/27)
 - [ ] Sprite [#28](https://github.com/SethKitchen/ThreeMojo/issues/28)
-- [ ] InstancedMesh and BatchedMesh [#29](https://github.com/SethKitchen/ThreeMojo/issues/29)
+- [x] [InstancedMesh and BatchedMesh](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#instancedmesh): one geometry, or one geometry per instance, at many transforms under one node, culled instance by instance [#29](https://github.com/SethKitchen/ThreeMojo/issues/29)
 - [ ] SkinnedMesh, Bone and Skeleton [#30](https://github.com/SethKitchen/ThreeMojo/issues/30)
-- [ ] LOD [#31](https://github.com/SethKitchen/ThreeMojo/issues/31)
+- [x] [LOD](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#lod): one of several geometries at a node, picked by the camera's distance each frame [#31](https://github.com/SethKitchen/ThreeMojo/issues/31)
 
 ### Materials
 
@@ -139,7 +139,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] Render target as a texture [#68](https://github.com/SethKitchen/ThreeMojo/issues/68)
 - [ ] JPEG loader [#69](https://github.com/SethKitchen/ThreeMojo/issues/69)
 - [ ] GLTF loader [#70](https://github.com/SethKitchen/ThreeMojo/issues/70)
-- [ ] OBJ loader [#71](https://github.com/SethKitchen/ThreeMojo/issues/71)
+- [x] [OBJ loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files): positions, texture coordinates, normals and polygon faces, split by object and material [#71](https://github.com/SethKitchen/ThreeMojo/issues/71)
 
 ### Rendering
 

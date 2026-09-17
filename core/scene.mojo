@@ -56,6 +56,8 @@ from lights.light import Light
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
+from objects.instanced_mesh import BatchedMesh, InstancedMesh
+from objects.lod import Lod
 from objects.mesh import Mesh
 
 
@@ -75,6 +77,14 @@ struct Scene(Movable):
     # assignable, so a caller comparing two draw lists against one scene can
     # swap them without rebuilding it.
     var meshes: List[Mesh]
+    # The other things the scene draws, each naming a node here as a mesh
+    # does: one geometry at many transforms, many geometries at many
+    # transforms, and one of several geometries by distance. Public and
+    # assignable for the reason `meshes` is. See `objects.instanced_mesh`
+    # and `objects.lod`.
+    var instanced_meshes: List[InstancedMesh]
+    var batched_meshes: List[BatchedMesh]
+    var lods: List[Lod]
     # False only when every world matrix reflects every node as it stands.
     var _stale: Bool
 
@@ -84,6 +94,9 @@ struct Scene(Movable):
         self._world = List[Matrix4]()
         self.lights = List[Light]()
         self.meshes = List[Mesh]()
+        self.instanced_meshes = List[InstancedMesh]()
+        self.batched_meshes = List[BatchedMesh]()
+        self.lods = List[Lod]()
         # An empty scene has nothing to recompute, so it starts current.
         self._stale = False
 
@@ -108,6 +121,55 @@ struct Scene(Movable):
         if mesh.node.value >= len(self._nodes):
             raise Error("A mesh must name a node that is in the scene")
         self.meshes.append(mesh)
+
+    def add_instanced_mesh(mut self, var mesh: InstancedMesh) raises:
+        """Add one geometry to draw at many transforms, three.js's
+        `scene.add(instancedMesh)`.
+
+        Args:
+            mesh: The instanced mesh, consumed. Its node must already be
+                in the scene; its geometry and material are checked when
+                rendered.
+
+        Raises:
+            Error: If it names a node the scene does not have.
+        """
+        if mesh.node.value >= len(self._nodes):
+            raise Error(
+                "An instanced mesh must name a node that is in the scene"
+            )
+        self.instanced_meshes.append(mesh^)
+
+    def add_batched_mesh(mut self, var mesh: BatchedMesh) raises:
+        """Add many geometries to draw at many transforms under one
+        material, three.js's `scene.add(batchedMesh)`.
+
+        Args:
+            mesh: The batched mesh, consumed. Its node must already be in
+                the scene; its geometries and material are checked when
+                rendered.
+
+        Raises:
+            Error: If it names a node the scene does not have.
+        """
+        if mesh.node.value >= len(self._nodes):
+            raise Error("A batched mesh must name a node that is in the scene")
+        self.batched_meshes.append(mesh^)
+
+    def add_lod(mut self, var lod: Lod) raises:
+        """Add a level-of-detail object, three.js's `scene.add(lod)`.
+
+        Args:
+            lod: The LOD, consumed. Its node must already be in the scene;
+                its levels' geometries and materials are checked when the
+                level is rendered.
+
+        Raises:
+            Error: If it names a node the scene does not have.
+        """
+        if lod.node.value >= len(self._nodes):
+            raise Error("An LOD must name a node that is in the scene")
+        self.lods.append(lod^)
 
     def node(
         mut self, index: NodeId

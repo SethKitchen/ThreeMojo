@@ -80,22 +80,25 @@ work; dropping one changes the image.
 from cameras.camera import Camera
 from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.assets import Assets
+from core.geometry_store import GeometryId
 from lights.lighting import Lighting
 from core.layers import Layers
+from core.object3d import NodeId
 from core.scene import Scene
 from math.bounds import Sphere
 from math.frustum import Frustum
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
-from objects.mesh import Mesh
 from materials.material import (
     BACK_SIDE,
     DOUBLE_SIDE,
     FRONT_SIDE,
     Blending,
     Material,
+    MaterialId,
 )
+from units.si import Length, METER
 from render.texture import IGNORED
 from render.texture_store import NO_TEXTURE, TextureId
 from render.framebuffer import Color, FloatColor, Framebuffer
@@ -279,31 +282,32 @@ comptime CULL_SLACK = Float32(1e-6)
 
 
 def _in_view(
-    scene: Scene,
     assets: Assets,
-    mesh: Mesh,
+    geometry: GeometryId,
+    world: Matrix4,
     frustum: Frustum,
     slack: Float32,
     mut bounds: List[Sphere],
     mut known: List[Bool],
 ) raises -> Bool:
-    """Return True if any of `mesh`'s bounding sphere is inside `frustum`.
+    """Return True if any of a geometry's bounding sphere, carried by
+    `world`, is inside `frustum`.
 
     three.js's `Frustum.intersectsObject`: the geometry's own bounding
-    sphere, carried to world space by the node's world matrix, tested
+    sphere, carried to world space by the draw's world matrix, tested
     against the six planes. The sphere is worked out afresh each frame,
     as `BufferGeometry.bounding_sphere` says it must be, at two passes
-    over the positions, but once per geometry and not once per mesh: the
-    first mesh to draw a geometry this frame records its bound in
-    `bounds`, and every later one reads it back. A forest of one tree
-    drawn two hundred times scans the tree once. A geometry with no
-    vertices has an empty sphere, which is in view nowhere, and a mesh of
-    it draws nothing either way.
+    over the positions, but once per geometry and not once per draw: the
+    first draw of a geometry this frame records its bound in `bounds`,
+    and every later one reads it back. A forest of one tree drawn two
+    hundred times, as two hundred meshes or two hundred instances, scans
+    the tree once. A geometry with no vertices has an empty sphere, which
+    is in view nowhere, and a draw of it draws nothing either way.
 
     Args:
-        scene: The transform hierarchy, updated.
         assets: Where the geometry lives.
-        mesh: The mesh to test.
+        geometry: Which geometry.
+        world: The transform that places it, instance matrix included.
         frustum: The camera's frustum, in world space.
         slack: How far past a plane the bound may lie and still count as
             in view; see `CULL_SLACK`.
@@ -312,19 +316,18 @@ def _in_view(
         known: Which entries of `bounds` have been filled in.
 
     Returns:
-        Whether the mesh's bound reaches into the view.
+        Whether the placed bound reaches into the view.
 
     Raises:
-        Error: If the mesh names a geometry that is not there, or its
-            geometry has no positions.
+        Error: If the geometry is not there, or has no positions.
     """
-    ref geometry = assets.geometries.get(mesh.geometry)
-    var slot = mesh.geometry.value
+    ref shape = assets.geometries.get(geometry)
+    var slot = geometry.value
     if not known[slot]:
-        bounds[slot] = geometry.bounding_sphere()
+        bounds[slot] = shape.bounding_sphere()
         known[slot] = True
     var bound = bounds[slot]
-    bound.apply_matrix4(scene.world_matrix(mesh.node))
+    bound.apply_matrix4(world)
     # Grown, not shrunk: the empty sphere is left empty rather than made a
     # point by the slack.
     if not bound.is_empty():
@@ -332,26 +335,136 @@ def _in_view(
     return frustum.intersects_sphere(bound)
 
 
-def _draw_order(
+@fieldwise_init
+struct _Draw(ImplicitlyCopyable):
+    """One geometry drawn with one material at one world transform.
+
+    What a mesh is; what each instance of an instanced or batched mesh
+    is, with the instance's matrix folded into the node's; and what the
+    level an LOD picks is. `prepare` reads the scene as a list of these,
+    so that everything after the draw order is written once.
+    """
+
+    var geometry: GeometryId
+    var material: MaterialId
+    var world: Matrix4
+
+
+def _gather(
+    mut draws: List[_Draw],
+    mut starts: List[Int],
+    mut counts: List[Int],
+    mut depths: List[Float32],
+    mut clear: List[Bool],
     scene: Scene,
     assets: Assets,
+    node: NodeId,
+    material: MaterialId,
+    geometries: List[GeometryId],
+    matrices: List[Matrix4],
+    culled: Bool,
     view: Matrix4,
     visible: Layers,
     frustum: Frustum,
     slack: Float32,
-) raises -> List[Int]:
-    """Return the order to draw the meshes a camera sees in: opaque nearest
-    first, then the translucent ones furthest first.
+    mut bounds: List[Sphere],
+    mut known: List[Bool],
+) raises:
+    """Add one group of draws to `draws`, with the group's sort key
+    alongside, unless the camera leaves it out.
 
-    A mesh whose node shares no layer with the camera is left out here,
-    before the sort, three.js's `layers.test` in `projectObject`: the list
-    that is sorted is the list that is drawn, and nothing is measured for a
-    mesh that will not be. So is a mesh whose bounding sphere lies wholly
-    outside the frustum, three.js's `frustumCulled` test in the same
-    function, unless the mesh has opted out. Of a mesh left out here only
-    the positions are read, for the bound: its material's textures and its
-    index buffer are checked when it is drawn, as three.js reads nothing
-    of an object it culls.
+    A group is a mesh, every instance of an instanced or batched mesh, or
+    the level an LOD shows: one node, one material, and a geometry and a
+    matrix per draw. It is left out whole when its node shares no layer
+    with the camera, three.js's `layers.test` in `projectObject`, before
+    anything is measured for it. Each draw is left out on its own when
+    its bound lies wholly outside the frustum, three.js's `frustumCulled`
+    test in the same function, unless the group opted out; three.js tests
+    an instanced mesh by one bound around every instance, and a test per
+    instance is what lets the instances behind the camera cost nothing.
+    A group every draw of which is out of view is not recorded at all.
+    Of a draw left out here only the positions are read, for the bound:
+    its material's textures and its index buffer are checked when it is
+    drawn, as three.js reads nothing of an object it culls.
+
+    Args:
+        draws: Every draw so far; the group's are appended.
+        starts: Where each recorded group begins in `draws`.
+        counts: How many draws each recorded group has.
+        depths: Each recorded group's camera-space depth, of its node.
+        clear: Whether each recorded group's material blends.
+        scene: The transform hierarchy, updated.
+        assets: Where the geometries and materials live.
+        node: The group's node.
+        material: The group's material.
+        geometries: One geometry per draw.
+        matrices: One transform per draw, relative to the node; as many
+            as `geometries`.
+        culled: Whether a draw may be left out for its bound.
+        view: The world-to-camera transform, for the depth.
+        visible: The camera's layers.
+        frustum: The camera's frustum, in world space.
+        slack: How far past a plane a bound may lie and still be drawn;
+            see `CULL_SLACK`.
+        bounds: Each geometry's local bound, filled in as met.
+        known: Which entries of `bounds` have been filled in.
+
+    Raises:
+        Error: If the node, a geometry or the material is not there, a
+            geometry has no positions, or the scene is stale.
+    """
+    if not scene.get(node).layers.test(visible):
+        return
+    var placed = scene.world_matrix(node)
+    var start = len(draws)
+    for index in range(len(matrices)):
+        var world = Matrix4(copy=placed)
+        world.multiply(matrices[index])
+        if culled and not _in_view(
+            assets, geometries[index], world, frustum, slack, bounds, known
+        ):
+            continue
+        draws.append(_Draw(geometries[index], material, world^))
+    if len(draws) == start:
+        return
+    starts.append(start)
+    counts.append(len(draws) - start)
+    # The camera looks down -z, so a smaller z is further away.
+    depths.append(view.transform_point(scene.world_position(node)).z)
+    clear.append(assets.materials.get(material).is_transparent())
+
+
+def _take(mut ordered: List[_Draw], draws: List[_Draw], start: Int, count: Int):
+    """Append one recorded group's draws to `ordered`, in the order they
+    were gathered.
+
+    Args:
+        ordered: The draw order being built.
+        draws: Every draw gathered.
+        start: Where the group begins in `draws`.
+        count: How many draws it has; at least one.
+    """
+    for offset in range(count):  # pragma: no branch
+        ordered.append(draws[start + offset])
+
+
+def _draws(
+    scene: Scene,
+    assets: Assets,
+    view: Matrix4,
+    eye: Vector3,
+    visible: Layers,
+    frustum: Frustum,
+    slack: Float32,
+) raises -> List[_Draw]:
+    """Return what the camera draws, in the order to draw it: opaque
+    groups nearest first, then the translucent ones furthest first.
+
+    The scene's meshes, instanced meshes, batched meshes and LODs are
+    read into groups of draws by `_gather`, which also leaves out what
+    the camera's layers and frustum leave out; an LOD contributes the one
+    level its node's distance from the camera picks, three.js's
+    `LOD.update`, or nothing when it has no levels.
 
     Blending is not commutative, so a translucent surface only looks right if
     what is behind it is already there. Two rules follow, and they are the
@@ -360,7 +473,7 @@ def _draw_order(
     Opaque first, because a translucent surface has to mix with the solid
     thing behind it, and because opaque surfaces write depth — which is what
     stops a translucent surface behind a wall from showing through it. Among
-    themselves the opaque meshes go nearest first. The image does not depend
+    themselves the opaque groups go nearest first. The image does not depend
     on it, since the depth test settles every pixel whatever the order, but
     the cost does: a fragment that fails the depth test is skipped *before*
     it is lit and sampled, so drawing the near things first means the far
@@ -368,69 +481,164 @@ def _draw_order(
     opaque list front to back for the same reason.
 
     Then translucent, furthest first, because each one mixes into the result
-    of the ones beyond it. Sorted by the camera-space depth of the mesh's
-    origin, which is what three.js sorts by: per object, not per triangle.
-    Within one mesh the triangles keep their own order, so a translucent mesh
-    that overlaps itself is still approximate. That is the usual bargain, and
-    the alternative is sorting every triangle every frame.
+    of the ones beyond it. Sorted by the camera-space depth of the group's
+    node, which is what three.js sorts by: per object, not per triangle,
+    and an instanced mesh is one object whose instances keep their given
+    order, as it is in three.js. Within one draw the triangles keep their
+    own order, so a translucent mesh that overlaps itself is still
+    approximate. That is the usual bargain, and the alternative is sorting
+    every triangle every frame.
 
     Args:
-        scene: The transform hierarchy, and the meshes to draw.
-        assets: Where the materials live.
+        scene: The transform hierarchy, and what it draws.
+        assets: Where the geometries and materials live.
         view: The world-to-camera transform, for measuring depth.
-        visible: The camera's layers. A mesh on none of them is left out.
-        frustum: The camera's frustum, in world space. A mesh whose bound
-            lies wholly outside it is left out, unless it opted out.
+        eye: Where the camera is, in world space, for an LOD's distance.
+        visible: The camera's layers. A group on none of them is left out.
+        frustum: The camera's frustum, in world space. A draw whose bound
+            lies wholly outside it is left out, unless its group opted out.
         slack: How far past a plane a bound may lie and still be drawn;
             see `CULL_SLACK`.
 
     Returns:
-        Indices into `scene.meshes`, only those the camera draws, in the
-        order they should be drawn.
+        The draws the camera makes, in the order to make them.
 
     Raises:
-        Error: If a mesh names a node, a geometry or a material that is not
-            there, or its geometry has no positions.
+        Error: If anything drawn names a node, a geometry or a material
+            that is not there, or a geometry has no positions.
     """
-    ref meshes = scene.meshes
-    var solid = List[Int]()
-    var solid_depths = List[Float32]()
-    var clear = List[Int]()
-    var clear_depths = List[Float32]()
-    # Each geometry's local bound, found the first time a mesh draws it
-    # this frame and reused by every other mesh that does.
+    var draws = List[_Draw]()
+    var starts = List[Int]()
+    var counts = List[Int]()
+    var depths = List[Float32]()
+    var clear = List[Bool]()
+    # Each geometry's local bound, found the first time a draw needs it
+    # this frame and reused by every other draw that does.
     var bounds = List[Sphere](
         length=assets.geometries.count(), fill=Sphere.empty()
     )
     var known = List[Bool](length=assets.geometries.count(), fill=False)
-    for index in range(len(meshes)):
-        if not scene.get(meshes[index].node).layers.test(visible):
+    var one: List[Matrix4] = [Matrix4()]
+    for index in range(len(scene.meshes)):
+        ref mesh = scene.meshes[index]
+        var geometry: List[GeometryId] = [mesh.geometry]
+        _gather(
+            draws,
+            starts,
+            counts,
+            depths,
+            clear,
+            scene,
+            assets,
+            mesh.node,
+            mesh.material,
+            geometry,
+            one,
+            mesh.frustum_culled,
+            view,
+            visible,
+            frustum,
+            slack,
+            bounds,
+            known,
+        )
+    for index in range(len(scene.instanced_meshes)):
+        ref group = scene.instanced_meshes[index]
+        _gather(
+            draws,
+            starts,
+            counts,
+            depths,
+            clear,
+            scene,
+            assets,
+            group.node,
+            group.material,
+            List[GeometryId](length=group.count(), fill=group.geometry),
+            group.matrices,
+            group.frustum_culled,
+            view,
+            visible,
+            frustum,
+            slack,
+            bounds,
+            known,
+        )
+    for index in range(len(scene.batched_meshes)):
+        ref batch = scene.batched_meshes[index]
+        _gather(
+            draws,
+            starts,
+            counts,
+            depths,
+            clear,
+            scene,
+            assets,
+            batch.node,
+            batch.material,
+            batch.geometries,
+            batch.matrices,
+            batch.frustum_culled,
+            view,
+            visible,
+            frustum,
+            slack,
+            bounds,
+            known,
+        )
+    for index in range(len(scene.lods)):
+        ref lod = scene.lods[index]
+        var level = lod.level_for(
+            Length((eye - scene.world_position(lod.node)).length(), METER)
+        )
+        if level < 0:
             continue
-        if meshes[index].frustum_culled and not _in_view(
-            scene, assets, meshes[index], frustum, slack, bounds, known
-        ):
-            continue
-        # The camera looks down -z, so a smaller z is further away.
-        var depth = view.transform_point(
-            scene.world_position(meshes[index].node)
-        ).z
-        if assets.materials.get(meshes[index].material).is_transparent():
-            clear.append(index)
-            clear_depths.append(depth)
-        else:
-            solid.append(index)
-            # Negated, so one ascending sort serves both lists: the nearest
-            # opaque mesh has the largest z and must come first.
-            solid_depths.append(-depth)
+        var shown = lod.levels[level]
+        var geometry: List[GeometryId] = [shown.geometry]
+        _gather(
+            draws,
+            starts,
+            counts,
+            depths,
+            clear,
+            scene,
+            assets,
+            lod.node,
+            shown.material,
+            geometry,
+            one,
+            lod.frustum_culled,
+            view,
+            visible,
+            frustum,
+            slack,
+            bounds,
+            known,
+        )
 
+    var solid = List[Int]()
+    var solid_depths = List[Float32]()
+    var see_through = List[Int]()
+    var see_through_depths = List[Float32]()
+    for group in range(len(starts)):
+        if clear[group]:
+            see_through.append(group)
+            see_through_depths.append(depths[group])
+        else:
+            solid.append(group)
+            # Negated, so one ascending sort serves both lists: the nearest
+            # opaque group has the largest z and must come first.
+            solid_depths.append(-depths[group])
     _sort_by(solid, solid_depths)
-    _sort_by(clear, clear_depths)
-    var order = List[Int]()
+    _sort_by(see_through, see_through_depths)
+    var ordered = List[_Draw]()
     for position in range(len(solid)):
-        order.append(solid[position])
-    for position in range(len(clear)):
-        order.append(clear[position])
-    return order^
+        var group = solid[position]
+        _take(ordered, draws, starts[group], counts[group])
+    for position in range(len(see_through)):
+        var group = see_through[position]
+        _take(ordered, draws, starts[group], counts[group])
+    return ordered^
 
 
 def _sort_by(mut items: List[Int], mut keys: List[Float32]):
@@ -654,7 +862,10 @@ struct Renderer(Movable):
             Raster vertices, three per triangle, in submission order. A mesh
             whose node shares no layer with the camera contributes none,
             and nor does one whose bounding sphere lies wholly outside the
-            camera's frustum, unless it opted out of that test.
+            camera's frustum, unless it opted out of that test. An
+            instanced or batched mesh contributes each of its instances the
+            same way, and an LOD the one level its distance from the camera
+            picks.
 
         Raises:
             Error: If a mesh names a node, a geometry or a material that is
@@ -663,7 +874,7 @@ struct Renderer(Movable):
                 alpha, if its geometry has no positions, or if its material
                 asks for vertex colors and the geometry has no `color`
                 attribute of three or four floats per vertex. The asset
-                checks are made on the meshes that are drawn: a mesh the
+                checks are made on the draws that are made: a mesh the
                 camera's layers or frustum leave out is not read.
         """
         var corners = List[RasterVertex]()
@@ -681,30 +892,37 @@ struct Renderer(Movable):
         clip.multiply(view)
         var frustum = Frustum.from_camera(clip, view, near, far)
 
-        ref meshes = scene.meshes
-        # Worked out once, not once per mesh, and already without the
-        # meshes the camera does not draw.
-        var order = _draw_order(
+        # Where the camera is, in the world: what an LOD measures its
+        # distance from. The view is rigid, so its inverse's translation
+        # is the eye.
+        var to_world = Matrix4(copy=view)
+        to_world.invert()
+        var eye = to_world.transform_point(Vector3(0, 0, 0))
+        # Worked out once, not once per draw, and already without what
+        # the camera does not draw: every mesh, every instance and every
+        # LOD's shown level, as one list.
+        var draws = _draws(
             scene,
             assets,
             view,
+            eye,
             camera.visible_layers(),
             frustum,
             far * CULL_SLACK,
         )
-        for ordered in range(len(order)):
-            var index = order[ordered]
-            var world = scene.world_matrix(meshes[index].node)
+        for slot in range(len(draws)):
+            var world = draws[slot].world
             # An odd number of reflections in the world transform reverses
             # winding, which turns both the culling convention and the
-            # geometric-normal fallback upside down. Asked once per mesh, of
+            # geometric-normal fallback upside down. Asked once per draw, of
             # the world matrix rather than the node's own scale, because the
-            # reflection can be inherited from any parent.
+            # reflection can be inherited from any parent, or from an
+            # instance's own matrix.
             var mirrored = world.determinant() < 0
-            # Borrowed, not copied: two meshes naming the same id read the
+            # Borrowed, not copied: two draws naming the same id read the
             # same arrays rather than each holding their own.
-            ref geometry = assets.geometries.get(meshes[index].geometry)
-            var material = assets.materials.get(meshes[index].material)
+            ref geometry = assets.geometries.get(draws[slot].geometry)
+            var material = assets.materials.get(draws[slot].material)
             # Carried on every vertex of this mesh, so one flat triangle list
             # can hold a scene whose meshes use different images.
             var blending = material.blending

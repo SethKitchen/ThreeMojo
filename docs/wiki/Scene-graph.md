@@ -32,6 +32,7 @@ A `NodeId` wraps an integer. A bare integer does not compile where a node id is 
 | `get(id) -> Object3D` | Copy a node. |
 | `set(id, node)` | Replace a node. The parent must be an earlier node. |
 | `add_mesh(mesh)` | Add something to draw. See [Meshes and assets](Meshes-and-assets). |
+| `add_instanced_mesh(mesh)`, `add_batched_mesh(mesh)`, `add_lod(lod)` | Add the other things a scene draws. See [Meshes and assets](Meshes-and-assets#instancedmesh). |
 | `add_light(light)` | Add a light. See [Lights](Lights). |
 | `update()` | Compute every world matrix in one forward pass. |
 | `world_matrix(id) -> Matrix4` | A node's world transform. Raises if the scene is stale. |
@@ -64,7 +65,7 @@ scene.lights[0].layers.set(1)        # the first light too
 camera.layers.enable(1)              # the camera sees layer one as well
 ```
 | `count() -> Int` | The number of nodes. |
-| `meshes`, `lights` | The scene content, as public lists. |
+| `meshes`, `instanced_meshes`, `batched_meshes`, `lods`, `lights` | The scene content, as public lists. |
 
 ## Rules
 

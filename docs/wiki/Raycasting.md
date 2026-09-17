@@ -66,6 +66,8 @@ The material's `side` decides which faces count. A `FRONT_SIDE` mesh is not pick
 
 A mirrored mesh is hit on the face the renderer draws. Its hit normal is turned back, as the renderer turns its geometric normal.
 
+Only `scene.meshes` is tested. Instanced meshes, batched meshes and LODs are not picked yet.
+
 ## Errors
 
 - A mesh index that names no mesh raises.

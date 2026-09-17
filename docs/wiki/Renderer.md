@@ -35,7 +35,9 @@ var fast = Renderer(1280, 720, workers=available_workers())
 
 ## What prepare does
 
-First, leave out every mesh whose node shares no layer with the camera. Then leave out every mesh whose bounding sphere lies wholly outside the camera's frustum. Then sort the rest into draw order. Then, for each mesh in that order:
+First, read the scene as draws. A mesh is one draw. An instanced or batched mesh is one draw per instance, kept together as one group. An LOD is one draw, the level its distance from the camera picks. See [Meshes and assets](Meshes-and-assets#instancedmesh).
+
+Leave out every group whose node shares no layer with the camera. Then leave out every draw whose bounding sphere lies wholly outside the camera's frustum. Then sort the groups into draw order. Then, for each draw in that order:
 
 1. Transform the positions to world space and camera space.
 2. Carry the texture coordinates through the map's transform. See [Textures](Textures#transform).
@@ -60,6 +62,8 @@ The sphere is the geometry's, computed once per geometry per frame and reused by
 The image does not change. Every triangle of such a mesh is clipped away or lands off the image. What the test saves is the transform, the clip and the projection of those triangles. The bound itself reads the positions, twice.
 
 `Mesh(geometry, material, node, frustum_culled=False)` opts a mesh out. three.js: `Object3D.frustumCulled`. A mesh that is left out is not read. Its material and its index buffer are checked when it is drawn.
+
+Each instance of an instanced or batched mesh is tested on its own, with the instance's matrix folded into the node's. three.js tests the whole group by one bound. An LOD's shown level is tested as a mesh is.
 
 ## What render does
 

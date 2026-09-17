@@ -38,9 +38,11 @@ from core.scene import Scene
 from lights.light import ambient_light, directional_light, point_light
 from geometries.box import cube
 from geometries.sphere import sphere
+from math.matrix4 import translation
 from math.vector2 import Vector2
 from std.math import inf
 from math.vector3 import Vector3
+from objects.instanced_mesh import InstancedMesh
 from objects.mesh import Mesh
 from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METER
@@ -2661,6 +2663,57 @@ def test_both_backends_agree_on_a_transformed_texture() raises:
                 dark += 1
     assert_true(light > 0 and dark > 0, "the checkerboard did not appear")
     assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_both_backends_agree_on_an_instanced_scene() raises:
+    # Instances are folded into world matrices in prepare, so both
+    # rasterizers are handed one list of triangles for the whole forest
+    # and fill it the same way.
+    if skipped_for_lack_of_a_gpu("both backends agree on an instanced scene"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(0.8, METER)))
+    var paint = assets.materials.add(Material(Color(255, 140, 40)))
+    var scene = Scene()
+    var root = scene.add(Object3D())
+    light_the(scene)
+    scene.update()
+    var group = InstancedMesh(box, paint, root, 4)
+    group.set_matrix_at(0, translation(-1.2, 0, 0))
+    group.set_matrix_at(1, translation(1.2, 0.3, -0.5))
+    group.set_matrix_at(2, translation(0, -0.6, 0.4))
+    group.set_matrix_at(3, translation(0, 0, 30))
+    scene.add_instanced_mesh(group^)
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.6, 4.0), Vector3(0, 0, 0))
+    var corners = renderer.prepare(scene, assets, camera)
+    assert_true(len(corners) > 0, "the instances prepared no triangles")
+    var lighting = Lighting(scene)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    for triangle in range(len(corners) // 3):  # pragma: no branch
+        rasterize_shaded(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+            target,
+            SHADE_LIT,
+            assets.textures,
+            lighting,
+        )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 100, "the forest barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def main() raises:
