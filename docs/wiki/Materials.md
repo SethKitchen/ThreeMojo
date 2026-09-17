@@ -68,7 +68,9 @@ var glossy = assets.materials.add(
 
 `phong_material(color, map=NO_TEXTURE, specular=Color(17, 17, 17), shininess=30.0, side=FRONT_SIDE, opacity=1.0, blending=None)`.
 
-The specular and the shininess are three.js's own defaults. `Material(color, kind=PHONG)` is the same surface with no highlight, because this project's defaults are neutral and three.js's are not.
+The specular and the shininess are three.js's own defaults. `Material(color, kind=PHONG)` gives the same surface a black specular, because this project's defaults are neutral and three.js's are not.
+
+A black specular is a base reflectance of zero. It is not a highlight switched off. three.js's Fresnel factor rises toward one at a grazing angle, whatever the surface reflects head on. So a Phong surface with a black specular still catches a dim rim where a Lambert surface catches nothing. `has_highlight()` asks the kind alone for that reason.
 
 | Property | Meaning |
 |---|---|
@@ -100,8 +102,8 @@ A normal material and a depth material write bytes that a display must show as t
 ```mojo
 var shown = assets.materials.add(normal_material())
 var seen = assets.materials.add(depth_material())
-var pane = assets.materials.add(normal_material(DOUBLE_SIDE, 0.5))
-var cut = assets.materials.add(depth_material(mask, FRONT_SIDE, 1.0, BLEND))
+var pane = assets.materials.add(normal_material(DOUBLE_SIDE))
+var cut = assets.materials.add(depth_material(mask))
 ```
 
 | Builder | Meaning |
@@ -109,7 +111,7 @@ var cut = assets.materials.add(depth_material(mask, FRONT_SIDE, 1.0, BLEND))
 | `normal_material(side=FRONT_SIDE, opacity=1.0, blending=None, alpha_test=0.0)` | The view-space normal as a color. |
 | `depth_material(map=NO_TEXTURE, side=FRONT_SIDE, opacity=1.0, blending=None, alpha_map=NO_TEXTURE, alpha_test=0.0)` | The depth as a gray. |
 
-Both take `side`, `opacity` and `blending`, and nothing else. A depth material also takes a `map`.
+Both take `side`, `opacity` and `blending`, and nothing else. A depth material also takes a `map`. Neither can blend: see [What they refuse](#what-they-refuse).
 
 ### Normals
 
@@ -125,13 +127,15 @@ A face seen from behind shows its normal flipped, as it is lit flipped. The norm
 
 Set the camera's `near` and `far` close together to see anything. A range of one to a thousand meters puts almost every surface within a few levels of black.
 
-A map's alpha cuts the surface out, as three.js's does. Its color is not read. Pass `blending=BLEND` for the cut to show what is behind it.
+A map's alpha cuts the surface out, as three.js's does. Its color is not read. Give the material an `alpha_test` to throw the cut fragments away. Such a fragment claims no depth, so what is behind it draws. A depth material cannot blend, so blending is not the way to show the cut.
 
 ### What they refuse
 
 Neither shader reads a color, an emissive term or the vertex colors. A material of either kind refuses all three rather than ignoring them. Pass opaque white as the color, or use the builders, which do. A normal material refuses a map and an alpha map as well. Both take an alpha test, as three.js's do.
 
 Neither is lit, fogged nor tone mapped. A veil of light over a normal, or a curve that compresses it, would make the image lie about its own numbers. Both rasterizers decide this per pixel. See [Why a normal is not a color](Why-a-normal-is-not-a-color).
+
+Neither can blend. One pixel holds its own bytes or the scene's light. A mixture of the two is neither. So a `NORMALS` or `DEPTH` material whose blending resolves to `BLEND` is refused, stated or inferred from an opacity below one. Both rasterizers refuse a blended data triangle as well, from the same function. That is what lets `RenderTarget.blend` say a mixture is always light.
 
 ## Vertex colors
 
@@ -215,12 +219,12 @@ The comparison is strict, as three.js's is. A fragment whose alpha equals the te
 
 `opacity` below one, or a color with alpha below 255, makes the material blend. A blended surface tests depth without writing it, and the renderer draws it after every opaque mesh, furthest first.
 
-Pass `blending=BLEND` when a texture's own alpha needs blending and the material looks opaque. Pass `blending=OPAQUE` to force an opaque draw.
+Pass `blending=BLEND` when a texture's own alpha needs blending and the material looks opaque. Pass `blending=OPAQUE` to force an opaque draw. A `NORMALS` or `DEPTH` material must be opaque either way.
 
 | Method | Meaning |
 |---|---|
 | `is_lit() -> Bool` | `kind` is `LAMBERT` or `PHONG`. |
-| `has_highlight() -> Bool` | A `PHONG` material whose `specular` is not black. |
+| `has_highlight() -> Bool` | `kind` is `PHONG`. A black specular is a reflectance of zero, not a switch. |
 | `specular_light() -> FloatColor` | The specular color decoded to linear light. |
 | `is_data() -> Bool` | `kind` is `NORMALS` or `DEPTH`. |
 | `has_alpha_map() -> Bool` | `alpha_map != NO_TEXTURE`. |
@@ -245,6 +249,7 @@ The constructor raises for:
 - An alpha test outside zero to one, or not finite.
 - A negative or non-finite shininess.
 - A specular that is not black, or a positive shininess, on a kind that is not `PHONG`.
+- A `NORMALS` or `DEPTH` material whose blending resolves to `BLEND`, stated or inferred.
 
 `Renderer.prepare` raises for an emissive map that reads its alpha as coverage.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.

@@ -70,7 +70,9 @@ three.js: `SpotLight(color, intensity, distance, angle, penumbra, decay)` and `S
 
 ## Lighting
 
-`Lighting(scene)` resolves every light against the scene's world matrices. Build it after `scene.update()`. `Lighting(scene, visible=camera.visible_layers())` resolves only the lights on the camera's layers. Pass the camera's world position as `eye` as well, which a `PHONG` material measures its highlight from. `Renderer.render` builds that value for each frame with `camera_position(scene, camera)`. Build the same one for `GpuRenderer.draw`.
+`Lighting(scene)` resolves every light against the scene's world matrices. Build it after `scene.update()`. `Lighting(scene, visible=camera.visible_layers())` resolves only the lights on the camera's layers. Pass the camera's world position as `eye` as well, which a `PHONG` material measures its highlight from.
+
+Pass `toward_eye` with it, the one direction toward a camera whose rays run parallel. `Renderer.render` builds both for each frame, with `camera_position(scene, camera)` and `toward_camera(scene, camera)`. Build the same two for `GpuRenderer.draw`.
 
 | Member | Meaning |
 |---|---|
@@ -82,6 +84,7 @@ three.js: `SpotLight(color, intensity, distance, angle, penumbra, decay)` and `S
 | `intensity_at(normal, position) -> FloatColor` | The light that reaches a surface with that unit normal at that world position. |
 | `specular_at(normal, position, specular, shininess) -> FloatColor` | The highlight a `PHONG` surface there sends to the camera. |
 | `eye: Vector3` | Where the camera is, in world space. Only a highlight reads it. |
+| `toward_eye: Vector3` | The one direction toward that camera, or `PERSPECTIVE_VIEW`. Normalized here. |
 | `shade(base, normal, position) -> FloatColor` | `base` decoded from sRGB and multiplied by `intensity_at`. |
 | `Lighting.uniform()` | Light of one everywhere. The identity for a hand-built triangle. |
 
@@ -105,6 +108,14 @@ Every builder calls `validate`. `Lighting(scene)` calls it again on every light,
 A `PHONG` material adds a highlight to the diffuse term. `specular_at` sums it over the lights that have a direction: directional, point and spot. An ambient light and a hemisphere light make none. See [Materials](Materials#phong).
 
 `blinn_phong(toward_light, toward_eye, normal, specular, shininess)` is three.js's `BRDF_BlinnPhong`, shared with the GPU kernel as `falloff` is.
+
+### Which way the camera lies
+
+A perspective camera's rays converge on one point, so each surface sees it from its own direction. `specular_at` works that direction out from `eye` and the surface position.
+
+An orthographic camera's rays run parallel, so every surface sees it from the same direction. Working the direction out from a position would put a false bright spot in the middle of a flat sheet. It would also move the highlight when the camera slides along its own axis, which a parallel projection cannot do.
+
+`toward_eye_at(eye, parallel, position)` decides between the two. It returns `parallel` when that vector has a length, and the way to `eye` otherwise. `PERSPECTIVE_VIEW`, the zero vector, is what says the rays converge. Both backends call this one function.
 
 ## Rules
 

@@ -36,7 +36,7 @@ three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as 
 |---|---|
 | `RenderTarget(width, height, clear)` | A target cleared to a color. |
 | `write(x, y, color, data=False)` | Replace a pixel. |
-| `blend(x, y, color, data=False)` | Source-over in premultiplied linear light. |
+| `blend(x, y, color)` | Source-over in premultiplied linear light. |
 | `is_data(x, y) -> Bool` | Whether the pixel holds data rather than light. |
 | `test_depth(x, y, z) -> Bool` | Keep and record `z` when it is nearer. |
 | `depth_passes(x, y, z) -> Bool` | Compare without recording. |
@@ -49,7 +49,11 @@ Nothing is clamped before `resolve`. Overexposed light survives every step.
 
 `claim_depth` is the other half of a late depth write. A fragment an alpha test can throw away tests with `depth_passes` and claims only once it survives. See [Rasterization](Rasterization#depth).
 
-Pass `data=True` when the color is not light. A normal material, a depth material and the `SHADE_UV` view all do. The last fragment into a pixel decides. `resolve` encodes such a pixel without tone mapping it. See [Why a normal is not a color](Why-a-normal-is-not-a-color).
+Pass `data=True` to `write` when the color is not light. A normal material, a depth material and the `SHADE_UV` view all do. `resolve` encodes such a pixel without tone mapping it. See [Why a normal is not a color](Why-a-normal-is-not-a-color).
+
+A write replaces the pixel, so the pixel takes the fragment's answer about what it holds. A blend mixes into what is there, and a mixture with light in it is light. Only light blends, because the rasterizers refuse a blended data triangle. So `blend` takes no flag and always leaves the pixel holding light.
+
+A blend whose effective alpha is zero changes nothing at all. Source-over hides nothing and adds nothing there, so it adds no color, no depth and no answer about what the pixel holds. It used to take the data flag before it read the alpha. An invisible fragment could then put the tone mapping curve back onto a normal's bytes. The rule applies to `blend` alone. A `write` at alpha zero still replaces the pixel.
 
 ## Tone mapping
 

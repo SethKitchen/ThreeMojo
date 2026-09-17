@@ -46,6 +46,7 @@ A `NORMALS` corner carries its normal in view space, not world space. The normal
 | `packed_normal(normal)` | A unit normal mapped into zero to one per axis. |
 | `packed_depth(z)` | An NDC depth as the gray a `DEPTH` material shows. |
 | `check_alpha_map(texture)` | Refuse an alpha map that is not stored as data. |
+| `interpolate_alpha(a, b, c, share_b, share_c)` | An alpha across a triangle, in difference form. |
 
 ## Coverage
 
@@ -93,9 +94,15 @@ The alpha map's green channel multiplies the fragment's alpha, three.js's `alpha
 
 A fragment whose alpha then falls below `alpha_test` is thrown away, three.js's `alphatest_fragment`. The comparison is strict. A test of zero throws nothing away. `SHADE_LIT` ignores the map and keeps the test. `SHADE_UV` ignores both.
 
+`interpolate_alpha` reaches that comparison. The three barycentric weights are rounded floats, so they sum to one only up to rounding. `a * sa + b * sb + c * sc` for three alphas of one can give 0.99999994. A test of one then throws away a surface that is opaque everywhere.
+
+The difference form, `a + sb * (b - a) + sc * (c - a)`, returns a constant exactly. Alpha alone uses it: alpha reaches a strict threshold, and red, green and blue reach a quantization that a last bit cannot move. Both backends call this one function.
+
 ## Transparency
 
 `rasterize_shaded` blends a `BLEND` fragment over what is there, in premultiplied linear light. The caller owns the draw order. `Renderer.prepare` sorts.
+
+A `NORMALS` or `DEPTH` triangle cannot blend. One pixel holds its own bytes or the scene's light, and a mixture of the two is neither. `check_triangle_state` refuses the pair, on both backends and on every worker count. So `RenderTarget.blend` can say a mixture is always light. See [Materials](Materials#what-they-refuse).
 
 ## Errors
 
@@ -105,6 +112,7 @@ A fragment whose alpha then falls below `alpha_test` is thrown away, three.js's 
 - A material kind that is none of the four raises, on every worker count.
 - An emissive map that reads its alpha as coverage raises under `SHADE_TEXTURE`, on both backends.
 - A blend value that is neither `OPAQUE` nor `BLEND` raises, on every worker count, whether or not the triangle is visible.
+- A `NORMALS` or `DEPTH` triangle whose blend is `BLEND` raises, on every worker count.
 - A texture the store lacks raises when a fragment samples it.
 - An alpha map that `SHADE_TEXTURE` would open raises unless it is `LINEAR` and `IGNORED`.
 - An alpha test outside zero to one, or not finite, raises on every worker count.

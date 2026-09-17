@@ -15,7 +15,7 @@ MAX 26.5.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-G
 | `available() -> Bool` | Whether a GPU is present. |
 | `render_triangles(corners, width, height, background, mode, textures, lighting, fog, tone_mapping, exposure) -> Framebuffer` | One-shot: draw and read back. |
 | `flatten(corners) -> List[Float32]` | The corner buffer the kernel reads, one lane per varying. |
-| `flatten_lights(lighting) -> List[Float32]` | The light buffer: the camera's position, the ambient term, then each directional, point, hemisphere and spot light. |
+| `flatten_lights(lighting) -> List[Float32]` | The light buffer: the camera's position, the one direction toward it, the ambient term, then each directional, point, hemisphere and spot light. |
 | `flatten_fog(fog) -> List[Float32]` | The fog buffer, six floats. The kind crosses as a kernel argument. |
 | `flatten_textures(store)` | Every texture in one buffer, with a descriptor table. |
 | `triangle_state(corners) -> List[Int32]` | Texture, blend, material kind, emissive map and alpha map per triangle. |
@@ -44,6 +44,8 @@ Coverage is integer arithmetic and matches the CPU exactly. Shading is floating 
 The kernel calls the same functions as the CPU for the fill rule, texture wrapping and texel blending. It shares the light falloff, the spot light's rim and the Blinn-Phong highlight. It shares the fog factor, the normal and depth packing, and the tone mapping curves too. See [Why the CPU and GPU share code](Why-the-CPU-and-GPU-share-code).
 
 The kernel tracks whether each pixel holds data rather than light, as the host's target does. It keeps the fog and the curve off those pixels.
+
+The light buffer begins with three floats of camera position at `LIGHTS_EYE`, then three at `LIGHTS_TOWARD`. Those three hold the zero vector for a converging projection, and one unit direction for a parallel one. The kernel passes both to `toward_eye_at`, the host's own function. The lights follow at `LIGHTS_FIRST`.
 
 ## Teardown
 

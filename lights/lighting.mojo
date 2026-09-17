@@ -79,6 +79,51 @@ def falloff(distance: Float32, decay: Float32, cutoff: Float32) -> Float32:
     return attenuation
 
 
+# What `Lighting.toward_eye` holds when a camera's rays converge on a
+# point, which is a perspective camera: there is no single direction toward
+# it, so each fragment works its own out from `Lighting.eye`. A zero vector,
+# the same idiom as `NO_PARENT` and `NO_TEXTURE`.
+comptime PERSPECTIVE_VIEW = Vector3(0, 0, 0)
+
+
+def toward_eye_at(
+    eye: Vector3, parallel: Vector3, position: Vector3
+) -> Vector3:
+    """Return the unit direction from a surface toward the camera:
+    three.js's `geometryViewDir`.
+
+    **The two projections answer differently, and that is the point.** A
+    perspective camera's rays converge on `eye`, so the direction depends on
+    where the surface stands. An orthographic camera's rays run parallel, so
+    one direction serves every fragment and `eye` says nothing about it --
+    moving such a camera along its own axis changes no highlight at all.
+    three.js draws the same distinction in `lights_fragment_begin`, where
+    `geometryViewDir` is `vec3(0, 0, 1)` under an orthographic projection
+    and the normalized view position otherwise.
+
+    Shared by both rasterizers, as `falloff` is, so that neither can see a
+    surface from somewhere the other does not.
+
+    Args:
+        eye: Where the camera is, in world space. Read only when the rays
+            converge.
+        parallel: The one direction toward the camera, already a unit
+            vector, or `PERSPECTIVE_VIEW` when the rays converge.
+        position: Where the surface is, in world space.
+
+    Returns:
+        The unit direction toward the camera, or a zero vector when the
+        surface sits exactly at a converging camera and there is none.
+    """
+    if parallel.length() != 0:
+        return parallel
+    var toward = eye - position
+    if toward.length() == 0:
+        return Vector3(0, 0, 0)
+    toward.normalize()
+    return toward^
+
+
 # three.js's `G_BlinnPhong_Implicit`: the geometric term of the Blinn-Phong
 # BRDF, a constant there and here.
 comptime BLINN_PHONG_G = Float32(0.25)
@@ -178,6 +223,10 @@ struct Lighting(Movable):
     # like `visible` is, and set by `Renderer.render` from the camera it
     # draws through. The origin by default, which only a highlight notices.
     var eye: Vector3
+    # The one direction toward that camera when its rays run parallel, or
+    # `PERSPECTIVE_VIEW` when they converge on `eye` instead. Normalized on
+    # the way in, so a fragment never has to. See `toward_eye_at`.
+    var toward_eye: Vector3
     # The sum of every ambient light, already decoded and scaled.
     var ambient: FloatColor
     # One entry per directional light, parallel lists.
@@ -212,6 +261,7 @@ struct Lighting(Movable):
         scene: Scene,
         visible: Layers = Layers.all(),
         eye: Vector3 = Vector3(0, 0, 0),
+        toward_eye: Vector3 = PERSPECTIVE_VIEW,
     ) raises:
         """Resolve a scene's lights against the world transforms it holds.
 
@@ -231,6 +281,11 @@ struct Lighting(Movable):
                 measured along. `Renderer.render` passes the camera's own
                 position; the origin, the default, is what a scene with no
                 Phong surface wants.
+            toward_eye: The one direction toward that camera, for a camera
+                whose rays run parallel, or `PERSPECTIVE_VIEW`, the
+                default, for one whose rays converge. `Renderer.render`
+                passes `toward_camera`, which asks the camera's own
+                projection. Normalized here, so a caller need not.
 
         Raises:
             Error: If a light's numbers are refused by `Light.validate`,
@@ -242,6 +297,11 @@ struct Lighting(Movable):
                 is none of the five.
         """
         self.eye = eye
+        # Normalized here rather than at every fragment, and left alone when
+        # it is the zero vector that means a converging view.
+        self.toward_eye = toward_eye
+        if self.toward_eye.length() != 0:
+            self.toward_eye.normalize()
         self.ambient = FloatColor(0.0, 0.0, 0.0, 1.0)
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()
@@ -340,6 +400,7 @@ struct Lighting(Movable):
             ambient: The light arriving everywhere, already linear.
         """
         self.eye = Vector3(0, 0, 0)
+        self.toward_eye = PERSPECTIVE_VIEW
         self.ambient = ambient
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()
@@ -544,11 +605,13 @@ struct Lighting(Movable):
         Returns:
             The reflected light, linear. Alpha is not light and stays at one.
         """
-        var toward_eye = self.eye - position
-        # A surface exactly at the camera has no direction to be seen along.
+        # Which way the camera lies from here: one fixed direction under a
+        # parallel projection, and the way to `eye` under a converging one.
+        var toward_eye = toward_eye_at(self.eye, self.toward_eye, position)
+        # A surface exactly at a converging camera has no direction to be
+        # seen along.
         if toward_eye.length() == 0:
             return FloatColor(0.0, 0.0, 0.0, 1.0)
-        toward_eye.normalize()
         var red = Float32(0)
         var green = Float32(0)
         var blue = Float32(0)

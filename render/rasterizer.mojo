@@ -750,6 +750,53 @@ def packed_depth(z: Float32) -> Float32:
     return 1 - (z * 0.5 + 0.5)
 
 
+def interpolate_alpha(
+    first: Float32,
+    second: Float32,
+    third: Float32,
+    share_b: Float32,
+    share_c: Float32,
+) -> Float32:
+    """Return a fragment's alpha, in the one form that keeps a constant one
+    constant.
+
+    The obvious spelling, `a * sa + b * sb + c * sc`, is three rounded
+    products and two rounded sums, and the three weights sum to one only up
+    to rounding. So a triangle whose corners all carry an alpha of one can
+    reach a fragment holding 0.99999994, which is invisible everywhere it
+    is quantized and fatal where it is *compared*: an alpha test of one
+    then throws away a fully opaque surface, and one of a half cuts holes
+    in a uniformly half-covered one.
+
+    Written as a difference from the first corner instead:
+
+        alpha = a + sb * (b - a) + sc * (c - a)
+
+    which is the same number in exact arithmetic, because the weights sum
+    to one. When the three alphas are equal the differences are exactly
+    zero and the first corner's value comes back untouched, whatever the
+    weights rounded to. Where the alphas really do differ this rounds no
+    worse than the sum it replaces.
+
+    Only alpha is spelled this way. Red, green and blue reach a
+    quantization and cannot show a last-bit error; alpha reaches a
+    threshold and can. Both rasterizers call this, so neither can cut a
+    hole the other keeps.
+
+    Args:
+        first: The first corner's alpha, the one the others are measured
+            from.
+        second: The second corner's alpha.
+        third: The third corner's alpha.
+        share_b: The second corner's perspective-correct weight.
+        share_c: The third corner's weight.
+
+    Returns:
+        The interpolated alpha.
+    """
+    return first + share_b * (second - first) + share_c * (third - first)
+
+
 def check_triangle_state(
     a: RasterVertex, b: RasterVertex, c: RasterVertex
 ) raises:
@@ -776,10 +823,13 @@ def check_triangle_state(
 
     Raises:
         Error: If the three corners do not agree on their blend policy, on
-            any of their three maps, on their material kind or on their
-            alpha test; if the agreed policy is neither `OPAQUE` nor
-            `BLEND`, the agreed kind is none of the four, or the agreed
-            alpha test is outside zero to one or not finite; or if any
+            any of their three maps, on their material kind, on their
+            alpha test or on their shininess; if the agreed policy is
+            neither `OPAQUE` nor `BLEND`, the agreed kind is none of the
+            five, the agreed alpha test is outside zero to one or not
+            finite, or the agreed shininess is negative or not finite; if
+            the agreed kind shows data and the agreed policy is `BLEND`,
+            which no pixel could resolve; or if any
             texture id is a negative other than `NO_TEXTURE`, which
             nothing can ever hold.
     """
@@ -809,7 +859,16 @@ def check_triangle_state(
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is neither OPAQUE nor BLEND")
     if not a.kind.is_valid():
-        raise Error("A triangle's material kind is none of the four")
+        raise Error("A triangle's material kind is none of the five")
+    # A fragment that shows data cannot be mixed into one that shows light:
+    # the pixel would hold part of each and resolve as neither. Refused
+    # here so that both backends refuse it, and so that `RenderTarget.blend`
+    # can say a mixture is always light. See `render.target`.
+    if a.kind.is_data() and a.blend == BLEND:
+        raise Error(
+            "A normal or depth material cannot blend: a pixel holds its"
+            " bytes or the scene's light, not a mixture of the two"
+        )
     if a.texture != NO_TEXTURE and a.texture.value < 0:
         raise Error("A triangle names a texture id that nothing can hold")
     if a.emissive_map != NO_TEXTURE and a.emissive_map.value < 0:
@@ -1044,7 +1103,9 @@ def rasterize_shaded(
                 a.color.r * share_a + b.color.r * share_b + c.color.r * share_c,
                 a.color.g * share_a + b.color.g * share_b + c.color.g * share_c,
                 a.color.b * share_a + b.color.b * share_b + c.color.b * share_c,
-                a.color.a * share_a + b.color.a * share_b + c.color.a * share_c,
+                interpolate_alpha(
+                    a.color.a, b.color.a, c.color.a, share_b, share_c
+                ),
             )
             # An unlit surface shows its own color: neither the lights nor
             # the normal are consulted. A normal material consults the
@@ -1233,7 +1294,7 @@ def rasterize_shaded(
                 )
                 shaded = fog_mix(shaded, fog.color, fog.factor_at(depth))
             if blended:
-                target.blend(x, y, shaded, data)
+                target.blend(x, y, shaded)
             else:
                 # The depth an alpha-tested fragment did not claim before it
                 # was shaded, claimed now that it has survived.

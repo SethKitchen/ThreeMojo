@@ -16,7 +16,9 @@ So a normal written as linear 0.5 encodes to 188, not 128. And a tone mapping cu
 
 `resolve` encodes that value and gets the same bytes. The two conversions cancel.
 
-The target also records, per pixel, that the pixel holds data. `resolve` reads the flag and encodes such a pixel without tone mapping it. The last fragment written or blended into a pixel decides.
+The target also records, per pixel, that the pixel holds data. `resolve` reads the flag and encodes such a pixel without tone mapping it. The last fragment written into a pixel decides.
+
+A data material cannot blend, and both rasterizers refuse the pair. So a blend never mixes bytes with light, and a pixel that a blend touches holds light. A blend at alpha zero touches nothing and leaves the flag alone.
 
 ## Why a flag per pixel
 

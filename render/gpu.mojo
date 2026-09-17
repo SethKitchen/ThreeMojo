@@ -44,7 +44,7 @@ from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
-from lights.lighting import Lighting, blinn_phong, falloff
+from lights.lighting import Lighting, blinn_phong, falloff, toward_eye_at
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.rasterizer import (
@@ -56,6 +56,7 @@ from render.rasterizer import (
     Triangle,
     check_alpha_map,
     check_triangle_state,
+    interpolate_alpha,
     packed_depth,
     packed_normal,
 )
@@ -160,12 +161,14 @@ comptime FOG_G = 4
 comptime FOG_B = 5
 comptime FOG_FLOATS = FOG_B + 1
 
-# How the light buffer begins: where the camera is, then the ambient term,
-# then the directional lights. Named here for the reason the vertex lanes
-# are, and read by `flatten_lights`, `_arriving` and `_highlight` alike.
+# How the light buffer begins: where the camera is, the one direction
+# toward it when its rays are parallel, then the ambient term, then the
+# directional lights. Named here for the reason the vertex lanes are, and
+# read by `flatten_lights`, `_arriving` and `_highlight` alike.
 comptime LIGHTS_EYE = 0
-comptime LIGHTS_AMBIENT = 3
-comptime LIGHTS_FIRST = 6
+comptime LIGHTS_TOWARD = 3
+comptime LIGHTS_AMBIENT = 6
+comptime LIGHTS_FIRST = 9
 
 # Further than any NDC depth, so the first covering triangle always wins. The
 # host framebuffer uses an actual infinity; a literal keeps the kernel free of
@@ -300,7 +303,8 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
 def flatten_lights(lighting: Lighting) -> List[Float32]:
     """Return a scene's lights as the flat float buffer the kernel reads.
 
-    Three floats of camera position, then three of ambient, then six per
+    Three floats of camera position, three of the one direction toward it
+    under a parallel projection, then three of ambient, then six per
     directional light -- a unit
     direction and the light it carries -- then eight per point light: where
     it is, the light it carries, its decay and its cutoff. Then nine per
@@ -313,7 +317,10 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
 
     The camera comes first because a `PHONG` material measures its
     highlight from there, and because putting it at the head leaves every
-    light's offset one named constant away.
+    light's offset one named constant away. The direction beside it is
+    zero for a converging projection, which is what tells the kernel to
+    work each fragment's direction out from the position instead; see
+    `lights.lighting.toward_eye_at`.
 
     Args:
         lighting: The scene's lights, resolved to world space.
@@ -326,6 +333,9 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     flat.append(lighting.eye.x)
     flat.append(lighting.eye.y)
     flat.append(lighting.eye.z)
+    flat.append(lighting.toward_eye.x)
+    flat.append(lighting.toward_eye.y)
+    flat.append(lighting.toward_eye.z)
     flat.append(lighting.ambient.r)
     flat.append(lighting.ambient.g)
     flat.append(lighting.ambient.b)
@@ -550,14 +560,23 @@ def _highlight(
     The ambient and hemisphere terms are absent from both: neither has a
     direction, so neither makes a highlight.
     """
-    var toward_eye = Vector3(
-        lights[unsafe_offset=LIGHTS_EYE] - px,
-        lights[unsafe_offset=LIGHTS_EYE + 1] - py,
-        lights[unsafe_offset=LIGHTS_EYE + 2] - pz,
+    # One fixed direction under a parallel projection, and the way to the
+    # camera's position under a converging one: the host's own function.
+    var toward_eye = toward_eye_at(
+        Vector3(
+            lights[unsafe_offset=LIGHTS_EYE],
+            lights[unsafe_offset=LIGHTS_EYE + 1],
+            lights[unsafe_offset=LIGHTS_EYE + 2],
+        ),
+        Vector3(
+            lights[unsafe_offset=LIGHTS_TOWARD],
+            lights[unsafe_offset=LIGHTS_TOWARD + 1],
+            lights[unsafe_offset=LIGHTS_TOWARD + 2],
+        ),
+        Vector3(px, py, pz),
     )
     if toward_eye.length() == 0:
         return Vector3(0, 0, 0)
-    toward_eye.normalize()
     var normal = Vector3(nx, ny, nz)
     var red = Float32(0)
     var green = Float32(0)
@@ -1314,10 +1333,14 @@ def rasterize_kernel(
                 + corners[unsafe_offset=b_base + LANE_B] * share_b
                 + corners[unsafe_offset=c_base + LANE_B] * share_c
             )
-            alpha = (
-                corners[unsafe_offset=base + LANE_A] * share_a
-                + corners[unsafe_offset=b_base + LANE_A] * share_b
-                + corners[unsafe_offset=c_base + LANE_A] * share_c
+            # The difference form, so a constant alpha reaches the alpha
+            # test exactly: the host's own function.
+            alpha = interpolate_alpha(
+                corners[unsafe_offset=base + LANE_A],
+                corners[unsafe_offset=b_base + LANE_A],
+                corners[unsafe_offset=c_base + LANE_A],
+                share_b,
+                share_c,
             )
             red *= arriving.x
             green *= arriving.y
@@ -1497,10 +1520,6 @@ def rasterize_kernel(
         # translucent one, so `nearest` is already final when the first
         # blended fragment arrives -- the same guarantee `rasterize_shaded`
         # relies on, and the reason `Renderer.prepare` sorts.
-        found = True
-        # The last fragment in decides whether the pixel holds data, as the
-        # host's target decides it.
-        data = shows_data
         var share = alpha
         if share > 1:
             share = 1
@@ -1508,9 +1527,17 @@ def rasterize_kernel(
             share = 0
         # Asked the way the host asks it -- "is it BLEND?" -- so anything
         # else is opaque on both sides rather than opaque on one.
-        if maps[
+        var mixes = maps[
             unsafe_offset=index * STATE_PER_TRIANGLE + STATE_BLEND
-        ] != Int32(BLEND.value) or mode == Int32(SHADE_UV.value):
+        ] == Int32(BLEND.value) and mode != Int32(SHADE_UV.value)
+        # A source-over fragment that covers nothing contributes no color,
+        # so it must contribute no depth and no answer about what the pixel
+        # holds either. `RenderTarget.blend` returns early for the same
+        # reason; see `render.target`.
+        if mixes and share == 0:
+            continue
+        found = True
+        if not mixes:
             # Nothing behind contributes. The surface's own alpha is kept
             # rather than forced to one, so an opaque material drawn with a
             # partly transparent texture resolves partly transparent.
@@ -1520,6 +1547,9 @@ def rasterize_kernel(
             mixed_a = share
             nearest = z
             solid = True
+            # A write replaces the pixel, so its answer becomes this
+            # fragment's, exactly as `RenderTarget.write` decides it.
+            data = shows_data
         else:
             # Source-over, premultiplied: a weighted sum with no special case.
             var keep = 1 - share
@@ -1527,6 +1557,10 @@ def rasterize_kernel(
             mixed_g = green * share + mixed_g * keep
             mixed_b = blue * share + mixed_b * keep
             mixed_a = share + mixed_a * keep
+            # A mixture with light in it is light, and only light blends:
+            # a fragment that shows data is refused this policy by
+            # `check_triangle_state`. See `render.target`.
+            data = False
 
     var word = background
     var nearest_depth = inf[DType.float32]()
@@ -1686,8 +1720,8 @@ struct GpuRenderer(Movable):
         self.depth = self.context.enqueue_create_buffer[DType.float32](
             width * height
         )
-        # Room for the camera, the ambient term and one directional light
-        # to begin with.
+        # Room for the camera, its direction, the ambient term and one
+        # directional light to begin with.
         self.light_room = LIGHTS_FIRST + 6
         self.lights = self.context.enqueue_create_buffer[DType.float32](
             self.light_room

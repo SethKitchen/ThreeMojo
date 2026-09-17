@@ -83,13 +83,14 @@ from render.tonemap import (
 from render.rasterizer import rasterize_all
 from units.si import InverseLength, PER_METER
 from core.layers import Layers
-from renderers.renderer import camera_position
+from renderers.renderer import camera_position, toward_camera
 from render.gpu import (
     FLOATS_PER_VERTEX,
     FOG_FLOATS,
     LIGHTS_AMBIENT,
     LIGHTS_EYE,
     LIGHTS_FIRST,
+    LIGHTS_TOWARD,
     STATE_PER_TRIANGLE,
     TABLE_COLUMNS,
     GpuRenderer,
@@ -3877,9 +3878,10 @@ def test_flattening_carries_the_specular_and_the_shininess() raises:
     assert_equal(flat[24], Float32(30.0))
 
 
-def test_the_light_buffer_begins_with_the_camera() raises:
+def test_the_light_buffer_begins_with_the_camera_and_its_direction() raises:
     # A highlight is measured from there, and putting the camera at the
-    # head leaves every light's offset one named constant away.
+    # head leaves every light's offset one named constant away. The
+    # direction beside it is what a parallel projection puts there.
     var scene = Scene()
     var lamp = Object3D()
     lamp.set_position(0, 0, 1)
@@ -3892,10 +3894,23 @@ def test_the_light_buffer_begins_with_the_camera() raises:
     assert_equal(flat[LIGHTS_EYE], Float32(7))
     assert_equal(flat[LIGHTS_EYE + 1], Float32(8))
     assert_equal(flat[LIGHTS_EYE + 2], Float32(9))
+    # Nothing said which way the camera lies, so the lanes hold the zero
+    # vector that means a converging view; see `toward_eye_at`.
+    assert_equal(flat[LIGHTS_TOWARD], Float32(0))
+    assert_equal(flat[LIGHTS_TOWARD + 1], Float32(0))
+    assert_equal(flat[LIGHTS_TOWARD + 2], Float32(0))
     assert_equal(flat[LIGHTS_AMBIENT], Float32(1))
     # The one directional light follows, its unit direction then its light.
     assert_equal(flat[LIGHTS_FIRST + 2], Float32(1))
     assert_equal(flat[LIGHTS_FIRST + 3], Float32(1))
+    # A parallel projection puts its one direction there, normalized on the
+    # way in so no fragment has to.
+    var flat_view = flatten_lights(
+        Lighting(scene, Layers.all(), Vector3(7, 8, 9), Vector3(0, 0, 4))
+    )
+    assert_equal(flat_view[LIGHTS_TOWARD], Float32(0))
+    assert_equal(flat_view[LIGHTS_TOWARD + 1], Float32(0))
+    assert_equal(flat_view[LIGHTS_TOWARD + 2], Float32(1))
 
 
 def phong_pair(specular: FloatColor, shininess: Float32) -> List[RasterVertex]:
@@ -4131,6 +4146,333 @@ def test_both_backends_refuse_a_shininess_they_cannot_reach() raises:
         renderer.draw(corners, BACKGROUND)
     with assert_raises():
         rasterize_all(corners, target)
+
+
+# --- a blend that covers nothing, on both backends --------------------------
+
+
+def sheet_over(z: Float32, alpha: Float32) -> List[RasterVertex]:
+    """Return two blended triangles covering everything, at `alpha`.
+
+    White, so a backend that lets an empty source-over contribute shows it
+    at once.
+
+    Args:
+        z: Depth to put them at, in front of what they cover.
+        alpha: Coverage, zero for a fragment that must change nothing.
+
+    Returns:
+        Six raster vertices, three per triangle.
+    """
+    var places: List[Tuple[Float32, Float32]] = [
+        (Float32(0), Float32(0)),
+        (Float32(40), Float32(0)),
+        (Float32(0), Float32(40)),
+        (Float32(40), Float32(0)),
+        (Float32(40), Float32(40)),
+        (Float32(0), Float32(40)),
+    ]
+    var corners = List[RasterVertex]()
+    for place in places:
+        corners.append(
+            RasterVertex(
+                place[0],
+                place[1],
+                z,
+                1,
+                FloatColor(1, 1, 1, alpha),
+                blend=BLEND,
+            )
+        )
+    return corners^
+
+
+def test_both_backends_ignore_a_blend_that_covers_nothing() raises:
+    # Source-over at alpha zero hides nothing and adds nothing, so it must
+    # add no color, no depth and no answer about what the pixel holds. The
+    # kernel recorded the last two before it looked at the alpha, which let
+    # an invisible fragment take the data flag off a normal and put the
+    # curve back on its bytes.
+    if skipped_for_lack_of_a_gpu("both backends ignore an empty blend"):
+        return
+    var covered = data_pair(NORMALS)
+    for here in sheet_over(0.05, 0.0):
+        covered.append(here)
+    var alone = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(
+        data_pair(NORMALS),
+        alone,
+        SHADE_TEXTURE,
+        TextureStore(),
+        Lighting.uniform(),
+    )
+    var under = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(
+        covered, under, SHADE_TEXTURE, TextureStore(), Lighting.uniform()
+    )
+    var plain = alone.resolve(1, REINHARD_TONE_MAPPING, 1.0)
+    var veiled = under.resolve(1, REINHARD_TONE_MAPPING, 1.0)
+    assert_equal(count_mismatches(plain, veiled), 0)
+    assert_true(under.is_data(12, 12), "the empty blend took the data flag")
+    var gpu = render_triangles(
+        covered,
+        24,
+        18,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        TextureStore(),
+        Lighting.uniform(),
+        FogView(no_fog()),
+        REINHARD_TONE_MAPPING,
+        1.0,
+    )
+    assert_equal(count_mismatches(plain, gpu, tolerance=1), 0)
+    for y in range(18):
+        for x in range(24):
+            assert_almost_equal(
+                gpu.depth_at(x, y), plain.depth_at(x, y), atol=Float64(1e-5)
+            )
+    # A sheet that does cover something changes both, so the rule is about
+    # the alpha and not about the sheet.
+    var faint = data_pair(NORMALS)
+    for here in sheet_over(0.05, 0.5):
+        faint.append(here)
+    var mixed = render_triangles(
+        faint,
+        24,
+        18,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        TextureStore(),
+        Lighting.uniform(),
+        FogView(no_fog()),
+        REINHARD_TONE_MAPPING,
+        1.0,
+    )
+    assert_true(count_mismatches(plain, mixed) > 50, "a real blend did nothing")
+    # And over nothing at all it leaves the background, rather than writing
+    # a transparent black where it found no contribution.
+    var empty = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(sheet_over(0.05, 0.0), empty, SHADE_TEXTURE)
+    var clear = empty.resolve()
+    var device = render_triangles(
+        sheet_over(0.05, 0.0), 24, 18, BACKGROUND, SHADE_TEXTURE
+    )
+    assert_equal(count_mismatches(clear, device), 0)
+    assert_equal(device.get_pixel(12, 12).r, BACKGROUND.r)
+    assert_equal(device.get_pixel(12, 12).a, UInt8(255))
+    assert_equal(device.depth_at(12, 12), inf[DType.float32]())
+
+
+# --- a highlight under a parallel projection, on both backends --------------
+
+
+def test_both_backends_agree_on_a_parallel_view_highlight() raises:
+    # A parallel projection sees every point of a flat sheet from one
+    # direction, so the sheet reflects evenly. The kernel reads that
+    # direction from the light buffer rather than working it out from the
+    # camera's position, and must reach the same even highlight.
+    if skipped_for_lack_of_a_gpu("both backends agree on a parallel highlight"):
+        return
+    var renderer = Renderer(32, 24)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER), 4, 4)
+    )
+    var shiny = assets.materials.add(
+        phong_material(Color(0, 0, 0), NO_TEXTURE, Color(255, 255, 255), 30.0)
+    )
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 5)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.update()
+    var camera = centered(
+        Length(6.0, METER),
+        Float32(32) / Float32(24),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(sheet, shiny, NodeId(0)))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the sheet prepared no triangles")
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+    )
+    var target = RenderTarget(32, 24, BACKGROUND)
+    rasterize_all(corners, target, SHADE_TEXTURE, assets.textures, lighting)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 32, 24, BACKGROUND, SHADE_TEXTURE, assets.textures, lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # Even across the sheet on the device too, which is what says the
+    # kernel read the direction rather than the camera's position.
+    var middle = gpu.get_pixel(16, 12)
+    assert_true(middle.r > 200, "the sheet caught no highlight")
+    for y in range(4, 20):
+        for x in range(6, 26):
+            assert_true(
+                _apart(gpu.get_pixel(x, y).r, middle.r) <= 1,
+                "the device highlight is not even across a parallel view",
+            )
+
+
+# --- the whole phong path at once, through either kind of camera ------------
+
+
+def a_masked_phong_frame[
+    C: Camera
+](camera: C, alpha_test: Float32) raises -> Int:
+    """Draw an alpha-tested phong sheet through `camera` on both backends.
+
+    A turned and tiled mask cuts the holes, a fog veils what survives and a
+    curve compresses it. Asserts the two agree in color and in depth, and
+    returns how many pixels a fragment claimed the depth of, so a caller
+    can say the mask really cut something out.
+
+    Args:
+        camera: The camera to project through.
+        alpha_test: The cutoff, or zero to keep every fragment.
+
+    Returns:
+        How many pixels the host claimed a depth for.
+
+    Raises:
+        Error: If the two backends disagree, or the sheet barely drew.
+    """
+    var renderer = Renderer(32, 24)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(4.0, METER), Length(4.0, METER), 6, 6)
+    )
+    var mask = checkerboard(
+        16,
+        4,
+        Color(0, 255, 0),
+        Color(0, 0, 0),
+        REPEAT,
+        NEAREST,
+        LINEAR,
+        False,
+        IGNORED,
+    )
+    mask.repeat = Vector2(2, 1.5)
+    mask.rotation = Angle(25.0, DEGREE)
+    mask.center = Vector2(0.5, 0.5)
+    mask.offset = Vector2(0.1, -0.2)
+    var cut = assets.materials.add(
+        Material(
+            Color(200, 90, 60),
+            kind=PHONG,
+            alpha_map=assets.textures.add(mask^),
+            alpha_test=alpha_test,
+            specular=Color(255, 255, 255),
+            shininess=40.0,
+        )
+    )
+    var scene = Scene()
+    var tilted = Object3D()
+    tilted.set_euler(
+        Angle(-25.0, DEGREE), Angle(15.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var node = scene.add(tilted^)
+    light_the(scene)
+    var bulb = Object3D()
+    bulb.set_position(0.5, 1.0, 2.0)
+    var bulb_node = scene.add(bulb^)
+    scene.add_light(point_light(Color(255, 220, 180), bulb_node, 2.0))
+    scene.fog = linear_fog(
+        Color(160, 170, 190), Length(2.0, METER), Length(9.0, METER)
+    )
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(sheet, cut, node))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the sheet prepared no triangles")
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+    )
+    var view = FogView(scene.fog)
+    var target = RenderTarget(32, 24, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_TEXTURE, assets.textures, lighting, 1, view
+    )
+    var cpu = target.resolve(1, AGX_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        corners,
+        32,
+        24,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+        view,
+        AGX_TONE_MAPPING,
+        1.0,
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # The depth agrees everywhere too, which is what says the late write
+    # for a cut fragment happened on both.
+    var claimed = 0
+    for y in range(24):
+        for x in range(32):
+            var theirs = cpu.depth_at(x, y)
+            if theirs > 1.0e30:
+                assert_true(
+                    gpu.depth_at(x, y) > 1.0e30,
+                    "the kernel claimed a depth the host cut away",
+                )
+            else:
+                claimed += 1
+                assert_almost_equal(
+                    gpu.depth_at(x, y), theirs, atol=Float64(1e-5)
+                )
+    return claimed
+
+
+def test_both_backends_agree_on_a_masked_phong_frame() raises:
+    # Every part of this change at once -- the highlight, the alpha map,
+    # the cutoff and the late depth write -- through a fog and a curve, and
+    # through both kinds of camera, because the highlight asks the
+    # projection which direction the camera lies in.
+    if skipped_for_lack_of_a_gpu("both backends agree on a masked phong frame"):
+        return
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(32) / Float32(24),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0.6, 0.8, 3.4), Vector3(0, 0, 0))
+    var cut = a_masked_phong_frame(camera, 0.5)
+    var whole = a_masked_phong_frame(camera, 0.0)
+    assert_true(cut > 50, "the masked sheet barely drew anything")
+    assert_true(cut < whole, "the mask cut nothing out of the near view")
+    # The same frame through a parallel projection.
+    var flat = centered(
+        Length(4.0, METER),
+        Float32(32) / Float32(24),
+        Length(0.1, METER),
+        Length(12.0, METER),
+    )
+    flat.place(Vector3(0.6, 0.8, 3.4), Vector3(0, 0, 0))
+    var parallel = a_masked_phong_frame(flat, 0.5)
+    var full = a_masked_phong_frame(flat, 0.0)
+    assert_true(parallel > 50, "the parallel sheet barely drew anything")
+    assert_true(parallel < full, "the mask cut nothing out of the flat view")
 
 
 def main() raises:

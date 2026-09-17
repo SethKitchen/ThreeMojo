@@ -51,6 +51,7 @@ from render.rasterizer import (
     Triangle,
     check_alpha_map,
     data_color,
+    interpolate_alpha,
     edge,
     mip_level,
     packed_depth,
@@ -2195,20 +2196,28 @@ def test_a_maps_alpha_cuts_a_depth_out_and_its_color_does_not() raises:
         data_quad(DEPTH, z=0.5, texture=cut), textures=textures
     )
     assert_same_color(shown.shown(4, 4), Color(64, 64, 64, 128))
-    # Blended over an opaque black target, half of that gray's light
-    # arrives and the pixel stays opaque, as any half-covered fragment
-    # does. The gray itself is still the depth's.
-    var mixed = data_pixel(
-        data_quad(DEPTH, z=0.5, blend=BLEND, texture=cut), textures=textures
-    )
-    var gray = FloatColor(srgb=Color(64, 64, 64))
-    var share = Float32(128) / 255
-    assert_same_color(
-        mixed.shown(4, 4),
-        FloatColor(
-            gray.r * share, gray.g * share, gray.b * share, 1.0
-        ).encode(),
-    )
+    # The alpha reaches the pixel as coverage and the gray comes back
+    # exact, because the fragment is written rather than mixed. Mixing is
+    # refused: see the next test.
+
+
+def test_a_data_triangle_cannot_blend() raises:
+    # One pixel cannot hold part of a normal and part of the scene's light.
+    # Refused by both backends from the same function, on one worker and
+    # on four, so `RenderTarget.blend` can say a mixture is always light.
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    for kind in [NORMALS, DEPTH]:
+        var corners = data_quad(kind, blend=BLEND)
+        with assert_raises():
+            rasterize_shaded(corners[0], corners[1], corners[2], target)
+        for workers in [1, 4]:
+            with assert_raises():
+                rasterize_all(corners, target, workers=workers)
+        # Opaque is what such a surface must be, and it draws.
+        rasterize_all(data_quad(kind, blend=OPAQUE), target)
+    # A lit triangle blends as it always did.
+    rasterize_all(data_quad(LAMBERT, blend=BLEND), target)
+    rasterize_all(data_quad(BASIC, blend=BLEND), target)
 
 
 def test_a_data_material_is_never_fogged() raises:
@@ -2756,6 +2765,99 @@ def test_a_shininess_that_is_not_a_number_is_refused() raises:
     # Zero and a very tight lobe are both legal.
     rasterize_all(phong_quad(FloatColor(1, 1, 1), 0.0), target)
     rasterize_all(phong_quad(FloatColor(1, 1, 1), 1000.0), target)
+
+
+# --- interpolation that keeps a constant constant ---------------------------
+
+
+def test_a_constant_alpha_survives_interpolation() raises:
+    # The weights are three rounded floats that sum to one only up to
+    # rounding, so the obvious `a * sa + b * sb + c * sc` can reach
+    # 0.99999994 for three alphas of one. That is invisible where alpha is
+    # quantized and fatal where it is compared: an alpha test of one then
+    # throws away a fully opaque surface.
+    assert_equal(interpolate_alpha(1.0, 1.0, 1.0, 0.9499999, 0.041666664), 1.0)
+    assert_equal(interpolate_alpha(0.5, 0.5, 0.5, 0.3, 0.45), 0.5)
+    # The old spelling does not, at the weights one real pixel produced.
+    var summed = (
+        Float32(1) * Float32(0.008333333)
+        + Float32(1) * Float32(0.9499999)
+        + Float32(1) * Float32(0.041666664)
+    )
+    assert_true(summed < 1.0, "the weights no longer expose the rounding")
+    # Where the alphas differ it interpolates as it always did: the ends
+    # exactly, and the middle in between.
+    assert_equal(interpolate_alpha(0.0, 1.0, 1.0, 0.0, 0.0), 0.0)
+    assert_equal(interpolate_alpha(0.0, 1.0, 0.0, 1.0, 0.0), 1.0)
+    assert_equal(interpolate_alpha(0.0, 0.0, 1.0, 0.0, 1.0), 1.0)
+    assert_almost_equal(
+        interpolate_alpha(0.0, 1.0, 1.0, 0.25, 0.25),
+        Float32(0.5),
+        atol=Float64(1e-7),
+    )
+
+
+def covered_pixels(target: RenderTarget) raises -> Int:
+    """Return how many pixels of `target` a fragment claimed the depth of."""
+    var claimed = 0
+    for y in range(target.height):
+        for x in range(target.width):
+            if target.depth_at(x, y) < 1.0e30:
+                claimed += 1
+    return claimed
+
+
+def opaque_triangle(alpha: Float32, alpha_test: Float32) -> List[RasterVertex]:
+    """Return one large triangle of a uniform alpha, tested at
+    `alpha_test`."""
+    var corners = List[RasterVertex]()
+    var places: List[Tuple[Float32, Float32]] = [
+        (Float32(0), Float32(0)),
+        (Float32(60), Float32(0)),
+        (Float32(0), Float32(60)),
+    ]
+    for place in places:
+        corners.append(
+            data_corner(
+                place[0],
+                place[1],
+                BASIC,
+                Vector3(0, 0, 1),
+                0.5,
+                alpha,
+                OPAQUE,
+                0,
+                NO_TEXTURE,
+                NO_TEXTURE,
+                alpha_test,
+            )
+        )
+    return corners^
+
+
+def test_a_uniform_surface_is_not_cut_by_its_own_alpha_test() raises:
+    # A triangle that is opaque at every corner, tested against one: every
+    # covered pixel must survive, and the image and depth must be what the
+    # same triangle gives with no test at all. A last-bit error in the
+    # interpolated alpha used to punch holes in it.
+    var tested = RenderTarget(64, 64, Color(0, 0, 0))
+    rasterize_all(opaque_triangle(1.0, 1.0), tested, SHADE_TEXTURE)
+    var plain = RenderTarget(64, 64, Color(0, 0, 0))
+    rasterize_all(opaque_triangle(1.0, 0.0), plain, SHADE_TEXTURE)
+    var claimed = covered_pixels(plain)
+    assert_true(claimed > 1500, "the triangle covered almost nothing")
+    assert_equal(covered_pixels(tested), claimed)
+    for y in range(64):
+        for x in range(64):
+            assert_equal(tested.depth_at(x, y), plain.depth_at(x, y))
+            assert_equal(tested.shown(x, y).r, plain.shown(x, y).r)
+            assert_equal(tested.shown(x, y).a, plain.shown(x, y).a)
+    # And a uniformly half-covered surface tested against exactly a half.
+    var half = RenderTarget(64, 64, Color(0, 0, 0))
+    rasterize_all(opaque_triangle(0.5, 0.5), half, SHADE_TEXTURE)
+    var loose = RenderTarget(64, 64, Color(0, 0, 0))
+    rasterize_all(opaque_triangle(0.5, 0.0), loose, SHADE_TEXTURE)
+    assert_equal(covered_pixels(half), covered_pixels(loose))
 
 
 def main() raises:

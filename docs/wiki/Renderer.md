@@ -22,6 +22,7 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `render(scene, assets, camera) -> Framebuffer` | `prepare`, then rasterize and resolve. |
 | `available_workers() -> Int` | One per logical core. |
 | `camera_position(scene, camera) -> Vector3` | Where the camera stands, in world space. |
+| `toward_camera(scene, camera) -> Vector3` | The one direction toward it, or `PERSPECTIVE_VIEW`. |
 
 `scene.update()` must run before `prepare` or `render`. The renderer reads world matrices and does not recompute them.
 
@@ -77,7 +78,9 @@ Each instance of an instanced or batched mesh is tested on its own, with the ins
 
 ## What render does
 
-`render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, camera.visible_layers(), camera_position(scene, camera))`. A light on a layer the camera does not watch lights nothing. The camera's position goes with the lights because a `PHONG` material measures its highlight from there. See [Lights](Lights#lighting).
+`render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, camera.visible_layers(), camera_position(scene, camera), toward_camera(scene, camera))`. A light on a layer the camera does not watch lights nothing. The camera's position goes with the lights because a `PHONG` material measures its highlight from there. See [Lights](Lights#lighting).
+
+`toward_camera` goes with it because a parallel projection has one direction toward the camera for every surface. It asks `Matrix4.is_affine()` of the projection matrix. A converging projection has a bottom row that is not (0, 0, 0, 1), and `toward_camera` returns `PERSPECTIVE_VIEW` for it. A parallel one returns the camera's own world +z axis, made unit length. See [Lights](Lights#which-way-the-camera-lies).
 
 It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). Then it rasterizes the triangles and resolves the image through the tone mapping curve.
 

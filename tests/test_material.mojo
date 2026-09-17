@@ -19,7 +19,7 @@ from materials.material import (
     Material,
     MaterialStore,
 )
-from render.framebuffer import Color
+from render.framebuffer import Color, FloatColor
 from render.texture import Texture, checkerboard
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from std.testing import (
@@ -88,12 +88,13 @@ def test_a_normal_material_is_white_and_front_facing_by_default() raises:
     assert_equal(shown.side, FRONT_SIDE)
     assert_equal(shown.opacity, Float32(1))
     assert_false(shown.is_transparent())
-    # And it takes the three properties its shader does read.
-    var pane = normal_material(DOUBLE_SIDE, 0.5)
+    # And it takes the properties its shader does read. An opacity below
+    # one would make it blend, which a data material cannot do, so an
+    # explicit OPAQUE is what keeps such a surface legal.
+    var pane = normal_material(DOUBLE_SIDE, 0.5, OPAQUE)
     assert_equal(pane.side, DOUBLE_SIDE)
     assert_equal(pane.opacity, Float32(0.5))
-    assert_true(pane.is_transparent())
-    assert_true(normal_material(FRONT_SIDE, 1.0, BLEND).is_transparent())
+    assert_false(pane.is_transparent())
 
 
 def test_a_depth_material_takes_a_map_that_cuts_it_out() raises:
@@ -103,12 +104,12 @@ def test_a_depth_material_takes_a_map_that_cuts_it_out() raises:
     assert_false(shown.is_textured())
     # A map is allowed, unlike on a normal material: three.js's
     # `MeshDepthMaterial` reads its alpha, which cuts the surface out.
-    var cut = depth_material(TextureId(2), BACK_SIDE, 0.25, BLEND)
+    var cut = depth_material(TextureId(2), BACK_SIDE, 0.25, OPAQUE)
     assert_equal(cut.map, TextureId(2))
     assert_true(cut.is_textured())
     assert_equal(cut.side, BACK_SIDE)
     assert_equal(cut.opacity, Float32(0.25))
-    assert_true(cut.is_transparent())
+    assert_false(cut.is_transparent())
     # The same refusals every material makes still apply.
     with assert_raises():
         _ = depth_material(TextureId(-2))
@@ -118,6 +119,36 @@ def test_a_depth_material_takes_a_map_that_cuts_it_out() raises:
         _ = depth_material(NO_TEXTURE, FRONT_SIDE, 2.0)
     with assert_raises():
         _ = normal_material(FRONT_SIDE, 1.0, Blending(7))
+
+
+def test_a_data_material_cannot_blend() raises:
+    # One pixel cannot hold part of a normal and part of the scene's
+    # light, so the mixture is refused rather than resolved as neither.
+    # Stated outright, or inferred from an opacity below one, or from a
+    # base color that could see through -- though a data material's color
+    # must be opaque white anyway.
+    for kind in [NORMALS, DEPTH]:
+        with assert_raises():
+            _ = Material(Color(255, 255, 255), kind=kind, blending=BLEND)
+        with assert_raises():
+            _ = Material(Color(255, 255, 255), kind=kind, opacity=0.5)
+        # Opaque, stated or inferred, is what such a surface must be.
+        _ = Material(Color(255, 255, 255), kind=kind)
+        _ = Material(
+            Color(255, 255, 255), kind=kind, opacity=0.5, blending=OPAQUE
+        )
+    with assert_raises():
+        _ = normal_material(FRONT_SIDE, 1.0, BLEND)
+    with assert_raises():
+        _ = normal_material(FRONT_SIDE, 0.5)
+    with assert_raises():
+        _ = depth_material(NO_TEXTURE, FRONT_SIDE, 1.0, BLEND)
+    with assert_raises():
+        _ = depth_material(NO_TEXTURE, FRONT_SIDE, 0.25)
+    # A lit material blends as it always did, which is what makes the
+    # refusal about the kind and not about the policy.
+    _ = Material(Color(255, 255, 255), kind=LAMBERT, blending=BLEND)
+    _ = Material(Color(255, 255, 255), kind=BASIC, opacity=0.5)
 
 
 def test_a_data_material_refuses_a_color_that_is_not_opaque_white() raises:
@@ -449,7 +480,7 @@ def test_a_normal_material_refuses_an_alpha_map_and_takes_a_test() raises:
     # which cuts by the opacity alone.
     with assert_raises():
         _ = Material(Color(255, 255, 255), kind=NORMALS, alpha_map=TextureId(0))
-    var cut = normal_material(FRONT_SIDE, 0.4, None, 0.5)
+    var cut = normal_material(FRONT_SIDE, 0.4, OPAQUE, 0.5)
     assert_equal(cut.alpha_test, Float32(0.5))
     assert_false(cut.has_alpha_map())
     # A depth material takes both, as three.js's MeshDepthMaterial does.
@@ -486,6 +517,7 @@ def test_a_phong_material_carries_three_js_defaults() raises:
     assert_equal(shiny.specular.b, UInt8(17))
     assert_equal(shiny.shininess, Float32(30))
     assert_true(shiny.has_highlight())
+    assert_equal(shiny.specular_light().r, FloatColor(srgb=shiny.specular).r)
     # And every other property comes through as it does on any material.
     var pane = phong_material(
         Color(1, 2, 3),
@@ -512,21 +544,26 @@ def test_a_phong_material_carries_three_js_defaults() raises:
     )
 
 
-def test_a_phong_material_without_a_specular_has_no_highlight() raises:
-    # The project's defaults are neutral where three.js's are not, so a
-    # bare phong material is a lambert one with a term of zero.
+def test_a_highlight_belongs_to_the_kind_and_not_to_the_color() raises:
+    # `has_highlight` asks the kind. A black specular is a base reflectance
+    # of zero rather than a term switched off: three.js's Fresnel factor
+    # still rises toward one at a grazing angle, so such a surface catches
+    # a dim rim where a lambert one catches nothing. Saying "no highlight"
+    # there would promise what the shader does not do.
     var dull = Material(Color(200, 40, 40), kind=PHONG)
     assert_equal(dull.specular.r, UInt8(0))
     assert_equal(dull.shininess, Float32(0))
-    assert_false(dull.has_highlight())
-    # A shininess alone is not a highlight: black times anything is black.
-    var tight = Material(Color(1, 2, 3), kind=PHONG, shininess=90.0)
-    assert_false(tight.has_highlight())
-    # Any channel above zero is.
+    assert_true(dull.has_highlight())
+    assert_equal(dull.specular_light().r, Float32(0))
     for sheen in [Color(1, 0, 0), Color(0, 1, 0), Color(0, 0, 1)]:
         assert_true(
             Material(Color(1, 2, 3), kind=PHONG, specular=sheen).has_highlight()
         )
+    # Every other kind reflects none, whatever else it carries.
+    assert_false(Material(Color(1, 2, 3)).has_highlight())
+    assert_false(Material(Color(1, 2, 3), kind=BASIC).has_highlight())
+    assert_false(normal_material().has_highlight())
+    assert_false(depth_material().has_highlight())
 
 
 def test_a_specular_is_decoded_to_linear_light() raises:

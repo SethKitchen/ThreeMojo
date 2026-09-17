@@ -6,7 +6,7 @@
 """Tests for `objects.mesh` and `renderers.renderer`."""
 
 from cameras.camera import Camera
-from cameras.orthographic_camera import centered
+from cameras.orthographic_camera import OrthographicCamera, centered
 from render.rasterizer import RasterVertex
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
@@ -66,7 +66,13 @@ from render.texture import (
     checkerboard,
 )
 from render.texture_store import NO_TEXTURE, TextureId
-from renderers.renderer import Renderer, available_workers, face_normal
+from renderers.renderer import (
+    Renderer,
+    available_workers,
+    camera_position,
+    face_normal,
+    toward_camera,
+)
 from std.math import inf, nan
 from std.testing import (
     TestSuite,
@@ -4206,8 +4212,10 @@ def test_a_phong_sphere_shows_a_spot_a_lambert_one_does_not() raises:
 
 
 def test_a_phong_material_is_lit_like_a_lambert_one() raises:
-    # Without a specular it is a lambert surface, which is what says the
-    # highlight is the only thing the kind adds.
+    # Its diffuse term is a lambert term, which is what says the highlight
+    # is the only thing the kind adds. Head on, with a base reflectance of
+    # zero, the Fresnel rim is far below a level and the two images agree
+    # exactly; at a grazing angle they do not, and the test below says so.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var dull = assets.materials.add(Material(Color(200, 100, 50), kind=PHONG))
@@ -4223,6 +4231,142 @@ def test_a_phong_material_is_lit_like_a_lambert_one() raises:
         for x in range(WIDTH):
             assert_equal(one.get_pixel(x, y).r, two.get_pixel(x, y).r)
             assert_equal(one.get_pixel(x, y).g, two.get_pixel(x, y).g)
+
+
+# --- a parallel projection sees every surface from one direction ------------
+
+
+def flat_ortho(height: Float32) raises -> OrthographicCamera:
+    """Return an orthographic camera up the z axis, looking at the origin."""
+    var camera = centered(
+        Length(height, METER),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    return camera^
+
+
+def test_a_perspective_camera_has_no_one_direction_toward_it() raises:
+    # Its rays converge, so each fragment works its own out from the
+    # camera's position. `toward_camera` says so by answering with the
+    # zero vector.
+    var scene = scene_with_node_at(0)
+    var toward = toward_camera(scene, camera_at(0, 0, 4))
+    assert_equal(toward.x, Float32(0))
+    assert_equal(toward.y, Float32(0))
+    assert_equal(toward.z, Float32(0))
+    # An orthographic camera answers with its own backward axis, a unit
+    # vector, which for one up the z axis is +z.
+    var parallel = toward_camera(scene, flat_ortho(4.0))
+    assert_almost_equal(parallel.x, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(parallel.y, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(parallel.z, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(parallel.length(), Float32(1), atol=TOLERANCE)
+    # One placed off the axis answers with the direction it looks back
+    # along, not with where it stands.
+    var tilted = centered(
+        Length(6.0, METER),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    tilted.place(Vector3(0, 4, 4), Vector3(0, 0, 0))
+    var leaning = toward_camera(scene, tilted)
+    assert_almost_equal(leaning.y, Float32(0.7071068), atol=TOLERANCE)
+    assert_almost_equal(leaning.z, Float32(0.7071068), atol=TOLERANCE)
+
+
+def test_an_orthographic_highlight_is_even_across_a_flat_sheet() raises:
+    # A parallel projection sees every point of a flat sheet from the same
+    # direction, so a sheet square on to both the light and the camera
+    # reflects evenly. Working the direction out from the camera's position
+    # instead puts a bright spot in the middle of it, which is the bug this
+    # pins: the corner of the sheet fell from byte 170 to byte 54.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER), 4, 4)
+    )
+    var shiny = assets.materials.add(
+        phong_material(Color(0, 0, 0), NO_TEXTURE, Color(255, 255, 255), 30.0)
+    )
+    var scene = lamp_scene()
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(sheet, shiny, NodeId(0)))
+    var shown = rendered(renderer, scene, assets, meshes, flat_ortho(4.0))
+    var middle = shown.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(middle.r > 200, "the sheet caught no highlight at all")
+    # Every covered pixel agrees with the middle, to the level that
+    # interpolating the normals across the sheet allows.
+    for y in range(2, HEIGHT - 2):
+        for x in range(2, WIDTH - 2):
+            var here = shown.get_pixel(x, y)
+            assert_true(
+                abs(Int(here.r) - Int(middle.r)) <= 1,
+                "the highlight is not even across a parallel view",
+            )
+
+
+def test_moving_an_orthographic_camera_along_its_axis_changes_nothing() raises:
+    # Its rays run parallel, so sliding it back and forth cannot change
+    # which way a surface sees it. A perspective camera's highlight does
+    # move, which is what makes this a test of the projection.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var shiny = assets.materials.add(
+        phong_material(Color(0, 0, 0), NO_TEXTURE, Color(255, 255, 255), 30.0)
+    )
+    var scene = lamp_scene()
+    var meshes = sheet_of(assets, shiny)
+    var near = flat_ortho(4.0)
+    var far = centered(
+        Length(4.0, METER),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    far.place(Vector3(0, 0, 20), Vector3(0, 0, 0))
+    var close = rendered(renderer, scene, assets, meshes, near)
+    var distant = rendered(renderer, scene, assets, meshes, far)
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(close.get_pixel(x, y).r, distant.get_pixel(x, y).r)
+
+
+# --- a black specular is a base reflectance, not a switch -------------------
+
+
+def test_a_black_specular_still_differs_from_lambert_at_a_grazing_angle() raises:
+    # three.js's Fresnel factor rises toward one whatever the surface
+    # reflects head on, so the default phong material is not a lambert one.
+    # A sheet with the light and the camera both far off the normal shows
+    # the rim; a lambert sheet shows nothing.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var dull = assets.materials.add(Material(Color(0, 0, 0), kind=PHONG))
+    var lambert = assets.materials.add(Material(Color(0, 0, 0)))
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    var lamp = Object3D()
+    # Eighty degrees off the normal, on the far side from the camera.
+    lamp.set_position(5.6713, 0, 1.0)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.update()
+    var camera = camera_at(-5.6713, 0, 1.0)
+    var rim = rendered(renderer, scene, assets, sheet_of(assets, dull), camera)
+    var none = rendered(
+        renderer, scene, assets, sheet_of(assets, lambert), camera
+    )
+    var here = rim.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(none.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(0))
+    assert_true(here.r > 0, "the black specular caught no rim at all")
+    assert_true(here.r < 80, "the rim is far brighter than a rim should be")
 
 
 def main() raises:

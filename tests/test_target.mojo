@@ -345,19 +345,53 @@ def test_a_cleared_pixel_holds_light_and_not_data() raises:
         _ = target.is_data(2, 0)
 
 
-def test_writing_or_blending_says_whether_a_pixel_holds_data() raises:
-    # A normal material writes bytes a display must show as they are, and
-    # the last fragment into a pixel decides. Either call can say so, and
-    # either can take it back.
+def test_a_write_replaces_a_pixels_answer_and_a_blend_makes_it_light() raises:
+    # A write replaces the pixel outright, so the pixel's answer becomes
+    # the fragment's, either way round. A blend mixes into what is there,
+    # and a mixture with light in it is light -- only light blends, because
+    # a fragment showing data is refused the policy.
     var target = RenderTarget(2, 1, Color(0, 0, 0))
     target.write(0, 0, FloatColor(0.5, 0.5, 0.5, 1.0), True)
     assert_true(target.is_data(0, 0))
     target.write(0, 0, FloatColor(0.5, 0.5, 0.5, 1.0))
     assert_false(target.is_data(0, 0))
-    target.blend(1, 0, FloatColor(0.5, 0.5, 0.5, 1.0), True)
+    # A translucent lit surface over a data pixel is the one mixture that
+    # can happen, and it resolves as light.
+    target.write(1, 0, FloatColor(0.5, 0.5, 0.5, 1.0), True)
     assert_true(target.is_data(1, 0))
-    target.blend(1, 0, FloatColor(0.5, 0.5, 0.5, 1.0))
+    target.blend(1, 0, FloatColor(0.25, 0.25, 0.25, 0.5))
     assert_false(target.is_data(1, 0))
+
+
+def test_a_blend_that_covers_nothing_changes_nothing_at_all() raises:
+    # Source-over at alpha zero hides nothing and contributes nothing, so
+    # it must not contribute an answer about what the pixel holds either.
+    # It used to: the flag was assigned before the alpha was looked at, and
+    # a fully transparent normal material could switch the tone mapping off
+    # a lit pixel behind it. Twice white through Reinhard is two thirds;
+    # unmapped it clamps to white, which is the bug this pins.
+    var target = RenderTarget(1, 1, Color(0, 0, 0))
+    target.write(0, 0, FloatColor(2.0, 2.0, 2.0, 1.0))
+    var before = target.shown(0, 0, REINHARD_TONE_MAPPING)
+    assert_equal(before.r, FloatColor(2.0 / 3, 0, 0, 1.0).encode().r)
+    target.blend(0, 0, FloatColor(0.0, 0.0, 0.0, 0.0))
+    var after = target.shown(0, 0, REINHARD_TONE_MAPPING)
+    assert_equal(after.r, before.r)
+    assert_false(target.is_data(0, 0))
+    assert_equal(target.color_at(0, 0).r, Float32(2))
+    assert_equal(target.color_at(0, 0).a, Float32(1))
+    # And the other way round: an invisible fragment over a data pixel
+    # leaves it data, so its bytes still come back unmapped.
+    var shown = RenderTarget(1, 1, Color(0, 0, 0))
+    shown.write(0, 0, FloatColor(2.0, 2.0, 2.0, 1.0), True)
+    shown.blend(0, 0, FloatColor(9.0, 9.0, 9.0, 0.0))
+    assert_true(shown.is_data(0, 0))
+    assert_equal(shown.shown(0, 0, REINHARD_TONE_MAPPING).r, UInt8(255))
+    assert_equal(shown.color_at(0, 0).r, Float32(2))
+    # A negative alpha clamps to zero and is the same no-op.
+    shown.blend(0, 0, FloatColor(9.0, 9.0, 9.0, -1.0))
+    assert_true(shown.is_data(0, 0))
+    assert_equal(shown.color_at(0, 0).r, Float32(2))
 
 
 def test_a_data_pixel_is_encoded_but_never_tone_mapped() raises:

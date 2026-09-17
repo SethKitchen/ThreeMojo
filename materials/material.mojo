@@ -76,6 +76,13 @@ moves as the camera does. The highlight is tinted by `specular` and not by
 `color`, which is why a red plastic ball has a white spot on it. A material
 of any other kind refuses both, because no other shader here reads them.
 
+`specular` is a *base* reflectance and not a switch. three.js's Fresnel
+term, `F_Schlick`, rises toward one at a grazing angle whatever the surface
+reflects head on, so a `PHONG` material with a black specular still catches
+a rim where the light and the camera are both far off the normal. It is a
+dim rim -- a few levels at a shininess of zero -- but it is not nothing,
+and `has_highlight` says so: it asks the kind, not the color.
+
 Two more kinds show *data* rather than light: `NORMALS` writes the
 view-space normal as a color, three.js's `MeshNormalMaterial`, and `DEPTH`
 writes how far away the surface is, near white and far black, three.js's
@@ -348,7 +355,10 @@ struct Material(ImplicitlyCopyable):
                 `NORMALS` material are all refused too. A `shininess`
                 that is negative or not finite is refused, and so is any
                 highlight -- a `specular` that is not black, or a positive
-                `shininess` -- on a kind that is not `PHONG`.
+                `shininess` -- on a kind that is not `PHONG`. A `NORMALS`
+                or `DEPTH` material whose blending resolves to `BLEND`,
+                whether stated or inferred from an opacity below one, is
+                refused as well.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -439,19 +449,37 @@ struct Material(ImplicitlyCopyable):
             self.blending = BLEND
         else:
             self.blending = OPAQUE
+        # A surface that shows data cannot be mixed into one that shows
+        # light: the pixel would hold part of each and resolve as neither.
+        # Asked of the *resolved* policy, so an opacity below one is
+        # refused along with a policy stated outright -- see
+        # `render.target`. A map's own alpha is another matter: an opaque
+        # write keeps it, and the bytes come back exact.
+        if kind.is_data() and self.blending == BLEND:
+            raise Error(
+                "A normal or depth material cannot blend: a pixel holds its"
+                " bytes or the scene's light, not a mixture of the two"
+            )
 
     def is_lit(self) -> Bool:
         """Return True if the scene's lights reach this surface."""
         return self.kind.is_lit()
 
     def has_highlight(self) -> Bool:
-        """Return True if this surface sends a highlight to the camera.
+        """Return True if this surface reflects a highlight at all, which is
+        to say whether it is a `PHONG` material.
 
-        A `PHONG` material whose `specular` is not black. The shininess
-        alone does not count: it says how tight the highlight is, and black
-        times anything is black -- the same rule `is_emissive` follows.
+        Not "whether `specular` is set". A black specular is a base
+        reflectance of zero, not a term switched off: three.js's Fresnel
+        factor still rises toward one at a grazing angle, so such a surface
+        catches a dim rim where a `LAMBERT` one catches nothing. Reporting
+        that as "no highlight" would be a promise the shader does not keep.
+
+        `specular` and `shininess` say how strong and how tight the
+        highlight is. Nothing here switches it off; use `LAMBERT` for a
+        surface that reflects none.
         """
-        return self.kind == PHONG and _gives_off_light(self.specular, 1.0)
+        return self.kind == PHONG
 
     def specular_light(self) -> FloatColor:
         """Return how much light this surface sends toward the camera,
@@ -527,8 +555,10 @@ def phong_material(
 
     The defaults are three.js's own: a specular of `0x111111` and a
     shininess of thirty. `Material(color, kind=PHONG)` is the same surface
-    with no highlight at all, because this project's defaults are neutral
-    and three.js's are not.
+    with a base reflectance of zero, because this project's defaults are
+    neutral and three.js's are not. That is not a Lambert surface: the
+    Fresnel term still catches a dim rim at a grazing angle. See
+    `has_highlight`.
 
     three.js's `specularMap`, which would vary the highlight per texel, is
     not ported.
@@ -592,9 +622,10 @@ def normal_material(
 
     Args:
         side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
-        opacity: One for an opaque surface, less to see through it.
-        blending: `OPAQUE` or `BLEND`, or unset to infer it from the
-            opacity.
+        opacity: One for an opaque surface, less to see through it. It
+            reaches the pixel's alpha; it cannot make the surface blend,
+            because a normal is not mixed with light.
+        blending: `OPAQUE`, or unset, which infers it. `BLEND` is refused.
         alpha_test: The alpha a fragment must reach to be drawn. A normal
             material has no map, so this cuts by the opacity alone.
 
@@ -602,9 +633,9 @@ def normal_material(
         The material, of kind `NORMALS`.
 
     Raises:
-        Error: If `opacity` or `alpha_test` is outside zero to one, or
-            `side` or `blending` holds a value that is none of its named
-            constants.
+        Error: If `opacity` or `alpha_test` is outside zero to one, `side`
+            or `blending` holds a value that is none of its named
+            constants, or the blending resolves to `BLEND`.
     """
     return Material(
         Color(255, 255, 255),
@@ -637,9 +668,9 @@ def depth_material(
             `NO_TEXTURE`.
         side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
         opacity: One for an opaque surface, less to see through it.
-        blending: `OPAQUE` or `BLEND`, or unset to infer it from the
-            opacity. A map's own alpha cannot be inferred from here, so a
-            cut-out image needs `BLEND` to blend.
+        blending: `OPAQUE`, or unset, which infers it. `BLEND` is
+            refused: a depth is not mixed with light. Cut a shape out with
+            `alpha_test` instead, which discards rather than mixing.
         alpha_map: Id of a texture whose green channel thins the surface,
             or `NO_TEXTURE`. three.js's `MeshDepthMaterial` has one.
         alpha_test: The alpha a fragment must reach to be drawn.
@@ -650,8 +681,8 @@ def depth_material(
     Raises:
         Error: If `map` or `alpha_map` is a negative other than
             `NO_TEXTURE`, `opacity` or `alpha_test` is outside zero to one,
-            or `side` or `blending` holds a value that is none of its named
-            constants.
+            `side` or `blending` holds a value that is none of its named
+            constants, or the blending resolves to `BLEND`.
     """
     return Material(
         Color(255, 255, 255),

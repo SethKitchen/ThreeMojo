@@ -82,7 +82,7 @@ from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.fog import FogView
-from lights.lighting import Lighting
+from lights.lighting import PERSPECTIVE_VIEW, Lighting
 from core.layers import Layers
 from core.object3d import NodeId
 from core.scene import Scene
@@ -774,6 +774,46 @@ def camera_position[C: Camera](scene: Scene, camera: C) raises -> Vector3:
     return to_world.transform_point(Vector3(0, 0, 0))
 
 
+def toward_camera[C: Camera](scene: Scene, camera: C) raises -> Vector3:
+    """Return the one direction from any surface toward `camera`, or
+    `PERSPECTIVE_VIEW` when its rays converge and there is no single one.
+
+    three.js's `isOrthographic` branch in `lights_fragment_begin`, asked
+    once per frame instead of once per fragment. An orthographic camera's
+    rays run parallel, so every surface sees it from the same direction,
+    and a `PHONG` highlight computed from a *position* would put a bright
+    center on a flat plane that should reflect evenly. A perspective
+    camera's rays converge, and there the position is the answer.
+
+    Which one a camera is comes from its own projection matrix: a parallel
+    projection keeps `w` at one and so is affine, and a converging one does
+    not. That is the same fact `cameras.camera` states about the bottom
+    row, asked of the matrix rather than of a flag a camera would have to
+    carry, so any camera answers it without a method of its own.
+
+    Args:
+        scene: The scene the camera may be riding a node of, updated.
+        camera: The camera to ask.
+
+    Returns:
+        The unit direction toward the camera under a parallel projection,
+        or `PERSPECTIVE_VIEW` under a converging one.
+
+    Raises:
+        Error: If the camera's volume is degenerate, it rides a node the
+            scene does not have, or the scene is stale.
+    """
+    if not camera.projection_matrix().is_affine():
+        return PERSPECTIVE_VIEW
+    # The camera looks down its own -z, so +z points back at the viewer;
+    # carried into the world by the inverse of the view, which is rigid.
+    var to_world = camera.view_matrix_in(scene)
+    to_world.invert()
+    var toward = to_world.transform_direction(Vector3(0, 0, 1))
+    toward.normalize()
+    return toward^
+
+
 def available_workers() -> Int:
     """Return how many rasterizer workers this machine can run at once.
 
@@ -1325,11 +1365,14 @@ struct Renderer(Movable):
         # Only the lights on the camera's layers, as only its meshes were
         # prepared: a light the camera does not see lights nothing it draws.
         # The camera's own position goes with them, because a `PHONG`
-        # surface's highlight is measured from wherever the camera stands.
+        # surface's highlight is measured from wherever the camera stands
+        # -- or from one fixed direction, if the camera's rays are parallel
+        # rather than converging. See `toward_camera`.
         var lighting = Lighting(
             scene,
             visible=camera.visible_layers(),
             eye=camera_position(scene, camera),
+            toward_eye=toward_camera(scene, camera),
         )
         # The scene's fog as the rasterizer takes it. Each corner already
         # carries the depth `prepare` measured for it along this view.

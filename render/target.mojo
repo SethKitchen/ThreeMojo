@@ -31,7 +31,24 @@ and a display must show those bytes as they are. They are stored decoded,
 so the encode gives the bytes back -- see `render.rasterizer.data_color` --
 and a flag per pixel says so, which keeps the tone mapping off them: a
 curve that compresses light would make a normal lie about its own numbers.
-The last fragment written or blended into a pixel decides the flag.
+
+**One flag cannot describe a mixture**, so the policy is that nothing is
+mixed. A `write` replaces the pixel outright and the pixel's flag becomes
+the fragment's. A `blend` mixes into what is there and the result is
+light, whatever it mixed with, because a fragment that shows data is
+refused a blend policy in the first place -- see
+`render.rasterizer.check_triangle_state`. That leaves one reachable
+mixture, a translucent lit surface over a data pixel, and calling the
+result light is the honest answer: light is in it, and tone mapping is for
+light. A pixel showing a normal that is half covered by smoke is not a
+normal any more.
+
+**Source-over with no coverage changes nothing at all.** A blend of alpha
+zero contributes no color, so it must not contribute a flag either. It
+used to: the flag was assigned before the alpha was looked at, and a fully
+transparent normal material could switch the tone mapping off a lit pixel
+behind it and brighten the image. `blend` now returns before it touches
+anything, and the kernel skips such a fragment for the same reason.
 
 **Premultiplied.** The stored color is the light a pixel actually contributes,
 already scaled by its coverage — `(r*a, g*a, b*a, a)`. Source-over in that form
@@ -115,7 +132,8 @@ struct RenderTarget(Movable):
     var depth: List[Float32]
     # Whether each pixel holds data rather than light -- a normal, a depth,
     # a coordinate -- which the tone mapping must leave alone. Set by the
-    # last `write` or `blend` into the pixel; a cleared pixel holds light.
+    # last `write` into the pixel and cleared by any `blend` that
+    # contributes; a cleared pixel holds light. See the module docstring.
     var data: List[Bool]
 
     def __init__(out self, width: Int, height: Int, clear: Color) raises:
@@ -236,6 +254,8 @@ struct RenderTarget(Movable):
             data: True if the color is data rather than light -- a normal,
                 a depth, a coordinate -- which `resolve` must encode
                 without tone mapping. See `render.rasterizer.data_color`.
+                A write replaces the pixel, so the pixel's answer becomes
+                this one.
 
         Raises:
             Error: If the coordinate is out of bounds.
@@ -244,30 +264,37 @@ struct RenderTarget(Movable):
         self.colors[slot] = color.premultiplied()
         self.data[slot] = data
 
-    def blend(
-        mut self, x: Int, y: Int, color: FloatColor, data: Bool = False
-    ) raises:
+    def blend(mut self, x: Int, y: Int, color: FloatColor) raises:
         """Mix `color` into pixel (x, y) with source-over compositing.
+
+        The result is light, whatever was there before. Only light blends:
+        a fragment that shows data is refused a blend policy, so the mix is
+        light over something, and a mixture with light in it is light. See
+        the module docstring.
+
+        A color whose alpha is zero hides nothing and contributes nothing,
+        and this returns without touching the pixel -- its color, its alpha
+        and its flag alike. The identity of source-over has to be the
+        identity of the whole operation, not of the arithmetic alone.
 
         Args:
             x: Column.
             y: Row.
             color: Linear color with straight (unassociated) alpha, where
                 alpha is how much of what is behind it is hidden.
-            data: True if the color is data rather than light, as for
-                `write`. The last fragment into a pixel decides whether the
-                pixel is tone mapped.
 
         Raises:
             Error: If the coordinate is out of bounds.
         """
         var slot = self._slot(x, y)
-        self.data[slot] = data
         var share = color.a
         if share > 1:
             share = 1
         if share < 0:
             share = 0
+        if share == 0:
+            return
+        self.data[slot] = False
         var source = FloatColor(
             color.r, color.g, color.b, share
         ).premultiplied()
