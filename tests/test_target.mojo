@@ -14,6 +14,13 @@ eight bits, so the losses compounded.
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
 from render.target import RenderTarget
+from render.tonemap import (
+    ACES_FILMIC_TONE_MAPPING,
+    LINEAR_TONE_MAPPING,
+    NO_TONE_MAPPING,
+    REINHARD_TONE_MAPPING,
+    ToneMapping,
+)
 from std.math import inf
 from std.testing import (
     TestSuite,
@@ -199,6 +206,84 @@ def test_resolving_needs_at_least_one_worker() raises:
     var target = RenderTarget(2, 2, Color(0, 0, 0))
     with assert_raises():
         _ = target.resolve(0)
+
+
+# --- tone mapping -------------------------------------------------------------
+
+
+def test_resolving_can_tone_map_the_light() raises:
+    # Twice white in the buffer clamps to white without a curve. Reinhard
+    # shows two thirds of the light. The linear curve at a half exposure
+    # shows one, white again, and at a quarter shows a half.
+    var target = RenderTarget(1, 1, Color(0, 0, 0))
+    target.write(0, 0, FloatColor(2.0, 2.0, 2.0, 1.0))
+    assert_equal(target.resolve().get_pixel(0, 0).r, UInt8(255))
+    var squeezed = target.resolve(1, REINHARD_TONE_MAPPING)
+    var expected = FloatColor(2.0 / 3, 2.0 / 3, 2.0 / 3, 1.0).encode()
+    assert_equal(squeezed.get_pixel(0, 0).r, expected.r)
+    assert_equal(target.shown(0, 0, REINHARD_TONE_MAPPING).g, expected.g)
+    var exposed = target.resolve(1, LINEAR_TONE_MAPPING, 0.5)
+    assert_equal(exposed.get_pixel(0, 0).r, UInt8(255))
+    var dim = target.resolve(1, LINEAR_TONE_MAPPING, 0.25)
+    assert_equal(
+        dim.get_pixel(0, 0).r, FloatColor(0.5, 0.5, 0.5, 1.0).encode().r
+    )
+    # Without a curve the exposure is not applied, as in three.js.
+    var plain = target.resolve(1, NO_TONE_MAPPING, 0.25)
+    assert_equal(plain.get_pixel(0, 0).r, UInt8(255))
+
+
+def test_tone_mapping_sees_the_straight_color_and_keeps_alpha() raises:
+    # A half-covered pixel holding twice white: the curve is applied to the
+    # straight color, two, and not to the premultiplied one, and the
+    # coverage is left as it was.
+    var target = RenderTarget(1, 1, Color(0, 0, 0, 0))
+    target.write(0, 0, FloatColor(2.0, 2.0, 2.0, 0.5))
+    var shown = target.shown(0, 0, REINHARD_TONE_MAPPING)
+    assert_equal(shown.r, FloatColor(2.0 / 3, 0, 0, 1.0).encode().r)
+    assert_equal(shown.a, UInt8(128))
+    var image = target.resolve(1, REINHARD_TONE_MAPPING)
+    assert_equal(image.get_pixel(0, 0).r, shown.r)
+    assert_equal(image.get_pixel(0, 0).a, UInt8(128))
+
+
+def test_tone_mapping_on_several_workers_matches_one() raises:
+    var target = RenderTarget(7, 5, Color(20, 24, 32))
+    for y in range(5):
+        for x in range(7):
+            target.write(
+                x, y, FloatColor(Float32(x) * 0.5, Float32(y) * 0.7, 1.5, 1.0)
+            )
+    var alone = target.resolve(1, ACES_FILMIC_TONE_MAPPING, 1.3)
+    var crowd = target.resolve(4, ACES_FILMIC_TONE_MAPPING, 1.3)
+    var changed = 0
+    var plain = target.resolve()
+    for y in range(5):
+        for x in range(7):
+            var one = alone.get_pixel(x, y)
+            var many = crowd.get_pixel(x, y)
+            assert_equal(one.r, many.r)
+            assert_equal(one.g, many.g)
+            assert_equal(one.b, many.b)
+            if plain.get_pixel(x, y).b != one.b:
+                changed += 1
+    # And the curve really changed the image.
+    assert_true(changed > 20, "the curve changed almost nothing")
+
+
+def test_resolving_refuses_an_unknown_curve_or_a_negative_exposure() raises:
+    var target = RenderTarget(2, 2, Color(0, 0, 0))
+    with assert_raises():
+        _ = target.resolve(1, ToneMapping(9))
+    with assert_raises():
+        _ = target.resolve(1, LINEAR_TONE_MAPPING, -1.0)
+    with assert_raises():
+        _ = target.shown(0, 0, ToneMapping(9))
+    with assert_raises():
+        _ = target.shown(0, 0, LINEAR_TONE_MAPPING, -1.0)
+    # A zero exposure is a legal black.
+    var black = target.resolve(1, LINEAR_TONE_MAPPING, 0.0)
+    assert_equal(black.get_pixel(0, 0).r, UInt8(0))
 
 
 def main() raises:

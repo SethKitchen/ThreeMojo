@@ -17,6 +17,7 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `set_workers(workers)` | Change the thread count. At least one. |
 | `set_background(color)` | The clear color. |
 | `set_shading(mode)` | What a fragment's color comes from. See below. |
+| `set_tone_mapping(mode, exposure=1.0)` | The curve that compresses the light for a display. See below. |
 | `prepare(scene, assets, camera) -> List[RasterVertex]` | Transform, clip and project every mesh. |
 | `render(scene, assets, camera) -> Framebuffer` | `prepare`, then rasterize and resolve. |
 | `available_workers() -> Int` | One per logical core. |
@@ -32,6 +33,12 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `SHADE_UV` | The texture coordinates, as red and green. A debug view. |
 
 `set_shading` refuses a mode that is none of the three.
+
+## Tone mapping
+
+`set_tone_mapping` picks one of the seven curves in `render/tonemap.mojo` and an exposure. `NO_TONE_MAPPING` and an exposure of one are the defaults, as in three.js. `render` applies the curve in `RenderTarget.resolve`, once per pixel, after every fragment is composited. The `SHADE_UV` view is never tone mapped. See [Render target](Render-target-and-framebuffer#tone-mapping).
+
+`set_tone_mapping` refuses a curve that is none of the seven, and a negative exposure.
 
 ## What prepare does
 
@@ -67,7 +74,7 @@ Each instance of an instanced or batched mesh is tested on its own, with the ins
 
 ## What render does
 
-`render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, visible=camera.visible_layers())`. A light on a layer the camera does not watch lights nothing. See [Lights](Lights#lighting). It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). Then it rasterizes the triangles and resolves the image.
+`render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, visible=camera.visible_layers())`. A light on a layer the camera does not watch lights nothing. See [Lights](Lights#lighting). It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). Then it rasterizes the triangles and resolves the image through the tone mapping curve.
 
 ## Workers
 

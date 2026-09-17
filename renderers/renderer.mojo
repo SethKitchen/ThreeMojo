@@ -105,6 +105,7 @@ from render.texture import IGNORED
 from render.texture_store import NO_TEXTURE, TextureId
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
+from render.tonemap import NO_TONE_MAPPING, ToneMapping
 from math.vector2 import Vector2
 from render.rasterizer import (
     SHADE_LIT,
@@ -753,6 +754,13 @@ struct Renderer(Movable):
     # measurement -- the examples, the benchmark -- asks for
     # `available_workers()`.
     var workers: Int
+    # The curve that compresses each finished pixel's light into what a
+    # display can show, and what the light is scaled by first: three.js's
+    # `toneMapping` and `toneMappingExposure`, at three.js's defaults of
+    # none and one. Applied by `RenderTarget.resolve`, once, to the
+    # composited image -- see `render.tonemap`.
+    var tone_mapping: ToneMapping
+    var tone_mapping_exposure: Float32
 
     def __init__(out self, width: Int, height: Int, workers: Int = 1) raises:
         """Create a renderer with a dark background.
@@ -774,6 +782,8 @@ struct Renderer(Movable):
         self.background = Color(16, 18, 26)
         self.shading = SHADE_TEXTURE
         self.workers = workers
+        self.tone_mapping = NO_TONE_MAPPING
+        self.tone_mapping_exposure = 1.0
 
     def set_workers(mut self, workers: Int) raises:
         """Choose how many threads rasterize a frame.
@@ -797,6 +807,29 @@ struct Renderer(Movable):
     def set_background(mut self, color: Color):
         """Set the color the image is cleared to."""
         self.background = color
+
+    def set_tone_mapping(
+        mut self, mode: ToneMapping, exposure: Float32 = 1.0
+    ) raises:
+        """Choose how each pixel's light is compressed for a display.
+
+        Args:
+            mode: One of the seven curves in `render.tonemap`, or
+                `NO_TONE_MAPPING` to clamp and nothing else.
+            exposure: What the light is scaled by before the curve,
+                three.js's `toneMappingExposure`. One leaves it alone.
+
+        Raises:
+            Error: If the mode is none of the seven, or the exposure is
+                negative. The type stops a bare integer; it does not stop
+                `ToneMapping(9)`.
+        """
+        if not mode.is_valid():
+            raise Error("A tone mapping that is none of the seven")
+        if exposure < 0:
+            raise Error("A tone mapping exposure cannot be negative")
+        self.tone_mapping = mode
+        self.tone_mapping_exposure = exposure
 
     def set_shading(mut self, mode: ShadeMode) raises:
         """Choose what a fragment's color is taken from.
@@ -1222,5 +1255,10 @@ struct Renderer(Movable):
             fog,
         )
         # Linear light becomes an image exactly once, here, on as many
-        # threads as drew it.
-        return target.resolve(self.workers)
+        # threads as drew it, through the tone mapping curve on the way --
+        # except in the uv view, which is coordinates rather than light and
+        # is never tone mapped, on either backend.
+        var curve = self.tone_mapping
+        if self.shading == SHADE_UV:
+            curve = NO_TONE_MAPPING
+        return target.resolve(self.workers, curve, self.tone_mapping_exposure)

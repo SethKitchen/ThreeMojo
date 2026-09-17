@@ -59,6 +59,7 @@ from render.rasterizer import (
 from materials.material import BLEND
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.srgb import SRGB, ColorSpace, decode_ramp
+from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
 from render.texture import (
     BILINEAR,
     COVERAGE,
@@ -869,6 +870,8 @@ def rasterize_kernel(
     spot_count: Int32,
     fog: MutPointer[Float32, MutAnyOrigin],
     fog_kind: Int32,
+    tone: Int32,
+    exposure: Float32,
 ):
     """Color one pixel from the nearest triangle that covers it."""
     var x = Int(global_idx.x)
@@ -1255,18 +1258,23 @@ def rasterize_kernel(
 
     var word = background
     var nearest_depth = inf[DType.float32]()
-    if found:
-        # Unpremultiply, then encode. PNG stores unassociated alpha, and alpha
-        # is coverage rather than color so it skips the transfer function.
-        var lit = FloatColor(
-            mixed_r, mixed_g, mixed_b, mixed_a
-        ).unpremultiplied()
-        # SHADE_UV writes coordinates rather than light, so it is not encoded;
+    # Unpremultiply, then encode. PNG stores unassociated alpha, and alpha
+    # is coverage rather than color so it skips the transfer function. A
+    # pixel nothing covers holds the decoded background.
+    var lit = FloatColor(mixed_r, mixed_g, mixed_b, mixed_a).unpremultiplied()
+    if mode == Int32(SHADE_UV.value):
+        # Coordinates rather than light, so neither tone mapped nor encoded;
         # see rasterize_shaded.
-        if mode == Int32(SHADE_UV.value):
+        if found:
             word = pack(lit.quantize())
-        else:
-            word = pack(lit.encode())
+    elif found or tone != Int32(NO_TONE_MAPPING.value):
+        # Tone mapped and then encoded, as `RenderTarget.resolve` does it,
+        # from the same function -- the background included, once there
+        # is a curve, since the host's target holds its clear color as
+        # light and resolves it through the curve like any other pixel.
+        # Without a curve an uncovered pixel keeps the background's own
+        # bytes rather than a decode and an encode of them.
+        word = pack(tone_map(lit, ToneMapping(Int(tone)), exposure).encode())
     if solid:
         nearest_depth = nearest
 
@@ -1477,6 +1485,8 @@ struct GpuRenderer(Movable):
         mode: ShadeMode = SHADE_LIT,
         lighting: Lighting = Lighting.uniform(),
         fog: FogView = FogView.none(),
+        tone_mapping: ToneMapping = NO_TONE_MAPPING,
+        exposure: Float32 = 1.0,
     ) raises:
         """Rasterize prepared triangles into the device render target.
 
@@ -1491,10 +1501,16 @@ struct GpuRenderer(Movable):
                 exactly as the CPU rasterizer's does.
             fog: The scene's fog, seen through the camera, as
                 `rasterize_shaded` takes it. Defaults to `FogView.none`.
+            tone_mapping: The curve that compresses each finished pixel's
+                light, as `RenderTarget.resolve` takes it. Defaults to
+                `NO_TONE_MAPPING`. The uv view is never tone mapped.
+            exposure: What the light is scaled by before the curve.
 
         Raises:
             Error: If the corner count is not a multiple of three, the mode
-                is none of the three, a triangle's blend policy, texture or
+                is none of the three, the tone mapping is none of the
+                seven, the exposure is negative, a triangle's blend
+                policy, texture or
                 emissive map disagrees between its corners or is a value
                 neither backend knows, a vertex names a texture or an
                 emissive map that is not uploaded, or an emissive map that
@@ -1504,6 +1520,12 @@ struct GpuRenderer(Movable):
             raise Error("Rasterizing needs whole triangles")
         if not mode.is_valid():
             raise Error("A shading mode that is none of the three")
+        # The kernel cannot raise on a curve it does not know, so the same
+        # refusal `RenderTarget.resolve` makes is made here, before the launch.
+        if not tone_mapping.is_valid():
+            raise Error("A tone mapping that is none of the seven")
+        if exposure < 0:
+            raise Error("A tone mapping exposure cannot be negative")
         var triangles = len(corners) // 3
 
         # The same per-triangle check the CPU makes, from the same function,
@@ -1593,6 +1615,8 @@ struct GpuRenderer(Movable):
             Int32(lighting.spot_count()),
             self.fog.unsafe_ptr(),
             Int32(fog.kind.value),
+            Int32(tone_mapping.value),
+            exposure,
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -1707,6 +1731,8 @@ def render_triangles(
     textures: TextureStore = TextureStore(),
     lighting: Lighting = Lighting.uniform(),
     fog: FogView = FogView.none(),
+    tone_mapping: ToneMapping = NO_TONE_MAPPING,
+    exposure: Float32 = 1.0,
 ) raises -> Framebuffer:
     """Draw prepared triangles on the GPU and read the image back.
 
@@ -1725,6 +1751,9 @@ def render_triangles(
             `Lighting.uniform`, which leaves the corner colors alone.
         fog: The scene's fog, seen through the camera. Defaults to
             `FogView.none`, which leaves every fragment alone.
+        tone_mapping: The curve that compresses each pixel's light, as
+            `RenderTarget.resolve` takes it. Defaults to `NO_TONE_MAPPING`.
+        exposure: What the light is scaled by before the curve.
 
     Returns:
         The rendered image.
@@ -1735,7 +1764,9 @@ def render_triangles(
     """
     var renderer = GpuRenderer(width, height)
     renderer.set_textures(textures)
-    renderer.draw(corners, background, mode, lighting, fog)
+    renderer.draw(
+        corners, background, mode, lighting, fog, tone_mapping, exposure
+    )
     return renderer.read_back()
 
 

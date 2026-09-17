@@ -70,6 +70,16 @@ from lights.light import (
 )
 from lights.lighting import Lighting
 from core.fog import Fog, FogView, exp2_fog, linear_fog, no_fog
+from render.tonemap import (
+    ACES_FILMIC_TONE_MAPPING,
+    AGX_TONE_MAPPING,
+    CINEON_TONE_MAPPING,
+    LINEAR_TONE_MAPPING,
+    NEUTRAL_TONE_MAPPING,
+    NO_TONE_MAPPING,
+    REINHARD_TONE_MAPPING,
+    ToneMapping,
+)
 from render.rasterizer import rasterize_all
 from units.si import InverseLength, PER_METER
 from render.gpu import (
@@ -1368,6 +1378,154 @@ def test_both_backends_leave_the_uv_view_unfogged() raises:
         exp2_fog(Color(255, 255, 255), InverseLength(5.0, PER_METER)), SHADE_UV
     )
     assert_equal(count_mismatches(clear, veiled), 0)
+
+
+def compare_tone_mapped(
+    mode: ToneMapping, exposure: Float32
+) raises -> Framebuffer:
+    """Render an overexposed box and sphere on both backends through
+    `mode`, assert they agree, and return the CPU image."""
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
+    var scene = Scene()
+    var left = Object3D()
+    left.set_position(-0.9, 0, 0)
+    left.set_euler(Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.9, 0, 0.4)
+    var right_node = scene.add(right^)
+    var sun = Object3D()
+    sun.set_position(0.4, 0.8, 0.5)
+    var sun_node = scene.add(sun^)
+    scene.add_light(directional_light(Color(255, 240, 220), sun_node, 2.5))
+    var bulb = Object3D()
+    bulb.set_position(0.5, 1.0, 1.5)
+    var bulb_node = scene.add(bulb^)
+    scene.add_light(point_light(Color(255, 200, 160), bulb_node, 3.0))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.3))
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            box, assets.materials.add(Material(Color(255, 140, 40))), left_node
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(Material(Color(90, 190, 255))),
+            right_node,
+        )
+    )
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.6, 3.0), Vector3(0, 0, 0))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    var lighting = Lighting(scene)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(corners, target, SHADE_LIT, assets.textures, lighting)
+    var cpu = target.resolve(1, mode, exposure)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        lighting,
+        FogView.none(),
+        mode,
+        exposure,
+    )
+    var drawn = 0
+    for y in range(36):
+        for x in range(48):
+            if cpu.depth_at(x, y) != inf[DType.float32]():
+                drawn += 1
+    assert_true(drawn > 200, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    return cpu^
+
+
+def test_both_backends_tone_map_identically() raises:
+    # An overexposed scene through every curve: each is applied to the
+    # finished pixel on both sides from the same function, and each
+    # visibly changes the frame.
+    if skipped_for_lack_of_a_gpu("both backends tone map identically"):
+        return
+    var plain = compare_tone_mapped(NO_TONE_MAPPING, 1.0)
+    var blown = 0
+    for y in range(36):
+        for x in range(48):
+            if plain.get_pixel(x, y).r == 255:
+                blown += 1
+    assert_true(
+        blown > 20, "nothing was overexposed, so there is nothing to compress"
+    )
+    for mode in [
+        LINEAR_TONE_MAPPING,
+        REINHARD_TONE_MAPPING,
+        CINEON_TONE_MAPPING,
+        ACES_FILMIC_TONE_MAPPING,
+        AGX_TONE_MAPPING,
+        NEUTRAL_TONE_MAPPING,
+    ]:
+        var curved = compare_tone_mapped(mode, 0.7)
+        assert_true(
+            count_mismatches(plain, curved) > 100, "the curve changed nothing"
+        )
+
+
+def test_the_gpu_refuses_an_unknown_curve_or_a_negative_exposure() raises:
+    if skipped_for_lack_of_a_gpu("the gpu refuses an unknown curve"):
+        return
+    var renderer = GpuRenderer(8, 8)
+    with assert_raises():
+        renderer.draw(
+            overlapping_pair(),
+            BACKGROUND,
+            SHADE_LIT,
+            Lighting.uniform(),
+            FogView.none(),
+            ToneMapping(9),
+        )
+    with assert_raises():
+        renderer.draw(
+            overlapping_pair(),
+            BACKGROUND,
+            SHADE_LIT,
+            Lighting.uniform(),
+            FogView.none(),
+            REINHARD_TONE_MAPPING,
+            -1.0,
+        )
+
+
+def test_the_gpu_never_tone_maps_the_uv_view() raises:
+    if skipped_for_lack_of_a_gpu("the gpu never tone maps the uv view"):
+        return
+    var plain = render_triangles(mapped_quad(16), 16, 16, BACKGROUND, SHADE_UV)
+    var curved = render_triangles(
+        mapped_quad(16),
+        16,
+        16,
+        BACKGROUND,
+        SHADE_UV,
+        TextureStore(),
+        Lighting.uniform(),
+        FogView.none(),
+        REINHARD_TONE_MAPPING,
+        0.5,
+    )
+    assert_equal(count_mismatches(plain, curved), 0)
 
 
 def test_the_gpu_leaves_an_unlit_triangle_its_own_color() raises:

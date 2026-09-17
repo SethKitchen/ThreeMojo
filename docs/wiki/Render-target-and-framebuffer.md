@@ -1,6 +1,6 @@
 # Render target and framebuffer
 
-`render/target.mojo` and `render/framebuffer.mojo`. A `RenderTarget` is the workspace: premultiplied linear RGBA and depth, at float precision. A `Framebuffer` is the result: bytes and depth. `resolve` turns the first into the second once.
+`render/target.mojo`, `render/framebuffer.mojo` and `render/tonemap.mojo`. A `RenderTarget` is the workspace: premultiplied linear RGBA and depth, at float precision. A `Framebuffer` is the result: bytes and depth. `resolve` turns the first into the second once, through a tone mapping curve when one is asked for.
 
 three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as a texture yet.
 
@@ -40,10 +40,30 @@ three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as 
 | `test_depth(x, y, z) -> Bool` | Keep and record `z` when it is nearer. |
 | `depth_passes(x, y, z) -> Bool` | Compare without recording. |
 | `depth_at(x, y)`, `color_at(x, y)` | Read a pixel. |
-| `shown(x, y) -> Color` | One pixel as it will resolve. |
-| `resolve(workers=1) -> Framebuffer` | Unpremultiply and encode every pixel. |
+| `shown(x, y, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Color` | One pixel as it will resolve. |
+| `resolve(workers=1, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Framebuffer` | Unpremultiply, tone map and encode every pixel. |
 
 Nothing is clamped before `resolve`. Overexposed light survives every step.
+
+## Tone mapping
+
+`resolve` can compress the light into what a display can show instead of clamping it. Pass one of the seven curves and an exposure. The curve is applied to each pixel's straight color, after the unpremultiply and before the sRGB encode. Alpha is left alone.
+
+three.js: `WebGLRenderer.toneMapping` and `toneMappingExposure`.
+
+| Curve | Meaning |
+|---|---|
+| `NO_TONE_MAPPING` | Clamp and nothing else. The exposure is not applied. The default. |
+| `LINEAR_TONE_MAPPING` | Scale by the exposure and clamp. |
+| `REINHARD_TONE_MAPPING` | `c / (1 + c)`. Nothing reaches white. |
+| `CINEON_TONE_MAPPING` | The Hejl and Burgess-Dawson filmic curve. |
+| `ACES_FILMIC_TONE_MAPPING` | Hill's fit of the ACES transform, brightened as three.js brightens it. |
+| `AGX_TONE_MAPPING` | Blender's AgX through rec. 2020, as Filament and three.js carry it. |
+| `NEUTRAL_TONE_MAPPING` | The Khronos PBR neutral curve. |
+
+`tone_map(color, mode, exposure)` is the function itself. The GPU kernel calls the same one. `ToneMapping` is a type. `is_valid` names the seven. `resolve` and `shown` refuse any other value, and a negative exposure. A bare integer does not compile.
+
+The curve is applied once, to the composited light of each pixel. three.js applies it to each fragment before blending. The two agree on every opaque pixel. The background is light in the target and goes through the curve too. The `SHADE_UV` view is never tone mapped. See [Renderer](Renderer#tone-mapping).
 
 ## Framebuffer
 

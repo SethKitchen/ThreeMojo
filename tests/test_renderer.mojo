@@ -31,6 +31,12 @@ from core.scene import Scene
 from lights.light import ambient_light, directional_light
 from lights.lighting import Lighting
 from core.fog import FogKind, exp2_fog, linear_fog, no_fog
+from render.tonemap import (
+    LINEAR_TONE_MAPPING,
+    NO_TONE_MAPPING,
+    REINHARD_TONE_MAPPING,
+    ToneMapping,
+)
 from units.si import InverseLength, PER_METER
 from geometries.box import cube
 from geometries.sphere import sphere
@@ -3549,6 +3555,70 @@ def test_a_fog_edited_into_nonsense_is_refused_by_render() raises:
     scene.fog.kind = FogKind(9)
     with assert_raises():
         _ = renderer.render(scene, assets, facing_camera())
+
+
+# --- tone mapping -------------------------------------------------------------
+
+
+def test_tone_mapping_compresses_what_the_renderer_shows() raises:
+    # A white unlit sheet is white without a curve. Under Reinhard it shows
+    # half the light, byte 188. Under the linear curve at a quarter
+    # exposure it shows a quarter of it. The background is light in the
+    # target too, and goes through the curve with everything else.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(200, 200, 200))
+    assert_equal(renderer.tone_mapping, NO_TONE_MAPPING)
+    assert_equal(renderer.tone_mapping_exposure, Float32(1))
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(4.0, METER), Length(4.0, METER), 1, 1)
+    )
+    var white = assets.materials.add(Material(Color(255, 255, 255), kind=BASIC))
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(sheet, white, node))
+    var camera = facing_camera()
+    var plain = rendered(renderer, scene, assets, meshes, camera)
+    assert_equal(plain.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(255))
+
+    renderer.set_tone_mapping(REINHARD_TONE_MAPPING)
+    assert_equal(renderer.tone_mapping, REINHARD_TONE_MAPPING)
+    var squeezed = rendered(renderer, scene, assets, meshes, camera)
+    assert_equal(squeezed.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(188))
+    assert_true(
+        squeezed.get_pixel(0, 0).b != plain.get_pixel(0, 0).b,
+        "the background was not tone mapped",
+    )
+
+    renderer.set_tone_mapping(LINEAR_TONE_MAPPING, 0.25)
+    assert_equal(renderer.tone_mapping_exposure, Float32(0.25))
+    var dim = rendered(renderer, scene, assets, meshes, camera)
+    assert_equal(
+        dim.get_pixel(WIDTH // 2, HEIGHT // 2).r,
+        FloatColor(0.25, 0.25, 0.25, 1.0).encode().r,
+    )
+
+    # The uv view is coordinates, not light, and is never tone mapped.
+    renderer.set_shading(SHADE_UV)
+    var coordinates = rendered(renderer, scene, assets, meshes, camera)
+    renderer.set_tone_mapping(NO_TONE_MAPPING)
+    var untouched = rendered(renderer, scene, assets, meshes, camera)
+    var veiled = coordinates.get_pixel(WIDTH // 2, HEIGHT // 2)
+    var raw = untouched.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(veiled.r, raw.r)
+    assert_equal(veiled.g, raw.g)
+
+
+def test_a_tone_mapping_that_is_none_of_the_seven_is_refused() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    with assert_raises():
+        renderer.set_tone_mapping(ToneMapping(9))
+    with assert_raises():
+        renderer.set_tone_mapping(REINHARD_TONE_MAPPING, -0.5)
+    assert_equal(renderer.tone_mapping, NO_TONE_MAPPING)
+    assert_equal(renderer.tone_mapping_exposure, Float32(1))
 
 
 def main() raises:
