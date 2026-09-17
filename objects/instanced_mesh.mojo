@@ -12,14 +12,19 @@ tests; an `InstancedMesh` is one node, one material, and two hundred
 matrices, each placing one copy of the geometry relative to the node.
 three.js's instancing exists to make one GPU draw call of it. Here there
 are no draw calls, and what it saves is the scene graph: the copies do not
-need nodes, and the renderer sorts and culls the group as one object, as
-three.js does, then prepares each instance whose bound is in view.
+need nodes. The renderer prepares each instance whose bound is in view,
+and orders every instance on its own, nearest first among the opaque and
+furthest first among the translucent, where three.js keeps an
+InstancedMesh's instances together; a software renderer that prepares
+every instance anyway can afford to order them right.
 
 A `BatchedMesh` is the same idea with a geometry per instance: a forest of
-three kinds of tree under one material, with one matrix and one geometry
-id each. three.js's `BatchedMesh` copies the geometries into one shared
-buffer, which is what makes its one draw call possible; here every
-geometry already lives in the store, so an instance simply names one.
+three kinds of tree under one material, each instance one geometry id
+and one matrix, held together as a `BatchedInstance` so that neither can
+be edited without the other. three.js's `BatchedMesh` copies the
+geometries into one shared buffer, which is what makes its one draw call
+possible; here every geometry already lives in the store, so an instance
+simply names one.
 
 Both hold their matrices as three.js holds `instanceMatrix`: relative to
 the node, so that moving the node moves the whole forest, and read and
@@ -27,6 +32,14 @@ written one at a time with `matrix_at` and `set_matrix_at`. An instance
 index is a plain number, as three.js's `instanceId` is: it is an index
 into a list this object owns, not an id another store could confuse it
 with, and it is checked against the count wherever it is used.
+
+An instance matrix must place: it moves, turns, scales, shears or
+mirrors, and keeps `w` at one, with every element a finite number. A
+matrix that projects is refused, because everything downstream carries
+positions, bounds and normals as an affine transform carries them, and a
+homogeneous divide would bend the positions while the normals kept the
+affine answer. The lists are open, as every field here is, so the
+renderer asks the same question again of each matrix it draws.
 
 Neither has per-instance colors yet. three.js's `instanceColor` is a
 separate attribute, and a geometry's own vertex colors already reach every
@@ -37,6 +50,25 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
+
+
+def check_placing(matrix: Matrix4) raises:
+    """Refuse a matrix that cannot place an instance.
+
+    Args:
+        matrix: The transform an instance is to have, relative to its node.
+
+    Raises:
+        Error: If an element is infinite or not a number, or the matrix
+            projects rather than keeping `w` at one.
+    """
+    if not matrix.is_finite():
+        raise Error("An instance matrix must hold finite numbers")
+    if not matrix.is_affine():
+        raise Error(
+            "An instance matrix must be affine: it moves, turns, scales or"
+            " shears, and keeps w at one"
+        )
 
 
 struct InstancedMesh(Copyable, Movable):
@@ -117,18 +149,28 @@ struct InstancedMesh(Copyable, Movable):
 
         Args:
             index: Which instance, from zero.
-            matrix: Its transform relative to the node.
+            matrix: Its transform relative to the node: affine and finite.
 
         Raises:
-            Error: If there is no such instance.
+            Error: If there is no such instance, or the matrix cannot
+                place one; see `check_placing`.
         """
         self._check(index)
+        check_placing(matrix)
         self.matrices[index] = Matrix4(copy=matrix)
 
     def _check(self, index: Int) raises:
         """Refuse an instance index that names no instance."""
         if index < 0 or index >= len(self.matrices):
             raise Error("No instance has that index")
+
+
+@fieldwise_init
+struct BatchedInstance(ImplicitlyCopyable):
+    """One member of a batch: which geometry it draws, and where."""
+
+    var geometry: GeometryId
+    var matrix: Matrix4
 
 
 struct BatchedMesh(Copyable, Movable):
@@ -140,9 +182,8 @@ struct BatchedMesh(Copyable, Movable):
     var node: NodeId
     # As on `InstancedMesh`: per instance.
     var frustum_culled: Bool
-    # One geometry and one transform per instance, in step.
-    var geometries: List[GeometryId]
-    var matrices: List[Matrix4]
+    # Each instance's geometry and transform, together.
+    var instances: List[BatchedInstance]
 
     def __init__(
         out self,
@@ -170,12 +211,11 @@ struct BatchedMesh(Copyable, Movable):
         self.material = material
         self.node = node
         self.frustum_culled = frustum_culled
-        self.geometries = List[GeometryId]()
-        self.matrices = List[Matrix4]()
+        self.instances = List[BatchedInstance]()
 
     def count(self) -> Int:
         """Return how many instances there are."""
-        return len(self.matrices)
+        return len(self.instances)
 
     def add_instance(
         mut self, geometry: GeometryId, matrix: Matrix4 = Matrix4()
@@ -185,20 +225,21 @@ struct BatchedMesh(Copyable, Movable):
         Args:
             geometry: Id of the geometry it draws. Whether the store has it
                 is checked when the scene renders, as a mesh's is.
-            matrix: Its transform relative to the node; the identity if
-                not given.
+            matrix: Its transform relative to the node, affine and finite;
+                the identity if not given.
 
         Returns:
             The new instance's index, for `set_matrix_at` and the rest.
 
         Raises:
-            Error: If the geometry id is negative.
+            Error: If the geometry id is negative, or the matrix cannot
+                place an instance; see `check_placing`.
         """
         if geometry.value < 0:
             raise Error("A batched instance must name a geometry")
-        self.geometries.append(geometry)
-        self.matrices.append(Matrix4(copy=matrix))
-        return len(self.matrices) - 1
+        check_placing(matrix)
+        self.instances.append(BatchedInstance(geometry, Matrix4(copy=matrix)))
+        return len(self.instances) - 1
 
     def geometry_at(self, index: Int) raises -> GeometryId:
         """Return which geometry one instance draws.
@@ -213,7 +254,7 @@ struct BatchedMesh(Copyable, Movable):
             Error: If there is no such instance.
         """
         self._check(index)
-        return self.geometries[index]
+        return self.instances[index].geometry
 
     def set_geometry_at(mut self, index: Int, geometry: GeometryId) raises:
         """Change which geometry one instance draws, three.js's
@@ -229,7 +270,7 @@ struct BatchedMesh(Copyable, Movable):
         self._check(index)
         if geometry.value < 0:
             raise Error("A batched instance must name a geometry")
-        self.geometries[index] = geometry
+        self.instances[index].geometry = geometry
 
     def matrix_at(self, index: Int) raises -> Matrix4:
         """Return one instance's transform, three.js's `getMatrixAt`.
@@ -244,22 +285,24 @@ struct BatchedMesh(Copyable, Movable):
             Error: If there is no such instance.
         """
         self._check(index)
-        return Matrix4(copy=self.matrices[index])
+        return Matrix4(copy=self.instances[index].matrix)
 
     def set_matrix_at(mut self, index: Int, matrix: Matrix4) raises:
         """Place one instance, three.js's `setMatrixAt`.
 
         Args:
             index: Which instance, from zero.
-            matrix: Its transform relative to the node.
+            matrix: Its transform relative to the node: affine and finite.
 
         Raises:
-            Error: If there is no such instance.
+            Error: If there is no such instance, or the matrix cannot
+                place one; see `check_placing`.
         """
         self._check(index)
-        self.matrices[index] = Matrix4(copy=matrix)
+        check_placing(matrix)
+        self.instances[index].matrix = Matrix4(copy=matrix)
 
     def _check(self, index: Int) raises:
         """Refuse an instance index that names no instance."""
-        if index < 0 or index >= len(self.matrices):
+        if index < 0 or index >= len(self.instances):
             raise Error("No instance has that index")

@@ -37,7 +37,7 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 | `v x y z` | A position. A fourth number is ignored. |
 | `vt u v` | A texture coordinate. |
 | `vn x y z` | A normal. |
-| `f a b c ...` | A face of three or more corners, cut into a fan of triangles. Each corner is `v`, `v/vt`, `v//vn` or `v/vt/vn`. |
+| `f a b c ...` | A face of three or more corners, cut into a fan of triangles. A polygon must be convex. Each corner is `v`, `v/vt`, `v//vn` or `v/vt/vn`. |
 | `o name`, `g name` | A new object. One with no faces is dropped. |
 | `usemtl name` | A new object under that material, with the same name. |
 | `#` | A comment, to the end of the line. |
@@ -50,8 +50,9 @@ Every face of one object must agree about normals and texture coordinates. A geo
 
 The parser raises, naming the line, for:
 
-- A `v`, `vt` or `vn` line with too few coordinates, or one that is not a number.
+- A `v`, `vt` or `vn` line with too few coordinates. A coordinate that is not a number, or is not finite as a `Float32`.
 - A face with fewer than three corners, or a corner with more than three parts.
+- A face of four or more corners that is not convex, or has no area. A fan covers a convex polygon and only that.
 - An index that is not a whole number, is zero, or names an entry the file does not have.
 - A face that names a normal or a texture coordinate where an earlier face of the object did not, or the other way round.
 

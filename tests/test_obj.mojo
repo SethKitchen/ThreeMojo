@@ -243,6 +243,84 @@ def test_faces_of_one_object_must_agree_about_normals_and_uvs() raises:
     assert_equal(split.count(), 2)
 
 
+def test_a_refusal_names_its_line_and_the_offending_text() raises:
+    var seen = String()
+    try:
+        _ = parse_obj(String("v 0 0 0\nv 1 not_a_number 0\n"))
+    except reason:
+        seen = String(reason)
+    assert_true("OBJ line 2" in seen, seen)
+    assert_true("not_a_number" in seen, seen)
+    seen = String()
+    try:
+        _ = parse_obj(String("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 two 3\n"))
+    except reason:
+        seen = String(reason)
+    assert_true("OBJ line 4" in seen, seen)
+    assert_true("two" in seen, seen)
+    seen = String()
+    try:
+        _ = parse_obj(String("v 0 0 0\nv 1 0 0\nv 0 1 0\n\nf 1 2 9\n"))
+    except reason:
+        seen = String(reason)
+    assert_true("OBJ line 5" in seen, seen)
+
+
+def test_a_coordinate_must_be_finite_as_a_float32() raises:
+    # Finite as a Float64, infinite once narrowed.
+    with assert_raises():
+        _ = parse_obj(String("v 1e100 0 0\n"))
+    with assert_raises():
+        _ = parse_obj(String("v inf 0 0\n"))
+    with assert_raises():
+        _ = parse_obj(String("v 0 nan 0\n"))
+    with assert_raises():
+        _ = parse_obj(
+            String("v 0 0 0\nv 1 0 0\nv 0 1 0\nvt 1e39 0\nf 1/1 2/1 3/1\n")
+        )
+    # Large but within reach is kept.
+    var model = parse_obj(String("v 1e30 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"))
+    assert_true(model.objects[0].geometry.corner(0, 0).x > 9e29)
+
+
+def test_a_polygon_must_be_convex_and_have_area() raises:
+    # A U shape: a fan from its first corner covers the cutout.
+    with assert_raises():
+        _ = parse_obj(
+            String(
+                "v 0 0 0\nv 3 0 0\nv 3 3 0\nv 2 3 0\n"
+                "v 2 1 0\nv 1 1 0\nv 1 3 0\nv 0 3 0\n"
+                "f 1 2 3 4 5 6 7 8\n"
+            )
+        )
+    # An arrowhead: one corner turns the other way.
+    with assert_raises():
+        _ = parse_obj(String("v 0 0 0\nv 2 1 0\nv 4 0 0\nv 2 3 0\nf 1 2 3 4\n"))
+    # Corners on one line: no area at all.
+    with assert_raises():
+        _ = parse_obj(String("v 0 0 0\nv 1 0 0\nv 2 0 0\nv 3 0 0\nf 1 2 3 4\n"))
+    # The refusal names the line.
+    var seen = String()
+    try:
+        _ = parse_obj(String("v 0 0 0\nv 2 1 0\nv 4 0 0\nv 2 3 0\nf 1 2 3 4\n"))
+    except reason:
+        seen = String(reason)
+    assert_true("OBJ line 5" in seen, seen)
+    assert_true("convex" in seen, seen)
+    # A convex pentagon cuts into three triangles, whichever way it is
+    # wound, and a triangle is never asked.
+    var pentagon = parse_obj(
+        String("v 0 0 0\nv 2 0 0\nv 3 1 0\nv 1 2 0\nv -1 1 0\nf 1 2 3 4 5\n")
+    )
+    assert_equal(pentagon.objects[0].geometry.triangle_count(), 3)
+    var clockwise = parse_obj(
+        String("v 0 0 0\nv 2 0 0\nv 3 1 0\nv 1 2 0\nv -1 1 0\nf 5 4 3 2 1\n")
+    )
+    assert_equal(clockwise.objects[0].geometry.triangle_count(), 3)
+    var sliver = parse_obj(String("v 0 0 0\nv 1 0 0\nv 2 0 0\nf 1 2 3\n"))
+    assert_equal(sliver.objects[0].geometry.triangle_count(), 1)
+
+
 # --- a file on disk ----------------------------------------------------------
 
 

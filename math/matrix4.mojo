@@ -31,7 +31,7 @@ passed where radians are meant.
 """
 
 from math.vector3 import Vector3
-from std.math import cos, sin, sqrt
+from std.math import cos, isfinite, sin, sqrt
 from units.si import Angle
 
 # How far a frame can be from a rotation before `is_rotation` says it is not
@@ -666,6 +666,22 @@ struct Matrix4(ImplicitlyCopyable):
         """
         ref e = self.elements
         return e[3] == 0 and e[7] == 0 and e[11] == 0 and e[15] == 1
+
+    def is_finite(self) -> Bool:
+        """Return True if every element is a finite number.
+
+        A matrix with an infinity or a not-a-number in it places nothing
+        anywhere, and the arithmetic downstream would carry the value into
+        every bound, corner and normal without a word. An instance matrix
+        is asked this at the boundary that takes it.
+
+        Returns:
+            Whether no element is infinite or not a number.
+        """
+        for index in range(16):  # pragma: no branch
+            if not isfinite(self.elements[index]):
+                return False
+        return True
 
     def _axis_length(self, axis: Int) -> Float32:
         """Return the length of one axis column: the scale along that axis."""

@@ -587,5 +587,18 @@ def test_the_tolerance_is_the_callers_to_widen() raises:
     assert_true(m.is_rotation(Float32(0.02)))
 
 
+from std.math import inf, nan
+
+
+def test_a_matrix_is_finite_unless_an_element_is_not() raises:
+    assert_true(Matrix4().is_finite())
+    var wide = Matrix4()
+    wide.elements[5] = inf[DType.float32]()
+    assert_true(not wide.is_finite())
+    var unsure = Matrix4()
+    unsure.elements[15] = nan[DType.float32]()
+    assert_true(not unsure.is_finite())
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

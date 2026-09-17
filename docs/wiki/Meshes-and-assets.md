@@ -50,7 +50,9 @@ scene.add_instanced_mesh(forest^)
 | `matrix_at(index) -> Matrix4`, `set_matrix_at(index, matrix)` | One instance's transform, relative to the node. |
 | `matrices` | Every transform, in order. |
 
-Moving the node moves every instance. The renderer sorts the group as one object, as three.js does. It culls each instance on its own, so an instance out of view costs nothing. three.js culls the whole group by one bound.
+Moving the node moves every instance. The renderer orders every instance on its own: opaque nearest first, translucent furthest first. three.js keeps an instanced mesh's instances together. That draws a translucent instance over one it is behind when the two were added the other way round. It culls each instance on its own, so an instance out of view costs nothing. three.js culls the whole group by one bound.
+
+An instance matrix must be affine and finite. It moves, turns, scales, shears or mirrors, and keeps `w` at one. A matrix that projects, or holds an infinity or a not-a-number, raises at `set_matrix_at`, and again when the scene renders, because the list is open.
 
 An instance index is a plain number, as three.js's `instanceId` is. An index that names no instance raises.
 
@@ -72,10 +74,11 @@ scene.add_batched_mesh(batch^)
 | `BatchedMesh(material, node, frustum_culled=True)` | An empty batch. |
 | `add_instance(geometry, matrix=Matrix4()) -> Int` | Add an instance and return its index. |
 | `geometry_at(index)`, `set_geometry_at(index, geometry)` | Which geometry one instance draws. |
-| `matrix_at(index)`, `set_matrix_at(index, matrix)` | One instance's transform. |
+| `matrix_at(index)`, `set_matrix_at(index, matrix)` | One instance's transform. Affine and finite, as an instanced mesh's. |
 | `count() -> Int` | How many instances. |
+| `instances` | Every `BatchedInstance`, in order: a geometry id and a matrix, held together. |
 
-three.js copies the geometries into one shared buffer. Here every geometry is in the store already, so an instance names one by id.
+three.js copies the geometries into one shared buffer. Here every geometry is in the store already, so an instance names one by id. The renderer orders each instance on its own, as it orders an instanced mesh's.
 
 ## LOD
 

@@ -90,6 +90,7 @@ from math.frustum import Frustum
 from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
+from objects.instanced_mesh import check_placing
 from materials.material import (
     BACK_SIDE,
     DOUBLE_SIDE,
@@ -352,8 +353,6 @@ struct _Draw(ImplicitlyCopyable):
 
 def _gather(
     mut draws: List[_Draw],
-    mut starts: List[Int],
-    mut counts: List[Int],
     mut depths: List[Float32],
     mut clear: List[Bool],
     scene: Scene,
@@ -370,33 +369,37 @@ def _gather(
     mut bounds: List[Sphere],
     mut known: List[Bool],
 ) raises:
-    """Add one group of draws to `draws`, with the group's sort key
-    alongside, unless the camera leaves it out.
+    """Add the draws of one scene object to `draws`, each with its sort
+    key alongside, unless the camera leaves it out.
 
-    A group is a mesh, every instance of an instanced or batched mesh, or
-    the level an LOD shows: one node, one material, and a geometry and a
-    matrix per draw. It is left out whole when its node shares no layer
+    An object is a mesh, every instance of an instanced or batched mesh,
+    or the level an LOD shows: one node, one material, and a geometry and
+    a matrix per draw. It is left out whole when its node shares no layer
     with the camera, three.js's `layers.test` in `projectObject`, before
     anything is measured for it. Each draw is left out on its own when
     its bound lies wholly outside the frustum, three.js's `frustumCulled`
-    test in the same function, unless the group opted out; three.js tests
-    an instanced mesh by one bound around every instance, and a test per
-    instance is what lets the instances behind the camera cost nothing.
-    A group every draw of which is out of view is not recorded at all.
-    Of a draw left out here only the positions are read, for the bound:
-    its material's textures and its index buffer are checked when it is
-    drawn, as three.js reads nothing of an object it culls.
+    test in the same function, unless the object opted out; three.js
+    tests an instanced mesh by one bound around every instance, and a
+    test per instance is what lets the instances behind the camera cost
+    nothing. Of a draw left out here only the positions are read, for the
+    bound: its material's textures and its index buffer are checked when
+    it is drawn, as three.js reads nothing of an object it culls, and the
+    material itself is looked up once the first draw survives.
+
+    Each draw's depth is its own placed origin's, not its node's, so that
+    an instance sorts where it is. And each instance matrix is asked
+    again whether it places -- affine, and finite -- whether or not it is
+    culled: the lists that hold them are open, and a check at
+    `set_matrix_at` alone is a check a caller can walk past.
 
     Args:
-        draws: Every draw so far; the group's are appended.
-        starts: Where each recorded group begins in `draws`.
-        counts: How many draws each recorded group has.
-        depths: Each recorded group's camera-space depth, of its node.
-        clear: Whether each recorded group's material blends.
+        draws: Every draw so far; the object's are appended.
+        depths: Each draw's camera-space depth, appended alongside.
+        clear: Whether each draw's material blends, appended alongside.
         scene: The transform hierarchy, updated.
         assets: Where the geometries and materials live.
-        node: The group's node.
-        material: The group's material.
+        node: The object's node.
+        material: The object's material.
         geometries: One geometry per draw.
         matrices: One transform per draw, relative to the node; as many
             as `geometries`.
@@ -411,41 +414,36 @@ def _gather(
 
     Raises:
         Error: If the node, a geometry or the material is not there, a
-            geometry has no positions, or the scene is stale.
+            geometry has no positions, the scene is stale, or an instance
+            matrix projects or holds a value that is not finite.
     """
     if not scene.get(node).layers.test(visible):
         return
     var placed = scene.world_matrix(node)
-    var start = len(draws)
+    var blends = False
+    var asked = False
     for index in range(len(matrices)):
+        check_placing(matrices[index])
         var world = Matrix4(copy=placed)
         world.multiply(matrices[index])
         if culled and not _in_view(
             assets, geometries[index], world, frustum, slack, bounds, known
         ):
             continue
+        if not asked:
+            blends = assets.materials.get(material).is_transparent()
+            asked = True
+        # The camera looks down -z, so a smaller z is further away. The
+        # draw's own origin: the translation column of where it is placed.
+        depths.append(
+            view.transform_point(
+                Vector3(
+                    world.elements[12], world.elements[13], world.elements[14]
+                )
+            ).z
+        )
+        clear.append(blends)
         draws.append(_Draw(geometries[index], material, world^))
-    if len(draws) == start:
-        return
-    starts.append(start)
-    counts.append(len(draws) - start)
-    # The camera looks down -z, so a smaller z is further away.
-    depths.append(view.transform_point(scene.world_position(node)).z)
-    clear.append(assets.materials.get(material).is_transparent())
-
-
-def _take(mut ordered: List[_Draw], draws: List[_Draw], start: Int, count: Int):
-    """Append one recorded group's draws to `ordered`, in the order they
-    were gathered.
-
-    Args:
-        ordered: The draw order being built.
-        draws: Every draw gathered.
-        start: Where the group begins in `draws`.
-        count: How many draws it has; at least one.
-    """
-    for offset in range(count):  # pragma: no branch
-        ordered.append(draws[start + offset])
 
 
 def _draws(
@@ -458,13 +456,13 @@ def _draws(
     slack: Float32,
 ) raises -> List[_Draw]:
     """Return what the camera draws, in the order to draw it: opaque
-    groups nearest first, then the translucent ones furthest first.
+    draws nearest first, then the translucent ones furthest first.
 
     The scene's meshes, instanced meshes, batched meshes and LODs are
-    read into groups of draws by `_gather`, which also leaves out what
-    the camera's layers and frustum leave out; an LOD contributes the one
-    level its node's distance from the camera picks, three.js's
-    `LOD.update`, or nothing when it has no levels.
+    read into draws by `_gather`, which also leaves out what the camera's
+    layers and frustum leave out; an LOD contributes the one level its
+    node's distance from the camera picks, three.js's `LOD.update`, or
+    nothing when it has no levels.
 
     Blending is not commutative, so a translucent surface only looks right if
     what is behind it is already there. Two rules follow, and they are the
@@ -473,7 +471,7 @@ def _draws(
     Opaque first, because a translucent surface has to mix with the solid
     thing behind it, and because opaque surfaces write depth — which is what
     stops a translucent surface behind a wall from showing through it. Among
-    themselves the opaque groups go nearest first. The image does not depend
+    themselves the opaque draws go nearest first. The image does not depend
     on it, since the depth test settles every pixel whatever the order, but
     the cost does: a fragment that fails the depth test is skipped *before*
     it is lit and sampled, so drawing the near things first means the far
@@ -481,22 +479,27 @@ def _draws(
     opaque list front to back for the same reason.
 
     Then translucent, furthest first, because each one mixes into the result
-    of the ones beyond it. Sorted by the camera-space depth of the group's
-    node, which is what three.js sorts by: per object, not per triangle,
-    and an instanced mesh is one object whose instances keep their given
-    order, as it is in three.js. Within one draw the triangles keep their
-    own order, so a translucent mesh that overlaps itself is still
-    approximate. That is the usual bargain, and the alternative is sorting
-    every triangle every frame.
+    of the ones beyond it. Sorted by the camera-space depth of each draw's
+    own origin: per draw, not per triangle, and per instance rather than per
+    object. three.js sorts an InstancedMesh as one object and a
+    BatchedMesh's members among themselves, which puts a translucent
+    instance in front of one it should be behind whenever the two were
+    added the other way round; a software renderer that prepares every
+    instance anyway can afford to order them right, and to let a
+    translucent mesh between two instances of a group fall between them.
+    Within one draw the triangles keep their own order, so a translucent
+    mesh that overlaps itself is still approximate. That is the usual
+    bargain, and the alternative is sorting every triangle every frame.
 
     Args:
         scene: The transform hierarchy, and what it draws.
         assets: Where the geometries and materials live.
         view: The world-to-camera transform, for measuring depth.
         eye: Where the camera is, in world space, for an LOD's distance.
-        visible: The camera's layers. A group on none of them is left out.
+        visible: The camera's layers. An object on none of them is left
+            out.
         frustum: The camera's frustum, in world space. A draw whose bound
-            lies wholly outside it is left out, unless its group opted out.
+            lies wholly outside it is left out, unless its object opted out.
         slack: How far past a plane a bound may lie and still be drawn;
             see `CULL_SLACK`.
 
@@ -505,11 +508,10 @@ def _draws(
 
     Raises:
         Error: If anything drawn names a node, a geometry or a material
-            that is not there, or a geometry has no positions.
+            that is not there, a geometry has no positions, or an instance
+            matrix cannot place an instance.
     """
     var draws = List[_Draw]()
-    var starts = List[Int]()
-    var counts = List[Int]()
     var depths = List[Float32]()
     var clear = List[Bool]()
     # Each geometry's local bound, found the first time a draw needs it
@@ -524,8 +526,6 @@ def _draws(
         var geometry: List[GeometryId] = [mesh.geometry]
         _gather(
             draws,
-            starts,
-            counts,
             depths,
             clear,
             scene,
@@ -546,8 +546,6 @@ def _draws(
         ref group = scene.instanced_meshes[index]
         _gather(
             draws,
-            starts,
-            counts,
             depths,
             clear,
             scene,
@@ -566,18 +564,21 @@ def _draws(
         )
     for index in range(len(scene.batched_meshes)):
         ref batch = scene.batched_meshes[index]
+        var geometries = List[GeometryId]()
+        var matrices = List[Matrix4]()
+        for slot in range(batch.count()):
+            geometries.append(batch.instances[slot].geometry)
+            matrices.append(batch.instances[slot].matrix)
         _gather(
             draws,
-            starts,
-            counts,
             depths,
             clear,
             scene,
             assets,
             batch.node,
             batch.material,
-            batch.geometries,
-            batch.matrices,
+            geometries,
+            matrices,
             batch.frustum_culled,
             view,
             visible,
@@ -597,8 +598,6 @@ def _draws(
         var geometry: List[GeometryId] = [shown.geometry]
         _gather(
             draws,
-            starts,
-            counts,
             depths,
             clear,
             scene,
@@ -620,33 +619,31 @@ def _draws(
     var solid_depths = List[Float32]()
     var see_through = List[Int]()
     var see_through_depths = List[Float32]()
-    for group in range(len(starts)):
-        if clear[group]:
-            see_through.append(group)
-            see_through_depths.append(depths[group])
+    for index in range(len(draws)):
+        if clear[index]:
+            see_through.append(index)
+            see_through_depths.append(depths[index])
         else:
-            solid.append(group)
+            solid.append(index)
             # Negated, so one ascending sort serves both lists: the nearest
-            # opaque group has the largest z and must come first.
-            solid_depths.append(-depths[group])
+            # opaque draw has the largest z and must come first.
+            solid_depths.append(-depths[index])
     _sort_by(solid, solid_depths)
     _sort_by(see_through, see_through_depths)
     var ordered = List[_Draw]()
     for position in range(len(solid)):
-        var group = solid[position]
-        _take(ordered, draws, starts[group], counts[group])
+        ordered.append(draws[solid[position]])
     for position in range(len(see_through)):
-        var group = see_through[position]
-        _take(ordered, draws, starts[group], counts[group])
+        ordered.append(draws[see_through[position]])
     return ordered^
 
 
 def _sort_by(mut items: List[Int], mut keys: List[Float32]):
     """Sort `items` by `keys`, ascending, in place and stably.
 
-    Insertion sort: the lists are one entry per mesh, which is small, and a
-    stable order keeps meshes at equal depth in the order the caller gave
-    them.
+    Insertion sort: the lists are one entry per draw, hundreds in a busy
+    scene rather than millions, and a stable order keeps draws at equal
+    depth in the order the caller gave them.
     """
     for position in range(len(items)):
         var item = items[position]

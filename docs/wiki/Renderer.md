@@ -51,7 +51,7 @@ The output is one flat list, three `RasterVertex` per triangle. Both rasterizers
 
 ## Draw order
 
-Opaque meshes come first, nearest first. Translucent meshes follow, furthest first. The order is per mesh, by the depth of its node's origin. Only the meshes the camera draws are sorted. See [Why transparency is sorted](Why-transparency-is-sorted).
+Opaque draws come first, nearest first. Translucent draws follow, furthest first. The order is per draw, by the depth of its own placed origin. An instance sorts where it is, not where its node is, so a translucent mesh between two instances of a group falls between them. Only the draws the camera makes are sorted. See [Why transparency is sorted](Why-transparency-is-sorted).
 
 ## Frustum culling
 

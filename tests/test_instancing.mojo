@@ -15,15 +15,19 @@ is exact.
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import COLOR, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
 from geometries.plane import plane
 from geometries.sphere import sphere
+from lights.light import ambient_light, directional_light
 from materials.material import BASIC, BLEND, MaterialId, Material
 from math.matrix4 import Matrix4, scaling, translation
 from math.vector3 import Vector3
+from std.math import nan
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
 from objects.lod import Lod
 from objects.mesh import Mesh
@@ -91,6 +95,8 @@ def assert_same_image(got: Framebuffer, wanted: Framebuffer) raises:
             assert_equal(one.g, two.g)
             assert_equal(one.b, two.b)
             assert_equal(one.a, two.a)
+            # The depth too: the same surface at the same distance.
+            assert_equal(got.depth_at(x, y), wanted.depth_at(x, y))
 
 
 def count_drawn(image: Framebuffer, background: Color) raises -> Int:
@@ -505,6 +511,246 @@ def test_a_group_naming_an_asset_that_is_not_there_is_refused() raises:
     missing_level.add_lod(lod^)
     with assert_raises():
         _ = renderer.render(missing_level, assets, a_camera())
+
+
+def tinted_sheet(r: Float32, g: Float32, b: Float32) raises -> BufferGeometry:
+    """Return a three meter square facing +z with one vertex color on
+    every corner, so that one white material can draw it in any color.
+
+    Args:
+        r: Red, linear.
+        g: Green, linear.
+        b: Blue, linear.
+
+    Returns:
+        The geometry.
+
+    Raises:
+        Error: If the plane cannot be built, which it can.
+    """
+    var sheet = plane(Length(3.0, METER), Length(3.0, METER))
+    var tints = List[Float32]()
+    for _ in range(sheet.vertex_count()):
+        tints.append(r)
+        tints.append(g)
+        tints.append(b)
+    sheet.set_attribute(String(COLOR), BufferAttribute(tints^, 3))
+    return sheet^
+
+
+def assert_middle_pixel(image: Framebuffer, r: Int, g: Int, b: Int) raises:
+    """Assert the middle pixel is the given color, to within one step of
+    rounding on each channel.
+
+    Args:
+        image: The image.
+        r: Expected red.
+        g: Expected green.
+        b: Expected blue.
+
+    Raises:
+        Error: If a channel is off by more than one.
+    """
+    var pixel = image.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(abs(Int(pixel.r) - r) <= 1, "red " + String(pixel.r))
+    assert_true(abs(Int(pixel.g) - g) <= 1, "green " + String(pixel.g))
+    assert_true(abs(Int(pixel.b) - b) <= 1, "blue " + String(pixel.b))
+
+
+def test_translucent_instances_draw_furthest_first_whatever_their_order() raises:
+    # Half-transparent red in front of half-transparent blue, over black.
+    # Blue first then red over it gives linear (0.5, 0, 0.25); the other
+    # way round gives (0.25, 0, 0.5), a different color. Three.js draws
+    # a batch's members in their own order; here each instance sorts on
+    # its own, so the insertion order does not matter. With a translucent
+    # green mesh between the two, it falls between them.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var red = assets.geometries.add(tinted_sheet(1, 0, 0))
+    var blue = assets.geometries.add(tinted_sheet(0, 0, 1))
+    var plain = assets.geometries.add(
+        plane(Length(3.0, METER), Length(3.0, METER))
+    )
+    var tinted = assets.materials.add(
+        Material(
+            Color(255, 255, 255),
+            opacity=0.5,
+            blending=BLEND,
+            kind=BASIC,
+            vertex_colors=True,
+        )
+    )
+    var green = assets.materials.add(
+        Material(Color(0, 255, 0), opacity=0.5, blending=BLEND, kind=BASIC)
+    )
+    for red_first in [True, False]:
+        var batch = BatchedMesh(tinted, NodeId(0))
+        if red_first:
+            _ = batch.add_instance(red, translation(0, 0, 0))
+            _ = batch.add_instance(blue, translation(0, 0, -2))
+        else:
+            _ = batch.add_instance(blue, translation(0, 0, -2))
+            _ = batch.add_instance(red, translation(0, 0, 0))
+        var scene = a_scene()
+        scene.add_batched_mesh(batch^)
+        assert_middle_pixel(
+            renderer.render(scene, assets, a_camera(2)), 188, 0, 137
+        )
+        # A translucent mesh a meter behind the red sheet is drawn after
+        # the blue one and before the red.
+        var between = Object3D()
+        between.set_position(0, 0, -1)
+        scene.add_mesh(Mesh(plain, green, scene.add(between^)))
+        scene.update()
+        assert_middle_pixel(
+            renderer.render(scene, assets, a_camera(2)), 188, 137, 99
+        )
+
+
+def test_an_instance_matrix_must_place() raises:
+    var projective = Matrix4()
+    projective.put(3, 0, 1)
+    var unsure = Matrix4()
+    unsure.elements[12] = nan[DType.float32]()
+    var group = InstancedMesh(GeometryId(0), MaterialId(0), NodeId(0), 1)
+    with assert_raises():
+        group.set_matrix_at(0, projective)
+    with assert_raises():
+        group.set_matrix_at(0, unsure)
+    var batch = BatchedMesh(MaterialId(0), NodeId(0))
+    with assert_raises():
+        _ = batch.add_instance(GeometryId(0), projective)
+    with assert_raises():
+        _ = batch.add_instance(GeometryId(0), unsure)
+    _ = batch.add_instance(GeometryId(0))
+    with assert_raises():
+        batch.set_matrix_at(0, projective)
+    # The lists are open, so the renderer asks again, with the culling on
+    # and off alike: turning an optimization off must not turn a wrong
+    # matrix into different arithmetic.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var paint = assets.materials.add(Material(Color(220, 120, 40)))
+    for culled in [True, False]:
+        var forest = InstancedMesh(
+            box, paint, NodeId(0), 1, frustum_culled=culled
+        )
+        forest.matrices[0] = projective
+        var scene = a_scene()
+        scene.add_instanced_mesh(forest^)
+        with assert_raises():
+            _ = renderer.render(scene, assets, a_camera())
+        var crowd = BatchedMesh(paint, NodeId(0), frustum_culled=culled)
+        _ = crowd.add_instance(box)
+        crowd.instances[0].matrix = unsure
+        var other = a_scene()
+        other.add_batched_mesh(crowd^)
+        with assert_raises():
+            _ = renderer.render(other, assets, a_camera())
+
+
+def test_lit_and_transformed_instances_draw_as_meshes_would() raises:
+    # Under lights, with a turned and stretched parent and a turned and
+    # stretched instance: the same world transform either way, so the
+    # same normals and the same shading, pixel for pixel and in depth.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.5, METER), 12, 8))
+    var paint = assets.materials.add(Material(Color(220, 120, 40)))
+    var child = Object3D()
+    child.set_position(-0.8, 0.1, 0)
+    child.set_euler(
+        Angle(10.0, DEGREE), Angle(30.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    child.set_scale(1, 1.5, 0.7)
+    var other = Object3D()
+    other.set_position(0.9, -0.2, 0.3)
+    other.set_euler(
+        Angle(0.0, DEGREE), Angle(-40.0, DEGREE), Angle(15.0, DEGREE)
+    )
+    other.set_scale(1.3, 0.8, 1)
+    # The same lamp and the same parent in both scenes, so the node ids
+    # the lights and the batch name agree.
+    var meshes = Scene()
+    var instances = Scene()
+    for which in [0, 1]:
+        var lamp = Object3D()
+        lamp.set_position(0.4, 0.8, 0.5)
+        var parent = Object3D()
+        parent.set_position(0.3, 0.2, 0)
+        parent.set_euler(
+            Angle(0.0, DEGREE), Angle(20.0, DEGREE), Angle(0.0, DEGREE)
+        )
+        parent.set_scale(1.2, 1, 1)
+        if which == 0:
+            var lamp_node = meshes.add(lamp^)
+            meshes.add_light(ambient_light(Color(255, 255, 255), 0.25))
+            meshes.add_light(
+                directional_light(Color(255, 255, 255), lamp_node, 0.75)
+            )
+            var parent_node = meshes.add(parent^)
+            var box_node = meshes.attach(Object3D(copy=child), parent_node)
+            var ball_node = meshes.attach(Object3D(copy=other), parent_node)
+            meshes.update()
+            meshes.add_mesh(Mesh(box, paint, box_node))
+            meshes.add_mesh(Mesh(ball, paint, ball_node))
+        else:
+            var lamp_node = instances.add(lamp^)
+            instances.add_light(ambient_light(Color(255, 255, 255), 0.25))
+            instances.add_light(
+                directional_light(Color(255, 255, 255), lamp_node, 0.75)
+            )
+            var parent_node = instances.add(parent^)
+            var batch = BatchedMesh(paint, parent_node)
+            _ = batch.add_instance(box, child.local_matrix())
+            _ = batch.add_instance(ball, other.local_matrix())
+            instances.update()
+            instances.add_batched_mesh(batch^)
+    var image = renderer.render(instances, assets, a_camera(4))
+    assert_true(count_drawn(image, renderer.background) > 30, "little drawn")
+    assert_same_image(image, renderer.render(meshes, assets, a_camera(4)))
+
+
+def test_an_lod_under_a_moved_parent_measures_from_the_camera() raises:
+    # The LOD's node rides a parent six meters down z, and the camera
+    # rides a node two meters up it: eight meters apart, the far level
+    # shows. With the parent a meter down, three meters: the near one.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
+    var paint = assets.materials.add(Material(Color(220, 120, 40)))
+    for far_away in [True, False]:
+        var eye = Object3D()
+        eye.set_position(0, 0, 2)
+        var parent = Object3D()
+        var away: Float32 = -6 if far_away else -1
+        parent.set_position(0, 0, away)
+        var lod_scene = Scene()
+        var eye_node = lod_scene.add(Object3D(copy=eye))
+        var parent_node = lod_scene.add(Object3D(copy=parent))
+        var child_node = lod_scene.attach(Object3D(), parent_node)
+        lod_scene.update()
+        var lod = Lod(child_node)
+        lod.add_level(box, paint)
+        lod.add_level(ball, paint, Length(5.0, METER))
+        lod_scene.add_lod(lod^)
+        var mesh_scene = Scene()
+        _ = mesh_scene.add(eye^)
+        var mesh_parent = mesh_scene.add(parent^)
+        var mesh_child = mesh_scene.attach(Object3D(), mesh_parent)
+        mesh_scene.update()
+        mesh_scene.add_mesh(Mesh(ball if far_away else box, paint, mesh_child))
+        var camera = a_camera()
+        camera.attach(eye_node)
+        var shown = renderer.render(lod_scene, assets, camera)
+        assert_true(
+            count_drawn(shown, renderer.background) > 0, "nothing shown"
+        )
+        assert_same_image(shown, renderer.render(mesh_scene, assets, camera))
 
 
 def test_a_group_with_no_instances_draws_nothing() raises:

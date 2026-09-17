@@ -16,8 +16,11 @@ What is read is what three.js's loader reads and this renderer can draw:
   A fourth coordinate on any of them is ignored, as three.js ignores it.
 - `f` with three or more corners, each `v`, `v/vt`, `v//vn` or `v/vt/vn`.
   A polygon is cut into a fan of triangles from its first corner, as
-  three.js cuts it. An index counts from one, and a negative one counts
-  back from the last entry so far, as the format allows.
+  three.js cuts it, and so it must be convex: a fan covers a convex
+  polygon and only that, and a concave one, or one with no area, is
+  refused rather than drawn wrong, as three.js draws it. An index counts
+  from one, and a negative one counts back from the last entry so far,
+  as the format allows.
 - `o name` and `g name` start a new object; `usemtl name` starts a new
   object under that material, keeping the name, since one geometry has one
   material here where three.js's has groups. An object with no faces is
@@ -34,12 +37,15 @@ and texture coordinates: a file that names a normal on one face and not
 the next is refused rather than padded, because a zero normal would light
 a corner black without a word.
 
-A number that cannot be read, a face with fewer than three corners, and
-an index that names nothing are refused, with the line they were found on.
+A number that cannot be read or is not finite once it is a `Float32`, a
+face with fewer than three corners or that is not convex, and an index
+that names nothing are refused, with the line they were found on.
 """
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import NORMAL, POSITION, UV, BufferGeometry
+from math.vector3 import Vector3
+from std.math import isfinite
 from std.pathlib import Path
 
 
@@ -171,6 +177,46 @@ def _where(line: Int) -> String:
     return "OBJ line " + String(line) + ": "
 
 
+def _number(field: String, line: Int) raises -> Float32:
+    """Return one coordinate read from a field.
+
+    Read wide, then narrowed to the `Float32` a geometry holds, and
+    refused if either step gives something that is not a finite number:
+    `1e100` reads as a finite Float64 and narrows to infinity, and an
+    infinity in a position would reach every bound, projection and
+    normal downstream without a word.
+
+    Args:
+        field: The text.
+        line: Which line it is on, for the error.
+
+    Returns:
+        The number.
+
+    Raises:
+        Error: If the field is not a number, or is not finite once it is
+            a `Float32`.
+    """
+    var wide: Float64
+    try:
+        wide = Float64(field)
+    except reason:
+        raise Error(
+            _where(line)
+            + "not a number: "
+            + field
+            + " ("
+            + String(reason)
+            + ")"
+        )
+    var value = Float32(wide)
+    if not isfinite(value):
+        raise Error(
+            _where(line) + "a coordinate must be a finite number: " + field
+        )
+    return value
+
+
 def _index(field: String, pool: Int, line: Int) raises -> Int:
     """Return which entry of a pool a face field names, from zero.
 
@@ -187,7 +233,18 @@ def _index(field: String, pool: Int, line: Int) raises -> Int:
         Error: If the field is not a whole number, is zero, or names an
             entry the pool does not have.
     """
-    var value = Int(field)
+    var value: Int
+    try:
+        value = Int(field)
+    except reason:
+        raise Error(
+            _where(line)
+            + "not an index: "
+            + field
+            + " ("
+            + String(reason)
+            + ")"
+        )
     if value < 0:
         value += pool
     else:
@@ -246,7 +303,7 @@ def _read_coordinates(
         )
     # Two or three coordinates: the loop always runs.
     for index in range(1, count + 1):  # pragma: no branch
-        pool.append(Float32(Float64(fields[index])))
+        pool.append(_number(fields[index], line))
 
 
 def _read_corner(
@@ -306,6 +363,78 @@ def _read_corner(
     part.corners += 1
 
 
+def _corner_position(
+    field: String, vertices: List[Float32], line: Int
+) raises -> Vector3:
+    """Return the position a face corner names, before the corner is
+    read in full.
+
+    Args:
+        field: The corner: `v`, `v/vt`, `v//vn` or `v/vt/vn`.
+        vertices: The position pool so far.
+        line: Which line, for the error.
+
+    Returns:
+        The position.
+
+    Raises:
+        Error: If the position index cannot be read or names nothing.
+    """
+    var parts = List[String]()
+    # A split yields at least one piece: the loop always runs.
+    for piece in field.split("/"):  # pragma: no branch
+        parts.append(String(piece))
+    var vertex = _index(parts[0], len(vertices) // 3, line)
+    return Vector3(
+        vertices[vertex * 3], vertices[vertex * 3 + 1], vertices[vertex * 3 + 2]
+    )
+
+
+def _check_convex(points: List[Vector3], line: Int) raises:
+    """Refuse a polygon of four or more corners that a fan from its first
+    corner would not cover: one that is not convex, or has no area.
+
+    The polygon's normal is Newell's sum over its edges, which is twice
+    its area as a vector and is zero for corners on one line. Each corner
+    then turns the same way about that normal in a convex polygon, and
+    the other way somewhere in a concave one, where a fan triangle would
+    cover the cutout. A corner within a millionth of straight is let
+    through, since a sliver of a triangle draws nothing and a rounded
+    corner should not refuse a file.
+
+    Args:
+        points: The corners, in order.
+        line: Which line, for the error.
+
+    Raises:
+        Error: If the polygon has no area, or a corner turns the wrong
+            way.
+    """
+    var count = len(points)
+    var normal = Vector3(0, 0, 0)
+    for index in range(count):  # pragma: no branch
+        var a = points[index]
+        var b = points[(index + 1) % count]
+        normal.x += (a.y - b.y) * (a.z + b.z)
+        normal.y += (a.z - b.z) * (a.x + b.x)
+        normal.z += (a.x - b.x) * (a.y + b.y)
+    var area = normal.length()
+    if area == 0:
+        raise Error(_where(line) + "a face has no area")
+    for index in range(count):  # pragma: no branch
+        var a = points[index]
+        var b = points[(index + 1) % count]
+        var c = points[(index + 2) % count]
+        var turn = b - a
+        turn.cross(c - b)
+        if turn.dot(normal) < -1e-6 * area * area:
+            raise Error(
+                _where(line)
+                + "a face is not convex, and only a convex face cuts into a"
+                " fan of triangles"
+            )
+
+
 def _read_face(
     mut part: _Part,
     fields: List[String],
@@ -332,6 +461,11 @@ def _read_face(
     var corners = len(fields) - 1
     if corners < 3:
         raise Error(_where(line) + "a face needs at least three corners")
+    if corners > 3:
+        var points = List[Vector3]()
+        for which in range(corners):  # pragma: no branch
+            points.append(_corner_position(fields[which + 1], vertices, line))
+        _check_convex(points, line)
     # Three corners or more: the loop always runs.
     for triangle in range(corners - 2):  # pragma: no branch
         for which in [0, triangle + 1, triangle + 2]:  # pragma: no branch
