@@ -22,6 +22,7 @@ Every `make` target, as `make help` lists them. Every command is the same on mac
 | `make animation` | Render every animated example into `out/`. |
 | `make bench` | Time the CPU and GPU rasterizers across image sizes. |
 | `make bench-scene` | Time each stage of the CPU renderer on a textured sphere. |
+| `make bench-examples` | Time every example against three.js and, when present, Mojo 1.0. |
 | `make clean` | Remove the coverage build and the task cache. Keeps `out/`. |
 | `make clean-images` | Remove the rendered images in `out/`. |
 

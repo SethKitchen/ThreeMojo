@@ -36,7 +36,8 @@ TOOL_LIBS    := $(filter-out $(TOOL_CLIS),$(wildcard coverage/*.mojo))
 # tests/compile_fail is deliberately excluded: those files must NOT compile,
 # which is the point of them, so linting them would always fail.
 ENTRY_POINTS := $(shell find tests examples bench tools -name '*.mojo' \
-                  -not -path 'tests/compile_fail/*') $(TOOL_CLIS)
+                  -not -path 'tests/compile_fail/*' \
+                  -not -path 'bench/mojo10/*') $(TOOL_CLIS)
 COMPILE_FAIL := $(wildcard tests/compile_fail/*.mojo)
 DOC_SOURCES  := $(LIB_SOURCES) $(TOOL_LIBS)
 TESTS        := $(wildcard tests/test_*.mojo)
@@ -151,7 +152,8 @@ endef
 
 .PHONY: help check check-cpu check-gpu ci test test-cpu test-gpu docs-check wiki-publish \
         lint lint-cpu lint-gpu gpu-status docstrings fmt fmt-check coverage \
-        compile-fail example animation bench bench-scene clean clean-images
+        compile-fail example animation bench bench-scene bench-examples \
+        clean clean-images
 
 help:
 	@echo "ThreeMojo tasks ($(TOOLCHAIN), inputs hash to $(HASH))"
@@ -173,6 +175,7 @@ help:
 	@echo "  make animation  render the animated examples into out/"
 	@echo "  make bench      CPU vs GPU rasterization across sizes"
 	@echo "  make bench-scene  a textured sphere through the CPU renderer, per stage"
+	@echo "  make bench-examples  each example vs three.js, and vs Mojo 1.0"
 	@echo "  make clean      remove the coverage build and the cache"
 	@echo "  make clean-images  remove the rendered images in out/"
 	@echo
@@ -435,6 +438,11 @@ bench:
 bench-scene:
 	@$(call run,$(MOJO) run $(MOJOFLAGS) bench/scene_bench.mojo); \
 	[ $$rc -eq 0 ] || exit 1
+
+# Uncached: the point is a fresh measurement. Writes bench/results.json and
+# fills the tables on docs/wiki/Benchmarks.md.
+bench-examples:
+	@python3 tools/bench_examples.py
 
 example: $(OUT_DIR)/triangle.png
 

@@ -67,7 +67,7 @@ The difference shows only once something moves the mesh's node after the bind. T
 
 Frustum culling is **off** by default, which is not a plain `Mesh`'s default. A posed skeleton carries vertices wherever the bones go, and the geometry's bound describes the rest pose only.
 
-Turning it on measures that rest pose and nothing else, so a mesh the bones have carried out of it can be culled while it is still on screen. It is an opt-in to a known wrong answer rather than a free saving. A bound that follows the pose needs the deformed vertices, which is the same evaluator [picking](Raycasting) now uses and the natural place to take this next.
+Turning it on measures that rest pose and nothing else. A mesh the bones have carried out of it can then be culled while it is still on screen. It is an opt-in to a known wrong answer rather than a free saving. A bound that follows the pose needs the deformed vertices. That is the evaluator [picking](Raycasting) now uses, and the natural place to take this next.
 
 ## The arithmetic
 

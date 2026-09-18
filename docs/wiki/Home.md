@@ -19,6 +19,7 @@ Get a task done.
 - [Run the checks](How-to-run-the-checks)
 - [Use the GPU backend](How-to-use-the-GPU-backend)
 - [Measure coverage](How-to-measure-coverage)
+- [Measure examples](How-to-measure-examples)
 - [Add a feature](How-to-add-a-feature)
 - [Write documentation](How-to-write-documentation)
 
@@ -50,6 +51,7 @@ Look something up.
 - [Coverage tool](Coverage-tool)
 - [Commands](Commands)
 - [Examples](Examples)
+- [Benchmarks](Benchmarks)
 
 ## Explanation
 

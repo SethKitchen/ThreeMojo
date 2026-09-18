@@ -39,6 +39,14 @@ make -B check
 
 `make ci` forces everything, which is what the CI workflow runs.
 
+## Measure the examples
+
+```bash
+make bench-examples
+```
+
+This times every example against a three.js scene of the same size. See [How to measure examples](How-to-measure-examples) and [Benchmarks](Benchmarks).
+
 ## Check the documentation
 
 ```bash

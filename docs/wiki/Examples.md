@@ -56,6 +56,9 @@ Animated outputs are APNG files. A browser or VS Code plays them. A viewer that 
 |---|---|
 | `bench/raster_bench.mojo` | CPU against GPU rasterization across image sizes. |
 | `bench/scene_bench.mojo` | Each stage of the CPU renderer, one worker and every core. |
+| `tools/bench_examples.py` | Every example against three.js, and the Mojo 1.0 probe. |
+
+The recorded tables live on [Benchmarks](Benchmarks). The refresh command is in [How to measure examples](How-to-measure-examples).
 
 ## Tools
 

@@ -1,0 +1,1500 @@
+{
+  "generated_at": "2026-09-18",
+  "host": {
+    "os": "Linux 6.18.33.1-microsoft-standard-WSL2",
+    "cpu": "AMD Ryzen 9 5900X 12-Core Processor",
+    "python": "3.14.4",
+    "mojo_1_1": "Mojo 1.1.0 (8189361e)",
+    "mojo_1_0": "Mojo 1.0.0 (ed45d567)",
+    "node": "v22.14.0"
+  },
+  "threejs_backend": "cpu",
+  "mojo10_refused": 21,
+  "mojo10_total": 22,
+  "probe": {
+    "v11": {
+      "compile": {
+        "ok": true,
+        "seconds": 2.53,
+        "rss_kib": 167788,
+        "status": 0
+      },
+      "run": {
+        "ok": true,
+        "seconds": 0.04,
+        "rss_kib": 13520,
+        "status": 0
+      }
+    },
+    "v10": {
+      "compile": {
+        "ok": true,
+        "seconds": 2.53,
+        "rss_kib": 371072,
+        "status": 0
+      },
+      "run": {
+        "ok": true,
+        "seconds": 0.04,
+        "rss_kib": 14684,
+        "status": 0
+      }
+    }
+  },
+  "examples": [
+    {
+      "name": "triangle",
+      "width": 320,
+      "height": 240,
+      "frames": 1,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 3.19,
+          "rss_kib": 338404,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.02,
+          "rss_kib": 15248,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.14,
+        "rss_kib": 149400,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": true,
+          "seconds": 3.26,
+          "rss_kib": 345500,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.01,
+          "rss_kib": 14712,
+          "status": 0
+        }
+      }
+    },
+    {
+      "name": "spin",
+      "width": 160,
+      "height": 120,
+      "frames": 24,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 3.23,
+          "rss_kib": 337716,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.04,
+          "rss_kib": 21084,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.13,
+        "rss_kib": 149200,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": true,
+          "seconds": 3.25,
+          "rss_kib": 353396,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.05,
+          "rss_kib": 20848,
+          "status": 0
+        }
+      }
+    },
+    {
+      "name": "cube",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 4.06,
+          "rss_kib": 373624,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.12,
+          "rss_kib": 40780,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.15,
+        "rss_kib": 151560,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": true,
+          "seconds": 4.17,
+          "rss_kib": 389940,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.16,
+          "rss_kib": 40724,
+          "status": 0
+        }
+      }
+    },
+    {
+      "name": "cubes",
+      "width": 260,
+      "height": 200,
+      "frames": 48,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 7.69,
+          "rss_kib": 483356,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.22,
+          "rss_kib": 59944,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.16,
+        "rss_kib": 152872,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.51,
+          "rss_kib": 192576,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/cubes.mojo:42:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/cubes.mojo:42:"
+        }
+      }
+    },
+    {
+      "name": "uv",
+      "width": 320,
+      "height": 200,
+      "frames": 2,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 7.23,
+          "rss_kib": 471792,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.03,
+          "rss_kib": 16472,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.14,
+        "rss_kib": 149020,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.38,
+          "rss_kib": 190344,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/uv.mojo:41:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/uv.mojo:41:"
+        }
+      }
+    },
+    {
+      "name": "textured",
+      "width": 260,
+      "height": 200,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 7.82,
+          "rss_kib": 482536,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.19,
+          "rss_kib": 44696,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.16,
+        "rss_kib": 151680,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.5,
+          "rss_kib": 190508,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/textured.mojo:41:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/textured.mojo:41:"
+        }
+      }
+    },
+    {
+      "name": "glass",
+      "width": 260,
+      "height": 200,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 7.81,
+          "rss_kib": 483084,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.18,
+          "rss_kib": 44448,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.16,
+        "rss_kib": 152360,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.49,
+          "rss_kib": 191052,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/glass.mojo:38:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/glass.mojo:38:"
+        }
+      }
+    },
+    {
+      "name": "floor",
+      "width": 320,
+      "height": 200,
+      "frames": 30,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 7.9,
+          "rss_kib": 484924,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.21,
+          "rss_kib": 45424,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.15,
+        "rss_kib": 151892,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.46,
+          "rss_kib": 192148,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/floor.mojo:54:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/floor.mojo:54:"
+        }
+      }
+    },
+    {
+      "name": "photo",
+      "width": 260,
+      "height": 200,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 9.03,
+          "rss_kib": 511728,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.19,
+          "rss_kib": 44944,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.17,
+        "rss_kib": 151324,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.98,
+          "rss_kib": 192880,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/photo.mojo:41:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/photo.mojo:41:"
+        }
+      }
+    },
+    {
+      "name": "lamps",
+      "width": 260,
+      "height": 200,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 7.76,
+          "rss_kib": 481508,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.18,
+          "rss_kib": 44688,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.19,
+        "rss_kib": 153596,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.45,
+          "rss_kib": 191752,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/lamps.mojo:50:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/lamps.mojo:50:"
+        }
+      }
+    },
+    {
+      "name": "first_scene",
+      "width": 320,
+      "height": 240,
+      "frames": 1,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 7.66,
+          "rss_kib": 475640,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.02,
+          "rss_kib": 15948,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.14,
+        "rss_kib": 152940,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.43,
+          "rss_kib": 191100,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/first_scene.mojo:27:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/first_scene.mojo:27:"
+        }
+      }
+    },
+    {
+      "name": "lit_scene",
+      "width": 320,
+      "height": 240,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 7.83,
+          "rss_kib": 478652,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.26,
+          "rss_kib": 64444,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.17,
+        "rss_kib": 152068,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.5,
+          "rss_kib": 190508,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/lit_scene.mojo:28:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/lit_scene.mojo:28:"
+        }
+      }
+    },
+    {
+      "name": "rotations",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 9.94,
+          "rss_kib": 449868,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.16,
+          "rss_kib": 41376,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.17,
+        "rss_kib": 151376,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.61,
+          "rss_kib": 191260,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/rotations.mojo:26:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/rotations.mojo:26:"
+        }
+      }
+    },
+    {
+      "name": "ortho",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.17,
+          "rss_kib": 485208,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.16,
+          "rss_kib": 41052,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.17,
+        "rss_kib": 152068,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.65,
+          "rss_kib": 190616,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/ortho.mojo:24:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/ortho.mojo:24:"
+        }
+      }
+    },
+    {
+      "name": "geometry",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 9.07,
+          "rss_kib": 480808,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.18,
+          "rss_kib": 43432,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.23,
+        "rss_kib": 153704,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.8,
+          "rss_kib": 191520,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/geometry.mojo:24:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/geometry.mojo:24:"
+        }
+      }
+    },
+    {
+      "name": "instances",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.1,
+          "rss_kib": 486048,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.2,
+          "rss_kib": 41400,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.64,
+        "rss_kib": 153328,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.64,
+          "rss_kib": 190892,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/instances.mojo:26:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/instances.mojo:26:"
+        }
+      }
+    },
+    {
+      "name": "raycast",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.6,
+          "rss_kib": 473024,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.19,
+          "rss_kib": 41076,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.2,
+        "rss_kib": 154624,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.7,
+          "rss_kib": 192020,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/raycast.mojo:28:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/raycast.mojo:28:"
+        }
+      }
+    },
+    {
+      "name": "curves",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 12.41,
+          "rss_kib": 484628,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.68,
+          "rss_kib": 41496,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 1.15,
+        "rss_kib": 153956,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 12.27,
+          "rss_kib": 189972,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/curves.mojo:27:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/curves.mojo:27:"
+        }
+      }
+    },
+    {
+      "name": "keyframes",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 29.17,
+          "rss_kib": 439888,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.41,
+          "rss_kib": 41380,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.27,
+        "rss_kib": 151720,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 5.13,
+          "rss_kib": 192144,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/keyframes.mojo:29:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/keyframes.mojo:29:"
+        }
+      }
+    },
+    {
+      "name": "skinning",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 10.42,
+          "rss_kib": 484140,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.17,
+          "rss_kib": 41440,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.18,
+        "rss_kib": 152940,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 3.02,
+          "rss_kib": 192420,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/skinning.mojo:29:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/skinning.mojo:29:"
+        }
+      }
+    },
+    {
+      "name": "phong",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.54,
+          "rss_kib": 483880,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.2,
+          "rss_kib": 43208,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.19,
+        "rss_kib": 154364,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.91,
+          "rss_kib": 191252,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/phong.mojo:25:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/phong.mojo:25:"
+        }
+      }
+    },
+    {
+      "name": "fog",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.85,
+          "rss_kib": 478388,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.15,
+          "rss_kib": 41176,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.15,
+        "rss_kib": 151676,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.73,
+          "rss_kib": 191628,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/fog.mojo:26:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/fog.mojo:26:"
+        }
+      }
+    },
+    {
+      "name": "culling",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.13,
+          "rss_kib": 466580,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.15,
+          "rss_kib": 41492,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.18,
+        "rss_kib": 151704,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 3.09,
+          "rss_kib": 190608,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/culling.mojo:26:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/culling.mojo:26:"
+        }
+      }
+    },
+    {
+      "name": "clipping",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 7.99,
+          "rss_kib": 480000,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.16,
+          "rss_kib": 41680,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.16,
+        "rss_kib": 152096,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.52,
+          "rss_kib": 192396,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/clipping.mojo:25:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/clipping.mojo:25:"
+        }
+      }
+    },
+    {
+      "name": "gpu_backend",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.4,
+          "rss_kib": 483028,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.17,
+          "rss_kib": 41396,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.18,
+        "rss_kib": 151896,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.66,
+          "rss_kib": 191864,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/gpu_backend.mojo:26:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/gpu_backend.mojo:26:"
+        }
+      }
+    },
+    {
+      "name": "exposure",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.26,
+          "rss_kib": 476568,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.18,
+          "rss_kib": 41196,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.18,
+        "rss_kib": 151784,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.62,
+          "rss_kib": 191372,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/exposure.mojo:26:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/exposure.mojo:26:"
+        }
+      }
+    },
+    {
+      "name": "model",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 9.5,
+          "rss_kib": 536452,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.16,
+          "rss_kib": 41076,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.16,
+        "rss_kib": 152152,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.7,
+          "rss_kib": 193480,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/model.mojo:25:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/model.mojo:25:"
+        }
+      }
+    },
+    {
+      "name": "orbit",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 7.95,
+          "rss_kib": 481248,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.17,
+          "rss_kib": 41780,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.16,
+        "rss_kib": 153572,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.45,
+          "rss_kib": 190676,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/orbit.mojo:27:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/orbit.mojo:27:"
+        }
+      }
+    },
+    {
+      "name": "clock",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.13,
+          "rss_kib": 480952,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.15,
+          "rss_kib": 41208,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.15,
+        "rss_kib": 151564,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.55,
+          "rss_kib": 191892,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/clock.mojo:27:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/clock.mojo:27:"
+        }
+      }
+    },
+    {
+      "name": "chain",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.19,
+          "rss_kib": 466628,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.15,
+          "rss_kib": 41440,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.16,
+        "rss_kib": 151816,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.48,
+          "rss_kib": 191392,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/chain.mojo:25:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/chain.mojo:25:"
+        }
+      }
+    },
+    {
+      "name": "additive",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 7.9,
+          "rss_kib": 479884,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.18,
+          "rss_kib": 41752,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.16,
+        "rss_kib": 152072,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.58,
+          "rss_kib": 190484,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/additive.mojo:26:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/additive.mojo:26:"
+        }
+      }
+    },
+    {
+      "name": "normals",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.15,
+          "rss_kib": 478984,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.19,
+          "rss_kib": 42056,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.19,
+        "rss_kib": 154300,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.46,
+          "rss_kib": 190524,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/normals.mojo:24:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/normals.mojo:24:"
+        }
+      }
+    },
+    {
+      "name": "fragments",
+      "width": 240,
+      "height": 180,
+      "frames": 36,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 8.05,
+          "rss_kib": 477932,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.16,
+          "rss_kib": 41212,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.17,
+        "rss_kib": 152088,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": false,
+          "seconds": 2.5,
+          "rss_kib": 190824,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/fragments.mojo:26:"
+        },
+        "run": {
+          "ok": false,
+          "seconds": null,
+          "rss_kib": null,
+          "status": 1,
+          "error": "Imported from /home/tron/ThreeMojo/examples/fragments.mojo:26:"
+        }
+      }
+    },
+    {
+      "name": "edges",
+      "width": 240,
+      "height": 180,
+      "frames": 48,
+      "threemojo": {
+        "compile": {
+          "ok": true,
+          "seconds": 3.42,
+          "rss_kib": 334720,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.15,
+          "rss_kib": 46832,
+          "status": 0
+        }
+      },
+      "threejs": {
+        "ok": true,
+        "seconds": 0.16,
+        "rss_kib": 151540,
+        "status": 0,
+        "backend": "cpu"
+      },
+      "mojo10": {
+        "compile": {
+          "ok": true,
+          "seconds": 3.38,
+          "rss_kib": 353672,
+          "status": 0
+        },
+        "run": {
+          "ok": true,
+          "seconds": 0.21,
+          "rss_kib": 46596,
+          "status": 0
+        }
+      }
+    }
+  ]
+}

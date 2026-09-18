@@ -9,6 +9,7 @@
 - [Run the checks](How-to-run-the-checks)
 - [GPU backend](How-to-use-the-GPU-backend)
 - [Coverage](How-to-measure-coverage)
+- [Measure examples](How-to-measure-examples)
 - [Add a feature](How-to-add-a-feature)
 - [Write documentation](How-to-write-documentation)
 
@@ -37,6 +38,7 @@
 - [Coverage tool](Coverage-tool)
 - [Commands](Commands)
 - [Examples](Examples)
+- [Benchmarks](Benchmarks)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)

@@ -4,6 +4,7 @@
 # Mojo toolchain, installed per-checkout by `uv pip install mojo`.
 # The README covers recreating it; it must never be committed.
 .venv/
+.venv-mojo10/
 
 # Instrumented copies of the sources, plus the manifest and captured probe
 # records. Regenerated from scratch by every `make coverage`.
@@ -19,6 +20,9 @@ coverage/build/
 *.o
 *.dylib
 *.so
+bench/build/
+bench/scratch/
+bench/threejs/node_modules/
 
 # Agent skills vendored from github per skills-lock.json. The lockfile is
 # committed so the versions are reproducible; the fetched content is not,

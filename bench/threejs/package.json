@@ -1,0 +1,11 @@
+{
+  "name": "threemojo-bench-threejs",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "optionalDependencies": {
+    "gl": "^8.1.6"
+  }
+}
