@@ -28,4 +28,6 @@ Hardware estimates the footprint by shading pixels in 2 by 2 quads and subtracti
 
 ## See it
 
-`make animation` renders `out/floor.png`: one checkerboard floor to the horizon, mipmapped on the right and not on the left.
+![A receding floor is mipmapped on the right and aliases on the left](out/floor.png)
+
+`examples/floor.mojo` renders one checkerboard floor to the horizon, mipmapped on the right and not on the left.

@@ -2,6 +2,8 @@
 
 `render/target.mojo`, `render/framebuffer.mojo` and `render/tonemap.mojo`. A `RenderTarget` is the workspace: premultiplied linear RGBA and depth, at float precision. A `Framebuffer` is the result: bytes and depth. `resolve` turns the first into the second once, through a tone mapping curve when one is asked for.
 
+![ACES tone mapping holds a bright sphere as exposure rises](out/exposure.png)
+
 three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as a texture yet.
 
 ## Color and FloatColor

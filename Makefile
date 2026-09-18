@@ -80,8 +80,8 @@ CPU_DOC_SOURCES  := $(CPU_LIB_SOURCES) $(TOOL_LIBS)
 COVERAGE_EXCLUDE := render/gpu.mojo
 COVERED := $(filter-out $(COVERAGE_EXCLUDE),$(LIB_SOURCES))
 COV_DIR := coverage/build
-# Rendered images land here. Gitignored, but kept between runs so they can be
-# looked at; `make clean` removes it.
+# Rendered images land here. The APNG figures are committed for the wiki;
+# `make animation` rewrites them when an example changes.
 OUT_DIR := out
 
 # --- caching ----------------------------------------------------------------
@@ -395,6 +395,8 @@ wiki-publish:
 	       "browser once, then run this again."; exit 1; }; \
 	rm -f $(CACHE_DIR)/wiki/*.md; \
 	cp docs/wiki/*.md $(CACHE_DIR)/wiki/; \
+	mkdir -p $(CACHE_DIR)/wiki/out; \
+	cp -f $(OUT_DIR)/*.png $(CACHE_DIR)/wiki/out/ 2>/dev/null || true; \
 	name=$$(git config user.name || echo "ThreeMojo"); \
 	email=$$(git config user.email || echo "threemojo@users.noreply.github.com"); \
 	from=$$(git rev-parse --short HEAD 2>/dev/null || echo "docs/wiki"); \
@@ -439,7 +441,19 @@ example: $(OUT_DIR)/triangle.png
 animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/uv.png $(OUT_DIR)/textured.png $(OUT_DIR)/glass.png \
            $(OUT_DIR)/floor.png $(OUT_DIR)/photo.png \
-           $(OUT_DIR)/lamps.png
+           $(OUT_DIR)/lamps.png $(OUT_DIR)/first_scene.png \
+           $(OUT_DIR)/lit_scene.png $(OUT_DIR)/rotations.png \
+           $(OUT_DIR)/cameras.png $(OUT_DIR)/geometry.png \
+           $(OUT_DIR)/instances.png $(OUT_DIR)/raycast.png \
+           $(OUT_DIR)/curves.png $(OUT_DIR)/keyframes.png \
+           $(OUT_DIR)/skinning.png $(OUT_DIR)/phong.png \
+           $(OUT_DIR)/fog.png $(OUT_DIR)/culling.png \
+           $(OUT_DIR)/clipping.png $(OUT_DIR)/gpu_backend.png \
+           $(OUT_DIR)/exposure.png $(OUT_DIR)/model.png \
+           $(OUT_DIR)/math.png $(OUT_DIR)/units.png \
+           $(OUT_DIR)/chain.png $(OUT_DIR)/additive.png \
+           $(OUT_DIR)/normals.png $(OUT_DIR)/fragments.png \
+           $(OUT_DIR)/coverage.png
 
 $(OUT_DIR)/cube.png: $(LIB_SOURCES) examples/cube.mojo
 	@mkdir -p $(OUT_DIR)
@@ -495,6 +509,126 @@ $(OUT_DIR)/spin.png: $(LIB_SOURCES) examples/spin.mojo
 $(OUT_DIR)/triangle.png: $(LIB_SOURCES) examples/triangle.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/triangle.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/first_scene.png: $(LIB_SOURCES) examples/first_scene.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/first_scene.mojo); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/lit_scene.png: $(LIB_SOURCES) examples/lit_scene.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/lit_scene.mojo); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/rotations.png: $(LIB_SOURCES) examples/rotations.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/rotations.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/cameras.png: $(LIB_SOURCES) examples/ortho.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/ortho.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/geometry.png: $(LIB_SOURCES) examples/geometry.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/geometry.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/instances.png: $(LIB_SOURCES) examples/instances.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/instances.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/raycast.png: $(LIB_SOURCES) examples/raycast.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/raycast.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/curves.png: $(LIB_SOURCES) examples/curves.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/curves.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/keyframes.png: $(LIB_SOURCES) examples/keyframes.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/keyframes.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/skinning.png: $(LIB_SOURCES) examples/skinning.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/skinning.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/phong.png: $(LIB_SOURCES) examples/phong.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/phong.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/fog.png: $(LIB_SOURCES) examples/fog.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/fog.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/culling.png: $(LIB_SOURCES) examples/culling.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/culling.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/clipping.png: $(LIB_SOURCES) examples/clipping.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/clipping.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/gpu_backend.png: $(LIB_SOURCES) examples/gpu_backend.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/gpu_backend.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/exposure.png: $(LIB_SOURCES) examples/exposure.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/exposure.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/model.png: $(LIB_SOURCES) examples/model.mojo assets/cube.obj
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/model.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/math.png: $(LIB_SOURCES) examples/orbit.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/orbit.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/units.png: $(LIB_SOURCES) examples/clock.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/clock.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/chain.png: $(LIB_SOURCES) examples/chain.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/chain.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/additive.png: $(LIB_SOURCES) examples/additive.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/additive.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/normals.png: $(LIB_SOURCES) examples/normals.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/normals.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/fragments.png: $(LIB_SOURCES) examples/fragments.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/fragments.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/coverage.png: $(LIB_SOURCES) examples/edges.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/edges.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be

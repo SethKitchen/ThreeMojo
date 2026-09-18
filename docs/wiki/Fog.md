@@ -2,6 +2,8 @@
 
 `core/fog.mojo`. A scene holds one fog in `scene.fog`. The renderer mixes every fragment toward the fog color by its camera-space depth. Both rasterizers apply it, in linear light.
 
+![An orange cube walks into a gray fog and back](out/fog.png)
+
 three.js: `Fog`, `FogExp2`, `Scene.fog`.
 
 ## Set the fog

@@ -2,6 +2,8 @@
 
 In this tutorial you write a program that renders one lit cube to a PNG file. It takes about ten minutes. At the end you know how a scene, a camera and a renderer fit together.
 
+![An orange cube, lit from the upper right, on a dark background](out/first_scene.png)
+
 You need a working install. See [How to install](How-to-install) if `make check-cpu` does not pass yet.
 
 The finished program is `examples/first_scene.mojo` in the repository.

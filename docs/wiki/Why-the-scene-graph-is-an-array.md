@@ -2,6 +2,8 @@
 
 `Scene` holds every node in one flat array, and each node records its parent's index. three.js holds a tree of objects that own their children. Mojo cannot express that tree, and the array turned out better.
 
+![A chain of parented cubes waves from the first node](out/chain.png)
+
 ## Mojo cannot nest a struct in itself
 
 three.js gives every `Object3D` a `children` array. In Mojo a struct cannot hold a `List` of its own type. The compiler rejects it with `field 'children' has non-'Deinitable' type`.

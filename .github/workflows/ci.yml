@@ -91,6 +91,8 @@ jobs:
           fi
           rm -f wiki/*.md
           cp docs/wiki/*.md wiki/
+          mkdir -p wiki/out
+          cp -f out/*.png wiki/out/ 2>/dev/null || true
           cd wiki
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

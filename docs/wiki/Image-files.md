@@ -2,6 +2,8 @@
 
 `render/png.mojo`, `render/inflate.mojo`, `render/apng.mojo` and `render/ppm.mojo`. The project writes PNG, APNG and PPM, and reads PNG. No compression library is involved.
 
+![A triangle turns in an animated PNG](out/spin.png)
+
 three.js: `TextureLoader` for reading. three.js writes nothing; the browser does.
 
 ## Formats

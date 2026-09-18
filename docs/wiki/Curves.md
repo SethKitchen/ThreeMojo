@@ -2,6 +2,8 @@
 
 `math/curve.mojo` and `math/path.mojo`. A curve is a function from a number between zero and one to a point in the plane. A path is a run of curves that meet end to end. A shape is a closed path with holes in it.
 
+![A tube follows one cubic Bezier curve](out/curves.png)
+
 three.js: `Curve`, `LineCurve`, `QuadraticBezierCurve`, `CubicBezierCurve`, `SplineCurve`, `CurvePath`, `Path`, `Shape`.
 
 ## Curve

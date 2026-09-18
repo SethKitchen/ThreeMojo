@@ -2,6 +2,8 @@
 
 `loaders/obj.mojo`. `read_obj` reads a Wavefront OBJ file into named objects, each with a `BufferGeometry`. `parse_obj` reads the text of one.
 
+![A cube loaded from an OBJ file turns under a lamp](out/model.png)
+
 three.js: `OBJLoader`.
 
 ## Read a file

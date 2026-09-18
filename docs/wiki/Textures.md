@@ -2,6 +2,8 @@
 
 `render/texture.mojo` and `render/texture_store.mojo`. A `Texture` is an RGBA image with a wrap mode, a filter, a color space, an alpha mode and an optional mip chain. A material names one by id.
 
+![Two checkerboard cubes turn, nearest beside bilinear](out/textured.png)
+
 three.js: `Texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`.
 
 ## Make a texture

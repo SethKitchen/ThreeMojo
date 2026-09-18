@@ -9,9 +9,10 @@
 # records. Regenerated from scratch by every `make coverage`.
 coverage/build/
 
-# Rendered images from `make example` and `make animation`. Kept between runs
-# so they can be looked at; removed by `make clean`.
-/out/
+# Regenerated dumps. The APNG figures in out/ are committed so the wiki
+# can show them.
+/out/*
+!/out/*.png
 *.ppm
 
 # Compiled binaries from `mojo build`.

@@ -26,6 +26,8 @@ An orthographic projection leaves `w` at one. Every `inv_w` is one, and the corr
 
 ## See it
 
-`make animation` renders `out/uv.png`: two frames of one floor plane with its texture coordinates written out as color. The first is correct. The second forces every `inv_w` to one. Every covered pixel differs, by up to 142 levels of 255.
+![Perspective-correct uvs sit beside an affine floor that bends](out/uv.png)
+
+`examples/uv.mojo` renders two frames of one floor plane with its texture coordinates written out as color. The first is correct. The second forces every `inv_w` to one. Every covered pixel differs, by up to 142 levels of 255.
 
 Both frames come from one `Renderer.prepare` call. That is why `prepare` is public. The affine frame is the same prepared triangles with the perspective thrown away. Nothing but the correction can account for the difference.

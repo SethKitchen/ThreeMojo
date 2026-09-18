@@ -2,6 +2,8 @@
 
 `core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes. Two more fill a drawn [shape](Curves) in, and give it thickness.
 
+![A torus knot turns under a lamp](out/geometry.png)
+
 three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`. Also `ShapeGeometry`, `ExtrudeGeometry` and `ShapeUtils.triangulateShape`.
 
 ## BufferAttribute

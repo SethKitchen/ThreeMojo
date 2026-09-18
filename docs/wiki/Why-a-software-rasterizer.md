@@ -2,6 +2,8 @@
 
 ThreeMojo rasterizes in software because Mojo has no graphics pipeline to port `WebGLRenderer` to. That constraint turned out to teach more than a port would have.
 
+![A cube turns through a model matrix and a flat rasterizer](out/cube.png)
+
 ## What Mojo offers
 
 Mojo's GPU support is compute only, in the CUDA sense: kernels, buffers and thread indexing. There are no vertex or fragment shaders, no rasterization stage, no window and no swapchain. three.js's renderer drives exactly those things through WebGL.

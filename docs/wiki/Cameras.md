@@ -2,6 +2,8 @@
 
 `cameras/camera.mojo`, `cameras/perspective_camera.mojo`, `cameras/orthographic_camera.mojo`. A camera gives the renderer a view matrix, a camera-to-pixels matrix and two clipping distances. The renderer is generic over the `Camera` trait.
 
+![An orthographic camera rides a pivot around a cube](out/cameras.png)
+
 three.js: `Camera`, `PerspectiveCamera`, `OrthographicCamera`.
 
 ## Camera trait
@@ -84,4 +86,4 @@ The two contracts differ, because `look_at` carries a facing into the parent's f
 
 ## Example
 
-`examples/photo.mojo` orbits an attached camera around a textured cube.
+`examples/ortho.mojo` orbits an attached `OrthographicCamera` around a cube. `examples/photo.mojo` does the same with a perspective camera and a decoded PNG.

@@ -2,6 +2,8 @@
 
 `math/quaternion.mojo`, `math/euler.mojo`, and the rotation methods of `Object3D`. A node's rotation is a quaternion. Euler angles set it. The rotate methods turn it further. `rotation()` reads Euler angles back out of it.
 
+![A cube turns along a slerp between two poses](out/rotations.png)
+
 three.js: `Quaternion`, `Euler`, `Euler.setFromRotationMatrix`, `Euler.setFromQuaternion`, `Object3D.rotation`, `Object3D.rotateX/Y/Z`, `rotateOnAxis`, `rotateOnWorldAxis`, `lookAt`.
 
 ## Quaternion

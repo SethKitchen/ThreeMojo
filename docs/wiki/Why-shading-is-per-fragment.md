@@ -2,6 +2,8 @@
 
 Every fragment interpolates the normal, normalizes it again, and sums the lights itself. Shading at the corners and interpolating the color, which is Gouraud shading, gives a coarse sphere a crease along every edge.
 
+![Light crosses the large faces of a coarse sphere without a crease](out/fragments.png)
+
 ## Gouraud's limit
 
 A triangle shaded at its corners can only be as round as its corners. A highlight that lands between two vertices is lost. A lamp close to a surface lights the corners and nothing in between.

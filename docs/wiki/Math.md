@@ -2,6 +2,8 @@
 
 `math/vector2.mojo`, `math/vector3.mojo`, `math/vector4.mojo`, `math/matrix3.mojo`, `math/matrix4.mojo`, `math/bounds.mojo`, `math/frustum.mojo`, `math/ray.mojo` and `math/projection.mojo`. Ported from three.js with the same conventions.
 
+![A quaternion turns a vector, and a sphere follows that point](out/math.png)
+
 three.js: `Vector2`, `Vector3`, `Vector4`, `Matrix3`, `Matrix4`, `Matrix4.makePerspective`, `makeOrthographic`, `lookAt`, `Box3`, `Sphere`, `Plane`, `Frustum`, `Ray`.
 
 ## Vector2 and Vector3

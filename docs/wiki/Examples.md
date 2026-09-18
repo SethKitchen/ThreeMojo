@@ -9,20 +9,42 @@ mkdir -p out
 .venv/bin/mojo run -I . examples/cubes.mojo out/cubes.png
 ```
 
-| Example | Output | Shows |
+| Example | Output | Page |
 |---|---|---|
-| `triangle.mojo` | `triangle.png` | One flat triangle. The smallest program that draws. |
-| `spin.mojo` | `spin.png` | A turning triangle. The first animation. |
-| `cube.mojo` | `cube.png` | A cube through a model matrix, with culling and depth. |
-| `cubes.mojo` | `cubes.png` | Two cubes on a scene graph. A small one orbits behind a large one. |
-| `uv.mojo` | `uv.png` | Perspective-correct against affine interpolation, two frames. |
-| `textured.mojo` | `textured.png` | Two checkerboard cubes, nearest and bilinear. |
-| `glass.mojo` | `glass.png` | Three translucent panes over a solid cube, sorted and blended. |
-| `floor.mojo` | `floor.png` | A floor to the horizon, mipmapped on one side. |
-| `photo.mojo` | `photo.png` | A decoded PNG on a cube, with the camera on an orbiting node. |
-| `lamps.mojo` | `lamps.png` | Three colored lights and a point light on a coarse sphere. |
-| `first_scene.mojo` | `first_scene.png` | The [first tutorial](Tutorial-Render-your-first-scene). |
-| `lit_scene.mojo` | `lit_scene.png` | The [second tutorial](Tutorial-Light-texture-and-animate). |
+| `triangle.mojo` | `triangle.png` | The smallest program that draws. |
+| `spin.mojo` | `spin.png` | [Image files](Image-files) |
+| `cube.mojo` | `cube.png` | [Why a software rasterizer](Why-a-software-rasterizer) |
+| `cubes.mojo` | `cubes.png` | [Scene graph](Scene-graph) |
+| `uv.mojo` | `uv.png` | [Why interpolation is perspective-correct](Why-interpolation-is-perspective-correct) |
+| `textured.mojo` | `textured.png` | [Textures](Textures) |
+| `glass.mojo` | `glass.png` | [Why transparency is sorted](Why-transparency-is-sorted) |
+| `floor.mojo` | `floor.png` | [Why mipmaps](Why-mipmaps) |
+| `photo.mojo` | `photo.png` | A decoded PNG on a cube. The README figure. |
+| `lamps.mojo` | `lamps.png` | [Lights](Lights) |
+| `first_scene.mojo` | `first_scene.png` | [Render your first scene](Tutorial-Render-your-first-scene) |
+| `lit_scene.mojo` | `lit_scene.png` | [Light, texture and animate](Tutorial-Light-texture-and-animate) |
+| `rotations.mojo` | `rotations.png` | [Rotations](Rotations) |
+| `ortho.mojo` | `cameras.png` | [Cameras](Cameras) |
+| `geometry.mojo` | `geometry.png` | [Geometry](Geometry) |
+| `instances.mojo` | `instances.png` | [Meshes and assets](Meshes-and-assets) |
+| `raycast.mojo` | `raycast.png` | [Raycasting](Raycasting) |
+| `curves.mojo` | `curves.png` | [Curves and paths](Curves) |
+| `keyframes.mojo` | `keyframes.png` | [Animation](Animation) |
+| `skinning.mojo` | `skinning.png` | [Skinning](Skinning) |
+| `phong.mojo` | `phong.png` | [Materials](Materials) |
+| `fog.mojo` | `fog.png` | [Fog](Fog) |
+| `culling.mojo` | `culling.png` | [Renderer](Renderer) |
+| `clipping.mojo` | `clipping.png` | [Rasterization](Rasterization) |
+| `gpu_backend.mojo` | `gpu_backend.png` | [GPU backend](GPU-backend) |
+| `exposure.mojo` | `exposure.png` | [Render target and framebuffer](Render-target-and-framebuffer) |
+| `model.mojo` | `model.png` | [Model files](Model-files) |
+| `orbit.mojo` | `math.png` | [Math](Math) |
+| `clock.mojo` | `units.png` | [Units](Units) |
+| `chain.mojo` | `chain.png` | [Why the scene graph is an array](Why-the-scene-graph-is-an-array) |
+| `additive.mojo` | `additive.png` | [Why color is linear](Why-color-is-linear) |
+| `normals.mojo` | `normals.png` | [Why a normal is not a color](Why-a-normal-is-not-a-color) |
+| `fragments.mojo` | `fragments.png` | [Why shading is per fragment](Why-shading-is-per-fragment) |
+| `edges.mojo` | `coverage.png` | [Why coverage uses fixed point](Why-coverage-uses-fixed-point) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 

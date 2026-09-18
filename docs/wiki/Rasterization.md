@@ -2,6 +2,8 @@
 
 `render/rasterizer.mojo`, `render/fillrule.mojo` and `renderers/clip.mojo`. The rasterizer fills screen-space triangles into a `RenderTarget`. It decides coverage in fixed point, tests depth, interpolates with perspective correction, and shades every fragment.
 
+![A cube walks through the near plane and is sliced](out/clipping.png)
+
 three.js has no software rasterizer. This is the part of the port that replaces the GPU pipeline.
 
 ## RasterVertex

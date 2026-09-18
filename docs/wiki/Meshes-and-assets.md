@@ -2,6 +2,8 @@
 
 `objects/mesh.mojo` and `core/assets.mojo`. A `Mesh` is three ids: a geometry, a material and a scene node. `Assets` owns the geometry, materials and textures that meshes name. An `InstancedMesh`, a `BatchedMesh` and an `Lod` draw at a node too, and are described below.
 
+![Eight cubes share one geometry on a turning ring](out/instances.png)
+
 three.js: `Mesh`. three.js has no assets store. A JavaScript mesh holds references; a Mojo mesh holds ids.
 
 ## Assets

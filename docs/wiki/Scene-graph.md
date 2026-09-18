@@ -2,6 +2,8 @@
 
 `core/object3d.mojo` and `core/scene.mojo`. A `Scene` holds a flat array of `Object3D` nodes. Each node records its parent's index. Meshes and lights name a node by id.
 
+![A small cube orbits a large cube and passes behind it](out/cubes.png)
+
 three.js: `Object3D`, `Scene`, `Group`.
 
 ## Object3D

@@ -2,6 +2,8 @@
 
 `lights/light.mojo` and `lights/lighting.mojo`. A scene holds ambient, directional, point, hemisphere and spot lights. The renderer resolves them once per frame and evaluates them at every fragment.
 
+![Three colored lamps and a warm bulb light one white sphere](out/lamps.png)
+
 three.js: `AmbientLight`, `DirectionalLight`, `PointLight`, `HemisphereLight`, `SpotLight`.
 
 ## Add a light

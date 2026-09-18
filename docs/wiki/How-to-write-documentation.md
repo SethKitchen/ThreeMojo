@@ -43,6 +43,18 @@ Follow ASD-STE100:
 - Put code, file names and commands in code spans.
 - Write American English: "color", "meter", "center", "gray", "-ize". This applies to code and identifiers too.
 
+## Figures
+
+Each feature page has one animated PNG in `out/`. The file is committed. Name the PNG after the page. Do not name the example program after a package. `examples/math.mojo` would hide `math/`. Do not put a gallery of figures on [Examples](Examples) or on Home.
+
+Write the image after the first paragraph:
+
+```markdown
+![A small cube orbits a large cube and passes behind it](out/cubes.png)
+```
+
+The alt text is one short sentence. `make wiki-publish` copies `out/*.png` with the pages.
+
 ## Check the rules
 
 ```bash

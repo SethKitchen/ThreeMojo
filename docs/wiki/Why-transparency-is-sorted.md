@@ -24,4 +24,6 @@ The kernel accumulates every fragment of a pixel in one pass. That is correct on
 
 ## See it
 
-`make animation` renders `out/glass.png`: three translucent panes turning through each other over a solid cube. Submitting them in any order gives the same image, and a test asserts it.
+![Three translucent panes turn through each other over a cube](out/glass.png)
+
+`examples/glass.mojo` renders three translucent panes turning through each other over a solid cube. Submitting them in any order gives the same image, and a test asserts it.

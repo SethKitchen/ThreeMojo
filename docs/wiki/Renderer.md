@@ -2,6 +2,8 @@
 
 `renderers/renderer.mojo`. The `Renderer` turns a scene, its assets and a camera into an image. `prepare` makes screen-space triangles. `render` also fills them on the CPU.
 
+![A cube leaves the frustum and vanishes, then returns](out/culling.png)
+
 three.js: `WebGLRenderer.render(scene, camera)`, plus the assets argument that Mojo needs.
 
 ## Construct one

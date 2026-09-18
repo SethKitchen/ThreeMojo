@@ -2,6 +2,8 @@
 
 `render/gpu.mojo`. `GpuRenderer` runs the rasterizer as a kernel with one thread per pixel. It consumes the same `RasterVertex` list as the CPU rasterizer and produces the same image.
 
+![An icosahedron turns. Both backends draw this picture.](out/gpu_backend.png)
+
 three.js has no equivalent. Mojo's GPU support is compute only, so this is a compute kernel and not a graphics pipeline.
 
 ## Requirements

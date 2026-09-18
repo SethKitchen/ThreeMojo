@@ -2,6 +2,8 @@
 
 `core/raycaster.mojo`. A `Raycaster` carries a `Ray` through a scene and returns every mesh it meets, nearest first. Use it to find what is under a pixel.
 
+![A red marker sits where a ray hits the sphere under the pixel](out/raycast.png)
+
 three.js: `Raycaster`, `setFromCamera`, `intersectObject`, `intersectObjects`, `Mesh.raycast`.
 
 ## Construct one

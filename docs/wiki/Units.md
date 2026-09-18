@@ -2,6 +2,8 @@
 
 `units/quantity.mojo` and `units/si.mojo`. Every measurement carries its dimension in its type. The compiler checks dimensions and erases them. A `Quantity` is the size of the `Float32` inside it.
 
+![A clock delta turns a cube by an angle in radians](out/units.png)
+
 three.js has no units. It leaves world units to the application. Here world space is meters.
 
 ## Quantity

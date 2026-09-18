@@ -2,6 +2,8 @@
 
 A normal material and a depth material write bytes, not light. Every other stage of this renderer works in linear light. So those two fragments take a different path out. They skip the tone mapping curve. They are stored so that the sRGB encode gives back the bytes they named. The alternative is an image that lies about its own numbers.
 
+![View-space normals shift as the camera circles a sphere](out/normals.png)
+
 ## The problem
 
 `RenderTarget` holds linear light and `resolve` encodes it once. See [Why color is linear](Why-color-is-linear). That is right for a lit surface. It is wrong for a normal.

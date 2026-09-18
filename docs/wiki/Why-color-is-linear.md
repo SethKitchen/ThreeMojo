@@ -2,6 +2,8 @@
 
 Every color in the renderer is decoded to linear light on the way in, mixed there, and encoded to sRGB once at the pixel. Arithmetic on encoded bytes gives shaded midtones that are far too dark.
 
+![Red light and green light add to yellow on a white sphere](out/additive.png)
+
 ## Light adds and sRGB does not
 
 A byte value of 128 is not half the light of 255. It is about 21.6 percent of it. sRGB spends more of its 256 steps on dark values, where the eye can tell them apart. Every image file and every authored color is encoded that way.

@@ -2,6 +2,8 @@
 
 `animation/keyframe_track.mojo`, `animation/animation_clip.mojo` and `animation/animation_mixer.mojo`. A track gives one property of one node a value at a list of times. A clip plays tracks together. A mixer plays clips and writes the pose into a scene.
 
+![A mixer slides and turns a cube from keyframes](out/keyframes.png)
+
 three.js: `KeyframeTrack`, `VectorKeyframeTrack`, `QuaternionKeyframeTrack`, `AnimationClip`, `AnimationAction`, `AnimationMixer`.
 
 ## KeyframeTrack

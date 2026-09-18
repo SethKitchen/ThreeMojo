@@ -2,6 +2,8 @@
 
 The rasterizer snaps vertices to a 1/16 pixel grid and evaluates the edge function in integers. Floating point left one-pixel cracks along shared edges.
 
+![A large triangle turns slowly, and its edges stay locked to pixels](out/coverage.png)
+
 ## The crack
 
 Two triangles that share an edge test it from opposite corner orders. One asks `edge(A, B, p)`, the other `edge(B, A, p)`. In floating point those results need not negate exactly. A pixel almost on the edge can come out negative for both, and neither triangle draws it.

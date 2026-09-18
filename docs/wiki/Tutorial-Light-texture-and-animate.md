@@ -2,6 +2,8 @@
 
 In this tutorial you extend the first scene with a texture, a point light and motion. The result is an animated PNG of a checkerboard cube that turns under a warm bulb. It takes about fifteen minutes.
 
+![A checkerboard cube turns under a warm bulb](out/lit_scene.png)
+
 Complete [Render your first scene](Tutorial-Render-your-first-scene) first. The finished program is `examples/lit_scene.mojo` in the repository.
 
 ## 1. Change the imports
