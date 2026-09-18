@@ -78,6 +78,7 @@ work; dropping one changes the image.
 """
 
 from cameras.camera import Camera
+from core.deform import morphed_normals, morphed_positions
 from core.buffer_geometry import (
     COLOR,
     MAX_MORPH_TARGETS,
@@ -100,7 +101,12 @@ from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.instanced_mesh import check_placing
 from objects.skeleton import blend_bones
-from objects.skinned_mesh import BONES_PER_VERTEX, SKIN_INDEX, SKIN_WEIGHT
+from objects.skinned_mesh import (
+    ATTACHED,
+    BONES_PER_VERTEX,
+    SKIN_INDEX,
+    SKIN_WEIGHT,
+)
 from materials.material import (
     BACK_SIDE,
     DOUBLE_SIDE,
@@ -131,8 +137,39 @@ from render.rasterizer import (
     rasterize_all,
 )
 from renderers.clip import ClipVertex, clip_depth
-from std.math import max
+from std.math import floor, isfinite, max
 from std.sys import num_logical_cores
+
+
+def whole_bone(named: Float32, count: Int) raises -> Int:
+    """Return which bone a `skinIndex` component names.
+
+    The attribute holds floats because every vertex attribute does, but a
+    bone number is a whole number and nothing else. Converting first and
+    asking afterward loses the distinction: `Int(0.75)` is bone zero, so a
+    rig exported with fractional indices quietly drew the wrong bone
+    carrying the wrong vertex, and `Int(-0.5)` is bone zero as well, so a
+    negative index lost its sign on the way to the range check.
+
+    Args:
+        named: The component as the attribute stores it.
+        count: How many bones the skeleton has.
+
+    Returns:
+        The bone number.
+
+    Raises:
+        Error: If the component is not a number, is not whole, or is not a
+            bone the skeleton has.
+    """
+    if not isfinite(named):
+        raise Error("A bone index must be a number")
+    if named != floor(named):
+        raise Error("A bone index must be a whole number")
+    var bone = Int(named)
+    if bone < 0 or bone >= count:
+        raise Error("A vertex names a bone the skeleton does not have")
+    return bone
 
 
 def _carriers(
@@ -162,8 +199,9 @@ def _carriers(
     Raises:
         Error: If the geometry has no skin attributes, if either is not
             four numbers a vertex or does not cover every vertex, or if a
-            vertex names a bone the skeleton does not have or carries
-            weights that do not sum to one.
+            vertex names a bone that is not a whole number in range or
+            carries weights that are not numbers, are negative, or do not
+            sum to one.
     """
     var out = List[Matrix4]()
     if skin < 0:
@@ -181,12 +219,16 @@ def _carriers(
         raise Error("A skin attribute holds four numbers a vertex")
     if bones.count() != vertex_count or weights.count() != vertex_count:
         raise Error("A skin attribute must cover every vertex")
+    var count = len(skins[skin].palette)
+    # One pair of lists for the whole draw. They were built per vertex,
+    # which is two allocations per vertex per frame to hold four numbers
+    # each, and the four are overwritten every time round anyway.
+    var named = List[Int](length=BONES_PER_VERTEX, fill=0)
+    var shares = List[Float32](length=BONES_PER_VERTEX, fill=0)
     for vertex in range(vertex_count):  # pragma: no branch
-        var named = List[Int]()
-        var shares = List[Float32]()
         for slot in range(BONES_PER_VERTEX):  # pragma: no branch
-            named.append(Int(bones.component(vertex, slot)))
-            shares.append(weights.component(vertex, slot))
+            named[slot] = whole_bone(bones.component(vertex, slot), count)
+            shares[slot] = weights.component(vertex, slot)
         var blended = blend_bones(skins[skin].palette, named, shares)
         # Into the bones' space, through them, and back out: three.js's
         # `bindMatrixInverse * skinMatrix * bindMatrix`.
@@ -195,28 +237,6 @@ def _carriers(
         carry.multiply(skins[skin].bind)
         out.append(carry^)
     return out^
-
-
-def _morph_offset(
-    base: Vector3, target: Vector3, weight: Float32, relative: Bool
-) -> Vector3:
-    """Return how far one morph target moves a vertex at `weight`.
-
-    three.js's two lines of `morphtarget_vertex`, and the same pair for a
-    normal. A target that holds finished positions contributes the run from
-    the base to itself; one that holds offsets contributes itself.
-
-    It returns the offset rather than the moved point so that the caller
-    can add every target's offset to the *unmorphed* value. Moving the
-    point once per target instead measures each target from where the last
-    one left it, and two half-worn targets then land somewhere neither of
-    them names: half of a target that carries a vertex to two, followed by
-    half of one that carries it to two the other way, gave a half rather
-    than a one.
-    """
-    if relative:
-        return target * weight
-    return (target - base) * weight
 
 
 def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
@@ -448,6 +468,12 @@ struct _Skin(Movable):
     has moved since the bind. The two bind matrices carry a vertex into the
     space the bones work in and back out again; see
     `objects.skinned_mesh`.
+
+    `bind_inverse` is worked out here rather than taken from the mesh,
+    because an `ATTACHED` mesh undoes wherever its node is *this frame*.
+    Taking the mesh's fixed inverse instead moved a character twice when
+    its mesh and its bones hung from one root that walked: the bones
+    carried the root's transform, and the mesh's node carried it again.
 
     It is a per-frame thing and not part of a `_Draw`, because a draw is
     copied into a sorted list and a palette is a list of its own. Draws
@@ -715,11 +741,22 @@ def _draws(
         var placed = List[Matrix4]()
         for bone in range(skinned.bone_count()):  # pragma: no branch
             placed.append(scene.world_matrix(skinned.skeleton.node(bone)))
+        # What the bones' world-space result is carried back out of. An
+        # attached mesh undoes its node as it stands now, so that the node
+        # carrying it and the bones carrying it do not both count; a
+        # detached one undoes the bind it was given and stays where its
+        # own node puts it.
+        var undo = Matrix4(copy=skinned.bind_matrix)
+        if skinned.bind_mode == ATTACHED:
+            undo = scene.world_matrix(skinned.node)
+        if undo.determinant() == 0:
+            raise Error("A skinned mesh has no inverse to undo its bind")
+        undo.invert()
         skins.append(
             _Skin(
                 skinned.skeleton.pose(placed),
                 skinned.bind_matrix,
-                skinned.bind_inverse,
+                undo^,
             )
         )
         var skin_geometry: List[GeometryId] = [skinned.geometry]
@@ -1386,7 +1423,6 @@ struct Renderer(Movable):
             # wears. Worked out once here rather than per vertex, and zero
             # for everything that is not a morphed mesh, which is the only
             # cost an unmorphed scene pays for any of this.
-            var targets = geometry.morph_count()
             # A skinned draw works out one matrix per vertex before the
             # loops below, because the position and the normal both want
             # it and three.js blends it once for the same reason.
@@ -1394,16 +1430,12 @@ struct Renderer(Movable):
                 geometry, skins, draws[slot].skin, vertex_count
             )
             var carried = len(carriers) > 0
+            # Where the targets put the vertices. The same call the
+            # raycaster makes, so what is drawn and what is picked cannot
+            # answer differently.
+            var worn = morphed_positions(geometry, draws[slot].morph_influences)
             for vertex in range(vertex_count):
-                var base = positions.vector3(vertex)
-                var local = base
-                for target in range(targets):
-                    local = local + _morph_offset(
-                        base,
-                        geometry.morph_position(target, vertex),
-                        draws[slot].morph_influences[target],
-                        geometry.morph_relative,
-                    )
+                var local = worn[vertex]
                 if carried:
                     local = carriers[vertex].transform_point(local)
                 var point = world.transform_point(local)
@@ -1451,25 +1483,15 @@ struct Renderer(Movable):
             # any case. The lights never see these: the kind is unlit.
             var vertex_normals = List[Vector3]()
             if smooth:
-                ref normals = geometry.attribute_view(String(NORMAL))
                 var to_normal = world.normal_matrix()
-                # Morphed only when the targets carry normals of their own.
-                # A geometry whose targets carry none keeps the base
-                # normal however far the positions move, which is what
-                # three.js's shader does without `morphAttributes.normal`.
-                var turned = targets
-                if not geometry.has_morph_normals():
-                    turned = 0
+                # Morphed by the same evaluator the positions went through,
+                # which keeps the two in step and keeps the rule about a
+                # geometry whose targets carry no normals in one place.
+                var faces = morphed_normals(
+                    geometry, draws[slot].morph_influences
+                )
                 for vertex in range(vertex_count):
-                    var rest = normals.vector3(vertex)
-                    var facing = rest
-                    for target in range(turned):
-                        facing = facing + _morph_offset(
-                            rest,
-                            geometry.morph_normal(target, vertex),
-                            draws[slot].morph_influences[target],
-                            geometry.morph_relative,
-                        )
+                    var facing = faces[vertex]
                     if carried:
                         facing = carriers[vertex].transform_direction(facing)
                     # transform_direction ignores translation, which is what a

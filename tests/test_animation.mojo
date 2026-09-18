@@ -374,10 +374,22 @@ def test_a_once_action_lets_go_unless_it_is_told_to_hold() raises:
         scene.get(NodeId(0)).position.x, Float32(4), atol=TOLERANCE
     )
     assert_false(mixer.action(which).is_active())
-    # Having let go, it no longer drives the node.
+    # Having let go, the node goes back to what it held before the mixer
+    # ever touched it, once, and is then left alone. Leaving the endpoint
+    # on it instead is the whole difference between letting go and
+    # clamping, and the two were the same thing before.
     mixer.update(scene, at(1))
     assert_almost_equal(
-        scene.get(NodeId(0)).position.x, Float32(4), atol=TOLERANCE
+        scene.get(NodeId(0)).position.x, Float32(0), atol=TOLERANCE
+    )
+    # Released, not deleted: the binding is still there, and the caller
+    # may now move the node without the mixer writing over it.
+    assert_equal(mixer.binding_count(), 1)
+    scene.node(NodeId(0)).set_position(7, 0, 0)
+    scene.update()
+    mixer.update(scene, at(1))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(7), atol=TOLERANCE
     )
 
     var held = AnimationAction(
@@ -797,6 +809,63 @@ def test_playback_refuses_settings_that_are_not_numbers() raises:
     mixer.action(which).play()
     with assert_raises():
         mixer.update(scene, at(nowhere))
+
+
+def test_a_weight_falling_to_zero_puts_the_pose_back() raises:
+    # Nearly zero blends almost all the way back to the original. Zero
+    # made no pile at all, so nothing was written and the node kept the
+    # frame before -- a fade that stopped one frame short of its target.
+    var scene = one_node_scene()
+    var mixer = AnimationMixer()
+    var which = mixer.add(holding_action(4))
+    mixer.action(which).play()
+
+    mixer.action(which).set_weight(0.5)
+    mixer.update(scene, at(0.1))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(2), atol=TOLERANCE
+    )
+    mixer.action(which).set_weight(0)
+    mixer.update(scene, at(0.1))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(0), atol=TOLERANCE
+    )
+
+
+def test_stopping_the_last_action_puts_the_pose_back() raises:
+    var scene = one_node_scene()
+    var mixer = AnimationMixer()
+    var which = mixer.add(holding_action(4))
+    mixer.action(which).play()
+    mixer.update(scene, at(0.1))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(4), atol=TOLERANCE
+    )
+    mixer.action(which).stop()
+    mixer.update(scene, at(0.1))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(0), atol=TOLERANCE
+    )
+
+
+def test_one_action_stopping_leaves_the_other_driving() raises:
+    # A property still driven by something else is not released, and the
+    # pose is what the remaining action says rather than the original.
+    var scene = one_node_scene()
+    var mixer = AnimationMixer()
+    var low = mixer.add(holding_action(0))
+    var high = mixer.add(holding_action(10))
+    mixer.action(low).play()
+    mixer.action(high).play()
+    mixer.update(scene, at(0.1))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(5), atol=TOLERANCE
+    )
+    mixer.action(low).stop()
+    mixer.update(scene, at(0.1))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(10), atol=TOLERANCE
+    )
 
 
 def test_a_binding_remembers_and_copies_what_a_node_held() raises:

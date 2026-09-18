@@ -16,6 +16,7 @@ from core.buffer_geometry import (
     NORMAL,
     POSITION,
 )
+from core.deform import box_of, morph_offset, sphere_of
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from materials.material import Color, DOUBLE_SIDE, Material
@@ -359,6 +360,35 @@ def test_a_morphed_mesh_is_not_culled_by_a_bound_it_has_left() raises:
     var moved = prepared(assets, mesh)
     assert_equal(len(moved), 3)
     assert_almost_equal(moved[0].world.x, Float32(40), atol=TOLERANCE)
+
+
+def test_a_morph_offset_is_a_run_or_an_offset() raises:
+    var base = Vector3(1, 0, 0)
+    var target = Vector3(3, 0, 0)
+    # An absolute target contributes the run from the base to itself.
+    assert_almost_equal(
+        morph_offset(base, target, 0.5, False).x, Float32(1), atol=TOLERANCE
+    )
+    # A relative one contributes itself.
+    assert_almost_equal(
+        morph_offset(base, target, 0.5, True).x, Float32(1.5), atol=TOLERANCE
+    )
+
+
+def test_bounding_the_points_a_mesh_has_been_carried_to() raises:
+    var points: List[Vector3] = [Vector3(0, 0, 0), Vector3(2, 0, 0)]
+    var around = sphere_of(points)
+    assert_almost_equal(around.center.x, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(around.radius, Float32(1), atol=TOLERANCE)
+    var box = box_of(points)
+    assert_almost_equal(box.min.x, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(box.max.x, Float32(2), atol=TOLERANCE)
+    # No points is not a bound of nothing, it is nothing to bound. The box
+    # comes back inside out, as `Box3.empty` is, and the sphere refuses.
+    var nothing = box_of(List[Vector3]())
+    assert_true(nothing.min.x > nothing.max.x)
+    with assert_raises():
+        _ = sphere_of(List[Vector3]())
 
 
 def main() raises:

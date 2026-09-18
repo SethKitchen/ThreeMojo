@@ -50,11 +50,24 @@ The geometry must carry two attributes, named as three.js and glTF name them:
 | `skinIndex` | Four bone numbers per vertex. |
 | `skinWeight` | Four weights per vertex, summing to one. |
 
-Four is what every skinning pipeline settled on. It is enough for a joint, and a fifth bone on one vertex is a rig that needs cleaning.
+Four is this port's limit and the common one: glTF's first `JOINTS_0` and `WEIGHTS_0` pair holds four. It is not a limit of skinning — glTF allows further sets for vertices that need more, and those are simply not read yet. The attribute names here are three.js's.
 
 A skinned mesh owns its skeleton and is moved into the scene, exactly as an `InstancedMesh` is moved in with its matrices. three.js lets several meshes share one skeleton; here each carries its own, and two meshes on one rig name the same nodes. The nodes are shared, so the pose is shared.
 
+### Attached or detached
+
+A bone's matrix carries a vertex in world space, and the mesh's own node then carries it again. Something must undo the second carry, or a character whose mesh and bones hang from one moving root is moved twice.
+
+| Mode | What it undoes | For |
+|---|---|---|
+| `ATTACHED` | The mesh node's world matrix **this frame**. | A rig that follows whatever carries it. The default, here and in three.js. |
+| `DETACHED` | The fixed bind matrix. | A mesh bound to a skeleton elsewhere in the graph. |
+
+The difference shows only once something moves the mesh's node after the bind. Translate a shared root three meters with `ATTACHED` and the character moves three. With `DETACHED` it moves six, which is the right answer to a different question.
+
 Frustum culling is **off** by default, which is not a plain `Mesh`'s default. A posed skeleton carries vertices wherever the bones go, and the geometry's bound describes the rest pose only.
+
+Turning it on measures that rest pose and nothing else, so a mesh the bones have carried out of it can be culled while it is still on screen. It is an opt-in to a known wrong answer rather than a free saving. A bound that follows the pose needs the deformed vertices, which is the same evaluator [picking](Raycasting) now uses and the natural place to take this next.
 
 ## The arithmetic
 
@@ -88,11 +101,19 @@ Skinning happens in `Renderer.prepare`, which is the one place the CPU and GPU r
 | A skin attribute that is not four numbers a vertex. | An error at `prepare`. |
 | A vertex naming a bone the skeleton does not have. | An error at `prepare`. |
 | Weights that do not sum to one. | An error at `prepare`. |
+| A weight that is not a number, or is below zero. | An error at `prepare`. |
+| A bone index that is not a whole number in range. | An error at `prepare`. |
+| A supplied inverse bind with no inverse of its own. | An error at construction. |
+| A bind mode that is neither of the two. | An error at construction. |
+| An `ATTACHED` mesh scaled to nothing. | An error at `prepare`. |
 
-The last one is stricter than three.js, which normalizes in its loader and lets the shader take whatever arrives. Weights summing to two put a vertex twice as far from the origin as the bones do. That reads as a mesh which swells where it bends, and it is a rig with a mistake in it.
+Negative weights are refused for the same reason. Two bones at minus one and two sum to one, and send a vertex twice as far as the further one. glTF forbids them.
+
+The sum rule is stricter than three.js, which normalizes in its loader and lets the shader take whatever arrives. Weights summing to two put a vertex twice as far from the origin as the bones do. That reads as a mesh which swells where it bends, and it is a rig with a mistake in it.
 
 ## See also
 
 - [Animation](Animation) poses the bones.
 - [Scene graph](Scene-graph) holds them.
 - [Geometry](Geometry#morph-targets) has morph targets, the other way a vertex moves.
+- [Raycasting](Raycasting) picks morphed meshes, and does not pick rigs yet.

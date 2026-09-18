@@ -42,13 +42,21 @@ matrix in a frame is read.
 ## What is refused
 
 A skeleton with no bones. An inverse bind that is not a finite affine
-transform. A pose given a different number of world matrices than there
-are bones, which is the one way the caller's lookup and the skeleton can
+transform, or one with no inverse of its own, which is not the inverse of
+anything. A pose given a different number of world matrices than there are
+bones, which is the one way the caller's lookup and the skeleton can
 disagree.
+
+A weight that is not a number, one below zero, or a set that does not sum
+to one. Negative weights are not a mixture: two bones at minus one and two
+sum to one and send a vertex to twice the distance of the further one,
+outside anything either bone names. glTF forbids them for the same
+reason.
 """
 
 from core.object3d import NodeId
 from math.matrix4 import Matrix4
+from std.math import isfinite
 
 
 @fieldwise_init
@@ -84,6 +92,12 @@ struct Skeleton(Copyable, Movable):
                 raise Error("A bone's inverse bind must be a real transform")
             if not bones[index].inverse_bind.is_affine():
                 raise Error("A bone's inverse bind must be affine")
+            # A matrix with no inverse is not the inverse of anything.
+            # `bind_skeleton` refuses a bone bound at a scale of zero
+            # before it inverts one; a caller handing the inverses in
+            # directly has to meet the same bar.
+            if bones[index].inverse_bind.determinant() == 0:
+                raise Error("A bone's inverse bind must be invertible")
         self.bones = bones^
 
     def bone_count(self) -> Int:
@@ -149,8 +163,16 @@ def blend_bones(
     that hold it.
 
     three.js's `skinMatrix`: the weighted sum of the named bones' matrices,
-    element by element. A matrix sum is what makes skinning linear, and
-    linear is what lets one blend serve the position and the normal both.
+    element by element.
+
+    The same matrix then serves the position and the normal, as three.js's
+    `skinning_vertex` and `skinnormal_vertex` share theirs. That is a
+    compatibility choice and not a correctness one: a normal is properly
+    carried by the inverse transpose, which differs from the matrix itself
+    wherever the blend scales unevenly -- and a blend of two rotations
+    does scale unevenly. It is close enough for a rig of rotations and
+    translations, which is what a skeleton is, and it is what every engine
+    doing this on a GPU uses.
 
     It is also why an elbow made of two bones pinches slightly when it
     bends: the average of two rotations taken through their matrices is not
@@ -167,9 +189,9 @@ def blend_bones(
         The blended matrix.
 
     Raises:
-        Error: If the two lists are different lengths, if a weight names a
-            bone the palette does not have, or if the weights do not sum
-            to one.
+        Error: If the two lists are different lengths, if a weight is not a
+            number or is below zero, if a weight names a bone the palette
+            does not have, or if the weights do not sum to one.
     """
     if len(bones) != len(weights):
         raise Error("A vertex needs one weight for every bone it names")
@@ -177,6 +199,10 @@ def blend_bones(
     var total = Float32(0)
     for slot in range(len(bones)):
         var weight = weights[slot]
+        if not isfinite(weight):
+            raise Error("A vertex's bone weights must be numbers")
+        if weight < 0:
+            raise Error("A vertex's bone weights cannot be negative")
         total += weight
         if weight == 0:
             continue
@@ -185,7 +211,10 @@ def blend_bones(
             raise Error("A vertex names a bone the skeleton does not have")
         for element in range(16):  # pragma: no branch
             summed[element] += palette[bone].elements[element] * weight
-    if abs(total - 1) > WEIGHT_SLACK:
+    # Written so that a total which is not a number fails. `abs(nan - 1) >
+    # slack` is false, so the obvious spelling lets one through, and the
+    # same spelling let a rotation key through before it.
+    if not (abs(total - 1) <= WEIGHT_SLACK):
         raise Error("A vertex's bone weights must sum to one")
     var blended = Matrix4()
     for element in range(16):  # pragma: no branch

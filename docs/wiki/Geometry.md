@@ -296,11 +296,15 @@ Every target is measured from the *unmorphed* vertex, so wearing two of them at 
 
 Either every target carries normals or none does. A geometry whose targets carry none keeps the base normal however far the positions move, which is what three.js's shader does when `morphAttributes.normal` is absent.
 
+### What is drawn is what is picked
+
+`core/deform.mojo` answers where a vertex is once its targets are worn, and both the renderer and the [raycaster](Raycasting) ask it. They did not always. Rendering wore the targets and picking did not, so a morphed mesh was drawn in one place and clicked in another.
+
 ### A worn mesh is not culled
 
 A mesh wearing a target is not where its geometry's bounding sphere says it is, so the renderer does not measure it against the frustum. three.js culls it anyway, and clips morphed meshes at the edge of the view for exactly this reason.
 
-Eight targets is the ceiling, which is three.js's `MAX_MORPH_TARGETS`.
+Eight targets is this port's ceiling, not three.js's. Older three.js had the same number, from how many attribute slots a WebGL program has. Current three.js passes its targets in a texture and is bounded by memory. Eight is here because a mesh holds its weights in a fixed row rather than a list, which is what keeps a `Mesh` copyable.
 
 ## Errors
 

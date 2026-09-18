@@ -538,5 +538,80 @@ def test_a_click_lands_on_the_cube_under_it() raises:
     assert_equal(len(caster.intersect_scene(scene, assets)), 0)
 
 
+def morphed_scene() raises -> Scene:
+    """Return a scene holding one flat triangle at the origin, whose single
+    morph target carries every vertex ten meters along x."""
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene.update()
+    return scene^
+
+
+def morphed_mesh(mut assets: Assets, weight: Float32) raises -> Mesh:
+    """Return a mesh over that triangle, wearing its target at `weight`."""
+    var geometry = BufferGeometry()
+    var points: List[Float32] = [0, 0, 0, 1, 0, 0, 0, 1, 0]
+    geometry.set_attribute(String(POSITION), BufferAttribute(points^, 3))
+    var offsets: List[Float32] = [10, 0, 0, 10, 0, 0, 10, 0, 0]
+    geometry.add_morph_target(BufferAttribute(offsets^, 3))
+    geometry.morph_relative = True
+    var mesh = Mesh(
+        assets.geometries.add(geometry^),
+        assets.materials.add(Material(Color(255, 255, 255), side=DOUBLE_SIDE)),
+        NodeId(0),
+    )
+    mesh.set_morph_influence(0, weight)
+    return mesh^
+
+
+def test_a_ray_meets_a_morphed_mesh_where_it_is_drawn() raises:
+    # Rendering wears the targets and picking did not, so the drawn shape
+    # could not be hit and the modelled one could be hit where nothing was.
+    var assets = Assets()
+    var scene = morphed_scene()
+    scene.add_mesh(morphed_mesh(assets, 1))
+    scene.update()
+
+    # Straight down onto where the triangle has gone.
+    var onto = Raycaster(Vector3(10.25, 0.25, 1), Vector3(0, 0, -1))
+    var met = onto.intersect_mesh(scene, assets, 0)
+    assert_equal(len(met), 1)
+    assert_almost_equal(met[0].point.x, Float32(10.25), atol=TOLERANCE)
+    assert_almost_equal(met[0].point.z, Float32(0), atol=TOLERANCE)
+
+
+def test_a_ray_misses_a_morphed_mesh_where_it_used_to_be() raises:
+    var assets = Assets()
+    var scene = morphed_scene()
+    scene.add_mesh(morphed_mesh(assets, 1))
+    scene.update()
+
+    # Straight down onto where the geometry was modelled and is not now.
+    var behind = Raycaster(Vector3(0.25, 0.25, 1), Vector3(0, 0, -1))
+    assert_equal(len(behind.intersect_mesh(scene, assets, 0)), 0)
+
+
+def test_a_half_worn_target_is_met_half_way() raises:
+    var assets = Assets()
+    var scene = morphed_scene()
+    scene.add_mesh(morphed_mesh(assets, 0.5))
+    scene.update()
+    var onto = Raycaster(Vector3(5.25, 0.25, 1), Vector3(0, 0, -1))
+    assert_equal(len(onto.intersect_mesh(scene, assets, 0)), 1)
+    var elsewhere = Raycaster(Vector3(10.25, 0.25, 1), Vector3(0, 0, -1))
+    assert_equal(len(elsewhere.intersect_mesh(scene, assets, 0)), 0)
+
+
+def test_picking_a_scene_sees_the_worn_mesh_too() raises:
+    # `intersect_scene` walks the same path, so the whole-scene query has
+    # to agree with the single-mesh one.
+    var assets = Assets()
+    var scene = morphed_scene()
+    scene.add_mesh(morphed_mesh(assets, 1))
+    scene.update()
+    var onto = Raycaster(Vector3(10.25, 0.25, 1), Vector3(0, 0, -1))
+    assert_equal(len(onto.intersect_scene(scene, assets)), 1)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

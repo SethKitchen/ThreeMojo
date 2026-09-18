@@ -20,17 +20,20 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from materials.material import Color, DOUBLE_SIDE, Material, MaterialId
-from math.matrix4 import Matrix4, scaling, translation
+from math.matrix4 import Matrix4, rotation_z, scaling, translation
 from math.vector3 import Vector3
 from objects.skeleton import Bone, Skeleton, bind_skeleton, blend_bones
 from objects.skinned_mesh import (
+    ATTACHED,
     BONES_PER_VERTEX,
+    BindMode,
+    DETACHED,
     SKIN_INDEX,
     SKIN_WEIGHT,
     SkinnedMesh,
 )
 from render.rasterizer import RasterVertex
-from renderers.renderer import Renderer
+from renderers.renderer import Renderer, whole_bone
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -514,6 +517,48 @@ def test_a_skinned_mesh_wears_morph_targets_too() raises:
     assert_almost_equal(corners[0].world.y, Float32(1), atol=TOLERANCE)
 
 
+def test_a_morph_is_worn_before_the_bones_carry_it() raises:
+    # Two translations commute, so a test built from them passes whichever
+    # order the renderer uses. A turn does not. The first vertex sits at
+    # the origin; half of a target that offsets it by one along x carries
+    # it to (0.5, 0, 0), and a quarter turn about z then takes it to
+    # (0, 0.5, 0). Turning first would leave it at the origin and the
+    # offset would land it at (0.5, 0, 0) instead -- the same two numbers
+    # the other way round, which is what makes this worth asserting.
+    var assets = Assets()
+    var geometry = on_one_bone()
+    var offsets: List[Float32] = [1, 0, 0, 0, 0, 0, 0, 0, 0]
+    geometry.add_morph_target(BufferAttribute(offsets^, 3))
+    geometry.morph_relative = True
+
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    _ = scene.add(Object3D())
+    _ = scene.add(Object3D())
+    scene.update()
+    var skeleton = bind_skeleton(
+        [NodeId(1), NodeId(2)],
+        [scene.world_matrix(NodeId(1)), scene.world_matrix(NodeId(2))],
+    )
+    var mesh = SkinnedMesh(
+        assets.geometries.add(geometry^),
+        assets.materials.add(Material(Color(255, 255, 255), side=DOUBLE_SIDE)),
+        NodeId(0),
+        skeleton^,
+    )
+    mesh.set_morph_influence(0, 0.5)
+    scene.add_skinned_mesh(mesh^)
+    scene.node(NodeId(1)).set_euler(
+        Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(90.0, DEGREE)
+    )
+    scene.update()
+
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var corners = renderer.prepare(scene, assets, a_camera())
+    assert_almost_equal(corners[0].world.x, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(corners[0].world.y, Float32(0.5), atol=TOLERANCE)
+
+
 def test_a_mesh_bound_somewhere_else_still_comes_back() raises:
     # The bind matrix is where the mesh stood when it was attached. A mesh
     # whose node is turned needs it, because the bones work in world space
@@ -549,6 +594,188 @@ def test_a_mesh_bound_somewhere_else_still_comes_back() raises:
     var turned = scene.world_matrix(NodeId(0)).transform_point(Vector3(1, 0, 0))
     assert_almost_equal(corners[1].world.x, turned.x, atol=TOLERANCE)
     assert_almost_equal(corners[1].world.z, turned.z, atol=TOLERANCE)
+
+
+def parented_rig(mode: BindMode, moved: Matrix4) raises -> Vector3:
+    """Return where the first vertex lands when the mesh and its bone hang
+    from one root and that root is moved after the bind.
+
+    Node zero is the root, node one is the mesh, node two is the bone; the
+    mesh and the bone are both children of the root and neither moves on
+    its own.
+    """
+    var assets = Assets()
+    var scene = Scene()
+    var root = scene.add(Object3D())
+    var mesh_node = scene.attach(Object3D(), root)
+    var bone_node = scene.attach(Object3D(), root)
+    scene.update()
+
+    var skeleton = bind_skeleton([bone_node], [scene.world_matrix(bone_node)])
+    var mesh = SkinnedMesh(
+        assets.geometries.add(on_one_bone()),
+        assets.materials.add(Material(Color(255, 255, 255), side=DOUBLE_SIDE)),
+        mesh_node,
+        skeleton^,
+        scene.world_matrix(mesh_node),
+        bind_mode=mode,
+    )
+    scene.add_skinned_mesh(mesh^)
+    scene.set(root, moved_node(moved))
+    scene.update()
+
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var corners = renderer.prepare(scene, assets, a_camera())
+    return corners[1].world
+
+
+def moved_node(placed: Matrix4) raises -> Object3D:
+    """Return a node carrying the translation of `placed`."""
+    var node = Object3D()
+    node.set_position(
+        placed.elements[12], placed.elements[13], placed.elements[14]
+    )
+    return node^
+
+
+def test_an_attached_rig_follows_a_root_once_and_not_twice() raises:
+    # The mesh and the bone hang from one root. Moving that root carries
+    # the bone, and the mesh's own node carries it again; something has to
+    # undo the second carry or the character moves twice as far.
+    var landed = parented_rig(ATTACHED, translation(3, 0, 0))
+    # The geometry's second vertex is at (1, 0, 0), so three meters of root
+    # puts it at four.
+    assert_almost_equal(landed.x, Float32(4), atol=TOLERANCE)
+
+
+def test_a_detached_rig_stays_where_its_own_node_puts_it() raises:
+    # The other answer, and a deliberate one: the bind is undone against
+    # the fixed bind matrix, so the bones reach for the mesh from where
+    # they are and the root's move lands twice over.
+    var landed = parented_rig(DETACHED, translation(3, 0, 0))
+    assert_almost_equal(landed.x, Float32(7), atol=TOLERANCE)
+
+
+def test_an_attached_rig_follows_a_turning_root() raises:
+    # A rotation catches what a translation can hide: turning twice is not
+    # turning once, and the two are not the same point.
+    var assets = Assets()
+    var scene = Scene()
+    var root = scene.add(Object3D())
+    var mesh_node = scene.attach(Object3D(), root)
+    var bone_node = scene.attach(Object3D(), root)
+    scene.update()
+    var skeleton = bind_skeleton([bone_node], [scene.world_matrix(bone_node)])
+    scene.add_skinned_mesh(
+        SkinnedMesh(
+            assets.geometries.add(on_one_bone()),
+            assets.materials.add(
+                Material(Color(255, 255, 255), side=DOUBLE_SIDE)
+            ),
+            mesh_node,
+            skeleton^,
+            scene.world_matrix(mesh_node),
+        )
+    )
+    scene.node(root).set_euler(
+        Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(90.0, DEGREE)
+    )
+    scene.update()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var corners = renderer.prepare(scene, assets, a_camera())
+    # A quarter turn about z takes (1, 0, 0) to (0, 1, 0). Twice would take
+    # it to (-1, 0, 0), which is the answer a fixed bind inverse gave.
+    assert_almost_equal(corners[1].world.x, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(corners[1].world.y, Float32(1), atol=TOLERANCE)
+
+
+def test_a_skinned_mesh_needs_a_bind_mode_that_exists() raises:
+    with assert_raises():
+        _ = SkinnedMesh(
+            GeometryId(0),
+            MaterialId(0),
+            NodeId(0),
+            a_skeleton(),
+            bind_mode=BindMode(9),
+        )
+    assert_true(ATTACHED.is_valid())
+    assert_true(DETACHED.is_valid())
+    assert_false(BindMode(9).is_valid())
+
+
+def test_a_mesh_scaled_to_nothing_has_no_bind_to_undo() raises:
+    var assets = Assets()
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    _ = scene.add(Object3D())
+    scene.update()
+    var skeleton = bind_skeleton([NodeId(1)], [scene.world_matrix(NodeId(1))])
+    scene.add_skinned_mesh(
+        SkinnedMesh(
+            assets.geometries.add(on_one_bone()),
+            assets.materials.add(
+                Material(Color(255, 255, 255), side=DOUBLE_SIDE)
+            ),
+            NodeId(0),
+            skeleton^,
+        )
+    )
+    scene.node(NodeId(0)).set_scale(1, 0, 1)
+    scene.update()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    with assert_raises():
+        _ = renderer.prepare(scene, assets, a_camera())
+
+
+# --- what a skin attribute may hold -----------------------------------------
+
+
+def test_a_bone_index_must_be_a_whole_number_in_range() raises:
+    assert_equal(whole_bone(Float32(2), 4), 2)
+    var nowhere = Float32(0) / Float32(0)
+    with assert_raises():
+        _ = whole_bone(nowhere, 4)
+    # Three quarters of a bone is not a bone, and truncating it silently
+    # drew bone zero carrying the vertex.
+    with assert_raises():
+        _ = whole_bone(Float32(0.75), 4)
+    with assert_raises():
+        _ = whole_bone(Float32(-1), 4)
+    with assert_raises():
+        _ = whole_bone(Float32(4), 4)
+
+
+def test_a_fractional_bone_index_is_refused_in_a_frame() raises:
+    var assets = Assets()
+    var first: List[Float32] = [0.75, 0, 0, 0, 0.75, 0, 0, 0, 0.75, 0, 0, 0]
+    var second: List[Float32] = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0]
+    with assert_raises():
+        _ = rigged(assets, skinned_triangle(first, second), Vector3(0, 0, 0))
+
+
+def test_bone_weights_must_be_numbers_that_are_not_negative() raises:
+    var palette: List[Matrix4] = [Matrix4(), translation(10, 0, 0)]
+    var bones: List[Int] = [0, 1, 0, 0]
+    # Minus one and two sum to one, and send the origin to twice the
+    # distance of the further bone -- outside anything either one names.
+    var mixed: List[Float32] = [-1, 2, 0, 0]
+    with assert_raises():
+        _ = blend_bones(palette, bones, mixed)
+    # A weight that is not a number makes the total not a number, and the
+    # obvious spelling of the sum test lets that through.
+    var nowhere = Float32(0) / Float32(0)
+    var absent: List[Float32] = [nowhere, 0, 0, 0]
+    with assert_raises():
+        _ = blend_bones(palette, bones, absent)
+
+
+def test_a_supplied_inverse_bind_must_be_invertible() raises:
+    # `bind_skeleton` refuses a bone bound at a scale of zero; a caller
+    # handing the inverses in directly meets the same bar.
+    var flat = Matrix4()
+    flat.elements[5] = 0
+    with assert_raises():
+        _ = Skeleton([Bone(NodeId(0), flat)])
 
 
 def test_four_bones_a_vertex_is_the_shape_of_a_skin() raises:

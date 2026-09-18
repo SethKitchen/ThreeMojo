@@ -40,10 +40,27 @@ Layer zero alone by default, as everywhere.
 The two distances are `Length`s: this is the edge of the API, where the
 units live, and a bare number here does not compile. The ray inside holds
 meters, as the math does.
+
+## What it sees
+
+The mesh as it is drawn, not as it was modelled. A mesh wearing a morph
+target is picked where the target has carried it, because both this and
+`Renderer.prepare` ask `core.deform` the same question. They did not always:
+rendering wore the targets and picking did not, so the drawn shape could
+not be hit and the modelled one could be hit where nothing was.
+
+What it does not see is a skinned mesh. `intersect_scene` walks
+`scene.meshes`, and a `SkinnedMesh` is in a list of its own, so a rig is
+simply not offered to the ray -- it is not silently picked in its rest
+pose. Teaching it about rigs means the posed bones, which come from the
+scene rather than the geometry, and a `Hit` that can say which list its
+index belongs to. Neither is here yet.
 """
 
 from cameras.camera import Camera
 from core.assets import Assets
+from core.buffer_geometry import BufferGeometry
+from core.deform import morphed_positions, sphere_of
 from core.layers import Layers
 from core.scene import Scene
 from math.matrix4 import Matrix4
@@ -75,6 +92,35 @@ struct Hit(ImplicitlyCopyable):
     var mesh: Mesh
     # Which of the geometry's triangles, from zero.
     var triangle: Int
+
+
+def _worn_corner(
+    geometry: BufferGeometry,
+    worn: List[Vector3],
+    triangle: Int,
+    corner: Int,
+) raises -> Vector3:
+    """Return one corner of one triangle, worn targets included.
+
+    `worn` is empty for a mesh wearing nothing, and then this is
+    `BufferGeometry.corner` exactly. It exists so the triangle loop reads
+    the same whichever the mesh is.
+
+    Args:
+        geometry: The geometry being picked.
+        worn: Every vertex once its targets are worn, or empty.
+        triangle: Which triangle.
+        corner: Which of its three corners.
+
+    Returns:
+        The corner, in the geometry's own space.
+
+    Raises:
+        Error: If either index is out of range.
+    """
+    if len(worn) == 0:
+        return geometry.corner(triangle, corner)
+    return worn[geometry.corner_index(triangle, corner)]
 
 
 struct Raycaster(ImplicitlyCopyable):
@@ -258,7 +304,19 @@ struct Raycaster(ImplicitlyCopyable):
         # The whole mesh first, in world space: a miss here is the common
         # case and costs six multiplies. An empty sphere, of a geometry
         # with no vertices, is met nowhere.
+        # Where the vertices actually are. A mesh wearing a morph target
+        # is not where its geometry says it is, and picking the geometry
+        # instead answered for a shape nobody could see: the drawn one was
+        # missed, and the modelled one was hit where nothing was. Only a
+        # morphed mesh pays for this; an unmorphed one keeps the bound the
+        # geometry already worked out, and never touches a vertex when the
+        # ray misses it.
+        var worn = List[Vector3]()
+        if mesh.is_morphed():
+            worn = morphed_positions(geometry, mesh.morph_influences)
         var bound = geometry.bounding_sphere()
+        if len(worn) > 0:
+            bound = sphere_of(worn)
         bound.apply_matrix4(world)
         if not self.ray.intersects_sphere(bound):
             return hits^
@@ -267,15 +325,19 @@ struct Raycaster(ImplicitlyCopyable):
         into.invert()
         var local = self.ray
         local.apply_matrix4(into)
-        if not local.intersects_box(geometry.bounding_box()):
-            return hits^
+        # The box is skipped for a morphed mesh: the sphere above was built
+        # from the same worn vertices and has already done the rejecting,
+        # and the geometry's own box describes the shape it has left.
+        if len(worn) == 0:
+            if not local.intersects_box(geometry.bounding_box()):
+                return hits^
         var mirrored = world.determinant() < 0
         var near = self.near.value
         var far = self.far.value
         for triangle in range(geometry.triangle_count()):
-            var a = geometry.corner(triangle, 0)
-            var b = geometry.corner(triangle, 1)
-            var c = geometry.corner(triangle, 2)
+            var a = _worn_corner(geometry, worn, triangle, 0)
+            var b = _worn_corner(geometry, worn, triangle, 1)
+            var c = _worn_corner(geometry, worn, triangle, 2)
             var met: Optional[Vector3]
             if material.side == BACK_SIDE:
                 # Wound the other way, so the back is the side that counts.

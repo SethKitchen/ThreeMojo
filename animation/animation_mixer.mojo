@@ -54,6 +54,25 @@ That original is captured **once**, the first time a property is driven,
 and never again. Reading the node each frame would read back what the
 mixer wrote last frame, and the pose would wander.
 
+## Letting go
+
+A weight of zero is not the same as a weight of nearly zero. Nearly zero
+writes the pile blended almost entirely back toward the original; zero
+means the action contributes nothing at all, so no pile is made, so
+nothing is written -- and the node kept whatever the last frame left on it.
+Fading an action out therefore ended one frame short of where it was
+going, and stopping the only action left its last pose behind for ever.
+
+So a binding remembers whether anything drove it last frame. The frame
+after the last contribution goes, it is written back to the value it held
+before the mixer ever touched it, and then released.
+
+Released is not deleted. The original is kept, so playing the action again
+fades back toward the same pose. What release means is that the mixer
+stops writing the property, which is what lets ordinary scene editing move
+it afterwards: a mixer that wrote every property it had ever bound, every
+frame, would fight the caller for the node for ever.
+
 ## Looping
 
 `ONCE` stops at the end and stays there, `REPEAT` starts over, and
@@ -239,6 +258,10 @@ struct Binding(Copyable, Movable):
     var node: Int
     var kind: Int
     var original: List[Float32]
+    # Whether anything drove this property in the last update. The frame
+    # after it goes false, the original is written back and the mixer
+    # leaves the property alone; see the module docstring.
+    var driven: Bool
 
     def __init__(out self, node: Int, kind: Int, var original: List[Float32]):
         """Remember what one node property held.
@@ -251,6 +274,36 @@ struct Binding(Copyable, Movable):
         self.node = node
         self.kind = kind
         self.original = original^
+        self.driven = False
+
+
+def apply_pose(
+    mut scene: Scene, node: Int, kind: TrackKind, values: List[Float32], at: Int
+) raises:
+    """Write one node property from four numbers.
+
+    The one place a property is set, so the pose the actions make and the
+    pose a released binding goes back to cannot drift apart.
+
+    Args:
+        scene: The scene to write into.
+        node: Which node.
+        kind: Which property.
+        values: The numbers to write, `PILE` of them per entry.
+        at: Where this property's numbers start in `values`.
+
+    Raises:
+        Error: If the scene has no such node.
+    """
+    ref placed = scene.node(NodeId(node))
+    if kind == POSITION:
+        placed.position = Vector3(values[at], values[at + 1], values[at + 2])
+    elif kind == SCALE:
+        placed.scale = Vector3(values[at], values[at + 1], values[at + 2])
+    else:
+        placed.quaternion = Quaternion(
+            values[at], values[at + 1], values[at + 2], values[at + 3]
+        )
 
 
 struct AnimationAction(Copyable, Movable):
@@ -508,7 +561,9 @@ struct AnimationMixer(Movable):
         """
         if node < 0 or node >= scene.count():
             raise Error("A track must name a node that is in the scene")
-        if self._binding(node, kind.value) >= 0:
+        var known = self._binding(node, kind.value)
+        if known >= 0:
+            self.bindings[known].driven = True
             return
         ref held = scene.get(NodeId(node))
         var original = List[Float32]()
@@ -527,7 +582,9 @@ struct AnimationMixer(Movable):
             original.append(held.position.y)
             original.append(held.position.z)
             original.append(0)
-        self.bindings.append(Binding(node, kind.value, original^))
+        var made = Binding(node, kind.value, original^)
+        made.driven = True
+        self.bindings.append(made^)
 
     def update(mut self, mut scene: Scene, delta: Duration) raises:
         """Move every playing action on by `delta`, and write the pose the
@@ -536,6 +593,11 @@ struct AnimationMixer(Movable):
         An action that finishes its `ONCE` clip during this call still
         contributes its last frame, and stops contributing from the next
         call on unless it holds.
+
+        A property that was driven last time and is not driven now is put
+        back to what it held before the mixer first touched it, and then
+        released: the mixer stops writing it until something drives it
+        again.
 
         Args:
             scene: The scene whose nodes the tracks name.
@@ -596,13 +658,31 @@ struct AnimationMixer(Movable):
                     self.bindings[held].original,
                     kind,
                 )
-            var at = slot * PILE
-            ref node = scene.node(NodeId(nodes[slot]))
-            if kind == POSITION:
-                node.position = Vector3(piles[at], piles[at + 1], piles[at + 2])
-            elif kind == SCALE:
-                node.scale = Vector3(piles[at], piles[at + 1], piles[at + 2])
-            else:
-                node.quaternion = Quaternion(
-                    piles[at], piles[at + 1], piles[at + 2], piles[at + 3]
+            apply_pose(scene, nodes[slot], kind, piles, slot * PILE)
+
+        # Anything that was driven last frame and is not driven now goes
+        # back to what it held before the mixer touched it, once, and is
+        # then left alone. Without this a weight fading to zero stopped one
+        # frame short of the pose it was fading toward, because a weight of
+        # zero makes no pile and an empty pile writes nothing.
+        for slot in range(len(self.bindings)):  # pragma: no branch
+            if not self.bindings[slot].driven:
+                continue
+            if (
+                find_pile(
+                    nodes,
+                    kinds,
+                    self.bindings[slot].node,
+                    self.bindings[slot].kind,
                 )
+                >= 0
+            ):
+                continue
+            apply_pose(
+                scene,
+                self.bindings[slot].node,
+                TrackKind(self.bindings[slot].kind),
+                self.bindings[slot].original,
+                0,
+            )
+            self.bindings[slot].driven = False

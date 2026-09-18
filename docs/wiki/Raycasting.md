@@ -60,6 +60,14 @@ if len(hits) > 0:
 | `mesh` | The `Mesh` itself: its node, geometry and material. |
 | `triangle` | Which of the geometry's triangles, from zero. |
 
+## What it sees
+
+The mesh as it is drawn, not as it was modelled. A mesh wearing a [morph target](Geometry#morph-targets) is picked where the target has carried it, because picking and the renderer both ask `core/deform.mojo` the same question.
+
+They did not always. Rendering wore the targets and picking did not. The drawn shape could not be hit, and the modelled one could be hit where nothing was.
+
+A [skinned mesh](Skinning) is not picked at all. `intersect_scene` walks `scene.meshes`, and a `SkinnedMesh` is in a list of its own. A rig is therefore never offered to the ray, rather than being silently picked in its rest pose. Teaching it about rigs needs the posed bones, which come from the scene rather than the geometry. It also needs a `Hit` that can say which list its index belongs to.
+
 ## Rules
 
 A mesh is tested in three steps. First its bounding sphere, in world space. Then its bounding box, in its own space. Then every triangle. A mesh the ray misses at the first step costs six multiplies.

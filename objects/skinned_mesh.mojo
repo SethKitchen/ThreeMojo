@@ -16,10 +16,40 @@ The two attributes are three.js's, and glTF's, under the same names:
     skinIndex    four bone numbers per vertex
     skinWeight   four weights per vertex, summing to one
 
-Four because that is what every skinning pipeline settled on, from glTF to
-every game engine. It is enough for a joint, and a fifth bone on one vertex
-is the sign of a rig that needs cleaning rather than a format that needs
-widening.
+Four is this port's limit, and it is the common one: glTF's first
+`JOINTS_0` and `WEIGHTS_0` pair holds four, and four is enough for an
+ordinary joint. It is not a limit of skinning. glTF allows further
+`JOINTS_n` and `WEIGHTS_n` sets for vertices that need more, and a rig that
+uses them is not a rig with a mistake in it -- it is a rig this does not
+read yet.
+
+The names here are three.js's, `skinIndex` and `skinWeight`. A glTF loader
+would have to map its own names onto them.
+
+## Attached to the scene, or placed in it
+
+A bone's matrix carries a vertex in *world* space, and the mesh's own node
+then carries it again. Something has to undo the second carry, or a
+character whose mesh and bones hang from one moving root is moved twice:
+translate that root three meters and the vertices go six.
+
+three.js calls the two answers `AttachedBindMode` and `DetachedBindMode`,
+and this has the same pair.
+
+`ATTACHED`, the default there and here, undoes the mesh node's world
+matrix *as it is this frame*. The rig follows whatever carries it, which is
+what an ordinary character wants: a mesh and its bones under one root, the
+root walking across the scene.
+
+`DETACHED` undoes the bind matrix instead, which is fixed. The mesh then
+sits wherever its own node puts it and the bones reach for it from where
+they are, which is what a mesh bound to a skeleton somewhere else in the
+graph wants.
+
+The difference shows only once something moves the mesh's node after the
+bind. Everything here was written against `DETACHED` behavior before the
+mode existed, and the tests did not catch it because none of them moved a
+parent that the mesh and the bones shared.
 
 ## The two bind matrices
 
@@ -63,10 +93,15 @@ world space, which is a different and wrong picture.
 
 ## What is refused
 
-A skeleton with no bones, or a bind matrix that cannot be inverted. The
-skin attributes are checked where they are read, by the renderer, because
-that is where the geometry is known: a mesh names a geometry by id and
-cannot see it.
+A skeleton with no bones, a bind mode that is neither of the two, or a
+bind matrix that cannot be inverted. An `ATTACHED` mesh whose node has no
+inverse this frame, which is a mesh scaled to nothing.
+
+The skin attributes are checked where they are read, by the renderer,
+because that is where the geometry is known: a mesh names a geometry by id
+and cannot see it. What is checked there is every part of them -- that a
+bone index is a whole number in range, that a weight is a number and not
+negative, and that the four sum to one.
 """
 
 from core.buffer_geometry import MAX_MORPH_TARGETS
@@ -89,6 +124,33 @@ comptime SKIN_INDEX = "skinIndex"
 comptime SKIN_WEIGHT = "skinWeight"
 
 
+@fieldwise_init
+struct BindMode(Equatable, ImplicitlyCopyable, Writable):
+    """Which transform a skinned mesh undoes before its bones carry it, as
+    a type rather than a bare int.
+
+    The same argument as `materials.material.Side`: two small integers that
+    mean two different things should not be interchangeable, and the type
+    stops a bare integer at compile time. `SkinnedMesh.__init__` stops
+    `BindMode(9)` with `is_valid`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `ATTACHED` or `DETACHED`."""
+        return self == ATTACHED or self == DETACHED
+
+
+# Undo the mesh node's world matrix as it stands this frame, so the rig
+# follows whatever carries it: three.js's `AttachedBindMode`, and the
+# default there and here.
+comptime ATTACHED = BindMode(0)
+# Undo the fixed bind matrix, so the mesh stays where its own node puts it:
+# three.js's `DetachedBindMode`.
+comptime DETACHED = BindMode(1)
+
+
 struct SkinnedMesh(Copyable, Movable):
     """A geometry carried by a skeleton, drawn with one material."""
 
@@ -105,6 +167,10 @@ struct SkinnedMesh(Copyable, Movable):
     # same default a `Mesh` has: a posed skeleton carries vertices wherever
     # the bones go, and the geometry's bound describes the rest pose only.
     var frustum_culled: Bool
+    # Whether the mesh follows its node or is placed by it; see the module
+    # docstring. The renderer reads it once per frame, because `ATTACHED`
+    # depends on where the node is now.
+    var bind_mode: BindMode
     # How much of each of the geometry's morph targets this mesh wears,
     # exactly as a `Mesh` carries them. See `objects.mesh`.
     var morph_influences: SIMD[DType.float32, MAX_MORPH_TARGETS]
@@ -117,6 +183,7 @@ struct SkinnedMesh(Copyable, Movable):
         var skeleton: Skeleton,
         var bind_matrix: Matrix4 = Matrix4(),
         *,
+        bind_mode: BindMode = ATTACHED,
         frustum_culled: Bool = False,
     ) raises:
         """Bind a stored geometry and material to a scene node and a
@@ -131,14 +198,20 @@ struct SkinnedMesh(Copyable, Movable):
             bind_matrix: Where the mesh stood when it was bound. The
                 identity by default, which is right for a mesh modelled
                 and bound at the origin.
+            bind_mode: Whether the mesh follows its node or is placed by
+                it. `ATTACHED` by default, as in three.js.
             frustum_culled: Whether the renderer may skip this mesh when
                 its bounds are out of view. Off by default, because a
                 posed skeleton moves the vertices out of the bound the
-                geometry describes.
+                geometry describes. Turning it on measures the rest pose
+                and nothing else, so a mesh the bones have carried out of
+                that bound can be culled while it is on screen. It is an
+                opt-in to a known wrong answer, not a free saving.
 
         Raises:
-            Error: If any id is negative, or the bind matrix is not a
-                finite affine transform that can be inverted.
+            Error: If any id is negative, if the bind mode is neither of
+                the two, or if the bind matrix is not a finite affine
+                transform that can be inverted.
         """
         if node.value < 0:
             raise Error("A skinned mesh must name a scene node")
@@ -146,6 +219,8 @@ struct SkinnedMesh(Copyable, Movable):
             raise Error("A skinned mesh must name a geometry")
         if material.value < 0:
             raise Error("A skinned mesh must name a material")
+        if not bind_mode.is_valid():
+            raise Error("A skinned mesh needs a bind mode that exists")
         if not bind_matrix.is_finite():
             raise Error("A bind matrix must be a real transform")
         if not bind_matrix.is_affine():
@@ -161,6 +236,7 @@ struct SkinnedMesh(Copyable, Movable):
         self.bind_matrix = bind_matrix^
         self.bind_inverse = undo^
         self.frustum_culled = frustum_culled
+        self.bind_mode = bind_mode
         self.morph_influences = SIMD[DType.float32, MAX_MORPH_TARGETS](0)
 
     def bone_count(self) -> Int:

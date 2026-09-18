@@ -60,11 +60,16 @@ from core.buffer_attribute import BufferAttribute
 from math.bounds import Box3, Sphere
 from math.vector3 import Vector3
 
-# How many morph targets one geometry may carry. three.js's own ceiling,
-# `MAX_MORPH_TARGETS`, which comes from how many attribute slots a WebGL
-# program has. Nothing here is short of slots, but a mesh holds its weights
-# in a fixed row of eight so that it stays a handful of numbers rather than
-# a list, and the two numbers have to agree.
+# How many morph targets one geometry may carry. This port's limit, and
+# not three.js's: older three.js had a `MAX_MORPH_TARGETS` of eight because
+# of how many attribute slots a WebGL program has, and current three.js
+# passes the targets in a texture instead and is bounded by memory rather
+# than by eight.
+#
+# Eight is here because a mesh holds its weights in a fixed row rather than
+# a list, which is what keeps a `Mesh` implicitly copyable, and a row has
+# to have a size. Widening it is changing one number and the tests that
+# name it.
 comptime MAX_MORPH_TARGETS = 8
 
 # The attributes this port knows about, named as three.js names them.
