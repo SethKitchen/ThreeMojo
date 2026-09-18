@@ -55,8 +55,17 @@ jobs:
       # second per suite, tuned on a fast many-core machine to catch the
       # instrumenter sending the compiler superlinear; a 2-core hosted runner
       # exceeds it while behaving perfectly. Here it is only a hang detector.
+      #
+      # It was 300, and three new suites walked the run into the alarm at
+      # 8053 items covered. Nothing was slow: each of them compiled and ran
+      # in about two seconds under instrumentation, the same as every other
+      # small suite. The number was simply a flat one against a total that
+      # grows with the library, and 300 had quietly become the ceiling
+      # rather than the outlier. A genuine hang is minutes of no progress
+      # and blows through any of these numbers, so the detector loses
+      # nothing by being generous.
       - name: coverage
-        run: make -B coverage COV_BUDGET=300
+        run: make -B coverage COV_BUDGET=900
 
   # The wiki is generated from docs/wiki/ so the two cannot drift. GitHub
   # creates the wiki repository when its first page is saved in the browser;
