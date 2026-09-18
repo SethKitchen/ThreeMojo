@@ -1,8 +1,8 @@
 # Geometry
 
-`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes.
+`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes. Two more fill a drawn [shape](Curves) in, and give it thickness.
 
-three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`.
+three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`. Also `ShapeGeometry`, `ExtrudeGeometry` and `ShapeUtils.triangulateShape`.
 
 ## BufferAttribute
 
@@ -194,6 +194,66 @@ A tube of one radius swept along a path of points. Each point gets a ring, built
 
 three.js samples its path from a curve. There are no curve types here yet, so the path is the points. `u` runs along the path by distance, the closing segment included. `v` runs around the tube.
 
+## Shape
+
+```mojo
+var flat = shape_geometry(plate)                    # twelve runs a curve
+var flat = shape_geometry(plate, 32)                # a finer sample
+```
+
+A [shape](Curves) filled in: a flat surface in the plane where z is zero, facing the positive z axis. The outline and its holes are sampled into points, and the points are cut into triangles. The texture coordinate of a vertex is the vertex, which is three.js's default generator.
+
+Every other builder here is a grid. A shape is not, and cutting one up is the whole of `geometries/shape.mojo`.
+
+### How it is cut up
+
+By ear clipping. A corner of a loop is an ear when the triangle it makes with its two neighbors lies inside the loop. That triangle must hold no other corner. Clip that triangle off, and the loop has one corner fewer. Every simple loop has an ear at every step, so this always finishes.
+
+A hole is a separate loop, and ear clipping knows one loop. So each hole is seamed into the outline first. Two points that can see each other are joined. The outline then runs out along that line, around the hole and back. Two points see each other when the line between them crosses no edge of the outline and no edge of any hole.
+
+three.js casts a ray from the hole's rightmost point and fixes the cases that go wrong. This takes the shortest pair that can see each other, which has no cases to fix.
+
+### Corners in a line are dropped
+
+A straight edge sampled into eight runs leaves seven corners that turn by nothing. None of them can be an ear, so the clipping would stop with a row of them left. They describe one edge, and `triangulate` says so once.
+
+`triangulate(shape, curve_segments)` returns the points, the triangles and where each contour starts, for a caller that needs more than a flat surface. `extrude` is that caller.
+
+## Extrude
+
+```mojo
+var solid = extrude(plate, Length(2, METER))
+var solid = extrude(plate, Length(2, METER), steps=4)
+var solid = extrude(
+    plate,
+    Length(2, METER),
+    bevel_enabled=True,
+    bevel_thickness=Length(0.2, METER),
+    bevel_size=Length(0.1, METER),
+    bevel_segments=3,
+)
+```
+
+A shape given thickness along the z axis, from zero to `depth`. The shape is filled in twice, once at each end, and every edge of every contour becomes a wall between them. A hole becomes a shaft through the solid.
+
+The vertices are built in layers, each holding every contour point once at one height. `steps` cuts the walls up without changing the solid.
+
+### The bevel
+
+A bevel rounds the two edges off. It adds `bevel_segments` layers at each end. They reach `bevel_thickness` past the end face, and stand `bevel_size` out from the outline, by the sine and the cosine of a quarter turn.
+
+three.js measures a bevel *out* from the shape drawn, and so does this. The two end faces are the outline itself, and the body between them stands proud of it all the way round. `bevel_offset` moves every layer out before the bevel is measured, the end faces included, which makes a lip rather than rounding an edge.
+
+A corner moves along its miter, the line that keeps both of its edges parallel to where they were.
+
+### The faces are flat
+
+An extrusion has no index buffer, and its normals come from its triangles, so every vertex belongs to one face. A bevel of three segments is three flat bands. three.js does the same, and for the same reason: two walls that meet at a corner do not agree about the texture coordinate there.
+
+A wall is measured along x or along y, whichever it runs further in, and up the negative of z. That is three.js's own generator.
+
+three.js can also sweep a shape along a path, its `extrudePath`. That is not ported.
+
 ## Errors
 
 - A negative or zero extent raises.
@@ -210,5 +270,9 @@ three.js samples its path from a curve. There are no curve types here yet, so th
 - A lathe needs at least two points, one segment, and a sweep of at most one turn. No point can have a negative `x`, and no two consecutive points can be the same. A profile that turns straight back to the point before raises, because that corner has no normal.
 - A tube needs at least two points, or three when closed, no two consecutive the same, a positive radius and three segments around. A path that returns to the point before the last raises, because that tangent is zero. A path that folds straight back on itself raises, because there is no axis to turn the frame about.
 - A sweep must be positive and at most one turn.
+- A shape's contour needs three corners and an area. A contour drawn in a line, or out and back, has neither.
+- A shape's hole must lie inside its outline, and not inside another hole.
+- An outline that crosses itself raises, because it has no inside and runs out of ears.
+- An extrusion needs a positive depth, one step and one curve segment. A bevel needs a positive thickness, a size that is not negative, and one band.
 - An index entry beyond the last vertex raises.
 - `compute_vertex_normals`, `bounding_box` and `bounding_sphere` raise on a geometry with no positions.

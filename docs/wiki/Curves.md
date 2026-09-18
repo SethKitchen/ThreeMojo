@@ -123,7 +123,7 @@ plate.add_hole(hole^)
 | `outline_points(divisions)` | The outline as points. |
 | `hole_points(index, divisions)` | One hole as points. |
 
-The winding does not matter. A geometry built from a shape turns the outline counter-clockwise and each hole clockwise first.
+The winding does not matter. `shape_geometry` turns the outline counter-clockwise and each hole clockwise before it cuts them up.
 
 ## What is refused
 
@@ -145,4 +145,4 @@ three.js clamps `t`, returns an empty list, or builds a shape with no area. Each
 ## See also
 
 - [Math](Math) has `Vector2`, which a curve is made of.
-- [Geometry](Geometry) has the builders that turn points into a mesh.
+- [Geometry](Geometry) fills a `Shape` in, and gives it thickness.
