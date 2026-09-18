@@ -32,7 +32,16 @@ from lights.light import (
 )
 from math.smoothstep import smoothstep
 from std.math import inf, nan
-from lights.lighting import Lighting, blinn_phong
+from lights.lighting import (
+    TOON_EDGE,
+    TOON_SHADE,
+    Lighting,
+    blinn_phong,
+    toon_coord,
+    toon_index,
+    toon_step,
+    toon_tone,
+)
 from math.vector3 import Vector3
 from units.si import Angle, DEGREE, RADIAN
 from render.framebuffer import Color, FloatColor
@@ -1234,6 +1243,174 @@ def test_a_surface_at_the_camera_takes_no_highlight() raises:
     var sent = lighting.specular_at(UP_Z, ORIGIN, WHITE_SHEEN, 30.0)
     assert_equal(sent.r, Float32(0))
     assert_equal(sent.a, Float32(1))
+
+
+# --- a toon ramp ------------------------------------------------------------
+
+
+def no_ramp() -> List[Float32]:
+    """Return the empty ramp, which means three.js's fallback."""
+    return List[Float32]()
+
+
+def unit(x: Float32, y: Float32, z: Float32) -> Vector3:
+    """Return a unit vector pointing that way."""
+    var facing = Vector3(x, y, z)
+    facing.normalize()
+    return facing^
+
+
+def three_tones() -> List[Float32]:
+    """Return a ramp of three flat tones: dark, middle and full."""
+    var tones = List[Float32]()
+    tones.append(0.2)
+    tones.append(0.6)
+    tones.append(1.0)
+    return tones^
+
+
+def test_a_cosine_maps_onto_the_whole_ramp() raises:
+    # three.js reads at `dot * 0.5 + 0.5`, so the ramp covers every angle
+    # and not just the lit half. That is why a toon surface never goes
+    # black: facing straight away reads the ramp's left end.
+    assert_equal(toon_coord(-1.0), Float32(0))
+    assert_equal(toon_coord(0.0), Float32(0.5))
+    assert_equal(toon_coord(1.0), Float32(1))
+    assert_almost_equal(toon_coord(0.5), Float32(0.75), atol=TOLERANCE)
+
+
+def test_the_fallback_ramp_has_two_tones_and_one_edge() raises:
+    # three.js's `mix(vec3(0.7), vec3(1.0), smoothstep(0.7 - fw, 0.7 + fw,
+    # coord))`, with the edge hard because a software rasterizer has no
+    # neighboring fragment to take `fwidth` against.
+    assert_equal(toon_step(0.0), TOON_SHADE)
+    assert_equal(toon_step(TOON_EDGE - 0.001), TOON_SHADE)
+    assert_equal(toon_step(TOON_EDGE), Float32(1))
+    assert_equal(toon_step(1.0), Float32(1))
+
+
+def test_a_ramp_is_read_as_a_lookup_table_with_its_ends_clamped() raises:
+    # Nearest and never wrapped: a ramp is a table, not a picture. Three
+    # tones split the range in thirds.
+    assert_equal(toon_index(0.0, 3), 0)
+    assert_equal(toon_index(0.33, 3), 0)
+    assert_equal(toon_index(0.34, 3), 1)
+    assert_equal(toon_index(0.67, 3), 2)
+    assert_equal(toon_index(1.0, 3), 2)
+    # A coordinate outside the range clamps rather than wrapping. Only a
+    # hand-built call reaches these, since `toon_coord` cannot leave zero
+    # to one, but the kernel indexes memory with the answer.
+    assert_equal(toon_index(-0.5, 3), 0)
+    assert_equal(toon_index(2.0, 3), 2)
+    # One tone is a legal ramp, and every angle reads it.
+    assert_equal(toon_index(0.0, 1), 0)
+    assert_equal(toon_index(1.0, 1), 0)
+
+
+def test_a_tone_comes_off_the_ramp_or_off_the_fallback() raises:
+    assert_equal(toon_tone(1.0, no_ramp()), Float32(1))
+    assert_equal(toon_tone(-1.0, no_ramp()), TOON_SHADE)
+    assert_equal(toon_tone(1.0, three_tones()), Float32(1))
+    assert_equal(toon_tone(-1.0, three_tones()), Float32(0.2))
+    assert_equal(toon_tone(0.0, three_tones()), Float32(0.6))
+
+
+def test_a_toon_surface_steps_where_a_lambert_one_fades() raises:
+    # The whole point of the kind. Two normals a few degrees apart on the
+    # same side of the edge read the same tone; a lambert surface reads
+    # two different ones.
+    var lighting = Lighting(lit_from(0, 0, 1))
+    var square = lighting.toon_at(Vector3(0, 0, 1), ORIGIN, no_ramp())
+    var tilted = lighting.toon_at(unit(0.2, 0, 1), ORIGIN, no_ramp())
+    assert_equal(square.r, Float32(1))
+    assert_equal(tilted.r, Float32(1))
+    var smooth = lighting.intensity_at(unit(0.2, 0, 1), ORIGIN)
+    assert_true(smooth.r < 1, "a lambert surface did not fade at all")
+    # And across the edge it steps, rather than passing through the values
+    # in between. The edge sits at a cosine of 0.4: these two are a cosine
+    # of 0.5 and of 0.3, one either side of it.
+    var above = lighting.toon_at(unit(0, 0.8660254, 0.5), ORIGIN, no_ramp())
+    var below = lighting.toon_at(unit(0, 0.9539392, 0.3), ORIGIN, no_ramp())
+    assert_equal(above.r, Float32(1))
+    assert_equal(below.r, TOON_SHADE)
+
+
+def test_a_toon_surface_turned_away_is_still_lit() raises:
+    # three.js's ramp has no zero to clamp at, so a lamp behind the surface
+    # reads the ramp's left end. That is what keeps the shaded side flat
+    # instead of black, and it is the one place toon and lambert disagree
+    # about whether a light counts at all.
+    var lighting = Lighting(lit_from(0, 0, 1))
+    var away = Vector3(0, 0, -1)
+    assert_equal(lighting.intensity_at(away, ORIGIN).r, Float32(0))
+    assert_equal(lighting.toon_at(away, ORIGIN, no_ramp()).r, TOON_SHADE)
+    assert_equal(lighting.toon_at(away, ORIGIN, three_tones()).r, Float32(0.2))
+    # Alpha is not light and stays at one, as everywhere else.
+    assert_equal(lighting.toon_at(away, ORIGIN, no_ramp()).a, Float32(1))
+
+
+def test_a_toon_point_light_is_stepped_and_still_falls_off() raises:
+    # The ramp replaces the cosine; the distance still attenuates, because
+    # three.js folds the falloff into the light's color before the ramp
+    # multiplies it.
+    var lighting = bulb_at(0, 2, 0)
+    # Two meters below, facing up: full tone, a quarter of the light.
+    var below = lighting.toon_at(Vector3(0, 1, 0), ORIGIN, no_ramp())
+    assert_almost_equal(below.r, Float32(0.25), atol=TOLERANCE)
+    # Facing away: the ramp's low tone, still quartered.
+    var away = lighting.toon_at(Vector3(0, -1, 0), ORIGIN, no_ramp())
+    assert_almost_equal(away.r, Float32(0.25) * TOON_SHADE, atol=TOLERANCE)
+    # A surface exactly on the bulb has no direction to be lit from, and is
+    # skipped rather than dividing by zero.
+    var on_it = lighting.toon_at(Vector3(0, 1, 0), Vector3(0, 2, 0), no_ramp())
+    assert_equal(on_it.r, Float32(0))
+    # A ramp of its own is read the same way.
+    assert_almost_equal(
+        lighting.toon_at(Vector3(0, -1, 0), ORIGIN, three_tones()).r,
+        Float32(0.25) * 0.2,
+        atol=TOLERANCE,
+    )
+
+
+def test_a_toon_spot_light_is_stepped_inside_its_cone_alone() raises:
+    # The cone gates the light as it always did -- three.js's
+    # `directLight.visible` -- and the ramp decides what arrives inside it.
+    var scene = scene_with_lamp_at(0, 2, 0)
+    scene.add_light(spot_light(WHITE, NodeId(0), 1.0, 0.0, Angle(30.0, DEGREE)))
+    var lighting = Lighting(scene)
+    var inside = lighting.toon_at(Vector3(0, 1, 0), ORIGIN, no_ramp())
+    assert_almost_equal(inside.r, Float32(0.25), atol=TOLERANCE)
+    # Facing away inside the cone: the low tone, not nothing.
+    var shaded_side = lighting.toon_at(Vector3(0, -1, 0), ORIGIN, no_ramp())
+    assert_almost_equal(
+        shaded_side.r, Float32(0.25) * TOON_SHADE, atol=TOLERANCE
+    )
+    # Outside the cone nothing arrives, whatever the ramp says.
+    var outside = lighting.toon_at(
+        Vector3(0, 1, 0), Vector3(4, 0, 0), no_ramp()
+    )
+    assert_equal(outside.r, Float32(0))
+    # And a surface exactly on the bulb is skipped.
+    var on_it = lighting.toon_at(Vector3(0, 1, 0), Vector3(0, 2, 0), no_ramp())
+    assert_equal(on_it.r, Float32(0))
+
+
+def test_a_toon_surface_takes_its_indirect_light_unstepped() raises:
+    # three.js reflects an ambient light and a hemisphere light through
+    # `RE_IndirectDiffuse`, which no ramp touches. So both reach a toon
+    # surface exactly as they reach a lambert one.
+    var scene = scene_with_lamp_at(0, 4, 0)
+    scene.add_light(ambient_light(WHITE, 0.25))
+    scene.add_light(hemisphere_light(WHITE, Color(0, 0, 0), NodeId(0), 1.0))
+    var lighting = Lighting(scene)
+    for facing in [Vector3(0, 1, 0), Vector3(0, -1, 0), Vector3(1, 0, 0)]:
+        assert_equal(
+            lighting.toon_at(facing, ORIGIN, no_ramp()).r,
+            lighting.intensity_at(facing, ORIGIN).r,
+        )
+    # Facing the sky: a quarter ambient plus all of the sky.
+    var up = lighting.toon_at(Vector3(0, 1, 0), ORIGIN, no_ramp())
+    assert_almost_equal(up.r, Float32(1.25), atol=TOLERANCE)
 
 
 def main() raises:

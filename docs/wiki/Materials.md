@@ -2,7 +2,7 @@
 
 `materials/material.mojo`. A `Material` is a color, an optional texture, which sides to draw, an opacity, a blend policy, a kind and an emissive term.
 
-three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`.
+three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshToonMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`.
 
 ## Construct one
 
@@ -32,6 +32,7 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `alpha_test` | `Float32` | `0.0` | The alpha a fragment must reach to be drawn. |
 | `specular` | `Color` | black | How much light a `PHONG` surface sends to the camera. |
 | `shininess` | `Float32` | `0.0` | How tight that highlight is. |
+| `gradient_map` | `TextureId` | `NO_TEXTURE` | The ramp a `TOON` surface steps through. |
 
 ## Side
 
@@ -94,6 +95,47 @@ three.js divides both its diffuse and its specular term by pi. The diffuse term 
 The highlight can exceed one. That is what a highlight is. Set a tone mapping curve to bring it back. See [Render target](Render-target-and-framebuffer#tone-mapping).
 
 three.js's `specularMap`, which varies the highlight per texel, is not ported.
+
+## Toon
+
+A toon surface is lit like a Lambert one, then stepped through a ramp instead of faded. That is what makes the cartoon look. Build one with its own function:
+
+```mojo
+var cel = assets.materials.add(toon_material(Color(200, 60, 60)))
+var banded = assets.materials.add(
+    toon_material(Color(60, 120, 200), bark, ramp)
+)
+```
+
+`toon_material(color, map=NO_TEXTURE, gradient_map=NO_TEXTURE, side=FRONT_SIDE, opacity=1.0, blending=None)`.
+
+three.js: `MeshToonMaterial`, `gradientMap`.
+
+| Property | Meaning |
+|---|---|
+| `gradient_map` | The ramp to step through, or `NO_TEXTURE` for three.js's fallback. |
+
+### How the ramp is read
+
+The cosine between the surface normal and the direction toward a light picks a tone. three.js reads its ramp at `dot(N, L) * 0.5 + 0.5`, so the whole range of angles maps onto the whole ramp.
+
+**A toon surface never fades to black.** A Lambert term clamps the cosine at zero, and a ramp has no zero to clamp at. A surface turned away from a lamp reads the ramp's left end. That is what keeps the shaded side flat.
+
+With no `gradient_map`, three.js's fallback applies: two tones, with the edge where the coordinate reads 0.7, and the low tone at 0.7 as well. three.js antialiases that edge with `fwidth`, a screen-space derivative. A software rasterizer shades one fragment at a time and has no neighbor to take a derivative against, so the edge is hard here. That is the one difference, and it shows on the single row of fragments the edge crosses.
+
+### The gradient map is a lookup table
+
+Only the top row is read, left to right, and only its red channel. Nothing is filtered and nothing is wrapped: a ramp of three texels gives three flat tones, each covering a third of the range. three.js builds its own gradient maps `NearestFilter` and `ClampToEdgeWrapping` for the same reason.
+
+So a ramp holds data, and must say so twice, as an alpha map must. Build it `LINEAR`, or the sRGB curve changes what its bytes mean. Build it `IGNORED`, or its own alpha weights them.
+
+A ramp is read at no surface coordinate. So its own `repeat`, `offset` and `rotation` are never applied. They are never asked to agree with the material's other maps either. See [Texture transforms](Textures#transform).
+
+### What a toon material does not have
+
+A highlight. three.js's `MeshToonMaterial` has no `specular` and no `shininess`, and a material of this kind refuses both, as every other non-Phong kind does.
+
+An ambient light and a hemisphere light are not stepped. three.js reflects both through `RE_IndirectDiffuse`, which no ramp touches, so both reach a toon surface exactly as they reach a Lambert one.
 
 ## Data materials
 
@@ -226,6 +268,7 @@ Pass `blending=BLEND` when a texture's own alpha needs blending and the material
 | `is_lit() -> Bool` | `kind` is `LAMBERT` or `PHONG`. |
 | `has_highlight() -> Bool` | `kind` is `PHONG`. A black specular is a reflectance of zero, not a switch. |
 | `specular_light() -> FloatColor` | The specular color decoded to linear light. |
+| `has_gradient_map() -> Bool` | `gradient_map != NO_TEXTURE`. A `TOON` material without one steps through the fallback. |
 | `is_data() -> Bool` | `kind` is `NORMALS` or `DEPTH`. |
 | `has_alpha_map() -> Bool` | `alpha_map != NO_TEXTURE`. |
 | `is_alpha_tested() -> Bool` | `alpha_test > 0`. |
@@ -249,6 +292,7 @@ The constructor raises for:
 - An alpha test outside zero to one, or not finite.
 - A negative or non-finite shininess.
 - A specular that is not black, or a positive shininess, on a kind that is not `PHONG`.
+- A gradient map on a kind that is not `TOON`, or a gradient map id below zero that is not `NO_TEXTURE`.
 - A `NORMALS` or `DEPTH` material whose blending resolves to `BLEND`, stated or inferred.
 
 `Renderer.prepare` raises for an emissive map that reads its alpha as coverage.

@@ -46,6 +46,8 @@ A `NORMALS` corner carries its normal in view space, not world space. The normal
 | `packed_normal(normal)` | A unit normal mapped into zero to one per axis. |
 | `packed_depth(z)` | An NDC depth as the gray a `DEPTH` material shows. |
 | `check_alpha_map(texture)` | Refuse an alpha map that is not stored as data. |
+| `check_gradient_map(texture)` | Refuse a toon ramp that is not stored as data. |
+| `gradient_ramp(texture)` | A gradient map's top row as tones, left to right. |
 | `interpolate_alpha(a, b, c, share_b, share_c)` | An alpha across a triangle, in difference form. |
 
 ## Coverage
@@ -98,6 +100,12 @@ A fragment whose alpha then falls below `alpha_test` is thrown away, three.js's 
 
 The difference form, `a + sb * (b - a) + sc * (c - a)`, returns a constant exactly. Alpha alone uses it: alpha reaches a strict threshold, and red, green and blue reach a quantization that a last bit cannot move. Both backends call this one function.
 
+## Toon shading
+
+A `TOON` triangle reads its light from `Lighting.toon_at` rather than from `intensity_at`. Its ramp is read once per triangle by `gradient_ramp`, not once per fragment. The top row is the whole lookup table, and it is the same for every pixel. An empty ramp means the triangle named none, and three.js's fallback applies.
+
+Both backends read the same bytes. The host reads texel (x, 0) of the gradient map. The kernel reads the same byte of the same row out of its texel buffer. So a ramp of three tones cannot step at one coordinate on one side and another on the other. See [Materials](Materials#toon).
+
 ## Transparency
 
 `rasterize_shaded` blends a `BLEND` fragment over what is there, in premultiplied linear light. The caller owns the draw order. `Renderer.prepare` sorts.
@@ -107,13 +115,15 @@ A `NORMALS` or `DEPTH` triangle cannot blend. One pixel holds its own bytes or t
 ## Errors
 
 - A mode that is none of the three raises.
-- Corners that disagree about blend, texture, kind, emissive map or shininess raise.
+- Corners that disagree about blend, texture, kind, emissive map, gradient map or shininess raise.
 - A negative or non-finite shininess raises, on every worker count.
-- A material kind that is none of the four raises, on every worker count.
+- A material kind that is none of the six raises, on every worker count.
 - An emissive map that reads its alpha as coverage raises under `SHADE_TEXTURE`, on both backends.
 - A blend value that is neither `OPAQUE` nor `BLEND` raises, on every worker count, whether or not the triangle is visible.
 - A `NORMALS` or `DEPTH` triangle whose blend is `BLEND` raises, on every worker count.
 - A texture the store lacks raises when a fragment samples it.
 - An alpha map that `SHADE_TEXTURE` would open raises unless it is `LINEAR` and `IGNORED`.
+- A gradient map raises unless it is `LINEAR`, `IGNORED` and holds texels. Asked under every mode that lights the surface, because `SHADE_LIT` reads one too.
+- A gradient map on a kind that is not `TOON` raises, and so do corners that disagree about one.
 - An alpha test outside zero to one, or not finite, raises on every worker count.
 - A fog view that `FogView.validate` refuses raises before any fragment is drawn, on every worker count.

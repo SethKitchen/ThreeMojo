@@ -83,6 +83,25 @@ a rim where the light and the camera are both far off the normal. It is a
 dim rim -- a few levels at a shininess of zero -- but it is not nothing,
 and `has_highlight` says so: it asks the kind, not the color.
 
+`gradient_map` is the twelfth, and it belongs to one more lit kind:
+`TOON`, three.js's `MeshToonMaterial`. A Lambert surface fades smoothly
+from lit to unlit, and a toon surface steps. The cosine each light makes
+with the surface picks a tone off a ramp, and the ramp is what a cartoon
+looks like: two or three flat tones with hard edges between them.
+
+The ramp is a texture, three.js's `gradientMap`, read as a lookup table
+rather than as a picture. Its top row alone is read, left to right, with
+no filtering and the ends clamped. So it holds data, and must say so the
+way an alpha map does: `LINEAR`, or the sRGB curve would change what its
+bytes mean, and `IGNORED`, or its own alpha would weight them. A material
+with no ramp gets three.js's fallback, two tones with the edge at 0.7.
+
+A toon surface is lit but never fades to black. three.js's ramp is read
+at `dot(N, L) * 0.5 + 0.5`, so a surface turned away from a lamp reads
+the ramp's left end rather than zero. The fallback's left end is 0.7, so
+the shaded side of a default toon surface is seven tenths lit. That is
+three.js's own arithmetic, and it is what makes the look.
+
 Two more kinds show *data* rather than light: `NORMALS` writes the
 view-space normal as a color, three.js's `MeshNormalMaterial`, and `DEPTH`
 writes how far away the surface is, near white and far black, three.js's
@@ -162,23 +181,24 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the five kinds there are."""
+        """Return True if this is one of the six kinds there are."""
         return (
             self == BASIC
             or self == LAMBERT
             or self == NORMALS
             or self == DEPTH
             or self == PHONG
+            or self == TOON
         )
 
     def is_lit(self) -> Bool:
         """Return True if the scene's lights reach a surface of this kind:
-        `LAMBERT` or `PHONG`.
+        `LAMBERT`, `PHONG` or `TOON`.
 
         Both rasterizers ask this before they evaluate a light, so a kind
         that is lit in one place and not the other is not expressible.
         """
-        return self == LAMBERT or self == PHONG
+        return self == LAMBERT or self == PHONG or self == TOON
 
     def is_data(self) -> Bool:
         """Return True if a material of this kind shows data rather than
@@ -208,6 +228,10 @@ comptime DEPTH = MaterialKind(3)
 # Lit per fragment like `LAMBERT`, plus a highlight that follows the camera:
 # three.js's `MeshPhongMaterial`, with Blinn's half vector as three.js uses.
 comptime PHONG = MaterialKind(4)
+# Lit per fragment, then stepped through a ramp rather than faded smoothly:
+# three.js's `MeshToonMaterial`. The ramp is `gradient_map`, or three.js's
+# two-tone fallback when there is none.
+comptime TOON = MaterialKind(5)
 
 
 @fieldwise_init
@@ -260,6 +284,12 @@ struct Material(ImplicitlyCopyable):
     # throws away whatever falls below it, color and depth alike, which is
     # what cuts a shape out of a rectangle.
     var alpha_test: Float32
+    # The ramp a `TOON` surface steps through, three.js's `gradientMap`.
+    # Its top row is a lookup table read at `dot(N, L) * 0.5 + 0.5`, not a
+    # picture: nearest, ends clamped, and sampled at no surface coordinate,
+    # so its own transform is never applied. Data rather than color, so it
+    # must be `LINEAR` and `IGNORED`, which the renderer checks.
+    var gradient_map: TextureId
     # How much light this surface sends toward the camera rather than
     # scattering, three.js's `MeshPhongMaterial.specular`, as authored.
     # Black by default, so a material that says nothing about it has no
@@ -286,6 +316,7 @@ struct Material(ImplicitlyCopyable):
         alpha_test: Float32 = 0.0,
         specular: Color = Color(0, 0, 0),
         shininess: Float32 = 0.0,
+        gradient_map: TextureId = NO_TEXTURE,
     ) raises:
         """Describe a surface.
 
@@ -336,6 +367,9 @@ struct Material(ImplicitlyCopyable):
             shininess: How tight the highlight is; must not be negative.
                 Zero spreads it over the whole lit side, as three.js
                 allows. Only a `PHONG` material reads it.
+            gradient_map: Id of the ramp a `TOON` surface steps through,
+                or `NO_TEXTURE` for three.js's two-tone fallback. Only a
+                `TOON` material reads it.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -343,6 +377,8 @@ struct Material(ImplicitlyCopyable):
                 rather than a deliberate absence — `opacity` is outside zero
                 to one, `emissive_intensity` is negative, `side`, `blending`
                 or `kind` holds a value that is none of its named constants,
+                or a `gradient_map` is given on a kind that is not `TOON`,
+                or its id is a negative other than `NO_TEXTURE`,
                 or `kind` is `BASIC` and any emissive term was given, which
                 three.js's `MeshBasicMaterial` has no place for. A `NORMALS`
                 or `DEPTH` material refuses a color that is not opaque
@@ -370,7 +406,15 @@ struct Material(ImplicitlyCopyable):
             )
         if not kind.is_valid():
             raise Error(
-                "A material's kind must be BASIC, LAMBERT, NORMALS or DEPTH"
+                "A material's kind must be BASIC, LAMBERT, NORMALS, DEPTH,"
+                " PHONG or TOON"
+            )
+        if gradient_map.value < 0 and gradient_map != NO_TEXTURE:
+            raise Error("A material's gradient map id cannot be negative")
+        if kind != TOON and gradient_map != NO_TEXTURE:
+            raise Error(
+                "Only a toon material steps through a ramp: give it"
+                " kind=TOON, or build it with toon_material"
             )
         if emissive_map.value < 0 and emissive_map != NO_TEXTURE:
             raise Error("A material's emissive map id cannot be negative")
@@ -436,6 +480,7 @@ struct Material(ImplicitlyCopyable):
         self.alpha_test = alpha_test
         self.specular = specular
         self.shininess = shininess
+        self.gradient_map = gradient_map
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -495,6 +540,14 @@ struct Material(ImplicitlyCopyable):
         """Return True if this surface shows data rather than light: a
         `NORMALS` or `DEPTH` material. See `MaterialKind.is_data`."""
         return self.kind.is_data()
+
+    def has_gradient_map(self) -> Bool:
+        """Return True if this material names a ramp of its own.
+
+        A `TOON` material with no ramp is not unramped. It steps through
+        three.js's two-tone fallback instead; see `lights.lighting.toon_step`.
+        """
+        return self.gradient_map != NO_TEXTURE
 
     def has_alpha_map(self) -> Bool:
         """Return True if this material names a texture that thins it."""
@@ -592,6 +645,54 @@ def phong_material(
         kind=PHONG,
         specular=specular,
         shininess=shininess,
+    )
+
+
+def toon_material(
+    color: Color,
+    map: TextureId = NO_TEXTURE,
+    gradient_map: TextureId = NO_TEXTURE,
+    side: Side = FRONT_SIDE,
+    opacity: Float32 = 1.0,
+    blending: Optional[Blending] = None,
+) raises -> Material:
+    """Return a lit material that steps through a ramp, three.js's
+    `MeshToonMaterial`.
+
+    Every light the surface catches is read off the ramp rather than faded
+    smoothly, which is what makes the cartoon look. Pass a `gradient_map`
+    to say which ramp. With none, three.js's fallback applies: two tones,
+    with the edge where the cosine reads 0.7.
+
+    A ramp is a lookup table and not a picture. Only its top row is read,
+    nearest and with the ends clamped, so its size decides how many tones
+    there are. Build it `LINEAR` and `IGNORED`, as an alpha map is built.
+
+    Args:
+        color: The base color, as authored in sRGB.
+        map: Id of the texture that multiplies the color, or `NO_TEXTURE`.
+        gradient_map: Id of the ramp, or `NO_TEXTURE` for the fallback.
+        side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
+        opacity: One for an opaque surface, less to see through it.
+        blending: `OPAQUE` or `BLEND`, or unset to infer it from the
+            opacity.
+
+    Returns:
+        The material, of kind `TOON`.
+
+    Raises:
+        Error: If `map` or `gradient_map` is a negative other than
+            `NO_TEXTURE`, `opacity` is outside zero to one, or `side` or
+            `blending` holds a value that is none of its named constants.
+    """
+    return Material(
+        color,
+        map=map,
+        side=side,
+        opacity=opacity,
+        blending=blending,
+        kind=TOON,
+        gradient_map=gradient_map,
     )
 
 

@@ -6,8 +6,13 @@
 """Tests for `materials.material`, `render.texture_store` and `core.assets`."""
 
 from materials.material import BLEND, OPAQUE, Blending, MaterialKind, Side
-from materials.material import BASIC, DEPTH, LAMBERT, NORMALS, PHONG
-from materials.material import depth_material, normal_material, phong_material
+from materials.material import BASIC, DEPTH, LAMBERT, NORMALS, PHONG, TOON
+from materials.material import (
+    depth_material,
+    normal_material,
+    phong_material,
+    toon_material,
+)
 from materials.material import MaterialId
 from core.assets import Assets
 from geometries.box import cube
@@ -208,6 +213,8 @@ def test_a_wrong_value_in_the_right_type_is_refused() raises:
     assert_true(LAMBERT.is_valid())
     assert_true(NORMALS.is_valid())
     assert_true(DEPTH.is_valid())
+    assert_true(PHONG.is_valid())
+    assert_true(TOON.is_valid())
     assert_false(MaterialKind(7).is_valid())
     with assert_raises():
         _ = Material(Color(0, 0, 0), NO_TEXTURE, Side(99))
@@ -502,6 +509,7 @@ def test_a_phong_material_is_lit_and_shows_no_data() raises:
     assert_false(BASIC.is_lit())
     assert_false(NORMALS.is_lit())
     assert_false(DEPTH.is_lit())
+    assert_true(TOON.is_lit())
     var shiny = phong_material(Color(200, 40, 40))
     assert_equal(shiny.kind, PHONG)
     assert_true(shiny.is_lit())
@@ -613,6 +621,86 @@ def test_a_shininess_that_is_not_a_number_is_rejected() raises:
     # Zero is the widest lobe three.js allows, and any size above it is fine.
     _ = Material(Color(1, 2, 3), kind=PHONG, shininess=0.0)
     _ = Material(Color(1, 2, 3), kind=PHONG, shininess=1000.0)
+
+
+# --- a toon material steps through a ramp -----------------------------------
+
+
+def test_a_toon_material_is_lit_and_shows_no_data() raises:
+    assert_true(TOON.is_valid())
+    assert_true(TOON.is_lit())
+    assert_false(TOON.is_data())
+    var flat = toon_material(Color(200, 40, 40))
+    assert_equal(flat.kind, TOON)
+    assert_true(flat.is_lit())
+    assert_false(flat.is_data())
+    # It has no highlight: a ramp is a diffuse term, and three.js's
+    # `MeshToonMaterial` has no specular at all.
+    assert_false(flat.has_highlight())
+    assert_equal(flat.shininess, Float32(0))
+
+
+def test_a_toon_material_names_its_ramp_or_takes_the_fallback() raises:
+    # With no ramp it is not unramped: three.js's two-tone fallback
+    # applies, which is why the default is a material and not an error.
+    var plain = toon_material(Color(200, 40, 40))
+    assert_equal(plain.gradient_map, NO_TEXTURE)
+    assert_false(plain.has_gradient_map())
+    var stepped = toon_material(Color(200, 40, 40), NO_TEXTURE, TextureId(3))
+    assert_equal(stepped.gradient_map, TextureId(3))
+    assert_true(stepped.has_gradient_map())
+    # And every other property comes through as it does on any material.
+    var pane = toon_material(
+        Color(1, 2, 3), TextureId(4), TextureId(5), DOUBLE_SIDE, 0.5
+    )
+    assert_equal(pane.map, TextureId(4))
+    assert_equal(pane.gradient_map, TextureId(5))
+    assert_equal(pane.side, DOUBLE_SIDE)
+    assert_equal(pane.opacity, Float32(0.5))
+    assert_true(pane.is_transparent())
+    assert_true(toon_material(Color(1, 2, 3), blending=BLEND).is_transparent())
+    # Every other kind names no ramp, whatever else it carries.
+    assert_false(Material(Color(1, 2, 3)).has_gradient_map())
+    assert_false(phong_material(Color(1, 2, 3)).has_gradient_map())
+    assert_false(normal_material().has_gradient_map())
+
+
+def test_only_a_toon_material_steps_through_a_ramp() raises:
+    # No other shader reads one, so a ramp elsewhere is a mistake rather
+    # than a value to ignore -- the same rule a specular follows.
+    for kind in [BASIC, LAMBERT, NORMALS, DEPTH, PHONG]:
+        with assert_raises():
+            _ = Material(
+                Color(255, 255, 255), kind=kind, gradient_map=TextureId(1)
+            )
+    _ = Material(Color(1, 2, 3), kind=TOON, gradient_map=TextureId(1))
+
+
+def test_a_bad_gradient_map_id_is_rejected() raises:
+    with assert_raises():
+        _ = toon_material(Color(1, 2, 3), NO_TEXTURE, TextureId(-2))
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), kind=TOON, gradient_map=TextureId(-7))
+    # `NO_TEXTURE` is the one negative that means something.
+    _ = toon_material(Color(1, 2, 3), NO_TEXTURE, NO_TEXTURE)
+    # The refusals every material makes still apply to this builder.
+    with assert_raises():
+        _ = toon_material(Color(1, 2, 3), TextureId(-2))
+    with assert_raises():
+        _ = toon_material(Color(1, 2, 3), NO_TEXTURE, NO_TEXTURE, Side(99))
+    with assert_raises():
+        _ = toon_material(
+            Color(1, 2, 3), NO_TEXTURE, NO_TEXTURE, FRONT_SIDE, 2.0
+        )
+    with assert_raises():
+        _ = toon_material(
+            Color(1, 2, 3),
+            NO_TEXTURE,
+            NO_TEXTURE,
+            FRONT_SIDE,
+            1.0,
+            Blending(7),
+        )
 
 
 def main() raises:

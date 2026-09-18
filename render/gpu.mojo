@@ -44,7 +44,15 @@ from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
-from lights.lighting import Lighting, blinn_phong, falloff, toward_eye_at
+from lights.lighting import (
+    Lighting,
+    blinn_phong,
+    falloff,
+    toon_coord,
+    toon_index,
+    toon_step,
+    toward_eye_at,
+)
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.rasterizer import (
@@ -60,7 +68,7 @@ from render.rasterizer import (
     packed_depth,
     packed_normal,
 )
-from materials.material import BLEND, DEPTH, LAMBERT, NORMALS, PHONG
+from materials.material import BLEND, DEPTH, LAMBERT, NORMALS, PHONG, TOON
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.srgb import LINEAR, SRGB, ColorSpace, decode_ramp
 from render.tonemap import (
@@ -147,7 +155,11 @@ comptime STATE_BLEND = 1
 comptime STATE_KIND = 2
 comptime STATE_EMISSIVE_MAP = 3
 comptime STATE_ALPHA_MAP = 4
-comptime STATE_PER_TRIANGLE = STATE_ALPHA_MAP + 1
+# Which texture's top row is the ramp a `TOON` triangle steps through, or
+# `NO_TEXTURE`. An index rather than a lane, because it is one number per
+# triangle like every other map.
+comptime STATE_GRADIENT_MAP = 5
+comptime STATE_PER_TRIANGLE = STATE_GRADIENT_MAP + 1
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
 # density, then the fog color, linear. Six floats, whatever the kind,
@@ -538,6 +550,167 @@ def _arriving(
     return Vector3(red, green, blue)
 
 
+def _toon_tone(
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    start: Int,
+    tones: Int,
+    dot_nl: Float32,
+) -> Float32:
+    """Return how lit a `TOON` surface looks at this cosine.
+
+    The device counterpart of `lights.lighting.toon_tone`: the same three
+    shared functions, reading the ramp out of the device texel buffer
+    rather than out of a list. The host reads texel (x, 0) of the gradient
+    map and this reads the same byte of the same row, so the two cannot
+    step at different places.
+
+    Args:
+        texels: Every texture's bytes end to end.
+        start: Where this triangle's ramp begins in them.
+        tones: How many texels across the ramp is, or zero for none.
+        dot_nl: The cosine between the normal and the way to the light.
+
+    Returns:
+        How lit the surface looks, from zero to one.
+    """
+    var coord = toon_coord(dot_nl)
+    if tones <= 0:
+        return toon_step(coord)
+    return (
+        Float32(texels[unsafe_offset=start + toon_index(coord, tones) * 4])
+        / 255
+    )
+
+
+def _toon_arriving(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    count: Int,
+    points: Int,
+    hemispheres: Int,
+    spots: Int,
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    start: Int,
+    tones: Int,
+    nx: Float32,
+    ny: Float32,
+    nz: Float32,
+    px: Float32,
+    py: Float32,
+    pz: Float32,
+) -> Vector3:
+    """Return the light reaching a `TOON` surface at (px, py, pz).
+
+    The device counterpart of `Lighting.toon_at`, and held to the same
+    answer by the parity tests. Every cosine a light makes is read off the
+    ramp instead of used directly, and never clamped at zero, so a lamp
+    behind the surface still lights it to the ramp's left end. The ambient
+    term and the hemisphere lights are not stepped, because three.js
+    reflects those through `RE_IndirectDiffuse`.
+    """
+    var red = lights[unsafe_offset=LIGHTS_AMBIENT]
+    var green = lights[unsafe_offset=LIGHTS_AMBIENT + 1]
+    var blue = lights[unsafe_offset=LIGHTS_AMBIENT + 2]
+    for index in range(count):
+        var at = LIGHTS_FIRST + index * 6
+        var tone = _toon_tone(
+            texels,
+            start,
+            tones,
+            nx * lights[unsafe_offset=at]
+            + ny * lights[unsafe_offset=at + 1]
+            + nz * lights[unsafe_offset=at + 2],
+        )
+        red += lights[unsafe_offset=at + 3] * tone
+        green += lights[unsafe_offset=at + 4] * tone
+        blue += lights[unsafe_offset=at + 5] * tone
+    var first_point = LIGHTS_FIRST + count * 6
+    for index in range(points):
+        var at = first_point + index * 8
+        var dx = lights[unsafe_offset=at] - px
+        var dy = lights[unsafe_offset=at + 1] - py
+        var dz = lights[unsafe_offset=at + 2] - pz
+        var distance = sqrt(dx * dx + dy * dy + dz * dz)
+        if distance == 0:
+            continue
+        var tone = _toon_tone(
+            texels, start, tones, (nx * dx + ny * dy + nz * dz) / distance
+        )
+        var reach = tone * falloff(
+            distance, lights[unsafe_offset=at + 6], lights[unsafe_offset=at + 7]
+        )
+        red += lights[unsafe_offset=at + 3] * reach
+        green += lights[unsafe_offset=at + 4] * reach
+        blue += lights[unsafe_offset=at + 5] * reach
+    var first_sky = first_point + points * 8
+    for index in range(hemispheres):
+        var at = first_sky + index * 9
+        # Indirect, so it is not stepped: the host's own sum, in its order.
+        var weight = (
+            0.5
+            * (
+                nx * lights[unsafe_offset=at]
+                + ny * lights[unsafe_offset=at + 1]
+                + nz * lights[unsafe_offset=at + 2]
+            )
+            + 0.5
+        )
+        var lift_r = (
+            lights[unsafe_offset=at + 6]
+            + (lights[unsafe_offset=at + 3] - lights[unsafe_offset=at + 6])
+            * weight
+        )
+        var lift_g = (
+            lights[unsafe_offset=at + 7]
+            + (lights[unsafe_offset=at + 4] - lights[unsafe_offset=at + 7])
+            * weight
+        )
+        var lift_b = (
+            lights[unsafe_offset=at + 8]
+            + (lights[unsafe_offset=at + 5] - lights[unsafe_offset=at + 8])
+            * weight
+        )
+        red += lift_r
+        green += lift_g
+        blue += lift_b
+    var first_spot = first_sky + hemispheres * 9
+    for index in range(spots):
+        var at = first_spot + index * 13
+        var dx = lights[unsafe_offset=at] - px
+        var dy = lights[unsafe_offset=at + 1] - py
+        var dz = lights[unsafe_offset=at + 2] - pz
+        var distance = sqrt(dx * dx + dy * dy + dz * dz)
+        if distance == 0:
+            continue
+        var angle_cos = (
+            dx * lights[unsafe_offset=at + 3]
+            + dy * lights[unsafe_offset=at + 4]
+            + dz * lights[unsafe_offset=at + 5]
+        ) / distance
+        var rim = smoothstep(
+            lights[unsafe_offset=at + 11],
+            lights[unsafe_offset=at + 12],
+            angle_cos,
+        )
+        if rim <= 0:
+            continue
+        var tone = _toon_tone(
+            texels, start, tones, (nx * dx + ny * dy + nz * dz) / distance
+        )
+        var reach = (
+            tone
+            * rim
+            * falloff(
+                distance,
+                lights[unsafe_offset=at + 9],
+                lights[unsafe_offset=at + 10],
+            )
+        )
+        red += lights[unsafe_offset=at + 6] * reach
+        green += lights[unsafe_offset=at + 7] * reach
+        blue += lights[unsafe_offset=at + 8] * reach
+    return Vector3(red, green, blue)
+
+
 def _highlight(
     lights: MutPointer[Float32, MutAnyOrigin],
     count: Int,
@@ -783,7 +956,8 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
 
     Returns:
         Texture id, blend policy, the material kind's value, the emissive
-        map id, then the alpha map id, per triangle, from its first corner.
+        map id, the alpha map id, then the gradient map id, per triangle,
+        from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -792,6 +966,7 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
         state.append(Int32(corners[triangle * 3].kind.value))
         state.append(Int32(corners[triangle * 3].emissive_map.value))
         state.append(Int32(corners[triangle * 3].alpha_map.value))
+        state.append(Int32(corners[triangle * 3].gradient_map.value))
     return state^
 
 
@@ -1197,7 +1372,11 @@ def rasterize_kernel(
         var threshold = corners[unsafe_offset=base + LANE_ALPHA_TEST]
         var tested = threshold > 0 and mode != Int32(SHADE_UV.value)
         var kind = maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_KIND]
-        var lit = kind == Int32(LAMBERT.value) or kind == Int32(PHONG.value)
+        var lit = (
+            kind == Int32(LAMBERT.value)
+            or kind == Int32(PHONG.value)
+            or kind == Int32(TOON.value)
+        )
         var shows_normal = kind == Int32(NORMALS.value)
         var shows_data = shows_normal or kind == Int32(DEPTH.value)
         # The interpolated normal, made a unit vector again here. That
@@ -1251,19 +1430,50 @@ def rasterize_kernel(
                 + corners[unsafe_offset=b_base + LANE_WZ] * share_b
                 + corners[unsafe_offset=c_base + LANE_WZ] * share_c
             )
-            arriving = _arriving(
-                lights,
-                Int(light_count),
-                Int(point_count),
-                Int(hemisphere_count),
-                Int(spot_count),
-                nx,
-                ny,
-                nz,
-                wx,
-                wy,
-                wz,
-            )
+            if kind == Int32(TOON.value):
+                # Every cosine read off the ramp rather than faded, and
+                # never clamped at zero: see `_toon_arriving`. Where the
+                # ramp lives is looked up once here, not once per light.
+                var start = 0
+                var tones = 0
+                var ramp_slot = maps[
+                    unsafe_offset=index * STATE_PER_TRIANGLE
+                    + STATE_GRADIENT_MAP
+                ]
+                if ramp_slot >= 0:
+                    var shades = _describe(table, Int(ramp_slot))
+                    start = shades.start
+                    tones = shades.width
+                arriving = _toon_arriving(
+                    lights,
+                    Int(light_count),
+                    Int(point_count),
+                    Int(hemisphere_count),
+                    Int(spot_count),
+                    texels,
+                    start,
+                    tones,
+                    nx,
+                    ny,
+                    nz,
+                    wx,
+                    wy,
+                    wz,
+                )
+            else:
+                arriving = _arriving(
+                    lights,
+                    Int(light_count),
+                    Int(point_count),
+                    Int(hemisphere_count),
+                    Int(spot_count),
+                    nx,
+                    ny,
+                    nz,
+                    wx,
+                    wy,
+                    wz,
+                )
             if kind == Int32(PHONG.value):
                 # Interpolated like the emissive, and summed over the
                 # lights that have a direction; see `_highlight`.
@@ -1659,6 +1869,10 @@ struct GpuRenderer(Movable):
     # Per uploaded texture, whether it is stored linear. An alpha map must
     # be, since its green is a coverage rather than a color.
     var is_linear: List[Bool]
+    # Per uploaded texture, whether it holds texels at all. A blank texture
+    # crosses as one white texel so the kernel never reads a zero width, so
+    # a gradient map of no tones would step nowhere; refused here instead.
+    var has_texels: List[Bool]
     # Declared last so that it is released last. See `__del__`.
     var context: DeviceContext
 
@@ -1748,6 +1962,7 @@ struct GpuRenderer(Movable):
         self.uploaded = 0
         self.ignores_alpha = List[Bool]()
         self.is_linear = List[Bool]()
+        self.has_texels = List[Bool]()
         self.ramp = self.context.enqueue_create_buffer[DType.float32](256)
         var steps = decode_ramp()
         with self.ramp.map_to_host() as host:
@@ -1871,6 +2086,7 @@ struct GpuRenderer(Movable):
                 corners[index].texture,
                 corners[index].emissive_map,
                 corners[index].alpha_map,
+                corners[index].gradient_map,
             ]:
                 if slot == NO_TEXTURE:
                     continue
@@ -1906,6 +2122,31 @@ struct GpuRenderer(Movable):
                             "An alpha map must ignore its own alpha; build"
                             " the texture with alpha=IGNORED"
                         )
+        # A ramp holds data and says so the same two ways, and must hold
+        # texels to step through. Asked under every mode that lights the
+        # surface rather than under `SHADE_TEXTURE` alone, because
+        # `SHADE_LIT` shades a toon surface and reads the ramp -- exactly
+        # where `rasterize_shaded` asks it.
+        if mode != SHADE_UV:
+            for triangle in range(triangles):
+                var tones = corners[triangle * 3].gradient_map
+                if tones == NO_TEXTURE:
+                    continue
+                if not self.has_texels[tones.value]:
+                    raise Error(
+                        "A gradient map must hold texels: name no map for"
+                        " the fallback"
+                    )
+                if not self.is_linear[tones.value]:
+                    raise Error(
+                        "A gradient map holds data, not color; build the"
+                        " texture with color_space=LINEAR"
+                    )
+                if not self.ignores_alpha[tones.value]:
+                    raise Error(
+                        "A gradient map must ignore its own alpha; build"
+                        " the texture with alpha=IGNORED"
+                    )
 
         if triangles > self.capacity:
             # Grow to exactly what is asked for. Frames tend to submit the
@@ -2021,10 +2262,12 @@ struct GpuRenderer(Movable):
         self.uploaded = textures.count()
         self.ignores_alpha = List[Bool]()
         self.is_linear = List[Bool]()
+        self.has_texels = List[Bool]()
         for id in range(textures.count()):
             ref image = textures.get(TextureId(id))
             self.ignores_alpha.append(image.alpha == IGNORED)
             self.is_linear.append(image.color_space == LINEAR)
+            self.has_texels.append(not image.is_blank())
 
     def read_back(self) raises -> Framebuffer:
         """Copy the device render target into a host framebuffer.

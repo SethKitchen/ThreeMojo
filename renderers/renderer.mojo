@@ -116,6 +116,7 @@ from render.rasterizer import (
     RasterVertex,
     ShadeMode,
     check_alpha_map,
+    check_gradient_map,
     edge,
     rasterize_all,
 )
@@ -695,6 +696,7 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
         corner.alpha_test,
         corner.specular,
         corner.shininess,
+        corner.gradient_map,
     )
 
 
@@ -709,6 +711,7 @@ def _to_raster(
     alpha_test: Float32,
     specular: FloatColor,
     shininess: Float32,
+    gradient_map: TextureId,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -747,6 +750,7 @@ def _to_raster(
         alpha_test,
         specular,
         shininess,
+        gradient_map,
     )
 
 
@@ -1094,6 +1098,18 @@ struct Renderer(Movable):
                 check_alpha_map(assets.textures.get(mask))
             if self.shading != SHADE_TEXTURE:
                 mask = NO_TEXTURE
+            # The ramp a `TOON` surface steps through, checked the same way
+            # and refused unless it is stored as data. Carried under every
+            # shading mode that lights the surface, unlike the alpha map:
+            # `SHADE_LIT` shades a toon surface and reads the ramp, and
+            # only the uv view does not.
+            var tones = material.gradient_map
+            if tones != NO_TEXTURE and tones.value >= assets.textures.count():
+                raise Error("A material names a gradient map that is not there")
+            if tones != NO_TEXTURE:
+                check_gradient_map(assets.textures.get(tones))
+            if self.shading == SHADE_UV:
+                tones = NO_TEXTURE
             # Where the maps are moved, tiled and turned on this surface,
             # asked of the material's own maps whatever the shading mode:
             # the uv view shows the coordinates the texture would be
@@ -1282,6 +1298,7 @@ struct Renderer(Movable):
                         material.alpha_test,
                         sheen,
                         material.shininess,
+                        tones,
                     )
                     var two = _to_raster(
                         pieces[piece * 3 + 1],
@@ -1294,6 +1311,7 @@ struct Renderer(Movable):
                         material.alpha_test,
                         sheen,
                         material.shininess,
+                        tones,
                     )
                     var three = _to_raster(
                         pieces[piece * 3 + 2],
@@ -1306,6 +1324,7 @@ struct Renderer(Movable):
                         material.alpha_test,
                         sheen,
                         material.shininess,
+                        tones,
                     )
                     # Which way this piece ends up facing decides two things
                     # at once: whether it survives, and which side of it is

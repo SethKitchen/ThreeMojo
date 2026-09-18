@@ -83,6 +83,7 @@ Pass `toward_eye` with it, the one direction toward a camera whose rays run para
 | `spot_count()` | The number of spot lights. |
 | `intensity_at(normal, position) -> FloatColor` | The light that reaches a surface with that unit normal at that world position. |
 | `specular_at(normal, position, specular, shininess) -> FloatColor` | The highlight a `PHONG` surface there sends to the camera. |
+| `toon_at(normal, position, ramp) -> FloatColor` | The light that reaches a `TOON` surface, every cosine read off `ramp`. |
 | `eye: Vector3` | Where the camera is, in world space. Only a highlight reads it. |
 | `toward_eye: Vector3` | The one direction toward that camera, or `PERSPECTIVE_VIEW`. Normalized here. |
 | `shade(base, normal, position) -> FloatColor` | `base` decoded from sRGB and multiplied by `intensity_at`. |
@@ -108,6 +109,19 @@ Every builder calls `validate`. `Lighting(scene)` calls it again on every light,
 A `PHONG` material adds a highlight to the diffuse term. `specular_at` sums it over the lights that have a direction: directional, point and spot. An ambient light and a hemisphere light make none. See [Materials](Materials#phong).
 
 `blinn_phong(toward_light, toward_eye, normal, specular, shininess)` is three.js's `BRDF_BlinnPhong`, shared with the GPU kernel as `falloff` is.
+
+### The toon ramp
+
+A `TOON` material replaces each cosine with a tone off a ramp. `toon_at` sums that over the lights, where `intensity_at` sums the cosines themselves. Four functions do the arithmetic, and both rasterizers call them:
+
+| Function | Meaning |
+|---|---|
+| `toon_coord(dot_nl)` | Where a cosine falls on the ramp: `dot * 0.5 + 0.5`. |
+| `toon_step(coord)` | three.js's fallback ramp: `TOON_SHADE` below `TOON_EDGE`, one above. |
+| `toon_index(coord, count)` | Which tone of a ramp of `count` tones to read. Nearest, ends clamped. |
+| `toon_tone(dot_nl, ramp)` | The three above together, for a ramp that can be empty. |
+
+A lamp the surface is turned away from still counts, because the ramp has no zero to clamp at. A point or spot light is still cut off by distance and by its cone, as three.js's `directLight.visible` is false there. An ambient light and a hemisphere light are not stepped at all. See [Materials](Materials#toon).
 
 ### Which way the camera lies
 

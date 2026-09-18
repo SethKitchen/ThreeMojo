@@ -104,7 +104,7 @@ from render.gpu import (
     render_triangles,
     triangle_state,
 )
-from render.srgb import LINEAR, ColorSpace
+from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import Alpha
 from geometries.plane import plane
 from core.buffer_attribute import BufferAttribute
@@ -116,9 +116,11 @@ from materials.material import (
     LAMBERT,
     NORMALS,
     PHONG,
+    TOON,
     depth_material,
     normal_material,
     phong_material,
+    toon_material,
 )
 from render.target import RenderTarget
 from render.rasterizer import (
@@ -736,8 +738,9 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
     assert_equal(flatten(deep)[19], Float32(7.5))
 
 
-def test_the_state_table_has_four_entries_per_triangle() raises:
-    # Texture, blend, material kind and emissive map, from the first corner.
+def test_the_state_table_has_an_entry_per_map_and_policy() raises:
+    # Texture, blend, material kind, emissive map, alpha map and gradient
+    # map, all from the first corner.
     var corners = List[RasterVertex]()
     for _ in range(3):
         corners.append(
@@ -764,8 +767,14 @@ def test_the_state_table_has_four_entries_per_triangle() raises:
     assert_equal(state[1], Int32(BLEND.value))
     assert_equal(state[2], Int32(BASIC.value))
     assert_equal(state[3], Int32(5))
-    # And each of the other three kinds crosses as its own value.
-    for kind in [LAMBERT, NORMALS, DEPTH]:
+    assert_equal(state[4], Int32(NO_TEXTURE.value))
+    assert_equal(state[5], Int32(NO_TEXTURE.value))
+    # A toon triangle's ramp rides the last column.
+    var stepped = toon_pair(TextureId(6))
+    assert_equal(triangle_state(stepped)[5], Int32(6))
+    assert_equal(triangle_state(toon_pair())[5], Int32(NO_TEXTURE.value))
+    # And each of the other four kinds crosses as its own value.
+    for kind in [LAMBERT, NORMALS, DEPTH, TOON]:
         var others = List[RasterVertex]()
         for _ in range(3):
             others.append(
@@ -3713,7 +3722,7 @@ def test_the_state_table_carries_the_alpha_map() raises:
         )
     var state = triangle_state(corners)
     assert_equal(len(state), STATE_PER_TRIANGLE)
-    assert_equal(len(state), 5)
+    assert_equal(len(state), 6)
     assert_equal(state[4], Int32(7))
     var plain = List[RasterVertex]()
     for _ in range(3):
@@ -4473,6 +4482,251 @@ def test_both_backends_agree_on_a_masked_phong_frame() raises:
     var full = a_masked_phong_frame(flat, 0.0)
     assert_true(parallel > 50, "the parallel sheet barely drew anything")
     assert_true(parallel < full, "the mask cut nothing out of the flat view")
+
+
+# --- a toon material, both backends -----------------------------------------
+
+
+def a_gpu_ramp(
+    tones: List[UInt8],
+    space: ColorSpace = LINEAR,
+    alpha: Alpha = IGNORED,
+) raises -> Texture:
+    """Return a one-row gradient map whose red channel holds `tones`."""
+    var pixels = List[UInt8]()
+    for tone in tones:
+        pixels.append(tone)
+        pixels.append(255)
+        pixels.append(0)
+        pixels.append(255)
+    return Texture(len(tones), 1, pixels^, REPEAT, NEAREST, space, False, alpha)
+
+
+def toon_pair(gradient_map: TextureId = NO_TEXTURE) -> List[RasterVertex]:
+    """Return `overlapping_pair` as toon surfaces, each corner facing a
+    different way so the ramp is really swept across the triangles."""
+    var normals: List[Vector3] = [
+        Vector3(0, 0, 1),
+        Vector3(0.9, 0, 0.4),
+        Vector3(0, 0.9, -0.4),
+        Vector3(-0.8, 0.2, 0.5),
+        Vector3(0.3, -0.9, 0.1),
+        Vector3(0, 0, -1),
+    ]
+    var corners = List[RasterVertex]()
+    var base = overlapping_pair()
+    for index in range(len(base)):
+        var here = base[index]
+        corners.append(
+            RasterVertex(
+                here.x,
+                here.y,
+                here.z,
+                here.inv_w,
+                here.color,
+                here.u,
+                here.v,
+                here.texture,
+                here.blend,
+                normals[index],
+                Vector3(Float32(index) * 0.2 - 0.5, Float32(index) * 0.1, 0.0),
+                TOON,
+                here.emissive,
+                here.emissive_map,
+                here.view_depth,
+                NO_TEXTURE,
+                0,
+                FloatColor(0, 0, 0),
+                0,
+                gradient_map,
+            )
+        )
+    return corners^
+
+
+def test_both_backends_agree_on_the_fallback_toon_ramp() raises:
+    # No gradient map, so both step through three.js's two tones from the
+    # same shared function. The kernel must reach the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends agree on the toon fallback"):
+        return
+    var lighting = phong_lighting()
+    var corners = toon_pair()
+    var target = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(corners, target, SHADE_LIT, TextureStore(), lighting)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the ramp really stepped: the same surfaces as lambert ones differ.
+    var plain = List[RasterVertex]()
+    for here in toon_pair():
+        plain.append(of_kind(here, LAMBERT, here.normal))
+    var faded = render_triangles(
+        plain, 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    assert_true(count_mismatches(gpu, faded) > 50, "the ramp changed nothing")
+
+
+def test_both_backends_read_the_same_tone_off_a_gradient_map() raises:
+    # The host reads texel (x, 0) of the map and the kernel reads the same
+    # byte of the same row, so a ramp of three tones cannot step at one
+    # coordinate on one side and another on the other.
+    if skipped_for_lack_of_a_gpu("both backends read the same toon ramp"):
+        return
+    var textures = TextureStore()
+    var tones: List[UInt8] = [0, 96, 176, 255]
+    var ramp = textures.add(a_gpu_ramp(tones))
+    var lighting = phong_lighting()
+    var corners = toon_pair(ramp)
+    var target = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(corners, target, SHADE_LIT, textures, lighting)
+    var cpu = target.resolve()
+    var renderer = GpuRenderer(24, 18)
+    renderer.set_textures(textures)
+    renderer.draw(corners, BACKGROUND, SHADE_LIT, lighting)
+    var gpu = renderer.read_back()
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the map really replaced the fallback: the same surfaces without
+    # it differ, and reach no black.
+    var fallback = render_triangles(
+        toon_pair(), 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    assert_true(
+        count_mismatches(gpu, fallback) > 50, "the gradient map did nothing"
+    )
+
+
+def test_the_gpu_refuses_a_gradient_map_it_cannot_sample() raises:
+    # The same three refusals the host makes before its first fragment,
+    # made here before the launch, plus the one only the device can make.
+    if skipped_for_lack_of_a_gpu("the gpu refuses a bad gradient map"):
+        return
+    var tones: List[UInt8] = [0, 255]
+    var textures = TextureStore()
+    var good = textures.add(a_gpu_ramp(tones))
+    var colored = textures.add(a_gpu_ramp(tones, SRGB, IGNORED))
+    var weighted = textures.add(a_gpu_ramp(tones, LINEAR, COVERAGE))
+    var empty = textures.add(Texture())
+    var renderer = GpuRenderer(16, 12)
+    renderer.set_textures(textures)
+    var target = RenderTarget(16, 12, BACKGROUND)
+    for slot in [colored, weighted, empty]:
+        with assert_raises():
+            renderer.draw(toon_pair(slot), BACKGROUND, SHADE_LIT)
+        with assert_raises():
+            rasterize_all(toon_pair(slot), target, SHADE_LIT, textures)
+    # A ramp stored as data draws on both, which is what makes the three
+    # above about the storage.
+    renderer.draw(toon_pair(good), BACKGROUND, SHADE_LIT)
+    rasterize_all(toon_pair(good), target, SHADE_LIT, textures)
+    # A ramp that was never uploaded is refused rather than read off the
+    # end of the descriptor table.
+    with assert_raises():
+        renderer.draw(toon_pair(TextureId(9)), BACKGROUND, SHADE_LIT)
+
+
+def test_both_backends_agree_on_a_prepared_toon_scene() raises:
+    # A whole frame: a lit floor, a toon sphere on the fallback and a toon
+    # box on a ramp of its own, through a fog and a curve.
+    if skipped_for_lack_of_a_gpu("both backends agree on a toon scene"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var floor = assets.geometries.add(
+        plane(Length(12.0, METER), Length(12.0, METER), 4, 4)
+    )
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 16, 12))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var tones: List[UInt8] = [0, 80, 160, 255]
+    var ramp = assets.textures.add(a_gpu_ramp(tones))
+
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_position(0, -1.0, 0)
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var left = Object3D()
+    left.set_position(-1.0, 0, 0)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(1.0, 0, -0.4)
+    right.set_euler(
+        Angle(20.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var right_node = scene.add(right^)
+    light_the(scene)
+    var bulb = Object3D()
+    bulb.set_position(0.5, 1.2, 1.5)
+    var bulb_node = scene.add(bulb^)
+    scene.add_light(point_light(Color(255, 220, 180), bulb_node, 2.0))
+    scene.fog = linear_fog(
+        Color(160, 170, 190), Length(3.0, METER), Length(12.0, METER)
+    )
+    scene.update()
+
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            floor,
+            assets.materials.add(Material(Color(200, 200, 200))),
+            ground_node,
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(toon_material(Color(200, 60, 60))),
+            left_node,
+        )
+    )
+    meshes.append(
+        Mesh(
+            box,
+            assets.materials.add(
+                toon_material(Color(60, 120, 200), NO_TEXTURE, ramp)
+            ),
+            right_node,
+        )
+    )
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0, 0.8, 3.2), Vector3(0, 0, 0))
+
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the scene prepared no triangles")
+    var lighting = Lighting(
+        scene, camera.visible_layers(), camera_position(scene, camera)
+    )
+    var view = FogView(scene.fog)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_TEXTURE, assets.textures, lighting, 1, view
+    )
+    var cpu = target.resolve(1, ACES_FILMIC_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+        view,
+        ACES_FILMIC_TONE_MAPPING,
+        1.0,
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 300, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def main() raises:

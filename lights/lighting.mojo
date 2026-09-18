@@ -124,6 +124,104 @@ def toward_eye_at(
     return toward^
 
 
+# Where three.js's fallback toon ramp steps, and how lit its low tone is:
+# `mix(vec3(0.7), vec3(1.0), smoothstep(0.7 - fw, 0.7 + fw, coord))` in
+# three.js's `lights_toon_pars_fragment`. The two numbers are the same 0.7
+# by coincidence of three.js's choice, so they are named apart.
+comptime TOON_EDGE = Float32(0.7)
+comptime TOON_SHADE = Float32(0.7)
+
+
+def toon_coord(dot_nl: Float32) -> Float32:
+    """Return where a cosine falls on a toon ramp, three.js's `coord`.
+
+    **A toon surface never fades to black.** three.js reads its ramp at
+    `dot(N, L) * 0.5 + 0.5`, so a surface turned fully away from a lamp
+    reads the ramp's left end rather than zero. A Lambert term clamps the
+    cosine at zero and a toon ramp does not, which is why a toon surface
+    keeps a flat shaded tone where a Lambert one goes dark.
+
+    Shared by both rasterizers, as `falloff` is, so that neither can read a
+    ramp somewhere the other does not.
+
+    Args:
+        dot_nl: The cosine between the surface normal and the direction
+            toward the light, from minus one to one.
+
+    Returns:
+        Where to read the ramp, from zero to one.
+    """
+    return dot_nl * 0.5 + 0.5
+
+
+def toon_step(coord: Float32) -> Float32:
+    """Return three.js's fallback ramp at `coord`: two tones, one edge.
+
+    three.js antialiases the edge with `fwidth`, a screen-space derivative
+    of the coordinate. A software rasterizer shades one fragment at a time
+    and has no neighboring fragment to take a derivative against, so the
+    edge is hard here. That is the one difference, and it shows only on the
+    single row of fragments the edge crosses.
+
+    Args:
+        coord: Where on the ramp to read, from `toon_coord`.
+
+    Returns:
+        `TOON_SHADE` below the edge, one at or above it.
+    """
+    if coord < TOON_EDGE:
+        return TOON_SHADE
+    return 1.0
+
+
+def toon_index(coord: Float32, count: Int) -> Int:
+    """Return which tone of a ramp of `count` tones `coord` reads.
+
+    Nearest, with both ends clamped: a ramp is a lookup table rather than a
+    picture, so it is never filtered and never wrapped. three.js's own
+    gradient maps are built `NearestFilter` and `ClampToEdgeWrapping` for
+    the same reason.
+
+    Shared by both rasterizers, so that a ramp of three tones cannot step
+    at one coordinate on the host and another on the device.
+
+    Args:
+        coord: Where on the ramp to read, from `toon_coord`.
+        count: How many tones the ramp holds, one or more.
+
+    Returns:
+        The tone to read, from zero to `count` minus one.
+    """
+    var slot = Int(coord * Float32(count))
+    if slot < 0:
+        return 0
+    if slot >= count:
+        return count - 1
+    return slot
+
+
+def toon_tone(dot_nl: Float32, ramp: List[Float32]) -> Float32:
+    """Return how lit a toon surface looks at this cosine.
+
+    The host's spelling of what the kernel does with the same three
+    functions. An empty ramp means the material named none, and three.js's
+    fallback applies.
+
+    Args:
+        dot_nl: The cosine between the surface normal and the direction
+            toward the light.
+        ramp: The tones of the material's gradient map, left to right, or
+            empty for the fallback.
+
+    Returns:
+        How lit the surface looks, from zero to one.
+    """
+    var coord = toon_coord(dot_nl)
+    if len(ramp) == 0:
+        return toon_step(coord)
+    return ramp[toon_index(coord, len(ramp))]
+
+
 # three.js's `G_BlinnPhong_Implicit`: the geometric term of the Blinn-Phong
 # BRDF, a constant there and here.
 comptime BLINN_PHONG_G = Float32(0.25)
@@ -557,6 +655,111 @@ struct Lighting(Movable):
                 continue
             var reach = (
                 lambert
+                * rim
+                * falloff(
+                    distance, self.spot_decays[index], self.spot_cutoffs[index]
+                )
+            )
+            ref bulb = self.spot_radiances[index]
+            total = FloatColor(
+                total.r + bulb.r * reach,
+                total.g + bulb.g * reach,
+                total.b + bulb.b * reach,
+                1.0,
+            )
+        return total
+
+    def toon_at(
+        self, normal: Vector3, position: Vector3, ramp: List[Float32]
+    ) -> FloatColor:
+        """Return how much light of each color reaches a `TOON` surface here.
+
+        `intensity_at` with every cosine read off a ramp, three.js's
+        `RE_Direct_Toon`. The lights that have a direction are stepped;
+        the ambient term and the hemisphere lights are not, because
+        three.js reflects those through `RE_IndirectDiffuse` and a ramp is
+        a direct term. The kinds are summed in the same order as there, so
+        the two methods round alike wherever they agree.
+
+        **A light that the surface is turned away from still counts.** The
+        ramp is read at `dot(N, L) * 0.5 + 0.5`, which has no zero to clamp
+        at, so a lamp behind the surface reads the ramp's left end. That is
+        what keeps a toon surface flat on its shaded side instead of black.
+        A point or spot light is still cut off by distance and by its cone,
+        because three.js's `directLight.visible` is false there.
+
+        Separate from `intensity_at` rather than folded into it, for the
+        reason `specular_at` is separate: a `LAMBERT` surface pays nothing
+        for a ramp it has not got, and every number already asserted of
+        `intensity_at` stays where it was.
+
+        Args:
+            normal: The surface's unit normal, in world space.
+            position: Where the surface is, in world space. Only a point or
+                spot light reads it.
+            ramp: The tones of the material's gradient map, left to right,
+                or empty for three.js's two-tone fallback.
+
+        Returns:
+            The arriving light, linear. Alpha is not light and stays at one.
+        """
+        var total = self.ambient
+        for index in range(len(self.directions)):
+            var tone = toon_tone(normal.dot(self.directions[index]), ramp)
+            ref light = self.radiances[index]
+            total = FloatColor(
+                total.r + light.r * tone,
+                total.g + light.g * tone,
+                total.b + light.b * tone,
+                1.0,
+            )
+        for index in range(len(self.positions)):
+            var toward = self.positions[index] - position
+            var distance = toward.length()
+            # A surface exactly on the bulb has no direction to be lit from.
+            if distance == 0:
+                continue
+            var tone = toon_tone(normal.dot(toward) / distance, ramp)
+            var reach = tone * falloff(
+                distance, self.decays[index], self.cutoffs[index]
+            )
+            ref bulb = self.point_radiances[index]
+            total = FloatColor(
+                total.r + bulb.r * reach,
+                total.g + bulb.g * reach,
+                total.b + bulb.b * reach,
+                1.0,
+            )
+        for index in range(len(self.sky_directions)):
+            # Indirect, so it is not stepped: the same sum as `intensity_at`.
+            var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
+            ref sky = self.skies[index]
+            ref ground = self.grounds[index]
+            var lift = FloatColor(
+                ground.r + (sky.r - ground.r) * weight,
+                ground.g + (sky.g - ground.g) * weight,
+                ground.b + (sky.b - ground.b) * weight,
+                1.0,
+            )
+            total = FloatColor(
+                total.r + lift.r, total.g + lift.g, total.b + lift.b, 1.0
+            )
+        for index in range(len(self.spot_positions)):
+            var toward = self.spot_positions[index] - position
+            var distance = toward.length()
+            if distance == 0:
+                continue
+            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var rim = smoothstep(
+                self.cone_cosines[index],
+                self.penumbra_cosines[index],
+                angle_cos,
+            )
+            if rim <= 0:
+                continue
+            var tone = toon_tone(normal.dot(toward) / distance, ramp)
+            var reach = (
+                tone
                 * rim
                 * falloff(
                     distance, self.spot_decays[index], self.spot_cutoffs[index]

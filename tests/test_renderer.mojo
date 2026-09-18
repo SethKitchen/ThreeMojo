@@ -31,9 +31,11 @@ from materials.material import (
     DEPTH,
     NORMALS,
     PHONG,
+    TOON,
     depth_material,
     normal_material,
     phong_material,
+    toon_material,
 )
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
@@ -54,11 +56,12 @@ from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV, ShadeMode
 from geometries.polyhedron import octahedron
-from render.srgb import LINEAR, SRGB
+from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import (
     BILINEAR,
     CLAMP,
     COVERAGE,
+    Alpha,
     IGNORED,
     NEAREST,
     REPEAT,
@@ -4367,6 +4370,185 @@ def test_a_black_specular_still_differs_from_lambert_at_a_grazing_angle() raises
     assert_equal(none.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(0))
     assert_true(here.r > 0, "the black specular caught no rim at all")
     assert_true(here.r < 80, "the rim is far brighter than a rim should be")
+
+
+# --- a toon material, through the renderer ---------------------------------
+
+
+def a_gradient(
+    tones: List[UInt8],
+    space: ColorSpace = LINEAR,
+    alpha: Alpha = IGNORED,
+) raises -> Texture:
+    """Return a one-row gradient map whose red channel holds `tones`."""
+    var pixels = List[UInt8]()
+    for tone in tones:
+        pixels.append(tone)
+        pixels.append(255)
+        pixels.append(0)
+        pixels.append(255)
+    return Texture(len(tones), 1, pixels^, REPEAT, NEAREST, space, False, alpha)
+
+
+def ball_of(mut assets: Assets, material: MaterialId) raises -> List[Mesh]:
+    """Return one sphere drawn with `material`, whose normals sweep the
+    whole ramp."""
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            assets.geometries.add(sphere(Length(0.9, METER), 24, 18)),
+            material,
+            NodeId(0),
+        )
+    )
+    return meshes^
+
+
+def band_count(shown: Framebuffer) raises -> Int:
+    """Return how many different red levels the image holds, background
+    aside."""
+    var seen = List[UInt8]()
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var here = shown.get_pixel(x, y).r
+            var known = False
+            for level in seen:
+                if level == here:
+                    known = True
+            if not known:
+                seen.append(here)
+    return len(seen)
+
+
+def test_a_toon_sphere_shows_flat_bands_where_a_lambert_one_is_smooth() raises:
+    # The whole point of the kind: a lambert sphere fades through dozens of
+    # levels and a toon one shows the ramp's tones and the background.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var flat = assets.materials.add(toon_material(Color(255, 255, 255)))
+    var smooth = assets.materials.add(Material(Color(255, 255, 255)))
+    var scene = lamp_scene()
+    var stepped = rendered(
+        renderer, scene, assets, ball_of(assets, flat), camera_at(0, 0, 4)
+    )
+    var faded = rendered(
+        renderer, scene, assets, ball_of(assets, smooth), camera_at(0, 0, 4)
+    )
+    # The background, the fallback's low tone and its full tone: three.
+    assert_equal(band_count(stepped), 3)
+    assert_true(band_count(faded) > 10, "a lambert sphere did not fade at all")
+
+
+def test_a_gradient_map_gives_a_toon_sphere_its_own_bands() raises:
+    # Four tones in the map, four bands on the sphere. The lamp is off to
+    # the side, so the visible half of the sphere is turned through the
+    # whole ramp rather than through its top half alone.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var tones: List[UInt8] = [0, 60, 150, 255]
+    var ramp = assets.textures.add(a_gradient(tones))
+    var stepped = assets.materials.add(
+        toon_material(Color(255, 255, 255), NO_TEXTURE, ramp)
+    )
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    var lamp = Object3D()
+    lamp.set_position(1, 0, 0)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.update()
+    var shown = rendered(
+        renderer, scene, assets, ball_of(assets, stepped), camera_at(0, 0, 4)
+    )
+    # The brightest band is white, which says the top tone was reached.
+    var brightest = UInt8(0)
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var here = shown.get_pixel(x, y).r
+            if here > brightest:
+                brightest = here
+    assert_equal(brightest, UInt8(255))
+    # Four tones, and the darkest is black like the background, so four
+    # levels in all. The fallback could give neither that black nor four.
+    assert_equal(band_count(shown), 4)
+
+
+def test_a_material_naming_a_gradient_map_that_is_not_there_is_rejected() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var missing = assets.materials.add(
+        toon_material(Color(255, 255, 255), NO_TEXTURE, TextureId(3))
+    )
+    var scene = lamp_scene()
+    with assert_raises():
+        _ = rendered(
+            renderer,
+            scene,
+            assets,
+            ball_of(assets, missing),
+            camera_at(0, 0, 4),
+        )
+
+
+def a_toon_sphere_with(var ramp_image: Texture) raises:
+    """Render a toon sphere whose ramp is `ramp_image`, and throw the image
+    away: what is under test is whether the render is allowed at all."""
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var ramp = assets.textures.add(ramp_image^)
+    var stepped = assets.materials.add(
+        toon_material(Color(255, 255, 255), NO_TEXTURE, ramp)
+    )
+    var scene = lamp_scene()
+    _ = rendered(
+        renderer, scene, assets, ball_of(assets, stepped), camera_at(0, 0, 4)
+    )
+
+
+def test_a_gradient_map_must_be_stored_as_data_in_the_renderer() raises:
+    # Refused whatever the shading mode, as a wrong asset rather than a
+    # wrong frame -- the rule an alpha map follows.
+    var tones: List[UInt8] = [0, 255]
+    with assert_raises():
+        a_toon_sphere_with(a_gradient(tones, SRGB, IGNORED))
+    with assert_raises():
+        a_toon_sphere_with(a_gradient(tones, LINEAR, COVERAGE))
+    with assert_raises():
+        a_toon_sphere_with(a_gradient(tones, SRGB, COVERAGE))
+    # A ramp stored as data draws, which is what makes the three above
+    # about the storage and not about the ramp.
+    a_toon_sphere_with(a_gradient(tones))
+
+
+def test_a_ramp_is_read_at_no_surface_coordinate() raises:
+    # A fragment carries one texture coordinate and samples every map with
+    # it, so a material's maps must share one transform. A ramp is not
+    # sampled with it at all -- three.js reads it at `vec2(coord, 0.0)` --
+    # so its own transform is neither applied nor asked to agree.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var tones: List[UInt8] = [0, 255]
+    var moved = a_gradient(tones)
+    moved.repeat = Vector2(3, 7)
+    moved.offset = Vector2(0.25, 0.5)
+    var ramp = assets.textures.add(moved^)
+    var board = checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0))
+    var skin = assets.textures.add(board^)
+    var stepped = assets.materials.add(
+        toon_material(Color(255, 255, 255), skin, ramp)
+    )
+    var scene = lamp_scene()
+    var shown = rendered(
+        renderer, scene, assets, ball_of(assets, stepped), camera_at(0, 0, 4)
+    )
+    var drawn = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            if shown.get_pixel(x, y).r > 0:
+                drawn += 1
+    assert_true(drawn > 50, "the sphere barely drew anything")
 
 
 def main() raises:

@@ -33,6 +33,7 @@ from materials.material import (
     NORMALS,
     OPAQUE,
     PHONG,
+    TOON,
     Blending,
     MaterialKind,
 )
@@ -472,6 +473,11 @@ struct RasterVertex(ImplicitlyCopyable):
     # How tight that highlight is, three.js's `shininess`. Per-triangle
     # like the alpha test, and read from the first corner.
     var shininess: Float32
+    # Which texture's top row is the ramp a `TOON` surface steps through,
+    # or `NO_TEXTURE` for three.js's fallback: three.js's `gradientMap`.
+    # Per-triangle metadata like `texture`, and read at no surface
+    # coordinate, so its own transform never applies.
+    var gradient_map: TextureId
     # How far in front of the camera this corner is, in meters: three.js's
     # `vFogDepth`, minus the camera-space z, taken from the clipped
     # position as it is projected. Interpolated with perspective correction
@@ -501,6 +507,7 @@ struct RasterVertex(ImplicitlyCopyable):
         alpha_test: Float32 = 0,
         specular: FloatColor = FloatColor(0.0, 0.0, 0.0),
         shininess: Float32 = 0,
+        gradient_map: TextureId = NO_TEXTURE,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -512,7 +519,9 @@ struct RasterVertex(ImplicitlyCopyable):
         emissive defaults to black: no light given off. The depth defaults
         to zero, which is at the camera and in no fog. The alpha test
         defaults to zero, which throws no fragment away, and the specular
-        to black, which is no highlight.
+        to black, which is no highlight. The gradient map defaults to none,
+        which is three.js's two-tone fallback for a `TOON` corner and is
+        read by no other kind.
         """
         self.x = x
         self.y = y
@@ -533,6 +542,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.alpha_test = alpha_test
         self.specular = specular
         self.shininess = shininess
+        self.gradient_map = gradient_map
 
 
 @fieldwise_init
@@ -824,9 +834,11 @@ def check_triangle_state(
     Raises:
         Error: If the three corners do not agree on their blend policy, on
             any of their three maps, on their material kind, on their
-            alpha test or on their shininess; if the agreed policy is
+            alpha test, on their gradient map or on their shininess; if
+            the agreed policy is
             neither `OPAQUE` nor `BLEND`, the agreed kind is none of the
-            five, the agreed alpha test is outside zero to one or not
+            six, a gradient map is named on a kind that is not `TOON`,
+            the agreed alpha test is outside zero to one or not
             finite, or the agreed shininess is negative or not finite; if
             the agreed kind shows data and the agreed policy is `BLEND`,
             which no pixel could resolve; or if any
@@ -841,6 +853,8 @@ def check_triangle_state(
         raise Error("A triangle's corners disagree about their emissive map")
     if b.alpha_map != a.alpha_map or c.alpha_map != a.alpha_map:
         raise Error("A triangle's corners disagree about their alpha map")
+    if b.gradient_map != a.gradient_map or c.gradient_map != a.gradient_map:
+        raise Error("A triangle's corners disagree about their gradient map")
     if b.kind != a.kind or c.kind != a.kind:
         raise Error("A triangle's corners disagree about their material kind")
     # Before the agreement check below, because not-a-number is not equal
@@ -859,7 +873,15 @@ def check_triangle_state(
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is neither OPAQUE nor BLEND")
     if not a.kind.is_valid():
-        raise Error("A triangle's material kind is none of the five")
+        raise Error("A triangle's material kind is none of the six")
+    # Only a toon shader reads a ramp, so a ramp on any other kind is a
+    # mistake rather than a value to ignore. Refused here, as the material
+    # refuses it, so a hand-built triangle cannot smuggle one past.
+    if a.kind != TOON and a.gradient_map != NO_TEXTURE:
+        raise Error(
+            "Only a toon triangle steps through a ramp: no other shader"
+            " reads one"
+        )
     # A fragment that shows data cannot be mixed into one that shows light:
     # the pixel would hold part of each and resolve as neither. Refused
     # here so that both backends refuse it, and so that `RenderTarget.blend`
@@ -875,6 +897,8 @@ def check_triangle_state(
         raise Error("A triangle names an emissive map id that nothing can hold")
     if a.alpha_map != NO_TEXTURE and a.alpha_map.value < 0:
         raise Error("A triangle names an alpha map id that nothing can hold")
+    if a.gradient_map != NO_TEXTURE and a.gradient_map.value < 0:
+        raise Error("A triangle names a gradient map id that nothing can hold")
 
 
 def check_alpha_map(image: Texture) raises:
@@ -904,6 +928,71 @@ def check_alpha_map(image: Texture) raises:
             "An alpha map must ignore its own alpha; build the texture with"
             " alpha=IGNORED"
         )
+
+
+def check_gradient_map(image: Texture) raises:
+    """Refuse a ramp that is not stored as data.
+
+    A gradient map is a lookup table and not a picture. Its red channel is
+    how lit a surface looks, so it must be `LINEAR`, or the sRGB decode
+    turns a byte of 128 into 0.216 rather than 0.502. And it must be
+    `IGNORED`, or its own alpha weights the tones -- the reason an alpha
+    map and an emissive map ask the same.
+
+    A blank texture is refused as well. It has no row to read, and a ramp
+    of no tones has no meaning; a material that wants the fallback names no
+    map at all.
+
+    Shared by both backends, so neither can accept what the other refuses.
+
+    Args:
+        image: The texture named as a gradient map.
+
+    Raises:
+        Error: If the texture is blank, its color space is not `LINEAR`, or
+            it reads its alpha as coverage.
+    """
+    if image.is_blank():
+        raise Error(
+            "A gradient map must hold texels: name no map for the fallback"
+        )
+    if image.color_space != LINEAR:
+        raise Error(
+            "A gradient map holds data, not color; build the texture with"
+            " color_space=LINEAR"
+        )
+    if image.alpha != IGNORED:
+        raise Error(
+            "A gradient map must ignore its own alpha; build the texture"
+            " with alpha=IGNORED"
+        )
+
+
+def gradient_ramp(image: Texture) raises -> List[Float32]:
+    """Return a gradient map's top row as tones, left to right.
+
+    Only the top row, because three.js reads its gradient map at
+    `vec2(coord, 0.0)` and nothing else varies down the image. Only the red
+    channel, because three.js reads `.r`. Read once per triangle rather
+    than per fragment: the row is the same for every pixel, and a texture
+    lookup per light per pixel would open it a hundred thousand times a
+    frame.
+
+    Args:
+        image: The texture named as a gradient map, already checked by
+            `check_gradient_map`.
+
+    Returns:
+        One tone per texel across, from zero to one.
+
+    Raises:
+        Error: If a texel cannot be read.
+    """
+    var tones = List[Float32]()
+    # A checked map holds at least one texel, so this never runs zero times.
+    for x in range(image.width):  # pragma: no branch
+        tones.append(Float32(image.texel(x, 0).r) / 255)
+    return tones^
 
 
 def rasterize_shaded(
@@ -1016,6 +1105,15 @@ def rasterize_shaded(
     # it before the launch, and only when the map will be opened.
     if a.alpha_map != NO_TEXTURE and mode == SHADE_TEXTURE:
         check_alpha_map(textures.get(a.alpha_map))
+    # The ramp a `TOON` surface steps through, read once here. Its top row
+    # is the whole lookup table, and it is the same for every fragment, so
+    # opening the texture per light per pixel would buy nothing. Empty for
+    # a triangle that names no ramp, which is three.js's fallback. The uv
+    # debug view shades nothing and reads none.
+    var ramp = List[Float32]()
+    if a.gradient_map != NO_TEXTURE and mode != SHADE_UV:
+        check_gradient_map(textures.get(a.gradient_map))
+        ramp = gradient_ramp(textures.get(a.gradient_map))
 
     # Whether this surface composites, decided by the material and carried
     # here rather than inferred from a color. It changes two things
@@ -1151,7 +1249,12 @@ def rasterize_shaded(
                     + b.world.z * share_b
                     + c.world.z * share_c,
                 )
-                arriving = lighting.intensity_at(facing, spot)
+                if a.kind == TOON:
+                    # Every cosine read off the ramp rather than faded, and
+                    # never clamped at zero: see `Lighting.toon_at`.
+                    arriving = lighting.toon_at(facing, spot, ramp)
+                else:
+                    arriving = lighting.intensity_at(facing, spot)
                 if a.kind == PHONG:
                     # Interpolated like the emissive, and summed over the
                     # lights that have a direction; see `specular_at`.

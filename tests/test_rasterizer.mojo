@@ -12,6 +12,7 @@ from materials.material import (
     LAMBERT,
     NORMALS,
     PHONG,
+    TOON,
     Blending,
     MaterialKind,
     depth_material,
@@ -50,7 +51,10 @@ from render.rasterizer import (
     ShadeMode,
     Triangle,
     check_alpha_map,
+    check_gradient_map,
+    check_triangle_state,
     data_color,
+    gradient_ramp,
     interpolate_alpha,
     edge,
     mip_level,
@@ -2858,6 +2862,267 @@ def test_a_uniform_surface_is_not_cut_by_its_own_alpha_test() raises:
     var loose = RenderTarget(64, 64, Color(0, 0, 0))
     rasterize_all(opaque_triangle(0.5, 0.0), loose, SHADE_TEXTURE)
     assert_equal(covered_pixels(half), covered_pixels(loose))
+
+
+# --- a toon triangle steps through a ramp -----------------------------------
+
+
+def a_ramp(
+    tones: List[UInt8],
+    space: ColorSpace = LINEAR,
+    alpha: Alpha = IGNORED,
+) raises -> Texture:
+    """Return a one-row gradient map whose red channel holds `tones`.
+
+    Green and blue are deliberately not the tone: three.js reads `.r` and
+    nothing else, and a gray texel could not tell them apart. A second row
+    is added below, filled with a value nothing may read, so a shader that
+    sampled anywhere but the top row would show it.
+    """
+    var pixels = List[UInt8]()
+    for tone in tones:
+        pixels.append(tone)
+        pixels.append(255)
+        pixels.append(0)
+        pixels.append(255)
+    for _ in tones:
+        pixels.append(17)
+        pixels.append(17)
+        pixels.append(17)
+        pixels.append(255)
+    return Texture(len(tones), 2, pixels^, REPEAT, NEAREST, space, False, alpha)
+
+
+def toon_corner(
+    x: Float32,
+    y: Float32,
+    normal: Vector3,
+    gradient_map: TextureId = NO_TEXTURE,
+) -> RasterVertex:
+    """Return a white toon corner facing `normal`."""
+    return RasterVertex(
+        x,
+        y,
+        0.5,
+        1,
+        FloatColor(1, 1, 1),
+        0,
+        0,
+        NO_TEXTURE,
+        OPAQUE,
+        normal,
+        Vector3(0, 0, 0),
+        TOON,
+        FloatColor(0.0, 0.0, 0.0),
+        NO_TEXTURE,
+        0,
+        NO_TEXTURE,
+        0,
+        FloatColor(0.0, 0.0, 0.0),
+        0,
+        gradient_map,
+    )
+
+
+def toon_quad(
+    left: Vector3, right: Vector3, gradient_map: TextureId = NO_TEXTURE
+) -> List[RasterVertex]:
+    """Return two triangles whose normal turns from `left` to `right`
+    across an eight-pixel target, so the ramp is really swept."""
+    var corners = List[RasterVertex]()
+    corners.append(toon_corner(0, 0, left, gradient_map))
+    corners.append(toon_corner(8, 0, right, gradient_map))
+    corners.append(toon_corner(8, 8, right, gradient_map))
+    corners.append(toon_corner(0, 0, left, gradient_map))
+    corners.append(toon_corner(8, 8, right, gradient_map))
+    corners.append(toon_corner(0, 8, left, gradient_map))
+    return corners^
+
+
+def lamp_straight_on() raises -> Lighting:
+    """Return one white directional light down the z axis, and nothing
+    else: no ambient, so every level in the image is the ramp's."""
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.update()
+    return Lighting(scene)
+
+
+def test_a_gradient_map_must_be_stored_as_data() raises:
+    # Its red channel is a tone, not a color. The sRGB curve would turn a
+    # byte of 128 into 0.216, and a coverage-weighted filter would weight
+    # it by an alpha that means nothing.
+    var tones: List[UInt8] = [0, 128, 255]
+    check_gradient_map(a_ramp(tones))
+    with assert_raises():
+        check_gradient_map(a_ramp(tones, SRGB, IGNORED))
+    with assert_raises():
+        check_gradient_map(a_ramp(tones, LINEAR, COVERAGE))
+    with assert_raises():
+        check_gradient_map(a_ramp(tones, SRGB, COVERAGE))
+    # And a ramp of no tones steps nowhere. A material that wants the
+    # fallback names no map at all, which is a different thing.
+    with assert_raises():
+        check_gradient_map(Texture())
+
+
+def test_a_ramp_is_the_top_rows_red_channel_and_nothing_else() raises:
+    # three.js reads its gradient map at `vec2(coord, 0.0)` and takes `.r`.
+    var tones: List[UInt8] = [0, 51, 204, 255]
+    var read = gradient_ramp(a_ramp(tones))
+    assert_equal(len(read), 4)
+    assert_equal(read[0], Float32(0))
+    assert_almost_equal(read[1], Float32(0.2), atol=Float64(1e-6))
+    assert_almost_equal(read[2], Float32(0.8), atol=Float64(1e-6))
+    assert_equal(read[3], Float32(1))
+    # The second row holds 17 in every channel, and none of it arrived.
+    for tone in read:
+        assert_true(tone != Float32(17) / 255, "the ramp read the wrong row")
+
+
+def test_a_toon_triangle_shows_flat_tones_where_a_lambert_one_fades() raises:
+    # The normal turns from square-on to nearly edge-on across the quad. A
+    # lambert surface fades smoothly over that; a toon surface shows two
+    # flat tones with one edge between them.
+    var lighting = lamp_straight_on()
+    var stepped = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(
+        toon_quad(Vector3(0, 0, 1), Vector3(0.95, 0, 0.31)),
+        stepped,
+        SHADE_TEXTURE,
+        TextureStore(),
+        lighting,
+    )
+    var levels = List[UInt8]()
+    for x in range(8):
+        levels.append(stepped.shown(x, 4).r)
+    # Two values and no more, and the left one is the brighter.
+    var bright = levels[0]
+    var dark = levels[7]
+    assert_true(bright > dark, "the ramp did not step down")
+    for level in levels:
+        assert_true(level == bright or level == dark, "a toon surface faded")
+    # The same quad as a lambert one takes more than two values.
+    var faded = RenderTarget(8, 8, Color(0, 0, 0))
+    var smooth = List[RasterVertex]()
+    for here in toon_quad(Vector3(0, 0, 1), Vector3(0.95, 0, 0.31)):
+        smooth.append(as_kind(here, LAMBERT))
+    rasterize_all(smooth, faded, SHADE_TEXTURE, TextureStore(), lighting)
+    var seen = 0
+    for x in range(8):
+        var here = faded.shown(x, 4).r
+        if here != bright and here != dark:
+            seen += 1
+    assert_true(seen > 0, "a lambert surface stepped like a toon one")
+
+
+def as_kind(base: RasterVertex, kind: MaterialKind) -> RasterVertex:
+    """Return `base` as a surface of another kind, carrying everything
+    else it holds -- the ramp included, so a ramp on a kind that must not
+    have one can be built and refused."""
+    return RasterVertex(
+        base.x,
+        base.y,
+        base.z,
+        base.inv_w,
+        base.color,
+        base.u,
+        base.v,
+        base.texture,
+        base.blend,
+        base.normal,
+        base.world,
+        kind,
+        base.emissive,
+        base.emissive_map,
+        base.view_depth,
+        base.alpha_map,
+        base.alpha_test,
+        base.specular,
+        base.shininess,
+        base.gradient_map,
+    )
+
+
+def test_a_named_ramp_replaces_the_fallback() raises:
+    # A ramp of three flat tones gives three flat bands, and the darkest
+    # is darker than the fallback's low tone -- which is what says the
+    # texture was read rather than ignored.
+    var textures = TextureStore()
+    var tones: List[UInt8] = [0, 128, 255]
+    var ramp = textures.add(a_ramp(tones))
+    var lighting = lamp_straight_on()
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(
+        toon_quad(Vector3(0.6, 0, 0.8), Vector3(0.6, 0, -0.8), ramp),
+        target,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+    )
+    # The left edge is turned toward the lamp and reads the top of the
+    # ramp; the right edge is turned away and reads the bottom, which is
+    # black. The middle passes through the tone in between, which a normal
+    # swept straight from +z to -z would skip.
+    assert_equal(target.shown(0, 4).r, UInt8(255))
+    assert_equal(target.shown(7, 4).r, UInt8(0))
+    # Three tones and no more across the row.
+    var seen = List[UInt8]()
+    for x in range(8):
+        var here = target.shown(x, 4).r
+        var known = False
+        for tone in seen:
+            if tone == here:
+                known = True
+        if not known:
+            seen.append(here)
+    assert_equal(len(seen), 3)
+
+
+def test_a_toon_triangles_ramp_is_checked_and_belongs_to_the_kind() raises:
+    # The same three refusals the material makes, made again of a
+    # hand-built triangle, so neither backend can be handed one.
+    var textures = TextureStore()
+    var tones: List[UInt8] = [0, 255]
+    var ramp = textures.add(a_ramp(tones))
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    # A ramp on any other kind is refused.
+    var wrong = toon_quad(Vector3(0, 0, 1), Vector3(0, 0, 1), ramp)
+    for index in range(len(wrong)):
+        wrong[index] = as_kind(wrong[index], LAMBERT)
+    with assert_raises():
+        check_triangle_state(wrong[0], wrong[1], wrong[2])
+    # Corners that disagree about the ramp are refused, whichever of the
+    # two behind the first is the odd one out.
+    var second = toon_quad(Vector3(0, 0, 1), Vector3(0, 0, 1), ramp)
+    second[1] = toon_corner(8, 0, Vector3(0, 0, 1))
+    with assert_raises():
+        check_triangle_state(second[0], second[1], second[2])
+    var third = toon_quad(Vector3(0, 0, 1), Vector3(0, 0, 1), ramp)
+    third[2] = toon_corner(8, 8, Vector3(0, 0, 1))
+    with assert_raises():
+        check_triangle_state(third[0], third[1], third[2])
+    # An id nothing can hold is refused.
+    var bad = toon_quad(Vector3(0, 0, 1), Vector3(0, 0, 1), TextureId(-9))
+    with assert_raises():
+        check_triangle_state(bad[0], bad[1], bad[2])
+    with assert_raises():
+        rasterize_all(bad, target, SHADE_TEXTURE, textures)
+    # A ramp that is not stored as data is refused before the first
+    # fragment, on every worker count.
+    var colored = TextureStore()
+    var wrong_space = colored.add(a_ramp(tones, SRGB, IGNORED))
+    var stepped = toon_quad(Vector3(0, 0, 1), Vector3(0, 0, 1), wrong_space)
+    for workers in [1, 4]:
+        with assert_raises():
+            rasterize_all(
+                stepped, target, SHADE_TEXTURE, colored, workers=workers
+            )
+    # The uv debug view shades nothing and reads no ramp, so it draws.
+    rasterize_all(stepped, target, SHADE_UV, colored)
 
 
 def main() raises:
