@@ -1,10 +1,10 @@
 # The CUDA teardown hang
 
-A `DeviceContext` destroyed before its buffers hangs the next context's first allocation, under MAX 26.5.0 on CUDA. `GpuRenderer.__deinit__` releases its buffers first, and the GPU suite runs under a time budget. A reproducer is in `docs/max-gpu-teardown-issue/repro.mojo`.
+**Fixed upstream in MAX 26.6.0.** A `DeviceContext` destroyed before its buffers used to hang the next context's first allocation on CUDA. The reproducer in `docs/max-gpu-teardown-issue/repro.mojo` now exits zero both ways round. The page stays because the defenses it describes stay: they are the right order to release in whatever the runtime tolerates.
 
 ## Affects
 
-MAX 26.5.0 with Mojo 1.0.0 (`ed45d567`), on WSL 2 Ubuntu over an NVIDIA TITAN RTX with driver 591.86. Not reproduced on macOS with Metal.
+MAX 26.5.0 with Mojo 1.0.0 (`ed45d567`), on WSL 2 Ubuntu over an NVIDIA TITAN RTX with driver 591.86. Not reproduced on macOS with Metal. Not reproduced on MAX 26.6.0 with Mojo 1.1.0 (`8189361e`), on the same machine.
 
 ## What happens
 
@@ -44,7 +44,7 @@ With the order fixed, the suite got forty-one tests further and hung again, afte
 
 ```bash
 timeout 45 .venv/bin/mojo run -I . docs/max-gpu-teardown-issue/repro.mojo buffers_first   # exit 0
-timeout 45 .venv/bin/mojo run -I . docs/max-gpu-teardown-issue/repro.mojo context_first   # exit 124
+timeout 45 .venv/bin/mojo run -I . docs/max-gpu-teardown-issue/repro.mojo context_first   # exit 124 on 26.5.0, 0 on 26.6.0
 ```
 
 `docs/` is outside every Makefile glob. The reproducer is never built by `make check`.

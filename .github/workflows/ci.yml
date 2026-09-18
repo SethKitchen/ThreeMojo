@@ -40,7 +40,7 @@ jobs:
       - name: Install the pinned Mojo toolchain
         run: |
           uv venv --prompt ThreeMojo
-          uv pip install "mojo==1.0.0"
+          uv pip install "mojo==1.1.0"
           .venv/bin/mojo --version
 
       # Formatting, linting, the CPU suites, and the compile-fail cases. No

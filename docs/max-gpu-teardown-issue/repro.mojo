@@ -11,9 +11,10 @@ docs/wiki/The-CUDA-teardown-hang.md.
     mojo run -I . docs/max-gpu-teardown-issue/repro.mojo buffers_first
     mojo run -I . docs/max-gpu-teardown-issue/repro.mojo context_first
 
-The first exits normally. The second never returns from the *second*
+The first exits normally. The second never returned from the *second*
 context's first allocation on MAX 26.5.0 under CUDA on WSL 2, so run it under
-`timeout`.
+`timeout`. MAX 26.6.0 fixed that, and both now exit zero; the reproducer
+stays so the fix can be checked again on a new toolchain.
 """
 
 from max.gpu.host import DeviceContext

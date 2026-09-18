@@ -297,9 +297,16 @@ $(FMT_STAMP):
 	@$(call stamp,fmt)
 
 # Instrument the library, run the suite against the instrumented copies, then
-# compare what ran against what could have run. `-I $(COV_DIR)` comes first so
-# library imports resolve to the instrumented copies; `-I .` backfills the rest
-# (the first -I wins). Probe records go to stderr, keeping stdout untouched.
+# compare what ran against what could have run. Probe records go to stderr,
+# keeping stdout untouched.
+#
+# **The whole run happens inside $(COV_DIR).** Mojo 1.1 resolves a module
+# beside the file being compiled before it looks at any `-I` path, so a suite
+# run from the repo root imports the *real* library however the search path
+# is ordered: `-I $(COV_DIR) -I .` measured nothing at all and reported a
+# clean zero. Copying the suites and the probe runtime into the build tree
+# makes the instrumented copies the ones beside them, which is the only
+# arrangement the new rule can resolve the way this needs.
 coverage: $(COV_STAMP)
 $(COV_STAMP):
 	@rm -rf $(COV_DIR)
@@ -313,6 +320,16 @@ $(COV_STAMP):
 	@for f in $(COVERAGE_EXCLUDE); do \
 	  mkdir -p "$(COV_DIR)/$$(dirname $$f)"; cp "$$f" "$(COV_DIR)/$$f"; \
 	done
+	@# The coverage tool itself, and the suites that drive it, both copied
+	@# in so that every import a suite makes resolves beside it. The whole
+	@# package rather than the probe runtime alone: the tool's own suites
+	@# test the instrumenter, the scanner and the report. See the note
+	@# above. These copies are never instrumented, so measuring the tool
+	@# with itself is still not attempted.
+	@mkdir -p $(COV_DIR)/coverage
+	@cp coverage/*.mojo $(COV_DIR)/coverage/
+	@mkdir -p $(COV_DIR)/tests
+	@cp $(COVERAGE_TESTS) $(COV_DIR)/tests/
 	@mkdir -p $(COV_DIR)/hits
 	@# One file per suite rather than a shared append: probe records must not
 	@# interleave mid-line, and MC-DC needs each decision's records in order.
@@ -320,7 +337,7 @@ $(COV_STAMP):
 	  | perl -e 'alarm shift; exec @ARGV' $(COV_BUDGET) \
 	      xargs -P $(JOBS) -I {} \
 	      sh -c 'name=$$(basename "$$1" .mojo); \
-	             $(MOJO) run -I $(COV_DIR) $(MOJOFLAGS) "$$1" \
+	             $(MOJO) run -I $(COV_DIR) "$(COV_DIR)/tests/$$name.mojo" \
 	               2> $(COV_DIR)/hits/$$name.txt > /dev/null' _ {} \
 	  || { rc=$$?; \
 	       if [ $$rc -eq 142 ]; then \
@@ -331,7 +348,8 @@ $(COV_STAMP):
 	              "apart."; \
 	       else \
 	         echo "A suite failed under instrumentation (exit $$rc); coverage" \
-	              "not measured. Run it with -I $(COV_DIR) to see why."; \
+	              "not measured. Run its copy under $(COV_DIR)/tests to see" \
+	              "why."; \
 	       fi; exit 1; }
 	@cat $(COV_DIR)/hits/*.txt > $(COV_DIR)/hits.txt
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo \

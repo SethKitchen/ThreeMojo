@@ -27,7 +27,7 @@ xcode-select --install
 git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
 uv venv --prompt ThreeMojo
-uv pip install "mojo==1.0.0"
+uv pip install "mojo==1.1.0"
 ```
 
 ## Linux
@@ -47,7 +47,7 @@ On Fedora, use `sudo dnf install -y make gcc git curl`. On Arch, use `sudo pacma
 git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
 uv venv --prompt ThreeMojo
-uv pip install "mojo==1.0.0"
+uv pip install "mojo==1.1.0"
 ```
 
 ## Windows
@@ -67,13 +67,13 @@ Clone into the Linux filesystem, for example `~/ThreeMojo`. Do not clone into `/
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install "mojo==1.0.0"
+.venv/bin/pip install "mojo==1.1.0"
 ```
 
 ## Verify
 
 ```bash
-.venv/bin/mojo --version    # Mojo 1.0.0 (ed45d567)
+.venv/bin/mojo --version    # Mojo 1.1.0 (8189361e)
 make check-cpu
 ```
 
@@ -83,11 +83,13 @@ make check-cpu
 
 | Component | Version | Needed for |
 |---|---|---|
-| Mojo | `1.0.0` (`ed45d567`) | Everything |
-| MAX | `26.5.0` | `render/gpu.mojo` and its tests only |
+| Mojo | `1.1.0` (`8189361e`) | Everything |
+| MAX | `26.6.0` | `render/gpu.mojo` and its tests only |
 | Metal toolchain | Xcode component | GPU kernels on macOS |
 
 The toolchain version is part of the build cache key. An upgrade invalidates every cached result.
+
+The pin is exact, not a floor. Mojo 1.1 moved the async task runtime behind an underscore, and moved `gpu` out of `std` into `max`. So one source cannot serve both 1.0 and 1.1: 1.0 has no `std.runtime._asyncrt`, and 1.1 has no `std.runtime.asyncrt`. See [Rasterization](Rasterization#threads) and [GPU backend](GPU-backend).
 
 ## Editor setup
 

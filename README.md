@@ -6,7 +6,7 @@ SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
 # ThreeMojo
 
 [![license](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-orange)](LICENSE)
-[![mojo](https://img.shields.io/badge/Mojo-1.0.0-fe5c1c)](https://mojolang.org)
+[![mojo](https://img.shields.io/badge/Mojo-1.1.0-fe5c1c)](https://mojolang.org)
 [![coverage](https://img.shields.io/badge/coverage-100%25%20line%20%7C%20branch%20%7C%20condition%20%7C%20MC%2FDC-brightgreen)](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool)
 
 ![A brick-textured cube, lit by a lamp, with the camera circling it](out/photo.png)
@@ -25,8 +25,8 @@ Supported platforms: macOS on Apple Silicon, Linux on x86-64 or aarch64, and Win
 git clone https://github.com/SethKitchen/ThreeMojo.git
 cd ThreeMojo
 uv venv --prompt ThreeMojo
-uv pip install "mojo==1.0.0"
-uv pip install "max==26.5.0"      # optional: the GPU backend
+uv pip install "mojo==1.1.0"
+uv pip install "max==26.6.0"      # optional: the GPU backend
 ```
 
 [How to install](https://github.com/SethKitchen/ThreeMojo/wiki/How-to-install) covers WSL 2, the Metal toolchain and the editor setup.

@@ -1,16 +1,24 @@
 # Coverage tool
 
-`coverage/`. A source-to-source instrumenter and a report that measure line, branch, condition and MC/DC coverage. Mojo 1.0 ships no coverage tool, and the toolchain has no `llvm-cov` to build one on.
+`coverage/`. A source-to-source instrumenter and a report that measure line, branch, condition and MC/DC coverage. Mojo ships no coverage tool, and the toolchain has no `llvm-cov` to build one on.
 
 This is original work with no three.js lineage.
 
 ## How it works
 
 1. `build_cli.mojo` rewrites every covered module into `coverage/build/`, with a probe before each statement and around each decision. It writes a manifest of everything the probes can report.
-2. The test suites run with `-I coverage/build -I .`, so imports resolve to the instrumented copies. Each probe writes one record to `stderr`. `stdout` is unchanged.
+2. The coverage tool and the suites are copied into `coverage/build/` as well, and the suites run from there. Each probe writes one record to `stderr`. `stdout` is unchanged.
 3. `report_cli.mojo` groups the records, matches them to the manifest, and prints the table. It exits with an error when anything is uncovered.
 
 `make coverage` runs all three. See [How to measure coverage](How-to-measure-coverage).
+
+### Why the run happens inside the build tree
+
+Mojo 1.1 resolves a module beside the file being compiled before it looks at any `-I` path. A suite run from the repository root therefore imports the *real* library, whatever the search path says.
+
+The suites used to run with `-I coverage/build -I .` and the first `-I` decided. Under 1.1 that arrangement measured nothing at all and reported a clean zero, which is the worst way for a coverage tool to fail. Copying the suites in makes the instrumented copies the ones beside them.
+
+The copies of the tool itself are never instrumented. Measuring the tool with the tool is still not attempted.
 
 ## Modules
 

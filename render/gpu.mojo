@@ -101,7 +101,7 @@ from render.texture import (
     mix_color,
     wrap_index,
 )
-from std.gpu import global_idx
+from max.gpu import global_idx
 from std.math import ceildiv, floor, inf, log2, sqrt
 from std.memory import unsafe_memcpy
 from std.sys import has_accelerator

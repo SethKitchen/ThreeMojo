@@ -17,6 +17,26 @@ ThreeMojo ports three.js to Mojo. Read the [README](README.md) first and [CONTRI
 - The CPU and GPU rasterizers share their arithmetic and agree in the parity tests.
 - Every public symbol has a docstring with `Args`, `Returns` and `Raises`.
 
+## Toolchain
+
+The pin is exact: Mojo `1.1.0` (`8189361e`), and MAX `26.6.0` for the GPU
+half. It is a pin and not a floor, because one source cannot serve both 1.0
+and 1.1. Three things moved, and all three are easy to write back the old
+way by habit:
+
+- `TaskGroup` is `from std.runtime._asyncrt import TaskGroup`. The public
+  `std.runtime` keeps only `parallelism_level` and `initialize_runtime`, and
+  nothing public in `std` runs work on a thread pool. This is the one place
+  the project reaches past a leading underscore. 1.0 has no `_asyncrt`; 1.1
+  has no `asyncrt`.
+- `global_idx` is `from max.gpu import global_idx`. Much of `std.gpu` moved
+  into the `max` package, and the compiler says so when it cannot find it.
+- A module beside the file being compiled now beats any `-I` path. That is
+  why `make coverage` copies the suites and the coverage tool into
+  `coverage/build/` and runs them from there. Adding `-I` in front of the
+  instrumented tree does *not* work any more: it measured nothing and
+  reported a clean zero. See [Coverage tool](docs/wiki/Coverage-tool.md).
+
 ## Process
 
 - Every feature has a GitHub issue and a line in the README checklist. Tick the box, link the wiki page, and close the issue in the same change.

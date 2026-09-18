@@ -46,7 +46,15 @@ from lights.lighting import PERSPECTIVE_VIEW, Lighting, toward_eye_at
 from core.fog import FogView, fog_mix
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, isfinite, log2, max, min, sqrt
-from std.runtime.asyncrt import TaskGroup
+
+# `TaskGroup` moved behind an underscore in Mojo 1.1: `std.runtime` keeps
+# only `parallelism_level` and `initialize_runtime` in public view, and
+# nothing public in `std` runs work on the thread pool -- `std.algorithm.map`
+# is sequential. So the private module is the only way to keep the bands
+# parallel, and this import is the one place the project reaches past a
+# leading underscore. It pins the toolchain to 1.1: 1.0 has no `_asyncrt`
+# and 1.1 has no `asyncrt`, so one source cannot serve both.
+from std.runtime._asyncrt import TaskGroup
 
 
 def edge(a: Vector2, b: Vector2, p: Vector2) -> Float32:

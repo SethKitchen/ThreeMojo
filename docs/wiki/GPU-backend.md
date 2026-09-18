@@ -6,7 +6,7 @@ three.js has no equivalent. Mojo's GPU support is compute only, so this is a com
 
 ## Requirements
 
-MAX 26.5.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-GPU-backend). `render/gpu.mojo` is the only module that imports MAX.
+MAX 26.6.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-GPU-backend). `render/gpu.mojo` is the only module that imports MAX.
 
 ## Functions
 

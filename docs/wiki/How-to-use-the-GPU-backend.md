@@ -5,7 +5,7 @@ The GPU backend runs the rasterizer as a kernel with one thread per pixel. It ne
 ## Install MAX
 
 ```bash
-uv pip install "max==26.5.0"
+uv pip install "max==26.6.0"
 ```
 
 On macOS, also install Apple's Metal toolchain. Xcode does not install it by default:

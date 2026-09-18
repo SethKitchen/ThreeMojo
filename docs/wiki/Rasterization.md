@@ -114,6 +114,12 @@ A `MATCAP` triangle is unlit. Its light comes from an image, looked up by which 
 
 The direction toward the camera is measured from where the camera stands, under either projection. The image is read at its full-size level and never down a mip chain. See [Materials](Materials#matcap).
 
+## Threads
+
+`rasterize_all` splits the image into horizontal bands and runs one task per band. A band owns its rows outright, so no two threads touch the same pixel and the depth test needs no atomics.
+
+The tasks come from `TaskGroup`. Mojo 1.1 moved that behind an underscore. `std.runtime` keeps only `parallelism_level` and `initialize_runtime` in public view, and nothing public in `std` runs work on a thread pool. So `from std.runtime._asyncrt import TaskGroup` is the one place this project reaches past a leading underscore, and it is what pins the toolchain to an exact version. Mojo 1.0 has no `_asyncrt` and 1.1 has no `asyncrt`, so one source cannot serve both.
+
 ## Transparency
 
 `rasterize_shaded` blends a `BLEND` fragment over what is there, in premultiplied linear light. The caller owns the draw order. `Renderer.prepare` sorts.

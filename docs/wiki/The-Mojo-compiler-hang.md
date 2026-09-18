@@ -4,7 +4,7 @@ A `Bool` variable that is set to `True` inside a nested `for` loop and read afte
 
 ## Affects
 
-Mojo 1.0.0 (`ed45d567`), installed with `uv pip install mojo`, on macOS 25.6 with an Apple M4 Max. Not yet checked on other platforms.
+Mojo 1.0.0 (`ed45d567`), installed with `uv pip install mojo`, on macOS 25.6 with an Apple M4 Max. Not yet checked on other platforms, and not re-checked on Mojo 1.1.0.
 
 ## What happens
 
