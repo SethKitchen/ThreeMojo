@@ -1899,8 +1899,8 @@ struct GpuRenderer(Movable):
     # back whatever the allocation happened to contain.
     var drawn: Bool
     # Every device buffer is declared before the context that owns it, and
-    # `__del__` releases them in that order. The order is load-bearing; see
-    # `__del__` for the hang it prevents.
+    # `__deinit__` releases them in that order. The order is load-bearing;
+    # see `__deinit__` for the hang it prevents.
     var pixels: DeviceBuffer[DType.uint8]
     var depth: DeviceBuffer[DType.float32]
     var corners: DeviceBuffer[DType.float32]
@@ -1937,7 +1937,7 @@ struct GpuRenderer(Movable):
     # crosses as one white texel so the kernel never reads a zero width, so
     # a gradient map of no tones would step nowhere; refused here instead.
     var has_texels: List[Bool]
-    # Declared last so that it is released last. See `__del__`.
+    # Declared last so that it is released last. See `__deinit__`.
     var context: DeviceContext
 
     def __deinit__(deinit self):

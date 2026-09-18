@@ -46,7 +46,7 @@ def test_statements_in_a_function_are_executable() raises:
 
 
 def test_def_header_and_decorator_are_skipped() raises:
-    var source = String("@always_inline\ndef f():\n    return 1\n")
+    var source = String("@inline(.always)\ndef f():\n    return 1\n")
     assert_equal(executable_lines(source), [3])
 
 

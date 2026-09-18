@@ -433,7 +433,7 @@ def test_a_renderer_can_be_created_after_another_was_destroyed() raises:
         return
     # `render` builds a GpuRenderer, uses it and lets it die. Under CUDA on
     # WSL 2 the second one hung in its constructor for as long as the first
-    # released its context before its buffers -- see GpuRenderer.__del__.
+    # released its context before its buffers -- see GpuRenderer.__deinit__.
     # The Makefile's budget turns that hang into a failure; this names it.
     var triangle = Triangle(Vector2(2, 14), Vector2(8, 2), Vector2(14, 14))
     var first = render(triangle, 16, 16, BACKGROUND, FOREGROUND)

@@ -20,20 +20,20 @@ comptime LINE_PREFIX = "COVLINE:"
 comptime BRANCH_PREFIX = "COVBRANCH:"
 
 
-@no_inline
+@inline(.never)
 def hit(id: StaticString):
     """Record that the statement identified by `id` executed.
 
     Takes a `StaticString` so a call site passes a pointer to a literal and
     allocates nothing per probe. (This was once suspected of causing a
     compile-time hang; it was not -- see docs/mojo-compiler-issue -- but it
-    is the cheaper signature regardless, and `@no_inline` keeps the print
-    machinery compiled once here rather than at every call site.)
+    is the cheaper signature regardless, and `@inline(.never)` keeps the
+    print machinery compiled once here rather than at every call site.)
     """
     print(LINE_PREFIX, id, sep="", file=stderr)
 
 
-@no_inline
+@inline(.never)
 def branch(id: StaticString, value: Bool) -> Bool:
     """Record which way the decision identified by `id` went, and pass it on.
 

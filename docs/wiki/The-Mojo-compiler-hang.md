@@ -6,6 +6,8 @@ A `Bool` variable that is set to `True` inside a nested `for` loop and read afte
 
 Mojo 1.0.0 (`ed45d567`), installed with `uv pip install mojo`, on macOS 25.6 with an Apple M4 Max. Not yet checked on other platforms, and not re-checked on Mojo 1.1.0.
 
+The two reproducers keep the spelling they were written in, `@no_inline` included. They are evidence of what one toolchain did, so modernizing them would make them evidence of something else. `coverage/runtime.mojo`, which is live code, uses the current `@inline(.never)`.
+
 ## What happens
 
 Type-checking is unaffected. `mojo doc` completes in under a second on the hanging file. Codegen is what hangs.
