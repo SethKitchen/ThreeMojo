@@ -8,6 +8,8 @@ three.js: `Vector2`, `Vector3`, `Vector4`, `Matrix3`, `Matrix4`, `Matrix4.makePe
 
 `Vector2(x, y)` and `Vector3(x, y, z)` hold `Float32` components. Both are value types. Assignment copies.
 
+`Vector2` has the same members in two dimensions, plus `cross(other) -> Float32`, which is the one component a cross product has in a plane. It is positive when `other` lies to the left of `self`. The curves asked for them; see [Curves and paths](Curves).
+
 | Vector3 member | Meaning |
 |---|---|
 | `dot(other) -> Float32` | The dot product. |

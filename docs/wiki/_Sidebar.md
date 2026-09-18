@@ -19,6 +19,7 @@
 - [Geometry](Geometry)
 - [Meshes and assets](Meshes-and-assets)
 - [Raycasting](Raycasting)
+- [Curves and paths](Curves)
 - [Materials](Materials)
 - [Lights](Lights)
 - [Fog](Fog)
