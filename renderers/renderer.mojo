@@ -99,6 +99,8 @@ from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.instanced_mesh import check_placing
+from objects.skeleton import blend_bones
+from objects.skinned_mesh import BONES_PER_VERTEX, SKIN_INDEX, SKIN_WEIGHT
 from materials.material import (
     BACK_SIDE,
     DOUBLE_SIDE,
@@ -131,6 +133,68 @@ from render.rasterizer import (
 from renderers.clip import ClipVertex, clip_depth
 from std.math import max
 from std.sys import num_logical_cores
+
+
+def _carriers(
+    geometry: BufferGeometry,
+    skins: List[_Skin],
+    skin: Int,
+    vertex_count: Int,
+) raises -> List[Matrix4]:
+    """Return one matrix per vertex, carrying it from its own space to
+    where the bones have taken it.
+
+    three.js's `skinning_vertex` and `skinnormal_vertex` share a blend and
+    so do these: the sandwich `bind_inverse * blend * bind` is a linear
+    map, so the same matrix moves the position and turns the normal.
+
+    Args:
+        geometry: The geometry being drawn; it must carry `skinIndex` and
+            `skinWeight`.
+        skins: The frame's posed skeletons.
+        skin: Which of them carries this draw, or minus one for none.
+        vertex_count: How many vertices the geometry has.
+
+    Returns:
+        One matrix per vertex, or an empty list when the draw is not
+        skinned.
+
+    Raises:
+        Error: If the geometry has no skin attributes, if either is not
+            four numbers a vertex or does not cover every vertex, or if a
+            vertex names a bone the skeleton does not have or carries
+            weights that do not sum to one.
+    """
+    var out = List[Matrix4]()
+    if skin < 0:
+        return out^
+    if not geometry.has_attribute(String(SKIN_INDEX)) or not (
+        geometry.has_attribute(String(SKIN_WEIGHT))
+    ):
+        raise Error("A skinned mesh needs skinIndex and skinWeight")
+    ref bones = geometry.attribute_view(String(SKIN_INDEX))
+    ref weights = geometry.attribute_view(String(SKIN_WEIGHT))
+    if (
+        bones.item_size != BONES_PER_VERTEX
+        or weights.item_size != BONES_PER_VERTEX
+    ):
+        raise Error("A skin attribute holds four numbers a vertex")
+    if bones.count() != vertex_count or weights.count() != vertex_count:
+        raise Error("A skin attribute must cover every vertex")
+    for vertex in range(vertex_count):  # pragma: no branch
+        var named = List[Int]()
+        var shares = List[Float32]()
+        for slot in range(BONES_PER_VERTEX):  # pragma: no branch
+            named.append(Int(bones.component(vertex, slot)))
+            shares.append(weights.component(vertex, slot))
+        var blended = blend_bones(skins[skin].palette, named, shares)
+        # Into the bones' space, through them, and back out: three.js's
+        # `bindMatrixInverse * skinMatrix * bindMatrix`.
+        var carry = Matrix4(copy=skins[skin].bind_inverse)
+        carry.multiply(blended)
+        carry.multiply(skins[skin].bind)
+        out.append(carry^)
+    return out^
 
 
 def _morph_offset(
@@ -377,6 +441,41 @@ def _in_view(
     return frustum.intersects_sphere(bound)
 
 
+struct _Skin(Movable):
+    """One skinned mesh's bones, as the vertex loop needs them.
+
+    The palette is `Skeleton.pose`: one matrix per bone saying how far it
+    has moved since the bind. The two bind matrices carry a vertex into the
+    space the bones work in and back out again; see
+    `objects.skinned_mesh`.
+
+    It is a per-frame thing and not part of a `_Draw`, because a draw is
+    copied into a sorted list and a palette is a list of its own. Draws
+    name theirs by index instead, which keeps a draw four small values.
+    """
+
+    var palette: List[Matrix4]
+    var bind: Matrix4
+    var bind_inverse: Matrix4
+
+    def __init__(
+        out self,
+        var palette: List[Matrix4],
+        bind: Matrix4,
+        bind_inverse: Matrix4,
+    ):
+        """Hold one mesh's posed bones and its bind matrices.
+
+        Args:
+            palette: One matrix per bone, from `Skeleton.pose`.
+            bind: Where the mesh stood when it was bound.
+            bind_inverse: The inverse of that.
+        """
+        self.palette = palette^
+        self.bind = bind
+        self.bind_inverse = bind_inverse
+
+
 @fieldwise_init
 struct _Draw(ImplicitlyCopyable):
     """One geometry drawn with one material at one world transform.
@@ -394,6 +493,9 @@ struct _Draw(ImplicitlyCopyable):
     # A mesh's own; all zero for an instance, a batch member or an LOD
     # level, none of which three.js morphs either.
     var morph_influences: SIMD[DType.float32, MAX_MORPH_TARGETS]
+    # Which of the frame's skins carries this draw, or minus one when
+    # nothing does. Only a skinned mesh has one.
+    var skin: Int
 
 
 def _gather(
@@ -416,6 +518,7 @@ def _gather(
     morph_influences: SIMD[DType.float32, MAX_MORPH_TARGETS] = SIMD[
         DType.float32, MAX_MORPH_TARGETS
     ](0),
+    skin: Int = -1,
 ) raises:
     """Add the draws of one scene object to `draws`, each with its sort
     key alongside, unless the camera leaves it out.
@@ -461,6 +564,8 @@ def _gather(
         known: Which entries of `bounds` have been filled in.
         morph_influences: How much of each morph target the object wears.
             A mesh's own, and all zero for everything else.
+        skin: Which of the frame's skins carries the object, or minus one.
+            Only a skinned mesh has one.
 
     Raises:
         Error: If the node, a geometry or the material is not there, a
@@ -494,7 +599,7 @@ def _gather(
         )
         clear.append(blends)
         draws.append(
-            _Draw(geometries[index], material, world^, morph_influences)
+            _Draw(geometries[index], material, world^, morph_influences, skin)
         )
 
 
@@ -506,6 +611,7 @@ def _draws(
     visible: Layers,
     frustum: Frustum,
     slack: Float32,
+    mut skins: List[_Skin],
 ) raises -> List[_Draw]:
     """Return what the camera draws, in the order to draw it: opaque
     draws nearest first, then the translucent ones furthest first.
@@ -554,6 +660,8 @@ def _draws(
             lies wholly outside it is left out, unless its object opted out.
         slack: How far past a plane a bound may lie and still be drawn;
             see `CULL_SLACK`.
+        skins: The frame's posed skeletons; one is appended per skinned
+            mesh, and the draws name them by index.
 
     Returns:
         The draws the camera makes, in the order to make them.
@@ -599,6 +707,41 @@ def _draws(
             bounds,
             known,
             mesh.morph_influences,
+        )
+    for index in range(len(scene.skinned_meshes)):
+        ref skinned = scene.skinned_meshes[index]
+        # The bones' world matrices, then how far each has moved since the
+        # bind. Once per mesh per frame, whatever the vertex count.
+        var placed = List[Matrix4]()
+        for bone in range(skinned.bone_count()):  # pragma: no branch
+            placed.append(scene.world_matrix(skinned.skeleton.node(bone)))
+        skins.append(
+            _Skin(
+                skinned.skeleton.pose(placed),
+                skinned.bind_matrix,
+                skinned.bind_inverse,
+            )
+        )
+        var skin_geometry: List[GeometryId] = [skinned.geometry]
+        _gather(
+            draws,
+            depths,
+            clear,
+            scene,
+            assets,
+            skinned.node,
+            skinned.material,
+            skin_geometry,
+            one,
+            skinned.frustum_culled,
+            view,
+            visible,
+            frustum,
+            slack,
+            bounds,
+            known,
+            skinned.morph_influences,
+            len(skins) - 1,
         )
     for index in range(len(scene.instanced_meshes)):
         ref group = scene.instanced_meshes[index]
@@ -1105,6 +1248,7 @@ struct Renderer(Movable):
         # Worked out once, not once per draw, and already without what
         # the camera does not draw: every mesh, every instance and every
         # LOD's shown level, as one list.
+        var skins = List[_Skin]()
         var draws = _draws(
             scene,
             assets,
@@ -1113,6 +1257,7 @@ struct Renderer(Movable):
             camera.visible_layers(),
             frustum,
             far * CULL_SLACK,
+            skins,
         )
         for slot in range(len(draws)):
             var world = draws[slot].world
@@ -1242,6 +1387,13 @@ struct Renderer(Movable):
             # for everything that is not a morphed mesh, which is the only
             # cost an unmorphed scene pays for any of this.
             var targets = geometry.morph_count()
+            # A skinned draw works out one matrix per vertex before the
+            # loops below, because the position and the normal both want
+            # it and three.js blends it once for the same reason.
+            var carriers = _carriers(
+                geometry, skins, draws[slot].skin, vertex_count
+            )
+            var carried = len(carriers) > 0
             for vertex in range(vertex_count):
                 var base = positions.vector3(vertex)
                 var local = base
@@ -1252,6 +1404,8 @@ struct Renderer(Movable):
                         draws[slot].morph_influences[target],
                         geometry.morph_relative,
                     )
+                if carried:
+                    local = carriers[vertex].transform_point(local)
                 var point = world.transform_point(local)
                 world_points.append(point)
                 view_points.append(view.transform_point(point))
@@ -1316,6 +1470,8 @@ struct Renderer(Movable):
                             draws[slot].morph_influences[target],
                             geometry.morph_relative,
                         )
+                    if carried:
+                        facing = carriers[vertex].transform_direction(facing)
                     # transform_direction ignores translation, which is what a
                     # normal wants: it points somewhere, it is not somewhere.
                     var direction = to_normal.transform_direction(facing)

@@ -89,7 +89,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] Points [#27](https://github.com/SethKitchen/ThreeMojo/issues/27)
 - [ ] Sprite [#28](https://github.com/SethKitchen/ThreeMojo/issues/28)
 - [x] [InstancedMesh and BatchedMesh](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#instancedmesh): one geometry, or one geometry per instance, at many transforms under one node, culled instance by instance [#29](https://github.com/SethKitchen/ThreeMojo/issues/29)
-- [ ] SkinnedMesh, Bone and Skeleton [#30](https://github.com/SethKitchen/ThreeMojo/issues/30)
+- [x] [SkinnedMesh, Bone and Skeleton](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning): bones that are scene nodes, and a skeleton saying how far each has moved since the bind [#30](https://github.com/SethKitchen/ThreeMojo/issues/30)
 - [x] [LOD](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#lod): one of several geometries at a node, picked by the camera's distance each frame [#31](https://github.com/SethKitchen/ThreeMojo/issues/31)
 
 ### Materials
@@ -164,7 +164,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 
 - [x] [AnimationMixer, AnimationClip and KeyframeTrack](https://github.com/SethKitchen/ThreeMojo/wiki/Animation): keyframes on a node's position, scale and rotation, blended by weight across the actions playing [#88](https://github.com/SethKitchen/ThreeMojo/issues/88)
 - [x] [Morph targets](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#morph-targets): a second set of positions per geometry and a weight per mesh, blended into the vertex before it is projected [#89](https://github.com/SethKitchen/ThreeMojo/issues/89)
-- [ ] Skinning [#90](https://github.com/SethKitchen/ThreeMojo/issues/90)
+- [x] [Skinning](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning#the-arithmetic): four bones a vertex, blended into one matrix and applied in `prepare`, so both backends draw it without knowing [#90](https://github.com/SethKitchen/ThreeMojo/issues/90)
 
 ### Math and foundations
 

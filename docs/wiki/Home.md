@@ -34,6 +34,7 @@ Look something up.
 - [Raycasting](Raycasting)
 - [Curves and paths](Curves)
 - [Animation](Animation)
+- [Skinning](Skinning)
 - [Materials](Materials)
 - [Lights](Lights)
 - [Fog](Fog)

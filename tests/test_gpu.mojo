@@ -110,6 +110,9 @@ from render.texture import Alpha
 from geometries.plane import plane
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, POSITION
+from math.matrix4 import Matrix4
+from objects.skeleton import bind_skeleton
+from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from materials.material import (
     BASIC,
     DEPTH,
@@ -4835,6 +4838,118 @@ def test_both_backends_agree_on_a_morphed_mesh() raises:
     )
     var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
     assert_true(drawn > 200, "the morphed box barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- skinning, both backends ------------------------------------------------
+
+
+def test_both_backends_agree_on_a_posed_rig() raises:
+    # Skinning happens in `prepare`, which both backends read from, so
+    # neither rasterizer knows a bone exists. This says so: a two-bone rig
+    # with the far bone turned, drawn through both.
+    if skipped_for_lack_of_a_gpu("both backends agree on a posed rig"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+
+    # A tall box, split top and bottom between two bones so the turn bends
+    # it rather than carrying it whole.
+    var shape = cube(Length(1.2, METER))
+    ref points = shape.attribute_view(String(POSITION))
+    var named = List[Float32]()
+    var shares = List[Float32]()
+    for vertex in range(points.count()):
+        var point = points.vector3(vertex)
+        named.append(0)
+        named.append(1)
+        named.append(0)
+        named.append(0)
+        # Everything above the middle leans on the second bone.
+        var upper = Float32(0.5) + point.y / Float32(1.2)
+        if upper < 0:
+            upper = 0
+        if upper > 1:
+            upper = 1
+        shares.append(1 - upper)
+        shares.append(upper)
+        shares.append(0)
+        shares.append(0)
+    shape.set_attribute(String(SKIN_INDEX), BufferAttribute(named^, 4))
+    shape.set_attribute(String(SKIN_WEIGHT), BufferAttribute(shares^, 4))
+    var box = assets.geometries.add(shape^)
+
+    var scene = Scene()
+    var body = Object3D()
+    var body_node = scene.add(body^)
+    var root = Object3D()
+    root.set_position(0, -0.5, 0)
+    var root_node = scene.add(root^)
+    var tip = Object3D()
+    tip.set_position(0, 0.5, 0)
+    var tip_node = scene.add(tip^)
+    var lamp = Object3D()
+    lamp.set_position(2, 3, 4)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(60, 60, 60)))
+    scene.add_light(directional_light(Color(220, 220, 220), lamp_node))
+    scene.update()
+
+    var bones: List[NodeId] = [root_node, tip_node]
+    var placed = List[Matrix4]()
+    for index in range(len(bones)):
+        placed.append(scene.world_matrix(bones[index]))
+    var skeleton = bind_skeleton(bones, placed)
+    scene.add_skinned_mesh(
+        SkinnedMesh(
+            box,
+            assets.materials.add(Material(Color(200, 120, 60))),
+            body_node,
+            skeleton^,
+        )
+    )
+    # Bend the top bone over, which is what the upper vertices follow.
+    scene.node(tip_node).set_euler(
+        Angle(0.0, DEGREE), Angle(0.0, DEGREE), Angle(40.0, DEGREE)
+    )
+    scene.update()
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    # Off the axis, so several faces of the box show and the bend is
+    # visible rather than edge on.
+    camera.place(Vector3(1.8, 1.1, 2.4), Vector3(0, 0, 0))
+
+    var corners = renderer.prepare(scene, assets, camera)
+    assert_true(len(corners) > 0, "the rig prepared no triangles")
+    var lighting = Lighting(
+        scene, camera.visible_layers(), camera_position(scene, camera)
+    )
+    var view = FogView(scene.fog)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_LIT, assets.textures, lighting, 1, view
+    )
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_LIT,
+        assets.textures,
+        lighting,
+        view,
+        NO_TONE_MAPPING,
+        1.0,
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 300, "the rig barely drew anything")
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 

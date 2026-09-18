@@ -64,6 +64,7 @@ from math.vector3 import Vector3
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
 from objects.lod import Lod
 from objects.mesh import Mesh
+from objects.skinned_mesh import SkinnedMesh
 
 
 struct Scene(Movable):
@@ -90,6 +91,11 @@ struct Scene(Movable):
     var instanced_meshes: List[InstancedMesh]
     var batched_meshes: List[BatchedMesh]
     var lods: List[Lod]
+    # Meshes carried by bones rather than by their node alone. Their own
+    # list because a skinned mesh owns a skeleton and so is moved in
+    # rather than copied, exactly as an instanced mesh is. See
+    # `objects.skinned_mesh`.
+    var skinned_meshes: List[SkinnedMesh]
     # What veils the scene with distance, three.js's `scene.fog`. Public
     # and assignable, as the lights are: set it to the value `linear_fog`
     # or `exp2_fog` returns, and the renderer reads it every frame.
@@ -106,6 +112,7 @@ struct Scene(Movable):
         self.instanced_meshes = List[InstancedMesh]()
         self.batched_meshes = List[BatchedMesh]()
         self.lods = List[Lod]()
+        self.skinned_meshes = List[SkinnedMesh]()
         self.fog = no_fog()
         # An empty scene has nothing to recompute, so it starts current.
         self._stale = False
@@ -180,6 +187,28 @@ struct Scene(Movable):
         if lod.node.value >= len(self._nodes):
             raise Error("An LOD must name a node that is in the scene")
         self.lods.append(lod^)
+
+    def add_skinned_mesh(mut self, var mesh: SkinnedMesh) raises:
+        """Add a mesh carried by bones, three.js's
+        `scene.add(skinnedMesh)`.
+
+        Args:
+            mesh: The skinned mesh, consumed. Its node and every one of
+                its bones must already be in the scene; its geometry, its
+                material and its skin attributes are checked when it is
+                rendered.
+
+        Raises:
+            Error: If it names a node the scene does not have, or one of
+                its bones does.
+        """
+        if mesh.node.value >= len(self._nodes):
+            raise Error("A skinned mesh must name a node that is in the scene")
+        for index in range(mesh.bone_count()):  # pragma: no branch
+            var bone = mesh.skeleton.node(index)
+            if bone.value < 0 or bone.value >= len(self._nodes):
+                raise Error("A bone must name a node that is in the scene")
+        self.skinned_meshes.append(mesh^)
 
     def node(
         mut self, index: NodeId
