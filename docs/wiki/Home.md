@@ -32,6 +32,8 @@ Look something up.
 - [Geometry](Geometry)
 - [Meshes and assets](Meshes-and-assets)
 - [Raycasting](Raycasting)
+- [Curves and paths](Curves)
+- [Animation](Animation)
 - [Materials](Materials)
 - [Lights](Lights)
 - [Fog](Fog)

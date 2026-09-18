@@ -162,7 +162,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 
 ### Animation
 
-- [ ] AnimationMixer, AnimationClip and KeyframeTrack [#88](https://github.com/SethKitchen/ThreeMojo/issues/88)
+- [x] [AnimationMixer, AnimationClip and KeyframeTrack](https://github.com/SethKitchen/ThreeMojo/wiki/Animation): keyframes on a node's position, scale and rotation, blended by weight across the actions playing [#88](https://github.com/SethKitchen/ThreeMojo/issues/88)
 - [ ] Morph targets [#89](https://github.com/SethKitchen/ThreeMojo/issues/89)
 - [ ] Skinning [#90](https://github.com/SethKitchen/ThreeMojo/issues/90)
 
