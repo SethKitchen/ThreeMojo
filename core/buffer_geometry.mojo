@@ -30,11 +30,42 @@ will eventually want.
 The examples grew these arrays by hand before this module existed, and two of
 them had drifted into near-identical copies. That duplication is what a
 geometry type is for.
+
+## Morph targets
+
+A geometry can also carry *morph targets*: three.js's `morphAttributes`, a
+second, third and further set of positions for the same vertices. A mesh
+gives each one a weight, and the vertex it draws is the base vertex moved
+toward those targets by their weights. That is how a face smiles: one
+geometry, one target per expression, and a number per expression that says
+how much of it to use.
+
+The targets live here because they are vertex data, and the weights live on
+the `Mesh` because they are what changes. Two meshes can share one head and
+wear different expressions, which is the whole point and is the same
+argument that put `position` here and the transform on the node.
+
+`morph_relative` is three.js's `morphTargetsRelative`. False, the default,
+means a target holds the *finished* positions and the mesh moves from the
+base toward them. True means it holds the offsets to add. Exporters write
+both, so both are read.
+
+Normals may be morphed alongside positions, and either every target carries
+them or none does. three.js allows the same, and a geometry whose targets
+have no normals keeps the base normal -- which is what three.js's shader
+does when `morphAttributes.normal` is absent.
 """
 
 from core.buffer_attribute import BufferAttribute
 from math.bounds import Box3, Sphere
 from math.vector3 import Vector3
+
+# How many morph targets one geometry may carry. three.js's own ceiling,
+# `MAX_MORPH_TARGETS`, which comes from how many attribute slots a WebGL
+# program has. Nothing here is short of slots, but a mesh holds its weights
+# in a fixed row of eight so that it stays a handful of numbers rather than
+# a list, and the two numbers have to agree.
+comptime MAX_MORPH_TARGETS = 8
 
 # The attributes this port knows about, named as three.js names them.
 # `position` is the only one a geometry must have.
@@ -60,12 +91,128 @@ struct BufferGeometry(Movable):
     var names: List[String]
     var values: List[BufferAttribute]
     var index: List[Int]
+    # One further set of positions per morph target, each as long as
+    # `position`. See the module docstring.
+    var morph_positions: List[BufferAttribute]
+    # The matching normals, either one per target or none at all.
+    var morph_normals: List[BufferAttribute]
+    # Whether a target holds finished positions or offsets to add:
+    # three.js's `morphTargetsRelative`. Read only when there are targets,
+    # and either answer is a legitimate one, so nothing checks it.
+    var morph_relative: Bool
 
     def __init__(out self):
         """Create an empty geometry with no attributes and no index."""
         self.names = List[String]()
         self.values = List[BufferAttribute]()
         self.index = List[Int]()
+        self.morph_positions = List[BufferAttribute]()
+        self.morph_normals = List[BufferAttribute]()
+        self.morph_relative = False
+
+    def morph_count(self) -> Int:
+        """Return how many morph targets the geometry carries."""
+        return len(self.morph_positions)
+
+    def has_morph_normals(self) -> Bool:
+        """Return True if the morph targets carry normals as well as
+        positions."""
+        return len(self.morph_normals) > 0
+
+    def _check_morph(self, attribute: BufferAttribute) raises:
+        """Raise unless `attribute` can be a morph target of this geometry.
+
+        Raises:
+            Error: If the geometry has no positions, if the attribute is
+                not three numbers a vertex, if it does not describe the
+                same vertices the positions do, or if the geometry already
+                holds `MAX_MORPH_TARGETS` of them.
+        """
+        if not self.has_attribute(String(POSITION)):
+            raise Error("A morph target needs a geometry with positions")
+        if attribute.item_size != 3:
+            raise Error("A morph target holds three numbers a vertex")
+        if attribute.count() != self.attribute_view(String(POSITION)).count():
+            raise Error("A morph target must cover every vertex")
+        if len(self.morph_positions) >= MAX_MORPH_TARGETS:
+            raise Error("A geometry holds at most eight morph targets")
+
+    def add_morph_target(mut self, var positions: BufferAttribute) raises:
+        """Add one morph target's positions, with no normals.
+
+        The base normal is then used whatever the weights are, which is
+        what three.js's shader does when a target has no normals of its
+        own.
+
+        Args:
+            positions: Where every vertex goes at full weight, or how far
+                it moves when `morph_relative` is set.
+
+        Raises:
+            Error: If the target does not fit the geometry -- see
+                `_check_morph` -- or if the targets already added carry
+                normals, since either all of them do or none does.
+        """
+        self._check_morph(positions)
+        if len(self.morph_normals) > 0:
+            raise Error("Every morph target must carry normals, or none")
+        self.morph_positions.append(positions^)
+
+    def add_morph_target(
+        mut self, var positions: BufferAttribute, var normals: BufferAttribute
+    ) raises:
+        """Add one morph target's positions and normals.
+
+        Args:
+            positions: Where every vertex goes at full weight.
+            normals: Which way every vertex faces at full weight.
+
+        Raises:
+            Error: If either does not fit the geometry -- see
+                `_check_morph` -- or if the targets already added carry no
+                normals, since either all of them do or none does.
+        """
+        self._check_morph(positions)
+        self._check_morph(normals)
+        if len(self.morph_positions) != len(self.morph_normals):
+            raise Error("Every morph target must carry normals, or none")
+        self.morph_positions.append(positions^)
+        self.morph_normals.append(normals^)
+
+    def morph_position(self, target: Int, vertex: Int) raises -> Vector3:
+        """Return where one vertex goes in one morph target.
+
+        Args:
+            target: Which target, from zero.
+            vertex: Which vertex.
+
+        Returns:
+            The target's position for that vertex.
+
+        Raises:
+            Error: If there is no such target, or no such vertex.
+        """
+        if target < 0 or target >= len(self.morph_positions):
+            raise Error("No morph target has that index")
+        return self.morph_positions[target].vector3(vertex)
+
+    def morph_normal(self, target: Int, vertex: Int) raises -> Vector3:
+        """Return which way one vertex faces in one morph target.
+
+        Args:
+            target: Which target, from zero.
+            vertex: Which vertex.
+
+        Returns:
+            The target's normal for that vertex.
+
+        Raises:
+            Error: If the targets carry no normals, if there is no such
+                target, or no such vertex.
+        """
+        if target < 0 or target >= len(self.morph_normals):
+            raise Error("No morph target has that normal")
+        return self.morph_normals[target].vector3(vertex)
 
     def _slot(self, name: String) -> Int:
         """Return where `name` is stored, or -1 if it is not present."""

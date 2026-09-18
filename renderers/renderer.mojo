@@ -78,7 +78,14 @@ work; dropping one changes the image.
 """
 
 from cameras.camera import Camera
-from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
+from core.buffer_geometry import (
+    COLOR,
+    MAX_MORPH_TARGETS,
+    NORMAL,
+    POSITION,
+    UV,
+    BufferGeometry,
+)
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.fog import FogView
@@ -124,6 +131,28 @@ from render.rasterizer import (
 from renderers.clip import ClipVertex, clip_depth
 from std.math import max
 from std.sys import num_logical_cores
+
+
+def _morph_offset(
+    base: Vector3, target: Vector3, weight: Float32, relative: Bool
+) -> Vector3:
+    """Return how far one morph target moves a vertex at `weight`.
+
+    three.js's two lines of `morphtarget_vertex`, and the same pair for a
+    normal. A target that holds finished positions contributes the run from
+    the base to itself; one that holds offsets contributes itself.
+
+    It returns the offset rather than the moved point so that the caller
+    can add every target's offset to the *unmorphed* value. Moving the
+    point once per target instead measures each target from where the last
+    one left it, and two half-worn targets then land somewhere neither of
+    them names: half of a target that carries a vertex to two, followed by
+    half of one that carries it to two the other way, gave a half rather
+    than a one.
+    """
+    if relative:
+        return target * weight
+    return (target - base) * weight
 
 
 def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
@@ -361,6 +390,10 @@ struct _Draw(ImplicitlyCopyable):
     var geometry: GeometryId
     var material: MaterialId
     var world: Matrix4
+    # How much of each of the geometry's morph targets this draw wears.
+    # A mesh's own; all zero for an instance, a batch member or an LOD
+    # level, none of which three.js morphs either.
+    var morph_influences: SIMD[DType.float32, MAX_MORPH_TARGETS]
 
 
 def _gather(
@@ -380,6 +413,9 @@ def _gather(
     slack: Float32,
     mut bounds: List[Sphere],
     mut known: List[Bool],
+    morph_influences: SIMD[DType.float32, MAX_MORPH_TARGETS] = SIMD[
+        DType.float32, MAX_MORPH_TARGETS
+    ](0),
 ) raises:
     """Add the draws of one scene object to `draws`, each with its sort
     key alongside, unless the camera leaves it out.
@@ -423,6 +459,8 @@ def _gather(
             see `CULL_SLACK`.
         bounds: Each geometry's local bound, filled in as met.
         known: Which entries of `bounds` have been filled in.
+        morph_influences: How much of each morph target the object wears.
+            A mesh's own, and all zero for everything else.
 
     Raises:
         Error: If the node, a geometry or the material is not there, a
@@ -455,7 +493,9 @@ def _gather(
             ).z
         )
         clear.append(blends)
-        draws.append(_Draw(geometries[index], material, world^))
+        draws.append(
+            _Draw(geometries[index], material, world^, morph_influences)
+        )
 
 
 def _draws(
@@ -536,6 +576,11 @@ def _draws(
     for index in range(len(scene.meshes)):
         ref mesh = scene.meshes[index]
         var geometry: List[GeometryId] = [mesh.geometry]
+        # A mesh wearing a morph target is not where its geometry's bound
+        # says it is, so it is not measured against the frustum. The bound
+        # describes the face the mesh has stopped wearing. three.js culls
+        # it anyway and clips morphed meshes at the edge of the view for
+        # exactly this reason.
         _gather(
             draws,
             depths,
@@ -546,13 +591,14 @@ def _draws(
             mesh.material,
             geometry,
             one,
-            mesh.frustum_culled,
+            mesh.frustum_culled and not mesh.is_morphed(),
             view,
             visible,
             frustum,
             slack,
             bounds,
             known,
+            mesh.morph_influences,
         )
     for index in range(len(scene.instanced_meshes)):
         ref group = scene.instanced_meshes[index]
@@ -1191,8 +1237,22 @@ struct Renderer(Movable):
             # the point of the two accessors.
             ref positions = geometry.attribute_view(String(POSITION))
             var vertex_count = positions.count()
+            # How many of the geometry's morph targets this draw actually
+            # wears. Worked out once here rather than per vertex, and zero
+            # for everything that is not a morphed mesh, which is the only
+            # cost an unmorphed scene pays for any of this.
+            var targets = geometry.morph_count()
             for vertex in range(vertex_count):
-                var point = world.transform_point(positions.vector3(vertex))
+                var base = positions.vector3(vertex)
+                var local = base
+                for target in range(targets):
+                    local = local + _morph_offset(
+                        base,
+                        geometry.morph_position(target, vertex),
+                        draws[slot].morph_influences[target],
+                        geometry.morph_relative,
+                    )
+                var point = world.transform_point(local)
                 world_points.append(point)
                 view_points.append(view.transform_point(point))
 
@@ -1239,12 +1299,26 @@ struct Renderer(Movable):
             if smooth:
                 ref normals = geometry.attribute_view(String(NORMAL))
                 var to_normal = world.normal_matrix()
+                # Morphed only when the targets carry normals of their own.
+                # A geometry whose targets carry none keeps the base
+                # normal however far the positions move, which is what
+                # three.js's shader does without `morphAttributes.normal`.
+                var turned = targets
+                if not geometry.has_morph_normals():
+                    turned = 0
                 for vertex in range(vertex_count):
+                    var rest = normals.vector3(vertex)
+                    var facing = rest
+                    for target in range(turned):
+                        facing = facing + _morph_offset(
+                            rest,
+                            geometry.morph_normal(target, vertex),
+                            draws[slot].morph_influences[target],
+                            geometry.morph_relative,
+                        )
                     # transform_direction ignores translation, which is what a
                     # normal wants: it points somewhere, it is not somewhere.
-                    var direction = to_normal.transform_direction(
-                        normals.vector3(vertex)
-                    )
+                    var direction = to_normal.transform_direction(facing)
                     direction.normalize()
                     if kind == NORMALS:
                         direction = view.transform_direction(direction)

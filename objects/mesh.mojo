@@ -30,19 +30,38 @@ transposable and these three used to be exactly that; see `core.object3d`.
 The flag is three.js's `Object3D.frustumCulled`, and it lives here rather
 than on the node because here is what is drawn: a node is a transform, and
 a transform has no bounds to be out of view. It is on by default, as in
-three.js, and is turned off for a mesh whose geometry the bound does not
-describe -- none yet, since nothing here moves a vertex after the geometry
-is built -- or to prove the culling changes nothing, which is what the
-renderer's tests use it for.
+three.js, and is turned off to prove the culling changes nothing, which is
+what the renderer's tests use it for.
+
+It used to say here that nothing moved a vertex after the geometry was
+built, so a bound always described what it bounded. Morph targets are the
+thing that moves one. A mesh whose weights are not all zero is left in
+whatever its bound says, because the bound describes the face the mesh is
+no longer wearing; see `Renderer.prepare`.
+
+## Morph target influences
+
+`morph_influences` is three.js's `morphTargetInfluences`: how much of each
+of the geometry's morph targets this mesh wears. The geometry holds the
+targets and the mesh holds the numbers, which is what lets two meshes share
+one head and pull different faces.
+
+They are a fixed row of eight rather than a list, because eight is
+three.js's own ceiling and because a row of numbers leaves a `Mesh`
+implicitly copyable -- a scene adds one by value, and a list field would
+have made every `add_mesh` call consume its argument instead. The influence
+of a target the geometry does not have is simply never read.
 
 Color used to live here, with a note saying a `Material` would be ceremony
 until there was a second property to put in it. Textures were that second
 property, and `side` a third; see `materials.material`.
 """
 
+from core.buffer_geometry import MAX_MORPH_TARGETS
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from materials.material import MaterialId
+from std.math import isfinite
 
 
 struct Mesh(ImplicitlyCopyable):
@@ -54,6 +73,9 @@ struct Mesh(ImplicitlyCopyable):
     # Whether `Renderer.prepare` may leave this mesh out when its bounding
     # sphere, carried to world space, lies outside the camera's frustum.
     var frustum_culled: Bool
+    # How much of each of the geometry's morph targets this mesh wears:
+    # three.js's `morphTargetInfluences`. See the module docstring.
+    var morph_influences: SIMD[DType.float32, MAX_MORPH_TARGETS]
 
     def __init__(
         out self,
@@ -90,3 +112,51 @@ struct Mesh(ImplicitlyCopyable):
         self.material = material
         self.node = node
         self.frustum_culled = frustum_culled
+        self.morph_influences = SIMD[DType.float32, MAX_MORPH_TARGETS](0)
+
+    def set_morph_influence(mut self, target: Int, weight: Float32) raises:
+        """Set how much of one morph target this mesh wears.
+
+        Args:
+            target: Which of the geometry's targets, from zero.
+            weight: How much of it. One wears the target outright, zero
+                leaves the base shape, and the numbers between mix. Values
+                outside that range are allowed, as three.js allows them:
+                they overshoot, which is how a smile becomes a grin.
+
+        Raises:
+            Error: If there is no such target, or the weight is not a
+                number.
+        """
+        if target < 0 or target >= MAX_MORPH_TARGETS:
+            raise Error("A mesh has eight morph target influences")
+        if not isfinite(weight):
+            raise Error("A morph influence must be a number")
+        self.morph_influences[target] = weight
+
+    def morph_influence(self, target: Int) raises -> Float32:
+        """Return how much of one morph target this mesh wears.
+
+        Args:
+            target: Which of the geometry's targets, from zero.
+
+        Returns:
+            Its weight.
+
+        Raises:
+            Error: If there is no such target.
+        """
+        if target < 0 or target >= MAX_MORPH_TARGETS:
+            raise Error("A mesh has eight morph target influences")
+        return self.morph_influences[target]
+
+    def is_morphed(self) -> Bool:
+        """Return True if any morph target is worn at all.
+
+        The renderer asks before it culls: a mesh wearing a target is not
+        where its geometry's bound says it is.
+        """
+        for target in range(MAX_MORPH_TARGETS):  # pragma: no branch
+            if self.morph_influences[target] != 0:
+                return True
+        return False

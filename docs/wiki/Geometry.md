@@ -254,6 +254,52 @@ A wall is measured along x or along y, whichever it runs further in, and up the 
 
 three.js can also sweep a shape along a path, its `extrudePath`. That is not ported.
 
+## Morph targets
+
+```mojo
+var head = sphere(Length(1.0, METER), 24, 16)
+head.add_morph_target(smiling)                 # a BufferAttribute of positions
+head.add_morph_target(frowning, frown_normals) # positions and normals
+
+var face = Mesh(assets.geometries.add(head^), skin, node)
+face.set_morph_influence(0, 0.7)               # seven tenths of a smile
+```
+
+A morph target is a second set of positions for the same vertices. The mesh gives each one a weight, and the vertex drawn is the base vertex moved toward the targets by their weights. That is how a face smiles: one geometry, one target per expression, and a number per expression.
+
+three.js: `BufferGeometry.morphAttributes`, `Mesh.morphTargetInfluences`, `morphTargetsRelative`.
+
+| Member | Meaning |
+|---|---|
+| `geometry.add_morph_target(positions)` | Add a target that moves vertices only. |
+| `geometry.add_morph_target(positions, normals)` | Add one that turns them too. |
+| `geometry.morph_count() -> Int` | How many targets the geometry carries. |
+| `geometry.has_morph_normals() -> Bool` | Whether the targets carry normals. |
+| `geometry.morph_relative` | Whether a target holds destinations or offsets. |
+| `mesh.set_morph_influence(target, weight)` | How much of one target to wear. |
+| `mesh.morph_influence(target) -> Float32` | What it is wearing. |
+| `mesh.is_morphed() -> Bool` | Whether any target is worn at all. |
+
+The targets live on the geometry and the weights live on the mesh. That is what lets two meshes share one head and pull different faces. It is the same split that puts `position` on the geometry and the transform on the node.
+
+### Targets add, they do not compound
+
+Every target is measured from the *unmorphed* vertex, so wearing two of them at half each lands half way between both. Measuring each from where the last one left it would land somewhere neither names.
+
+### Destinations or offsets
+
+`morph_relative` is three.js's `morphTargetsRelative`. False, the default, means a target holds the finished positions and the mesh moves from the base toward them. True means it holds the offsets to add. Exporters write both.
+
+### Normals
+
+Either every target carries normals or none does. A geometry whose targets carry none keeps the base normal however far the positions move, which is what three.js's shader does when `morphAttributes.normal` is absent.
+
+### A worn mesh is not culled
+
+A mesh wearing a target is not where its geometry's bounding sphere says it is, so the renderer does not measure it against the frustum. three.js culls it anyway, and clips morphed meshes at the edge of the view for exactly this reason.
+
+Eight targets is the ceiling, which is three.js's `MAX_MORPH_TARGETS`.
+
 ## Errors
 
 - A negative or zero extent raises.
@@ -270,6 +316,9 @@ three.js can also sweep a shape along a path, its `extrudePath`. That is not por
 - A lathe needs at least two points, one segment, and a sweep of at most one turn. No point can have a negative `x`, and no two consecutive points can be the same. A profile that turns straight back to the point before raises, because that corner has no normal.
 - A tube needs at least two points, or three when closed, no two consecutive the same, a positive radius and three segments around. A path that returns to the point before the last raises, because that tangent is zero. A path that folds straight back on itself raises, because there is no axis to turn the frame about.
 - A sweep must be positive and at most one turn.
+- A morph target must cover every vertex, three numbers each, and a geometry holds at most eight.
+- Either every morph target carries normals or none does.
+- A morph influence must be a number, and there are eight of them.
 - A shape's contour needs three corners and an area. A contour drawn in a line, or out and back, has neither.
 - A shape's hole must lie inside its outline, and not inside another hole.
 - An outline that crosses itself raises, because it has no inside and runs out of ears.

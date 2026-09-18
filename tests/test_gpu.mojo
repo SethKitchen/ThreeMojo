@@ -4757,6 +4757,87 @@ def test_both_backends_agree_on_a_prepared_toon_scene() raises:
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+# --- morph targets, both backends -------------------------------------------
+
+
+def test_both_backends_agree_on_a_morphed_mesh() raises:
+    # A morph target moves vertices in `Renderer.prepare`, which is the one
+    # place both backends read from, so the two are drawing the same
+    # triangles by construction. This is what says so: the same scene worn
+    # at a weight that is neither nothing nor everything, through both.
+    if skipped_for_lack_of_a_gpu("both backends agree on a morphed mesh"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+
+    var shape = cube(Length(1.0, METER))
+    ref positions = shape.attribute_view(String(POSITION))
+    var stretched = List[Float32]()
+    for vertex in range(positions.count()):
+        var point = positions.vector3(vertex)
+        # A target that pulls the box out along x and up along y, so the
+        # silhouette and the shading both change rather than just the size.
+        stretched.append(point.x * 1.8)
+        stretched.append(point.y + 0.4)
+        stretched.append(point.z)
+    shape.add_morph_target(BufferAttribute(stretched^, 3))
+    var box = assets.geometries.add(shape^)
+
+    var scene = Scene()
+    var node = Object3D()
+    node.set_euler(Angle(20.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    var placed = scene.add(node^)
+    var lamp = Object3D()
+    lamp.set_position(2, 3, 4)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(ambient_light(Color(60, 60, 60)))
+    scene.add_light(directional_light(Color(220, 220, 220), lamp_node))
+    scene.update()
+
+    var meshes = List[Mesh]()
+    var worn = Mesh(
+        box, assets.materials.add(Material(Color(200, 120, 60))), placed
+    )
+    worn.set_morph_influence(0, 0.65)
+    meshes.append(worn)
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0, 0.6, 3.4), Vector3(0, 0, 0))
+
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the morphed scene prepared no triangles")
+    var lighting = Lighting(
+        scene, camera.visible_layers(), camera_position(scene, camera)
+    )
+    var view = FogView(scene.fog)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_LIT, assets.textures, lighting, 1, view
+    )
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_LIT,
+        assets.textures,
+        lighting,
+        view,
+        NO_TONE_MAPPING,
+        1.0,
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 200, "the morphed box barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 # --- a matcap material, both backends ---------------------------------------
 
 
