@@ -5,19 +5,19 @@
       "source": "modular/skills",
       "sourceType": "github",
       "skillPath": "mojo-gpu-fundamentals/SKILL.md",
-      "computedHash": "1e464a5fcdbe080841a28be1e79770e23b6b2a3fb8d4342807b4f94f09ff9b33"
+      "computedHash": "2570b1132cfd1588b52da66f0f2b6abada498c5e9a16f9b46601f17310cd23a5"
     },
     "mojo-syntax": {
       "source": "modular/skills",
       "sourceType": "github",
       "skillPath": "mojo-syntax/SKILL.md",
-      "computedHash": "541ef1cb64e56eb3613a7c7b256b8033604e26adf2a0cc348540dcb7709e793b"
+      "computedHash": "71fd102ad141c252b0fc098ae941a6282f4be02e9ea7f637ba995804171e56c5"
     },
     "new-modular-project": {
       "source": "modular/skills",
       "sourceType": "github",
       "skillPath": "new-modular-project/SKILL.md",
-      "computedHash": "babcdc53d94a42a92427c47384151efe5d6b85de19a1f406a31d249f16973b39"
+      "computedHash": "3823a35b41a727fddfb84f6cc1565e4374a67eeab4455f161b427519279cb5fa"
     }
   }
 }

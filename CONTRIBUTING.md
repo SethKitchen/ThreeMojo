@@ -30,6 +30,30 @@ Every feature has one GitHub issue. The [README checklist](README.md#features) l
 6. Tick the box in the README checklist and link it to the wiki page.
 7. Commit. Close the issue in the commit message.
 
+## Agent skills
+
+`skills-lock.json` pins three Modular skills that teach an AI agent to write
+Mojo. It is committed; the skills themselves are not, the same way a lockfile
+is tracked and its packages are not. They are fetched with
+[`skills`](https://skills.sh), which any agent can use.
+
+Restore the pinned skills after a clone:
+
+```bash
+npx skills experimental_install
+```
+
+Bump them to the latest upstream, which rewrites the lockfile:
+
+```bash
+npx skills update -p -y
+```
+
+The skills land in `.agents/skills/` or `.claude/skills/`, both ignored by git.
+Commit the lockfile when the hashes change, so everyone fetches the same
+revision. `computedHash` is a SHA-256 over every file in the skill folder,
+written by the tool. Do not edit it by hand.
+
 ## Commit messages
 
 Write the first line as a statement of what the commit does, in fewer than 72 characters. Explain why in the body. Reference the issue.

@@ -91,6 +91,17 @@ The toolchain version is part of the build cache key. An upgrade invalidates eve
 
 The pin is exact, not a floor. Mojo 1.1 moved the async task runtime behind an underscore, and moved `gpu` out of `std` into `max`. So one source cannot serve both 1.0 and 1.1: 1.0 has no `std.runtime._asyncrt`, and 1.1 has no `std.runtime.asyncrt`. See [Rasterization](Rasterization#threads) and [GPU backend](GPU-backend).
 
+## Agent skills
+
+The repository pins three Modular skills that teach an AI agent to write Mojo. `skills-lock.json` is committed; the fetched skills are not.
+
+```bash
+npx skills experimental_install   # restore the pinned skills
+npx skills update -p -y           # bump them, and rewrite the lockfile
+```
+
+They land in `.agents/skills/` or `.claude/skills/`. Both are ignored by git. Neither the build nor the tests read them, so this step is optional.
+
 ## Editor setup
 
 The Mojo language server does not read `-I .`. The repository ships `.vscode/settings.json` with `"mojo.lsp.includeDirs": ["."]`, which fixes the imports.

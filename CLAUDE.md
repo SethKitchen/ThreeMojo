@@ -42,3 +42,4 @@ way by habit:
 - Every feature has a GitHub issue and a line in the README checklist. Tick the box, link the wiki page, and close the issue in the same change.
 - Build and test inside a Linux environment. Mojo has no native Windows build.
 - Do not edit the wiki in the browser. Edit `docs/wiki/` and let the CI workflow publish it.
+- The agent skills in `skills-lock.json` are fetched with `npx skills experimental_install` and bumped with `npx skills update -p -y`. Never write `computedHash` by hand: the tool computes it over every file in the skill folder, and it has changed the way it computes it before.
