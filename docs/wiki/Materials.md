@@ -120,13 +120,19 @@ three.js: `MeshToonMaterial`, `gradientMap`.
 
 The cosine between the surface normal and the direction toward a light picks a tone. three.js reads its ramp at `dot(N, L) * 0.5 + 0.5`, so the whole range of angles maps onto the whole ramp.
 
-**A toon surface never fades to black.** A Lambert term clamps the cosine at zero, and a ramp has no zero to clamp at. A surface turned away from a lamp reads the ramp's left end. That is what keeps the shaded side flat.
+**A lamp the surface is turned away from still counts.** A Lambert term clamps the cosine at zero. A ramp has no zero to clamp at. So a surface facing away reads the ramp's left end rather than nothing, which is what keeps the shaded side flat.
 
-With no `gradient_map`, three.js's fallback applies: two tones, with the edge where the coordinate reads 0.7, and the low tone at 0.7 as well. three.js antialiases that edge with `fwidth`, a screen-space derivative. A software rasterizer shades one fragment at a time and has no neighbor to take a derivative against, so the edge is hard here. That is the one difference, and it shows on the single row of fragments the edge crosses.
+How dark that side is belongs to the ramp. three.js's fallback puts its left end at 0.7, so a default toon surface never goes black. A ramp of your own can put zero there, and then it does. A toon surface with no light reaching it is black either way.
+
+With no `gradient_map`, three.js's fallback applies: two tones, with the edge where the coordinate reads 0.7, and the low tone at 0.7 as well.
+
+three.js softens that edge with `fwidth`, a screen-space derivative. The edge is hard here because that antialiasing is not implemented yet. The architecture does not forbid it: this rasterizer already evaluates a triangle's varyings at neighboring pixels, which is how `mip_level` picks a level. The difference shows on the single row of fragments the edge crosses.
 
 ### The gradient map is a lookup table
 
-Only the top row is read, left to right, and only its red channel. Nothing is filtered and nothing is wrapped: a ramp of three texels gives three flat tones, each covering a third of the range. three.js builds its own gradient maps `NearestFilter` and `ClampToEdgeWrapping` for the same reason.
+A ramp must be exactly one row high, and that row is read left to right, red channel only. Nothing is filtered and nothing is wrapped: a ramp of three texels gives three flat tones, each covering a third of the range. three.js builds its own gradient maps `NearestFilter` and `ClampToEdgeWrapping` for the same reason.
+
+The height is a rule and not a convention. three.js reads its gradient map at `vec2(coord, 0.0)`. Under this project's texture convention a `v` of zero is the *bottom* row, because every sampler flips with `1 - v`. So "the first stored row" and "`v` of zero" name different rows in a taller image. There is no way to tell which one the author meant, and one row has only one, so a taller image is refused.
 
 So a ramp holds data, and must say so twice, as an alpha map must. Build it `LINEAR`, or the sRGB curve changes what its bytes mean. Build it `IGNORED`, or its own alpha weights them.
 
@@ -174,7 +180,7 @@ uv = (dot(x, normal), dot(y, normal)) * 0.495 + 0.5
 
 The direction toward the camera is measured from where the camera stands, under either projection. three.js reads `vViewPosition` in this shader and does not special-case a parallel one, so neither does this. `toward_camera` is not consulted here.
 
-The 0.495 is three.js's own. It keeps the edge of the image out of the lookup, and so out of any wrapping.
+The 0.495 is three.js's own. It is there to reduce artifacts from an undersized matcap disk. It keeps the lookup a little inside the image, but it does not make the wrap mode irrelevant. On a small image a bilinear footprint at 0.005 can still cross the edge.
 
 ### The fallback
 
@@ -184,7 +190,7 @@ With no `matcap`, three.js falls back to `mix(0.2, 0.8, uv.y)`. That is a gray g
 
 An emissive term. The image already holds every bit of light the surface shows, so a `MATCAP` material refuses one, exactly as a `BASIC` material does. `MaterialKind.is_unlit` is the question both answer.
 
-The image is sampled at its full-size level and never down a mip chain. The coordinate comes from the normal rather than from the surface. So a pixel's footprint in the image is not the footprint the chain was built for.
+The image is sampled at its full-size level and never down a mip chain. A mip chain is only progressively filtered copies of an image, so normal-derived coordinates could use one. What is missing is the screen-space footprint of *those* coordinates. `mip_level` measures the footprint of the surface's own texture coordinates, which is a different quantity. Matcap-coordinate derivatives and mip selection are not implemented.
 
 A matcap's own alpha means nothing: three.js reads `.rgb` and no more. So the texture must be built `IGNORED`, or filtering would weight its channels by an alpha that says nothing. Its color space is free, because a matcap really is color.
 

@@ -931,6 +931,65 @@ def check_triangle_state(
         raise Error("A triangle names a matcap id that nothing can hold")
 
 
+def check_output_kinds(corners: List[RasterVertex], mapped: Bool) raises:
+    """Refuse a tone-mapped frame that holds both data and blended light.
+
+    **Two output representations cannot share a pixel, and a blend is what
+    puts them there.** A `NORMALS` or `DEPTH` fragment writes bytes a
+    display must show as they are; every other kind writes light that the
+    tone mapping curve compresses. `RenderTarget.blend` resolves the
+    mixture as light, because a mixture with light in it is light -- and
+    that answer does not fade out with the alpha. A black surface at an
+    alpha of 1e-8 leaves the stored color bit-for-bit identical, since
+    `1 - alpha` rounds to one in Float32, and still turns the curve on for
+    the normal underneath: (128, 128, 255) resolves as (117, 117, 188)
+    through Reinhard. A fragment too faint to change a single channel
+    should not be able to change the whole pixel's answer.
+
+    No per-pixel rule fixes that. Making the mixture data instead lets
+    scene light escape the curve, and a threshold only moves the jump to
+    the threshold. So the frame is refused instead, once, before anything
+    is drawn: draw the data materials in a pass of their own, or turn the
+    tone mapping off. A blended data triangle is already refused outright
+    by `check_triangle_state`; this is the other direction of the same
+    rule.
+
+    Asked of the whole list rather than per pixel, so both backends can ask
+    it on the host before a launch. A kernel cannot raise part way through
+    a frame, and a check that only fires where the two actually overlap
+    would have to.
+
+    Args:
+        corners: Raster vertices, three per triangle, as submitted.
+        mapped: Whether this frame resolves through a tone mapping curve.
+            A frame with no curve has nothing to decide and is never
+            refused.
+
+    Raises:
+        Error: If the curve is on and the frame holds both a surface that
+            shows data and a surface that blends.
+    """
+    if not mapped:
+        return
+    var shows_data = False
+    var mixes_light = False
+    for triangle in range(len(corners) // 3):
+        ref first = corners[triangle * 3]
+        # A data triangle cannot blend -- `check_triangle_state` refuses it
+        # -- so these two are exclusive and the elif loses nothing.
+        if first.kind.is_data():
+            shows_data = True
+        elif first.blend == BLEND:
+            mixes_light = True
+    if shows_data and mixes_light:
+        raise Error(
+            "A tone-mapped frame cannot hold both a data material and a"
+            " blended one: the curve is on for light and off for data, and"
+            " a blend decides that for the pixel behind it however faint it"
+            " is. Draw the data in its own pass, or set NO_TONE_MAPPING"
+        )
+
+
 def check_alpha_map(image: Texture) raises:
     """Refuse an alpha map that is not stored as data.
 
@@ -1038,6 +1097,13 @@ def check_gradient_map(image: Texture) raises:
     `IGNORED`, or its own alpha weights the tones -- the reason an alpha
     map and an emissive map ask the same.
 
+    **It must be exactly one row high.** three.js reads its gradient map at
+    `vec2(coord, 0.0)`, and under this project's texture convention `v` of
+    zero is the *bottom* row: every sampler here flips with `1 - v`, as
+    `render.texture` explains. A ramp is read as a flat table instead, off
+    the single row it has, so a taller image would leave two defensible
+    answers and no way to tell which the author meant. One row has only one.
+
     A blank texture is refused as well. It has no row to read, and a ramp
     of no tones has no meaning; a material that wants the fallback names no
     map at all.
@@ -1048,12 +1114,17 @@ def check_gradient_map(image: Texture) raises:
         image: The texture named as a gradient map.
 
     Raises:
-        Error: If the texture is blank, its color space is not `LINEAR`, or
-            it reads its alpha as coverage.
+        Error: If the texture is blank, it is more than one row high, its
+            color space is not `LINEAR`, or it reads its alpha as coverage.
     """
     if image.is_blank():
         raise Error(
             "A gradient map must hold texels: name no map for the fallback"
+        )
+    if image.height != 1:
+        raise Error(
+            "A gradient map must be one row high: it is a lookup table, not"
+            " a picture, and a taller image has no unambiguous row"
         )
     if image.color_space != LINEAR:
         raise Error(
@@ -1070,8 +1141,8 @@ def check_gradient_map(image: Texture) raises:
 def gradient_ramp(image: Texture) raises -> List[Float32]:
     """Return a gradient map's top row as tones, left to right.
 
-    Only the top row, because three.js reads its gradient map at
-    `vec2(coord, 0.0)` and nothing else varies down the image. Only the red
+    The only row, because `check_gradient_map` refuses a taller image: a
+    ramp is a flat table and `v` would otherwise be ambiguous. Only the red
     channel, because three.js reads `.r`. Read once per triangle rather
     than per fragment: the row is the same for every pixel, and a texture
     lookup per light per pixel would open it a hundred thousand times a

@@ -104,9 +104,11 @@ The difference form, `a + sb * (b - a) + sc * (c - a)`, returns a constant exact
 
 ## Toon shading
 
-A `TOON` triangle reads its light from `Lighting.toon_at` rather than from `intensity_at`. Its ramp is read once per triangle by `gradient_ramp`, not once per fragment. The top row is the whole lookup table, and it is the same for every pixel. An empty ramp means the triangle named none, and three.js's fallback applies.
+A `TOON` triangle reads its light from `Lighting.toon_at` rather than from `intensity_at`. Its ramp is read once per triangle by `gradient_ramp`, not once per fragment. The one row is the whole lookup table, and it is the same for every pixel. An empty ramp means the triangle named none, and three.js's fallback applies.
 
-Both backends read the same bytes. The host reads texel (x, 0) of the gradient map. The kernel reads the same byte of the same row out of its texel buffer. So a ramp of three tones cannot step at one coordinate on one side and another on the other. See [Materials](Materials#toon).
+A ramp is one row high, and `check_gradient_map` refuses a taller image on both backends. Under this project's convention a `v` of zero is the bottom row. So "the first stored row" and three.js's `vec2(coord, 0.0)` name different rows in a taller image, and one row has only one. See [Materials](Materials#the-gradient-map-is-a-lookup-table).
+
+Both backends then read the same bytes. The host reads texel (x, 0), and the kernel reads that same byte out of its texel buffer.
 
 ## Matcap shading
 
@@ -119,6 +121,16 @@ The direction toward the camera is measured from where the camera stands, under 
 `rasterize_all` splits the image into horizontal bands and runs one task per band. A band owns its rows outright, so no two threads touch the same pixel and the depth test needs no atomics.
 
 The tasks come from `TaskGroup`. Mojo 1.1 moved that behind an underscore. `std.runtime` keeps only `parallelism_level` and `initialize_runtime` in public view, and nothing public in `std` runs work on a thread pool. So `from std.runtime._asyncrt import TaskGroup` is the one place this project reaches past a leading underscore, and it is what pins the toolchain to an exact version. Mojo 1.0 has no `_asyncrt` and 1.1 has no `asyncrt`, so one source cannot serve both.
+
+## Two output representations
+
+A `NORMALS` or `DEPTH` fragment writes bytes a display must show as they are. Every other kind writes light, which the tone mapping curve compresses. One pixel cannot hold both.
+
+`check_triangle_state` refuses a blended data triangle, which closes one direction. `check_output_kinds` closes the other. A frame that resolves through a curve must not hold both a data material and a blended one.
+
+That refusal is a whole-frame rule rather than a per-pixel one, and both backends ask it on the host before anything is drawn. A kernel cannot raise part way through a frame, so a check that fired only where the two actually overlap could not be shared.
+
+**Why not resolve it per pixel.** `RenderTarget.blend` resolves a mixture as light, and that answer does not fade out with the alpha. A black surface at an alpha of 1e-8 leaves the stored color bit for bit identical, because `1 - alpha` rounds to one in Float32. It still turns the curve on for the normal underneath, which moves (128, 128, 255) to (117, 117, 188) through Reinhard. Making the mixture data instead would let scene light escape the curve, and a threshold would only move the jump to the threshold. Draw the data in a pass of its own, or set `NO_TONE_MAPPING`.
 
 ## Transparency
 
@@ -137,7 +149,7 @@ A `NORMALS` or `DEPTH` triangle cannot blend. One pixel holds its own bytes or t
 - A `NORMALS` or `DEPTH` triangle whose blend is `BLEND` raises, on every worker count.
 - A texture the store lacks raises when a fragment samples it.
 - An alpha map that `SHADE_TEXTURE` would open raises unless it is `LINEAR` and `IGNORED`.
-- A gradient map raises unless it is `LINEAR`, `IGNORED` and holds texels. Asked under every mode that lights the surface, because `SHADE_LIT` reads one too.
+- A gradient map raises unless it is `LINEAR`, `IGNORED`, holds texels and is one row high. Asked under every mode that lights the surface, because `SHADE_LIT` reads one too.
 - A gradient map on a kind that is not `TOON` raises, and so do corners that disagree about one.
 - A matcap raises unless it is `IGNORED`. A matcap on a kind that is not `MATCAP` raises, and so do corners that disagree about one.
 - An alpha test outside zero to one, or not finite, raises on every worker count.

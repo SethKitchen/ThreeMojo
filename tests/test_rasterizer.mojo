@@ -24,6 +24,7 @@ from std.math import inf
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, NO_TEXTURE, OPAQUE
 from render.texture import (
+    CLAMP,
     COVERAGE,
     IGNORED,
     NEAREST,
@@ -55,6 +56,7 @@ from render.rasterizer import (
     Triangle,
     check_alpha_map,
     check_gradient_map,
+    check_output_kinds,
     check_triangle_state,
     data_color,
     gradient_ramp,
@@ -2880,10 +2882,20 @@ def a_ramp(
     """Return a one-row gradient map whose red channel holds `tones`.
 
     Green and blue are deliberately not the tone: three.js reads `.r` and
-    nothing else, and a gray texel could not tell them apart. A second row
-    is added below, filled with a value nothing may read, so a shader that
-    sampled anywhere but the top row would show it.
+    nothing else, and a gray texel could not tell them apart.
     """
+    var pixels = List[UInt8]()
+    for tone in tones:
+        pixels.append(tone)
+        pixels.append(255)
+        pixels.append(0)
+        pixels.append(255)
+    return Texture(len(tones), 1, pixels^, REPEAT, NEAREST, space, False, alpha)
+
+
+def a_tall_ramp(tones: List[UInt8]) raises -> Texture:
+    """Return a two-row gradient map, which is refused. The rows differ, so
+    a reader that picked one silently would show which."""
     var pixels = List[UInt8]()
     for tone in tones:
         pixels.append(tone)
@@ -2895,7 +2907,9 @@ def a_ramp(
         pixels.append(17)
         pixels.append(17)
         pixels.append(255)
-    return Texture(len(tones), 2, pixels^, REPEAT, NEAREST, space, False, alpha)
+    return Texture(
+        len(tones), 2, pixels^, REPEAT, NEAREST, LINEAR, False, IGNORED
+    )
 
 
 def toon_corner(
@@ -2974,7 +2988,7 @@ def test_a_gradient_map_must_be_stored_as_data() raises:
         check_gradient_map(Texture())
 
 
-def test_a_ramp_is_the_top_rows_red_channel_and_nothing_else() raises:
+def test_a_ramp_is_one_row_of_the_red_channel() raises:
     # three.js reads its gradient map at `vec2(coord, 0.0)` and takes `.r`.
     var tones: List[UInt8] = [0, 51, 204, 255]
     var read = gradient_ramp(a_ramp(tones))
@@ -2983,9 +2997,29 @@ def test_a_ramp_is_the_top_rows_red_channel_and_nothing_else() raises:
     assert_almost_equal(read[1], Float32(0.2), atol=Float64(1e-6))
     assert_almost_equal(read[2], Float32(0.8), atol=Float64(1e-6))
     assert_equal(read[3], Float32(1))
-    # The second row holds 17 in every channel, and none of it arrived.
-    for tone in read:
-        assert_true(tone != Float32(17) / 255, "the ramp read the wrong row")
+
+
+def test_a_ramp_taller_than_one_row_is_refused() raises:
+    # Under this project's texture convention a `v` of zero is the *bottom*
+    # row: every sampler flips with `1 - v`, so three.js's `vec2(coord, 0)`
+    # and "the first stored row" are not the same row at all. A ramp is
+    # read as a flat table rather than sampled, so a taller image would
+    # leave two defensible answers. One row has only one.
+    var tones: List[UInt8] = [0, 255]
+    check_gradient_map(a_ramp(tones))
+    with assert_raises():
+        check_gradient_map(a_tall_ramp(tones))
+    # And the refusal reaches a draw, on every worker count, before the
+    # first fragment.
+    var textures = TextureStore()
+    var tall = textures.add(a_tall_ramp(tones))
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var corners = toon_quad(TOWARD_Z, TOWARD_Z, tall)
+    for workers in [1, 4]:
+        with assert_raises():
+            rasterize_all(
+                corners, target, SHADE_TEXTURE, textures, workers=workers
+            )
 
 
 def test_a_toon_triangle_shows_flat_tones_where_a_lambert_one_fades() raises:
@@ -3342,6 +3376,122 @@ def test_a_matcap_must_ignore_its_own_alpha() raises:
             )
     # The uv debug view looks nothing up, so it draws.
     rasterize_all(corners, target, SHADE_UV, textures)
+
+
+def test_a_faint_blend_cannot_decide_a_data_pixels_curve() raises:
+    # The discontinuity this refusal exists for. A black surface at an
+    # alpha of 1e-8 leaves the stored color bit for bit identical, because
+    # `1 - alpha` rounds to one in Float32. It still turns the tone mapping
+    # on for the normal underneath, which moves (128, 128, 255) to
+    # (117, 117, 188). A fragment too faint to change one channel must not
+    # decide the whole pixel's answer, and no per-pixel rule can make that
+    # continuous, so the frame is refused instead.
+    var target = RenderTarget(1, 1, Color(0, 0, 0))
+    target.write(0, 0, data_color(0.5, 0.5, 1.0, 1.0), True)
+    var before = target.shown(0, 0, REINHARD_TONE_MAPPING)
+    assert_equal(before.r, UInt8(128))
+    assert_equal(before.b, UInt8(255))
+    target.blend(0, 0, FloatColor(0.0, 0.0, 0.0, 0.00000001))
+    # The color really did not move, and the flag really did.
+    assert_equal(target.color_at(0, 0).r, FloatColor(srgb=Color(128, 0, 0)).r)
+    assert_false(target.is_data(0, 0))
+    var after = target.shown(0, 0, REINHARD_TONE_MAPPING)
+    assert_equal(after.r, UInt8(117))
+    assert_equal(after.b, UInt8(188))
+    # So a frame that could reach it is refused before anything is drawn.
+    var mixed = data_quad(NORMALS)
+    for here in toon_quad(TOWARD_Z, TOWARD_Z):
+        mixed.append(as_kind(here, BASIC))
+    mixed[6] = blended(mixed[6])
+    mixed[7] = blended(mixed[7])
+    mixed[8] = blended(mixed[8])
+    with assert_raises():
+        check_output_kinds(mixed, True)
+    # With no curve there is nothing to decide, and the same frame draws.
+    check_output_kinds(mixed, False)
+    # Data alone, or blended light alone, is fine under a curve.
+    check_output_kinds(data_quad(NORMALS), True)
+    check_output_kinds(data_quad(BASIC, blend=BLEND), True)
+    # An empty frame holds neither.
+    check_output_kinds(List[RasterVertex](), True)
+
+
+def blended(base: RasterVertex) -> RasterVertex:
+    """Return `base` as a source-over fragment."""
+    return RasterVertex(
+        base.x,
+        base.y,
+        base.z,
+        base.inv_w,
+        base.color,
+        base.u,
+        base.v,
+        base.texture,
+        BLEND,
+        base.normal,
+        base.world,
+        base.kind,
+    )
+
+
+def four_corners(
+    top_left: Color, top_right: Color, low_left: Color, low_right: Color
+) raises -> Texture:
+    """Return a two-by-two matcap, a different color in every quadrant.
+
+    A two-texel image only pins left against right. Four pin the other axis
+    too, which is what catches a flipped `v` or a swapped frame vector.
+    Stored top row first, as `Texture` stores every image.
+    """
+    var pixels = List[UInt8]()
+    for tint in [top_left, top_right, low_left, low_right]:
+        pixels.append(tint.r)
+        pixels.append(tint.g)
+        pixels.append(tint.b)
+        pixels.append(255)
+    return Texture(2, 2, pixels^, CLAMP, NEAREST, SRGB, False, IGNORED)
+
+
+def leaning(x: Float32, y: Float32) -> Vector3:
+    """Return a unit normal leaning that way in the camera's frame."""
+    var facing = Vector3(x, y, 0)
+    facing.normalize()
+    return facing^
+
+
+def test_a_matcap_is_looked_up_the_right_way_up_and_round() raises:
+    # The camera sits up the z axis with world up, so `across` is +x and
+    # `upright` is +y. A normal leaning up and left must read the image's
+    # top-left texel, and so on round the four. This pins the sign of both
+    # frame vectors and the `v` flip at once; a two-texel image could not.
+    var textures = TextureStore()
+    var ball = textures.add(
+        four_corners(
+            Color(255, 0, 0),  # top left
+            Color(0, 255, 0),  # top right
+            Color(0, 0, 255),  # low left
+            Color(255, 255, 0),  # low right
+        )
+    )
+    var wanted: List[Tuple[Float32, Float32, UInt8, UInt8]] = [
+        (Float32(-1), Float32(1), UInt8(255), UInt8(0)),
+        (Float32(1), Float32(1), UInt8(0), UInt8(255)),
+        (Float32(-1), Float32(-1), UInt8(0), UInt8(0)),
+        (Float32(1), Float32(-1), UInt8(255), UInt8(255)),
+    ]
+    for want in wanted:
+        var facing = leaning(want[0], want[1])
+        var target = RenderTarget(8, 8, Color(0, 0, 0))
+        rasterize_all(
+            matcap_quad(facing, facing, ball),
+            target,
+            SHADE_TEXTURE,
+            textures,
+            watching_from(4),
+        )
+        var shown = target.shown(4, 4)
+        assert_equal(shown.r, want[2])
+        assert_equal(shown.g, want[3])
 
 
 def main() raises:

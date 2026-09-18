@@ -19,6 +19,7 @@ from core.assets import Assets
 from materials.material import (
     BACK_SIDE,
     BLEND,
+    Blending,
     MaterialId,
     OPAQUE,
     DOUBLE_SIDE,
@@ -4728,6 +4729,78 @@ def test_a_matcap_must_ignore_its_alpha_in_the_renderer() raises:
         _ = rendered(
             renderer, scene, assets, ball_of(assets, skin), camera_at(0, 0, 4)
         )
+
+
+# --- two output representations cannot share a tone-mapped frame ------------
+
+
+def mixed_scene(mut assets: Assets, blending: Blending) raises -> List[Mesh]:
+    """Return a normal-material sheet and a second sheet of ordinary light
+    drawn with `blending`."""
+    var sheet = assets.geometries.add(
+        plane(Length(2.0, METER), Length(2.0, METER))
+    )
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(sheet, assets.materials.add(normal_material()), NodeId(0))
+    )
+    meshes.append(
+        Mesh(
+            sheet,
+            assets.materials.add(
+                Material(Color(200, 60, 60), blending=blending)
+            ),
+            NodeId(0),
+        )
+    )
+    return meshes^
+
+
+def test_a_tone_mapped_frame_refuses_data_beside_a_blended_surface() raises:
+    # A blended fragment resolves its pixel as light however faint it is,
+    # so it decides the curve for a normal behind it at an alpha too small
+    # to move a single channel. No per-pixel rule makes that continuous, so
+    # the frame is refused. See `check_output_kinds`.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    renderer.set_tone_mapping(REINHARD_TONE_MAPPING)
+    var assets = Assets()
+    var scene = lamp_scene()
+    with assert_raises():
+        _ = rendered(
+            renderer,
+            scene,
+            assets,
+            mixed_scene(assets, BLEND),
+            camera_at(0, 0, 4),
+        )
+    # Opaque light beside data is fine: nothing mixes the two.
+    var plain = Assets()
+    _ = rendered(
+        renderer, scene, plain, mixed_scene(plain, OPAQUE), camera_at(0, 0, 4)
+    )
+    # And with no curve there is nothing to decide, so the blended frame
+    # draws. That is what makes the refusal about the curve.
+    var off = Renderer(WIDTH, HEIGHT)
+    off.set_background(Color(0, 0, 0))
+    var third = Assets()
+    _ = rendered(
+        off, scene, third, mixed_scene(third, BLEND), camera_at(0, 0, 4)
+    )
+
+
+def test_the_uv_view_is_data_throughout_and_is_never_refused() raises:
+    # Every pixel of it is coordinates, and it is never tone mapped, so the
+    # mixture the refusal guards against cannot arise.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    renderer.set_tone_mapping(REINHARD_TONE_MAPPING)
+    renderer.set_shading(SHADE_UV)
+    var assets = Assets()
+    var scene = lamp_scene()
+    _ = rendered(
+        renderer, scene, assets, mixed_scene(assets, BLEND), camera_at(0, 0, 4)
+    )
 
 
 def main() raises:

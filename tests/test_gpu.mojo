@@ -133,6 +133,7 @@ from render.rasterizer import (
     RasterVertex,
     ShadeMode,
     Triangle,
+    check_output_kinds,
     rasterize,
     rasterize_shaded,
 )
@@ -4222,18 +4223,22 @@ def sheet_over(z: Float32, alpha: Float32) -> List[RasterVertex]:
 
 def test_both_backends_ignore_a_blend_that_covers_nothing() raises:
     # Source-over at alpha zero hides nothing and adds nothing, so it must
-    # add no color, no depth and no answer about what the pixel holds. The
-    # kernel recorded the last two before it looked at the alpha, which let
-    # an invisible fragment take the data flag off a normal and put the
-    # curve back on its bytes.
+    # add no color and no depth. The kernel recorded both before it looked
+    # at the alpha.
+    #
+    # The surfaces underneath are `BASIC` rather than `NORMALS`: a blended
+    # fragment may not share a tone-mapped frame with a data material at
+    # all now, and that refusal is what puts the flag half of this rule out
+    # of reach here. `RenderTarget.blend` is still held to it directly, in
+    # `tests/test_target.mojo`.
     if skipped_for_lack_of_a_gpu("both backends ignore an empty blend"):
         return
-    var covered = data_pair(NORMALS)
+    var covered = data_pair(BASIC)
     for here in sheet_over(0.05, 0.0):
         covered.append(here)
     var alone = RenderTarget(24, 18, BACKGROUND)
     rasterize_all(
-        data_pair(NORMALS),
+        data_pair(BASIC),
         alone,
         SHADE_TEXTURE,
         TextureStore(),
@@ -4246,7 +4251,6 @@ def test_both_backends_ignore_a_blend_that_covers_nothing() raises:
     var plain = alone.resolve(1, REINHARD_TONE_MAPPING, 1.0)
     var veiled = under.resolve(1, REINHARD_TONE_MAPPING, 1.0)
     assert_equal(count_mismatches(plain, veiled), 0)
-    assert_true(under.is_data(12, 12), "the empty blend took the data flag")
     var gpu = render_triangles(
         covered,
         24,
@@ -4267,7 +4271,7 @@ def test_both_backends_ignore_a_blend_that_covers_nothing() raises:
             )
     # A sheet that does cover something changes both, so the rule is about
     # the alpha and not about the sheet.
-    var faint = data_pair(NORMALS)
+    var faint = data_pair(BASIC)
     for here in sheet_over(0.05, 0.5):
         faint.append(here)
     var mixed = render_triangles(
@@ -5000,6 +5004,145 @@ def test_both_backends_agree_on_a_prepared_matcap_scene() raises:
     var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
     assert_true(drawn > 300, "the scene barely drew anything")
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- the same two contracts, on the device ----------------------------------
+
+
+def a_tall_gpu_ramp(tones: List[UInt8]) raises -> Texture:
+    """Return a two-row gradient map, which both backends refuse."""
+    var pixels = List[UInt8]()
+    for tone in tones:
+        pixels.append(tone)
+        pixels.append(255)
+        pixels.append(0)
+        pixels.append(255)
+    for _ in tones:
+        pixels.append(17)
+        pixels.append(17)
+        pixels.append(17)
+        pixels.append(255)
+    return Texture(
+        len(tones), 2, pixels^, REPEAT, NEAREST, LINEAR, False, IGNORED
+    )
+
+
+def test_both_backends_refuse_a_ramp_taller_than_one_row() raises:
+    # A `v` of zero is the bottom row here and the first stored row in
+    # three.js, so a taller ramp has two defensible readings. Both backends
+    # refuse it rather than each picking one.
+    if skipped_for_lack_of_a_gpu("both backends refuse a tall ramp"):
+        return
+    var tones: List[UInt8] = [0, 255]
+    var textures = TextureStore()
+    var flat = textures.add(a_gpu_ramp(tones))
+    var tall = textures.add(a_tall_gpu_ramp(tones))
+    var renderer = GpuRenderer(16, 12)
+    renderer.set_textures(textures)
+    var target = RenderTarget(16, 12, BACKGROUND)
+    with assert_raises():
+        renderer.draw(toon_pair(tall), BACKGROUND, SHADE_LIT)
+    with assert_raises():
+        rasterize_all(toon_pair(tall), target, SHADE_LIT, textures)
+    # One row draws on both, which is what makes the refusal about height.
+    renderer.draw(toon_pair(flat), BACKGROUND, SHADE_LIT)
+    rasterize_all(toon_pair(flat), target, SHADE_LIT, textures)
+
+
+def test_both_backends_refuse_data_beside_a_blend_under_a_curve() raises:
+    # The host asks this before it draws and the device before it launches,
+    # from the same function, because a kernel cannot raise part way
+    # through a frame. See `check_output_kinds`.
+    if skipped_for_lack_of_a_gpu("both backends refuse a mixed curve frame"):
+        return
+    var mixed = data_pair(NORMALS)
+    for here in sheet_over(0.05, 0.5):
+        mixed.append(here)
+    var renderer = GpuRenderer(24, 18)
+    var target = RenderTarget(24, 18, BACKGROUND)
+    with assert_raises():
+        renderer.draw(
+            mixed,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting.uniform(),
+            FogView(no_fog()),
+            REINHARD_TONE_MAPPING,
+            1.0,
+        )
+    with assert_raises():
+        check_output_kinds(mixed, True)
+    # With no curve the same frame draws on the device, as it always did.
+    renderer.draw(mixed, BACKGROUND, SHADE_TEXTURE)
+    # And the uv view is data throughout, so it is never refused.
+    renderer.draw(
+        mixed,
+        BACKGROUND,
+        SHADE_UV,
+        Lighting.uniform(),
+        FogView(no_fog()),
+        REINHARD_TONE_MAPPING,
+        1.0,
+    )
+    _ = target
+
+
+def a_four_corner_matcap() raises -> Texture:
+    """Return a two-by-two matcap, a different color in every quadrant."""
+    var pixels = List[UInt8]()
+    var corners: List[Color] = [
+        Color(255, 0, 0),
+        Color(0, 255, 0),
+        Color(0, 0, 255),
+        Color(255, 255, 0),
+    ]
+    for tint in corners:
+        pixels.append(tint.r)
+        pixels.append(tint.g)
+        pixels.append(tint.b)
+        pixels.append(255)
+    return Texture(2, 2, pixels^, CLAMP, NEAREST, SRGB, False, IGNORED)
+
+
+def test_both_backends_orient_a_matcap_the_same_way() raises:
+    # A two-texel image only pins left against right. Four quadrants pin the
+    # other axis, so a flipped `v` on one backend alone would show here.
+    if skipped_for_lack_of_a_gpu("both backends orient a matcap alike"):
+        return
+    var textures = TextureStore()
+    var ball = textures.add(a_four_corner_matcap())
+    var lighting = watching()
+    var corners = matcap_pair(ball)
+    var target = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(corners, target, SHADE_LIT, textures, lighting)
+    var cpu = target.resolve()
+    var renderer = GpuRenderer(24, 18)
+    renderer.set_textures(textures)
+    renderer.draw(corners, BACKGROUND, SHADE_LIT, lighting)
+    var gpu = renderer.read_back()
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # Three of the four quadrants at least reached the image, or the
+    # normals never swept it and the comparison proves nothing.
+    var seen = 0
+    for want in [
+        Color(255, 0, 0),
+        Color(0, 255, 0),
+        Color(0, 0, 255),
+        Color(255, 255, 0),
+    ]:
+        var found = False
+        for y in range(18):
+            for x in range(24):
+                var here = gpu.get_pixel(x, y)
+                if (
+                    _apart(here.r, want.r) < 40
+                    and _apart(here.g, want.g) < 40
+                    and _apart(here.b, want.b) < 40
+                ):
+                    found = True
+        if found:
+            seen += 1
+    assert_true(seen >= 3, "the lookup did not sweep the image")
 
 
 def main() raises:

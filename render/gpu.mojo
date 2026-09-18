@@ -64,6 +64,7 @@ from render.rasterizer import (
     ShadeMode,
     Triangle,
     check_alpha_map,
+    check_output_kinds,
     check_triangle_state,
     interpolate_alpha,
     matcap_fallback,
@@ -1937,6 +1938,10 @@ struct GpuRenderer(Movable):
     # crosses as one white texel so the kernel never reads a zero width, so
     # a gradient map of no tones would step nowhere; refused here instead.
     var has_texels: List[Bool]
+    # Per uploaded texture, how many rows it has. A gradient map must have
+    # exactly one: the kernel reads the row the host reads, and a taller
+    # image has no unambiguous one. See `check_gradient_map`.
+    var heights: List[Int]
     # Declared last so that it is released last. See `__deinit__`.
     var context: DeviceContext
 
@@ -2027,6 +2032,7 @@ struct GpuRenderer(Movable):
         self.ignores_alpha = List[Bool]()
         self.is_linear = List[Bool]()
         self.has_texels = List[Bool]()
+        self.heights = List[Int]()
         self.ramp = self.context.enqueue_create_buffer[DType.float32](256)
         var steps = decode_ramp()
         with self.ramp.map_to_host() as host:
@@ -2187,6 +2193,14 @@ struct GpuRenderer(Movable):
                             "An alpha map must ignore its own alpha; build"
                             " the texture with alpha=IGNORED"
                         )
+        # Two output representations cannot share a tone-mapped frame.
+        # Asked here, before the launch, exactly where `Renderer.render`
+        # asks it before it draws. The uv view is data throughout and is
+        # never tone mapped, so it is never refused.
+        check_output_kinds(
+            corners,
+            mode != SHADE_UV and tone_mapping != NO_TONE_MAPPING,
+        )
         # A ramp holds data and says so the same two ways, and must hold
         # texels to step through. Asked under every mode that lights the
         # surface rather than under `SHADE_TEXTURE` alone, because
@@ -2201,6 +2215,12 @@ struct GpuRenderer(Movable):
                     raise Error(
                         "A gradient map must hold texels: name no map for"
                         " the fallback"
+                    )
+                if self.heights[tones.value] != 1:
+                    raise Error(
+                        "A gradient map must be one row high: it is a lookup"
+                        " table, not a picture, and a taller image has no"
+                        " unambiguous row"
                     )
                 if not self.is_linear[tones.value]:
                     raise Error(
@@ -2345,6 +2365,7 @@ struct GpuRenderer(Movable):
             self.ignores_alpha.append(image.alpha == IGNORED)
             self.is_linear.append(image.color_space == LINEAR)
             self.has_texels.append(not image.is_blank())
+            self.heights.append(image.height)
 
     def read_back(self) raises -> Framebuffer:
         """Copy the device render target into a host framebuffer.

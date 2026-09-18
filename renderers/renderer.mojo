@@ -117,6 +117,7 @@ from render.rasterizer import (
     ShadeMode,
     check_alpha_map,
     check_gradient_map,
+    check_output_kinds,
     edge,
     rasterize_all,
 )
@@ -1431,11 +1432,22 @@ struct Renderer(Movable):
 
         Raises:
             Error: If a mesh names a node or a geometry that is not there,
-                its geometry has no positions, or the scene's fog holds a
+                its geometry has no positions, the scene's fog holds a
                 kind that is none of the three or a range that is inside
-                out -- see `core.fog.FogView`.
+                out -- see `core.fog.FogView` -- or a tone mapping curve is
+                set and the scene holds both a data material and a blended
+                one, which no pixel could resolve; see
+                `render.rasterizer.check_output_kinds`.
         """
         var corners = self.prepare(scene, assets, camera)
+        # Two output representations cannot share a tone-mapped frame. Asked
+        # here, before anything is drawn, exactly where `GpuRenderer.draw`
+        # asks it before a launch. The uv view is data throughout and is
+        # never tone mapped, so it is never refused; see below.
+        check_output_kinds(
+            corners,
+            self.shading != SHADE_UV and self.tone_mapping != NO_TONE_MAPPING,
+        )
         # Resolved here as well as in `prepare`, because the fragments need
         # it: lighting is no longer baked into the corners on the way past.
         # Only the lights on the camera's layers, as only its meshes were
