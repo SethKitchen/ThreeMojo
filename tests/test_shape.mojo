@@ -11,6 +11,8 @@ from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from geometries.extrude import extrude
 from geometries.shape import (
     Contours,
+    extent,
+    on_diagonal,
     shape_geometry,
     triangulate,
     turn,
@@ -18,10 +20,12 @@ from geometries.shape import (
 from math.path import Path, Shape
 from math.vector2 import Vector2
 from units.si import Length, METER
+from std.math import isfinite
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -78,6 +82,42 @@ def filled_area(cut: Contours) raises -> Float32:
         assert_true(doubled >= 0, "a triangle is wound backwards")
         total += doubled
     return total / 2
+
+
+def covered_by(cut: Contours, probe: Vector2) raises -> Int:
+    """Return how many triangles cover `probe`, the boundary counting as
+    covered. Every triangle is wound counter-clockwise, which `filled_area`
+    has asserted."""
+    var hits = 0
+    for triangle in range(cut.triangle_count()):
+        var first = cut.points[cut.index[triangle * 3]]
+        var second = cut.points[cut.index[triangle * 3 + 1]]
+        var third = cut.points[cut.index[triangle * 3 + 2]]
+        if (
+            turn(first, second, probe) >= 0
+            and turn(second, third, probe) >= 0
+            and turn(third, first, probe) >= 0
+        ):
+            hits += 1
+    return hits
+
+
+def small_l() raises -> Shape:
+    """Return a two by two square with a one by one bite out of the far
+    corner. Its first diagonal runs corner to corner, straight through the
+    notch."""
+    return Shape(
+        polygon(
+            [
+                Vector2(0, 0),
+                Vector2(2, 0),
+                Vector2(2, 1),
+                Vector2(1, 1),
+                Vector2(1, 2),
+                Vector2(0, 2),
+            ]
+        )
+    )
 
 
 def test_turn_says_which_way() raises:
@@ -140,6 +180,74 @@ def test_a_concave_outline_keeps_its_notch() raises:
     )
     assert_equal(cut.triangle_count(), 4)
     assert_almost_equal(filled_area(cut), Float32(7), atol=TOLERANCE)
+
+
+def test_a_notch_on_the_first_diagonal_is_not_clipped_across() raises:
+    # The corner at (1, 1) sits exactly on the diagonal from (0, 2) to
+    # (2, 0). A strictly-inside test does not see it, the ear is clipped
+    # across the notch, and the triangles cover three and a half square
+    # meters of a three square meter shape with one wound backwards.
+    for divisions in [1, 12, 50]:
+        var cut = triangulate(small_l(), divisions)
+        assert_almost_equal(filled_area(cut), Float32(3), atol=TOLERANCE)
+        for triangle in range(cut.triangle_count()):
+            var first = cut.points[cut.index[triangle * 3]]
+            var second = cut.points[cut.index[triangle * 3 + 1]]
+            var third = cut.points[cut.index[triangle * 3 + 2]]
+            assert_true(
+                turn(first, second, third) > 0, "a triangle has no area"
+            )
+        # Two points in the bite, which nothing may cover.
+        assert_equal(covered_by(cut, Vector2(1.5, 1.1)), 0)
+        assert_equal(covered_by(cut, Vector2(1.5, 1.5)), 0)
+        # And one in the shape, which something must.
+        assert_true(covered_by(cut, Vector2(0.5, 0.5)) > 0)
+
+
+def test_on_diagonal_sees_a_point_along_a_run() raises:
+    var first = Vector2(0, 2)
+    var second = Vector2(2, 0)
+    var flat = Float32(1e-5)
+    # On the run, between its ends.
+    assert_true(on_diagonal(Vector2(1, 1), first, second, flat))
+    # Off the run.
+    assert_false(on_diagonal(Vector2(0, 0), first, second, flat))
+    # On the line the run lies along, but past either end.
+    assert_false(on_diagonal(Vector2(-1, 3), first, second, flat))
+    assert_false(on_diagonal(Vector2(3, -1), first, second, flat))
+    # At either end, which a seam names twice on purpose.
+    assert_false(on_diagonal(first, first, second, flat))
+    assert_false(on_diagonal(second, first, second, flat))
+
+
+def test_extent_is_the_box_around_a_contour() raises:
+    var points: List[Vector2] = [
+        Vector2(1, 1),
+        Vector2(4, 1),
+        Vector2(4, 5),
+    ]
+    assert_almost_equal(extent(points, 0, 3), Float32(5), atol=TOLERANCE)
+    assert_almost_equal(extent(points, 0, 1), Float32(0), atol=TOLERANCE)
+
+
+def test_a_small_shape_survives_any_sample_count() raises:
+    # Five millimeters on a side. A fixed area threshold called its true
+    # corners flat at twelve runs an edge and threw the shape away, and
+    # sampling it more finely made it disappear rather than improve.
+    for divisions in [1, 4, 12, 24, 100]:
+        var cut = triangulate(square(0.005), divisions)
+        assert_equal(cut.triangle_count(), 2)
+        assert_almost_equal(
+            filled_area(cut), Float32(2.5e-5), atol=Float64(1e-12)
+        )
+
+
+def test_a_large_shape_is_measured_the_same_way() raises:
+    # The same L a kilometer across. A tolerance taken as a share of the
+    # shape answers both the same way.
+    var cut = triangulate(square(2000), 4)
+    assert_equal(cut.triangle_count(), 2)
+    assert_almost_equal(filled_area(cut), Float32(4000000), atol=Float64(1))
 
 
 def test_a_hole_is_seamed_in_and_left_empty() raises:
@@ -470,6 +578,64 @@ def test_an_extrusion_refuses_what_it_cannot_build() raises:
             bevel_enabled=True,
             bevel_size=Length(-1, METER),
         )
+
+
+def thin_triangle() raises -> Shape:
+    """Return a triangle ten meters long and a millimeter thick. Its point
+    is sharp enough that the two outward normals there come out opposite in
+    Float32, and their dot product rounds to exactly minus one."""
+    return Shape(polygon([Vector2(0, 0), Vector2(10, 0), Vector2(0, 0.001)]))
+
+
+def assert_all_finite(geometry: BufferGeometry) raises:
+    """Assert every number in the geometry is a number."""
+    ref positions = geometry.attribute_view(String(POSITION))
+    ref normals = geometry.attribute_view(String(NORMAL))
+    for vertex in range(geometry.vertex_count()):
+        for part in range(3):
+            assert_true(
+                isfinite(positions.component(vertex, part)),
+                "a position is not a number",
+            )
+            assert_true(
+                isfinite(normals.component(vertex, part)),
+                "a normal is not a number",
+            )
+
+
+def test_a_sharp_corner_extrudes_without_a_bevel() raises:
+    # The miter at the point is not a number, and multiplying it by an
+    # inset of zero does not make it one. Without a bevel there is no
+    # inset, so there is no miter to work out.
+    var solid = extrude(thin_triangle(), Length(2, METER))
+    assert_all_finite(solid)
+    assert_almost_equal(closed_volume(solid), Float32(0.01), atol=Float64(1e-6))
+
+
+def test_a_sharp_corner_refuses_a_bevel() raises:
+    with assert_raises():
+        _ = extrude(
+            thin_triangle(),
+            Length(2, METER),
+            bevel_enabled=True,
+            bevel_thickness=Length(0.1, METER),
+            bevel_size=Length(0.05, METER),
+            bevel_segments=2,
+        )
+
+
+def test_an_ordinary_bevel_is_still_all_numbers() raises:
+    var plate = square(6)
+    plate.add_hole(box_path(2, 2, 4, 4))
+    var solid = extrude(
+        plate,
+        Length(2, METER),
+        bevel_enabled=True,
+        bevel_thickness=Length(0.25, METER),
+        bevel_size=Length(0.25, METER),
+        bevel_segments=3,
+    )
+    assert_all_finite(solid)
 
 
 def main() raises:

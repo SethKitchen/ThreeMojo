@@ -21,9 +21,14 @@ struct and a kind: a clip has to hold a list of one type.
 
 three.js names its target with a string, `.position` or `.quaternion`, and
 finds the object by its name at run time. Here a track names a `NodeId`
-and a kind, both of which the compiler checks. A string that does not
-match anything is three.js's most common animation bug, and it is not
-expressible here.
+and a kind, both of which the compiler checks, so a track cannot ask for a
+property that does not exist and cannot be handed a texture id by mistake.
+
+What that does *not* prove is that the node is in the scene. A `NodeId` is
+an index, any integer makes one, and the scene it indexes is not chosen
+until `AnimationMixer.update` is called. So the mixer checks, and raises
+on a track that names a node the scene does not have. The type stops the
+confusion; it does not stop the index.
 
 ## How two keys are mixed
 
@@ -51,11 +56,31 @@ A track with no keys, or with times that do not rise. A list of values
 that does not divide into one value per key. A kind or an interpolation
 that is none of the named ones. Each of those is a track that cannot be
 read at any time at all, and three.js finds out at the first frame.
+
+A time or a value that is not a number is refused too, and so is a time
+asked for that is not a number. That last one is not tidiness. The ends
+are found by comparing the time against the first key and the last, and a
+comparison against a value that is not a number is false both ways, so the
+search walks past the last key and reads one off the end of the list. It
+was an out-of-range abort, not an error, which is the worst way for a
+scene to find out that a frame time went wrong.
+
+A rotation key must be of unit length, to within `UNIT_SLACK`, and one
+that is accepted is made exactly unit before it is stored. Otherwise a key
+just inside the slack comes back out of `sample` unchanged, and a caller
+told that rotations are of unit length would be told wrong.
+
+The constructor is not the last chance to get any of this wrong. A track's
+fields are open, as `Texture`'s are, so `sample` checks once more that the
+two lists still agree before it reads them -- the same argument
+`Texture.validate` makes, and the same reason: a value that was right when
+it was built can be edited afterward.
 """
 
 from core.object3d import NodeId
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
+from std.math import isfinite
 from units.si import Duration, SECOND
 
 # How far a rotation key's length may sit from one. Wide enough for a
@@ -158,9 +183,10 @@ struct KeyframeTrack(Copyable, Movable):
 
         Raises:
             Error: If the kind or the interpolation is none of the named
-                ones, if there are no keys, if a time is negative or does
-                not rise above the one before it, or if the values do not
-                divide into one value per key.
+                ones, if there are no keys, if a time or a value is not a
+                number, if a time is negative or does not rise above the
+                one before it, if the values do not divide into one value
+                per key, or if a rotation key is not of unit length.
         """
         if not kind.is_valid():
             raise Error("A track needs a kind that exists")
@@ -170,34 +196,48 @@ struct KeyframeTrack(Copyable, Movable):
             raise Error("A track needs at least one key")
         if len(values) != len(times) * kind.component_count():
             raise Error("A track needs one value for every key")
+        for index in range(len(values)):  # pragma: no branch
+            if not isfinite(values[index]):
+                raise Error("A track's values must be numbers")
         var seconds = List[Float32]()
         for index in range(len(times)):  # pragma: no branch
             var at = times[index].to(SECOND)
+            if not isfinite(at):
+                raise Error("A track's times must be numbers")
             if at < 0:
                 raise Error("A track's times cannot be negative")
             if index > 0:
                 if at <= seconds[index - 1]:
                     raise Error("A track's times must rise")
             seconds.append(at)
+        var stored = values^
         if kind == QUATERNION:
             # A rotation of any other length is not a rotation, and `slerp`
             # cannot make one out of two of them. three.js leaves this to
             # whoever built the track, and a rig exported wrong shows as a
             # model that swells as it turns.
             for key in range(len(times)):  # pragma: no branch
-                var turn = Quaternion(
-                    values[key * 4],
-                    values[key * 4 + 1],
-                    values[key * 4 + 2],
-                    values[key * 4 + 3],
+                var turned = Quaternion(
+                    stored[key * 4],
+                    stored[key * 4 + 1],
+                    stored[key * 4 + 2],
+                    stored[key * 4 + 3],
                 )
-                if abs(turn.length() - 1) > UNIT_SLACK:
+                if abs(turned.length() - 1) > UNIT_SLACK:
                     raise Error("A rotation key must be of unit length")
+                # Inside the slack, and now exactly on it, so `sample`
+                # hands back a rotation of unit length at a key as well as
+                # between two of them.
+                turned.normalize()
+                stored[key * 4] = turned.x
+                stored[key * 4 + 1] = turned.y
+                stored[key * 4 + 2] = turned.z
+                stored[key * 4 + 3] = turned.w
         self.node = node
         self.kind = kind
         self.interpolation = interpolation
         self.times = seconds^
-        self.values = values^
+        self.values = stored^
 
     def __init__(out self, *, copy: Self):
         """Copy another track."""
@@ -233,7 +273,7 @@ struct KeyframeTrack(Copyable, Movable):
             found = key
         return found
 
-    def sample(self, at: Duration) -> List[Float32]:
+    def sample(self, at: Duration) raises -> List[Float32]:
         """Return the track's value at a time.
 
         Before the first key the value is the first key's, and after the
@@ -246,8 +286,24 @@ struct KeyframeTrack(Copyable, Movable):
         Returns:
             `kind.component_count()` numbers. A `QUATERNION` track returns
             a rotation of unit length.
+
+        Raises:
+            Error: If `at` is not a number, or if the track's lists no
+                longer agree with each other.
+
+                The first would make both end tests false, and the search
+                for the key before it would walk off the end of the track.
+                The second is the same walk by another route: a track's
+                fields are open, the constructor is not the last chance to
+                change them, and a `values` list made shorter afterward
+                reads past its end on the next frame. It is one comparison
+                per sample, which is what the check being cheap buys.
         """
         var seconds = at.to(SECOND)
+        if not isfinite(seconds):
+            raise Error("A track cannot be read at a time that is not a number")
+        if len(self.values) != len(self.times) * self.kind.component_count():
+            raise Error("A track's values no longer match its keys")
         var last = len(self.times) - 1
         if seconds <= self.times[0]:
             return self._value_at_key(0)

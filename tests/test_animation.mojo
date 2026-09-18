@@ -11,12 +11,14 @@ from animation.animation_clip import AnimationClip
 from animation.animation_mixer import (
     AnimationAction,
     AnimationMixer,
+    Binding,
     Loop,
     ONCE,
     PING_PONG,
     REPEAT,
     find_pile,
     mix_into_pile,
+    rest_into_pile,
 )
 from animation.keyframe_track import (
     Interpolation,
@@ -329,8 +331,68 @@ def sliding_action(loop: Loop = REPEAT) raises -> AnimationAction:
     return AnimationAction(AnimationClip("slide", [slide()]), loop)
 
 
+def test_a_paused_action_keeps_its_place_in_the_pose() raises:
+    # Two actions hold one node at zero and at ten, so the pose is five.
+    # Pausing the first must freeze the pose, not hand the node over.
+    var scene = one_node_scene()
+    var mixer = AnimationMixer()
+    var low = mixer.add(holding_action(0))
+    var high = mixer.add(holding_action(10))
+    mixer.action(low).play()
+    mixer.action(high).play()
+    mixer.update(scene, at(0.5))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(5), atol=TOLERANCE
+    )
+    mixer.action(low).pause()
+    mixer.update(scene, at(0.5))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(5), atol=TOLERANCE
+    )
+    # Paused is not stopped: it still counts, but its clock has stopped.
+    assert_true(mixer.action(low).is_active())
+    assert_false(mixer.action(low).is_playing())
+    assert_almost_equal(
+        mixer.action(low).at().to(SECOND), Float32(0.5), atol=TOLERANCE
+    )
+    # Stopping it does hand the node over.
+    mixer.action(low).stop()
+    mixer.update(scene, at(0.5))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(10), atol=TOLERANCE
+    )
+
+
+def test_a_once_action_lets_go_unless_it_is_told_to_hold() raises:
+    var scene = one_node_scene()
+    var mixer = AnimationMixer()
+    var which = mixer.add(sliding_action(ONCE))
+    mixer.action(which).play()
+    mixer.update(scene, at(5))
+    # The last frame is applied once, however it ends.
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(4), atol=TOLERANCE
+    )
+    assert_false(mixer.action(which).is_active())
+    # Having let go, it no longer drives the node.
+    mixer.update(scene, at(1))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(4), atol=TOLERANCE
+    )
+
+    var held = AnimationAction(
+        AnimationClip("slide", [slide()]), ONCE, clamp_when_finished=True
+    )
+    held.play()
+    held.advance(5)
+    assert_true(held.is_active())
+    assert_false(held.is_playing())
+    assert_almost_equal(held.at().to(SECOND), Float32(2), atol=TOLERANCE)
+
+
 def test_an_action_starts_stopped_at_the_beginning() raises:
     var action = sliding_action()
+    assert_false(action.is_active())
     assert_false(action.is_playing())
     assert_almost_equal(action.at().to(SECOND), Float32(0), atol=TOLERANCE)
     action.play()
@@ -390,21 +452,64 @@ def test_an_action_that_plays_once_stops_at_each_end() raises:
     assert_false(backward.is_playing())
 
 
-def test_a_ping_pong_action_runs_back_the_way_it_came() raises:
+def test_a_ping_pong_action_runs_a_whole_period() raises:
+    # Eight half-second steps over a two-second clip: out to the end and
+    # back to the start. Storing the folded time instead of the phase lost
+    # which leg it was on, and it bounced -- 2, 1.5, 2, 1.5 -- for ever.
+    var wanted: List[Float32] = [0.5, 1.0, 1.5, 2.0, 1.5, 1.0, 0.5, 0.0]
     var action = sliding_action(PING_PONG)
     action.play()
-    action.advance(1)
+    for step in range(8):
+        action.advance(0.5)
+        assert_almost_equal(
+            action.at().to(SECOND), wanted[step], atol=TOLERANCE
+        )
+
+
+def test_ping_pong_does_not_depend_on_the_frame_rate() raises:
+    # The same elapsed time, cut up differently, must land in the same
+    # place. It is the invariant a playback clock exists to keep.
+    var stepped = sliding_action(PING_PONG)
+    stepped.play()
+    for _ in range(8):
+        stepped.advance(0.5)
+    var whole = sliding_action(PING_PONG)
+    whole.play()
+    whole.advance(4)
+    assert_almost_equal(
+        stepped.at().to(SECOND), whole.at().to(SECOND), atol=TOLERANCE
+    )
+    assert_almost_equal(whole.at().to(SECOND), Float32(0), atol=TOLERANCE)
+
+
+def test_a_ping_pong_action_folds_below_zero_too() raises:
+    # Run backward from the start and the phase wraps to the far end of the
+    # there-and-back, which is the return leg half a second from home.
+    var action = sliding_action(PING_PONG)
+    action.time_scale = -1
+    action.play()
+    action.advance(0.5)
+    assert_almost_equal(action.at().to(SECOND), Float32(0.5), atol=TOLERANCE)
+    # One more step back climbs the return leg rather than bouncing.
+    action.advance(0.5)
     assert_almost_equal(action.at().to(SECOND), Float32(1), atol=TOLERANCE)
-    # Past the end, and back down the far side.
-    action.advance(2)
-    assert_almost_equal(action.at().to(SECOND), Float32(1), atol=TOLERANCE)
-    # Round again, and into the stretch below zero, which folds up again.
-    action.advance(2.5)
-    assert_true(action.at().to(SECOND) >= 0)
-    assert_true(action.at().to(SECOND) <= 2)
 
 
 # --- AnimationMixer ---------------------------------------------------------
+
+
+def holding_action(x: Float32) raises -> AnimationAction:
+    """Return an action whose clip holds node zero at `x` throughout."""
+    return AnimationAction(
+        AnimationClip(
+            "hold",
+            [
+                KeyframeTrack(
+                    NodeId(0), POSITION, seconds([0, 2]), [x, 0, 0, x, 0, 0]
+                )
+            ],
+        )
+    )
 
 
 def one_node_scene() raises -> Scene:
@@ -452,6 +557,67 @@ def test_a_mixer_leaves_a_stopped_or_weightless_action_alone() raises:
     assert_almost_equal(
         mixer.action(stopped).at().to(SECOND), Float32(0), atol=TOLERANCE
     )
+
+
+def test_a_weight_below_one_keeps_the_pose_that_was_there() raises:
+    # The track reads two meters at one second. At a quarter weight the
+    # node keeps three quarters of where it was, which is what lets an
+    # animation be faded in and out.
+    var wanted: List[Float32] = [2.0, 1.0, 0.5, 0.0]
+    var weights: List[Float32] = [1.0, 0.5, 0.25, 0.0]
+    for index in range(4):
+        var scene = one_node_scene()
+        var mixer = AnimationMixer()
+        var which = mixer.add(sliding_action())
+        mixer.action(which).play()
+        mixer.action(which).set_weight(weights[index])
+        mixer.update(scene, at(1))
+        assert_almost_equal(
+            scene.get(NodeId(0)).position.x, wanted[index], atol=TOLERANCE
+        )
+
+
+def test_the_pose_that_was_there_is_read_once_and_kept() raises:
+    # Reading the node every frame would read back what the mixer wrote
+    # last frame, and a half-weight action would creep toward its own
+    # value instead of holding half way to it.
+    var scene = one_node_scene()
+    var mixer = AnimationMixer()
+    var which = mixer.add(holding_action(4))
+    mixer.action(which).play()
+    mixer.action(which).set_weight(0.5)
+    for _ in range(6):
+        mixer.update(scene, at(0.1))
+        assert_almost_equal(
+            scene.get(NodeId(0)).position.x, Float32(2), atol=TOLERANCE
+        )
+    assert_equal(mixer.binding_count(), 1)
+
+
+def test_resting_a_pile_moves_it_back_toward_what_was_there() raises:
+    var piles: List[Float32] = [4, 0, 0, 0]
+    var original: List[Float32] = [0, 0, 0, 0]
+    rest_into_pile(piles, 0, 0.25, original, POSITION)
+    assert_almost_equal(piles[0], Float32(1), atol=TOLERANCE)
+
+
+def test_resting_a_rotation_pile_moves_it_back_along_the_arc() raises:
+    var quarter = Quaternion.from_axis_angle(
+        Vector3(0, 1, 0), Angle(Float32(pi) / 2, RADIAN)
+    )
+    var piles: List[Float32] = [
+        quarter.x,
+        quarter.y,
+        quarter.z,
+        quarter.w,
+    ]
+    var original: List[Float32] = [0, 0, 0, 1]
+    rest_into_pile(piles, 0, 0.5, original, QUATERNION)
+    var eighth = Quaternion.from_axis_angle(
+        Vector3(0, 1, 0), Angle(Float32(pi) / 4, RADIAN)
+    )
+    var mixed = Quaternion(piles[0], piles[1], piles[2], piles[3])
+    assert_almost_equal(abs(mixed.dot(eighth)), Float32(1), atol=TOLERANCE)
 
 
 def test_two_actions_on_one_node_make_one_pose() raises:
@@ -562,6 +728,140 @@ def test_a_mixer_refuses_an_action_or_a_node_it_does_not_have() raises:
     stray.action(which).play()
     with assert_raises():
         stray.update(scene, at(0.5))
+
+
+def test_a_track_refuses_times_and_values_that_are_not_numbers() raises:
+    var nowhere = Float32(0) / Float32(0)
+    with assert_raises():
+        _ = KeyframeTrack(
+            NodeId(0), POSITION, seconds([0, 1]), [0, 0, 0, nowhere, 0, 0]
+        )
+    with assert_raises():
+        _ = KeyframeTrack(
+            NodeId(0), POSITION, seconds([0, nowhere]), [0, 0, 0, 1, 0, 0]
+        )
+    # A rotation key that is not a number must not slip through the unit
+    # test: a comparison against it is false whichever way it is written.
+    with assert_raises():
+        _ = KeyframeTrack(
+            NodeId(0),
+            QUATERNION,
+            seconds([0, 1]),
+            [nowhere, 0, 0, 1, 0, 0, 0, 1],
+        )
+
+
+def test_a_track_refuses_a_time_that_is_not_a_number() raises:
+    # Both end tests are false against it, so the search for the key before
+    # it walked off the end of the list and aborted the process.
+    var nowhere = Float32(0) / Float32(0)
+    var track = slide()
+    with assert_raises():
+        _ = track.sample(at(nowhere))
+
+
+def test_a_track_edited_after_it_was_built_is_still_checked() raises:
+    # A track's fields are open. Shortening the values after the
+    # constructor has passed used to read off the end of the list.
+    var track = slide()
+    track.values = [0, 0, 0]
+    with assert_raises():
+        _ = track.sample(at(1))
+
+
+def test_a_rotation_key_is_stored_of_unit_length() raises:
+    # Just inside the slack going in, exactly on it coming out.
+    var track = KeyframeTrack(
+        NodeId(0), QUATERNION, seconds([0, 1]), [0, 0, 0, 1.0005, 0, 0, 0, 1]
+    )
+    assert_almost_equal(
+        track.sample_quaternion(at(0)).length(), Float32(1), atol=TOLERANCE
+    )
+
+
+def test_playback_refuses_settings_that_are_not_numbers() raises:
+    var nowhere = Float32(0) / Float32(0)
+    with assert_raises():
+        _ = AnimationAction(AnimationClip("s", [slide()]), REPEAT, nowhere)
+    with assert_raises():
+        _ = AnimationAction(AnimationClip("s", [slide()]), REPEAT, 1, nowhere)
+    var action = sliding_action()
+    with assert_raises():
+        action.set_weight(nowhere)
+    with assert_raises():
+        action.advance(nowhere)
+
+    var scene = one_node_scene()
+    var mixer = AnimationMixer()
+    var which = mixer.add(sliding_action())
+    mixer.action(which).play()
+    with assert_raises():
+        mixer.update(scene, at(nowhere))
+
+
+def test_a_binding_remembers_and_copies_what_a_node_held() raises:
+    var held = Binding(3, POSITION.value, [1, 2, 3, 0])
+    var twin = Binding(copy=held)
+    assert_equal(twin.node, 3)
+    assert_equal(twin.kind, POSITION.value)
+    assert_almost_equal(twin.original[1], Float32(2), atol=TOLERANCE)
+
+
+def test_a_mixer_binds_each_node_it_drives() raises:
+    # Two nodes driven by one clip, so the search for the second binding
+    # has to walk past the first.
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    _ = scene.add(Object3D())
+    var mixer = AnimationMixer()
+    var which = mixer.add(
+        AnimationAction(
+            AnimationClip(
+                "pair",
+                [
+                    KeyframeTrack(
+                        NodeId(0), POSITION, seconds([0, 2]), [0, 0, 0, 4, 0, 0]
+                    ),
+                    KeyframeTrack(
+                        NodeId(1), POSITION, seconds([0, 2]), [0, 0, 0, 8, 0, 0]
+                    ),
+                ],
+            )
+        )
+    )
+    mixer.action(which).play()
+    mixer.action(which).set_weight(0.5)
+    mixer.update(scene, at(1))
+    assert_equal(mixer.binding_count(), 2)
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(1), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        scene.get(NodeId(1)).position.x, Float32(2), atol=TOLERANCE
+    )
+
+
+def test_a_mixer_refuses_a_node_index_below_zero() raises:
+    var scene = one_node_scene()
+    var mixer = AnimationMixer()
+    var which = mixer.add(
+        AnimationAction(
+            AnimationClip(
+                "stray",
+                [
+                    KeyframeTrack(
+                        NodeId(-1),
+                        POSITION,
+                        seconds([0, 1]),
+                        [0, 0, 0, 1, 0, 0],
+                    )
+                ],
+            )
+        )
+    )
+    mixer.action(which).play()
+    with assert_raises():
+        mixer.update(scene, at(0.5))
 
 
 def main() raises:

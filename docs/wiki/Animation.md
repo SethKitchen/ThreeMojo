@@ -42,7 +42,7 @@ Before the first key the value is the first key's. After the last it is the last
 
 three.js names its target with a string, `.position` or `.quaternion`, and looks the object up by name at run time. Here a track holds a `NodeId` and a kind, both of which the compiler checks.
 
-A string that matches nothing is three.js's most common animation bug. It is not expressible here.
+A string that matches nothing is three.js's most common animation bug, and naming the property by type removes it. Naming the *node* by type does not: a `NodeId` is an index, and the scene it indexes is chosen at `update`. The mixer checks there, and raises on a node the scene does not have.
 
 ### How two keys are mixed
 
@@ -76,13 +76,19 @@ An action is one clip being played.
 | Member | Meaning |
 |---|---|
 | `play()`, `pause()`, `stop()` | Start, hold where it is, or stop and rewind. |
-| `is_playing() -> Bool` | True if the mixer moves it on. |
+| `is_active() -> Bool` | True if it contributes to the pose. |
+| `is_playing() -> Bool` | True if its clock is running: active and not paused. |
+| `clamp_when_finished` | True if a `ONCE` action holds its last frame. |
 | `at() -> Duration` | How far into the clip it has got. |
 | `set_weight(weight)` | How much of it goes into the pose. |
 | `time_scale` | How fast it runs. A negative number runs it backward. |
 | `loop` | `ONCE`, `REPEAT` or `PING_PONG`. |
 
 `ONCE` stops at the end and stays there. `REPEAT` starts over. `PING_PONG` runs back the way it came. A negative `time_scale` runs a clip backward, and each mode handles that going the other way.
+
+An action carries a *phase*, not the time it is read at. For `PING_PONG` the phase runs to twice the clip's length, and the read time folds out of it. The return leg is therefore a different phase from the outward one. Storing the folded time loses which leg it is on, and the action bounces near the end instead of coming back.
+
+Three states are kept apart. `active` says the action contributes to the pose; `paused` says its clock has stopped. A paused action still contributes, which is what holding a pose has to mean. `clamp_when_finished` says whether a `ONCE` action holds its last frame or lets the node settle back; it is False by default, as in three.js.
 
 ## AnimationMixer
 
@@ -112,7 +118,19 @@ So every action's value goes into a pile, one pile per node and property. The pi
 
 A pile is a running average by weight, three.js's arrangement in `_mixBufferRegion`. The first value in is the pile, and every value after it moves the pile a share of the way toward itself. That share is the new weight over the total weight, which leaves the pile at the weighted mean however many values arrive.
 
-A rotation pile moves along the arc, by `slerp`, for the reason a rotation track is interpolated by `slerp`.
+A rotation pile moves along the arc, by `slerp`, for the reason a rotation track is interpolated by `slerp`. That makes a rotation pile depend on the order the actions were added, which a position pile does not. three.js has the same property.
+
+### Weight is a share of the node, not a share of the actions
+
+A pile is a mean, so on its own it says nothing about how much of the node the actions have claimed. The mixer remembers what each node property held before anything drove it, and mixes the pile back toward it by whatever weight is missing:
+
+```text
+result = total * pile + (1 - total) * original
+```
+
+An action alone at a weight of one quarter therefore moves the node a quarter of the way. That is what lets a single animation be faded in and out. three.js does this in `PropertyMixer.apply`.
+
+That original is read once, the first time a property is driven. Reading the node each frame would read back what the mixer wrote last frame, and the pose would wander.
 
 ## What is refused
 
@@ -126,6 +144,7 @@ A rotation pile moves along the arc, by `slerp`, for the reason a rotation track
 | Reading a rotation off a position track, or the other way round. | An error. |
 | A clip with no tracks, or one that lasts no time. | An error at construction. |
 | A weight below zero, or a loop mode that is not named. | An error. |
+| A weight, a time scale, a frame time or a key that is not a number. | An error. |
 | An action index the mixer does not have. | An error. |
 | A track naming a node the scene does not have. | An error at `update`. |
 

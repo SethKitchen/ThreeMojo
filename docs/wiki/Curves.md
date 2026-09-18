@@ -47,7 +47,9 @@ A Bezier with its control points bunched at one end crawls there and races at th
 
 Use `point` and `sample` to draw a curve. Use `point_at` and `spaced_points` to move something along it.
 
-`length` and `point_at` read a table of `ARC_DIVISIONS` straight runs, which is 200, as three.js's `ARC_LENGTH_DIVISIONS` is. That table is the only approximation here.
+`length` and `point_at` read a table of straight runs across the curve. That table is the only approximation here, and how good it is depends on there being enough runs to follow the curve.
+
+three.js uses 200 for every curve. A Bezier has one arc and 200 runs follow it closely. A spline has one arc per segment. 200 runs across a spline with 400 segments do not sample it sparsely. They land at the same place in every other segment, and measure a curve that is not there. So the count is `ARC_DIVISIONS` or `SEGMENT_SAMPLES` per segment, whichever is larger, and `arc_divisions()` reports it.
 
 ### Tangents are exact
 

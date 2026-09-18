@@ -44,21 +44,22 @@ through one another.
 
 A hole outside the outline, or inside another hole: neither describes a
 surface. A contour of fewer than three corners, or one with no area, such
-as a line drawn out and back. An outline that crosses itself, which has no
-inside and no ears, and which is refused when the clipping runs out of
-ears rather than by a test of its own.
+as a line drawn out and back.
+
+An outline that crosses itself is usually refused as well, because the
+clipping runs out of ears on it. That is a symptom and not a test. An
+outline is simple or it is not, and nothing here asks the question
+directly; a crossing outline that happens to keep finding ears will be
+filled in, and the triangles will be wrong rather than missing. Checking
+properly means testing every edge against every other, which is the same
+sweep the seams already pay for, and it is worth doing when there is a
+reason to trust the answer.
 """
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from math.path import Shape
 from math.vector2 import Vector2
-
-# A turn smaller than this is no turn, and an area smaller than this is no
-# area. The contours are in meters, so this is a square micrometer, far
-# below anything a shape is drawn to and far above the noise in a Float32
-# sum of products.
-comptime NEARBY = Float32(1e-6)
 
 
 def turn(origin: Vector2, first: Vector2, second: Vector2) -> Float32:
@@ -79,6 +80,93 @@ def turn(origin: Vector2, first: Vector2, second: Vector2) -> Float32:
         The signed area of the triangle, doubled.
     """
     return (first - origin).cross(second - origin)
+
+
+# How much of a turn is just the arithmetic, as a share of the size of the
+# shape being measured. About eight times `Float32`'s own epsilon: three
+# points read off a contour that spans `s` meters carry a rounding error of
+# roughly `eps * s` in each coordinate, so the turn they make carries
+# roughly `eps * s` times the distance the turn is measured across, and a
+# threshold of that shape is the only one that separates a real corner from
+# the rounding at every size.
+#
+# Two fixed thresholds came before this one, and both were wrong in a way
+# worth writing down.
+#
+# The first was 1e-6 square meters flat, described in a comment as a square
+# micrometer; it is a square millimeter, and that was the smaller mistake.
+# The real one was that a square five millimeters on a side, sampled into
+# twelve runs an edge, has a true corner whose turn measures 1.7e-7. The
+# threshold called that corner flat and threw the whole shape away, and
+# sampling it more finely made more shapes vanish rather than fewer.
+#
+# The second scaled with the distance between a point's two neighbors,
+# which reads as "how flat, for a step this long". That drops a shallow
+# corner on a long edge: the point of a triangle ten meters long and a
+# millimeter thick stands 8e-5 meters off the line through its neighbors,
+# which is a real corner of a real shape and was called flat.
+#
+# What is left is a noise floor and nothing else. A point is dropped when
+# the turn it makes is no larger than the arithmetic could have invented,
+# and kept otherwise, however shallow the corner is.
+comptime NOISE = Float32(1e-6)
+
+
+def extent(points: List[Vector2], start: Int, count: Int) -> Float32:
+    """Return the diagonal of the box around a contour, which is the scale
+    every tolerance here is taken as a share of.
+
+    Args:
+        points: Every point.
+        start: Where the contour begins.
+        count: How many points it has; at least one.
+
+    Returns:
+        The distance from the smallest corner of the box to the largest.
+    """
+    var low = points[start]
+    var high = points[start]
+    for index in range(1, count):  # pragma: no branch
+        var here = points[start + index]
+        low = Vector2(min(low.x, here.x), min(low.y, here.y))
+        high = Vector2(max(high.x, here.x), max(high.y, here.y))
+    return (high - low).length()
+
+
+def on_diagonal(
+    probe: Vector2, first: Vector2, second: Vector2, flat: Float32
+) -> Bool:
+    """Return True if `probe` lies along the run from `first` to `second`,
+    between its ends and at neither of them.
+
+    This is what the strictly-inside test cannot see, and what a corner
+    exactly on a proposed diagonal needs. A vertex there is on the
+    boundary of the triangle rather than within it, so clipping the ear
+    would run the new edge through a part of the outline, and the piece
+    left behind is no longer a simple loop.
+
+    A probe at either end is not on the run. That is not a nicety: the
+    seam that joins a hole to its outline deliberately names both of its
+    ends twice, so the same point really is in the ring twice, and a rule
+    that blocked on it would block every ear near a hole.
+
+    Args:
+        probe: The point to test, in meters.
+        first: Where the run starts, in meters.
+        second: Where it ends, in meters.
+        flat: How much area counts as none; see `NOISE`.
+
+    Returns:
+        True if the probe is on the run and is neither end of it.
+    """
+    if abs(turn(first, second, probe)) > flat:
+        return False
+    var reach = second - first
+    var out = probe - first
+    var along = out.dot(reach)
+    if along <= 0:
+        return False
+    return along < reach.dot(reach)
 
 
 def _clean(points: List[Vector2]) raises -> List[Vector2]:
@@ -111,10 +199,20 @@ def _clean(points: List[Vector2]) raises -> List[Vector2]:
     """
     var corners = List[Vector2]()
     var count = len(points) - 1
+    var span = extent(points, 0, count)
     for index in range(count):  # pragma: no branch
         var before = points[(index + count - 1) % count]
         var after = points[(index + 1) % count]
-        if abs(turn(before, points[index], after)) <= NEARBY:
+        # The turn is twice the area of the triangle the three points
+        # make: how far the middle one stands off the line through the
+        # other two, times how far apart those two are. The rounding in
+        # those three points is worth about `NOISE * span` in each
+        # coordinate, so it is worth `NOISE * span * reach` in the turn,
+        # and anything at or below that is a point in a line rather than a
+        # corner. Coincident neighbors make `reach` zero, which makes both
+        # sides zero, and the point goes with them.
+        var reach = (after - before).length()
+        if abs(turn(before, points[index], after)) <= NOISE * span * reach:
             continue
         corners.append(points[index])
     if len(corners) < 3:
@@ -253,12 +351,22 @@ def _bridge(
     return joined^
 
 
-def _find_ear(points: List[Vector2], ring: List[Int]) -> Int:
+def _find_ear(points: List[Vector2], ring: List[Int], flat: Float32) -> Int:
     """Return where in `ring` a corner sits that can be clipped off, or
     minus one when no corner can be.
 
     A corner is an ear when it turns left, so its triangle lies inside the
-    loop, and no other corner of the loop lies within that triangle.
+    loop, and no other corner of the loop lies *on or within* that
+    triangle. Within is not enough on its own. A corner sitting exactly on
+    the diagonal the ear would cut is on the triangle's boundary and not
+    inside it, and clipping across it cuts the loop into a piece that is no
+    longer simple, after which the clipping covers ground the shape does
+    not.
+
+    The smallest L shows it: two by two with a one by one bite out of the
+    far corner, whose first diagonal runs corner to corner straight through
+    the notch. The triangles came out covering three and a half square
+    meters of a three square meter shape, one of them wound backwards.
     """
     for at in range(len(ring)):  # pragma: no branch
         var before = (at + len(ring) - 1) % len(ring)
@@ -266,7 +374,7 @@ def _find_ear(points: List[Vector2], ring: List[Int]) -> Int:
         var corner = points[ring[at]]
         var left = points[ring[before]]
         var right = points[ring[after]]
-        if turn(left, corner, right) <= NEARBY:
+        if turn(left, corner, right) <= flat:
             continue
         var clear = True
         for other in range(len(ring)):  # pragma: no branch
@@ -279,17 +387,22 @@ def _find_ear(points: List[Vector2], ring: List[Int]) -> Int:
                 and turn(right, left, probe) > 0
             ):
                 clear = False
+            elif on_diagonal(probe, left, right, flat):
+                clear = False
         if clear:
             return at
     return -1
 
 
-def _ear_clip(points: List[Vector2], var ring: List[Int]) raises -> List[Int]:
+def _ear_clip(
+    points: List[Vector2], var ring: List[Int], flat: Float32
+) raises -> List[Int]:
     """Return the triangles that fill `ring`, three vertex numbers each.
 
     Args:
         points: Every point, the ring's numbers index into it.
         ring: One loop, counter-clockwise, holes already seamed in.
+        flat: How much area counts as none; see `NOISE`.
 
     Returns:
         Three vertex numbers per triangle, each wound counter-clockwise.
@@ -301,7 +414,7 @@ def _ear_clip(points: List[Vector2], var ring: List[Int]) raises -> List[Int]:
     """
     var index = List[Int]()
     while len(ring) > 3:
-        var ear = _find_ear(points, ring)
+        var ear = _find_ear(points, ring, flat)
         if ear < 0:
             raise Error("A shape that crosses itself cannot be filled in")
         var before = (ear + len(ring) - 1) % len(ring)
@@ -385,7 +498,8 @@ def _add_contour(
     for index in range(len(cleaned)):  # pragma: no branch
         points.append(cleaned[index])
     var doubled = _area(points, start, len(cleaned))
-    if abs(doubled) <= NEARBY:
+    var span = extent(points, start, len(cleaned))
+    if abs(doubled) <= NOISE * span * span:
         raise Error("A shape's contour must enclose an area")
     if (doubled > 0) != want_counter_clockwise:
         for step in range(len(cleaned) // 2):  # pragma: no branch
@@ -456,7 +570,11 @@ def triangulate(shape: Shape, curve_segments: Int = 12) raises -> Contours:
         ring = _bridge(points, ring, pending)
         _ = pending.pop(0)
 
-    var index = _ear_clip(points, ring^)
+    # One tolerance for the whole shape, taken from the size of the whole
+    # shape, so a hole is measured against the outline it sits in rather
+    # than against itself.
+    var flat = NOISE * extent(points, 0, len(points)) ** 2
+    var index = _ear_clip(points, ring^, flat)
     return Contours(points^, index^, starts^, counts^)
 
 

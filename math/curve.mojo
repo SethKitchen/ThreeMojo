@@ -36,12 +36,26 @@ equal steps along the curve.
 *length*. It is what an animation along a path wants, and what a tube
 swept along a curve wants, because equal steps in `u` are equal distances.
 three.js has the same pair, and builds the second from the first the same
-way: sample the curve at `ARC_DIVISIONS` points, add up the straight runs
-between them, and look `u` up in that table.
+way: sample the curve, add up the straight runs between the samples, and
+look `u` up in that table.
 
-That table is an approximation, and it is the only approximation here. A
-curve sampled 200 times is within a fraction of a percent of its true
-length for anything a shape is drawn with.
+That table is an approximation, and it is the only approximation here. How
+good it is depends on there being enough samples to follow the curve, and
+that is the one thing a fixed count cannot promise.
+
+three.js uses 200 samples for every curve it has. A Bezier has one arc and
+200 samples follow it closely. A spline has one arc *per segment*, and a
+spline with more segments than the table has samples is not sampled
+sparsely -- it is sampled at the wrong places. Take 401 control points
+that step left and right by a meter while climbing steadily: 200 samples
+land on every second one, all of them on the same side, and the table
+reports four meters for a curve more than four hundred meters long. Every
+distance `point_at` and `spaced_points` give is then wrong by the same
+hundredfold.
+
+So the count is `ARC_DIVISIONS` or `SEGMENT_SAMPLES` per segment,
+whichever is larger. That is still an approximation, and the docstrings
+say so rather than promising a figure.
 
 ## What is refused
 
@@ -56,9 +70,15 @@ from math.vector2 import Vector2
 from std.math import floor
 from units.si import Length, METER
 
-# How many straight runs stand in for the curve when its length is measured.
-# three.js's `ARC_LENGTH_DIVISIONS`.
+# The fewest straight runs that stand in for a curve when its length is
+# measured. three.js's `ARC_LENGTH_DIVISIONS`, and enough for a curve with
+# one arc in it.
 comptime ARC_DIVISIONS = 200
+
+# How many runs each segment of a spline gets, whatever the total comes to.
+# A spline has an arc per segment, and a table with fewer samples than the
+# curve has segments does not measure it at all.
+comptime SEGMENT_SAMPLES = 8
 
 
 @fieldwise_init
@@ -412,19 +432,40 @@ struct Curve(Copyable, Movable):
             out.append(out[index - 1] + step)
         return out^
 
-    def length(self) raises -> Length:
-        """Return how long the curve is, measured across `ARC_DIVISIONS`
-        straight runs.
+    def arc_divisions(self) -> Int:
+        """Return how many straight runs stand in for this curve when its
+        length is measured.
+
+        `ARC_DIVISIONS` for a curve with one arc in it, and at least
+        `SEGMENT_SAMPLES` for each segment of a spline, which has an arc
+        apiece. A table with fewer samples than the curve has segments
+        lands on the same part of every segment and measures a curve that
+        is not there.
 
         Returns:
-            The length.
+            The number of runs, never fewer than `ARC_DIVISIONS`.
+        """
+        if self.kind == SPLINE:
+            var wanted = (len(self.points) - 1) * SEGMENT_SAMPLES
+            if wanted > ARC_DIVISIONS:
+                return wanted
+        return ARC_DIVISIONS
+
+    def length(self) raises -> Length:
+        """Return how long the curve is, measured across the straight runs
+        `arc_divisions` asks for.
+
+        Returns:
+            The length, which is an approximation from below: a curve is at
+            least as long as any set of chords across it.
 
         Raises:
             Error: If a sample falls outside the curve, which cannot
                 happen for a curve that was constructed.
         """
-        var table = self.lengths(ARC_DIVISIONS)
-        return Length(table[ARC_DIVISIONS], METER)
+        var divisions = self.arc_divisions()
+        var table = self.lengths(divisions)
+        return Length(table[divisions], METER)
 
     def point_at(self, u: Float32) raises -> Vector2:
         """Return the point `u` of the way along the curve by distance.
@@ -440,7 +481,7 @@ struct Curve(Copyable, Movable):
         """
         if u < 0 or u > 1:
             raise Error("A curve's u must lie from zero through one")
-        return self.point(u_to_t(self.lengths(ARC_DIVISIONS), u))
+        return self.point(u_to_t(self.lengths(self.arc_divisions()), u))
 
     def spaced_points(self, divisions: Int) raises -> List[Vector2]:
         """Return `divisions + 1` points at equal distances along the curve.
@@ -457,9 +498,14 @@ struct Curve(Copyable, Movable):
         """
         if divisions < 1:
             raise Error("A curve needs at least one division")
+        # One table for the whole call. `point_at` builds its own, and
+        # asking it once per point rebuilt the same hundreds of samples for
+        # every point returned.
+        var table = self.lengths(self.arc_divisions())
         var out = List[Vector2]()
         for index in range(divisions + 1):  # pragma: no branch
-            out.append(self.point_at(Float32(index) / Float32(divisions)))
+            var u = Float32(index) / Float32(divisions)
+            out.append(self.point(u_to_t(table, u)))
         return out^
 
 

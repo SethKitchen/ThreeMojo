@@ -282,6 +282,32 @@ def test_u_to_t_holds_still_where_the_curve_does() raises:
 
 def test_arc_divisions_is_three_js_own() raises:
     assert_equal(ARC_DIVISIONS, 200)
+    # A Bezier has one arc, and three.js's count follows it closely.
+    assert_equal(line(Vector2(0, 0), Vector2(1, 0)).arc_divisions(), 200)
+    # So does a spline with few enough segments to fit inside it.
+    assert_equal(
+        spline([Vector2(0, 0), Vector2(1, 1), Vector2(2, 0)]).arc_divisions(),
+        200,
+    )
+
+
+def test_a_long_spline_is_sampled_segment_by_segment() raises:
+    # Four hundred segments stepping a meter left and right while climbing
+    # a centimeter at a time. Two hundred samples land on every second
+    # control point, all of them on the same side, and measure a straight
+    # four-meter climb instead of a four-hundred-meter zigzag.
+    var points = List[Vector2]()
+    for index in range(401):
+        points.append(Vector2(Float32(index % 2), Float32(index) * 0.01))
+    var zigzag = spline(points^)
+    assert_equal(zigzag.arc_divisions(), 3200)
+    # The curve passes through every control point, so the run between
+    # them is a floor under its length.
+    assert_true(zigzag.length().to(METER) > Float32(400))
+    # And the distance parameter is built on the same table, so it reaches
+    # the far end rather than a hundredth of the way along.
+    assert_true(zigzag.point_at(1).y > Float32(3.9))
+    assert_true(zigzag.point_at(0.5).y > Float32(1.9))
 
 
 # --- Path -------------------------------------------------------------------

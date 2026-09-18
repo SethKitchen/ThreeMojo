@@ -4,7 +4,8 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """What plays a clip and writes it into the scene, from three.js
-`src/animation/AnimationMixer.js` and `AnimationAction.js`.
+`src/animation/AnimationMixer.js`, `AnimationAction.js` and
+`PropertyMixer.js`.
 
 An `AnimationAction` is one clip being played: where it has got to, how
 fast, whether it repeats, and how much of it to use. An `AnimationMixer`
@@ -23,26 +24,72 @@ A pile is a running average by weight, three.js's own arrangement in
 `_mixBufferRegion`: the first value in is the pile, and every value after
 it moves the pile a share of the way toward itself. That share is the new
 weight over the weight so far plus the new weight, which leaves the pile
-at the weighted mean however many values arrive and in whatever order.
+at the weighted mean however many values arrive.
 
-A rotation moves along the arc rather than along the line, by `slerp`, for
-the reason a rotation track is interpolated by `slerp`: the average of
-four numbers is not the average of two turns.
+For a position or a scale that mean is the same whatever order the values
+arrive in. For a rotation it is not: `slerp` runs along an arc, and three
+or more rotations mixed in a different order end somewhere slightly
+different. three.js accumulates rotations the same way and has the same
+property. Order here is the order the actions were added, which is at
+least the same from frame to frame.
+
+## Weight, and the pose that was already there
+
+A pile is a mean, so on its own it says nothing about *how much* of the
+node the actions have claimed. An action alone at a weight of one quarter
+would set the node to its full value, and fading a single animation out
+would do nothing until the weight reached zero.
+
+So the mixer remembers, per node and property, the value the node held
+before anything drove it, and mixes the pile back toward it by whatever
+weight is missing:
+
+    result = total * pile + (1 - total) * original
+
+three.js does this in `PropertyMixer.apply`, against the same saved
+original. A rotation blends back along the arc rather than the line, for
+the reason a rotation pile is mixed along the arc.
+
+That original is captured **once**, the first time a property is driven,
+and never again. Reading the node each frame would read back what the
+mixer wrote last frame, and the pose would wander.
 
 ## Looping
 
 `ONCE` stops at the end and stays there, `REPEAT` starts over, and
-`PING_PONG` runs back the way it came. A negative `time_scale` runs a clip
-backward, and each of the three handles that the same way going the other
-way. three.js has the same three, as `LoopOnce`, `LoopRepeat` and
-`LoopPingPong`.
+`PING_PONG` runs back the way it came.
+
+What an action carries is a *phase*, not the time it is read at. For
+`PING_PONG` the phase runs from zero to twice the clip's length and the
+read time folds back out of it. Storing the folded time instead loses
+which leg it was on: the second half of every period has the same time as
+the first, so the action turned around, came back to the fold, and turned
+around again. It bounced near the end for ever, and moving the same
+elapsed time in smaller steps gave a different answer from moving it in
+one.
+
+## Pausing, and holding at the end
+
+Three things are kept apart that a single flag ran together.
+
+`active` says the action contributes to the pose. `paused` says its clock
+has stopped. A paused action still contributes, which is what "hold where
+it is" has to mean: with a single flag, pausing one of two actions on one
+node did not freeze the pose, it handed the node to the other action.
+
+`clamp_when_finished` says what a `ONCE` action does at the end. False,
+three.js's default, and it stops contributing, so the node settles back
+toward the pose it had. True, and it holds its last frame for as long as
+it is kept. Either way the last frame is applied once before it takes
+effect.
 
 ## What is refused
 
-A weight below zero, which is not a share of anything. A loop mode that is
-none of the three. An action index the mixer does not have. A clip of no
-length is refused where clips are built, which is what lets the looping
-divide by the length without asking.
+A weight below zero, which is not a share of anything. A weight, a time
+scale or a frame time that is not a number. A loop mode that is none of
+the three. An action index the mixer does not have. A track naming a node
+the scene does not have. A clip of no length is refused where clips are
+built, which is what lets the looping divide by the length without asking.
 """
 
 from animation.animation_clip import AnimationClip
@@ -51,7 +98,7 @@ from core.object3d import NodeId
 from core.scene import Scene
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import floor
+from std.math import floor, isfinite
 from units.si import Duration, SECOND
 
 # How many numbers a pile holds: four, which is what the widest value, a
@@ -140,19 +187,92 @@ def mix_into_pile(
         piles[at + offset] += (value[offset] - piles[at + offset]) * part
 
 
+def rest_into_pile(
+    mut piles: List[Float32],
+    slot: Int,
+    total: Float32,
+    original: List[Float32],
+    kind: TrackKind,
+):
+    """Mix one pile back toward the pose the node held before it was
+    driven, by however much weight is missing.
+
+    With a total weight of one the pile is left alone. With a total of one
+    quarter the node keeps three quarters of what it was. three.js's
+    `PropertyMixer.apply` does the same against the same saved value.
+
+    Args:
+        piles: Every pile's numbers, `PILE` of them each.
+        slot: Which pile.
+        total: How much weight the pile holds in all; below one.
+        original: The `PILE` numbers the node held before.
+        kind: Which property, which decides whether the move back is along
+            a line or along an arc.
+    """
+    var at = slot * PILE
+    if kind == QUATERNION:
+        var mixed = Quaternion(
+            original[0], original[1], original[2], original[3]
+        ).slerp(
+            Quaternion(piles[at], piles[at + 1], piles[at + 2], piles[at + 3]),
+            total,
+        )
+        piles[at] = mixed.x
+        piles[at + 1] = mixed.y
+        piles[at + 2] = mixed.z
+        piles[at + 3] = mixed.w
+        return
+    for offset in range(PILE):  # pragma: no branch
+        piles[at + offset] = (
+            original[offset] + (piles[at + offset] - original[offset]) * total
+        )
+
+
+struct Binding(Copyable, Movable):
+    """One node property the mixer drives, and the value it held before.
+
+    Kept for as long as the mixer is, because it is the pose a weight of
+    less than one blends back toward. Reading the node instead would read
+    back what the mixer wrote last frame.
+    """
+
+    var node: Int
+    var kind: Int
+    var original: List[Float32]
+
+    def __init__(out self, node: Int, kind: Int, var original: List[Float32]):
+        """Remember what one node property held.
+
+        Args:
+            node: Which node.
+            kind: Which property.
+            original: The `PILE` numbers it held.
+        """
+        self.node = node
+        self.kind = kind
+        self.original = original^
+
+
 struct AnimationAction(Copyable, Movable):
     """One clip being played: where it has got to, and how much of it to
     use."""
 
     var clip: AnimationClip
     var loop: Loop
-    # How far into the clip the action has got, in seconds.
-    var time: Float32
+    # How far through the loop the action has got, in seconds. For
+    # `PING_PONG` this runs to twice the clip's length and `at` folds it;
+    # see the note on phase above.
+    var phase: Float32
     # How much of this action goes into the pose, three.js's `weight`.
     var weight: Float32
     # How fast the clip runs, and which way. Negative runs it backward.
     var time_scale: Float32
-    var playing: Bool
+    # Whether the action contributes to the pose at all.
+    var active: Bool
+    # Whether its clock has stopped. A paused action still contributes.
+    var paused: Bool
+    # Whether a `ONCE` action holds its last frame once it finishes.
+    var clamp_when_finished: Bool
 
     def __init__(
         out self,
@@ -160,6 +280,7 @@ struct AnimationAction(Copyable, Movable):
         loop: Loop = REPEAT,
         weight: Float32 = 1,
         time_scale: Float32 = 1,
+        clamp_when_finished: Bool = False,
     ) raises:
         """Create an action on a clip, stopped at its start.
 
@@ -171,51 +292,84 @@ struct AnimationAction(Copyable, Movable):
                 negative.
             time_scale: How fast the clip runs. One is its own speed, two
                 is twice as fast, and a negative number runs it backward.
+            clamp_when_finished: True if a `ONCE` action holds its last
+                frame rather than letting the node settle back. three.js's
+                flag of the same name, and False by default as it is
+                there.
 
         Raises:
-            Error: If the loop mode is none of the three, or the weight is
-                negative.
+            Error: If the loop mode is none of the three, or the weight or
+                the time scale is negative or is not a number.
         """
         if not loop.is_valid():
             raise Error("An action needs a loop mode that exists")
+        if not isfinite(weight):
+            raise Error("An action's weight must be a number")
         if weight < 0:
             raise Error("An action's weight cannot be negative")
+        if not isfinite(time_scale):
+            raise Error("An action's time scale must be a number")
         self.clip = clip^
         self.loop = loop
-        self.time = 0
+        self.phase = 0
         self.weight = weight
         self.time_scale = time_scale
-        self.playing = False
+        self.active = False
+        self.paused = False
+        self.clamp_when_finished = clamp_when_finished
 
     def __init__(out self, *, copy: Self):
         """Copy another action, its clip included."""
         self.clip = AnimationClip(copy=copy.clip)
         self.loop = copy.loop
-        self.time = copy.time
+        self.phase = copy.phase
         self.weight = copy.weight
         self.time_scale = copy.time_scale
-        self.playing = copy.playing
+        self.active = copy.active
+        self.paused = copy.paused
+        self.clamp_when_finished = copy.clamp_when_finished
 
     def play(mut self):
         """Start the action from where it is, three.js's `play`."""
-        self.playing = True
+        self.active = True
+        self.paused = False
 
     def pause(mut self):
-        """Stop the action where it is, three.js's `paused`."""
-        self.playing = False
+        """Stop the action's clock where it is, three.js's `paused`.
+
+        It goes on contributing to the pose. That is what holding a pose
+        means, and a paused action that stopped contributing would hand
+        the node to whatever else drives it.
+        """
+        self.paused = True
 
     def stop(mut self):
-        """Stop the action and rewind it, three.js's `stop`."""
-        self.playing = False
-        self.time = 0
+        """Stop the action, rewind it, and take it out of the pose,
+        three.js's `stop`."""
+        self.active = False
+        self.paused = False
+        self.phase = 0
+
+    def is_active(self) -> Bool:
+        """Return True if the action contributes to the pose."""
+        return self.active
 
     def is_playing(self) -> Bool:
-        """Return True if the mixer will move this action on."""
-        return self.playing
+        """Return True if the action's clock is running, which needs it to
+        be active and not paused."""
+        return self.active and not self.paused
 
     def at(self) -> Duration:
-        """Return how far into the clip the action has got."""
-        return Duration(self.time, SECOND)
+        """Return how far into the clip the action is being read.
+
+        For `PING_PONG` this is the phase folded back at the end of the
+        clip, so it runs up to the end and back down to the start.
+        """
+        var length = self.clip.duration().to(SECOND)
+        if self.loop == PING_PONG:
+            if self.phase > length:
+                return Duration(length * 2 - self.phase, SECOND)
+        return Duration(self.phase, SECOND)
 
     def set_weight(mut self, weight: Float32) raises:
         """Set how much of this action goes into the pose.
@@ -224,13 +378,23 @@ struct AnimationAction(Copyable, Movable):
             weight: The new weight; not negative.
 
         Raises:
-            Error: If the weight is negative.
+            Error: If the weight is negative or is not a number.
         """
+        if not isfinite(weight):
+            raise Error("An action's weight must be a number")
         if weight < 0:
             raise Error("An action's weight cannot be negative")
         self.weight = weight
 
-    def advance(mut self, seconds: Float32):
+    def _finish(mut self):
+        """End a `ONCE` action, either holding its last frame or letting
+        go of the node."""
+        if self.clamp_when_finished:
+            self.paused = True
+        else:
+            self.active = False
+
+    def advance(mut self, seconds: Float32) raises:
         """Move the action on by `seconds` of real time, and handle the end
         of the clip the way its loop mode says.
 
@@ -240,36 +404,46 @@ struct AnimationAction(Copyable, Movable):
         Args:
             seconds: How much real time has passed. It is multiplied by
                 `time_scale`, so this can move the action either way.
+
+        Raises:
+            Error: If `seconds` is not a number.
         """
+        if not isfinite(seconds):
+            raise Error(
+                "An action cannot advance by a time that is not a number"
+            )
         var length = self.clip.duration().to(SECOND)
-        var moved = self.time + seconds * self.time_scale
+        var moved = self.phase + seconds * self.time_scale
         if self.loop == ONCE:
             if moved >= length:
                 moved = length
-                self.playing = False
+                self._finish()
             if moved < 0:
                 moved = 0
-                self.playing = False
+                self._finish()
         elif self.loop == REPEAT:
             moved -= floor(moved / length) * length
         else:
+            # The phase runs over the whole there-and-back, and `at` folds
+            # it. Folding it here instead would lose which leg it is on.
             var there_and_back = length * 2
             moved -= floor(moved / there_and_back) * there_and_back
-            if moved > length:
-                moved = there_and_back - moved
-        self.time = moved
+        self.phase = moved
 
 
 struct AnimationMixer(Movable):
-    """The actions playing, and what writes their pose into a scene."""
+    """The actions playing, what they held before, and what writes their
+    pose into a scene."""
 
     var actions: List[AnimationAction]
+    var bindings: List[Binding]
     # How much time the mixer has been given, in seconds.
     var elapsed: Float32
 
     def __init__(out self):
         """Create a mixer with nothing playing."""
         self.actions = List[AnimationAction]()
+        self.bindings = List[Binding]()
         self.elapsed = 0
 
     def add(mut self, var action: AnimationAction) -> Int:
@@ -289,6 +463,10 @@ struct AnimationMixer(Movable):
     def action_count(self) -> Int:
         """Return how many actions the mixer holds."""
         return len(self.actions)
+
+    def binding_count(self) -> Int:
+        """Return how many node properties the mixer has taken over."""
+        return len(self.bindings)
 
     def action(
         mut self, index: Int
@@ -312,18 +490,64 @@ struct AnimationMixer(Movable):
         """Return how much time the mixer has been given in all."""
         return Duration(self.elapsed, SECOND)
 
+    def _binding(self, node: Int, kind: Int) -> Int:
+        """Return where the binding for one node property is, or minus one
+        when the mixer has not taken it over yet."""
+        for slot in range(len(self.bindings)):  # pragma: no branch
+            if self.bindings[slot].node == node:
+                if self.bindings[slot].kind == kind:
+                    return slot
+        return -1
+
+    def _bind(mut self, scene: Scene, node: Int, kind: TrackKind) raises:
+        """Remember what one node property holds, the first time anything
+        drives it.
+
+        Raises:
+            Error: If the scene has no such node.
+        """
+        if node < 0 or node >= scene.count():
+            raise Error("A track must name a node that is in the scene")
+        if self._binding(node, kind.value) >= 0:
+            return
+        ref held = scene.get(NodeId(node))
+        var original = List[Float32]()
+        if kind == QUATERNION:
+            original.append(held.quaternion.x)
+            original.append(held.quaternion.y)
+            original.append(held.quaternion.z)
+            original.append(held.quaternion.w)
+        elif kind == SCALE:
+            original.append(held.scale.x)
+            original.append(held.scale.y)
+            original.append(held.scale.z)
+            original.append(0)
+        else:
+            original.append(held.position.x)
+            original.append(held.position.y)
+            original.append(held.position.z)
+            original.append(0)
+        self.bindings.append(Binding(node, kind.value, original^))
+
     def update(mut self, mut scene: Scene, delta: Duration) raises:
         """Move every playing action on by `delta`, and write the pose the
         actions make into the scene.
+
+        An action that finishes its `ONCE` clip during this call still
+        contributes its last frame, and stops contributing from the next
+        call on unless it holds.
 
         Args:
             scene: The scene whose nodes the tracks name.
             delta: How much real time has passed since the last update.
 
         Raises:
-            Error: If a track names a node the scene does not have.
+            Error: If `delta` is not a number, or a track names a node the
+                scene does not have.
         """
         var seconds = delta.to(SECOND)
+        if not isfinite(seconds):
+            raise Error("A mixer cannot advance by a time that is not a number")
         self.elapsed += seconds
 
         var nodes = List[Int]()
@@ -332,9 +556,10 @@ struct AnimationMixer(Movable):
         var piles = List[Float32]()
 
         for index in range(len(self.actions)):  # pragma: no branch
-            if not self.actions[index].playing:
+            if not self.actions[index].active:
                 continue
-            self.actions[index].advance(seconds)
+            if not self.actions[index].paused:
+                self.actions[index].advance(seconds)
             var share = self.actions[index].weight
             if share <= 0:
                 continue
@@ -345,6 +570,7 @@ struct AnimationMixer(Movable):
                 var node = self.actions[index].clip.tracks[which].node.value
                 var kind = self.actions[index].clip.tracks[which].kind
                 var value = self.actions[index].clip.tracks[which].sample(at)
+                self._bind(scene, node, kind)
                 var slot = find_pile(nodes, kinds, node, kind.value)
                 if slot < 0:
                     nodes.append(node)
@@ -360,13 +586,21 @@ struct AnimationMixer(Movable):
                 weights[slot] += share
 
         for slot in range(len(nodes)):  # pragma: no branch
-            if nodes[slot] >= scene.count():
-                raise Error("A track must name a node that is in the scene")
+            var kind = TrackKind(kinds[slot])
+            if weights[slot] < 1:
+                var held = self._binding(nodes[slot], kinds[slot])
+                rest_into_pile(
+                    piles,
+                    slot,
+                    weights[slot],
+                    self.bindings[held].original,
+                    kind,
+                )
             var at = slot * PILE
             ref node = scene.node(NodeId(nodes[slot]))
-            if kinds[slot] == POSITION.value:
+            if kind == POSITION:
                 node.position = Vector3(piles[at], piles[at + 1], piles[at + 2])
-            elif kinds[slot] == SCALE.value:
+            elif kind == SCALE:
                 node.scale = Vector3(piles[at], piles[at + 1], piles[at + 2])
             else:
                 node.quaternion = Quaternion(
