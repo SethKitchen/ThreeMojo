@@ -29,10 +29,12 @@ from lights.light import point_light
 from materials.material import (
     BASIC,
     DEPTH,
+    MATCAP,
     NORMALS,
     PHONG,
     TOON,
     depth_material,
+    matcap_material,
     normal_material,
     phong_material,
     toon_material,
@@ -73,6 +75,7 @@ from renderers.renderer import (
     Renderer,
     available_workers,
     camera_position,
+    camera_up,
     face_normal,
     toward_camera,
 )
@@ -4549,6 +4552,182 @@ def test_a_ramp_is_read_at_no_surface_coordinate() raises:
             if shown.get_pixel(x, y).r > 0:
                 drawn += 1
     assert_true(drawn > 50, "the sphere barely drew anything")
+
+
+# --- a matcap material, through the renderer -------------------------------
+
+
+def a_matcap_image(left: Color, right: Color) raises -> Texture:
+    """Return a two-texel matcap: `left` on the left, `right` on the
+    right."""
+    var pixels = List[UInt8]()
+    for tint in [left, right]:
+        pixels.append(tint.r)
+        pixels.append(tint.g)
+        pixels.append(tint.b)
+        pixels.append(255)
+    return Texture(2, 1, pixels^, CLAMP, NEAREST, SRGB, False, IGNORED)
+
+
+def test_an_upright_camera_looks_up_the_world_y_axis() raises:
+    # `camera_up` is the view space +y axis in world coordinates. An
+    # upright camera's is world up, whatever it is looking at.
+    var scene = scene_with_node_at(0)
+    var up = camera_up(scene, camera_at(0, 0, 4))
+    assert_almost_equal(up.x, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(up.y, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(up.z, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(up.length(), Float32(1), atol=TOLERANCE)
+    # A camera looking down at forty-five degrees has tilted its up axis
+    # back by the same forty-five: still square to the way it looks.
+    var above = camera_up(scene, camera_at(0, 4, 4))
+    assert_almost_equal(above.y, Float32(0.7071068), atol=TOLERANCE)
+    assert_almost_equal(above.z, Float32(-0.7071068), atol=TOLERANCE)
+    # A parallel projection answers the same way: which way is up does not
+    # depend on whether the rays converge.
+    var flat = camera_up(scene, flat_ortho(4.0))
+    assert_almost_equal(flat.y, Float32(1), atol=TOLERANCE)
+
+
+def test_a_matcap_sphere_shows_the_image_and_not_the_lights() raises:
+    # The left of the sphere leans left and reads the image's left half;
+    # the right leans right and reads its right half. The scene's lamp
+    # changes nothing, which is what says the surface is unlit.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var ball = assets.textures.add(
+        a_matcap_image(Color(255, 0, 0), Color(0, 0, 255))
+    )
+    var skin = assets.materials.add(matcap_material(ball))
+    var scene = lamp_scene()
+    var shown = rendered(
+        renderer, scene, assets, ball_of(assets, skin), camera_at(0, 0, 4)
+    )
+    var left = shown.get_pixel(WIDTH // 2 - 4, HEIGHT // 2)
+    var right = shown.get_pixel(WIDTH // 2 + 4, HEIGHT // 2)
+    assert_equal(left.r, UInt8(255))
+    assert_equal(left.b, UInt8(0))
+    assert_equal(right.r, UInt8(0))
+    assert_equal(right.b, UInt8(255))
+    # An unlit scene gives the same image, because no light is read.
+    var dark = Scene()
+    _ = dark.add(Object3D())
+    dark.update()
+    var again = rendered(
+        renderer, dark, assets, ball_of(assets, skin), camera_at(0, 0, 4)
+    )
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(again.get_pixel(x, y).r, shown.get_pixel(x, y).r)
+            assert_equal(again.get_pixel(x, y).b, shown.get_pixel(x, y).b)
+
+
+def unlike(left: Framebuffer, right: Framebuffer, levels: Int) raises -> Int:
+    """Return how many pixels differ in red by more than `levels`."""
+    var apart = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var here = Int(left.get_pixel(x, y).r)
+            var there = Int(right.get_pixel(x, y).r)
+            if here - there > levels or there - here > levels:
+                apart += 1
+    return apart
+
+
+def test_a_matcap_stays_put_as_the_camera_orbits() raises:
+    # The frame a matcap is looked up in is the camera's own, so a sphere's
+    # normals fall in the same places in it from wherever the camera
+    # stands. Orbit a quarter turn and the image hardly moves. A lambert
+    # sphere lit from one side changes completely over the same orbit,
+    # which is what makes this a test of the frame.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var ball = assets.textures.add(
+        a_matcap_image(Color(255, 0, 0), Color(60, 60, 60))
+    )
+    var skin = assets.materials.add(matcap_material(ball))
+    var plain = assets.materials.add(Material(Color(255, 255, 255)))
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    var lamp = Object3D()
+    lamp.set_position(1, 0, 0)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.update()
+    var front = rendered(
+        renderer, scene, assets, ball_of(assets, skin), camera_at(0, 0, 4)
+    )
+    var side = rendered(
+        renderer, scene, assets, ball_of(assets, skin), camera_at(4, 0, 0)
+    )
+    var lit_front = rendered(
+        renderer, scene, assets, ball_of(assets, plain), camera_at(0, 0, 4)
+    )
+    var lit_side = rendered(
+        renderer, scene, assets, ball_of(assets, plain), camera_at(4, 0, 0)
+    )
+    var kept = unlike(front, side, 16)
+    var swung = unlike(lit_front, lit_side, 16)
+    # The sphere covers about eighty pixels of this small image, so these
+    # counts are a large share of it and not a handful of stragglers.
+    assert_true(kept < 10, "the matcap moved with the world")
+    assert_true(swung > 40, "the lambert sphere did not move at all")
+    # And the image really is what the sphere shows: its left half is the
+    # matcap's red and its right half the matcap's gray.
+    assert_equal(front.get_pixel(WIDTH // 2 - 4, HEIGHT // 2).r, UInt8(255))
+    assert_true(front.get_pixel(WIDTH // 2 + 4, HEIGHT // 2).r < 200)
+
+
+def test_a_matcap_sphere_without_an_image_takes_the_gradient() raises:
+    # Dark at the bottom and pale at the top, which reads as a sphere lit
+    # from above however the scene is lit.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var skin = assets.materials.add(matcap_material())
+    var scene = lamp_scene()
+    var shown = rendered(
+        renderer, scene, assets, ball_of(assets, skin), camera_at(0, 0, 4)
+    )
+    var top = shown.get_pixel(WIDTH // 2, HEIGHT // 2 - 4)
+    var bottom = shown.get_pixel(WIDTH // 2, HEIGHT // 2 + 4)
+    assert_true(top.r > bottom.r, "the gradient did not rise up the sphere")
+    assert_true(bottom.r > 0, "the bottom of the gradient reached black")
+
+
+def test_a_material_naming_a_matcap_that_is_not_there_is_rejected() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var skin = assets.materials.add(matcap_material(TextureId(3)))
+    var scene = lamp_scene()
+    with assert_raises():
+        _ = rendered(
+            renderer, scene, assets, ball_of(assets, skin), camera_at(0, 0, 4)
+        )
+
+
+def test_a_matcap_must_ignore_its_alpha_in_the_renderer() raises:
+    # Refused whatever the shading mode, as a wrong asset rather than a
+    # wrong frame -- the rule the emissive map follows.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var pixels = List[UInt8]()
+    for _ in range(2):
+        pixels.append(255)
+        pixels.append(255)
+        pixels.append(255)
+        pixels.append(128)
+    var weighted = assets.textures.add(
+        Texture(2, 1, pixels^, CLAMP, NEAREST, SRGB, False, COVERAGE)
+    )
+    var skin = assets.materials.add(matcap_material(weighted))
+    var scene = lamp_scene()
+    with assert_raises():
+        _ = rendered(
+            renderer, scene, assets, ball_of(assets, skin), camera_at(0, 0, 4)
+        )
 
 
 def main() raises:

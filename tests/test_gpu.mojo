@@ -68,7 +68,7 @@ from lights.light import (
     point_light,
     spot_light,
 )
-from lights.lighting import Lighting
+from lights.lighting import PERSPECTIVE_VIEW, Lighting
 from core.fog import Fog, FogView, exp2_fog, linear_fog, no_fog
 from render.tonemap import (
     ACES_FILMIC_TONE_MAPPING,
@@ -83,7 +83,7 @@ from render.tonemap import (
 from render.rasterizer import rasterize_all
 from units.si import InverseLength, PER_METER
 from core.layers import Layers
-from renderers.renderer import camera_position, toward_camera
+from renderers.renderer import camera_position, camera_up, toward_camera
 from render.gpu import (
     FLOATS_PER_VERTEX,
     FOG_FLOATS,
@@ -91,6 +91,7 @@ from render.gpu import (
     LIGHTS_EYE,
     LIGHTS_FIRST,
     LIGHTS_TOWARD,
+    LIGHTS_UP,
     STATE_PER_TRIANGLE,
     TABLE_COLUMNS,
     GpuRenderer,
@@ -114,10 +115,12 @@ from materials.material import (
     DEPTH,
     DOUBLE_SIDE,
     LAMBERT,
+    MATCAP,
     NORMALS,
     PHONG,
     TOON,
     depth_material,
+    matcap_material,
     normal_material,
     phong_material,
     toon_material,
@@ -769,12 +772,16 @@ def test_the_state_table_has_an_entry_per_map_and_policy() raises:
     assert_equal(state[3], Int32(5))
     assert_equal(state[4], Int32(NO_TEXTURE.value))
     assert_equal(state[5], Int32(NO_TEXTURE.value))
+    assert_equal(state[6], Int32(NO_TEXTURE.value))
+    # A matcap triangle's image rides the column after the ramp.
+    assert_equal(triangle_state(matcap_pair(TextureId(8)))[6], Int32(8))
+    assert_equal(triangle_state(matcap_pair())[6], Int32(NO_TEXTURE.value))
     # A toon triangle's ramp rides the last column.
     var stepped = toon_pair(TextureId(6))
     assert_equal(triangle_state(stepped)[5], Int32(6))
     assert_equal(triangle_state(toon_pair())[5], Int32(NO_TEXTURE.value))
     # And each of the other four kinds crosses as its own value.
-    for kind in [LAMBERT, NORMALS, DEPTH, TOON]:
+    for kind in [LAMBERT, NORMALS, DEPTH, TOON, MATCAP]:
         var others = List[RasterVertex]()
         for _ in range(3):
             others.append(
@@ -3722,7 +3729,7 @@ def test_the_state_table_carries_the_alpha_map() raises:
         )
     var state = triangle_state(corners)
     assert_equal(len(state), STATE_PER_TRIANGLE)
-    assert_equal(len(state), 6)
+    assert_equal(len(state), 7)
     assert_equal(state[4], Int32(7))
     var plain = List[RasterVertex]()
     for _ in range(3):
@@ -3920,6 +3927,23 @@ def test_the_light_buffer_begins_with_the_camera_and_its_direction() raises:
     assert_equal(flat_view[LIGHTS_TOWARD], Float32(0))
     assert_equal(flat_view[LIGHTS_TOWARD + 1], Float32(0))
     assert_equal(flat_view[LIGHTS_TOWARD + 2], Float32(1))
+    # The camera's own up axis follows, normalized on the way in. World
+    # up is what an upright camera has and what a caller that says
+    # nothing gets.
+    assert_equal(flat[LIGHTS_UP], Float32(0))
+    assert_equal(flat[LIGHTS_UP + 1], Float32(1))
+    assert_equal(flat[LIGHTS_UP + 2], Float32(0))
+    var rolled = flatten_lights(
+        Lighting(
+            scene,
+            Layers.all(),
+            Vector3(7, 8, 9),
+            PERSPECTIVE_VIEW,
+            Vector3(0, 0, 5),
+        )
+    )
+    assert_equal(rolled[LIGHTS_UP + 2], Float32(1))
+    assert_equal(rolled[LIGHTS_UP + 1], Float32(0))
 
 
 def phong_pair(specular: FloatColor, shininess: Float32) -> List[RasterVertex]:
@@ -4705,6 +4729,255 @@ def test_both_backends_agree_on_a_prepared_toon_scene() raises:
     assert_true(len(corners) > 0, "the scene prepared no triangles")
     var lighting = Lighting(
         scene, camera.visible_layers(), camera_position(scene, camera)
+    )
+    var view = FogView(scene.fog)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_TEXTURE, assets.textures, lighting, 1, view
+    )
+    var cpu = target.resolve(1, ACES_FILMIC_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+        view,
+        ACES_FILMIC_TONE_MAPPING,
+        1.0,
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 300, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- a matcap material, both backends ---------------------------------------
+
+
+def a_gpu_matcap(
+    left: Color, right: Color, alpha: Alpha = IGNORED
+) raises -> Texture:
+    """Return a two-texel matcap: `left` on the left, `right` on the
+    right."""
+    var pixels = List[UInt8]()
+    for tint in [left, right]:
+        pixels.append(tint.r)
+        pixels.append(tint.g)
+        pixels.append(tint.b)
+        pixels.append(255)
+    return Texture(2, 1, pixels^, CLAMP, NEAREST, SRGB, False, alpha)
+
+
+def matcap_pair(matcap: TextureId = NO_TEXTURE) -> List[RasterVertex]:
+    """Return `overlapping_pair` as matcap surfaces, each corner facing a
+    different way so the lookup really sweeps the image."""
+    var normals: List[Vector3] = [
+        Vector3(0, 0, 1),
+        Vector3(0.9, 0, 0.4),
+        Vector3(0, 0.9, -0.4),
+        Vector3(-0.8, 0.2, 0.5),
+        Vector3(0.3, -0.9, 0.1),
+        Vector3(0, -0.6, 0.8),
+    ]
+    var corners = List[RasterVertex]()
+    var base = overlapping_pair()
+    for index in range(len(base)):
+        var here = base[index]
+        corners.append(
+            RasterVertex(
+                here.x,
+                here.y,
+                here.z,
+                here.inv_w,
+                # White, because a matcap multiplies the surface color:
+                # a green corner under a red image would show neither.
+                FloatColor(1, 1, 1),
+                here.u,
+                here.v,
+                here.texture,
+                here.blend,
+                normals[index],
+                Vector3(Float32(index) * 0.2 - 0.5, Float32(index) * 0.1, 0.0),
+                MATCAP,
+                here.emissive,
+                here.emissive_map,
+                here.view_depth,
+                NO_TEXTURE,
+                0,
+                FloatColor(0, 0, 0),
+                0,
+                NO_TEXTURE,
+                matcap,
+            )
+        )
+    return corners^
+
+
+def watching() raises -> Lighting:
+    """Return lighting with a camera off to one side and no lights, so
+    nothing but the matcap decides a pixel."""
+    return Lighting(Scene(), Layers.all(), Vector3(0.4, 0.3, 3.0))
+
+
+def test_both_backends_look_a_matcap_up_in_the_same_place() raises:
+    # The frame comes from the same shared function on both sides, and the
+    # image is read at the same level, so the two must reach the same
+    # texels.
+    if skipped_for_lack_of_a_gpu("both backends look a matcap up alike"):
+        return
+    var textures = TextureStore()
+    var ball = textures.add(
+        a_gpu_matcap(Color(255, 40, 40), Color(40, 40, 255))
+    )
+    var lighting = watching()
+    var corners = matcap_pair(ball)
+    var target = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(corners, target, SHADE_LIT, textures, lighting)
+    var cpu = target.resolve()
+    var renderer = GpuRenderer(24, 18)
+    renderer.set_textures(textures)
+    renderer.draw(corners, BACKGROUND, SHADE_LIT, lighting)
+    var gpu = renderer.read_back()
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # Both halves of the image really arrived, so the lookup swept it.
+    var reds = 0
+    var blues = 0
+    for y in range(18):
+        for x in range(24):
+            var here = gpu.get_pixel(x, y)
+            if here.r > 200:
+                reds += 1
+            elif here.b > 200:
+                blues += 1
+    assert_true(reds > 20 and blues > 20, "the lookup did not sweep the image")
+
+
+def test_both_backends_agree_on_the_fallback_matcap() raises:
+    # No image, so both take three.js's gray gradient from the same shared
+    # function.
+    if skipped_for_lack_of_a_gpu("both backends agree on the matcap gradient"):
+        return
+    var lighting = watching()
+    var corners = matcap_pair()
+    var target = RenderTarget(24, 18, BACKGROUND)
+    rasterize_all(corners, target, SHADE_LIT, TextureStore(), lighting)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners, 24, 18, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And it is a gradient, not one flat gray: the corners face different
+    # ways, so the lookup reaches different heights.
+    var low = UInt8(255)
+    var high = UInt8(0)
+    for y in range(18):
+        for x in range(24):
+            var here = gpu.get_pixel(x, y)
+            if here.r == BACKGROUND.r and here.g == BACKGROUND.g:
+                continue
+            if here.r < low:
+                low = here.r
+            if here.r > high:
+                high = here.r
+    assert_true(high > low + 8, "the fallback matcap was flat")
+
+
+def test_the_gpu_refuses_a_matcap_it_cannot_sample() raises:
+    if skipped_for_lack_of_a_gpu("the gpu refuses a bad matcap"):
+        return
+    var textures = TextureStore()
+    var good = textures.add(a_gpu_matcap(Color(255, 0, 0), Color(0, 0, 255)))
+    var weighted = textures.add(
+        a_gpu_matcap(Color(255, 0, 0), Color(0, 0, 255), COVERAGE)
+    )
+    var renderer = GpuRenderer(16, 12)
+    renderer.set_textures(textures)
+    var target = RenderTarget(16, 12, BACKGROUND)
+    with assert_raises():
+        renderer.draw(matcap_pair(weighted), BACKGROUND, SHADE_LIT)
+    with assert_raises():
+        rasterize_all(matcap_pair(weighted), target, SHADE_LIT, textures)
+    # One that ignores its alpha draws on both.
+    renderer.draw(matcap_pair(good), BACKGROUND, SHADE_LIT)
+    rasterize_all(matcap_pair(good), target, SHADE_LIT, textures)
+    # And one that was never uploaded is refused rather than read off the
+    # end of the descriptor table.
+    with assert_raises():
+        renderer.draw(matcap_pair(TextureId(9)), BACKGROUND, SHADE_LIT)
+
+
+def test_both_backends_agree_on_a_prepared_matcap_scene() raises:
+    # A whole frame: a lit floor, a matcap sphere on an image and a matcap
+    # box on the gradient, through a fog and a curve.
+    if skipped_for_lack_of_a_gpu("both backends agree on a matcap scene"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var floor = assets.geometries.add(
+        plane(Length(12.0, METER), Length(12.0, METER), 4, 4)
+    )
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 16, 12))
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var image = assets.textures.add(
+        a_gpu_matcap(Color(255, 190, 120), Color(40, 60, 110))
+    )
+
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_position(0, -1.0, 0)
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var left = Object3D()
+    left.set_position(-1.0, 0, 0)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(1.0, 0, -0.4)
+    right.set_euler(
+        Angle(20.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var right_node = scene.add(right^)
+    light_the(scene)
+    scene.fog = linear_fog(
+        Color(160, 170, 190), Length(3.0, METER), Length(12.0, METER)
+    )
+    scene.update()
+
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            floor,
+            assets.materials.add(Material(Color(200, 200, 200))),
+            ground_node,
+        )
+    )
+    meshes.append(
+        Mesh(ball, assets.materials.add(matcap_material(image)), left_node)
+    )
+    meshes.append(
+        Mesh(box, assets.materials.add(matcap_material()), right_node)
+    )
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0, 0.8, 3.2), Vector3(0, 0, 0))
+
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the scene prepared no triangles")
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
     )
     var view = FogView(scene.fog)
     var target = RenderTarget(48, 36, BACKGROUND)

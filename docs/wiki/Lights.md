@@ -86,6 +86,7 @@ Pass `toward_eye` with it, the one direction toward a camera whose rays run para
 | `toon_at(normal, position, ramp) -> FloatColor` | The light that reaches a `TOON` surface, every cosine read off `ramp`. |
 | `eye: Vector3` | Where the camera is, in world space. Only a highlight reads it. |
 | `toward_eye: Vector3` | The one direction toward that camera, or `PERSPECTIVE_VIEW`. Normalized here. |
+| `up: Vector3` | Which way is up for that camera, in world space. Only a matcap reads it. Normalized here. |
 | `shade(base, normal, position) -> FloatColor` | `base` decoded from sRGB and multiplied by `intensity_at`. |
 | `Lighting.uniform()` | Light of one everywhere. The identity for a hand-built triangle. |
 

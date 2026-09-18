@@ -325,6 +325,12 @@ struct Lighting(Movable):
     # `PERSPECTIVE_VIEW` when they converge on `eye` instead. Normalized on
     # the way in, so a fragment never has to. See `toward_eye_at`.
     var toward_eye: Vector3
+    # Which way is up for the camera, in world space: the frame a `MATCAP`
+    # surface is looked up in. three.js measures that frame against the
+    # view space +y axis, and this is that axis in world coordinates, so
+    # the two reach the same coordinate. World up, the default, is what a
+    # scene with no matcap wants and what an upright camera has anyway.
+    var up: Vector3
     # The sum of every ambient light, already decoded and scaled.
     var ambient: FloatColor
     # One entry per directional light, parallel lists.
@@ -360,6 +366,7 @@ struct Lighting(Movable):
         visible: Layers = Layers.all(),
         eye: Vector3 = Vector3(0, 0, 0),
         toward_eye: Vector3 = PERSPECTIVE_VIEW,
+        up: Vector3 = Vector3(0, 1, 0),
     ) raises:
         """Resolve a scene's lights against the world transforms it holds.
 
@@ -384,6 +391,10 @@ struct Lighting(Movable):
                 default, for one whose rays converge. `Renderer.render`
                 passes `toward_camera`, which asks the camera's own
                 projection. Normalized here, so a caller need not.
+            up: Which way is up for that camera, in world space. Only a
+                `MATCAP` material reads it, for the frame it is looked up
+                in. `Renderer.render` passes `camera_up`. World up, the
+                default, is what an upright camera has. Normalized here.
 
         Raises:
             Error: If a light's numbers are refused by `Light.validate`,
@@ -400,6 +411,12 @@ struct Lighting(Movable):
         self.toward_eye = toward_eye
         if self.toward_eye.length() != 0:
             self.toward_eye.normalize()
+        # Normalized here rather than at every fragment, as `toward_eye` is.
+        # A zero vector is left alone: it names no frame, and `matcap_uv`
+        # answers the middle of the image for one.
+        self.up = up
+        if self.up.length() != 0:
+            self.up.normalize()
         self.ambient = FloatColor(0.0, 0.0, 0.0, 1.0)
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()
@@ -499,6 +516,7 @@ struct Lighting(Movable):
         """
         self.eye = Vector3(0, 0, 0)
         self.toward_eye = PERSPECTIVE_VIEW
+        self.up = Vector3(0, 1, 0)
         self.ambient = ambient
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()

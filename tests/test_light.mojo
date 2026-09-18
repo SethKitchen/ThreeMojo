@@ -1413,5 +1413,27 @@ def test_a_toon_surface_takes_its_indirect_light_unstepped() raises:
     assert_almost_equal(up.r, Float32(1.25), atol=TOLERANCE)
 
 
+# --- which way is up for the camera ----------------------------------------
+
+
+def test_the_cameras_up_axis_is_carried_and_made_unit_length() raises:
+    # Only a `MATCAP` material reads it, for the frame it is looked up in.
+    # World up is the default, which is what an upright camera has.
+    var scene = scene_with_lamp_at(0, 0, 1)
+    assert_equal(Lighting(scene).up.y, Float32(1))
+    assert_equal(Lighting(scene).up.x, Float32(0))
+    assert_equal(Lighting.uniform().up.y, Float32(1))
+    # Normalized on the way in, so no fragment has to.
+    var rolled = Lighting(scene, Layers.all(), ORIGIN, ORIGIN, Vector3(0, 0, 3))
+    assert_equal(rolled.up.z, Float32(1))
+    assert_equal(rolled.up.y, Float32(0))
+    var tilted = Lighting(scene, Layers.all(), ORIGIN, ORIGIN, Vector3(3, 4, 0))
+    assert_almost_equal(tilted.up.x, Float32(0.6), atol=TOLERANCE)
+    assert_almost_equal(tilted.up.y, Float32(0.8), atol=TOLERANCE)
+    # A zero vector names no frame and is left as it is.
+    var none = Lighting(scene, Layers.all(), ORIGIN, ORIGIN, Vector3(0, 0, 0))
+    assert_equal(none.up.length(), Float32(0))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

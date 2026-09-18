@@ -48,6 +48,8 @@ A `NORMALS` corner carries its normal in view space, not world space. The normal
 | `check_alpha_map(texture)` | Refuse an alpha map that is not stored as data. |
 | `check_gradient_map(texture)` | Refuse a toon ramp that is not stored as data. |
 | `gradient_ramp(texture)` | A gradient map's top row as tones, left to right. |
+| `matcap_uv(toward_eye, up, normal)` | Where a `MATCAP` surface is looked up in its image. |
+| `matcap_fallback(v)` | three.js's gray gradient, for a matcap surface with no image. |
 | `interpolate_alpha(a, b, c, share_b, share_c)` | An alpha across a triangle, in difference form. |
 
 ## Coverage
@@ -106,6 +108,12 @@ A `TOON` triangle reads its light from `Lighting.toon_at` rather than from `inte
 
 Both backends read the same bytes. The host reads texel (x, 0) of the gradient map. The kernel reads the same byte of the same row out of its texel buffer. So a ramp of three tones cannot step at one coordinate on one side and another on the other. See [Materials](Materials#toon).
 
+## Matcap shading
+
+A `MATCAP` triangle is unlit. Its light comes from an image, looked up by which way the surface is turned in the camera's frame. That light multiplies the surface color exactly as arriving light does. `matcap_uv` builds that frame and both backends call it.
+
+The direction toward the camera is measured from where the camera stands, under either projection. The image is read at its full-size level and never down a mip chain. See [Materials](Materials#matcap).
+
 ## Transparency
 
 `rasterize_shaded` blends a `BLEND` fragment over what is there, in premultiplied linear light. The caller owns the draw order. `Renderer.prepare` sorts.
@@ -115,9 +123,9 @@ A `NORMALS` or `DEPTH` triangle cannot blend. One pixel holds its own bytes or t
 ## Errors
 
 - A mode that is none of the three raises.
-- Corners that disagree about blend, texture, kind, emissive map, gradient map or shininess raise.
+- Corners that disagree about blend, texture, kind, emissive map, gradient map, matcap or shininess raise.
 - A negative or non-finite shininess raises, on every worker count.
-- A material kind that is none of the six raises, on every worker count.
+- A material kind that is none of the seven raises, on every worker count.
 - An emissive map that reads its alpha as coverage raises under `SHADE_TEXTURE`, on both backends.
 - A blend value that is neither `OPAQUE` nor `BLEND` raises, on every worker count, whether or not the triangle is visible.
 - A `NORMALS` or `DEPTH` triangle whose blend is `BLEND` raises, on every worker count.
@@ -125,5 +133,6 @@ A `NORMALS` or `DEPTH` triangle cannot blend. One pixel holds its own bytes or t
 - An alpha map that `SHADE_TEXTURE` would open raises unless it is `LINEAR` and `IGNORED`.
 - A gradient map raises unless it is `LINEAR`, `IGNORED` and holds texels. Asked under every mode that lights the surface, because `SHADE_LIT` reads one too.
 - A gradient map on a kind that is not `TOON` raises, and so do corners that disagree about one.
+- A matcap raises unless it is `IGNORED`. A matcap on a kind that is not `MATCAP` raises, and so do corners that disagree about one.
 - An alpha test outside zero to one, or not finite, raises on every worker count.
 - A fog view that `FogView.validate` refuses raises before any fragment is drawn, on every worker count.

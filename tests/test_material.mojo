@@ -6,9 +6,18 @@
 """Tests for `materials.material`, `render.texture_store` and `core.assets`."""
 
 from materials.material import BLEND, OPAQUE, Blending, MaterialKind, Side
-from materials.material import BASIC, DEPTH, LAMBERT, NORMALS, PHONG, TOON
+from materials.material import (
+    BASIC,
+    DEPTH,
+    LAMBERT,
+    MATCAP,
+    NORMALS,
+    PHONG,
+    TOON,
+)
 from materials.material import (
     depth_material,
+    matcap_material,
     normal_material,
     phong_material,
     toon_material,
@@ -215,7 +224,8 @@ def test_a_wrong_value_in_the_right_type_is_refused() raises:
     assert_true(DEPTH.is_valid())
     assert_true(PHONG.is_valid())
     assert_true(TOON.is_valid())
-    assert_false(MaterialKind(7).is_valid())
+    assert_true(MATCAP.is_valid())
+    assert_false(MaterialKind(9).is_valid())
     with assert_raises():
         _ = Material(Color(0, 0, 0), NO_TEXTURE, Side(99))
     with assert_raises():
@@ -510,6 +520,7 @@ def test_a_phong_material_is_lit_and_shows_no_data() raises:
     assert_false(NORMALS.is_lit())
     assert_false(DEPTH.is_lit())
     assert_true(TOON.is_lit())
+    assert_false(MATCAP.is_lit())
     var shiny = phong_material(Color(200, 40, 40))
     assert_equal(shiny.kind, PHONG)
     assert_true(shiny.is_lit())
@@ -696,6 +707,104 @@ def test_a_bad_gradient_map_id_is_rejected() raises:
         _ = toon_material(
             Color(1, 2, 3),
             NO_TEXTURE,
+            NO_TEXTURE,
+            FRONT_SIDE,
+            1.0,
+            Blending(7),
+        )
+
+
+# --- a matcap material is looked up in an image -----------------------------
+
+
+def test_a_matcap_material_is_unlit_and_shows_no_data() raises:
+    assert_true(MATCAP.is_valid())
+    assert_false(MATCAP.is_lit())
+    assert_false(MATCAP.is_data())
+    assert_true(MATCAP.is_unlit())
+    assert_true(BASIC.is_unlit())
+    assert_false(LAMBERT.is_unlit())
+    assert_false(PHONG.is_unlit())
+    assert_false(TOON.is_unlit())
+    assert_false(NORMALS.is_unlit())
+    assert_false(DEPTH.is_unlit())
+    var ball = matcap_material(TextureId(2))
+    assert_equal(ball.kind, MATCAP)
+    assert_false(ball.is_lit())
+    assert_false(ball.is_data())
+    assert_false(ball.has_highlight())
+
+
+def test_a_matcap_material_names_its_image_or_takes_the_gradient() raises:
+    # The image comes first, because the surface is the image. The color
+    # is a tint over it, and white leaves it alone.
+    var ball = matcap_material(TextureId(2))
+    assert_equal(ball.matcap, TextureId(2))
+    assert_true(ball.has_matcap())
+    assert_equal(ball.color.r, UInt8(255))
+    assert_equal(ball.color.g, UInt8(255))
+    assert_equal(ball.color.b, UInt8(255))
+    # With none it is not unlookupable: three.js's gray gradient applies.
+    var plain = matcap_material()
+    assert_equal(plain.matcap, NO_TEXTURE)
+    assert_false(plain.has_matcap())
+    # And every other property comes through as it does on any material.
+    var pane = matcap_material(
+        TextureId(2), Color(1, 2, 3), TextureId(4), DOUBLE_SIDE, 0.5
+    )
+    assert_equal(pane.color.r, UInt8(1))
+    assert_equal(pane.map, TextureId(4))
+    assert_equal(pane.side, DOUBLE_SIDE)
+    assert_equal(pane.opacity, Float32(0.5))
+    assert_true(pane.is_transparent())
+    # Every other kind names no image, whatever else it carries.
+    assert_false(Material(Color(1, 2, 3)).has_matcap())
+    assert_false(toon_material(Color(1, 2, 3)).has_matcap())
+    assert_false(normal_material().has_matcap())
+
+
+def test_only_a_matcap_material_is_looked_up_in_an_image() raises:
+    for kind in [BASIC, LAMBERT, NORMALS, DEPTH, PHONG, TOON]:
+        with assert_raises():
+            _ = Material(Color(255, 255, 255), kind=kind, matcap=TextureId(1))
+    _ = Material(Color(1, 2, 3), kind=MATCAP, matcap=TextureId(1))
+
+
+def test_a_matcap_material_has_no_emissive_term() raises:
+    # The image already holds every bit of light the surface shows, so an
+    # emissive term is a mistake rather than an addition -- the rule a
+    # basic material follows, and the reason both answer `is_unlit`.
+    with assert_raises():
+        _ = Material(
+            Color(255, 255, 255), kind=MATCAP, emissive=Color(10, 10, 10)
+        )
+    with assert_raises():
+        _ = Material(
+            Color(255, 255, 255), kind=MATCAP, emissive_map=TextureId(1)
+        )
+    # A black emissive adds nothing and is allowed, as on a basic material.
+    _ = Material(Color(255, 255, 255), kind=MATCAP, emissive=Color(0, 0, 0))
+
+
+def test_a_bad_matcap_id_is_rejected() raises:
+    with assert_raises():
+        _ = matcap_material(TextureId(-2))
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), kind=MATCAP, matcap=TextureId(-7))
+    _ = matcap_material(NO_TEXTURE)
+    # The refusals every material makes still apply to this builder.
+    with assert_raises():
+        _ = matcap_material(NO_TEXTURE, Color(1, 2, 3), TextureId(-2))
+    with assert_raises():
+        _ = matcap_material(NO_TEXTURE, Color(1, 2, 3), NO_TEXTURE, Side(99))
+    with assert_raises():
+        _ = matcap_material(
+            NO_TEXTURE, Color(1, 2, 3), NO_TEXTURE, FRONT_SIDE, 2.0
+        )
+    with assert_raises():
+        _ = matcap_material(
+            NO_TEXTURE,
+            Color(1, 2, 3),
             NO_TEXTURE,
             FRONT_SIDE,
             1.0,

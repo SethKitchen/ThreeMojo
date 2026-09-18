@@ -45,6 +45,7 @@ from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.framebuffer import Color, FloatColor, Framebuffer
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.lighting import (
+    PERSPECTIVE_VIEW,
     Lighting,
     blinn_phong,
     falloff,
@@ -65,10 +66,20 @@ from render.rasterizer import (
     check_alpha_map,
     check_triangle_state,
     interpolate_alpha,
+    matcap_fallback,
+    matcap_uv,
     packed_depth,
     packed_normal,
 )
-from materials.material import BLEND, DEPTH, LAMBERT, NORMALS, PHONG, TOON
+from materials.material import (
+    BLEND,
+    DEPTH,
+    LAMBERT,
+    MATCAP,
+    NORMALS,
+    PHONG,
+    TOON,
+)
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.srgb import LINEAR, SRGB, ColorSpace, decode_ramp
 from render.tonemap import (
@@ -159,7 +170,9 @@ comptime STATE_ALPHA_MAP = 4
 # `NO_TEXTURE`. An index rather than a lane, because it is one number per
 # triangle like every other map.
 comptime STATE_GRADIENT_MAP = 5
-comptime STATE_PER_TRIANGLE = STATE_GRADIENT_MAP + 1
+# Which image a `MATCAP` triangle is looked up in, or `NO_TEXTURE`.
+comptime STATE_MATCAP = 6
+comptime STATE_PER_TRIANGLE = STATE_MATCAP + 1
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
 # density, then the fog color, linear. Six floats, whatever the kind,
@@ -179,8 +192,9 @@ comptime FOG_FLOATS = FOG_B + 1
 # read by `flatten_lights`, `_arriving` and `_highlight` alike.
 comptime LIGHTS_EYE = 0
 comptime LIGHTS_TOWARD = 3
-comptime LIGHTS_AMBIENT = 6
-comptime LIGHTS_FIRST = 9
+comptime LIGHTS_UP = 6
+comptime LIGHTS_AMBIENT = 9
+comptime LIGHTS_FIRST = 12
 
 # Further than any NDC depth, so the first covering triangle always wins. The
 # host framebuffer uses an actual infinity; a literal keeps the kernel free of
@@ -316,7 +330,8 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     """Return a scene's lights as the flat float buffer the kernel reads.
 
     Three floats of camera position, three of the one direction toward it
-    under a parallel projection, then three of ambient, then six per
+    under a parallel projection, three of the camera's own up axis, then
+    three of ambient, then six per
     directional light -- a unit
     direction and the light it carries -- then eight per point light: where
     it is, the light it carries, its decay and its cutoff. Then nine per
@@ -348,6 +363,9 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     flat.append(lighting.toward_eye.x)
     flat.append(lighting.toward_eye.y)
     flat.append(lighting.toward_eye.z)
+    flat.append(lighting.up.x)
+    flat.append(lighting.up.y)
+    flat.append(lighting.up.z)
     flat.append(lighting.ambient.r)
     flat.append(lighting.ambient.g)
     flat.append(lighting.ambient.b)
@@ -956,8 +974,8 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
 
     Returns:
         Texture id, blend policy, the material kind's value, the emissive
-        map id, the alpha map id, then the gradient map id, per triangle,
-        from its first corner.
+        map id, the alpha map id, the gradient map id, then the matcap id,
+        per triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -967,6 +985,7 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
         state.append(Int32(corners[triangle * 3].emissive_map.value))
         state.append(Int32(corners[triangle * 3].alpha_map.value))
         state.append(Int32(corners[triangle * 3].gradient_map.value))
+        state.append(Int32(corners[triangle * 3].matcap.value))
     return state^
 
 
@@ -1377,6 +1396,9 @@ def rasterize_kernel(
             or kind == Int32(PHONG.value)
             or kind == Int32(TOON.value)
         )
+        # Unlit, but looked up by which way the surface is turned, so it
+        # needs the normal and the world position that a lit surface needs.
+        var looked_up = kind == Int32(MATCAP.value)
         var shows_normal = kind == Int32(NORMALS.value)
         var shows_data = shows_normal or kind == Int32(DEPTH.value)
         # The interpolated normal, made a unit vector again here. That
@@ -1391,7 +1413,7 @@ def rasterize_kernel(
         var nx = Float32(0)
         var ny = Float32(0)
         var nz = Float32(1)
-        if mode != Int32(SHADE_UV.value) and (lit or shows_normal):
+        if mode != Int32(SHADE_UV.value) and (lit or shows_normal or looked_up):
             nx = (
                 corners[unsafe_offset=base + LANE_NX] * share_a
                 + corners[unsafe_offset=b_base + LANE_NX] * share_b
@@ -1412,7 +1434,7 @@ def rasterize_kernel(
                 nx /= unit
                 ny /= unit
                 nz /= unit
-        if mode != Int32(SHADE_UV.value) and lit:
+        if mode != Int32(SHADE_UV.value) and (lit or looked_up):
             # Where this fragment is in the world, for the lights that have
             # a position.
             var wx = (
@@ -1430,7 +1452,49 @@ def rasterize_kernel(
                 + corners[unsafe_offset=b_base + LANE_WZ] * share_b
                 + corners[unsafe_offset=c_base + LANE_WZ] * share_c
             )
-            if kind == Int32(TOON.value):
+            if looked_up:
+                # Which way the surface is turned in the camera's frame,
+                # and the image read there: the host's own two functions.
+                # Measured from where the camera stands under either
+                # projection, because three.js reads `vViewPosition` and
+                # does not special-case a parallel one.
+                var place = matcap_uv(
+                    toward_eye_at(
+                        Vector3(
+                            lights[unsafe_offset=LIGHTS_EYE],
+                            lights[unsafe_offset=LIGHTS_EYE + 1],
+                            lights[unsafe_offset=LIGHTS_EYE + 2],
+                        ),
+                        PERSPECTIVE_VIEW,
+                        Vector3(wx, wy, wz),
+                    ),
+                    Vector3(
+                        lights[unsafe_offset=LIGHTS_UP],
+                        lights[unsafe_offset=LIGHTS_UP + 1],
+                        lights[unsafe_offset=LIGHTS_UP + 2],
+                    ),
+                    Vector3(nx, ny, nz),
+                )
+                var ball = maps[
+                    unsafe_offset=index * STATE_PER_TRIANGLE + STATE_MATCAP
+                ]
+                if ball >= 0:
+                    # The full-size level, never a mip, as the host reads
+                    # it: the coordinate comes from the normal rather than
+                    # from the surface.
+                    var looked = _sample_at(
+                        texels,
+                        ramp,
+                        _describe(table, Int(ball)),
+                        place.x,
+                        place.y,
+                        0,
+                    )
+                    arriving = Vector3(looked.r, looked.g, looked.b)
+                else:
+                    var gray = matcap_fallback(place.y)
+                    arriving = Vector3(gray, gray, gray)
+            elif kind == Int32(TOON.value):
                 # Every cosine read off the ramp rather than faded, and
                 # never clamped at zero: see `_toon_arriving`. Where the
                 # ramp lives is looked up once here, not once per light.
@@ -1934,8 +1998,8 @@ struct GpuRenderer(Movable):
         self.depth = self.context.enqueue_create_buffer[DType.float32](
             width * height
         )
-        # Room for the camera, its direction, the ambient term and one
-        # directional light to begin with.
+        # Room for the camera, its direction, its up axis, the ambient term
+        # and one directional light to begin with.
         self.light_room = LIGHTS_FIRST + 6
         self.lights = self.context.enqueue_create_buffer[DType.float32](
             self.light_room
@@ -2087,6 +2151,7 @@ struct GpuRenderer(Movable):
                 corners[index].emissive_map,
                 corners[index].alpha_map,
                 corners[index].gradient_map,
+                corners[index].matcap,
             ]:
                 if slot == NO_TEXTURE:
                     continue
@@ -2146,6 +2211,18 @@ struct GpuRenderer(Movable):
                     raise Error(
                         "A gradient map must ignore its own alpha; build"
                         " the texture with alpha=IGNORED"
+                    )
+            # A matcap's own alpha means nothing either, and only a
+            # texture built to ignore it filters correctly. Its own loop,
+            # because a triangle with a matcap rarely has a ramp as well.
+            for triangle in range(triangles):
+                var ball = corners[triangle * 3].matcap
+                if ball == NO_TEXTURE:
+                    continue
+                if not self.ignores_alpha[ball.value]:
+                    raise Error(
+                        "A matcap must ignore its alpha; build the texture"
+                        " with alpha=IGNORED"
                     )
 
         if triangles > self.capacity:

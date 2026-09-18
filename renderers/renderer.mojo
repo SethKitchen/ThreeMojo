@@ -697,6 +697,7 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
         corner.specular,
         corner.shininess,
         corner.gradient_map,
+        corner.matcap,
     )
 
 
@@ -712,6 +713,7 @@ def _to_raster(
     specular: FloatColor,
     shininess: Float32,
     gradient_map: TextureId,
+    matcap: TextureId,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -751,6 +753,7 @@ def _to_raster(
         specular,
         shininess,
         gradient_map,
+        matcap,
     )
 
 
@@ -816,6 +819,40 @@ def toward_camera[C: Camera](scene: Scene, camera: C) raises -> Vector3:
     var toward = to_world.transform_direction(Vector3(0, 0, 1))
     toward.normalize()
     return toward^
+
+
+def camera_up[C: Camera](scene: Scene, camera: C) raises -> Vector3:
+    """Return which way is up for `camera`, in world space.
+
+    three.js measures a matcap's frame against the view space +y axis, and
+    this is that axis in world coordinates. A matcap turns with the camera,
+    so rolling the camera rolls the image on every surface, and that is
+    the frame the roll is measured in.
+
+    Asked once per frame rather than once per fragment, as
+    `camera_position` and `toward_camera` are. Every projection answers the
+    same way: which way is up does not depend on whether the rays converge.
+
+    Args:
+        scene: The scene the camera may be riding a node of, updated.
+        camera: The camera to ask.
+
+    Returns:
+        The camera's own up axis, a unit vector in world space.
+
+    Raises:
+        Error: If the camera rides a node the scene does not have, or the
+            scene is stale.
+    """
+    # The view carries the world into the camera's frame, so its inverse
+    # carries the frame's +y back out. The view is rigid, so the result is
+    # already unit length; normalized anyway, for the reason
+    # `toward_camera` normalizes.
+    var to_world = camera.view_matrix_in(scene)
+    to_world.invert()
+    var up = to_world.transform_direction(Vector3(0, 1, 0))
+    up.normalize()
+    return up^
 
 
 def available_workers() -> Int:
@@ -1110,6 +1147,23 @@ struct Renderer(Movable):
                 check_gradient_map(assets.textures.get(tones))
             if self.shading == SHADE_UV:
                 tones = NO_TEXTURE
+            # The image a `MATCAP` surface is looked up in. Its own alpha
+            # means nothing, so it is refused unless it ignores it -- the
+            # rule the emissive map follows. Carried under every mode that
+            # shades, as the ramp is.
+            var ball = material.matcap
+            if ball != NO_TEXTURE and ball.value >= assets.textures.count():
+                raise Error("A material names a matcap that is not there")
+            if (
+                ball != NO_TEXTURE
+                and assets.textures.get(ball).alpha != IGNORED
+            ):
+                raise Error(
+                    "A matcap must ignore its alpha; build the texture with"
+                    " alpha=IGNORED"
+                )
+            if self.shading == SHADE_UV:
+                ball = NO_TEXTURE
             # Where the maps are moved, tiled and turned on this surface,
             # asked of the material's own maps whatever the shading mode:
             # the uv view shows the coordinates the texture would be
@@ -1299,6 +1353,7 @@ struct Renderer(Movable):
                         sheen,
                         material.shininess,
                         tones,
+                        ball,
                     )
                     var two = _to_raster(
                         pieces[piece * 3 + 1],
@@ -1312,6 +1367,7 @@ struct Renderer(Movable):
                         sheen,
                         material.shininess,
                         tones,
+                        ball,
                     )
                     var three = _to_raster(
                         pieces[piece * 3 + 2],
@@ -1325,6 +1381,7 @@ struct Renderer(Movable):
                         sheen,
                         material.shininess,
                         tones,
+                        ball,
                     )
                     # Which way this piece ends up facing decides two things
                     # at once: whether it survives, and which side of it is
@@ -1386,12 +1443,15 @@ struct Renderer(Movable):
         # The camera's own position goes with them, because a `PHONG`
         # surface's highlight is measured from wherever the camera stands
         # -- or from one fixed direction, if the camera's rays are parallel
-        # rather than converging. See `toward_camera`.
+        # rather than converging. See `toward_camera`. Which way is up for
+        # the camera goes with them too, for the frame a `MATCAP` surface
+        # is looked up in. See `camera_up`.
         var lighting = Lighting(
             scene,
             visible=camera.visible_layers(),
             eye=camera_position(scene, camera),
             toward_eye=toward_camera(scene, camera),
+            up=camera_up(scene, camera),
         )
         # The scene's fog as the rasterizer takes it. Each corner already
         # carries the depth `prepare` measured for it along this view.

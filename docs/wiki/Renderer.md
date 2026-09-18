@@ -23,6 +23,7 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `available_workers() -> Int` | One per logical core. |
 | `camera_position(scene, camera) -> Vector3` | Where the camera stands, in world space. |
 | `toward_camera(scene, camera) -> Vector3` | The one direction toward it, or `PERSPECTIVE_VIEW`. |
+| `camera_up(scene, camera) -> Vector3` | Which way is up for it, in world space. |
 
 `scene.update()` must run before `prepare` or `render`. The renderer reads world matrices and does not recompute them.
 
@@ -81,6 +82,8 @@ Each instance of an instanced or batched mesh is tested on its own, with the ins
 `render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, camera.visible_layers(), camera_position(scene, camera), toward_camera(scene, camera))`. A light on a layer the camera does not watch lights nothing. The camera's position goes with the lights because a `PHONG` material measures its highlight from there. See [Lights](Lights#lighting).
 
 `toward_camera` goes with it because a parallel projection has one direction toward the camera for every surface. It asks `Matrix4.is_affine()` of the projection matrix. A converging projection has a bottom row that is not (0, 0, 0, 1), and `toward_camera` returns `PERSPECTIVE_VIEW` for it. A parallel one returns the camera's own world +z axis, made unit length. See [Lights](Lights#which-way-the-camera-lies).
+
+`camera_up` goes with them for a `MATCAP` surface, which is looked up in the camera's own frame. It is the view space +y axis carried back into the world. Every projection answers the same way. See [Materials](Materials#matcap).
 
 It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). Then it rasterizes the triangles and resolves the image through the tone mapping curve.
 

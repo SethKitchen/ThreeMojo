@@ -31,6 +31,7 @@ from materials.material import (
     DEPTH,
     LAMBERT,
     NORMALS,
+    MATCAP,
     OPAQUE,
     PHONG,
     TOON,
@@ -41,7 +42,7 @@ from render.target import RenderTarget
 from render.srgb import LINEAR
 from render.texture import IGNORED, Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
-from lights.lighting import Lighting
+from lights.lighting import PERSPECTIVE_VIEW, Lighting, toward_eye_at
 from core.fog import FogView, fog_mix
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, isfinite, log2, max, min, sqrt
@@ -473,6 +474,11 @@ struct RasterVertex(ImplicitlyCopyable):
     # How tight that highlight is, three.js's `shininess`. Per-triangle
     # like the alpha test, and read from the first corner.
     var shininess: Float32
+    # Which image a `MATCAP` surface is looked up in, or `NO_TEXTURE`
+    # for three.js's gray gradient. Per-triangle metadata like `texture`,
+    # and sampled at a coordinate the normal decides rather than at the
+    # surface's own, so its transform never applies.
+    var matcap: TextureId
     # Which texture's top row is the ramp a `TOON` surface steps through,
     # or `NO_TEXTURE` for three.js's fallback: three.js's `gradientMap`.
     # Per-triangle metadata like `texture`, and read at no surface
@@ -508,6 +514,7 @@ struct RasterVertex(ImplicitlyCopyable):
         specular: FloatColor = FloatColor(0.0, 0.0, 0.0),
         shininess: Float32 = 0,
         gradient_map: TextureId = NO_TEXTURE,
+        matcap: TextureId = NO_TEXTURE,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -521,7 +528,8 @@ struct RasterVertex(ImplicitlyCopyable):
         defaults to zero, which throws no fragment away, and the specular
         to black, which is no highlight. The gradient map defaults to none,
         which is three.js's two-tone fallback for a `TOON` corner and is
-        read by no other kind.
+        read by no other kind. The matcap defaults to none, which is
+        three.js's gray gradient for a `MATCAP` corner.
         """
         self.x = x
         self.y = y
@@ -543,6 +551,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.specular = specular
         self.shininess = shininess
         self.gradient_map = gradient_map
+        self.matcap = matcap
 
 
 @fieldwise_init
@@ -834,10 +843,12 @@ def check_triangle_state(
     Raises:
         Error: If the three corners do not agree on their blend policy, on
             any of their three maps, on their material kind, on their
-            alpha test, on their gradient map or on their shininess; if
+            alpha test, on their gradient map, on their matcap or on
+            their shininess; if
             the agreed policy is
             neither `OPAQUE` nor `BLEND`, the agreed kind is none of the
-            six, a gradient map is named on a kind that is not `TOON`,
+            seven, a gradient map is named on a kind that is not `TOON`,
+            a matcap on a kind that is not `MATCAP`,
             the agreed alpha test is outside zero to one or not
             finite, or the agreed shininess is negative or not finite; if
             the agreed kind shows data and the agreed policy is `BLEND`,
@@ -855,6 +866,8 @@ def check_triangle_state(
         raise Error("A triangle's corners disagree about their alpha map")
     if b.gradient_map != a.gradient_map or c.gradient_map != a.gradient_map:
         raise Error("A triangle's corners disagree about their gradient map")
+    if b.matcap != a.matcap or c.matcap != a.matcap:
+        raise Error("A triangle's corners disagree about their matcap")
     if b.kind != a.kind or c.kind != a.kind:
         raise Error("A triangle's corners disagree about their material kind")
     # Before the agreement check below, because not-a-number is not equal
@@ -873,7 +886,14 @@ def check_triangle_state(
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is neither OPAQUE nor BLEND")
     if not a.kind.is_valid():
-        raise Error("A triangle's material kind is none of the six")
+        raise Error("A triangle's material kind is none of the seven")
+    # Only a matcap shader looks a surface up in an image, so one on any
+    # other kind is a mistake rather than a value to ignore.
+    if a.kind != MATCAP and a.matcap != NO_TEXTURE:
+        raise Error(
+            "Only a matcap triangle is looked up in an image: no other"
+            " shader reads one"
+        )
     # Only a toon shader reads a ramp, so a ramp on any other kind is a
     # mistake rather than a value to ignore. Refused here, as the material
     # refuses it, so a hand-built triangle cannot smuggle one past.
@@ -899,6 +919,8 @@ def check_triangle_state(
         raise Error("A triangle names an alpha map id that nothing can hold")
     if a.gradient_map != NO_TEXTURE and a.gradient_map.value < 0:
         raise Error("A triangle names a gradient map id that nothing can hold")
+    if a.matcap != NO_TEXTURE and a.matcap.value < 0:
+        raise Error("A triangle names a matcap id that nothing can hold")
 
 
 def check_alpha_map(image: Texture) raises:
@@ -928,6 +950,75 @@ def check_alpha_map(image: Texture) raises:
             "An alpha map must ignore its own alpha; build the texture with"
             " alpha=IGNORED"
         )
+
+
+# How far off the middle of a matcap a surface square-on to the camera is
+# looked up: three.js's own 0.495, which keeps the edge of the image out of
+# the lookup and so out of any wrapping.
+comptime MATCAP_SCALE = Float32(0.495)
+# The two ends of three.js's fallback matcap, a gray gradient that reads as
+# a sphere lit from above: `mix(0.2, 0.8, uv.y)`.
+comptime MATCAP_FLOOR = Float32(0.2)
+comptime MATCAP_CEILING = Float32(0.8)
+
+
+def matcap_uv(toward_eye: Vector3, up: Vector3, normal: Vector3) -> Vector2:
+    """Return where a `MATCAP` surface is looked up in its image.
+
+    three.js's `matcap_fragment`, in world space rather than in view
+    space. It builds a frame from the direction toward the camera and the
+    camera's own up axis, then reads how far the normal leans along each:
+
+        x = normalize(cross(up, toward_eye))
+        y = cross(toward_eye, x)
+        uv = (dot(x, normal), dot(y, normal)) * 0.495 + 0.5
+
+    The same two dot products come out either way round, because the view
+    transform is rigid and a dot product does not care how the pair is
+    turned. Doing it here saves carrying a second normal and a second
+    position per corner.
+
+    Shared by both rasterizers, as `falloff` is, so neither can look a
+    surface up somewhere the other does not.
+
+    Args:
+        toward_eye: Unit direction from the surface toward the camera.
+        up: The camera's own up axis, in world space, already unit length.
+        normal: The surface's unit normal, in world space.
+
+    Returns:
+        Where to sample, from 0.005 to 0.995 for unit inputs. The middle
+        of the image when the frame collapses, which is when `up` and
+        `toward_eye` are parallel or either is a zero vector.
+    """
+    var across = up
+    across.cross(toward_eye)
+    if across.length() == 0:
+        return Vector2(0.5, 0.5)
+    across.normalize()
+    var upright = toward_eye
+    upright.cross(across)
+    return Vector2(
+        across.dot(normal) * MATCAP_SCALE + 0.5,
+        upright.dot(normal) * MATCAP_SCALE + 0.5,
+    )
+
+
+def matcap_fallback(v: Float32) -> Float32:
+    """Return three.js's fallback matcap at a lookup height.
+
+    `mix(0.2, 0.8, uv.y)`, a gray gradient: dark at the bottom, pale at
+    the top, which reads as a sphere lit from above. Gray in all three
+    channels, and in linear light rather than as an authored byte, because
+    three.js writes it straight into the outgoing light.
+
+    Args:
+        v: How far up the image the surface is looked up, from zero to one.
+
+    Returns:
+        How much light the surface shows, in every channel.
+    """
+    return MATCAP_FLOOR + (MATCAP_CEILING - MATCAP_FLOOR) * v
 
 
 def check_gradient_map(image: Texture) raises:
@@ -1114,6 +1205,16 @@ def rasterize_shaded(
     if a.gradient_map != NO_TEXTURE and mode != SHADE_UV:
         check_gradient_map(textures.get(a.gradient_map))
         ramp = gradient_ramp(textures.get(a.gradient_map))
+    # A matcap's own alpha means nothing, so only a texture built to
+    # ignore it filters accordingly -- the rule an emissive map follows.
+    # Asked here, as the GPU asks it before the launch, and only under a
+    # mode that shades: the uv view looks nothing up.
+    if a.matcap != NO_TEXTURE and mode != SHADE_UV:
+        if textures.get(a.matcap).alpha != IGNORED:
+            raise Error(
+                "A matcap must ignore its alpha; build the texture with"
+                " alpha=IGNORED"
+            )
 
     # Whether this surface composites, decided by the material and carried
     # here rather than inferred from a color. It changes two things
@@ -1214,7 +1315,7 @@ def rasterize_shaded(
             # before the emissive, exactly where three.js sums it.
             var highlight = FloatColor(0.0, 0.0, 0.0, 1.0)
             var facing = Vector3(0, 0, 1)
-            if a.kind.is_lit() or a.kind == NORMALS:
+            if a.kind.is_lit() or a.kind == NORMALS or a.kind == MATCAP:
                 # The normal is interpolated like every other varying and
                 # made a unit vector again here. That renormalization is the
                 # whole difference between this and shading at the corners:
@@ -1234,7 +1335,7 @@ def rasterize_shaded(
                 )
                 if facing.length() != 0:
                     facing.normalize()
-            if a.kind.is_lit():
+            if (a.kind.is_lit() or a.kind == MATCAP) and mode != SHADE_UV:
                 # Where this fragment is in the world, for the lights that
                 # have a position, and for the direction the camera sees it
                 # along.
@@ -1249,7 +1350,31 @@ def rasterize_shaded(
                     + b.world.z * share_b
                     + c.world.z * share_c,
                 )
-                if a.kind == TOON:
+                if a.kind == MATCAP:
+                    # Looked up by which way the surface is turned in the
+                    # camera's frame, and multiplied into the color exactly
+                    # as arriving light is: three.js's
+                    # `outgoingLight = diffuseColor.rgb * matcapColor.rgb`.
+                    # Measured from where the camera stands under either
+                    # projection, because three.js reads `vViewPosition`
+                    # and does not special-case a parallel one.
+                    var place = matcap_uv(
+                        toward_eye_at(lighting.eye, PERSPECTIVE_VIEW, spot),
+                        lighting.up,
+                        facing,
+                    )
+                    if a.matcap != NO_TEXTURE:
+                        ref ball = textures.get(a.matcap)
+                        # The full-size level, never a mip: the coordinate
+                        # comes from the normal rather than from the
+                        # surface, so a pixel's footprint in this image is
+                        # not the footprint the chain was built for.
+                        var looked = ball.sample(place.x, place.y)
+                        arriving = FloatColor(looked.r, looked.g, looked.b, 1.0)
+                    else:
+                        var gray = matcap_fallback(place.y)
+                        arriving = FloatColor(gray, gray, gray, 1.0)
+                elif a.kind == TOON:
                     # Every cosine read off the ramp rather than faded, and
                     # never clamped at zero: see `Lighting.toon_at`.
                     arriving = lighting.toon_at(facing, spot, ramp)

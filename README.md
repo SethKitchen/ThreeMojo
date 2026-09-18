@@ -102,7 +102,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [MeshPhongMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#phong): a highlight on Blinn's half vector that follows the camera, tinted by the specular and not by the color [#37](https://github.com/SethKitchen/ThreeMojo/issues/37)
 - [ ] MeshStandardMaterial and MeshPhysicalMaterial [#38](https://github.com/SethKitchen/ThreeMojo/issues/38)
 - [x] [MeshNormalMaterial and MeshDepthMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#data-materials): the view-space normal as a color and the depth as a gray, written as bytes no curve touches [#39](https://github.com/SethKitchen/ThreeMojo/issues/39)
-- [ ] [MeshToonMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#toon): a gradient ramp on the diffuse term, read as a lookup table, with three.js's two-tone fallback; MeshMatcapMaterial still to come [#40](https://github.com/SethKitchen/ThreeMojo/issues/40)
+- [x] [MeshToonMaterial and MeshMatcapMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#toon): a gradient ramp on the diffuse term, and an image looked up by which way a surface is turned [#40](https://github.com/SethKitchen/ThreeMojo/issues/40)
 - [ ] LineBasicMaterial and LineDashedMaterial [#41](https://github.com/SethKitchen/ThreeMojo/issues/41)
 - [ ] PointsMaterial and SpriteMaterial [#42](https://github.com/SethKitchen/ThreeMojo/issues/42)
 - [ ] ShadowMaterial [#43](https://github.com/SethKitchen/ThreeMojo/issues/43)

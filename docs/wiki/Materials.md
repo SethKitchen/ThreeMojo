@@ -2,7 +2,7 @@
 
 `materials/material.mojo`. A `Material` is a color, an optional texture, which sides to draw, an opacity, a blend policy, a kind and an emissive term.
 
-three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshToonMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`.
+three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`.
 
 ## Construct one
 
@@ -33,6 +33,7 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `specular` | `Color` | black | How much light a `PHONG` surface sends to the camera. |
 | `shininess` | `Float32` | `0.0` | How tight that highlight is. |
 | `gradient_map` | `TextureId` | `NO_TEXTURE` | The ramp a `TOON` surface steps through. |
+| `matcap` | `TextureId` | `NO_TEXTURE` | The image a `MATCAP` surface is looked up in. |
 
 ## Side
 
@@ -136,6 +137,56 @@ A ramp is read at no surface coordinate. So its own `repeat`, `offset` and `rota
 A highlight. three.js's `MeshToonMaterial` has no `specular` and no `shininess`, and a material of this kind refuses both, as every other non-Phong kind does.
 
 An ambient light and a hemisphere light are not stepped. three.js reflects both through `RE_IndirectDiffuse`, which no ramp touches, so both reach a toon surface exactly as they reach a Lambert one.
+
+## Matcap
+
+A matcap is a photograph of a sphere, lit however the artist liked. The shader looks a surface up in it by which way the surface is turned. So a whole lighting rig arrives as one image, and the scene's own lights are not consulted at all.
+
+```mojo
+var clay = assets.materials.add(matcap_material(ball))
+var tinted = assets.materials.add(matcap_material(ball, Color(255, 200, 160)))
+var plain = assets.materials.add(matcap_material())
+```
+
+`matcap_material(matcap=NO_TEXTURE, color=Color(255, 255, 255), map=NO_TEXTURE, side=FRONT_SIDE, opacity=1.0, blending=None)`.
+
+three.js: `MeshMatcapMaterial`, `matcap`.
+
+The image comes first, because a matcap surface is the image. The color is a tint over it, and white, the default, leaves it alone.
+
+| Property | Meaning |
+|---|---|
+| `matcap` | The image to look the surface up in, or `NO_TEXTURE` for three.js's gradient. |
+
+### The frame is the camera's own
+
+three.js builds a frame from the direction toward the camera and the camera's own up axis, then reads how far the normal leans along each:
+
+```
+x  = normalize(cross(up, toward_eye))
+y  = cross(toward_eye, x)
+uv = (dot(x, normal), dot(y, normal)) * 0.495 + 0.5
+```
+
+`matcap_uv` is that arithmetic, in `render/rasterizer.mojo`. Both rasterizers call it. three.js works in view space and this works in world space. The two give the same dot products: the view transform is rigid, and a dot product does not care how the pair is turned. Doing it in world space saves carrying a second normal and a second position per corner.
+
+**A matcap turns with the camera.** Orbit the camera around a sphere and the image stays where it is on the screen. That is what makes the trick cheap, and what stops it working for anything that has to stay put in the world.
+
+The direction toward the camera is measured from where the camera stands, under either projection. three.js reads `vViewPosition` in this shader and does not special-case a parallel one, so neither does this. `toward_camera` is not consulted here.
+
+The 0.495 is three.js's own. It keeps the edge of the image out of the lookup, and so out of any wrapping.
+
+### The fallback
+
+With no `matcap`, three.js falls back to `mix(0.2, 0.8, uv.y)`. That is a gray gradient, dark at the bottom and pale at the top, which reads as a sphere lit from above. `matcap_fallback` is that mix. It is linear light rather than an authored byte, because three.js writes it straight into the outgoing light.
+
+### What a matcap material does not have
+
+An emissive term. The image already holds every bit of light the surface shows, so a `MATCAP` material refuses one, exactly as a `BASIC` material does. `MaterialKind.is_unlit` is the question both answer.
+
+The image is sampled at its full-size level and never down a mip chain. The coordinate comes from the normal rather than from the surface. So a pixel's footprint in the image is not the footprint the chain was built for.
+
+A matcap's own alpha means nothing: three.js reads `.rgb` and no more. So the texture must be built `IGNORED`, or filtering would weight its channels by an alpha that says nothing. Its color space is free, because a matcap really is color.
 
 ## Data materials
 
@@ -265,10 +316,12 @@ Pass `blending=BLEND` when a texture's own alpha needs blending and the material
 
 | Method | Meaning |
 |---|---|
-| `is_lit() -> Bool` | `kind` is `LAMBERT` or `PHONG`. |
+| `is_lit() -> Bool` | `kind` is `LAMBERT`, `PHONG` or `TOON`. |
+| `is_unlit() -> Bool` | `kind` is `BASIC` or `MATCAP`. Neither has an emissive term. |
 | `has_highlight() -> Bool` | `kind` is `PHONG`. A black specular is a reflectance of zero, not a switch. |
 | `specular_light() -> FloatColor` | The specular color decoded to linear light. |
 | `has_gradient_map() -> Bool` | `gradient_map != NO_TEXTURE`. A `TOON` material without one steps through the fallback. |
+| `has_matcap() -> Bool` | `matcap != NO_TEXTURE`. A `MATCAP` material without one takes the gradient. |
 | `is_data() -> Bool` | `kind` is `NORMALS` or `DEPTH`. |
 | `has_alpha_map() -> Bool` | `alpha_map != NO_TEXTURE`. |
 | `is_alpha_tested() -> Bool` | `alpha_test > 0`. |
@@ -284,7 +337,6 @@ The constructor raises for:
 - A texture id or an emissive map id below zero that is not `NO_TEXTURE`.
 - An opacity outside zero to one.
 - A negative emissive intensity.
-- An emissive color or map on a `BASIC` material.
 - A color that is not opaque white on a `NORMALS` or `DEPTH` material.
 - An emissive term or vertex colors on either of those two kinds.
 - A map or an alpha map on a `NORMALS` material.
@@ -293,6 +345,8 @@ The constructor raises for:
 - A negative or non-finite shininess.
 - A specular that is not black, or a positive shininess, on a kind that is not `PHONG`.
 - A gradient map on a kind that is not `TOON`, or a gradient map id below zero that is not `NO_TEXTURE`.
+- A matcap on a kind that is not `MATCAP`, or a matcap id below zero that is not `NO_TEXTURE`.
+- An emissive term on an unlit material, which is a `BASIC` or a `MATCAP` one.
 - A `NORMALS` or `DEPTH` material whose blending resolves to `BLEND`, stated or inferred.
 
 `Renderer.prepare` raises for an emissive map that reads its alpha as coverage.

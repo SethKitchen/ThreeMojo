@@ -102,6 +102,23 @@ the ramp's left end rather than zero. The fallback's left end is 0.7, so
 the shaded side of a default toon surface is seven tenths lit. That is
 three.js's own arithmetic, and it is what makes the look.
 
+`matcap` is the thirteenth, and the last kind: `MATCAP`, three.js's
+`MeshMatcapMaterial`. A matcap is a photograph of a sphere lit however
+the artist liked, and the shader looks a surface up in it by which way
+the surface is turned. So a whole lighting rig, a material and its
+highlights arrive as one image, and the scene's own lights are not
+consulted at all.
+
+Which way "turned" means is measured in the camera's own frame: across
+its right and up its own up axis. Turn the camera and the sphere turns
+with it, which is what makes the trick work and what stops it working
+for anything that has to stay put in the world.
+
+A matcap material is unlit, like `BASIC`, and refuses an emissive term
+for the same reason: the image already holds every bit of light the
+surface shows. With no image, three.js falls back to a gray gradient,
+dark at the bottom and pale at the top, which is a sphere lit from above.
+
 Two more kinds show *data* rather than light: `NORMALS` writes the
 view-space normal as a color, three.js's `MeshNormalMaterial`, and `DEPTH`
 writes how far away the surface is, near white and far black, three.js's
@@ -181,7 +198,7 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the six kinds there are."""
+        """Return True if this is one of the seven kinds there are."""
         return (
             self == BASIC
             or self == LAMBERT
@@ -189,7 +206,18 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
             or self == DEPTH
             or self == PHONG
             or self == TOON
+            or self == MATCAP
         )
+
+    def is_unlit(self) -> Bool:
+        """Return True if the scene's lights leave a surface of this kind
+        alone and it shows light of its own: `BASIC` or `MATCAP`.
+
+        Neither has an emissive term, because neither needs one. A basic
+        surface already shows its own color whatever the lights do, and a
+        matcap surface shows an image that is light already.
+        """
+        return self == BASIC or self == MATCAP
 
     def is_lit(self) -> Bool:
         """Return True if the scene's lights reach a surface of this kind:
@@ -232,6 +260,10 @@ comptime PHONG = MaterialKind(4)
 # three.js's `MeshToonMaterial`. The ramp is `gradient_map`, or three.js's
 # two-tone fallback when there is none.
 comptime TOON = MaterialKind(5)
+# Unlit, and looked up in an image by which way the surface is turned in
+# the camera's frame: three.js's `MeshMatcapMaterial`. The image is
+# `matcap`, or three.js's gray gradient when there is none.
+comptime MATCAP = MaterialKind(6)
 
 
 @fieldwise_init
@@ -284,6 +316,11 @@ struct Material(ImplicitlyCopyable):
     # throws away whatever falls below it, color and depth alike, which is
     # what cuts a shape out of a rectangle.
     var alpha_test: Float32
+    # The image a `MATCAP` surface is looked up in, three.js's `matcap`.
+    # Sampled at a coordinate the surface's own normal decides rather than
+    # at its texture coordinates, so its transform is never applied and it
+    # never has to agree with the material's other maps.
+    var matcap: TextureId
     # The ramp a `TOON` surface steps through, three.js's `gradientMap`.
     # Its top row is a lookup table read at `dot(N, L) * 0.5 + 0.5`, not a
     # picture: nearest, ends clamped, and sampled at no surface coordinate,
@@ -317,6 +354,7 @@ struct Material(ImplicitlyCopyable):
         specular: Color = Color(0, 0, 0),
         shininess: Float32 = 0.0,
         gradient_map: TextureId = NO_TEXTURE,
+        matcap: TextureId = NO_TEXTURE,
     ) raises:
         """Describe a surface.
 
@@ -370,6 +408,9 @@ struct Material(ImplicitlyCopyable):
             gradient_map: Id of the ramp a `TOON` surface steps through,
                 or `NO_TEXTURE` for three.js's two-tone fallback. Only a
                 `TOON` material reads it.
+            matcap: Id of the image a `MATCAP` surface is looked up in, or
+                `NO_TEXTURE` for three.js's gray gradient. Only a `MATCAP`
+                material reads it.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -378,9 +419,11 @@ struct Material(ImplicitlyCopyable):
                 to one, `emissive_intensity` is negative, `side`, `blending`
                 or `kind` holds a value that is none of its named constants,
                 or a `gradient_map` is given on a kind that is not `TOON`,
-                or its id is a negative other than `NO_TEXTURE`,
-                or `kind` is `BASIC` and any emissive term was given, which
-                three.js's `MeshBasicMaterial` has no place for. A `NORMALS`
+                or a `matcap` on a kind that is not `MATCAP`, or either id
+                is a negative other than `NO_TEXTURE`,
+                or `kind` is unlit -- `BASIC` or `MATCAP` -- and any
+                emissive term was given, which neither of three.js's two
+                has a place for. A `NORMALS`
                 or `DEPTH` material refuses a color that is not opaque
                 white, any emissive term and vertex colors, and `NORMALS`
                 refuses a map as well: neither shader reads them. A bare
@@ -416,6 +459,13 @@ struct Material(ImplicitlyCopyable):
                 "Only a toon material steps through a ramp: give it"
                 " kind=TOON, or build it with toon_material"
             )
+        if matcap.value < 0 and matcap != NO_TEXTURE:
+            raise Error("A material's matcap id cannot be negative")
+        if kind != MATCAP and matcap != NO_TEXTURE:
+            raise Error(
+                "Only a matcap material is looked up in an image: give it"
+                " kind=MATCAP, or build it with matcap_material"
+            )
         if emissive_map.value < 0 and emissive_map != NO_TEXTURE:
             raise Error("A material's emissive map id cannot be negative")
         if alpha_map.value < 0 and alpha_map != NO_TEXTURE:
@@ -431,13 +481,14 @@ struct Material(ImplicitlyCopyable):
             )
         if emissive_intensity < 0:
             raise Error("An emissive intensity cannot be negative")
-        if kind == BASIC and (
+        if kind.is_unlit() and (
             emissive_map != NO_TEXTURE
             or _gives_off_light(emissive, emissive_intensity)
         ):
             raise Error(
-                "A basic material has no emissive term: its color already"
-                " shows whatever the lights do"
+                "An unlit material has no emissive term: a basic one shows"
+                " its color whatever the lights do, and a matcap one shows"
+                " an image that is light already"
             )
         if kind.is_data():
             # Neither shader reads a color, an emissive term or the vertex
@@ -481,6 +532,7 @@ struct Material(ImplicitlyCopyable):
         self.specular = specular
         self.shininess = shininess
         self.gradient_map = gradient_map
+        self.matcap = matcap
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -540,6 +592,15 @@ struct Material(ImplicitlyCopyable):
         """Return True if this surface shows data rather than light: a
         `NORMALS` or `DEPTH` material. See `MaterialKind.is_data`."""
         return self.kind.is_data()
+
+    def has_matcap(self) -> Bool:
+        """Return True if this material names an image of its own.
+
+        A `MATCAP` material with none is not unlookupable. It falls back
+        to three.js's gray gradient instead; see
+        `render.rasterizer.matcap_fallback`.
+        """
+        return self.matcap != NO_TEXTURE
 
     def has_gradient_map(self) -> Bool:
         """Return True if this material names a ramp of its own.
@@ -693,6 +754,54 @@ def toon_material(
         blending=blending,
         kind=TOON,
         gradient_map=gradient_map,
+    )
+
+
+def matcap_material(
+    matcap: TextureId = NO_TEXTURE,
+    color: Color = Color(255, 255, 255),
+    map: TextureId = NO_TEXTURE,
+    side: Side = FRONT_SIDE,
+    opacity: Float32 = 1.0,
+    blending: Optional[Blending] = None,
+) raises -> Material:
+    """Return an unlit material looked up in an image by which way the
+    surface is turned, three.js's `MeshMatcapMaterial`.
+
+    The image comes first, because a matcap surface is the image: the
+    color is a tint over it and white, the default, leaves it alone. With
+    no image, three.js's gray gradient applies.
+
+    The scene's lights are not consulted. A matcap holds a whole lighting
+    rig already, which is what makes it cheap and what makes it turn with
+    the camera.
+
+    Args:
+        matcap: Id of the image, or `NO_TEXTURE` for the gradient.
+        color: A tint over the image, as authored in sRGB. White by
+            default, which shows the image as it is.
+        map: Id of the texture that multiplies the color, or `NO_TEXTURE`.
+        side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
+        opacity: One for an opaque surface, less to see through it.
+        blending: `OPAQUE` or `BLEND`, or unset to infer it from the
+            opacity.
+
+    Returns:
+        The material, of kind `MATCAP`.
+
+    Raises:
+        Error: If `matcap` or `map` is a negative other than `NO_TEXTURE`,
+            `opacity` is outside zero to one, or `side` or `blending` holds
+            a value that is none of its named constants.
+    """
+    return Material(
+        color,
+        map=map,
+        side=side,
+        opacity=opacity,
+        blending=blending,
+        kind=MATCAP,
+        matcap=matcap,
     )
 
 

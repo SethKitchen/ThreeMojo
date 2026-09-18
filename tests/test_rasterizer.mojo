@@ -10,6 +10,7 @@ from materials.material import (
     BASIC,
     DEPTH,
     LAMBERT,
+    MATCAP,
     NORMALS,
     PHONG,
     TOON,
@@ -44,6 +45,8 @@ from math.vector3 import Vector3
 from render.target import RenderTarget
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.rasterizer import (
+    MATCAP_CEILING,
+    MATCAP_FLOOR,
     SHADE_LIT,
     SHADE_TEXTURE,
     SHADE_UV,
@@ -56,6 +59,8 @@ from render.rasterizer import (
     data_color,
     gradient_ramp,
     interpolate_alpha,
+    matcap_fallback,
+    matcap_uv,
     edge,
     mip_level,
     packed_depth,
@@ -3044,6 +3049,7 @@ def as_kind(base: RasterVertex, kind: MaterialKind) -> RasterVertex:
         base.specular,
         base.shininess,
         base.gradient_map,
+        base.matcap,
     )
 
 
@@ -3123,6 +3129,219 @@ def test_a_toon_triangles_ramp_is_checked_and_belongs_to_the_kind() raises:
             )
     # The uv debug view shades nothing and reads no ramp, so it draws.
     rasterize_all(stepped, target, SHADE_UV, colored)
+
+
+# --- a matcap is looked up by which way a surface is turned -----------------
+
+
+comptime UP_Y = Vector3(0, 1, 0)
+comptime TOWARD_Z = Vector3(0, 0, 1)
+
+
+def test_a_surface_square_on_reads_the_middle_of_a_matcap() raises:
+    # The frame is the camera's own: across its right and up its own up.
+    # A normal pointing straight back at the camera leans along neither.
+    var middle = matcap_uv(TOWARD_Z, UP_Y, TOWARD_Z)
+    assert_equal(middle.x, Float32(0.5))
+    assert_equal(middle.y, Float32(0.5))
+
+
+def test_a_leaning_surface_reads_off_the_middle_by_three_js_scale() raises:
+    # three.js's 0.495, which keeps the edge of the image out of the
+    # lookup and so out of any wrapping.
+    var right = matcap_uv(TOWARD_Z, UP_Y, Vector3(1, 0, 0))
+    assert_almost_equal(right.x, Float32(0.995), atol=Float64(1e-6))
+    assert_almost_equal(right.y, Float32(0.5), atol=Float64(1e-6))
+    var left = matcap_uv(TOWARD_Z, UP_Y, Vector3(-1, 0, 0))
+    assert_almost_equal(left.x, Float32(0.005), atol=Float64(1e-6))
+    var above = matcap_uv(TOWARD_Z, UP_Y, UP_Y)
+    assert_almost_equal(above.x, Float32(0.5), atol=Float64(1e-6))
+    assert_almost_equal(above.y, Float32(0.995), atol=Float64(1e-6))
+    var below = matcap_uv(TOWARD_Z, UP_Y, Vector3(0, -1, 0))
+    assert_almost_equal(below.y, Float32(0.005), atol=Float64(1e-6))
+
+
+def test_a_matcap_turns_with_the_camera() raises:
+    # Roll the camera a quarter turn about the direction it looks, and a
+    # surface leaning to the right now reads as leaning up. That is what
+    # says the frame is the camera's and not the world's.
+    var rolled = matcap_uv(TOWARD_Z, Vector3(-1, 0, 0), Vector3(1, 0, 0))
+    assert_almost_equal(rolled.x, Float32(0.5), atol=Float64(1e-6))
+    assert_almost_equal(rolled.y, Float32(0.005), atol=Float64(1e-6))
+
+
+def test_a_collapsed_frame_reads_the_middle() raises:
+    # Up parallel to the way the camera is seen from leaves no frame to
+    # measure in. A camera cannot see a surface from there -- it would be
+    # looking straight along its own up axis -- but a hand-built call can
+    # ask, and it must not divide by zero.
+    var along = matcap_uv(UP_Y, UP_Y, Vector3(1, 0, 0))
+    assert_equal(along.x, Float32(0.5))
+    assert_equal(along.y, Float32(0.5))
+    var none = matcap_uv(Vector3(0, 0, 0), UP_Y, Vector3(1, 0, 0))
+    assert_equal(none.x, Float32(0.5))
+    var no_up = matcap_uv(TOWARD_Z, Vector3(0, 0, 0), Vector3(1, 0, 0))
+    assert_equal(no_up.x, Float32(0.5))
+
+
+def test_the_fallback_matcap_is_a_gray_gradient() raises:
+    # three.js's `mix(0.2, 0.8, uv.y)`: dark at the bottom, pale at the
+    # top, which reads as a sphere lit from above.
+    assert_equal(matcap_fallback(0.0), MATCAP_FLOOR)
+    assert_equal(matcap_fallback(1.0), MATCAP_CEILING)
+    assert_almost_equal(matcap_fallback(0.5), Float32(0.5), atol=Float64(1e-6))
+
+
+def matcap_corner(
+    x: Float32, y: Float32, normal: Vector3, matcap: TextureId = NO_TEXTURE
+) -> RasterVertex:
+    """Return a white matcap corner facing `normal`, at the origin."""
+    return RasterVertex(
+        x,
+        y,
+        0.5,
+        1,
+        FloatColor(1, 1, 1),
+        0,
+        0,
+        NO_TEXTURE,
+        OPAQUE,
+        normal,
+        Vector3(0, 0, 0),
+        MATCAP,
+        FloatColor(0.0, 0.0, 0.0),
+        NO_TEXTURE,
+        0,
+        NO_TEXTURE,
+        0,
+        FloatColor(0.0, 0.0, 0.0),
+        0,
+        NO_TEXTURE,
+        matcap,
+    )
+
+
+def matcap_quad(
+    left: Vector3, right: Vector3, matcap: TextureId = NO_TEXTURE
+) -> List[RasterVertex]:
+    """Return two triangles whose normal turns from `left` to `right`
+    across an eight-pixel target."""
+    var corners = List[RasterVertex]()
+    corners.append(matcap_corner(0, 0, left, matcap))
+    corners.append(matcap_corner(8, 0, right, matcap))
+    corners.append(matcap_corner(8, 8, right, matcap))
+    corners.append(matcap_corner(0, 0, left, matcap))
+    corners.append(matcap_corner(8, 8, right, matcap))
+    corners.append(matcap_corner(0, 8, left, matcap))
+    return corners^
+
+
+def watching_from(z: Float32) raises -> Lighting:
+    """Return lighting with the camera up the z axis and no lights at all,
+    so nothing but the matcap decides a pixel."""
+    return Lighting(Scene(), Layers.all(), Vector3(0, 0, z))
+
+
+def half_and_half(left: Color, right: Color) raises -> Texture:
+    """Return a two-texel image: `left` on the left, `right` on the
+    right."""
+    var pixels = List[UInt8]()
+    for tint in [left, right]:
+        pixels.append(tint.r)
+        pixels.append(tint.g)
+        pixels.append(tint.b)
+        pixels.append(255)
+    return Texture(2, 1, pixels^, REPEAT, NEAREST, SRGB, False, IGNORED)
+
+
+def test_a_matcap_triangle_shows_the_image_and_not_the_lights() raises:
+    # A surface leaning left reads the image's left half and one leaning
+    # right reads its right half, whatever the scene's lights say -- and
+    # here the scene has none at all.
+    var textures = TextureStore()
+    var ball = textures.add(half_and_half(Color(255, 0, 0), Color(0, 0, 255)))
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(
+        matcap_quad(Vector3(-1, 0, 0), Vector3(1, 0, 0), ball),
+        target,
+        SHADE_TEXTURE,
+        textures,
+        watching_from(4),
+    )
+    assert_equal(target.shown(0, 4).r, UInt8(255))
+    assert_equal(target.shown(0, 4).b, UInt8(0))
+    assert_equal(target.shown(7, 4).r, UInt8(0))
+    assert_equal(target.shown(7, 4).b, UInt8(255))
+
+
+def test_a_matcap_triangle_without_an_image_takes_the_gradient() raises:
+    # Dark at the bottom of the lookup and pale at the top, which for a
+    # quad whose normal sweeps down to up is dark on one side.
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(
+        matcap_quad(Vector3(0, -1, 0), Vector3(0, 1, 0)),
+        target,
+        SHADE_TEXTURE,
+        TextureStore(),
+        watching_from(4),
+    )
+    var low = target.shown(0, 4).r
+    var high = target.shown(7, 4).r
+    assert_true(high > low, "the gradient did not rise across the quad")
+    # The ends are the gradient's own two values, encoded.
+    assert_equal(low, FloatColor(MATCAP_FLOOR, 0, 0, 1).encode().r)
+    assert_equal(high, FloatColor(MATCAP_CEILING, 0, 0, 1).encode().r)
+
+
+def test_a_matcap_triangles_image_is_checked_and_belongs_to_the_kind() raises:
+    var textures = TextureStore()
+    var ball = textures.add(half_and_half(Color(255, 0, 0), Color(0, 0, 255)))
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    # An image on any other kind is refused.
+    var wrong = matcap_quad(TOWARD_Z, TOWARD_Z, ball)
+    for index in range(len(wrong)):
+        wrong[index] = as_kind(wrong[index], LAMBERT)
+    with assert_raises():
+        check_triangle_state(wrong[0], wrong[1], wrong[2])
+    # Corners that disagree about it are refused, either of the two.
+    var second = matcap_quad(TOWARD_Z, TOWARD_Z, ball)
+    second[1] = matcap_corner(8, 0, TOWARD_Z)
+    with assert_raises():
+        check_triangle_state(second[0], second[1], second[2])
+    var third = matcap_quad(TOWARD_Z, TOWARD_Z, ball)
+    third[2] = matcap_corner(8, 8, TOWARD_Z)
+    with assert_raises():
+        check_triangle_state(third[0], third[1], third[2])
+    # An id nothing can hold is refused.
+    var bad = matcap_quad(TOWARD_Z, TOWARD_Z, TextureId(-9))
+    with assert_raises():
+        check_triangle_state(bad[0], bad[1], bad[2])
+    with assert_raises():
+        rasterize_all(bad, target, SHADE_TEXTURE, textures)
+
+
+def test_a_matcap_must_ignore_its_own_alpha() raises:
+    # Filtering would weight its channels by an alpha that means nothing:
+    # three.js reads `.rgb` and no more. The rule the emissive map follows.
+    var textures = TextureStore()
+    var pixels = List[UInt8]()
+    for _ in range(2):
+        pixels.append(255)
+        pixels.append(255)
+        pixels.append(255)
+        pixels.append(128)
+    var weighted = textures.add(
+        Texture(2, 1, pixels^, REPEAT, NEAREST, SRGB, False, COVERAGE)
+    )
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var corners = matcap_quad(TOWARD_Z, TOWARD_Z, weighted)
+    for workers in [1, 4]:
+        with assert_raises():
+            rasterize_all(
+                corners, target, SHADE_TEXTURE, textures, workers=workers
+            )
+    # The uv debug view looks nothing up, so it draws.
+    rasterize_all(corners, target, SHADE_UV, textures)
 
 
 def main() raises:
