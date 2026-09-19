@@ -29,6 +29,7 @@ from extensions.humanoid.skeleton.leg.femur.geometry import (
     _axis_cells,
     _clamp01,
     _clip_tetrahedron,
+    _emit_triangle,
     _lerp_zero,
     _long_cells,
     _require_triangles,
@@ -309,6 +310,35 @@ def test_unit_face_normalizes_and_handles_a_degenerate_triangle() raises:
     assert_equal(flat.x, Float32(0))
     assert_equal(flat.y, Float32(1))
     assert_equal(flat.z, Float32(0))
+
+
+def test_emit_triangle_flips_when_the_normal_points_in() raises:
+    var positions = List[Float32]()
+    var indices = List[Int]()
+    _emit_triangle(
+        positions,
+        indices,
+        Vector3(0, 0, 0),
+        Vector3(1, 0, 0),
+        Vector3(0, 1, 0),
+        Vector3(0.1, 0.1, 1),
+    )
+    assert_equal(indices[0], 0)
+    assert_equal(indices[1], 2)
+    assert_equal(indices[2], 1)
+    var keep = List[Float32]()
+    var wind = List[Int]()
+    _emit_triangle(
+        keep,
+        wind,
+        Vector3(0, 0, 0),
+        Vector3(1, 0, 0),
+        Vector3(0, 1, 0),
+        Vector3(0.1, 0.1, -1),
+    )
+    assert_equal(wind[0], 0)
+    assert_equal(wind[1], 1)
+    assert_equal(wind[2], 2)
 
 
 def test_every_tetrahedron_sign_pattern_emits_the_expected_triangles() raises:
