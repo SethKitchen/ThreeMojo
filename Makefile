@@ -464,7 +464,8 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/normals.png $(OUT_DIR)/fragments.png \
            $(OUT_DIR)/coverage.png $(OUT_DIR)/lines.png \
            $(OUT_DIR)/helpers.png $(OUT_DIR)/split.png \
-           $(OUT_DIR)/femur.png
+           $(OUT_DIR)/femur.png $(OUT_DIR)/tibia.png \
+           $(OUT_DIR)/fibula.png $(OUT_DIR)/patella.png
 
 # A split screen: two viewports and two scissors drawing into one target.
 $(OUT_DIR)/split.png: $(LIB_SOURCES) examples/split.mojo
@@ -662,6 +663,21 @@ $(OUT_DIR)/coverage.png: $(LIB_SOURCES) examples/edges.mojo
 $(OUT_DIR)/femur.png: $(LIB_SOURCES) examples/femur.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/femur.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/tibia.png: $(LIB_SOURCES) examples/tibia.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/tibia.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/fibula.png: $(LIB_SOURCES) examples/fibula.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/fibula.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/patella.png: $(LIB_SOURCES) examples/patella.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/patella.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be

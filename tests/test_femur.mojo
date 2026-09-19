@@ -8,24 +8,16 @@
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
-from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.tissue import (
-    BoneKind,
-    cortical_tissue,
-    trabecular_tissue,
+from extensions.humanoid.spec import MAX_STATURE, MIN_STATURE, HumanoidSpec
+from extensions.humanoid.skeleton.field import (
+    clamp_unit,
+    empty_bounds,
+    sd_ellipse_segment,
+    sd_ellipsoid,
+    sd_segment,
+    smin,
 )
-from extensions.humanoid.skeleton.leg.femur.dimensions import (
-    MAX_STATURE,
-    MIN_STATURE,
-    FemurField,
-    _clamp_unit,
-    _sd_ellipse_segment,
-    _sd_segment,
-    femur_dimensions,
-    femur_distance,
-    measured_neck_shaft_angle,
-)
-from extensions.humanoid.skeleton.leg.femur.geometry import (
+from extensions.humanoid.skeleton.isosurface import (
     _axis_cells,
     _clamp01,
     _clip_tetrahedron,
@@ -34,10 +26,8 @@ from extensions.humanoid.skeleton.leg.femur.geometry import (
     _long_cells,
     _require_triangles,
     _unit_face,
-    femur,
-    femur_from_dimensions,
 )
-from extensions.humanoid.skeleton.leg.femur.mass import (
+from extensions.humanoid.skeleton.occupancy import (
     CORTICAL_FILL,
     EMPTY,
     MARROW,
@@ -45,10 +35,27 @@ from extensions.humanoid.skeleton.leg.femur.mass import (
     MIN_STEP,
     TRABECULAR_FILL,
     BoneOccupancy,
-    _Tally,
-    _cells,
+    Tally,
     add_fill,
     apparent_density_of,
+    grid_cells,
+)
+from extensions.humanoid.skeleton.tissue import (
+    BoneKind,
+    cortical_tissue,
+    trabecular_tissue,
+)
+from extensions.humanoid.skeleton.leg.femur.dimensions import (
+    FemurField,
+    femur_dimensions,
+    femur_distance,
+    measured_neck_shaft_angle,
+)
+from extensions.humanoid.skeleton.leg.femur.geometry import (
+    femur,
+    femur_from_dimensions,
+)
+from extensions.humanoid.skeleton.leg.femur.mass import (
     femur_mass,
     femur_mass_from_dimensions,
     femur_occupancy,
@@ -209,16 +216,17 @@ def test_midshaft_ap_and_ml_are_independent() raises:
 def test_ellipse_segment_keeps_ap_and_ml_apart() raises:
     var a = Vector3(0, 0, 0)
     var b = Vector3(0, 1, 0)
-    var on_ml = _sd_ellipse_segment(
-        Vector3(0.20, 0.5, 0), a, b, 0.20, 0.05, 0.20, 0.05
+    var hint = Vector3(1, 0, 0)
+    var on_ml = sd_ellipse_segment(
+        Vector3(0.20, 0.5, 0), a, b, 0.20, 0.05, 0.20, 0.05, hint
     )
-    var on_ap = _sd_ellipse_segment(
-        Vector3(0, 0.5, 0.05), a, b, 0.20, 0.05, 0.20, 0.05
+    var on_ap = sd_ellipse_segment(
+        Vector3(0, 0.5, 0.05), a, b, 0.20, 0.05, 0.20, 0.05, hint
     )
     assert_almost_equal(on_ml, Float32(0), atol=Float64(1e-3))
     assert_almost_equal(on_ap, Float32(0), atol=Float64(1e-3))
-    var axis = _sd_ellipse_segment(
-        Vector3(0, 0.5, 0), a, b, 0.20, 0.05, 0.20, 0.05
+    var axis = sd_ellipse_segment(
+        Vector3(0, 0.5, 0), a, b, 0.20, 0.05, 0.20, 0.05, hint
     )
     assert_true(axis < 0)
 
@@ -226,11 +234,12 @@ def test_ellipse_segment_keeps_ap_and_ml_apart() raises:
 def test_ellipse_segment_along_x_uses_the_fallback_frame() raises:
     var a = Vector3(0, 0, 0)
     var b = Vector3(1, 0, 0)
-    var on_z = _sd_ellipse_segment(
-        Vector3(0.5, 0, 0.20), a, b, 0.20, 0.05, 0.20, 0.05
+    var hint = Vector3(1, 0, 0)
+    var on_z = sd_ellipse_segment(
+        Vector3(0.5, 0, 0.20), a, b, 0.20, 0.05, 0.20, 0.05, hint
     )
-    var on_y = _sd_ellipse_segment(
-        Vector3(0.5, 0.05, 0), a, b, 0.20, 0.05, 0.20, 0.05
+    var on_y = sd_ellipse_segment(
+        Vector3(0.5, 0.05, 0), a, b, 0.20, 0.05, 0.20, 0.05, hint
     )
     assert_almost_equal(on_z, Float32(0), atol=Float64(2e-3))
     assert_almost_equal(on_y, Float32(0), atol=Float64(2e-3))
@@ -238,33 +247,67 @@ def test_ellipse_segment_along_x_uses_the_fallback_frame() raises:
 
 def test_a_degenerated_ellipse_segment_is_an_ellipsoid() raises:
     var at = Vector3(1, 2, 3)
-    var on = _sd_ellipse_segment(at, at, at, 0.4, 0.2, 0.4, 0.2)
+    var hint = Vector3(1, 0, 0)
+    var on = sd_ellipse_segment(at, at, at, 0.4, 0.2, 0.4, 0.2, hint)
     assert_true(on < 0)
-    var away = _sd_ellipse_segment(Vector3(1, 2, 4), at, at, 0.4, 0.2, 0.4, 0.2)
+    var away = sd_ellipse_segment(
+        Vector3(1, 2, 4), at, at, 0.4, 0.2, 0.4, 0.2, hint
+    )
     assert_true(away > 0)
 
 
 def test_ellipse_t_clamps_beyond_the_end() raises:
     var a = Vector3(0, 0, 0)
     var b = Vector3(0, 1, 0)
-    var below = _sd_ellipse_segment(Vector3(0, -1, 0), a, b, 0.1, 0.1, 0.1, 0.1)
-    var above = _sd_ellipse_segment(Vector3(0, 2, 0), a, b, 0.1, 0.1, 0.1, 0.1)
+    var hint = Vector3(1, 0, 0)
+    var below = sd_ellipse_segment(
+        Vector3(0, -1, 0), a, b, 0.1, 0.1, 0.1, 0.1, hint
+    )
+    var above = sd_ellipse_segment(
+        Vector3(0, 2, 0), a, b, 0.1, 0.1, 0.1, 0.1, hint
+    )
     assert_true(below > 0)
     assert_true(above > 0)
 
 
 def test_a_degenerated_segment_is_a_sphere() raises:
     var at = Vector3(1, 2, 3)
-    var on = _sd_segment(at, at, at, 0.5, 0.25)
+    var on = sd_segment(at, at, at, 0.5, 0.25)
     assert_almost_equal(on, Float32(-0.5), atol=TOLERANCE)
-    var away = _sd_segment(Vector3(1, 2, 4), at, at, 0.5, 0.25)
+    var away = sd_segment(Vector3(1, 2, 4), at, at, 0.5, 0.25)
     assert_almost_equal(away, Float32(0.5), atol=TOLERANCE)
 
 
+def test_ellipsoid_center_uses_the_zero_gradient_path() raises:
+    var center = Vector3(1, 2, 3)
+    var radii = Vector3(0.4, 0.2, 0.5)
+    var inside = sd_ellipsoid(center, center, radii)
+    assert_true(inside < 0)
+    var far = sd_ellipsoid(Vector3(10, 2, 3), center, radii)
+    assert_true(far > 0)
+
+
+def test_smin_skips_the_blend_when_values_are_far() raises:
+    var blended = smin(Float32(0), Float32(0.01), Float32(0.1))
+    assert_true(blended < 0)
+    var apart = smin(Float32(0), Float32(2), Float32(0.1))
+    assert_equal(apart, Float32(0))
+
+
+def test_empty_bounds_grows_from_the_first_sphere() raises:
+    var box = empty_bounds()
+    box.include_sphere(Vector3(1, 2, 3), Float32(0.5))
+    box.include_ellipsoid(Vector3(0, 2, 3), Vector3(0.2, 0.2, 0.2))
+    var padded = box.padded(Float32(0.1))
+    assert_true(padded.low.x < box.low.x)
+    assert_true(padded.high.x > box.high.x)
+    assert_true(box.low.x < Float32(0.9))
+
+
 def test_clamp_unit_holds_the_acos_domain() raises:
-    assert_equal(_clamp_unit(Float32(-2)), Float32(-1))
-    assert_equal(_clamp_unit(Float32(2)), Float32(1))
-    assert_equal(_clamp_unit(Float32(0.25)), Float32(0.25))
+    assert_equal(clamp_unit(Float32(-2)), Float32(-1))
+    assert_equal(clamp_unit(Float32(2)), Float32(1))
+    assert_equal(clamp_unit(Float32(0.25)), Float32(0.25))
 
 
 def test_lerp_zero_covers_midpoint_and_clamps() raises:
@@ -295,12 +338,12 @@ def test_grid_counts_honor_the_floor() raises:
 
 def test_empty_isosurface_is_refused() raises:
     with assert_raises():
-        _require_triangles(List[Int]())
+        _require_triangles(List[Int](), "femur")
     var keep = List[Int]()
     keep.append(0)
     keep.append(1)
     keep.append(2)
-    _require_triangles(keep)
+    _require_triangles(keep, "femur")
 
 
 def test_unit_face_normalizes_and_handles_a_degenerate_triangle() raises:
@@ -717,7 +760,7 @@ def test_a_taller_femur_has_more_mass() raises:
 def test_add_fill_counts_every_occupancy() raises:
     var cortical = cortical_tissue()
     var trabecular = trabecular_tissue()
-    var tally = _Tally(0, 0, 0, 0, 0)
+    var tally = Tally(0, 0, 0, 0, 0)
     add_fill(tally, EMPTY, 1.0, cortical, trabecular)
     assert_equal(tally.envelope, Float32(0))
     assert_equal(tally.mass, Float32(0))
@@ -730,11 +773,13 @@ def test_add_fill_counts_every_occupancy() raises:
     add_fill(tally, MARROW, 4.0, cortical, trabecular)
     assert_almost_equal(tally.envelope, Float32(9), atol=TOLERANCE)
     assert_equal(tally.mass, mass_before)
+    with assert_raises():
+        add_fill(tally, BoneOccupancy(9), 1.0, cortical, trabecular)
 
 
 def test_a_span_shorter_than_the_step_still_has_one_cell() raises:
-    assert_equal(_cells(Float32(0.01), Float32(1.0)), 1)
-    assert_true(_cells(Float32(0.55), Float32(0.005)) > 1)
+    assert_equal(grid_cells(Float32(0.01), Float32(1.0)), 1)
+    assert_true(grid_cells(Float32(0.55), Float32(0.005)) > 1)
 
 
 def test_refuses_a_short_mass_step() raises:

@@ -3,17 +3,14 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Bone-tissue mass and Earth weight of a femur from its solid and tissues.
+"""Bone-tissue mass and Earth weight of a fibula from its solid and tissues.
 
 The mesh is the outer surface. The interior is not solid cortical bone.
-A shaft has a marrow cavity. The head and the condyles hold trabecular
-bone inside a cortical shell. This module samples the signed-distance
-field on a grid and classifies each cell.
+A thin shaft has a marrow cavity. The head and the malleolus hold
+trabecular bone inside a cortical shell.
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
-    var report = femur_mass(person)
-    print(report.mass.to(KILOGRAM), "kg")
-    print(report.weight().to(NEWTON), "N")
+    var report = fibula_mass(person)
 """
 
 from extensions.humanoid.side import RIGHT, BodySide
@@ -38,28 +35,26 @@ from extensions.humanoid.skeleton.tissue import (
     cortical_tissue,
     trabecular_tissue,
 )
-from extensions.humanoid.skeleton.leg.femur.dimensions import (
-    FemurDimensions,
-    FemurField,
-    femur_dimensions,
+from extensions.humanoid.skeleton.leg.fibula.dimensions import (
+    FibulaDimensions,
+    FibulaField,
+    fibula_dimensions,
 )
 from math.vector3 import Vector3
 from units.si import Length
 
-# Cortical shell as a fraction of mean midshaft radius, about 6 mm on a 6 ft male.
-comptime SHELL_FRACTION = Float32(0.42)
-# Distal and proximal fractions of the shaft that are metaphysis, not cavity.
-comptime DISTAL_METAPHYSIS = Float32(0.20)
-comptime PROXIMAL_METAPHYSIS = Float32(0.15)
+comptime SHELL_FRACTION = Float32(0.50)
+comptime DISTAL_METAPHYSIS = Float32(0.18)
+comptime PROXIMAL_METAPHYSIS = Float32(0.16)
 
 
-def femur_occupancy(
-    dimensions: FemurDimensions, point: Vector3
+def fibula_occupancy(
+    dimensions: FibulaDimensions, point: Vector3
 ) raises -> BoneOccupancy:
-    """Return what fills `point` in a sized femur.
+    """Return what fills `point` in a sized fibula.
 
     Args:
-        dimensions: A femur already sized from stature and sex.
+        dimensions: A fibula already sized from stature and sex.
         point: A point in the bone's frame, in meters.
 
     Returns:
@@ -69,44 +64,44 @@ def femur_occupancy(
     Raises:
         Error: If `dimensions.validate` refuses the copy.
     """
-    return _occupancy(FemurField(dimensions), point)
+    return _occupancy(FibulaField(dimensions), point)
 
 
-def femur_mass(
+def fibula_mass(
     spec: HumanoidSpec, side: BodySide = RIGHT, step: Length = DEFAULT_STEP
 ) raises -> BoneMass:
-    """Return the bone-tissue mass of a femur sized for `spec`.
+    """Return the bone-tissue mass of a fibula sized for `spec`.
 
     Args:
         spec: Standing height and osteological sex.
-        side: `RIGHT` or `LEFT`. A right femur is the default.
+        side: `RIGHT` or `LEFT`. A right fibula is the default.
         step: Grid cell size. 2 mm through 20 mm, 5 mm by default.
 
     Returns:
         Sampled volumes and the bone-tissue mass.
 
     Raises:
-        Error: If `spec` or `side` is refused by `femur_dimensions`, or
+        Error: If `spec` or `side` is refused by `fibula_dimensions`, or
             if `step` is out of range.
     """
-    return femur_mass_from_dimensions(
-        femur_dimensions(spec.stature, spec.sex, side),
+    return fibula_mass_from_dimensions(
+        fibula_dimensions(spec.stature, spec.sex, side),
         cortical_tissue(),
         trabecular_tissue(),
         step,
     )
 
 
-def femur_mass_from_dimensions(
-    dimensions: FemurDimensions,
+def fibula_mass_from_dimensions(
+    dimensions: FibulaDimensions,
     cortical: BoneTissue,
     trabecular: BoneTissue,
     step: Length = DEFAULT_STEP,
 ) raises -> BoneMass:
-    """Return the bone-tissue mass of an already-sized femur.
+    """Return the bone-tissue mass of an already-sized fibula.
 
     Args:
-        dimensions: Size and landmarks from `femur_dimensions`.
+        dimensions: Size and landmarks from `fibula_dimensions`.
         cortical: Cortical tissue for the shell.
         trabecular: Trabecular tissue for the cancellous ends.
         step: Grid cell size.
@@ -119,11 +114,11 @@ def femur_mass_from_dimensions(
             out of range, or either tissue fails `validate`.
     """
     dimensions.validate()
-    check_mass_step(step, "femur")
+    check_mass_step(step, "fibula")
     cortical.validate()
     trabecular.validate()
 
-    var field = FemurField(dimensions)
+    var field = FibulaField(dimensions)
     var dx = step.value
     var dy = step.value
     var dz = step.value
@@ -148,7 +143,7 @@ def femur_mass_from_dimensions(
     return finish_mass(tally)
 
 
-def _occupancy(field: FemurField, point: Vector3) -> BoneOccupancy:
+def _occupancy(field: FibulaField, point: Vector3) -> BoneOccupancy:
     """Return what fills `point` in `field`."""
     var d = field.distance(point)
     if d >= 0:
