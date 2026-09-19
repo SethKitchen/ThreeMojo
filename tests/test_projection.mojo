@@ -135,15 +135,29 @@ def test_up_need_not_be_perpendicular() raises:
     assert_point(m.transform_point(Vector3(0, 0, 0)), 0, 0, -10)
 
 
-def test_a_camera_at_its_own_target_is_rejected() raises:
-    with assert_raises():
-        _ = look_at(Vector3(1, 2, 3), Vector3(1, 2, 3), Vector3(0, 1, 0))
+def test_a_camera_at_its_own_target_looks_down_its_own_axis() raises:
+    # three.js gives such a camera a forward of -z rather than an error.
+    var m = look_at(Vector3(1, 2, 3), Vector3(1, 2, 3), Vector3(0, 1, 0))
+    assert_point(m.transform_point(Vector3(1, 2, 3)), 0, 0, 0)
+    assert_point(m.transform_point(Vector3(1, 2, -7)), 0, 0, -10)
 
 
-def test_up_parallel_to_the_view_direction_is_rejected() raises:
-    # Looking straight down with up also pointing down leaves no sideways.
-    with assert_raises():
-        _ = look_at(Vector3(0, 10, 0), Vector3(0, 0, 0), Vector3(0, 1, 0))
+def test_up_parallel_to_the_view_direction_is_nudged_off_it() raises:
+    # Looking straight down with the default up: three.js nudges the view
+    # direction by a ten-thousandth and builds the basis from that, so a
+    # top-down camera works without being told a new up. The origin still
+    # lands straight ahead, ten meters down the axis.
+    var m = look_at(Vector3(0, 10, 0), Vector3(0, 0, 0), Vector3(0, 1, 0))
+    var ahead = m.transform_point(Vector3(0, 0, 0))
+    assert_almost_equal(ahead.z, Float32(-10), atol=Float64(1e-3))
+    assert_almost_equal(ahead.x, Float32(0), atol=Float64(1e-3))
+    # And the same when up is the z axis, which is nudged along x instead.
+    var along_z = look_at(Vector3(0, 0, 10), Vector3(0, 0, 0), Vector3(0, 0, 1))
+    assert_almost_equal(
+        along_z.transform_point(Vector3(0, 0, 0)).z,
+        Float32(-10),
+        atol=Float64(1e-3),
+    )
 
 
 # --- viewport ---------------------------------------------------------------

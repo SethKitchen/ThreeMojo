@@ -61,6 +61,7 @@ from lights.light import Light
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
+from units.si import Length, METER
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
 from objects.line import Line
 from objects.lod import Lod
@@ -451,6 +452,28 @@ struct Scene(Movable):
                 combined.multiply(local)
                 self._world[index] = combined^
         self._stale = False
+
+    def update_lods(mut self, eye: Vector3) raises:
+        """Choose every LOD's level for a camera at `eye`, and remember the
+        choices: three.js's `LOD.update(camera)`, for the whole scene.
+
+        The renderer measures the same distance and reads the memory, so a
+        frame drawn after this shows what this chose, hysteresis included.
+        A scene never given this shows the stateless choice.
+
+        Args:
+            eye: The camera's position in world space.
+
+        Raises:
+            Error: If the scene is stale, or an LOD names a node that is
+                not there.
+        """
+        for index in range(len(self.lods)):
+            var distance = Length(
+                (eye - self.world_position(self.lods[index].node)).length(),
+                METER,
+            )
+            _ = self.lods[index].update(distance)
 
     def validate(self) raises:
         """Check the invariants the single-pass update relies on.

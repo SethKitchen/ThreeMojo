@@ -23,8 +23,9 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `color` | `Color` | required | The base color, as authored in sRGB. |
 | `map` | `TextureId` | `NO_TEXTURE` | The texture that multiplies the color. |
 | `side` | `Side` | `FRONT_SIDE` | Which faces are drawn. |
-| `opacity` | `Float32` | `1.0` | One is opaque. Less shows what is behind. |
-| `blending` | `Optional[Blending]` | inferred | `OPAQUE` or `BLEND`. |
+| `opacity` | `Float32` | `1.0` | One is opaque. Less shows what is behind, when `transparent`. |
+| `blending` | `Optional[Blending]` | follows `transparent` | `OPAQUE` or `BLEND`. |
+| `transparent` | `Bool` | `False` | Whether the surface blends over what is behind it, three.js's `transparent`. |
 | `kind` | `MaterialKind` | `LAMBERT` | Lit, unlit, or showing data. |
 | `emissive` | `Color` | black | Light the surface gives off, as authored in sRGB. |
 | `emissive_intensity` | `Float32` | `1.0` | Scales `emissive`. |
@@ -45,7 +46,7 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `BACK_SIDE` | Faces that point away. The inside of a closed mesh. |
 | `DOUBLE_SIDE` | Both. Use it for an open surface. |
 
-A face seen from behind is lit with its normal flipped. A mirrored mesh, with a negative world determinant, keeps the same convention.
+A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is three.js's rule: its shader flips the normal under `DOUBLE_SIDED` and nowhere else. A `BACK_SIDE` face keeps the normal it was given. three.js turns the winding round for `BackSide`, not the normal. The inside of a box lit from outside is bright on the wall the light reaches through and dark on the wall it sees. A mirrored mesh, with a negative world determinant, keeps the same convention.
 
 ## Kind
 
@@ -91,9 +92,9 @@ Only the lights that have a direction make one. An ambient light has none, and a
 
 `blinn_phong(toward_light, toward_eye, normal, specular, shininess)` is the arithmetic, in `lights/lighting.mojo`. The GPU kernel calls the same function. `Lighting.specular_at(normal, position, specular, shininess)` sums it over the lights.
 
-### One difference from three.js
+### The reciprocal of pi
 
-three.js divides both its diffuse and its specular term by pi. The diffuse term here does not, so the specular term drops the same factor. That keeps the ratio of highlight to diffuse exactly three.js's, which is what decides how a surface looks. See the module docstring in `lights/lighting.mojo`.
+three.js divides both its diffuse and its specular term by pi, and so does this: `Lighting` scales every sum of arriving light by `RECIPROCAL_PI`. A white surface square on to a white light of intensity one reflects a third of it. A light meant to read as full white has an intensity of about three, as in three.js's own examples. See [Lights](Lights#units).
 
 The highlight can exceed one. That is what a highlight is. Set a tone mapping curve to bring it back. See [Render target](Render-target-and-framebuffer#tone-mapping).
 
@@ -220,7 +221,7 @@ Both take `side`, `opacity` and `blending`, and nothing else. A depth material a
 
 The normal is the one the camera sees, three.js's `vNormal`, not the one the world sees. Moving the camera changes the colors of a surface that never moved. The renderer carries each normal through the view matrix for this material alone.
 
-A face seen from behind shows its normal flipped, as it is lit flipped. The normal is made unit length at every fragment, as it is for a lit surface. A geometry with no normals falls back to its face normal.
+A `DOUBLE_SIDE` face seen from behind shows its normal flipped, as it is lit flipped. A `BACK_SIDE` face shows the normal it was given. The normal is made unit length at every fragment, as it is for a lit surface. A geometry with no normals falls back to its face normal.
 
 ### Depth
 
@@ -236,7 +237,7 @@ Neither shader reads a color, an emissive term or the vertex colors. A material 
 
 Neither is lit, fogged nor tone mapped. A veil of light over a normal, or a curve that compresses it, would make the image lie about its own numbers. Both rasterizers decide this per pixel. See [Why a normal is not a color](Why-a-normal-is-not-a-color).
 
-Neither can blend. One pixel holds its own bytes or the scene's light. A mixture of the two is neither. So a `NORMALS` or `DEPTH` material whose blending resolves to `BLEND` is refused, stated or inferred from an opacity below one. Both rasterizers refuse a blended data triangle as well, from the same function. That is what lets `RenderTarget.blend` say a mixture is always light.
+Neither can blend. One pixel holds its own bytes or the scene's light. A mixture of the two is neither. So a `NORMALS` or `DEPTH` material whose blending resolves to `BLEND` is refused, stated or taken from `transparent`. Both rasterizers refuse a blended data triangle as well, from the same function. That is what lets `RenderTarget.blend` say a mixture is always light.
 
 ## Vertex colors
 
@@ -339,9 +340,11 @@ To keep only the edges that show the shape, build a geometry with [`edges_geomet
 
 ## Opacity and blending
 
-`opacity` below one, or a color with alpha below 255, makes the material blend. A blended surface tests depth without writing it, and the renderer draws it after every opaque mesh, furthest first.
+`transparent=True` makes the material blend, as in three.js. A blended surface tests depth without writing it, and the renderer draws it after every opaque mesh, furthest first. Its alpha is `opacity` times the color's alpha, the texture's alpha and the alpha map.
 
-Pass `blending=BLEND` when a texture's own alpha needs blending and the material looks opaque. Pass `blending=OPAQUE` to force an opaque draw. A `NORMALS` or `DEPTH` material must be opaque either way.
+A material that is not `transparent` is drawn opaque whatever its opacity or its maps say. Every fragment is written with an alpha of one, as three.js's `opaque_fragment` writes it. The opacity and the maps still feed the alpha test. A `DEPTH` material keeps its opacity as its alpha, as three.js's does.
+
+Pass `blending=BLEND` or `blending=OPAQUE` to state the policy outright. A `NORMALS` or `DEPTH` material must be opaque either way.
 
 | Method | Meaning |
 |---|---|
@@ -355,7 +358,7 @@ Pass `blending=BLEND` when a texture's own alpha needs blending and the material
 | `has_alpha_map() -> Bool` | `alpha_map != NO_TEXTURE`. |
 | `is_alpha_tested() -> Bool` | `alpha_test > 0`. |
 | `is_textured() -> Bool` | `map != NO_TEXTURE`. |
-| `is_transparent() -> Bool` | `blending == BLEND`. |
+| `is_transparent() -> Bool` | `blending == BLEND`, which follows `transparent` unless stated. |
 | `is_emissive() -> Bool` | Whether the emissive color at its intensity adds any light. |
 | `emissive_light() -> FloatColor` | The emissive color decoded to linear light, times the intensity. |
 
@@ -389,7 +392,7 @@ The constructor raises for:
 
 ```mojo
 var glass = assets.materials.add(
-    Material(Color(255, 80, 80), NO_TEXTURE, DOUBLE_SIDE, 0.45)
+    Material(Color(255, 80, 80), NO_TEXTURE, DOUBLE_SIDE, 0.45, transparent=True)
 )
 var sky = assets.materials.add(Material(Color(120, 170, 255), kind=BASIC))
 ```

@@ -16,14 +16,19 @@ light adds. A spot light adds one more, the rim of its cone, and that is
 `math.smoothstep`, shared the same way. `blinn_phong` is the third, and
 belongs to a `PHONG` material rather than to a light.
 
-**On three.js's reciprocal pi.** three.js divides its diffuse term by pi,
-`BRDF_Lambert`, and its specular lobe too, `D_BlinnPhong`. The diffuse term
-here does not: `intensity_at` returns what a surface facing a white light of
-one reflects, which is its own color rather than that over pi. So
-`blinn_phong` drops the same factor, which keeps the *ratio* of highlight to
-diffuse exactly three.js's -- the number that decides how a surface looks.
-Both conventions are consistent on their own; mixing them is what would not
-be.
+**On three.js's reciprocal pi.** three.js divides every diffuse term by
+pi, `BRDF_Lambert`, direct and indirect alike, and its specular lobe too,
+`D_BlinnPhong`. A white surface square on to a white light of intensity one
+therefore reflects `1 / pi` of it, about 0.318, and a light meant to read
+as full white is given an intensity of about three -- which is what
+three.js's own examples do since its lights became physically correct. The
+same holds here: `Lighting(scene)` carries the factor as `scale`, applied
+once to each sum, so that emissive, basic and matcap surfaces -- which
+three.js does not divide -- stand in the same ratio to lit ones as there.
+`Lighting.uniform` carries a scale of one instead: it is the identity for
+the multiply a fragment does, and a scale would make it something else.
+`blinn_phong` itself drops its factor of pi and `specular_at` applies the
+scale, so the highlight and the diffuse term move together.
 """
 
 from core.layers import Layers
@@ -40,7 +45,11 @@ from lights.light import (
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
-from std.math import cos, exp2, log2, max, min
+from std.math import cos, exp2, log2, max, min, pi
+
+# What every lit sum is multiplied by: three.js's `RECIPROCAL_PI`, the
+# factor in `BRDF_Lambert` and `D_BlinnPhong`. See the module docstring.
+comptime RECIPROCAL_PI = Float32(1) / Float32(pi)
 
 # Distance to the power of decay is never taken below this, so a surface
 # touching the bulb is very bright rather than infinitely so. three.js's
@@ -333,6 +342,11 @@ struct Lighting(Movable):
     var up: Vector3
     # The sum of every ambient light, already decoded and scaled.
     var ambient: FloatColor
+    # What each sum of arriving light is multiplied by before it is
+    # returned: `RECIPROCAL_PI` for a scene's lights, as three.js's BRDF
+    # has it, and one for `uniform`, the identity. Crosses to the kernel
+    # in the light buffer, so both backends scale the same sums.
+    var scale: Float32
     # One entry per directional light, parallel lists.
     var directions: List[Vector3]
     var radiances: List[FloatColor]
@@ -418,6 +432,7 @@ struct Lighting(Movable):
         if self.up.length() != 0:
             self.up.normalize()
         self.ambient = FloatColor(0.0, 0.0, 0.0, 1.0)
+        self.scale = RECIPROCAL_PI
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()
         self.positions = List[Vector3]()
@@ -518,6 +533,7 @@ struct Lighting(Movable):
         self.toward_eye = PERSPECTIVE_VIEW
         self.up = Vector3(0, 1, 0)
         self.ambient = ambient
+        self.scale = 1
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()
         self.positions = List[Vector3]()
@@ -685,7 +701,7 @@ struct Lighting(Movable):
                 total.b + bulb.b * reach,
                 1.0,
             )
-        return total
+        return total.scaled(self.scale)
 
     def toon_at(
         self, normal: Vector3, position: Vector3, ramp: List[Float32]
@@ -790,7 +806,7 @@ struct Lighting(Movable):
                 total.b + bulb.b * reach,
                 1.0,
             )
-        return total
+        return total.scaled(self.scale)
 
     def specular_at(
         self,
@@ -901,7 +917,7 @@ struct Lighting(Movable):
             red += bulb.r * reach * sent.x
             green += bulb.g * reach * sent.y
             blue += bulb.b * reach * sent.z
-        return FloatColor(red, green, blue, 1.0)
+        return FloatColor(red, green, blue, 1.0).scaled(self.scale)
 
     def shade(
         self, base: Color, normal: Vector3, position: Vector3

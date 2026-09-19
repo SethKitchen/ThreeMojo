@@ -9,9 +9,9 @@ three.js: `Texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmap
 ## Make a texture
 
 ```mojo
-checkerboard(size, squares, first, second, wrap=REPEAT, filter=NEAREST, mipmapped=False, alpha=COVERAGE)
-texture_from(image, wrap=REPEAT, filter=NEAREST, color_space=None, mipmapped=False, alpha=COVERAGE)
-Texture(width, height, pixels, wrap=REPEAT, filter=NEAREST, color_space=SRGB, mipmapped=False, alpha=COVERAGE)
+checkerboard(size, squares, first, second, wrap=REPEAT, filter=BILINEAR, mipmapped=True, alpha=COVERAGE)
+texture_from(image, wrap=REPEAT, filter=BILINEAR, color_space=None, mipmapped=True, alpha=COVERAGE)
+Texture(width, height, pixels, wrap=REPEAT, filter=BILINEAR, color_space=SRGB, mipmapped=True, alpha=COVERAGE)
 ```
 
 `checkerboard` builds a test pattern. `texture_from` takes a `DecodedImage` from the PNG reader. `Texture` takes row-major RGBA bytes from the top.
@@ -36,6 +36,8 @@ Under `REPEAT`, coordinates 0 and 1 name the same texel. Under `CLAMP` they name
 ## Mipmaps
 
 `mipmapped=True` builds a chain of halved copies down to one texel. Sampling then picks the level whose texels match the pixel footprint, and blends between the two nearest levels. This stops a distant surface from shimmering.
+
+The chain is built by default, as three.js's `Texture` sets `generateMipmaps` and `LinearMipmapLinearFilter`, and the filter is bilinear by default, as three.js's `LinearFilter` is. Pass `mipmapped=False` or `NEAREST` to turn either off.
 
 The chain costs a third more memory. It is built in premultiplied linear light, unless the texture ignores its alpha.
 

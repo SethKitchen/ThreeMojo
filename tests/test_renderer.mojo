@@ -80,7 +80,11 @@ from renderers.renderer import (
     face_normal,
     toward_camera,
 )
-from std.math import inf, nan
+from std.math import inf, nan, pi
+
+# The intensity that lights a white surface square on to full white: three.js
+# divides every lit term by pi, and so does `Lighting`. See tests/test_light.
+comptime FULL = Float32(pi)
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -199,8 +203,10 @@ def light_from(
     var lamp = Object3D()
     lamp.set_position(x, y, z)
     var node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), ambient))
-    scene.add_light(directional_light(Color(255, 255, 255), node, 1 - ambient))
+    scene.add_light(ambient_light(Color(255, 255, 255), ambient * FULL))
+    scene.add_light(
+        directional_light(Color(255, 255, 255), node, (1 - ambient) * FULL)
+    )
 
 
 def light_the(mut scene: Scene) raises:
@@ -219,8 +225,8 @@ def light_the(mut scene: Scene) raises:
     var lamp = Object3D()
     lamp.set_position(0.4, 0.8, 0.5)
     var node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
-    scene.add_light(directional_light(Color(255, 255, 255), node, 0.75))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.25 * FULL))
+    scene.add_light(directional_light(Color(255, 255, 255), node, 0.75 * FULL))
 
 
 comptime TOLERANCE = Float64(1e-5)
@@ -1497,11 +1503,13 @@ def test_a_back_side_material_shows_the_inside_of_a_cube() raises:
     assert_true(count_background(image, renderer.background) < 100)
 
 
-def test_a_back_side_surface_is_lit_from_the_side_you_can_see() raises:
+def test_a_back_side_surface_keeps_its_authored_normal() raises:
     # Culling decides which faces exist; it does not decide which way they
-    # face for lighting. A triangle whose authored normal is +z, seen from
-    # -z with the light shining along -z, is lit square-on from the camera's
-    # side -- and rendered black until the normal was flipped with it.
+    # face for lighting. three.js turns the winding round for `BackSide`
+    # and leaves the normal alone, so a triangle whose authored normal is
+    # +z, seen from -z with the light shining along -z, is turned away from
+    # the light and dark -- as three.js draws it. Flipping the normal with
+    # the face, which this once did, lit it square-on instead.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var tri = assets.geometries.add(lone_triangle(True))
@@ -1534,13 +1542,14 @@ def test_a_back_side_surface_is_lit_from_the_side_you_can_see() raises:
                 if pixel.r > brightest:
                     brightest = pixel.r
     assert_true(drawn > 0, "BackSide drew nothing to light")
-    # Ambient is zero and the surface faces the light square-on.
-    assert_equal(brightest, UInt8(255))
+    # Ambient is zero and the authored normal points away from the light.
+    assert_equal(brightest, UInt8(0))
 
 
-def test_a_back_side_surface_lit_from_behind_stays_dark() raises:
-    # The other direction, so the fix cannot have been to light both sides.
-    # Same geometry, light now on the side nobody is looking at.
+def test_a_back_side_surface_is_lit_where_its_normal_points() raises:
+    # The other direction, so the rule cannot have been to darken both
+    # sides. Same geometry, light now on the side the authored normal
+    # faces, which is the side nobody is looking at: three.js lights it.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var tri = assets.geometries.add(lone_triangle(True))
@@ -1564,6 +1573,7 @@ def test_a_back_side_surface_lit_from_behind_stays_dark() raises:
     var image = rendered(renderer, scene, assets, meshes, behind)
 
     var drawn = 0
+    var brightest = UInt8(0)
     for y in range(HEIGHT):
         for x in range(WIDTH):
             var pixel = image.get_pixel(x, y)
@@ -1571,8 +1581,11 @@ def test_a_back_side_surface_lit_from_behind_stays_dark() raises:
                 pixel.g != renderer.background.g
             ):
                 drawn += 1
-                assert_equal(pixel.r, UInt8(0))
-    assert_true(drawn > 0, "BackSide drew nothing to leave dark")
+                if pixel.r > brightest:
+                    brightest = pixel.r
+    assert_true(drawn > 0, "BackSide drew nothing to light")
+    # Ambient is zero and the authored normal faces the light square-on.
+    assert_equal(brightest, UInt8(255))
 
 
 def test_a_double_side_surface_lights_each_half_on_its_own_side() raises:
@@ -1632,7 +1645,9 @@ def test_a_translucent_mesh_lets_the_one_behind_it_show() raises:
     var box = assets.geometries.add(cube(Length(1.0, METER)))
     var solid = assets.materials.add(Material(Color(0, 255, 0)))
     var glass = assets.materials.add(
-        Material(Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5)
+        Material(
+            Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5, transparent=True
+        )
     )
 
     var scene = Scene()
@@ -1691,7 +1706,9 @@ def test_translucent_meshes_are_drawn_after_opaque_ones() raises:
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.0, METER)))
     var glass = assets.materials.add(
-        Material(Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5)
+        Material(
+            Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5, transparent=True
+        )
     )
     var solid = assets.materials.add(Material(Color(0, 255, 0)))
 
@@ -1722,10 +1739,14 @@ def test_translucent_meshes_are_sorted_back_to_front() raises:
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.0, METER)))
     var red = assets.materials.add(
-        Material(Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5)
+        Material(
+            Color(255, 0, 0), NO_TEXTURE, FRONT_SIDE, 0.5, transparent=True
+        )
     )
     var blue = assets.materials.add(
-        Material(Color(0, 0, 255), NO_TEXTURE, FRONT_SIDE, 0.5)
+        Material(
+            Color(0, 0, 255), NO_TEXTURE, FRONT_SIDE, 0.5, transparent=True
+        )
     )
 
     var scene = Scene()
@@ -1766,8 +1787,15 @@ def test_opacity_outside_zero_to_one_is_rejected() raises:
 
 def test_a_material_is_opaque_by_default() raises:
     assert_false(Material(Color(1, 2, 3)).is_transparent())
-    assert_true(
+    # An opacity below one changes nothing on its own, as in three.js: the
+    # material has to say it is transparent.
+    assert_false(
         Material(Color(1, 2, 3), NO_TEXTURE, FRONT_SIDE, 0.5).is_transparent()
+    )
+    assert_true(
+        Material(
+            Color(1, 2, 3), NO_TEXTURE, FRONT_SIDE, 0.5, transparent=True
+        ).is_transparent()
     )
 
 
@@ -1779,11 +1807,13 @@ def test_a_translucent_base_color_sorts_and_rasterizes_the_same_way() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.0, METER)))
-    var red = assets.materials.add(Material(Color(255, 0, 0, 128)))
+    var red = assets.materials.add(
+        Material(Color(255, 0, 0, 128), transparent=True)
+    )
     var blue = assets.materials.add(Material(Color(0, 0, 255)))
     assert_true(
         assets.materials.get(red).is_transparent(),
-        "a base color with alpha must count as transparent",
+        "a transparent material must count as transparent",
     )
 
     var scene = Scene()
@@ -1907,7 +1937,9 @@ def test_several_workers_draw_the_same_image_as_one() raises:
     var box = assets.geometries.add(cube(Length(1.0, METER)))
     var solid = assets.materials.add(Material(Color(255, 255, 255)))
     var glass = assets.materials.add(
-        Material(Color(255, 80, 80), NO_TEXTURE, DOUBLE_SIDE, 0.5)
+        Material(
+            Color(255, 80, 80), NO_TEXTURE, DOUBLE_SIDE, 0.5, transparent=True
+        )
     )
     var scene = Scene()
     var back = Object3D()
@@ -2405,7 +2437,7 @@ def test_a_camera_lights_only_with_the_lights_on_its_layers() raises:
     lamp.set_position(0, 0, 5)
     var lamp_node = scene.add(lamp^)
     scene.update()
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node))
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, FULL))
     var meshes = List[Mesh]()
     meshes.append(Mesh(box, paint, NodeId(0)))
     var camera = a_camera()
@@ -2555,6 +2587,7 @@ def test_emission_survives_clipping_and_the_back_side() raises:
             BACK_SIDE,
             0.5,
             emissive=Color(255, 255, 255),
+            transparent=True,
         )
     )
     var solid = assets.materials.add(
@@ -2877,7 +2910,9 @@ def test_culling_leaves_the_image_unchanged() raises:
     var box = assets.geometries.add(cube(Length(1.5, METER)))
     var paint = assets.materials.add(Material(Color(220, 160, 80)))
     var glass = assets.materials.add(
-        Material(Color(80, 160, 220), NO_TEXTURE, FRONT_SIDE, 0.5)
+        Material(
+            Color(80, 160, 220), NO_TEXTURE, FRONT_SIDE, 0.5, transparent=True
+        )
     )
     var camera = a_camera()
     var scene = Scene()
@@ -3033,7 +3068,11 @@ def test_vertex_colors_multiply_a_nonwhite_material() raises:
     var tinted = assets.geometries.add(sheet^)
     var orange = assets.materials.add(
         Material(
-            Color(255, 128, 0), opacity=0.8, kind=BASIC, vertex_colors=True
+            Color(255, 128, 0),
+            opacity=0.8,
+            kind=BASIC,
+            vertex_colors=True,
+            transparent=True,
         )
     )
     var scene = scene_with_node_at(0)
@@ -3183,7 +3222,8 @@ def test_a_vertex_alpha_blends_only_when_the_material_does() raises:
     var written = covered.get_pixel(WIDTH // 8, HEIGHT // 2)
     assert_equal(written.r, UInt8(255))
     assert_equal(written.g, UInt8(0))
-    assert_equal(written.a, UInt8(128))
+    # Opaque, so written with an alpha of one whatever the vertex said.
+    assert_equal(written.a, UInt8(255))
     assert_true(
         covered.depth_at(WIDTH // 8, HEIGHT // 2) < inf[DType.float32](),
         "an opaque fragment did not claim the depth",
@@ -3428,10 +3468,16 @@ def test_a_repeat_tiles_the_texture_and_an_offset_slides_it() raises:
         Length(100.0, METER),
     )
     camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
-    var plain = checkerboard(2, 2, Color(255, 255, 255), Color(0, 0, 0))
-    var tiled = checkerboard(2, 2, Color(255, 255, 255), Color(0, 0, 0))
+    var plain = checkerboard(
+        2, 2, Color(255, 255, 255), Color(0, 0, 0), REPEAT, NEAREST
+    )
+    var tiled = checkerboard(
+        2, 2, Color(255, 255, 255), Color(0, 0, 0), REPEAT, NEAREST
+    )
     tiled.repeat = Vector2(2, 2)
-    var slid = checkerboard(2, 2, Color(255, 255, 255), Color(0, 0, 0))
+    var slid = checkerboard(
+        2, 2, Color(255, 255, 255), Color(0, 0, 0), REPEAT, NEAREST
+    )
     slid.offset = Vector2(0.5, 0)
     var boards: List[TextureId] = [
         assets.textures.add(plain^),
@@ -4018,9 +4064,9 @@ def test_an_alpha_test_cuts_a_hole_that_shows_what_is_behind() raises:
 
 
 def test_without_the_test_a_thinned_fragment_still_claims_the_depth() raises:
-    # The same pair with no alpha test: the near sheet writes a transparent
-    # pixel and keeps the depth, so the far sheet is hidden. This is what
-    # the test is for.
+    # The same pair with no alpha test: the near sheet is drawn opaque,
+    # white and with an alpha of one whatever the map said, and keeps the
+    # depth, so the far sheet is hidden. This is what the test is for.
     var renderer = Renderer(WIDTH, HEIGHT)
     renderer.set_background(Color(0, 0, 0))
     var assets = Assets()
@@ -4040,8 +4086,9 @@ def test_without_the_test_a_thinned_fragment_still_claims_the_depth() raises:
         meshes.append(mesh)
     var shown = rendered(renderer, scene, assets, meshes, camera_at(0, 0, 4))
     var hole = shown.get_pixel(15, HEIGHT // 2)
-    assert_equal(hole.a, UInt8(0))
-    assert_equal(hole.r, UInt8(0))
+    assert_equal(hole.a, UInt8(255))
+    assert_equal(hole.r, UInt8(255))
+    assert_equal(hole.g, UInt8(255))
 
 
 def test_a_material_naming_an_alpha_map_that_is_not_there_is_rejected() raises:
@@ -4128,16 +4175,21 @@ def test_lit_shading_ignores_the_alpha_map() raises:
     var assets = Assets()
     var mask = assets.textures.add(a_flat_mask(0))
     var thinned = assets.materials.add(
-        Material(Color(255, 255, 255), kind=BASIC, alpha_map=mask)
+        Material(
+            Color(255, 255, 255), kind=BASIC, alpha_map=mask, alpha_test=0.5
+        )
     )
     var scene = scene_with_node_at(0)
     var meshes = sheet_of(assets, thinned)
     var sampled = Renderer(WIDTH, HEIGHT)
+    sampled.set_background(Color(0, 0, 0))
     var ignored = Renderer(WIDTH, HEIGHT)
+    ignored.set_background(Color(0, 0, 0))
     ignored.set_shading(SHADE_LIT)
     var gone = rendered(sampled, scene, assets, meshes, camera_at(0, 0, 4))
     var whole = rendered(ignored, scene, assets, meshes, camera_at(0, 0, 4))
-    assert_equal(gone.get_pixel(WIDTH // 2, HEIGHT // 2).a, UInt8(0))
+    # Sampled, the map empties the surface and the test throws it away.
+    assert_equal(gone.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(0))
     assert_equal(whole.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(255))
 
 
@@ -4152,7 +4204,7 @@ def lamp_scene() raises -> Scene:
     var lamp = Object3D()
     lamp.set_position(0, 0, 1)
     var node = scene.add(lamp^)
-    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.add_light(directional_light(Color(255, 255, 255), node, FULL))
     scene.update()
     return scene^
 
@@ -4461,7 +4513,7 @@ def test_a_gradient_map_gives_a_toon_sphere_its_own_bands() raises:
     var lamp = Object3D()
     lamp.set_position(1, 0, 0)
     var node = scene.add(lamp^)
-    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.add_light(directional_light(Color(255, 255, 255), node, FULL))
     scene.update()
     var shown = rendered(
         renderer, scene, assets, ball_of(assets, stepped), camera_at(0, 0, 4)

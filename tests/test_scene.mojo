@@ -7,7 +7,7 @@
 
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
-from core.object3d import NO_PARENT, Object3D
+from core.object3d import NO_PARENT, Object3D, facing
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.projection import look_at
 from math.quaternion import Quaternion
@@ -643,18 +643,42 @@ def test_a_camera_looks_at_a_target_with_minus_z() raises:
         )
 
 
-def test_looking_at_the_nodes_own_position_is_rejected() raises:
+def test_looking_at_the_nodes_own_position_faces_down_its_own_axis() raises:
+    # three.js gives such a node a line of sight along -z rather than an
+    # error, so the rotation is left the identity.
     var node = node_at(1, 1, 1)
-    with assert_raises():
-        node.look_at(Vector3(1, 1, 1))
+    node.set_euler(Angle(0.0, DEGREE), Angle(90.0, DEGREE), Angle(0.0, DEGREE))
+    node.look_at(Vector3(1, 1, 1))
+    # The identity: the line of sight three.js substitutes is the z axis.
+    var toward = node.local_matrix().transform_direction(Vector3(0, 0, 1))
+    assert_point(toward, 0, 0, 1)
+    # And a camera the same: three.js swaps eye and target for a camera,
+    # and the substitute is +z either way round.
+    node.look_at(Vector3(1, 1, 1), camera=True)
+    toward = node.local_matrix().transform_direction(Vector3(0, 0, 1))
+    assert_point(toward, 0, 0, 1)
 
 
-def test_looking_straight_up_is_rejected() raises:
+def test_looking_straight_up_is_nudged_off_up() raises:
+    # Straight along up leaves the roll undefined, and three.js nudges the
+    # line of sight by a ten-thousandth rather than refusing it. The node
+    # still faces up to within that nudge, and the roll is the one the
+    # nudge picks: forward turned a hair toward +z.
     var node = node_at(0, 0, 0)
-    with assert_raises():
-        node.look_at(Vector3(0, 5, 0))
-    with assert_raises():
-        node.look_at(Vector3(0, -5, 0), camera=True)
+    node.look_at(Vector3(0, 5, 0))
+    # A node that is not a camera faces its target with +z.
+    var toward = node.local_matrix().transform_direction(Vector3(0, 0, 1))
+    assert_almost_equal(toward.y, Float32(1), atol=Float64(1e-4))
+    var camera = node_at(0, 0, 0)
+    camera.look_at(Vector3(0, -5, 0), camera=True)
+    var seen = camera.local_matrix().transform_direction(Vector3(0, 0, -1))
+    assert_almost_equal(seen.y, Float32(-1), atol=Float64(1e-4))
+    # Up along z is nudged along x instead, which is the other branch.
+    var along_z = facing(
+        Vector3(0, 0, 0), Vector3(0, 0, 5), Vector3(0, 0, 1), False
+    )
+    var ahead = along_z.rotate(Vector3(0, 0, 1))
+    assert_almost_equal(ahead.z, Float32(1), atol=Float64(1e-4))
 
 
 def test_a_scene_look_at_is_in_world_space() raises:

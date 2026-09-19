@@ -211,11 +211,14 @@ def test_a_far_plane_not_beyond_near_is_rejected() raises:
         )
 
 
-def test_a_camera_sitting_on_its_target_cannot_produce_a_view() raises:
+def test_a_camera_sitting_on_its_target_looks_down_its_own_axis() raises:
+    # As three.js's `lookAt` settles it: no error, and -z ahead.
     var camera = square_camera()
     camera.place(Vector3(1, 1, 1), Vector3(1, 1, 1))
-    with assert_raises():
-        _ = camera.view_matrix()
+    var view = camera.view_matrix()
+    assert_almost_equal(
+        view.transform_point(Vector3(1, 1, -9)).z, Float32(-10), atol=TOLERANCE
+    )
 
 
 def test_an_invalid_viewport_is_rejected() raises:

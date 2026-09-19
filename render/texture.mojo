@@ -16,7 +16,8 @@ is where those two disagree, so sampling is where it is reconciled, once:
 `flipY`, and has it on by default.
 
 **Two filters.** `NEAREST` takes the color of whichever texel the sample
-lands in; `BILINEAR` blends the four around it. Nearest keeps a checkerboard's
+lands in; `BILINEAR`, the default as in three.js, blends the four around
+it, and a chain of mip levels is built by default as three.js builds one. Nearest keeps a checkerboard's
 edges hard, which is what makes a mapping error legible — a wrong `uv` shows a
 misplaced square rather than a vague blur — and it is exact, so both backends
 agree on it to the last bit. Bilinear is what you want once the image is meant
@@ -456,9 +457,9 @@ struct Texture(Movable):
         height: Int,
         var pixels: List[UInt8],
         wrap: Wrap = REPEAT,
-        filter: Filter = NEAREST,
+        filter: Filter = BILINEAR,
         color_space: ColorSpace = SRGB,
-        mipmapped: Bool = False,
+        mipmapped: Bool = True,
         alpha: Alpha = COVERAGE,
     ) raises:
         """Create a texture from RGBA bytes.
@@ -468,13 +469,16 @@ struct Texture(Movable):
             height: Image height in texels.
             pixels: Row-major RGBA bytes from the top, width * height * 4.
             wrap: How coordinates outside the unit square are resolved.
-            filter: `NEAREST` or `BILINEAR`.
+            filter: `NEAREST` or `BILINEAR`. Bilinear by default, as
+                three.js's `LinearFilter` is.
             color_space: `SRGB` for a color image, the default because that
                 is what an image file holds; `LINEAR` for data that is not
                 color and must not be decoded. `UNKNOWN_SPACE` is refused:
                 it is a decoder's admission, not a way to read texels.
             mipmapped: Build the chain of halved copies. Costs a third more
                 memory and is what stops a distant surface from sparkling.
+                On by default, as three.js's `generateMipmaps` and
+                `LinearMipmapLinearFilter` are.
             alpha: `COVERAGE`, the default, if the alpha bytes hide color,
                 as a cut-out's or a translucent image's do; `IGNORED` if they
                 mean nothing, as an emissive map's do. Decided here rather
@@ -1006,7 +1010,7 @@ def texture_from(
     wrap: Wrap = REPEAT,
     filter: Filter = BILINEAR,
     color_space: Optional[ColorSpace] = None,
-    mipmapped: Bool = False,
+    mipmapped: Bool = True,
     alpha: Alpha = COVERAGE,
 ) raises -> Texture:
     """Return a texture holding a decoded image's pixels.
@@ -1068,9 +1072,9 @@ def checkerboard(
     light: Color,
     dark: Color,
     wrap: Wrap = REPEAT,
-    filter: Filter = NEAREST,
+    filter: Filter = BILINEAR,
     color_space: ColorSpace = SRGB,
-    mipmapped: Bool = False,
+    mipmapped: Bool = True,
     alpha: Alpha = COVERAGE,
 ) raises -> Texture:
     """Return a square checkerboard, the traditional mapping test image.
@@ -1078,6 +1082,8 @@ def checkerboard(
     Hard edges on a regular grid are what make a mapping error obvious: a
     wrong `uv` moves a square somewhere visibly wrong, and a wrong
     interpolation bends the grid lines rather than merely shading oddly.
+    Ask for `NEAREST` to keep the edges hard; the default filters as
+    three.js's defaults filter.
 
     Args:
         size: The image's width and height in texels.

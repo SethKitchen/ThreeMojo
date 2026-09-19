@@ -20,7 +20,11 @@ from materials.material import (
     normal_material,
 )
 from math.vector2 import Vector2
-from std.math import inf
+from std.math import inf, pi
+
+# The intensity that lights a white surface square on to full white: three.js
+# divides every lit term by pi, and so does `Lighting`. See tests/test_light.
+comptime FULL = Float32(pi)
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import BLEND, NO_TEXTURE, OPAQUE
 from render.texture import (
@@ -46,6 +50,12 @@ from math.vector3 import Vector3
 from render.target import RenderTarget
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.rasterizer import (
+    DRAW_SEGMENTS,
+    DRAW_TRIANGLES,
+    Draw,
+    DrawKind,
+    check_draws,
+    rasterize_frame,
     MATCAP_CEILING,
     MATCAP_FLOOR,
     SHADE_LIT,
@@ -1135,7 +1145,15 @@ def test_the_same_surface_without_a_chain_takes_a_single_texel() raises:
     # absence of, and without it that one would pass on a blurry bug.
     var textures = TextureStore()
     var board = textures.add(
-        checkerboard(32, 16, Color(255, 0, 0), Color(0, 0, 255))
+        checkerboard(
+            32,
+            16,
+            Color(255, 0, 0),
+            Color(0, 0, 255),
+            REPEAT,
+            NEAREST,
+            mipmapped=False,
+        )
     )
     var fb = drawn_quad(mapped_quad(8, board), 8, textures)
     var extreme = 0
@@ -1519,6 +1537,30 @@ def test_an_emissive_map_that_reads_alpha_as_coverage_is_refused() raises:
     assert_equal(flat.shown(4, 4).r, UInt8(255))
 
 
+def test_a_bad_map_is_refused_on_every_worker_count() raises:
+    # A band skips a triangle its rows never reach before `rasterize_shaded`
+    # can open its maps, so an emissive map that reads alpha as coverage on
+    # a triangle above the image was refused on one worker and drawn around
+    # on four. `rasterize_all` asks about every triangle's maps before any
+    # band starts, exactly as it asks about their state.
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
+    )
+    var above = List[RasterVertex]()
+    above.append(glowing_corner(0, -20, 0, 1, FloatColor(1, 1, 1), board))
+    above.append(glowing_corner(8, -20, 1, 1, FloatColor(1, 1, 1), board))
+    above.append(glowing_corner(8, -12, 1, 0, FloatColor(1, 1, 1), board))
+    for workers in [1, 4]:
+        var target = RenderTarget(8, 8, Color(0, 0, 0))
+        with assert_raises():
+            rasterize_all(
+                above, target, SHADE_TEXTURE, textures, workers=workers
+            )
+        # Under a mode that never opens the map, the same triangle is fine.
+        rasterize_all(above, target, SHADE_LIT, textures, workers=workers)
+
+
 def test_corners_that_disagree_about_their_texture_are_rejected() raises:
     var textures = TextureStore()
     var board = textures.add(
@@ -1556,7 +1598,7 @@ def lit_along_z() raises -> Lighting:
     lamp.set_position(0, 0, 1)
     _ = scene.add(lamp^)
     scene.update()
-    scene.add_light(directional_light(Color(255, 255, 255), NodeId(0)))
+    scene.add_light(directional_light(Color(255, 255, 255), NodeId(0), FULL))
     return Lighting(scene)
 
 
@@ -1743,6 +1785,153 @@ def test_rasterize_all_carries_a_workers_error_back() raises:
         rasterize_all(corners, target, SHADE_TEXTURE, none, workers=2)
     with assert_raises():
         rasterize_all(corners, target, SHADE_TEXTURE, none)
+
+
+def test_a_frame_draws_its_runs_in_the_order_given() raises:
+    # A blended triangle over an opaque segment, and the same two with the
+    # segment drawn last: the order is the caller's, and it shows.
+    var textures = TextureStore()
+    var pane = List[RasterVertex]()
+    for point in covering(0.2):
+        pane.append(stated_corner(point, NO_TEXTURE, BLEND))
+    for index in range(3):
+        pane[index].color = FloatColor(1, 0, 0, 0.5)
+    var stroke: List[RasterVertex] = [
+        stated_corner(Vector3(0, 4.5, 0), NO_TEXTURE, OPAQUE),
+        stated_corner(Vector3(8, 4.5, 0), NO_TEXTURE, OPAQUE),
+    ]
+    stroke[0].kind = BASIC
+    stroke[1].kind = BASIC
+    stroke[0].color = FloatColor(0, 0, 1)
+    stroke[1].color = FloatColor(0, 0, 1)
+    stroke[0].z = 0.6
+    stroke[1].z = 0.6
+    var behind = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_frame(
+        pane,
+        stroke,
+        [Draw(DRAW_SEGMENTS, 0, 1), Draw(DRAW_TRIANGLES, 0, 1)],
+        behind,
+        SHADE_LIT,
+        textures,
+    )
+    # The stroke first, then half red over it: half red and half blue.
+    var seen = behind.shown(4, 4)
+    assert_equal(seen.r, UInt8(188))
+    assert_equal(seen.b, UInt8(188))
+    var over = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_frame(
+        pane,
+        stroke,
+        [Draw(DRAW_TRIANGLES, 0, 1), Draw(DRAW_SEGMENTS, 0, 1)],
+        over,
+        SHADE_LIT,
+        textures,
+    )
+    # The pane blended without claiming the depth, so the stroke passes
+    # the test and replaces the pixel: the wrong picture, and exactly what
+    # two passes drew.
+    var replaced = over.shown(4, 4)
+    assert_equal(replaced.r, UInt8(0))
+    assert_equal(replaced.b, UInt8(255))
+    # And an empty order draws nothing at all, nor does a run of nothing.
+    var untouched = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_frame(pane, stroke, List[Draw](), untouched)
+    rasterize_frame(
+        pane,
+        stroke,
+        [Draw(DRAW_TRIANGLES, 1, 0), Draw(DRAW_SEGMENTS, 1, 0)],
+        untouched,
+    )
+    assert_equal(untouched.shown(4, 4).r, UInt8(0))
+    assert_equal(untouched.depth_at(4, 4), inf[DType.float32]())
+
+
+def test_a_frame_draws_the_same_on_one_worker_and_on_four() raises:
+    var textures = TextureStore()
+    var pane = List[RasterVertex]()
+    for point in covering(0.2):
+        pane.append(stated_corner(point, NO_TEXTURE, BLEND))
+    for index in range(3):
+        pane[index].color = FloatColor(1, 0, 0, 0.5)
+    var strokes = List[RasterVertex]()
+    var rows: List[Float32] = [1.5, 4.5, 6.5]
+    var ends: List[Float32] = [0, 8]
+    for row in rows:
+        for x in ends:
+            var end = stated_corner(Vector3(x, row, 0), NO_TEXTURE, OPAQUE)
+            end.kind = BASIC
+            end.color = FloatColor(0, 0, 1)
+            end.z = 0.6
+            strokes.append(end)
+    var order: List[Draw] = [
+        Draw(DRAW_SEGMENTS, 0, 2),
+        Draw(DRAW_TRIANGLES, 0, 1),
+        Draw(DRAW_SEGMENTS, 2, 1),
+        Draw(DRAW_SEGMENTS, 0, 0),
+    ]
+    var alone = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_frame(pane, strokes, order, alone, SHADE_LIT, textures)
+    var crowd = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_frame(pane, strokes, order, crowd, SHADE_LIT, textures, workers=4)
+    for y in range(8):
+        for x in range(8):
+            var one = alone.shown(x, y)
+            var four = crowd.shown(x, y)
+            assert_equal(one.r, four.r)
+            assert_equal(one.g, four.g)
+            assert_equal(one.b, four.b)
+            assert_equal(alone.depth_at(x, y), crowd.depth_at(x, y))
+    # The last stroke was drawn over the pane, the first two under it.
+    assert_equal(alone.shown(4, 6).b, UInt8(255))
+    assert_equal(alone.shown(4, 1).b, UInt8(188))
+
+
+def test_a_frame_refuses_a_draw_it_does_not_hold() raises:
+    # Every operand of the range check has to decide the outcome alone, and
+    # a kind that is none of the two is refused before the range is read.
+    var textures = TextureStore()
+    var pane = List[RasterVertex]()
+    for point in covering(0.2):
+        pane.append(stated_corner(point, NO_TEXTURE, OPAQUE))
+    var stroke: List[RasterVertex] = [
+        stated_corner(Vector3(0, 4.5, 0), NO_TEXTURE, OPAQUE),
+        stated_corner(Vector3(8, 4.5, 0), NO_TEXTURE, OPAQUE),
+    ]
+    stroke[0].kind = BASIC
+    stroke[1].kind = BASIC
+    check_draws([Draw(DRAW_TRIANGLES, 0, 1), Draw(DRAW_SEGMENTS, 0, 1)], 1, 1)
+    check_draws([Draw(DRAW_TRIANGLES, 1, 0), Draw(DRAW_SEGMENTS, 1, 0)], 1, 1)
+    with assert_raises():
+        check_draws([Draw(DrawKind(7), 0, 1)], 1, 1)
+    with assert_raises():
+        check_draws([Draw(DRAW_TRIANGLES, -1, 1)], 1, 1)
+    with assert_raises():
+        check_draws([Draw(DRAW_TRIANGLES, 0, -1)], 1, 1)
+    with assert_raises():
+        check_draws([Draw(DRAW_TRIANGLES, 0, 2)], 1, 1)
+    with assert_raises():
+        check_draws([Draw(DRAW_SEGMENTS, 1, 1)], 1, 1)
+    for workers in [1, 4]:
+        var target = RenderTarget(8, 8, Color(0, 0, 0))
+        with assert_raises():
+            rasterize_frame(
+                pane,
+                stroke,
+                [Draw(DRAW_SEGMENTS, 0, 2)],
+                target,
+                SHADE_LIT,
+                textures,
+                workers=workers,
+            )
+        with assert_raises():
+            rasterize_frame(
+                pane, stroke, [Draw(DRAW_TRIANGLES, 0, 1)], target, workers=0
+            )
+        var odd = List[RasterVertex]()
+        odd.append(stroke[0])
+        with assert_raises():
+            rasterize_frame(pane, odd, List[Draw](), target)
 
 
 def test_rasterize_all_needs_whole_triangles_and_a_worker() raises:
@@ -2351,14 +2540,27 @@ def test_an_alpha_maps_green_channel_thins_the_surface() raises:
     var textures = TextureStore()
     var mask = textures.add(a_mask(128))
     var shown = data_pixel(data_quad(BASIC, alpha_map=mask), textures=textures)
-    assert_same_color(shown.shown(4, 4), Color(255, 255, 255, 128))
-    # A green of 255 leaves the surface alone, and one of zero empties it.
+    assert_same_color(shown.shown(4, 4), Color(255, 255, 255, 255))
+    # A green of 255 leaves the surface alone, and one of zero empties it:
+    # an opaque fragment is written with an alpha of one whatever the map
+    # said, as three.js writes it, so the alpha test is what shows the
+    # thinning.
     var whole = textures.add(a_mask(255))
-    var solid = data_pixel(data_quad(BASIC, alpha_map=whole), textures=textures)
+    var solid = data_pixel(
+        data_quad(BASIC, alpha_map=whole, alpha_test=0.5), textures=textures
+    )
     assert_same_color(solid.shown(4, 4), Color(255, 255, 255, 255))
     var empty = textures.add(a_mask(0))
-    var gone = data_pixel(data_quad(BASIC, alpha_map=empty), textures=textures)
-    assert_equal(gone.shown(4, 4).a, UInt8(0))
+    var gone = data_pixel(
+        data_quad(BASIC, alpha_map=empty, alpha_test=0.5), textures=textures
+    )
+    assert_same_color(gone.shown(4, 4), Color(0, 0, 0))
+    # And a blended fragment carries the thinned alpha into the mix.
+    var seen = data_pixel(
+        data_quad(BASIC, alpha_map=textures.add(a_mask(128)), blend=BLEND),
+        textures=textures,
+    )
+    assert_equal(seen.shown(4, 4).r, FloatColor(0.5, 0.5, 0.5).encode().r)
 
 
 def test_an_alpha_map_multiplies_the_opacity_it_is_given() raises:
@@ -2367,9 +2569,23 @@ def test_an_alpha_map_multiplies_the_opacity_it_is_given() raises:
     var textures = TextureStore()
     var mask = textures.add(a_mask(128))
     var shown = data_pixel(
-        data_quad(BASIC, alpha=0.5, alpha_map=mask), textures=textures
+        data_quad(BASIC, alpha=0.5, alpha_map=mask, blend=BLEND),
+        textures=textures,
     )
-    assert_equal(shown.shown(4, 4).a, UInt8(64))
+    # A quarter of white over black, in linear light.
+    assert_equal(shown.shown(4, 4).r, FloatColor(0.25, 0.25, 0.25).encode().r)
+    # The alpha test reads the same quarter: just above it discards, just
+    # below it keeps.
+    var cut = data_pixel(
+        data_quad(BASIC, alpha=0.5, alpha_map=mask, alpha_test=0.26),
+        textures=textures,
+    )
+    assert_same_color(cut.shown(4, 4), Color(0, 0, 0))
+    var kept = data_pixel(
+        data_quad(BASIC, alpha=0.5, alpha_map=mask, alpha_test=0.24),
+        textures=textures,
+    )
+    assert_equal(kept.shown(4, 4).r, UInt8(255))
 
 
 def test_an_alpha_map_leaves_the_color_alone() raises:
@@ -2390,10 +2606,11 @@ def test_the_alpha_test_throws_a_fragment_away() raises:
     var cut = data_pixel(data_quad(BASIC, alpha=0.4, alpha_test=0.5))
     assert_same_color(cut.shown(4, 4), Color(0, 0, 0))
     var kept = data_pixel(data_quad(BASIC, alpha=0.4, alpha_test=0.4))
-    assert_equal(kept.shown(4, 4).a, UInt8(102))
+    # Written opaque, with an alpha of one, as three.js writes it.
+    assert_same_color(kept.shown(4, 4), Color(255, 255, 255, 255))
     # A test of zero is no test at all, as in three.js.
     var every = data_pixel(data_quad(BASIC, alpha=0.0, alpha_test=0.0))
-    assert_equal(every.shown(4, 4).a, UInt8(0))
+    assert_equal(every.shown(4, 4).r, UInt8(255))
     assert_false(every.is_data(4, 4))
 
 
@@ -2564,7 +2781,7 @@ def lit_along_z_from(z: Float32) raises -> Lighting:
     var lamp = Object3D()
     lamp.set_position(0, 0, 1)
     var node = scene.add(lamp^)
-    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.add_light(directional_light(Color(255, 255, 255), node, FULL))
     scene.update()
     return Lighting(scene, Layers.all(), Vector3(0, 0, z))
 
@@ -2965,7 +3182,7 @@ def lamp_straight_on() raises -> Lighting:
     var lamp = Object3D()
     lamp.set_position(0, 0, 1)
     var node = scene.add(lamp^)
-    scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
+    scene.add_light(directional_light(Color(255, 255, 255), node, FULL))
     scene.update()
     return Lighting(scene)
 
@@ -3414,6 +3631,22 @@ def test_a_faint_blend_cannot_decide_a_data_pixels_curve() raises:
     check_output_kinds(data_quad(BASIC, blend=BLEND), True)
     # An empty frame holds neither.
     check_output_kinds(List[RasterVertex](), True)
+    # A blended segment mixes light into whatever it crosses, a data pixel
+    # included, so it counts as a blended triangle does. An opaque one
+    # replaces the pixel and decides nothing for the pixel behind it.
+    var stroke: List[RasterVertex] = [
+        stated_corner(Vector3(0, 0, 0), NO_TEXTURE, BLEND),
+        stated_corner(Vector3(8, 8, 0), NO_TEXTURE, BLEND),
+    ]
+    with assert_raises():
+        check_output_kinds(data_quad(NORMALS), True, stroke)
+    check_output_kinds(data_quad(NORMALS), False, stroke)
+    check_output_kinds(List[RasterVertex](), True, stroke)
+    var solid_stroke: List[RasterVertex] = [
+        stated_corner(Vector3(0, 0, 0), NO_TEXTURE, OPAQUE),
+        stated_corner(Vector3(8, 8, 0), NO_TEXTURE, OPAQUE),
+    ]
+    check_output_kinds(data_quad(NORMALS), True, solid_stroke)
 
 
 def blended(base: RasterVertex) -> RasterVertex:

@@ -33,6 +33,7 @@ from render.rasterizer import (
 from render.target import RenderTarget
 from render.texture_store import NO_TEXTURE
 from render.tonemap import NO_TONE_MAPPING
+from std.math import inf
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -282,6 +283,45 @@ def test_a_blended_line_mixes_with_what_is_there() raises:
     # Half red over white: full red, and the other channels halved.
     assert_almost_equal(mixed.r, Float32(1), atol=TOLERANCE)
     assert_almost_equal(mixed.g, Float32(0.5), atol=TOLERANCE)
+
+
+def test_a_blended_line_claims_no_depth() raises:
+    # Two blended segments crossing: the second is behind the first and
+    # still contributes, because a blended segment tests the depth without
+    # claiming it, as a blended triangle does. Claiming it dropped the
+    # second at the crossing, and the kernel never did.
+    var target = RenderTarget(16, 16, Color(0, 0, 0))
+    rasterize_line(
+        end(2.5, 8.5, 0.2, FloatColor(1, 0, 0, 0.5), BLEND),
+        end(14.5, 8.5, 0.2, FloatColor(1, 0, 0, 0.5), BLEND),
+        target,
+    )
+    rasterize_line(
+        end(8.5, 2.5, 0.6, FloatColor(0, 0, 1, 0.5), BLEND),
+        end(8.5, 14.5, 0.6, FloatColor(0, 0, 1, 0.5), BLEND),
+        target,
+    )
+    var crossing = target.color_at(8, 8)
+    # Half blue over half red over opaque black, premultiplied: a quarter
+    # red and a half blue, and the clear color's full coverage kept.
+    assert_almost_equal(crossing.r, Float32(0.25), atol=TOLERANCE)
+    assert_almost_equal(crossing.b, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(crossing.a, Float32(1), atol=TOLERANCE)
+    # And neither claimed the pixel's depth.
+    assert_equal(target.depth_at(8, 8), inf[DType.float32]())
+    # An opaque segment still claims it.
+    rasterize_line(end(2.5, 8.5, 0.1), end(14.5, 8.5, 0.1), target)
+    assert_almost_equal(target.depth_at(8, 8), Float32(0.1), atol=TOLERANCE)
+    # And a blended segment behind that opaque one is hidden by it: the
+    # test is still made, only the claim is not.
+    rasterize_line(
+        end(8.5, 2.5, 0.4, FloatColor(0, 1, 0, 0.5), BLEND),
+        end(8.5, 14.5, 0.4, FloatColor(0, 1, 0, 0.5), BLEND),
+        target,
+    )
+    assert_almost_equal(target.color_at(8, 8).g, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(target.color_at(8, 8).r, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(target.color_at(8, 8).b, Float32(1), atol=TOLERANCE)
 
 
 def test_fog_veils_a_line_by_its_depth() raises:

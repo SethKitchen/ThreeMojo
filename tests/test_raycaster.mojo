@@ -20,18 +20,30 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
-from core.raycaster import Raycaster
+from core.raycaster import (
+    BATCHED_HIT,
+    INSTANCED_HIT,
+    LOD_HIT,
+    MESH_HIT,
+    HitKind,
+    Raycaster,
+)
 from core.scene import Scene
 from geometries.box import cube
 from materials.material import BACK_SIDE, DOUBLE_SIDE, Material
+from math.matrix4 import translation
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from objects.instanced_mesh import BatchedMesh, InstancedMesh
+from objects.lod import Lod
 from objects.mesh import Mesh
 from render.framebuffer import Color
+from std.math import nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -132,6 +144,21 @@ def test_a_raycaster_refuses_a_bad_range_or_no_direction() raises:
             Vector3(0, 0, -1),
             Length(2.0, METER),
             Length(1.0, METER),
+        )
+    # A range that is not a number passed both tests above and then
+    # filtered nothing, silently.
+    with assert_raises():
+        _ = Raycaster(
+            Vector3(0, 0, 0),
+            Vector3(0, 0, -1),
+            Length(nan[DType.float32](), METER),
+        )
+    with assert_raises():
+        _ = Raycaster(
+            Vector3(0, 0, 0),
+            Vector3(0, 0, -1),
+            Length(0.0, METER),
+            Length(nan[DType.float32](), METER),
         )
     var caster = down_z()
     with assert_raises():
@@ -536,6 +563,179 @@ def test_a_click_lands_on_the_cube_under_it() raises:
     # A pixel at the edge of the image looks past the cube.
     caster.set_from_pixel(0.5, 50, 200, 100, camera, scene)
     assert_equal(len(caster.intersect_scene(scene, assets)), 0)
+
+
+# --- groups and levels -------------------------------------------------------
+
+
+def test_a_hit_kind_is_one_of_four() raises:
+    assert_true(MESH_HIT.is_valid())
+    assert_true(INSTANCED_HIT.is_valid())
+    assert_true(BATCHED_HIT.is_valid())
+    assert_true(LOD_HIT.is_valid())
+    assert_false(HitKind(4).is_valid())
+    assert_false(HitKind(-1).is_valid())
+
+
+def test_a_plain_mesh_hit_names_its_list_and_no_instance() raises:
+    var assets = Assets()
+    var scene = a_cube_scene(assets, Material(Color(255, 255, 255)))
+    var hits = down_z().intersect_mesh(scene, assets, 0)
+    assert_equal(hits[0].kind, MESH_HIT)
+    assert_equal(hits[0].instance, -1)
+
+
+def test_an_instanced_mesh_is_hit_per_instance_at_its_own_place() raises:
+    # Two unit cubes on one node: one at the origin, one two meters up z
+    # and slid off the ray on x. The ray strikes the first alone, and the
+    # hit says which, three.js's `instanceId`.
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    var group = InstancedMesh(
+        assets.geometries.add(cube(Length(1.0, METER))),
+        assets.materials.add(Material(Color(255, 255, 255))),
+        node,
+        2,
+    )
+    group.set_matrix_at(1, translation(3, 0, 2))
+    scene.add_instanced_mesh(group^)
+    var hits = down_z().intersect_instanced_mesh(scene, assets, 0)
+    assert_equal(len(hits), 1)
+    assert_equal(hits[0].kind, INSTANCED_HIT)
+    assert_equal(hits[0].index, 0)
+    assert_equal(hits[0].instance, 0)
+    assert_equal(hits[0].mesh.node, node)
+    assert_almost_equal(hits[0].distance, Float32(4.5), atol=TOLERANCE)
+    # Slide the second under the ray, in front of the first: it is struck
+    # first, at the node's transform times its own.
+    scene.instanced_meshes[0].set_matrix_at(1, translation(0, 0, 2))
+    hits = down_z().intersect_instanced_mesh(scene, assets, 0)
+    assert_equal(len(hits), 2)
+    assert_equal(hits[0].instance, 1)
+    assert_almost_equal(hits[0].distance, Float32(2.5), atol=TOLERANCE)
+    assert_equal(hits[1].instance, 0)
+    with assert_raises():
+        _ = down_z().intersect_instanced_mesh(scene, assets, 1)
+    with assert_raises():
+        _ = down_z().intersect_instanced_mesh(scene, assets, -1)
+
+
+def test_a_batched_mesh_is_hit_with_each_instances_own_geometry() raises:
+    # A big cube slid off the ray and a small one under it, in one batch.
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    var big = assets.geometries.add(cube(Length(4.0, METER)))
+    var small = assets.geometries.add(cube(Length(1.0, METER)))
+    var batch = BatchedMesh(
+        assets.materials.add(Material(Color(255, 255, 255))), node
+    )
+    _ = batch.add_instance(big, translation(6, 0, 0))
+    _ = batch.add_instance(small, translation(0, 0, 1))
+    scene.add_batched_mesh(batch^)
+    var hits = down_z().intersect_batched_mesh(scene, assets, 0)
+    assert_equal(len(hits), 1)
+    assert_equal(hits[0].kind, BATCHED_HIT)
+    assert_equal(hits[0].instance, 1)
+    assert_equal(hits[0].mesh.geometry, small)
+    assert_almost_equal(hits[0].distance, Float32(3.5), atol=TOLERANCE)
+    with assert_raises():
+        _ = down_z().intersect_batched_mesh(scene, assets, 1)
+    with assert_raises():
+        _ = down_z().intersect_batched_mesh(scene, assets, -1)
+
+
+def test_an_empty_group_is_hit_nowhere() raises:
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var paint = assets.materials.add(Material(Color(255, 255, 255)))
+    scene.add_instanced_mesh(InstancedMesh(box, paint, node, 0))
+    scene.add_batched_mesh(BatchedMesh(paint, node))
+    assert_equal(len(down_z().intersect_scene(scene, assets)), 0)
+
+
+def test_an_lod_is_hit_on_the_level_the_rays_origin_picks() raises:
+    # A unit cube up close and a two-meter cube from three meters on. The
+    # ray leaves five meters out, so the far level is the one struck.
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    var small = assets.geometries.add(cube(Length(1.0, METER)))
+    var large = assets.geometries.add(cube(Length(2.0, METER)))
+    var paint = assets.materials.add(Material(Color(255, 255, 255)))
+    var lod = Lod(node)
+    lod.add_level(small, paint)
+    lod.add_level(large, paint, Length(3.0, METER), 0.5)
+    scene.add_lod(lod^)
+    var hits = down_z().intersect_lod(scene, assets, 0)
+    assert_equal(len(hits), 1)
+    assert_equal(hits[0].kind, LOD_HIT)
+    assert_equal(hits[0].instance, 1)
+    assert_equal(hits[0].mesh.geometry, large)
+    assert_almost_equal(hits[0].distance, Float32(4.0), atol=TOLERANCE)
+    # From two meters out, the near level, whatever the LOD remembers:
+    # three.js's `LOD.raycast` goes by `getObjectForDistance`.
+    scene.update_lods(Vector3(0, 0, 5))
+    var near = Raycaster(Vector3(0.1, 0.2, 2), Vector3(0, 0, -1))
+    hits = near.intersect_lod(scene, assets, 0)
+    assert_equal(hits[0].instance, 0)
+    assert_almost_equal(hits[0].distance, Float32(1.5), atol=TOLERANCE)
+    # No levels, no hits; no such LOD, an error.
+    var bare = Scene()
+    _ = bare.add(Object3D())
+    bare.update()
+    bare.add_lod(Lod(NodeId(0)))
+    assert_equal(len(down_z().intersect_lod(bare, assets, 0)), 0)
+    with assert_raises():
+        _ = down_z().intersect_lod(scene, assets, 1)
+    with assert_raises():
+        _ = down_z().intersect_lod(scene, assets, -1)
+
+
+def test_the_scene_answers_across_every_kind_of_object() raises:
+    # A plain cube at the origin, an instance a meter up, a batch member
+    # two up and an LOD level three up: four hits, nearest first, each
+    # from its own list.
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var paint = assets.materials.add(Material(Color(255, 255, 255)))
+    scene.add_mesh(Mesh(box, paint, node))
+    var group = InstancedMesh(box, paint, node, 1)
+    group.set_matrix_at(0, translation(0, 0, 1))
+    scene.add_instanced_mesh(group^)
+    var batch = BatchedMesh(paint, node)
+    _ = batch.add_instance(box, translation(0, 0, 2))
+    scene.add_batched_mesh(batch^)
+    var raised = scene.add(Object3D())
+    scene.node(raised).set_position(0, 0, 3)
+    scene.update()
+    var lod = Lod(raised)
+    lod.add_level(box, paint)
+    scene.add_lod(lod^)
+    var hits = down_z().intersect_scene(scene, assets)
+    assert_equal(len(hits), 4)
+    assert_equal(hits[0].kind, LOD_HIT)
+    assert_equal(hits[1].kind, BATCHED_HIT)
+    assert_equal(hits[2].kind, INSTANCED_HIT)
+    assert_equal(hits[3].kind, MESH_HIT)
+    assert_almost_equal(hits[0].distance, Float32(1.5), atol=TOLERANCE)
+    assert_almost_equal(hits[3].distance, Float32(4.5), atol=TOLERANCE)
+    # A layer the raycaster does not test hides a group as it hides a mesh.
+    scene.node(node).layers.set(1)
+    scene.update()
+    hits = down_z().intersect_scene(scene, assets)
+    assert_equal(len(hits), 1)
+    assert_equal(hits[0].kind, LOD_HIT)
 
 
 def morphed_scene() raises -> Scene:

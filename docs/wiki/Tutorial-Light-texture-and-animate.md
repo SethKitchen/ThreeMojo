@@ -72,8 +72,8 @@ A point light sits at a position and falls off with distance:
     var bulb = Object3D()
     bulb.set_position(0.8, 1.0, 1.5)
     var bulb_node = scene.add(bulb^)
-    scene.add_light(point_light(Color(255, 220, 180), bulb_node, 1.5))
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.15))
+    scene.add_light(point_light(Color(255, 220, 180), bulb_node, 4.71))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.47))
 ```
 
 The third argument is the intensity at one meter. The default decay is the inverse-square law.

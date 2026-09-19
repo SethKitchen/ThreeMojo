@@ -191,9 +191,14 @@ def test_a_degenerate_or_misordered_volume_is_rejected() raises:
     with assert_raises():
         _ = orthographic(-1, 1, -1, 1, 1, 10)
     with assert_raises():
-        _ = orthographic(-1, 1, 1, -1, -1, 10)
-    with assert_raises():
         _ = orthographic(-1, 1, 1, -1, 5, 5)
+    # A near plane behind the camera is allowed, as three.js allows it: a
+    # top-down view is commonly given one so that what stands above the
+    # camera is still drawn. The depth range runs from it to the far plane.
+    var behind = orthographic(-1, 1, 1, -1, -1, 10)
+    assert_almost_equal(
+        behind.transform_point(Vector3(0, 0, 1)).z, Float32(-1), atol=TOLERANCE
+    )
 
 
 def test_a_near_plane_of_zero_is_allowed() raises:
@@ -307,15 +312,15 @@ def test_an_unusable_camera_is_rejected() raises:
             Length(0.1, METER),
             Length(10.0, METER),
         )
-    with assert_raises():
-        _ = OrthographicCamera(
-            Length(-1.0, METER),
-            Length(1.0, METER),
-            Length(1.0, METER),
-            Length(-1.0, METER),
-            Length(-1.0, METER),
-            Length(10.0, METER),
-        )
+    # A near plane behind the camera is allowed, as in three.js.
+    _ = OrthographicCamera(
+        Length(-1.0, METER),
+        Length(1.0, METER),
+        Length(1.0, METER),
+        Length(-1.0, METER),
+        Length(-1.0, METER),
+        Length(10.0, METER),
+    )
     with assert_raises():
         _ = OrthographicCamera(
             Length(-1.0, METER),

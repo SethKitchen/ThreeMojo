@@ -47,9 +47,15 @@ does it: the two normals at its point come out as `(0, -1)` and
 `(0.0001, 1)`, whose dot product rounds to exactly minus one, and the
 miter is not a number.
 
-So a bevel refuses a corner sharper than `SHARPEST`. The miter would reach
-further out than the bevel is wide, which is not a bevel, and the answer
-is either a wider shape or no bevel.
+So a bevel does what three.js's `getBevelVec` does: it keeps the exact
+miter while it is no longer than the square root of two bevel widths and
+shrinks a longer one to that length, which rounds a sharp corner off
+rather than drawing it out to a spike. A corner whose two edges fold
+straight back, where the sum of the normals has no direction left, is
+moved along its incoming edge by the same length, as three.js's collinear
+branch moves it. This used to refuse any corner sharper than about eleven
+degrees, and stood every corner sharper than a right angle out further
+than three.js does.
 
 An extrusion without a bevel does not ask the question. It has no distance
 to move a corner by, so it does not work out which way to move it, and the
@@ -85,26 +91,35 @@ from core.buffer_geometry import BufferGeometry, POSITION, UV
 from geometries.shape import Contours, triangulate
 from math.path import Shape
 from math.vector2 import Vector2
-from std.math import cos, pi, sin
+from std.math import cos, pi, sin, sqrt
 from units.si import Length, METER
 
-# The smallest `1 + n1 . n2` a bevelled corner may have. Two normals a
-# quarter turn apart give one; opposite normals give zero. At this floor
-# the miter reaches ten times the bevel's width, which is the point past
-# which a rounded edge is a spike, and below it `Float32` reaches exactly
-# zero and the miter stops being a number. It is an interior angle of
-# about eleven degrees.
-comptime SHARPEST = Float32(0.02)
+# The smallest `1 + n1 . n2` a corner is still turned rather than folded
+# at. Two normals a quarter turn apart give one; opposite normals give
+# zero, and there the two edges run straight back along each other and
+# meet nowhere. Below this the sum of the normals has no direction a
+# `Float32` can be trusted with, and three.js's collinear branch takes
+# over: it moves the point along its incoming edge instead.
+comptime FOLDED = Float32(1e-6)
+# How far a bevel may stand a corner out, in bevel widths: three.js's
+# `getBevelVec` keeps the exact miter while it is no longer than this and
+# shrinks a longer one to it, so a sharp corner is rounded off rather
+# than drawn out to a spike.
+comptime MITER_LIMIT = Float32(1.4142135)
 
 
-def _miters(
-    points: List[Vector2], start: Int, count: Int
-) raises -> List[Vector2]:
+def _miters(points: List[Vector2], start: Int, count: Int) -> List[Vector2]:
     """Return the direction each corner of one contour moves in when the
     contour is moved out, one vector per point.
 
     Moving a corner by `size` times its vector moves both of its edges out
-    by exactly `size`, which is what keeps a bevel's band an even width.
+    by exactly `size`, which is what keeps a bevel's band an even width --
+    up to a corner sharper than a right angle. There the exact miter grows
+    without limit, and three.js's `getBevelVec` caps it at `MITER_LIMIT`
+    bevel widths, which is what this does too: the band narrows at a sharp
+    corner rather than running out to a spike. A corner whose two edges
+    fold straight back is moved along its incoming edge by the same limit,
+    as three.js's collinear branch moves it.
 
     Args:
         points: Every contour's points.
@@ -113,10 +128,6 @@ def _miters(
 
     Returns:
         One vector per point, in the order the points are in.
-
-    Raises:
-        Error: If a corner is sharper than `SHARPEST`, where the miter
-            runs away and, in `Float32`, stops being a number at all.
     """
     var out = List[Vector2]()
     for index in range(count):  # pragma: no branch
@@ -132,9 +143,15 @@ def _miters(
         var first = Vector2(incoming.y, -incoming.x)
         var second = Vector2(outgoing.y, -outgoing.x)
         var share = 1 + first.dot(second)
-        if share < SHARPEST:
-            raise Error("A bevel cannot turn a corner this sharp")
-        out.append((first + second) * (1 / share))
+        if share <= FOLDED:
+            out.append(incoming * MITER_LIMIT)
+        elif share < 1:
+            # The exact miter has a length of the square root of two over
+            # `share`, which is past the limit here; scaled back onto it,
+            # the direction kept.
+            out.append((first + second) * (1 / sqrt(share)))
+        else:
+            out.append((first + second) * (1 / share))
     return out^
 
 
@@ -249,8 +266,7 @@ def extrude(
     Raises:
         Error: If the depth is not positive, if there are fewer than one
             step or one curve segment, if a bevel has no thickness, a
-            negative size or fewer than one band, if a bevelled outline
-            turns a corner sharper than `SHARPEST`, or if the shape cannot
+            negative size or fewer than one band, or if the shape cannot
             be filled in; see `geometries.shape.triangulate`.
     """
     if depth.value <= 0:
@@ -266,9 +282,7 @@ def extrude(
 
     var cut = triangulate(shape, curve_segments)
     # Without a bevel every layer sits on the outline itself, so there is
-    # no distance to move a corner by and no miter to work out. Leaving
-    # them at zero is not the same as working them out and multiplying by
-    # zero: a corner sharp enough has no miter to work out at all.
+    # no distance to move a corner by and no miter to work out.
     var miters = List[Vector2]()
     if bevel_enabled:
         for contour in range(cut.contour_count()):  # pragma: no branch

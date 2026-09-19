@@ -138,27 +138,25 @@ def test_a_depth_material_takes_a_map_that_cuts_it_out() raises:
 def test_a_data_material_cannot_blend() raises:
     # One pixel cannot hold part of a normal and part of the scene's
     # light, so the mixture is refused rather than resolved as neither.
-    # Stated outright, or inferred from an opacity below one, or from a
-    # base color that could see through -- though a data material's color
-    # must be opaque white anyway.
+    # Stated outright, or taken from `transparent`. An opacity below one
+    # on its own changes nothing, as in three.js, and is allowed.
     for kind in [NORMALS, DEPTH]:
         with assert_raises():
             _ = Material(Color(255, 255, 255), kind=kind, blending=BLEND)
         with assert_raises():
-            _ = Material(Color(255, 255, 255), kind=kind, opacity=0.5)
-        # Opaque, stated or inferred, is what such a surface must be.
+            _ = Material(Color(255, 255, 255), kind=kind, transparent=True)
+        # Opaque, stated or by default, is what such a surface must be.
         _ = Material(Color(255, 255, 255), kind=kind)
+        _ = Material(Color(255, 255, 255), kind=kind, opacity=0.5)
         _ = Material(
             Color(255, 255, 255), kind=kind, opacity=0.5, blending=OPAQUE
         )
     with assert_raises():
         _ = normal_material(FRONT_SIDE, 1.0, BLEND)
-    with assert_raises():
-        _ = normal_material(FRONT_SIDE, 0.5)
+    _ = normal_material(FRONT_SIDE, 0.5)
     with assert_raises():
         _ = depth_material(NO_TEXTURE, FRONT_SIDE, 1.0, BLEND)
-    with assert_raises():
-        _ = depth_material(NO_TEXTURE, FRONT_SIDE, 0.25)
+    _ = depth_material(NO_TEXTURE, FRONT_SIDE, 0.25)
     # A lit material blends as it always did, which is what makes the
     # refusal about the kind and not about the policy.
     _ = Material(Color(255, 255, 255), kind=LAMBERT, blending=BLEND)
@@ -549,7 +547,14 @@ def test_a_phong_material_carries_three_js_defaults() raises:
     assert_equal(pane.map, TextureId(4))
     assert_equal(pane.shininess, Float32(5))
     assert_equal(pane.side, DOUBLE_SIDE)
-    assert_true(pane.is_transparent())
+    # An opacity below one blends only when the material is transparent,
+    # as in three.js.
+    assert_false(pane.is_transparent())
+    assert_true(
+        phong_material(
+            Color(1, 2, 3), NO_TEXTURE, Color(0, 0, 0), 5.0, transparent=True
+        ).is_transparent()
+    )
     assert_true(
         phong_material(
             Color(1, 2, 3),
@@ -668,7 +673,10 @@ def test_a_toon_material_names_its_ramp_or_takes_the_fallback() raises:
     assert_equal(pane.gradient_map, TextureId(5))
     assert_equal(pane.side, DOUBLE_SIDE)
     assert_equal(pane.opacity, Float32(0.5))
-    assert_true(pane.is_transparent())
+    assert_false(pane.is_transparent())
+    assert_true(
+        toon_material(Color(1, 2, 3), transparent=True).is_transparent()
+    )
     assert_true(toon_material(Color(1, 2, 3), blending=BLEND).is_transparent())
     # Every other kind names no ramp, whatever else it carries.
     assert_false(Material(Color(1, 2, 3)).has_gradient_map())
@@ -756,7 +764,8 @@ def test_a_matcap_material_names_its_image_or_takes_the_gradient() raises:
     assert_equal(pane.map, TextureId(4))
     assert_equal(pane.side, DOUBLE_SIDE)
     assert_equal(pane.opacity, Float32(0.5))
-    assert_true(pane.is_transparent())
+    assert_false(pane.is_transparent())
+    assert_true(matcap_material(transparent=True).is_transparent())
     # Every other kind names no image, whatever else it carries.
     assert_false(Material(Color(1, 2, 3)).has_matcap())
     assert_false(toon_material(Color(1, 2, 3)).has_matcap())

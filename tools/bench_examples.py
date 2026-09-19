@@ -107,13 +107,30 @@ def host_info(mojo11: Path | None, mojo10: Path | None) -> dict:
     }
 
 
+BSD_REAL = re.compile(r"^\s*([0-9.]+)\s+real\b", re.MULTILINE)
+BSD_RSS = re.compile(r"^\s*(\d+)\s+maximum resident set size")
+
+
 def measure(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> dict:
-    """Run cmd and return elapsed seconds, peak RSS in KiB, status and stderr."""
+    """Run cmd and return elapsed seconds, peak RSS in KiB, status and stderr.
+
+    GNU time takes a format string; BSD time, which macOS ships, prints a
+    fixed report under `-l` with the peak in bytes. Both are read here, so
+    the page can be refreshed on either kind of machine.
+    """
     full_env = os.environ.copy()
     if env:
         full_env.update(env)
     if Path(TIME_BIN).is_file():
-        wrapped = [TIME_BIN, "-f", "TIME_RSS %e %M %x", "--", *cmd]
+        if sys.platform == "darwin":
+            wrapped = [TIME_BIN, "-l", *cmd]
+        else:
+            wrapped = [TIME_BIN, "-f", "TIME_RSS %e %M %x", "--", *cmd]
+        # The clock is this process's, to the microsecond: both `time`s
+        # print the elapsed time to two decimals, which cannot tell a
+        # ten-millisecond run from a nineteen-millisecond one. `time`
+        # is kept for the peak resident set, which only it can report.
+        started = time.perf_counter()
         proc = subprocess.run(
             wrapped,
             cwd=cwd,
@@ -122,14 +139,29 @@ def measure(cmd: list[str], cwd: Path, env: dict[str, str] | None = None) -> dic
             text=True,
             check=False,
         )
+        elapsed = round(time.perf_counter() - started, 4)
         combined = (proc.stdout or "") + "\n" + (proc.stderr or "")
+        if sys.platform == "darwin":
+            rss = None
+            for line in combined.splitlines():
+                peak = BSD_RSS.match(line)
+                if peak:
+                    rss = int(peak.group(1)) // 1024
+            if BSD_REAL.search(combined):
+                return {
+                    "ok": proc.returncode == 0,
+                    "seconds": elapsed,
+                    "rss_kib": rss,
+                    "status": proc.returncode,
+                    "output": combined,
+                }
         for line in combined.splitlines():
             match = RSS_LINE.match(line.strip())
             if match:
-                elapsed, rss, status = match.groups()
+                _, rss, status = match.groups()
                 return {
                     "ok": int(float(status)) == 0,
-                    "seconds": float(elapsed),
+                    "seconds": elapsed,
                     "rss_kib": int(float(rss)),
                     "status": int(float(status)),
                     "output": combined,
@@ -267,8 +299,26 @@ def bench_compile(mojo: Path, src: Path, binary: Path) -> dict:
     )
 
 
+# How many times a built binary is run for one number. The first launch of
+# a freshly built executable on macOS pays a system check of several hundred
+# milliseconds that has nothing to do with the program, and any run can be
+# disturbed; the fastest of a few is the program.
+RUNS = 3
+
+
 def bench_run(binary: Path, args: list[str], cwd: Path) -> dict:
-    return measure([str(binary), *args], cwd=cwd)
+    """Run a built binary `RUNS` times and return the fastest run."""
+    best = None
+    for _ in range(RUNS):
+        result = measure([str(binary), *args], cwd=cwd)
+        if not result["ok"]:
+            return result
+        if best is None or (
+            result["seconds"] is not None
+            and (best["seconds"] is None or result["seconds"] < best["seconds"])
+        ):
+            best = result
+    return best
 
 
 def ensure_threejs() -> bool:
@@ -321,21 +371,41 @@ def bench_threejs(name: str) -> dict:
             "backend": "",
             "output": "node is missing",
         }
-    result = measure(
-        [str(node), str(THREEJS / "run.mjs"), name],
-        cwd=ROOT,
-        env=node_env(),
-    )
+    result = None
+    for _ in range(RUNS):
+        run = measure(
+            [str(node), str(THREEJS / "run.mjs"), name],
+            cwd=ROOT,
+            env=node_env(),
+        )
+        if not run["ok"]:
+            result = run
+            break
+        if result is None or (
+            run["seconds"] is not None
+            and (result["seconds"] is None or run["seconds"] < result["seconds"])
+        ):
+            result = run
     backend = ""
+    frames_seconds = None
+    import_seconds = None
     for line in result["output"].splitlines():
         line = line.strip()
         if line.startswith("{") and line.endswith("}"):
             try:
                 payload = json.loads(line)
                 backend = payload.get("backend", "")
+                if isinstance(payload.get("frames_ms"), (int, float)):
+                    frames_seconds = payload["frames_ms"] / 1000.0
+                if isinstance(payload.get("import_ms"), (int, float)):
+                    import_seconds = payload["import_ms"] / 1000.0
             except json.JSONDecodeError:
                 pass
     result["backend"] = backend
+    # The frames alone and the import of three.js, timed inside the Node
+    # process, so the table can show the drawing apart from the process.
+    result["frames_seconds"] = frames_seconds
+    result["import_seconds"] = import_seconds
     return result
 
 
@@ -350,6 +420,31 @@ def find_mojo10() -> Path | None:
         if path.is_file():
             return path
     return None
+
+
+def bench_baselines(mojo: Path) -> dict:
+    """Time a Mojo program that does nothing and a Node process that does
+    nothing, so a reader can tell the process from the frames."""
+    noop = BUILD / "noop"
+    compiled = bench_compile(mojo, ROOT / "bench" / "noop.mojo", noop)
+    mojo_run = (
+        bench_run(noop, [], ROOT)
+        if compiled["ok"] and noop.is_file()
+        else {"ok": False, "seconds": None, "rss_kib": None, "status": 1}
+    )
+    node = which_node()
+    node_run = {"ok": False, "seconds": None, "rss_kib": None, "status": 127}
+    if node is not None:
+        for _ in range(RUNS):
+            run = measure([str(node), "-e", ""], ROOT, env=node_env())
+            if not run["ok"]:
+                node_run = run
+                break
+            if node_run["seconds"] is None or (
+                run["seconds"] is not None and run["seconds"] < node_run["seconds"]
+            ):
+                node_run = run
+    return {"mojo": mojo_run, "node": node_run}
 
 
 def bench_probe(mojo: Path, src: Path, binary: Path) -> dict:
@@ -378,8 +473,8 @@ def refused_reason(output: str) -> str:
 
 def example_table(rows: list[dict], backend: str) -> str:
     lines = [
-        "| Example | Size | Frames | ThreeMojo compile (s) | ThreeMojo run (s) | three.js run (s) | ThreeMojo RSS (MiB) | three.js RSS (MiB) |",
-        "|---|---|---|---|---|---|---|---|",
+        "| Example | Size | Frames | ThreeMojo compile (s) | ThreeMojo run (s) | three.js run (s) | three.js frames only (s) | ThreeMojo RSS (MiB) | three.js RSS (MiB) |",
+        "|---|---|---|---|---|---|---|---|---|",
     ]
     for row in rows:
         tm = row["threemojo"]
@@ -390,6 +485,7 @@ def example_table(rows: list[dict], backend: str) -> str:
         )
         tm_rss = fmt_mib(tm["run"].get("rss_kib")) if tm_run_ok else "—"
         js_run = fmt_s(js["seconds"]) if js.get("ok") else "failed"
+        js_frames = fmt_s(js.get("frames_seconds")) if js.get("ok") else "—"
         js_rss = fmt_mib(js.get("rss_kib")) if js.get("ok") else "—"
         run_l, run_r = painted_pair(
             tm_run,
@@ -404,7 +500,7 @@ def example_table(rows: list[dict], backend: str) -> str:
             good_mib(js),
         )
         lines.append(
-            "| `{name}` | {w}×{h} | {frames} | {c} | {r} | {jr} | {m} | {jm} |".format(
+            "| `{name}` | {w}×{h} | {frames} | {c} | {r} | {jr} | {jf} | {m} | {jm} |".format(
                 name=row["name"],
                 w=row["width"],
                 h=row["height"],
@@ -412,6 +508,7 @@ def example_table(rows: list[dict], backend: str) -> str:
                 c=fmt_s(tm["compile"]["seconds"]),
                 r=run_l,
                 jr=run_r,
+                jf=js_frames,
                 m=rss_l,
                 jm=rss_r,
             )
@@ -419,6 +516,16 @@ def example_table(rows: list[dict], backend: str) -> str:
     if backend:
         lines.append("")
         lines.append(f"three.js backend for this run: `{backend}`.")
+        if backend != "webgl":
+            lines.append(
+                "The `gl` package did not load, so three.js did not render. "
+                "The `cpu-flat` backend fills the same triangles with each "
+                "material's flat color and a depth test. It does no lighting, "
+                "no textures, no sRGB and no transparency, and it writes no "
+                "file. The `three.js frames only` column is that fill, timed "
+                "inside the process. The rest of the `three.js run` column is "
+                "Node starting and importing three.js."
+            )
     return "\n".join(lines)
 
 
@@ -490,7 +597,16 @@ def slim_metric(metric: dict | None) -> dict | None:
         return None
     kept = {
         key: metric[key]
-        for key in ("ok", "seconds", "rss_kib", "status", "backend", "error")
+        for key in (
+            "ok",
+            "seconds",
+            "rss_kib",
+            "status",
+            "backend",
+            "frames_seconds",
+            "import_seconds",
+            "error",
+        )
         if key in metric
     }
     if not metric.get("ok"):
@@ -503,6 +619,10 @@ def slim_payload(payload: dict) -> dict:
         "generated_at": payload["generated_at"],
         "host": payload["host"],
         "threejs_backend": payload.get("threejs_backend", ""),
+        "baselines": {
+            key: slim_metric(value)
+            for key, value in payload.get("baselines", {}).items()
+        },
         "mojo10_refused": payload["mojo10_refused"],
         "mojo10_total": payload["mojo10_total"],
         "probe": {},
@@ -538,6 +658,16 @@ def slim_payload(payload: dict) -> dict:
     return slim
 
 
+def baseline_lines(payload: dict) -> list[str]:
+    baselines = payload.get("baselines") or {}
+    mojo = baselines.get("mojo") or {}
+    node = baselines.get("node") or {}
+    return [
+        f"- A Mojo program that does nothing: `{fmt_s(good_seconds(mojo))}` s",
+        f"- A Node process that does nothing: `{fmt_s(good_seconds(node))}` s",
+    ]
+
+
 def write_wiki(payload: dict) -> None:
     host = payload["host"]
     host_md = "\n".join(
@@ -550,6 +680,7 @@ def write_wiki(payload: dict) -> None:
             f"- Node: `{host['node'] or 'missing'}`",
             f"- three.js backend: `{payload.get('threejs_backend') or 'missing'}`",
         ]
+        + baseline_lines(payload)
     )
     text = WIKI.read_text(encoding="utf-8")
     text = replace_span(text, "HOST", host_md)
@@ -653,10 +784,21 @@ def main() -> int:
         "host": host_info(mojo11, mojo10),
         "examples": [],
         "threejs_backend": "",
+        "baselines": {},
         "probe": {},
         "mojo10_refused": 0,
         "mojo10_total": 0,
     }
+
+    print("== baselines ==", flush=True)
+    payload["baselines"] = bench_baselines(mojo11)
+    print(
+        "  mojo noop {m}s  node noop {n}s".format(
+            m=fmt_s(payload["baselines"]["mojo"]["seconds"]),
+            n=fmt_s(payload["baselines"]["node"]["seconds"]),
+        ),
+        flush=True,
+    )
 
     print("== probe (Mojo 1.1) ==", flush=True)
     payload["probe"]["v11"] = bench_probe(
@@ -783,6 +925,8 @@ def main() -> int:
         ]
         if previous.get("probe"):
             slim["probe"] = previous["probe"] | slim.get("probe", {})
+        if previous.get("baselines"):
+            slim["baselines"] = previous["baselines"] | slim.get("baselines", {})
         slim["host"] = slim["host"] or previous.get("host", {})
         slim["threejs_backend"] = slim.get("threejs_backend") or previous.get(
             "threejs_backend", ""

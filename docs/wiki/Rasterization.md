@@ -41,7 +41,12 @@ A `NORMALS` corner carries its normal in view space, not world space. The normal
 | `rasterize(triangle, framebuffer, color)` | Fill a flat triangle. |
 | `rasterize_depth(...)` | Fill with a depth test. |
 | `rasterize_shaded(a, b, c, target, mode, textures, lighting, first_row, last_row, fog)` | Fill one shaded triangle. |
-| `rasterize_all(corners, target, mode, textures, lighting, workers, fog)` | Fill a whole list, on one or more threads. |
+| `rasterize_all(corners, target, mode, textures, lighting, workers, fog)` | Fill a whole list of triangles, on one or more threads. |
+| `rasterize_lines_all(corners, target, workers, fog)` | Draw a whole list of segments, on one or more threads. |
+| `rasterize_frame(corners, segments, draws, target, mode, textures, lighting, workers, fog)` | Draw triangles and segments in one order. `rasterize_all` and `rasterize_lines_all` are each one draw of it. |
+| `Draw(kind, first, count)` | One run of `DRAW_TRIANGLES` or `DRAW_SEGMENTS` in a frame's order. |
+| `check_draws(draws, triangles, segments)` | Refuse a draw that names a run the frame does not hold. |
+| `check_triangle_maps(a, mode, textures)` | Refuse a triangle whose maps are not stored the way its shader reads them. |
 | `check_triangle_state(a, b, c)` | Refuse corners that disagree, or hold a value neither backend knows. |
 | `mip_level(du, dv, width, height)` | The mip level for a texture footprint. |
 | `data_color(r, g, b, a)` | Three channels of data as the light that resolves to their bytes. |
@@ -120,7 +125,7 @@ The direction toward the camera is measured from where the camera stands, under 
 
 ## Threads
 
-`rasterize_all` splits the image into horizontal bands and runs one task per band. A band owns its rows outright, so no two threads touch the same pixel and the depth test needs no atomics.
+`rasterize_frame` splits the image into horizontal bands and runs one task per band. Every draw is offered to every band, and a primitive whose rows miss the band is skipped on two integer compares. A band owns its rows outright, so no two threads touch the same pixel and the depth test needs no atomics.
 
 The tasks come from `TaskGroup`. Mojo 1.1 moved that behind an underscore. `std.runtime` keeps only `parallelism_level` and `initialize_runtime` in public view, and nothing public in `std` runs work on a thread pool. So `from std.runtime._asyncrt import TaskGroup` is the one place this project reaches past a leading underscore, and it is what pins the toolchain to an exact version. Mojo 1.0 has no `_asyncrt` and 1.1 has no `asyncrt`, so one source cannot serve both.
 

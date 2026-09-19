@@ -89,8 +89,8 @@ def main() raises:
     var lamp = Object3D()
     lamp.set_position(0.6, 0.7, 1.2)
     var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.12))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 1.0))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.38))
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 3.14))
 
     var pivot = scene.add(Object3D())
     var eye = Object3D()

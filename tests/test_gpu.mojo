@@ -40,7 +40,7 @@ from geometries.box import cube
 from geometries.sphere import sphere
 from math.matrix4 import translation
 from math.vector2 import Vector2
-from std.math import inf
+from std.math import inf, pi
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
 from objects.line import LOOP, Line
@@ -81,7 +81,12 @@ from render.tonemap import (
     REINHARD_TONE_MAPPING,
     ToneMapping,
 )
-from render.rasterizer import rasterize_all, rasterize_lines_all
+from render.rasterizer import (
+    DRAW_SEGMENTS,
+    Draw,
+    rasterize_all,
+    rasterize_lines_all,
+)
 from units.si import InverseLength, PER_METER
 from core.layers import Layers
 from renderers.renderer import camera_position, camera_up, toward_camera
@@ -171,6 +176,9 @@ def light_the(mut scene: Scene) raises:
 
 
 comptime BACKGROUND = Color(20, 24, 32)
+# The intensity that lights a facing white surface to full white: three.js
+# divides a light's contribution by pi, as `lights.lighting` explains.
+comptime FULL = Float32(pi)
 comptime FOREGROUND = Color(255, 128, 32)
 
 
@@ -1208,7 +1216,7 @@ def test_both_backends_agree_under_hemisphere_and_spot_lights() raises:
     var sky_node = scene.add(sky^)
     scene.add_light(
         hemisphere_light(
-            Color(120, 160, 255), Color(120, 80, 40), sky_node, 0.6
+            Color(120, 160, 255), Color(120, 80, 40), sky_node, 0.6 * FULL
         )
     )
     var soft = Object3D()
@@ -1216,7 +1224,12 @@ def test_both_backends_agree_under_hemisphere_and_spot_lights() raises:
     var soft_node = scene.add(soft^)
     scene.add_light(
         spot_light(
-            Color(255, 220, 180), soft_node, 3.0, 0.0, Angle(35.0, DEGREE), 0.4
+            Color(255, 220, 180),
+            soft_node,
+            3.0 * FULL,
+            0.0,
+            Angle(35.0, DEGREE),
+            0.4,
         )
     )
     var hard = Object3D()
@@ -1226,7 +1239,7 @@ def test_both_backends_agree_under_hemisphere_and_spot_lights() raises:
         spot_light(
             Color(255, 120, 120),
             hard_node,
-            2.0,
+            2.0 * FULL,
             4.0,
             Angle(25.0, DEGREE),
             0.0,
@@ -1234,7 +1247,7 @@ def test_both_backends_agree_under_hemisphere_and_spot_lights() raises:
             left_node,
         )
     )
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.05))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.05 * FULL))
     scene.update()
 
     var camera = PerspectiveCamera(
@@ -1572,6 +1585,210 @@ def test_the_gpu_never_tone_maps_the_uv_view() raises:
     assert_equal(count_mismatches(plain, curved), 0)
 
 
+def test_the_gpu_never_tone_maps_the_uv_views_background() raises:
+    # The host turns the curve off for the whole uv frame, background and
+    # lines included; the device once tone mapped every pixel no uv
+    # triangle had written, so an empty uv frame came back darker than the
+    # clear color.
+    if skipped_for_lack_of_a_gpu("the gpu never tone maps the uv background"):
+        return
+    var gpu = render_triangles(
+        List[RasterVertex](),
+        8,
+        8,
+        BACKGROUND,
+        SHADE_UV,
+        TextureStore(),
+        Lighting.uniform(),
+        FogView.none(),
+        REINHARD_TONE_MAPPING,
+        1.0,
+    )
+    var cpu = RenderTarget(8, 8, BACKGROUND).resolve(1, NO_TONE_MAPPING, 1.0)
+    assert_equal(gpu.get_pixel(3, 3).r, BACKGROUND.r)
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_both_backends_resolve_an_untouched_transparent_clear_alike() raises:
+    # The host holds its clear color premultiplied and unpremultiplies it
+    # on the way out, so a clear with no coverage resolves to transparent
+    # black whatever its color. The device wrote the clear color's own
+    # bytes where nothing was drawn, which kept the blue.
+    if skipped_for_lack_of_a_gpu("both backends resolve a transparent clear"):
+        return
+    var clear = Color(0, 0, 255, 0)
+    var gpu = render_triangles(List[RasterVertex](), 4, 4, clear)
+    var cpu = RenderTarget(4, 4, clear).resolve()
+    assert_equal(cpu.get_pixel(1, 1).b, UInt8(0))
+    assert_equal(gpu.get_pixel(1, 1).b, UInt8(0))
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_both_backends_let_blended_lines_cross() raises:
+    # A blended segment tests the depth without claiming it. The host once
+    # claimed it, so of two blended segments crossing, the second was
+    # dropped at the crossing on the host and kept on the device.
+    if skipped_for_lack_of_a_gpu("both backends let blended lines cross"):
+        return
+    var lines = a_line(2.0, 8.5, 14.0, 8.5, 0.2, Color(255, 0, 0, 128), BLEND)
+    for here in a_line(8.5, 2.0, 8.5, 14.0, 0.6, Color(0, 0, 255, 128), BLEND):
+        lines.append(here)
+    var target = RenderTarget(16, 16, BACKGROUND)
+    rasterize_lines_all(lines, target, 1, FogView.none())
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        List[RasterVertex](),
+        16,
+        16,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        FogView.none(),
+        NO_TONE_MAPPING,
+        1.0,
+        lines,
+    )
+    # Both colors reach the crossing, and neither side claimed its depth.
+    assert_true(cpu.get_pixel(8, 8).b > 60, "the second segment was dropped")
+    assert_equal(cpu.depth_at(8, 8), inf[DType.float32]())
+    assert_equal(gpu.depth_at(8, 8), inf[DType.float32]())
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_refuse_a_blended_line_beside_data_under_a_curve() raises:
+    # A blended segment over a data pixel decides that pixel's curve as a
+    # blended triangle does, so it is refused the same way, on both sides.
+    if skipped_for_lack_of_a_gpu("both backends refuse a blended line by data"):
+        return
+    var stroke = a_line(1.0, 8.5, 20.0, 8.5, 0.05, Color(0, 0, 0, 2), BLEND)
+    var renderer = GpuRenderer(24, 18)
+    with assert_raises():
+        renderer.draw(
+            data_pair(NORMALS),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting.uniform(),
+            FogView(no_fog()),
+            REINHARD_TONE_MAPPING,
+            1.0,
+            stroke,
+        )
+    with assert_raises():
+        check_output_kinds(data_pair(NORMALS), True, stroke)
+    # With no curve the same frame draws on the device.
+    renderer.draw(
+        data_pair(NORMALS),
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting.uniform(),
+        FogView(no_fog()),
+        NO_TONE_MAPPING,
+        1.0,
+        stroke,
+    )
+
+
+def test_both_backends_draw_a_frame_in_its_one_order() raises:
+    # An opaque line behind a translucent pane: drawn after every triangle
+    # it landed on top, on both sides. The frame's draw order puts it
+    # first, and both walk that order.
+    if skipped_for_lack_of_a_gpu("both backends draw a frame in order"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(2.0, METER), Length(2.0, METER))
+    )
+    var stroke = BufferGeometry()
+    stroke.set_attribute(
+        String(POSITION),
+        BufferAttribute([-1.5, 0.0, 0.0, 1.5, 0.0, 0.0], 3),
+    )
+    var line_geometry = assets.geometries.add(stroke^)
+    var glass = assets.materials.add(
+        Material(
+            Color(255, 0, 0),
+            opacity=0.5,
+            kind=BASIC,
+            side=DOUBLE_SIDE,
+            transparent=True,
+        )
+    )
+    var blue = assets.materials.add(Material(Color(0, 0, 255), kind=BASIC))
+    var scene = Scene()
+    var near = Object3D()
+    near.set_position(0, 0, 0.5)
+    var near_node = scene.add(near^)
+    var away = Object3D()
+    away.set_position(0, 0, -0.5)
+    var away_node = scene.add(away^)
+    scene.update()
+    scene.add_mesh(Mesh(sheet, glass, near_node))
+    scene.add_line(Line(line_geometry, blue, away_node))
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0, 0, 4.0), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    assert_true(frame.draws[0].kind == DRAW_SEGMENTS)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene),
+        FogView(scene.fog),
+        NO_TONE_MAPPING,
+        1.0,
+        frame.segments,
+        frame.draws,
+    )
+    var gpu = device.read_back()
+    var center = cpu.get_pixel(24, 18)
+    assert_true(center.r > 100 and center.b > 100, "the pane did not blend")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # Without an order the device draws every triangle and then every
+    # segment, which is what the two-pass host functions draw.
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(frame.corners, target, SHADE_TEXTURE, assets.textures)
+    rasterize_lines_all(frame.segments, target)
+    var two_passes = target.resolve()
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene),
+        FogView(scene.fog),
+        NO_TONE_MAPPING,
+        1.0,
+        frame.segments,
+    )
+    assert_equal(
+        count_mismatches(two_passes, device.read_back(), tolerance=1), 0
+    )
+    assert_true(two_passes.get_pixel(24, 18).r < 100, "the pane stayed on top")
+    # And a draw the frame cannot hold is refused before the launch.
+    with assert_raises():
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting(scene),
+            FogView(scene.fog),
+            NO_TONE_MAPPING,
+            1.0,
+            frame.segments,
+            [Draw(DRAW_SEGMENTS, 0, 99)],
+        )
+
+
 def test_both_backends_agree_on_the_whole_pipeline_at_once() raises:
     # Every light kind, a mipmapped floor, a lit box, an unlit sphere and a
     # translucent pane, through a linear fog and the ACES curve: the whole
@@ -1608,7 +1825,13 @@ def test_both_backends_agree_on_the_whole_pipeline_at_once() raises:
     var orange = assets.materials.add(Material(Color(255, 140, 40)))
     var plain = assets.materials.add(Material(Color(90, 190, 255), kind=BASIC))
     var glass = assets.materials.add(
-        Material(Color(120, 255, 160), NO_TEXTURE, DOUBLE_SIDE, 0.45)
+        Material(
+            Color(120, 255, 160),
+            NO_TEXTURE,
+            DOUBLE_SIDE,
+            0.45,
+            transparent=True,
+        )
     )
 
     var scene = Scene()
@@ -2692,9 +2915,10 @@ def test_both_backends_match_a_hand_computed_shaded_pixel() raises:
     # own inv_w and renormalizing gives (8/11, 2/11, 1/11).
     #
     # The normals are the three axes, so the interpolated normal is
-    # (2, 1, 8) / 11, whose length is sqrt(69) / 11. Against a unit white
-    # light along +z the Lambert term is 8 / sqrt(69) = 0.963087, and 0.963087
-    # of the light displays as 251.
+    # (2, 1, 8) / 11, whose length is sqrt(69) / 11. Against a white light
+    # of intensity pi along +z, which the 1/pi of three.js's Lambert BRDF
+    # brings back to one, the Lambert term is 8 / sqrt(69) = 0.963087, and
+    # 0.963087 of the light displays as 251.
     #
     # Interpolating lighting computed at the corners instead would give
     # (8/11) * 1 + (2/11) * 0 + (1/11) * 0 = 0.727, which displays as 224.
@@ -2705,7 +2929,7 @@ def test_both_backends_match_a_hand_computed_shaded_pixel() raises:
     lamp.set_position(0, 0, 1)
     _ = scene.add(lamp^)
     scene.update()
-    scene.add_light(directional_light(Color(255, 255, 255), NodeId(0)))
+    scene.add_light(directional_light(Color(255, 255, 255), NodeId(0), FULL))
     var lighting = Lighting(scene)
 
     var corners = List[RasterVertex]()
@@ -3041,10 +3265,11 @@ def test_both_backends_agree_on_depth_in_uv_mode() raises:
     assert_equal(count_mismatches(cpu, gpu), 0)
 
 
-def test_both_backends_keep_a_texture_alpha_on_an_opaque_surface() raises:
+def test_both_backends_force_a_texture_alpha_to_one_on_an_opaque_surface() raises:
     # An opaque material sampling a partly transparent texture: the surface
-    # replaces what is behind it, and its own alpha survives to the image.
-    # The CPU kept the sampled alpha and the GPU forced it to one.
+    # replaces what is behind it, and its alpha is written as one, as
+    # three.js's `opaque_fragment` chunk writes it. A blended surface keeps
+    # the sampled alpha and mixes by it. Both backends, both ways.
     if skipped_for_lack_of_a_gpu("texture alpha on an opaque surface"):
         return
     var textures = TextureStore()
@@ -3058,8 +3283,19 @@ def test_both_backends_keep_a_texture_alpha_on_an_opaque_surface() raises:
         corners, 16, 16, BACKGROUND, SHADE_TEXTURE, textures
     )
     var cpu = cpu_textured(corners, 16, textures)
-    assert_equal(cpu.get_pixel(4, 4).a, UInt8(128))
+    assert_equal(cpu.get_pixel(4, 4).a, UInt8(255))
+    assert_equal(cpu.get_pixel(4, 4).r, UInt8(255))
     assert_equal(count_mismatches(cpu, gpu), 0)
+
+    var blended = List[RasterVertex]()
+    for base in corners:
+        blended.append(blending_as(base, BLEND))
+    gpu = render_triangles(blended, 16, 16, BACKGROUND, SHADE_TEXTURE, textures)
+    cpu = cpu_textured(blended, 16, textures)
+    assert_true(
+        cpu.get_pixel(4, 4).r < UInt8(255), "the half alpha did not mix"
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def test_both_backends_composite_over_a_transparent_clear_color() raises:
@@ -3692,13 +3928,41 @@ def thinned(
     )
 
 
+def blending_as(base: RasterVertex, blend: Blending) -> RasterVertex:
+    """Return `base` with its blending changed to `blend`."""
+    return RasterVertex(
+        base.x,
+        base.y,
+        base.z,
+        base.inv_w,
+        base.color,
+        base.u,
+        base.v,
+        base.texture,
+        blend,
+        base.normal,
+        base.world,
+        base.kind,
+        base.emissive,
+        base.emissive_map,
+        base.view_depth,
+        base.alpha_map,
+        base.alpha_test,
+    )
+
+
 def thinned_pair(
-    alpha_map: TextureId, alpha_test: Float32
+    alpha_map: TextureId, alpha_test: Float32, blend: Blending = BLEND
 ) -> List[RasterVertex]:
-    """Return `mapped_quad` thinned and cut, so the uv really varies."""
+    """Return `mapped_quad` thinned and cut, so the uv really varies.
+
+    The quad is blended unless asked otherwise: an opaque surface writes
+    alpha one whatever its map says, as three.js's `opaque_fragment` does,
+    so only a blended one shows the thinning without an alpha test.
+    """
     var corners = List[RasterVertex]()
     for base in mapped_quad(24):
-        corners.append(thinned(base, alpha_map, alpha_test))
+        corners.append(blending_as(thinned(base, alpha_map, alpha_test), blend))
     return corners^
 
 
@@ -3777,8 +4041,9 @@ def test_both_backends_cut_the_same_fragments_out() raises:
         return
     var textures = TextureStore()
     var mask = textures.add(a_gpu_mask(128))
-    # A test just above the map's green, so every fragment goes.
-    var corners = thinned_pair(mask, 0.6)
+    # A test just above the map's green, so every fragment goes. Opaque,
+    # so a survivor claims depth.
+    var corners = thinned_pair(mask, 0.6, OPAQUE)
     var target = RenderTarget(24, 24, BACKGROUND)
     rasterize_all(corners, target, SHADE_TEXTURE, textures)
     var cpu = target.resolve()
@@ -3795,7 +4060,7 @@ def test_both_backends_cut_the_same_fragments_out() raises:
                 gpu.depth_at(x, y) > 1.0e30, "the kernel claimed a depth"
             )
     # A test just below it keeps every fragment, and both then claim depth.
-    var kept = thinned_pair(mask, 0.4)
+    var kept = thinned_pair(mask, 0.4, OPAQUE)
     var second = RenderTarget(24, 24, BACKGROUND)
     rasterize_all(kept, second, SHADE_TEXTURE, textures)
     var solid = second.resolve()

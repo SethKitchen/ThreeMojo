@@ -612,16 +612,56 @@ def test_a_sharp_corner_extrudes_without_a_bevel() raises:
     assert_almost_equal(closed_volume(solid), Float32(0.01), atol=Float64(1e-6))
 
 
-def test_a_sharp_corner_refuses_a_bevel() raises:
-    with assert_raises():
-        _ = extrude(
-            thin_triangle(),
-            Length(2, METER),
-            bevel_enabled=True,
-            bevel_thickness=Length(0.1, METER),
-            bevel_size=Length(0.05, METER),
-            bevel_segments=2,
-        )
+def test_a_sharp_corner_bevels_to_the_miter_limit() raises:
+    # The two normals at the point come out opposite, so the exact miter
+    # is not a number. three.js moves such a corner along its incoming
+    # edge by the square root of two bevel widths, and so does this: the
+    # solid is finite and only a little longer than the outline.
+    var solid = extrude(
+        thin_triangle(),
+        Length(2, METER),
+        bevel_enabled=True,
+        bevel_thickness=Length(0.1, METER),
+        bevel_size=Length(0.05, METER),
+        bevel_segments=2,
+    )
+    assert_all_finite(solid)
+    var box = solid.bounding_box()
+    assert_true(box.max.x > 10)
+    assert_true(box.max.x < 10 + 0.05 * 1.5)
+
+
+def test_a_bevel_stands_a_sharp_corner_out_no_further_than_three_js() raises:
+    # An equilateral corner turns sixty degrees, where the exact miter is
+    # twice the bevel width; three.js caps it at the square root of two,
+    # so the beveled solid reaches less far past the point than the miter
+    # would take it.
+    var spike = Shape(
+        polygon([Vector2(0, 0), Vector2(4, 0), Vector2(2, 3.4641)])
+    )
+    var solid = extrude(
+        spike,
+        Length(1, METER),
+        bevel_enabled=True,
+        bevel_thickness=Length(0.5, METER),
+        bevel_size=Length(0.5, METER),
+        bevel_segments=1,
+    )
+    var box = solid.bounding_box()
+    # Straight up from the top point: the exact miter would reach 1.0
+    # past it, the capped one reaches about 0.707.
+    assert_almost_equal(box.max.y, Float32(3.4641 + 0.7071), atol=Float64(1e-3))
+    # And a right angle is where the two agree: the square's corners still
+    # stand out by exactly the bevel size along each axis.
+    var square_box = extrude(
+        square(4),
+        Length(1, METER),
+        bevel_enabled=True,
+        bevel_thickness=Length(0.5, METER),
+        bevel_size=Length(0.25, METER),
+        bevel_segments=1,
+    ).bounding_box()
+    assert_almost_equal(square_box.max.x, Float32(4.25), atol=TOLERANCE)
 
 
 def test_an_ordinary_bevel_is_still_all_numbers() raises:

@@ -16,6 +16,7 @@ from geometries.plane import plane
 from materials.material import (
     BASIC,
     BLEND,
+    DOUBLE_SIDE,
     LAMBERT,
     Material,
     MaterialId,
@@ -34,7 +35,7 @@ from objects.line import (
 )
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
-from render.rasterizer import RasterVertex
+from render.rasterizer import DRAW_SEGMENTS, DRAW_TRIANGLES, RasterVertex
 from render.texture import checkerboard
 from render.texture_store import NO_TEXTURE
 from renderers.clip import ClipVertex, clip_segment
@@ -311,15 +312,15 @@ def test_a_segment_wholly_outside_the_range_is_thrown_away() raises:
 
 
 def test_a_segment_clipper_refuses_an_inside_out_range() raises:
-    """The two planes must be in front of the camera and in order."""
+    """The two planes must be in order. A near plane behind the camera is
+    allowed, as an orthographic camera may have one."""
     var a = ClipVertex(
         Vector3(0, 0, -1), FloatColor(1, 1, 1), Vector3(0, 0, 1), 0, 0
     )
     var b = ClipVertex(
         Vector3(0, 0, -2), FloatColor(1, 1, 1), Vector3(0, 0, 1), 0, 0
     )
-    with assert_raises():
-        _ = clip_segment(a, b, -1.0, 5.0)
+    assert_equal(len(clip_segment(a, b, -1.0, 5.0)), 2)
     with assert_raises():
         _ = clip_segment(a, b, 5.0, 5.0)
 
@@ -493,7 +494,7 @@ def test_opaque_lines_are_prepared_before_blended_ones() raises:
     )
     var solid = assets.materials.add(Material(Color(255, 0, 0), kind=BASIC))
     var clear = assets.materials.add(
-        Material(Color(0, 0, 255), opacity=0.5, kind=BASIC)
+        Material(Color(0, 0, 255), opacity=0.5, kind=BASIC, transparent=True)
     )
     var scene = Scene()
     var near = Object3D()
@@ -512,6 +513,84 @@ def test_opaque_lines_are_prepared_before_blended_ones() raises:
     assert_equal(len(segments), 4)
     assert_true(segments[0].blend == OPAQUE)
     assert_true(segments[2].blend == BLEND)
+
+
+def test_an_opaque_line_behind_a_translucent_pane_stays_behind_it() raises:
+    """A blended surface does not claim the depth, so a line drawn after
+    everything passed the test and landed on top of the pane it was behind.
+    The frame's draw order puts the opaque line first and the pane over it.
+    """
+    var assets = Assets()
+    var stroke = assets.geometries.add(points([-0.5, 0.0, 0.0, 0.5, 0.0, 0.0]))
+    var sheet = assets.geometries.add(plane(Length(1, METER), Length(1, METER)))
+    var blue = assets.materials.add(Material(Color(0, 0, 255), kind=BASIC))
+    var glass = assets.materials.add(
+        Material(
+            Color(255, 0, 0),
+            opacity=0.5,
+            kind=BASIC,
+            side=DOUBLE_SIDE,
+            transparent=True,
+        )
+    )
+    var scene = Scene()
+    var near = Object3D()
+    near.set_position(0, 0, 1)
+    var near_node = scene.add(near^)
+    var away = Object3D()
+    away.set_position(0, 0, -1)
+    var away_node = scene.add(away^)
+    scene.update()
+    scene.add_mesh(Mesh(sheet, glass, near_node))
+    scene.add_line(Line(stroke, blue, away_node))
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var frame = renderer.prepare_frame(scene, assets, a_camera())
+    # The line, then the pane over it.
+    assert_equal(len(frame.draws), 2)
+    assert_true(frame.draws[0].kind == DRAW_SEGMENTS)
+    assert_true(frame.draws[1].kind == DRAW_TRIANGLES)
+    var image = renderer.render(scene, assets, a_camera())
+    var center = image.get_pixel(WIDTH // 2, HEIGHT // 2)
+    # Half red over blue: half of each, linear, which encodes to 188.
+    assert_equal(center.r, UInt8(188))
+    assert_equal(center.b, UInt8(188))
+
+
+def test_a_wireframe_is_sorted_among_the_lines() raises:
+    """An opaque wireframe comes before a blended line, whatever order the
+    scene holds them in: it used to be appended after every line."""
+    var assets = Assets()
+    var stroke = assets.geometries.add(points([-0.5, 0.0, 0.0, 0.5, 0.0, 0.0]))
+    var sheet = assets.geometries.add(plane(Length(1, METER), Length(1, METER)))
+    var wire = assets.materials.add(
+        Material(Color(255, 0, 0), kind=BASIC, wireframe=True)
+    )
+    var clear = assets.materials.add(
+        Material(Color(0, 0, 255), opacity=0.5, kind=BASIC, transparent=True)
+    )
+    var scene = Scene()
+    var near = Object3D()
+    near.set_position(0, 0, 1)
+    var near_node = scene.add(near^)
+    var away = Object3D()
+    away.set_position(0, 0, -1)
+    var away_node = scene.add(away^)
+    scene.update()
+    scene.add_line(Line(stroke, clear, away_node))
+    scene.add_mesh(Mesh(sheet, wire, near_node))
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var segments = renderer.prepare_lines(scene, assets, a_camera())
+    # Five edges of the wireframe's two triangles, then the one line.
+    assert_equal(len(segments), 12)
+    assert_true(segments[0].blend == OPAQUE)
+    assert_true(segments[10].blend == BLEND)
+    var frame = renderer.prepare_frame(scene, assets, a_camera())
+    assert_equal(len(frame.draws), 2)
+    assert_true(frame.draws[0].kind == DRAW_SEGMENTS)
+    assert_equal(frame.draws[0].count, 5)
+    assert_equal(frame.draws[1].first, 5)
+    assert_equal(frame.draws[1].count, 1)
 
 
 def test_a_rendered_line_lands_where_the_camera_puts_it() raises:

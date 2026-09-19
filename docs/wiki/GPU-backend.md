@@ -15,7 +15,7 @@ MAX 26.6.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-G
 | Function | Meaning |
 |---|---|
 | `available() -> Bool` | Whether a GPU is present. |
-| `render_triangles(corners, width, height, background, mode, textures, lighting, fog, tone_mapping, exposure) -> Framebuffer` | One-shot: draw and read back. |
+| `render_triangles(corners, width, height, background, mode, textures, lighting, fog, tone_mapping, exposure, lines, draws) -> Framebuffer` | One-shot: draw and read back. |
 | `flatten(corners) -> List[Float32]` | The corner buffer the kernel reads, one lane per varying. |
 | `flatten_lights(lighting) -> List[Float32]` | The light buffer: the camera's position, the one direction toward it, its up axis, the ambient term, then each directional, point, hemisphere and spot light. |
 | `flatten_fog(fog) -> List[Float32]` | The fog buffer, six floats. The kind crosses as a kernel argument. |
@@ -30,10 +30,10 @@ Hold one across frames. The device buffers survive between draws.
 |---|---|
 | `GpuRenderer(width, height)` | Create the context and the buffers. Raises without a GPU. |
 | `set_textures(store)` | Upload every texture. All or nothing. |
-| `draw(corners, background, mode, lighting, fog, tone_mapping, exposure)` | Rasterize into the device target. Pass `Lighting(scene, visible=camera.visible_layers())` and `FogView(scene.fog, view)`, the values `Renderer.render` uses. The kernel tone maps each pixel as `RenderTarget.resolve` does. |
+| `draw(corners, background, mode, lighting, fog, tone_mapping, exposure, lines, draws)` | Rasterize into the device target. Pass `Lighting(scene, visible=camera.visible_layers())` and `FogView(scene.fog, view)`, the values `Renderer.render` uses. `lines` are two corners a segment and `draws` is the order, both from `Renderer.prepare_frame`. An empty order draws every triangle and then every segment. The kernel tone maps each pixel as `RenderTarget.resolve` does. |
 | `read_back() -> Framebuffer` | Copy color and depth to the host. |
 
-`draw` checks every triangle's state, every texture id, the alpha test, the tone mapping curve and the exposure on the host before it launches. The kernel cannot raise.
+`draw` checks every triangle's state, every segment's state and every draw's run on the host before it launches. It checks every texture id, the alpha test, the tone mapping curve and the exposure the same way. The kernel cannot raise.
 
 An alpha map must be `LINEAR` and `IGNORED`. `draw` asks that of the descriptors it uploaded, as the CPU asks it of the store.
 

@@ -20,9 +20,9 @@ var ranged = Raycaster(origin, direction, Length(0.1, METER), Length(50.0, METER
 | `near` | `Length` | zero | Hits nearer than this are dropped. |
 | `far` | `Length` | unbounded | Hits further than this are dropped. |
 
-The two distances are lengths. A bare number does not compile. `near` must not be negative, and `far` must not be below `near`.
+The two distances are lengths. A bare number does not compile. `near` must not be negative, `far` must not be below `near`, and neither can be NaN.
 
-`caster.layers` is a `Layers`, on layer zero by default. A mesh whose node shares no layer with it is not tested. See [Scene graph](Scene-graph#layers).
+`caster.layers` is a `Layers`, on layer zero by default. An object whose node shares no layer with it is not tested. See [Scene graph](Scene-graph#layers).
 
 ## Aim it
 
@@ -46,8 +46,11 @@ if len(hits) > 0:
 
 | Method | Meaning |
 |---|---|
-| `intersect_scene(scene, assets) -> List[Hit]` | Every hit on every mesh, nearest first. |
+| `intersect_scene(scene, assets) -> List[Hit]` | Every hit on every mesh, instanced mesh, batched mesh and LOD, nearest first. |
 | `intersect_mesh(scene, assets, index) -> List[Hit]` | Every hit on `scene.meshes[index]`, nearest first. |
+| `intersect_instanced_mesh(scene, assets, index) -> List[Hit]` | Every hit on every instance of `scene.instanced_meshes[index]`. |
+| `intersect_batched_mesh(scene, assets, index) -> List[Hit]` | Every hit on every instance of `scene.batched_meshes[index]`. |
+| `intersect_lod(scene, assets, index) -> List[Hit]` | Every hit on the level of `scene.lods[index]` that the ray's origin picks. |
 
 ## Hit
 
@@ -56,9 +59,13 @@ if len(hits) > 0:
 | `distance` | Meters from the ray's origin. |
 | `point` | Where, in world space. |
 | `normal` | The face's front in world space, unit length. The face as wound, whichever side the ray came from. |
-| `index` | The mesh's position in `scene.meshes`. |
-| `mesh` | The `Mesh` itself: its node, geometry and material. |
+| `kind` | A `HitKind`: which list `index` counts in. `MESH_HIT`, `INSTANCED_HIT`, `BATCHED_HIT` or `LOD_HIT`. |
+| `index` | The object's position in that list. |
+| `instance` | Which instance of an instanced or batched mesh, or which level of an LOD. -1 for a plain mesh. three.js's `instanceId` and `batchId`. |
+| `mesh` | The shape struck as a `Mesh`: its node, geometry and material. For a plain mesh, the mesh itself. |
 | `triangle` | Which of the geometry's triangles, from zero. |
+
+A `HitKind` is a type. A bare integer does not compile.
 
 ## What it sees
 
@@ -66,7 +73,9 @@ The mesh as it is drawn, not as it was modelled. A mesh wearing a [morph target]
 
 They did not always. Rendering wore the targets and picking did not. The drawn shape could not be hit, and the modelled one could be hit where nothing was.
 
-A [skinned mesh](Skinning) is not picked at all. `intersect_scene` walks `scene.meshes`, and a `SkinnedMesh` is in a list of its own. A rig is therefore never offered to the ray, rather than being silently picked in its rest pose. Teaching it about rigs needs the posed bones, which come from the scene rather than the geometry. It also needs a `Hit` that can say which list its index belongs to.
+An [instanced mesh](Meshes-and-assets#instancedmesh) is picked instance by instance. Each instance is tested at the node's transform times its own. A [batched mesh](Meshes-and-assets#batchedmesh) is picked the same way, with each instance's own geometry. An [LOD](Meshes-and-assets#lod) is picked on one level. That level is the one the distance from the ray's origin to the node picks with no memory, as three.js's `LOD.raycast` does.
+
+A [skinned mesh](Skinning) is not picked at all. A `SkinnedMesh` is in a list of its own. A rig is therefore never offered to the ray, rather than being silently picked in its rest pose. Teaching it about rigs needs the posed bones, which come from the scene rather than the geometry.
 
 ## Rules
 
@@ -76,11 +85,11 @@ The material's `side` decides which faces count. A `FRONT_SIDE` mesh is not pick
 
 A mirrored mesh is hit on the face the renderer draws. Its hit normal is turned back, as the renderer turns its geometric normal.
 
-Only `scene.meshes` is tested. Instanced meshes, batched meshes and LODs are not picked yet.
+Skinned meshes and lines are not picked.
 
 ## Errors
 
-- A mesh index that names no mesh raises.
+- An index that names no mesh, instanced mesh, batched mesh or LOD raises.
 - A mesh that names a missing node, geometry or material raises. A geometry with no positions raises.
 - A stale scene raises. Call `scene.update()` first.
 - A mesh whose world transform flattens a dimension raises. It has no inverse to carry the ray through.

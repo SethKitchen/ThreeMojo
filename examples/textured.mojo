@@ -140,8 +140,8 @@ def main() raises:
     var lamp = Object3D()
     lamp.set_position(0.4, 0.8, 0.5)
     var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
-    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
+    scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.36))
 
     var camera = PerspectiveCamera(
         Angle(45.0, DEGREE),

@@ -31,7 +31,7 @@ from lights.light import (
     spot_light,
 )
 from math.smoothstep import smoothstep
-from std.math import inf, nan
+from std.math import inf, nan, pi
 from lights.lighting import (
     TOON_EDGE,
     TOON_SHADE,
@@ -56,6 +56,11 @@ from std.testing import (
 comptime TOLERANCE = Float64(1e-6)
 comptime WHITE = Color(255, 255, 255)
 comptime ORIGIN = Vector3(0, 0, 0)
+# The intensity that lights a white surface square on to full white: three.js
+# divides every lit term by pi, so one unit of light reflects as a third.
+# The tests below that ask about the light *arriving* say their intensities
+# in these units, so the numbers they expect stay the physical ones.
+comptime FULL = Float32(pi)
 
 
 def scene_with_lamp_at(x: Float32, y: Float32, z: Float32) raises -> Scene:
@@ -77,7 +82,7 @@ def shaded(lighting: Lighting, base: Color, normal: Vector3) -> FloatColor:
 def lit_from(x: Float32, y: Float32, z: Float32) raises -> Scene:
     """Return a scene with one white directional light at full strength."""
     var scene = scene_with_lamp_at(x, y, z)
-    scene.add_light(directional_light(WHITE, NodeId(0)))
+    scene.add_light(directional_light(WHITE, NodeId(0), FULL))
     return scene^
 
 
@@ -213,7 +218,7 @@ def test_a_face_turned_away_gets_only_the_ambient() raises:
     # of the byte, which would be 50. Dimming the encoded value is the
     # classic color-space error: it makes shadows far too dark.
     var scene = lit_from(0, 1, 0)
-    scene.add_light(ambient_light(WHITE, 0.25))
+    scene.add_light(ambient_light(WHITE, 0.25 * FULL))
     var lighting = Lighting(scene)
     var dim = shaded(lighting, Color(200, 100, 50), Vector3(0, -1, 0)).encode()
     assert_equal(dim.r, UInt8(106))
@@ -232,8 +237,8 @@ def test_two_lights_add_their_light_and_not_their_bytes() raises:
     # byte 255. Adding encoded halves would give 128, a fifth of the light
     # wearing the label of a half.
     var scene = scene_with_lamp_at(0, 1, 0)
-    scene.add_light(directional_light(WHITE, NodeId(0), 0.5))
-    scene.add_light(directional_light(WHITE, NodeId(0), 0.5))
+    scene.add_light(directional_light(WHITE, NodeId(0), 0.5 * FULL))
+    scene.add_light(directional_light(WHITE, NodeId(0), 0.5 * FULL))
     var lighting = Lighting(scene)
     assert_equal(lighting.count(), 2)
     var lit = shaded(lighting, WHITE, Vector3(0, 1, 0)).encode()
@@ -252,7 +257,7 @@ def test_a_colored_light_tints_the_surface() raises:
     # What the old scalar dimming could not do at all: a red lamp on a white
     # surface leaves red and nothing else.
     var scene = scene_with_lamp_at(0, 1, 0)
-    scene.add_light(directional_light(Color(255, 0, 0), NodeId(0)))
+    scene.add_light(directional_light(Color(255, 0, 0), NodeId(0), FULL))
     var lighting = Lighting(scene)
     var lit = shaded(lighting, WHITE, Vector3(0, 1, 0)).encode()
     assert_equal(lit.r, UInt8(255))
@@ -262,7 +267,7 @@ def test_a_colored_light_tints_the_surface() raises:
 
 def test_a_blue_ambient_tints_the_shadows() raises:
     var scene = Scene()
-    scene.add_light(ambient_light(Color(0, 0, 255), 0.5))
+    scene.add_light(ambient_light(Color(0, 0, 255), 0.5 * FULL))
     var lighting = Lighting(scene)
     var shadow = shaded(lighting, WHITE, Vector3(0, -1, 0)).encode()
     assert_equal(shadow.r, UInt8(0))
@@ -282,8 +287,8 @@ def test_an_overexposed_surface_clamps_once_at_the_end() raises:
     # can show. Nothing clamps until `encode`, so the headroom survives every
     # step in between.
     var scene = scene_with_lamp_at(0, 1, 0)
-    scene.add_light(directional_light(WHITE, NodeId(0)))
-    scene.add_light(directional_light(WHITE, NodeId(0)))
+    scene.add_light(directional_light(WHITE, NodeId(0), FULL))
+    scene.add_light(directional_light(WHITE, NodeId(0), FULL))
     var lighting = Lighting(scene)
     var over = shaded(lighting, WHITE, Vector3(0, 1, 0))
     assert_almost_equal(over.r, Float32(2), atol=TOLERANCE)
@@ -343,7 +348,9 @@ def bulb_at(
     """Return lighting with one white point light at a position and nothing
     else."""
     var scene = scene_with_lamp_at(x, y, z)
-    scene.add_light(point_light(WHITE, NodeId(0), intensity, decay, distance))
+    scene.add_light(
+        point_light(WHITE, NodeId(0), intensity * FULL, decay, distance)
+    )
     return Lighting(scene)
 
 
@@ -417,8 +424,8 @@ def test_a_surface_exactly_on_the_bulb_gets_only_the_ambient() raises:
     # No direction to be lit from, so the bulb is skipped rather than
     # dividing by zero.
     var scene = scene_with_lamp_at(1, 1, 1)
-    scene.add_light(point_light(WHITE, NodeId(0)))
-    scene.add_light(ambient_light(WHITE, 0.25))
+    scene.add_light(point_light(WHITE, NodeId(0), FULL))
+    scene.add_light(ambient_light(WHITE, 0.25 * FULL))
     var lighting = Lighting(scene)
     var arriving = lighting.intensity_at(Vector3(0, 1, 0), Vector3(1, 1, 1))
     assert_almost_equal(arriving.r, Float32(0.25), atol=TOLERANCE)
@@ -432,7 +439,7 @@ def test_a_point_light_is_carried_by_its_node() raises:
     var bulb = Object3D()
     bulb.set_position(0, 1, 0)
     var child = scene.attach(bulb^, parent)
-    scene.add_light(point_light(WHITE, child))
+    scene.add_light(point_light(WHITE, child, FULL))
     scene.update()
     var lighting = Lighting(scene)
     assert_almost_equal(lighting.positions[0].y, Float32(6), atol=TOLERANCE)
@@ -585,7 +592,7 @@ def sky_from(
     """Return lighting with one hemisphere light whose sky lies toward a
     point, and nothing else."""
     var scene = scene_with_lamp_at(x, y, z)
-    scene.add_light(hemisphere_light(sky, ground, NodeId(0)))
+    scene.add_light(hemisphere_light(sky, ground, NodeId(0), FULL))
     return Lighting(scene)
 
 
@@ -632,8 +639,8 @@ def test_a_hemisphere_light_adds_to_the_other_lights() raises:
     # A quarter of ambient under a white sky: a surface facing the sky gets
     # one and a quarter, and the light does not clamp.
     var scene = scene_with_lamp_at(0, 1, 0)
-    scene.add_light(hemisphere_light(WHITE, Color(0, 0, 0), NodeId(0)))
-    scene.add_light(ambient_light(WHITE, 0.25))
+    scene.add_light(hemisphere_light(WHITE, Color(0, 0, 0), NodeId(0), FULL))
+    scene.add_light(ambient_light(WHITE, 0.25 * FULL))
     var lighting = Lighting(scene)
     var up = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
     assert_almost_equal(up.r, Float32(1.25), atol=TOLERANCE)
@@ -679,7 +686,7 @@ def spot_at(
     the origin, and nothing else."""
     var scene = scene_with_lamp_at(x, y, z)
     scene.add_light(
-        spot_light(WHITE, NodeId(0), 1.0, distance, angle, penumbra, decay)
+        spot_light(WHITE, NodeId(0), FULL, distance, angle, penumbra, decay)
     )
     return Lighting(scene)
 
@@ -830,7 +837,7 @@ def test_a_spot_light_points_at_its_target_node() raises:
     aim.set_position(2, 2, 0)
     var target = scene.add(aim^)
     scene.update()
-    scene.add_light(spot_light(WHITE, NodeId(0), target=target))
+    scene.add_light(spot_light(WHITE, NodeId(0), FULL, target=target))
     var lighting = Lighting(scene)
     assert_almost_equal(
         lighting.spot_directions[0].x, Float32(-1), atol=TOLERANCE
@@ -879,7 +886,7 @@ def test_a_spot_light_is_carried_by_its_node() raises:
     var bulb = Object3D()
     bulb.set_position(0, -1, 0)
     var child = scene.attach(bulb^, parent)
-    scene.add_light(spot_light(WHITE, child))
+    scene.add_light(spot_light(WHITE, child, FULL))
     scene.update()
     var lighting = Lighting(scene)
     assert_almost_equal(
@@ -901,7 +908,7 @@ def test_a_directional_light_points_at_its_target_node() raises:
     aim.set_position(0, 5, 5)
     var target = scene.add(aim^)
     scene.update()
-    scene.add_light(directional_light(WHITE, NodeId(0), target=target))
+    scene.add_light(directional_light(WHITE, NodeId(0), FULL, target=target))
     var lighting = Lighting(scene)
     assert_almost_equal(lighting.directions[0].z, Float32(-1), atol=TOLERANCE)
     assert_almost_equal(lighting.directions[0].y, Float32(0), atol=TOLERANCE)
@@ -1130,7 +1137,7 @@ def test_a_directional_light_makes_a_highlight_from_where_you_stand() raises:
     var lamp = Object3D()
     lamp.set_position(0, 0, 1)
     var node = scene.add(lamp^)
-    scene.add_light(directional_light(WHITE, node, 1.0))
+    scene.add_light(directional_light(WHITE, node, FULL))
     scene.update()
     var head_on = Lighting(scene, Layers.all(), Vector3(0, 0, 4))
     var sent = head_on.specular_at(UP_Z, ORIGIN, WHITE_SHEEN, 30.0)
@@ -1169,7 +1176,7 @@ def test_a_point_light_highlight_falls_off_with_distance() raises:
     var bulb = Object3D()
     bulb.set_position(0, 0, 2)
     var node = scene.add(bulb^)
-    scene.add_light(point_light(WHITE, node, 1.0))
+    scene.add_light(point_light(WHITE, node, FULL))
     scene.update()
     var lighting = Lighting(scene, Layers.all(), Vector3(0, 0, 2))
     # Two meters away under the inverse square, so a quarter of the light,
@@ -1219,8 +1226,8 @@ def test_a_light_with_no_direction_makes_no_highlight() raises:
     var sky = Object3D()
     sky.set_position(0, 1, 0)
     var node = scene.add(sky^)
-    scene.add_light(ambient_light(WHITE, 1.0))
-    scene.add_light(hemisphere_light(WHITE, WHITE, node, 1.0))
+    scene.add_light(ambient_light(WHITE, FULL))
+    scene.add_light(hemisphere_light(WHITE, WHITE, node, FULL))
     scene.update()
     var lighting = Lighting(scene, Layers.all(), Vector3(0, 0, 4))
     var sent = lighting.specular_at(UP_Z, ORIGIN, WHITE_SHEEN, 30.0)
@@ -1332,7 +1339,7 @@ def test_a_toon_surface_steps_where_a_lambert_one_fades() raises:
     var above = lighting.toon_at(unit(0, 0.8660254, 0.5), ORIGIN, no_ramp())
     var below = lighting.toon_at(unit(0, 0.9539392, 0.3), ORIGIN, no_ramp())
     assert_equal(above.r, Float32(1))
-    assert_equal(below.r, TOON_SHADE)
+    assert_almost_equal(below.r, TOON_SHADE, atol=TOLERANCE)
 
 
 def test_a_toon_surface_turned_away_is_still_lit() raises:
@@ -1343,8 +1350,14 @@ def test_a_toon_surface_turned_away_is_still_lit() raises:
     var lighting = Lighting(lit_from(0, 0, 1))
     var away = Vector3(0, 0, -1)
     assert_equal(lighting.intensity_at(away, ORIGIN).r, Float32(0))
-    assert_equal(lighting.toon_at(away, ORIGIN, no_ramp()).r, TOON_SHADE)
-    assert_equal(lighting.toon_at(away, ORIGIN, three_tones()).r, Float32(0.2))
+    assert_almost_equal(
+        lighting.toon_at(away, ORIGIN, no_ramp()).r, TOON_SHADE, atol=TOLERANCE
+    )
+    assert_almost_equal(
+        lighting.toon_at(away, ORIGIN, three_tones()).r,
+        Float32(0.2),
+        atol=TOLERANCE,
+    )
     # Alpha is not light and stays at one, as everywhere else.
     assert_equal(lighting.toon_at(away, ORIGIN, no_ramp()).a, Float32(1))
 
@@ -1376,7 +1389,9 @@ def test_a_toon_spot_light_is_stepped_inside_its_cone_alone() raises:
     # The cone gates the light as it always did -- three.js's
     # `directLight.visible` -- and the ramp decides what arrives inside it.
     var scene = scene_with_lamp_at(0, 2, 0)
-    scene.add_light(spot_light(WHITE, NodeId(0), 1.0, 0.0, Angle(30.0, DEGREE)))
+    scene.add_light(
+        spot_light(WHITE, NodeId(0), FULL, 0.0, Angle(30.0, DEGREE))
+    )
     var lighting = Lighting(scene)
     var inside = lighting.toon_at(Vector3(0, 1, 0), ORIGIN, no_ramp())
     assert_almost_equal(inside.r, Float32(0.25), atol=TOLERANCE)
@@ -1400,8 +1415,8 @@ def test_a_toon_surface_takes_its_indirect_light_unstepped() raises:
     # `RE_IndirectDiffuse`, which no ramp touches. So both reach a toon
     # surface exactly as they reach a lambert one.
     var scene = scene_with_lamp_at(0, 4, 0)
-    scene.add_light(ambient_light(WHITE, 0.25))
-    scene.add_light(hemisphere_light(WHITE, Color(0, 0, 0), NodeId(0), 1.0))
+    scene.add_light(ambient_light(WHITE, 0.25 * FULL))
+    scene.add_light(hemisphere_light(WHITE, Color(0, 0, 0), NodeId(0), FULL))
     var lighting = Lighting(scene)
     for facing in [Vector3(0, 1, 0), Vector3(0, -1, 0), Vector3(1, 0, 0)]:
         assert_equal(

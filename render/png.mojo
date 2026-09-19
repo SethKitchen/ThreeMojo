@@ -18,7 +18,7 @@ Byte order is big-endian throughout, as PNG requires, except inside DEFLATE's
 own stored-block lengths, which are little-endian.
 """
 
-from render.checksum import adler32, crc32
+from render.checksum import Crc32, adler32
 from render.framebuffer import Color, Framebuffer
 from render.srgb import LINEAR, SRGB, UNKNOWN_SPACE, ColorSpace
 from render.inflate import zlib_inflate
@@ -61,14 +61,15 @@ def push_chunk(mut out: List[UInt8], kind: String, data: List[UInt8]) raises:
         Error: Never; present to match its callers.
     """
     push_be32(out, UInt32(len(data)))
-    var checked = List[UInt8]()
-    _push_ascii(checked, kind)
-    for index in range(len(data)):
-        checked.append(data[index])
-    # `checked` holds the type as well as the data, so at least four bytes.
-    for index in range(len(checked)):  # pragma: no branch
-        out.append(checked[index])
-    push_be32(out, crc32(checked))
+    # The type and then the data, fed to the checksum where they are
+    # rather than joined first: joining them copied every frame once more.
+    var checked = Crc32()
+    checked.update(kind.as_bytes())
+    checked.update(Span(data))
+    out.reserve(len(out) + 4 + len(data) + 4)
+    _push_ascii(out, kind)
+    out.extend(Span(data))
+    push_be32(out, checked.finish())
 
 
 def raw_scanlines(buffer: Framebuffer) raises -> List[UInt8]:
@@ -77,17 +78,16 @@ def raw_scanlines(buffer: Framebuffer) raises -> List[UInt8]:
     Filter 0 means "None": the row is stored as-is. Real encoders pick a filter
     per row to help compression, which is pointless when nothing compresses.
     """
+    var stride = buffer.width * Framebuffer.CHANNELS
     var raw = List[UInt8]()
+    raw.reserve(buffer.height * (stride + 1))
+    var pixels = Span(buffer.pixels)
     # A Framebuffer always has positive dimensions, so this cannot run zero
     # times.
     for y in range(buffer.height):  # pragma: no branch
         raw.append(0)
-        var start = y * buffer.width * Framebuffer.CHANNELS
-        # A Framebuffer always has a positive width.
-        for offset in range(
-            buffer.width * Framebuffer.CHANNELS
-        ):  # pragma: no branch
-            raw.append(buffer.pixels[start + offset])
+        var start = y * stride
+        raw.extend(pixels[start : start + stride])
     return raw^
 
 
@@ -110,6 +110,9 @@ def zlib_stream(
         A complete zlib stream, header and Adler-32 included.
     """
     var out = List[UInt8]()
+    # The header, one five-byte block header per block, the bytes, and the
+    # checksum, sized up front so the copy below never grows the list.
+    out.reserve(2 + 5 * (len(raw) // max_block + 1) + len(raw) + 4)
     # CMF: deflate, 32K window. FLG chosen so (CMF << 8 | FLG) % 31 == 0.
     out.append(0x78)
     out.append(0x01)
@@ -130,8 +133,7 @@ def zlib_stream(
         out.append(UInt8((size >> 8) & 0xFF))
         out.append(UInt8((~size) & 0xFF))
         out.append(UInt8(((~size) >> 8) & 0xFF))
-        for offset in range(size):
-            out.append(raw[position + offset])
+        out.extend(Span(raw)[position : position + size])
 
         position += size
         if final:
@@ -493,6 +495,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     # specification says: the gamma is there for decoders with no color
     # handling at all, and the two can disagree in the same file.
     var stated_srgb = False
+    var stated_profile = False
     # Where in the file's structure we are. A PNG is ordered, so this is a
     # small state machine rather than a set of flags that can contradict.
     var seen_header = False
@@ -519,16 +522,14 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
             raise Error("A PNG chunk runs past the end of the file")
 
         var body = List[UInt8]()
-        for index in range(length):  # pragma: no branch
-            body.append(bytes[start + index])
+        body.reserve(length)
+        body.extend(Span(bytes)[start : start + length])
 
         # The CRC covers the type and the data, not the length.
-        var checked = List[UInt8]()
-        for index in range(4):  # pragma: no branch
-            checked.append(bytes[at + 4 + index])
-        for index in range(length):  # pragma: no branch
-            checked.append(body[index])
-        if UInt32(_be32(bytes, start + length)) != crc32(checked):
+        var checked = Crc32()
+        checked.update(Span(bytes)[at + 4 : at + 8])
+        checked.update(Span(body))
+        if UInt32(_be32(bytes, start + length)) != checked.finish():
             raise Error("A PNG chunk failed its CRC")
 
         if kind == "IHDR":
@@ -610,15 +611,23 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
                 raise Error("A PNG gAMA chunk must come before its pixel data")
             if length != 4:
                 raise Error("A PNG gAMA chunk is the wrong size")
-            if not stated_srgb:
+            # A gamma says nothing a profile or an sRGB chunk has not said
+            # better. libpng writes the profile first and the gamma after
+            # it, so a gamma that could override the profile turned every
+            # profiled export with a gamma of 1/2.2 into a plain sRGB one.
+            if not stated_srgb and not stated_profile:
                 color_space = _space_from_gamma(_be32(body, 0))
         elif kind == "iCCP":
             if seen_data:
                 raise Error("A PNG iCCP chunk must come before its pixel data")
             # A profile this renderer has no way to apply. Saying so beats
             # both ignoring it and refusing the file: the caller can state an
-            # interpretation, and `texture_from` will insist they do.
-            color_space = UNKNOWN_SPACE
+            # interpretation, and `texture_from` will insist they do. An
+            # sRGB chunk beside it is an interpretation the file itself
+            # stated, and keeps.
+            stated_profile = True
+            if not stated_srgb:
+                color_space = UNKNOWN_SPACE
         elif kind == "IDAT":
             if data_closed:
                 raise Error("A PNG's pixel data must be in one run")

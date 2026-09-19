@@ -553,8 +553,15 @@ struct AnimationMixer(Movable):
         return -1
 
     def _bind(mut self, scene: Scene, node: Int, kind: TrackKind) raises:
-        """Remember what one node property holds, the first time anything
-        drives it.
+        """Remember what one node property holds, each time something
+        starts to drive it.
+
+        Read again when a released property is driven again, not only the
+        first time: three.js's `PropertyMixer.saveOriginalState` runs
+        whenever a binding's use count rises from zero, so a node the
+        caller moved while nothing drove it is blended toward, and put
+        back to, where the caller left it. Reading it once and keeping it
+        threw the caller's edit away.
 
         Raises:
             Error: If the scene has no such node.
@@ -562,8 +569,7 @@ struct AnimationMixer(Movable):
         if node < 0 or node >= scene.count():
             raise Error("A track must name a node that is in the scene")
         var known = self._binding(node, kind.value)
-        if known >= 0:
-            self.bindings[known].driven = True
+        if known >= 0 and self.bindings[known].driven:
             return
         ref held = scene.get(NodeId(node))
         var original = List[Float32]()
@@ -582,6 +588,10 @@ struct AnimationMixer(Movable):
             original.append(held.position.y)
             original.append(held.position.z)
             original.append(0)
+        if known >= 0:
+            self.bindings[known].original = original^
+            self.bindings[known].driven = True
+            return
         var made = Binding(node, kind.value, original^)
         made.driven = True
         self.bindings.append(made^)

@@ -119,6 +119,7 @@ from materials.material import (
     Material,
     MaterialId,
     MaterialKind,
+    Side,
 )
 from units.si import Length, METER
 from render.texture import IGNORED
@@ -128,19 +129,22 @@ from render.target import RenderTarget
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, check_tone_mapping
 from math.vector2 import Vector2
 from render.rasterizer import (
+    DRAW_SEGMENTS,
     SHADE_LIT,
     SHADE_TEXTURE,
     SHADE_UV,
+    DRAW_TRIANGLES,
+    Draw,
+    DrawKind,
     RasterVertex,
     ShadeMode,
     check_alpha_map,
     check_gradient_map,
     check_output_kinds,
     edge,
-    rasterize_all,
-    rasterize_lines_all,
+    rasterize_frame,
 )
-from renderers.clip import ClipVertex, clip_depth, clip_segment
+from renderers.clip import ClipVertex, clip_depth, clip_segment, within_depth
 from std.math import floor, isfinite, max
 from std.sys import num_logical_cores
 
@@ -526,6 +530,59 @@ struct _Draw(ImplicitlyCopyable):
     # Which of the frame's skins carries this draw, or minus one when
     # nothing does. Only a skinned mesh has one.
     var skin: Int
+    # The camera-space depth of the draw's own placed origin, which is what
+    # it was sorted by, and whether its material blends. Carried past the
+    # sort so that `prepare_frame` can put the draw's primitives in order
+    # with the segments', which are sorted by the same two.
+    var depth: Float32
+    var blends: Bool
+
+
+@fieldwise_init
+struct _Span(ImplicitlyCopyable):
+    """One draw's run of primitives in a prepared list, with its sort key.
+
+    What `_prepared` and `_prepared_lines` record beside the corners they
+    emit, and what `prepare_frame` turns into `Draw` records: the run,
+    which list it is in, how deep the draw was, and whether it blends.
+    """
+
+    var kind: DrawKind
+    # The first primitive of the run, a triangle or a segment.
+    var first: Int
+    var count: Int
+    var depth: Float32
+    var blends: Bool
+
+
+def _note_span(
+    mut spans: List[_Span],
+    kind: DrawKind,
+    begin: Int,
+    end: Int,
+    depth: Float32,
+    blends: Bool,
+):
+    """Record the primitives one draw emitted between two corner counts.
+
+    Nothing is recorded for a draw that emitted none -- every triangle
+    culled, or a wireframe with no edges -- so a `Draw` never names an
+    empty run.
+
+    Args:
+        spans: The list to record into.
+        kind: `DRAW_TRIANGLES` or `DRAW_SEGMENTS`, which says the stride.
+        begin: How many corners the list held before the draw.
+        end: How many it holds after.
+        depth: The draw's camera-space depth.
+        blends: Whether its material blends.
+    """
+    var stride = 3
+    if kind == DRAW_SEGMENTS:
+        stride = 2
+    var count = (end - begin) // stride
+    if count > 0:
+        spans.append(_Span(kind, begin // stride, count, depth, blends))
 
 
 def _gather(
@@ -620,16 +677,21 @@ def _gather(
             asked = True
         # The camera looks down -z, so a smaller z is further away. The
         # draw's own origin: the translation column of where it is placed.
-        depths.append(
-            view.transform_point(
-                Vector3(
-                    world.elements[12], world.elements[13], world.elements[14]
-                )
-            ).z
-        )
+        var depth = view.transform_point(
+            Vector3(world.elements[12], world.elements[13], world.elements[14])
+        ).z
+        depths.append(depth)
         clear.append(blends)
         draws.append(
-            _Draw(geometries[index], material, world^, morph_influences, skin)
+            _Draw(
+                geometries[index],
+                material,
+                world^,
+                morph_influences,
+                skin,
+                depth,
+                blends,
+            )
         )
 
 
@@ -831,8 +893,11 @@ def _draws(
         )
     for index in range(len(scene.lods)):
         ref lod = scene.lods[index]
-        var level = lod.level_for(
-            Length((eye - scene.world_position(lod.node)).length(), METER)
+        # The level `Scene.update_lods` last chose sets the hysteresis; a
+        # scene never updated gets the stateless choice.
+        var level = lod.level_from(
+            Length((eye - scene.world_position(lod.node)).length(), METER),
+            lod.shown,
         )
         if level < 0:
             continue
@@ -988,6 +1053,126 @@ def _to_raster(
     )
 
 
+def _whole_in_depth(
+    a: ClipVertex, b: ClipVertex, c: ClipVertex, near: Float32, far: Float32
+) -> Bool:
+    """Return True if no corner of the triangle needs cutting.
+
+    Asked corner by corner, so a triangle is refused as soon as one corner
+    is outside and the other two are not examined.
+
+    Args:
+        a: The first corner, in camera space.
+        b: The second.
+        c: The third.
+        near: Distance to the near plane.
+        far: Distance to the far plane.
+
+    Returns:
+        True if `clip_depth` would return the three corners as they are.
+    """
+    if not within_depth(a.position.z, near, far):
+        return False
+    if not within_depth(b.position.z, near, far):
+        return False
+    return within_depth(c.position.z, near, far)
+
+
+@fieldwise_init
+struct _Paint(ImplicitlyCopyable):
+    """What every corner of one filled draw carries besides its own
+    varyings, and the two rules that decide whether a piece of it is drawn.
+
+    One of these per draw, so that a piece is emitted by one method
+    whether it came straight from the mesh or out of the clipper: the
+    same projection, the same material metadata and the same facing test,
+    written once rather than once per path.
+    """
+
+    var to_screen: Matrix4
+    var map: TextureId
+    var blending: Blending
+    var kind: MaterialKind
+    var glow_map: TextureId
+    var mask: TextureId
+    var alpha_test: Float32
+    var sheen: FloatColor
+    var shininess: Float32
+    var tones: TextureId
+    var ball: TextureId
+    # Whether the draw's world transform reflects it; see `_faces_away`.
+    var mirrored: Bool
+    var side: Side
+
+    def raster(self, vertex: ClipVertex) -> RasterVertex:
+        """Project one clipped corner into the rasterizer's input."""
+        return _to_raster(
+            vertex,
+            self.to_screen,
+            self.map,
+            self.blending,
+            self.kind,
+            self.glow_map,
+            self.mask,
+            self.alpha_test,
+            self.sheen,
+            self.shininess,
+            self.tones,
+            self.ball,
+        )
+
+    def emit(
+        self,
+        mut corners: List[RasterVertex],
+        a: ClipVertex,
+        b: ClipVertex,
+        c: ClipVertex,
+    ):
+        """Project one triangle and append it, unless its facing rejects it.
+
+        Which way the triangle ends up facing decides two things at once:
+        whether it survives, and, for a two-sided material, which side of
+        it is being lit. Read from the screen winding, so it is known only
+        now -- which is why the normal traveled this far unflipped.
+
+        Args:
+            corners: The frame's raster vertices, appended to.
+            a: The first corner, in camera space.
+            b: The second.
+            c: The third.
+        """
+        var one = self.raster(a)
+        var two = self.raster(b)
+        var three = self.raster(c)
+        var away = _faces_away(one, two, three, self.mirrored)
+        if self.side == FRONT_SIDE and away:
+            return
+        if self.side == BACK_SIDE and not away:
+            return
+        if self.side == DOUBLE_SIDE and away:
+            # A two-sided surface seen from behind is lit on the side being
+            # looked at: three.js's `normal *= faceDirection`, which its
+            # shader applies under `DOUBLE_SIDED` and nowhere else. A
+            # `BACK_SIDE` surface keeps the normal it was given, as there:
+            # three.js turns the winding round for it, not the normal, so
+            # the inside of a box lit from the outside is bright on the
+            # wall the light reaches through and dark on the wall it sees.
+            # This used to flip `BACK_SIDE` as well, which lit an interior
+            # from a lamp inside it -- pleasant, and not what three.js
+            # draws for the same scene.
+            #
+            # One flip replaces the two colors this used to carry from the
+            # vertex stage, because the far side's normal is just this one
+            # negated -- which the lighting was not, once it had been
+            # applied.
+            one = _turned_around(one)
+            two = _turned_around(two)
+            three = _turned_around(three)
+        corners.append(one)
+        corners.append(two)
+        corners.append(three)
+
+
 def _line_corner(
     view_points: List[Vector3],
     world_points: List[Vector3],
@@ -1126,6 +1311,42 @@ def available_workers() -> Int:
     return num_logical_cores()
 
 
+struct Frame(Movable):
+    """A scene as both rasterizers take it: two lists of primitives and
+    the one order they are drawn in.
+
+    What `Renderer.prepare_frame` returns and `render.rasterizer.
+    rasterize_frame` and `render.gpu.GpuRenderer.draw` consume, so that
+    a parity test can hand both backends the identical input and demand
+    identical output -- the property `prepare` alone gave the triangles.
+    """
+
+    # Raster vertices, three per triangle, as `prepare` returns them.
+    var corners: List[RasterVertex]
+    # Raster vertices, two per segment, as `prepare_lines` returns them.
+    var segments: List[RasterVertex]
+    # The order to draw in, as runs of one list or the other; see
+    # `render.rasterizer.Draw`.
+    var draws: List[Draw]
+
+    def __init__(
+        out self,
+        var corners: List[RasterVertex],
+        var segments: List[RasterVertex],
+        var draws: List[Draw],
+    ):
+        """Hold a prepared frame.
+
+        Args:
+            corners: The triangles' corners, three each.
+            segments: The segments' corners, two each.
+            draws: The order to draw them in.
+        """
+        self.corners = corners^
+        self.segments = segments^
+        self.draws = draws^
+
+
 struct Renderer(Movable):
     """Renders a scene to a framebuffer of a fixed size."""
 
@@ -1262,7 +1483,8 @@ struct Renderer(Movable):
         Raises:
             Error: Everything `_prepared` raises.
         """
-        return self._prepared(scene, assets, camera, False)
+        var spans = List[_Span]()
+        return self._prepared(scene, assets, camera, False, spans)
 
     def _prepared[
         C: Camera
@@ -1272,6 +1494,7 @@ struct Renderer(Movable):
         assets: Assets,
         camera: C,
         wireframe: Bool,
+        mut spans: List[_Span],
     ) raises -> List[RasterVertex]:
         """Turn a scene into the triangles a rasterizer can fill.
 
@@ -1308,16 +1531,18 @@ struct Renderer(Movable):
                 make of it. False gives the filled surfaces as triangles,
                 three corners each, which is what `prepare` asks for. True
                 gives the wireframe meshes as segments, two corners each,
-                assembled from the edges of their own triangles.
-
-                The split is here, after the vertex stage, so that a
-                wireframe is morphed, skinned, instanced and culled by the
-                same code as the surface it replaces, and only the
-                primitive it is assembled into differs. It is not a filled
-                mesh cut up afterwards: clipping a triangle leaves a
-                polygon that has to be fanned, and the fan's diagonal and
-                the cut along the near plane are edges of the clipper
-                rather than of the mesh. See below.
+                assembled from the edges of their own triangles. The split
+                is here, after the vertex stage, so that a wireframe is
+                morphed, skinned, instanced and culled by the same code as
+                the surface it replaces, and only the primitive it is
+                assembled into differs. It is not a filled mesh cut up
+                afterwards: clipping a triangle leaves a polygon that has
+                to be fanned, and the fan's diagonal and the cut along the
+                near plane are edges of the clipper rather than of the
+                mesh. See below.
+            spans: Where each draw's run of primitives is recorded, with
+                its depth and whether it blends, for `prepare_frame` to
+                order against the other kind's. Appended to.
 
         Returns:
             Raster vertices, three per triangle, in submission order, or
@@ -1606,6 +1831,27 @@ struct Renderer(Movable):
                 if indices[slot] >= vertex_count:
                     raise Error("An index entry points past the last vertex")
             var triangles = geometry.triangle_count()
+            # Grown once per draw rather than by doubling as corners arrive,
+            # which copied the frame's whole list several times over: three
+            # corners a triangle, before the clipper adds any or the facing
+            # test drops any.
+            corners.reserve(len(corners) + triangles * 3)
+            var begin = len(corners)
+            var paint = _Paint(
+                to_screen,
+                map,
+                blending,
+                kind,
+                glow_map,
+                mask,
+                material.alpha_test,
+                sheen,
+                material.shininess,
+                tones,
+                ball,
+                mirrored,
+                material.side,
+            )
             if wireframe:
                 # The mesh's own edges, each once, clipped as segments.
                 # `clip_segment` shares its arithmetic with the triangle
@@ -1650,6 +1896,14 @@ struct Renderer(Movable):
                                 NO_TEXTURE,
                             )
                         )
+                _note_span(
+                    spans,
+                    DRAW_SEGMENTS,
+                    begin,
+                    len(corners),
+                    draws[slot].depth,
+                    draws[slot].blends,
+                )
                 continue
             for triangle in range(triangles):
                 var first = triangle * 3
@@ -1690,106 +1944,57 @@ struct Renderer(Movable):
                     normal_b = geometric
                     normal_c = geometric
 
-                var pieces = clip_depth(
-                    ClipVertex(
-                        view_points[first],
-                        vertex_colors[first],
-                        normal_a,
-                        vertex_u[first],
-                        vertex_v[first],
-                        world_points[first],
-                        glow,
-                    ),
-                    ClipVertex(
-                        view_points[second],
-                        vertex_colors[second],
-                        normal_b,
-                        vertex_u[second],
-                        vertex_v[second],
-                        world_points[second],
-                        glow,
-                    ),
-                    ClipVertex(
-                        view_points[third],
-                        vertex_colors[third],
-                        normal_c,
-                        vertex_u[third],
-                        vertex_v[third],
-                        world_points[third],
-                        glow,
-                    ),
-                    near,
-                    far,
+                var corner_a = ClipVertex(
+                    view_points[first],
+                    vertex_colors[first],
+                    normal_a,
+                    vertex_u[first],
+                    vertex_v[first],
+                    world_points[first],
+                    glow,
                 )
+                var corner_b = ClipVertex(
+                    view_points[second],
+                    vertex_colors[second],
+                    normal_b,
+                    vertex_u[second],
+                    vertex_v[second],
+                    world_points[second],
+                    glow,
+                )
+                var corner_c = ClipVertex(
+                    view_points[third],
+                    vertex_colors[third],
+                    normal_c,
+                    vertex_u[third],
+                    vertex_v[third],
+                    world_points[third],
+                    glow,
+                )
+                # A triangle wholly between the two planes is what the
+                # clipper would hand back untouched, so it is not sent
+                # through: the clipper builds four lists for every triangle
+                # it is given, and a mesh in view gives it thousands that
+                # it would return as they came. See `within_depth`.
+                if _whole_in_depth(corner_a, corner_b, corner_c, near, far):
+                    paint.emit(corners, corner_a, corner_b, corner_c)
+                    continue
+                var pieces = clip_depth(corner_a, corner_b, corner_c, near, far)
                 for piece in range(len(pieces) // 3):
-                    var one = _to_raster(
+                    paint.emit(
+                        corners,
                         pieces[piece * 3],
-                        to_screen,
-                        map,
-                        blending,
-                        kind,
-                        glow_map,
-                        mask,
-                        material.alpha_test,
-                        sheen,
-                        material.shininess,
-                        tones,
-                        ball,
-                    )
-                    var two = _to_raster(
                         pieces[piece * 3 + 1],
-                        to_screen,
-                        map,
-                        blending,
-                        kind,
-                        glow_map,
-                        mask,
-                        material.alpha_test,
-                        sheen,
-                        material.shininess,
-                        tones,
-                        ball,
-                    )
-                    var three = _to_raster(
                         pieces[piece * 3 + 2],
-                        to_screen,
-                        map,
-                        blending,
-                        kind,
-                        glow_map,
-                        mask,
-                        material.alpha_test,
-                        sheen,
-                        material.shininess,
-                        tones,
-                        ball,
                     )
-                    # Which way this piece ends up facing decides two things
-                    # at once: whether it survives, and which side of it is
-                    # being lit. Read from the screen winding, so it is known
-                    # only now -- which is why the normal traveled this far
-                    # unflipped.
-                    var away = _faces_away(one, two, three, mirrored)
-                    if material.side == FRONT_SIDE and away:
-                        continue
-                    if material.side == BACK_SIDE and not away:
-                        continue
-                    if away:
-                        # Seen from behind, so light the side being looked at.
-                        # Without this a BackSide surface with the light in
-                        # front of it renders black: the Lambert term is taken
-                        # against the normal pointing away from the camera.
-                        #
-                        # One flip replaces the two colors this used to carry
-                        # from the vertex stage, because the far side's normal
-                        # is just this one negated -- which the lighting was
-                        # not, once it had been applied.
-                        one = _turned_around(one)
-                        two = _turned_around(two)
-                        three = _turned_around(three)
-                    corners.append(one)
-                    corners.append(two)
-                    corners.append(three)
+            _note_span(
+                spans,
+                DRAW_TRIANGLES,
+                begin,
+                len(corners),
+                draws[slot].depth,
+                draws[slot].blends,
+            )
 
         return corners^
 
@@ -1843,6 +2048,42 @@ struct Renderer(Movable):
                 has no `color` attribute of three or four floats per
                 vertex.
         """
+        var spans = List[_Span]()
+        return self._prepared_lines(scene, assets, camera, spans)
+
+    def _prepared_lines[
+        C: Camera
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        mut spans: List[_Span],
+    ) raises -> List[RasterVertex]:
+        """Turn the lines and the wireframes in a scene into segments, in
+        draw order, recording each one's run.
+
+        The body of `prepare_lines`. The standalone lines are read in
+        scene order and the wireframes after them, and the whole list is
+        then put in draw order at once: opaque runs nearest first, blended
+        runs furthest first, a wireframe sorted among the lines by its
+        own depth rather than appended after them, which once let an
+        opaque wireframe follow a blended line.
+
+        Args:
+            scene: The transform hierarchy, and the lines in it.
+            assets: The geometries and materials the lines name.
+            camera: The camera to project through.
+            spans: Where each line's and each wireframe's run is recorded,
+                with its depth and whether it blends, in the order the
+                returned list holds them. Appended to.
+
+        Returns:
+            Raster vertices, two per segment, in draw order.
+
+        Raises:
+            Error: Everything `prepare_lines` raises.
+        """
         var view = camera.view_matrix_in(scene)
         var to_screen = camera.view_to_screen_matrix(self.width, self.height)
         var near = camera.near_distance()
@@ -1858,13 +2099,11 @@ struct Renderer(Movable):
         var known = List[Bool](length=assets.geometries.count(), fill=False)
         var slack = far * CULL_SLACK
 
-        # Which lines survive the camera, and how deep each one is, so the
-        # blended ones can be put behind the opaque ones. Per line and not
-        # per segment: one sort key per object is what `_draws` uses, and a
-        # line is one object.
-        var drawn = List[Int]()
-        var depths = List[Float32]()
-        var clear = List[Bool]()
+        # Every line the camera keeps, read in scene order and sorted
+        # below with the wireframes. Per line and not per segment: one sort
+        # key per object is what `_draws` uses, and a line is one object.
+        var unsorted = List[_Span]()
+        var corners = List[RasterVertex]()
         for index in range(len(scene.lines)):
             ref line = scene.lines[index]
             if not scene.get(line.node).layers.test(camera.visible_layers()):
@@ -1874,43 +2113,12 @@ struct Renderer(Movable):
                 assets, line.geometry, world, frustum, slack, bounds, known
             ):
                 continue
-            drawn.append(index)
-            depths.append(
-                view.transform_point(
-                    Vector3(
-                        world.elements[12],
-                        world.elements[13],
-                        world.elements[14],
-                    )
-                ).z
-            )
-            clear.append(assets.materials.get(line.material).is_transparent())
-
-        var solid = List[Int]()
-        var solid_depths = List[Float32]()
-        var see_through = List[Int]()
-        var see_through_depths = List[Float32]()
-        for position in range(len(drawn)):
-            if clear[position]:
-                see_through.append(drawn[position])
-                see_through_depths.append(depths[position])
-            else:
-                solid.append(drawn[position])
-                # Negated so one ascending sort serves both lists, as in
-                # `_draws`: the nearest opaque line has the largest z.
-                solid_depths.append(-depths[position])
-        _sort_by(solid, solid_depths)
-        _sort_by(see_through, see_through_depths)
-        var ordered = List[Int]()
-        for position in range(len(solid)):
-            ordered.append(solid[position])
-        for position in range(len(see_through)):
-            ordered.append(see_through[position])
-
-        var corners = List[RasterVertex]()
-        for position in range(len(ordered)):
-            ref line = scene.lines[ordered[position]]
-            var world = scene.world_matrix(line.node)
+            var depth = view.transform_point(
+                Vector3(
+                    world.elements[12], world.elements[13], world.elements[14]
+                )
+            ).z
+            var begin = len(corners)
             ref geometry = assets.geometries.get(line.geometry)
             var material = assets.materials.get(line.material)
             # A line is unlit and untextured, and these refuse the
@@ -2002,6 +2210,14 @@ struct Renderer(Movable):
                             NO_TEXTURE,
                         )
                     )
+            _note_span(
+                unsorted,
+                DRAW_SEGMENTS,
+                begin,
+                len(corners),
+                depth,
+                material.is_transparent(),
+            )
 
         # And the meshes drawn as the lines of their own triangles.
         # `_prepared` shares everything up to primitive assembly with the
@@ -2013,18 +2229,139 @@ struct Renderer(Movable):
         # pairs them, as three.js's `getWireframeAttribute` does. Drawing
         # it twice is not free even though it is the same pixels, because
         # a blended segment drawn over itself is twice as opaque.
-        var wired = List[RasterVertex]()
         for index in range(assets.materials.count()):
             if assets.materials.get(MaterialId(index)).wireframe:
                 # Asked before the work rather than after, so a scene with
                 # no wireframe in it pays one pass over the materials
                 # rather than a second pass over its geometry.
-                wired = self._prepared(scene, assets, camera, True)
+                var wire_spans = List[_Span]()
+                var wired = self._prepared(
+                    scene, assets, camera, True, wire_spans
+                )
+                var offset = len(corners) // 2
+                corners.extend(Span(wired))
+                for span in range(len(wire_spans)):
+                    ref run = wire_spans[span]
+                    unsorted.append(
+                        _Span(
+                            DRAW_SEGMENTS,
+                            offset + run.first,
+                            run.count,
+                            run.depth,
+                            run.blends,
+                        )
+                    )
                 break
-        for end in range(len(wired)):
-            corners.append(wired[end])
 
-        return corners^
+        # Into draw order: opaque runs nearest first, then blended runs
+        # furthest first, lines and wireframes together. The same two
+        # rules `_draws` applies to the meshes, for the same reasons.
+        var solid = List[Int]()
+        var solid_depths = List[Float32]()
+        var see_through = List[Int]()
+        var see_through_depths = List[Float32]()
+        for position in range(len(unsorted)):
+            if unsorted[position].blends:
+                see_through.append(position)
+                see_through_depths.append(unsorted[position].depth)
+            else:
+                solid.append(position)
+                # Negated so one ascending sort serves both lists, as in
+                # `_draws`: the nearest opaque line has the largest z.
+                solid_depths.append(-unsorted[position].depth)
+        _sort_by(solid, solid_depths)
+        _sort_by(see_through, see_through_depths)
+        var order = List[Int]()
+        for position in range(len(solid)):
+            order.append(solid[position])
+        for position in range(len(see_through)):
+            order.append(see_through[position])
+        var ordered = List[RasterVertex]()
+        ordered.reserve(len(corners))
+        for position in range(len(order)):
+            ref run = unsorted[order[position]]
+            spans.append(
+                _Span(
+                    DRAW_SEGMENTS,
+                    len(ordered) // 2,
+                    run.count,
+                    run.depth,
+                    run.blends,
+                )
+            )
+            ordered.extend(
+                Span(corners)[run.first * 2 : (run.first + run.count) * 2]
+            )
+        return ordered^
+
+    def prepare_frame[
+        C: Camera
+    ](self, scene: Scene, assets: Assets, camera: C,) raises -> Frame:
+        """Turn a scene into a frame: its triangles, its segments, and the
+        one order both are drawn in.
+
+        `prepare` and `prepare_lines` together, with what neither list can
+        say on its own: where a run of one kind goes among the runs of the
+        other. Opaque runs come first, the triangles nearest first and then
+        the segments nearest first, which is safe in any order because an
+        opaque fragment settles a pixel by depth alone. Blended runs follow,
+        triangles and segments together, furthest first by the depth of
+        each draw's own placed origin, so that a translucent line is drawn
+        after the translucent surface behind it and before the one in
+        front of it. Drawing every line after every triangle, as the two
+        lists were once drawn, put an opaque line behind a translucent
+        pane on top of it: the pane had blended without claiming the
+        depth, and the line passed the test.
+
+        Args:
+            scene: The transform hierarchy, and the meshes, lines and
+                lights in it.
+            assets: The geometry, materials and textures they name.
+            camera: The camera to project through.
+
+        Returns:
+            The frame. `Renderer.render` fills it with `rasterize_frame`
+            and `GpuRenderer.draw` takes its three lists as they are.
+
+        Raises:
+            Error: Everything `prepare` and `prepare_lines` raise.
+        """
+        var corner_spans = List[_Span]()
+        var corners = self._prepared(scene, assets, camera, False, corner_spans)
+        var segment_spans = List[_Span]()
+        var segments = self._prepared_lines(
+            scene, assets, camera, segment_spans
+        )
+        var draws = List[Draw]()
+        for span in range(len(corner_spans)):
+            ref run = corner_spans[span]
+            if not run.blends:
+                draws.append(Draw(DRAW_TRIANGLES, run.first, run.count))
+        for span in range(len(segment_spans)):
+            ref run = segment_spans[span]
+            if not run.blends:
+                draws.append(Draw(DRAW_SEGMENTS, run.first, run.count))
+        # Both kinds' blended runs, furthest first. Each list is already in
+        # that order on its own; the sort is stable, so at one depth a
+        # surface still goes before a line, as it did with two passes.
+        var mixed = List[_Span]()
+        var order = List[Int]()
+        var depths = List[Float32]()
+        for span in range(len(corner_spans)):
+            if corner_spans[span].blends:
+                order.append(len(mixed))
+                depths.append(corner_spans[span].depth)
+                mixed.append(corner_spans[span])
+        for span in range(len(segment_spans)):
+            if segment_spans[span].blends:
+                order.append(len(mixed))
+                depths.append(segment_spans[span].depth)
+                mixed.append(segment_spans[span])
+        _sort_by(order, depths)
+        for position in range(len(order)):
+            ref run = mixed[order[position]]
+            draws.append(Draw(run.kind, run.first, run.count))
+        return Frame(corners^, segments^, draws^)
 
     def render[
         C: Camera
@@ -2052,15 +2389,15 @@ struct Renderer(Movable):
                 one, which no pixel could resolve; see
                 `render.rasterizer.check_output_kinds`.
         """
-        var corners = self.prepare(scene, assets, camera)
-        var segments = self.prepare_lines(scene, assets, camera)
+        var frame = self.prepare_frame(scene, assets, camera)
         # Two output representations cannot share a tone-mapped frame. Asked
         # here, before anything is drawn, exactly where `GpuRenderer.draw`
         # asks it before a launch. The uv view is data throughout and is
         # never tone mapped, so it is never refused; see below.
         check_output_kinds(
-            corners,
+            frame.corners,
             self.shading != SHADE_UV and self.tone_mapping != NO_TONE_MAPPING,
+            frame.segments,
         )
         # Resolved here as well as in `prepare`, because the fragments need
         # it: lighting is no longer baked into the corners on the way past.
@@ -2083,8 +2420,13 @@ struct Renderer(Movable):
         # carries the depth `prepare` measured for it along this view.
         var fog = FogView(scene.fog)
         var target = RenderTarget(self.width, self.height, self.background)
-        rasterize_all(
-            corners,
+        # Triangles and segments in the frame's one order, which is the
+        # order the kernel walks too. See `render.rasterizer.rasterize_frame`
+        # and `prepare_frame`.
+        rasterize_frame(
+            frame.corners,
+            frame.segments,
+            frame.draws,
             target,
             self.shading,
             assets.textures,
@@ -2092,10 +2434,6 @@ struct Renderer(Movable):
             self.workers,
             fog,
         )
-        # The lines go over the triangles, depth tested against them, which
-        # is the order the kernel does its two passes in. See
-        # `render.rasterizer.rasterize_lines_all`.
-        rasterize_lines_all(segments, target, self.workers, fog)
         # Linear light becomes an image exactly once, here, on as many
         # threads as drew it, through the tone mapping curve on the way --
         # except in the uv view, which is coordinates rather than light and

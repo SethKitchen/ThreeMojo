@@ -90,6 +90,8 @@ def _encode_run(
     past: Int,
     tone_mapping: ToneMapping,
     exposure: Float32,
+    clear: FloatColor,
+    clear_shown: Color,
 ):
     """Encode the pixels in `[first, past)` from linear light to bytes.
 
@@ -99,17 +101,27 @@ def _encode_run(
     the curve sees the straight color a display is about to show, as the
     GPU kernel applies it to the same color at the same point. A pixel
     that holds data skips the curve, as the kernel skips it.
+
+    A pixel still holding the clear color is written as `clear_shown`,
+    which `resolve` encoded once by the same three steps. Most of most
+    frames is background, and three `pow` calls a pixel were the second
+    largest cost of a frame; the bytes are the ones the steps would give,
+    because they are the ones the steps gave.
     """
     # A run is never empty: `resolve` never makes more bands than pixels.
     for slot in range(first, past):  # pragma: no branch
-        var curve = tone_mapping
-        if data[unsafe_offset=slot]:
-            curve = NO_TONE_MAPPING
-        var shown = tone_map(
-            colors[unsafe_offset=slot].unpremultiplied(),
-            curve,
-            exposure,
-        ).encode()
+        var shown: Color
+        if not data[unsafe_offset=slot] and colors[unsafe_offset=slot] == clear:
+            shown = clear_shown
+        else:
+            var curve = tone_mapping
+            if data[unsafe_offset=slot]:
+                curve = NO_TONE_MAPPING
+            shown = tone_map(
+                colors[unsafe_offset=slot].unpremultiplied(),
+                curve,
+                exposure,
+            ).encode()
         var at = slot * Framebuffer.CHANNELS
         pixels[unsafe_offset=at] = shown.r
         pixels[unsafe_offset=at + 1] = shown.g
@@ -125,9 +137,21 @@ async def _encode_band(
     past: Int,
     tone_mapping: ToneMapping,
     exposure: Float32,
+    clear: FloatColor,
+    clear_shown: Color,
 ):
     """`_encode_run` as a task, one per worker; see `resolve`."""
-    _encode_run(colors, data, pixels, first, past, tone_mapping, exposure)
+    _encode_run(
+        colors,
+        data,
+        pixels,
+        first,
+        past,
+        tone_mapping,
+        exposure,
+        clear,
+        clear_shown,
+    )
 
 
 struct RenderTarget(Movable):
@@ -137,6 +161,10 @@ struct RenderTarget(Movable):
     var height: Int
     # Premultiplied linear light, one entry per pixel.
     var colors: List[FloatColor]
+    # What every pixel held before anything was drawn, premultiplied like
+    # the pixels. `resolve` encodes it once and writes the answer wherever
+    # a pixel still holds it.
+    var clear: FloatColor
     var depth: List[Float32]
     # Whether each pixel holds data rather than light -- a normal, a depth,
     # a coordinate -- which the tone mapping must leave alone. Set by the
@@ -161,9 +189,8 @@ struct RenderTarget(Movable):
             raise Error("Render target dimensions must be positive")
         self.width = width
         self.height = height
-        self.colors = List[FloatColor](
-            length=width * height, fill=FloatColor(srgb=clear).premultiplied()
-        )
+        self.clear = FloatColor(srgb=clear).premultiplied()
+        self.colors = List[FloatColor](length=width * height, fill=self.clear)
         self.depth = List[Float32](
             length=width * height, fill=inf[DType.float32]()
         )
@@ -374,6 +401,8 @@ struct RenderTarget(Movable):
         them -- and it parallelizes perfectly, so `Renderer.render` hands it
         the same worker count it rasterized with. Each band encodes its own
         run of pixels into a buffer sized up front; nothing is appended.
+        The clear color is encoded once here and copied to every pixel
+        that still holds it, which in most frames is most of them.
 
         Args:
             workers: How many threads to encode with. One encodes in place
@@ -399,6 +428,10 @@ struct RenderTarget(Movable):
         check_tone_mapping(tone_mapping, exposure)
         var count = self.width * self.height
         var pixels = List[UInt8](length=count * Framebuffer.CHANNELS, fill=0)
+        # The background, by the same three steps every other pixel takes.
+        var clear_shown = tone_map(
+            self.clear.unpremultiplied(), tone_mapping, exposure
+        ).encode()
         var bands = min(workers, count)
         if bands == 1:
             _encode_run(
@@ -409,6 +442,8 @@ struct RenderTarget(Movable):
                 count,
                 tone_mapping,
                 exposure,
+                self.clear,
+                clear_shown,
             )
         else:
             var group = TaskGroup()
@@ -427,6 +462,8 @@ struct RenderTarget(Movable):
                         (band + 1) * count // bands,
                         tone_mapping,
                         exposure,
+                        self.clear,
+                        clear_shown,
                     )
                 )
             group.wait()

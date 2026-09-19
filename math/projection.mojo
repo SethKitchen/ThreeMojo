@@ -107,7 +107,10 @@ def orthographic(
         right: Right edge.
         top: Top edge.
         bottom: Bottom edge.
-        near: Distance to the near clipping plane; must be positive.
+        near: Distance to the near clipping plane. Zero or negative is
+            allowed, as three.js allows: nothing divides by depth here, and
+            a top-down view is commonly given a near plane behind the
+            camera so that what stands above it is still drawn.
         far: Distance to the far clipping plane; must exceed `near`.
 
     Returns:
@@ -115,14 +118,8 @@ def orthographic(
 
     Raises:
         Error: If the volume is degenerate or its edges are reversed, or the
-            planes are not ordered. A `near` of exactly zero is allowed, as
-            three.js allows: nothing divides by depth here, so the perspective
-            camera's reason for forbidding it does not apply. Negative is
-            still refused, which keeps the near plane in front of the camera
-            and the depth range the right way round.
+            planes are not ordered.
     """
-    if near < 0:
-        raise Error("The near plane cannot be behind the camera")
     if far <= near:
         raise Error("The far plane must be beyond the near plane")
     if right <= left or top <= bottom:
@@ -170,19 +167,30 @@ def look_at(eye: Vector3, target: Vector3, up: Vector3) raises -> Matrix4:
         A matrix transforming world space into camera space.
 
     Raises:
-        Error: If the camera is at its own target, or `up` is parallel to the
-            view direction, either of which leaves the basis undefined.
+        Error: Never. A camera at its own target looks down its own -z, and
+            an `up` parallel to the view direction is nudged off it by a
+            ten-thousandth, exactly as three.js's `Matrix4.lookAt` settles
+            both, so a camera looking straight down with the default up
+            still has a basis.
     """
     # z points back towards the camera, because the camera looks down -z.
     var forward = eye - target
     if forward.length() == 0:
-        raise Error("The camera cannot sit at its own target")
+        forward = Vector3(0, 0, 1)
     forward.normalize()
 
     var right = up
     right.cross(forward)
     if right.length() == 0:
-        raise Error("Up is parallel to the view direction")
+        # three.js's own nudge: along x when up is the z axis, along z
+        # otherwise, and the basis is rebuilt from the nudged direction.
+        if abs(up.z) == 1:
+            forward.x += 0.0001
+        else:
+            forward.z += 0.0001
+        forward.normalize()
+        right = up
+        right.cross(forward)
     right.normalize()
 
     # Already perpendicular unit vectors, so this needs no normalizing.

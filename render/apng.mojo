@@ -39,6 +39,10 @@ comptime BLEND_SOURCE = UInt8(0)
 # an exact integer.
 comptime DELAY_DENOMINATOR = UInt16(1000)
 comptime LOOP_FOREVER = 0
+# The largest delay the two bytes of an fcTL numerator can hold, and the
+# largest loop count the four bytes of acTL can.
+comptime MAX_DELAY_MS = 65535
+comptime MAX_PLAYS = 0xFFFFFFFF
 
 
 def push_be16(mut out: List[UInt8], value: UInt16):
@@ -56,8 +60,12 @@ def push_actl(mut out: List[UInt8], frames: Int, plays: Int) raises:
         plays: How many times to loop; 0 repeats forever.
 
     Raises:
-        Error: Never; present to match push_chunk.
+        Error: If the loop count is negative or does not fit the chunk's
+            thirty-two bits. Wrapping it instead turned minus one into four
+            billion plays.
     """
+    if plays < 0 or plays > MAX_PLAYS:
+        raise Error("An APNG loop count is 0 to 4294967295")
     var data = List[UInt8]()
     push_be32(data, UInt32(frames))
     push_be32(data, UInt32(plays))
@@ -81,8 +89,12 @@ def push_fctl(
         delay_ms: How long to show the frame, in milliseconds.
 
     Raises:
-        Error: Never; present to match push_chunk.
+        Error: If the delay does not fit the chunk's sixteen bits: below
+            zero, or above 65535 milliseconds. Truncating it instead showed
+            a seventy-second frame for four and a half.
     """
+    if delay_ms < 0 or delay_ms > MAX_DELAY_MS:
+        raise Error("An APNG frame delay is 0 to 65535 milliseconds")
     var data = List[UInt8]()
     push_be32(data, UInt32(sequence))
     push_be32(data, UInt32(width))
@@ -108,11 +120,9 @@ def push_fdat(mut out: List[UInt8], sequence: Int, pixels: List[UInt8]) raises:
         Error: Never; present to match push_chunk.
     """
     var data = List[UInt8]()
+    data.reserve(4 + len(pixels))
     push_be32(data, UInt32(sequence))
-    # A zlib stream always carries a header, a block and a checksum, so it is
-    # never empty and this cannot run zero times.
-    for index in range(len(pixels)):  # pragma: no branch
-        data.append(pixels[index])
+    data.extend(Span(pixels))
     push_chunk(out, String("fdAT"), data)
 
 
@@ -130,7 +140,9 @@ def encode(
         The bytes of a valid APNG, which is also a valid PNG of frame one.
 
     Raises:
-        Error: If `frames` is empty or the frames disagree on size.
+        Error: If `frames` is empty, the frames disagree on size, the delay
+            is outside 0 to 65535 milliseconds, or the loop count is
+            outside what four bytes hold.
     """
     if len(frames) == 0:
         raise Error("An animation needs at least one frame")

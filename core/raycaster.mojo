@@ -49,12 +49,20 @@ target is picked where the target has carried it, because both this and
 rendering wore the targets and picking did not, so the drawn shape could
 not be hit and the modelled one could be hit where nothing was.
 
-What it does not see is a skinned mesh. `intersect_scene` walks
-`scene.meshes`, and a `SkinnedMesh` is in a list of its own, so a rig is
-simply not offered to the ray -- it is not silently picked in its rest
-pose. Teaching it about rigs means the posed bones, which come from the
-scene rather than the geometry, and a `Hit` that can say which list its
-index belongs to. Neither is here yet.
+**Groups and levels.** An instanced mesh is picked instance by instance,
+each at the node's transform times its own, and the hit says which in
+`instance`, three.js's `instanceId`; a batched mesh the same, with each
+instance's own geometry, three.js's `batchId`. An LOD is picked on the
+level its distance from the ray's origin picks with no memory, three.js's
+`LOD.raycast` through `getObjectForDistance`, and `instance` says which
+level. A hit's `kind` says which of the scene's lists `index` counts in,
+and `mesh` is the shape struck as a `Mesh`: its node, geometry and
+material, whatever list it came from.
+
+What it does not see is a skinned mesh. A `SkinnedMesh` is in a list of
+its own, so a rig is simply not offered to the ray -- it is not silently
+picked in its rest pose. Teaching it about rigs means the posed bones,
+which come from the scene rather than the geometry. That is not here yet.
 """
 
 from cameras.camera import Camera
@@ -69,8 +77,44 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from materials.material import BACK_SIDE, FRONT_SIDE
 from objects.mesh import Mesh
-from std.math import inf
+from std.math import inf, isnan
 from units.si import Length, METER
+
+
+@fieldwise_init
+struct HitKind(Equatable, ImplicitlyCopyable, Writable):
+    """Which of the scene's lists a hit's `index` counts in, as a type
+    rather than a bare int.
+
+    The same argument as `objects.line.LineMode`: four small integers
+    that mean four different lists must not be interchangeable, and the
+    type stops a bare integer at compile time. `is_valid` stops
+    `HitKind(9)`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `MESH_HIT`, `INSTANCED_HIT`,
+        `BATCHED_HIT` or `LOD_HIT`."""
+        return (
+            self == MESH_HIT
+            or self == INSTANCED_HIT
+            or self == BATCHED_HIT
+            or self == LOD_HIT
+        )
+
+
+# `index` counts in `scene.meshes`, and `instance` is -1.
+comptime MESH_HIT = HitKind(0)
+# `index` counts in `scene.instanced_meshes`, and `instance` is which
+# instance: three.js's `instanceId`.
+comptime INSTANCED_HIT = HitKind(1)
+# `index` counts in `scene.batched_meshes`, and `instance` is which
+# instance: three.js's `batchId`.
+comptime BATCHED_HIT = HitKind(2)
+# `index` counts in `scene.lods`, and `instance` is which level was struck.
+comptime LOD_HIT = HitKind(3)
 
 
 @fieldwise_init
@@ -86,9 +130,15 @@ struct Hit(ImplicitlyCopyable):
     # triangle as wound, whichever side the ray came from. A mirrored
     # mesh's is turned back, as the renderer turns its geometric normal.
     var normal: Vector3
-    # Which mesh, as its position in `scene.meshes`, and the mesh itself:
-    # its node, its geometry and its material.
+    # Which of the scene's lists `index` counts in, and what `instance`
+    # means there.
+    var kind: HitKind
     var index: Int
+    # Which instance of an instanced or batched mesh, or which level of an
+    # LOD, was struck; -1 for a plain mesh.
+    var instance: Int
+    # The shape struck as a mesh: its node, its geometry and its material.
+    # For a plain mesh, the mesh itself.
     var mesh: Mesh
     # Which of the geometry's triangles, from zero.
     var triangle: Int
@@ -151,8 +201,12 @@ struct Raycaster(ImplicitlyCopyable):
 
         Raises:
             Error: If the direction has no length, `near` is negative, or
-                `far` is below `near`.
+                `far` is below `near`, or either is not a number: a NaN
+                passes both of the other tests and then stops the range
+                filtering anything, silently.
         """
+        if isnan(near.value) or isnan(far.value):
+            raise Error("A raycaster's range must be made of numbers")
         if near.value < 0:
             raise Error("A raycaster's near distance cannot be negative")
         if far.value < near.value:
@@ -292,15 +346,175 @@ struct Raycaster(ImplicitlyCopyable):
                 flattens a dimension, which leaves no inverse to carry the
                 ray through.
         """
-        var hits = List[Hit]()
         if index < 0 or index >= len(scene.meshes):
             raise Error("No mesh has that index")
         var mesh = scene.meshes[index]
+        return self._intersect_shape(
+            scene,
+            assets,
+            mesh,
+            scene.world_matrix(mesh.node),
+            MESH_HIT,
+            index,
+            -1,
+        )
+
+    def intersect_instanced_mesh(
+        self, scene: Scene, assets: Assets, index: Int
+    ) raises -> List[Hit]:
+        """Return every place this ray meets one instanced mesh, nearest
+        first, three.js's `InstancedMesh.raycast`: each instance is tested
+        at the node's transform times its own, and a hit's `instance` says
+        which was struck.
+
+        Args:
+            scene: The scene the instanced mesh is in, updated.
+            assets: The geometry and material it names.
+            index: Which, as its position in `scene.instanced_meshes`.
+
+        Returns:
+            The hits, nearest first, across every instance.
+
+        Raises:
+            Error: If no instanced mesh has that index, or for anything
+                `intersect_mesh` raises for, per instance.
+        """
+        if index < 0 or index >= len(scene.instanced_meshes):
+            raise Error("No instanced mesh has that index")
+        ref group = scene.instanced_meshes[index]
+        var mesh = Mesh(group.geometry, group.material, group.node)
+        var world = scene.world_matrix(group.node)
+        var hits = List[Hit]()
+        for instance in range(group.count()):
+            var placed = Matrix4(copy=world)
+            placed.multiply(group.matrix_at(instance))
+            hits.extend(
+                self._intersect_shape(
+                    scene, assets, mesh, placed, INSTANCED_HIT, index, instance
+                )
+            )
+        _sort_by_distance(hits)
+        return hits^
+
+    def intersect_batched_mesh(
+        self, scene: Scene, assets: Assets, index: Int
+    ) raises -> List[Hit]:
+        """Return every place this ray meets one batched mesh, nearest
+        first, three.js's `BatchedMesh.raycast`: each instance is tested
+        with its own geometry at the node's transform times its own, and
+        a hit's `instance` says which was struck.
+
+        Args:
+            scene: The scene the batched mesh is in, updated.
+            assets: The geometries and material it names.
+            index: Which, as its position in `scene.batched_meshes`.
+
+        Returns:
+            The hits, nearest first, across every instance.
+
+        Raises:
+            Error: If no batched mesh has that index, or for anything
+                `intersect_mesh` raises for, per instance.
+        """
+        if index < 0 or index >= len(scene.batched_meshes):
+            raise Error("No batched mesh has that index")
+        ref batch = scene.batched_meshes[index]
+        var world = scene.world_matrix(batch.node)
+        var hits = List[Hit]()
+        for instance in range(batch.count()):
+            var mesh = Mesh(
+                batch.geometry_at(instance), batch.material, batch.node
+            )
+            var placed = Matrix4(copy=world)
+            placed.multiply(batch.matrix_at(instance))
+            hits.extend(
+                self._intersect_shape(
+                    scene, assets, mesh, placed, BATCHED_HIT, index, instance
+                )
+            )
+        _sort_by_distance(hits)
+        return hits^
+
+    def intersect_lod(
+        self, scene: Scene, assets: Assets, index: Int
+    ) raises -> List[Hit]:
+        """Return every place this ray meets one LOD, nearest first,
+        three.js's `LOD.raycast`: the level tested is the one the distance
+        from the ray's origin to the node picks with no memory, and a
+        hit's `instance` says which level that was.
+
+        Args:
+            scene: The scene the LOD is in, updated.
+            assets: The geometries and materials its levels name.
+            index: Which, as its position in `scene.lods`.
+
+        Returns:
+            The hits, nearest first. None for an LOD with no levels.
+
+        Raises:
+            Error: If no LOD has that index, or for anything
+                `intersect_mesh` raises for.
+        """
+        if index < 0 or index >= len(scene.lods):
+            raise Error("No LOD has that index")
+        ref lod = scene.lods[index]
+        var world = scene.world_matrix(lod.node)
+        var origin = world.transform_point(Vector3(0, 0, 0))
+        var level = lod.level_for(
+            Length((self.ray.origin - origin).length(), METER)
+        )
+        if level < 0:
+            return List[Hit]()
+        var shown = lod.levels[level]
+        return self._intersect_shape(
+            scene,
+            assets,
+            Mesh(shown.geometry, shown.material, lod.node),
+            world,
+            LOD_HIT,
+            index,
+            level,
+        )
+
+    def _intersect_shape(
+        self,
+        scene: Scene,
+        assets: Assets,
+        mesh: Mesh,
+        world: Matrix4,
+        kind: HitKind,
+        index: Int,
+        instance: Int,
+    ) raises -> List[Hit]:
+        """Return every place this ray meets one shape at one transform,
+        nearest first: three.js's `Mesh.raycast`, which every picker above
+        comes down to.
+
+        Args:
+            scene: The scene, for the node's layers.
+            assets: The geometry and materials the mesh names.
+            mesh: The shape: its node, geometry, material and worn targets.
+            world: Where it is, in world space.
+            kind: Which list the hits say `index` counts in.
+            index: The position in that list.
+            instance: Which instance or level, or -1 for a plain mesh.
+
+        Returns:
+            The hits, nearest first. None for a node on a layer this
+            raycaster does not test, or a shape whose bounds the ray
+            misses.
+
+        Raises:
+            Error: If the mesh names a node, a geometry or a material that
+                is not there, its geometry has no positions, or `world`
+                flattens a dimension, which leaves no inverse to carry the
+                ray through.
+        """
+        var hits = List[Hit]()
         if not scene.get(mesh.node).layers.test(self.layers):
             return hits^
         ref geometry = assets.geometries.get(mesh.geometry)
         var material = assets.materials.get(mesh.material)
-        var world = scene.world_matrix(mesh.node)
         # The whole mesh first, in world space: a miss here is the common
         # case and costs six multiplies. An empty sphere, of a geometry
         # with no vertices, is met nowhere.
@@ -361,30 +575,46 @@ struct Raycaster(ImplicitlyCopyable):
             normal.normalize()
             if mirrored:
                 normal = -normal
-            hits.append(Hit(distance, point, normal, index, mesh, triangle))
+            hits.append(
+                Hit(
+                    distance,
+                    point,
+                    normal,
+                    kind,
+                    index,
+                    instance,
+                    mesh,
+                    triangle,
+                )
+            )
         _sort_by_distance(hits)
         return hits^
 
     def intersect_scene(self, scene: Scene, assets: Assets) raises -> List[Hit]:
-        """Return every place this ray meets any mesh of the scene, nearest
-        first, three.js's `intersectObjects`.
+        """Return every place this ray meets any mesh, instanced mesh,
+        batched mesh or LOD of the scene, nearest first, three.js's
+        `intersectObjects`.
 
         Args:
             scene: The scene, updated.
-            assets: The geometry and materials its meshes name.
+            assets: The geometry and materials its objects name.
 
         Returns:
-            The hits, nearest first, across every mesh on a layer this
+            The hits, nearest first, across every object on a layer this
             raycaster tests.
 
         Raises:
-            Error: For anything `intersect_mesh` raises for.
+            Error: For anything the pickers above raise for.
         """
         var hits = List[Hit]()
         for index in range(len(scene.meshes)):
-            var found = self.intersect_mesh(scene, assets, index)
-            for position in range(len(found)):
-                hits.append(found[position])
+            hits.extend(self.intersect_mesh(scene, assets, index))
+        for index in range(len(scene.instanced_meshes)):
+            hits.extend(self.intersect_instanced_mesh(scene, assets, index))
+        for index in range(len(scene.batched_meshes)):
+            hits.extend(self.intersect_batched_mesh(scene, assets, index))
+        for index in range(len(scene.lods)):
+            hits.extend(self.intersect_lod(scene, assets, index))
         _sort_by_distance(hits)
         return hits^
 

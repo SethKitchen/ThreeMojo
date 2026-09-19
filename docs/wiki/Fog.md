@@ -48,7 +48,7 @@ A fragment is shaded first: the material color, the texture, the lights and the 
 
 The mix is a weighted sum: `surface * (1 - veil) + fog * veil`. A lerp, `surface + (fog - surface) * veil`, loses the fog color when the surface is far brighter, because light here has no top. A surface a million times brighter than the fog color is exactly the fog color when fully fogged.
 
-The mix is in linear light, before the image is encoded. three.js mixes after its output color-space conversion, on the encoded color. Halfway into the fog here is half the light of each color. See [Why color is linear](Why-color-is-linear).
+The mix is in linear light, before the tone curve and the encoding. three.js's WebGL renderer mixes after both, on the encoded color, and has an open issue about it. Its WebGPU renderer mixes before both, and that is the order kept here. Halfway into the fog here is half the light of each color. See [Why color is linear](Why-color-is-linear).
 
 Every material that shows light is fogged, lit or unlit. three.js's `Material.fog` flag is not ported. A `NORMALS` or `DEPTH` material is never fogged, because it shows data. The `SHADE_UV` debug view is never fogged either. It shows coordinates, not light. Pixels that no triangle covers keep the background color.
 

@@ -59,13 +59,17 @@ from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.rasterizer import (
     check_line_state,
+    DRAW_SEGMENTS,
     SHADE_LIT,
     SHADE_TEXTURE,
     SHADE_UV,
+    DRAW_TRIANGLES,
+    Draw,
     RasterVertex,
     ShadeMode,
     Triangle,
     check_alpha_map,
+    check_draws,
     check_output_kinds,
     check_triangle_state,
     interpolate_alpha,
@@ -179,6 +183,9 @@ comptime STATE_MATCAP = 6
 # How many integers a segment's state takes: its blend policy, and
 # nothing else. A line is unlit and untextured; see `line_state`.
 comptime STATE_PER_LINE = 1
+# How a `Draw` crosses to the device: its kind, its first primitive and its
+# count, as three integers.
+comptime INTS_PER_DRAW = 3
 comptime STATE_PER_TRIANGLE = STATE_MATCAP + 1
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
@@ -201,7 +208,9 @@ comptime LIGHTS_EYE = 0
 comptime LIGHTS_TOWARD = 3
 comptime LIGHTS_UP = 6
 comptime LIGHTS_AMBIENT = 9
-comptime LIGHTS_FIRST = 12
+# What every sum of arriving light is multiplied by: `Lighting.scale`.
+comptime LIGHTS_SCALE = 12
+comptime LIGHTS_FIRST = 13
 
 # Further than any NDC depth, so the first covering triangle always wins. The
 # host framebuffer uses an actual infinity; a literal keeps the kernel free of
@@ -338,7 +347,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
 
     Three floats of camera position, three of the one direction toward it
     under a parallel projection, three of the camera's own up axis, then
-    three of ambient, then six per
+    three of ambient, one of `Lighting.scale`, then six per
     directional light -- a unit
     direction and the light it carries -- then eight per point light: where
     it is, the light it carries, its decay and its cutoff. Then nine per
@@ -376,6 +385,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     flat.append(lighting.ambient.r)
     flat.append(lighting.ambient.g)
     flat.append(lighting.ambient.b)
+    flat.append(lighting.scale)
     for index in range(lighting.count()):
         ref direction = lighting.directions[index]
         flat.append(direction.x)
@@ -572,7 +582,8 @@ def _arriving(
         red += lights[unsafe_offset=at + 6] * reach
         green += lights[unsafe_offset=at + 7] * reach
         blue += lights[unsafe_offset=at + 8] * reach
-    return Vector3(red, green, blue)
+    var scale = lights[unsafe_offset=LIGHTS_SCALE]
+    return Vector3(red * scale, green * scale, blue * scale)
 
 
 def _toon_tone(
@@ -733,7 +744,8 @@ def _toon_arriving(
         red += lights[unsafe_offset=at + 6] * reach
         green += lights[unsafe_offset=at + 7] * reach
         blue += lights[unsafe_offset=at + 8] * reach
-    return Vector3(red, green, blue)
+    var scale = lights[unsafe_offset=LIGHTS_SCALE]
+    return Vector3(red * scale, green * scale, blue * scale)
 
 
 def _highlight(
@@ -855,7 +867,8 @@ def _highlight(
         red += lights[unsafe_offset=at + 6] * reach * sent.x
         green += lights[unsafe_offset=at + 7] * reach * sent.y
         blue += lights[unsafe_offset=at + 8] * reach * sent.z
-    return Vector3(red, green, blue)
+    var scale = lights[unsafe_offset=LIGHTS_SCALE]
+    return Vector3(red * scale, green * scale, blue * scale)
 
 
 def _extent(extent: Int, level: Int) -> Int:
@@ -1265,7 +1278,6 @@ def rasterize_kernel(
     depth: MutPointer[Float32, MutAnyOrigin],
     corners: MutPointer[Float32, MutAnyOrigin],
     maps: MutPointer[Int32, MutAnyOrigin],
-    triangles: Int32,
     width: Int32,
     height: Int32,
     background: UInt32,
@@ -1284,13 +1296,16 @@ def rasterize_kernel(
     exposure: Float32,
     segments: MutPointer[Float32, MutAnyOrigin],
     segment_maps: MutPointer[Int32, MutAnyOrigin],
-    segment_count: Int32,
+    draws: MutPointer[Int32, MutAnyOrigin],
+    draw_count: Int32,
 ):
     """Color one pixel from the nearest primitive that covers it.
 
-    Triangles first, then lines, which is the order the host draws them in
-    and the order that matters: a line over a surface has to test its
-    depth against the surface. Both passes composite into the same running
+    The draws in the frame's order, each a run of triangles or of
+    segments, which is the order the host draws them in and the order
+    that matters: a blended line has to mix over the surface behind it and
+    under the one in front, and a line over an opaque surface has to test
+    its depth against it. Both kinds composite into the same running
     color, in linear light, and the pixel is resolved once at the end --
     exactly as `Renderer.render` fills one target and resolves it once.
     """
@@ -1336,681 +1351,703 @@ def rasterize_kernel(
         SHADE_UV.value
     )
 
-    for index in range(Int(triangles)):
-        var base = index * FLOATS_PER_TRIANGLE
-        # Derived rather than written out: every offset past the first corner
-        # used to be a literal, and changing the stride meant changing all of
-        # them. Twice it meant missing one, which reads a neighboring field
-        # as a coordinate and is invisible until a parity test disagrees.
-        var b_base = base + FLOATS_PER_VERTEX
-        var c_base = base + 2 * FLOATS_PER_VERTEX
-        var ax = corners[unsafe_offset=base + LANE_X]
-        var ay = corners[unsafe_offset=base + LANE_Y]
-        var az = corners[unsafe_offset=base + LANE_Z]
-        var aw = corners[unsafe_offset=base + LANE_INV_W]
-        var bx = corners[unsafe_offset=b_base + LANE_X]
-        var by = corners[unsafe_offset=b_base + LANE_Y]
-        var bz = corners[unsafe_offset=b_base + LANE_Z]
-        var bw = corners[unsafe_offset=b_base + LANE_INV_W]
-        var cx = corners[unsafe_offset=c_base + LANE_X]
-        var cy = corners[unsafe_offset=c_base + LANE_Y]
-        var cz = corners[unsafe_offset=c_base + LANE_Z]
-        var cw = corners[unsafe_offset=c_base + LANE_INV_W]
-
-        # Exactly `_Coverage` on the host: snap, normalize the winding, then
-        # test with the top-left bias. Only the snapped coordinates are
-        # swapped; the attributes stay in the caller's order and the weights
-        # are mapped back at the end.
-        var sax = snap(ax)
-        var say = snap(ay)
-        var sbx = snap(bx)
-        var sby = snap(by)
-        var scx = snap(cx)
-        var scy = snap(cy)
-
-        var area = edge_at(sax, say, sbx, sby, scx, scy)
-        var swapped = area < 0
-        if swapped:
-            var tx = sbx
-            var ty = sby
-            sbx = scx
-            sby = scy
-            scx = tx
-            scy = ty
-            area = -area
-        if area == 0:
-            continue
-
-        var e_ab = edge_at(sax, say, sbx, sby, px, py)
-        var e_bc = edge_at(sbx, sby, scx, scy, px, py)
-        var e_ca = edge_at(scx, scy, sax, say, px, py)
-        if (
-            e_ab + bias(sax, say, sbx, sby) < 0
-            or e_bc + bias(sbx, sby, scx, scy) < 0
-            or e_ca + bias(scx, scy, sax, say) < 0
-        ):
-            continue
-
-        # The edge opposite a corner is that corner's weight.
-        # One reciprocal per triangle, three multiplies per pixel, exactly
-        # as `_Coverage.inv_area` on the host.
-        var span_inv = Float32(1) / Float32(area)
-        var first = Float32(e_bc) * span_inv
-        var second = Float32(e_ca) * span_inv
-        var third = Float32(e_ab) * span_inv
-        var wa = first
-        var wb = second
-        var wc = third
-        if swapped:
-            wb = third
-            wc = second
-
-        # Depth interpolates affinely; see `RasterVertex.z`.
-        var z = wa * az + wb * bz + wc * cz
-        if z >= nearest:
-            continue
-
-        # Color does not: weight by inv_w and divide by the interpolated
-        # inv_w, matching `rasterize_shaded`.
-        var inv_w = wa * aw + wb * bw + wc * cw
-        var share_a = wa
-        var share_b = wb
-        var share_c = wc
-        if inv_w != 0:
-            var rcp = Float32(1) / inv_w
-            share_a = wa * aw * rcp
-            share_b = wb * bw * rcp
-            share_c = wc * cw * rcp
-
-        # What kind of surface this is, per triangle from the state table:
-        # lit, unlit, or showing its normal or its depth as data.
-        # The alpha a fragment must reach to be drawn, from the first
-        # corner's lane, and whether there is a test at all. The uv debug
-        # view cuts nothing out, as it samples no texture.
-        var threshold = corners[unsafe_offset=base + LANE_ALPHA_TEST]
-        var tested = threshold > 0 and mode != Int32(SHADE_UV.value)
-        var kind = maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_KIND]
-        var lit = (
-            kind == Int32(LAMBERT.value)
-            or kind == Int32(PHONG.value)
-            or kind == Int32(TOON.value)
-        )
-        # Unlit, but looked up by which way the surface is turned, so it
-        # needs the normal and the world position that a lit surface needs.
-        var looked_up = kind == Int32(MATCAP.value)
-        var shows_normal = kind == Int32(NORMALS.value)
-        var shows_data = shows_normal or kind == Int32(DEPTH.value)
-        # The interpolated normal, made a unit vector again here. That
-        # renormalization is the difference between per-fragment and
-        # per-vertex shading: the average of two unit vectors is shorter than
-        # either, so leaving it alone dims the middle of every triangle.
-        # Only the two lit modes need it, and only a surface that is lit by
-        # it or shows it: SHADE_UV writes coordinates rather than light,
-        # and a BASIC material shows its own color.
-        var arriving = Vector3(1, 1, 1)
-        var highlight = Vector3(0, 0, 0)
-        var nx = Float32(0)
-        var ny = Float32(0)
-        var nz = Float32(1)
-        if mode != Int32(SHADE_UV.value) and (lit or shows_normal or looked_up):
-            nx = (
-                corners[unsafe_offset=base + LANE_NX] * share_a
-                + corners[unsafe_offset=b_base + LANE_NX] * share_b
-                + corners[unsafe_offset=c_base + LANE_NX] * share_c
-            )
-            ny = (
-                corners[unsafe_offset=base + LANE_NY] * share_a
-                + corners[unsafe_offset=b_base + LANE_NY] * share_b
-                + corners[unsafe_offset=c_base + LANE_NY] * share_c
-            )
-            nz = (
-                corners[unsafe_offset=base + LANE_NZ] * share_a
-                + corners[unsafe_offset=b_base + LANE_NZ] * share_b
-                + corners[unsafe_offset=c_base + LANE_NZ] * share_c
-            )
-            var unit = sqrt(nx * nx + ny * ny + nz * nz)
-            if unit != 0:
-                nx /= unit
-                ny /= unit
-                nz /= unit
-        if mode != Int32(SHADE_UV.value) and (lit or looked_up):
-            # Where this fragment is in the world, for the lights that have
-            # a position.
-            var wx = (
-                corners[unsafe_offset=base + LANE_WX] * share_a
-                + corners[unsafe_offset=b_base + LANE_WX] * share_b
-                + corners[unsafe_offset=c_base + LANE_WX] * share_c
-            )
-            var wy = (
-                corners[unsafe_offset=base + LANE_WY] * share_a
-                + corners[unsafe_offset=b_base + LANE_WY] * share_b
-                + corners[unsafe_offset=c_base + LANE_WY] * share_c
-            )
-            var wz = (
-                corners[unsafe_offset=base + LANE_WZ] * share_a
-                + corners[unsafe_offset=b_base + LANE_WZ] * share_b
-                + corners[unsafe_offset=c_base + LANE_WZ] * share_c
-            )
-            if looked_up:
-                # Which way the surface is turned in the camera's frame,
-                # and the image read there: the host's own two functions.
-                # Measured from where the camera stands under either
-                # projection, because three.js reads `vViewPosition` and
-                # does not special-case a parallel one.
-                var place = matcap_uv(
-                    toward_eye_at(
-                        Vector3(
-                            lights[unsafe_offset=LIGHTS_EYE],
-                            lights[unsafe_offset=LIGHTS_EYE + 1],
-                            lights[unsafe_offset=LIGHTS_EYE + 2],
+    for draw in range(Int(draw_count)):
+        var kind = draws[unsafe_offset=draw * INTS_PER_DRAW]
+        var first = Int(draws[unsafe_offset=draw * INTS_PER_DRAW + 1])
+        var past = first + Int(draws[unsafe_offset=draw * INTS_PER_DRAW + 2])
+        if kind != Int32(DRAW_TRIANGLES.value):
+            # A run of segments. One thread per pixel here too, so the
+            # question is "does this segment light me" rather than "which
+            # pixels does this segment light" -- and `render.linerule`
+            # answers both from one expression, which is why the staircase
+            # the host walks and the staircase the device tests are the
+            # same one.
+            for index in range(first, past):
+                var base = index * 2 * FLOATS_PER_VERTEX
+                var far_base = base + FLOATS_PER_VERTEX
+                var first = Vector2(
+                    segments[unsafe_offset=base + LANE_X],
+                    segments[unsafe_offset=base + LANE_Y],
+                )
+                var second = Vector2(
+                    segments[unsafe_offset=far_base + LANE_X],
+                    segments[unsafe_offset=far_base + LANE_Y],
+                )
+                if not covers(first, second, x, y):
+                    continue
+                var along = y
+                if major_is_x(first, second):
+                    along = x
+                var share = share_at(first, second, along)
+                if share < 0:
+                    share = 0
+                if share > 1:
+                    share = 1
+                var az = segments[unsafe_offset=base + LANE_Z]
+                var bz = segments[unsafe_offset=far_base + LANE_Z]
+                var z = az + (bz - az) * share
+                if z >= nearest:
+                    continue
+                var near = segments[unsafe_offset=base + LANE_INV_W] * (
+                    1 - share
+                )
+                var away = segments[unsafe_offset=far_base + LANE_INV_W] * share
+                var total = near + away
+                if total == 0:
+                    continue
+                var toward = away / total
+                # Straight, through the function the host calls, so the one
+                # convention for a line's color lives in one place.
+                var drawn = mix_straight(
+                    FloatColor(
+                        segments[unsafe_offset=base + LANE_R],
+                        segments[unsafe_offset=base + LANE_G],
+                        segments[unsafe_offset=base + LANE_B],
+                        segments[unsafe_offset=base + LANE_A],
+                    ),
+                    FloatColor(
+                        segments[unsafe_offset=far_base + LANE_R],
+                        segments[unsafe_offset=far_base + LANE_G],
+                        segments[unsafe_offset=far_base + LANE_B],
+                        segments[unsafe_offset=far_base + LANE_A],
+                    ),
+                    toward,
+                )
+                # The host's line pass reads no shading mode: a line has no surface
+                # coordinates, so there is no uv view of one, and it is veiled by
+                # the fog whatever the mode. See `rasterize_line`.
+                if fog_kind != Int32(NO_FOG.value):
+                    var ad = segments[unsafe_offset=base + LANE_DEPTH]
+                    var bd = segments[unsafe_offset=far_base + LANE_DEPTH]
+                    var seen = ad + (bd - ad) * toward
+                    # By name, as the triangle pass reads it. Written out as
+                    # literal slots once, which took the color out of the near,
+                    # far and density lanes and the distances out of the color: a
+                    # white line in black fog came back yellow.
+                    drawn = fog_mix(
+                        drawn,
+                        FloatColor(
+                            fog[unsafe_offset=FOG_R],
+                            fog[unsafe_offset=FOG_G],
+                            fog[unsafe_offset=FOG_B],
+                            1,
                         ),
-                        PERSPECTIVE_VIEW,
-                        Vector3(wx, wy, wz),
-                    ),
-                    Vector3(
-                        lights[unsafe_offset=LIGHTS_UP],
-                        lights[unsafe_offset=LIGHTS_UP + 1],
-                        lights[unsafe_offset=LIGHTS_UP + 2],
-                    ),
-                    Vector3(nx, ny, nz),
-                )
-                var ball = maps[
-                    unsafe_offset=index * STATE_PER_TRIANGLE + STATE_MATCAP
-                ]
-                if ball >= 0:
-                    # The full-size level, never a mip, as the host reads
-                    # it: the coordinate comes from the normal rather than
-                    # from the surface.
-                    var looked = _sample_at(
-                        texels,
-                        ramp,
-                        _describe(table, Int(ball)),
-                        place.x,
-                        place.y,
-                        0,
+                        fog_factor(
+                            FogKind(Int(fog_kind)),
+                            seen,
+                            fog[unsafe_offset=FOG_NEAR],
+                            fog[unsafe_offset=FOG_FAR],
+                            fog[unsafe_offset=FOG_DENSITY],
+                        ),
                     )
-                    arriving = Vector3(looked.r, looked.g, looked.b)
+                var share_a = drawn.a
+                if share_a > 1:
+                    share_a = 1
+                if share_a < 0:
+                    share_a = 0
+                var mixes = segment_maps[
+                    unsafe_offset=index * STATE_PER_LINE
+                ] == Int32(BLEND.value)
+                if mixes and share_a == 0:
+                    continue
+                found = True
+                if not mixes:
+                    # Opaque, so written with an alpha of one, as on the host.
+                    share_a = 1
+                    mixed_r = drawn.r * share_a
+                    mixed_g = drawn.g * share_a
+                    mixed_b = drawn.b * share_a
+                    mixed_a = share_a
+                    nearest = z
+                    solid = True
+                    # A line is light, never data: it has no normal to show and no
+                    # depth material to show one. `check_line_state` refuses any
+                    # kind but an unlit one.
+                    data = False
                 else:
-                    var gray = matcap_fallback(place.y)
-                    arriving = Vector3(gray, gray, gray)
-            elif kind == Int32(TOON.value):
-                # Every cosine read off the ramp rather than faded, and
-                # never clamped at zero: see `_toon_arriving`. Where the
-                # ramp lives is looked up once here, not once per light.
-                var start = 0
-                var tones = 0
-                var ramp_slot = maps[
-                    unsafe_offset=index * STATE_PER_TRIANGLE
-                    + STATE_GRADIENT_MAP
-                ]
-                if ramp_slot >= 0:
-                    var shades = _describe(table, Int(ramp_slot))
-                    start = shades.start
-                    tones = shades.width
-                arriving = _toon_arriving(
-                    lights,
-                    Int(light_count),
-                    Int(point_count),
-                    Int(hemisphere_count),
-                    Int(spot_count),
-                    texels,
-                    start,
-                    tones,
-                    nx,
-                    ny,
-                    nz,
-                    wx,
-                    wy,
-                    wz,
-                )
-            else:
-                arriving = _arriving(
-                    lights,
-                    Int(light_count),
-                    Int(point_count),
-                    Int(hemisphere_count),
-                    Int(spot_count),
-                    nx,
-                    ny,
-                    nz,
-                    wx,
-                    wy,
-                    wz,
-                )
-            if kind == Int32(PHONG.value):
-                # Interpolated like the emissive, and summed over the
-                # lights that have a direction; see `_highlight`.
-                var sheen = Vector3(
-                    corners[unsafe_offset=base + LANE_SPECULAR_R] * share_a
-                    + corners[unsafe_offset=b_base + LANE_SPECULAR_R] * share_b
-                    + corners[unsafe_offset=c_base + LANE_SPECULAR_R] * share_c,
-                    corners[unsafe_offset=base + LANE_SPECULAR_G] * share_a
-                    + corners[unsafe_offset=b_base + LANE_SPECULAR_G] * share_b
-                    + corners[unsafe_offset=c_base + LANE_SPECULAR_G] * share_c,
-                    corners[unsafe_offset=base + LANE_SPECULAR_B] * share_a
-                    + corners[unsafe_offset=b_base + LANE_SPECULAR_B] * share_b
-                    + corners[unsafe_offset=c_base + LANE_SPECULAR_B] * share_c,
-                )
-                highlight = _highlight(
-                    lights,
-                    Int(light_count),
-                    Int(point_count),
-                    Int(hemisphere_count),
-                    Int(spot_count),
-                    nx,
-                    ny,
-                    nz,
-                    wx,
-                    wy,
-                    wz,
-                    sheen,
-                    corners[unsafe_offset=base + LANE_SHININESS],
-                )
+                    var keep = 1 - share_a
+                    mixed_r = drawn.r * share_a + mixed_r * keep
+                    mixed_g = drawn.g * share_a + mixed_g * keep
+                    mixed_b = drawn.b * share_a + mixed_b * keep
+                    mixed_a = share_a + mixed_a * keep
+                    data = False
 
-        # Texture coordinates, for the two modes that read them.
-        var u = Float32(0)
-        var v = Float32(0)
-        if mode != Int32(SHADE_LIT.value):
-            u = (
-                corners[unsafe_offset=base + LANE_U] * share_a
-                + corners[unsafe_offset=b_base + LANE_U] * share_b
-                + corners[unsafe_offset=c_base + LANE_U] * share_c
-            )
-            v = (
-                corners[unsafe_offset=base + LANE_V] * share_a
-                + corners[unsafe_offset=b_base + LANE_V] * share_b
-                + corners[unsafe_offset=c_base + LANE_V] * share_c
-            )
+            continue
+        for index in range(first, past):
+            var base = index * FLOATS_PER_TRIANGLE
+            # Derived rather than written out: every offset past the first corner
+            # used to be a literal, and changing the stride meant changing all of
+            # them. Twice it meant missing one, which reads a neighboring field
+            # as a coordinate and is invisible until a parity test disagrees.
+            var b_base = base + FLOATS_PER_VERTEX
+            var c_base = base + 2 * FLOATS_PER_VERTEX
+            var ax = corners[unsafe_offset=base + LANE_X]
+            var ay = corners[unsafe_offset=base + LANE_Y]
+            var az = corners[unsafe_offset=base + LANE_Z]
+            var aw = corners[unsafe_offset=base + LANE_INV_W]
+            var bx = corners[unsafe_offset=b_base + LANE_X]
+            var by = corners[unsafe_offset=b_base + LANE_Y]
+            var bz = corners[unsafe_offset=b_base + LANE_Z]
+            var bw = corners[unsafe_offset=b_base + LANE_INV_W]
+            var cx = corners[unsafe_offset=c_base + LANE_X]
+            var cy = corners[unsafe_offset=c_base + LANE_Y]
+            var cz = corners[unsafe_offset=c_base + LANE_Z]
+            var cw = corners[unsafe_offset=c_base + LANE_INV_W]
 
-        if mode == Int32(SHADE_UV.value):
-            # Coordinates, not light, through the same quantize and decode
-            # the host's `data_color` uses, so the two backends hold the
-            # same light and one resolve serves every pixel. Storing the
-            # raw coordinate and quantizing the whole frame instead worked
-            # only while every pixel in the frame was a coordinate. A line
-            # in the uv view holds real light, and the frame-wide quantize
-            # showed that light undecoded.
-            var shown = _decoded(ramp, u, v, 0)
-            red = shown.r
-            green = shown.g
-            blue = shown.b
-            alpha = 1
-        else:
-            red = (
-                corners[unsafe_offset=base + LANE_R] * share_a
-                + corners[unsafe_offset=b_base + LANE_R] * share_b
-                + corners[unsafe_offset=c_base + LANE_R] * share_c
-            )
-            green = (
-                corners[unsafe_offset=base + LANE_G] * share_a
-                + corners[unsafe_offset=b_base + LANE_G] * share_b
-                + corners[unsafe_offset=c_base + LANE_G] * share_c
-            )
-            blue = (
-                corners[unsafe_offset=base + LANE_B] * share_a
-                + corners[unsafe_offset=b_base + LANE_B] * share_b
-                + corners[unsafe_offset=c_base + LANE_B] * share_c
-            )
-            # The difference form, so a constant alpha reaches the alpha
-            # test exactly: the host's own function.
-            alpha = interpolate_alpha(
-                corners[unsafe_offset=base + LANE_A],
-                corners[unsafe_offset=b_base + LANE_A],
-                corners[unsafe_offset=c_base + LANE_A],
-                share_b,
-                share_c,
-            )
-            red *= arriving.x
-            green *= arriving.y
-            blue *= arriving.z
-            # Light the surface gives off, interpolated like its color and
-            # added after the lights, exactly as `rasterize_shaded` adds it.
-            var glow_r = (
-                corners[unsafe_offset=base + LANE_ER] * share_a
-                + corners[unsafe_offset=b_base + LANE_ER] * share_b
-                + corners[unsafe_offset=c_base + LANE_ER] * share_c
-            )
-            var glow_g = (
-                corners[unsafe_offset=base + LANE_EG] * share_a
-                + corners[unsafe_offset=b_base + LANE_EG] * share_b
-                + corners[unsafe_offset=c_base + LANE_EG] * share_c
-            )
-            var glow_b = (
-                corners[unsafe_offset=base + LANE_EB] * share_a
-                + corners[unsafe_offset=b_base + LANE_EB] * share_b
-                + corners[unsafe_offset=c_base + LANE_EB] * share_c
-            )
-            if mode == Int32(SHADE_TEXTURE.value):
-                # Which image, from the triangle; -1 is no texture, which
-                # samples as white and so leaves the lighting alone.
-                var slot = Int(
-                    maps[
-                        unsafe_offset=index * STATE_PER_TRIANGLE + STATE_TEXTURE
-                    ]
-                )
-                if slot != NO_TEXTURE.value:
-                    var sampled = _sample_slot(
-                        texels,
-                        ramp,
-                        table,
-                        slot,
-                        corners,
-                        base,
-                        sax,
-                        say,
-                        sbx,
-                        sby,
-                        scx,
-                        scy,
-                        span_inv,
-                        swapped,
-                        px,
-                        py,
-                        u,
-                        v,
-                    )
-                    red *= sampled.r
-                    green *= sampled.g
-                    blue *= sampled.b
-                    alpha *= sampled.a
-                # The emissive map multiplies the glow the same way, alpha
-                # aside: light given off has no coverage.
-                var glow_slot = Int(
-                    maps[
-                        unsafe_offset=index * STATE_PER_TRIANGLE
-                        + STATE_EMISSIVE_MAP
-                    ]
-                )
-                # The alpha map's green channel thins the surface,
-                # three.js's `alphamap_fragment`, exactly as the host
-                # multiplies it.
-                var mask_slot = Int(
-                    maps[
-                        unsafe_offset=index * STATE_PER_TRIANGLE
-                        + STATE_ALPHA_MAP
-                    ]
-                )
-                if mask_slot != NO_TEXTURE.value:
-                    var thinning = _sample_slot(
-                        texels,
-                        ramp,
-                        table,
-                        mask_slot,
-                        corners,
-                        base,
-                        sax,
-                        say,
-                        sbx,
-                        sby,
-                        scx,
-                        scy,
-                        span_inv,
-                        swapped,
-                        px,
-                        py,
-                        u,
-                        v,
-                    )
-                    alpha *= thinning.g
-                if glow_slot != NO_TEXTURE.value:
-                    var glowing = _sample_slot(
-                        texels,
-                        ramp,
-                        table,
-                        glow_slot,
-                        corners,
-                        base,
-                        sax,
-                        say,
-                        sbx,
-                        sby,
-                        scx,
-                        scy,
-                        span_inv,
-                        swapped,
-                        px,
-                        py,
-                        u,
-                        v,
-                    )
-                    glow_r *= glowing.r
-                    glow_g *= glowing.g
-                    glow_b *= glowing.b
-            # Thrown away for being too transparent, three.js's
-            # `alphatest_fragment`. Leaving `nearest` alone is the late
-            # depth write the host makes with `claim_depth`: the hole
-            # shows whatever is behind it.
-            if tested and alpha < threshold:
+            # Exactly `_Coverage` on the host: snap, normalize the winding, then
+            # test with the top-left bias. Only the snapped coordinates are
+            # swapped; the attributes stay in the caller's order and the weights
+            # are mapped back at the end.
+            var sax = snap(ax)
+            var say = snap(ay)
+            var sbx = snap(bx)
+            var sby = snap(by)
+            var scx = snap(cx)
+            var scy = snap(cy)
+
+            var area = edge_at(sax, say, sbx, sby, scx, scy)
+            var swapped = area < 0
+            if swapped:
+                var tx = sbx
+                var ty = sby
+                sbx = scx
+                sby = scy
+                scx = tx
+                scy = ty
+                area = -area
+            if area == 0:
                 continue
-            if shows_data:
-                # Data rather than light, exactly as `rasterize_shaded`
-                # writes it: the packed normal, or the depth as a gray, as
-                # bytes decoded through the ramp. The color and the texture
-                # keep their say over alpha alone, so a cut-out map cuts a
-                # depth out. Neither the glow nor the fog reaches these.
-                var shown: FloatColor
-                if shows_normal:
-                    var packed = packed_normal(Vector3(nx, ny, nz))
-                    shown = _decoded(ramp, packed.x, packed.y, packed.z)
+
+            var e_ab = edge_at(sax, say, sbx, sby, px, py)
+            var e_bc = edge_at(sbx, sby, scx, scy, px, py)
+            var e_ca = edge_at(scx, scy, sax, say, px, py)
+            if (
+                e_ab + bias(sax, say, sbx, sby) < 0
+                or e_bc + bias(sbx, sby, scx, scy) < 0
+                or e_ca + bias(scx, scy, sax, say) < 0
+            ):
+                continue
+
+            # The edge opposite a corner is that corner's weight.
+            # One reciprocal per triangle, three multiplies per pixel, exactly
+            # as `_Coverage.inv_area` on the host.
+            var span_inv = Float32(1) / Float32(area)
+            var first = Float32(e_bc) * span_inv
+            var second = Float32(e_ca) * span_inv
+            var third = Float32(e_ab) * span_inv
+            var wa = first
+            var wb = second
+            var wc = third
+            if swapped:
+                wb = third
+                wc = second
+
+            # Depth interpolates affinely; see `RasterVertex.z`.
+            var z = wa * az + wb * bz + wc * cz
+            if z >= nearest:
+                continue
+
+            # Color does not: weight by inv_w and divide by the interpolated
+            # inv_w, matching `rasterize_shaded`.
+            var inv_w = wa * aw + wb * bw + wc * cw
+            var share_a = wa
+            var share_b = wb
+            var share_c = wc
+            if inv_w != 0:
+                var rcp = Float32(1) / inv_w
+                share_a = wa * aw * rcp
+                share_b = wb * bw * rcp
+                share_c = wc * cw * rcp
+
+            # What kind of surface this is, per triangle from the state table:
+            # lit, unlit, or showing its normal or its depth as data.
+            # The alpha a fragment must reach to be drawn, from the first
+            # corner's lane, and whether there is a test at all. The uv debug
+            # view cuts nothing out, as it samples no texture.
+            var threshold = corners[unsafe_offset=base + LANE_ALPHA_TEST]
+            var tested = threshold > 0 and mode != Int32(SHADE_UV.value)
+            var kind = maps[
+                unsafe_offset=index * STATE_PER_TRIANGLE + STATE_KIND
+            ]
+            var lit = (
+                kind == Int32(LAMBERT.value)
+                or kind == Int32(PHONG.value)
+                or kind == Int32(TOON.value)
+            )
+            # Unlit, but looked up by which way the surface is turned, so it
+            # needs the normal and the world position that a lit surface needs.
+            var looked_up = kind == Int32(MATCAP.value)
+            var shows_normal = kind == Int32(NORMALS.value)
+            var shows_data = shows_normal or kind == Int32(DEPTH.value)
+            # The interpolated normal, made a unit vector again here. That
+            # renormalization is the difference between per-fragment and
+            # per-vertex shading: the average of two unit vectors is shorter than
+            # either, so leaving it alone dims the middle of every triangle.
+            # Only the two lit modes need it, and only a surface that is lit by
+            # it or shows it: SHADE_UV writes coordinates rather than light,
+            # and a BASIC material shows its own color.
+            var arriving = Vector3(1, 1, 1)
+            var highlight = Vector3(0, 0, 0)
+            var nx = Float32(0)
+            var ny = Float32(0)
+            var nz = Float32(1)
+            if mode != Int32(SHADE_UV.value) and (
+                lit or shows_normal or looked_up
+            ):
+                nx = (
+                    corners[unsafe_offset=base + LANE_NX] * share_a
+                    + corners[unsafe_offset=b_base + LANE_NX] * share_b
+                    + corners[unsafe_offset=c_base + LANE_NX] * share_c
+                )
+                ny = (
+                    corners[unsafe_offset=base + LANE_NY] * share_a
+                    + corners[unsafe_offset=b_base + LANE_NY] * share_b
+                    + corners[unsafe_offset=c_base + LANE_NY] * share_c
+                )
+                nz = (
+                    corners[unsafe_offset=base + LANE_NZ] * share_a
+                    + corners[unsafe_offset=b_base + LANE_NZ] * share_b
+                    + corners[unsafe_offset=c_base + LANE_NZ] * share_c
+                )
+                var unit = sqrt(nx * nx + ny * ny + nz * nz)
+                if unit != 0:
+                    nx /= unit
+                    ny /= unit
+                    nz /= unit
+            if mode != Int32(SHADE_UV.value) and (lit or looked_up):
+                # Where this fragment is in the world, for the lights that have
+                # a position.
+                var wx = (
+                    corners[unsafe_offset=base + LANE_WX] * share_a
+                    + corners[unsafe_offset=b_base + LANE_WX] * share_b
+                    + corners[unsafe_offset=c_base + LANE_WX] * share_c
+                )
+                var wy = (
+                    corners[unsafe_offset=base + LANE_WY] * share_a
+                    + corners[unsafe_offset=b_base + LANE_WY] * share_b
+                    + corners[unsafe_offset=c_base + LANE_WY] * share_c
+                )
+                var wz = (
+                    corners[unsafe_offset=base + LANE_WZ] * share_a
+                    + corners[unsafe_offset=b_base + LANE_WZ] * share_b
+                    + corners[unsafe_offset=c_base + LANE_WZ] * share_c
+                )
+                if looked_up:
+                    # Which way the surface is turned in the camera's frame,
+                    # and the image read there: the host's own two functions.
+                    # Measured from where the camera stands under either
+                    # projection, because three.js reads `vViewPosition` and
+                    # does not special-case a parallel one.
+                    var place = matcap_uv(
+                        toward_eye_at(
+                            Vector3(
+                                lights[unsafe_offset=LIGHTS_EYE],
+                                lights[unsafe_offset=LIGHTS_EYE + 1],
+                                lights[unsafe_offset=LIGHTS_EYE + 2],
+                            ),
+                            PERSPECTIVE_VIEW,
+                            Vector3(wx, wy, wz),
+                        ),
+                        Vector3(
+                            lights[unsafe_offset=LIGHTS_UP],
+                            lights[unsafe_offset=LIGHTS_UP + 1],
+                            lights[unsafe_offset=LIGHTS_UP + 2],
+                        ),
+                        Vector3(nx, ny, nz),
+                    )
+                    var ball = maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE + STATE_MATCAP
+                    ]
+                    if ball >= 0:
+                        # The full-size level, never a mip, as the host reads
+                        # it: the coordinate comes from the normal rather than
+                        # from the surface.
+                        var looked = _sample_at(
+                            texels,
+                            ramp,
+                            _describe(table, Int(ball)),
+                            place.x,
+                            place.y,
+                            0,
+                        )
+                        arriving = Vector3(looked.r, looked.g, looked.b)
+                    else:
+                        var gray = matcap_fallback(place.y)
+                        arriving = Vector3(gray, gray, gray)
+                elif kind == Int32(TOON.value):
+                    # Every cosine read off the ramp rather than faded, and
+                    # never clamped at zero: see `_toon_arriving`. Where the
+                    # ramp lives is looked up once here, not once per light.
+                    var start = 0
+                    var tones = 0
+                    var ramp_slot = maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE
+                        + STATE_GRADIENT_MAP
+                    ]
+                    if ramp_slot >= 0:
+                        var shades = _describe(table, Int(ramp_slot))
+                        start = shades.start
+                        tones = shades.width
+                    arriving = _toon_arriving(
+                        lights,
+                        Int(light_count),
+                        Int(point_count),
+                        Int(hemisphere_count),
+                        Int(spot_count),
+                        texels,
+                        start,
+                        tones,
+                        nx,
+                        ny,
+                        nz,
+                        wx,
+                        wy,
+                        wz,
+                    )
                 else:
-                    var seen = packed_depth(z)
-                    shown = _decoded(ramp, seen, seen, seen)
+                    arriving = _arriving(
+                        lights,
+                        Int(light_count),
+                        Int(point_count),
+                        Int(hemisphere_count),
+                        Int(spot_count),
+                        nx,
+                        ny,
+                        nz,
+                        wx,
+                        wy,
+                        wz,
+                    )
+                if kind == Int32(PHONG.value):
+                    # Interpolated like the emissive, and summed over the
+                    # lights that have a direction; see `_highlight`.
+                    var sheen = Vector3(
+                        corners[unsafe_offset=base + LANE_SPECULAR_R] * share_a
+                        + corners[unsafe_offset=b_base + LANE_SPECULAR_R]
+                        * share_b
+                        + corners[unsafe_offset=c_base + LANE_SPECULAR_R]
+                        * share_c,
+                        corners[unsafe_offset=base + LANE_SPECULAR_G] * share_a
+                        + corners[unsafe_offset=b_base + LANE_SPECULAR_G]
+                        * share_b
+                        + corners[unsafe_offset=c_base + LANE_SPECULAR_G]
+                        * share_c,
+                        corners[unsafe_offset=base + LANE_SPECULAR_B] * share_a
+                        + corners[unsafe_offset=b_base + LANE_SPECULAR_B]
+                        * share_b
+                        + corners[unsafe_offset=c_base + LANE_SPECULAR_B]
+                        * share_c,
+                    )
+                    highlight = _highlight(
+                        lights,
+                        Int(light_count),
+                        Int(point_count),
+                        Int(hemisphere_count),
+                        Int(spot_count),
+                        nx,
+                        ny,
+                        nz,
+                        wx,
+                        wy,
+                        wz,
+                        sheen,
+                        corners[unsafe_offset=base + LANE_SHININESS],
+                    )
+
+            # Texture coordinates, for the two modes that read them.
+            var u = Float32(0)
+            var v = Float32(0)
+            if mode != Int32(SHADE_LIT.value):
+                u = (
+                    corners[unsafe_offset=base + LANE_U] * share_a
+                    + corners[unsafe_offset=b_base + LANE_U] * share_b
+                    + corners[unsafe_offset=c_base + LANE_U] * share_c
+                )
+                v = (
+                    corners[unsafe_offset=base + LANE_V] * share_a
+                    + corners[unsafe_offset=b_base + LANE_V] * share_b
+                    + corners[unsafe_offset=c_base + LANE_V] * share_c
+                )
+
+            if mode == Int32(SHADE_UV.value):
+                # Coordinates, not light, through the same quantize and decode
+                # the host's `data_color` uses, so the two backends hold the
+                # same light and one resolve serves every pixel. Storing the
+                # raw coordinate and quantizing the whole frame instead worked
+                # only while every pixel in the frame was a coordinate. A line
+                # in the uv view holds real light, and the frame-wide quantize
+                # showed that light undecoded.
+                var shown = _decoded(ramp, u, v, 0)
                 red = shown.r
                 green = shown.g
                 blue = shown.b
+                alpha = 1
             else:
-                # The highlight and then the glow, exactly as
-                # `rasterize_shaded` sums them.
-                red += highlight.x + glow_r
-                green += highlight.y + glow_g
-                blue += highlight.z + glow_b
-            # Veiled by the fog last, in linear light, from the same depth
-            # lane and with the same function as `rasterize_shaded`. Alpha
-            # is coverage and is left alone.
-            if fog_on and not shows_data:
-                var depth = (
-                    corners[unsafe_offset=base + LANE_DEPTH] * share_a
-                    + corners[unsafe_offset=b_base + LANE_DEPTH] * share_b
-                    + corners[unsafe_offset=c_base + LANE_DEPTH] * share_c
+                red = (
+                    corners[unsafe_offset=base + LANE_R] * share_a
+                    + corners[unsafe_offset=b_base + LANE_R] * share_b
+                    + corners[unsafe_offset=c_base + LANE_R] * share_c
                 )
-                var veiled = fog_mix(
-                    FloatColor(red, green, blue, alpha),
-                    FloatColor(
-                        fog[unsafe_offset=FOG_R],
-                        fog[unsafe_offset=FOG_G],
-                        fog[unsafe_offset=FOG_B],
-                        1.0,
-                    ),
-                    fog_factor(
-                        FogKind(Int(fog_kind)),
-                        depth,
-                        fog[unsafe_offset=FOG_NEAR],
-                        fog[unsafe_offset=FOG_FAR],
-                        fog[unsafe_offset=FOG_DENSITY],
-                    ),
+                green = (
+                    corners[unsafe_offset=base + LANE_G] * share_a
+                    + corners[unsafe_offset=b_base + LANE_G] * share_b
+                    + corners[unsafe_offset=c_base + LANE_G] * share_c
                 )
-                red = veiled.r
-                green = veiled.g
-                blue = veiled.b
+                blue = (
+                    corners[unsafe_offset=base + LANE_B] * share_a
+                    + corners[unsafe_offset=b_base + LANE_B] * share_b
+                    + corners[unsafe_offset=c_base + LANE_B] * share_c
+                )
+                # The difference form, so a constant alpha reaches the alpha
+                # test exactly: the host's own function.
+                alpha = interpolate_alpha(
+                    corners[unsafe_offset=base + LANE_A],
+                    corners[unsafe_offset=b_base + LANE_A],
+                    corners[unsafe_offset=c_base + LANE_A],
+                    share_b,
+                    share_c,
+                )
+                red *= arriving.x
+                green *= arriving.y
+                blue *= arriving.z
+                # Light the surface gives off, interpolated like its color and
+                # added after the lights, exactly as `rasterize_shaded` adds it.
+                var glow_r = (
+                    corners[unsafe_offset=base + LANE_ER] * share_a
+                    + corners[unsafe_offset=b_base + LANE_ER] * share_b
+                    + corners[unsafe_offset=c_base + LANE_ER] * share_c
+                )
+                var glow_g = (
+                    corners[unsafe_offset=base + LANE_EG] * share_a
+                    + corners[unsafe_offset=b_base + LANE_EG] * share_b
+                    + corners[unsafe_offset=c_base + LANE_EG] * share_c
+                )
+                var glow_b = (
+                    corners[unsafe_offset=base + LANE_EB] * share_a
+                    + corners[unsafe_offset=b_base + LANE_EB] * share_b
+                    + corners[unsafe_offset=c_base + LANE_EB] * share_c
+                )
+                if mode == Int32(SHADE_TEXTURE.value):
+                    # Which image, from the triangle; -1 is no texture, which
+                    # samples as white and so leaves the lighting alone.
+                    var slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_TEXTURE
+                        ]
+                    )
+                    if slot != NO_TEXTURE.value:
+                        var sampled = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        )
+                        red *= sampled.r
+                        green *= sampled.g
+                        blue *= sampled.b
+                        alpha *= sampled.a
+                    # The emissive map multiplies the glow the same way, alpha
+                    # aside: light given off has no coverage.
+                    var glow_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_EMISSIVE_MAP
+                        ]
+                    )
+                    # The alpha map's green channel thins the surface,
+                    # three.js's `alphamap_fragment`, exactly as the host
+                    # multiplies it.
+                    var mask_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_ALPHA_MAP
+                        ]
+                    )
+                    if mask_slot != NO_TEXTURE.value:
+                        var thinning = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            mask_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        )
+                        alpha *= thinning.g
+                    if glow_slot != NO_TEXTURE.value:
+                        var glowing = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            glow_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        )
+                        glow_r *= glowing.r
+                        glow_g *= glowing.g
+                        glow_b *= glowing.b
+                # Thrown away for being too transparent, three.js's
+                # `alphatest_fragment`. Leaving `nearest` alone is the late
+                # depth write the host makes with `claim_depth`: the hole
+                # shows whatever is behind it.
+                if tested and alpha < threshold:
+                    continue
+                if shows_data:
+                    # Data rather than light, exactly as `rasterize_shaded`
+                    # writes it: the packed normal, or the depth as a gray, as
+                    # bytes decoded through the ramp. The color and the texture
+                    # keep their say over alpha alone, so a cut-out map cuts a
+                    # depth out. Neither the glow nor the fog reaches these.
+                    var shown: FloatColor
+                    if shows_normal:
+                        var packed = packed_normal(Vector3(nx, ny, nz))
+                        shown = _decoded(ramp, packed.x, packed.y, packed.z)
+                    else:
+                        var seen = packed_depth(z)
+                        shown = _decoded(ramp, seen, seen, seen)
+                    red = shown.r
+                    green = shown.g
+                    blue = shown.b
+                else:
+                    # The highlight and then the glow, exactly as
+                    # `rasterize_shaded` sums them.
+                    red += highlight.x + glow_r
+                    green += highlight.y + glow_g
+                    blue += highlight.z + glow_b
+                # Veiled by the fog last, in linear light, from the same depth
+                # lane and with the same function as `rasterize_shaded`. Alpha
+                # is coverage and is left alone.
+                if fog_on and not shows_data:
+                    var depth = (
+                        corners[unsafe_offset=base + LANE_DEPTH] * share_a
+                        + corners[unsafe_offset=b_base + LANE_DEPTH] * share_b
+                        + corners[unsafe_offset=c_base + LANE_DEPTH] * share_c
+                    )
+                    var veiled = fog_mix(
+                        FloatColor(red, green, blue, alpha),
+                        FloatColor(
+                            fog[unsafe_offset=FOG_R],
+                            fog[unsafe_offset=FOG_G],
+                            fog[unsafe_offset=FOG_B],
+                            1.0,
+                        ),
+                        fog_factor(
+                            FogKind(Int(fog_kind)),
+                            depth,
+                            fog[unsafe_offset=FOG_NEAR],
+                            fog[unsafe_offset=FOG_FAR],
+                            fog[unsafe_offset=FOG_DENSITY],
+                        ),
+                    )
+                    red = veiled.r
+                    green = veiled.g
+                    blue = veiled.b
 
-        # Opaque replaces what is there; translucent mixes into it. One pass
-        # is enough only because every opaque triangle is submitted before any
-        # translucent one, so `nearest` is already final when the first
-        # blended fragment arrives -- the same guarantee `rasterize_shaded`
-        # relies on, and the reason `Renderer.prepare` sorts.
-        var share = alpha
-        if share > 1:
-            share = 1
-        if share < 0:
-            share = 0
-        # Asked the way the host asks it -- "is it BLEND?" -- so anything
-        # else is opaque on both sides rather than opaque on one.
-        var mixes = maps[
-            unsafe_offset=index * STATE_PER_TRIANGLE + STATE_BLEND
-        ] == Int32(BLEND.value) and mode != Int32(SHADE_UV.value)
-        # A source-over fragment that covers nothing contributes no color,
-        # so it must contribute no depth and no answer about what the pixel
-        # holds either. `RenderTarget.blend` returns early for the same
-        # reason; see `render.target`.
-        if mixes and share == 0:
-            continue
-        found = True
-        if not mixes:
-            # Nothing behind contributes. The surface's own alpha is kept
-            # rather than forced to one, so an opaque material drawn with a
-            # partly transparent texture resolves partly transparent.
-            mixed_r = red * share
-            mixed_g = green * share
-            mixed_b = blue * share
-            mixed_a = share
-            nearest = z
-            solid = True
-            # A write replaces the pixel, so its answer becomes this
-            # fragment's, exactly as `RenderTarget.write` decides it.
-            # The uv view shows coordinates, which the tone mapping has
-            # to leave alone exactly as it leaves a normal alone.
-            data = shows_data or mode == Int32(SHADE_UV.value)
-        else:
-            # Source-over, premultiplied: a weighted sum with no special case.
-            var keep = 1 - share
-            mixed_r = red * share + mixed_r * keep
-            mixed_g = green * share + mixed_g * keep
-            mixed_b = blue * share + mixed_b * keep
-            mixed_a = share + mixed_a * keep
-            # A mixture with light in it is light, and only light blends:
-            # a fragment that shows data is refused this policy by
-            # `check_triangle_state`. See `render.target`.
-            data = False
+            # Opaque replaces what is there; translucent mixes into it. One pass
+            # is enough only because every opaque triangle is submitted before any
+            # translucent one, so `nearest` is already final when the first
+            # blended fragment arrives -- the same guarantee `rasterize_shaded`
+            # relies on, and the reason `Renderer.prepare` sorts.
+            var share = alpha
+            if share > 1:
+                share = 1
+            if share < 0:
+                share = 0
+            # Asked the way the host asks it -- "is it BLEND?" -- so anything
+            # else is opaque on both sides rather than opaque on one.
+            var mixes = maps[
+                unsafe_offset=index * STATE_PER_TRIANGLE + STATE_BLEND
+            ] == Int32(BLEND.value) and mode != Int32(SHADE_UV.value)
+            # A source-over fragment that covers nothing contributes no color,
+            # so it must contribute no depth and no answer about what the pixel
+            # holds either. `RenderTarget.blend` returns early for the same
+            # reason; see `render.target`.
+            if mixes and share == 0:
+                continue
+            found = True
+            if not mixes:
+                # Nothing behind contributes, and the fragment is written with
+                # an alpha of one, as three.js's `opaque_fragment` writes it
+                # and as `rasterize_shaded` writes it; only a depth material
+                # keeps its opacity as its alpha.
+                if kind != Int32(DEPTH.value):
+                    share = 1
+                mixed_r = red * share
+                mixed_g = green * share
+                mixed_b = blue * share
+                mixed_a = share
+                nearest = z
+                solid = True
+                # A write replaces the pixel, so its answer becomes this
+                # fragment's, exactly as `RenderTarget.write` decides it.
+                # The uv view shows coordinates, which the tone mapping has
+                # to leave alone exactly as it leaves a normal alone.
+                data = shows_data or mode == Int32(SHADE_UV.value)
+            else:
+                # Source-over, premultiplied: a weighted sum with no special case.
+                var keep = 1 - share
+                mixed_r = red * share + mixed_r * keep
+                mixed_g = green * share + mixed_g * keep
+                mixed_b = blue * share + mixed_b * keep
+                mixed_a = share + mixed_a * keep
+                # A mixture with light in it is light, and only light blends:
+                # a fragment that shows data is refused this policy by
+                # `check_triangle_state`. See `render.target`.
+                data = False
 
-    # Lines, after every triangle has had its say. One thread per pixel
-    # here too, so the question is "does this segment light me" rather
-    # than "which pixels does this segment light" -- and `render.linerule`
-    # answers both from one expression, which is why the staircase the
-    # host walks and the staircase the device tests are the same one.
-    for index in range(Int(segment_count)):
-        var base = index * 2 * FLOATS_PER_VERTEX
-        var far_base = base + FLOATS_PER_VERTEX
-        var first = Vector2(
-            segments[unsafe_offset=base + LANE_X],
-            segments[unsafe_offset=base + LANE_Y],
-        )
-        var second = Vector2(
-            segments[unsafe_offset=far_base + LANE_X],
-            segments[unsafe_offset=far_base + LANE_Y],
-        )
-        if not covers(first, second, x, y):
-            continue
-        var along = y
-        if major_is_x(first, second):
-            along = x
-        var share = share_at(first, second, along)
-        if share < 0:
-            share = 0
-        if share > 1:
-            share = 1
-        var az = segments[unsafe_offset=base + LANE_Z]
-        var bz = segments[unsafe_offset=far_base + LANE_Z]
-        var z = az + (bz - az) * share
-        if z >= nearest:
-            continue
-        var near = segments[unsafe_offset=base + LANE_INV_W] * (1 - share)
-        var away = segments[unsafe_offset=far_base + LANE_INV_W] * share
-        var total = near + away
-        if total == 0:
-            continue
-        var toward = away / total
-        # Straight, through the function the host calls, so the one
-        # convention for a line's color lives in one place.
-        var drawn = mix_straight(
-            FloatColor(
-                segments[unsafe_offset=base + LANE_R],
-                segments[unsafe_offset=base + LANE_G],
-                segments[unsafe_offset=base + LANE_B],
-                segments[unsafe_offset=base + LANE_A],
-            ),
-            FloatColor(
-                segments[unsafe_offset=far_base + LANE_R],
-                segments[unsafe_offset=far_base + LANE_G],
-                segments[unsafe_offset=far_base + LANE_B],
-                segments[unsafe_offset=far_base + LANE_A],
-            ),
-            toward,
-        )
-        # The host's line pass reads no shading mode: a line has no surface
-        # coordinates, so there is no uv view of one, and it is veiled by
-        # the fog whatever the mode. See `rasterize_line`.
-        if fog_kind != Int32(NO_FOG.value):
-            var ad = segments[unsafe_offset=base + LANE_DEPTH]
-            var bd = segments[unsafe_offset=far_base + LANE_DEPTH]
-            var seen = ad + (bd - ad) * toward
-            # By name, as the triangle pass reads it. Written out as
-            # literal slots once, which took the color out of the near,
-            # far and density lanes and the distances out of the color: a
-            # white line in black fog came back yellow.
-            drawn = fog_mix(
-                drawn,
-                FloatColor(
-                    fog[unsafe_offset=FOG_R],
-                    fog[unsafe_offset=FOG_G],
-                    fog[unsafe_offset=FOG_B],
-                    1,
-                ),
-                fog_factor(
-                    FogKind(Int(fog_kind)),
-                    seen,
-                    fog[unsafe_offset=FOG_NEAR],
-                    fog[unsafe_offset=FOG_FAR],
-                    fog[unsafe_offset=FOG_DENSITY],
-                ),
-            )
-        var share_a = drawn.a
-        if share_a > 1:
-            share_a = 1
-        if share_a < 0:
-            share_a = 0
-        var mixes = segment_maps[unsafe_offset=index * STATE_PER_LINE] == Int32(
-            BLEND.value
-        )
-        if mixes and share_a == 0:
-            continue
-        found = True
-        if not mixes:
-            mixed_r = drawn.r * share_a
-            mixed_g = drawn.g * share_a
-            mixed_b = drawn.b * share_a
-            mixed_a = share_a
-            nearest = z
-            solid = True
-            # A line is light, never data: it has no normal to show and no
-            # depth material to show one. `check_line_state` refuses any
-            # kind but an unlit one.
-            data = False
-        else:
-            var keep = 1 - share_a
-            mixed_r = drawn.r * share_a + mixed_r * keep
-            mixed_g = drawn.g * share_a + mixed_g * keep
-            mixed_b = drawn.b * share_a + mixed_b * keep
-            mixed_a = share_a + mixed_a * keep
-            data = False
-
-    var word = background
     var nearest_depth = inf[DType.float32]()
-    # Unpremultiply, then encode. PNG stores unassociated alpha, and alpha
+    # Unpremultiply, tone map, then encode, as `RenderTarget.resolve` does
+    # it and from the same functions -- every pixel, covered or not. The
+    # host's target holds its clear color as premultiplied light and
+    # resolves it like any other pixel, so a pixel nothing covers is that
+    # round trip and not the background's own bytes: for a clear color
+    # with an alpha of zero the two differ, since no color survives being
+    # unpremultiplied by nothing. PNG stores unassociated alpha, and alpha
     # is coverage rather than color so it skips the transfer function. A
-    # pixel nothing covers holds the decoded background.
+    # pixel that holds data skips the curve, as the host's target skips it.
     var lit = FloatColor(mixed_r, mixed_g, mixed_b, mixed_a).unpremultiplied()
-    if found or tone != Int32(NO_TONE_MAPPING.value):
-        # Tone mapped and then encoded, as `RenderTarget.resolve` does it,
-        # from the same function -- the background included, once there
-        # is a curve, since the host's target holds its clear color as
-        # light and resolves it through the curve like any other pixel.
-        # Without a curve an uncovered pixel keeps the background's own
-        # bytes rather than a decode and an encode of them. A pixel that
-        # holds data skips the curve, as the host's target skips it.
-        var curve = Int(tone)
-        if data:
-            curve = NO_TONE_MAPPING.value
-        word = pack(tone_map(lit, ToneMapping(curve), exposure).encode())
+    var curve = Int(tone)
+    if data:
+        curve = NO_TONE_MAPPING.value
+    var word = pack(tone_map(lit, ToneMapping(curve), exposure).encode())
     if solid:
         nearest_depth = nearest
 
@@ -2075,6 +2112,10 @@ struct GpuRenderer(Movable):
     var segments: DeviceBuffer[DType.float32]
     var segment_maps: DeviceBuffer[DType.int32]
     var line_capacity: Int
+    # The frame's draw order, `INTS_PER_DRAW` integers a draw, and how many
+    # draws the buffer has room for.
+    var draw_list: DeviceBuffer[DType.int32]
+    var draw_room: Int
     # Every texture the scene can sample, uploaded once rather than per draw.
     var texels: DeviceBuffer[DType.uint8]
     var table: DeviceBuffer[DType.int32]
@@ -2132,6 +2173,9 @@ struct GpuRenderer(Movable):
         _ = self.lights^
         _ = self.fog^
         _ = self.maps^
+        _ = self.segments^
+        _ = self.segment_maps^
+        _ = self.draw_list^
         _ = self.texels^
         _ = self.table^
         _ = self.ramp^
@@ -2186,6 +2230,12 @@ struct GpuRenderer(Movable):
         self.segment_maps = self.context.enqueue_create_buffer[DType.int32](
             STATE_PER_LINE
         )
+        # Two draws' worth: the order a frame with no list of its own gets,
+        # every triangle and then every segment.
+        self.draw_room = 2
+        self.draw_list = self.context.enqueue_create_buffer[DType.int32](
+            self.draw_room * INTS_PER_DRAW
+        )
         # One texel's worth, standing in for the blank texture. A zero-length
         # device buffer is not worth the special case, and a width of zero is
         # what the kernel actually reads to mean "no texture".
@@ -2218,6 +2268,9 @@ struct GpuRenderer(Movable):
         """
         var flat = flatten_lights(lighting)
         if len(flat) > self.light_room:
+            # A draw still in flight may be reading the old buffer; see
+            # `set_textures`, which waits for the same reason.
+            self.context.synchronize()
             self.lights = self.context.enqueue_create_buffer[DType.float32](
                 len(flat)
             )
@@ -2256,6 +2309,7 @@ struct GpuRenderer(Movable):
         tone_mapping: ToneMapping = NO_TONE_MAPPING,
         exposure: Float32 = 1.0,
         lines: List[RasterVertex] = List[RasterVertex](),
+        draws: List[Draw] = List[Draw](),
     ) raises:
         """Rasterize prepared triangles and lines into the device target.
 
@@ -2277,14 +2331,20 @@ struct GpuRenderer(Movable):
                 light, as `RenderTarget.resolve` takes it. Defaults to
                 `NO_TONE_MAPPING`. The uv view is never tone mapped.
             exposure: What the light is scaled by before the curve.
-            lines: Raster vertices, two per segment, drawn after the
-                triangles and depth tested against them, as the host draws
-                them. Empty by default.
+            lines: Raster vertices, two per segment. Empty by default.
+            draws: The order to draw in, as runs of triangles or of
+                segments; see `render.rasterizer.Draw`. Empty, the
+                default, draws every triangle and then every segment,
+                which is the order `rasterize_all` followed by
+                `rasterize_lines_all` draws them in. `Renderer.prepare_frame`
+                gives the order `Renderer.render` uses, with blended
+                triangles and segments sorted together.
 
         Raises:
             Error: If the corner count is not a multiple of three, the
                 line corner count is not a multiple of two, a segment's
-                ends disagree or its material is lit, the mode
+                ends disagree or its material is lit, a draw is refused
+                by `check_draws`, the mode
                 is none of the three, the tone mapping is none of the
                 seven, the exposure is negative or not finite, the fog
                 view is refused by `FogView.validate`, a triangle's blend
@@ -2325,6 +2385,14 @@ struct GpuRenderer(Movable):
         # cannot raise on a policy it does not know.
         for segment in range(len(lines) // 2):
             check_line_state(lines[segment * 2], lines[segment * 2 + 1])
+        # The order, or the two-pass one when none is given. Checked by
+        # the function the host checks with: the kernel reads the corner
+        # buffers at whatever index a draw hands it.
+        var order = draws.copy()
+        if len(order) == 0:
+            order.append(Draw(DRAW_TRIANGLES, 0, triangles))
+            order.append(Draw(DRAW_SEGMENTS, 0, len(lines) // 2))
+        check_draws(order, triangles, len(lines) // 2)
 
         # Every texture reference is checked here because it cannot be checked
         # on the device: the kernel reads the descriptor table at whatever
@@ -2381,6 +2449,7 @@ struct GpuRenderer(Movable):
         check_output_kinds(
             corners,
             mode != SHADE_UV and tone_mapping != NO_TONE_MAPPING,
+            lines,
         )
         # A ramp holds data and says so the same two ways, and must hold
         # texels to step through. Asked under every mode that lights the
@@ -2429,6 +2498,9 @@ struct GpuRenderer(Movable):
         if triangles > self.capacity:
             # Grow to exactly what is asked for. Frames tend to submit the
             # same count repeatedly, so this settles after the first one.
+            # A draw still in flight may be reading the old buffers; see
+            # `set_textures`, which waits for the same reason.
+            self.context.synchronize()
             self.corners = self.context.enqueue_create_buffer[DType.float32](
                 triangles * FLOATS_PER_TRIANGLE
             )
@@ -2455,6 +2527,7 @@ struct GpuRenderer(Movable):
 
         var line_count = len(lines) // 2
         if line_count > self.line_capacity:
+            self.context.synchronize()
             self.segments = self.context.enqueue_create_buffer[DType.float32](
                 line_count * 2 * FLOATS_PER_VERTEX
             )
@@ -2479,14 +2552,39 @@ struct GpuRenderer(Movable):
                     count=len(policies),
                 )
 
+        if len(order) > self.draw_room:
+            self.context.synchronize()
+            self.draw_list = self.context.enqueue_create_buffer[DType.int32](
+                len(order) * INTS_PER_DRAW
+            )
+            self.draw_room = len(order)
+        var flat_draws = List[Int32]()
+        flat_draws.reserve(len(order) * INTS_PER_DRAW)
+        for index in range(len(order)):  # pragma: no branch
+            flat_draws.append(Int32(order[index].kind.value))
+            flat_draws.append(Int32(order[index].first))
+            flat_draws.append(Int32(order[index].count))
+        with self.draw_list.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=flat_draws.unsafe_ptr(),
+                count=len(flat_draws),
+            )
+
         self._upload_lights(lighting)
         self._upload_fog(fog)
+        # The uv view is coordinates rather than light and is never tone
+        # mapped, background included, exactly as `Renderer.render` turns
+        # the curve off for it. The curve was checked above as given;
+        # what the kernel is handed is what the host resolves with.
+        var curve = tone_mapping
+        if mode == SHADE_UV:
+            curve = NO_TONE_MAPPING
         self.context.enqueue_function[rasterize_kernel](
             self.pixels.unsafe_ptr(),
             self.depth.unsafe_ptr(),
             self.corners.unsafe_ptr(),
             self.maps.unsafe_ptr(),
-            Int32(triangles),
             Int32(self.width),
             Int32(self.height),
             pack(background),
@@ -2501,11 +2599,12 @@ struct GpuRenderer(Movable):
             Int32(lighting.spot_count()),
             self.fog.unsafe_ptr(),
             Int32(fog.kind.value),
-            Int32(tone_mapping.value),
+            Int32(curve.value),
             exposure,
             self.segments.unsafe_ptr(),
             self.segment_maps.unsafe_ptr(),
-            Int32(line_count),
+            self.draw_list.unsafe_ptr(),
+            Int32(len(order)),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -2634,6 +2733,7 @@ def render_triangles(
     tone_mapping: ToneMapping = NO_TONE_MAPPING,
     exposure: Float32 = 1.0,
     lines: List[RasterVertex] = List[RasterVertex](),
+    draws: List[Draw] = List[Draw](),
 ) raises -> Framebuffer:
     """Draw prepared triangles and lines on the GPU and read the image back.
 
@@ -2655,8 +2755,9 @@ def render_triangles(
         tone_mapping: The curve that compresses each pixel's light, as
             `RenderTarget.resolve` takes it. Defaults to `NO_TONE_MAPPING`.
         exposure: What the light is scaled by before the curve.
-        lines: Raster vertices, two per segment, drawn after the triangles
-            and depth tested against them. Empty by default.
+        lines: Raster vertices, two per segment. Empty by default.
+        draws: The order to draw in, or empty for every triangle and then
+            every segment; see `GpuRenderer.draw`.
 
     Returns:
         The rendered image.
@@ -2677,6 +2778,7 @@ def render_triangles(
         tone_mapping,
         exposure,
         lines,
+        draws,
     )
     return renderer.read_back()
 

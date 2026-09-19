@@ -84,14 +84,14 @@ def main() raises:
     var left = Object3D()
     left.set_position(-1.1, 0.2, 0.6)
     var left_id = scene.add(left^)
-    scene.add_light(directional_light(Color(255, 20, 20), left_id, 1.05))
+    scene.add_light(directional_light(Color(255, 20, 20), left_id, 3.3))
 
     var right = Object3D()
     right.set_position(1.1, 0.2, 0.6)
     var right_id = scene.add(right^)
-    scene.add_light(directional_light(Color(20, 255, 40), right_id, 1.05))
+    scene.add_light(directional_light(Color(20, 255, 40), right_id, 3.3))
 
-    scene.add_light(ambient_light(Color(24, 26, 32), 1.0))
+    scene.add_light(ambient_light(Color(24, 26, 32), 3.14))
 
     var camera = PerspectiveCamera(
         Angle(40.0, DEGREE),

@@ -252,7 +252,14 @@ struct KeyframeTrack(Copyable, Movable):
         return len(self.times)
 
     def duration(self) -> Duration:
-        """Return when the last key is, which is how long the track runs."""
+        """Return when the last key is, which is how long the track runs.
+
+        No time at all for a track whose keys were removed after it was
+        built: the fields are open, and reading the last of no keys was a
+        crash rather than an answer.
+        """
+        if len(self.times) == 0:
+            return Duration(0, SECOND)
         return Duration(self.times[len(self.times) - 1], SECOND)
 
     def _value_at_key(self, key: Int) -> List[Float32]:
@@ -288,20 +295,25 @@ struct KeyframeTrack(Copyable, Movable):
             a rotation of unit length.
 
         Raises:
-            Error: If `at` is not a number, or if the track's lists no
-                longer agree with each other.
+            Error: If `at` is not a number, if the track has no keys left,
+                or if the track's lists no longer agree with each other.
 
                 The first would make both end tests false, and the search
                 for the key before it would walk off the end of the track.
-                The second is the same walk by another route: a track's
+                The other two are the same walk by another route: a track's
                 fields are open, the constructor is not the last chance to
-                change them, and a `values` list made shorter afterward
-                reads past its end on the next frame. It is one comparison
-                per sample, which is what the check being cheap buys.
+                change them, and a `times` list emptied afterward or a
+                `values` list made shorter reads past its end on the next
+                frame. An emptied track passed the agreement check, since
+                no values match no keys, and crashed on the first key. It is
+                two comparisons per sample, which is what the checks being
+                cheap buys.
         """
         var seconds = at.to(SECOND)
         if not isfinite(seconds):
             raise Error("A track cannot be read at a time that is not a number")
+        if len(self.times) == 0:
+            raise Error("A track's keys were removed after it was built")
         if len(self.values) != len(self.times) * self.kind.component_count():
             raise Error("A track's values no longer match its keys")
         var last = len(self.times) - 1

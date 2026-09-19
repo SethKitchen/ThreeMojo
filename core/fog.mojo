@@ -31,12 +31,15 @@ interpolated to world coordinates that rounded by a sixteenth, and the
 depth recovered from them wandered from 7.875 to 8.125 across one flat
 surface. A depth of eight interpolated as eight stays eight.
 
-**Mixed in linear light, before the image is encoded.** three.js applies its
-fog after tone mapping and after the output color-space conversion, on the
-encoded color, a quirk of shader-chunk order that three.js itself has an
-issue open about. Here the mix happens where every other mix happens, in the
-linear working space, so that halfway into the fog really is half the light
-of each. The fog color is decoded from sRGB on the way in, as a light's is.
+**Mixed in linear light, before the image is encoded.** three.js's WebGL
+renderer applies its fog after tone mapping and after the output
+color-space conversion, on the encoded color, a quirk of shader-chunk order
+that three.js itself has an issue open about, and that its newer WebGPU
+renderer does not repeat: its node materials fog the linear color and then
+tone map and encode it. That newer order is the one kept here, where every
+other mix happens, in the linear working space, so that halfway into the
+fog really is half the light of each. The fog color is decoded from sRGB on
+the way in, as a light's is.
 The fog reaches every material, lit or not, since three.js's
 `Material.fog` defaults to on and is not ported. The uv debug view is not
 fogged: it shows coordinates, not light.

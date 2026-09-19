@@ -5,7 +5,14 @@ import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import * as THREE from "three";
+
+// Imported here rather than statically so the cost of loading three.js can
+// be measured apart from the frames. It is most of what this process does:
+// the module is large, and Node parses and compiles it before a single
+// triangle is drawn. The number goes out in the JSON line below.
+const importStarted = performance.now();
+const THREE = await import("three");
+const importMs = performance.now() - importStarted;
 
 const here = dirname(fileURLToPath(import.meta.url));
 const catalog = JSON.parse(readFileSync(join(here, "../catalog.json"), "utf8"));
@@ -44,22 +51,22 @@ function checkerTexture() {
 }
 
 function lights(scene, kind) {
-  scene.add(new THREE.AmbientLight(0xffffff, kind === "additive" ? 0.05 : 0.25));
+  scene.add(new THREE.AmbientLight(0xffffff, kind === "additive" ? 0.16 : 0.79));
   if (kind === "lamps" || kind === "lit_scene") {
-    const bulb = new THREE.PointLight(0xffdcb4, 1.5, 0, 2);
+    const bulb = new THREE.PointLight(0xffdcb4, 4.71, 0, 2);
     bulb.position.set(0.8, 1.0, 1.5);
     scene.add(bulb);
     return;
   }
   if (kind === "additive") {
-    const a = new THREE.PointLight(0xff4040, 1.2, 0, 2);
+    const a = new THREE.PointLight(0xff4040, 3.77, 0, 2);
     a.position.set(-1.2, 0.8, 1.0);
-    const b = new THREE.PointLight(0x40a0ff, 1.2, 0, 2);
+    const b = new THREE.PointLight(0x40a0ff, 3.77, 0, 2);
     b.position.set(1.2, 0.8, 1.0);
     scene.add(a, b);
     return;
   }
-  const lamp = new THREE.DirectionalLight(0xffffff, 0.75);
+  const lamp = new THREE.DirectionalLight(0xffffff, 2.36);
   lamp.position.set(0.4, 0.8, 0.5);
   scene.add(lamp);
 }
@@ -420,9 +427,15 @@ function tryWebGL(width, height) {
   }
 }
 
+// What runs when the `gl` package is missing or cannot make a context. It is
+// not three.js rendering: three.js has no CPU rasterizer, so this fills the
+// projected triangles with each material's flat color and a depth test, and
+// nothing else. No lighting, no textures, no clipping, no sRGB, no
+// transparency, and no file is written. The backend name says so, and the
+// benchmark page explains what the column then measures.
 function softwareTarget(width, height) {
   return {
-    kind: "cpu",
+    kind: "cpu-flat",
     color: new Uint8Array(width * height * 4),
     depth: new Float32Array(width * height),
   };
@@ -562,13 +575,18 @@ function drawFrames(target) {
   }
 }
 
+// The frames alone, timed inside the process, so the benchmark can show the
+// drawing apart from starting Node and importing three.js.
+let framesStarted = performance.now();
 try {
   drawFrames(backend);
 } catch (err) {
   if (backend.kind !== "webgl") throw err;
   backend = softwareTarget(spec.width, spec.height);
+  framesStarted = performance.now();
   drawFrames(backend);
 }
+const framesMs = performance.now() - framesStarted;
 
 const sample =
   backend.kind === "webgl" ? backend.pixels[0] : backend.color[0];
@@ -579,6 +597,8 @@ console.log(
     height: spec.height,
     frames: spec.frames,
     backend: backend.kind,
+    import_ms: Math.round(importMs * 10) / 10,
+    frames_ms: Math.round(framesMs * 10) / 10,
     sample,
   }),
 );

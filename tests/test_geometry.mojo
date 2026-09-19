@@ -598,11 +598,12 @@ def test_a_sphere_wraps_u_once_around_the_equator() raises:
     ref uvs = geometry.attribute_view(String(UV))
     # One row is width_segments + 1 vertices, the last repeating the first in
     # space but not in u -- which is the whole reason the seam is duplicated.
-    assert_equal(uvs.component(0, 0), Float32(0))
-    assert_equal(uvs.component(8, 0), Float32(1))
+    # The second row: the pole row's u is offset half a column, as below.
+    assert_equal(uvs.component(9, 0), Float32(0))
+    assert_equal(uvs.component(17, 0), Float32(1))
     ref positions = geometry.attribute_view(String(POSITION))
-    var start = positions.vector3(0)
-    var wrapped = positions.vector3(8)
+    var start = positions.vector3(9)
+    var wrapped = positions.vector3(17)
     assert_almost_equal(start.x, wrapped.x, atol=Float64(1e-5))
     assert_almost_equal(start.z, wrapped.z, atol=Float64(1e-5))
 
@@ -622,11 +623,34 @@ def test_sphere_texture_coordinates_cover_the_whole_range() raises:
     ref uvs = geometry.attribute_view(String(UV))
     var widest = Float32(0)
     var tallest = Float32(0)
-    for vertex in range(uvs.count()):
+    # The rings between the poles: the poles' own u is offset, see below.
+    for vertex in range(13, uvs.count() - 13):
         widest = max(widest, uvs.component(vertex, 0))
         tallest = max(tallest, uvs.component(vertex, 1))
     assert_equal(widest, Float32(1))
-    assert_equal(tallest, Float32(1))
+    assert_equal(uvs.component(0, 1), Float32(1))
+    assert_true(tallest < 1)
+
+
+def test_sphere_poles_are_offset_half_a_column_as_three_js_has_them() raises:
+    # Each pole triangle's tip sits at the pole, and three.js moves the
+    # tip's u half a column into the triangle: forward at the north pole
+    # and back at the south, so a texture meets the pole squarely.
+    var geometry = sphere(Length(1.0, METER), 4, 2)
+    ref uvs = geometry.attribute_view(String(UV))
+    var half = Float32(0.5) / 4
+    for column in range(5):
+        assert_almost_equal(
+            uvs.component(column, 0), Float32(column) / 4 + half, atol=TOLERANCE
+        )
+        assert_almost_equal(
+            uvs.component(5 + column, 0), Float32(column) / 4, atol=TOLERANCE
+        )
+        assert_almost_equal(
+            uvs.component(10 + column, 0),
+            Float32(column) / 4 - half,
+            atol=TOLERANCE,
+        )
 
 
 # --- plane -------------------------------------------------------------------

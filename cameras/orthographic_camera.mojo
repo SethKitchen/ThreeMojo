@@ -86,8 +86,6 @@ struct OrthographicCamera(Camera):
             raise Error("The view volume needs right beyond left")
         if top.value <= bottom.value:
             raise Error("The view volume needs top above bottom")
-        if near.value < 0:
-            raise Error("The near plane cannot be behind the camera")
         if far.value <= near.value:
             raise Error("The far plane must be beyond the near plane")
 

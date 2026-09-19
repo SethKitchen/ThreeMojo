@@ -84,27 +84,34 @@ three.js copies the geometries into one shared buffer. Here every geometry is in
 
 ## LOD
 
-`objects/lod.mojo`. An `Lod` shows one of several geometries at a node, by the camera's distance to the node. three.js: `LOD`, `addLevel`, `getCurrentLevel`.
+`objects/lod.mojo`. An `Lod` shows one of several geometries at a node, by the camera's distance to the node. three.js: `LOD`, `addLevel`, `getObjectForDistance`, `update`.
 
 ```mojo
 var tree = Lod(node)
 tree.add_level(full_tree, bark)
 tree.add_level(rough_tree, bark, Length(20.0, METER))
-tree.add_level(billboard, bark, Length(80.0, METER))
+tree.add_level(billboard, bark, Length(80.0, METER), 0.1)
 scene.add_lod(tree^)
 ```
 
 | Member | Meaning |
 |---|---|
 | `Lod(node, frustum_culled=True)` | An LOD with no levels. |
-| `add_level(geometry, material, distance=Length(0.0, METER))` | A level to show from `distance` on. The levels stay in order of distance. |
+| `add_level(geometry, material, distance=Length(0.0, METER), hysteresis=0)` | A level to show from `distance` on. The levels stay in order of distance. |
 | `count() -> Int`, `level_at(index) -> LodLevel` | The levels, nearest first. |
-| `level_for(distance) -> Int` | Which level shows from `distance`, or -1 with no levels. |
+| `level_for(distance) -> Int` | Which level shows from `distance` with no memory, or -1 with no levels. three.js's `getObjectForDistance`. |
+| `level_from(distance, shown) -> Int` | Which level shows from `distance` when `shown` shows now. Hysteresis applies. |
+| `update(distance) -> Int` | Choose the level from `distance` and remember it in `shown`. three.js's `LOD.update`. |
+| `shown` | The level `update` last chose. Zero at first. |
 | `levels` | Every level, in order. |
 
 The renderer measures the distance from the camera's position to the node's world origin, each frame. It shows the last level whose distance has been reached. Below the second level's distance it shows the first. An LOD with no levels shows nothing.
 
-A distance is a `Length`. A bare number does not compile. A negative distance raises.
+A level's `hysteresis` is a fraction of its distance, from zero to one. Once the level is shown, it keeps showing until the camera comes that fraction nearer than its distance. That stops the level flipping every frame when the camera hovers at the distance. three.js's `addLevel` takes the same fraction.
+
+The hysteresis needs a memory of the shown level. `scene.update_lods(eye)` chooses and remembers every LOD's level for a camera at `eye`, after `scene.update()`. The renderer reads the memory and never writes it. A scene never given `update_lods` shows the stateless choice.
+
+A distance is a `Length`. A bare number does not compile. A negative distance raises. A hysteresis outside zero to one raises.
 
 ## Rules
 

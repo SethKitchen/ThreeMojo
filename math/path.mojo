@@ -35,9 +35,38 @@ track of the order, and three.js's silent answer to all of them is a
 shape with no area.
 """
 
-from math.curve import Curve, cubic_bezier, line, quadratic_bezier, spline
+from math.curve import (
+    LINE,
+    SPLINE,
+    Curve,
+    cubic_bezier,
+    line,
+    quadratic_bezier,
+    spline,
+)
 from math.vector2 import Vector2
 from units.si import Length, METER
+
+
+def resolution_of(curve: Curve, divisions: Int) -> Int:
+    """Return how many runs `Path.sample` cuts one curve into.
+
+    three.js's rule in `CurvePath.getPoints`, curve kind by curve kind:
+    one for a line, `divisions` for each point of a spline, and
+    `divisions` for anything else.
+
+    Args:
+        curve: The curve.
+        divisions: The resolution the path was asked for.
+
+    Returns:
+        The runs, at least one.
+    """
+    if curve.kind == LINE:
+        return 1
+    if curve.kind == SPLINE:
+        return divisions * len(curve.points)
+    return divisions
 
 
 struct Path(Copyable, Movable):
@@ -194,14 +223,24 @@ struct Path(Copyable, Movable):
         return gap.x == 0 and gap.y == 0
 
     def sample(self, divisions: Int) raises -> List[Vector2]:
-        """Return the path as points, `divisions` per curve.
+        """Return the path as points, at three.js's resolution per curve.
+
+        three.js's `CurvePath.getPoints`: a straight line is one run
+        whatever `divisions` says, since more points along it would all be
+        collinear; a spline is `divisions` runs for each point it passes
+        through, since one curve of it may wind through dozens; and a
+        Bezier is `divisions` runs. Cutting every curve into `divisions`
+        runs instead, as this once did, gave a twenty-point spline twelve
+        runs for the whole of it and missed most of its own points, and
+        gave every straight edge eleven points it did not need.
 
         A curve's first point is where the one before it ended, so it is
         left out: the run is continuous, and a repeated point would be a
         segment of no length for whatever reads it.
 
         Args:
-            divisions: How many runs to cut each curve into; at least one.
+            divisions: How many runs to cut a Bezier curve into, and how
+                many per point of a spline; at least one.
 
         Returns:
             The points, in meters, from the start of the first curve to
@@ -213,9 +252,13 @@ struct Path(Copyable, Movable):
         """
         if len(self.curves) == 0:
             raise Error("A path with no curves has no points")
+        if divisions < 1:
+            raise Error("A path needs at least one division")
         var out = List[Vector2]()
         for index in range(len(self.curves)):  # pragma: no branch
-            var piece = self.curves[index].sample(divisions)
+            var piece = self.curves[index].sample(
+                resolution_of(self.curves[index], divisions)
+            )
             var start = 1
             if index == 0:
                 start = 0
@@ -284,10 +327,11 @@ struct Shape(Copyable, Movable):
         return len(self.holes)
 
     def outline_points(self, divisions: Int) raises -> List[Vector2]:
-        """Return the outline as points, `divisions` per curve.
+        """Return the outline as points, at `Path.sample`'s resolution.
 
         Args:
-            divisions: How many runs to cut each curve into; at least one.
+            divisions: How many runs to cut a curve into; see
+                `Path.sample`. At least one.
 
         Returns:
             The points, in meters, the last of them the first again
@@ -299,11 +343,12 @@ struct Shape(Copyable, Movable):
         return self.outline.sample(divisions)
 
     def hole_points(self, index: Int, divisions: Int) raises -> List[Vector2]:
-        """Return one hole as points, `divisions` per curve.
+        """Return one hole as points, at `Path.sample`'s resolution.
 
         Args:
             index: Which hole, from zero.
-            divisions: How many runs to cut each curve into; at least one.
+            divisions: How many runs to cut a curve into; see
+                `Path.sample`. At least one.
 
         Returns:
             The points, in meters, the last of them the first again.

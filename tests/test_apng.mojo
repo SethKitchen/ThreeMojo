@@ -192,6 +192,29 @@ def test_empty_animation_is_rejected() raises:
         _ = encode(List[Framebuffer]())
 
 
+def test_a_delay_the_chunk_cannot_hold_is_rejected() raises:
+    # Two bytes of numerator: 70000 milliseconds used to wrap to 4464.
+    var frames = List[Framebuffer]()
+    frames.append(Framebuffer(2, 2, Color(0, 0, 0)))
+    with assert_raises():
+        _ = encode(frames, delay_ms=70000)
+    with assert_raises():
+        _ = encode(frames, delay_ms=-1)
+    _ = encode(frames, delay_ms=65535)
+    _ = encode(frames, delay_ms=0)
+
+
+def test_a_loop_count_the_chunk_cannot_hold_is_rejected() raises:
+    # Four bytes: minus one used to become four billion plays.
+    var frames = List[Framebuffer]()
+    frames.append(Framebuffer(2, 2, Color(0, 0, 0)))
+    with assert_raises():
+        _ = encode(frames, plays=-1)
+    with assert_raises():
+        _ = encode(frames, plays=0x100000000)
+    _ = encode(frames, plays=0xFFFFFFFF)
+
+
 def test_mismatched_frame_width_is_rejected() raises:
     var frames = List[Framebuffer]()
     frames.append(Framebuffer(2, 2, Color(0, 0, 0)))

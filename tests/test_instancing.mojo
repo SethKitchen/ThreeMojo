@@ -250,12 +250,90 @@ def test_an_lod_refuses_bad_ids_a_negative_distance_and_a_bad_level() raises:
     with assert_raises():
         lod.add_level(GeometryId(0), MaterialId(0), Length(-1.0, METER))
     with assert_raises():
+        lod.add_level(GeometryId(0), MaterialId(0), hysteresis=-0.1)
+    with assert_raises():
+        lod.add_level(GeometryId(0), MaterialId(0), hysteresis=1.1)
+    with assert_raises():
+        lod.add_level(
+            GeometryId(0), MaterialId(0), hysteresis=nan[DType.float32]()
+        )
+    with assert_raises():
         _ = lod.level_at(0)
     lod.add_level(GeometryId(0), MaterialId(0))
     with assert_raises():
         _ = lod.level_at(1)
     with assert_raises():
         _ = lod.level_at(-1)
+
+
+def test_an_lod_with_hysteresis_keeps_its_level_until_the_camera_comes_nearer() raises:
+    # three.js's `addLevel(object, distance, hysteresis)`: the far level
+    # takes over at 10 m, and once shown holds down to 10 m less a fifth.
+    var lod = Lod(NodeId(0))
+    lod.add_level(GeometryId(0), MaterialId(0))
+    lod.add_level(GeometryId(1), MaterialId(0), Length(10.0, METER), 0.2)
+    assert_equal(lod.shown, 0)
+    assert_equal(lod.update(Length(9.0, METER)), 0)
+    assert_equal(lod.update(Length(10.0, METER)), 1)
+    assert_equal(lod.shown, 1)
+    # Back to nine: without memory the first, with it still the second.
+    assert_equal(lod.level_for(Length(9.0, METER)), 0)
+    assert_equal(lod.update(Length(9.0, METER)), 1)
+    assert_equal(lod.update(Length(8.0, METER)), 1)
+    assert_equal(lod.update(Length(7.9, METER)), 0)
+    assert_equal(lod.shown, 0)
+    # The memory follows a level inserted before it, and an empty LOD
+    # remembers nothing.
+    _ = lod.update(Length(50.0, METER))
+    lod.add_level(GeometryId(2), MaterialId(0), Length(5.0, METER))
+    assert_equal(lod.shown, 2)
+    assert_equal(lod.level_at(2).geometry, GeometryId(1))
+    var empty = Lod(NodeId(0))
+    assert_equal(empty.update(Length(1.0, METER)), -1)
+    assert_equal(empty.shown, 0)
+    empty.add_level(GeometryId(0), MaterialId(0))
+    assert_equal(empty.shown, 0)
+
+
+def test_the_scene_updates_every_lod_and_the_renderer_reads_the_memory() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 12, 8))
+    var paint = assets.materials.add(Material(Color(220, 120, 40)))
+    var lod = Lod(NodeId(0))
+    lod.add_level(box, paint)
+    lod.add_level(ball, paint, Length(5.0, METER), 0.5)
+    var scene = a_scene()
+    scene.add_lod(lod^)
+    var near_box = a_scene()
+    near_box.add_mesh(Mesh(box, paint, NodeId(0)))
+    var far_ball = a_scene()
+    far_ball.add_mesh(Mesh(ball, paint, NodeId(0)))
+    # Never updated, four meters out shows the cube. Updated from eight
+    # meters, the sphere holds at four, and lets go under two and a half.
+    assert_same_image(
+        renderer.render(scene, assets, a_camera(4)),
+        renderer.render(near_box, assets, a_camera(4)),
+    )
+    scene.update_lods(Vector3(0, 0, 8))
+    assert_equal(scene.lods[0].shown, 1)
+    assert_same_image(
+        renderer.render(scene, assets, a_camera(4)),
+        renderer.render(far_ball, assets, a_camera(4)),
+    )
+    scene.update_lods(Vector3(0, 0, 2.4))
+    assert_equal(scene.lods[0].shown, 0)
+    assert_same_image(
+        renderer.render(scene, assets, a_camera(4)),
+        renderer.render(near_box, assets, a_camera(4)),
+    )
+    # A scene with no LODs has nothing to update, and a stale scene is
+    # refused, as anywhere its world positions are read.
+    near_box.update_lods(Vector3(0, 0, 8))
+    scene.node(NodeId(0)).set_position(0, 0, 1)
+    with assert_raises():
+        scene.update_lods(Vector3(0, 0, 8))
 
 
 def test_the_scene_takes_each_once_its_node_exists() raises:

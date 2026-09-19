@@ -33,9 +33,11 @@ python3 tools/bench_examples.py --only cube
 
 ## Read the numbers
 
-Compile time is `mojo build` only. Run time is the built binary. Peak RSS is the kernel maximum resident set in MiB.
+Compile time is `mojo build` only. Run time is the fastest of three runs of the built binary, and of the Node process. Peak RSS is the kernel maximum resident set in MiB. The first launch of a freshly built binary on macOS pays a system check of several hundred milliseconds. One run is not enough.
 
 ThreeMojo writes the image file. three.js draws the same width, height and frame count, and reads the pixels back. three.js does not encode an animated PNG.
+
+three.js renders only when the `gl` package loads. Without it the runner fills the same triangles flat on the CPU and writes no file. The `three.js frames only` column times that fill inside the process. The page says which backend ran and what each process costs before it draws. See [Benchmarks](Benchmarks#what-the-columns-measure).
 
 The pin is Mojo 1.1. A second venv at `.venv-mojo10/` compiles the same sources with Mojo 1.0. The probe is a standalone triangle fill that imports nothing from ThreeMojo.
 

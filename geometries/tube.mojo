@@ -41,7 +41,11 @@ from std.math import acos, cos, pi, sin
 from units.si import Angle, Length, RADIAN
 
 # Below this the two tangents are parallel and there is no axis to turn
-# the frame about; three.js's threshold.
+# the frame about. three.js compares the cross product against
+# `Number.EPSILON`, a double's last bit; a `Float32` axis this short has
+# no direction worth turning about, and a path sampled finely enough for
+# the turn between two rings to fall under it is not one anything here
+# draws.
 comptime STRAIGHT = Float32(1e-4)
 
 

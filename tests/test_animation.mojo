@@ -606,6 +606,42 @@ def test_the_pose_that_was_there_is_read_once_and_kept() raises:
     assert_equal(mixer.binding_count(), 1)
 
 
+def test_a_released_pose_is_read_again_when_it_is_driven_again() raises:
+    # three.js saves the original state every time a binding comes into
+    # use, so a node the caller moved between a stop and the next play is
+    # blended toward, and restored to, where the caller put it. Reading it
+    # once and keeping it blended toward the stale pose and then wrote it
+    # back over the caller's edit.
+    var scene = one_node_scene()
+    var mixer = AnimationMixer()
+    var which = mixer.add(holding_action(4))
+    mixer.action(which).play()
+    mixer.update(scene, at(0.1))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(4), atol=TOLERANCE
+    )
+    mixer.action(which).stop()
+    mixer.update(scene, at(0.1))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(0), atol=TOLERANCE
+    )
+    scene.node(NodeId(0)).set_position(7, 0, 0)
+    mixer.action(which).play()
+    mixer.action(which).set_weight(0.5)
+    mixer.update(scene, at(0.1))
+    # Half way from the edited seven to the held four.
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(5.5), atol=TOLERANCE
+    )
+    mixer.action(which).stop()
+    mixer.update(scene, at(0.1))
+    assert_almost_equal(
+        scene.get(NodeId(0)).position.x, Float32(7), atol=TOLERANCE
+    )
+    # Still one binding: the property was read again, not bound again.
+    assert_equal(mixer.binding_count(), 1)
+
+
 def test_resting_a_pile_moves_it_back_toward_what_was_there() raises:
     var piles: List[Float32] = [4, 0, 0, 0]
     var original: List[Float32] = [0, 0, 0, 0]
@@ -779,6 +815,16 @@ def test_a_track_edited_after_it_was_built_is_still_checked() raises:
     track.values = [0, 0, 0]
     with assert_raises():
         _ = track.sample(at(1))
+    # Emptying the keys passed the agreement check, since no values match
+    # no keys, and crashed on the first key instead of raising.
+    var emptied = slide()
+    emptied.times = List[Float32]()
+    emptied.values = List[Float32]()
+    with assert_raises():
+        _ = emptied.sample(at(1))
+    assert_almost_equal(
+        emptied.duration().to(SECOND), Float32(0), atol=TOLERANCE
+    )
 
 
 def test_a_rotation_key_is_stored_of_unit_length() raises:

@@ -30,4 +30,4 @@ Hardware estimates the footprint by shading pixels in 2 by 2 quads and subtracti
 
 ![A receding floor is mipmapped on the right and aliases on the left](out/floor.png)
 
-`examples/floor.mojo` renders one checkerboard floor to the horizon, mipmapped on the right and not on the left.
+`examples/floor.mojo` renders one checkerboard floor to the horizon, mipmapped on the right and not on the left. The moiré in the top left is the point of the picture, not a defect. That half has no chain, so every pixel near the horizon is one texel picked out of dozens. The right half averages them and fades to gray.

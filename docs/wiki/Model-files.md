@@ -26,7 +26,7 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 
 | Field | Meaning |
 |---|---|
-| `name` | From `o` or `g`. Empty before either. |
+| `name` | From `o` or `g`. Empty when the file has neither. Faces read before the first `o` or `g` belong to it, as three.js has it. |
 | `material` | The name from `usemtl`. Empty before one. The material library is not read. |
 | `geometry` | A non-indexed `BufferGeometry` with `position`, and with `normal` and `uv` when the faces name them. |
 

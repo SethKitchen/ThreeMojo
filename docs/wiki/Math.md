@@ -196,6 +196,6 @@ An empty sphere or box is hit nowhere. A ray parallel to a plane meets it only w
 | `look_at(eye, target, up)` | The view matrix of a camera at `eye`. |
 | `viewport(width, height)` | Normalized device space to pixels. Rows count down. |
 
-Each raises for a degenerate volume, a camera at its own target, or an up vector along the view direction.
+Each raises for a degenerate volume. `look_at` never raises. A camera at its own target looks down its own -z. An up vector along the view direction is nudged off it, as three.js does.
 
 Normalized device space is unitless. World space is meters and screen space is pixels. The matrices meet in the middle.

@@ -22,6 +22,7 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `set_tone_mapping(mode, exposure=1.0)` | The curve that compresses the light for a display. See below. |
 | `prepare(scene, assets, camera) -> List[RasterVertex]` | Transform, clip and project every mesh. |
 | `prepare_lines(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [lines](Lines) and wireframes. |
+| `prepare_frame(scene, assets, camera) -> Frame` | Both lists, and the one order both rasterizers draw them in. See [Lines](Lines#two-lists-one-order). |
 | `render(scene, assets, camera) -> Framebuffer` | Both passes, then rasterize and resolve. |
 | `available_workers() -> Int` | One per logical core. |
 | `camera_position(scene, camera) -> Vector3` | Where the camera stands, in world space. |
@@ -62,13 +63,15 @@ Leave out every group whose node shares no layer with the camera. Then leave out
 4. Clip each triangle against the near and far planes.
 5. Project each corner to pixels and keep `1 / w`.
 6. Cull faces that the material's `side` does not draw.
-7. Flip the normal of a face seen from behind.
+7. Flip the normal of a `DOUBLE_SIDE` face seen from behind. A `BACK_SIDE` face keeps its normal, as in three.js.
 
 The output is one flat list, three `RasterVertex` per triangle. Both rasterizers consume it. See [Rasterization](Rasterization).
 
 ## Draw order
 
 Opaque draws come first, nearest first. Translucent draws follow, furthest first. The order is per draw, by the depth of its own placed origin. An instance sorts where it is, not where its node is, so a translucent mesh between two instances of a group falls between them. Only the draws the camera makes are sorted. See [Why transparency is sorted](Why-transparency-is-sorted).
+
+`prepare_frame` sorts lines and wireframes into the same order. A translucent line falls between the translucent surfaces on either side of it. See [Lines](Lines#two-lists-one-order).
 
 ## Frustum culling
 
@@ -84,13 +87,13 @@ Each instance of an instanced or batched mesh is tested on its own, with the ins
 
 ## What render does
 
-`render` calls `prepare`, then resolves the lights once for the frame with `Lighting(scene, camera.visible_layers(), camera_position(scene, camera), toward_camera(scene, camera))`. A light on a layer the camera does not watch lights nothing. The camera's position goes with the lights because a `PHONG` material measures its highlight from there. See [Lights](Lights#lighting).
+`render` calls `prepare_frame`, then resolves the lights once for the frame with `Lighting(scene, camera.visible_layers(), camera_position(scene, camera), toward_camera(scene, camera))`. A light on a layer the camera does not watch lights nothing. The camera's position goes with the lights because a `PHONG` material measures its highlight from there. See [Lights](Lights#lighting).
 
 `toward_camera` goes with it because a parallel projection has one direction toward the camera for every surface. It asks `Matrix4.is_affine()` of the projection matrix. A converging projection has a bottom row that is not (0, 0, 0, 1), and `toward_camera` returns `PERSPECTIVE_VIEW` for it. A parallel one returns the camera's own world +z axis, made unit length. See [Lights](Lights#which-way-the-camera-lies).
 
 `camera_up` goes with them for a `MATCAP` surface, which is looked up in the camera's own frame. It is the view space +y axis carried back into the world. Every projection answers the same way. See [Materials](Materials#matcap).
 
-It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). Then it rasterizes the triangles and resolves the image through the tone mapping curve.
+It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). Then it rasterizes the frame with `rasterize_frame`, in the frame's order, and resolves the image through the tone mapping curve.
 
 ## Workers
 
@@ -115,4 +118,6 @@ A mesh the camera's layers or frustum leave out is not checked.
 
 ## Performance
 
-`make bench-scene` times each stage on a sphere of twelve thousand triangles. At 1280 by 720 with 24 workers a frame takes about 19 milliseconds. `prepare` is single threaded and is the largest stage.
+`make bench-scene` times each stage on its own on a sphere of twelve thousand triangles. At 1280 by 720 with 16 workers a frame takes about 6 milliseconds on an Apple M4 Max. The rasterizer is the largest stage. `prepare` is single threaded and takes about half a millisecond. A triangle wholly inside the depth range skips the clipper, and the corner list is sized once per draw.
+
+The resolve encodes the clear color once and copies it to every pixel that still holds it. A frame that is mostly background pays for the pixels that are not.

@@ -49,7 +49,7 @@ var flat = centered(
 )
 ```
 
-`OrthographicCamera(left, right, top, bottom, near, far)` takes the volume's edges as lengths. `centered(height, aspect, near, far)` builds a symmetric one. `near` can be zero. The edges must be ordered: right beyond left, top above bottom.
+`OrthographicCamera(left, right, top, bottom, near, far)` takes the volume's edges as lengths. `centered(height, aspect, near, far)` builds a symmetric one. `near` can be zero or negative, as in three.js: a top-down view often puts it behind the camera. The edges must be ordered: right beyond left, top above bottom.
 
 An orthographic projection leaves `w` at one. The perspective correction then divides by one, so no code path is special.
 
@@ -82,7 +82,7 @@ The two contracts differ, because `look_at` carries a facing into the parent's f
 - `view_matrix()` raises when the camera is attached. Only the scene knows where the node is.
 - `view_matrix_in(scene)` raises when the scene is stale or the node is missing.
 - `view_matrix_in(scene)` raises when the node's world transform is mirrored, flattened or sheared.
-- A camera at its own target, or with up along the view direction, raises.
+- A camera at its own target keeps the identity rotation. An up along the view direction is nudged off it by a ten-thousandth, as three.js's `lookAt` does. Neither raises.
 
 ## Example
 

@@ -139,6 +139,40 @@ def test_objects_and_groups_split_the_file_and_keep_their_names() raises:
     # An object declared with no name at all has an empty one.
     var unnamed = parse_obj(String("o\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n"))
     assert_equal(unnamed.objects[0].name, String(""))
+    # A declaration with no faces before the next is dropped, as three.js
+    # drops an empty object, and the faces after belong to the next.
+    var renamed = parse_obj(
+        String("v 0 0 0\nv 1 0 0\nv 0 1 0\no first\no second\nf 1 2 3\n")
+    )
+    assert_equal(renamed.count(), 1)
+    assert_equal(renamed.objects[0].name, String("second"))
+
+
+def test_faces_before_the_first_declaration_belong_to_it() raises:
+    # three.js renames the object it began with at the first `o` or `g`
+    # rather than starting another, so faces listed before the line are
+    # the named object's. A material change before the line has already
+    # split those faces into parts; every one of them takes the name too.
+    var model = parse_obj(
+        String("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\no Cube\nf 3 2 1\n")
+    )
+    assert_equal(model.count(), 1)
+    assert_equal(model.objects[0].name, String("Cube"))
+    assert_equal(model.objects[0].geometry.triangle_count(), 2)
+    var split = parse_obj(
+        String(
+            "v 0 0 0\nv 1 0 0\nv 0 1 0\n"
+            "usemtl red\nf 1 2 3\nusemtl blue\nf 3 2 1\n"
+            "g Cube\nf 1 2 3\ng Other\nf 1 2 3\n"
+        )
+    )
+    assert_equal(split.count(), 3)
+    assert_equal(split.objects[0].name, String("Cube"))
+    assert_equal(split.objects[0].material, String("red"))
+    assert_equal(split.objects[1].name, String("Cube"))
+    assert_equal(split.objects[1].material, String("blue"))
+    assert_equal(split.objects[1].geometry.triangle_count(), 2)
+    assert_equal(split.objects[2].name, String("Other"))
 
 
 def test_a_material_splits_an_object_and_carries_into_the_next() raises:
@@ -238,9 +272,15 @@ def test_faces_of_one_object_must_agree_about_normals_and_uvs() raises:
         _ = parse_obj(three + "f 1//1 2//1 3//1\nf 1 2 3\n")
     with assert_raises():
         _ = parse_obj(three + "f 1 2 3\nf 1/1 2/1 3/1\n")
-    # A new object may differ.
-    var split = parse_obj(three + "f 1//1 2//1 3//1\no next\nf 1 2 3\n")
+    # A new object may differ. Both are declared: faces before the first
+    # `o` belong to it, as three.js has it, so one declaration would make
+    # the two faces one object that disagrees with itself.
+    var split = parse_obj(
+        three + "o first\nf 1//1 2//1 3//1\no next\nf 1 2 3\n"
+    )
     assert_equal(split.count(), 2)
+    with assert_raises():
+        _ = parse_obj(three + "f 1//1 2//1 3//1\no next\nf 1 2 3\n")
 
 
 def test_a_refusal_names_its_line_and_the_offending_text() raises:

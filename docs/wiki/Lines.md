@@ -79,20 +79,25 @@ A distance test is the natural way to ask "is this pixel on the line" per pixel.
 
 three.js is the same. WebGL ignores `linewidth`, which is why three.js ships `Line2` as geometry rather than as a line. When thickness arrives here it will be quads, and quads are triangles, which `render/fillrule.mojo` already covers.
 
-## The two passes
+## Two lists, one order
 
-Lines are prepared by their own pass and drawn by their own pass.
+Lines are prepared by their own pass into their own list.
 
 ```mojo
 var corners = renderer.prepare(scene, assets, camera)
 var segments = renderer.prepare_lines(scene, assets, camera)
+var frame = renderer.prepare_frame(scene, assets, camera)
 ```
 
-`prepare_lines` is `prepare` for lines, and it is the same boundary: screen-space primitives with their varyings worked out. `Renderer.render` fills the triangles and then the segments. `GpuRenderer.draw` takes both lists and does both passes in one launch.
+`prepare_lines` is `prepare` for lines, and it is the same boundary: screen-space primitives with their varyings worked out. `prepare_frame` makes both lists and one order over them: a list of `Draw` records, each a run of triangles or a run of segments. `Renderer.render` fills a frame with `rasterize_frame`. `GpuRenderer.draw` takes the same three lists and walks the same order in one launch.
 
-The lines go second, and they test the triangles' depth. A line in front of a surface is drawn over it. A line behind one is hidden by it.
+The order is the one every renderer uses. Opaque runs come first, triangles then segments, nearest first. Blended runs follow, triangles and segments together, furthest first, by the depth of each draw's own placed origin. A blended line is drawn after the blended surface behind it and before the one in front of it. See [Sorted transparency](Why-transparency-is-sorted).
 
-Opaque lines are prepared first, nearest first, then the blended ones furthest first. That is the order `prepare` puts the triangles in, and for the same reasons. See [Sorted transparency](Why-transparency-is-sorted).
+An opaque line behind a translucent pane stays behind it. Drawing every line after every triangle put that line on top: the pane had blended without claiming the depth, and the line passed the test.
+
+A line tests the depth of what was drawn before it. An opaque line in front of a surface is drawn over it. A line behind an opaque surface is hidden by it. A blended line tests the depth and does not claim it, as a blended surface does not.
+
+`prepare_lines` returns its list in that order too: opaque lines and wireframes nearest first, then the blended ones furthest first. A wireframe is sorted among the lines by its own depth.
 
 A line whose node shares no layer with the camera contributes nothing. Nor does one whose bounding sphere lies outside the camera's frustum, unless it opted out with `frustum_culled=False`.
 

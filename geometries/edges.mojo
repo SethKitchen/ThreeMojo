@@ -176,6 +176,24 @@ def _face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     return edge
 
 
+def _degenerate(a: Int, b: Int, c: Int) -> Bool:
+    """Return True if two of a face's three welded points are one point.
+
+    Args:
+        a: The first corner's welded point.
+        b: The second's.
+        c: The third's.
+
+    Returns:
+        True for a face with no area to have a normal.
+    """
+    if a == b:
+        return True
+    if b == c:
+        return True
+    return a == c
+
+
 def _paired(
     geometry: BufferGeometry,
 ) raises -> Tuple[List[Int], List[Int], List[Float32]]:
@@ -215,6 +233,15 @@ def _paired(
         var corners = List[Int]()
         for corner in range(3):  # pragma: no branch
             corners.append(geometry.corner_index(triangle, corner))
+        # A face with two corners on one welded point has no area and no
+        # normal, and three.js's `EdgesGeometry` skips it. Counted, it
+        # lent the edges it shares a turn of ninety degrees -- a zero
+        # normal dots to zero -- and drew a crease across a flat surface
+        # wherever a generator left a degenerate pole fan.
+        if _degenerate(
+            welded[corners[0]], welded[corners[1]], welded[corners[2]]
+        ):
+            continue
         var normal = _face_normal(
             geometry.corner(triangle, 0),
             geometry.corner(triangle, 1),

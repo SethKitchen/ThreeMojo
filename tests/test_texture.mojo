@@ -74,7 +74,7 @@ def quad(wrap: Wrap = REPEAT) raises -> Texture:
         pixels.append(colors[index].g)
         pixels.append(colors[index].b)
         pixels.append(colors[index].a)
-    return Texture(2, 2, pixels^, wrap)
+    return Texture(2, 2, pixels^, wrap, NEAREST, mipmapped=False)
 
 
 # --- the blank texture ------------------------------------------------------
@@ -454,6 +454,12 @@ def test_a_repeating_bilinear_texture_blends_across_its_seam() raises:
 def test_a_texture_keeps_the_filter_it_was_given() raises:
     assert_equal(quad().filter, NEAREST)
     assert_equal(smooth_quad().filter, BILINEAR)
+    # Left unsaid, the filter is bilinear and the chain is built, as
+    # three.js's `LinearFilter`, `LinearMipmapLinearFilter` and
+    # `generateMipmaps` have them.
+    var told_nothing = checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
+    assert_equal(told_nothing.filter, BILINEAR)
+    assert_equal(told_nothing.levels, 4)
     var board = checkerboard(
         4, 2, Color(255, 255, 255), Color(0, 0, 0), REPEAT, BILINEAR
     )
@@ -519,10 +525,12 @@ def test_filtering_two_opaque_texels_is_unchanged_by_premultiplying() raises:
 # --- Mipmaps ----------------------------------------------------------------
 
 
-def test_a_texture_has_one_level_unless_asked_for_more() raises:
+def test_a_texture_has_one_level_when_asked_for_none() raises:
     # Building the chain costs a third more memory and is pointless for an
     # image that is never minified, so it is opt-in.
-    var plain = checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
+    var plain = checkerboard(
+        8, 2, Color(255, 255, 255), Color(0, 0, 0), mipmapped=False
+    )
     assert_equal(plain.levels, 1)
 
 
@@ -636,7 +644,9 @@ def test_a_level_past_the_end_reads_the_smallest_image() raises:
 
 
 def test_a_texture_without_a_chain_ignores_the_level() raises:
-    var plain = checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
+    var plain = checkerboard(
+        8, 2, Color(255, 255, 255), Color(0, 0, 0), mipmapped=False
+    )
     assert_equal(plain.sample_level(0.1, 0.9, 2.0).r, plain.sample(0.1, 0.9).r)
 
 
@@ -858,7 +868,9 @@ def test_reading_a_level_the_chain_does_not_have_is_rejected() raises:
 
 
 def test_a_texture_without_a_chain_has_only_level_zero() raises:
-    var plain = checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 0))
+    var plain = checkerboard(
+        8, 2, Color(255, 255, 255), Color(0, 0, 0), mipmapped=False
+    )
     _ = plain.sample_at(0.5, 0.5, 0)
     with assert_raises():
         _ = plain.sample_at(0.5, 0.5, 1)

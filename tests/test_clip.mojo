@@ -7,7 +7,7 @@
 
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor
-from renderers.clip import ClipVertex, clip_depth
+from renderers.clip import ClipVertex, clip_depth, clip_segment
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -128,9 +128,16 @@ def test_position_is_interpolated_across_the_cut() raises:
     assert_true(found)
 
 
-def test_a_near_plane_behind_the_camera_is_rejected() raises:
-    with assert_raises():
-        _ = clip_depth(at(0, 0, -5), at(1, 0, -5), at(0, 1, -5), -1.0, FAR)
+def test_a_near_plane_behind_the_camera_cuts_there() raises:
+    # An orthographic camera may put its near plane behind itself, as
+    # three.js allows; the clipper cuts at z = +1 as at any other plane.
+    var pieces = clip_depth(at(0, 0, -5), at(1, 0, -5), at(0, 1, 5), -1.0, FAR)
+    assert_true(len(pieces) > 0)
+    for index in range(len(pieces)):
+        assert_true(pieces[index].position.z <= Float32(1 + 1e-5))
+    var kept = clip_segment(at(0, 0, 3), at(0, 0, -5), -1.0, FAR)
+    assert_equal(len(kept), 2)
+    assert_almost_equal(kept[0].position.z, Float32(1), atol=Float64(1e-5))
 
 
 def test_a_near_plane_at_the_camera_itself_is_allowed() raises:

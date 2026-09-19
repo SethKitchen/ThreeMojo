@@ -90,7 +90,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] Sprite [#28](https://github.com/SethKitchen/ThreeMojo/issues/28)
 - [x] [InstancedMesh and BatchedMesh](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#instancedmesh): one geometry, or one geometry per instance, at many transforms under one node, culled instance by instance [#29](https://github.com/SethKitchen/ThreeMojo/issues/29)
 - [x] [SkinnedMesh, Bone and Skeleton](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning): bones that are scene nodes, and a skeleton saying how far each has moved since the bind [#30](https://github.com/SethKitchen/ThreeMojo/issues/30)
-- [x] [LOD](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#lod): one of several geometries at a node, picked by the camera's distance each frame [#31](https://github.com/SethKitchen/ThreeMojo/issues/31)
+- [x] [LOD](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#lod): one of several geometries at a node, picked by the camera's distance each frame, with hysteresis [#31](https://github.com/SethKitchen/ThreeMojo/issues/31)
 
 ### Materials
 
@@ -174,7 +174,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Euler angles from a quaternion](https://github.com/SethKitchen/ThreeMojo/wiki/Rotations#euler-and-eulerorder): all six orders, gimbal lock as in three.js, `Object3D.rotation` [#94](https://github.com/SethKitchen/ThreeMojo/issues/94)
 - [x] [Matrix3 and Vector4](https://github.com/SethKitchen/ThreeMojo/wiki/Math#matrix3): the normal matrix at its own size, three.js's uv transform, and homogeneous coordinates that keep their `w` [#95](https://github.com/SethKitchen/ThreeMojo/issues/95)
 - [x] [Box3, Sphere and Plane](https://github.com/SethKitchen/ThreeMojo/wiki/Math#box3-sphere-and-plane): bounds that grow, transform and test each other, and a plane with a signed distance [#96](https://github.com/SethKitchen/ThreeMojo/issues/96)
-- [x] [Ray and Raycaster](https://github.com/SethKitchen/ThreeMojo/wiki/Raycasting): a ray against spheres, boxes, planes and triangles, and a pick through a camera's pixel onto the meshes [#97](https://github.com/SethKitchen/ThreeMojo/issues/97)
+- [x] [Ray and Raycaster](https://github.com/SethKitchen/ThreeMojo/wiki/Raycasting): a ray against spheres, boxes, planes and triangles. A pick through a camera's pixel onto the meshes, instances, batches and LODs [#97](https://github.com/SethKitchen/ThreeMojo/issues/97)
 - [x] [Curves and paths](https://github.com/SethKitchen/ThreeMojo/wiki/Curves): line, quadratic and cubic Bezier, and Catmull-Rom curves, joined into a path and closed into a shape with holes [#98](https://github.com/SethKitchen/ThreeMojo/issues/98)
 - [x] [Color as floats](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer#color-and-floatcolor): three.js's hex and HSL setters and getters, lerp, offset and arithmetic on the linear float color [#99](https://github.com/SethKitchen/ThreeMojo/issues/99)
 <!-- /features -->

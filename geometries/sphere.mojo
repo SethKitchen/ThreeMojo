@@ -30,14 +30,16 @@ from units.si import Length
 
 
 def sphere(
-    radius: Length, width_segments: Int = 24, height_segments: Int = 16
+    radius: Length, width_segments: Int = 32, height_segments: Int = 16
 ) raises -> BufferGeometry:
     """Return a sphere centered on the origin.
 
     Args:
         radius: How far the surface lies from the center.
         width_segments: Divisions around the equator; at least three.
+            Thirty-two by default, three.js's `SphereGeometry` default.
         height_segments: Divisions from pole to pole; at least two.
+            Sixteen by default, as there.
 
     Returns:
         A geometry with `position`, `normal` and `uv` attributes and an
@@ -66,6 +68,16 @@ def sphere(
         var theta = Float32(pi) * ring_fraction
         var sin_theta = sin(theta)
         var cos_theta = cos(theta)
+        # At a pole every column's vertex is the same point, and the one
+        # triangle each quad keeps there has its tip at it. three.js moves
+        # the tip's u half a column toward the middle of that triangle --
+        # forward at the north pole, back at the south -- so the texture
+        # meets the pole squarely rather than sheared into a pinwheel.
+        var u_offset = Float32(0)
+        if ring == 0:
+            u_offset = 0.5 / Float32(width_segments)
+        elif ring == height_segments:
+            u_offset = -0.5 / Float32(width_segments)
         for column in range(width_segments + 1):  # pragma: no branch
             var column_fraction = Float32(column) / Float32(width_segments)
             var phi = 2 * Float32(pi) * column_fraction
@@ -83,7 +95,7 @@ def sphere(
             # u wraps once around the equator; v runs 1 at the north pole to
             # 0 at the south, because texture space has its origin at the
             # bottom while `ring` counts downwards from the top.
-            uvs.append(column_fraction)
+            uvs.append(column_fraction + u_offset)
             uvs.append(1 - ring_fraction)
 
     var stride = width_segments + 1

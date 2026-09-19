@@ -932,7 +932,11 @@ def check_triangle_state(
         raise Error("A triangle names a matcap id that nothing can hold")
 
 
-def check_output_kinds(corners: List[RasterVertex], mapped: Bool) raises:
+def check_output_kinds(
+    corners: List[RasterVertex],
+    mapped: Bool,
+    segments: List[RasterVertex] = List[RasterVertex](),
+) raises:
     """Refuse a tone-mapped frame that holds both data and blended light.
 
     **Two output representations cannot share a pixel, and a blend is what
@@ -965,10 +969,14 @@ def check_output_kinds(corners: List[RasterVertex], mapped: Bool) raises:
         mapped: Whether this frame resolves through a tone mapping curve.
             A frame with no curve has nothing to decide and is never
             refused.
+        segments: Raster vertices, two per segment, as submitted alongside.
+            A line is never data, but a blended one mixes light into
+            whatever it crosses, a data pixel included, so it counts the
+            same way a blended triangle does. Empty by default.
 
     Raises:
         Error: If the curve is on and the frame holds both a surface that
-            shows data and a surface that blends.
+            shows data and a surface or a segment that blends.
     """
     if not mapped:
         return
@@ -981,6 +989,9 @@ def check_output_kinds(corners: List[RasterVertex], mapped: Bool) raises:
         if first.kind.is_data():
             shows_data = True
         elif first.blend == BLEND:
+            mixes_light = True
+    for segment in range(len(segments) // 2):
+        if segments[segment * 2].blend == BLEND:
             mixes_light = True
     if shows_data and mixes_light:
         raise Error(
@@ -1166,6 +1177,62 @@ def gradient_ramp(image: Texture) raises -> List[Float32]:
     return tones^
 
 
+def check_triangle_maps(
+    a: RasterVertex, mode: ShadeMode, textures: TextureStore
+) raises:
+    """Refuse a triangle whose maps are not stored the way its shader reads
+    them, under the mode that would read them.
+
+    The four checks `rasterize_shaded` makes before its first fragment,
+    asked of the first corner, which `check_triangle_state` has made
+    authoritative. `rasterize_all` asks them of every triangle before any
+    band starts, so a triangle a band's rows never reach is refused on
+    four workers as it is on one; a band skips such a triangle before
+    `rasterize_shaded` can look at it. The kernel asks the same four before
+    a launch.
+
+    Args:
+        a: The triangle's first corner.
+        mode: What a fragment's color is taken from; only `SHADE_TEXTURE`
+            opens the base, emissive and alpha maps, and only the uv view
+            opens neither the ramp nor the matcap.
+        textures: Where the maps live.
+
+    Raises:
+        Error: If a map the mode would open is not in the store; an
+            emissive map or a matcap does not ignore its alpha; an alpha
+            map is not stored as data; or a gradient map is not a
+            one-row linear table -- see `check_alpha_map` and
+            `check_gradient_map`.
+    """
+    # An emissive map's alpha means nothing, and only a texture built to
+    # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
+    # only when the map will be opened: SHADE_LIT never reads it.
+    if a.emissive_map != NO_TEXTURE and mode == SHADE_TEXTURE:
+        if textures.get(a.emissive_map).alpha != IGNORED:
+            raise Error(
+                "An emissive map must ignore its alpha; build the texture"
+                " with alpha=IGNORED"
+            )
+    # An alpha map holds data, and says so twice: linear, or the sRGB curve
+    # changes what its bytes mean, and alpha ignored, or filtering weights
+    # its green by an alpha that means nothing.
+    if a.alpha_map != NO_TEXTURE and mode == SHADE_TEXTURE:
+        check_alpha_map(textures.get(a.alpha_map))
+    # The ramp a `TOON` surface steps through. The uv debug view shades
+    # nothing and reads none.
+    if a.gradient_map != NO_TEXTURE and mode != SHADE_UV:
+        check_gradient_map(textures.get(a.gradient_map))
+    # A matcap's own alpha means nothing, so only a texture built to
+    # ignore it filters accordingly -- the rule an emissive map follows.
+    if a.matcap != NO_TEXTURE and mode != SHADE_UV:
+        if textures.get(a.matcap).alpha != IGNORED:
+            raise Error(
+                "A matcap must ignore its alpha; build the texture with"
+                " alpha=IGNORED"
+            )
+
+
 def rasterize_shaded(
     a: RasterVertex,
     b: RasterVertex,
@@ -1260,22 +1327,9 @@ def rasterize_shaded(
     # refused here, before a fragment reads it, as the GPU refuses it
     # before the launch.
     fog.validate()
-    # An emissive map's alpha means nothing, and only a texture built to
-    # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
-    # before the first fragment, as the GPU asks it before the launch, and
-    # only when the map will be opened: SHADE_LIT never reads it.
-    if a.emissive_map != NO_TEXTURE and mode == SHADE_TEXTURE:
-        if textures.get(a.emissive_map).alpha != IGNORED:
-            raise Error(
-                "An emissive map must ignore its alpha; build the texture"
-                " with alpha=IGNORED"
-            )
-    # An alpha map holds data, and says so twice: linear, or the sRGB curve
-    # changes what its bytes mean, and alpha ignored, or filtering weights
-    # its green by an alpha that means nothing. Asked here, as the GPU asks
-    # it before the launch, and only when the map will be opened.
-    if a.alpha_map != NO_TEXTURE and mode == SHADE_TEXTURE:
-        check_alpha_map(textures.get(a.alpha_map))
+    # The maps, asked before the first fragment as the GPU asks before the
+    # launch, and only under the mode that would open each.
+    check_triangle_maps(a, mode, textures)
     # The ramp a `TOON` surface steps through, read once here. Its top row
     # is the whole lookup table, and it is the same for every fragment, so
     # opening the texture per light per pixel would buy nothing. Empty for
@@ -1283,18 +1337,7 @@ def rasterize_shaded(
     # debug view shades nothing and reads none.
     var ramp = List[Float32]()
     if a.gradient_map != NO_TEXTURE and mode != SHADE_UV:
-        check_gradient_map(textures.get(a.gradient_map))
         ramp = gradient_ramp(textures.get(a.gradient_map))
-    # A matcap's own alpha means nothing, so only a texture built to
-    # ignore it filters accordingly -- the rule an emissive map follows.
-    # Asked here, as the GPU asks it before the launch, and only under a
-    # mode that shades: the uv view looks nothing up.
-    if a.matcap != NO_TEXTURE and mode != SHADE_UV:
-        if textures.get(a.matcap).alpha != IGNORED:
-            raise Error(
-                "A matcap must ignore its alpha; build the texture with"
-                " alpha=IGNORED"
-            )
 
     # Whether this surface composites, decided by the material and carried
     # here rather than inferred from a color. It changes two things
@@ -1608,6 +1651,14 @@ def rasterize_shaded(
                 # was shaded, claimed now that it has survived.
                 if tested:
                     target.claim_depth(x, y, z)
+                # An opaque fragment is written with an alpha of one, as
+                # three.js's `opaque_fragment` writes it: the material's
+                # opacity and its maps' alpha have had their say through
+                # the alpha test, and a surface that does not blend hides
+                # everything behind it. A depth material keeps its opacity
+                # as its alpha, as three.js's `MeshDepthMaterial` writes it.
+                if a.kind != DEPTH:
+                    shaded.a = 1
                 target.write(x, y, shaded, data)
         row = row + down
 
@@ -1744,7 +1795,16 @@ def rasterize_line(
         if share > 1:
             share = 1
         var z = a.z + (b.z - a.z) * share
-        if not target.test_depth(x, y, z):
+        # A blended segment is hidden by what is in front of it and hides
+        # nothing behind it, exactly as a blended triangle: it tests the
+        # depth without claiming it. Claiming it, as this once did, dropped
+        # every later blended segment at a shared pixel, so a translucent
+        # wireframe lost the second edge at every corner, while the kernel
+        # kept it.
+        if a.blend == BLEND:
+            if not target.depth_passes(x, y, z):
+                continue
+        elif not target.test_depth(x, y, z):
             continue
         var near = a.inv_w * (1 - share)
         var far = b.inv_w * share
@@ -1763,142 +1823,126 @@ def rasterize_line(
         if a.blend == BLEND:
             target.blend(x, y, color)
         else:
-            target.claim_depth(x, y, z)
+            # Opaque, so written with an alpha of one, as a triangle is.
+            color.a = 1
             target.write(x, y, color, False)
 
 
-async def _line_band(
-    corners: Pointer[RasterVertex, ImmutAnyOrigin],
-    segments: Int,
-    target: MutPointer[RenderTarget, MutAnyOrigin],
-    errors: MutPointer[String, MutAnyOrigin],
-    band: Int,
-    first_row: Int,
-    last_row: Int,
-    fog: FogView,
-):
-    """Draw every segment into one horizontal band of the target.
+# --- frames -----------------------------------------------------------------
 
-    `_band` for lines. It takes pointers for the same reason: a coroutine
-    outlives the call that made it, and `rasterize_lines_all` keeps
-    everything alive until `TaskGroup.wait` returns. A band owns its rows,
-    so the threads never touch one pixel, and submission order inside a
-    band is what it is on one thread -- which is what keeps a blended
-    segment mixing over what it should.
 
-    A task cannot raise, so an error goes into this band's slot and
-    `rasterize_lines_all` raises it once every band has finished.
+@fieldwise_init
+struct DrawKind(Equatable, ImplicitlyCopyable, Writable):
+    """Which primitive a `Draw` runs over, as a type rather than an int.
+
+    See `core.object3d.NodeId` for why. The type stops a bare integer at
+    compile time; it does not stop `DrawKind(7)`, which `check_draws`
+    refuses before anything is drawn. `value` is what crosses to the
+    kernel.
     """
-    try:
-        for segment in range(segments):
-            var a = corners[unsafe_offset=segment * 2]
-            var b = corners[unsafe_offset=segment * 2 + 1]
-            # Most segments miss most bands, and saying so from two ends is
-            # cheaper than bounding the walk and finding it empty.
-            if (
-                Int(floor(min(a.y, b.y))) > last_row
-                or Int(ceil(max(a.y, b.y))) < first_row
-            ):
-                # Still checked, though nothing here will draw it. A band
-                # owns rows, not segments, so a segment no band drew would
-                # otherwise go unexamined on four workers and be refused on
-                # one -- the same input, two answers. `rasterize_line`
-                # makes the identical check on the ones that do draw.
-                check_line_state(a, b)
-                continue
-            rasterize_line(a, b, target[], first_row, last_row, fog)
-    except e:
-        errors[unsafe_offset=band] = String(e)
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `DRAW_TRIANGLES` or `DRAW_SEGMENTS`."""
+        return self == DRAW_TRIANGLES or self == DRAW_SEGMENTS
 
 
-def rasterize_lines_all(
-    corners: List[RasterVertex],
-    mut target: RenderTarget,
-    workers: Int = 1,
-    fog: FogView = FogView.none(),
-) raises:
-    """Draw every segment in `corners` into `target`, on `workers` threads.
+# A run of triangles, three corners each, out of a frame's corner list.
+comptime DRAW_TRIANGLES = DrawKind(0)
+# A run of segments, two corners each, out of a frame's segment list.
+comptime DRAW_SEGMENTS = DrawKind(1)
 
-    `rasterize_all` for lines: two corners a segment rather than three, and
-    the same band split, so the image is what one thread would have drawn.
+
+@fieldwise_init
+struct Draw(ImplicitlyCopyable):
+    """One run of primitives of one kind, drawn in one go.
+
+    A frame is two lists, triangles and segments, and one order over both:
+    a list of these, each naming a run of one list. That is what lets a
+    blended line be drawn after the blended surface behind it and before
+    the one in front of it, which two lists drawn one after the other
+    cannot. `Renderer.prepare_frame` writes the order once; both
+    rasterizers walk it, so neither can put a primitive somewhere the other
+    does not.
+    """
+
+    var kind: DrawKind
+    # The first primitive of the run: a triangle or a segment, not a
+    # corner.
+    var first: Int
+    var count: Int
+
+
+def check_draws(draws: List[Draw], triangles: Int, segments: Int) raises:
+    """Refuse a draw list that names what a frame does not hold.
+
+    Shared by both backends, so neither can walk a run the other refuses:
+    the kernel reads the corner buffers at whatever index a draw hands it,
+    and an index past the end is an unchecked read of device memory.
 
     Args:
-        corners: Raster vertices, two per segment.
-        target: The linear render target to draw into.
-        workers: How many threads to draw with, at least one. The image is
-            cut into that many horizontal bands, each drawn by its own
-            task, exactly as `rasterize_all` cuts it.
-        fog: The scene's fog, seen through the camera.
-
-    Every segment's metadata is checked whether or not it is drawn, and
-    on every band, so the same input is refused on one worker and on
-    four. `rasterize_line` makes the check on a segment a band draws and
-    `_line_band` makes it on one the band's rows miss. What a caller does
-    not get is a promise that nothing was drawn before the error: bands
-    run at once, and the target a raise leaves behind is not a frame.
+        draws: The order to draw in.
+        triangles: How many triangles the frame's corner list holds.
+        segments: How many segments its segment list holds.
 
     Raises:
-        Error: If the corner count is odd, `workers` is less than one, the
-            fog view is refused, or any segment's metadata is refused by
-            `check_line_state`.
+        Error: If a draw's kind is neither `DRAW_TRIANGLES` nor `DRAW_SEGMENTS`, or
+            its run starts before the first primitive, has a negative
+            count, or reaches past the last primitive of its kind.
     """
-    if len(corners) % 2 != 0:
-        raise Error("Rasterizing needs whole segments")
-    if workers < 1:
-        raise Error("Rasterizing lines needs at least one worker")
-    fog.validate()
-    var segments = len(corners) // 2
-    # Bands, as `rasterize_all` uses them, and for the same reason: a band
-    # owns its rows, so two threads never write one pixel. Lines are cheap
-    # enough that one worker is the common case, and the split is here so
-    # that a frame of lines and triangles is drawn the same way throughout.
-    # The split `rasterize_all` uses, and the same arithmetic: a band's
-    # rows fall out of the band number and the height, so no band can start
-    # past the image or end beyond it and neither needs a guard. A target
-    # has at least one row and a caller at least one worker, so there is
-    # always at least one band.
-    var bands = min(workers, target.height)
-    if bands == 1:
-        for segment in range(segments):
-            rasterize_line(
-                corners[segment * 2],
-                corners[segment * 2 + 1],
-                target,
-                fog=fog,
+    for index in range(len(draws)):
+        ref draw = draws[index]
+        if not draw.kind.is_valid():
+            raise Error(
+                "A draw needs a kind that exists: DRAW_TRIANGLES or"
+                " DRAW_SEGMENTS"
             )
-        return
-
-    # Tasks, as `rasterize_all` creates them, and for the same reason: a
-    # band owns its rows, so no two threads write one pixel. Walking the
-    # bands in an ordinary loop instead is what this used to do, which
-    # asked every worker's worth of rows to be walked on one thread --
-    # more workers meant more work and no more threads.
-    var errors = List[String](length=bands, fill=String(""))
-    var group = TaskGroup()
-    # At least two bands past the early return above, so neither loop can
-    # run zero times.
-    for band in range(bands):  # pragma: no branch
-        group.create_task(
-            _line_band(
-                corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
-                segments,
-                Pointer(to=target).unsafe_origin_cast[MutAnyOrigin](),
-                errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                band,
-                band * target.height // bands,
-                (band + 1) * target.height // bands - 1,
-                fog,
-            )
-        )
-    group.wait()
-    for band in range(bands):  # pragma: no branch
-        if errors[band] != "":
-            raise Error(errors[band])
+        var held = triangles
+        if draw.kind == DRAW_SEGMENTS:
+            held = segments
+        if draw.first < 0 or draw.count < 0 or draw.first + draw.count > held:
+            raise Error("A draw runs past the primitives the frame holds")
 
 
-async def _band(
+def _rows_of(corners: List[RasterVertex], stride: Int) -> List[Int]:
+    """Return the first and last row each primitive can touch, in pairs.
+
+    Worked out once for every band rather than once per band: most
+    primitives miss most bands, and two integer compares say so; reading
+    the corners to find out copied half a kilobyte per triangle per band,
+    which was most of what a band did.
+
+    Args:
+        corners: The primitives' corners.
+        stride: Corners per primitive: three for a triangle, two for a
+            segment.
+
+    Returns:
+        Two entries per primitive, the first row then the last.
+    """
+    var rows = List[Int]()
+    var count = len(corners) // stride
+    rows.reserve(count * 2)
+    for index in range(count):
+        var top = corners[index * stride].y
+        var bottom = top
+        for corner in range(1, stride):  # pragma: no branch
+            var y = corners[index * stride + corner].y
+            top = min(top, y)
+            bottom = max(bottom, y)
+        rows.append(Int(floor(top)))
+        rows.append(Int(ceil(bottom)))
+    return rows^
+
+
+async def _frame_band(
     corners: Pointer[RasterVertex, ImmutAnyOrigin],
-    triangles: Int,
+    triangle_rows: MutPointer[Int, MutAnyOrigin],
+    segments: Pointer[RasterVertex, ImmutAnyOrigin],
+    segment_rows: MutPointer[Int, MutAnyOrigin],
+    draws: Pointer[Draw, ImmutAnyOrigin],
+    draw_count: Int,
     target: MutPointer[RenderTarget, MutAnyOrigin],
     mode: ShadeMode,
     textures: Pointer[TextureStore, ImmutAnyOrigin],
@@ -1909,49 +1953,224 @@ async def _band(
     last_row: Int,
     fog: FogView,
 ):
-    """Rasterize every triangle into one horizontal band of the target.
+    """Draw a frame into one horizontal band of the target.
 
-    One of these runs per worker, as a task on the standard library's thread
-    pool. It takes pointers rather than references because a coroutine
-    outlives the call that made it and must not borrow from it; `rasterize_all`
-    keeps everything alive until `TaskGroup.wait` returns.
+    One of these runs per worker, as a task on the standard library's
+    thread pool. It takes pointers rather than references because a
+    coroutine outlives the call that made it and must not borrow from it;
+    `rasterize_frame` keeps everything alive until `TaskGroup.wait`
+    returns.
 
     A band owns its rows outright, so the threads never touch the same
     pixel and the depth test needs no atomics -- the same argument the GPU
     kernel makes with one thread per pixel. Draw order within a band is
-    submission order, exactly as on one thread, which is what keeps blending
-    correct: the sort `Renderer.prepare` did still holds row by row.
+    the frame's order, exactly as on one thread, which is what keeps
+    blending correct: the sort `Renderer.prepare_frame` did still holds
+    row by row.
+
+    The row pairs are from `_rows_of`: a primitive whose rows miss the
+    band is skipped on two compares, without reading its corners.
 
     A task cannot raise, so an error is written into this band's slot and
-    raised by `rasterize_all` once every band has finished.
+    raised by `rasterize_frame` once every band has finished.
     """
     try:
-        for triangle in range(triangles):
-            var a = corners[unsafe_offset=triangle * 3]
-            var b = corners[unsafe_offset=triangle * 3 + 1]
-            var c = corners[unsafe_offset=triangle * 3 + 2]
-            # Most triangles miss most bands. Saying so here, from three
-            # corners, is cheaper than letting `rasterize_shaded` snap the
-            # triangle, bias its edges and clamp an empty box before finding
-            # out.
-            var top = min(a.y, min(b.y, c.y))
-            var bottom = max(a.y, max(b.y, c.y))
-            if Int(floor(top)) > last_row or Int(ceil(bottom)) < first_row:
+        for index in range(draw_count):
+            var draw = draws[unsafe_offset=index]
+            var past = draw.first + draw.count
+            if draw.kind == DRAW_TRIANGLES:
+                for triangle in range(draw.first, past):
+                    if (
+                        triangle_rows[unsafe_offset=triangle * 2] > last_row
+                        or triangle_rows[unsafe_offset=triangle * 2 + 1]
+                        < first_row
+                    ):
+                        continue
+                    rasterize_shaded(
+                        corners[unsafe_offset=triangle * 3],
+                        corners[unsafe_offset=triangle * 3 + 1],
+                        corners[unsafe_offset=triangle * 3 + 2],
+                        target[],
+                        mode,
+                        textures[],
+                        lighting[],
+                        first_row,
+                        last_row,
+                        fog,
+                    )
                 continue
-            rasterize_shaded(
-                a,
-                b,
-                c,
-                target[],
-                mode,
-                textures[],
-                lighting[],
-                first_row,
-                last_row,
-                fog,
-            )
+            for segment in range(draw.first, past):
+                if (
+                    segment_rows[unsafe_offset=segment * 2] > last_row
+                    or segment_rows[unsafe_offset=segment * 2 + 1] < first_row
+                ):
+                    continue
+                rasterize_line(
+                    segments[unsafe_offset=segment * 2],
+                    segments[unsafe_offset=segment * 2 + 1],
+                    target[],
+                    first_row,
+                    last_row,
+                    fog,
+                )
     except e:
         errors[unsafe_offset=band] = String(e)
+
+
+def rasterize_frame(
+    corners: List[RasterVertex],
+    segments: List[RasterVertex],
+    draws: List[Draw],
+    mut target: RenderTarget,
+    mode: ShadeMode = SHADE_LIT,
+    textures: TextureStore = TextureStore(),
+    lighting: Lighting = Lighting.uniform(),
+    workers: Int = 1,
+    fog: FogView = FogView.none(),
+) raises:
+    """Draw a frame -- triangles and segments, in one order -- into
+    `target`, on `workers` threads.
+
+    `rasterize_shaded` and `rasterize_line` for a whole frame. With one
+    worker it is exactly the loop a caller would write: each draw in turn,
+    each primitive of it in turn. With more, the image is cut into that
+    many horizontal bands, each drawn by its own task on the standard
+    library's thread pool, and every draw is offered to every band. The
+    result is byte for byte what one thread produces -- a band owns its
+    rows and draws in the same order -- so only the wall clock changes.
+    More bands than rows collapse to one band per row.
+
+    Everything is checked here, before any band starts, so malformed
+    input is refused whether or not a primitive is visible and however
+    many workers there are: a band skips a primitive its rows miss before
+    the per-primitive rasterizer can look at it, and a single worker does
+    not, so without this the same bad input raised on one thread and
+    passed on four. A texture the store lacks is still found only when a
+    fragment samples it -- `Renderer.prepare` refuses one long before here
+    -- and that answer is the same on any number of workers, because some
+    band covers whatever is visible.
+
+    Threads rather than SIMD, first, because a band is the same code with a
+    row range and needs no new arithmetic, and because the scene benchmark
+    showed rasterization and the sRGB resolve were the frame.
+
+    Args:
+        corners: Raster vertices, three per triangle.
+        segments: Raster vertices, two per segment.
+        draws: The order to draw in; see `Draw`. A primitive no draw
+            names is not drawn.
+        target: The linear render target to draw into.
+        mode: What a fragment's color comes from; see `rasterize_shaded`.
+            A segment reads no mode.
+        textures: Where `SHADE_TEXTURE` looks the triangles' maps up.
+        lighting: The scene's lights, resolved to world space.
+        workers: How many threads to draw with, at least one.
+        fog: The scene's fog, seen through the camera; see
+            `rasterize_shaded` and `rasterize_line`.
+
+    Raises:
+        Error: If the corner count is not a multiple of three, the segment
+            corner count is not a multiple of two, `workers` is less than
+            one, the mode is none of the three, the fog view is refused by
+            `FogView.validate`, any triangle's metadata is refused by
+            `check_triangle_state` or its maps by `check_triangle_maps`,
+            any segment's by `check_line_state`, the draw list is refused
+            by `check_draws`, or any primitive is refused as it is drawn
+            -- on a worker that error is carried back and raised here.
+    """
+    if len(corners) % 3 != 0:
+        raise Error("Rasterizing needs whole triangles")
+    if len(segments) % 2 != 0:
+        raise Error("Rasterizing needs whole segments")
+    if workers < 1:
+        raise Error("Rasterizing needs at least one worker")
+    if not mode.is_valid():
+        raise Error("A shading mode that is none of the three")
+    # Refused here, before any band starts, for the reason the triangle
+    # state is: whether or not a triangle is visible, and however many
+    # workers there are.
+    fog.validate()
+    var triangles = len(corners) // 3
+    var lines = len(segments) // 2
+    for triangle in range(triangles):
+        check_triangle_state(
+            corners[triangle * 3],
+            corners[triangle * 3 + 1],
+            corners[triangle * 3 + 2],
+        )
+        # And its maps, for the same reason: a band skips a triangle its
+        # rows miss before `rasterize_shaded` can open them, so without
+        # this a bad map on a triangle above the image was refused on one
+        # worker and drawn around on four.
+        check_triangle_maps(corners[triangle * 3], mode, textures)
+    for segment in range(lines):
+        check_line_state(segments[segment * 2], segments[segment * 2 + 1])
+    check_draws(draws, triangles, lines)
+
+    var bands = min(workers, target.height)
+    if bands == 1:
+        for index in range(len(draws)):
+            ref draw = draws[index]
+            var past = draw.first + draw.count
+            if draw.kind == DRAW_TRIANGLES:
+                for triangle in range(draw.first, past):
+                    rasterize_shaded(
+                        corners[triangle * 3],
+                        corners[triangle * 3 + 1],
+                        corners[triangle * 3 + 2],
+                        target,
+                        mode,
+                        textures,
+                        lighting,
+                        fog=fog,
+                    )
+                continue
+            for segment in range(draw.first, past):
+                rasterize_line(
+                    segments[segment * 2],
+                    segments[segment * 2 + 1],
+                    target,
+                    fog=fog,
+                )
+        return
+
+    # Every pointer below is to an argument or a local that outlives `wait`,
+    # which is what makes handing it to a coroutine sound.
+    var errors = List[String](length=bands, fill=String(""))
+    var triangle_rows = _rows_of(corners, 3)
+    var segment_rows = _rows_of(segments, 2)
+    var group = TaskGroup()
+    # At least two bands past the early return above, so neither loop can
+    # run zero times.
+    for band in range(bands):  # pragma: no branch
+        group.create_task(
+            _frame_band(
+                corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+                triangle_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                segments.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+                segment_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                draws.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+                len(draws),
+                Pointer(to=target).unsafe_origin_cast[MutAnyOrigin](),
+                mode,
+                Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=lighting).unsafe_origin_cast[ImmutAnyOrigin](),
+                errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                band,
+                band * target.height // bands,
+                (band + 1) * target.height // bands - 1,
+                fog,
+            )
+        )
+    group.wait()
+    # Mojo destroys a value after its last use, and the tasks read the row
+    # pairs through pointers the compiler cannot see: these reads are what
+    # keep the lists alive until every band has finished with them.
+    _ = len(triangle_rows)
+    _ = len(segment_rows)
+    for band in range(bands):  # pragma: no branch
+        if errors[band] != "":
+            raise Error(errors[band])
 
 
 def rasterize_all(
@@ -1965,18 +2184,8 @@ def rasterize_all(
 ) raises:
     """Draw every triangle in `corners` into `target`, on `workers` threads.
 
-    `rasterize_shaded` for a whole list. With one worker it is exactly the
-    loop a caller would write. With more, the image is cut into that many
-    horizontal bands, each drawn by its own task on the standard library's
-    thread pool, and every triangle is offered to every band. The result is
-    byte for byte what one thread produces -- a band owns its rows and draws
-    in the same order -- so only the wall clock changes. More bands than
-    rows collapse to one band per row.
-
-    Threads rather than SIMD, first, because a band is the same code with a
-    row range and needs no new arithmetic, and because the scene benchmark
-    showed rasterization and the sRGB resolve were the frame; `prepare`,
-    still single-threaded, is now the largest single piece.
+    `rasterize_frame` for a frame of triangles alone, in submission order:
+    one draw over the whole list and no segments.
 
     Args:
         corners: Raster vertices, three per triangle.
@@ -1989,77 +2198,57 @@ def rasterize_all(
             `rasterize_shaded`.
 
     Raises:
-        Error: If the corner count is not a multiple of three, `workers` is
-            less than one, the mode is none of the three, the fog view is
-            refused by `FogView.validate`, any triangle's
-            metadata is refused by `check_triangle_state`, or any triangle is
-            refused by `rasterize_shaded` -- on a worker that error is
-            carried back and raised here.
+        Error: Everything `rasterize_frame` raises of the triangles: a
+            corner count that is not a multiple of three, `workers` less
+            than one, a mode that is none of the three, a fog view that
+            `FogView.validate` refuses, a triangle that
+            `check_triangle_state` or `check_triangle_maps` refuses, or one
+            refused as it is drawn.
     """
-    if len(corners) % 3 != 0:
-        raise Error("Rasterizing needs whole triangles")
-    if workers < 1:
-        raise Error("Rasterizing needs at least one worker")
-    if not mode.is_valid():
-        raise Error("A shading mode that is none of the three")
-    # Refused here, before any band starts, for the reason the triangle
-    # state is: whether or not a triangle is visible, and however many
-    # workers there are.
-    fog.validate()
-    var triangles = len(corners) // 3
-    # Every triangle's metadata is checked here, before any band starts, so
-    # malformed input is refused whether or not the triangle is visible and
-    # however many workers there are. A band skips triangles outside its
-    # rows before `rasterize_shaded` can look at them, and a single worker
-    # does not, so without this the same bad input raised on one thread and
-    # passed on four. A texture the store lacks is still found only when a
-    # fragment samples it -- `Renderer.prepare` refuses one long before here
-    # -- and that answer is the same on any number of workers, because some
-    # band covers whatever is visible.
-    for triangle in range(triangles):
-        check_triangle_state(
-            corners[triangle * 3],
-            corners[triangle * 3 + 1],
-            corners[triangle * 3 + 2],
-        )
-    var bands = min(workers, target.height)
-    if bands == 1:
-        for triangle in range(triangles):
-            rasterize_shaded(
-                corners[triangle * 3],
-                corners[triangle * 3 + 1],
-                corners[triangle * 3 + 2],
-                target,
-                mode,
-                textures,
-                lighting,
-                fog=fog,
-            )
-        return
+    var draws: List[Draw] = [Draw(DRAW_TRIANGLES, 0, len(corners) // 3)]
+    rasterize_frame(
+        corners,
+        List[RasterVertex](),
+        draws,
+        target,
+        mode,
+        textures,
+        lighting,
+        workers,
+        fog,
+    )
 
-    # Every pointer below is to an argument or a local that outlives `wait`,
-    # which is what makes handing it to a coroutine sound.
-    var errors = List[String](length=bands, fill=String(""))
-    var group = TaskGroup()
-    # At least two bands past the early return above, so neither loop can
-    # run zero times.
-    for band in range(bands):  # pragma: no branch
-        group.create_task(
-            _band(
-                corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
-                triangles,
-                Pointer(to=target).unsafe_origin_cast[MutAnyOrigin](),
-                mode,
-                Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
-                Pointer(to=lighting).unsafe_origin_cast[ImmutAnyOrigin](),
-                errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
-                band,
-                band * target.height // bands,
-                (band + 1) * target.height // bands - 1,
-                fog,
-            )
-        )
-    group.wait()
-    for band in range(bands):  # pragma: no branch
-        if errors[band] != "":
-            raise Error(errors[band])
+
+def rasterize_lines_all(
+    corners: List[RasterVertex],
+    mut target: RenderTarget,
+    workers: Int = 1,
+    fog: FogView = FogView.none(),
+) raises:
+    """Draw every segment in `corners` into `target`, on `workers` threads.
+
+    `rasterize_frame` for a frame of segments alone, in submission order:
+    one draw over the whole list and no triangles. A segment reads no
+    shading mode, no texture and no light.
+
+    Args:
+        corners: Raster vertices, two per segment.
+        target: The linear render target to draw into.
+        workers: How many threads to draw with, at least one.
+        fog: The scene's fog, seen through the camera.
+
+    Raises:
+        Error: Everything `rasterize_frame` raises of the segments: an odd
+            corner count, `workers` less than one, a fog view that
+            `FogView.validate` refuses, or a segment that
+            `check_line_state` refuses.
+    """
+    var draws: List[Draw] = [Draw(DRAW_SEGMENTS, 0, len(corners) // 2)]
+    rasterize_frame(
+        List[RasterVertex](),
+        corners,
+        draws,
+        target,
+        workers=workers,
+        fog=fog,
+    )

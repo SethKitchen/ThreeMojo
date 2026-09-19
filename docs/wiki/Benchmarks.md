@@ -7,13 +7,15 @@ The numbers come from one machine. Other machines differ. The refresh command is
 ## Machine
 
 <!-- BENCH:HOST -->
-- Date: `2026-09-18`
-- OS: Linux 6.18.33.1-microsoft-standard-WSL2
-- CPU: AMD Ryzen 9 5900X 12-Core Processor
+- Date: `2026-09-19`
+- OS: Darwin 25.6.0
+- CPU: arm
 - Mojo 1.1: `Mojo 1.1.0 (8189361e)`
-- Mojo 1.0: `Mojo 1.0.0 (ed45d567)`
-- Node: `v22.14.0`
-- three.js backend: `cpu`
+- Mojo 1.0: `not installed`
+- Node: `v24.20.0`
+- three.js backend: `cpu-flat`
+- A Mojo program that does nothing: `0.014` s
+- A Node process that does nothing: `0.027` s
 <!-- /BENCH:HOST -->
 
 ## What the columns measure
@@ -21,56 +23,62 @@ The numbers come from one machine. Other machines differ. The refresh command is
 | Column | Meaning |
 |---|---|
 | compile | `mojo build`, in seconds. Paired in the 1.0 table. |
-| run | The built binary or the Node process, in seconds |
+| run | The built binary or the Node process, whole, in seconds |
+| three.js frames only | The draw loop alone, timed inside the Node process |
 | RSS | Peak resident set of that run, in MiB |
 
 Paired columns sit next to each other. Dark green is faster by 30% or more. Light green is faster by 10% to 30%. Yellow is within 10%. A cell with no color is the slower side, or a value with no pair.
 
-ThreeMojo draws in software on the CPU and writes PNG or APNG. three.js draws with WebGL when the `gl` package loads, or with a CPU fill of the same triangles when it does not. three.js does not encode an animated PNG.
+**The two `run` columns do not measure the same work.** ThreeMojo transforms, clips, lights, textures and composites every frame in linear light on the CPU. It encodes every frame into an APNG and writes the file. three.js draws with WebGL when the `gl` package loads. three.js has no CPU renderer of its own.
+
+When `gl` does not load, the `cpu-flat` backend fills the same projected triangles with each material's flat color and a depth test. It does no lighting, no textures, no sRGB and no transparency, and it writes no file. Most of a `cpu-flat` run is Node starting and importing three.js. The baselines under [Machine](#machine) say what each process costs before it draws anything.
+
+Read the `three.js frames only` column against the ThreeMojo `run` column minus the Mojo baseline. That is the nearest the page comes to like against like.
 
 The pin is Mojo 1.1. The 1.0 column is the same source built by Mojo 1.0.0. The probe is a standalone triangle fill that imports nothing from ThreeMojo.
 
 ## Example vs three.js
 
 <!-- BENCH:EXAMPLES -->
-| Example | Size | Frames | ThreeMojo compile (s) | ThreeMojo run (s) | three.js run (s) | ThreeMojo RSS (MiB) | three.js RSS (MiB) |
-|---|---|---|---|---|---|---|---|
-| `triangle` | 320×240 | 1 | 3.190 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.020</strong></span> | 0.140 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>14.9</strong></span> | 145.9 |
-| `spin` | 160×120 | 24 | 3.230 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.040</strong></span> | 0.130 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>20.6</strong></span> | 145.7 |
-| `cube` | 240×180 | 36 | 4.060 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.120</strong></span> | 0.150 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>39.8</strong></span> | 148.0 |
-| `cubes` | 260×200 | 48 | 7.690 | 0.220 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.160</strong></span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>58.5</strong></span> | 149.3 |
-| `uv` | 320×200 | 2 | 7.230 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.030</strong></span> | 0.140 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>16.1</strong></span> | 145.5 |
-| `textured` | 260×200 | 36 | 7.820 | 0.190 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.160</strong></span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>43.6</strong></span> | 148.1 |
-| `glass` | 260×200 | 36 | 7.810 | 0.180 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.160</strong></span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>43.4</strong></span> | 148.8 |
-| `floor` | 320×200 | 30 | 7.900 | 0.210 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.150</strong></span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>44.4</strong></span> | 148.3 |
-| `photo` | 260×200 | 36 | 9.030 | 0.190 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.170</strong></span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>43.9</strong></span> | 147.8 |
-| `lamps` | 260×200 | 36 | 7.760 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.180</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.190</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>43.6</strong></span> | 150.0 |
-| `first_scene` | 320×240 | 1 | 7.660 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.020</strong></span> | 0.140 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>15.6</strong></span> | 149.4 |
-| `lit_scene` | 320×240 | 36 | 7.830 | 0.260 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.170</strong></span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>62.9</strong></span> | 148.5 |
-| `rotations` | 240×180 | 36 | 9.940 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.160</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.170</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.4</strong></span> | 147.8 |
-| `ortho` | 240×180 | 36 | 8.170 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.160</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.170</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.1</strong></span> | 148.5 |
-| `geometry` | 240×180 | 36 | 9.070 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.180</strong></span> | 0.230 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>42.4</strong></span> | 150.1 |
-| `instances` | 240×180 | 36 | 8.100 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.200</strong></span> | 0.640 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.4</strong></span> | 149.7 |
-| `raycast` | 240×180 | 36 | 8.600 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.190</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.200</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.1</strong></span> | 151.0 |
-| `curves` | 240×180 | 36 | 12.410 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.680</strong></span> | 1.150 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.5</strong></span> | 150.3 |
-| `keyframes` | 240×180 | 36 | 29.170 | 0.410 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.270</strong></span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.4</strong></span> | 148.2 |
-| `skinning` | 240×180 | 36 | 10.420 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.170</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.180</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.5</strong></span> | 149.4 |
-| `phong` | 240×180 | 36 | 8.540 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.200</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.190</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>42.2</strong></span> | 150.7 |
-| `fog` | 240×180 | 36 | 8.850 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.150</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.150</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.2</strong></span> | 148.1 |
-| `culling` | 240×180 | 36 | 8.130 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.150</strong></span> | 0.180 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.5</strong></span> | 148.1 |
-| `clipping` | 240×180 | 36 | 7.990 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.160</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.160</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.7</strong></span> | 148.5 |
-| `gpu_backend` | 240×180 | 36 | 8.400 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.170</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.180</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.4</strong></span> | 148.3 |
-| `exposure` | 240×180 | 36 | 8.260 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.180</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.180</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.2</strong></span> | 148.2 |
-| `model` | 240×180 | 36 | 9.500 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.160</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.160</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.1</strong></span> | 148.6 |
-| `orbit` | 240×180 | 36 | 7.950 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.170</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.160</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.8</strong></span> | 150.0 |
-| `clock` | 240×180 | 36 | 8.130 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.150</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.150</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.2</strong></span> | 148.0 |
-| `chain` | 240×180 | 36 | 8.190 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.150</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.160</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.5</strong></span> | 148.3 |
-| `additive` | 240×180 | 36 | 7.900 | 0.180 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.160</strong></span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.8</strong></span> | 148.5 |
-| `normals` | 240×180 | 36 | 8.150 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.190</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.190</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>41.1</strong></span> | 150.7 |
-| `fragments` | 240×180 | 36 | 8.050 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.160</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.170</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>40.2</strong></span> | 148.5 |
-| `edges` | 240×180 | 48 | 3.420 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.150</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.160</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.7</strong></span> | 148.0 |
+| Example | Size | Frames | ThreeMojo compile (s) | ThreeMojo run (s) | three.js run (s) | three.js frames only (s) | ThreeMojo RSS (MiB) | three.js RSS (MiB) |
+|---|---|---|---|---|---|---|---|---|
+| `triangle` | 320×240 | 1 | 0.392 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.018</strong></span> | 0.040 | 0.002 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>14.3</strong></span> | 64.0 |
+| `spin` | 160×120 | 24 | 0.397 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.020</strong></span> | 0.039 | 0.002 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>20.0</strong></span> | 64.1 |
+| `cube` | 240×180 | 36 | 0.580 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.027</strong></span> | 0.043 | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>44.6</strong></span> | 65.4 |
+| `cubes` | 260×200 | 48 | 1.112 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.040</strong></span> | 0.047 | 0.010 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>59.1</strong></span> | 65.5 |
+| `uv` | 320×200 | 2 | 1.021 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.020</strong></span> | 0.040 | 0.002 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>16.0</strong></span> | 64.1 |
+| `textured` | 260×200 | 36 | 1.109 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.038</strong></span> | 0.044 | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>44.1</strong></span> | 64.8 |
+| `glass` | 260×200 | 36 | 1.127 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.035</strong></span> | 0.045 | 0.009 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>51.8</strong></span> | 65.5 |
+| `floor` | 320×200 | 30 | 1.106 | 0.050 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.045</strong></span> | 0.008 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>41.2</strong></span> | 64.6 |
+| `photo` | 260×200 | 36 | 1.240 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.041</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.042</span> | 0.007 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>44.1</strong></span> | 65.1 |
+| `lamps` | 260×200 | 36 | 1.112 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.036</strong></span> | 0.052 | 0.013 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>44.1</strong></span> | 65.6 |
+| `first_scene` | 320×240 | 1 | 1.087 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.023</strong></span> | 0.040 | 0.002 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>16.3</strong></span> | 63.9 |
+| `lit_scene` | 320×240 | 36 | 1.107 | 0.050 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.045</strong></span> | 0.008 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">69.5</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">64.9</span> |
+| `rotations` | 240×180 | 36 | 1.108 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.030</strong></span> | 0.042 | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.7</strong></span> | 65.3 |
+| `ortho` | 240×180 | 36 | 1.111 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.030</strong></span> | 0.041 | 0.004 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>39.3</strong></span> | 64.9 |
+| `geometry` | 240×180 | 36 | 1.117 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.037</strong></span> | 0.070 | 0.031 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>47.9</strong></span> | 65.8 |
+| `instances` | 240×180 | 36 | 1.113 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.032</strong></span> | 0.047 | 0.011 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>46.2</strong></span> | 65.4 |
+| `raycast` | 240×180 | 36 | 1.165 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.038</strong></span> | 0.058 | 0.018 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>47.8</strong></span> | 66.1 |
+| `curves` | 240×180 | 36 | 1.150 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.035</strong></span> | 0.050 | 0.010 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.8</strong></span> | 66.0 |
+| `keyframes` | 240×180 | 36 | 1.202 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.030</strong></span> | 0.044 | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.8</strong></span> | 65.2 |
+| `skinning` | 240×180 | 36 | 1.127 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.035</strong></span> | 0.041 | 0.004 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.9</strong></span> | 65.5 |
+| `phong` | 240×180 | 36 | 1.115 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.038</strong></span> | 0.054 | 0.017 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>42.2</strong></span> | 65.7 |
+| `fog` | 240×180 | 36 | 1.115 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.029</strong></span> | 0.042 | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.8</strong></span> | 65.5 |
+| `culling` | 240×180 | 36 | 1.114 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.033</strong></span> | 0.046 | 0.011 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.7</strong></span> | 65.3 |
+| `clipping` | 240×180 | 36 | 1.119 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.032</strong></span> | 0.043 | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.7</strong></span> | 65.4 |
+| `gpu_backend` | 240×180 | 36 | 1.166 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.032</strong></span> | 0.049 | 0.012 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.8</strong></span> | 65.4 |
+| `exposure` | 240×180 | 36 | 1.117 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.043</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.042</span> | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>42.0</strong></span> | 65.2 |
+| `model` | 240×180 | 36 | 1.211 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.032</strong></span> | 0.043 | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.8</strong></span> | 65.3 |
+| `orbit` | 240×180 | 36 | 1.108 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.033</strong></span> | 0.043 | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>47.8</strong></span> | 65.7 |
+| `clock` | 240×180 | 36 | 1.129 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.031</strong></span> | 0.043 | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.8</strong></span> | 65.2 |
+| `chain` | 240×180 | 36 | 1.123 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.031</strong></span> | 0.042 | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>46.1</strong></span> | 65.2 |
+| `additive` | 240×180 | 36 | 1.116 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.037</strong></span> | 0.043 | 0.006 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>42.1</strong></span> | 65.2 |
+| `normals` | 240×180 | 36 | 1.122 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.039</strong></span> | 0.053 | 0.015 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>42.2</strong></span> | 65.5 |
+| `fragments` | 240×180 | 36 | 1.131 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.037</strong></span> | 0.047 | 0.009 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>45.7</strong></span> | 65.3 |
+| `edges` | 240×180 | 48 | 0.418 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.029</strong></span> | 0.041 | 0.004 | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>50.7</strong></span> | 64.9 |
 
-three.js backend for this run: `cpu`.
+three.js backend for this run: `cpu-flat`.
+The `gl` package did not load, so three.js did not render. The `cpu-flat` backend fills the same triangles with each material's flat color and a depth test. It does no lighting, no textures, no sRGB and no transparency, and it writes no file. The `three.js frames only` column is that fill, timed inside the process. The rest of the `three.js run` column is Node starting and importing three.js.
 <!-- /BENCH:EXAMPLES -->
 
 ## Mojo 1.1 against Mojo 1.0
@@ -78,41 +86,41 @@ three.js backend for this run: `cpu`.
 <!-- BENCH:MOJO10 -->
 | Program | 1.1 compile (s) | 1.0 compile (s) | 1.1 run (s) | 1.0 run (s) | 1.1 RSS (MiB) | 1.0 RSS (MiB) |
 |---|---|---|---|---|---|---|
-| `probe` | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">2.530</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">2.530</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.040</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">0.040</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">13.2</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">14.3</span> |
-| `triangle` | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">3.190</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">3.260</span> | 0.020 | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.010</strong></span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">14.9</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">14.4</span> |
-| `spin` | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">3.230</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">3.250</span> | <span style="background-color:#86efac;color:#14532d;padding:0 0.4em"><strong>0.040</strong></span> | 0.050 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">20.6</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">20.4</span> |
-| `cube` | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">4.060</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">4.170</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.120</strong></span> | 0.160 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">39.8</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">39.8</span> |
-| `cubes` | 7.690 | 2.510 | 0.220 | refused | 58.5 | — |
-| `uv` | 7.230 | 2.380 | 0.030 | refused | 16.1 | — |
-| `textured` | 7.820 | 2.500 | 0.190 | refused | 43.6 | — |
-| `glass` | 7.810 | 2.490 | 0.180 | refused | 43.4 | — |
-| `floor` | 7.900 | 2.460 | 0.210 | refused | 44.4 | — |
-| `photo` | 9.030 | 2.980 | 0.190 | refused | 43.9 | — |
-| `lamps` | 7.760 | 2.450 | 0.180 | refused | 43.6 | — |
-| `first_scene` | 7.660 | 2.430 | 0.020 | refused | 15.6 | — |
-| `lit_scene` | 7.830 | 2.500 | 0.260 | refused | 62.9 | — |
-| `rotations` | 9.940 | 2.610 | 0.160 | refused | 40.4 | — |
-| `ortho` | 8.170 | 2.650 | 0.160 | refused | 40.1 | — |
-| `geometry` | 9.070 | 2.800 | 0.180 | refused | 42.4 | — |
-| `instances` | 8.100 | 2.640 | 0.200 | refused | 40.4 | — |
-| `raycast` | 8.600 | 2.700 | 0.190 | refused | 40.1 | — |
-| `curves` | 12.410 | 12.270 | 0.680 | refused | 40.5 | — |
-| `keyframes` | 29.170 | 5.130 | 0.410 | refused | 40.4 | — |
-| `skinning` | 10.420 | 3.020 | 0.170 | refused | 40.5 | — |
-| `phong` | 8.540 | 2.910 | 0.200 | refused | 42.2 | — |
-| `fog` | 8.850 | 2.730 | 0.150 | refused | 40.2 | — |
-| `culling` | 8.130 | 3.090 | 0.150 | refused | 40.5 | — |
-| `clipping` | 7.990 | 2.520 | 0.160 | refused | 40.7 | — |
-| `gpu_backend` | 8.400 | 2.660 | 0.170 | refused | 40.4 | — |
-| `exposure` | 8.260 | 2.620 | 0.180 | refused | 40.2 | — |
-| `model` | 9.500 | 2.700 | 0.160 | refused | 40.1 | — |
-| `orbit` | 7.950 | 2.450 | 0.170 | refused | 40.8 | — |
-| `clock` | 8.130 | 2.550 | 0.150 | refused | 40.2 | — |
-| `chain` | 8.190 | 2.480 | 0.150 | refused | 40.5 | — |
-| `additive` | 7.900 | 2.580 | 0.180 | refused | 40.8 | — |
-| `normals` | 8.150 | 2.460 | 0.190 | refused | 41.1 | — |
-| `fragments` | 8.050 | 2.500 | 0.160 | refused | 40.2 | — |
-| `edges` | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">3.420</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">3.380</span> | <span style="background-color:#14532d;color:#ffffff;padding:0 0.4em"><strong>0.150</strong></span> | 0.210 | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">45.7</span> | <span style="background-color:#fde047;color:#422006;padding:0 0.4em">45.5</span> |
+| `probe` | 0.294 | not installed | 0.027 | — | 14.1 | — |
+| `triangle` | 0.392 | not installed | 0.018 | — | 14.3 | — |
+| `spin` | 0.397 | not installed | 0.020 | — | 20.0 | — |
+| `cube` | 0.580 | not installed | 0.027 | — | 44.6 | — |
+| `cubes` | 1.112 | not installed | 0.040 | — | 59.1 | — |
+| `uv` | 1.021 | not installed | 0.020 | — | 16.0 | — |
+| `textured` | 1.109 | not installed | 0.038 | — | 44.1 | — |
+| `glass` | 1.127 | not installed | 0.035 | — | 51.8 | — |
+| `floor` | 1.106 | not installed | 0.050 | — | 41.2 | — |
+| `photo` | 1.240 | not installed | 0.041 | — | 44.1 | — |
+| `lamps` | 1.112 | not installed | 0.036 | — | 44.1 | — |
+| `first_scene` | 1.087 | not installed | 0.023 | — | 16.3 | — |
+| `lit_scene` | 1.107 | not installed | 0.050 | — | 69.5 | — |
+| `rotations` | 1.108 | not installed | 0.030 | — | 45.7 | — |
+| `ortho` | 1.111 | not installed | 0.030 | — | 39.3 | — |
+| `geometry` | 1.117 | not installed | 0.037 | — | 47.9 | — |
+| `instances` | 1.113 | not installed | 0.032 | — | 46.2 | — |
+| `raycast` | 1.165 | not installed | 0.038 | — | 47.8 | — |
+| `curves` | 1.150 | not installed | 0.035 | — | 45.8 | — |
+| `keyframes` | 1.202 | not installed | 0.030 | — | 45.8 | — |
+| `skinning` | 1.127 | not installed | 0.035 | — | 45.9 | — |
+| `phong` | 1.115 | not installed | 0.038 | — | 42.2 | — |
+| `fog` | 1.115 | not installed | 0.029 | — | 45.8 | — |
+| `culling` | 1.114 | not installed | 0.033 | — | 45.7 | — |
+| `clipping` | 1.119 | not installed | 0.032 | — | 45.7 | — |
+| `gpu_backend` | 1.166 | not installed | 0.032 | — | 45.8 | — |
+| `exposure` | 1.117 | not installed | 0.043 | — | 42.0 | — |
+| `model` | 1.211 | not installed | 0.032 | — | 45.8 | — |
+| `orbit` | 1.108 | not installed | 0.033 | — | 47.8 | — |
+| `clock` | 1.129 | not installed | 0.031 | — | 45.8 | — |
+| `chain` | 1.123 | not installed | 0.031 | — | 46.1 | — |
+| `additive` | 1.116 | not installed | 0.037 | — | 42.1 | — |
+| `normals` | 1.122 | not installed | 0.039 | — | 42.2 | — |
+| `fragments` | 1.131 | not installed | 0.037 | — | 45.7 | — |
+| `edges` | 0.418 | not installed | 0.029 | — | 50.7 | — |
 <!-- /BENCH:MOJO10 -->
 
 Mojo 1.0.0 compiles the probe, `triangle`, `spin`, `cube` and `edges`. It refuses the other examples.
@@ -122,6 +130,7 @@ Mojo 1.0.0 compiles the probe, `triangle`, `spin`, `cube` and `edges`. It refuse
 | Program | Shows |
 |---|---|
 | `bench/raster_bench.mojo` | CPU against GPU rasterization across image sizes. |
-| `bench/scene_bench.mojo` | Each stage of the CPU renderer, one worker and every core. |
+| `bench/scene_bench.mojo` | Each stage of the CPU renderer, timed on its own, one worker and every core. |
 | `bench/probe.mojo` | The 1.1 half of the compiler comparison. |
+| `bench/noop.mojo` | A program that does nothing: the Mojo baseline. |
 | `bench/mojo10/probe.mojo` | The 1.0 half. `make lint` excludes this file. |

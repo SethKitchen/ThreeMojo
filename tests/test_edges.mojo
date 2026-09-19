@@ -97,6 +97,67 @@ def test_an_edge_geometry_drops_an_edge_its_faces_do_not_turn_at() raises:
     assert_equal(segments_of(edges_geometry(quad)), 4)
 
 
+def test_a_face_with_no_area_lends_no_crease() raises:
+    """A face whose corners coincide is skipped, as three.js's
+    `EdgesGeometry` skips it. Its normal is zero, which dots to zero with
+    any neighbor, and that read as a right-angle turn: a flat square with
+    such a face on its diagonal kept the diagonal as a crease. Each way two
+    of three corners can be the same point is tried."""
+    var flat = points(
+        [
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            1.0,
+            0.0,
+            # Degenerate: first two corners, last two, and first and last.
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            0.0,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+            1.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        ]
+    )
+    assert_equal(segments_of(edges_geometry(flat)), 4)
+    # Nor does a wireframe draw the point they collapse to as an edge.
+    assert_equal(segments_of(wireframe_geometry(flat)), 5)
+
+
 def test_a_cube_keeps_its_twelve_edges() raises:
     """Its faces turn a quarter turn, and its face diagonals do not turn."""
     var box = cube(Length(1, METER))

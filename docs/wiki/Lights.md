@@ -9,11 +9,11 @@ three.js: `AmbientLight`, `DirectionalLight`, `PointLight`, `HemisphereLight`, `
 ## Add a light
 
 ```mojo
-scene.add_light(ambient_light(Color(255, 255, 255), 0.25))
-scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 0.75))
-scene.add_light(point_light(Color(255, 200, 120), bulb_node, 0.5))
-scene.add_light(hemisphere_light(Color(120, 160, 255), Color(120, 80, 40), sky_node, 0.6))
-scene.add_light(spot_light(Color(255, 220, 180), beam_node, 2.0, angle=Angle(30.0, DEGREE), penumbra=0.3))
+scene.add_light(ambient_light(Color(255, 255, 255), 0.79))
+scene.add_light(directional_light(Color(255, 255, 255), lamp_node, 2.36))
+scene.add_light(point_light(Color(255, 200, 120), bulb_node, 1.57))
+scene.add_light(hemisphere_light(Color(120, 160, 255), Color(120, 80, 40), sky_node, 1.88))
+scene.add_light(spot_light(Color(255, 220, 180), beam_node, 6.28, angle=Angle(30.0, DEGREE), penumbra=0.3))
 ```
 
 | Builder | Meaning |
@@ -25,6 +25,10 @@ scene.add_light(spot_light(Color(255, 220, 180), beam_node, 2.0, angle=Angle(30.
 | `spot_light(color, node, intensity=1.0, distance=0.0, angle=60°, penumbra=0.0, decay=2.0, target=NO_PARENT)` | A bulb at the node's world position that shines in a cone toward its target. |
 
 Intensity multiplies the color. Values above one are allowed. A negative intensity, decay or distance raises.
+
+### Units
+
+The light that reaches a surface is divided by pi, as three.js's `BRDF_Lambert` divides it. A white surface square on to a white light of intensity one reflects a third of it, byte 153. An intensity of about three lights it to full white. The examples use 0.79 of ambient and 2.36 of directional light, which is a quarter and three quarters of full white. `Lighting.uniform` is the identity and is not divided. See the module docstring in `lights/lighting.mojo`.
 
 Every light has `layers`, layer zero alone by default. A camera lights its meshes with only the lights that share a layer with it. Set the layers before you add the light, or through `scene.lights`. See [Layers](Scene-graph#layers).
 

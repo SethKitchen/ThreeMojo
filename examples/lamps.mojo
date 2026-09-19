@@ -130,7 +130,7 @@ def main() raises:
         var node = Object3D()
         node.set_position(places[lamp].x, places[lamp].y, places[lamp].z)
         var id = scene.add(node^)
-        scene.add_light(directional_light(tints[lamp], id, 0.9))
+        scene.add_light(directional_light(tints[lamp], id, 2.83))
 
     # The fourth hangs from the turntable, so it turns with the sphere and its
     # pool of light stays in the same place on the surface. A bulb, held just
@@ -139,10 +139,10 @@ def main() raises:
     var carried = Object3D()
     carried.set_position(0, -0.6, 1.6)
     var carried_id = scene.attach(carried^, table)
-    scene.add_light(point_light(Color(255, 200, 120), carried_id, 0.5))
+    scene.add_light(point_light(Color(255, 200, 120), carried_id, 1.57))
 
     # Just enough fill that the unlit side is a shape rather than a hole.
-    scene.add_light(ambient_light(Color(30, 34, 48), 1.0))
+    scene.add_light(ambient_light(Color(30, 34, 48), 3.14))
 
     var camera = PerspectiveCamera(
         Angle(40.0, DEGREE),

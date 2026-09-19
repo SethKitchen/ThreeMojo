@@ -108,6 +108,27 @@ def _inside(z: Float32, plane_z: Float32, keep_nearer: Bool) -> Bool:
     return z >= plane_z
 
 
+def within_depth(z: Float32, near: Float32, far: Float32) -> Bool:
+    """Return True if a camera-space depth needs no cutting at either plane.
+
+    The same two tests `clip_depth` makes, asked of one corner. A triangle
+    whose three corners all pass is left exactly as it is by the clipper --
+    every corner kept, no crossing added -- so a caller can skip the clip
+    and its allocations for the common case of a triangle wholly in view,
+    and get the same three corners back.
+
+    Args:
+        z: The corner's camera-space z, negative in front of the camera.
+        near: Distance to the near plane; the plane sits at z = -near.
+        far: Distance to the far plane, at z = -far.
+
+    Returns:
+        True if the corner is at or beyond the near plane and at or before
+        the far one.
+    """
+    return _inside(z, -near, True) and _inside(z, -far, False)
+
+
 def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
     """Return the vertex where the edge from `a` to `b` meets `plane_z`."""
     # Only called for an edge with one end on each side of the plane, so the
@@ -202,21 +223,18 @@ def clip_depth(
         per triangle of the fan the clipped polygon was cut into.
 
     Raises:
-        Error: If `near` is negative, which would put the plane behind the
-            camera, or if `far` does not lie beyond `near`, which would leave
-            the frustum inside out.
+        Error: If `far` does not lie beyond `near`, which would leave the
+            frustum inside out.
 
-            A `near` of exactly zero is fine here. This clipper's job is to
+            A `near` of zero or less is fine here. This clipper's job is to
             cut against two finite, ordered planes in camera space, and it
-            does that as happily at z = 0 as anywhere else — an orthographic
-            camera is entitled to a near plane there and three.js allows one.
-            Forbidding it was a perspective rule in the wrong place: what
-            cannot survive z = 0 is the *divide*, and that prohibition lives
-            in `math.projection.perspective` and `PerspectiveCamera`, which
-            both still refuse it.
+            does that as happily behind the camera as anywhere else -- an
+            orthographic camera is entitled to a near plane there and
+            three.js allows one. Forbidding it was a perspective rule in the
+            wrong place: what cannot survive z = 0 is the *divide*, and that
+            prohibition lives in `math.projection.perspective` and
+            `PerspectiveCamera`, which both still refuse it.
     """
-    if near < 0:
-        raise Error("The near plane cannot be behind the camera")
     if far <= near:
         raise Error("The far plane must be beyond the near plane")
 
@@ -266,12 +284,10 @@ def clip_segment(
         Two corners, or none if the segment lies wholly outside the range.
 
     Raises:
-        Error: If `near` is negative, which would put the plane behind the
-            camera, or if `far` does not lie beyond `near`, which would
-            leave the frustum inside out.
+        Error: If `far` does not lie beyond `near`, which would leave the
+            frustum inside out; see `clip_depth` on a near plane behind
+            the camera.
     """
-    if near < 0:
-        raise Error("The near plane cannot be behind the camera")
     if far <= near:
         raise Error("The far plane must be beyond the near plane")
 

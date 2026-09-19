@@ -246,6 +246,8 @@ A bevel rounds the two edges off. It adds `bevel_segments` layers at each end. T
 
 three.js measures a bevel *out* from the shape drawn, and so does this. The two end faces are the outline itself, and the body between them stands proud of it all the way round. `bevel_offset` moves every layer out before the bevel is measured, the end faces included, which makes a lip rather than rounding an edge.
 
+A corner sharper than a right angle is not drawn out to a spike. three.js's `getBevelVec` keeps the exact miter while it is no longer than the square root of two bevel widths. It shrinks a longer one to that length, and so does this. A corner whose edges fold straight back moves along its incoming edge by the same length.
+
 A corner moves along its miter, the line that keeps both of its edges parallel to where they were.
 
 ### The faces are flat

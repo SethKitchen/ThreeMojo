@@ -84,19 +84,29 @@ def facing(
         The rotation.
 
     Raises:
-        Error: If the target is at the eye, or the line of sight runs along
-            `up`, either of which leaves the roll undefined.
+        Error: Never. A target at the eye leaves the rotation the identity,
+            and a line of sight along `up` is nudged off it by a
+            ten-thousandth, exactly as three.js's `Matrix4.lookAt` settles
+            both; see `math.projection.look_at`.
     """
     var z = target - eye
-    if z.length() == 0:
-        raise Error("A node cannot look at its own position")
-    z.normalize()
     if camera:
         z = -z
+    # three.js substitutes +z for the basis's third column whichever way
+    # round the eye and target went in, so both cases give the identity.
+    if z.length() == 0:
+        z = Vector3(0, 0, 1)
+    z.normalize()
     var x = up
     x.cross(z)
     if x.length() == 0:
-        raise Error("Looking straight along up leaves the roll undefined")
+        if abs(up.z) == 1:
+            z.x += 0.0001
+        else:
+            z.z += 0.0001
+        z.normalize()
+        x = up
+        x.cross(z)
     x.normalize()
     var y = z
     y.cross(x)

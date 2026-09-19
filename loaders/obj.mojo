@@ -496,6 +496,8 @@ def parse_obj(text: String) raises -> ObjModel:
     var texcoords = List[Float32]()
     var normals = List[Float32]()
     var part = _Part(String(), String())
+    # Whether an `o` or `g` line has been read yet; see below.
+    var declared = False
     var line = 0
     # A split yields at least one piece, even of an empty file: the loop
     # always runs.
@@ -526,6 +528,18 @@ def parse_obj(text: String) raises -> ObjModel:
         elif keyword == "f":
             _read_face(part, fields, vertices, texcoords, normals, line)
         elif keyword == "o" or keyword == "g":
+            if not declared:
+                # The first declaration names what was read before it
+                # rather than starting afresh, as three.js's `startObject`
+                # renames the object it began with: a file that lists
+                # faces and then says `o Cube` means those faces are the
+                # cube's. Every part already finished came before this
+                # line too, so it takes the name as well.
+                declared = True
+                part.name = _rest(fields)
+                for index in range(len(model.objects)):
+                    model.objects[index].name = part.name
+                continue
             # A new object, under the material in force, as three.js
             # carries it over. One with no faces is dropped.
             var material = part.material

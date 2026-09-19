@@ -342,6 +342,12 @@ struct Material(ImplicitlyCopyable):
     # kind must be `BASIC` and there must be no map. See `objects.line`
     # and `Renderer.prepare_lines`.
     var wireframe: Bool
+    # Whether the surface is composited over what is behind it: three.js's
+    # `transparent`. Off, the default, an opacity below one and a texture's
+    # alpha change nothing but the alpha test, and every fragment is written
+    # with an alpha of one, as three.js's `opaque_fragment` writes it. On,
+    # the surface blends by its alpha. `blending` is the resolved policy.
+    var transparent: Bool
 
     def __init__(
         out self,
@@ -362,6 +368,7 @@ struct Material(ImplicitlyCopyable):
         gradient_map: TextureId = NO_TEXTURE,
         matcap: TextureId = NO_TEXTURE,
         wireframe: Bool = False,
+        transparent: Bool = False,
     ) raises:
         """Describe a surface.
 
@@ -370,11 +377,10 @@ struct Material(ImplicitlyCopyable):
             map: Id of the texture to sample, or `NO_TEXTURE`.
             side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
             opacity: One for an opaque surface, less to see through it.
-            blending: `OPAQUE` or `BLEND`. Left unset it is inferred, and
-                anything that can see through — an opacity below one or a base
-                color with alpha — blends. Set it to say so explicitly: a
-                texture's own alpha cannot be inferred from here, so a cut-out
-                image needs `BLEND` even when the material looks opaque.
+                Read only by a `transparent` material and by the alpha
+                test, as in three.js.
+            blending: `OPAQUE` or `BLEND`. Left unset it follows
+                `transparent`. Set it to say so explicitly.
             kind: `LAMBERT` to be lit by the scene's lights, `PHONG` to be
                 lit and to carry a highlight as well, `BASIC` to show
                 the color and texture as they are, `NORMALS` to show the
@@ -422,6 +428,10 @@ struct Material(ImplicitlyCopyable):
                 than fill them, three.js's `wireframe`. The lines are
                 drawn by the line pass, so the kind must be `BASIC` and
                 there must be no map.
+            transparent: Whether the surface blends over what is behind
+                it, three.js's `transparent`. Off, the default, it is drawn
+                opaque with an alpha of one whatever its opacity or its
+                texture's alpha say, which only the alpha test reads.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -447,7 +457,7 @@ struct Material(ImplicitlyCopyable):
                 highlight -- a `specular` that is not black, or a positive
                 `shininess` -- on a kind that is not `PHONG`. A `NORMALS`
                 or `DEPTH` material whose blending resolves to `BLEND`,
-                whether stated or inferred from an opacity below one, is
+                whether stated or taken from `transparent`, is
                 refused as well. A `wireframe` on a kind that is not
                 `BASIC`, or beside a map or an alpha map, is refused: a
                 line has no normal for a light to reach and no surface
@@ -464,7 +474,7 @@ struct Material(ImplicitlyCopyable):
         if not kind.is_valid():
             raise Error(
                 "A material's kind must be BASIC, LAMBERT, NORMALS, DEPTH,"
-                " PHONG or TOON"
+                " PHONG, TOON or MATCAP"
             )
         if gradient_map.value < 0 and gradient_map != NO_TEXTURE:
             raise Error("A material's gradient map id cannot be negative")
@@ -561,6 +571,7 @@ struct Material(ImplicitlyCopyable):
                 " coordinates to sample one with"
             )
         self.wireframe = wireframe
+        self.transparent = transparent
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -570,7 +581,7 @@ struct Material(ImplicitlyCopyable):
             if not chosen.is_valid():
                 raise Error("A material's blending must be OPAQUE or BLEND")
             self.blending = chosen
-        elif opacity < 1 or color.a < 255:
+        elif transparent:
             self.blending = BLEND
         else:
             self.blending = OPAQUE
@@ -654,8 +665,10 @@ struct Material(ImplicitlyCopyable):
     def is_transparent(self) -> Bool:
         """Return True if this surface is composited over what is behind it.
 
-        The single answer. Everything that needs to know — the mesh sorter,
-        both rasterizers — asks this rather than inspecting a color.
+        The single answer: the resolved `blending`, which follows
+        `transparent` unless a policy was stated. Everything that needs to
+        know — the mesh sorter, both rasterizers — asks this rather than
+        inspecting a color.
         """
         return self.blending == BLEND
 
@@ -691,6 +704,7 @@ def phong_material(
     side: Side = FRONT_SIDE,
     opacity: Float32 = 1.0,
     blending: Optional[Blending] = None,
+    transparent: Bool = False,
 ) raises -> Material:
     """Return a lit material with a highlight, three.js's
     `MeshPhongMaterial` at three.js's defaults.
@@ -713,8 +727,8 @@ def phong_material(
         shininess: How tight the highlight is.
         side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
         opacity: One for an opaque surface, less to see through it.
-        blending: `OPAQUE` or `BLEND`, or unset to infer it from the
-            opacity.
+        blending: `OPAQUE` or `BLEND`, or unset to follow `transparent`.
+        transparent: Whether the surface blends over what is behind it.
 
     Returns:
         The material, of kind `PHONG`.
@@ -731,6 +745,7 @@ def phong_material(
         side=side,
         opacity=opacity,
         blending=blending,
+        transparent=transparent,
         kind=PHONG,
         specular=specular,
         shininess=shininess,
@@ -744,6 +759,7 @@ def toon_material(
     side: Side = FRONT_SIDE,
     opacity: Float32 = 1.0,
     blending: Optional[Blending] = None,
+    transparent: Bool = False,
 ) raises -> Material:
     """Return a lit material that steps through a ramp, three.js's
     `MeshToonMaterial`.
@@ -763,8 +779,8 @@ def toon_material(
         gradient_map: Id of the ramp, or `NO_TEXTURE` for the fallback.
         side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
         opacity: One for an opaque surface, less to see through it.
-        blending: `OPAQUE` or `BLEND`, or unset to infer it from the
-            opacity.
+        blending: `OPAQUE` or `BLEND`, or unset to follow `transparent`.
+        transparent: Whether the surface blends over what is behind it.
 
     Returns:
         The material, of kind `TOON`.
@@ -780,6 +796,7 @@ def toon_material(
         side=side,
         opacity=opacity,
         blending=blending,
+        transparent=transparent,
         kind=TOON,
         gradient_map=gradient_map,
     )
@@ -792,6 +809,7 @@ def matcap_material(
     side: Side = FRONT_SIDE,
     opacity: Float32 = 1.0,
     blending: Optional[Blending] = None,
+    transparent: Bool = False,
 ) raises -> Material:
     """Return an unlit material looked up in an image by which way the
     surface is turned, three.js's `MeshMatcapMaterial`.
@@ -811,8 +829,8 @@ def matcap_material(
         map: Id of the texture that multiplies the color, or `NO_TEXTURE`.
         side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
         opacity: One for an opaque surface, less to see through it.
-        blending: `OPAQUE` or `BLEND`, or unset to infer it from the
-            opacity.
+        blending: `OPAQUE` or `BLEND`, or unset to follow `transparent`.
+        transparent: Whether the surface blends over what is behind it.
 
     Returns:
         The material, of kind `MATCAP`.
@@ -828,6 +846,7 @@ def matcap_material(
         side=side,
         opacity=opacity,
         blending=blending,
+        transparent=transparent,
         kind=MATCAP,
         matcap=matcap,
     )

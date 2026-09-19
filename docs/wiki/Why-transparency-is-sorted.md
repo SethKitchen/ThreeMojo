@@ -4,7 +4,7 @@ Blending is not commutative, so `Renderer.prepare` decides the draw order. Opaqu
 
 ## Two rules every renderer has
 
-A translucent surface tests depth without writing it. It is hidden by what is in front and hides nothing behind, so two panes one behind the other both show.
+A translucent surface tests depth without writing it. It is hidden by what is in front and hides nothing behind, so two panes one behind the other both show. three.js's `depthWrite` is on by default for a transparent material too, so there a pane drawn first can hide one drawn after it. That flag is not ported.
 
 Opaque surfaces draw first because they write the depth that stops a pane behind a wall from showing through. Among themselves they draw nearest first. The image does not depend on that order, but the cost does: a fragment that fails the depth test is skipped before it is shaded.
 

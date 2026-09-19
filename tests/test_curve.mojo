@@ -19,7 +19,7 @@ from math.curve import (
     spline,
     u_to_t,
 )
-from math.path import Path, Shape
+from math.path import resolution_of, Path, Shape
 from math.vector2 import Vector2
 from std.testing import (
     TestSuite,
@@ -390,14 +390,37 @@ def test_empty_path_has_no_points_no_length_and_no_close() raises:
 
 def test_path_sample_does_not_repeat_a_join() raises:
     var pen = Path(Vector2(0, 0))
-    pen.line_to(Vector2(1, 0))
-    pen.line_to(Vector2(2, 0))
+    pen.quadratic_to(Vector2(0.5, 1), Vector2(1, 0))
+    pen.quadratic_to(Vector2(1.5, 1), Vector2(2, 0))
     var points = pen.sample(2)
     # Two curves, two runs each: five points, not six.
     assert_equal(len(points), 5)
     assert_point(points[0], 0, 0)
     assert_point(points[2], 1, 0)
     assert_point(points[4], 2, 0)
+
+
+def test_path_sample_cuts_each_kind_at_its_own_resolution() raises:
+    # three.js's `CurvePath.getPoints`: a line is one run whatever the
+    # resolution, a spline is `divisions` runs for each of its points, and
+    # a Bezier is `divisions` runs. Cutting every curve into `divisions`
+    # runs gave a long spline too few and a straight edge too many.
+    var straight = Path(Vector2(0, 0))
+    straight.line_to(Vector2(1, 0))
+    straight.line_to(Vector2(2, 0))
+    assert_equal(len(straight.sample(12)), 3)
+    var curved = Path(Vector2(0, 0))
+    curved.cubic_to(Vector2(0, 1), Vector2(1, 1), Vector2(1, 0))
+    assert_equal(len(curved.sample(12)), 13)
+    var winding = Path(Vector2(0, 0))
+    winding.spline_thru(
+        [Vector2(1, 1), Vector2(2, 0), Vector2(3, 1), Vector2(4, 0)]
+    )
+    # Five points through, the pen's own included: sixty runs.
+    assert_equal(len(winding.sample(12)), 61)
+    assert_equal(resolution_of(line(Vector2(0, 0), Vector2(1, 0)), 12), 1)
+    with assert_raises():
+        _ = straight.sample(0)
 
 
 def test_path_length_adds_its_curves_up() raises:
