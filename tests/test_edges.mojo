@@ -12,6 +12,7 @@ from geometries.edges import (
     DEFAULT_THRESHOLD,
     WELD,
     edges_geometry,
+    triangle_edges,
     welded_points,
     wireframe_geometry,
 )
@@ -163,6 +164,7 @@ def test_a_surface_with_no_points_has_no_edges() raises:
     assert_equal(len(welded_points(nothing)), 0)
     assert_equal(segments_of(wireframe_geometry(nothing)), 0)
     assert_equal(segments_of(edges_geometry(nothing)), 0)
+    assert_equal(len(triangle_edges(nothing)[0]), 0)
 
 
 def test_a_third_face_on_one_edge_does_not_change_its_angle() raises:
@@ -221,6 +223,24 @@ def test_a_cube_keeps_its_right_angles_at_an_inclusive_ninety() raises:
     # And just past the right angle nothing survives, so the slack is a
     # tolerance rather than a widening of the threshold.
     assert_equal(segments_of(edges_geometry(box, Angle(90.01, DEGREE))), 0)
+
+
+def test_edges_paired_by_index_do_not_weld() raises:
+    """`triangle_edges` is three.js's wireframe rule: index, not position."""
+    # A cube builds each face from its own four vertices, so the twelve
+    # edges of the shape are twenty-four vertex pairs. Pairing by index
+    # keeps them apart; `wireframe_geometry` welds them into eighteen.
+    var box = cube(Length(1, METER))
+    var ends = triangle_edges(box)
+    assert_equal(len(ends[0]), 30)
+    assert_equal(segments_of(wireframe_geometry(box)), 18)
+    # A sphere is large enough that the buckets really collide, which is
+    # the case where a key is compared and found to be another edge's.
+    var ball = sphere(Length(1, METER), 24, 16)
+    var many = triangle_edges(ball)
+    assert_true(len(many[0]) > 1000)
+    # Every edge once: three per triangle, less the ones shared.
+    assert_true(len(many[0]) < ball.triangle_count() * 3)
 
 
 def main() raises:

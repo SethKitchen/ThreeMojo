@@ -282,6 +282,68 @@ def _as_segments(
     return drawn^
 
 
+def triangle_edges(
+    geometry: BufferGeometry,
+) raises -> Tuple[List[Int], List[Int]]:
+    """Return each edge of a geometry's triangles once, by vertex index.
+
+    What `material.wireframe` draws, and what three.js's
+    `getWireframeAttribute` builds: the edges of the triangles as they are
+    indexed, with an edge shared by two triangles kept once.
+
+    Paired by vertex index and not by welded position, which is the one
+    way it differs from `wireframe_geometry`. three.js draws the same
+    distinction, and it is the right one here: a wireframe is drawn from
+    the mesh's own vertices, already morphed, skinned and carried into
+    view, and two indices that happen to stand at one place are still two
+    vertices with their own colors. Welding them would be a second
+    opinion about what the mesh is.
+
+    Args:
+        geometry: The surface, which must carry positions.
+
+    Returns:
+        The vertex index of each end of each unique edge.
+
+    Raises:
+        Error: If the geometry has no positions, or an index entry points
+            past the last vertex.
+    """
+    var triangles = geometry.triangle_count()
+    var buckets = max(1, triangles * 3)
+    var bucketed = List[List[Int]](length=buckets, fill=List[Int]())
+    var keys = List[Int]()
+    var first = List[Int]()
+    var second = List[Int]()
+    ref positions = geometry.attribute_view(String(POSITION))
+    var spread = positions.count() + 1
+    for triangle in range(triangles):
+        var corners = List[Int]()
+        for corner in range(3):  # pragma: no branch
+            corners.append(geometry.corner_index(triangle, corner))
+        for corner in range(3):  # pragma: no branch
+            var start = corners[corner]
+            var finish = corners[(corner + 1) % 3]
+            var low = start
+            var high = finish
+            if low > high:
+                low, high = high, low
+            var key = low * spread + high
+            var slot = _hashed(low * 73856093 + high * 19349663, buckets)
+            var found = False
+            ref nearby = bucketed[slot]
+            for index in range(len(nearby)):
+                if keys[nearby[index]] == key:
+                    found = True
+                    break
+            if not found:
+                bucketed[slot].append(len(keys))
+                keys.append(key)
+                first.append(start)
+                second.append(finish)
+    return (first^, second^)
+
+
 def wireframe_geometry(geometry: BufferGeometry) raises -> BufferGeometry:
     """Return every edge of a surface, once each, as segments.
 

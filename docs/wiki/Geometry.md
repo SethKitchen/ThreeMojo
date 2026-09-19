@@ -272,11 +272,14 @@ scene.add_line(Line(outline, ink, node, mode=SEGMENTS))
 |---|---|
 | `wireframe_geometry(geometry)` | Every edge, once each. |
 | `edges_geometry(geometry, threshold)` | The edges that show the shape. |
+| `triangle_edges(geometry)` | Each edge once, paired by vertex index. |
 | `welded_points(geometry)` | Which welded point each vertex stands on. |
 
 `edges_geometry` keeps an edge when the two faces meeting at it turn by at least `threshold`, and when it has one face and no neighbor. A cube keeps its twelve edges and drops the diagonal across each face. `threshold` is one degree unless said otherwise, as three.js defaults `thresholdAngle`.
 
-It finds creases and boundaries, not silhouettes. It is given no camera, and its answer does not move when one does. What it keeps of a sphere depends on how finely the sphere is divided. Twenty-four segments turn fifteen degrees a facet, so the default threshold keeps most of those edges rather than none.
+`triangle_edges` is what a [wireframe material](Materials#wireframe) draws. It pairs by vertex index rather than by welded position, as three.js pairs the two rules. A wireframe is drawn from the mesh's own vertices, and two indices that stand at one place are still two vertices with their own colors. A cube has thirty edges by index and eighteen by position.
+
+`edges_geometry` finds creases and boundaries, not silhouettes. It is given no camera, and its answer does not move when one does. What it keeps of a sphere depends on how finely the sphere is divided. Twenty-four segments turn fifteen degrees a facet, so the default threshold keeps most of those edges rather than none.
 
 The comparison is inclusive. An edge turning exactly as far as the threshold is kept. `ANGLE_SLACK` is what makes that true in practice. An `Angle` holds radians as a `Float32`, so an authored 90 degrees has a cosine of −4.37e−8 rather than zero. Two perpendicular faces give a dot product of exactly zero. Without the slack a cube asked for its right angles lost all twelve.
 

@@ -325,11 +325,17 @@ var wire = Material(Color(120, 220, 255), kind=BASIC, wireframe=True)
 scene.add_mesh(Mesh(shape, assets.materials.add(wire), node))
 ```
 
-The mesh is prepared by the pipeline every other mesh goes through, and its triangles are cut into segments at the very end. A wireframe of a morphed, skinned or instanced mesh therefore needs no further word about any of the three. It is culled, sorted and clipped like the surface it replaces. The segments are drawn by the [line pass](Lines).
+The mesh goes through the pipeline every other mesh goes through: morph, skin, instance, cull, transform. It then assembles its own triangle edges as segments rather than filling them. A wireframe of a morphed, skinned or instanced mesh therefore needs no further word about any of the three. The segments are drawn by the [line pass](Lines).
+
+The edges come from the mesh, not from the filled triangles. Cutting prepared fill into lines looks equivalent and is not. Clipping a triangle leaves a polygon that has to be fanned. The fan's diagonal and the cut along the near plane both become edges the mesh never had. Each edge is clipped with `clip_segment` instead.
+
+A wireframe is submitted as lines, so it has no facing. A front-sided wireframe shows its far side, as three.js's does.
 
 The kind must be `BASIC` and there must be no map. A line has no surface, so it has no normal for a light to reach and no coordinate to sample an image at. A lit or mapped wireframe is refused rather than drawn with one of the two quietly dropped.
 
-An edge shared by two triangles is drawn twice, over itself. It is the same rule both times, so it is the same pixels. To pair the edges and draw each once, build a geometry with [`wireframe_geometry`](Geometry#edges-and-wireframes) and draw it with a `Line`. To keep only the edges that show the shape, use `edges_geometry`.
+An edge shared by two triangles is drawn once. `triangle_edges` pairs them by vertex index, as three.js's `getWireframeAttribute` does. Drawing it twice is not free even though it is the same pixels: a blended segment drawn over itself is twice as opaque.
+
+To keep only the edges that show the shape, build a geometry with [`edges_geometry`](Geometry#edges-and-wireframes) and draw it with a `Line`.
 
 ## Opacity and blending
 

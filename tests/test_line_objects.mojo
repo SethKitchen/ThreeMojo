@@ -47,7 +47,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Length, METER
+from units.si import Angle, DEGREE, Length, METER
 
 comptime TOLERANCE = Float64(1e-5)
 # Small for the reason `tests/test_renderer.mojo` gives: these cover the
@@ -616,9 +616,12 @@ def test_a_wireframe_mesh_prepares_lines_and_not_triangles() raises:
     scene.add_mesh(Mesh(quad, wire, NodeId(0)))
     var renderer = Renderer(WIDTH, HEIGHT)
     assert_equal(len(renderer.prepare(scene, assets, a_camera())), 0)
-    # Two triangles, three edges each, two ends an edge.
+    # Two triangles sharing a diagonal: five unique edges, not six, and
+    # two ends an edge. `triangle_edges` pairs them, as three.js's
+    # `getWireframeAttribute` does, so a blended wireframe is not drawn
+    # twice over its own diagonal.
     var segments = renderer.prepare_lines(scene, assets, a_camera())
-    assert_equal(len(segments), 12)
+    assert_equal(len(segments), 10)
     for end in range(len(segments)):
         assert_true(segments[end].kind == BASIC)
         assert_true(segments[end].texture == NO_TEXTURE)
@@ -668,6 +671,78 @@ def test_a_wireframe_is_drawn_hollow_beside_a_filled_surface() raises:
     assert_true(hollow_pixels < filled_pixels)
     assert_equal(filled_holes, 0)
     assert_true(hollow_holes > 0)
+
+
+def test_a_clipped_wireframe_invents_no_edges() raises:
+    """A triangle cut by the near plane keeps its three edges."""
+    # Prepared as fill and cut up afterwards, this drew five: the clipper
+    # leaves a quadrilateral, fanning it adds a diagonal, and the cut
+    # along the near plane itself becomes an edge the mesh never had.
+    # Assembling the mesh's own edges and clipping each as a segment
+    # cannot invent one.
+    var assets = Assets()
+    # One vertex behind the near plane, two in front of it.
+    var wedge = assets.geometries.add(
+        points([0.0, 0.5, 4.5, -0.5, -0.5, 0.0, 0.5, -0.5, 0.0])
+    )
+    var wire = assets.materials.add(
+        Material(Color(255, 0, 0), kind=BASIC, wireframe=True)
+    )
+    var scene = a_scene_with_one_node()
+    scene.add_mesh(Mesh(wedge, wire, NodeId(0), frustum_culled=False))
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var segments = renderer.prepare_lines(scene, assets, a_camera())
+    # Three edges, two ends each. Two of them were cut short by the near
+    # plane and are still two.
+    assert_equal(len(segments), 6)
+
+
+def test_a_wireframe_shows_its_far_side() raises:
+    """A wireframe is submitted as lines, and a line has no facing."""
+    var assets = Assets()
+    var quad = assets.geometries.add(plane(Length(1, METER), Length(1, METER)))
+    var wire = assets.materials.add(
+        Material(Color(255, 0, 0), kind=BASIC, wireframe=True)
+    )
+    var solid = assets.materials.add(Material(Color(255, 0, 0), kind=BASIC))
+    var scene = Scene()
+    var turned = Object3D()
+    # Half a turn, so the plane's front faces away from the camera.
+    turned.rotate_y(Angle(180.0, DEGREE))
+    _ = scene.add(turned^)
+    scene.update()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    # The filled front-sided surface is culled from behind.
+    scene.add_mesh(Mesh(quad, solid, NodeId(0)))
+    assert_equal(len(renderer.prepare(scene, assets, a_camera())), 0)
+    # The wireframe is not.
+    scene.meshes = List[Mesh]()
+    scene.add_mesh(Mesh(quad, wire, NodeId(0)))
+    assert_equal(len(renderer.prepare_lines(scene, assets, a_camera())), 10)
+
+
+def test_a_wireframe_with_nothing_to_draw_prepares_nothing() raises:
+    """No triangles, and every edge behind the camera, each give none."""
+    var assets = Assets()
+    var empty = assets.geometries.add(points(List[Float32]()))
+    var quad = assets.geometries.add(plane(Length(1, METER), Length(1, METER)))
+    var wire = assets.materials.add(
+        Material(Color(255, 0, 0), kind=BASIC, wireframe=True)
+    )
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    var behind = Object3D()
+    behind.set_position(0, 0, 40)
+    _ = scene.add(behind^)
+    scene.update()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    scene.add_mesh(Mesh(empty, wire, NodeId(0), frustum_culled=False))
+    assert_equal(len(renderer.prepare_lines(scene, assets, a_camera())), 0)
+    # And a mesh whose every edge lies beyond the far plane: the edges are
+    # there, and the clipper keeps nothing of any of them.
+    scene.meshes = List[Mesh]()
+    scene.add_mesh(Mesh(quad, wire, NodeId(1), frustum_culled=False))
+    assert_equal(len(renderer.prepare_lines(scene, assets, a_camera())), 0)
 
 
 def main() raises:

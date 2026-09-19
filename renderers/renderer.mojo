@@ -100,6 +100,7 @@ from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.instanced_mesh import check_placing
+from geometries.edges import triangle_edges
 from objects.line import segment_count, segment_ends
 from objects.skeleton import blend_bones
 from objects.skinned_mesh import (
@@ -987,6 +988,37 @@ def _to_raster(
     )
 
 
+def _line_corner(
+    view_points: List[Vector3],
+    world_points: List[Vector3],
+    colors: List[FloatColor],
+    vertex: Int,
+) -> ClipVertex:
+    """Return one end of a wireframe edge, ready for `clip_segment`.
+
+    A line carries a position, a color and a world position and nothing
+    else: its kind is unlit, so no normal is read, and it has no surface
+    coordinates, so no map is sampled. See `objects.line`.
+
+    Args:
+        view_points: Every vertex of this draw, in camera space.
+        world_points: The same vertices, in world space.
+        colors: The color at each vertex.
+        vertex: Which vertex this end is.
+
+    Returns:
+        The corner.
+    """
+    return ClipVertex(
+        view_points[vertex],
+        colors[vertex],
+        Vector3(0, 0, 0),
+        0,
+        0,
+        world_points[vertex],
+    )
+
+
 def camera_position[C: Camera](scene: Scene, camera: C) raises -> Vector3:
     """Return where `camera` stands, in world space.
 
@@ -1217,7 +1249,7 @@ struct Renderer(Movable):
 
         The filled surfaces only. A mesh whose material is a wireframe is
         drawn as lines by `prepare_lines`, and contributes no triangle
-        here; see `_prepare_filled`.
+        here; see `_prepared`.
 
         Args:
             scene: The transform hierarchy, and the meshes and lights in it.
@@ -1228,11 +1260,11 @@ struct Renderer(Movable):
             Raster vertices, three per triangle, in submission order.
 
         Raises:
-            Error: Everything `_prepare_filled` raises.
+            Error: Everything `_prepared` raises.
         """
-        return self._prepare_filled(scene, assets, camera, False)
+        return self._prepared(scene, assets, camera, False)
 
-    def _prepare_filled[
+    def _prepared[
         C: Camera
     ](
         self,
@@ -1272,16 +1304,24 @@ struct Renderer(Movable):
             camera: The camera to project through — anything satisfying
                 `cameras.camera.Camera`, perspective or orthographic, placed
                 or riding one of the scene's nodes.
-            wireframe: Which half of the scene to prepare: the draws whose
-                material's `wireframe` matches. False gives the surfaces
-                that are filled, which is what `prepare` asks for. True
-                gives the ones the line pass turns into segments, run
-                through the identical pipeline so that a wireframe is
-                morphed, skinned, sorted and clipped exactly as the
-                surface it replaces.
+            wireframe: Which half of the scene to prepare, and what to
+                make of it. False gives the filled surfaces as triangles,
+                three corners each, which is what `prepare` asks for. True
+                gives the wireframe meshes as segments, two corners each,
+                assembled from the edges of their own triangles.
+
+                The split is here, after the vertex stage, so that a
+                wireframe is morphed, skinned, instanced and culled by the
+                same code as the surface it replaces, and only the
+                primitive it is assembled into differs. It is not a filled
+                mesh cut up afterwards: clipping a triangle leaves a
+                polygon that has to be fanned, and the fan's diagonal and
+                the cut along the near plane are edges of the clipper
+                rather than of the mesh. See below.
 
         Returns:
-            Raster vertices, three per triangle, in submission order. A mesh
+            Raster vertices, three per triangle, in submission order, or
+            two per segment when `wireframe`. A mesh
             whose node shares no layer with the camera contributes none,
             and nor does one whose bounding sphere lies wholly outside the
             camera's frustum, unless it opted out of that test. An
@@ -1566,6 +1606,51 @@ struct Renderer(Movable):
                 if indices[slot] >= vertex_count:
                     raise Error("An index entry points past the last vertex")
             var triangles = geometry.triangle_count()
+            if wireframe:
+                # The mesh's own edges, each once, clipped as segments.
+                # `clip_segment` shares its arithmetic with the triangle
+                # clipper, so a wireframe edge and the filled edge under
+                # it are cut at the same place.
+                #
+                # No backface test and no `side`: this is submitted as
+                # lines, as three.js submits it, and a line has no facing
+                # to reject. A front-sided wireframe box shows the far
+                # side of itself, which is what a wireframe is for.
+                var ends = triangle_edges(geometry)
+                for edge in range(len(ends[0])):
+                    var from_end = ends[0][edge]
+                    var to_end = ends[1][edge]
+                    var kept = clip_segment(
+                        _line_corner(
+                            view_points,
+                            world_points,
+                            vertex_colors,
+                            from_end,
+                        ),
+                        _line_corner(
+                            view_points, world_points, vertex_colors, to_end
+                        ),
+                        near,
+                        far,
+                    )
+                    for end in range(len(kept)):
+                        corners.append(
+                            _to_raster(
+                                kept[end],
+                                to_screen,
+                                NO_TEXTURE,
+                                blending,
+                                BASIC,
+                                NO_TEXTURE,
+                                NO_TEXTURE,
+                                0,
+                                FloatColor(0.0, 0.0, 0.0),
+                                0,
+                                NO_TEXTURE,
+                                NO_TEXTURE,
+                            )
+                        )
+                continue
             for triangle in range(triangles):
                 var first = triangle * 3
                 var second = first + 1
@@ -1918,34 +2003,26 @@ struct Renderer(Movable):
                         )
                     )
 
-        # And the meshes drawn as the lines of their triangles. Their
-        # triangles are prepared by the pipeline every other mesh goes
-        # through, and are cut into segments at the very end. That is what
-        # makes a wireframe of a morphed, skinned or instanced mesh work
-        # without a second word about any of the three.
+        # And the meshes drawn as the lines of their own triangles.
+        # `_prepared` shares everything up to primitive assembly with the
+        # filled pass -- morph, skin, instance, cull, transform -- and
+        # then assembles edges rather than triangles, so a wireframe of a
+        # morphed or skinned mesh needs no second word about either.
         #
-        # An edge shared by two triangles is drawn twice, over itself. It
-        # is the same rule both times, so it is the same pixels. Pairing
-        # the edges to draw each once is `geometries.edges`, which a
-        # caller reaches for when it wants the edges as a geometry.
+        # An edge shared by two triangles is drawn once: `triangle_edges`
+        # pairs them, as three.js's `getWireframeAttribute` does. Drawing
+        # it twice is not free even though it is the same pixels, because
+        # a blended segment drawn over itself is twice as opaque.
         var wired = List[RasterVertex]()
         for index in range(assets.materials.count()):
             if assets.materials.get(MaterialId(index)).wireframe:
                 # Asked before the work rather than after, so a scene with
                 # no wireframe in it pays one pass over the materials
                 # rather than a second pass over its geometry.
-                wired = self._prepare_filled(scene, assets, camera, True)
+                wired = self._prepared(scene, assets, camera, True)
                 break
-        for triangle in range(len(wired) // 3):
-            var one = wired[triangle * 3]
-            var two = wired[triangle * 3 + 1]
-            var three = wired[triangle * 3 + 2]
-            corners.append(one)
-            corners.append(two)
-            corners.append(two)
-            corners.append(three)
-            corners.append(three)
-            corners.append(one)
+        for end in range(len(wired)):
+            corners.append(wired[end])
 
         return corners^
 
