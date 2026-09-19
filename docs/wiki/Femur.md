@@ -4,7 +4,7 @@
 
 ![Four femurs of different stature and sex turn under a lamp](out/femur.png)
 
-`extensions/humanoid/spec.mojo`, `extensions/humanoid/sex.mojo`, `extensions/humanoid/side.mojo`, `extensions/humanoid/skeleton/tissue.mojo`, `extensions/humanoid/skeleton/bone.mojo`, `extensions/humanoid/skeleton/leg/femur/dimensions.mojo`, `extensions/humanoid/skeleton/leg/femur/geometry.mojo` and `extensions/humanoid/skeleton/leg/femur/mass.mojo`.
+`extensions/humanoid/spec.mojo`, `extensions/humanoid/sex.mojo` and `extensions/humanoid/side.mojo` hold the spec. Tissue and visual maps live in `extensions/humanoid/skeleton/`. The femur solid lives in `extensions/humanoid/skeleton/leg/femur/`. Shared field, isosurface and occupancy code sit beside them.
 
 This is not a three.js port. See [Extensions](Extensions) and [Why extensions sit beside the port](Why-extensions-sit-beside-the-port).
 

@@ -73,6 +73,9 @@ mkdir -p out
 | `utah.mojo` | `teapot.png` | [Geometry addons](Geometry-addons#teapot) |
 | `blobs.mojo` | `blobs.png` | [Scene objects](Scene-objects#marching-cubes) |
 | `femur.mojo` | `femur.png` | [Femur](Femur) |
+| `tibia.mojo` | `tibia.png` | [Tibia](Tibia) |
+| `fibula.mojo` | `fibula.png` | [Fibula](Fibula) |
+| `patella.mojo` | `patella.png` | [Patella](Patella) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 

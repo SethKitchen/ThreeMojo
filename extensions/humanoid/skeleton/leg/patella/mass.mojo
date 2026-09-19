@@ -3,17 +3,13 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Bone-tissue mass and Earth weight of a femur from its solid and tissues.
+"""Bone-tissue mass and Earth weight of a patella from its solid and tissues.
 
-The mesh is the outer surface. The interior is not solid cortical bone.
-A shaft has a marrow cavity. The head and the condyles hold trabecular
-bone inside a cortical shell. This module samples the signed-distance
-field on a grid and classifies each cell.
+The patella has no marrow cavity. A thin cortical shell wraps a trabecular
+interior. Porosity is applied once through apparent density.
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
-    var report = femur_mass(person)
-    print(report.mass.to(KILOGRAM), "kg")
-    print(report.weight().to(NEWTON), "N")
+    var report = patella_mass(person)
 """
 
 from extensions.humanoid.side import RIGHT, BodySide
@@ -22,7 +18,6 @@ from extensions.humanoid.skeleton.occupancy import (
     CORTICAL_FILL,
     DEFAULT_STEP,
     EMPTY,
-    MARROW,
     TRABECULAR_FILL,
     BoneMass,
     BoneOccupancy,
@@ -31,84 +26,79 @@ from extensions.humanoid.skeleton.occupancy import (
     check_mass_step,
     finish_mass,
     grid_cells,
-    in_shaft_span,
 )
 from extensions.humanoid.skeleton.tissue import (
     BoneTissue,
     cortical_tissue,
     trabecular_tissue,
 )
-from extensions.humanoid.skeleton.leg.femur.dimensions import (
-    FemurDimensions,
-    FemurField,
-    femur_dimensions,
+from extensions.humanoid.skeleton.leg.patella.dimensions import (
+    PatellaDimensions,
+    PatellaField,
+    patella_dimensions,
 )
 from math.vector3 import Vector3
 from units.si import Length
 
-# Cortical shell as a fraction of mean midshaft radius, about 6 mm on a 6 ft male.
-comptime SHELL_FRACTION = Float32(0.42)
-# Distal and proximal fractions of the shaft that are metaphysis, not cavity.
-comptime DISTAL_METAPHYSIS = Float32(0.20)
-comptime PROXIMAL_METAPHYSIS = Float32(0.15)
+comptime SHELL_FRACTION = Float32(0.55)
 
 
-def femur_occupancy(
-    dimensions: FemurDimensions, point: Vector3
+def patella_occupancy(
+    dimensions: PatellaDimensions, point: Vector3
 ) raises -> BoneOccupancy:
-    """Return what fills `point` in a sized femur.
+    """Return what fills `point` in a sized patella.
 
     Args:
-        dimensions: A femur already sized from stature and sex.
+        dimensions: A patella already sized from stature and sex.
         point: A point in the bone's frame, in meters.
 
     Returns:
-        `EMPTY` outside, `CORTICAL_FILL` in the shell, `MARROW` in the
-        shaft cavity, or `TRABECULAR_FILL` in the cancellous ends.
+        `EMPTY` outside, `CORTICAL_FILL` in the shell, or
+        `TRABECULAR_FILL` in the interior. There is no marrow.
 
     Raises:
         Error: If `dimensions.validate` refuses the copy.
     """
-    return _occupancy(FemurField(dimensions), point)
+    return _occupancy(PatellaField(dimensions), point)
 
 
-def femur_mass(
+def patella_mass(
     spec: HumanoidSpec, side: BodySide = RIGHT, step: Length = DEFAULT_STEP
 ) raises -> BoneMass:
-    """Return the bone-tissue mass of a femur sized for `spec`.
+    """Return the bone-tissue mass of a patella sized for `spec`.
 
     Args:
         spec: Standing height and osteological sex.
-        side: `RIGHT` or `LEFT`. A right femur is the default.
+        side: `RIGHT` or `LEFT`. A right patella is the default.
         step: Grid cell size. 2 mm through 20 mm, 5 mm by default.
 
     Returns:
         Sampled volumes and the bone-tissue mass.
 
     Raises:
-        Error: If `spec` or `side` is refused by `femur_dimensions`, or
+        Error: If `spec` or `side` is refused by `patella_dimensions`, or
             if `step` is out of range.
     """
-    return femur_mass_from_dimensions(
-        femur_dimensions(spec.stature, spec.sex, side),
+    return patella_mass_from_dimensions(
+        patella_dimensions(spec.stature, spec.sex, side),
         cortical_tissue(),
         trabecular_tissue(),
         step,
     )
 
 
-def femur_mass_from_dimensions(
-    dimensions: FemurDimensions,
+def patella_mass_from_dimensions(
+    dimensions: PatellaDimensions,
     cortical: BoneTissue,
     trabecular: BoneTissue,
     step: Length = DEFAULT_STEP,
 ) raises -> BoneMass:
-    """Return the bone-tissue mass of an already-sized femur.
+    """Return the bone-tissue mass of an already-sized patella.
 
     Args:
-        dimensions: Size and landmarks from `femur_dimensions`.
+        dimensions: Size and landmarks from `patella_dimensions`.
         cortical: Cortical tissue for the shell.
-        trabecular: Trabecular tissue for the cancellous ends.
+        trabecular: Trabecular tissue for the interior.
         step: Grid cell size.
 
     Returns:
@@ -119,11 +109,11 @@ def femur_mass_from_dimensions(
             out of range, or either tissue fails `validate`.
     """
     dimensions.validate()
-    check_mass_step(step, "femur")
+    check_mass_step(step, "patella")
     cortical.validate()
     trabecular.validate()
 
-    var field = FemurField(dimensions)
+    var field = PatellaField(dimensions)
     var dx = step.value
     var dy = step.value
     var dz = step.value
@@ -148,16 +138,12 @@ def femur_mass_from_dimensions(
     return finish_mass(tally)
 
 
-def _occupancy(field: FemurField, point: Vector3) -> BoneOccupancy:
-    """Return what fills `point` in `field`."""
+def _occupancy(field: PatellaField, point: Vector3) -> BoneOccupancy:
+    """Return what fills `point` in `field`. There is no marrow."""
     var d = field.distance(point)
     if d >= 0:
         return EMPTY
     var thickness = SHELL_FRACTION * field.r2
     if d > -thickness:
         return CORTICAL_FILL
-    if in_shaft_span(
-        point.y, field.s0.y, field.s4.y, DISTAL_METAPHYSIS, PROXIMAL_METAPHYSIS
-    ):
-        return MARROW
     return TRABECULAR_FILL

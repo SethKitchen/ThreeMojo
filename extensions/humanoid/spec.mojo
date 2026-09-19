@@ -5,18 +5,25 @@
 
 """What a humanoid is, as far as the bones need to know.
 
-A later pass will take this spec and scale every bone. Today the femur
-reads stature and sex from it. Age, build and population are not fields
-yet. The named default is the inverted Trotter and Gleser 1952 American
-White adult line. That is a template choice, not a unique measurement
-for a person of that stature.
+Each bone reads stature and sex from this spec and sizes itself. Age,
+build and population are not fields yet. Long-bone templates invert the
+Trotter and Gleser 1952 American White adult lines. That is a named
+choice, not a unique measurement for a person of that stature.
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var bone = femur(person)
+
+The accepted stature interval is 1.2 m through 2.5 m. That is the
+software range. It is not the calibration range of the 1952 sample.
 """
 
 from extensions.humanoid.sex import Sex
-from units.si import Length
+from units.si import Length, METER
+
+# Software range for a stature argument. This is not the calibration
+# range of the 1952 sample.
+comptime MIN_STATURE = Length(1.2, METER)
+comptime MAX_STATURE = Length(2.5, METER)
 
 
 @fieldwise_init

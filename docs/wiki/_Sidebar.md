@@ -52,6 +52,11 @@
 - [Commands](Commands)
 - [Examples](Examples)
 - [Benchmarks](Benchmarks)
+- [Extensions](Extensions)
+- [Femur](Femur)
+- [Tibia](Tibia)
+- [Fibula](Fibula)
+- [Patella](Patella)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)

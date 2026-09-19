@@ -362,6 +362,9 @@ The port is not at parity with three.js yet. 187 features are ported and 16 are 
 Content that is not a three.js port lives under `extensions/`. Each item is tested, documented, and scaled from measured data.
 
 - [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look
+- [x] [Tibia](https://github.com/SethKitchen/ThreeMojo/wiki/Tibia): a stature-scaled tibia, with bone tissue
+- [x] [Fibula](https://github.com/SethKitchen/ThreeMojo/wiki/Fibula): a stature-scaled fibula, with bone tissue
+- [x] [Patella](https://github.com/SethKitchen/ThreeMojo/wiki/Patella): a stature-scaled patella, with bone tissue
 
 ### Out of scope
 

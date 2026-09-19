@@ -570,7 +570,8 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/coats.png $(OUT_DIR)/environment.png \
            $(OUT_DIR)/sky.png $(OUT_DIR)/faces.png \
            $(OUT_DIR)/teapot.png $(OUT_DIR)/blobs.png \
-           $(OUT_DIR)/femur.png
+           $(OUT_DIR)/femur.png $(OUT_DIR)/tibia.png \
+           $(OUT_DIR)/fibula.png $(OUT_DIR)/patella.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
 $(OUT_DIR)/mirror.png: $(LIB_SOURCES) examples/mirror.mojo
@@ -910,6 +911,21 @@ $(OUT_DIR)/blobs.png: $(LIB_SOURCES) examples/blobs.mojo
 $(OUT_DIR)/femur.png: $(LIB_SOURCES) examples/femur.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/femur.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/tibia.png: $(LIB_SOURCES) examples/tibia.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/tibia.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/fibula.png: $(LIB_SOURCES) examples/fibula.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/fibula.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/patella.png: $(LIB_SOURCES) examples/patella.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/patella.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be
