@@ -77,6 +77,8 @@ Look something up.
 - [Commands](Commands)
 - [Examples](Examples)
 - [Benchmarks](Benchmarks)
+- [Extensions](Extensions)
+- [Femur](Femur)
 
 ## Explanation
 
@@ -96,6 +98,7 @@ Understand why.
 - [Why the CPU and GPU share code](Why-the-CPU-and-GPU-share-code)
 - [Why the CPU renderer uses bands](Why-the-CPU-renderer-uses-bands)
 - [Why the PNG reader checks structure](Why-the-PNG-reader-checks-structure)
+- [Why extensions sit beside the port](Why-extensions-sit-beside-the-port)
 - [The CUDA teardown hang](The-CUDA-teardown-hang)
 - [The Mojo compiler hang](The-Mojo-compiler-hang)
 

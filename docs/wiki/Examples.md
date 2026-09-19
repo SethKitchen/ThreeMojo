@@ -87,6 +87,7 @@ mkdir -p out
 | `vase.mojo` | `lofts.png` | [Lofts and clipping groups](Lofts-and-clipping-groups) |
 | `sapling.mojo` | `generators.png` | [Procedural generators](Procedural-generators) |
 | `particles.mojo` | `computenodes.png` | [Compute nodes](Compute-nodes) |
+| `femur.mojo` | `femur.png` | [Femur](Femur) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 
