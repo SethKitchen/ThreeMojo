@@ -42,7 +42,7 @@ is size-dependent. `bench/raster_bench.mojo` measures where the crossover is.
 from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
-from render.linerule import covers, major_is_x, share_at
+from render.linerule import covers, dash_covers, major_is_x, share_at
 from render.framebuffer import Color, FloatColor, Framebuffer
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.lighting import (
@@ -163,7 +163,15 @@ comptime LANE_SPECULAR_B = 23
 # How tight the highlight is. Per-triangle, read from the first corner's
 # lane like the alpha test.
 comptime LANE_SHININESS = 24
-comptime FLOATS_PER_VERTEX = LANE_SHININESS + 1
+# How far along its line a corner is, scaled: a dashed line's varying.
+# See `RasterVertex.line_distance`. A triangle's corners carry zero.
+comptime LANE_LINE_DISTANCE = 25
+# How long a dash is and how long the gap after it. Per-segment, read
+# from the first end's lane like the alpha test, and floats like it, which
+# is why they are lanes rather than entries in the segment state table.
+comptime LANE_DASH = 26
+comptime LANE_GAP = 27
+comptime FLOATS_PER_VERTEX = LANE_GAP + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -339,6 +347,9 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.specular.g)
         flat.append(corner.specular.b)
         flat.append(corner.shininess)
+        flat.append(corner.line_distance)
+        flat.append(corner.dash_size)
+        flat.append(corner.gap_size)
     return flat^
 
 
@@ -1386,8 +1397,6 @@ def rasterize_kernel(
                 var az = segments[unsafe_offset=base + LANE_Z]
                 var bz = segments[unsafe_offset=far_base + LANE_Z]
                 var z = az + (bz - az) * share
-                if z >= nearest:
-                    continue
                 var near = segments[unsafe_offset=base + LANE_INV_W] * (
                     1 - share
                 )
@@ -1396,6 +1405,20 @@ def rasterize_kernel(
                 if total == 0:
                     continue
                 var toward = away / total
+                # A pixel in a gap is thrown away before the depth is
+                # tested, as the host throws it away: a gap claims nothing.
+                var from_a = segments[unsafe_offset=base + LANE_LINE_DISTANCE]
+                var from_b = segments[
+                    unsafe_offset=far_base + LANE_LINE_DISTANCE
+                ]
+                if not dash_covers(
+                    from_a + (from_b - from_a) * toward,
+                    segments[unsafe_offset=base + LANE_DASH],
+                    segments[unsafe_offset=base + LANE_GAP],
+                ):
+                    continue
+                if z >= nearest:
+                    continue
                 # Straight, through the function the host calls, so the one
                 # convention for a line's color lives in one place.
                 var drawn = mix_straight(

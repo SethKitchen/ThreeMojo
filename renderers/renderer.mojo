@@ -101,7 +101,7 @@ from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.instanced_mesh import check_placing
 from geometries.edges import triangle_edges
-from objects.line import segment_count, segment_ends
+from objects.line import line_distances, segment_count, segment_ends
 from objects.skeleton import blend_bones
 from objects.skinned_mesh import (
     ATTACHED,
@@ -1010,6 +1010,8 @@ def _to_raster(
     shininess: Float32,
     gradient_map: TextureId,
     matcap: TextureId,
+    dash_size: Float32 = 0,
+    gap_size: Float32 = 0,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -1050,6 +1052,9 @@ def _to_raster(
         shininess,
         gradient_map,
         matcap,
+        vertex.line_distance,
+        dash_size,
+        gap_size,
     )
 
 
@@ -2163,6 +2168,20 @@ struct Renderer(Movable):
                 )
                 world_points.append(point)
                 view_points.append(view.transform_point(point))
+            # How far along the line each point is, in the geometry's own
+            # space and scaled by the material, three.js's `vLineDistance`.
+            # Worked out here rather than kept as an attribute, so a dashed
+            # line cannot forget to have it worked out; see `objects.line`.
+            # A solid line carries zeros, which no gap ever falls on.
+            var dash = Float32(0)
+            var gap = Float32(0)
+            var along = List[Float32](length=vertex_count, fill=0)
+            if material.is_dashed():
+                dash = material.dash_size.to(METER)
+                gap = material.gap_size.to(METER)
+                along = line_distances(line.mode, positions)
+                for vertex in range(vertex_count):
+                    along[vertex] *= material.dash_scale
 
             for segment in range(segment_count(line.mode, vertex_count)):
                 var ends = segment_ends(line.mode, vertex_count, segment)
@@ -2170,8 +2189,9 @@ struct Renderer(Movable):
                 var second = ends[1]
                 # The normal is zero and the texture coordinates are zero
                 # because nothing reads either: the kind is unlit and there
-                # is no map. Carrying the material color and the world
-                # position is the whole of what a segment varies.
+                # is no map. Carrying the material color, the world
+                # position and the distance along the line is the whole of
+                # what a segment varies.
                 var kept = clip_segment(
                     ClipVertex(
                         view_points[first],
@@ -2180,6 +2200,7 @@ struct Renderer(Movable):
                         0,
                         0,
                         world_points[first],
+                        line_distance=along[first],
                     ),
                     ClipVertex(
                         view_points[second],
@@ -2188,6 +2209,7 @@ struct Renderer(Movable):
                         0,
                         0,
                         world_points[second],
+                        line_distance=along[second],
                     ),
                     near,
                     far,
@@ -2208,6 +2230,8 @@ struct Renderer(Movable):
                             0,
                             NO_TEXTURE,
                             NO_TEXTURE,
+                            dash,
+                            gap,
                         )
                     )
             _note_span(

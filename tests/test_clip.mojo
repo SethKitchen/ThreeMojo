@@ -455,5 +455,38 @@ def test_a_cut_carries_the_world_position_across() raises:
     assert_equal(bare.world.z, Float32(0))
 
 
+def test_a_cut_carries_the_line_distance_across() raises:
+    # A segment from half a meter in front of the camera to two and a
+    # half, cut at the near plane a quarter of the way along: its
+    # distance is a quarter of the way too, so a dashed line cut at the
+    # near plane keeps its dashes where they were.
+    var a = ClipVertex(
+        Vector3(0, 0, -0.5),
+        FloatColor(1, 1, 1),
+        Vector3(0, 0, 1),
+        0,
+        0,
+        line_distance=0,
+    )
+    var b = ClipVertex(
+        Vector3(0, 0, -2.5),
+        FloatColor(1, 1, 1),
+        Vector3(0, 0, 1),
+        0,
+        0,
+        line_distance=4,
+    )
+    var kept = clip_segment(a, b, NEAR, FAR)
+    assert_equal(len(kept), 2)
+    assert_almost_equal(
+        Float64(kept[0].line_distance), Float64(1), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        Float64(kept[1].line_distance), Float64(4), atol=TOLERANCE
+    )
+    # A corner of a triangle has no line, and says so.
+    assert_equal(at(0, 0, -2).line_distance, Float32(0))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

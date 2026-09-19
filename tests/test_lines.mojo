@@ -18,6 +18,7 @@ from math.vector2 import Vector2
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.linerule import (
     covers,
+    dash_covers,
     major_at,
     major_is_x,
     other_at,
@@ -33,7 +34,7 @@ from render.rasterizer import (
 from render.target import RenderTarget
 from render.texture_store import NO_TEXTURE
 from render.tonemap import NO_TONE_MAPPING
-from std.math import inf
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -623,6 +624,148 @@ def test_a_steep_line_that_wanders_off_the_side_is_held_in() raises:
         drawn_line(0.5, -90.5, 7.5, -90.5), Color(0, 0, 0)
     )
     assert_equal(len(under), 0)
+
+
+def dashed(
+    x: Float32,
+    y: Float32,
+    along: Float32,
+    dash: Float32,
+    gap: Float32,
+    z: Float32 = 0.5,
+    inv_w: Float32 = 1,
+) raises -> RasterVertex:
+    """Return one end of a dashed line, `along` units along it."""
+    return RasterVertex(
+        x,
+        y,
+        z,
+        inv_w,
+        FloatColor(1, 1, 1),
+        0,
+        0,
+        NO_TEXTURE,
+        OPAQUE,
+        kind=BASIC,
+        line_distance=along,
+        dash_size=dash,
+        gap_size=gap,
+    )
+
+
+def test_a_gap_of_zero_draws_every_pixel() raises:
+    # A solid line asks the same question and is never refused, whatever
+    # the dash says: three.js's fold into a period of the dash alone
+    # never passes the dash's end.
+    assert_true(dash_covers(0, 0, 0))
+    assert_true(dash_covers(7.5, 0, 0))
+    assert_true(dash_covers(7.5, 3, 0))
+    assert_true(dash_covers(-2, 3, 0))
+
+
+def test_a_distance_is_folded_into_one_period() raises:
+    # A dash of three and a gap of one, three.js's defaults: drawn for the
+    # first three of every four units, and the fold is inclusive at the
+    # dash's end, as `mod(d, 4) > 3` discards only past it.
+    assert_true(dash_covers(0, 3, 1))
+    assert_true(dash_covers(2.9, 3, 1))
+    assert_true(dash_covers(3, 3, 1))
+    assert_false(dash_covers(3.5, 3, 1))
+    assert_false(dash_covers(3.999, 3, 1))
+    assert_true(dash_covers(4, 3, 1))
+    assert_true(dash_covers(10.5, 3, 1))
+    assert_false(dash_covers(11.5, 3, 1))
+
+
+def test_a_negative_distance_folds_like_glsl_mod() raises:
+    # A scale below zero runs the distance backward. GLSL's `mod` follows
+    # the divisor's sign, so -0.5 folds to 3.5, which is in the gap, and
+    # -1.5 folds to 2.5, which is in the dash.
+    assert_false(dash_covers(-0.5, 3, 1))
+    assert_true(dash_covers(-1.5, 3, 1))
+
+
+def test_a_dashed_line_leaves_its_gaps_unpainted() raises:
+    # Sixteen columns, a distance of one per column measured at the pixel
+    # center, a dash of four and a gap of four: columns 0 to 3 and 8 to 11
+    # fold at or under four, and the rest past it.
+    var target = RenderTarget(16, 16, Color(0, 0, 0))
+    rasterize_line(dashed(0, 8.5, 0, 4, 4), dashed(16, 8.5, 16, 4, 4), target)
+    for x in range(16):
+        var drawn = target.color_at(x, 8).r > 0.5
+        var expected = (x % 8) < 4
+        assert_equal(drawn, expected, "column " + String(x))
+    assert_equal(lit(target), 8)
+
+
+def test_a_dash_is_measured_with_perspective_correction() raises:
+    # The near end is three times as close as the far one, so the far
+    # half of the line in the world is squeezed into the last third or
+    # so of the screen. A dash covering the first half of the line ends
+    # past column 11 rather than at column 8, where an affine measure
+    # would end it.
+    var target = RenderTarget(16, 16, Color(0, 0, 0))
+    rasterize_line(
+        dashed(0, 8.5, 0, 8, 8, inv_w=3),
+        dashed(16, 8.5, 16, 8, 8, inv_w=1),
+        target,
+    )
+    # Column 8 is 4.4 units along and column 11 is 7.4: both in the dash.
+    assert_true(target.color_at(8, 8).r > 0.5)
+    assert_true(target.color_at(11, 8).r > 0.5)
+    # Column 12 is 8.7 units along and column 15 is 14.6: both in the gap.
+    assert_false(target.color_at(12, 8).r > 0.5)
+    assert_false(target.color_at(15, 8).r > 0.5)
+
+
+def test_a_gap_claims_no_depth() raises:
+    # A dashed line in front, then a solid line behind it. The pixels in
+    # the gaps were never drawn, so they claim nothing and the line behind
+    # shows through them; the dashes hide it.
+    var target = RenderTarget(16, 16, Color(0, 0, 0))
+    rasterize_line(
+        dashed(0, 8.5, 0, 4, 4, z=0.2), dashed(16, 8.5, 16, 4, 4, z=0.2), target
+    )
+    rasterize_line(
+        end(0, 8.5, 0.6, FloatColor(0, 0, 1)),
+        end(16, 8.5, 0.6, FloatColor(0, 0, 1)),
+        target,
+    )
+    assert_almost_equal(target.color_at(2, 8).b, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(target.color_at(2, 8).r, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(target.color_at(5, 8).b, Float32(1), atol=TOLERANCE)
+    assert_almost_equal(target.color_at(5, 8).r, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(target.depth_at(5, 8), Float32(0.6), atol=TOLERANCE)
+
+
+def test_a_line_must_agree_with_itself_about_the_dashes() raises:
+    var target = RenderTarget(4, 4, Color(0, 0, 0))
+    with assert_raises(contains="agree about the dashes"):
+        rasterize_line(dashed(0, 1.5, 0, 4, 4), dashed(4, 1.5, 4, 2, 4), target)
+    with assert_raises(contains="agree about the dashes"):
+        rasterize_line(dashed(0, 1.5, 0, 4, 4), dashed(4, 1.5, 4, 4, 2), target)
+
+
+def test_a_dash_or_a_gap_must_be_a_length() raises:
+    var target = RenderTarget(4, 4, Color(0, 0, 0))
+    with assert_raises(contains="dash size cannot be negative"):
+        rasterize_line(
+            dashed(0, 1.5, 0, -1, 4), dashed(4, 1.5, 4, -1, 4), target
+        )
+    with assert_raises(contains="dash size cannot be negative"):
+        var bad = nan[DType.float32]()
+        rasterize_line(
+            dashed(0, 1.5, 0, bad, 4), dashed(4, 1.5, 4, bad, 4), target
+        )
+    with assert_raises(contains="gap size cannot be negative"):
+        rasterize_line(
+            dashed(0, 1.5, 0, 4, -1), dashed(4, 1.5, 4, 4, -1), target
+        )
+    with assert_raises(contains="gap size cannot be negative"):
+        var bad = nan[DType.float32]()
+        rasterize_line(
+            dashed(0, 1.5, 0, 4, bad), dashed(4, 1.5, 4, 4, bad), target
+        )
 
 
 def test_a_segment_no_band_draws_is_still_refused() raises:

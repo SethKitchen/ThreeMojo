@@ -92,6 +92,9 @@ from core.layers import Layers
 from renderers.renderer import camera_position, camera_up, toward_camera
 from render.gpu import (
     FLOATS_PER_VERTEX,
+    LANE_DASH,
+    LANE_GAP,
+    LANE_LINE_DISTANCE,
     FOG_FLOATS,
     LIGHTS_AMBIENT,
     LIGHTS_EYE,
@@ -733,7 +736,7 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 25)
+    assert_equal(len(flat), 28)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -752,6 +755,28 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
     var deep = List[RasterVertex]()
     deep.append(RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), view_depth=7.5))
     assert_equal(flatten(deep)[19], Float32(7.5))
+    # The distance along a line and its dash and gap ride last, three
+    # lanes, and a corner that says nothing about them carries zeros.
+    assert_equal(flat[LANE_LINE_DISTANCE], Float32(0))
+    assert_equal(flat[LANE_DASH], Float32(0))
+    assert_equal(flat[LANE_GAP], Float32(0))
+    var dashed = List[RasterVertex]()
+    dashed.append(
+        RasterVertex(
+            1,
+            2,
+            3,
+            4,
+            FloatColor(1, 1, 1),
+            line_distance=6.5,
+            dash_size=3,
+            gap_size=1,
+        )
+    )
+    var lanes = flatten(dashed)
+    assert_equal(lanes[LANE_LINE_DISTANCE], Float32(6.5))
+    assert_equal(lanes[LANE_DASH], Float32(3))
+    assert_equal(lanes[LANE_GAP], Float32(1))
 
 
 def test_the_state_table_has_an_entry_per_map_and_policy() raises:
@@ -3974,7 +3999,7 @@ def test_flattening_carries_the_alpha_test_in_its_own_lane() raises:
         RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), alpha_test=0.375)
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 25)
+    assert_equal(len(flat), 28)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[20], Float32(0.375))
     # And a corner that says nothing about it carries zero, no test.
@@ -4156,7 +4181,7 @@ def test_flattening_carries_the_specular_and_the_shininess() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 25)
+    assert_equal(len(flat), 28)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[21], Float32(0.25))
     assert_equal(flat[22], Float32(0.5))
@@ -5961,6 +5986,121 @@ def test_both_backends_interpolate_a_line_color_the_same_way() raises:
             reds += 1
     assert_true(reds > 0, "the transparent end lent no color")
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def a_dashed_line(
+    dash: Float32,
+    gap: Float32,
+    near_inv_w: Float32 = 1,
+    far_inv_w: Float32 = 1,
+    z: Float32 = 0.5,
+) raises -> List[RasterVertex]:
+    """Return one flat segment across the image, sixteen units long along
+    itself, dashed."""
+    return [
+        RasterVertex(
+            0,
+            8.5,
+            z,
+            near_inv_w,
+            FloatColor(1, 1, 1),
+            0,
+            0,
+            NO_TEXTURE,
+            OPAQUE,
+            kind=BASIC,
+            line_distance=0,
+            dash_size=dash,
+            gap_size=gap,
+        ),
+        RasterVertex(
+            16,
+            8.5,
+            z,
+            far_inv_w,
+            FloatColor(1, 1, 1),
+            0,
+            0,
+            NO_TEXTURE,
+            OPAQUE,
+            kind=BASIC,
+            line_distance=16,
+            dash_size=dash,
+            gap_size=gap,
+        ),
+    ]
+
+
+def test_both_backends_dash_a_line_the_same_way() raises:
+    # A dash of four and a gap of four across sixteen columns, with the
+    # near end three times as close, so the fold is asked of a
+    # perspective-corrected distance on both sides. Then a solid line
+    # behind it, which shows through the gaps on both sides: a gap
+    # claims no depth on either.
+    if skipped_for_lack_of_a_gpu("both backends dash a line alike"):
+        return
+    var lines = a_dashed_line(4, 4, near_inv_w=3, far_inv_w=1, z=0.2)
+    var behind = a_varying_line(
+        0, 16, FloatColor(0, 0, 1, 1), FloatColor(0, 0, 1, 1), depth=0
+    )
+    lines.append(
+        RasterVertex(
+            behind[0].x,
+            behind[0].y,
+            0.6,
+            1,
+            behind[0].color,
+            0,
+            0,
+            NO_TEXTURE,
+            OPAQUE,
+            kind=BASIC,
+        )
+    )
+    lines.append(
+        RasterVertex(
+            behind[1].x,
+            behind[1].y,
+            0.6,
+            1,
+            behind[1].color,
+            0,
+            0,
+            NO_TEXTURE,
+            OPAQUE,
+            kind=BASIC,
+        )
+    )
+    var target = RenderTarget(16, 16, BACKGROUND)
+    rasterize_lines_all(lines, target, 1, FogView.none())
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        List[RasterVertex](),
+        16,
+        16,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        FogView.none(),
+        NO_TONE_MAPPING,
+        1.0,
+        lines,
+    )
+    # Some of the row is white dash and some is the blue line behind, and
+    # nothing in it is the background.
+    var white = 0
+    var blue = 0
+    for x in range(16):
+        var pixel = cpu.get_pixel(x, 8)
+        if pixel.r > 200:
+            white += 1
+        elif pixel.b > 200:
+            blue += 1
+    assert_true(white > 0, "no dash was drawn")
+    assert_true(blue > 0, "no gap let the line behind show")
+    assert_equal(white + blue, 16)
+    assert_equal(count_mismatches(cpu, gpu), 0)
 
 
 def test_both_backends_show_a_line_the_same_way_in_the_uv_view() raises:

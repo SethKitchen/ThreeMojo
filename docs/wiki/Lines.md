@@ -4,7 +4,7 @@
 
 ![A gold loop and a white path turn with a box](out/lines.png)
 
-three.js: `Line`, `LineLoop`, `LineSegments`, `LineBasicMaterial`.
+three.js: `Line`, `LineLoop`, `LineSegments`, `LineBasicMaterial`, `LineDashedMaterial`, `computeLineDistances`.
 
 ## Three objects, one mode
 
@@ -33,6 +33,7 @@ scene.add_line(path)
 | `line.segment_count(vertices)` | How many segments it makes. |
 | `segment_count(mode, vertices)` | The same, without a line. |
 | `segment_ends(mode, vertices, segment)` | Which two points one segment joins. |
+| `line_distances(mode, positions)` | How far along the line each point is, for the dashes. |
 
 `segment_ends` is the whole of the difference between the three modes. Everything that draws a line walks `segment_count` and asks `segment_ends`, so all three modes share one path through the renderer.
 
@@ -51,6 +52,50 @@ A `BASIC` material, three.js's `LineBasicMaterial`.
 A line has no surface. It has no normal, and every lighting term needs one. It has no surface coordinates either, so there is nothing to sample a map with. `prepare_lines` refuses a lit kind, a map and an alpha map. It refuses them rather than carrying them and drawing neither.
 
 The color, the opacity, the blending and the geometry's vertex colors all work as they do on a mesh. So does the [fog](Fog): a line that recedes is veiled like anything else.
+
+## Dashed lines
+
+`line_dashed_material` draws a line in dashes, three.js's `LineDashedMaterial`. A dash is a length along the line, and so is the gap after it.
+
+```mojo
+from materials.material import line_dashed_material
+
+var dashed = assets.materials.add(
+    line_dashed_material(
+        Color(240, 240, 255),
+        dash_size=Length(0.2, METER),
+        gap_size=Length(0.1, METER),
+    )
+)
+```
+
+| Argument | three.js | Default | Meaning |
+|---|---|---|---|
+| `dash_size` | `dashSize` | `3` | How long each dash is, along the line. |
+| `gap_size` | `gapSize` | `1` | How long the gap after it is. Zero is a solid line. |
+| `scale` | `scale` | `1` | What the distance along the line is multiplied by first. |
+
+The defaults are three.js's own. They are large for a scene measured in meters: three.js draws a dash of three units and a gap of one. Pass a dash and a gap that suit the line.
+
+### What a dash measures
+
+The distance along the line, from its first point, in the geometry's own space. three.js keeps that distance in a `lineDistance` attribute, and `computeLineDistances` fills it in. A dashed line whose author forgot to call it is drawn solid. Here `line_distances` works the distance out from the points, and `prepare_lines` calls it for every dashed line. Nothing has to be called first.
+
+The arithmetic is three.js's. A `STRIP` accumulates from its first point. `SEGMENTS` accumulate across the sticks too, as `LineSegments.computeLineDistances` does, so the pattern runs on from one stick to the next. A `LOOP` accumulates as a strip does. Its closing segment runs from the last point's distance back to zero, so the pattern along that one segment runs backward. That is what three.js draws.
+
+The distance is measured before the node's transform. A node scaled by two draws dashes twice as long, as in three.js. Set `scale` to change the pattern without changing the geometry.
+
+The distance is a varying. It is interpolated with perspective correction, as the color is, so a dash that recedes shortens on the screen as the line does. A segment cut at the near plane keeps its dashes where they were.
+
+### The rule
+
+A pixel is in a dash when the distance folded into one period lands at or before the dash's end. The fold is GLSL's `mod`, so a distance below zero still lands inside the period. `dash_covers` in `render/linerule.mojo` is that rule, and both rasterizers ask it. See [Shared CPU and GPU code](Why-the-CPU-and-GPU-share-code).
+
+A pixel in a gap is thrown away before the depth test, as three.js's `discard` throws it away. A gap claims no depth, so what is behind it shows through, whether the line blends or not.
+
+### Where dashes are refused
+
+Only a `BASIC` material can be dashed, because only a line has a length to measure along. A dashed material on a mesh is refused when it is built. A [wireframe](Materials#wireframe) cannot be dashed either: its edges are paired from a surface and carry no distance along them. A gap with no dash before it would draw nothing, and is refused too.
 
 ## The rule
 
@@ -113,6 +158,7 @@ Cutting a segment leaves a segment or nothing at all. There is no polygon to fan
 - A geometry with no positions, or with an index buffer.
 - A point count that does not suit the mode: an odd count under `SEGMENTS`.
 - A material that is not `BASIC`, or that carries a map or an alpha map.
+- A segment whose two ends disagree about the dashes, or whose dash or gap is negative, at the rasterizer boundary.
 - A material asking for vertex colors when the geometry has no `color` attribute.
 - A segment whose two ends disagree about blending, at the rasterizer boundary.
 

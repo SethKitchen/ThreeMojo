@@ -132,6 +132,13 @@ mapping, as they keep the uv debug view out of them.
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import isfinite
+from units.si import Length, METER
+
+# No dash and no gap: a solid line, and what a material says unless asked.
+comptime NO_DASH = Length(0.0, METER)
+# three.js's `LineDashedMaterial` defaults, in the line's own units.
+comptime DEFAULT_DASH_SIZE = Length(3.0, METER)
+comptime DEFAULT_GAP_SIZE = Length(1.0, METER)
 
 
 @fieldwise_init
@@ -342,6 +349,17 @@ struct Material(ImplicitlyCopyable):
     # kind must be `BASIC` and there must be no map. See `objects.line`
     # and `Renderer.prepare_lines`.
     var wireframe: Bool
+    # How long each dash of a line drawn with this material is, and how
+    # long the gap after it: three.js's `LineDashedMaterial.dashSize` and
+    # `gapSize`, measured along the line in the geometry's own units. A
+    # gap of zero, the default, is a solid line. Only a line reads them,
+    # so they are refused on anything but a `BASIC` material, and on a
+    # wireframe, whose edges carry no distance along them.
+    var dash_size: Length
+    var gap_size: Length
+    # What the distance along the line is multiplied by before the dashes
+    # are measured against it: three.js's `scale`. One leaves it alone.
+    var dash_scale: Float32
     # Whether the surface is composited over what is behind it: three.js's
     # `transparent`. Off, the default, an opacity below one and a texture's
     # alpha change nothing but the alpha test, and every fragment is written
@@ -369,6 +387,9 @@ struct Material(ImplicitlyCopyable):
         matcap: TextureId = NO_TEXTURE,
         wireframe: Bool = False,
         transparent: Bool = False,
+        dash_size: Length = NO_DASH,
+        gap_size: Length = NO_DASH,
+        dash_scale: Float32 = 1.0,
     ) raises:
         """Describe a surface.
 
@@ -432,6 +453,13 @@ struct Material(ImplicitlyCopyable):
                 it, three.js's `transparent`. Off, the default, it is drawn
                 opaque with an alpha of one whatever its opacity or its
                 texture's alpha say, which only the alpha test reads.
+            dash_size: How long each dash of a line is, along the line,
+                three.js's `dashSize`. Read with `gap_size`, and only by
+                a line: `line_dashed_material` passes three.js's defaults.
+            gap_size: How long the gap after each dash is, three.js's
+                `gapSize`. Zero, the default, is a solid line.
+            dash_scale: What the distance along the line is multiplied by
+                before the dashes are measured, three.js's `scale`.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -461,7 +489,11 @@ struct Material(ImplicitlyCopyable):
                 refused as well. A `wireframe` on a kind that is not
                 `BASIC`, or beside a map or an alpha map, is refused: a
                 line has no normal for a light to reach and no surface
-                coordinate to sample a map with.
+                coordinate to sample a map with. A `dash_size` or
+                `gap_size` that is negative or not finite is refused, as
+                is a `dash_scale` that is not finite, a gap with no dash
+                before it, which would draw nothing, and any dash on a
+                kind that is not `BASIC` or on a wireframe.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -572,6 +604,36 @@ struct Material(ImplicitlyCopyable):
             )
         self.wireframe = wireframe
         self.transparent = transparent
+        var dash = dash_size.to(METER)
+        var gap = gap_size.to(METER)
+        if not isfinite(dash) or dash < 0:
+            raise Error("A dash size cannot be negative")
+        if not isfinite(gap) or gap < 0:
+            raise Error("A gap size cannot be negative")
+        if not isfinite(dash_scale):
+            raise Error("A dash scale must be finite")
+        if gap > 0 and dash == 0:
+            raise Error(
+                "A dashed line needs a dash: a gap with no dash before it"
+                " draws nothing"
+            )
+        # Refused for the reason a wireframe is refused on a lit kind: only
+        # the line pass measures a distance along what it draws. A
+        # wireframe is drawn by that pass, but its edges are paired from a
+        # surface and carry no distance along them.
+        if gap > 0 and kind != BASIC:
+            raise Error(
+                "Only a basic material can be dashed: dashes are measured"
+                " along a line, and only a line has a length to measure"
+            )
+        if gap > 0 and wireframe:
+            raise Error(
+                "A wireframe cannot be dashed: its edges are paired from a"
+                " surface and carry no distance along them"
+            )
+        self.dash_size = dash_size
+        self.gap_size = gap_size
+        self.dash_scale = dash_scale
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -661,6 +723,15 @@ struct Material(ImplicitlyCopyable):
     def is_textured(self) -> Bool:
         """Return True if this material names a texture."""
         return self.map != NO_TEXTURE
+
+    def is_dashed(self) -> Bool:
+        """Return True if a line drawn with this material has gaps in it.
+
+        A gap of zero is a solid line whatever the dash size says, as in
+        three.js, where a distance folded into a period of the dash alone
+        never passes the dash's end.
+        """
+        return self.gap_size > NO_DASH
 
     def is_transparent(self) -> Bool:
         """Return True if this surface is composited over what is behind it.
@@ -849,6 +920,59 @@ def matcap_material(
         transparent=transparent,
         kind=MATCAP,
         matcap=matcap,
+    )
+
+
+def line_dashed_material(
+    color: Color,
+    dash_size: Length = DEFAULT_DASH_SIZE,
+    gap_size: Length = DEFAULT_GAP_SIZE,
+    scale: Float32 = 1.0,
+    opacity: Float32 = 1.0,
+    blending: Optional[Blending] = None,
+    transparent: Bool = False,
+    vertex_colors: Bool = False,
+) raises -> Material:
+    """Return an unlit material that draws a line in dashes, three.js's
+    `LineDashedMaterial` at three.js's defaults.
+
+    The defaults are three.js's own: a dash of three and a gap of one, in
+    the geometry's units, at a scale of one. `Material(color, kind=BASIC,
+    dash_size=..., gap_size=...)` is the same material spelled out.
+
+    The distance each dash is measured along is worked out by the renderer
+    from the line's own points, in its geometry's space, as three.js's
+    `computeLineDistances` works it out. Nothing has to be called first.
+
+    Args:
+        color: The line's color, as authored in sRGB.
+        dash_size: How long each dash is.
+        gap_size: How long the gap after it is. Zero is a solid line.
+        scale: What the distance along the line is multiplied by first.
+        opacity: One for an opaque line, less to see through it.
+        blending: `OPAQUE` or `BLEND`, or unset to follow `transparent`.
+        transparent: Whether the line blends over what is behind it.
+        vertex_colors: Whether the geometry's `color` attribute tints it.
+
+    Returns:
+        The material, of kind `BASIC`.
+
+    Raises:
+        Error: If `opacity` is outside zero to one, `blending` holds a
+            value that is neither named constant, either size is negative
+            or not finite, `scale` is not finite, or the gap is above zero
+            and the dash is not.
+    """
+    return Material(
+        color,
+        opacity=opacity,
+        blending=blending,
+        transparent=transparent,
+        kind=BASIC,
+        vertex_colors=vertex_colors,
+        dash_size=dash_size,
+        gap_size=gap_size,
+        dash_scale=scale,
     )
 
 

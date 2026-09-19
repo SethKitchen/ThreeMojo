@@ -37,6 +37,22 @@ The material color, its opacity, its blending and the geometry vertex
 colors all work as they do on a mesh. So does the fog: a line that recedes
 is veiled like anything else.
 
+## What a dashed line measures
+
+A dashed material, three.js's `LineDashedMaterial`, needs to know how far
+along the line every point is. three.js keeps that in a `lineDistance`
+attribute that `computeLineDistances` fills in, and forgets the dashes
+when nobody calls it. Here `line_distances` works it out from the points
+themselves, in the geometry's own space, and `Renderer.prepare_lines`
+calls it for every dashed line, so there is nothing to forget.
+
+The arithmetic is three.js's. A strip accumulates from its first point.
+A list of sticks accumulates across the sticks too, as three.js's
+`LineSegments.computeLineDistances` does, so the pattern runs on from one
+stick to the next. A loop is a strip: its closing segment runs from the
+last point's distance back to zero, as three.js's does, so the pattern
+along that one segment runs backward.
+
 ## What a line is not
 
 It is one pixel wide, always. three.js is the same: WebGL ignores
@@ -50,6 +66,7 @@ way `Renderer.prepare` routes it, and the mode arithmetic below does not
 change.
 """
 
+from core.buffer_attribute import BufferAttribute
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from materials.material import MaterialId
@@ -218,3 +235,39 @@ struct Line(ImplicitlyCopyable):
             Error: If the count is negative, or is odd under `SEGMENTS`.
         """
         return segment_count(self.mode, vertices)
+
+
+def line_distances(
+    mode: LineMode, positions: BufferAttribute
+) raises -> List[Float32]:
+    """Return how far along the line each point is, in the geometry's units.
+
+    three.js's `Line.computeLineDistances` and
+    `LineSegments.computeLineDistances`, which agree: both accumulate the
+    distance from each point to the next from the first point on. A loop
+    accumulates as a strip does, so its closing segment runs the pattern
+    backward, as three.js's does. See the module docstring.
+
+    Args:
+        mode: How the points are paired.
+        positions: The points, three floats each, in order.
+
+    Returns:
+        One distance per point, from zero at the first.
+
+    Raises:
+        Error: If the mode is not a named one, if the count is odd under
+            `SEGMENTS`, or if the attribute holds fewer than three floats
+            per point.
+    """
+    var count = positions.count()
+    _ = segment_count(mode, count)
+    var distances = List[Float32]()
+    var so_far = Float32(0)
+    for point in range(count):
+        if point > 0:
+            var before = positions.vector3(point - 1)
+            var here = positions.vector3(point)
+            so_far += (here - before).length()
+        distances.append(so_far)
+    return distances^

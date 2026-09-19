@@ -16,7 +16,11 @@ from materials.material import (
     TOON,
 )
 from materials.material import (
+    DEFAULT_DASH_SIZE,
+    DEFAULT_GAP_SIZE,
+    NO_DASH,
     depth_material,
+    line_dashed_material,
     matcap_material,
     normal_material,
     phong_material,
@@ -818,6 +822,90 @@ def test_a_bad_matcap_id_is_rejected() raises:
             FRONT_SIDE,
             1.0,
             Blending(7),
+        )
+
+
+def test_a_material_is_solid_unless_asked() raises:
+    var plain = Material(Color(255, 255, 255))
+    assert_false(plain.is_dashed())
+    assert_true(plain.dash_size == NO_DASH)
+    assert_true(plain.gap_size == NO_DASH)
+    assert_equal(plain.dash_scale, Float32(1))
+    # A dash with no gap is a solid line too, as three.js draws it.
+    var gapless = Material(
+        Color(255, 255, 255), kind=BASIC, dash_size=Length(2.0, METER)
+    )
+    assert_false(gapless.is_dashed())
+
+
+def test_a_dashed_line_material_takes_threejs_defaults() raises:
+    var dashed = line_dashed_material(Color(255, 0, 0))
+    assert_true(dashed.is_dashed())
+    assert_true(dashed.kind == BASIC)
+    assert_true(dashed.dash_size == DEFAULT_DASH_SIZE)
+    assert_true(dashed.gap_size == DEFAULT_GAP_SIZE)
+    assert_almost_equal(dashed.dash_size.to(METER), Float32(3), atol=1e-6)
+    assert_almost_equal(dashed.gap_size.to(METER), Float32(1), atol=1e-6)
+    assert_equal(dashed.dash_scale, Float32(1))
+    assert_equal(dashed.color.r, 255)
+    var spelled = line_dashed_material(
+        Color(255, 0, 0),
+        dash_size=Length(0.5, METER),
+        gap_size=Length(0.25, METER),
+        scale=2,
+        opacity=0.5,
+        transparent=True,
+        vertex_colors=True,
+    )
+    assert_almost_equal(spelled.dash_size.to(METER), Float32(0.5), atol=1e-6)
+    assert_almost_equal(spelled.gap_size.to(METER), Float32(0.25), atol=1e-6)
+    assert_equal(spelled.dash_scale, Float32(2))
+    assert_true(spelled.is_transparent())
+    assert_true(spelled.vertex_colors)
+
+
+def test_a_dash_and_a_gap_must_be_lengths() raises:
+    with assert_raises(contains="dash size cannot be negative"):
+        _ = line_dashed_material(
+            Color(255, 0, 0), dash_size=Length(-1.0, METER)
+        )
+    with assert_raises(contains="dash size cannot be negative"):
+        _ = line_dashed_material(
+            Color(255, 0, 0), dash_size=Length(nan[DType.float32](), METER)
+        )
+    with assert_raises(contains="gap size cannot be negative"):
+        _ = line_dashed_material(Color(255, 0, 0), gap_size=Length(-1.0, METER))
+    with assert_raises(contains="gap size cannot be negative"):
+        _ = line_dashed_material(
+            Color(255, 0, 0), gap_size=Length(nan[DType.float32](), METER)
+        )
+    with assert_raises(contains="dash scale must be finite"):
+        _ = line_dashed_material(Color(255, 0, 0), scale=nan[DType.float32]())
+    # A scale below zero is allowed: it runs the pattern backward.
+    var backward = line_dashed_material(Color(255, 0, 0), scale=-1)
+    assert_equal(backward.dash_scale, Float32(-1))
+
+
+def test_a_gap_with_no_dash_is_refused() raises:
+    with assert_raises(contains="needs a dash"):
+        _ = line_dashed_material(Color(255, 0, 0), dash_size=NO_DASH)
+
+
+def test_only_a_basic_material_can_be_dashed() raises:
+    with assert_raises(contains="Only a basic material can be dashed"):
+        _ = Material(
+            Color(255, 0, 0),
+            kind=LAMBERT,
+            dash_size=Length(1.0, METER),
+            gap_size=Length(1.0, METER),
+        )
+    with assert_raises(contains="wireframe cannot be dashed"):
+        _ = Material(
+            Color(255, 0, 0),
+            kind=BASIC,
+            wireframe=True,
+            dash_size=Length(1.0, METER),
+            gap_size=Length(1.0, METER),
         )
 
 

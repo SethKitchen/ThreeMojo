@@ -61,6 +61,11 @@ struct ClipVertex(ImplicitlyCopyable):
     # Light this surface gives off, linear, from the material. Carried like
     # the color, so a cut piece glows as the whole did.
     var emissive: FloatColor
+    # How far along its line this corner is, three.js's `vLineDistance`,
+    # already scaled by the material. Read by a dashed line and by nothing
+    # else, and carried through a cut like every other varying: a segment
+    # cut at the near plane keeps its dashes where they were.
+    var line_distance: Float32
 
     def __init__(
         out self,
@@ -71,12 +76,14 @@ struct ClipVertex(ImplicitlyCopyable):
         v: Float32,
         world: Vector3 = Vector3(0, 0, 0),
         emissive: FloatColor = FloatColor(0.0, 0.0, 0.0),
+        line_distance: Float32 = 0,
     ):
         """Create a corner.
 
         The world position defaults to the origin, which is what a hand-built
         triangle with no point lights in reach wants, and the emissive to
-        black, which is no light at all.
+        black, which is no light at all. The line distance defaults to
+        zero, which is where every corner of a triangle is.
         """
         self.position = position
         self.color = color
@@ -85,6 +92,7 @@ struct ClipVertex(ImplicitlyCopyable):
         self.v = v
         self.world = world
         self.emissive = emissive
+        self.line_distance = line_distance
 
 
 def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
@@ -171,6 +179,7 @@ def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
             _mix(a.emissive.b, b.emissive.b, t),
             _mix(a.emissive.a, b.emissive.a, t),
         ),
+        _mix(a.line_distance, b.line_distance, t),
     )
 
 

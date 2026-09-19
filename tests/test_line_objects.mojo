@@ -22,6 +22,7 @@ from materials.material import (
     MaterialId,
     NORMALS,
     OPAQUE,
+    line_dashed_material,
 )
 from math.vector3 import Vector3
 from objects.line import (
@@ -30,6 +31,7 @@ from objects.line import (
     LineMode,
     SEGMENTS,
     STRIP,
+    line_distances,
     segment_count,
     segment_ends,
 )
@@ -822,6 +824,169 @@ def test_a_wireframe_with_nothing_to_draw_prepares_nothing() raises:
     scene.meshes = List[Mesh]()
     scene.add_mesh(Mesh(quad, wire, NodeId(1), frustum_culled=False))
     assert_equal(len(renderer.prepare_lines(scene, assets, a_camera())), 0)
+
+
+def test_a_strip_measures_its_distance_from_the_first_point() raises:
+    # Points at x = 0, 1 and 3, then one a unit up: distances 0, 1, 3, 4.
+    var geometry = points(
+        [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 3.0, 0.0, 0.0, 3.0, 1.0, 0.0]
+    )
+    var along = line_distances(STRIP, geometry.attribute_view(String(POSITION)))
+    assert_equal(len(along), 4)
+    assert_almost_equal(Float64(along[0]), Float64(0), atol=TOLERANCE)
+    assert_almost_equal(Float64(along[1]), Float64(1), atol=TOLERANCE)
+    assert_almost_equal(Float64(along[2]), Float64(3), atol=TOLERANCE)
+    assert_almost_equal(Float64(along[3]), Float64(4), atol=TOLERANCE)
+    # A loop measures as a strip does: the closing segment runs from the
+    # last distance back to zero, as three.js's does.
+    var around = line_distances(LOOP, geometry.attribute_view(String(POSITION)))
+    assert_equal(len(around), 4)
+    assert_almost_equal(Float64(around[3]), Float64(4), atol=TOLERANCE)
+    # One point has no distance to measure, and none is.
+    var alone = line_distances(
+        STRIP, points([1.0, 2.0, 3.0]).attribute_view(String(POSITION))
+    )
+    assert_equal(len(alone), 1)
+    assert_equal(alone[0], Float32(0))
+    # And no point at all has no distance at all.
+    var none = line_distances(
+        STRIP, points(List[Float32]()).attribute_view(String(POSITION))
+    )
+    assert_equal(len(none), 0)
+
+
+def test_sticks_accumulate_their_distance_across_each_other() raises:
+    # Two sticks of two units each, the second starting a unit past the
+    # first's end: 0, 2, then 3 and 5, as three.js's `LineSegments`
+    # accumulates across the gap between them.
+    var geometry = points(
+        [0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 3.0, 0.0, 0.0, 5.0, 0.0, 0.0]
+    )
+    var along = line_distances(
+        SEGMENTS, geometry.attribute_view(String(POSITION))
+    )
+    assert_almost_equal(Float64(along[1]), Float64(2), atol=TOLERANCE)
+    assert_almost_equal(Float64(along[2]), Float64(3), atol=TOLERANCE)
+    assert_almost_equal(Float64(along[3]), Float64(5), atol=TOLERANCE)
+
+
+def test_line_distances_refuse_what_the_mode_refuses() raises:
+    var odd = points([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 2.0, 0.0, 0.0])
+    with assert_raises(contains="pairs of points"):
+        _ = line_distances(SEGMENTS, odd.attribute_view(String(POSITION)))
+    with assert_raises(contains="mode that exists"):
+        _ = line_distances(LineMode(9), odd.attribute_view(String(POSITION)))
+    var flat = BufferGeometry()
+    flat.set_attribute(
+        String(POSITION), BufferAttribute([0.0, 0.0, 1.0, 0.0], 2)
+    )
+    with assert_raises(contains="fewer than three"):
+        _ = line_distances(STRIP, flat.attribute_view(String(POSITION)))
+
+
+def test_a_solid_line_prepares_no_distance_and_no_dashes() raises:
+    var assets = Assets()
+    var geometry = assets.geometries.add(
+        points([-0.5, 0.0, 0.0, 0.5, 0.0, 0.0])
+    )
+    var material = assets.materials.add(Material(Color(255, 0, 0), kind=BASIC))
+    var scene = a_scene_with_one_node()
+    scene.add_line(Line(geometry, material, NodeId(0)))
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var segments = renderer.prepare_lines(scene, assets, a_camera())
+    assert_equal(len(segments), 2)
+    for end in range(2):
+        assert_equal(segments[end].line_distance, Float32(0))
+        assert_equal(segments[end].dash_size, Float32(0))
+        assert_equal(segments[end].gap_size, Float32(0))
+
+
+def test_a_dashed_line_prepares_its_scaled_distance_and_its_dashes() raises:
+    # A line of one meter, at a scale of four: the far end is four along.
+    # The dash and the gap ride each end unscaled, as three.js's uniforms
+    # do, and the geometry's own space is measured, not the world's: the
+    # node is doubled and the distance is not.
+    var assets = Assets()
+    var geometry = assets.geometries.add(
+        points([-0.5, 0.0, 0.0, 0.5, 0.0, 0.0])
+    )
+    var material = assets.materials.add(
+        line_dashed_material(
+            Color(255, 0, 0),
+            dash_size=Length(0.3, METER),
+            gap_size=Length(0.2, METER),
+            scale=4,
+        )
+    )
+    var scene = Scene()
+    var node = Object3D()
+    node.set_scale(2, 2, 2)
+    _ = scene.add(node^)
+    scene.update()
+    scene.add_line(Line(geometry, material, NodeId(0)))
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var segments = renderer.prepare_lines(scene, assets, a_camera())
+    assert_equal(len(segments), 2)
+    assert_almost_equal(
+        Float64(segments[0].line_distance), Float64(0), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        Float64(segments[1].line_distance), Float64(4), atol=TOLERANCE
+    )
+    for end in range(2):
+        assert_almost_equal(
+            Float64(segments[end].dash_size), Float64(0.3), atol=TOLERANCE
+        )
+        assert_almost_equal(
+            Float64(segments[end].gap_size), Float64(0.2), atol=TOLERANCE
+        )
+
+
+def test_a_dashed_line_with_no_points_prepares_nothing() raises:
+    var assets = Assets()
+    var geometry = assets.geometries.add(points(List[Float32]()))
+    var material = assets.materials.add(line_dashed_material(Color(255, 0, 0)))
+    var scene = a_scene_with_one_node()
+    scene.add_line(Line(geometry, material, NodeId(0), frustum_culled=False))
+    var renderer = Renderer(WIDTH, HEIGHT)
+    assert_equal(len(renderer.prepare_lines(scene, assets, a_camera())), 0)
+
+
+def test_a_dashed_line_renders_with_gaps_in_it() raises:
+    # Two meters of world across sixteen pixels: an eighth of a meter a
+    # pixel. A dash of half a meter and a gap of half a meter light four
+    # pixels, then leave four, along the whole row.
+    var assets = Assets()
+    var geometry = assets.geometries.add(
+        points([-1.0, 0.0, 0.0, 1.0, 0.0, 0.0])
+    )
+    var material = assets.materials.add(
+        line_dashed_material(
+            Color(255, 255, 255),
+            dash_size=Length(0.5, METER),
+            gap_size=Length(0.5, METER),
+        )
+    )
+    var scene = a_scene_with_one_node()
+    scene.add_line(Line(geometry, material, NodeId(0)))
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var image = renderer.render(scene, assets, a_camera())
+    var lit = 0
+    var row = -1
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            if image.get_pixel(x, y).r > 128:
+                lit += 1
+                row = y
+    assert_equal(lit, 8)
+    # The first dash starts at the left edge, whichever way the row runs.
+    assert_true(image.get_pixel(0, row).r > 128)
+    assert_true(image.get_pixel(3, row).r > 128)
+    assert_false(image.get_pixel(4, row).r > 128)
+    assert_false(image.get_pixel(7, row).r > 128)
+    assert_true(image.get_pixel(8, row).r > 128)
+    assert_false(image.get_pixel(15, row).r > 128)
 
 
 def main() raises:
