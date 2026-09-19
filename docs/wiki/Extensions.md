@@ -13,10 +13,12 @@ extensions/
     sex.mojo           MALE, FEMALE
     side.mojo          RIGHT, LEFT
     skeleton/
+      bone.mojo        cortical and trabecular tissue, PBR maps
       leg/
         femur/
           dimensions.mojo   osteometry and the implicit solid
           geometry.mojo     the mesh
+          mass.mojo         mineral mass and Earth weight
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.

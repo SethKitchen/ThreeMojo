@@ -13,30 +13,42 @@ stop this file building. Those cases live in `tests/compile_fail/`, which the
 
 from units.quantity import Quantity, Unit
 from units.si import (
-    Acceleration,
     Angle,
     Area,
     CENTIMETER,
+    CUBIC_CENTIMETER,
+    CUBIC_METER,
     DEGREE,
+    Density,
     Duration,
     FOOT,
+    GIGAPASCAL,
     GRAM,
+    GRAM_PER_CUBIC_CENTIMETER,
     HOUR,
     INCH,
     KILOGRAM,
+    KILOGRAM_PER_CUBIC_METER,
     KILOMETER,
     Length,
+    MEGAPASCAL,
     METER,
+    METER_PER_SECOND_SQUARED,
     MILE,
     MILLIMETER,
     NANOMETER,
     MINUTE,
     Mass,
+    NEWTON,
+    PASCAL,
     POUND,
+    POUND_FORCE,
+    Pressure,
     RADIAN,
     SECOND,
     SQUARE_FOOT,
     SQUARE_METER,
+    STANDARD_GRAVITY,
     Scalar,
     TURN,
     Velocity,
@@ -226,6 +238,45 @@ def test_a_quantity_is_only_as_big_as_its_float() raises:
     assert_equal(size_of[Length](), size_of[Float32]())
     assert_equal(size_of[Volume](), size_of[Float32]())
     assert_equal(size_of[Velocity](), size_of[Float32]())
+
+
+def test_a_cubic_centimeter_is_a_millionth_of_a_cubic_meter() raises:
+    var milliliter = Volume(1.0, CUBIC_CENTIMETER)
+    assert_almost_equal(milliliter.to(CUBIC_METER), Float32(1.0e-6))
+
+
+def test_one_gram_per_cubic_centimeter_is_a_thousand_kilograms_per_cubic_meter() raises:
+    var water = Density(1.0, GRAM_PER_CUBIC_CENTIMETER)
+    assert_equal(water.to(KILOGRAM_PER_CUBIC_METER), Float32(1000.0))
+
+
+def test_standard_gravity_is_the_conventional_value() raises:
+    assert_almost_equal(STANDARD_GRAVITY.value, Float32(9.80665))
+    assert_almost_equal(
+        STANDARD_GRAVITY.to(METER_PER_SECOND_SQUARED), Float32(9.80665)
+    )
+
+
+def test_weight_is_mass_times_gravity() raises:
+    var mass = Mass(2.0, KILOGRAM)
+    var weight = mass * STANDARD_GRAVITY
+    assert_equal(weight.length, 1)
+    assert_equal(weight.mass, 1)
+    assert_equal(weight.time, -2)
+    assert_almost_equal(weight.to(NEWTON), Float32(19.6133))
+
+
+def test_a_pound_force_is_standard_gravity_on_an_international_pound() raises:
+    var weight = Mass(1.0, POUND) * STANDARD_GRAVITY
+    assert_almost_equal(
+        weight.to(POUND_FORCE), Float32(1.0), atol=Float64(1e-5)
+    )
+
+
+def test_gigapascal_and_megapascal() raises:
+    var stiff = Pressure(17.9, GIGAPASCAL)
+    assert_almost_equal(stiff.to(PASCAL), Float32(1.79e10))
+    assert_almost_equal(Pressure(400.0, MEGAPASCAL).to(PASCAL), Float32(4.0e8))
 
 
 def main() raises:

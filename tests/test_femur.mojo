@@ -9,9 +9,15 @@ from core.buffer_geometry import NORMAL, POSITION, UV
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.bone import (
+    BoneKind,
+    cortical_tissue,
+    trabecular_tissue,
+)
 from extensions.humanoid.skeleton.leg.femur.dimensions import (
     MAX_STATURE,
     MIN_STATURE,
+    FemurField,
     _sd_segment,
     femur_dimensions,
     femur_distance,
@@ -20,6 +26,22 @@ from extensions.humanoid.skeleton.leg.femur.geometry import (
     _direction,
     femur,
     femur_from_dimensions,
+)
+from extensions.humanoid.skeleton.leg.femur.mass import (
+    CORTICAL_FILL,
+    EMPTY,
+    MARROW,
+    MAX_STEP,
+    MIN_STEP,
+    TRABECULAR_FILL,
+    BoneOccupancy,
+    _Tally,
+    _cells,
+    add_fill,
+    femur_mass,
+    femur_mass_from_dimensions,
+    femur_occupancy,
+    mineral_density,
 )
 from math.vector3 import Vector3
 from std.math import inf, nan
@@ -31,7 +53,17 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import CENTIMETER, FOOT, Length, METER
+from units.si import (
+    CENTIMETER,
+    CUBIC_CENTIMETER,
+    FOOT,
+    GRAM,
+    Length,
+    METER,
+    MILLIMETER,
+    NEWTON,
+    STANDARD_GRAVITY,
+)
 
 comptime TOLERANCE = Float64(1e-5)
 
@@ -229,6 +261,179 @@ def test_refuses_a_high_detail() raises:
     var dims = femur_dimensions(Length(6.0, FOOT), MALE)
     with assert_raises():
         _ = femur_from_dimensions(dims, 65)
+
+
+def test_occupancy_outside_is_empty() raises:
+    var dims = femur_dimensions(Length(6.0, FOOT), MALE)
+    assert_true(femur_occupancy(dims, Vector3(10, 0, 0)) == EMPTY)
+    assert_false(BoneOccupancy(9).is_valid())
+    assert_false(BoneOccupancy(-1).is_valid())
+    assert_true(EMPTY.is_valid())
+    assert_true(CORTICAL_FILL.is_valid())
+    assert_true(TRABECULAR_FILL.is_valid())
+    assert_true(MARROW.is_valid())
+
+
+def test_head_interior_is_trabecular() raises:
+    var dims = femur_dimensions(Length(6.0, FOOT), MALE)
+    assert_true(femur_occupancy(dims, dims.head_center) == TRABECULAR_FILL)
+
+
+def test_condyle_interior_is_trabecular() raises:
+    var dims = femur_dimensions(Length(6.0, FOOT), FEMALE, LEFT)
+    assert_true(femur_occupancy(dims, dims.medial_condyle) == TRABECULAR_FILL)
+
+
+def test_just_inside_the_head_is_cortical() raises:
+    var dims = femur_dimensions(Length(6.0, FOOT), MALE)
+    var radius = dims.head_diameter.value * Float32(0.5)
+    var shell = Vector3(
+        dims.head_center.x + radius - Float32(0.002),
+        dims.head_center.y,
+        dims.head_center.z,
+    )
+    assert_true(femur_occupancy(dims, shell) == CORTICAL_FILL)
+
+
+def test_midshaft_cavity_is_marrow() raises:
+    var dims = femur_dimensions(Length(6.0, FOOT), MALE)
+    var field = FemurField(dims)
+    assert_true(femur_occupancy(dims, field.s2) == MARROW)
+
+
+def test_distal_shaft_center_is_not_marrow() raises:
+    var dims = femur_dimensions(Length(6.0, FOOT), MALE)
+    var field = FemurField(dims)
+    assert_true(femur_occupancy(dims, field.s0) != MARROW)
+
+
+def test_proximal_shaft_center_is_not_marrow() raises:
+    var dims = femur_dimensions(Length(6.0, FOOT), MALE)
+    var field = FemurField(dims)
+    assert_true(femur_occupancy(dims, field.s4) != MARROW)
+
+
+def test_mineral_density_matches_the_fill() raises:
+    var cortical = cortical_tissue()
+    var trabecular = trabecular_tissue()
+    assert_equal(mineral_density(EMPTY, cortical, trabecular).value, Float32(0))
+    assert_equal(
+        mineral_density(MARROW, cortical, trabecular).value, Float32(0)
+    )
+    assert_equal(
+        mineral_density(CORTICAL_FILL, cortical, trabecular).value,
+        cortical.apparent_density().value,
+    )
+    assert_equal(
+        mineral_density(TRABECULAR_FILL, cortical, trabecular).value,
+        trabecular.apparent_density().value,
+    )
+    with assert_raises():
+        _ = mineral_density(BoneOccupancy(9), cortical, trabecular)
+
+
+def test_six_foot_male_mass_is_a_few_hundred_grams() raises:
+    var person = HumanoidSpec(Length(6.0, FOOT), MALE)
+    var report = femur_mass(person, RIGHT, Length(20.0, MILLIMETER))
+    var grams = report.mass.to(GRAM)
+    assert_true(grams > Float32(80))
+    assert_true(grams < Float32(1500))
+    var envelope_cm3 = report.envelope.to(CUBIC_CENTIMETER)
+    assert_true(envelope_cm3 > Float32(50))
+    assert_true(envelope_cm3 < Float32(2000))
+    assert_true(report.envelope >= report.bone)
+    assert_true(report.cortical.value > 0)
+    assert_true(report.trabecular.value > 0)
+    var weight = report.weight()
+    assert_almost_equal(
+        weight.value, report.mass.value * STANDARD_GRAVITY.value, atol=TOLERANCE
+    )
+    assert_true(weight.to(NEWTON) > Float32(0.5))
+    var moon = report.weight(STANDARD_GRAVITY.scaled(0.165))
+    assert_true(moon < weight)
+
+
+def test_a_taller_femur_has_more_mass() raises:
+    var step = Length(20.0, MILLIMETER)
+    var short = femur_mass(HumanoidSpec(Length(5.0, FOOT), FEMALE), LEFT, step)
+    var tall = femur_mass(HumanoidSpec(Length(6.5, FOOT), MALE), RIGHT, step)
+    assert_true(tall.mass > short.mass)
+    assert_true(tall.envelope > short.envelope)
+
+
+def test_add_fill_counts_every_occupancy() raises:
+    var cortical = cortical_tissue()
+    var trabecular = trabecular_tissue()
+    var tally = _Tally(0, 0, 0, 0)
+    add_fill(tally, EMPTY, 1.0, cortical, trabecular)
+    assert_equal(tally.envelope, Float32(0))
+    assert_equal(tally.mass, Float32(0))
+    add_fill(tally, CORTICAL_FILL, 2.0, cortical, trabecular)
+    assert_almost_equal(tally.cortical, Float32(2), atol=TOLERANCE)
+    add_fill(tally, TRABECULAR_FILL, 3.0, cortical, trabecular)
+    assert_almost_equal(tally.trabecular, Float32(3), atol=TOLERANCE)
+    var mass_before = tally.mass
+    add_fill(tally, MARROW, 4.0, cortical, trabecular)
+    assert_almost_equal(tally.envelope, Float32(9), atol=TOLERANCE)
+    assert_equal(tally.mass, mass_before)
+
+
+def test_a_span_shorter_than_the_step_still_has_one_cell() raises:
+    assert_equal(_cells(Float32(0.01), Float32(1.0)), 1)
+    assert_true(_cells(Float32(0.55), Float32(0.005)) > 1)
+
+
+def test_refuses_a_short_mass_step() raises:
+    var dims = femur_dimensions(Length(6.0, FOOT), MALE)
+    with assert_raises():
+        _ = femur_mass_from_dimensions(
+            dims, cortical_tissue(), trabecular_tissue(), MIN_STEP.scaled(0.5)
+        )
+
+
+def test_refuses_a_long_mass_step() raises:
+    var dims = femur_dimensions(Length(6.0, FOOT), MALE)
+    with assert_raises():
+        _ = femur_mass_from_dimensions(
+            dims,
+            cortical_tissue(),
+            trabecular_tissue(),
+            MAX_STEP + Length(1.0, MILLIMETER),
+        )
+
+
+def test_refuses_a_non_finite_mass_step() raises:
+    var dims = femur_dimensions(Length(6.0, FOOT), MALE)
+    with assert_raises():
+        _ = femur_mass_from_dimensions(
+            dims,
+            cortical_tissue(),
+            trabecular_tissue(),
+            Length(nan[DType.float32](), MILLIMETER),
+        )
+    with assert_raises():
+        _ = femur_mass_from_dimensions(
+            dims,
+            cortical_tissue(),
+            trabecular_tissue(),
+            Length(inf[DType.float32](), MILLIMETER),
+        )
+
+
+def test_mass_refuses_invalid_tissue() raises:
+    var dims = femur_dimensions(Length(6.0, FOOT), MALE)
+    var bad = cortical_tissue()
+    bad.kind = BoneKind(9)
+    with assert_raises():
+        _ = femur_mass_from_dimensions(
+            dims, bad, trabecular_tissue(), Length(10.0, MILLIMETER)
+        )
+    var worse = trabecular_tissue()
+    worse.kind = BoneKind(9)
+    with assert_raises():
+        _ = femur_mass_from_dimensions(
+            dims, cortical_tissue(), worse, Length(10.0, MILLIMETER)
+        )
 
 
 def main() raises:
