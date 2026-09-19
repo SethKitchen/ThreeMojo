@@ -44,7 +44,14 @@ from render.texture import IGNORED, Texture, mix_straight
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.lighting import PERSPECTIVE_VIEW, Lighting, toward_eye_at
 from core.fog import FogView, fog_mix
-from render.linerule import major_at, major_is_x, other_at, share_at, span_of
+from render.linerule import (
+    dash_covers,
+    major_at,
+    major_is_x,
+    other_at,
+    share_at,
+    span_of,
+)
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, isfinite, log2, max, min, sqrt
 
@@ -500,6 +507,17 @@ struct RasterVertex(ImplicitlyCopyable):
     # rather than recovering it from a large world coordinate, which
     # rounds the depth away far from the origin. Read only by the fog.
     var view_depth: Float32
+    # How far along its line this corner is, three.js's `vLineDistance`,
+    # already scaled by the material. A varying, interpolated with
+    # perspective correction like the color, and read by a dashed line
+    # alone; a triangle's corners carry zero.
+    var line_distance: Float32
+    # How long each dash is and how long the gap after it, in the units
+    # the distance is measured in: three.js's `dashSize` and `gapSize`.
+    # Per-segment metadata like the blend policy, read from the first end
+    # and checked to agree. A gap of zero is a solid line.
+    var dash_size: Float32
+    var gap_size: Float32
 
     def __init__(
         out self,
@@ -524,6 +542,9 @@ struct RasterVertex(ImplicitlyCopyable):
         shininess: Float32 = 0,
         gradient_map: TextureId = NO_TEXTURE,
         matcap: TextureId = NO_TEXTURE,
+        line_distance: Float32 = 0,
+        dash_size: Float32 = 0,
+        gap_size: Float32 = 0,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -538,7 +559,8 @@ struct RasterVertex(ImplicitlyCopyable):
         to black, which is no highlight. The gradient map defaults to none,
         which is three.js's two-tone fallback for a `TOON` corner and is
         read by no other kind. The matcap defaults to none, which is
-        three.js's gray gradient for a `MATCAP` corner.
+        three.js's gray gradient for a `MATCAP` corner. The line distance
+        and the dash and gap default to zero, which is a solid line.
         """
         self.x = x
         self.y = y
@@ -561,6 +583,9 @@ struct RasterVertex(ImplicitlyCopyable):
         self.shininess = shininess
         self.gradient_map = gradient_map
         self.matcap = matcap
+        self.line_distance = line_distance
+        self.dash_size = dash_size
+        self.gap_size = gap_size
 
 
 @fieldwise_init
@@ -1678,13 +1703,19 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
     every lighting term here needs one. A lit material on a line would be
     shaded by whatever its corners happened to carry, which is nothing.
 
+    The dashes are per-segment metadata too, and are checked the same
+    way, and for being a length at all: a negative dash or gap is not a
+    dash, and one that is not finite folds every distance to nothing.
+
     Args:
         a: One end.
         b: The other.
 
     Raises:
         Error: If the blend policies differ, if either is not a named
-            policy, if the kinds differ, or if the kind is not unlit.
+            policy, if the kinds differ, if the kind is not unlit, if the
+            dash or the gap differ between the ends, or if either is
+            negative or not finite.
     """
     if not a.blend.is_valid():
         raise Error("A line needs a blend policy that exists")
@@ -1696,6 +1727,14 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
         raise Error("A line's ends must agree about the material")
     if not a.kind.is_unlit():
         raise Error("A line's material must be unlit")
+    # The first end is checked before the two are compared: a dash that
+    # is not a number agrees with nothing, itself included.
+    if not isfinite(a.dash_size) or a.dash_size < 0:
+        raise Error("A dash size cannot be negative")
+    if not isfinite(a.gap_size) or a.gap_size < 0:
+        raise Error("A gap size cannot be negative")
+    if a.dash_size != b.dash_size or a.gap_size != b.gap_size:
+        raise Error("A line's ends must agree about the dashes")
 
 
 def rasterize_line(
@@ -1711,11 +1750,16 @@ def rasterize_line(
     `render.linerule` decides which pixels, and the kernel asks it the same
     question, so the two staircases are the same staircase.
 
-    What varies along a line is its color and its fog depth, and both are
-    interpolated with the perspective correction a triangle's varyings get:
-    weight by `inv_w`, divide by the interpolated `inv_w`. Depth is not
-    corrected, for the reason it is not corrected across a triangle -- the
-    projection already made it linear in screen space.
+    What varies along a line is its color, its fog depth and its distance
+    along itself, and all three are interpolated with the perspective
+    correction a triangle's varyings get: weight by `inv_w`, divide by the
+    interpolated `inv_w`. Depth is not corrected, for the reason it is not
+    corrected across a triangle -- the projection already made it linear
+    in screen space.
+
+    A dashed line throws a pixel in a gap away before the depth is
+    tested, as three.js's `discard` does, so a gap claims no depth and
+    what is behind it shows through.
 
     Args:
         a: One end.
@@ -1795,6 +1839,19 @@ def rasterize_line(
         if share > 1:
             share = 1
         var z = a.z + (b.z - a.z) * share
+        var near = a.inv_w * (1 - share)
+        var far = b.inv_w * share
+        var total = near + far
+        if total == 0:
+            continue
+        var toward = far / total
+        # The gap test comes before the depth test, as a discard does: a
+        # pixel in a gap is not drawn and claims nothing.
+        var along = (
+            a.line_distance + (b.line_distance - a.line_distance) * toward
+        )
+        if not dash_covers(along, a.dash_size, a.gap_size):
+            continue
         # A blended segment is hidden by what is in front of it and hides
         # nothing behind it, exactly as a blended triangle: it tests the
         # depth without claiming it. Claiming it, as this once did, dropped
@@ -1806,12 +1863,6 @@ def rasterize_line(
                 continue
         elif not target.test_depth(x, y, z):
             continue
-        var near = a.inv_w * (1 - share)
-        var far = b.inv_w * share
-        var total = near + far
-        if total == 0:
-            continue
-        var toward = far / total
         # Straight, as a varying is everywhere else in this file and
         # as the kernel's line pass does it. `mix_color` premultiplies,
         # which is a filtering rule and not an interpolation rule; see

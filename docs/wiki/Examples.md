@@ -30,11 +30,13 @@ mkdir -p out
 | `raycast.mojo` | `raycast.png` | [Raycasting](Raycasting) |
 | `curves.mojo` | `curves.png` | [Curves and paths](Curves) |
 | `lines.mojo` | `lines.png` | [Lines](Lines) |
+| `outlines.mojo` | `helpers.png` | [Helpers](Helpers) |
 | `keyframes.mojo` | `keyframes.png` | [Animation](Animation) |
 | `skinning.mojo` | `skinning.png` | [Skinning](Skinning) |
 | `phong.mojo` | `phong.png` | [Materials](Materials) |
 | `fog.mojo` | `fog.png` | [Fog](Fog) |
 | `culling.mojo` | `culling.png` | [Renderer](Renderer) |
+| `split.mojo` | `split.png` | [Renderer](Renderer#viewport-and-scissor) |
 | `clipping.mojo` | `clipping.png` | [Rasterization](Rasterization) |
 | `gpu_backend.mojo` | `gpu_backend.png` | [GPU backend](GPU-backend) |
 | `exposure.mojo` | `exposure.png` | [Render target and framebuffer](Render-target-and-framebuffer) |

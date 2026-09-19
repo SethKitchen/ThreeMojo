@@ -64,6 +64,7 @@ unassociated alpha.
 """
 
 from render.framebuffer import Color, FloatColor, Framebuffer
+from render.rect import Rect
 from render.tonemap import (
     NO_TONE_MAPPING,
     ToneMapping,
@@ -171,6 +172,11 @@ struct RenderTarget(Movable):
     # last `write` into the pixel and cleared by any `blend` that
     # contributes; a cleared pixel holds light. See the module docstring.
     var data: List[Bool]
+    # The pixels that can be drawn: three.js's scissor, with the test on.
+    # The whole target unless `set_scissor` narrows it. Every test and
+    # every write asks it, so a fragment outside is neither tested nor
+    # written, as a GPU's scissor test discards it before the depth test.
+    var scissor: Rect
 
     def __init__(out self, width: Int, height: Int, clear: Color) raises:
         """Create a target cleared to `clear`.
@@ -195,6 +201,53 @@ struct RenderTarget(Movable):
             length=width * height, fill=inf[DType.float32]()
         )
         self.data = List[Bool](length=width * height, fill=False)
+        self.scissor = Rect.whole(width, height)
+
+    def set_scissor(mut self, rect: Rect) raises:
+        """Draw only inside `rect` from now on, three.js's `setScissor`
+        with `setScissorTest(true)`.
+
+        The corner is measured from the bottom left, as three.js's is; see
+        `render.rect`. Pass `Rect.whole(width, height)` to draw everywhere
+        again.
+
+        Args:
+            rect: The pixels that can be drawn. It must lie wholly inside
+                the target.
+
+        Raises:
+            Error: If the rectangle is empty or reaches outside the target.
+        """
+        if not rect.fits(self.width, self.height):
+            raise Error("A scissor must lie inside the target")
+        self.scissor = rect
+
+    def clear_inside(mut self, rect: Rect, clear: Color) raises:
+        """Reset every pixel inside `rect` to `clear`, its depth to the
+        far distance and its flag to light, leaving the rest alone.
+
+        What clearing under a scissor does on a GPU, and what lets two
+        viewports share one target: each clears its own rectangle and
+        draws into it, and neither touches the other's. `Renderer.render_into`
+        calls this before it draws.
+
+        Args:
+            rect: The pixels to reset. It must lie wholly inside the target.
+            clear: The color to fill with, decoded from sRGB, alpha kept.
+
+        Raises:
+            Error: If the rectangle is empty or reaches outside the target.
+        """
+        if not rect.fits(self.width, self.height):
+            raise Error("A clear must lie inside the target")
+        self.clear = FloatColor(srgb=clear).premultiplied()
+        var top = rect.top(self.height)
+        for y in range(top, top + rect.height):  # pragma: no branch
+            for x in range(rect.x, rect.x + rect.width):  # pragma: no branch
+                var slot = y * self.width + x
+                self.colors[slot] = self.clear
+                self.depth[slot] = inf[DType.float32]()
+                self.data[slot] = False
 
     def _slot(self, x: Int, y: Int) raises -> Int:
         """Return the index of pixel (x, y), checking it is inside."""
@@ -224,6 +277,8 @@ struct RenderTarget(Movable):
         `depth_passes`, which does not claim.
         """
         var slot = self._slot(x, y)
+        if not self.scissor.contains_pixel(x, y, self.height):
+            return False
         if z >= self.depth[slot]:
             return False
         self.depth[slot] = z
@@ -250,7 +305,10 @@ struct RenderTarget(Movable):
         Raises:
             Error: If the coordinate is out of bounds.
         """
-        self.depth[self._slot(x, y)] = z
+        var slot = self._slot(x, y)
+        if not self.scissor.contains_pixel(x, y, self.height):
+            return
+        self.depth[slot] = z
 
     def depth_passes(self, x: Int, y: Int, z: Float32) raises -> Bool:
         """Return True if `z` is nearer than what is stored, claiming nothing.
@@ -270,7 +328,10 @@ struct RenderTarget(Movable):
         Raises:
             Error: If the coordinate is out of bounds.
         """
-        return z < self.depth[self._slot(x, y)]
+        var slot = self._slot(x, y)
+        if not self.scissor.contains_pixel(x, y, self.height):
+            return False
+        return z < self.depth[slot]
 
     def write(
         mut self, x: Int, y: Int, color: FloatColor, data: Bool = False
@@ -296,6 +357,8 @@ struct RenderTarget(Movable):
             Error: If the coordinate is out of bounds.
         """
         var slot = self._slot(x, y)
+        if not self.scissor.contains_pixel(x, y, self.height):
+            return
         self.colors[slot] = color.premultiplied()
         self.data[slot] = data
 
@@ -322,6 +385,8 @@ struct RenderTarget(Movable):
             Error: If the coordinate is out of bounds.
         """
         var slot = self._slot(x, y)
+        if not self.scissor.contains_pixel(x, y, self.height):
+            return
         var share = color.a
         if share > 1:
             share = 1

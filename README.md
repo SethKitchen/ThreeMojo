@@ -103,7 +103,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] MeshStandardMaterial and MeshPhysicalMaterial [#38](https://github.com/SethKitchen/ThreeMojo/issues/38)
 - [x] [MeshNormalMaterial and MeshDepthMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#data-materials): the view-space normal as a color and the depth as a gray, written as bytes no curve touches [#39](https://github.com/SethKitchen/ThreeMojo/issues/39)
 - [x] [MeshToonMaterial and MeshMatcapMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#toon): a gradient ramp on the diffuse term, and an image looked up by which way a surface is turned [#40](https://github.com/SethKitchen/ThreeMojo/issues/40)
-- [ ] LineBasicMaterial and LineDashedMaterial [#41](https://github.com/SethKitchen/ThreeMojo/issues/41)
+- [x] [LineBasicMaterial and LineDashedMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Lines#dashed-lines): a `BASIC` material draws a line, and `line_dashed_material` draws it in dashes measured along the line, on both backends [#41](https://github.com/SethKitchen/ThreeMojo/issues/41)
 - [ ] PointsMaterial and SpriteMaterial [#42](https://github.com/SethKitchen/ThreeMojo/issues/42)
 - [ ] ShadowMaterial [#43](https://github.com/SethKitchen/ThreeMojo/issues/43)
 - [ ] Normal maps and bump maps [#44](https://github.com/SethKitchen/ThreeMojo/issues/44)
@@ -155,9 +155,9 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Frustum culling](https://github.com/SethKitchen/ThreeMojo/wiki/Renderer#frustum-culling): a mesh whose bounding sphere lies outside the view is skipped before a vertex of it is transformed [#81](https://github.com/SethKitchen/ThreeMojo/issues/81)
 - [x] [Tone mapping](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer#tone-mapping): three.js's six curves and an exposure, applied once to the composited light of each pixel, on both backends [#82](https://github.com/SethKitchen/ThreeMojo/issues/82)
 - [ ] Anti-aliasing [#83](https://github.com/SethKitchen/ThreeMojo/issues/83)
-- [ ] Scissor and viewport [#84](https://github.com/SethKitchen/ThreeMojo/issues/84)
+- [x] [Scissor and viewport](https://github.com/SethKitchen/ThreeMojo/wiki/Renderer#viewport-and-scissor): `set_viewport`, `set_scissor` and `set_scissor_test`, enforced by both backends, and `render_into` for a split screen in one target [#84](https://github.com/SethKitchen/ThreeMojo/issues/84)
 - [ ] Post-processing [#85](https://github.com/SethKitchen/ThreeMojo/issues/85)
-- [ ] Helpers: axes, grid, box, camera [#86](https://github.com/SethKitchen/ThreeMojo/issues/86)
+- [x] [Helpers: axes, grid, box, camera](https://github.com/SethKitchen/ThreeMojo/wiki/Helpers): line geometries for the axes, a ground grid, the box around a mesh and a camera's frustum [#86](https://github.com/SethKitchen/ThreeMojo/issues/86)
 - [ ] Windowing and interactive controls [#87](https://github.com/SethKitchen/ThreeMojo/issues/87)
 
 ### Animation

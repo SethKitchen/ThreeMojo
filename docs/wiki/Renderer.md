@@ -24,6 +24,10 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `prepare_lines(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [lines](Lines) and wireframes. |
 | `prepare_frame(scene, assets, camera) -> Frame` | Both lists, and the one order both rasterizers draw them in. See [Lines](Lines#two-lists-one-order). |
 | `render(scene, assets, camera) -> Framebuffer` | Both passes, then rasterize and resolve. |
+| `render_into(target, scene, assets, camera)` | The same into a target of the renderer's size, cleared first, resolved by the caller. See below. |
+| `tone_curve() -> ToneMapping` | The curve `render` resolves through: the one set, or none in the uv view. |
+| `set_viewport(rect)` | Where the image lands on the target. See below. |
+| `set_scissor(rect)`, `set_scissor_test(enabled)` | Which pixels a draw may touch, and whether that is enforced. See below. |
 | `available_workers() -> Int` | One per logical core. |
 | `camera_position(scene, camera) -> Vector3` | Where the camera stands, in world space. |
 | `toward_camera(scene, camera) -> Vector3` | The one direction toward it, or `PERSPECTIVE_VIEW`. |
@@ -60,10 +64,10 @@ Leave out every group whose node shares no layer with the camera. Then leave out
 1. Transform the positions to world space and camera space.
 2. Carry the texture coordinates through the map's transform. See [Textures](Textures#transform).
 3. Transform the normals with the normal matrix, or compute a face normal. Carry them into view space for a `NORMALS` material.
-4. Clip each triangle against the near and far planes.
+4. Clip each triangle against the near and far planes and the four sides of the view. See [Rasterization](Rasterization#clipping).
 5. Project each corner to pixels and keep `1 / w`.
 6. Cull faces that the material's `side` does not draw.
-7. Flip the normal of a `DOUBLE_SIDE` face seen from behind. A `BACK_SIDE` face keeps its normal, as in three.js.
+7. Flip the normal of a `BACK_SIDE` face, and of a `DOUBLE_SIDE` face seen from behind, as three.js's `FLIP_SIDED` and `faceDirection` do.
 
 The output is one flat list, three `RasterVertex` per triangle. Both rasterizers consume it. See [Rasterization](Rasterization).
 
@@ -95,6 +99,40 @@ Each instance of an instanced or batched mesh is tested on its own, with the ins
 
 It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). Then it rasterizes the frame with `rasterize_frame`, in the frame's order, and resolves the image through the tone mapping curve.
 
+## Viewport and scissor
+
+`set_viewport(rect)` puts the camera's image in a rectangle of the target, three.js's `setViewport`. `set_scissor(rect)` and `set_scissor_test(True)` keep every draw inside a rectangle, three.js's `setScissor` and `setScissorTest`. A `Rect` is a corner and a size, and the corner counts up from the bottom left, as three.js's does.
+
+```mojo
+from render.rect import Rect
+
+renderer.set_viewport(Rect(0, 0, 160, 240))
+renderer.set_scissor(Rect(0, 0, 160, 240))
+renderer.set_scissor_test(True)
+```
+
+The viewport is folded into the screen matrix by `prepare` and `prepare_lines`. The projection is mapped onto the rectangle rather than onto the whole target. The image is squeezed or stretched to the rectangle's size, as three.js's is. A viewport hanging off the target is allowed: the pixels it puts outside are not drawn. A viewport must hold at least one pixel.
+
+A viewport is a mapping, not a scissor. Every triangle and segment is clipped against the camera's four side planes first, so nothing lands outside the camera's image. With the scissor test off, the whole target is cleared and the geometry outside the view produces no pixel.
+
+The scissor is enforced by the render target on the CPU and by the kernel on the GPU. Both ask `Rect.contains_pixel`, so they agree about every edge. A pixel outside is neither cleared nor drawn. With the test off, the default, the scissor is kept and ignored. A scissor must lie wholly inside the target.
+
+A split screen is two cameras, two viewports and two scissors drawing into one target. `render_into` draws into a target you hold, clearing the scissor alone to the background, so a second draw leaves the first's pixels. Resolve the target once, through `tone_curve`:
+
+```mojo
+var target = RenderTarget(WIDTH, HEIGHT, Color(0, 0, 0))
+renderer.set_scissor_test(True)
+renderer.set_viewport(left)
+renderer.set_scissor(left)
+renderer.render_into(target, scene, assets, perspective)
+renderer.set_viewport(right)
+renderer.set_scissor(right)
+renderer.render_into(target, scene, assets, top_view)
+var image = target.resolve(renderer.workers, renderer.tone_curve(), renderer.tone_mapping_exposure)
+```
+
+`GpuRenderer.draw` takes the same `scissor`, and its device target keeps its pixels between draws the same way. See [GPU backend](GPU-backend#gpurenderer). `examples/split.mojo` draws a split screen.
+
 ## Workers
 
 With more than one worker, the image is cut into horizontal bands. Each band is drawn on its own thread. The result is byte for byte the same as one thread. See [Why the CPU renderer uses bands](Why-the-CPU-renderer-uses-bands).
@@ -115,6 +153,8 @@ The default is one worker. The coverage tool needs probe records in order.
 A mesh the camera's layers or frustum leave out is not checked.
 
 `render` also raises when `scene.fog` holds an unknown kind or an inside-out range.
+
+`set_viewport` raises for a rectangle with no pixel. `set_scissor` raises for one that reaches outside the target. `render_into` raises for a target that is not the renderer's size.
 
 ## Performance
 

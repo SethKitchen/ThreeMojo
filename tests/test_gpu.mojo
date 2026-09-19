@@ -43,6 +43,7 @@ from math.vector2 import Vector2
 from std.math import inf, pi
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
+from materials.material import line_dashed_material
 from objects.line import LOOP, Line
 from objects.mesh import Mesh
 from renderers.renderer import Renderer
@@ -81,6 +82,7 @@ from render.tonemap import (
     REINHARD_TONE_MAPPING,
     ToneMapping,
 )
+from render.rect import Rect
 from render.rasterizer import (
     DRAW_SEGMENTS,
     Draw,
@@ -92,6 +94,9 @@ from core.layers import Layers
 from renderers.renderer import camera_position, camera_up, toward_camera
 from render.gpu import (
     FLOATS_PER_VERTEX,
+    LANE_DASH,
+    LANE_GAP,
+    LANE_LINE_DISTANCE,
     FOG_FLOATS,
     LIGHTS_AMBIENT,
     LIGHTS_EYE,
@@ -687,6 +692,223 @@ def test_a_renderer_grows_its_buffer_for_more_triangles() raises:
     assert_equal(count_mismatches(expected, grown), 0)
 
 
+def test_both_backends_keep_the_pixels_outside_a_scissor() raises:
+    # The pair drawn under a scissor on the left half, then under one on
+    # the right half with another background. Each draw clears and draws
+    # its own half and leaves the other's, on both backends alike.
+    if skipped_for_lack_of_a_gpu("both backends keep pixels outside a scissor"):
+        return
+    var corners = overlapping_pair()
+    var left = Rect(0, 0, 18, 30)
+    var right = Rect(18, 0, 18, 30)
+    var other = Color(0, 40, 0)
+    var target = RenderTarget(36, 30, BACKGROUND)
+    target.set_scissor(left)
+    target.clear_inside(left, BACKGROUND)
+    rasterize_all(
+        corners,
+        target,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        1,
+        FogView.none(),
+    )
+    target.set_scissor(right)
+    target.clear_inside(right, other)
+    rasterize_all(
+        corners,
+        target,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        1,
+        FogView.none(),
+    )
+    var cpu = target.resolve()
+    var renderer = GpuRenderer(36, 30)
+    renderer.draw(corners, BACKGROUND, scissor=left)
+    renderer.draw(corners, other, scissor=right)
+    var gpu = renderer.read_back()
+    assert_equal(count_mismatches(cpu, gpu), 0)
+    # Both halves hold the other's background at their corners, so each
+    # draw cleared its own half and not the other's.
+    assert_equal(gpu.get_pixel(0, 0).g, BACKGROUND.g)
+    assert_equal(gpu.get_pixel(35, 0).g, other.g)
+    # A scissor reaching outside the target is refused before a launch.
+    with assert_raises(contains="inside the target"):
+        renderer.draw(corners, BACKGROUND, scissor=Rect(20, 0, 20, 30))
+    # And the first draw a fresh renderer makes under a scissor clears
+    # the rest to the background rather than leaving it undefined.
+    var fresh = GpuRenderer(36, 30)
+    fresh.draw(corners, other, scissor=left)
+    var first = fresh.read_back()
+    assert_equal(first.get_pixel(30, 2).g, other.g)
+    assert_equal(first.get_pixel(30, 2).r, other.r)
+
+
+def test_a_fresh_scissored_draw_clears_the_rest_through_the_same_curve() raises:
+    # A white background under Reinhard is a mid gray, inside the scissor
+    # and outside it alike, as a fresh host target resolves whole through
+    # one curve. The first clear used to take the defaults and leave the
+    # outside white.
+    if skipped_for_lack_of_a_gpu(
+        "a fresh scissored draw clears through the curve"
+    ):
+        return
+    var renderer = GpuRenderer(8, 4)
+    renderer.draw(
+        List[RasterVertex](),
+        Color(255, 255, 255),
+        tone_mapping=REINHARD_TONE_MAPPING,
+        scissor=Rect(0, 0, 4, 4),
+    )
+    var image = renderer.read_back()
+    var inside = image.get_pixel(1, 1)
+    var outside = image.get_pixel(6, 1)
+    assert_equal(inside.r, outside.r)
+    assert_equal(inside.g, outside.g)
+    assert_equal(inside.b, outside.b)
+    assert_true(inside.r < 255, "the curve was not applied")
+    var target = RenderTarget(8, 4, Color(255, 255, 255))
+    var cpu = target.resolve(1, REINHARD_TONE_MAPPING, 1.0)
+    assert_equal(count_mismatches(cpu, image), 0)
+    # An invalid request is refused before the clear, on a fresh
+    # renderer: nothing was drawn, and a later valid draw still clears.
+    var untouched = GpuRenderer(8, 4)
+    with assert_raises():
+        untouched.draw(
+            List[RasterVertex](),
+            Color(255, 255, 255),
+            exposure=-1,
+            scissor=Rect(0, 0, 4, 4),
+        )
+    untouched.draw(
+        List[RasterVertex](), Color(0, 0, 255), scissor=Rect(0, 0, 4, 4)
+    )
+    assert_equal(untouched.read_back().get_pixel(6, 1).b, 255)
+
+
+def test_both_backends_agree_through_an_offset_viewport_and_a_scissor() raises:
+    # A lit box, a translucent pane and a dashed line, through a viewport
+    # off center and a scissor smaller than it, under a linear fog and the
+    # ACES curve. The host draws it with `render`, the device with the
+    # same prepared frame and the same scissor, and the two images agree
+    # to a level, the untouched background included.
+    if skipped_for_lack_of_a_gpu(
+        "both backends agree through a viewport and a scissor"
+    ):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(Color(30, 20, 40))
+    renderer.set_viewport(Rect(6, 4, 30, 24))
+    renderer.set_scissor(Rect(10, 6, 24, 20))
+    renderer.set_scissor_test(True)
+    renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING, 0.9)
+
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.2, METER)))
+    var pane = assets.geometries.add(
+        plane(Length(2.4, METER), Length(1.6, METER), 1, 1)
+    )
+    var path = BufferGeometry()
+    path.set_attribute(
+        String(POSITION),
+        BufferAttribute([-3.0, -0.9, 0.5, 3.0, 0.9, 0.5], 3),
+    )
+    var stroke = assets.geometries.add(path^)
+    var orange = assets.materials.add(Material(Color(255, 140, 40)))
+    var glass = assets.materials.add(
+        Material(
+            Color(120, 255, 160),
+            NO_TEXTURE,
+            DOUBLE_SIDE,
+            0.45,
+            transparent=True,
+        )
+    )
+    var dashed = assets.materials.add(
+        line_dashed_material(
+            Color(255, 255, 255),
+            dash_size=Length(0.4, METER),
+            gap_size=Length(0.2, METER),
+        )
+    )
+
+    var scene = Scene()
+    var block = Object3D()
+    block.set_euler(
+        Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var block_node = scene.add(block^)
+    var sheet = Object3D()
+    sheet.set_position(0.2, 0.1, 1.0)
+    var sheet_node = scene.add(sheet^)
+    var sun = Object3D()
+    sun.set_position(0.4, 0.8, 0.5)
+    var sun_node = scene.add(sun^)
+    scene.add_light(directional_light(Color(255, 255, 255), sun_node, 2.0))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.4))
+    scene.fog = linear_fog(
+        Color(160, 170, 190), Length(2.0, METER), Length(8.0, METER)
+    )
+    scene.update()
+    scene.add_mesh(Mesh(box, orange, block_node))
+    scene.add_mesh(Mesh(pane, glass, sheet_node))
+    scene.add_line(Line(stroke, dashed, block_node))
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(30) / Float32(24),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.6, 3.4), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    assert_true(len(frame.corners) > 0, "nothing was prepared")
+    assert_true(len(frame.segments) > 0, "no segment was prepared")
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+    )
+    var gpu = render_triangles(
+        frame.corners,
+        48,
+        36,
+        renderer.background,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+        FogView(scene.fog),
+        ACES_FILMIC_TONE_MAPPING,
+        0.9,
+        frame.segments,
+        frame.draws,
+        Rect(10, 6, 24, 20),
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # Something was drawn inside the scissor, and nothing outside it.
+    var inside = 0
+    var outside = 0
+    for y in range(36):
+        for x in range(48):
+            var pixel = gpu.get_pixel(x, y)
+            var untouched = pixel.r == cpu.get_pixel(0, 0).r and (
+                pixel.g == cpu.get_pixel(0, 0).g
+            )
+            if Rect(10, 6, 24, 20).contains_pixel(x, y, 36):
+                if not untouched:
+                    inside += 1
+            elif not untouched:
+                outside += 1
+    assert_true(inside > 0, "nothing was drawn inside the scissor")
+    assert_equal(outside, 0)
+
+
 def test_a_partial_triangle_is_rejected() raises:
     if skipped_for_lack_of_a_gpu("a partial triangle is rejected"):
         return
@@ -733,7 +955,7 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 25)
+    assert_equal(len(flat), 28)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -752,6 +974,28 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
     var deep = List[RasterVertex]()
     deep.append(RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), view_depth=7.5))
     assert_equal(flatten(deep)[19], Float32(7.5))
+    # The distance along a line and its dash and gap ride last, three
+    # lanes, and a corner that says nothing about them carries zeros.
+    assert_equal(flat[LANE_LINE_DISTANCE], Float32(0))
+    assert_equal(flat[LANE_DASH], Float32(0))
+    assert_equal(flat[LANE_GAP], Float32(0))
+    var dashed = List[RasterVertex]()
+    dashed.append(
+        RasterVertex(
+            1,
+            2,
+            3,
+            4,
+            FloatColor(1, 1, 1),
+            line_distance=6.5,
+            dash_size=3,
+            gap_size=1,
+        )
+    )
+    var lanes = flatten(dashed)
+    assert_equal(lanes[LANE_LINE_DISTANCE], Float32(6.5))
+    assert_equal(lanes[LANE_DASH], Float32(3))
+    assert_equal(lanes[LANE_GAP], Float32(1))
 
 
 def test_the_state_table_has_an_entry_per_map_and_policy() raises:
@@ -3974,7 +4218,7 @@ def test_flattening_carries_the_alpha_test_in_its_own_lane() raises:
         RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), alpha_test=0.375)
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 25)
+    assert_equal(len(flat), 28)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[20], Float32(0.375))
     # And a corner that says nothing about it carries zero, no test.
@@ -4156,7 +4400,7 @@ def test_flattening_carries_the_specular_and_the_shininess() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 25)
+    assert_equal(len(flat), 28)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[21], Float32(0.25))
     assert_equal(flat[22], Float32(0.5))
@@ -5961,6 +6205,121 @@ def test_both_backends_interpolate_a_line_color_the_same_way() raises:
             reds += 1
     assert_true(reds > 0, "the transparent end lent no color")
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def a_dashed_line(
+    dash: Float32,
+    gap: Float32,
+    near_inv_w: Float32 = 1,
+    far_inv_w: Float32 = 1,
+    z: Float32 = 0.5,
+) raises -> List[RasterVertex]:
+    """Return one flat segment across the image, sixteen units long along
+    itself, dashed."""
+    return [
+        RasterVertex(
+            0,
+            8.5,
+            z,
+            near_inv_w,
+            FloatColor(1, 1, 1),
+            0,
+            0,
+            NO_TEXTURE,
+            OPAQUE,
+            kind=BASIC,
+            line_distance=0,
+            dash_size=dash,
+            gap_size=gap,
+        ),
+        RasterVertex(
+            16,
+            8.5,
+            z,
+            far_inv_w,
+            FloatColor(1, 1, 1),
+            0,
+            0,
+            NO_TEXTURE,
+            OPAQUE,
+            kind=BASIC,
+            line_distance=16,
+            dash_size=dash,
+            gap_size=gap,
+        ),
+    ]
+
+
+def test_both_backends_dash_a_line_the_same_way() raises:
+    # A dash of four and a gap of four across sixteen columns, with the
+    # near end three times as close, so the fold is asked of a
+    # perspective-corrected distance on both sides. Then a solid line
+    # behind it, which shows through the gaps on both sides: a gap
+    # claims no depth on either.
+    if skipped_for_lack_of_a_gpu("both backends dash a line alike"):
+        return
+    var lines = a_dashed_line(4, 4, near_inv_w=3, far_inv_w=1, z=0.2)
+    var behind = a_varying_line(
+        0, 16, FloatColor(0, 0, 1, 1), FloatColor(0, 0, 1, 1), depth=0
+    )
+    lines.append(
+        RasterVertex(
+            behind[0].x,
+            behind[0].y,
+            0.6,
+            1,
+            behind[0].color,
+            0,
+            0,
+            NO_TEXTURE,
+            OPAQUE,
+            kind=BASIC,
+        )
+    )
+    lines.append(
+        RasterVertex(
+            behind[1].x,
+            behind[1].y,
+            0.6,
+            1,
+            behind[1].color,
+            0,
+            0,
+            NO_TEXTURE,
+            OPAQUE,
+            kind=BASIC,
+        )
+    )
+    var target = RenderTarget(16, 16, BACKGROUND)
+    rasterize_lines_all(lines, target, 1, FogView.none())
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        List[RasterVertex](),
+        16,
+        16,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        FogView.none(),
+        NO_TONE_MAPPING,
+        1.0,
+        lines,
+    )
+    # Some of the row is white dash and some is the blue line behind, and
+    # nothing in it is the background.
+    var white = 0
+    var blue = 0
+    for x in range(16):
+        var pixel = cpu.get_pixel(x, 8)
+        if pixel.r > 200:
+            white += 1
+        elif pixel.b > 200:
+            blue += 1
+    assert_true(white > 0, "no dash was drawn")
+    assert_true(blue > 0, "no gap let the line behind show")
+    assert_equal(white + blue, 16)
+    assert_equal(count_mismatches(cpu, gpu), 0)
 
 
 def test_both_backends_show_a_line_the_same_way_in_the_uv_view() raises:

@@ -91,6 +91,36 @@ struct Frustum(Copyable, Movable):
         return Frustum(planes^)
 
     @staticmethod
+    def side_planes(projection: Matrix4) raises -> List[Plane]:
+        """Return the four side planes of a projection, in the space the
+        projection is applied to.
+
+        For a camera's own projection matrix that is camera space, which
+        is where the renderer's clipper cuts: the planes where clip-space
+        x and y reach -w and w, read as `from_projection_matrix` reads
+        them, without the two depth planes it also reads. A perspective
+        projection gives four planes through the eye; an orthographic one
+        gives four parallel to its axis.
+
+        Args:
+            projection: The camera's projection matrix.
+
+        Returns:
+            Left, right, top and bottom, each facing inward.
+
+        Raises:
+            Error: If a plane has no normal, which a degenerate projection
+                gives.
+        """
+        ref e = projection.elements
+        var planes = List[Plane]()
+        planes.append(Frustum._plane(e, 0, 1))
+        planes.append(Frustum._plane(e, 0, -1))
+        planes.append(Frustum._plane(e, 1, -1))
+        planes.append(Frustum._plane(e, 1, 1))
+        return planes^
+
+    @staticmethod
     def from_camera(
         clip: Matrix4, view: Matrix4, near: Float32, far: Float32
     ) raises -> Frustum:

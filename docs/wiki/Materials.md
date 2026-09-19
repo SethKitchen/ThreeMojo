@@ -4,7 +4,9 @@
 
 ![A white highlight follows the camera around a red sphere](out/phong.png)
 
-three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`.
+three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `LineBasicMaterial`, `LineDashedMaterial`.
+
+Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`.
 
 ## Construct one
 
@@ -37,6 +39,10 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `shininess` | `Float32` | `0.0` | How tight that highlight is. |
 | `gradient_map` | `TextureId` | `NO_TEXTURE` | The ramp a `TOON` surface steps through. |
 | `matcap` | `TextureId` | `NO_TEXTURE` | The image a `MATCAP` surface is looked up in. |
+| `wireframe` | `Bool` | `False` | Draw the lines of the triangles rather than fill them. |
+| `dash_size` | `Length` | zero | How long each dash of a line is. See [dashed lines](Lines#dashed-lines). |
+| `gap_size` | `Length` | zero | How long the gap after each dash is. Zero is a solid line. |
+| `dash_scale` | `Float32` | `1.0` | What the distance along the line is multiplied by first. |
 
 ## Side
 
@@ -46,7 +52,7 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `BACK_SIDE` | Faces that point away. The inside of a closed mesh. |
 | `DOUBLE_SIDE` | Both. Use it for an open surface. |
 
-A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is three.js's rule: its shader flips the normal under `DOUBLE_SIDED` and nowhere else. A `BACK_SIDE` face keeps the normal it was given. three.js turns the winding round for `BackSide`, not the normal. The inside of a box lit from outside is bright on the wall the light reaches through and dark on the wall it sees. A mirrored mesh, with a negative world determinant, keeps the same convention.
+A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is three.js's rule: its shader flips the normal under `DOUBLE_SIDED` by which way the face is seen. A `BACK_SIDE` face is lit with its normal flipped whichever way it is seen. That is three.js's `FLIP_SIDED`, which `defaultnormal_vertex` applies when `side` is `BackSide`. The inside of a box lit by a lamp inside it is lit. A mirrored mesh, with a negative world determinant, keeps the same convention.
 
 ## Kind
 
@@ -54,7 +60,7 @@ A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is th
 |---|---|---|
 | `LAMBERT` | `MeshLambertMaterial` | The lights reach the surface. |
 | `PHONG` | `MeshPhongMaterial` | Lit, and with a highlight that follows the camera. |
-| `BASIC` | `MeshBasicMaterial` | The color and texture show as they are. |
+| `BASIC` | `MeshBasicMaterial`, `LineBasicMaterial` | The color and texture show as they are. The kind a [line](Lines) is drawn with. |
 | `NORMALS` | `MeshNormalMaterial` | The normal the camera sees, as a color. |
 | `DEPTH` | `MeshDepthMaterial` | How far away the surface is, as a gray. |
 
@@ -221,7 +227,7 @@ Both take `side`, `opacity` and `blending`, and nothing else. A depth material a
 
 The normal is the one the camera sees, three.js's `vNormal`, not the one the world sees. Moving the camera changes the colors of a surface that never moved. The renderer carries each normal through the view matrix for this material alone.
 
-A `DOUBLE_SIDE` face seen from behind shows its normal flipped, as it is lit flipped. A `BACK_SIDE` face shows the normal it was given. The normal is made unit length at every fragment, as it is for a lit surface. A geometry with no normals falls back to its face normal.
+A `DOUBLE_SIDE` face seen from behind shows its normal flipped, as it is lit flipped. A `BACK_SIDE` face shows its normal flipped too, as three.js's `FLIP_SIDED` flips it. The normal is made unit length at every fragment, as it is for a lit surface. A geometry with no normals falls back to its face normal.
 
 ### Depth
 
@@ -338,6 +344,10 @@ An edge shared by two triangles is drawn once. `triangle_edges` pairs them by ve
 
 To keep only the edges that show the shape, build a geometry with [`edges_geometry`](Geometry#edges-and-wireframes) and draw it with a `Line`.
 
+## Dashes
+
+`line_dashed_material(color)` is three.js's `LineDashedMaterial`: a `BASIC` material with a dash of three, a gap of one and a scale of one. `Material(color, kind=BASIC, dash_size=..., gap_size=...)` spells the same material out. Only a line reads the dashes. See [dashed lines](Lines#dashed-lines) for what they measure and where they are refused.
+
 ## Opacity and blending
 
 `transparent=True` makes the material blend, as in three.js. A blended surface tests depth without writing it, and the renderer draws it after every opaque mesh, furthest first. Its alpha is `opacity` times the color's alpha, the texture's alpha and the alpha map.
@@ -359,6 +369,7 @@ Pass `blending=BLEND` or `blending=OPAQUE` to state the policy outright. A `NORM
 | `is_alpha_tested() -> Bool` | `alpha_test > 0`. |
 | `is_textured() -> Bool` | `map != NO_TEXTURE`. |
 | `is_transparent() -> Bool` | `blending == BLEND`, which follows `transparent` unless stated. |
+| `is_dashed() -> Bool` | `gap_size` is above zero. A dash with no gap is a solid line. |
 | `is_emissive() -> Bool` | Whether the emissive color at its intensity adds any light. |
 | `emissive_light() -> FloatColor` | The emissive color decoded to linear light, times the intensity. |
 
@@ -380,6 +391,10 @@ The constructor raises for:
 - A matcap on a kind that is not `MATCAP`, or a matcap id below zero that is not `NO_TEXTURE`.
 - An emissive term on an unlit material, which is a `BASIC` or a `MATCAP` one.
 - A `NORMALS` or `DEPTH` material whose blending resolves to `BLEND`, stated or inferred.
+- A wireframe on a kind that is not `BASIC`, or beside a map or an alpha map.
+- A dash or a gap that is negative or not finite, or a dash scale that is not finite.
+- A gap with no dash before it, which would draw nothing.
+- Dashes on a kind that is not `BASIC`, or on a wireframe.
 
 `Renderer.prepare` raises for an emissive map that reads its alpha as coverage.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.

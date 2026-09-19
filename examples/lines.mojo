@@ -3,13 +3,15 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A box with a loop drawn around it and a path drawn through it.
+"""A box with a loop drawn around it and a dashed path drawn through it.
 
     mojo run -I . examples/lines.mojo [path.png]
 
 The page is Lines. The loop closes and the path does not, which is the
 whole of the difference between `LOOP` and `STRIP`. Both turn with the
-box, so the segments pass in front of the surface and then behind it.
+box, so the segments pass in front of the surface and then behind it. The
+path is dashed, and its dashes are measured along the path itself, so
+they keep their length as it climbs and turns.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -20,7 +22,7 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
 from lights.light import ambient_light, directional_light
-from materials.material import BASIC, Material
+from materials.material import BASIC, Material, line_dashed_material
 from math.vector3 import Vector3
 from objects.line import LOOP, STRIP, Line
 from objects.mesh import Mesh
@@ -135,7 +137,14 @@ def main() raises:
     # A line is unlit and untextured, so its material is `BASIC`. See
     # `objects.line`.
     var gold = assets.materials.add(Material(Color(255, 205, 70), kind=BASIC))
-    var white = assets.materials.add(Material(Color(240, 240, 255), kind=BASIC))
+    # A dashed line measures its dashes along itself, in meters.
+    var white = assets.materials.add(
+        line_dashed_material(
+            Color(240, 240, 255),
+            dash_size=Length(0.18, METER),
+            gap_size=Length(0.09, METER),
+        )
+    )
 
     var scene = Scene()
     var node = scene.add(Object3D())

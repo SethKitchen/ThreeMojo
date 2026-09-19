@@ -32,6 +32,8 @@ Look something up.
 - [Cameras](Cameras)
 - [Geometry](Geometry)
 - [Meshes and assets](Meshes-and-assets)
+- [Lines](Lines)
+- [Helpers](Helpers)
 - [Raycasting](Raycasting)
 - [Curves and paths](Curves)
 - [Animation](Animation)

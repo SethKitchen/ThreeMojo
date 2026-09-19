@@ -193,3 +193,32 @@ def covers(a: Vector2, b: Vector2, x: Int, y: Int) -> Bool:
     if horizontal:
         return y == other
     return x == other
+
+
+def dash_covers(distance: Float32, dash: Float32, gap: Float32) -> Bool:
+    """Return True if a dashed line shows the pixel at `distance` along it.
+
+    three.js's `linedashed_fragment`: the distance is folded into one
+    period of dash plus gap, and the pixel is in the dash when the fold
+    lands at or before the dash's end. A gap of zero draws every pixel,
+    which is what a solid line is, so a solid line asks this too and is
+    never refused.
+
+    The fold is GLSL's `mod`, which follows the sign of the divisor and
+    so is never negative here: a distance below zero, which a scale
+    below zero can make, still lands inside the period.
+
+    Args:
+        distance: How far along the line the pixel is, in the line's own
+            units, already scaled.
+        dash: How long each dash is, in those units.
+        gap: How long the gap after it is, in those units.
+
+    Returns:
+        True if the pixel is drawn.
+    """
+    if gap <= 0:
+        return True
+    var period = dash + gap
+    var folded = distance - period * floor(distance / period)
+    return folded <= dash

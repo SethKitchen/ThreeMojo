@@ -112,7 +112,9 @@ def a_camera() raises -> PerspectiveCamera:
         Length(0.1, METER),
         Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    # Eight meters back, so a vertex a bone carries two meters to the
+    # side is still in a 45-degree view and not cut away by the sides.
+    camera.place(Vector3(0, 0, 8), Vector3(0, 0, 0))
     return camera^
 
 
@@ -625,7 +627,11 @@ def parented_rig(mode: BindMode, moved: Matrix4) raises -> Vector3:
     scene.update()
 
     var renderer = Renderer(WIDTH, HEIGHT)
-    var corners = renderer.prepare(scene, assets, a_camera())
+    # Seen from far enough back that a vertex carried seven meters to
+    # the side is still in view: the clipper cuts away what is not.
+    var camera = a_camera()
+    camera.place(Vector3(0, 0, 40), Vector3(0, 0, 0))
+    var corners = renderer.prepare(scene, assets, camera)
     return corners[1].world
 
 

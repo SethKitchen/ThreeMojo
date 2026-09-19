@@ -42,7 +42,8 @@ is size-dependent. `bench/raster_bench.mojo` measures where the crossover is.
 from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
-from render.linerule import covers, major_is_x, share_at
+from render.linerule import covers, dash_covers, major_is_x, share_at
+from render.rect import Rect
 from render.framebuffer import Color, FloatColor, Framebuffer
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.lighting import (
@@ -163,7 +164,15 @@ comptime LANE_SPECULAR_B = 23
 # How tight the highlight is. Per-triangle, read from the first corner's
 # lane like the alpha test.
 comptime LANE_SHININESS = 24
-comptime FLOATS_PER_VERTEX = LANE_SHININESS + 1
+# How far along its line a corner is, scaled: a dashed line's varying.
+# See `RasterVertex.line_distance`. A triangle's corners carry zero.
+comptime LANE_LINE_DISTANCE = 25
+# How long a dash is and how long the gap after it. Per-segment, read
+# from the first end's lane like the alpha test, and floats like it, which
+# is why they are lanes rather than entries in the segment state table.
+comptime LANE_DASH = 26
+comptime LANE_GAP = 27
+comptime FLOATS_PER_VERTEX = LANE_GAP + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -339,6 +348,9 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.specular.g)
         flat.append(corner.specular.b)
         flat.append(corner.shininess)
+        flat.append(corner.line_distance)
+        flat.append(corner.dash_size)
+        flat.append(corner.gap_size)
     return flat^
 
 
@@ -1298,6 +1310,10 @@ def rasterize_kernel(
     segment_maps: MutPointer[Int32, MutAnyOrigin],
     draws: MutPointer[Int32, MutAnyOrigin],
     draw_count: Int32,
+    scissor_x: Int32,
+    scissor_y: Int32,
+    scissor_width: Int32,
+    scissor_height: Int32,
 ):
     """Color one pixel from the nearest primitive that covers it.
 
@@ -1313,6 +1329,15 @@ def rasterize_kernel(
     var y = Int(global_idx.y)
     # The grid is rounded up to whole tiles, so the edges overhang the image.
     if x >= Int(width) or y >= Int(height):
+        return
+    # A pixel outside the scissor is left as it was, depth included: not
+    # cleared, not drawn. That is what a GPU's scissor test does to a
+    # clear and to every fragment, and it is what lets two viewports share
+    # one target. The host's target keeps the same pixels the same way.
+    var scissor = Rect(
+        Int(scissor_x), Int(scissor_y), Int(scissor_width), Int(scissor_height)
+    )
+    if not scissor.contains_pixel(x, y, Int(height)):
         return
 
     var px = sample(x)
@@ -1386,8 +1411,6 @@ def rasterize_kernel(
                 var az = segments[unsafe_offset=base + LANE_Z]
                 var bz = segments[unsafe_offset=far_base + LANE_Z]
                 var z = az + (bz - az) * share
-                if z >= nearest:
-                    continue
                 var near = segments[unsafe_offset=base + LANE_INV_W] * (
                     1 - share
                 )
@@ -1396,6 +1419,20 @@ def rasterize_kernel(
                 if total == 0:
                     continue
                 var toward = away / total
+                # A pixel in a gap is thrown away before the depth is
+                # tested, as the host throws it away: a gap claims nothing.
+                var from_a = segments[unsafe_offset=base + LANE_LINE_DISTANCE]
+                var from_b = segments[
+                    unsafe_offset=far_base + LANE_LINE_DISTANCE
+                ]
+                if not dash_covers(
+                    from_a + (from_b - from_a) * toward,
+                    segments[unsafe_offset=base + LANE_DASH],
+                    segments[unsafe_offset=base + LANE_GAP],
+                ):
+                    continue
+                if z >= nearest:
+                    continue
                 # Straight, through the function the host calls, so the one
                 # convention for a line's color lives in one place.
                 var drawn = mix_straight(
@@ -2310,6 +2347,7 @@ struct GpuRenderer(Movable):
         exposure: Float32 = 1.0,
         lines: List[RasterVertex] = List[RasterVertex](),
         draws: List[Draw] = List[Draw](),
+        scissor: Optional[Rect] = None,
     ) raises:
         """Rasterize prepared triangles and lines into the device target.
 
@@ -2340,6 +2378,12 @@ struct GpuRenderer(Movable):
                 gives the order `Renderer.render` uses, with blended
                 triangles and segments sorted together.
 
+            scissor: The pixels this draw may touch, or none for all of
+                them: three.js's `setScissor` with the test on. A pixel
+                outside is neither cleared nor drawn, so a second draw
+                into another rectangle leaves this one's pixels alone.
+                The corner counts up from the bottom; see `render.rect`.
+
         Raises:
             Error: If the corner count is not a multiple of three, the
                 line corner count is not a multiple of two, a segment's
@@ -2368,6 +2412,28 @@ struct GpuRenderer(Movable):
         # made here, before the launch, by the same functions.
         check_tone_mapping(tone_mapping, exposure)
         fog.validate()
+        var kept = Rect.whole(self.width, self.height)
+        var narrowed = Bool(scissor)
+        if narrowed:
+            kept = scissor.value()
+            if not kept.fits(self.width, self.height):
+                raise Error("A scissor must lie inside the target")
+            # A pixel outside the scissor is left as it was, and on a
+            # fresh target "as it was" is whatever the device buffer held.
+            # The first draw clears the whole target first, so the rest
+            # is the background -- resolved through this draw's own mode,
+            # curve and exposure, as the host resolves a whole fresh target
+            # through one curve. Cleared with the defaults, a white
+            # background under Reinhard came back white outside the
+            # scissor and gray inside it.
+            if not self.drawn:
+                self.draw(
+                    List[RasterVertex](),
+                    background,
+                    mode,
+                    tone_mapping=tone_mapping,
+                    exposure=exposure,
+                )
         var triangles = len(corners) // 3
 
         # The same per-triangle check the CPU makes, from the same function,
@@ -2605,6 +2671,10 @@ struct GpuRenderer(Movable):
             self.segment_maps.unsafe_ptr(),
             self.draw_list.unsafe_ptr(),
             Int32(len(order)),
+            Int32(kept.x),
+            Int32(kept.y),
+            Int32(kept.width),
+            Int32(kept.height),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -2734,6 +2804,7 @@ def render_triangles(
     exposure: Float32 = 1.0,
     lines: List[RasterVertex] = List[RasterVertex](),
     draws: List[Draw] = List[Draw](),
+    scissor: Optional[Rect] = None,
 ) raises -> Framebuffer:
     """Draw prepared triangles and lines on the GPU and read the image back.
 
@@ -2759,6 +2830,8 @@ def render_triangles(
         draws: The order to draw in, or empty for every triangle and then
             every segment; see `GpuRenderer.draw`.
 
+        scissor: The pixels the draw may touch, or none for all of them.
+
     Returns:
         The rendered image.
 
@@ -2779,6 +2852,7 @@ def render_triangles(
         exposure,
         lines,
         draws,
+        scissor,
     )
     return renderer.read_back()
 

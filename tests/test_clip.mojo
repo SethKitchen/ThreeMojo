@@ -5,13 +5,17 @@
 
 """Tests for `renderers.clip`."""
 
+from math.frustum import Frustum
+from math.projection import orthographic
+from math.bounds import Plane
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor
-from renderers.clip import ClipVertex, clip_depth, clip_segment
+from renderers.clip import ClipVertex, clip_depth, clip_segment, within_sides
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
@@ -453,6 +457,125 @@ def test_a_cut_carries_the_world_position_across() raises:
     )
     assert_equal(bare.world.x, Float32(0))
     assert_equal(bare.world.z, Float32(0))
+
+
+def test_a_cut_carries_the_line_distance_across() raises:
+    # A segment from half a meter in front of the camera to two and a
+    # half, cut at the near plane a quarter of the way along: its
+    # distance is a quarter of the way too, so a dashed line cut at the
+    # near plane keeps its dashes where they were.
+    var a = ClipVertex(
+        Vector3(0, 0, -0.5),
+        FloatColor(1, 1, 1),
+        Vector3(0, 0, 1),
+        0,
+        0,
+        line_distance=0,
+    )
+    var b = ClipVertex(
+        Vector3(0, 0, -2.5),
+        FloatColor(1, 1, 1),
+        Vector3(0, 0, 1),
+        0,
+        0,
+        line_distance=4,
+    )
+    var kept = clip_segment(a, b, NEAR, FAR)
+    assert_equal(len(kept), 2)
+    assert_almost_equal(
+        Float64(kept[0].line_distance), Float64(1), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        Float64(kept[1].line_distance), Float64(4), atol=TOLERANCE
+    )
+    # A corner of a triangle has no line, and says so.
+    assert_equal(at(0, 0, -2).line_distance, Float32(0))
+
+
+def unit_sides() raises -> List[Plane]:
+    """Return the four sides of a volume two meters wide and tall."""
+    return Frustum.side_planes(orthographic(-1, 1, 1, -1, NEAR, FAR))
+
+
+def test_a_triangle_past_a_side_plane_is_cut_at_it() raises:
+    # A wide triangle at depth two, reaching from x = -3 to x = 3: cut to
+    # the volume's x range, every survivor has |x| at most one, and the
+    # part inside is kept.
+    var sides = unit_sides()
+    var pieces = clip_depth(
+        at(-3, -0.5, -2), at(3, -0.5, -2), at(0, 0.5, -2), NEAR, FAR, sides
+    )
+    assert_true(len(pieces) > 0, "the triangle was thrown away")
+    assert_equal(len(pieces) % 3, 0)
+    var widest = Float32(0)
+    for index in range(len(pieces)):
+        if abs(pieces[index].position.x) > widest:
+            widest = abs(pieces[index].position.x)
+        assert_true(pieces[index].position.x <= 1.0 + Float32(TOLERANCE))
+        assert_true(pieces[index].position.x >= -1.0 - Float32(TOLERANCE))
+    assert_almost_equal(Float64(widest), Float64(1), atol=TOLERANCE)
+    # Wholly beside the volume, nothing survives.
+    var beside = clip_depth(
+        at(2, -0.5, -2), at(3, -0.5, -2), at(2.5, 0.5, -2), NEAR, FAR, sides
+    )
+    assert_equal(len(beside), 0)
+    # Wholly inside, the three corners come back as they were.
+    var inside = clip_depth(
+        at(-0.5, -0.5, -2), at(0.5, -0.5, -2), at(0, 0.5, -2), NEAR, FAR, sides
+    )
+    assert_equal(len(inside), 3)
+    assert_almost_equal(
+        Float64(inside[1].position.x), Float64(0.5), atol=TOLERANCE
+    )
+
+
+def test_a_cut_at_a_side_carries_the_varyings() raises:
+    # Red at x = -3 and blue at x = 3, cut at x = 1: two thirds of the way
+    # along, so the survivor at the edge is a third red and two thirds
+    # blue, and its texture coordinate is at two thirds too.
+    var sides = unit_sides()
+    var a = ClipVertex(
+        Vector3(-3, 0, -2), FloatColor(1, 0, 0), Vector3(0, 0, 1), 0, 0
+    )
+    var b = ClipVertex(
+        Vector3(3, 0, -2), FloatColor(0, 0, 1), Vector3(0, 0, 1), 1, 0
+    )
+    var kept = clip_segment(a, b, NEAR, FAR, sides)
+    assert_equal(len(kept), 2)
+    assert_almost_equal(
+        Float64(kept[0].position.x), Float64(-1), atol=TOLERANCE
+    )
+    assert_almost_equal(Float64(kept[1].position.x), Float64(1), atol=TOLERANCE)
+    assert_almost_equal(
+        Float64(kept[1].color.r), Float64(1.0 / 3.0), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        Float64(kept[1].color.b), Float64(2.0 / 3.0), atol=TOLERANCE
+    )
+    assert_almost_equal(Float64(kept[1].u), Float64(2.0 / 3.0), atol=TOLERANCE)
+    # A segment wholly beside the volume is thrown away, and one whose
+    # far end alone is beside it is cut at that end.
+    var beside = clip_segment(at(2, 0, -2), at(3, 0, -2), NEAR, FAR, sides)
+    assert_equal(len(beside), 0)
+    var half = clip_segment(at(0, 0, -2), at(3, 0, -2), NEAR, FAR, sides)
+    assert_equal(len(half), 2)
+    assert_almost_equal(Float64(half[1].position.x), Float64(1), atol=TOLERANCE)
+    # And the same the other way round.
+    var other = clip_segment(at(3, 0, -2), at(0, 0, -2), NEAR, FAR, sides)
+    assert_almost_equal(
+        Float64(other[0].position.x), Float64(1), atol=TOLERANCE
+    )
+
+
+def test_within_sides_counts_a_point_on_a_plane_as_inside() raises:
+    var sides = unit_sides()
+    assert_true(within_sides(Vector3(0, 0, -2), sides))
+    assert_true(within_sides(Vector3(1, 1, -2), sides))
+    assert_true(within_sides(Vector3(-1, -1, -2), sides))
+    assert_false(within_sides(Vector3(1.01, 0, -2), sides))
+    assert_false(within_sides(Vector3(0, -1.01, -2), sides))
+    # No sides at all is everywhere inside.
+    assert_true(within_sides(Vector3(50, 50, -2), List[Plane]()))
 
 
 def main() raises:

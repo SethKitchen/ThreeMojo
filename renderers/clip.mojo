@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Cutting triangles against the near and far planes before they are projected.
+"""Cutting triangles against the view volume before they are projected.
 
 Perspective projection divides by depth, so a vertex level with the camera
 divides by zero and one behind it divides by a negative and comes out mirrored
@@ -23,13 +23,22 @@ z = -20 with near 0.1 and far 10 lands at about 1.0101 — outside the unit cube
 the projection is defined on, and drawn anyway. Clipping is what makes `far`
 mean something.
 
+The four side planes are cut for a third reason. A triangle that reaches
+past the edge of the image projects to pixels off the image, and a
+rasterizer bounded to the target throws those away -- until the image is
+put in a viewport smaller than the target, when "off the image" is still
+on the target and gets drawn. The sides come from the projection matrix,
+as the culler's do, through `Frustum.side_planes`, and are cut in camera
+space with the same arithmetic the depth planes are.
+
 Clipping a triangle against one plane leaves a polygon of three or four
-corners; against both, up to five. Fanning from the first corner turns whatever
+corners; against all six, up to nine. Fanning from the first corner turns whatever
 is left into triangles. The interpolation at each cut carries every varying
 with it -- color and texture coordinates, in floating point -- so a clipped
 triangle shades and maps as though it were never cut.
 """
 
+from math.bounds import Plane
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor
 
@@ -61,6 +70,11 @@ struct ClipVertex(ImplicitlyCopyable):
     # Light this surface gives off, linear, from the material. Carried like
     # the color, so a cut piece glows as the whole did.
     var emissive: FloatColor
+    # How far along its line this corner is, three.js's `vLineDistance`,
+    # already scaled by the material. Read by a dashed line and by nothing
+    # else, and carried through a cut like every other varying: a segment
+    # cut at the near plane keeps its dashes where they were.
+    var line_distance: Float32
 
     def __init__(
         out self,
@@ -71,12 +85,14 @@ struct ClipVertex(ImplicitlyCopyable):
         v: Float32,
         world: Vector3 = Vector3(0, 0, 0),
         emissive: FloatColor = FloatColor(0.0, 0.0, 0.0),
+        line_distance: Float32 = 0,
     ):
         """Create a corner.
 
         The world position defaults to the origin, which is what a hand-built
         triangle with no point lights in reach wants, and the emissive to
-        black, which is no light at all.
+        black, which is no light at all. The line distance defaults to
+        zero, which is where every corner of a triangle is.
         """
         self.position = position
         self.color = color
@@ -85,6 +101,7 @@ struct ClipVertex(ImplicitlyCopyable):
         self.v = v
         self.world = world
         self.emissive = emissive
+        self.line_distance = line_distance
 
 
 def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
@@ -129,21 +146,14 @@ def within_depth(z: Float32, near: Float32, far: Float32) -> Bool:
     return _inside(z, -near, True) and _inside(z, -far, False)
 
 
-def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
-    """Return the vertex where the edge from `a` to `b` meets `plane_z`."""
-    # Only called for an edge with one end on each side of the plane, so the
-    # ends differ in z and the span cannot be zero. The guard is kept because
-    # dividing by zero here would silently produce NaN coordinates rather than
-    # a visible error.
-    var span = a.position.z - b.position.z
-    var t = Float32(0)
-    if span != 0:  # pragma: no branch
-        t = (a.position.z - plane_z) / span
+def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
+    """Return the vertex a fraction `t` of the way from `a` to `b`, every
+    varying interpolated with the position."""
     return ClipVertex(
         Vector3(
-            a.position.x + (b.position.x - a.position.x) * t,
-            a.position.y + (b.position.y - a.position.y) * t,
-            plane_z,
+            _mix(a.position.x, b.position.x, t),
+            _mix(a.position.y, b.position.y, t),
+            _mix(a.position.z, b.position.z, t),
         ),
         FloatColor(
             _mix(a.color.r, b.color.r, t),
@@ -171,7 +181,82 @@ def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
             _mix(a.emissive.b, b.emissive.b, t),
             _mix(a.emissive.a, b.emissive.a, t),
         ),
+        _mix(a.line_distance, b.line_distance, t),
     )
+
+
+def _cross_at(a: ClipVertex, b: ClipVertex, plane_z: Float32) -> ClipVertex:
+    """Return the vertex where the edge from `a` to `b` meets `plane_z`."""
+    # Only called for an edge with one end on each side of the plane, so the
+    # ends differ in z and the span cannot be zero. The guard is kept because
+    # dividing by zero here would silently produce NaN coordinates rather than
+    # a visible error.
+    var span = a.position.z - b.position.z
+    var t = Float32(0)
+    if span != 0:  # pragma: no branch
+        t = (a.position.z - plane_z) / span
+    var crossing = _mix_vertex(a, b, t)
+    # Put exactly on the plane, so a corner made here passes the plane's
+    # own test rather than sitting a rounding error on the wrong side.
+    crossing.position.z = plane_z
+    return crossing
+
+
+def _cross_side(a: ClipVertex, b: ClipVertex, plane: Plane) -> ClipVertex:
+    """Return the vertex where the edge from `a` to `b` meets `plane`."""
+    var from_a = plane.distance_to_point(a.position)
+    var from_b = plane.distance_to_point(b.position)
+    var span = from_a - from_b
+    var t = Float32(0)
+    if span != 0:  # pragma: no branch
+        t = from_a / span
+    return _mix_vertex(a, b, t)
+
+
+def _clip_side(polygon: List[ClipVertex], plane: Plane) -> List[ClipVertex]:
+    """Return `polygon` cut down to the side of `plane` it faces.
+
+    `_clip_plane` for a plane that is not one of the camera's depth
+    planes: the same walk, with the side of each corner read as a signed
+    distance rather than a z. A corner on the plane is kept.
+
+    Args:
+        polygon: The corners, in order.
+        plane: The plane, facing the kept side.
+
+    Returns:
+        The surviving corners, in order.
+    """
+    var kept = List[ClipVertex]()
+    for position in range(len(polygon)):
+        var current = polygon[position]
+        var following = polygon[(position + 1) % len(polygon)]
+        var current_in = plane.distance_to_point(current.position) >= 0
+        var following_in = plane.distance_to_point(following.position) >= 0
+        if current_in:
+            kept.append(current)
+        if current_in != following_in:
+            kept.append(_cross_side(current, following, plane))
+    return kept^
+
+
+def within_sides(position: Vector3, sides: List[Plane]) -> Bool:
+    """Return True if a camera-space point needs no cutting at any side.
+
+    `within_depth` for the side planes: a point on a plane counts as
+    inside, as `_clip_side` keeps it.
+
+    Args:
+        position: The point, in camera space.
+        sides: The planes, facing inward.
+
+    Returns:
+        True if the point is in front of every one of them.
+    """
+    for index in range(len(sides)):
+        if sides[index].distance_to_point(position) < 0:
+            return False
+    return True
 
 
 def _clip_plane(
@@ -207,9 +292,14 @@ def _clip_plane(
 
 
 def clip_depth(
-    a: ClipVertex, b: ClipVertex, c: ClipVertex, near: Float32, far: Float32
+    a: ClipVertex,
+    b: ClipVertex,
+    c: ClipVertex,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane] = List[Plane](),
 ) raises -> List[ClipVertex]:
-    """Return the part of a triangle inside the camera's depth range.
+    """Return the part of a triangle inside the camera's view volume.
 
     Args:
         a: First corner, in camera space.
@@ -217,6 +307,8 @@ def clip_depth(
         c: Third corner.
         near: Distance to the near plane; the plane sits at z = -near.
         far: Distance to the far plane, at z = -far.
+        sides: The camera's side planes, from `Frustum.side_planes`, or
+            none to cut against the depth planes alone.
 
     Returns:
         Corners three at a time: empty if nothing survives, otherwise three
@@ -247,6 +339,8 @@ def clip_depth(
     # polygon. Order does not change the result, only the work.
     var in_front = _clip_plane(corners, -near, True)
     var within = _clip_plane(in_front, -far, False)
+    for side in range(len(sides)):
+        within = _clip_side(within, sides[side])
 
     # Three to five corners, fanned from the first into triangles. An empty
     # or degenerate polygon gives an empty range and so no triangles.
@@ -259,9 +353,13 @@ def clip_depth(
 
 
 def clip_segment(
-    a: ClipVertex, b: ClipVertex, near: Float32, far: Float32
+    a: ClipVertex,
+    b: ClipVertex,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane] = List[Plane](),
 ) raises -> List[ClipVertex]:
-    """Return the part of a segment inside the camera's depth range.
+    """Return the part of a segment inside the camera's view volume.
 
     The line counterpart of `clip_depth`, and it exists for the same
     reason: a point behind the camera does not project to a slightly wrong
@@ -279,9 +377,11 @@ def clip_segment(
         b: The other end.
         near: Distance to the near plane; the plane sits at z = -near.
         far: Distance to the far plane, at z = -far.
+        sides: The camera's side planes, from `Frustum.side_planes`, or
+            none to cut against the depth planes alone.
 
     Returns:
-        Two corners, or none if the segment lies wholly outside the range.
+        Two corners, or none if the segment lies wholly outside the volume.
 
     Raises:
         Error: If `far` does not lie beyond `near`, which would leave the
@@ -308,6 +408,17 @@ def clip_segment(
             first = _cross_at(first, second, plane_z)
         elif not second_in:
             second = _cross_at(second, first, plane_z)
+    # Then each side, the same way.
+    for side in range(len(sides)):
+        var plane = sides[side]
+        var first_in = plane.distance_to_point(first.position) >= 0
+        var second_in = plane.distance_to_point(second.position) >= 0
+        if not first_in and not second_in:
+            return List[ClipVertex]()
+        if not first_in:
+            first = _cross_side(first, second, plane)
+        elif not second_in:
+            second = _cross_side(second, first, plane)
     var kept = List[ClipVertex]()
     kept.append(first)
     kept.append(second)

@@ -75,7 +75,9 @@ def a_camera() raises -> PerspectiveCamera:
         Length(0.1, METER),
         Length(100.0, METER),
     )
-    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    # Eight meters back, so a vertex carried two meters to the side is
+    # still in a 45-degree view and not cut away by the side planes.
+    camera.place(Vector3(0, 0, 8), Vector3(0, 0, 0))
     return camera^
 
 
@@ -343,11 +345,12 @@ def test_one_geometry_wears_two_expressions_at_once() raises:
 
 def test_a_morphed_mesh_is_not_culled_by_a_bound_it_has_left() raises:
     # The geometry sits at the origin and its bound is around the origin.
-    # A target carries it far off to one side, out of the camera's view of
-    # the origin but still within the frustum where it has gone.
+    # A target carries it far off to one side, well outside the bound but
+    # still inside the frustum: at depth 64 a 45-degree view is over 26
+    # meters tall, and the triangle is moved 20 meters up.
     var assets = Assets()
     var geometry = flat_triangle()
-    var far: List[Float32] = [40, 0, -60, 41, 0, -60, 40, 1, -60]
+    var far: List[Float32] = [0, 20, -60, 1, 20, -60, 0, 21, -60]
     geometry.add_morph_target(BufferAttribute(far^, 3))
     var mesh = a_mesh(assets, geometry^)
 
@@ -359,7 +362,7 @@ def test_a_morphed_mesh_is_not_culled_by_a_bound_it_has_left() raises:
     mesh.set_morph_influence(0, 1)
     var moved = prepared(assets, mesh)
     assert_equal(len(moved), 3)
-    assert_almost_equal(moved[0].world.x, Float32(40), atol=TOLERANCE)
+    assert_almost_equal(moved[0].world.y, Float32(20), atol=TOLERANCE)
 
 
 def test_a_morph_offset_is_a_run_or_an_offset() raises:
