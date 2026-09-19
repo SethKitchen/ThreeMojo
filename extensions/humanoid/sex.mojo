@@ -24,9 +24,9 @@ struct Sex(Equatable, ImplicitlyCopyable, Writable):
         return self == MALE or self == FEMALE
 
 
-# Adult male osteological template. Trotter and Gleser's male femur
-# regression, and the male ratios for head, shaft and condyles, use this.
+# Adult male osteological template. The inverted Trotter and Gleser male
+# line, and the authored male ratios for head, shaft and condyles, use this.
 comptime MALE = Sex(0)
-# Adult female osteological template. The female regression and the female
-# ratios use this.
+# Adult female osteological template. The inverted female line and the
+# authored female ratios use this.
 comptime FEMALE = Sex(1)

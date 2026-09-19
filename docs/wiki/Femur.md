@@ -1,10 +1,10 @@
 # Femur
 
-`femur` builds a femur mesh from a humanoid's stature and sex. Thickness, length, neck angle and the condyles all follow from those two facts.
+`femur` builds a femur mesh from a humanoid's stature and sex.
 
 ![Four femurs of different stature and sex turn under a lamp](out/femur.png)
 
-`extensions/humanoid/spec.mojo`, `extensions/humanoid/sex.mojo`, `extensions/humanoid/side.mojo`, `extensions/humanoid/skeleton/bone.mojo`, `extensions/humanoid/skeleton/leg/femur/dimensions.mojo`, `extensions/humanoid/skeleton/leg/femur/geometry.mojo` and `extensions/humanoid/skeleton/leg/femur/mass.mojo`.
+`extensions/humanoid/spec.mojo`, `extensions/humanoid/sex.mojo`, `extensions/humanoid/side.mojo`, `extensions/humanoid/skeleton/tissue.mojo`, `extensions/humanoid/skeleton/bone.mojo`, `extensions/humanoid/skeleton/leg/femur/dimensions.mojo`, `extensions/humanoid/skeleton/leg/femur/geometry.mojo` and `extensions/humanoid/skeleton/leg/femur/mass.mojo`.
 
 This is not a three.js port. See [Extensions](Extensions) and [Why extensions sit beside the port](Why-extensions-sit-beside-the-port).
 
@@ -20,41 +20,53 @@ var person = HumanoidSpec(Length(6.0, FOOT), MALE)
 var bone = femur(person)
 ```
 
-`side` picks `RIGHT` or `LEFT`. A right femur is the default. `detail` is how many segments the capsule uses around and along. Twenty-four is the default. Eight is the least. Sixty-four is the most.
+`side` picks `RIGHT` or `LEFT`. A right femur is the default. `detail` sets the marching-tetrahedra grid along the bone. Twenty-four is the default. Eight is the least. Sixty-four is the most.
 
 The bone stands on y. The origin is mid-shaft. Plus y is proximal. Plus x is lateral. Plus z is anterior. A left femur is the right shape with x flipped.
 
 ## Length
 
-Length is maximum femoral length from Trotter and Gleser 1952. The paper gives stature from the bone. This inverts the line.
+Length is a modeling choice. Trotter and Gleser 1952 predict stature from maximum femoral length. This template inverts that published line.
 
-| Sex | Formula, lengths in cm |
+That inverse is not the regression of femur length on stature. The two estimates agree only when the relationship is effectively exact.
+
+| Sex | Published line, lengths in cm |
 |---|---|
 | Male | `stature = 2.38 * femur + 61.41` |
 | Female | `stature = 2.47 * femur + 54.10` |
 
-Those are the American White adult lines. Forensic tools use them when no population is named. A six foot male therefore has a femur of 51.04 cm.
+Those are the American White adult formulae from 1952. Forensic tools use them when no population is named. Later samples report different coefficients. This template keeps this pair as its named default.
+
+A six foot male gets a femur of 51.04 cm on this line.
 
 `femur_dimensions(stature, sex, side)` returns the lengths, angles and landmarks without building a mesh.
 
+The accepted stature interval is 1.2 m through 2.5 m. That is the software range. It is not the calibration range of the 1952 sample.
+
 ## Shape
 
-Every other linear measure is a sex-specific ratio of that length:
+The other linear measures are sex-specific ratios of that length. They are authored template parameters. They are not a cited osteometric table.
 
-| Measure | Male ratio | Female ratio |
-|---|---|---|
-| Head diameter | 0.1030 | 0.0977 |
-| Neck length, shaft axis to head center | 0.1073 | 0.1065 |
-| Bicondylar width | 0.1803 | 0.1736 |
-| Midshaft anteroposterior diameter | 0.0631 | 0.0602 |
-| Midshaft mediolateral diameter | 0.0579 | 0.0567 |
-| Greater trochanter offset | 0.0687 | 0.0648 |
-| Lesser trochanter offset | 0.0386 | 0.0370 |
-| Anterior bow | 0.0129 | 0.0120 |
+| Measure | Male ratio | Female ratio | Role |
+|---|---|---|---|
+| Head diameter | 0.1030 | 0.0977 | Authored landmark ratio |
+| Neck length, shaft axis to head center | 0.1073 | 0.1065 | Authored landmark ratio |
+| Bicondylar width | 0.1803 | 0.1736 | Authored landmark ratio |
+| Midshaft anteroposterior diameter | 0.0631 | 0.0602 | Authored landmark ratio |
+| Midshaft mediolateral diameter | 0.0579 | 0.0567 | Authored landmark ratio |
+| Greater trochanter offset | 0.0687 | 0.0648 | Authored construction |
+| Lesser trochanter offset | 0.0386 | 0.0370 | Authored construction |
+| Anterior bow | 0.0129 | 0.0120 | Authored construction |
 
-Neck-shaft angle, anteversion and the bicondylar angle are the usual adult means. They differ by a few degrees between the templates.
+Neck-shaft angle, anteversion and the bicondylar angle are authored adult means for the two templates.
 
-The solid is a smooth union of anatomical parts. A bowed shaft, a neck and a spherical head meet both trochanters. Both condyles, a patellar surface, a linea aspera and a notch complete the distal end. The mesh is a capsule shrink-wrapped onto the zero set of that field.
+The code builds the shaft frame first. It then places the neck relative to that frame, including anteversion. `measured_neck_shaft_angle` reads the generated centerlines. It compares that angle with the reported template value.
+
+The shaft cross-section is an ellipse. The AP and ML diameters are independent.
+
+The solid is a smooth union of anatomical parts. A bowed shaft, a neck and a spherical head meet both trochanters. Both condyles, a patellar surface, a linea aspera and a notch complete the distal end. The mesh is a marching-tetrahedra isosurface of that field. Connectivity comes from the field.
+
+`FemurDimensions` is editable. Editing a length does not rebuild landmarks. Call `femur_dimensions` to resolve a template. Call `validate` before a field, mesh or mass consumes an edited copy.
 
 ## Landmarks
 
@@ -73,24 +85,28 @@ The solid is a smooth union of anatomical parts. A bowed shaft, a neck and a sph
 
 ## Bone tissue
 
-`cortical_tissue()` and `trabecular_tissue()` hold density, porosity and elastic modulus. The values come from Morgan, Unnikrishnan and Hussein 2018 ([PMC6053074](https://pmc.ncbi.nlm.nih.gov/articles/PMC6053074/)).
+`cortical_tissue()` and `trabecular_tissue()` hold density, porosity and longitudinal moduli. The values come from Morgan, Unnikrishnan and Hussein 2018 ([PMC6053074](https://pmc.ncbi.nlm.nih.gov/articles/PMC6053074/)).
 
 Tissue density is 2.0 g/cm³ for both tissues. Apparent density is tissue density times one minus porosity.
 
-| Tissue | Porosity | Apparent density | Longitudinal modulus |
+| Tissue | Porosity | Apparent density | Longitudinal moduli |
 |---|---|---|---|
-| Cortical | 0.10 | 1.8 g/cm³ | 17.9 GPa tension, 18.16 GPa compression |
+| Cortical | 0.10 | 1.8 g/cm³ | 17.9 GPa and 18.16 GPa |
 | Trabecular | 0.80 | 0.40 g/cm³ | 400 MPa |
 
-Cortical porosity in the paper is 5% to 15%. The template uses the middle. Table 1 of that review gives the cortical moduli. Trabecular modulus sits inside the 10 MPa to 3000 MPa range the paper reports.
+Cortical porosity in the paper is 5% to 15%. The template uses the middle. Table 1 of that review lists two cortical longitudinal moduli from different footnotes. It does not label them tension and compression.
 
-`BoneKind` is `CORTICAL` or `TRABECULAR`. A bare integer is a compile error.
+Poisson's ratio 0.62 is a directional cortical figure. It is not an isotropic elastic constant. Do not form a bulk modulus from E and ν with the isotropic formula.
+
+These values are sourced research metadata. This extension does not implement a constitutive model.
+
+`BoneKind` is `CORTICAL` or `TRABECULAR`. A bare integer is a compile error. Tissue data lives in `tissue.mojo`. The visual maps live in `bone.mojo`.
 
 ## Mass and weight
 
-The mesh is the outer surface. The interior is not solid cortical bone. `femur_mass(spec)` samples the field. Each cell is empty, cortical shell, trabecular fill or marrow.
+The mesh is the outer surface. The interior is not solid cortical bone. `femur_mass(spec)` samples the field. Each cell is empty, cortical region, trabecular region or marrow.
 
-Mineral mass is apparent density times the cortical and trabecular volume. Marrow adds envelope volume and no mineral mass. Weight on Earth is that mass times `STANDARD_GRAVITY`. The grid step is 5 mm by default.
+Apparent density already includes porosity. The mass formula applies that factor once.
 
 ```mojo
 from extensions.humanoid.skeleton.leg.femur.mass import femur_mass
@@ -102,19 +118,23 @@ report.weight().to(NEWTON)
 report.weight().to(POUND_FORCE)
 ```
 
-`report.envelope` is the volume inside the surface. `report.bone` is the mineral volume. `report.cortical` and `report.trabecular` split that mineral volume.
+`report.envelope` is the volume inside the surface, including marrow. `report.cortical_region` and `report.trabecular_region` include pore space. `report.solid_tissue` is the tissue volume after porosity. `report.mass` is bone-tissue mass.
 
-A six foot male in this solid has about 960 g of mineral tissue. That is 9.4 N, or 2.1 lbf, on Earth. The visual envelope is larger than a dissected femur, so the mass is an upper bound for this sculpted field.
+The report does not estimate a mineral-component mass. That would need a mineral fraction. It does not estimate whole-bone mass with marrow.
+
+A six foot male at a 5 mm step has about 960 g of bone tissue. That is 9.4 N, or 2.1 lbf, on Earth. The value is a grid-sampled estimate under the template tissues. A 20 mm step gave about 1011 g. A 2 mm step gave about 965 g. The estimate is not a proven upper bound.
+
+Left and right femurs match in mass at the same step, within sampling error.
 
 ## Look
 
-`bone_albedo` is a procedural sRGB map of dry cortical bone. `bone_roughness` is a linear roughness map. Bone is a dielectric. Metalness is zero.
+`bone_albedo` is a procedural sRGB map of dry cortical bone. `bone_roughness` is a linear roughness map. Both are visual approximations. Bone is a dielectric. Metalness is zero.
 
-`MeshStandardMaterial` is not ported. `bone_phong` draws the albedo with a dim highlight until that kind exists.
+`MeshStandardMaterial` is not ported. `bone_phong` draws the albedo with a dim highlight until that kind exists. The current renderer does not consume the roughness map as a full PBR material.
 
 ## Limits
 
-Stature must lie in 1.2 m through 2.5 m. The formulas are adult. `Sex` must be `MALE` or `FEMALE`. `BodySide` must be `RIGHT` or `LEFT`. A bare integer is a compile error.
+Stature must lie in 1.2 m through 2.5 m. `Sex` must be `MALE` or `FEMALE`. `BodySide` must be `RIGHT` or `LEFT`. A bare integer is a compile error. Edited zero or non-finite dimensions fail at `validate`.
 
 ## Example
 

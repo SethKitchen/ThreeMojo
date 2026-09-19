@@ -5,10 +5,13 @@
 
 """A femur fill must be a `BoneOccupancy`, not a bare integer."""
 
-from extensions.humanoid.skeleton.bone import cortical_tissue, trabecular_tissue
-from extensions.humanoid.skeleton.leg.femur.mass import mineral_density
+from extensions.humanoid.skeleton.tissue import (
+    cortical_tissue,
+    trabecular_tissue,
+)
+from extensions.humanoid.skeleton.leg.femur.mass import apparent_density_of
 
 
 def main() raises:
-    var density = mineral_density(0, cortical_tissue(), trabecular_tissue())
+    var density = apparent_density_of(0, cortical_tissue(), trabecular_tissue())
     print(density.value)

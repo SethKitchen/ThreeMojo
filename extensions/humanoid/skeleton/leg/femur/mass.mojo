@@ -3,16 +3,22 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Mass and Earth weight of a femur from its solid and its tissues.
+"""Bone-tissue mass and Earth weight of a femur from its solid and tissues.
 
 The mesh is the outer surface. The interior is not solid cortical bone.
 A shaft has a marrow cavity. The head and the condyles hold trabecular
 bone inside a cortical shell. This module samples the signed-distance
 field on a grid and classifies each cell.
 
-Mineral mass is apparent density times the cortical and trabecular
-volume. Marrow adds envelope volume and no mineral mass. Weight on Earth
-is that mass times `STANDARD_GRAVITY`.
+Regional volumes include pore space. Apparent density is tissue density
+times one minus porosity. Bone-tissue mass is apparent density times
+regional volume. Porosity is applied once. `solid_tissue` is the tissue
+volume after that factor. The report does not estimate a mineral-only
+mass or a whole-bone mass with marrow.
+
+Weight on Earth is bone-tissue mass times `STANDARD_GRAVITY`. The number
+is a grid-sampled estimate under the chosen tissues. It is not a proven
+upper bound.
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var report = femur_mass(person)
@@ -22,7 +28,7 @@ is that mass times `STANDARD_GRAVITY`.
 
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
-from extensions.humanoid.skeleton.bone import (
+from extensions.humanoid.skeleton.tissue import (
     BoneTissue,
     cortical_tissue,
     trabecular_tissue,
@@ -76,14 +82,14 @@ comptime EMPTY = BoneOccupancy(0)
 comptime CORTICAL_FILL = BoneOccupancy(1)
 # Trabecular fill of the head, neck and condyles.
 comptime TRABECULAR_FILL = BoneOccupancy(2)
-# Medullary cavity of the diaphysis. No mineral mass.
+# Medullary cavity of the diaphysis. No bone-tissue mass.
 comptime MARROW = BoneOccupancy(3)
 
 # Cell size along each axis of the bounding box.
 comptime MIN_STEP = Length(2.0, MILLIMETER)
 comptime MAX_STEP = Length(20.0, MILLIMETER)
 comptime DEFAULT_STEP = Length(5.0, MILLIMETER)
-# Cortical shell as a fraction of midshaft radius, about 6 mm on a 6 ft male.
+# Cortical shell as a fraction of mean midshaft radius, about 6 mm on a 6 ft male.
 comptime SHELL_FRACTION = Float32(0.42)
 # Distal and proximal fractions of the shaft that are metaphysis, not cavity.
 comptime DISTAL_METAPHYSIS = Float32(0.20)
@@ -92,16 +98,16 @@ comptime PROXIMAL_METAPHYSIS = Float32(0.15)
 
 @fieldwise_init
 struct FemurMass(ImplicitlyCopyable):
-    """Sampled volume and mineral mass of one femur."""
+    """Sampled regional volumes and bone-tissue mass of one femur."""
 
     var envelope: Volume
-    var bone: Volume
-    var cortical: Volume
-    var trabecular: Volume
+    var cortical_region: Volume
+    var trabecular_region: Volume
+    var solid_tissue: Volume
     var mass: Mass
 
     def weight(self, gravity: Acceleration = STANDARD_GRAVITY) -> Force:
-        """Return the Earth weight of this mineral mass.
+        """Return the Earth weight of this bone-tissue mass.
 
         Args:
             gravity: Acceleration of free fall. Standard gravity is the
@@ -115,17 +121,19 @@ struct FemurMass(ImplicitlyCopyable):
 
 @fieldwise_init
 struct _Tally(ImplicitlyCopyable):
-    """Running envelope, mineral volumes and mass for one grid."""
+    """Running envelope, regional volumes, solid tissue and mass for one grid.
+    """
 
     var envelope: Float32
     var cortical: Float32
     var trabecular: Float32
+    var solid: Float32
     var mass: Float32
 
 
 def femur_occupancy(
     dimensions: FemurDimensions, point: Vector3
-) -> BoneOccupancy:
+) raises -> BoneOccupancy:
     """Return what fills `point` in a sized femur.
 
     Args:
@@ -135,14 +143,20 @@ def femur_occupancy(
     Returns:
         `EMPTY` outside, `CORTICAL_FILL` in the shell, `MARROW` in the
         shaft cavity, or `TRABECULAR_FILL` in the cancellous ends.
+
+    Raises:
+        Error: If `dimensions.validate` refuses the copy.
     """
     return _occupancy(FemurField(dimensions), point)
 
 
-def mineral_density(
+def apparent_density_of(
     fill: BoneOccupancy, cortical: BoneTissue, trabecular: BoneTissue
 ) raises -> Density:
-    """Return the mineral density of `fill`.
+    """Return the apparent tissue density of `fill`.
+
+    Apparent density already includes porosity. Do not scale the result
+    by one minus porosity again.
 
     Args:
         fill: A classified occupancy.
@@ -150,7 +164,7 @@ def mineral_density(
         trabecular: Trabecular tissue. Used for the cancellous ends.
 
     Returns:
-        Apparent density for a mineral fill, or zero for empty space and
+        Apparent density for a tissue fill, or zero for empty space and
         marrow.
 
     Raises:
@@ -186,22 +200,24 @@ def add_fill(
     Raises:
         Error: If `fill` is none of the named occupancies.
     """
-    var rho = mineral_density(fill, cortical, trabecular)
+    var rho = apparent_density_of(fill, cortical, trabecular)
     tally.mass = tally.mass + rho.value * cell
     if fill == EMPTY:
         return
     tally.envelope = tally.envelope + cell
     if fill == CORTICAL_FILL:
         tally.cortical = tally.cortical + cell
+        tally.solid = tally.solid + cell * (Float32(1) - cortical.porosity)
         return
     if fill == TRABECULAR_FILL:
         tally.trabecular = tally.trabecular + cell
+        tally.solid = tally.solid + cell * (Float32(1) - trabecular.porosity)
 
 
 def femur_mass(
     spec: HumanoidSpec, side: BodySide = RIGHT, step: Length = DEFAULT_STEP
 ) raises -> FemurMass:
-    """Return the mineral mass of a femur sized for `spec`.
+    """Return the bone-tissue mass of a femur sized for `spec`.
 
     Args:
         spec: Standing height and osteological sex.
@@ -209,7 +225,7 @@ def femur_mass(
         step: Grid cell size. 2 mm through 20 mm, 5 mm by default.
 
     Returns:
-        Sampled volumes and the mineral mass.
+        Sampled volumes and the bone-tissue mass.
 
     Raises:
         Error: If `spec` or `side` is refused by `femur_dimensions`, or
@@ -229,7 +245,7 @@ def femur_mass_from_dimensions(
     trabecular: BoneTissue,
     step: Length = DEFAULT_STEP,
 ) raises -> FemurMass:
-    """Return the mineral mass of an already-sized femur.
+    """Return the bone-tissue mass of an already-sized femur.
 
     Args:
         dimensions: Size and landmarks from `femur_dimensions`.
@@ -238,12 +254,13 @@ def femur_mass_from_dimensions(
         step: Grid cell size.
 
     Returns:
-        Sampled volumes and the mineral mass.
+        Sampled volumes and the bone-tissue mass.
 
     Raises:
-        Error: If `step` is out of range, or either tissue fails
-            `validate`.
+        Error: If `dimensions.validate` refuses the copy, if `step` is
+            out of range, or either tissue fails `validate`.
     """
+    dimensions.validate()
     if not isfinite(step.value):
         raise Error("A femur mass step must be finite")
     if step < MIN_STEP:
@@ -261,7 +278,7 @@ def femur_mass_from_dimensions(
     var ny = _cells(field.high.y - field.low.y, dy)
     var nz = _cells(field.high.z - field.low.z, dz)
     var cell = dx * dy * dz
-    var tally = _Tally(0, 0, 0, 0)
+    var tally = _Tally(0, 0, 0, 0, 0)
     for iz in range(nz):  # pragma: no branch
         var z = field.low.z + (Float32(iz) + Float32(0.5)) * dz
         for iy in range(ny):  # pragma: no branch
@@ -275,12 +292,11 @@ def femur_mass_from_dimensions(
                     cortical,
                     trabecular,
                 )
-    var bone_v = tally.cortical + tally.trabecular
     return FemurMass(
         Volume(tally.envelope, CUBIC_METER),
-        Volume(bone_v, CUBIC_METER),
         Volume(tally.cortical, CUBIC_METER),
         Volume(tally.trabecular, CUBIC_METER),
+        Volume(tally.solid, CUBIC_METER),
         Mass(tally.mass, KILOGRAM),
     )
 
