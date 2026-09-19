@@ -19,6 +19,7 @@
 - [Cameras](Cameras)
 - [Geometry](Geometry)
 - [Meshes and assets](Meshes-and-assets)
+- [Lines](Lines)
 - [Raycasting](Raycasting)
 - [Curves and paths](Curves)
 - [Animation](Animation)

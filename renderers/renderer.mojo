@@ -100,6 +100,7 @@ from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from objects.instanced_mesh import check_placing
+from objects.line import segment_count, segment_ends
 from objects.skeleton import blend_bones
 from objects.skinned_mesh import (
     ATTACHED,
@@ -109,6 +110,7 @@ from objects.skinned_mesh import (
 )
 from materials.material import (
     BACK_SIDE,
+    BASIC,
     DOUBLE_SIDE,
     FRONT_SIDE,
     NORMALS,
@@ -135,8 +137,9 @@ from render.rasterizer import (
     check_output_kinds,
     edge,
     rasterize_all,
+    rasterize_lines_all,
 )
-from renderers.clip import ClipVertex, clip_depth
+from renderers.clip import ClipVertex, clip_depth, clip_segment
 from std.math import floor, isfinite, max
 from std.sys import num_logical_cores
 
@@ -1665,6 +1668,218 @@ struct Renderer(Movable):
 
         return corners^
 
+    def prepare_lines[
+        C: Camera
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+    ) raises -> List[
+        RasterVertex
+    ]:
+        """Turn the lines in a scene into the segments a rasterizer draws.
+
+        `prepare` for lines. It is the same boundary and the same promise:
+        screen-space primitives with their varyings worked out, handed to
+        the CPU rasterizer by `render` and to the GPU by
+        `render.gpu.GpuRenderer.draw`, so a parity test can give both the
+        identical input.
+
+        It is a second pass rather than more work inside the first,
+        because almost nothing a triangle carries applies to a line. A
+        line has no surface, so no normal, no texture coordinates and no
+        winding. What is left is a position, a color and a depth, and a
+        pass that carries only those is shorter than a pass that carries
+        everything and then throws most of it away.
+
+        `scene.update()` must have been called since the last transform
+        change, as `prepare` needs.
+
+        Args:
+            scene: The transform hierarchy, and the lines in it.
+            assets: The geometries and materials the lines name.
+            camera: The camera to project through.
+
+        Returns:
+            Raster vertices, two per segment. Opaque lines come first,
+            nearest first, then the blended ones furthest first, which is
+            the order `_draws` puts the triangles in and for the same
+            reasons. A line whose node shares no layer with the camera
+            contributes none, and nor does one whose bounding sphere lies
+            wholly outside the camera frustum, unless it opted out.
+
+        Raises:
+            Error: If a line names a node, a geometry or a material that
+                is not there, if its geometry has no positions or carries
+                an index buffer, if its point count does not suit its
+                mode, if its material is not `BASIC` or carries a map, or
+                if its material asks for vertex colors and the geometry
+                has no `color` attribute of three or four floats per
+                vertex.
+        """
+        var view = camera.view_matrix_in(scene)
+        var to_screen = camera.view_to_screen_matrix(self.width, self.height)
+        var near = camera.near_distance()
+        var far = camera.far_distance()
+        var clip = camera.projection_matrix()
+        clip.multiply(view)
+        var frustum = Frustum.from_camera(clip, view, near, far)
+        # One local bound per geometry, found the first time a line needs
+        # it this frame, exactly as `_draws` keeps them for the meshes.
+        var bounds = List[Sphere](
+            length=assets.geometries.count(), fill=Sphere.empty()
+        )
+        var known = List[Bool](length=assets.geometries.count(), fill=False)
+        var slack = far * CULL_SLACK
+
+        # Which lines survive the camera, and how deep each one is, so the
+        # blended ones can be put behind the opaque ones. Per line and not
+        # per segment: one sort key per object is what `_draws` uses, and a
+        # line is one object.
+        var drawn = List[Int]()
+        var depths = List[Float32]()
+        var clear = List[Bool]()
+        for index in range(len(scene.lines)):
+            ref line = scene.lines[index]
+            if not scene.get(line.node).layers.test(camera.visible_layers()):
+                continue
+            var world = scene.world_matrix(line.node)
+            if line.frustum_culled and not _in_view(
+                assets, line.geometry, world, frustum, slack, bounds, known
+            ):
+                continue
+            drawn.append(index)
+            depths.append(
+                view.transform_point(
+                    Vector3(
+                        world.elements[12],
+                        world.elements[13],
+                        world.elements[14],
+                    )
+                ).z
+            )
+            clear.append(assets.materials.get(line.material).is_transparent())
+
+        var solid = List[Int]()
+        var solid_depths = List[Float32]()
+        var see_through = List[Int]()
+        var see_through_depths = List[Float32]()
+        for position in range(len(drawn)):
+            if clear[position]:
+                see_through.append(drawn[position])
+                see_through_depths.append(depths[position])
+            else:
+                solid.append(drawn[position])
+                # Negated so one ascending sort serves both lists, as in
+                # `_draws`: the nearest opaque line has the largest z.
+                solid_depths.append(-depths[position])
+        _sort_by(solid, solid_depths)
+        _sort_by(see_through, see_through_depths)
+        var ordered = List[Int]()
+        for position in range(len(solid)):
+            ordered.append(solid[position])
+        for position in range(len(see_through)):
+            ordered.append(see_through[position])
+
+        var corners = List[RasterVertex]()
+        for position in range(len(ordered)):
+            ref line = scene.lines[ordered[position]]
+            var world = scene.world_matrix(line.node)
+            ref geometry = assets.geometries.get(line.geometry)
+            var material = assets.materials.get(line.material)
+            # A line is unlit and untextured, and these refuse the
+            # alternatives rather than carrying them and drawing neither.
+            # See the module docstring of `objects.line`.
+            if material.kind != BASIC:
+                raise Error(
+                    "A line material must be BASIC: a line has no surface,"
+                    " so it has no normal for a light to reach"
+                )
+            if material.map != NO_TEXTURE or material.alpha_map != NO_TEXTURE:
+                raise Error(
+                    "A line material has no map: a line has no surface"
+                    " coordinates to sample one with"
+                )
+            # An index buffer here is a triangle index -- `set_index`
+            # demands whole triangles -- so it cannot say which points a
+            # segment joins. A line geometry carries its points in order,
+            # which is what three.js `EdgesGeometry` produces.
+            if geometry.is_indexed():
+                raise Error(
+                    "A line geometry cannot be indexed: its points are"
+                    " joined in the order they are given"
+                )
+            ref positions = geometry.attribute_view(String(POSITION))
+            var vertex_count = positions.count()
+            var base = _with_opacity(
+                FloatColor(srgb=material.color), material.opacity
+            )
+            var colors = _vertex_colors(
+                geometry, material.vertex_colors, base, vertex_count
+            )
+            var world_points = List[Vector3]()
+            var view_points = List[Vector3]()
+            for vertex in range(vertex_count):
+                var point = world.transform_point(
+                    Vector3(
+                        positions.component(vertex, 0),
+                        positions.component(vertex, 1),
+                        positions.component(vertex, 2),
+                    )
+                )
+                world_points.append(point)
+                view_points.append(view.transform_point(point))
+
+            for segment in range(segment_count(line.mode, vertex_count)):
+                var ends = segment_ends(line.mode, vertex_count, segment)
+                var first = ends[0]
+                var second = ends[1]
+                # The normal is zero and the texture coordinates are zero
+                # because nothing reads either: the kind is unlit and there
+                # is no map. Carrying the material color and the world
+                # position is the whole of what a segment varies.
+                var kept = clip_segment(
+                    ClipVertex(
+                        view_points[first],
+                        colors[first],
+                        Vector3(0, 0, 0),
+                        0,
+                        0,
+                        world_points[first],
+                    ),
+                    ClipVertex(
+                        view_points[second],
+                        colors[second],
+                        Vector3(0, 0, 0),
+                        0,
+                        0,
+                        world_points[second],
+                    ),
+                    near,
+                    far,
+                )
+                for end in range(len(kept)):
+                    corners.append(
+                        _to_raster(
+                            kept[end],
+                            to_screen,
+                            NO_TEXTURE,
+                            material.blending,
+                            BASIC,
+                            NO_TEXTURE,
+                            NO_TEXTURE,
+                            # No map, so there is no coverage to test.
+                            0,
+                            FloatColor(0.0, 0.0, 0.0),
+                            0,
+                            NO_TEXTURE,
+                            NO_TEXTURE,
+                        )
+                    )
+
+        return corners^
+
     def render[
         C: Camera
     ](self, scene: Scene, assets: Assets, camera: C,) raises -> Framebuffer:
@@ -1692,6 +1907,7 @@ struct Renderer(Movable):
                 `render.rasterizer.check_output_kinds`.
         """
         var corners = self.prepare(scene, assets, camera)
+        var segments = self.prepare_lines(scene, assets, camera)
         # Two output representations cannot share a tone-mapped frame. Asked
         # here, before anything is drawn, exactly where `GpuRenderer.draw`
         # asks it before a launch. The uv view is data throughout and is
@@ -1730,6 +1946,10 @@ struct Renderer(Movable):
             self.workers,
             fog,
         )
+        # The lines go over the triangles, depth tested against them, which
+        # is the order the kernel does its two passes in. See
+        # `render.rasterizer.rasterize_lines_all`.
+        rasterize_lines_all(segments, target, self.workers, fog)
         # Linear light becomes an image exactly once, here, on as many
         # threads as drew it, through the tone mapping curve on the way --
         # except in the uv view, which is coordinates rather than light and

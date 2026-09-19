@@ -461,7 +461,12 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/math.png $(OUT_DIR)/units.png \
            $(OUT_DIR)/chain.png $(OUT_DIR)/additive.png \
            $(OUT_DIR)/normals.png $(OUT_DIR)/fragments.png \
-           $(OUT_DIR)/coverage.png
+           $(OUT_DIR)/coverage.png $(OUT_DIR)/lines.png
+
+$(OUT_DIR)/lines.png: $(LIB_SOURCES) examples/lines.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/lines.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
 
 $(OUT_DIR)/cube.png: $(LIB_SOURCES) examples/cube.mojo
 	@mkdir -p $(OUT_DIR)

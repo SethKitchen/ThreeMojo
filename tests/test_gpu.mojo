@@ -43,6 +43,7 @@ from math.vector2 import Vector2
 from std.math import inf
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
+from objects.line import LOOP, Line
 from objects.mesh import Mesh
 from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METER
@@ -109,7 +110,7 @@ from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import Alpha
 from geometries.plane import plane
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, POSITION
+from core.buffer_geometry import BufferGeometry, COLOR, POSITION
 from math.matrix4 import Matrix4
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
@@ -5489,6 +5490,83 @@ def test_both_backends_orient_a_matcap_the_same_way() raises:
         if found:
             seen += 1
     assert_true(seen >= 3, "the lookup did not sweep the image")
+
+
+def test_both_backends_agree_on_a_scene_with_lines_in_it() raises:
+    # The whole path, not hand-built corners: one scene, one camera, and
+    # both halves of the renderer reading what `prepare` and
+    # `prepare_lines` produce. A line drawn over a lit box is where the
+    # two passes have to meet, because the segment tests the depth the
+    # triangles wrote.
+    if skipped_for_lack_of_a_gpu("both backends agree on a scene with lines"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.2, METER)))
+    var paint = assets.materials.add(Material(Color(60, 120, 220)))
+    var outline = BufferGeometry()
+    outline.set_attribute(
+        String(POSITION),
+        BufferAttribute(
+            [
+                Float32(-0.9),
+                -0.7,
+                0.9,
+                0.9,
+                -0.7,
+                0.9,
+                0.8,
+                0.75,
+                0.9,
+                -0.85,
+                0.6,
+                0.9,
+            ],
+            3,
+        ),
+    )
+    var ring = assets.geometries.add(outline^)
+    var ink = assets.materials.add(Material(Color(255, 210, 0), kind=BASIC))
+    var scene = Scene()
+    var root = scene.add(Object3D())
+    light_the(scene)
+    scene.update()
+    scene.add_mesh(Mesh(box, paint, root))
+    scene.add_line(Line(ring, ink, root, mode=LOOP))
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.4, 3.2), Vector3(0, 0, 0))
+    var corners = renderer.prepare(scene, assets, camera)
+    var segments = renderer.prepare_lines(scene, assets, camera)
+    assert_equal(len(segments), 8)
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_LIT,
+        assets.textures,
+        Lighting(scene),
+        FogView(scene.fog),
+        NO_TONE_MAPPING,
+        1.0,
+        segments,
+    )
+    # The line is really on top of the box, not beside it.
+    var ink_pixels = 0
+    for y in range(36):
+        for x in range(48):
+            var pixel = cpu.get_pixel(x, y)
+            if pixel.r > 200 and pixel.g > 150 and pixel.b < 100:
+                ink_pixels += 1
+    assert_true(ink_pixels > 20, "the outline barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def main() raises:

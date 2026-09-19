@@ -238,3 +238,61 @@ def clip_depth(
         triangles.append(within[corner])
         triangles.append(within[corner + 1])
     return triangles^
+
+
+def clip_segment(
+    a: ClipVertex, b: ClipVertex, near: Float32, far: Float32
+) raises -> List[ClipVertex]:
+    """Return the part of a segment inside the camera's depth range.
+
+    The line counterpart of `clip_depth`, and it exists for the same
+    reason: a point behind the camera does not project to a slightly wrong
+    point, it projects through the origin to the far side of the image. A
+    segment is simpler than a triangle, because cutting a segment against
+    a plane leaves a segment or nothing at all -- there is no polygon to
+    fan.
+
+    Both ends are moved by the same arithmetic the triangle clipper uses,
+    `_cross_at`, so a mesh edge and a line lying on it are cut at the same
+    place.
+
+    Args:
+        a: One end, in camera space.
+        b: The other end.
+        near: Distance to the near plane; the plane sits at z = -near.
+        far: Distance to the far plane, at z = -far.
+
+    Returns:
+        Two corners, or none if the segment lies wholly outside the range.
+
+    Raises:
+        Error: If `near` is negative, which would put the plane behind the
+            camera, or if `far` does not lie beyond `near`, which would
+            leave the frustum inside out.
+    """
+    if near < 0:
+        raise Error("The near plane cannot be behind the camera")
+    if far <= near:
+        raise Error("The far plane must be beyond the near plane")
+
+    var first = a
+    var second = b
+    # Near, then far, as `clip_depth` does them. Each pass either leaves
+    # the segment alone, moves one end onto the plane, or throws it away.
+    var planes: List[Float32] = [-near, -far]
+    var keep_nearer: List[Bool] = [True, False]
+    for pass_index in range(2):  # pragma: no branch
+        var plane_z = planes[pass_index]
+        var nearer = keep_nearer[pass_index]
+        var first_in = _inside(first.position.z, plane_z, nearer)
+        var second_in = _inside(second.position.z, plane_z, nearer)
+        if not first_in and not second_in:
+            return List[ClipVertex]()
+        if not first_in:
+            first = _cross_at(first, second, plane_z)
+        elif not second_in:
+            second = _cross_at(second, first, plane_z)
+    var kept = List[ClipVertex]()
+    kept.append(first)
+    kept.append(second)
+    return kept^

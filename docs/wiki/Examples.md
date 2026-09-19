@@ -29,6 +29,7 @@ mkdir -p out
 | `instances.mojo` | `instances.png` | [Meshes and assets](Meshes-and-assets) |
 | `raycast.mojo` | `raycast.png` | [Raycasting](Raycasting) |
 | `curves.mojo` | `curves.png` | [Curves and paths](Curves) |
+| `lines.mojo` | `lines.png` | [Lines](Lines) |
 | `keyframes.mojo` | `keyframes.png` | [Animation](Animation) |
 | `skinning.mojo` | `skinning.png` | [Skinning](Skinning) |
 | `phong.mojo` | `phong.png` | [Materials](Materials) |

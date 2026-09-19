@@ -85,7 +85,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 ### Objects
 
 - [x] [Mesh, with geometry, material and texture stores](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets) [#25](https://github.com/SethKitchen/ThreeMojo/issues/25)
-- [ ] Line and LineSegments [#26](https://github.com/SethKitchen/ThreeMojo/issues/26)
+- [x] [Line, LineLoop and LineSegments](https://github.com/SethKitchen/ThreeMojo/wiki/Lines): points joined by one-pixel strokes, walked by one rule both backends read [#26](https://github.com/SethKitchen/ThreeMojo/issues/26)
 - [ ] Points [#27](https://github.com/SethKitchen/ThreeMojo/issues/27)
 - [ ] Sprite [#28](https://github.com/SethKitchen/ThreeMojo/issues/28)
 - [x] [InstancedMesh and BatchedMesh](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#instancedmesh): one geometry, or one geometry per instance, at many transforms under one node, culled instance by instance [#29](https://github.com/SethKitchen/ThreeMojo/issues/29)

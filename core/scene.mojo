@@ -62,6 +62,7 @@ from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
+from objects.line import Line
 from objects.lod import Lod
 from objects.mesh import Mesh
 from objects.skinned_mesh import SkinnedMesh
@@ -96,6 +97,12 @@ struct Scene(Movable):
     # rather than copied, exactly as an instanced mesh is. See
     # `objects.skinned_mesh`.
     var skinned_meshes: List[SkinnedMesh]
+    # The paths and sticks the scene draws one pixel wide, each naming a
+    # node here as a mesh does. Their own list because they are prepared
+    # by their own pass and rasterized by their own rule: a line has no
+    # surface, so almost nothing a triangle carries applies to it. Public
+    # and assignable for the reason `meshes` is. See `objects.line`.
+    var lines: List[Line]
     # What veils the scene with distance, three.js's `scene.fog`. Public
     # and assignable, as the lights are: set it to the value `linear_fog`
     # or `exp2_fog` returns, and the renderer reads it every frame.
@@ -113,6 +120,7 @@ struct Scene(Movable):
         self.batched_meshes = List[BatchedMesh]()
         self.lods = List[Lod]()
         self.skinned_meshes = List[SkinnedMesh]()
+        self.lines = List[Line]()
         self.fog = no_fog()
         # An empty scene has nothing to recompute, so it starts current.
         self._stale = False
@@ -209,6 +217,26 @@ struct Scene(Movable):
             if bone.value < 0 or bone.value >= len(self._nodes):
                 raise Error("A bone must name a node that is in the scene")
         self.skinned_meshes.append(mesh^)
+
+    def add_line(mut self, line: Line) raises:
+        """Add a path or a list of sticks to draw, the three.js
+        `scene.add(line)`.
+
+        Does not make the scene stale, for the reason `add_mesh` does not:
+        a line holds no transform of its own, only the id of a node that
+        does.
+
+        Args:
+            line: The line to draw. Its node must already be in the scene.
+                Its geometry and material are checked when it is rendered,
+                because the scene has no view of the `Assets` they live in.
+
+        Raises:
+            Error: If the line names a node the scene does not have.
+        """
+        if line.node.value >= len(self._nodes):
+            raise Error("A line must name a node that is in the scene")
+        self.lines.append(line)
 
     def node(
         mut self, index: NodeId
