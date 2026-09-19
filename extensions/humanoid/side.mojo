@@ -5,7 +5,7 @@
 
 """Left or right of the body, as a type rather than a bare integer.
 
-A femur, and later a tibia or a humerus, is not symmetric across the
+A femur, a tibia, a fibula or a patella is not symmetric across the
 midline. The head of a right femur points medial, toward minus x in the
 bone's own frame; a left femur is that shape with x flipped. The type
 stops a bare integer at compile time. A value that is not `LEFT` or

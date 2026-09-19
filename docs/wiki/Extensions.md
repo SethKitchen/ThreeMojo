@@ -2,7 +2,7 @@
 
 `extensions/` holds content that is not a three.js port. Core stays a port of three.js. Water, plants, buildings and a humanoid live here, in a folder per subject.
 
-The first subject is the humanoid. The first bone is the femur. See [Femur](Femur).
+The first subject is the humanoid. The first bones are the femur, tibia, fibula and patella. See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula) and [Patella](Patella).
 
 ## Layout
 
@@ -15,11 +15,14 @@ extensions/
     skeleton/
       tissue.mojo      density, porosity and moduli
       bone.mojo        PBR maps and a Phong stand-in
+      field.mojo       signed-distance primitives
+      isosurface.mojo  marching tetrahedra
+      occupancy.mojo   tissue fill and mass tally
       leg/
-        femur/
-          dimensions.mojo   osteometry and the implicit solid
-          geometry.mojo     marching-tetrahedra mesh
-          mass.mojo         bone-tissue mass and Earth weight
+        femur/     dimensions, geometry, mass
+        tibia/     dimensions, geometry, mass
+        fibula/    dimensions, geometry, mass
+        patella/   dimensions, geometry, mass
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.

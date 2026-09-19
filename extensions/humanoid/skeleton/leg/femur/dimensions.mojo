@@ -41,22 +41,40 @@ Call `validate` at every public consumer of an edited copy.
 
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
+from extensions.humanoid.skeleton.field import (
+    DistanceField,
+    acute_angle,
+    bowed_station,
+    check_spec,
+    clamp_unit,
+    empty_bounds,
+    field_gradient,
+    finite_angle,
+    finite_point,
+    flip_x,
+    non_negative_length,
+    open_angle,
+    positive_length,
+    sd_ellipse_segment,
+    sd_ellipsoid,
+    sd_segment,
+    sd_sphere,
+    smax,
+    smin,
+)
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import acos, cos, isfinite, max, min, pi, sin, sqrt
+from std.math import acos, cos, max, sin
 from units.si import (
     Angle,
     CENTIMETER,
     DEGREE,
     Length,
-    METER,
     RADIAN,
 )
 
-# Software range for a stature argument. This is not the calibration
-# range of the 1952 sample.
-comptime MIN_STATURE = Length(1.2, METER)
-comptime MAX_STATURE = Length(2.5, METER)
+# Mediolateral hint for an unrotated shaft ellipse.
+comptime SHAFT_ML = Vector3(1, 0, 0)
 
 # Trotter M, Gleser GC. Am J Phys Anthropol. 1952. Table 13, American
 # White adults, maximum femoral length in centimeters.
@@ -133,28 +151,32 @@ struct FemurDimensions(ImplicitlyCopyable):
                 angle is not finite, if the neck-shaft angle is not
                 between 0 and 180 degrees, or if a landmark is not finite.
         """
-        _check_spec(self.stature, self.sex, self.side)
-        _positive_length(self.length, "length")
-        _positive_length(self.head_diameter, "head diameter")
-        _positive_length(self.neck_length, "neck length")
-        _positive_length(self.bicondylar_width, "bicondylar width")
-        _positive_length(self.midshaft_ap, "midshaft AP diameter")
-        _positive_length(self.midshaft_ml, "midshaft ML diameter")
-        _positive_length(self.greater_trochanter_offset, "greater trochanter")
-        _positive_length(self.lesser_trochanter_offset, "lesser trochanter")
-        _non_negative_length(self.anterior_bow, "anterior bow")
-        _open_angle(self.neck_shaft_angle, "neck-shaft angle")
-        _finite_angle(self.anteversion, "anteversion")
-        _acute_angle(self.bicondylar_angle, "bicondylar angle")
-        _finite_point(self.head_center, "head center")
-        _finite_point(self.neck_base, "neck base")
-        _finite_point(self.greater_trochanter, "greater trochanter")
-        _finite_point(self.lesser_trochanter, "lesser trochanter")
-        _finite_point(self.medial_condyle, "medial condyle")
-        _finite_point(self.lateral_condyle, "lateral condyle")
+        check_spec(self.stature, self.sex, self.side, "femur")
+        positive_length(self.length, "length", "femur")
+        positive_length(self.head_diameter, "head diameter", "femur")
+        positive_length(self.neck_length, "neck length", "femur")
+        positive_length(self.bicondylar_width, "bicondylar width", "femur")
+        positive_length(self.midshaft_ap, "midshaft AP diameter", "femur")
+        positive_length(self.midshaft_ml, "midshaft ML diameter", "femur")
+        positive_length(
+            self.greater_trochanter_offset, "greater trochanter", "femur"
+        )
+        positive_length(
+            self.lesser_trochanter_offset, "lesser trochanter", "femur"
+        )
+        non_negative_length(self.anterior_bow, "anterior bow", "femur")
+        open_angle(self.neck_shaft_angle, "neck-shaft angle", "femur")
+        finite_angle(self.anteversion, "anteversion", "femur")
+        acute_angle(self.bicondylar_angle, "bicondylar angle", "femur")
+        finite_point(self.head_center, "head center", "femur")
+        finite_point(self.neck_base, "neck base", "femur")
+        finite_point(self.greater_trochanter, "greater trochanter", "femur")
+        finite_point(self.lesser_trochanter, "lesser trochanter", "femur")
+        finite_point(self.medial_condyle, "medial condyle", "femur")
+        finite_point(self.lateral_condyle, "lateral condyle", "femur")
 
 
-struct FemurField(ImplicitlyCopyable):
+struct FemurField(DistanceField, ImplicitlyCopyable):
     """The implicit solid for one `FemurDimensions`.
 
     `distance` is in meters, negative inside the bone. `geometry` meshes
@@ -244,11 +266,14 @@ struct FemurField(ImplicitlyCopyable):
         var y4 = self.neck_base.y
         var x0 = 0.5 * (self.medial.x + self.lateral.x)
         var x4 = self.neck_base.x
-        self.s0 = _station(0.0, x0, x4, y0, y4, bow)
-        self.s1 = _station(0.25, x0, x4, y0, y4, bow)
-        self.s2 = _station(0.5, x0, x4, y0, y4, bow)
-        self.s3 = _station(0.75, x0, x4, y0, y4, bow)
-        self.s4 = _station(1.0, x0, x4, y0, y4, bow)
+        var distal = Vector3(x0, y0, 0)
+        var proximal = Vector3(x4, y4, 0)
+        var bow_off = Vector3(0, 0, bow)
+        self.s0 = bowed_station(0.0, distal, proximal, bow_off)
+        self.s1 = bowed_station(0.25, distal, proximal, bow_off)
+        self.s2 = bowed_station(0.5, distal, proximal, bow_off)
+        self.s3 = bowed_station(0.75, distal, proximal, bow_off)
+        self.s4 = bowed_station(1.0, distal, proximal, bow_off)
         self.ml0 = 1.35 * ml_mid
         self.ml1 = 1.10 * ml_mid
         self.ml2 = ml_mid
@@ -286,84 +311,79 @@ struct FemurField(ImplicitlyCopyable):
         self.epsilon = 0.0015 * L
         var rad0 = max(self.ml0, self.ap0)
         var rad4 = max(self.ml4, self.ap4)
-        var lo_x = self.head_center.x - self.head_r
-        var lo_y = self.head_center.y - self.head_r
-        var lo_z = self.head_center.z - self.head_r
-        var hi_x = self.head_center.x + self.head_r
-        var hi_y = self.head_center.y + self.head_r
-        var hi_z = self.head_center.z + self.head_r
-        lo_x = min(lo_x, self.gt.x - self.gt_r.x)
-        lo_y = min(lo_y, self.gt.y - self.gt_r.y)
-        lo_z = min(lo_z, self.gt.z - self.gt_r.z)
-        hi_x = max(hi_x, self.gt.x + self.gt_r.x)
-        hi_y = max(hi_y, self.gt.y + self.gt_r.y)
-        hi_z = max(hi_z, self.gt.z + self.gt_r.z)
-        lo_x = min(lo_x, self.lt.x - self.lt_r.x)
-        lo_y = min(lo_y, self.lt.y - self.lt_r.y)
-        lo_z = min(lo_z, self.lt.z - self.lt_r.z)
-        hi_x = max(hi_x, self.lt.x + self.lt_r.x)
-        hi_y = max(hi_y, self.lt.y + self.lt_r.y)
-        hi_z = max(hi_z, self.lt.z + self.lt_r.z)
-        lo_x = min(lo_x, self.medial.x - self.medial_r.x)
-        lo_y = min(lo_y, self.medial.y - self.medial_r.y)
-        lo_z = min(lo_z, self.medial.z - self.medial_r.z)
-        hi_x = max(hi_x, self.medial.x + self.medial_r.x)
-        hi_y = max(hi_y, self.medial.y + self.medial_r.y)
-        hi_z = max(hi_z, self.medial.z + self.medial_r.z)
-        lo_x = min(lo_x, self.lateral.x - self.lateral_r.x)
-        lo_y = min(lo_y, self.lateral.y - self.lateral_r.y)
-        lo_z = min(lo_z, self.lateral.z - self.lateral_r.z)
-        hi_x = max(hi_x, self.lateral.x + self.lateral_r.x)
-        hi_y = max(hi_y, self.lateral.y + self.lateral_r.y)
-        hi_z = max(hi_z, self.lateral.z + self.lateral_r.z)
-        lo_x = min(lo_x, self.s0.x - rad0)
-        lo_y = min(lo_y, self.s0.y - rad0)
-        lo_z = min(lo_z, self.s0.z - rad0)
-        hi_x = max(hi_x, self.s0.x + rad0)
-        hi_y = max(hi_y, self.s0.y + rad0)
-        hi_z = max(hi_z, self.s0.z + rad0)
-        lo_x = min(lo_x, self.s4.x - rad4)
-        lo_y = min(lo_y, self.s4.y - rad4)
-        lo_z = min(lo_z, self.s4.z - rad4)
-        hi_x = max(hi_x, self.s4.x + rad4)
-        hi_y = max(hi_y, self.s4.y + rad4)
-        hi_z = max(hi_z, self.s4.z + rad4)
+        var box = empty_bounds()
+        box.include_sphere(self.head_center, self.head_r)
+        box.include_ellipsoid(self.gt, self.gt_r)
+        box.include_ellipsoid(self.lt, self.lt_r)
+        box.include_ellipsoid(self.medial, self.medial_r)
+        box.include_ellipsoid(self.lateral, self.lateral_r)
+        box.include_sphere(self.s0, rad0)
+        box.include_sphere(self.s4, rad4)
         var pad = 0.022 * L + Float32(0.004)
-        self.low = Vector3(lo_x - pad, lo_y - pad, lo_z - pad)
-        self.high = Vector3(hi_x + pad, hi_y + pad, hi_z + pad)
+        var padded = box.padded(pad)
+        self.low = padded.low
+        self.high = padded.high
 
     def distance(self, point: Vector3) -> Float32:
         """Return how far `point` lies outside the femur, in meters.
 
         Negative is inside. Zero is the surface.
         """
-        var d = _sd_ellipse_segment(
-            point, self.s0, self.s1, self.ml0, self.ap0, self.ml1, self.ap1
+        var d = sd_ellipse_segment(
+            point,
+            self.s0,
+            self.s1,
+            self.ml0,
+            self.ap0,
+            self.ml1,
+            self.ap1,
+            SHAFT_ML,
         )
-        d = _smin(
+        d = smin(
             d,
-            _sd_ellipse_segment(
-                point, self.s1, self.s2, self.ml1, self.ap1, self.ml2, self.ap2
+            sd_ellipse_segment(
+                point,
+                self.s1,
+                self.s2,
+                self.ml1,
+                self.ap1,
+                self.ml2,
+                self.ap2,
+                SHAFT_ML,
             ),
             self.k,
         )
-        d = _smin(
+        d = smin(
             d,
-            _sd_ellipse_segment(
-                point, self.s2, self.s3, self.ml2, self.ap2, self.ml3, self.ap3
+            sd_ellipse_segment(
+                point,
+                self.s2,
+                self.s3,
+                self.ml2,
+                self.ap2,
+                self.ml3,
+                self.ap3,
+                SHAFT_ML,
             ),
             self.k,
         )
-        d = _smin(
+        d = smin(
             d,
-            _sd_ellipse_segment(
-                point, self.s3, self.s4, self.ml3, self.ap3, self.ml4, self.ap4
+            sd_ellipse_segment(
+                point,
+                self.s3,
+                self.s4,
+                self.ml3,
+                self.ap3,
+                self.ml4,
+                self.ap4,
+                SHAFT_ML,
             ),
             self.k,
         )
-        d = _smin(
+        d = smin(
             d,
-            _sd_segment(
+            sd_segment(
                 point,
                 self.neck_base,
                 self.head_center,
@@ -372,39 +392,27 @@ struct FemurField(ImplicitlyCopyable):
             ),
             self.k,
         )
-        d = _smin(d, _sd_sphere(point, self.head_center, self.head_r), self.k)
-        d = _smin(d, _sd_ellipsoid(point, self.gt, self.gt_r), self.k)
-        d = _smin(d, _sd_ellipsoid(point, self.lt, self.lt_r), self.k)
-        d = _smin(d, _sd_ellipsoid(point, self.medial, self.medial_r), self.k)
-        d = _smin(d, _sd_ellipsoid(point, self.lateral, self.lateral_r), self.k)
-        d = _smin(d, _sd_ellipsoid(point, self.patella, self.patella_r), self.k)
-        d = _smin(
+        d = smin(d, sd_sphere(point, self.head_center, self.head_r), self.k)
+        d = smin(d, sd_ellipsoid(point, self.gt, self.gt_r), self.k)
+        d = smin(d, sd_ellipsoid(point, self.lt, self.lt_r), self.k)
+        d = smin(d, sd_ellipsoid(point, self.medial, self.medial_r), self.k)
+        d = smin(d, sd_ellipsoid(point, self.lateral, self.lateral_r), self.k)
+        d = smin(d, sd_ellipsoid(point, self.patella, self.patella_r), self.k)
+        d = smin(
             d,
-            _sd_segment(
+            sd_segment(
                 point, self.linea_a, self.linea_b, self.linea_r, self.linea_r
             ),
             self.k,
         )
-        var notch = _sd_segment(
+        var notch = sd_segment(
             point, self.notch_a, self.notch_b, self.notch_r, self.notch_r
         )
-        return _smax(d, -notch, self.k_notch)
+        return smax(d, -notch, self.k_notch)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
-        var e = self.epsilon
-        var dx = self.distance(
-            Vector3(point.x + e, point.y, point.z)
-        ) - self.distance(Vector3(point.x - e, point.y, point.z))
-        var dy = self.distance(
-            Vector3(point.x, point.y + e, point.z)
-        ) - self.distance(Vector3(point.x, point.y - e, point.z))
-        var dz = self.distance(
-            Vector3(point.x, point.y, point.z + e)
-        ) - self.distance(Vector3(point.x, point.y, point.z - e))
-        var normal = Vector3(dx, dy, dz)
-        normal.normalize()
-        return normal
+        return field_gradient(self, point, self.epsilon)
 
 
 def femur_dimensions(
@@ -426,7 +434,7 @@ def femur_dimensions(
         Error: If `sex` or `side` is not valid, or stature is not finite
             or is outside the software range.
     """
-    _check_spec(stature, sex, side)
+    check_spec(stature, sex, side, "femur")
 
     var stature_cm = stature.to(CENTIMETER)
     var femur_cm: Float32
@@ -521,12 +529,12 @@ def femur_dimensions(
         neck_base.z - lt_off,
     )
     if side == LEFT:
-        head_center = _flip_x(head_center)
-        neck_base = _flip_x(neck_base)
-        gt = _flip_x(gt)
-        lt = _flip_x(lt)
-        medial = _flip_x(medial)
-        lateral = _flip_x(lateral)
+        head_center = flip_x(head_center)
+        neck_base = flip_x(neck_base)
+        gt = flip_x(gt)
+        lt = flip_x(lt)
+        medial = flip_x(medial)
+        lateral = flip_x(lateral)
 
     return FemurDimensions(
         stature,
@@ -574,7 +582,7 @@ def measured_neck_shaft_angle(dimensions: FemurDimensions) raises -> Angle:
     neck.normalize()
     var shaft = field.s0 - field.s4
     shaft.normalize()
-    return Angle(acos(_clamp_unit(neck.dot(shaft))), RADIAN)
+    return Angle(acos(clamp_unit(neck.dot(shaft))), RADIAN)
 
 
 def femur_distance(
@@ -596,224 +604,3 @@ def femur_distance(
     """
     var field = FemurField(dimensions)
     return field.distance(point)
-
-
-def _check_spec(stature: Length, sex: Sex, side: BodySide) raises:
-    """Refuse a spec the femur templates cannot use."""
-    if not sex.is_valid():
-        raise Error("A femur needs a male or female template")
-    if not side.is_valid():
-        raise Error("A femur needs a left or right side")
-    if not isfinite(stature.value):
-        raise Error("A femur's stature must be finite")
-    if stature < MIN_STATURE:
-        raise Error("A femur's stature must be at least 1.2 meters")
-    if stature > MAX_STATURE:
-        raise Error("A femur's stature cannot exceed 2.5 meters")
-
-
-def _positive_length(value: Length, name: String) raises:
-    """Refuse a length that is not finite or not positive."""
-    if not isfinite(value.value):
-        raise Error("A femur " + name + " must be finite")
-    if value.value <= 0:
-        raise Error("A femur " + name + " must be positive")
-
-
-def _non_negative_length(value: Length, name: String) raises:
-    """Refuse a length that is not finite or is negative."""
-    if not isfinite(value.value):
-        raise Error("A femur " + name + " must be finite")
-    if value.value < 0:
-        raise Error("A femur " + name + " cannot be negative")
-
-
-def _finite_angle(value: Angle, name: String) raises:
-    """Refuse an angle that is not finite."""
-    if not isfinite(value.value):
-        raise Error("A femur " + name + " must be finite")
-
-
-def _open_angle(value: Angle, name: String) raises:
-    """Refuse an angle that is not finite or not strictly between 0 and pi."""
-    _finite_angle(value, name)
-    if value.value <= 0:
-        raise Error("A femur " + name + " must be positive")
-    if value.value >= pi:
-        raise Error("A femur " + name + " must be less than 180 degrees")
-
-
-def _acute_angle(value: Angle, name: String) raises:
-    """Refuse an angle that is not finite, negative, or 90 degrees or more."""
-    _finite_angle(value, name)
-    if value.value < 0:
-        raise Error("A femur " + name + " cannot be negative")
-    if value.value >= pi * Float32(0.5):
-        raise Error("A femur " + name + " must be less than 90 degrees")
-
-
-def _finite_point(point: Vector3, name: String) raises:
-    """Refuse a landmark with a non-finite coordinate."""
-    if not isfinite(point.x):
-        raise Error("A femur " + name + " must be finite")
-    if not isfinite(point.y):
-        raise Error("A femur " + name + " must be finite")
-    if not isfinite(point.z):
-        raise Error("A femur " + name + " must be finite")
-
-
-def _clamp_unit(value: Float32) -> Float32:
-    """Return `value` held to minus one through one, for `acos`."""
-    if value < -1:
-        return -1
-    if value > 1:
-        return 1
-    return value
-
-
-def _flip_x(point: Vector3) -> Vector3:
-    """Return `point` mirrored across the midline of the bone."""
-    return Vector3(-point.x, point.y, point.z)
-
-
-def _station(
-    t: Float32, x0: Float32, x4: Float32, y0: Float32, y4: Float32, bow: Float32
-) -> Vector3:
-    """Return a shaft centerline point at fraction `t` from distal to proximal.
-    """
-    return Vector3(
-        x0 + t * (x4 - x0),
-        y0 + t * (y4 - y0),
-        4 * bow * t * (1 - t),
-    )
-
-
-def _abs(value: Float32) -> Float32:
-    """Return `value` without its sign."""
-    if value < 0:
-        return -value
-    return value
-
-
-def _smin(a: Float32, b: Float32, k: Float32) -> Float32:
-    """Return a smooth minimum of `a` and `b` with blend radius `k`."""
-    var h = k - _abs(a - b)
-    if h < 0:
-        h = 0
-    return min(a, b) - h * h * Float32(0.25) / k
-
-
-def _smax(a: Float32, b: Float32, k: Float32) -> Float32:
-    """Return a smooth maximum of `a` and `b` with blend radius `k`."""
-    return -_smin(-a, -b, k)
-
-
-def _sd_sphere(point: Vector3, center: Vector3, radius: Float32) -> Float32:
-    """Return the signed distance to a sphere."""
-    return (point - center).length() - radius
-
-
-def _sd_segment(
-    point: Vector3, a: Vector3, b: Vector3, radius_a: Float32, radius_b: Float32
-) -> Float32:
-    """Return the signed distance to a tapered capsule from `a` to `b`."""
-    var along = b - a
-    var from_a = point - a
-    var span = along.dot(along)
-    var t = Float32(0)
-    if span > 0:
-        t = from_a.dot(along) / span
-        if t < 0:
-            t = 0
-        if t > 1:
-            t = 1
-    var radius = radius_a + (radius_b - radius_a) * t
-    return (from_a - along * t).length() - radius
-
-
-def _reject(vector: Vector3, unit: Vector3) -> Vector3:
-    """Return the part of `vector` perpendicular to unit `unit`."""
-    var d = vector.dot(unit)
-    return Vector3(
-        vector.x - unit.x * d, vector.y - unit.y * d, vector.z - unit.z * d
-    )
-
-
-def _cross(a: Vector3, b: Vector3) -> Vector3:
-    """Return the cross product of `a` and `b` without mutating them."""
-    var out = a
-    out.cross(b)
-    return out
-
-
-def _sd_ellipse_segment(
-    point: Vector3,
-    a: Vector3,
-    b: Vector3,
-    ml_a: Float32,
-    ap_a: Float32,
-    ml_b: Float32,
-    ap_b: Float32,
-) -> Float32:
-    """Return an approximate signed distance to a tapered elliptical capsule.
-
-    Mediolateral radius is along bone x after projecting out the tangent.
-    Anteroposterior radius is along the remaining anterior axis. The two
-    diameters are independent.
-    """
-    var along = b - a
-    var from_a = point - a
-    var span = along.dot(along)
-    var t = Float32(0)
-    if span > 0:
-        t = from_a.dot(along) / span
-        if t < 0:
-            t = 0
-        if t > 1:
-            t = 1
-    var ml_r = ml_a + (ml_b - ml_a) * t
-    var ap_r = ap_a + (ap_b - ap_a) * t
-    var center = Vector3(
-        a.x + along.x * t, a.y + along.y * t, a.z + along.z * t
-    )
-    var offset = point - center
-    var tangent = Vector3(0, 1, 0)
-    if span > 0:
-        var inv = Float32(1) / sqrt(span)
-        tangent = Vector3(along.x * inv, along.y * inv, along.z * inv)
-    var ml_axis = _reject(Vector3(1, 0, 0), tangent)
-    if ml_axis.length() < Float32(0.000001):
-        ml_axis = _reject(Vector3(0, 0, 1), tangent)
-    ml_axis.normalize()
-    var ap_axis = _cross(tangent, ml_axis)
-    ap_axis.normalize()
-    var u = offset.dot(ml_axis)
-    var v = offset.dot(ap_axis)
-    var w = offset.dot(tangent)
-    var px = u / ml_r
-    var pz = v / ap_r
-    var pr = sqrt(ml_r * ap_r)
-    var py = w / pr
-    var k0 = sqrt(px * px + py * py + pz * pz)
-    var qx = px / ml_r
-    var qy = py / pr
-    var qz = pz / ap_r
-    var k1 = sqrt(qx * qx + qy * qy + qz * qz)
-    if k1 == 0:
-        return -min(ml_r, ap_r)
-    return k0 * (k0 - 1) / k1
-
-
-def _sd_ellipsoid(point: Vector3, center: Vector3, radii: Vector3) -> Float32:
-    """Return an approximate signed distance to an ellipsoid."""
-    var px = (point.x - center.x) / radii.x
-    var py = (point.y - center.y) / radii.y
-    var pz = (point.z - center.z) / radii.z
-    var k0 = sqrt(px * px + py * py + pz * pz)
-    var qx = px / radii.x
-    var qy = py / radii.y
-    var qz = pz / radii.z
-    var k1 = sqrt(qx * qx + qy * qy + qz * qz)
-    if k1 == 0:
-        return -min(radii.x, min(radii.y, radii.z))
-    return k0 * (k0 - 1) / k1

@@ -3,13 +3,13 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A femur fill must be a `BoneOccupancy`, not a bare integer."""
+"""A bone fill must be a `BoneOccupancy`, not a bare integer."""
 
 from extensions.humanoid.skeleton.tissue import (
     cortical_tissue,
     trabecular_tissue,
 )
-from extensions.humanoid.skeleton.leg.femur.mass import apparent_density_of
+from extensions.humanoid.skeleton.occupancy import apparent_density_of
 
 
 def main() raises:

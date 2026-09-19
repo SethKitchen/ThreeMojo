@@ -3,10 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A femur mesh from stature and sex.
+"""A tibia mesh from stature and sex.
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
-    var bone = femur(person)
+    var bone = tibia(person)
 
 The solid lives in `dimensions`. This file extracts the zero set with
 marching tetrahedra. Connectivity comes from the field.
@@ -16,21 +16,21 @@ from core.buffer_geometry import BufferGeometry
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
-from extensions.humanoid.skeleton.leg.femur.dimensions import (
-    FemurDimensions,
-    FemurField,
-    femur_dimensions,
+from extensions.humanoid.skeleton.leg.tibia.dimensions import (
+    TibiaDimensions,
+    TibiaField,
+    tibia_dimensions,
 )
 
 
-def femur(
+def tibia(
     spec: HumanoidSpec, side: BodySide = RIGHT, detail: Int = 24
 ) raises -> BufferGeometry:
-    """Return a femur sized for `spec`, standing on y, origin at mid-shaft.
+    """Return a tibia sized for `spec`, standing on y, origin at mid-shaft.
 
     Args:
-        spec: Standing height and osteological sex. The femur reads both.
-        side: `RIGHT` or `LEFT`. A right femur is the default.
+        spec: Standing height and osteological sex. The tibia reads both.
+        side: `RIGHT` or `LEFT`. A right tibia is the default.
         detail: Cells along the bone, eight through sixty-four,
             twenty-four by default.
 
@@ -43,18 +43,18 @@ def femur(
             finite or is outside 1.2 m through 2.5 m, if `detail` is
             out of range, or if the field produces no surface.
     """
-    return femur_from_dimensions(
-        femur_dimensions(spec.stature, spec.sex, side), detail
+    return tibia_from_dimensions(
+        tibia_dimensions(spec.stature, spec.sex, side), detail
     )
 
 
-def femur_from_dimensions(
-    dimensions: FemurDimensions, detail: Int = 24
+def tibia_from_dimensions(
+    dimensions: TibiaDimensions, detail: Int = 24
 ) raises -> BufferGeometry:
-    """Return a femur mesh for already-computed dimensions.
+    """Return a tibia mesh for already-computed dimensions.
 
     Args:
-        dimensions: Size and landmarks from `femur_dimensions`.
+        dimensions: Size and landmarks from `tibia_dimensions`.
         detail: Cells along the bone.
 
     Returns:
@@ -66,6 +66,6 @@ def femur_from_dimensions(
             produces no surface.
     """
     dimensions.validate()
-    check_detail(detail, "femur")
-    var field = FemurField(dimensions)
-    return mesh_field(field, field.low, field.high, detail, "femur")
+    check_detail(detail, "tibia")
+    var field = TibiaField(dimensions)
+    return mesh_field(field, field.low, field.high, detail, "tibia")

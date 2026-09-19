@@ -79,6 +79,9 @@ Look something up.
 - [Benchmarks](Benchmarks)
 - [Extensions](Extensions)
 - [Femur](Femur)
+- [Tibia](Tibia)
+- [Fibula](Fibula)
+- [Patella](Patella)
 
 ## Explanation
 
