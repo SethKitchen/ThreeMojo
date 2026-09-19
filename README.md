@@ -60,7 +60,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [OrthographicCamera](https://github.com/SethKitchen/ThreeMojo/wiki/Cameras#orthographiccamera) [#4](https://github.com/SethKitchen/ThreeMojo/issues/4)
 - [x] [Camera on a scene node](https://github.com/SethKitchen/ThreeMojo/wiki/Cameras#attach-a-camera-to-a-node): `attach`, orbit with a pivot [#5](https://github.com/SethKitchen/ThreeMojo/issues/5)
 - [ ] CubeCamera [#6](https://github.com/SethKitchen/ThreeMojo/issues/6)
-- [ ] ArrayCamera and StereoCamera [#7](https://github.com/SethKitchen/ThreeMojo/issues/7)
+- [x] [ArrayCamera and StereoCamera](https://github.com/SethKitchen/ThreeMojo/wiki/Cameras#arraycamera): cameras drawing into rectangles of one image, and two eyes skewed to converge at a focus [#7](https://github.com/SethKitchen/ThreeMojo/issues/7)
 - [x] [Fog and FogExp2](https://github.com/SethKitchen/ThreeMojo/wiki/Fog): `scene.fog`, a linear or an exponential veil by camera-space depth, mixed in linear light on both rasterizers [#8](https://github.com/SethKitchen/ThreeMojo/issues/8)
 - [ ] Scene background and environment [#9](https://github.com/SethKitchen/ThreeMojo/issues/9)
 - [x] [Layers](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph#layers): a bit mask on nodes and cameras that the renderer filters meshes by [#10](https://github.com/SethKitchen/ThreeMojo/issues/10)

@@ -25,6 +25,7 @@ mkdir -p out
 | `lit_scene.mojo` | `lit_scene.png` | [Light, texture and animate](Tutorial-Light-texture-and-animate) |
 | `rotations.mojo` | `rotations.png` | [Rotations](Rotations) |
 | `ortho.mojo` | `cameras.png` | [Cameras](Cameras) |
+| `stereo.mojo` | `stereo.png` | [Cameras](Cameras#stereocamera) |
 | `geometry.mojo` | `geometry.png` | [Geometry](Geometry) |
 | `instances.mojo` | `instances.png` | [Meshes and assets](Meshes-and-assets) |
 | `raycast.mojo` | `raycast.png` | [Raycasting](Raycasting) |

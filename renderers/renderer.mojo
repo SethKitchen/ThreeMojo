@@ -77,6 +77,7 @@ of the same view is left for the clipper to decide. Keeping a mesh costs
 work; dropping one changes the image.
 """
 
+from cameras.array_camera import ArrayCamera
 from cameras.camera import Camera
 from core.deform import morphed_normals, morphed_positions
 from core.buffer_geometry import (
@@ -3068,6 +3069,90 @@ struct Renderer(Movable):
         return target.resolve(
             self.workers, self.tone_curve(), self.tone_mapping_exposure
         )
+
+    def render_array(
+        mut self, scene: Scene, assets: Assets, array: ArrayCamera
+    ) raises -> Framebuffer:
+        """Draw the scene once per camera of `array`, each into its own
+        rectangle of one image, and return the image.
+
+        three.js's `WebGLRenderer.render` given an `ArrayCamera`: the
+        viewport and the scissor are set to each sub camera's rectangle
+        in turn, that rectangle is cleared to the background and drawn
+        through the camera, and the target is resolved once at the end.
+        The renderer's own viewport, scissor and scissor test are put
+        back afterward.
+
+        Args:
+            scene: The transform hierarchy, and what it draws.
+            assets: The geometry, materials and textures they name.
+            array: The cameras and their rectangles.
+
+        Returns:
+            The rendered image. An array of no cameras gives the
+            background alone.
+
+        Raises:
+            Error: If a rectangle reaches outside the target, or anything
+                `render_into` raises for one of the cameras.
+        """
+        var target = RenderTarget(self.width, self.height, self.background)
+        self.render_array_into(target, scene, assets, array)
+        return target.resolve(
+            self.workers, self.tone_curve(), self.tone_mapping_exposure
+        )
+
+    def render_array_into(
+        mut self,
+        mut target: RenderTarget,
+        scene: Scene,
+        assets: Assets,
+        array: ArrayCamera,
+    ) raises:
+        """Draw the scene once per camera of `array` into `target`, each
+        into its own rectangle, and resolve nothing.
+
+        `render_array` without the target's creation and its resolution,
+        as `render_into` is to `render`. Pixels outside every rectangle
+        are left as they were.
+
+        Args:
+            target: The target to draw into. It must be the renderer's
+                size.
+            scene: The transform hierarchy, and what it draws.
+            assets: The geometry, materials and textures they name.
+            array: The cameras and their rectangles.
+
+        Raises:
+            Error: If a rectangle reaches outside the target, the target
+                is not the renderer's size, or anything `render_into`
+                raises for one of the cameras.
+        """
+        var viewport = self.viewport
+        var scissor = self.scissor
+        var scissor_test = self.scissor_test
+        # Every rectangle is checked before any is drawn, so a bad one
+        # leaves the target untouched rather than half drawn.
+        for index in range(array.count()):
+            if not array.viewports[index].fits(self.width, self.height):
+                raise Error(
+                    "A sub camera's viewport must lie inside the target"
+                )
+        self.scissor_test = True
+        try:
+            for index in range(array.count()):
+                self.viewport = array.viewports[index]
+                self.scissor = array.viewports[index]
+                self.render_into(target, scene, assets, array.cameras[index])
+        except failure:
+            # Put back whatever a refused camera left set, then say why.
+            self.viewport = viewport
+            self.scissor = scissor
+            self.scissor_test = scissor_test
+            raise failure
+        self.viewport = viewport
+        self.scissor = scissor
+        self.scissor_test = scissor_test
 
     def tone_curve(self) -> ToneMapping:
         """Return the curve `render` resolves a target through: the tone

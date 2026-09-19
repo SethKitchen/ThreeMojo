@@ -1,10 +1,10 @@
 # Cameras
 
-`cameras/camera.mojo`, `cameras/perspective_camera.mojo`, `cameras/orthographic_camera.mojo`. A camera gives the renderer a view matrix, a camera-to-pixels matrix and two clipping distances. The renderer is generic over the `Camera` trait.
+`cameras/camera.mojo`, `cameras/perspective_camera.mojo`, `cameras/orthographic_camera.mojo`, `cameras/array_camera.mojo`, `cameras/stereo_camera.mojo`. A camera gives the renderer a view matrix, a camera-to-pixels matrix and two clipping distances. The renderer is generic over the `Camera` trait.
 
 ![An orthographic camera rides a pivot around a cube](out/cameras.png)
 
-three.js: `Camera`, `PerspectiveCamera`, `OrthographicCamera`.
+three.js: `Camera`, `PerspectiveCamera`, `OrthographicCamera`, `ArrayCamera`, `StereoCamera`.
 
 ## Camera trait
 
@@ -32,6 +32,8 @@ camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
 
 The field of view is an `Angle`. A bare number does not compile. The near plane must be positive, and the far plane beyond it.
 
+`PerspectiveCamera(fov, aspect, near, far, view_shift=Length(0.02, METER))` moves the frustum's two side edges along x at the near plane, keeping their distance apart. The camera then looks a little to one side without turning. Zero, the default, looks straight ahead. A `StereoCamera` sets it on each eye. The shift is a `Length`, and must be finite.
+
 | Member | Meaning |
 |---|---|
 | `place(position, target)` | Put the camera at `position`, looking at `target`, with +y up. |
@@ -52,6 +54,56 @@ var flat = centered(
 `OrthographicCamera(left, right, top, bottom, near, far)` takes the volume's edges as lengths. `centered(height, aspect, near, far)` builds a symmetric one. `near` can be zero or negative, as in three.js: a top-down view often puts it behind the camera. The edges must be ordered: right beyond left, top above bottom.
 
 An orthographic projection leaves `w` at one. The perspective correction then divides by one, so no code path is special.
+
+## ArrayCamera
+
+`ArrayCamera` is a list of perspective cameras, each with the rectangle of the image it draws into: three.js's `ArrayCamera` and its sub cameras' `viewport`. `Renderer.render_array` draws the scene once per camera, into that camera's rectangle, and resolves the image once.
+
+```mojo
+from cameras.array_camera import ArrayCamera
+
+var wall = ArrayCamera()
+wall.add(left_camera, Rect(0, 0, 120, 120))
+wall.add(right_camera, Rect(120, 0, 120, 120))
+var image = renderer.render_array(scene, assets, wall)
+```
+
+| Member | Meaning |
+|---|---|
+| `ArrayCamera()` | An array of no cameras. |
+| `add(camera, viewport)` | Add a camera and its rectangle. The rectangle must hold a pixel. |
+| `count()` | How many cameras. |
+| `cameras`, `viewports` | The two lists. |
+| `renderer.render_array(scene, assets, array)` | The image, one rectangle per camera. |
+| `renderer.render_array_into(target, scene, assets, array)` | The same into a target you hold, resolved by you. |
+
+Each rectangle is cleared to the background and drawn with the scissor on, so nothing of one reaches another. Pixels outside every rectangle keep the background. A rectangle must lie inside the target, and every rectangle is checked before any is drawn. The renderer's own viewport, scissor and scissor test are put back afterward. Each camera keeps its own aspect: one that does not match its rectangle draws a squeezed image, as three.js's does.
+
+## StereoCamera
+
+`StereoCamera` makes a left and a right eye from one camera: three.js's `StereoCamera`. Each eye stands half `eye_separation` to its side of the camera and looks the same way. Each eye's frustum is skewed toward the other so the two views cross at `focus`. Draw the eyes through an `ArrayCamera` for a side-by-side image.
+
+```mojo
+from cameras.stereo_camera import StereoCamera
+
+var stereo = StereoCamera(
+    eye_separation=Length(0.064, METER), focus=Length(10.0, METER), aspect=0.5
+)
+stereo.update(camera, scene)
+var eyes = ArrayCamera()
+eyes.add(stereo.left, Rect(0, 0, 120, 120))
+eyes.add(stereo.right, Rect(120, 0, 120, 120))
+```
+
+| Argument | three.js | Default | Meaning |
+|---|---|---|---|
+| `eye_separation` | `eyeSep` | 64 mm | How far apart the eyes are. Not negative. |
+| `focus` | `camera.focus` | 10 m | How far ahead the two views cross. Positive. |
+| `aspect` | `aspect` | `1.0` | What the camera's aspect is multiplied by for each eye. A half for a side-by-side pair. |
+
+`update(camera, scene)` places `left` and `right` from the camera as it stands, placed or riding a node of the scene. The eyes take the camera's field of view, planes and layers. The skew is `eye_separation / 2 * near / focus` at the near plane, three.js's own arithmetic, set as each eye's `view_shift`. A point at the focus lands on the same column in both eyes. A nearer point lands further apart, which is the parallax.
+
+`examples/stereo.mojo` draws a stereo pair of a box and a ring, side by side, from a circling camera.
 
 ## Attach a camera to a node
 

@@ -26,6 +26,8 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `prepare_frame(scene, assets, camera) -> Frame` | All three lists, and the one order both rasterizers draw them in. See [Lines](Lines#two-lists-one-order). |
 | `render(scene, assets, camera) -> Framebuffer` | Every pass, then rasterize and resolve. |
 | `render_into(target, scene, assets, camera)` | The same into a target of the renderer's size, cleared first, resolved by the caller. See below. |
+| `render_array(scene, assets, array) -> Framebuffer` | Once per camera of an [ArrayCamera](Cameras#arraycamera), each into its own rectangle. |
+| `render_array_into(target, scene, assets, array)` | The same into a target you hold. |
 | `tone_curve() -> ToneMapping` | The curve `render` resolves through: the one set, or none in the uv view. |
 | `set_viewport(rect)` | Where the image lands on the target. See below. |
 | `set_scissor(rect)`, `set_scissor_test(enabled)` | Which pixels a draw may touch, and whether that is enforced. See below. |

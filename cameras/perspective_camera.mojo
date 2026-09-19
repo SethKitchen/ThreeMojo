@@ -28,8 +28,11 @@ from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.projection import look_at, perspective, viewport
 from math.vector3 import Vector3
-from std.math import tan
-from units.si import Angle, Length
+from std.math import isfinite, tan
+from units.si import Angle, Length, METER
+
+# A frustum that looks straight ahead: what a camera has unless asked.
+comptime NO_SHIFT = Length(0.0, METER)
 
 
 struct PerspectiveCamera(Camera, ImplicitlyCopyable):
@@ -39,6 +42,13 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
     var aspect: Float32
     var near: Length
     var far: Length
+    # How far the frustum's two side edges are moved along x at the near
+    # plane, keeping their distance apart: an off-center projection that
+    # looks a little to one side without turning. Zero looks straight
+    # ahead. What three.js's `StereoCamera` does to each eye's projection,
+    # and the one thing a stereo pair needs of a camera that the field of
+    # view cannot say. See `cameras.stereo_camera`.
+    var view_shift: Length
     var position: Vector3
     var target: Vector3
     var up: Vector3
@@ -55,6 +65,7 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         aspect: Float32,
         near: Length,
         far: Length,
+        view_shift: Length = NO_SHIFT,
     ) raises:
         """Create a camera at the origin looking down -z, drawing layer zero.
 
@@ -63,9 +74,13 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
             aspect: Width divided by height; dimensionless.
             near: Distance to the near clipping plane.
             far: Distance to the far clipping plane.
+            view_shift: How far the frustum is moved along x at the near
+                plane, positive to the right. Zero, the default, looks
+                straight ahead.
 
         Raises:
-            Error: If the aspect ratio or the clipping planes are unusable.
+            Error: If the aspect ratio or the clipping planes are unusable,
+                or the shift is not finite.
         """
         if aspect <= 0:
             raise Error("The aspect ratio must be positive")
@@ -75,7 +90,10 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
             raise Error("The near plane must be in front of the camera")
         if far.value <= near.value:
             raise Error("The far plane must be beyond the near plane")
+        if not isfinite(view_shift.value):
+            raise Error("A view shift must be finite")
 
+        self.view_shift = view_shift
         self.fov = fov
         self.aspect = aspect
         self.near = near
@@ -116,8 +134,10 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
     def projection_matrix(self) raises -> Matrix4:
         """Return the matrix taking camera space to normalized device space.
 
-        The frustum is symmetric, so the top edge is found from half the field
-        of view and the rest follows from it and the aspect ratio.
+        The top edge is found from half the field of view and the rest
+        follows from it and the aspect ratio. The two side edges are then
+        moved by `view_shift`, which keeps the frustum's width and skews
+        it: the symmetric frustum is the shift of zero.
 
         Returns:
             The projection matrix.
@@ -127,8 +147,14 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         """
         var top = self.near.value * tan(self.fov.value / 2)
         var right = top * self.aspect
+        var shift = self.view_shift.value
         return perspective(
-            -right, right, top, -top, self.near.value, self.far.value
+            -right + shift,
+            right + shift,
+            top,
+            -top,
+            self.near.value,
+            self.far.value,
         )
 
     def view_matrix(self) raises -> Matrix4:
