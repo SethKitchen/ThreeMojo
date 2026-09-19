@@ -97,7 +97,8 @@ from core.scene import Scene
 from math.bounds import Sphere
 from math.frustum import Frustum
 from math.matrix3 import Matrix3
-from math.matrix4 import Matrix4
+from render.rect import Rect
+from math.matrix4 import Matrix4, translation
 from math.vector3 import Vector3
 from objects.instanced_mesh import check_placing
 from geometries.edges import triangle_edges
@@ -1378,6 +1379,18 @@ struct Renderer(Movable):
     # composited image -- see `render.tonemap`.
     var tone_mapping: ToneMapping
     var tone_mapping_exposure: Float32
+    # Where on the target the camera's image lands: three.js's
+    # `setViewport`. The whole target by default. Folded into the screen
+    # matrix by `prepare` and `prepare_lines`, so both backends draw the
+    # same pixels. The corner counts up from the bottom; see `render.rect`.
+    var viewport: Rect
+    # Which pixels a draw may touch, and whether that is enforced:
+    # three.js's `setScissor` and `setScissorTest`. Off by default, as
+    # there. With the test on, `render_into` clears and draws inside the
+    # scissor alone, which is what lets several viewports share one
+    # target.
+    var scissor: Rect
+    var scissor_test: Bool
 
     def __init__(out self, width: Int, height: Int, workers: Int = 1) raises:
         """Create a renderer with a dark background.
@@ -1401,6 +1414,79 @@ struct Renderer(Movable):
         self.workers = workers
         self.tone_mapping = NO_TONE_MAPPING
         self.tone_mapping_exposure = 1.0
+        self.viewport = Rect.whole(width, height)
+        self.scissor = Rect.whole(width, height)
+        self.scissor_test = False
+
+    def set_viewport(mut self, rect: Rect) raises:
+        """Put the camera's image in `rect`, three.js's `setViewport`.
+
+        The projection is mapped onto the rectangle rather than onto the
+        whole target, so the image is squeezed or stretched to its size,
+        as three.js's is. A rectangle hanging off the target is allowed:
+        the pixels it puts outside are not drawn. Pass
+        `Rect.whole(width, height)` to fill the target again.
+
+        Args:
+            rect: Where the image lands. The corner counts up from the
+                bottom left, as three.js's does; see `render.rect`.
+
+        Raises:
+            Error: If the rectangle holds no pixel.
+        """
+        if not rect.is_valid():
+            raise Error("A viewport needs a positive width and height")
+        self.viewport = rect
+
+    def set_scissor(mut self, rect: Rect) raises:
+        """Draw only inside `rect` once the scissor test is on, three.js's
+        `setScissor`.
+
+        The rectangle is kept whether or not the test is on, as three.js
+        keeps it, and read only while it is. See `set_scissor_test`.
+
+        Args:
+            rect: The pixels a draw may touch. It must lie wholly inside
+                the target. The corner counts up from the bottom left.
+
+        Raises:
+            Error: If the rectangle is empty or reaches outside the target.
+        """
+        if not rect.fits(self.width, self.height):
+            raise Error("A scissor must lie inside the target")
+        self.scissor = rect
+
+    def set_scissor_test(mut self, enabled: Bool):
+        """Turn the scissor on or off, three.js's `setScissorTest`.
+
+        On, `render` and `render_into` clear and draw inside the scissor
+        alone. Off, the default, they touch the whole target and the
+        scissor is ignored.
+
+        Args:
+            enabled: Whether the scissor is enforced.
+        """
+        self.scissor_test = enabled
+
+    def _to_screen[C: Camera](self, camera: C) raises -> Matrix4:
+        """Return the transform from camera space to the viewport's pixels.
+
+        The camera maps its projection onto a rectangle of the viewport's
+        size, and that rectangle is then moved to where the viewport is.
+        The viewport's corner counts up from the bottom and the rows count
+        down from the top, so the move along y is to `Rect.top`.
+        """
+        var to_screen = translation(
+            Float32(self.viewport.x),
+            Float32(self.viewport.top(self.height)),
+            0,
+        )
+        to_screen.multiply(
+            camera.view_to_screen_matrix(
+                self.viewport.width, self.viewport.height
+            )
+        )
+        return to_screen^
 
     def set_workers(mut self, workers: Int) raises:
         """Choose how many threads rasterize a frame.
@@ -1574,7 +1660,7 @@ struct Renderer(Movable):
         # Asked of the scene as well as the camera: a camera riding a node
         # looks from wherever the scene put that node.
         var view = camera.view_matrix_in(scene)
-        var to_screen = camera.view_to_screen_matrix(self.width, self.height)
+        var to_screen = self._to_screen(camera)
         var near = camera.near_distance()
         var far = camera.far_distance()
         # What the camera can see, in world space, where the meshes' bounds
@@ -2090,7 +2176,7 @@ struct Renderer(Movable):
             Error: Everything `prepare_lines` raises.
         """
         var view = camera.view_matrix_in(scene)
-        var to_screen = camera.view_to_screen_matrix(self.width, self.height)
+        var to_screen = self._to_screen(camera)
         var near = camera.near_distance()
         var far = camera.far_distance()
         var clip = camera.projection_matrix()
@@ -2405,14 +2491,75 @@ struct Renderer(Movable):
             The rendered image.
 
         Raises:
-            Error: If a mesh names a node or a geometry that is not there,
-                its geometry has no positions, the scene's fog holds a
-                kind that is none of the three or a range that is inside
-                out -- see `core.fog.FogView` -- or a tone mapping curve is
-                set and the scene holds both a data material and a blended
-                one, which no pixel could resolve; see
+            Error: Everything `render_into` raises.
+        """
+        var target = RenderTarget(self.width, self.height, self.background)
+        self.render_into(target, scene, assets, camera)
+        # Linear light becomes an image exactly once, here, on as many
+        # threads as drew it, through the tone mapping curve on the way --
+        # except in the uv view, which is coordinates rather than light and
+        # is never tone mapped, background included, on either backend. A
+        # normal or depth material's pixels are data too, and the target
+        # keeps the curve off them by itself.
+        return target.resolve(
+            self.workers, self.tone_curve(), self.tone_mapping_exposure
+        )
+
+    def tone_curve(self) -> ToneMapping:
+        """Return the curve `render` resolves a target through: the tone
+        mapping set, or none in the uv view, which is coordinates rather
+        than light and is never tone mapped.
+
+        For a caller that fills a target with `render_into` and resolves it
+        itself, so it resolves it as `render` would.
+        """
+        if self.shading == SHADE_UV:
+            return NO_TONE_MAPPING
+        return self.tone_mapping
+
+    def render_into[
+        C: Camera
+    ](
+        self, mut target: RenderTarget, scene: Scene, assets: Assets, camera: C
+    ) raises:
+        """Draw every mesh in the scene on the CPU into `target`, clearing
+        first, and resolve nothing.
+
+        `render` without the target's creation and its resolution, for a
+        caller that draws more than one view into one image: a split
+        screen is two cameras, two viewports and two scissors drawing into
+        one target, each clearing its own rectangle and leaving the
+        other's alone, as three.js draws one with `setScissorTest`. The
+        caller resolves the target once, through `tone_curve`.
+
+        With the scissor test on, the scissor is cleared to the background
+        and drawn into, and no other pixel is touched. Off, the whole
+        target is.
+
+        Args:
+            target: The target to draw into. It must be the renderer's
+                size.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera to project through.
+
+        Raises:
+            Error: If the target is not the renderer's size, if a mesh
+                names a node or a geometry that is not there, its geometry
+                has no positions, the scene's fog holds a kind that is
+                none of the three or a range that is inside out -- see
+                `core.fog.FogView` -- or a tone mapping curve is set and
+                the scene holds both a data material and a blended one,
+                which no pixel could resolve; see
                 `render.rasterizer.check_output_kinds`.
         """
+        if target.width != self.width or target.height != self.height:
+            raise Error("A target must be the renderer's size")
+        var kept = Rect.whole(self.width, self.height)
+        if self.scissor_test:
+            kept = self.scissor
+        target.set_scissor(kept)
+        target.clear_inside(kept, self.background)
         var frame = self.prepare_frame(scene, assets, camera)
         # Two output representations cannot share a tone-mapped frame. Asked
         # here, before anything is drawn, exactly where `GpuRenderer.draw`
@@ -2443,7 +2590,6 @@ struct Renderer(Movable):
         # The scene's fog as the rasterizer takes it. Each corner already
         # carries the depth `prepare` measured for it along this view.
         var fog = FogView(scene.fog)
-        var target = RenderTarget(self.width, self.height, self.background)
         # Triangles and segments in the frame's one order, which is the
         # order the kernel walks too. See `render.rasterizer.rasterize_frame`
         # and `prepare_frame`.
@@ -2458,13 +2604,3 @@ struct Renderer(Movable):
             self.workers,
             fog,
         )
-        # Linear light becomes an image exactly once, here, on as many
-        # threads as drew it, through the tone mapping curve on the way --
-        # except in the uv view, which is coordinates rather than light and
-        # is never tone mapped, background included, on either backend. A
-        # normal or depth material's pixels are data too, and the target
-        # keeps the curve off them by itself.
-        var curve = self.tone_mapping
-        if self.shading == SHADE_UV:
-            curve = NO_TONE_MAPPING
-        return target.resolve(self.workers, curve, self.tone_mapping_exposure)

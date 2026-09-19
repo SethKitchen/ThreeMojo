@@ -81,6 +81,7 @@ from render.tonemap import (
     REINHARD_TONE_MAPPING,
     ToneMapping,
 )
+from render.rect import Rect
 from render.rasterizer import (
     DRAW_SEGMENTS,
     Draw,
@@ -688,6 +689,61 @@ def test_a_renderer_grows_its_buffer_for_more_triangles() raises:
     var grown = renderer.read_back()
     var expected = cpu_render_triangles(overlapping_pair(), 36, 30)
     assert_equal(count_mismatches(expected, grown), 0)
+
+
+def test_both_backends_keep_the_pixels_outside_a_scissor() raises:
+    # The pair drawn under a scissor on the left half, then under one on
+    # the right half with another background. Each draw clears and draws
+    # its own half and leaves the other's, on both backends alike.
+    if skipped_for_lack_of_a_gpu("both backends keep pixels outside a scissor"):
+        return
+    var corners = overlapping_pair()
+    var left = Rect(0, 0, 18, 30)
+    var right = Rect(18, 0, 18, 30)
+    var other = Color(0, 40, 0)
+    var target = RenderTarget(36, 30, BACKGROUND)
+    target.set_scissor(left)
+    target.clear_inside(left, BACKGROUND)
+    rasterize_all(
+        corners,
+        target,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        1,
+        FogView.none(),
+    )
+    target.set_scissor(right)
+    target.clear_inside(right, other)
+    rasterize_all(
+        corners,
+        target,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        1,
+        FogView.none(),
+    )
+    var cpu = target.resolve()
+    var renderer = GpuRenderer(36, 30)
+    renderer.draw(corners, BACKGROUND, scissor=left)
+    renderer.draw(corners, other, scissor=right)
+    var gpu = renderer.read_back()
+    assert_equal(count_mismatches(cpu, gpu), 0)
+    # Both halves hold the other's background at their corners, so each
+    # draw cleared its own half and not the other's.
+    assert_equal(gpu.get_pixel(0, 0).g, BACKGROUND.g)
+    assert_equal(gpu.get_pixel(35, 0).g, other.g)
+    # A scissor reaching outside the target is refused before a launch.
+    with assert_raises(contains="inside the target"):
+        renderer.draw(corners, BACKGROUND, scissor=Rect(20, 0, 20, 30))
+    # And the first draw a fresh renderer makes under a scissor clears
+    # the rest to the background rather than leaving it undefined.
+    var fresh = GpuRenderer(36, 30)
+    fresh.draw(corners, other, scissor=left)
+    var first = fresh.read_back()
+    assert_equal(first.get_pixel(30, 2).g, other.g)
+    assert_equal(first.get_pixel(30, 2).r, other.r)
 
 
 def test_a_partial_triangle_is_rejected() raises:

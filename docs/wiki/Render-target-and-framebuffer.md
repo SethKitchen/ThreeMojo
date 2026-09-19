@@ -43,11 +43,15 @@ three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as 
 | `test_depth(x, y, z) -> Bool` | Keep and record `z` when it is nearer. |
 | `depth_passes(x, y, z) -> Bool` | Compare without recording. |
 | `claim_depth(x, y, z)` | Record without comparing, for a late depth write. |
+| `set_scissor(rect)` | Draw only inside `rect` from now on. Every test and write outside it does nothing. |
+| `clear_inside(rect, clear)` | Reset the pixels inside `rect` and leave the rest. |
 | `depth_at(x, y)`, `color_at(x, y)` | Read a pixel. |
 | `shown(x, y, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Color` | One pixel as it will resolve. |
 | `resolve(workers=1, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Framebuffer` | Unpremultiply, tone map and encode every pixel. |
 
 Nothing is clamped before `resolve`. Overexposed light survives every step.
+
+`set_scissor` is three.js's scissor with the test on. A fragment outside it is neither depth tested nor written, as a GPU discards it before the depth test. `clear_inside` is what a clear under that scissor does. The two are what let several viewports share one target; see [Renderer](Renderer#viewport-and-scissor). The rectangle's corner counts up from the bottom left, as three.js's does.
 
 `claim_depth` is the other half of a late depth write. A fragment an alpha test can throw away tests with `depth_passes` and claims only once it survives. See [Rasterization](Rasterization#depth).
 

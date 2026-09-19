@@ -43,6 +43,7 @@ from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.linerule import covers, dash_covers, major_is_x, share_at
+from render.rect import Rect
 from render.framebuffer import Color, FloatColor, Framebuffer
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.lighting import (
@@ -1309,6 +1310,10 @@ def rasterize_kernel(
     segment_maps: MutPointer[Int32, MutAnyOrigin],
     draws: MutPointer[Int32, MutAnyOrigin],
     draw_count: Int32,
+    scissor_x: Int32,
+    scissor_y: Int32,
+    scissor_width: Int32,
+    scissor_height: Int32,
 ):
     """Color one pixel from the nearest primitive that covers it.
 
@@ -1324,6 +1329,15 @@ def rasterize_kernel(
     var y = Int(global_idx.y)
     # The grid is rounded up to whole tiles, so the edges overhang the image.
     if x >= Int(width) or y >= Int(height):
+        return
+    # A pixel outside the scissor is left as it was, depth included: not
+    # cleared, not drawn. That is what a GPU's scissor test does to a
+    # clear and to every fragment, and it is what lets two viewports share
+    # one target. The host's target keeps the same pixels the same way.
+    var scissor = Rect(
+        Int(scissor_x), Int(scissor_y), Int(scissor_width), Int(scissor_height)
+    )
+    if not scissor.contains_pixel(x, y, Int(height)):
         return
 
     var px = sample(x)
@@ -2333,6 +2347,7 @@ struct GpuRenderer(Movable):
         exposure: Float32 = 1.0,
         lines: List[RasterVertex] = List[RasterVertex](),
         draws: List[Draw] = List[Draw](),
+        scissor: Optional[Rect] = None,
     ) raises:
         """Rasterize prepared triangles and lines into the device target.
 
@@ -2363,6 +2378,12 @@ struct GpuRenderer(Movable):
                 gives the order `Renderer.render` uses, with blended
                 triangles and segments sorted together.
 
+            scissor: The pixels this draw may touch, or none for all of
+                them: three.js's `setScissor` with the test on. A pixel
+                outside is neither cleared nor drawn, so a second draw
+                into another rectangle leaves this one's pixels alone.
+                The corner counts up from the bottom; see `render.rect`.
+
         Raises:
             Error: If the corner count is not a multiple of three, the
                 line corner count is not a multiple of two, a segment's
@@ -2386,6 +2407,18 @@ struct GpuRenderer(Movable):
             raise Error("Rasterizing needs whole segments")
         if not mode.is_valid():
             raise Error("A shading mode that is none of the three")
+        var kept = Rect.whole(self.width, self.height)
+        var narrowed = Bool(scissor)
+        if narrowed:
+            kept = scissor.value()
+            if not kept.fits(self.width, self.height):
+                raise Error("A scissor must lie inside the target")
+            # A pixel outside the scissor is left as it was, and on a
+            # fresh target "as it was" is whatever the device buffer held.
+            # The first draw clears the whole target first, so the rest
+            # is the background, as a fresh host target is.
+            if not self.drawn:
+                self.draw(List[RasterVertex](), background)
         # The kernel cannot raise on a curve or a fog it does not know, so
         # the refusals `RenderTarget.resolve` and `rasterize_all` make are
         # made here, before the launch, by the same functions.
@@ -2628,6 +2661,10 @@ struct GpuRenderer(Movable):
             self.segment_maps.unsafe_ptr(),
             self.draw_list.unsafe_ptr(),
             Int32(len(order)),
+            Int32(kept.x),
+            Int32(kept.y),
+            Int32(kept.width),
+            Int32(kept.height),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -2757,6 +2794,7 @@ def render_triangles(
     exposure: Float32 = 1.0,
     lines: List[RasterVertex] = List[RasterVertex](),
     draws: List[Draw] = List[Draw](),
+    scissor: Optional[Rect] = None,
 ) raises -> Framebuffer:
     """Draw prepared triangles and lines on the GPU and read the image back.
 
@@ -2782,6 +2820,8 @@ def render_triangles(
         draws: The order to draw in, or empty for every triangle and then
             every segment; see `GpuRenderer.draw`.
 
+        scissor: The pixels the draw may touch, or none for all of them.
+
     Returns:
         The rendered image.
 
@@ -2802,6 +2842,7 @@ def render_triangles(
         exposure,
         lines,
         draws,
+        scissor,
     )
     return renderer.read_back()
 
