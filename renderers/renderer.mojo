@@ -94,7 +94,7 @@ from lights.lighting import PERSPECTIVE_VIEW, Lighting
 from core.layers import Layers
 from core.object3d import NodeId
 from core.scene import Scene
-from math.bounds import Sphere
+from math.bounds import Plane, Sphere
 from math.frustum import Frustum
 from math.matrix3 import Matrix3
 from render.rect import Rect
@@ -145,7 +145,13 @@ from render.rasterizer import (
     edge,
     rasterize_frame,
 )
-from renderers.clip import ClipVertex, clip_depth, clip_segment, within_depth
+from renderers.clip import (
+    ClipVertex,
+    clip_depth,
+    clip_segment,
+    within_depth,
+    within_sides,
+)
 from std.math import floor, isfinite, max
 from std.sys import num_logical_cores
 
@@ -1059,13 +1065,20 @@ def _to_raster(
     )
 
 
-def _whole_in_depth(
-    a: ClipVertex, b: ClipVertex, c: ClipVertex, near: Float32, far: Float32
+def _whole_in_view(
+    a: ClipVertex,
+    b: ClipVertex,
+    c: ClipVertex,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane],
 ) -> Bool:
     """Return True if no corner of the triangle needs cutting.
 
     Asked corner by corner, so a triangle is refused as soon as one corner
-    is outside and the other two are not examined.
+    is outside and the other two are not examined. The depth is asked
+    first, because it is the cheaper test and the one a corner behind the
+    camera fails.
 
     Args:
         a: The first corner, in camera space.
@@ -1073,6 +1086,7 @@ def _whole_in_depth(
         c: The third.
         near: Distance to the near plane.
         far: Distance to the far plane.
+        sides: The camera's four side planes, in camera space.
 
     Returns:
         True if `clip_depth` would return the three corners as they are.
@@ -1081,7 +1095,13 @@ def _whole_in_depth(
         return False
     if not within_depth(b.position.z, near, far):
         return False
-    return within_depth(c.position.z, near, far)
+    if not within_depth(c.position.z, near, far):
+        return False
+    if not within_sides(a.position, sides):
+        return False
+    if not within_sides(b.position, sides):
+        return False
+    return within_sides(c.position, sides)
 
 
 @fieldwise_init
@@ -1155,17 +1175,17 @@ struct _Paint(ImplicitlyCopyable):
             return
         if self.side == BACK_SIDE and not away:
             return
-        if self.side == DOUBLE_SIDE and away:
+        if self.side == BACK_SIDE or (self.side == DOUBLE_SIDE and away):
             # A two-sided surface seen from behind is lit on the side being
             # looked at: three.js's `normal *= faceDirection`, which its
-            # shader applies under `DOUBLE_SIDED` and nowhere else. A
-            # `BACK_SIDE` surface keeps the normal it was given, as there:
-            # three.js turns the winding round for it, not the normal, so
-            # the inside of a box lit from the outside is bright on the
-            # wall the light reaches through and dark on the wall it sees.
-            # This used to flip `BACK_SIDE` as well, which lit an interior
-            # from a lamp inside it -- pleasant, and not what three.js
-            # draws for the same scene.
+            # shader applies under `DOUBLE_SIDED`. A `BACK_SIDE` surface is
+            # lit on its back whichever way it is seen: three.js's
+            # `flipSided` is `side === BackSide`, and `defaultnormal_vertex`
+            # negates the normal under `FLIP_SIDED`, beside turning the
+            # winding round. So the inside of a box lit from a lamp inside
+            # it is lit, as three.js draws it. This once kept the authored
+            # normal for `BACK_SIDE` on the belief that only the winding
+            # turned, which was wrong.
             #
             # One flip replaces the two colors this used to carry from the
             # vertex stage, because the far side's normal is just this one
@@ -1670,6 +1690,11 @@ struct Renderer(Movable):
         var clip = camera.projection_matrix()
         clip.multiply(view)
         var frustum = Frustum.from_camera(clip, view, near, far)
+        # The same four sides in camera space, where the clipper cuts.
+        # With a viewport smaller than the target, "off the image" is
+        # still on the target, and only a cut keeps it off; see
+        # `renderers.clip`.
+        var sides = Frustum.side_planes(camera.projection_matrix())
 
         # Where the camera is, in the world: what an LOD measures its
         # distance from, and what a highlight is measured toward.
@@ -1969,6 +1994,7 @@ struct Renderer(Movable):
                         ),
                         near,
                         far,
+                        sides,
                     )
                     for end in range(len(kept)):
                         corners.append(
@@ -2067,10 +2093,14 @@ struct Renderer(Movable):
                 # through: the clipper builds four lists for every triangle
                 # it is given, and a mesh in view gives it thousands that
                 # it would return as they came. See `within_depth`.
-                if _whole_in_depth(corner_a, corner_b, corner_c, near, far):
+                if _whole_in_view(
+                    corner_a, corner_b, corner_c, near, far, sides
+                ):
                     paint.emit(corners, corner_a, corner_b, corner_c)
                     continue
-                var pieces = clip_depth(corner_a, corner_b, corner_c, near, far)
+                var pieces = clip_depth(
+                    corner_a, corner_b, corner_c, near, far, sides
+                )
                 for piece in range(len(pieces) // 3):
                     paint.emit(
                         corners,
@@ -2182,6 +2212,11 @@ struct Renderer(Movable):
         var clip = camera.projection_matrix()
         clip.multiply(view)
         var frustum = Frustum.from_camera(clip, view, near, far)
+        # The same four sides in camera space, where the clipper cuts.
+        # With a viewport smaller than the target, "off the image" is
+        # still on the target, and only a cut keeps it off; see
+        # `renderers.clip`.
+        var sides = Frustum.side_planes(camera.projection_matrix())
         # One local bound per geometry, found the first time a line needs
         # it this frame, exactly as `_draws` keeps them for the meshes.
         var bounds = List[Sphere](
@@ -2299,6 +2334,7 @@ struct Renderer(Movable):
                     ),
                     near,
                     far,
+                    sides,
                 )
                 for end in range(len(kept)):
                     corners.append(
@@ -2555,11 +2591,8 @@ struct Renderer(Movable):
         """
         if target.width != self.width or target.height != self.height:
             raise Error("A target must be the renderer's size")
-        var kept = Rect.whole(self.width, self.height)
-        if self.scissor_test:
-            kept = self.scissor
-        target.set_scissor(kept)
-        target.clear_inside(kept, self.background)
+        # Prepared and checked before a pixel is touched, so a scene that
+        # is refused leaves a target another view was drawn into as it was.
         var frame = self.prepare_frame(scene, assets, camera)
         # Two output representations cannot share a tone-mapped frame. Asked
         # here, before anything is drawn, exactly where `GpuRenderer.draw`
@@ -2590,6 +2623,12 @@ struct Renderer(Movable):
         # The scene's fog as the rasterizer takes it. Each corner already
         # carries the depth `prepare` measured for it along this view.
         var fog = FogView(scene.fog)
+        fog.validate()
+        var kept = Rect.whole(self.width, self.height)
+        if self.scissor_test:
+            kept = self.scissor
+        target.set_scissor(kept)
+        target.clear_inside(kept, self.background)
         # Triangles and segments in the frame's one order, which is the
         # order the kernel walks too. See `render.rasterizer.rasterize_frame`
         # and `prepare_frame`.

@@ -6,11 +6,18 @@
 """Tests for `render.rect`, the scissor on `render.target`, and the
 viewport and scissor on `renderers.renderer`."""
 
+from cameras.orthographic_camera import centered
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
+from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
+from materials.material import MaterialId
 from core.scene import Scene
 from geometries.box import cube
+from geometries.plane import plane
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import BufferGeometry, POSITION
+from objects.line import Line, STRIP
 from materials.material import BASIC, BLEND, Material
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -304,6 +311,82 @@ def test_two_viewports_share_one_target() raises:
     assert_equal(image.get_pixel(0, 0).g, 0)
     assert_equal(image.get_pixel(WIDTH - 1, 0).g, 255)
     assert_equal(image.get_pixel(WIDTH - 1, 0).b, 0)
+
+
+def test_a_sub_viewport_keeps_a_surface_past_the_view_edge_off_the_target() raises:
+    # A twelve by eight target, a four by four viewport in its middle,
+    # and a plane far wider than the camera's two-meter view: with no
+    # scissor, only the camera's own image lands on the target, sixteen
+    # pixels, because the plane is cut at the side planes before it is
+    # projected. Without that cut the plane covered all ninety-six.
+    var assets = Assets()
+    var sheet = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER), 1, 1)
+    )
+    var paint = assets.materials.add(Material(RED, kind=BASIC))
+    var scene = Scene()
+    var node = Object3D()
+    node.set_position(0, 0, -2)
+    _ = scene.add(node^)
+    scene.update()
+    scene.add_mesh(Mesh(sheet, paint, NodeId(0)))
+    var renderer = Renderer(12, 8)
+    renderer.set_background(BACKGROUND)
+    renderer.set_viewport(Rect(4, 2, 4, 4))
+    var camera = centered(
+        Length(2.0, METER), 1.0, Length(1.0, METER), Length(10.0, METER)
+    )
+    camera.place(Vector3(0, 0, 0), Vector3(0, 0, -1))
+    var image = renderer.render(scene, assets, camera)
+    assert_equal(red_pixels(image, Rect.whole(12, 8)), 16)
+    assert_equal(red_pixels(image, Rect(4, 2, 4, 4)), 16)
+    assert_false(image.get_pixel(10, 4).r > 128)
+    # A line across the same view is cut the same way.
+    var path = BufferGeometry()
+    path.set_attribute(
+        String(POSITION), BufferAttribute([-5.0, 0.0, -2.0, 5.0, 0.0, -2.0], 3)
+    )
+    var stroke = assets.geometries.add(path^)
+    scene.meshes = List[Mesh]()
+    scene.add_line(Line(stroke, paint, NodeId(0), mode=STRIP))
+    var drawn = renderer.render(scene, assets, camera)
+    assert_equal(red_pixels(drawn, Rect(4, 2, 4, 4)), 4)
+    # A line lights the pixel each of its ends lands in, and the cut end
+    # lands exactly on the viewport's right edge: one pixel past it is
+    # lit, and no more. See the line rule on the Lines page.
+    assert_equal(red_pixels(drawn, Rect.whole(12, 8)), 5)
+    assert_true(drawn.get_pixel(8, 4).r > 128)
+    # And a viewport hanging off the target draws what lands on it and
+    # nothing beyond the camera's image.
+    scene.lines = List[Line]()
+    scene.add_mesh(Mesh(sheet, paint, NodeId(0)))
+    renderer.set_viewport(Rect(10, 6, 4, 4))
+    var corner = renderer.render(scene, assets, camera)
+    assert_equal(red_pixels(corner, Rect.whole(12, 8)), 4)
+    assert_equal(red_pixels(corner, Rect(10, 6, 2, 2)), 4)
+
+
+def test_render_into_leaves_the_target_alone_when_the_scene_is_refused() raises:
+    # A mesh naming a material that is not there is refused before a
+    # pixel is touched, so the view drawn before it survives.
+    var assets = Assets()
+    var scene = a_cube_scene(assets)
+    var renderer = a_renderer()
+    var target = RenderTarget(WIDTH, HEIGHT, Color(255, 255, 255))
+    renderer.render_into(target, scene, assets, a_camera())
+    var before = target.resolve()
+    var broken = Scene()
+    _ = broken.add(Object3D())
+    broken.update()
+    broken.add_mesh(Mesh(GeometryId(0), MaterialId(9), NodeId(0)))
+    renderer.set_background(Color(0, 255, 0))
+    with assert_raises():
+        renderer.render_into(target, broken, assets, a_camera())
+    var after = target.resolve()
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_equal(before.get_pixel(x, y).r, after.get_pixel(x, y).r)
+            assert_equal(before.get_pixel(x, y).g, after.get_pixel(x, y).g)
 
 
 def test_render_into_needs_a_target_of_the_renderer_size() raises:

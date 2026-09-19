@@ -2407,6 +2407,11 @@ struct GpuRenderer(Movable):
             raise Error("Rasterizing needs whole segments")
         if not mode.is_valid():
             raise Error("A shading mode that is none of the three")
+        # The kernel cannot raise on a curve or a fog it does not know, so
+        # the refusals `RenderTarget.resolve` and `rasterize_all` make are
+        # made here, before the launch, by the same functions.
+        check_tone_mapping(tone_mapping, exposure)
+        fog.validate()
         var kept = Rect.whole(self.width, self.height)
         var narrowed = Bool(scissor)
         if narrowed:
@@ -2416,14 +2421,19 @@ struct GpuRenderer(Movable):
             # A pixel outside the scissor is left as it was, and on a
             # fresh target "as it was" is whatever the device buffer held.
             # The first draw clears the whole target first, so the rest
-            # is the background, as a fresh host target is.
+            # is the background -- resolved through this draw's own mode,
+            # curve and exposure, as the host resolves a whole fresh target
+            # through one curve. Cleared with the defaults, a white
+            # background under Reinhard came back white outside the
+            # scissor and gray inside it.
             if not self.drawn:
-                self.draw(List[RasterVertex](), background)
-        # The kernel cannot raise on a curve or a fog it does not know, so
-        # the refusals `RenderTarget.resolve` and `rasterize_all` make are
-        # made here, before the launch, by the same functions.
-        check_tone_mapping(tone_mapping, exposure)
-        fog.validate()
+                self.draw(
+                    List[RasterVertex](),
+                    background,
+                    mode,
+                    tone_mapping=tone_mapping,
+                    exposure=exposure,
+                )
         var triangles = len(corners) // 3
 
         # The same per-triangle check the CPU makes, from the same function,

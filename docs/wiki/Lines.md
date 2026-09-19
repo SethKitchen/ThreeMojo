@@ -103,6 +103,8 @@ A line is walked along whichever axis it covers more of. That is its major axis.
 
 That is the oldest rasterization rule there is, and it is what "a width of one pixel" means: no thickness, no coverage, no anti-aliasing. A diagonal line is a staircase.
 
+A line lights the pixel each of its ends lands in, both ends included. So a line cut at the edge of a [viewport](Renderer#viewport-and-scissor) lights one pixel past that edge. A scissor keeps it out.
+
 `render/linerule.mojo` holds it. `other_at` is the whole rule. Give it a line and one coordinate along the major axis. It says which pixel on the minor axis the line lights there.
 
 | Function | Answer |

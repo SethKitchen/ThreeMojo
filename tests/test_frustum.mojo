@@ -13,6 +13,7 @@ from math.vector3 import Vector3
 from std.testing import (
     TestSuite,
     assert_almost_equal,
+    assert_equal,
     assert_false,
     assert_raises,
     assert_true,
@@ -301,6 +302,44 @@ def test_a_matrix_that_describes_no_volume_is_refused() raises:
     # so the right plane has no normal.
     with assert_raises():
         _ = Frustum.from_projection_matrix(scaling(0, 0, 0))
+
+
+def test_the_side_planes_of_a_projection_face_inward() raises:
+    # A box two wide and four tall: the left plane is at x = -1 facing +x,
+    # the top at y = 2 facing -y, and a point in the middle is in front
+    # of all four.
+    var sides = Frustum.side_planes(orthographic(-1, 1, 2, -2, 1, 10))
+    assert_equal(len(sides), 4)
+    var middle = Vector3(0, 0, -5)
+    for index in range(4):
+        assert_true(sides[index].distance_to_point(middle) > 0)
+    assert_almost_equal(
+        Float64(sides[0].distance_to_point(Vector3(-1, 0, -5))),
+        Float64(0),
+        atol=1e-5,
+    )
+    assert_almost_equal(
+        Float64(sides[1].distance_to_point(Vector3(1, 0, -5))),
+        Float64(0),
+        atol=1e-5,
+    )
+    assert_almost_equal(
+        Float64(sides[2].distance_to_point(Vector3(0, 2, -5))),
+        Float64(0),
+        atol=1e-5,
+    )
+    assert_almost_equal(
+        Float64(sides[3].distance_to_point(Vector3(0, -2, -5))),
+        Float64(0),
+        atol=1e-5,
+    )
+    assert_true(sides[0].distance_to_point(Vector3(-1.5, 0, -5)) < 0)
+    # A perspective volume's sides pass through the eye and widen with
+    # depth: a point off to the side is outside near the eye and inside
+    # further away.
+    var wide = Frustum.side_planes(perspective(-1, 1, 1, -1, 1, 10))
+    assert_false(wide[0].distance_to_point(Vector3(-2, 0, -1)) >= 0)
+    assert_true(wide[0].distance_to_point(Vector3(-2, 0, -4)) >= 0)
 
 
 def main() raises:

@@ -1503,13 +1503,13 @@ def test_a_back_side_material_shows_the_inside_of_a_cube() raises:
     assert_true(count_background(image, renderer.background) < 100)
 
 
-def test_a_back_side_surface_keeps_its_authored_normal() raises:
-    # Culling decides which faces exist; it does not decide which way they
-    # face for lighting. three.js turns the winding round for `BackSide`
-    # and leaves the normal alone, so a triangle whose authored normal is
-    # +z, seen from -z with the light shining along -z, is turned away from
-    # the light and dark -- as three.js draws it. Flipping the normal with
-    # the face, which this once did, lit it square-on instead.
+def test_a_back_side_surface_is_lit_on_its_back() raises:
+    # three.js's `flipSided` is `side === BackSide`, and its
+    # `defaultnormal_vertex` negates the normal under `FLIP_SIDED` beside
+    # turning the winding round. So a triangle whose authored normal is
+    # +z, seen from -z with the light shining along -z, faces the light
+    # square-on and is fully lit. This once kept the authored normal,
+    # which left it dark; the shader says otherwise.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var tri = assets.geometries.add(lone_triangle(True))
@@ -1542,14 +1542,15 @@ def test_a_back_side_surface_keeps_its_authored_normal() raises:
                 if pixel.r > brightest:
                     brightest = pixel.r
     assert_true(drawn > 0, "BackSide drew nothing to light")
-    # Ambient is zero and the authored normal points away from the light.
-    assert_equal(brightest, UInt8(0))
+    # Ambient is zero and the flipped normal faces the light square-on.
+    assert_equal(brightest, UInt8(255))
 
 
-def test_a_back_side_surface_is_lit_where_its_normal_points() raises:
-    # The other direction, so the rule cannot have been to darken both
+def test_a_back_side_surface_is_dark_on_its_authored_side() raises:
+    # The other direction, so the rule cannot have been to light both
     # sides. Same geometry, light now on the side the authored normal
-    # faces, which is the side nobody is looking at: three.js lights it.
+    # faces, which is the side nobody is looking at: the flipped normal
+    # points away from it, and three.js leaves it dark.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var tri = assets.geometries.add(lone_triangle(True))
@@ -1584,8 +1585,8 @@ def test_a_back_side_surface_is_lit_where_its_normal_points() raises:
                 if pixel.r > brightest:
                     brightest = pixel.r
     assert_true(drawn > 0, "BackSide drew nothing to light")
-    # Ambient is zero and the authored normal faces the light square-on.
-    assert_equal(brightest, UInt8(255))
+    # Ambient is zero and the flipped normal points away from the light.
+    assert_equal(brightest, UInt8(0))
 
 
 def test_a_double_side_surface_lights_each_half_on_its_own_side() raises:
@@ -2679,9 +2680,12 @@ def test_a_mesh_is_frustum_culled_unless_told_otherwise() raises:
 
 
 def test_a_mesh_outside_the_view_is_not_prepared() raises:
-    # Five meters to the right: every triangle would land off the image,
-    # so the mesh draws the same nothing with the test and without, and
-    # only without it is the mesh prepared at all.
+    # Five meters to the right: every triangle lies past the side planes,
+    # so the mesh draws the same nothing with the test and without. With
+    # the test it is left out before a vertex is transformed; without it,
+    # every triangle is transformed and then cut away whole by the
+    # clipper. The output is the same, which is what makes the test a
+    # shortcut rather than a rule.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.5, METER)))
@@ -2693,7 +2697,7 @@ def test_a_mesh_outside_the_view_is_not_prepared() raises:
     var kept = List[Mesh]()
     kept.append(Mesh(box, paint, NodeId(0), frustum_culled=False))
     assert_equal(len(prepared(renderer, scene, assets, culled, camera)), 0)
-    assert_true(len(prepared(renderer, scene, assets, kept, camera)) > 0)
+    assert_equal(len(prepared(renderer, scene, assets, kept, camera)), 0)
     assert_equal(
         count_background(
             rendered(renderer, scene, assets, culled, camera),
@@ -2904,7 +2908,10 @@ def test_a_scaled_mesh_is_culled_by_its_world_bound() raises:
 def test_culling_leaves_the_image_unchanged() raises:
     # Cubes all around the view -- in it, straddling it, past each side,
     # and far down the axis -- drawn with the test and without. The images
-    # must agree pixel for pixel, and the test must have left some out.
+    # must agree pixel for pixel, and so must the triangles prepared: the
+    # test leaves a cube out whole, and the clipper cuts the same cube
+    # away whole, so neither can hand the rasterizer a triangle the other
+    # does not.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.5, METER)))
@@ -2942,7 +2949,7 @@ def test_culling_leaves_the_image_unchanged() raises:
     var fewer = len(prepared(renderer, scene, assets, culled, camera))
     var every = len(prepared(renderer, scene, assets, kept, camera))
     assert_true(fewer > 0, "everything was culled")
-    assert_true(fewer < every, "nothing was culled")
+    assert_equal(fewer, every)
     var tested = rendered(renderer, scene, assets, culled, camera)
     var untested = rendered(renderer, scene, assets, kept, camera)
     var drawn = 0

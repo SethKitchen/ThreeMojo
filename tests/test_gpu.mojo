@@ -43,6 +43,7 @@ from math.vector2 import Vector2
 from std.math import inf, pi
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
+from materials.material import line_dashed_material
 from objects.line import LOOP, Line
 from objects.mesh import Mesh
 from renderers.renderer import Renderer
@@ -744,6 +745,168 @@ def test_both_backends_keep_the_pixels_outside_a_scissor() raises:
     var first = fresh.read_back()
     assert_equal(first.get_pixel(30, 2).g, other.g)
     assert_equal(first.get_pixel(30, 2).r, other.r)
+
+
+def test_a_fresh_scissored_draw_clears_the_rest_through_the_same_curve() raises:
+    # A white background under Reinhard is a mid gray, inside the scissor
+    # and outside it alike, as a fresh host target resolves whole through
+    # one curve. The first clear used to take the defaults and leave the
+    # outside white.
+    if skipped_for_lack_of_a_gpu(
+        "a fresh scissored draw clears through the curve"
+    ):
+        return
+    var renderer = GpuRenderer(8, 4)
+    renderer.draw(
+        List[RasterVertex](),
+        Color(255, 255, 255),
+        tone_mapping=REINHARD_TONE_MAPPING,
+        scissor=Rect(0, 0, 4, 4),
+    )
+    var image = renderer.read_back()
+    var inside = image.get_pixel(1, 1)
+    var outside = image.get_pixel(6, 1)
+    assert_equal(inside.r, outside.r)
+    assert_equal(inside.g, outside.g)
+    assert_equal(inside.b, outside.b)
+    assert_true(inside.r < 255, "the curve was not applied")
+    var target = RenderTarget(8, 4, Color(255, 255, 255))
+    var cpu = target.resolve(1, REINHARD_TONE_MAPPING, 1.0)
+    assert_equal(count_mismatches(cpu, image), 0)
+    # An invalid request is refused before the clear, on a fresh
+    # renderer: nothing was drawn, and a later valid draw still clears.
+    var untouched = GpuRenderer(8, 4)
+    with assert_raises():
+        untouched.draw(
+            List[RasterVertex](),
+            Color(255, 255, 255),
+            exposure=-1,
+            scissor=Rect(0, 0, 4, 4),
+        )
+    untouched.draw(
+        List[RasterVertex](), Color(0, 0, 255), scissor=Rect(0, 0, 4, 4)
+    )
+    assert_equal(untouched.read_back().get_pixel(6, 1).b, 255)
+
+
+def test_both_backends_agree_through_an_offset_viewport_and_a_scissor() raises:
+    # A lit box, a translucent pane and a dashed line, through a viewport
+    # off center and a scissor smaller than it, under a linear fog and the
+    # ACES curve. The host draws it with `render`, the device with the
+    # same prepared frame and the same scissor, and the two images agree
+    # to a level, the untouched background included.
+    if skipped_for_lack_of_a_gpu(
+        "both backends agree through a viewport and a scissor"
+    ):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(Color(30, 20, 40))
+    renderer.set_viewport(Rect(6, 4, 30, 24))
+    renderer.set_scissor(Rect(10, 6, 24, 20))
+    renderer.set_scissor_test(True)
+    renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING, 0.9)
+
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.2, METER)))
+    var pane = assets.geometries.add(
+        plane(Length(2.4, METER), Length(1.6, METER), 1, 1)
+    )
+    var path = BufferGeometry()
+    path.set_attribute(
+        String(POSITION),
+        BufferAttribute([-3.0, -0.9, 0.5, 3.0, 0.9, 0.5], 3),
+    )
+    var stroke = assets.geometries.add(path^)
+    var orange = assets.materials.add(Material(Color(255, 140, 40)))
+    var glass = assets.materials.add(
+        Material(
+            Color(120, 255, 160),
+            NO_TEXTURE,
+            DOUBLE_SIDE,
+            0.45,
+            transparent=True,
+        )
+    )
+    var dashed = assets.materials.add(
+        line_dashed_material(
+            Color(255, 255, 255),
+            dash_size=Length(0.4, METER),
+            gap_size=Length(0.2, METER),
+        )
+    )
+
+    var scene = Scene()
+    var block = Object3D()
+    block.set_euler(
+        Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var block_node = scene.add(block^)
+    var sheet = Object3D()
+    sheet.set_position(0.2, 0.1, 1.0)
+    var sheet_node = scene.add(sheet^)
+    var sun = Object3D()
+    sun.set_position(0.4, 0.8, 0.5)
+    var sun_node = scene.add(sun^)
+    scene.add_light(directional_light(Color(255, 255, 255), sun_node, 2.0))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.4))
+    scene.fog = linear_fog(
+        Color(160, 170, 190), Length(2.0, METER), Length(8.0, METER)
+    )
+    scene.update()
+    scene.add_mesh(Mesh(box, orange, block_node))
+    scene.add_mesh(Mesh(pane, glass, sheet_node))
+    scene.add_line(Line(stroke, dashed, block_node))
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(30) / Float32(24),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.6, 3.4), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    assert_true(len(frame.corners) > 0, "nothing was prepared")
+    assert_true(len(frame.segments) > 0, "no segment was prepared")
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+    )
+    var gpu = render_triangles(
+        frame.corners,
+        48,
+        36,
+        renderer.background,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+        FogView(scene.fog),
+        ACES_FILMIC_TONE_MAPPING,
+        0.9,
+        frame.segments,
+        frame.draws,
+        Rect(10, 6, 24, 20),
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # Something was drawn inside the scissor, and nothing outside it.
+    var inside = 0
+    var outside = 0
+    for y in range(36):
+        for x in range(48):
+            var pixel = gpu.get_pixel(x, y)
+            var untouched = pixel.r == cpu.get_pixel(0, 0).r and (
+                pixel.g == cpu.get_pixel(0, 0).g
+            )
+            if Rect(10, 6, 24, 20).contains_pixel(x, y, 36):
+                if not untouched:
+                    inside += 1
+            elif not untouched:
+                outside += 1
+    assert_true(inside > 0, "nothing was drawn inside the scissor")
+    assert_equal(outside, 0)
 
 
 def test_a_partial_triangle_is_rejected() raises:

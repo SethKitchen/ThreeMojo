@@ -52,7 +52,7 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `BACK_SIDE` | Faces that point away. The inside of a closed mesh. |
 | `DOUBLE_SIDE` | Both. Use it for an open surface. |
 
-A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is three.js's rule: its shader flips the normal under `DOUBLE_SIDED` and nowhere else. A `BACK_SIDE` face keeps the normal it was given. three.js turns the winding round for `BackSide`, not the normal. The inside of a box lit from outside is bright on the wall the light reaches through and dark on the wall it sees. A mirrored mesh, with a negative world determinant, keeps the same convention.
+A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is three.js's rule: its shader flips the normal under `DOUBLE_SIDED` by which way the face is seen. A `BACK_SIDE` face is lit with its normal flipped whichever way it is seen. That is three.js's `FLIP_SIDED`, which `defaultnormal_vertex` applies when `side` is `BackSide`. The inside of a box lit by a lamp inside it is lit. A mirrored mesh, with a negative world determinant, keeps the same convention.
 
 ## Kind
 
@@ -227,7 +227,7 @@ Both take `side`, `opacity` and `blending`, and nothing else. A depth material a
 
 The normal is the one the camera sees, three.js's `vNormal`, not the one the world sees. Moving the camera changes the colors of a surface that never moved. The renderer carries each normal through the view matrix for this material alone.
 
-A `DOUBLE_SIDE` face seen from behind shows its normal flipped, as it is lit flipped. A `BACK_SIDE` face shows the normal it was given. The normal is made unit length at every fragment, as it is for a lit surface. A geometry with no normals falls back to its face normal.
+A `DOUBLE_SIDE` face seen from behind shows its normal flipped, as it is lit flipped. A `BACK_SIDE` face shows its normal flipped too, as three.js's `FLIP_SIDED` flips it. The normal is made unit length at every fragment, as it is for a lit surface. A geometry with no normals falls back to its face normal.
 
 ### Depth
 

@@ -71,7 +71,7 @@ An alpha-tested fragment writes its depth *late*. It tests without claiming, and
 
 ## Clipping
 
-`clip_depth(a, b, c, near, far)` cuts a triangle against the near and far planes in camera space. It returns zero, one or two triangles. Every varying is interpolated to the cut, including the world position.
+`clip_depth(a, b, c, near, far, sides)` cuts a triangle against the near and far planes in camera space, and then against the four side planes in `sides`. It returns zero or more triangles, fanned from the first surviving corner. Every varying is interpolated to the cut, including the world position and the distance along a line. `clip_segment` cuts a segment the same way. The sides come from `Frustum.side_planes(camera.projection_matrix())`, the same planes the culler reads in world space. Without them a triangle past the edge of the view still projected onto the target, and a [viewport](Renderer#viewport-and-scissor) smaller than the target drew it.
 
 ## Culling
 

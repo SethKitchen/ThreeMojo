@@ -49,7 +49,9 @@ calls it for every dashed line, so there is nothing to forget.
 The arithmetic is three.js's. A strip accumulates from its first point.
 A list of sticks accumulates across the sticks too, as three.js's
 `LineSegments.computeLineDistances` does, so the pattern runs on from one
-stick to the next. A loop is a strip: its closing segment runs from the
+stick to the next -- but the empty space between two sticks is no line,
+and measures nothing: each stick starts where the last one ended. A loop
+is a strip: its closing segment runs from the
 last point's distance back to zero, as three.js's does, so the pattern
 along that one segment runs backward.
 
@@ -243,8 +245,9 @@ def line_distances(
     """Return how far along the line each point is, in the geometry's units.
 
     three.js's `Line.computeLineDistances` and
-    `LineSegments.computeLineDistances`, which agree: both accumulate the
-    distance from each point to the next from the first point on. A loop
+    `LineSegments.computeLineDistances`, which agree: both accumulate
+    from the first point on, and a stick starts at the distance the last
+    stick ended at, not at the gap's far side. A loop
     accumulates as a strip does, so its closing segment runs the pattern
     backward, as three.js's does. See the module docstring.
 
@@ -265,7 +268,14 @@ def line_distances(
     var distances = List[Float32]()
     var so_far = Float32(0)
     for point in range(count):
-        if point > 0:
+        # A stick's first point picks up where the last stick ended, not
+        # where it was: the empty space between two sticks is no line,
+        # and measures nothing. `LineSegments.computeLineDistances` carries
+        # `lineDistances[i - 1]` forward the same way.
+        var joined = point > 0
+        if mode == SEGMENTS and point % 2 == 0:
+            joined = False
+        if joined:
             var before = positions.vector3(point - 1)
             var here = positions.vector3(point)
             so_far += (here - before).length()

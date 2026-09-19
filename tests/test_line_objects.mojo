@@ -410,11 +410,12 @@ def test_a_line_outside_the_view_is_left_out_unless_it_says_otherwise() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     scene.add_line(Line(geometry, material, NodeId(0)))
     assert_equal(len(renderer.prepare_lines(scene, assets, a_camera())), 0)
-    # The same line, opting out of the test, is prepared and then clipped
-    # away by nothing: it is beside the view, not behind the camera.
+    # The same line, opting out of the test, is transformed and then cut
+    # away whole by the side planes: it is beside the view, and a segment
+    # beside the view is no more drawn than one behind the camera.
     scene.lines = List[Line]()
     scene.add_line(Line(geometry, material, NodeId(0), frustum_culled=False))
-    assert_equal(len(renderer.prepare_lines(scene, assets, a_camera())), 2)
+    assert_equal(len(renderer.prepare_lines(scene, assets, a_camera())), 0)
     # A line on no layer the camera sees is left out before anything is
     # measured for it.
     scene.node(NodeId(0)).layers.disable(0)
@@ -857,8 +858,9 @@ def test_a_strip_measures_its_distance_from_the_first_point() raises:
 
 def test_sticks_accumulate_their_distance_across_each_other() raises:
     # Two sticks of two units each, the second starting a unit past the
-    # first's end: 0, 2, then 3 and 5, as three.js's `LineSegments`
-    # accumulates across the gap between them.
+    # first's end: 0, 2, then 2 and 4. three.js's `LineSegments` carries
+    # the first stick's end forward as the second's start, and the empty
+    # unit between them measures nothing.
     var geometry = points(
         [0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 3.0, 0.0, 0.0, 5.0, 0.0, 0.0]
     )
@@ -866,8 +868,16 @@ def test_sticks_accumulate_their_distance_across_each_other() raises:
         SEGMENTS, geometry.attribute_view(String(POSITION))
     )
     assert_almost_equal(Float64(along[1]), Float64(2), atol=TOLERANCE)
-    assert_almost_equal(Float64(along[2]), Float64(3), atol=TOLERANCE)
-    assert_almost_equal(Float64(along[3]), Float64(5), atol=TOLERANCE)
+    assert_almost_equal(Float64(along[2]), Float64(2), atol=TOLERANCE)
+    assert_almost_equal(Float64(along[3]), Float64(4), atol=TOLERANCE)
+    # Moving the second stick away without changing its length changes
+    # nothing: the gap is no line.
+    var moved = points(
+        [0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 30.0, 0.0, 0.0, 32.0, 0.0, 0.0]
+    )
+    var same = line_distances(SEGMENTS, moved.attribute_view(String(POSITION)))
+    assert_almost_equal(Float64(same[2]), Float64(2), atol=TOLERANCE)
+    assert_almost_equal(Float64(same[3]), Float64(4), atol=TOLERANCE)
 
 
 def test_line_distances_refuse_what_the_mode_refuses() raises:

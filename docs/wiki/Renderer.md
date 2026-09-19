@@ -64,10 +64,10 @@ Leave out every group whose node shares no layer with the camera. Then leave out
 1. Transform the positions to world space and camera space.
 2. Carry the texture coordinates through the map's transform. See [Textures](Textures#transform).
 3. Transform the normals with the normal matrix, or compute a face normal. Carry them into view space for a `NORMALS` material.
-4. Clip each triangle against the near and far planes.
+4. Clip each triangle against the near and far planes and the four sides of the view. See [Rasterization](Rasterization#clipping).
 5. Project each corner to pixels and keep `1 / w`.
 6. Cull faces that the material's `side` does not draw.
-7. Flip the normal of a `DOUBLE_SIDE` face seen from behind. A `BACK_SIDE` face keeps its normal, as in three.js.
+7. Flip the normal of a `BACK_SIDE` face, and of a `DOUBLE_SIDE` face seen from behind, as three.js's `FLIP_SIDED` and `faceDirection` do.
 
 The output is one flat list, three `RasterVertex` per triangle. Both rasterizers consume it. See [Rasterization](Rasterization).
 
@@ -112,6 +112,8 @@ renderer.set_scissor_test(True)
 ```
 
 The viewport is folded into the screen matrix by `prepare` and `prepare_lines`. The projection is mapped onto the rectangle rather than onto the whole target. The image is squeezed or stretched to the rectangle's size, as three.js's is. A viewport hanging off the target is allowed: the pixels it puts outside are not drawn. A viewport must hold at least one pixel.
+
+A viewport is a mapping, not a scissor. Every triangle and segment is clipped against the camera's four side planes first, so nothing lands outside the camera's image. With the scissor test off, the whole target is cleared and the geometry outside the view produces no pixel.
 
 The scissor is enforced by the render target on the CPU and by the kernel on the GPU. Both ask `Rect.contains_pixel`, so they agree about every edge. A pixel outside is neither cleared nor drawn. With the test off, the default, the scissor is kept and ignored. A scissor must lie wholly inside the target.
 

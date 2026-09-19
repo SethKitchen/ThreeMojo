@@ -63,7 +63,7 @@ var edges = assets.geometries.add(box_helper(bounds))
 scene.add_line(Line(edges, yellow, root, mode=SEGMENTS))
 ```
 
-The points are where the box is, so the `Line` belongs on a node at the origin. three.js's `BoxHelper` leaves its own matrix the identity for the same reason. An empty box is refused.
+The points are where the box was when the helper was built. It does not follow a node that moves; build it again. The `Line` belongs on a node at the origin. three.js's `BoxHelper` leaves its own matrix the identity for the same reason. An empty box is refused.
 
 ## CameraHelper
 
