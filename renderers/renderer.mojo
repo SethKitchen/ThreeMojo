@@ -1215,6 +1215,34 @@ struct Renderer(Movable):
     ]:
         """Turn a scene into the triangles a rasterizer can fill.
 
+        The filled surfaces only. A mesh whose material is a wireframe is
+        drawn as lines by `prepare_lines`, and contributes no triangle
+        here; see `_prepare_filled`.
+
+        Args:
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera to project through.
+
+        Returns:
+            Raster vertices, three per triangle, in submission order.
+
+        Raises:
+            Error: Everything `_prepare_filled` raises.
+        """
+        return self._prepare_filled(scene, assets, camera, False)
+
+    def _prepare_filled[
+        C: Camera
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        wireframe: Bool,
+    ) raises -> List[RasterVertex]:
+        """Turn a scene into the triangles a rasterizer can fill.
+
         Everything that is not filling pixels happens here: world transforms,
         lighting, clipping and projection. What comes out is the boundary
         between the two halves of the renderer — screen-space triangles with
@@ -1244,6 +1272,13 @@ struct Renderer(Movable):
             camera: The camera to project through — anything satisfying
                 `cameras.camera.Camera`, perspective or orthographic, placed
                 or riding one of the scene's nodes.
+            wireframe: Which half of the scene to prepare: the draws whose
+                material's `wireframe` matches. False gives the surfaces
+                that are filled, which is what `prepare` asks for. True
+                gives the ones the line pass turns into segments, run
+                through the identical pipeline so that a wireframe is
+                morphed, skinned, sorted and clipped exactly as the
+                surface it replaces.
 
         Returns:
             Raster vertices, three per triangle, in submission order. A mesh
@@ -1312,6 +1347,11 @@ struct Renderer(Movable):
             # same arrays rather than each holding their own.
             ref geometry = assets.geometries.get(draws[slot].geometry)
             var material = assets.materials.get(draws[slot].material)
+            # The one line that splits the scene in two. Everything above
+            # is shared, so a wireframe is culled, sorted, morphed and
+            # skinned by the same code as a filled surface.
+            if material.wireframe != wireframe:
+                continue
             # Carried on every vertex of this mesh, so one flat triangle list
             # can hold a scene whose meshes use different images.
             var blending = material.blending
@@ -1877,6 +1917,35 @@ struct Renderer(Movable):
                             NO_TEXTURE,
                         )
                     )
+
+        # And the meshes drawn as the lines of their triangles. Their
+        # triangles are prepared by the pipeline every other mesh goes
+        # through, and are cut into segments at the very end. That is what
+        # makes a wireframe of a morphed, skinned or instanced mesh work
+        # without a second word about any of the three.
+        #
+        # An edge shared by two triangles is drawn twice, over itself. It
+        # is the same rule both times, so it is the same pixels. Pairing
+        # the edges to draw each once is `geometries.edges`, which a
+        # caller reaches for when it wants the edges as a geometry.
+        var wired = List[RasterVertex]()
+        for index in range(assets.materials.count()):
+            if assets.materials.get(MaterialId(index)).wireframe:
+                # Asked before the work rather than after, so a scene with
+                # no wireframe in it pays one pass over the materials
+                # rather than a second pass over its geometry.
+                wired = self._prepare_filled(scene, assets, camera, True)
+                break
+        for triangle in range(len(wired) // 3):
+            var one = wired[triangle * 3]
+            var two = wired[triangle * 3 + 1]
+            var three = wired[triangle * 3 + 2]
+            corners.append(one)
+            corners.append(two)
+            corners.append(two)
+            corners.append(three)
+            corners.append(three)
+            corners.append(one)
 
         return corners^
 

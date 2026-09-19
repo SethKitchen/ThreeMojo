@@ -316,6 +316,21 @@ The test reaches every kind, a translucent surface and a data material included.
 
 The comparison is strict, as three.js's is. A fragment whose alpha equals the test survives.
 
+## Wireframe
+
+`wireframe=True` draws the lines of a surface's triangles rather than filling them, three.js's `material.wireframe`.
+
+```mojo
+var wire = Material(Color(120, 220, 255), kind=BASIC, wireframe=True)
+scene.add_mesh(Mesh(shape, assets.materials.add(wire), node))
+```
+
+The mesh is prepared by the pipeline every other mesh goes through, and its triangles are cut into segments at the very end. A wireframe of a morphed, skinned or instanced mesh therefore needs no further word about any of the three. It is culled, sorted and clipped like the surface it replaces. The segments are drawn by the [line pass](Lines).
+
+The kind must be `BASIC` and there must be no map. A line has no surface, so it has no normal for a light to reach and no coordinate to sample an image at. A lit or mapped wireframe is refused rather than drawn with one of the two quietly dropped.
+
+An edge shared by two triangles is drawn twice, over itself. It is the same rule both times, so it is the same pixels. To pair the edges and draw each once, build a geometry with [`wireframe_geometry`](Geometry#edges-and-wireframes) and draw it with a `Line`. To keep only the edges that show the shape, use `edges_geometry`.
+
 ## Opacity and blending
 
 `opacity` below one, or a color with alpha below 255, makes the material blend. A blended surface tests depth without writing it, and the renderer draws it after every opaque mesh, furthest first.

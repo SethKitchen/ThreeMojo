@@ -1,6 +1,6 @@
 # Renderer
 
-`renderers/renderer.mojo`. The `Renderer` turns a scene, its assets and a camera into an image. `prepare` makes screen-space triangles. `render` also fills them on the CPU.
+`renderers/renderer.mojo`. The `Renderer` turns a scene, its assets and a camera into an image. `prepare` makes screen-space triangles and `prepare_lines` makes screen-space segments. `render` also fills them on the CPU.
 
 ![A cube leaves the frustum and vanishes, then returns](out/culling.png)
 
@@ -21,11 +21,14 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `set_shading(mode)` | What a fragment's color comes from. See below. |
 | `set_tone_mapping(mode, exposure=1.0)` | The curve that compresses the light for a display. See below. |
 | `prepare(scene, assets, camera) -> List[RasterVertex]` | Transform, clip and project every mesh. |
-| `render(scene, assets, camera) -> Framebuffer` | `prepare`, then rasterize and resolve. |
+| `prepare_lines(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [lines](Lines) and wireframes. |
+| `render(scene, assets, camera) -> Framebuffer` | Both passes, then rasterize and resolve. |
 | `available_workers() -> Int` | One per logical core. |
 | `camera_position(scene, camera) -> Vector3` | Where the camera stands, in world space. |
 | `toward_camera(scene, camera) -> Vector3` | The one direction toward it, or `PERSPECTIVE_VIEW`. |
 | `camera_up(scene, camera) -> Vector3` | Which way is up for it, in world space. |
+
+The two passes are separate because almost nothing a triangle carries applies to a line. `render` fills the triangles and then draws the segments over them, depth tested against them. See [Lines](Lines).
 
 `scene.update()` must run before `prepare` or `render`. The renderer reads world matrices and does not recompute them.
 

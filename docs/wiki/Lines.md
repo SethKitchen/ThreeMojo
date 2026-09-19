@@ -36,7 +36,7 @@ scene.add_line(path)
 
 `segment_ends` is the whole of the difference between the three modes. Everything that draws a line walks `segment_count` and asks `segment_ends`, so all three modes share one path through the renderer.
 
-A surface can be read back as lines: see [edges and wireframes](Geometry#edges-and-wireframes).
+A surface can be read back as lines: see [edges and wireframes](Geometry#edges-and-wireframes). A material can ask for its own surface to be drawn that way: see [wireframe](Materials#wireframe).
 
 ## What a line is made of
 

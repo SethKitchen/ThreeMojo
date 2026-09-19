@@ -336,6 +336,12 @@ struct Material(ImplicitlyCopyable):
     # over the whole lit side; thirty is three.js's default and is what
     # `phong_material` passes.
     var shininess: Float32
+    # Whether a surface of this material is drawn as the lines of its
+    # triangles rather than filled, three.js's `wireframe`. It is drawn by
+    # the line pass, so it is refused on anything a line cannot draw: the
+    # kind must be `BASIC` and there must be no map. See `objects.line`
+    # and `Renderer.prepare_lines`.
+    var wireframe: Bool
 
     def __init__(
         out self,
@@ -355,6 +361,7 @@ struct Material(ImplicitlyCopyable):
         shininess: Float32 = 0.0,
         gradient_map: TextureId = NO_TEXTURE,
         matcap: TextureId = NO_TEXTURE,
+        wireframe: Bool = False,
     ) raises:
         """Describe a surface.
 
@@ -411,6 +418,10 @@ struct Material(ImplicitlyCopyable):
             matcap: Id of the image a `MATCAP` surface is looked up in, or
                 `NO_TEXTURE` for three.js's gray gradient. Only a `MATCAP`
                 material reads it.
+            wireframe: Whether to draw the lines of the triangles rather
+                than fill them, three.js's `wireframe`. The lines are
+                drawn by the line pass, so the kind must be `BASIC` and
+                there must be no map.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -437,7 +448,10 @@ struct Material(ImplicitlyCopyable):
                 `shininess` -- on a kind that is not `PHONG`. A `NORMALS`
                 or `DEPTH` material whose blending resolves to `BLEND`,
                 whether stated or inferred from an opacity below one, is
-                refused as well.
+                refused as well. A `wireframe` on a kind that is not
+                `BASIC`, or beside a map or an alpha map, is refused: a
+                line has no normal for a light to reach and no surface
+                coordinate to sample a map with.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -533,6 +547,20 @@ struct Material(ImplicitlyCopyable):
         self.shininess = shininess
         self.gradient_map = gradient_map
         self.matcap = matcap
+        # Refused here rather than shaded differently at the far end. A
+        # wireframe is drawn by the line pass, and that pass reads no
+        # light and samples no image; see `render.rasterizer.rasterize_line`.
+        if wireframe and kind != BASIC:
+            raise Error(
+                "Only a basic material can be a wireframe: a line has no"
+                " surface, so it has no normal for a light to reach"
+            )
+        if wireframe and (map != NO_TEXTURE or alpha_map != NO_TEXTURE):
+            raise Error(
+                "A wireframe material has no map: a line has no surface"
+                " coordinates to sample one with"
+            )
+        self.wireframe = wireframe
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.

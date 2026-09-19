@@ -587,5 +587,88 @@ def test_a_line_with_no_points_prepares_nothing() raises:
     assert_equal(len(renderer.prepare_lines(scene, assets, a_camera())), 0)
 
 
+def test_a_wireframe_material_refuses_what_a_line_cannot_draw() raises:
+    """A lit kind and a map are each refused where the flag is set."""
+    with assert_raises():
+        _ = Material(Color(255, 255, 255), kind=LAMBERT, wireframe=True)
+    var image = checkerboard(2, 2, Color(255, 255, 255), Color(0, 0, 0))
+    var stored = Assets()
+    var id = stored.textures.add(image^)
+    with assert_raises():
+        _ = Material(Color(255, 255, 255), kind=BASIC, map=id, wireframe=True)
+    with assert_raises():
+        _ = Material(
+            Color(255, 255, 255), kind=BASIC, alpha_map=id, wireframe=True
+        )
+    # And the one that is allowed keeps the flag.
+    var wire = Material(Color(255, 255, 255), kind=BASIC, wireframe=True)
+    assert_true(wire.wireframe)
+
+
+def test_a_wireframe_mesh_prepares_lines_and_not_triangles() raises:
+    """Each triangle becomes its three edges, and fills nothing."""
+    var assets = Assets()
+    var quad = assets.geometries.add(plane(Length(1, METER), Length(1, METER)))
+    var wire = assets.materials.add(
+        Material(Color(255, 0, 0), kind=BASIC, wireframe=True)
+    )
+    var scene = a_scene_with_one_node()
+    scene.add_mesh(Mesh(quad, wire, NodeId(0)))
+    var renderer = Renderer(WIDTH, HEIGHT)
+    assert_equal(len(renderer.prepare(scene, assets, a_camera())), 0)
+    # Two triangles, three edges each, two ends an edge.
+    var segments = renderer.prepare_lines(scene, assets, a_camera())
+    assert_equal(len(segments), 12)
+    for end in range(len(segments)):
+        assert_true(segments[end].kind == BASIC)
+        assert_true(segments[end].texture == NO_TEXTURE)
+
+
+def test_a_wireframe_is_drawn_hollow_beside_a_filled_surface() raises:
+    """The outline is painted and the middle is not."""
+    var assets = Assets()
+    var quad = assets.geometries.add(plane(Length(1, METER), Length(1, METER)))
+    var wire = assets.materials.add(
+        Material(Color(255, 0, 0), kind=BASIC, wireframe=True)
+    )
+    var solid = assets.materials.add(Material(Color(255, 0, 0), kind=BASIC))
+    var scene = a_scene_with_one_node()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    scene.add_mesh(Mesh(quad, solid, NodeId(0)))
+    var filled = renderer.render(scene, assets, a_camera())
+    scene.meshes = List[Mesh]()
+    scene.add_mesh(Mesh(quad, wire, NodeId(0)))
+    var hollow = renderer.render(scene, assets, a_camera())
+    var filled_pixels = 0
+    var hollow_pixels = 0
+    # How much of the quad's own patch of the image is still background.
+    # None of it when the surface is filled, and some of it when only its
+    # edges are drawn: that is the whole of what "wireframe" means.
+    var filled_holes = 0
+    var hollow_holes = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var inside = (
+                x > WIDTH // 4
+                and x < WIDTH * 3 // 4
+                and y > HEIGHT // 4
+                and y < HEIGHT * 3 // 4
+            )
+            if filled.get_pixel(x, y).r > 128:
+                filled_pixels += 1
+            elif inside:
+                filled_holes += 1
+            if hollow.get_pixel(x, y).r > 128:
+                hollow_pixels += 1
+            elif inside:
+                hollow_holes += 1
+    assert_true(filled_pixels > 0)
+    assert_true(hollow_pixels > 0)
+    assert_true(hollow_pixels < filled_pixels)
+    assert_equal(filled_holes, 0)
+    assert_true(hollow_holes > 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
