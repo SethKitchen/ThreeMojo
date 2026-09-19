@@ -157,7 +157,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] Anti-aliasing [#83](https://github.com/SethKitchen/ThreeMojo/issues/83)
 - [ ] Scissor and viewport [#84](https://github.com/SethKitchen/ThreeMojo/issues/84)
 - [ ] Post-processing [#85](https://github.com/SethKitchen/ThreeMojo/issues/85)
-- [ ] Helpers: axes, grid, box, camera [#86](https://github.com/SethKitchen/ThreeMojo/issues/86)
+- [x] [Helpers: axes, grid, box, camera](https://github.com/SethKitchen/ThreeMojo/wiki/Helpers): line geometries for the axes, a ground grid, the box around a mesh and a camera's frustum [#86](https://github.com/SethKitchen/ThreeMojo/issues/86)
 - [ ] Windowing and interactive controls [#87](https://github.com/SethKitchen/ThreeMojo/issues/87)
 
 ### Animation

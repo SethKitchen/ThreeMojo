@@ -30,6 +30,7 @@ mkdir -p out
 | `raycast.mojo` | `raycast.png` | [Raycasting](Raycasting) |
 | `curves.mojo` | `curves.png` | [Curves and paths](Curves) |
 | `lines.mojo` | `lines.png` | [Lines](Lines) |
+| `outlines.mojo` | `helpers.png` | [Helpers](Helpers) |
 | `keyframes.mojo` | `keyframes.png` | [Animation](Animation) |
 | `skinning.mojo` | `skinning.png` | [Skinning](Skinning) |
 | `phong.mojo` | `phong.png` | [Materials](Materials) |
