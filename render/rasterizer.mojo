@@ -53,6 +53,13 @@ from render.linerule import (
     span_of,
 )
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
+from render.pointrule import (
+    coord as point_coord,
+    covers as point_covers,
+    first_covered,
+    last_covered,
+    mip_level_of,
+)
 from std.math import ceil, floor, isfinite, log2, max, min, sqrt
 
 # `TaskGroup` moved behind an underscore in Mojo 1.1: `std.runtime` keeps
@@ -518,6 +525,11 @@ struct RasterVertex(ImplicitlyCopyable):
     # and checked to agree. A gap of zero is a solid line.
     var dash_size: Float32
     var gap_size: Float32
+    # How many pixels across a point is, on the image, with any
+    # attenuation already applied: three.js's `gl_PointSize`. Read by a
+    # point alone, which is one corner rather than three or two; a
+    # triangle's corners and a segment's ends carry zero.
+    var point_size: Float32
 
     def __init__(
         out self,
@@ -545,6 +557,7 @@ struct RasterVertex(ImplicitlyCopyable):
         line_distance: Float32 = 0,
         dash_size: Float32 = 0,
         gap_size: Float32 = 0,
+        point_size: Float32 = 0,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -560,7 +573,9 @@ struct RasterVertex(ImplicitlyCopyable):
         which is three.js's two-tone fallback for a `TOON` corner and is
         read by no other kind. The matcap defaults to none, which is
         three.js's gray gradient for a `MATCAP` corner. The line distance
-        and the dash and gap default to zero, which is a solid line.
+        and the dash and gap default to zero, which is a solid line. The
+        point size defaults to zero, which no point may carry: a corner
+        that says nothing about it is not a point.
         """
         self.x = x
         self.y = y
@@ -586,6 +601,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.line_distance = line_distance
         self.dash_size = dash_size
         self.gap_size = gap_size
+        self.point_size = point_size
 
 
 @fieldwise_init
@@ -961,6 +977,7 @@ def check_output_kinds(
     corners: List[RasterVertex],
     mapped: Bool,
     segments: List[RasterVertex] = List[RasterVertex](),
+    points: List[RasterVertex] = List[RasterVertex](),
 ) raises:
     """Refuse a tone-mapped frame that holds both data and blended light.
 
@@ -998,10 +1015,13 @@ def check_output_kinds(
             A line is never data, but a blended one mixes light into
             whatever it crosses, a data pixel included, so it counts the
             same way a blended triangle does. Empty by default.
+        points: Raster vertices, one per point, as submitted alongside. A
+            point is never data either, and a blended one counts as a
+            blended segment does. Empty by default.
 
     Raises:
         Error: If the curve is on and the frame holds both a surface that
-            shows data and a surface or a segment that blends.
+            shows data and a surface, a segment or a point that blends.
     """
     if not mapped:
         return
@@ -1017,6 +1037,9 @@ def check_output_kinds(
             mixes_light = True
     for segment in range(len(segments) // 2):
         if segments[segment * 2].blend == BLEND:
+            mixes_light = True
+    for point in range(len(points)):
+        if points[point].blend == BLEND:
             mixes_light = True
     if shows_data and mixes_light:
         raise Error(
@@ -1879,6 +1902,217 @@ def rasterize_line(
             target.write(x, y, color, False)
 
 
+# --- points -----------------------------------------------------------------
+
+
+def check_point_state(point: RasterVertex) raises:
+    """Refuse a point whose material is lit, whose size is not a size, or
+    whose metadata holds a value neither backend knows.
+
+    A point is one corner, so there is no agreement to check, only the
+    values. It is unlit, as a line is and for the same reason: it has no
+    surface, so it has no normal for a light to reach. three.js's
+    `PointsMaterial` catches no light either.
+
+    Args:
+        point: The point.
+
+    Raises:
+        Error: If the blend policy is not a named one, the kind is not a
+            named one or is not unlit, the size is not finite or not above
+            zero, the alpha test is outside zero to one or not finite, or
+            a texture id is a negative other than `NO_TEXTURE`.
+    """
+    if not point.blend.is_valid():
+        raise Error("A point needs a blend policy that exists")
+    if not point.kind.is_valid():
+        raise Error("A point needs a material kind that exists")
+    if not point.kind.is_unlit():
+        raise Error("A point's material must be unlit")
+    if not isfinite(point.point_size) or point.point_size <= 0:
+        raise Error("A point needs a size above zero")
+    if (
+        not isfinite(point.alpha_test)
+        or point.alpha_test < 0
+        or point.alpha_test > 1
+    ):
+        raise Error("A point's alpha test must be between zero and one")
+    if point.texture != NO_TEXTURE and point.texture.value < 0:
+        raise Error("A point names a texture id that nothing can hold")
+    if point.alpha_map != NO_TEXTURE and point.alpha_map.value < 0:
+        raise Error("A point names an alpha map id that nothing can hold")
+
+
+def check_point_maps(
+    point: RasterVertex, mode: ShadeMode, textures: TextureStore
+) raises:
+    """Refuse a point whose alpha map is not stored as data, under the mode
+    that would read it.
+
+    `check_triangle_maps` for a point, which carries a map and an alpha
+    map and nothing else. Asked of every point before any band starts, as
+    the triangles' is, so a point no band reaches is refused too.
+
+    Args:
+        point: The point.
+        mode: What a pixel's color is taken from; only `SHADE_TEXTURE`
+            opens the maps.
+        textures: Where the maps live.
+
+    Raises:
+        Error: If an alpha map the mode would open is not in the store or
+            is not stored as data -- see `check_alpha_map`.
+    """
+    if point.alpha_map != NO_TEXTURE and mode == SHADE_TEXTURE:
+        check_alpha_map(textures.get(point.alpha_map))
+
+
+def _sample_point_map(
+    image: Texture, place: Vector2, level: Float32
+) -> FloatColor:
+    """Return `image` sampled at a point's own coordinate.
+
+    Straight from the one level when the image has one, and otherwise from
+    the level the point's size chooses, worked out once per point by
+    `mip_level_of`. Mirrored on the device by `render.gpu._sample_level`.
+    """
+    if image.levels == 1:
+        return image.sample(place.x, place.y)
+    return image.sample_level(place.x, place.y, level)
+
+
+def rasterize_point(
+    point: RasterVertex,
+    mut target: RenderTarget,
+    mode: ShadeMode = SHADE_LIT,
+    textures: TextureStore = TextureStore(),
+    first_row: Int = 0,
+    last_row: Int = -1,
+    fog: FogView = FogView.none(),
+) raises:
+    """Draw one point, a square of pixels, into `target`.
+
+    `render.pointrule` decides which pixels, and the kernel asks it the
+    same question, so the two squares are the same square.
+
+    Nothing varies across a point but its coordinate: one color, one
+    depth, one fog depth, as three.js's `gl_PointSize` square has. The
+    coordinate samples the map and the alpha map, as a triangle's does,
+    and the uv view shows it. The blend, the alpha test and the fog work
+    exactly as they do on a triangle, and in the same order.
+
+    Args:
+        point: The point.
+        target: The linear render target to draw into.
+        mode: `SHADE_LIT` to write the color, `SHADE_UV` to write the
+            point's own coordinate as red and green, or `SHADE_TEXTURE` to
+            multiply the color by the maps.
+        textures: Where `SHADE_TEXTURE` looks the point's maps up.
+        first_row: The first row this call owns. Below zero is the top.
+        last_row: The last row it owns. Below zero, or past the last row,
+            is the rest of the image.
+        fog: The scene's fog, seen through the camera.
+
+    Raises:
+        Error: If the mode is none of the three, the point is refused by
+            `check_point_state` or its maps by `check_point_maps`, the fog
+            view is refused by `FogView.validate`, or the point names a
+            texture the store does not have.
+    """
+    if not mode.is_valid():
+        raise Error("A shading mode that is none of the three")
+    check_point_state(point)
+    fog.validate()
+    check_point_maps(point, mode, textures)
+    # Decided by the material and carried here, as a triangle's are; see
+    # `rasterize_shaded` for what each changes.
+    var blended = point.blend == BLEND and mode != SHADE_UV
+    var fogged = fog.is_on() and mode != SHADE_UV
+    var tested = point.alpha_test > 0 and mode != SHADE_UV
+    var sampled = mode == SHADE_TEXTURE
+    var center = Vector2(point.x, point.y)
+    var size = point.point_size
+    # The rows this call owns, held inside the image, and the square held
+    # inside both. The bounds only limit the walk, and are rounded outward:
+    # `covers` is asked of every pixel between them, so a bound cannot
+    # move one; see `render.pointrule.first_covered`.
+    var bottom = last_row
+    if bottom < 0 or bottom >= target.height:
+        bottom = target.height - 1
+    var top = first_row
+    if top < 0:
+        top = 0
+    var left = max(first_covered(center.x, size), 0)
+    var right = min(last_covered(center.x, size), target.width - 1)
+    var above = max(first_covered(center.y, size), top)
+    var below = min(last_covered(center.y, size), bottom)
+    # Which level of each map the point reads, once: a point's footprint
+    # in its map is the same at every pixel of it.
+    var level = Float32(0)
+    if sampled and point.texture != NO_TEXTURE:
+        ref image = textures.get(point.texture)
+        level = mip_level_of(size, image.width, image.height)
+    var mask_level = Float32(0)
+    if sampled and point.alpha_map != NO_TEXTURE:
+        ref mask = textures.get(point.alpha_map)
+        mask_level = mip_level_of(size, mask.width, mask.height)
+    for y in range(above, below + 1):
+        for x in range(left, right + 1):
+            if not point_covers(center, size, x, y):
+                continue
+            var z = point.z
+            if blended or tested:
+                if not target.depth_passes(x, y, z):
+                    continue
+            elif not target.test_depth(x, y, z):
+                continue
+            var shaded = point.color
+            if mode != SHADE_LIT:
+                var place = point_coord(center, size, x, y)
+                if mode == SHADE_UV:
+                    # Coordinates, not light, as the uv view of a triangle
+                    # writes them; see `data_color`.
+                    target.write(
+                        x, y, data_color(place.x, place.y, 0.0, 1.0), True
+                    )
+                    continue
+                if point.texture != NO_TEXTURE:
+                    var texel = _sample_point_map(
+                        textures.get(point.texture), place, level
+                    )
+                    shaded = FloatColor(
+                        shaded.r * texel.r,
+                        shaded.g * texel.g,
+                        shaded.b * texel.b,
+                        shaded.a * texel.a,
+                    )
+                # The alpha map's green channel thins the point, as it
+                # thins a triangle.
+                if point.alpha_map != NO_TEXTURE:
+                    var thinning = _sample_point_map(
+                        textures.get(point.alpha_map), place, mask_level
+                    )
+                    shaded = FloatColor(
+                        shaded.r, shaded.g, shaded.b, shaded.a * thinning.g
+                    )
+            # Thrown away for being too transparent, claiming no depth, as
+            # a triangle's fragment is.
+            if tested and shaded.a < point.alpha_test:
+                continue
+            if fogged:
+                shaded = fog_mix(
+                    shaded, fog.color, fog.factor_at(point.view_depth)
+                )
+            if blended:
+                target.blend(x, y, shaded)
+            else:
+                if tested:
+                    target.claim_depth(x, y, z)
+                # Opaque, so written with an alpha of one, as a triangle is.
+                shaded.a = 1
+                target.write(x, y, shaded, False)
+
+
 # --- frames -----------------------------------------------------------------
 
 
@@ -1895,22 +2129,40 @@ struct DrawKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is `DRAW_TRIANGLES` or `DRAW_SEGMENTS`."""
-        return self == DRAW_TRIANGLES or self == DRAW_SEGMENTS
+        """Return True if this is `DRAW_TRIANGLES`, `DRAW_SEGMENTS` or
+        `DRAW_POINTS`."""
+        return (
+            self == DRAW_TRIANGLES
+            or self == DRAW_SEGMENTS
+            or self == DRAW_POINTS
+        )
+
+    def stride(self) -> Int:
+        """Return how many corners one primitive of this kind takes: three
+        for a triangle, two for a segment, one for a point. Three for a
+        kind that is none of them, which `check_draws` refuses before
+        anything reads the answer."""
+        if self == DRAW_SEGMENTS:
+            return 2
+        if self == DRAW_POINTS:
+            return 1
+        return 3
 
 
 # A run of triangles, three corners each, out of a frame's corner list.
 comptime DRAW_TRIANGLES = DrawKind(0)
 # A run of segments, two corners each, out of a frame's segment list.
 comptime DRAW_SEGMENTS = DrawKind(1)
+# A run of points, one corner each, out of a frame's point list.
+comptime DRAW_POINTS = DrawKind(2)
 
 
 @fieldwise_init
 struct Draw(ImplicitlyCopyable):
     """One run of primitives of one kind, drawn in one go.
 
-    A frame is two lists, triangles and segments, and one order over both:
-    a list of these, each naming a run of one list. That is what lets a
+    A frame is three lists, triangles, segments and points, and one order
+    over all three: a list of these, each naming a run of one list. That is what lets a
     blended line be drawn after the blended surface behind it and before
     the one in front of it, which two lists drawn one after the other
     cannot. `Renderer.prepare_frame` writes the order once; both
@@ -1919,13 +2171,15 @@ struct Draw(ImplicitlyCopyable):
     """
 
     var kind: DrawKind
-    # The first primitive of the run: a triangle or a segment, not a
-    # corner.
+    # The first primitive of the run: a triangle, a segment or a point,
+    # not a corner.
     var first: Int
     var count: Int
 
 
-def check_draws(draws: List[Draw], triangles: Int, segments: Int) raises:
+def check_draws(
+    draws: List[Draw], triangles: Int, segments: Int, points: Int = 0
+) raises:
     """Refuse a draw list that names what a frame does not hold.
 
     Shared by both backends, so neither can walk a run the other refuses:
@@ -1936,22 +2190,26 @@ def check_draws(draws: List[Draw], triangles: Int, segments: Int) raises:
         draws: The order to draw in.
         triangles: How many triangles the frame's corner list holds.
         segments: How many segments its segment list holds.
+        points: How many points its point list holds. None by default.
 
     Raises:
-        Error: If a draw's kind is neither `DRAW_TRIANGLES` nor `DRAW_SEGMENTS`, or
-            its run starts before the first primitive, has a negative
-            count, or reaches past the last primitive of its kind.
+        Error: If a draw's kind is none of `DRAW_TRIANGLES`, `DRAW_SEGMENTS`
+            and `DRAW_POINTS`, or its run starts before the first
+            primitive, has a negative count, or reaches past the last
+            primitive of its kind.
     """
     for index in range(len(draws)):
         ref draw = draws[index]
         if not draw.kind.is_valid():
             raise Error(
-                "A draw needs a kind that exists: DRAW_TRIANGLES or"
-                " DRAW_SEGMENTS"
+                "A draw needs a kind that exists: DRAW_TRIANGLES,"
+                " DRAW_SEGMENTS or DRAW_POINTS"
             )
         var held = triangles
         if draw.kind == DRAW_SEGMENTS:
             held = segments
+        if draw.kind == DRAW_POINTS:
+            held = points
         if draw.first < 0 or draw.count < 0 or draw.first + draw.count > held:
             raise Error("A draw runs past the primitives the frame holds")
 
@@ -1987,11 +2245,34 @@ def _rows_of(corners: List[RasterVertex], stride: Int) -> List[Int]:
     return rows^
 
 
+def _point_rows(points: List[RasterVertex]) -> List[Int]:
+    """Return the first and last row each point can touch, in pairs.
+
+    `_rows_of` for points, whose rows come from the size rather than from
+    a second corner: half the size above the center and half below.
+
+    Args:
+        points: The points.
+
+    Returns:
+        Two entries per point, the first row then the last.
+    """
+    var rows = List[Int]()
+    rows.reserve(len(points) * 2)
+    for index in range(len(points)):
+        var half = points[index].point_size / 2
+        rows.append(Int(floor(points[index].y - half)))
+        rows.append(Int(ceil(points[index].y + half)))
+    return rows^
+
+
 async def _frame_band(
     corners: Pointer[RasterVertex, ImmutAnyOrigin],
     triangle_rows: MutPointer[Int, MutAnyOrigin],
     segments: Pointer[RasterVertex, ImmutAnyOrigin],
     segment_rows: MutPointer[Int, MutAnyOrigin],
+    points: Pointer[RasterVertex, ImmutAnyOrigin],
+    point_rows: MutPointer[Int, MutAnyOrigin],
     draws: Pointer[Draw, ImmutAnyOrigin],
     draw_count: Int,
     target: MutPointer[RenderTarget, MutAnyOrigin],
@@ -2050,6 +2331,23 @@ async def _frame_band(
                         fog,
                     )
                 continue
+            if draw.kind == DRAW_POINTS:
+                for point in range(draw.first, past):
+                    if (
+                        point_rows[unsafe_offset=point * 2] > last_row
+                        or point_rows[unsafe_offset=point * 2 + 1] < first_row
+                    ):
+                        continue
+                    rasterize_point(
+                        points[unsafe_offset=point],
+                        target[],
+                        mode,
+                        textures[],
+                        first_row,
+                        last_row,
+                        fog,
+                    )
+                continue
             for segment in range(draw.first, past):
                 if (
                     segment_rows[unsafe_offset=segment * 2] > last_row
@@ -2078,11 +2376,13 @@ def rasterize_frame(
     lighting: Lighting = Lighting.uniform(),
     workers: Int = 1,
     fog: FogView = FogView.none(),
+    points: List[RasterVertex] = List[RasterVertex](),
 ) raises:
-    """Draw a frame -- triangles and segments, in one order -- into
-    `target`, on `workers` threads.
+    """Draw a frame -- triangles, segments and points, in one order --
+    into `target`, on `workers` threads.
 
-    `rasterize_shaded` and `rasterize_line` for a whole frame. With one
+    `rasterize_shaded`, `rasterize_line` and `rasterize_point` for a whole
+    frame. With one
     worker it is exactly the loop a caller would write: each draw in turn,
     each primitive of it in turn. With more, the image is cut into that
     many horizontal bands, each drawn by its own task on the standard
@@ -2118,6 +2418,7 @@ def rasterize_frame(
         workers: How many threads to draw with, at least one.
         fog: The scene's fog, seen through the camera; see
             `rasterize_shaded` and `rasterize_line`.
+        points: Raster vertices, one per point. None by default.
 
     Raises:
         Error: If the corner count is not a multiple of three, the segment
@@ -2125,9 +2426,11 @@ def rasterize_frame(
             one, the mode is none of the three, the fog view is refused by
             `FogView.validate`, any triangle's metadata is refused by
             `check_triangle_state` or its maps by `check_triangle_maps`,
-            any segment's by `check_line_state`, the draw list is refused
-            by `check_draws`, or any primitive is refused as it is drawn
-            -- on a worker that error is carried back and raised here.
+            any segment's by `check_line_state`, any point's by
+            `check_point_state` or its maps by `check_point_maps`, the
+            draw list is refused by `check_draws`, or any primitive is
+            refused as it is drawn -- on a worker that error is carried
+            back and raised here.
     """
     if len(corners) % 3 != 0:
         raise Error("Rasterizing needs whole triangles")
@@ -2156,7 +2459,10 @@ def rasterize_frame(
         check_triangle_maps(corners[triangle * 3], mode, textures)
     for segment in range(lines):
         check_line_state(segments[segment * 2], segments[segment * 2 + 1])
-    check_draws(draws, triangles, lines)
+    for point in range(len(points)):
+        check_point_state(points[point])
+        check_point_maps(points[point], mode, textures)
+    check_draws(draws, triangles, lines, len(points))
 
     var bands = min(workers, target.height)
     if bands == 1:
@@ -2176,6 +2482,12 @@ def rasterize_frame(
                         fog=fog,
                     )
                 continue
+            if draw.kind == DRAW_POINTS:
+                for point in range(draw.first, past):
+                    rasterize_point(
+                        points[point], target, mode, textures, fog=fog
+                    )
+                continue
             for segment in range(draw.first, past):
                 rasterize_line(
                     segments[segment * 2],
@@ -2190,6 +2502,7 @@ def rasterize_frame(
     var errors = List[String](length=bands, fill=String(""))
     var triangle_rows = _rows_of(corners, 3)
     var segment_rows = _rows_of(segments, 2)
+    var point_rows = _point_rows(points)
     var group = TaskGroup()
     # At least two bands past the early return above, so neither loop can
     # run zero times.
@@ -2200,6 +2513,8 @@ def rasterize_frame(
                 triangle_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
                 segments.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 segment_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                points.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+                point_rows.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
                 draws.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
                 len(draws),
                 Pointer(to=target).unsafe_origin_cast[MutAnyOrigin](),
@@ -2219,6 +2534,7 @@ def rasterize_frame(
     # keep the lists alive until every band has finished with them.
     _ = len(triangle_rows)
     _ = len(segment_rows)
+    _ = len(point_rows)
     for band in range(bands):  # pragma: no branch
         if errors[band] != "":
             raise Error(errors[band])
@@ -2302,4 +2618,46 @@ def rasterize_lines_all(
         target,
         workers=workers,
         fog=fog,
+    )
+
+
+def rasterize_points_all(
+    points: List[RasterVertex],
+    mut target: RenderTarget,
+    mode: ShadeMode = SHADE_LIT,
+    textures: TextureStore = TextureStore(),
+    workers: Int = 1,
+    fog: FogView = FogView.none(),
+) raises:
+    """Draw every point in `points` into `target`, on `workers` threads.
+
+    `rasterize_frame` for a frame of points alone, in submission order:
+    one draw over the whole list and no triangles or segments. A point
+    reads no light.
+
+    Args:
+        points: Raster vertices, one per point.
+        target: The linear render target to draw into.
+        mode: What a pixel's color comes from; see `rasterize_point`.
+        textures: Where `SHADE_TEXTURE` looks the points' maps up.
+        workers: How many threads to draw with, at least one.
+        fog: The scene's fog, seen through the camera.
+
+    Raises:
+        Error: Everything `rasterize_frame` raises of the points:
+            `workers` less than one, a mode that is none of the three, a
+            fog view that `FogView.validate` refuses, or a point that
+            `check_point_state` or `check_point_maps` refuses.
+    """
+    var draws: List[Draw] = [Draw(DRAW_POINTS, 0, len(points))]
+    rasterize_frame(
+        List[RasterVertex](),
+        List[RasterVertex](),
+        draws,
+        target,
+        mode,
+        textures,
+        workers=workers,
+        fog=fog,
+        points=points,
     )

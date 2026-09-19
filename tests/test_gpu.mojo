@@ -40,11 +40,18 @@ from geometries.box import cube
 from geometries.sphere import sphere
 from math.matrix4 import translation
 from math.vector2 import Vector2
-from std.math import inf, pi
+from std.math import cos, inf, pi, sin
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
-from materials.material import line_dashed_material
+from materials.material import (
+    PointSize,
+    line_dashed_material,
+    points_material,
+    sprite_material,
+)
 from objects.line import LOOP, Line
+from objects.points import Points
+from objects.sprite import Sprite
 from objects.mesh import Mesh
 from renderers.renderer import Renderer
 from units.si import Angle, DEGREE, Length, METER
@@ -84,10 +91,12 @@ from render.tonemap import (
 )
 from render.rect import Rect
 from render.rasterizer import (
+    DRAW_POINTS,
     DRAW_SEGMENTS,
     Draw,
     rasterize_all,
     rasterize_lines_all,
+    rasterize_points_all,
 )
 from units.si import InverseLength, PER_METER
 from core.layers import Layers
@@ -97,6 +106,12 @@ from render.gpu import (
     LANE_DASH,
     LANE_GAP,
     LANE_LINE_DISTANCE,
+    LANE_POINT_SIZE,
+    STATE_PER_POINT,
+    POINT_STATE_ALPHA_MAP,
+    POINT_STATE_BLEND,
+    POINT_STATE_TEXTURE,
+    point_state,
     FOG_FLOATS,
     LIGHTS_AMBIENT,
     LIGHTS_EYE,
@@ -955,7 +970,7 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 28)
+    assert_equal(len(flat), 29)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -996,6 +1011,40 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
     assert_equal(lanes[LANE_LINE_DISTANCE], Float32(6.5))
     assert_equal(lanes[LANE_DASH], Float32(3))
     assert_equal(lanes[LANE_GAP], Float32(1))
+    # A point's size rides last of all, and a corner that is not a point
+    # carries zero.
+    assert_equal(flat[LANE_POINT_SIZE], Float32(0))
+    var dotted = List[RasterVertex]()
+    dotted.append(RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), point_size=5.5))
+    assert_equal(flatten(dotted)[LANE_POINT_SIZE], Float32(5.5))
+
+
+def test_the_point_state_table_has_an_entry_per_map_and_policy() raises:
+    var points: List[RasterVertex] = [
+        RasterVertex(
+            1,
+            2,
+            3,
+            4,
+            FloatColor(1, 1, 1),
+            texture=TextureId(3),
+            blend=BLEND,
+            kind=BASIC,
+            alpha_map=TextureId(5),
+            point_size=2,
+        ),
+        RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), kind=BASIC, point_size=2),
+    ]
+    var state = point_state(points)
+    assert_equal(len(state), 2 * STATE_PER_POINT)
+    assert_equal(state[POINT_STATE_TEXTURE], Int32(3))
+    assert_equal(state[POINT_STATE_BLEND], Int32(BLEND.value))
+    assert_equal(state[POINT_STATE_ALPHA_MAP], Int32(5))
+    assert_equal(state[STATE_PER_POINT + POINT_STATE_TEXTURE], Int32(-1))
+    assert_equal(
+        state[STATE_PER_POINT + POINT_STATE_BLEND], Int32(OPAQUE.value)
+    )
+    assert_equal(state[STATE_PER_POINT + POINT_STATE_ALPHA_MAP], Int32(-1))
 
 
 def test_the_state_table_has_an_entry_per_map_and_policy() raises:
@@ -4218,7 +4267,7 @@ def test_flattening_carries_the_alpha_test_in_its_own_lane() raises:
         RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), alpha_test=0.375)
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 28)
+    assert_equal(len(flat), 29)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[20], Float32(0.375))
     # And a corner that says nothing about it carries zero, no test.
@@ -4400,7 +4449,7 @@ def test_flattening_carries_the_specular_and_the_shininess() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 28)
+    assert_equal(len(flat), 29)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[21], Float32(0.25))
     assert_equal(flat[22], Float32(0.5))
@@ -5461,6 +5510,398 @@ def test_both_backends_agree_on_a_posed_rig() raises:
     var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
     assert_true(drawn > 300, "the rig barely drew anything")
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- points, both backends --------------------------------------------------
+
+
+def a_point(
+    x: Float32,
+    y: Float32,
+    size: Float32,
+    z: Float32,
+    color: Color,
+    blend: Blending = OPAQUE,
+    texture: TextureId = NO_TEXTURE,
+    alpha_map: TextureId = NO_TEXTURE,
+    alpha_test: Float32 = 0,
+    depth: Float32 = 0,
+) raises -> RasterVertex:
+    """Return one point, unlit as a point must be."""
+    return RasterVertex(
+        x,
+        y,
+        z,
+        1,
+        FloatColor(srgb=color),
+        0,
+        0,
+        texture,
+        blend,
+        kind=BASIC,
+        view_depth=depth,
+        alpha_map=alpha_map,
+        alpha_test=alpha_test,
+        point_size=size,
+    )
+
+
+def test_both_backends_draw_the_same_squares() raises:
+    # The rule lives in `render.pointrule` and the two loops are shaped
+    # differently: the host walks the square, the kernel asks each pixel
+    # whether the point covers it. This is what says they agree.
+    if skipped_for_lack_of_a_gpu("both backends draw the same squares"):
+        return
+    # Centered on pixel centers and on pixel corners, whole and fractional
+    # sizes, one hanging off each edge, two overlapping at different
+    # depths, and a blended one over an opaque one.
+    var points: List[RasterVertex] = [
+        a_point(4.5, 4.5, 3, 0.5, Color(255, 255, 255)),
+        a_point(12.0, 6.0, 2, 0.5, Color(255, 0, 0)),
+        a_point(20.3, 9.7, 3.7, 0.5, Color(0, 255, 0)),
+        a_point(30.25, 12.5, 0.5, 0.5, Color(0, 0, 255)),
+        a_point(40.5, 20.5, 1, 0.5, Color(255, 255, 0)),
+        a_point(0.5, 30.5, 5, 0.5, Color(0, 255, 255)),
+        a_point(47.5, 33.5, 5, 0.5, Color(255, 0, 255)),
+        a_point(24.5, 24.5, 7, 0.6, Color(200, 200, 200)),
+        a_point(26.5, 26.5, 7, 0.4, Color(90, 90, 200)),
+        a_point(10.5, 26.5, 6, 0.3, Color(255, 128, 0, 128), BLEND),
+        a_point(10.5, 26.5, 4, 0.5, Color(0, 128, 255)),
+    ]
+    var empty = List[RasterVertex]()
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_points_all(points, target)
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        empty,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        FogView.none(),
+        NO_TONE_MAPPING,
+        1.0,
+        empty,
+        List[Draw](),
+        None,
+        points,
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 100, "the points barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    for y in range(36):
+        for x in range(48):
+            assert_equal(cpu.depth_at(x, y), gpu.depth_at(x, y))
+
+
+def test_both_backends_map_and_cut_and_fog_a_point_alike() raises:
+    # A mipmapped map read at the level the size chooses, an alpha map
+    # thinning and a test cutting, the fog by the point's own depth, and
+    # the uv view of the point's coordinate: everything a point's pixel
+    # goes through on the host, done by the device from the same lanes.
+    if skipped_for_lack_of_a_gpu("both backends map a point alike"):
+        return
+    var textures = TextureStore()
+    var board = textures.add(
+        checkerboard(
+            32, 4, Color(240, 200, 120), Color(30, 60, 120), REPEAT, BILINEAR
+        )
+    )
+    var sharp = textures.add(
+        checkerboard(
+            8,
+            2,
+            Color(255, 255, 255),
+            Color(0, 0, 0),
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+        )
+    )
+    var thin_pixels = List[UInt8]()
+    for texel in range(4):
+        thin_pixels.append(0)
+        thin_pixels.append(UInt8(40 + texel * 60))
+        thin_pixels.append(255)
+        thin_pixels.append(255)
+    var thin = textures.add(
+        Texture(2, 2, thin_pixels^, REPEAT, NEAREST, LINEAR, False, IGNORED)
+    )
+    var points: List[RasterVertex] = [
+        a_point(8.5, 8.5, 12, 0.5, Color(255, 255, 255), texture=board),
+        a_point(24.5, 8.5, 5, 0.5, Color(255, 255, 255), texture=board),
+        a_point(40.5, 8.5, 9, 0.5, Color(255, 255, 255), texture=sharp),
+        a_point(
+            8.5,
+            26.5,
+            10,
+            0.5,
+            Color(255, 255, 255, 200),
+            BLEND,
+            texture=board,
+            alpha_map=thin,
+        ),
+        a_point(
+            24.5,
+            26.5,
+            10,
+            0.5,
+            Color(255, 255, 255),
+            alpha_map=thin,
+            alpha_test=0.5,
+        ),
+        a_point(
+            40.5, 26.5, 10, 0.5, Color(255, 255, 255), texture=sharp, depth=6
+        ),
+    ]
+    var fog = FogView(
+        linear_fog(Color(160, 170, 190), Length(2.0, METER), Length(9.0, METER))
+    )
+    for mode in [SHADE_TEXTURE, SHADE_LIT, SHADE_UV]:
+        var target = RenderTarget(48, 36, BACKGROUND)
+        rasterize_points_all(points, target, mode, textures, 1, fog)
+        var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+        var gpu = render_triangles(
+            List[RasterVertex](),
+            48,
+            36,
+            BACKGROUND,
+            mode,
+            textures,
+            Lighting.uniform(),
+            fog,
+            NO_TONE_MAPPING,
+            1.0,
+            List[RasterVertex](),
+            List[Draw](),
+            None,
+            points,
+        )
+        var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+        assert_true(drawn > 100, "the points barely drew anything")
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+        for y in range(36):
+            for x in range(48):
+                assert_equal(cpu.depth_at(x, y), gpu.depth_at(x, y))
+    # A checked point: the level the map is read at has to differ between
+    # the big point and the small one, or the mip lane was not exercised.
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_points_all(points, target, SHADE_TEXTURE, textures)
+    # Read at a quarter of the way across and up each point: the middle
+    # of one square at the level the big point reads, and a mix of two
+    # at the level the small one reads.
+    var big = target.shown(5, 11)
+    var small = target.shown(23, 9)
+    assert_true(
+        _apart(big.r, small.r) > 8 or _apart(big.b, small.b) > 8,
+        "the two sizes read one level",
+    )
+
+
+def test_both_backends_draw_points_and_sprites_in_a_scene() raises:
+    # Points and sprites through the whole pipeline: attenuated sizes, a
+    # sprite turned and held to its image size, a translucent sprite over
+    # a lit box, opaque points behind the box and blended ones in front,
+    # in the frame's one order, under a fog and a curve.
+    if skipped_for_lack_of_a_gpu("both backends draw points and sprites"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING, 0.9)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var cloud = BufferGeometry()
+    var numbers = List[Float32]()
+    for index in range(40):
+        var share = Float32(index) / 40
+        numbers.append(1.6 * share - 0.8)
+        numbers.append(0.7 * sin(share * 12))
+        numbers.append(-1.5 + 3 * cos(share * 7))
+    cloud.set_attribute(String(POSITION), BufferAttribute(numbers^, 3))
+    var dots = assets.geometries.add(cloud^)
+    var board = assets.textures.add(
+        checkerboard(16, 4, Color(255, 240, 200), Color(60, 40, 120))
+    )
+    var orange = assets.materials.add(Material(Color(255, 140, 40)))
+    var solid_dots = assets.materials.add(
+        points_material(Color(120, 255, 160), size=PointSize(3.0))
+    )
+    var glass_dots = assets.materials.add(
+        points_material(
+            Color(255, 80, 80),
+            size=PointSize(2.5),
+            size_attenuation=False,
+            opacity=0.6,
+            transparent=True,
+        )
+    )
+    var badge = assets.materials.add(
+        sprite_material(
+            Color(255, 255, 255),
+            map=board,
+            rotation=Angle(20.0, DEGREE),
+            opacity=0.7,
+        )
+    )
+    var pinned = assets.materials.add(
+        sprite_material(Color(90, 190, 255), size_attenuation=False)
+    )
+    var scene = Scene()
+    var block = Object3D()
+    block.set_euler(
+        Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var block_node = scene.add(block^)
+    var cloud_node = scene.add(Object3D())
+    var label = Object3D()
+    label.set_position(0.4, 0.5, 0.9)
+    label.set_scale(0.8, 0.6, 1.0)
+    var label_node = scene.add(label^)
+    var pin = Object3D()
+    pin.set_position(-0.9, -0.4, -2.0)
+    pin.set_scale(0.3, 0.3, 1.0)
+    var pin_node = scene.add(pin^)
+    var sun = Object3D()
+    sun.set_position(0.4, 0.8, 0.5)
+    var sun_node = scene.add(sun^)
+    scene.add_light(directional_light(Color(255, 255, 255), sun_node, 0.8))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.2))
+    scene.fog = linear_fog(
+        Color(160, 170, 190), Length(2.0, METER), Length(9.0, METER)
+    )
+    scene.update()
+    scene.add_mesh(Mesh(box, orange, block_node))
+    scene.add_points(Points(dots, solid_dots, cloud_node))
+    scene.add_points(Points(dots, glass_dots, label_node))
+    scene.add_sprite(Sprite(badge, label_node))
+    scene.add_sprite(Sprite(pinned, pin_node))
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.6, 3.4), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    assert_true(len(frame.points) > 20, "the points were culled away")
+    var saw_points = False
+    for index in range(len(frame.draws)):
+        if frame.draws[index].kind == DRAW_POINTS:
+            saw_points = True
+    assert_true(saw_points, "the frame holds no points")
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        FogView(scene.fog),
+        ACES_FILMIC_TONE_MAPPING,
+        0.9,
+        frame.segments,
+        frame.draws,
+        None,
+        frame.points,
+    )
+    var gpu = device.read_back()
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 300, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    for y in range(36):
+        for x in range(48):
+            var theirs = cpu.depth_at(x, y)
+            var ours = gpu.depth_at(x, y)
+            if theirs == inf[DType.float32]():
+                assert_equal(ours, theirs)
+            else:
+                assert_almost_equal(ours, theirs, atol=Float64(1e-5))
+    # And a point naming a map that was never uploaded is refused before
+    # the launch, as a triangle's is.
+    var stray = List[RasterVertex]()
+    stray.append(
+        a_point(4.5, 4.5, 3, 0.5, Color(255, 0, 0), texture=TextureId(9))
+    )
+    with assert_raises(contains="has not been uploaded"):
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting(scene),
+            FogView(scene.fog),
+            NO_TONE_MAPPING,
+            1.0,
+            frame.segments,
+            List[Draw](),
+            None,
+            stray,
+        )
+    # A point whose alpha map is not stored as data is refused too, under
+    # the mode that would open it.
+    var pixels: List[UInt8] = [0, 128, 255, 255]
+    var wrong = assets.textures.add(
+        Texture(1, 1, pixels^, REPEAT, NEAREST, SRGB, False, COVERAGE)
+    )
+    device.set_textures(assets.textures)
+    var masked = List[RasterVertex]()
+    masked.append(a_point(4.5, 4.5, 3, 0.5, Color(255, 0, 0), alpha_map=wrong))
+    with assert_raises(contains="holds data"):
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting(scene),
+            FogView(scene.fog),
+            NO_TONE_MAPPING,
+            1.0,
+            frame.segments,
+            List[Draw](),
+            None,
+            masked,
+        )
+    var ignored = List[UInt8]()
+    for _ in range(4):
+        ignored.append(128)
+    var not_ignoring = assets.textures.add(
+        Texture(1, 1, ignored^, REPEAT, NEAREST, LINEAR, False, COVERAGE)
+    )
+    device.set_textures(assets.textures)
+    masked[0].alpha_map = not_ignoring
+    with assert_raises(contains="ignore its own alpha"):
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting(scene),
+            FogView(scene.fog),
+            NO_TONE_MAPPING,
+            1.0,
+            frame.segments,
+            List[Draw](),
+            None,
+            masked,
+        )
+    # A lit point is refused by the same check the host makes.
+    masked[0].alpha_map = NO_TEXTURE
+    masked[0].kind = LAMBERT
+    with assert_raises(contains="unlit"):
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_LIT,
+            Lighting(scene),
+            FogView(scene.fog),
+            NO_TONE_MAPPING,
+            1.0,
+            frame.segments,
+            List[Draw](),
+            None,
+            masked,
+        )
 
 
 # --- lines, both backends ---------------------------------------------------

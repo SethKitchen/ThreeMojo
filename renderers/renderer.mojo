@@ -103,6 +103,7 @@ from math.vector3 import Vector3
 from objects.instanced_mesh import check_placing
 from geometries.edges import triangle_edges
 from objects.line import line_distances, segment_count, segment_ends
+from objects.sprite import SPRITE_RADIUS, Sprite
 from objects.skeleton import blend_bones
 from objects.skinned_mesh import (
     ATTACHED,
@@ -122,7 +123,8 @@ from materials.material import (
     MaterialKind,
     Side,
 )
-from units.si import Length, METER
+from units.si import Length, METER, RADIAN
+from render.pointrule import attenuated_size
 from render.texture import IGNORED
 from render.texture_store import NO_TEXTURE, TextureId
 from render.framebuffer import Color, FloatColor, Framebuffer
@@ -130,6 +132,7 @@ from render.target import RenderTarget
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, check_tone_mapping
 from math.vector2 import Vector2
 from render.rasterizer import (
+    DRAW_POINTS,
     DRAW_SEGMENTS,
     SHADE_LIT,
     SHADE_TEXTURE,
@@ -152,7 +155,7 @@ from renderers.clip import (
     within_depth,
     within_sides,
 )
-from std.math import floor, isfinite, max
+from std.math import cos, floor, isfinite, max, sin
 from std.sys import num_logical_cores
 
 
@@ -543,6 +546,11 @@ struct _Draw(ImplicitlyCopyable):
     # with the segments', which are sorted by the same two.
     var depth: Float32
     var blends: Bool
+    # Which of the scene's sprites this draw is, or minus one when it is
+    # not one. A sprite names no geometry: `_prepared` builds its two
+    # triangles from its node's world matrix instead; see
+    # `objects.sprite`.
+    var sprite: Int
 
 
 @fieldwise_init
@@ -578,15 +586,14 @@ def _note_span(
 
     Args:
         spans: The list to record into.
-        kind: `DRAW_TRIANGLES` or `DRAW_SEGMENTS`, which says the stride.
+        kind: `DRAW_TRIANGLES`, `DRAW_SEGMENTS` or `DRAW_POINTS`, which
+            says the stride.
         begin: How many corners the list held before the draw.
         end: How many it holds after.
         depth: The draw's camera-space depth.
         blends: Whether its material blends.
     """
-    var stride = 3
-    if kind == DRAW_SEGMENTS:
-        stride = 2
+    var stride = kind.stride()
     var count = (end - begin) // stride
     if count > 0:
         spans.append(_Span(kind, begin // stride, count, depth, blends))
@@ -698,6 +705,7 @@ def _gather(
                 skin,
                 depth,
                 blends,
+                -1,
             )
         )
 
@@ -928,6 +936,39 @@ def _draws(
             bounds,
             known,
         )
+    # The sprites, sorted among the meshes by their own depth so that a
+    # translucent sprite falls between the translucent surfaces either
+    # side of it. Culled by the sphere around the unit square carried by
+    # the world matrix, three.js's `Sprite` geometry bound.
+    for index in range(len(scene.sprites)):
+        ref sprite = scene.sprites[index]
+        if not scene.get(sprite.node).layers.test(visible):
+            continue
+        var world = scene.world_matrix(sprite.node)
+        if sprite.frustum_culled:
+            var bound = Sphere(Vector3(0, 0, 0), SPRITE_RADIUS)
+            bound.apply_matrix4(world)
+            bound.radius += slack
+            if not frustum.intersects_sphere(bound):
+                continue
+        var depth = view.transform_point(
+            Vector3(world.elements[12], world.elements[13], world.elements[14])
+        ).z
+        var blends = assets.materials.get(sprite.material).is_transparent()
+        depths.append(depth)
+        clear.append(blends)
+        draws.append(
+            _Draw(
+                GeometryId(-1),
+                sprite.material,
+                world^,
+                SIMD[DType.float32, MAX_MORPH_TARGETS](0),
+                -1,
+                depth,
+                blends,
+                index,
+            )
+        )
 
     var solid = List[Int]()
     var solid_depths = List[Float32]()
@@ -1019,6 +1060,7 @@ def _to_raster(
     matcap: TextureId,
     dash_size: Float32 = 0,
     gap_size: Float32 = 0,
+    point_size: Float32 = 0,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -1062,6 +1104,7 @@ def _to_raster(
         vertex.line_distance,
         dash_size,
         gap_size,
+        point_size,
     )
 
 
@@ -1197,6 +1240,199 @@ struct _Paint(ImplicitlyCopyable):
         corners.append(one)
         corners.append(two)
         corners.append(three)
+
+
+def _column_length(matrix: Matrix4, axis: Int) -> Float32:
+    """Return the length of one of a matrix's three axis columns: how much
+    it scales along that axis, three.js's `length(modelMatrix[axis].xyz)`.
+
+    Args:
+        matrix: The transform.
+        axis: Which column, zero for x through two for z.
+
+    Returns:
+        The length.
+    """
+    ref e = matrix.elements
+    var start = axis * 4
+    var x = e[start]
+    var y = e[start + 1]
+    var z = e[start + 2]
+    return Vector3(x, y, z).length()
+
+
+def _checked_maps(
+    assets: Assets, material: Material, shading: ShadeMode
+) raises -> Tuple[TextureId, TextureId]:
+    """Return the map and the alpha map a point or a sprite samples, or
+    `NO_TEXTURE` for each the shading mode would not open.
+
+    The two checks the mesh loop of `_prepared` makes of the same two
+    maps, for the same reasons: an id naming nothing is detectable only
+    here, where the store is in reach, and an alpha map must be stored as
+    data whatever the mode.
+
+    Args:
+        assets: Where the textures live.
+        material: The material, for which maps it names.
+        shading: The renderer's shading mode. Only `SHADE_TEXTURE` opens
+            either map.
+
+    Returns:
+        The map, then the alpha map.
+
+    Raises:
+        Error: If either id names a texture that is not there, or the
+            alpha map is not stored as data -- see `check_alpha_map`.
+    """
+    var map = material.map
+    if map != NO_TEXTURE and map.value >= assets.textures.count():
+        raise Error("A material names a texture that is not there")
+    if shading != SHADE_TEXTURE:
+        map = NO_TEXTURE
+    var mask = material.alpha_map
+    if mask != NO_TEXTURE and mask.value >= assets.textures.count():
+        raise Error("A material names an alpha map that is not there")
+    if mask != NO_TEXTURE:
+        check_alpha_map(assets.textures.get(mask))
+    if shading != SHADE_TEXTURE:
+        mask = NO_TEXTURE
+    return (map, mask)
+
+
+def _emit_sprite(
+    mut corners: List[RasterVertex],
+    assets: Assets,
+    sprite: Sprite,
+    draw: _Draw,
+    view: Matrix4,
+    to_screen: Matrix4,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane],
+    perspective: Bool,
+    shading: ShadeMode,
+) raises:
+    """Build a sprite's two triangles in camera space and append them.
+
+    three.js's `sprite_vert`: the node's world origin is carried into
+    camera space, the square is scaled by the lengths of the world
+    matrix's x and y columns, turned by the material's rotation, and laid
+    flat to the image there, so the node's own turn does nothing to it.
+    With the attenuation off the scale is multiplied by the depth the
+    perspective divide is about to divide it by, so the square keeps its
+    size on the image. See `objects.sprite`.
+
+    The triangles then go where every triangle goes: through the clipper
+    and `_Paint.emit`, two-sided, so a sprite is drawn by the triangle
+    rule on either backend and needs no rule of its own.
+
+    Args:
+        corners: The frame's raster vertices, appended to.
+        assets: Where the material and its maps live.
+        sprite: The sprite, for its center.
+        draw: Its draw, for its material and world matrix.
+        view: The world-to-camera transform.
+        to_screen: The camera-to-pixels transform.
+        near: Distance to the near plane.
+        far: Distance to the far plane.
+        sides: The camera's four side planes, in camera space.
+        perspective: Whether the camera's rays converge.
+        shading: The renderer's shading mode, for which maps to carry.
+
+    Raises:
+        Error: If the material is not `BASIC` or is a wireframe, names a
+            map or an alpha map that is not there, or names an alpha map
+            that is not stored as data.
+    """
+    var material = assets.materials.get(draw.material)
+    # Refused for the reason a line refuses a lit kind: a sprite is unlit,
+    # as three.js's `SpriteMaterial` is, and there is no light to reach it
+    # with in any case -- it has no surface of its own to turn.
+    if material.kind != BASIC:
+        raise Error(
+            "A sprite material must be BASIC: a sprite is a picture facing"
+            " the camera, and no light reaches it"
+        )
+    if material.wireframe:
+        raise Error(
+            "A sprite cannot be a wireframe: it is a picture, and its"
+            " edges say nothing"
+        )
+    var maps = _checked_maps(assets, material, shading)
+    var to_uv = _uv_transform(assets, material)
+    ref world = draw.world
+    var origin = Vector3(
+        world.elements[12], world.elements[13], world.elements[14]
+    )
+    var center = view.transform_point(origin)
+    var scale_x = _column_length(world, 0)
+    var scale_y = _column_length(world, 1)
+    if not material.size_attenuation and perspective:
+        scale_x *= -center.z
+        scale_y *= -center.z
+    var turn = material.rotation.to(RADIAN)
+    var turned_x = cos(turn)
+    var turned_y = sin(turn)
+    var base = _with_opacity(FloatColor(srgb=material.color), material.opacity)
+    # The unit square's corners and their coordinates, counterclockwise
+    # from the bottom left: three.js's sprite geometry.
+    var xs: List[Float32] = [-0.5, 0.5, 0.5, -0.5]
+    var ys: List[Float32] = [-0.5, -0.5, 0.5, 0.5]
+    var quad = List[ClipVertex]()
+    for corner in range(4):  # pragma: no branch
+        var aligned_x = (xs[corner] - (sprite.center.x - 0.5)) * scale_x
+        var aligned_y = (ys[corner] - (sprite.center.y - 0.5)) * scale_y
+        var placed = to_uv.transform_point(
+            Vector2(xs[corner] + 0.5, ys[corner] + 0.5)
+        )
+        quad.append(
+            ClipVertex(
+                Vector3(
+                    center.x + turned_x * aligned_x - turned_y * aligned_y,
+                    center.y + turned_y * aligned_x + turned_x * aligned_y,
+                    center.z,
+                ),
+                base,
+                Vector3(0, 0, 1),
+                placed.x,
+                placed.y,
+                origin,
+            )
+        )
+    # Two-sided and unmirrored: a negative scale turns the square inside
+    # out, and it is drawn either way, as three.js draws it.
+    var paint = _Paint(
+        to_screen,
+        maps[0],
+        material.blending,
+        BASIC,
+        NO_TEXTURE,
+        maps[1],
+        material.alpha_test,
+        FloatColor(0.0, 0.0, 0.0),
+        0,
+        NO_TEXTURE,
+        NO_TEXTURE,
+        False,
+        DOUBLE_SIDE,
+    )
+    var thirds: List[Int] = [2, 3]
+    for half in range(2):  # pragma: no branch
+        var a = quad[0]
+        var b = quad[thirds[half] - 1]
+        var c = quad[thirds[half]]
+        if _whole_in_view(a, b, c, near, far, sides):
+            paint.emit(corners, a, b, c)
+            continue
+        var pieces = clip_depth(a, b, c, near, far, sides)
+        for piece in range(len(pieces) // 3):
+            paint.emit(
+                corners,
+                pieces[piece * 3],
+                pieces[piece * 3 + 1],
+                pieces[piece * 3 + 2],
+            )
 
 
 def _line_corner(
@@ -1351,7 +1587,9 @@ struct Frame(Movable):
     var corners: List[RasterVertex]
     # Raster vertices, two per segment, as `prepare_lines` returns them.
     var segments: List[RasterVertex]
-    # The order to draw in, as runs of one list or the other; see
+    # Raster vertices, one per point, as `prepare_points` returns them.
+    var points: List[RasterVertex]
+    # The order to draw in, as runs of one list or another; see
     # `render.rasterizer.Draw`.
     var draws: List[Draw]
 
@@ -1360,6 +1598,7 @@ struct Frame(Movable):
         var corners: List[RasterVertex],
         var segments: List[RasterVertex],
         var draws: List[Draw],
+        var points: List[RasterVertex] = List[RasterVertex](),
     ):
         """Hold a prepared frame.
 
@@ -1367,10 +1606,12 @@ struct Frame(Movable):
             corners: The triangles' corners, three each.
             segments: The segments' corners, two each.
             draws: The order to draw them in.
+            points: The points, one corner each. None by default.
         """
         self.corners = corners^
         self.segments = segments^
         self.draws = draws^
+        self.points = points^
 
 
 struct Renderer(Movable):
@@ -1715,7 +1956,39 @@ struct Renderer(Movable):
             far * CULL_SLACK,
             skins,
         )
+        # Whether the camera's rays converge, for a sprite that keeps its
+        # size on the image; see `_emit_sprite`.
+        var perspective = not camera.projection_matrix().is_affine()
         for slot in range(len(draws)):
+            if draws[slot].sprite >= 0:
+                # A sprite names no geometry, so nothing below applies to
+                # it: its two triangles are built from its node instead.
+                # It is a filled surface only, and refuses a wireframe.
+                if wireframe:
+                    continue
+                var begin = len(corners)
+                _emit_sprite(
+                    corners,
+                    assets,
+                    scene.sprites[draws[slot].sprite],
+                    draws[slot],
+                    view,
+                    to_screen,
+                    near,
+                    far,
+                    sides,
+                    perspective,
+                    self.shading,
+                )
+                _note_span(
+                    spans,
+                    DRAW_TRIANGLES,
+                    begin,
+                    len(corners),
+                    draws[slot].depth,
+                    draws[slot].blends,
+                )
+                continue
             var world = draws[slot].world
             # An odd number of reflections in the world transform reverses
             # winding, which turns both the culling convention and the
@@ -2440,37 +2713,281 @@ struct Renderer(Movable):
             )
         return ordered^
 
+    def prepare_points[
+        C: Camera
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+    ) raises -> List[
+        RasterVertex
+    ]:
+        """Turn the points in a scene into the squares a rasterizer draws.
+
+        `prepare_lines` for points: the same boundary and the same
+        promise, and a third pass for the reason the lines have a second.
+        A point has no surface, so it has no normal and no winding, and
+        no second corner to interpolate anything toward. What it has is a
+        position, a color, a depth and a size on the image, and a pass
+        that carries only those is shorter than one that carries
+        everything.
+
+        `scene.update()` must have been called since the last transform
+        change, as `prepare` needs.
+
+        Args:
+            scene: The transform hierarchy, and the points in it.
+            assets: The geometries, materials and textures the points name.
+            camera: The camera to project through.
+
+        Returns:
+            Raster vertices, one per point, each carrying its size on the
+            image with the attenuation applied. Opaque points come first,
+            nearest first, then the blended ones furthest first, as the
+            lines are ordered and for the same reasons. A point whose node
+            shares no layer with the camera contributes none, nor does one
+            whose bounding sphere lies wholly outside the camera frustum
+            unless it opted out, nor does a point outside the view volume:
+            a point is kept or thrown away whole, as three.js's is.
+
+        Raises:
+            Error: If the points name a node, a geometry or a material
+                that is not there, if their geometry has no positions or
+                carries an index buffer, if their material is not `BASIC`
+                or is a wireframe, if it names a map or an alpha map that
+                is not there or whose transform is not the identity, if
+                its alpha map is not stored as data, or if it asks for
+                vertex colors and the geometry has no `color` attribute
+                of three or four floats per vertex.
+        """
+        var spans = List[_Span]()
+        return self._prepared_points(scene, assets, camera, spans)
+
+    def _prepared_points[
+        C: Camera
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        mut spans: List[_Span],
+    ) raises -> List[RasterVertex]:
+        """Turn the points in a scene into raster vertices, in draw order,
+        recording each object's run.
+
+        The body of `prepare_points`, shaped as `_prepared_lines` is: every
+        object read in scene order, then the whole list put in draw order
+        at once.
+
+        Args:
+            scene: The transform hierarchy, and the points in it.
+            assets: The geometries, materials and textures the points name.
+            camera: The camera to project through.
+            spans: Where each object's run is recorded, with its depth and
+                whether it blends, in the order the returned list holds
+                them. Appended to.
+
+        Returns:
+            Raster vertices, one per point, in draw order.
+
+        Raises:
+            Error: Everything `prepare_points` raises.
+        """
+        var view = camera.view_matrix_in(scene)
+        var to_screen = self._to_screen(camera)
+        var near = camera.near_distance()
+        var far = camera.far_distance()
+        var clip = camera.projection_matrix()
+        clip.multiply(view)
+        var frustum = Frustum.from_camera(clip, view, near, far)
+        var sides = Frustum.side_planes(camera.projection_matrix())
+        var perspective = not camera.projection_matrix().is_affine()
+        # Half the target's height: three.js's `scale` uniform, which a
+        # point's size is measured against at a depth of one meter. The
+        # whole target and not the viewport, as three.js reads the drawing
+        # buffer's height whatever the viewport.
+        var scale = Float32(self.height) / 2
+        var bounds = List[Sphere](
+            length=assets.geometries.count(), fill=Sphere.empty()
+        )
+        var known = List[Bool](length=assets.geometries.count(), fill=False)
+        var slack = far * CULL_SLACK
+
+        var unsorted = List[_Span]()
+        var corners = List[RasterVertex]()
+        for index in range(len(scene.points)):
+            ref points = scene.points[index]
+            if not scene.get(points.node).layers.test(camera.visible_layers()):
+                continue
+            var world = scene.world_matrix(points.node)
+            if points.frustum_culled and not _in_view(
+                assets, points.geometry, world, frustum, slack, bounds, known
+            ):
+                continue
+            var depth = view.transform_point(
+                Vector3(
+                    world.elements[12], world.elements[13], world.elements[14]
+                )
+            ).z
+            var begin = len(corners)
+            ref geometry = assets.geometries.get(points.geometry)
+            var material = assets.materials.get(points.material)
+            # A point is unlit, and refuses a lit kind rather than being
+            # shaded by a normal it does not have. See `objects.points`.
+            if material.kind != BASIC:
+                raise Error(
+                    "A points material must be BASIC: a point has no"
+                    " surface, so it has no normal for a light to reach"
+                )
+            if material.wireframe:
+                raise Error(
+                    "A points material cannot be a wireframe: a point has"
+                    " no edges to draw"
+                )
+            var maps = _checked_maps(assets, material, self.shading)
+            # A point samples its maps at its own coordinate, as stored;
+            # see `render.pointrule.coord`. A map moved, tiled or turned
+            # would be sampled somewhere its author did not say, so it is
+            # refused rather than sampled untransformed, whatever the
+            # shading mode: it is a wrong asset, not a wrong frame.
+            if _uv_transform(assets, material) != Matrix3():
+                raise Error(
+                    "A point samples its map at its own coordinate, as"
+                    " stored: a map whose transform is not the identity is"
+                    " refused"
+                )
+            if geometry.is_indexed():
+                raise Error(
+                    "A points geometry cannot be indexed: each vertex is"
+                    " one point"
+                )
+            ref positions = geometry.attribute_view(String(POSITION))
+            var vertex_count = positions.count()
+            var base = _with_opacity(
+                FloatColor(srgb=material.color), material.opacity
+            )
+            var colors = _vertex_colors(
+                geometry, material.vertex_colors, base, vertex_count
+            )
+            for vertex in range(vertex_count):
+                var point = world.transform_point(
+                    Vector3(
+                        positions.component(vertex, 0),
+                        positions.component(vertex, 1),
+                        positions.component(vertex, 2),
+                    )
+                )
+                var seen = view.transform_point(point)
+                # Kept or thrown away whole: a point has no extent in the
+                # scene to cut, so one whose center is outside the volume
+                # is left out, as OpenGL leaves it out.
+                if not within_depth(seen.z, near, far):
+                    continue
+                if not within_sides(seen, sides):
+                    continue
+                corners.append(
+                    _to_raster(
+                        ClipVertex(
+                            seen,
+                            colors[vertex],
+                            Vector3(0, 0, 0),
+                            0,
+                            0,
+                            point,
+                        ),
+                        to_screen,
+                        maps[0],
+                        material.blending,
+                        BASIC,
+                        NO_TEXTURE,
+                        maps[1],
+                        material.alpha_test,
+                        FloatColor(0.0, 0.0, 0.0),
+                        0,
+                        NO_TEXTURE,
+                        NO_TEXTURE,
+                        point_size=attenuated_size(
+                            material.point_size.pixels,
+                            seen.z,
+                            scale,
+                            perspective and material.size_attenuation,
+                        ),
+                    )
+                )
+            _note_span(
+                unsorted,
+                DRAW_POINTS,
+                begin,
+                len(corners),
+                depth,
+                material.is_transparent(),
+            )
+
+        # Into draw order, as `_prepared_lines` puts the lines.
+        var solid = List[Int]()
+        var solid_depths = List[Float32]()
+        var see_through = List[Int]()
+        var see_through_depths = List[Float32]()
+        for position in range(len(unsorted)):
+            if unsorted[position].blends:
+                see_through.append(position)
+                see_through_depths.append(unsorted[position].depth)
+            else:
+                solid.append(position)
+                solid_depths.append(-unsorted[position].depth)
+        _sort_by(solid, solid_depths)
+        _sort_by(see_through, see_through_depths)
+        var order = List[Int]()
+        for position in range(len(solid)):
+            order.append(solid[position])
+        for position in range(len(see_through)):
+            order.append(see_through[position])
+        var ordered = List[RasterVertex]()
+        ordered.reserve(len(corners))
+        for position in range(len(order)):
+            ref run = unsorted[order[position]]
+            spans.append(
+                _Span(
+                    DRAW_POINTS, len(ordered), run.count, run.depth, run.blends
+                )
+            )
+            ordered.extend(Span(corners)[run.first : run.first + run.count])
+        return ordered^
+
     def prepare_frame[
         C: Camera
     ](self, scene: Scene, assets: Assets, camera: C,) raises -> Frame:
-        """Turn a scene into a frame: its triangles, its segments, and the
-        one order both are drawn in.
+        """Turn a scene into a frame: its triangles, its segments, its
+        points, and the one order all three are drawn in.
 
-        `prepare` and `prepare_lines` together, with what neither list can
-        say on its own: where a run of one kind goes among the runs of the
-        other. Opaque runs come first, the triangles nearest first and then
-        the segments nearest first, which is safe in any order because an
-        opaque fragment settles a pixel by depth alone. Blended runs follow,
-        triangles and segments together, furthest first by the depth of
-        each draw's own placed origin, so that a translucent line is drawn
-        after the translucent surface behind it and before the one in
-        front of it. Drawing every line after every triangle, as the two
-        lists were once drawn, put an opaque line behind a translucent
-        pane on top of it: the pane had blended without claiming the
-        depth, and the line passed the test.
+        `prepare`, `prepare_lines` and `prepare_points` together, with
+        what no list can say on its own: where a run of one kind goes
+        among the runs of the others. Opaque runs come first, the
+        triangles nearest first, then the segments and then the points,
+        each nearest first, which is safe in any order because an opaque
+        fragment settles a pixel by depth alone. Blended runs follow, all
+        three kinds together, furthest first by the depth of each draw's
+        own placed origin, so that a translucent line is drawn after the
+        translucent surface behind it and before the one in front of it.
+        Drawing every line after every triangle, as the two lists were
+        once drawn, put an opaque line behind a translucent pane on top of
+        it: the pane had blended without claiming the depth, and the line
+        passed the test.
 
         Args:
-            scene: The transform hierarchy, and the meshes, lines and
-                lights in it.
+            scene: The transform hierarchy, and the meshes, lines, points
+                and lights in it.
             assets: The geometry, materials and textures they name.
             camera: The camera to project through.
 
         Returns:
             The frame. `Renderer.render` fills it with `rasterize_frame`
-            and `GpuRenderer.draw` takes its three lists as they are.
+            and `GpuRenderer.draw` takes its four lists as they are.
 
         Raises:
-            Error: Everything `prepare` and `prepare_lines` raise.
+            Error: Everything `prepare`, `prepare_lines` and
+                `prepare_points` raise.
         """
         var corner_spans = List[_Span]()
         var corners = self._prepared(scene, assets, camera, False, corner_spans)
@@ -2478,6 +2995,8 @@ struct Renderer(Movable):
         var segments = self._prepared_lines(
             scene, assets, camera, segment_spans
         )
+        var point_spans = List[_Span]()
+        var points = self._prepared_points(scene, assets, camera, point_spans)
         var draws = List[Draw]()
         for span in range(len(corner_spans)):
             ref run = corner_spans[span]
@@ -2487,9 +3006,13 @@ struct Renderer(Movable):
             ref run = segment_spans[span]
             if not run.blends:
                 draws.append(Draw(DRAW_SEGMENTS, run.first, run.count))
-        # Both kinds' blended runs, furthest first. Each list is already in
-        # that order on its own; the sort is stable, so at one depth a
-        # surface still goes before a line, as it did with two passes.
+        for span in range(len(point_spans)):
+            ref run = point_spans[span]
+            if not run.blends:
+                draws.append(Draw(DRAW_POINTS, run.first, run.count))
+        # Every kind's blended runs, furthest first. Each list is already
+        # in that order on its own; the sort is stable, so at one depth a
+        # surface still goes before a line, and a line before a point.
         var mixed = List[_Span]()
         var order = List[Int]()
         var depths = List[Float32]()
@@ -2503,11 +3026,16 @@ struct Renderer(Movable):
                 order.append(len(mixed))
                 depths.append(segment_spans[span].depth)
                 mixed.append(segment_spans[span])
+        for span in range(len(point_spans)):
+            if point_spans[span].blends:
+                order.append(len(mixed))
+                depths.append(point_spans[span].depth)
+                mixed.append(point_spans[span])
         _sort_by(order, depths)
         for position in range(len(order)):
             ref run = mixed[order[position]]
             draws.append(Draw(run.kind, run.first, run.count))
-        return Frame(corners^, segments^, draws^)
+        return Frame(corners^, segments^, draws^, points^)
 
     def render[
         C: Camera
@@ -2602,6 +3130,7 @@ struct Renderer(Movable):
             frame.corners,
             self.shading != SHADE_UV and self.tone_mapping != NO_TONE_MAPPING,
             frame.segments,
+            frame.points,
         )
         # Resolved here as well as in `prepare`, because the fragments need
         # it: lighting is no longer baked into the corners on the way past.
@@ -2629,9 +3158,9 @@ struct Renderer(Movable):
             kept = self.scissor
         target.set_scissor(kept)
         target.clear_inside(kept, self.background)
-        # Triangles and segments in the frame's one order, which is the
-        # order the kernel walks too. See `render.rasterizer.rasterize_frame`
-        # and `prepare_frame`.
+        # Triangles, segments and points in the frame's one order, which
+        # is the order the kernel walks too. See
+        # `render.rasterizer.rasterize_frame` and `prepare_frame`.
         rasterize_frame(
             frame.corners,
             frame.segments,
@@ -2642,4 +3171,5 @@ struct Renderer(Movable):
             lighting,
             self.workers,
             fog,
+            frame.points,
         )

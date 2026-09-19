@@ -18,12 +18,17 @@ from materials.material import (
 from materials.material import (
     DEFAULT_DASH_SIZE,
     DEFAULT_GAP_SIZE,
+    DEFAULT_POINT_SIZE,
     NO_DASH,
+    NO_ROTATION,
+    PointSize,
     depth_material,
     line_dashed_material,
     matcap_material,
     normal_material,
     phong_material,
+    points_material,
+    sprite_material,
     toon_material,
 )
 from materials.material import MaterialId
@@ -48,8 +53,8 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from std.math import nan
-from units.si import Length, METER
+from std.math import inf, nan
+from units.si import Angle, DEGREE, Length, METER, RADIAN
 
 
 def a_board() raises -> Texture:
@@ -907,6 +912,117 @@ def test_only_a_basic_material_can_be_dashed() raises:
             dash_size=Length(1.0, METER),
             gap_size=Length(1.0, METER),
         )
+
+
+def test_a_point_size_is_a_positive_number_of_pixels() raises:
+    assert_true(PointSize(1.0).is_valid())
+    assert_true(PointSize(0.25).is_valid())
+    assert_false(PointSize(0.0).is_valid())
+    assert_false(PointSize(-3.0).is_valid())
+    assert_false(PointSize(nan[DType.float32]()).is_valid())
+    assert_false(PointSize(inf[DType.float32]()).is_valid())
+    assert_true(DEFAULT_POINT_SIZE == PointSize(1.0))
+
+
+def test_a_material_draws_one_pixel_points_unless_asked() raises:
+    var plain = Material(Color(255, 255, 255))
+    assert_true(plain.point_size == DEFAULT_POINT_SIZE)
+    assert_true(plain.size_attenuation)
+    assert_true(plain.rotation == NO_ROTATION)
+
+
+def test_a_points_material_takes_threejs_defaults() raises:
+    var dots = points_material(Color(255, 0, 0))
+    assert_true(dots.kind == BASIC)
+    assert_true(dots.point_size == DEFAULT_POINT_SIZE)
+    assert_true(dots.size_attenuation)
+    assert_false(dots.is_transparent())
+    assert_equal(dots.color.r, 255)
+    var spelled = points_material(
+        Color(255, 0, 0),
+        size=PointSize(6.0),
+        size_attenuation=False,
+        map=TextureId(0),
+        alpha_map=TextureId(1),
+        alpha_test=0.5,
+        opacity=0.5,
+        transparent=True,
+        vertex_colors=True,
+    )
+    assert_equal(spelled.point_size.pixels, Float32(6))
+    assert_false(spelled.size_attenuation)
+    assert_true(spelled.map == TextureId(0))
+    assert_true(spelled.alpha_map == TextureId(1))
+    assert_equal(spelled.alpha_test, Float32(0.5))
+    assert_true(spelled.is_transparent())
+    assert_true(spelled.vertex_colors)
+
+
+def test_a_sprite_material_takes_threejs_defaults() raises:
+    var badge = sprite_material()
+    assert_true(badge.kind == BASIC)
+    assert_equal(badge.color.r, 255)
+    assert_equal(badge.color.g, 255)
+    assert_equal(badge.color.b, 255)
+    assert_true(badge.rotation == NO_ROTATION)
+    assert_true(badge.size_attenuation)
+    # Transparent by default, as three.js's is: a sprite is a cut-out.
+    assert_true(badge.is_transparent())
+    var spelled = sprite_material(
+        Color(0, 255, 0),
+        map=TextureId(2),
+        alpha_map=TextureId(3),
+        rotation=Angle(90.0, DEGREE),
+        size_attenuation=False,
+        alpha_test=0.25,
+        opacity=0.75,
+        transparent=False,
+    )
+    assert_equal(spelled.color.g, 255)
+    assert_true(spelled.map == TextureId(2))
+    assert_true(spelled.alpha_map == TextureId(3))
+    assert_almost_equal(
+        spelled.rotation.to(RADIAN), Float32(1.5707964), atol=1e-6
+    )
+    assert_false(spelled.size_attenuation)
+    assert_equal(spelled.alpha_test, Float32(0.25))
+    assert_false(spelled.is_transparent())
+
+
+def test_a_point_size_that_is_not_a_size_is_refused() raises:
+    with assert_raises(contains="positive number of pixels"):
+        _ = points_material(Color(255, 0, 0), size=PointSize(0.0))
+    with assert_raises(contains="positive number of pixels"):
+        _ = points_material(Color(255, 0, 0), size=PointSize(-2.0))
+    with assert_raises(contains="positive number of pixels"):
+        _ = points_material(
+            Color(255, 0, 0), size=PointSize(nan[DType.float32]())
+        )
+
+
+def test_a_sprite_rotation_must_be_finite() raises:
+    with assert_raises(contains="rotation must be finite"):
+        _ = sprite_material(rotation=Angle(nan[DType.float32](), RADIAN))
+    with assert_raises(contains="rotation must be finite"):
+        _ = sprite_material(rotation=Angle(inf[DType.float32](), RADIAN))
+    # Any finite turn is allowed, more than a full one included.
+    var twice = sprite_material(rotation=Angle(720.0, DEGREE))
+    assert_almost_equal(twice.rotation.to(DEGREE), Float32(720), atol=1e-3)
+
+
+def test_only_a_basic_material_draws_points_or_sprites() raises:
+    with assert_raises(contains="Only a basic material draws points"):
+        _ = Material(Color(255, 0, 0), kind=LAMBERT, point_size=PointSize(4.0))
+    with assert_raises(contains="Only a basic material draws points"):
+        _ = Material(Color(255, 0, 0), kind=PHONG, size_attenuation=False)
+    with assert_raises(contains="Only a basic material draws a sprite"):
+        _ = Material(
+            Color(255, 0, 0), kind=LAMBERT, rotation=Angle(10.0, DEGREE)
+        )
+    # A lit material carrying the defaults is not a mistake: every
+    # material carries them.
+    var lit = Material(Color(255, 0, 0), kind=LAMBERT)
+    assert_true(lit.point_size == DEFAULT_POINT_SIZE)
 
 
 def main() raises:

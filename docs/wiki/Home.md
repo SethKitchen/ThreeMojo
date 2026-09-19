@@ -33,6 +33,7 @@ Look something up.
 - [Geometry](Geometry)
 - [Meshes and assets](Meshes-and-assets)
 - [Lines](Lines)
+- [Points and sprites](Points-and-sprites)
 - [Helpers](Helpers)
 - [Raycasting](Raycasting)
 - [Curves and paths](Curves)

@@ -127,18 +127,58 @@ colors, because neither shader reads them, and a material of either kind
 refuses them here rather than silently ignoring them. What they write is
 bytes, not light: the rasterizers keep it out of the fog and the tone
 mapping, as they keep the uv debug view out of them.
+
+`point_size` and `size_attenuation` are the fourteenth and fifteenth, and
+`rotation` the sixteenth: three.js's `PointsMaterial.size` and
+`sizeAttenuation`, and `SpriteMaterial.rotation` and `sizeAttenuation`.
+three.js has a class for each, and both are unlit, so here they are a
+`BASIC` material with three more fields, as `LineBasicMaterial` is a
+`BASIC` material with none and `LineDashedMaterial` one with three. Only a
+point reads the size, only a sprite reads the rotation, and both read the
+attenuation, so a value on any other kind is refused: `points_material`
+and `sprite_material` build them at three.js's defaults.
 """
 
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import isfinite
-from units.si import Length, METER
+from units.si import Angle, Length, METER, RADIAN
 
 # No dash and no gap: a solid line, and what a material says unless asked.
 comptime NO_DASH = Length(0.0, METER)
 # three.js's `LineDashedMaterial` defaults, in the line's own units.
 comptime DEFAULT_DASH_SIZE = Length(3.0, METER)
 comptime DEFAULT_GAP_SIZE = Length(1.0, METER)
+# A sprite drawn as its image is: three.js's `SpriteMaterial.rotation`.
+comptime NO_ROTATION = Angle(0.0, RADIAN)
+
+
+@fieldwise_init
+struct PointSize(Equatable, ImplicitlyCopyable, Writable):
+    """How big a point is drawn, in pixels, as a type rather than a bare
+    float.
+
+    A length in the scene is a `Length`, and this is not one: it is
+    measured on the image, in pixels, as three.js's `PointsMaterial.size`
+    is. It is a type for the reason `Side` is, so a bare float cannot stand
+    in for it and a scene length cannot be handed over as a pixel count.
+    `Material` refuses one that is not a positive number with `is_valid`.
+
+    With `size_attenuation` on, a point is this many pixels across when
+    it is as many meters from the camera as half the image is pixels
+    tall; nearer it grows and further it shrinks. See
+    `render.pointrule.attenuated_size`.
+    """
+
+    var pixels: Float32
+
+    def is_valid(self) -> Bool:
+        """Return True if this is a finite size above zero."""
+        return isfinite(self.pixels) and self.pixels > 0
+
+
+# One pixel across: three.js's `PointsMaterial` default.
+comptime DEFAULT_POINT_SIZE = PointSize(1.0)
 
 
 @fieldwise_init
@@ -366,6 +406,19 @@ struct Material(ImplicitlyCopyable):
     # with an alpha of one, as three.js's `opaque_fragment` writes it. On,
     # the surface blends by its alpha. `blending` is the resolved policy.
     var transparent: Bool
+    # How big a point drawn with this material is, three.js's
+    # `PointsMaterial.size`, and whether a point or a sprite shrinks with
+    # distance, three.js's `sizeAttenuation` on both. Only a point reads
+    # the size and only a point or a sprite reads the attenuation, so a
+    # value that is not the default is refused on anything but a `BASIC`
+    # material. See `objects.points` and `objects.sprite`.
+    var point_size: PointSize
+    var size_attenuation: Bool
+    # How far a sprite drawn with this material is turned about the line of
+    # sight, counterclockwise, three.js's `SpriteMaterial.rotation`. Only a
+    # sprite reads it, so a turn is refused on anything but a `BASIC`
+    # material.
+    var rotation: Angle
 
     def __init__(
         out self,
@@ -390,6 +443,9 @@ struct Material(ImplicitlyCopyable):
         dash_size: Length = NO_DASH,
         gap_size: Length = NO_DASH,
         dash_scale: Float32 = 1.0,
+        point_size: PointSize = DEFAULT_POINT_SIZE,
+        size_attenuation: Bool = True,
+        rotation: Angle = NO_ROTATION,
     ) raises:
         """Describe a surface.
 
@@ -460,6 +516,15 @@ struct Material(ImplicitlyCopyable):
                 `gapSize`. Zero, the default, is a solid line.
             dash_scale: What the distance along the line is multiplied by
                 before the dashes are measured, three.js's `scale`.
+            point_size: How big a point drawn with this material is, in
+                pixels, three.js's `PointsMaterial.size`. One pixel by
+                default, as there. Only a point reads it.
+            size_attenuation: Whether a point or a sprite shrinks with its
+                distance from the camera, three.js's `sizeAttenuation`.
+                On by default, as there. Only a point or a sprite reads it.
+            rotation: How far a sprite is turned about the line of sight,
+                counterclockwise, three.js's `SpriteMaterial.rotation`.
+                Zero by default. Only a sprite reads it.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -493,7 +558,12 @@ struct Material(ImplicitlyCopyable):
                 `gap_size` that is negative or not finite is refused, as
                 is a `dash_scale` that is not finite, a gap with no dash
                 before it, which would draw nothing, and any dash on a
-                kind that is not `BASIC` or on a wireframe.
+                kind that is not `BASIC` or on a wireframe. A `point_size`
+                that is not a positive number, a `rotation` that is not
+                finite, and any of the three -- a size that is not the
+                default, attenuation off, or a turn -- on a kind that is
+                not `BASIC` are refused: only a point or a sprite reads
+                them, and both are drawn unlit.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -634,6 +704,31 @@ struct Material(ImplicitlyCopyable):
         self.dash_size = dash_size
         self.gap_size = gap_size
         self.dash_scale = dash_scale
+        # Refused for the reason a dash is refused on a lit kind: only a
+        # point reads a size and only a sprite reads a turn, and both are
+        # drawn unlit. The default size and attenuation are what every
+        # other material carries without reading, so only a change is a
+        # mistake.
+        if not point_size.is_valid():
+            raise Error("A point size must be a positive number of pixels")
+        if not isfinite(rotation.to(RADIAN)):
+            raise Error("A sprite rotation must be finite")
+        if kind != BASIC and (
+            point_size != DEFAULT_POINT_SIZE or not size_attenuation
+        ):
+            raise Error(
+                "Only a basic material draws points or sprites: a point has"
+                " no surface for a light to reach, so only it reads a size"
+                " or an attenuation"
+            )
+        if kind != BASIC and rotation != NO_ROTATION:
+            raise Error(
+                "Only a basic material draws a sprite: a sprite is unlit, so"
+                " only it reads a rotation"
+            )
+        self.point_size = point_size
+        self.size_attenuation = size_attenuation
+        self.rotation = rotation
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -973,6 +1068,128 @@ def line_dashed_material(
         dash_size=dash_size,
         gap_size=gap_size,
         dash_scale=scale,
+    )
+
+
+def points_material(
+    color: Color,
+    size: PointSize = DEFAULT_POINT_SIZE,
+    size_attenuation: Bool = True,
+    map: TextureId = NO_TEXTURE,
+    alpha_map: TextureId = NO_TEXTURE,
+    alpha_test: Float32 = 0.0,
+    opacity: Float32 = 1.0,
+    blending: Optional[Blending] = None,
+    transparent: Bool = False,
+    vertex_colors: Bool = False,
+) raises -> Material:
+    """Return an unlit material that draws each vertex as a square of
+    pixels, three.js's `PointsMaterial` at three.js's defaults.
+
+    The defaults are three.js's own: one pixel across, shrinking with
+    distance. `Material(color, kind=BASIC, point_size=..., ...)` is the
+    same material spelled out. See `objects.points` for what a point is
+    and `render.pointrule` for which pixels it covers.
+
+    A point has a coordinate of its own across its square, so it can
+    carry a map and an alpha map, as three.js's can. The map is sampled at
+    that coordinate as it is stored: its own transform is not applied, and
+    the renderer refuses a map that carries one.
+
+    Args:
+        color: The points' color, as authored in sRGB.
+        size: How big each point is, in pixels.
+        size_attenuation: Whether a point shrinks with its distance from
+            the camera.
+        map: Id of the image drawn across each point, or `NO_TEXTURE`.
+        alpha_map: Id of a texture whose green channel thins each point,
+            or `NO_TEXTURE`. It must be built `LINEAR` and `IGNORED`.
+        alpha_test: The alpha a pixel must reach to be drawn.
+        opacity: One for opaque points, less to see through them.
+        blending: `OPAQUE` or `BLEND`, or unset to follow `transparent`.
+        transparent: Whether the points blend over what is behind them.
+        vertex_colors: Whether the geometry's `color` attribute tints them.
+
+    Returns:
+        The material, of kind `BASIC`.
+
+    Raises:
+        Error: If `size` is not a positive number, `map` or `alpha_map` is
+            a negative other than `NO_TEXTURE`, `opacity` or `alpha_test`
+            is outside zero to one, or `blending` holds a value that is
+            neither named constant.
+    """
+    return Material(
+        color,
+        map=map,
+        opacity=opacity,
+        blending=blending,
+        transparent=transparent,
+        kind=BASIC,
+        vertex_colors=vertex_colors,
+        alpha_map=alpha_map,
+        alpha_test=alpha_test,
+        point_size=size,
+        size_attenuation=size_attenuation,
+    )
+
+
+def sprite_material(
+    color: Color = Color(255, 255, 255),
+    map: TextureId = NO_TEXTURE,
+    alpha_map: TextureId = NO_TEXTURE,
+    rotation: Angle = NO_ROTATION,
+    size_attenuation: Bool = True,
+    alpha_test: Float32 = 0.0,
+    opacity: Float32 = 1.0,
+    blending: Optional[Blending] = None,
+    transparent: Bool = True,
+) raises -> Material:
+    """Return an unlit material for a quad that always faces the camera,
+    three.js's `SpriteMaterial` at three.js's defaults.
+
+    The defaults are three.js's own: white, so a map shows as it is;
+    turned not at all; shrinking with distance; and transparent, because
+    a sprite is nearly always a cut-out. `Material(color, kind=BASIC,
+    rotation=..., transparent=True)` is the same material spelled out. See
+    `objects.sprite`.
+
+    Args:
+        color: A tint over the image, as authored in sRGB. White, the
+            default, shows the image as it is.
+        map: Id of the image on the sprite, or `NO_TEXTURE`.
+        alpha_map: Id of a texture whose green channel thins the sprite,
+            or `NO_TEXTURE`. It must be built `LINEAR` and `IGNORED`.
+        rotation: How far the sprite is turned about the line of sight,
+            counterclockwise.
+        size_attenuation: Whether the sprite shrinks with its distance
+            from the camera. Off, it keeps its size on the image.
+        alpha_test: The alpha a pixel must reach to be drawn.
+        opacity: One for an opaque sprite, less to see through it.
+        blending: `OPAQUE` or `BLEND`, or unset to follow `transparent`.
+        transparent: Whether the sprite blends over what is behind it. On
+            by default, as three.js's is.
+
+    Returns:
+        The material, of kind `BASIC`.
+
+    Raises:
+        Error: If `rotation` is not finite, `map` or `alpha_map` is a
+            negative other than `NO_TEXTURE`, `opacity` or `alpha_test` is
+            outside zero to one, or `blending` holds a value that is
+            neither named constant.
+    """
+    return Material(
+        color,
+        map=map,
+        opacity=opacity,
+        blending=blending,
+        transparent=transparent,
+        kind=BASIC,
+        alpha_map=alpha_map,
+        alpha_test=alpha_test,
+        size_attenuation=size_attenuation,
+        rotation=rotation,
     )
 
 

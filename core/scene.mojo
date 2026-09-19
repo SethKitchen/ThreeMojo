@@ -66,7 +66,9 @@ from objects.instanced_mesh import BatchedMesh, InstancedMesh
 from objects.line import Line
 from objects.lod import Lod
 from objects.mesh import Mesh
+from objects.points import Points
 from objects.skinned_mesh import SkinnedMesh
+from objects.sprite import Sprite
 
 
 struct Scene(Movable):
@@ -104,6 +106,15 @@ struct Scene(Movable):
     # surface, so almost nothing a triangle carries applies to it. Public
     # and assignable for the reason `meshes` is. See `objects.line`.
     var lines: List[Line]
+    # The vertices the scene draws as squares of pixels, each naming a
+    # node here as a mesh does. Their own list for the reason the lines
+    # have one: a point is its own primitive, with its own pass and its
+    # own rule. See `objects.points`.
+    var points: List[Points]
+    # The camera-facing squares, each naming a node here. Their own list
+    # because a sprite names no geometry: it is drawn as two triangles
+    # the renderer builds for it. See `objects.sprite`.
+    var sprites: List[Sprite]
     # What veils the scene with distance, three.js's `scene.fog`. Public
     # and assignable, as the lights are: set it to the value `linear_fog`
     # or `exp2_fog` returns, and the renderer reads it every frame.
@@ -122,6 +133,8 @@ struct Scene(Movable):
         self.lods = List[Lod]()
         self.skinned_meshes = List[SkinnedMesh]()
         self.lines = List[Line]()
+        self.points = List[Points]()
+        self.sprites = List[Sprite]()
         self.fog = no_fog()
         # An empty scene has nothing to recompute, so it starts current.
         self._stale = False
@@ -238,6 +251,42 @@ struct Scene(Movable):
         if line.node.value >= len(self._nodes):
             raise Error("A line must name a node that is in the scene")
         self.lines.append(line)
+
+    def add_points(mut self, points: Points) raises:
+        """Add vertices to draw as squares of pixels, the three.js
+        `scene.add(points)`.
+
+        Does not make the scene stale, for the reason `add_mesh` does not.
+
+        Args:
+            points: The points to draw. Their node must already be in the
+                scene. Their geometry and material are checked when they
+                are rendered, because the scene has no view of the
+                `Assets` they live in.
+
+        Raises:
+            Error: If the points name a node the scene does not have.
+        """
+        if points.node.value >= len(self._nodes):
+            raise Error("Points must name a node that is in the scene")
+        self.points.append(points)
+
+    def add_sprite(mut self, sprite: Sprite) raises:
+        """Add a camera-facing square to draw, the three.js
+        `scene.add(sprite)`.
+
+        Does not make the scene stale, for the reason `add_mesh` does not.
+
+        Args:
+            sprite: The sprite to draw. Its node must already be in the
+                scene. Its material is checked when it is rendered.
+
+        Raises:
+            Error: If the sprite names a node the scene does not have.
+        """
+        if sprite.node.value >= len(self._nodes):
+            raise Error("A sprite must name a node that is in the scene")
+        self.sprites.append(sprite)
 
     def node(
         mut self, index: NodeId

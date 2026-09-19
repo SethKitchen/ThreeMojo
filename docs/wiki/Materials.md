@@ -4,9 +4,9 @@
 
 ![A white highlight follows the camera around a red sphere](out/phong.png)
 
-three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `LineBasicMaterial`, `LineDashedMaterial`.
+three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `LineBasicMaterial`, `LineDashedMaterial`, `PointsMaterial`, `SpriteMaterial`.
 
-Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`.
+Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`, `size`, `sizeAttenuation`, `rotation`.
 
 ## Construct one
 
@@ -43,6 +43,9 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `dash_size` | `Length` | zero | How long each dash of a line is. See [dashed lines](Lines#dashed-lines). |
 | `gap_size` | `Length` | zero | How long the gap after each dash is. Zero is a solid line. |
 | `dash_scale` | `Float32` | `1.0` | What the distance along the line is multiplied by first. |
+| `point_size` | `PointSize` | `PointSize(1.0)` | How many pixels across a point is. See [points](Points-and-sprites#points). |
+| `size_attenuation` | `Bool` | `True` | Whether a point or a sprite shrinks with distance. |
+| `rotation` | `Angle` | zero | How far a sprite is turned about the line of sight. See [sprites](Points-and-sprites#sprites). |
 
 ## Side
 
@@ -60,7 +63,7 @@ A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is th
 |---|---|---|
 | `LAMBERT` | `MeshLambertMaterial` | The lights reach the surface. |
 | `PHONG` | `MeshPhongMaterial` | Lit, and with a highlight that follows the camera. |
-| `BASIC` | `MeshBasicMaterial`, `LineBasicMaterial` | The color and texture show as they are. The kind a [line](Lines) is drawn with. |
+| `BASIC` | `MeshBasicMaterial`, `LineBasicMaterial`, `PointsMaterial`, `SpriteMaterial` | The color and texture show as they are. The kind a [line](Lines), a [point or a sprite](Points-and-sprites) is drawn with. |
 | `NORMALS` | `MeshNormalMaterial` | The normal the camera sees, as a color. |
 | `DEPTH` | `MeshDepthMaterial` | How far away the surface is, as a gray. |
 
@@ -348,6 +351,10 @@ To keep only the edges that show the shape, build a geometry with [`edges_geomet
 
 `line_dashed_material(color)` is three.js's `LineDashedMaterial`: a `BASIC` material with a dash of three, a gap of one and a scale of one. `Material(color, kind=BASIC, dash_size=..., gap_size=...)` spells the same material out. Only a line reads the dashes. See [dashed lines](Lines#dashed-lines) for what they measure and where they are refused.
 
+## Points and sprites
+
+`points_material(color)` is three.js's `PointsMaterial`: a `BASIC` material with a `PointSize` of one pixel and its attenuation on. `sprite_material()` is three.js's `SpriteMaterial`: a white `BASIC` material with no rotation, its attenuation on and `transparent=True`. Both can carry a map and an alpha map. Only a point reads the size and only a sprite reads the rotation. A size that is not the default, attenuation off or a rotation is refused on any other kind. See [Points and sprites](Points-and-sprites).
+
 ## Opacity and blending
 
 `transparent=True` makes the material blend, as in three.js. A blended surface tests depth without writing it, and the renderer draws it after every opaque mesh, furthest first. Its alpha is `opacity` times the color's alpha, the texture's alpha and the alpha map.
@@ -395,6 +402,8 @@ The constructor raises for:
 - A dash or a gap that is negative or not finite, or a dash scale that is not finite.
 - A gap with no dash before it, which would draw nothing.
 - Dashes on a kind that is not `BASIC`, or on a wireframe.
+- A point size that is not a positive number, or a rotation that is not finite.
+- A point size that is not the default, attenuation off, or a rotation, on a kind that is not `BASIC`.
 
 `Renderer.prepare` raises for an emissive map that reads its alpha as coverage.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.

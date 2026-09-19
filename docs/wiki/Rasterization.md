@@ -43,9 +43,12 @@ A `NORMALS` corner carries its normal in view space, not world space. The normal
 | `rasterize_shaded(a, b, c, target, mode, textures, lighting, first_row, last_row, fog)` | Fill one shaded triangle. |
 | `rasterize_all(corners, target, mode, textures, lighting, workers, fog)` | Fill a whole list of triangles, on one or more threads. |
 | `rasterize_lines_all(corners, target, workers, fog)` | Draw a whole list of segments, on one or more threads. |
-| `rasterize_frame(corners, segments, draws, target, mode, textures, lighting, workers, fog)` | Draw triangles and segments in one order. `rasterize_all` and `rasterize_lines_all` are each one draw of it. |
-| `Draw(kind, first, count)` | One run of `DRAW_TRIANGLES` or `DRAW_SEGMENTS` in a frame's order. |
-| `check_draws(draws, triangles, segments)` | Refuse a draw that names a run the frame does not hold. |
+| `rasterize_point(point, target, mode, textures, first_row, last_row, fog)` | Draw one [point](Points-and-sprites), a square of pixels. |
+| `rasterize_points_all(points, target, mode, textures, workers, fog)` | Draw a whole list of points, on one or more threads. |
+| `rasterize_frame(corners, segments, draws, target, mode, textures, lighting, workers, fog, points)` | Draw triangles, segments and points in one order. `rasterize_all`, `rasterize_lines_all` and `rasterize_points_all` are each one draw of it. |
+| `Draw(kind, first, count)` | One run of `DRAW_TRIANGLES`, `DRAW_SEGMENTS` or `DRAW_POINTS` in a frame's order. |
+| `check_draws(draws, triangles, segments, points)` | Refuse a draw that names a run the frame does not hold. |
+| `check_point_state(point)`, `check_point_maps(point, mode, textures)` | Refuse a point that is lit, has no size, or whose alpha map is not stored as data. |
 | `check_triangle_maps(a, mode, textures)` | Refuse a triangle whose maps are not stored the way its shader reads them. |
 | `check_triangle_state(a, b, c)` | Refuse corners that disagree, or hold a value neither backend knows. |
 | `mip_level(du, dv, width, height)` | The mip level for a texture footprint. |

@@ -43,6 +43,11 @@ from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.linerule import covers, dash_covers, major_is_x, share_at
+from render.pointrule import (
+    coord as point_coord,
+    covers as point_covers,
+    mip_level_of,
+)
 from render.rect import Rect
 from render.framebuffer import Color, FloatColor, Framebuffer
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
@@ -60,6 +65,8 @@ from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.rasterizer import (
     check_line_state,
+    check_point_state,
+    DRAW_POINTS,
     DRAW_SEGMENTS,
     SHADE_LIT,
     SHADE_TEXTURE,
@@ -172,7 +179,11 @@ comptime LANE_LINE_DISTANCE = 25
 # is why they are lanes rather than entries in the segment state table.
 comptime LANE_DASH = 26
 comptime LANE_GAP = 27
-comptime FLOATS_PER_VERTEX = LANE_GAP + 1
+# How many pixels across a point is. Per point, and a point is one corner,
+# so it is a lane like everything else a point carries. A triangle's
+# corners and a segment's ends carry zero.
+comptime LANE_POINT_SIZE = 28
+comptime FLOATS_PER_VERTEX = LANE_POINT_SIZE + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -192,6 +203,13 @@ comptime STATE_MATCAP = 6
 # How many integers a segment's state takes: its blend policy, and
 # nothing else. A line is unlit and untextured; see `line_state`.
 comptime STATE_PER_LINE = 1
+# How a point's metadata is laid out in its state buffer: its texture, its
+# blend policy and its alpha map. A point is unlit, so it has no kind to
+# carry, no emissive map, no ramp and no matcap.
+comptime POINT_STATE_TEXTURE = 0
+comptime POINT_STATE_BLEND = 1
+comptime POINT_STATE_ALPHA_MAP = 2
+comptime STATE_PER_POINT = POINT_STATE_ALPHA_MAP + 1
 # How a `Draw` crosses to the device: its kind, its first primitive and its
 # count, as three integers.
 comptime INTS_PER_DRAW = 3
@@ -351,6 +369,7 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.line_distance)
         flat.append(corner.dash_size)
         flat.append(corner.gap_size)
+        flat.append(corner.point_size)
     return flat^
 
 
@@ -1010,6 +1029,28 @@ def line_state(corners: List[RasterVertex]) -> List[Int32]:
     return state^
 
 
+def point_state(points: List[RasterVertex]) -> List[Int32]:
+    """Return each point's texture, blend policy and alpha map,
+    `STATE_PER_POINT` entries each.
+
+    A table rather than three lanes, for the reason the triangles' is: a
+    resource id crossed as a float loses exactness, and a policy that
+    decides whether depth is written is not an attribute.
+
+    Args:
+        points: Raster vertices, one per point.
+
+    Returns:
+        Texture id, blend policy, then alpha map id, per point.
+    """
+    var state = List[Int32]()
+    for point in range(len(points)):
+        state.append(Int32(points[point].texture.value))
+        state.append(Int32(points[point].blend.value))
+        state.append(Int32(points[point].alpha_map.value))
+    return state^
+
+
 def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
     """Return each triangle's texture, blend policy, material kind and
     emissive map, `STATE_PER_TRIANGLE` entries each.
@@ -1308,6 +1349,8 @@ def rasterize_kernel(
     exposure: Float32,
     segments: MutPointer[Float32, MutAnyOrigin],
     segment_maps: MutPointer[Int32, MutAnyOrigin],
+    points: MutPointer[Float32, MutAnyOrigin],
+    point_maps: MutPointer[Int32, MutAnyOrigin],
     draws: MutPointer[Int32, MutAnyOrigin],
     draw_count: Int32,
     scissor_x: Int32,
@@ -1317,8 +1360,8 @@ def rasterize_kernel(
 ):
     """Color one pixel from the nearest primitive that covers it.
 
-    The draws in the frame's order, each a run of triangles or of
-    segments, which is the order the host draws them in and the order
+    The draws in the frame's order, each a run of triangles, of segments
+    or of points, which is the order the host draws them in and the order
     that matters: a blended line has to mix over the surface behind it and
     under the one in front, and a line over an opaque surface has to test
     its depth against it. Both kinds composite into the same running
@@ -1380,6 +1423,136 @@ def rasterize_kernel(
         var kind = draws[unsafe_offset=draw * INTS_PER_DRAW]
         var first = Int(draws[unsafe_offset=draw * INTS_PER_DRAW + 1])
         var past = first + Int(draws[unsafe_offset=draw * INTS_PER_DRAW + 2])
+        if kind == Int32(DRAW_POINTS.value):
+            # A run of points. The question is "does this point cover me",
+            # and `render.pointrule` answers it from the expression the
+            # host walks its square with, so the two squares are the same
+            # square. What follows is the triangle pass with nothing to
+            # interpolate: one color, one depth, one fog depth, and a
+            # coordinate of the point's own for the maps and the uv view.
+            for index in range(first, past):
+                var base = index * FLOATS_PER_VERTEX
+                var center = Vector2(
+                    points[unsafe_offset=base + LANE_X],
+                    points[unsafe_offset=base + LANE_Y],
+                )
+                var size = points[unsafe_offset=base + LANE_POINT_SIZE]
+                if not point_covers(center, size, x, y):
+                    continue
+                var z = points[unsafe_offset=base + LANE_Z]
+                if z >= nearest:
+                    continue
+                var threshold = points[unsafe_offset=base + LANE_ALPHA_TEST]
+                var tested = threshold > 0 and mode != Int32(SHADE_UV.value)
+                red = points[unsafe_offset=base + LANE_R]
+                green = points[unsafe_offset=base + LANE_G]
+                blue = points[unsafe_offset=base + LANE_B]
+                alpha = points[unsafe_offset=base + LANE_A]
+                if mode != Int32(SHADE_LIT.value):
+                    var place = point_coord(center, size, x, y)
+                    if mode == Int32(SHADE_UV.value):
+                        # Coordinates, not light, exactly as the triangle
+                        # pass writes them.
+                        var shown = _decoded(ramp, place.x, place.y, 0)
+                        red = shown.r
+                        green = shown.g
+                        blue = shown.b
+                        alpha = 1
+                    else:
+                        # Which level of the map a point reads is decided
+                        # by its size alone, by the function the host
+                        # asks; see `mip_level_of`.
+                        var slot = Int(
+                            point_maps[
+                                unsafe_offset=index * STATE_PER_POINT
+                                + POINT_STATE_TEXTURE
+                            ]
+                        )
+                        if slot != NO_TEXTURE.value:
+                            var image = _describe(table, slot)
+                            var sampled = _sample_level(
+                                texels,
+                                ramp,
+                                image,
+                                place.x,
+                                place.y,
+                                mip_level_of(size, image.width, image.height),
+                            )
+                            red *= sampled.r
+                            green *= sampled.g
+                            blue *= sampled.b
+                            alpha *= sampled.a
+                        var mask_slot = Int(
+                            point_maps[
+                                unsafe_offset=index * STATE_PER_POINT
+                                + POINT_STATE_ALPHA_MAP
+                            ]
+                        )
+                        if mask_slot != NO_TEXTURE.value:
+                            var mask = _describe(table, mask_slot)
+                            var thinning = _sample_level(
+                                texels,
+                                ramp,
+                                mask,
+                                place.x,
+                                place.y,
+                                mip_level_of(size, mask.width, mask.height),
+                            )
+                            alpha *= thinning.g
+                if tested and alpha < threshold:
+                    continue
+                if fog_on:
+                    var veiled = fog_mix(
+                        FloatColor(red, green, blue, alpha),
+                        FloatColor(
+                            fog[unsafe_offset=FOG_R],
+                            fog[unsafe_offset=FOG_G],
+                            fog[unsafe_offset=FOG_B],
+                            1.0,
+                        ),
+                        fog_factor(
+                            FogKind(Int(fog_kind)),
+                            points[unsafe_offset=base + LANE_DEPTH],
+                            fog[unsafe_offset=FOG_NEAR],
+                            fog[unsafe_offset=FOG_FAR],
+                            fog[unsafe_offset=FOG_DENSITY],
+                        ),
+                    )
+                    red = veiled.r
+                    green = veiled.g
+                    blue = veiled.b
+                # Composited exactly as a triangle's fragment is; see the
+                # triangle pass below for why each step is what it is.
+                var share = alpha
+                if share > 1:
+                    share = 1
+                if share < 0:
+                    share = 0
+                var mixes = point_maps[
+                    unsafe_offset=index * STATE_PER_POINT + POINT_STATE_BLEND
+                ] == Int32(BLEND.value) and mode != Int32(SHADE_UV.value)
+                if mixes and share == 0:
+                    continue
+                found = True
+                if not mixes:
+                    share = 1
+                    mixed_r = red * share
+                    mixed_g = green * share
+                    mixed_b = blue * share
+                    mixed_a = share
+                    nearest = z
+                    solid = True
+                    # A point is light, never data, except in the uv view,
+                    # which shows coordinates.
+                    data = mode == Int32(SHADE_UV.value)
+                else:
+                    var keep = 1 - share
+                    mixed_r = red * share + mixed_r * keep
+                    mixed_g = green * share + mixed_g * keep
+                    mixed_b = blue * share + mixed_b * keep
+                    mixed_a = share + mixed_a * keep
+                    data = False
+            continue
         if kind != Int32(DRAW_TRIANGLES.value):
             # A run of segments. One thread per pixel here too, so the
             # question is "does this segment light me" rather than "which
@@ -2149,6 +2322,11 @@ struct GpuRenderer(Movable):
     var segments: DeviceBuffer[DType.float32]
     var segment_maps: DeviceBuffer[DType.int32]
     var line_capacity: Int
+    # The points, their state and how many the two have room for: a third
+    # pair, for the reason the segments have their own.
+    var points: DeviceBuffer[DType.float32]
+    var point_maps: DeviceBuffer[DType.int32]
+    var point_capacity: Int
     # The frame's draw order, `INTS_PER_DRAW` integers a draw, and how many
     # draws the buffer has room for.
     var draw_list: DeviceBuffer[DType.int32]
@@ -2212,6 +2390,8 @@ struct GpuRenderer(Movable):
         _ = self.maps^
         _ = self.segments^
         _ = self.segment_maps^
+        _ = self.points^
+        _ = self.point_maps^
         _ = self.draw_list^
         _ = self.texels^
         _ = self.table^
@@ -2267,9 +2447,17 @@ struct GpuRenderer(Movable):
         self.segment_maps = self.context.enqueue_create_buffer[DType.int32](
             STATE_PER_LINE
         )
-        # Two draws' worth: the order a frame with no list of its own gets,
-        # every triangle and then every segment.
-        self.draw_room = 2
+        # One point's worth, for the same reason.
+        self.point_capacity = 1
+        self.points = self.context.enqueue_create_buffer[DType.float32](
+            FLOATS_PER_VERTEX
+        )
+        self.point_maps = self.context.enqueue_create_buffer[DType.int32](
+            STATE_PER_POINT
+        )
+        # Three draws' worth: the order a frame with no list of its own
+        # gets, every triangle, then every segment, then every point.
+        self.draw_room = 3
         self.draw_list = self.context.enqueue_create_buffer[DType.int32](
             self.draw_room * INTS_PER_DRAW
         )
@@ -2348,8 +2536,10 @@ struct GpuRenderer(Movable):
         lines: List[RasterVertex] = List[RasterVertex](),
         draws: List[Draw] = List[Draw](),
         scissor: Optional[Rect] = None,
+        points: List[RasterVertex] = List[RasterVertex](),
     ) raises:
-        """Rasterize prepared triangles and lines into the device target.
+        """Rasterize prepared triangles, lines and points into the device
+        target.
 
         Args:
             corners: Raster vertices, three per triangle. An empty list is
@@ -2370,24 +2560,27 @@ struct GpuRenderer(Movable):
                 `NO_TONE_MAPPING`. The uv view is never tone mapped.
             exposure: What the light is scaled by before the curve.
             lines: Raster vertices, two per segment. Empty by default.
-            draws: The order to draw in, as runs of triangles or of
-                segments; see `render.rasterizer.Draw`. Empty, the
-                default, draws every triangle and then every segment,
-                which is the order `rasterize_all` followed by
-                `rasterize_lines_all` draws them in. `Renderer.prepare_frame`
+            draws: The order to draw in, as runs of triangles, of
+                segments or of points; see `render.rasterizer.Draw`.
+                Empty, the default, draws every triangle, then every
+                segment, then every point, which is the order
+                `rasterize_all`, `rasterize_lines_all` and
+                `rasterize_points_all` draw them in. `Renderer.prepare_frame`
                 gives the order `Renderer.render` uses, with blended
-                triangles and segments sorted together.
-
+                triangles, segments and points sorted together.
             scissor: The pixels this draw may touch, or none for all of
                 them: three.js's `setScissor` with the test on. A pixel
                 outside is neither cleared nor drawn, so a second draw
                 into another rectangle leaves this one's pixels alone.
                 The corner counts up from the bottom; see `render.rect`.
+            points: Raster vertices, one per point. Empty by default.
 
         Raises:
             Error: If the corner count is not a multiple of three, the
                 line corner count is not a multiple of two, a segment's
-                ends disagree or its material is lit, a draw is refused
+                ends disagree or its material is lit, a point is refused
+                by `check_point_state` or names a map that is not
+                uploaded, a draw is refused
                 by `check_draws`, the mode
                 is none of the three, the tone mapping is none of the
                 seven, the exposure is negative or not finite, the fog
@@ -2451,14 +2644,18 @@ struct GpuRenderer(Movable):
         # cannot raise on a policy it does not know.
         for segment in range(len(lines) // 2):
             check_line_state(lines[segment * 2], lines[segment * 2 + 1])
-        # The order, or the two-pass one when none is given. Checked by
+        # And the same per-point check, for the same reason.
+        for point in range(len(points)):
+            check_point_state(points[point])
+        # The order, or the three-pass one when none is given. Checked by
         # the function the host checks with: the kernel reads the corner
         # buffers at whatever index a draw hands it.
         var order = draws.copy()
         if len(order) == 0:
             order.append(Draw(DRAW_TRIANGLES, 0, triangles))
             order.append(Draw(DRAW_SEGMENTS, 0, len(lines) // 2))
-        check_draws(order, triangles, len(lines) // 2)
+            order.append(Draw(DRAW_POINTS, 0, len(points)))
+        check_draws(order, triangles, len(lines) // 2, len(points))
 
         # Every texture reference is checked here because it cannot be checked
         # on the device: the kernel reads the descriptor table at whatever
@@ -2480,6 +2677,29 @@ struct GpuRenderer(Movable):
                     raise Error(
                         "A vertex names a texture that has not been uploaded;"
                         " call set_textures() first"
+                    )
+        # A point's two maps, checked the same way and for the same
+        # reason, and its alpha map for holding data as a triangle's is.
+        for index in range(len(points)):
+            for slot in [points[index].texture, points[index].alpha_map]:
+                if slot == NO_TEXTURE:
+                    continue
+                if slot.value < 0 or slot.value >= self.uploaded:
+                    raise Error(
+                        "A point names a texture that has not been uploaded;"
+                        " call set_textures() first"
+                    )
+            var mask = points[index].alpha_map
+            if mask != NO_TEXTURE and mode == SHADE_TEXTURE:
+                if not self.is_linear[mask.value]:
+                    raise Error(
+                        "An alpha map holds data, not color; build the"
+                        " texture with color_space=LINEAR"
+                    )
+                if not self.ignores_alpha[mask.value]:
+                    raise Error(
+                        "An alpha map must ignore its own alpha; build"
+                        " the texture with alpha=IGNORED"
                     )
         # An emissive map's alpha means nothing, and only a texture built to
         # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
@@ -2516,6 +2736,7 @@ struct GpuRenderer(Movable):
             corners,
             mode != SHADE_UV and tone_mapping != NO_TONE_MAPPING,
             lines,
+            points,
         )
         # A ramp holds data and says so the same two ways, and must hold
         # texels to step through. Asked under every mode that lights the
@@ -2618,6 +2839,33 @@ struct GpuRenderer(Movable):
                     count=len(policies),
                 )
 
+        var point_count = len(points)
+        if point_count > self.point_capacity:
+            self.context.synchronize()
+            self.points = self.context.enqueue_create_buffer[DType.float32](
+                point_count * FLOATS_PER_VERTEX
+            )
+            self.point_maps = self.context.enqueue_create_buffer[DType.int32](
+                point_count * STATE_PER_POINT
+            )
+            self.point_capacity = point_count
+
+        if point_count > 0:
+            var dots = flatten(points)
+            with self.points.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=host.unsafe_ptr(),
+                    src=dots.unsafe_ptr(),
+                    count=len(dots),
+                )
+            var dot_state = point_state(points)
+            with self.point_maps.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=host.unsafe_ptr(),
+                    src=dot_state.unsafe_ptr(),
+                    count=len(dot_state),
+                )
+
         if len(order) > self.draw_room:
             self.context.synchronize()
             self.draw_list = self.context.enqueue_create_buffer[DType.int32](
@@ -2669,6 +2917,8 @@ struct GpuRenderer(Movable):
             exposure,
             self.segments.unsafe_ptr(),
             self.segment_maps.unsafe_ptr(),
+            self.points.unsafe_ptr(),
+            self.point_maps.unsafe_ptr(),
             self.draw_list.unsafe_ptr(),
             Int32(len(order)),
             Int32(kept.x),
@@ -2805,8 +3055,10 @@ def render_triangles(
     lines: List[RasterVertex] = List[RasterVertex](),
     draws: List[Draw] = List[Draw](),
     scissor: Optional[Rect] = None,
+    points: List[RasterVertex] = List[RasterVertex](),
 ) raises -> Framebuffer:
-    """Draw prepared triangles and lines on the GPU and read the image back.
+    """Draw prepared triangles, lines and points on the GPU and read the
+    image back.
 
     A convenience for one-shot renders. Anything drawing repeatedly should
     hold a `GpuRenderer` instead, so the context and buffers survive between
@@ -2829,8 +3081,8 @@ def render_triangles(
         lines: Raster vertices, two per segment. Empty by default.
         draws: The order to draw in, or empty for every triangle and then
             every segment; see `GpuRenderer.draw`.
-
         scissor: The pixels the draw may touch, or none for all of them.
+        points: Raster vertices, one per point. Empty by default.
 
     Returns:
         The rendered image.
@@ -2853,6 +3105,7 @@ def render_triangles(
         lines,
         draws,
         scissor,
+        points,
     )
     return renderer.read_back()
 

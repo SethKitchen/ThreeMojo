@@ -30,10 +30,10 @@ Hold one across frames. The device buffers survive between draws.
 |---|---|
 | `GpuRenderer(width, height)` | Create the context and the buffers. Raises without a GPU. |
 | `set_textures(store)` | Upload every texture. All or nothing. |
-| `draw(corners, background, mode, lighting, fog, tone_mapping, exposure, lines, draws, scissor)` | Rasterize into the device target. `scissor` is a `Rect` the draw may touch, or none for the whole target. A pixel outside it is neither cleared nor drawn, so the target keeps it between draws; see [Renderer](Renderer#viewport-and-scissor). Pass `Lighting(scene, visible=camera.visible_layers())` and `FogView(scene.fog, view)`, the values `Renderer.render` uses. `lines` are two corners a segment and `draws` is the order, both from `Renderer.prepare_frame`. An empty order draws every triangle and then every segment. The kernel tone maps each pixel as `RenderTarget.resolve` does. |
+| `draw(corners, background, mode, lighting, fog, tone_mapping, exposure, lines, draws, scissor, points)` | Rasterize into the device target. `scissor` is a `Rect` the draw may touch, or none for the whole target. A pixel outside it is neither cleared nor drawn, so the target keeps it between draws; see [Renderer](Renderer#viewport-and-scissor). Pass `Lighting(scene, visible=camera.visible_layers())` and `FogView(scene.fog, view)`, the values `Renderer.render` uses. `lines` are two corners a segment, `points` are one corner a [point](Points-and-sprites), and `draws` is the order, all from `Renderer.prepare_frame`. An empty order draws every triangle, then every segment, then every point. The kernel tone maps each pixel as `RenderTarget.resolve` does. |
 | `read_back() -> Framebuffer` | Copy color and depth to the host. |
 
-`draw` checks every triangle's state, every segment's state and every draw's run on the host before it launches. It checks every texture id, the alpha test, the tone mapping curve and the exposure the same way. The kernel cannot raise.
+`draw` checks every triangle's state, every segment's state, every point's state and every draw's run on the host before it launches. It checks every texture id, the alpha test, the tone mapping curve and the exposure the same way. The kernel cannot raise.
 
 An alpha map must be `LINEAR` and `IGNORED`. `draw` asks that of the descriptors it uploaded, as the CPU asks it of the store.
 

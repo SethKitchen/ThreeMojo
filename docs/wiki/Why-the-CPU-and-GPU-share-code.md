@@ -7,6 +7,8 @@ The CPU rasterizer and the GPU kernel call the same functions for the fill rule,
 | Module | Shared functions |
 |---|---|
 | `render/fillrule.mojo` | Snapping, the edge function, the top-left bias, the sample position. |
+| `render/linerule.mojo` | Which pixel a one-pixel [line](Lines) lights in each column, and the dash fold. |
+| `render/pointrule.mojo` | Whether a [point](Points-and-sprites) covers a pixel, its coordinate there, its size with distance and its mip level. |
 | `render/texture.mojo` | `wrap_index`, `blend_texels`, `mix_color`. |
 | `lights/lighting.mojo` | `falloff`. |
 

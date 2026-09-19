@@ -1,6 +1,6 @@
 # Renderer
 
-`renderers/renderer.mojo`. The `Renderer` turns a scene, its assets and a camera into an image. `prepare` makes screen-space triangles and `prepare_lines` makes screen-space segments. `render` also fills them on the CPU.
+`renderers/renderer.mojo`. The `Renderer` turns a scene, its assets and a camera into an image. `prepare` makes screen-space triangles, `prepare_lines` makes screen-space segments and `prepare_points` makes screen-space points. `render` also fills them on the CPU.
 
 ![A cube leaves the frustum and vanishes, then returns](out/culling.png)
 
@@ -22,8 +22,9 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `set_tone_mapping(mode, exposure=1.0)` | The curve that compresses the light for a display. See below. |
 | `prepare(scene, assets, camera) -> List[RasterVertex]` | Transform, clip and project every mesh. |
 | `prepare_lines(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [lines](Lines) and wireframes. |
-| `prepare_frame(scene, assets, camera) -> Frame` | Both lists, and the one order both rasterizers draw them in. See [Lines](Lines#two-lists-one-order). |
-| `render(scene, assets, camera) -> Framebuffer` | Both passes, then rasterize and resolve. |
+| `prepare_points(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [points](Points-and-sprites). A [sprite](Points-and-sprites#sprites) is two triangles, and `prepare` makes them. |
+| `prepare_frame(scene, assets, camera) -> Frame` | All three lists, and the one order both rasterizers draw them in. See [Lines](Lines#two-lists-one-order). |
+| `render(scene, assets, camera) -> Framebuffer` | Every pass, then rasterize and resolve. |
 | `render_into(target, scene, assets, camera)` | The same into a target of the renderer's size, cleared first, resolved by the caller. See below. |
 | `tone_curve() -> ToneMapping` | The curve `render` resolves through: the one set, or none in the uv view. |
 | `set_viewport(rect)` | Where the image lands on the target. See below. |
@@ -111,7 +112,7 @@ renderer.set_scissor(Rect(0, 0, 160, 240))
 renderer.set_scissor_test(True)
 ```
 
-The viewport is folded into the screen matrix by `prepare` and `prepare_lines`. The projection is mapped onto the rectangle rather than onto the whole target. The image is squeezed or stretched to the rectangle's size, as three.js's is. A viewport hanging off the target is allowed: the pixels it puts outside are not drawn. A viewport must hold at least one pixel.
+The viewport is folded into the screen matrix by `prepare`, `prepare_lines` and `prepare_points`. The projection is mapped onto the rectangle rather than onto the whole target. The image is squeezed or stretched to the rectangle's size, as three.js's is. A viewport hanging off the target is allowed: the pixels it puts outside are not drawn. A viewport must hold at least one pixel.
 
 A viewport is a mapping, not a scissor. Every triangle and segment is clipped against the camera's four side planes first, so nothing lands outside the camera's image. With the scissor test off, the whole target is cleared and the geometry outside the view produces no pixel.
 
