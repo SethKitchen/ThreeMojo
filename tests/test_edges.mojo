@@ -208,5 +208,20 @@ def test_a_third_face_on_one_edge_does_not_change_its_angle() raises:
     assert_equal(segments_of(edges_geometry(fan, Angle(180.0, DEGREE))), 6)
 
 
+def test_a_cube_keeps_its_right_angles_at_an_inclusive_ninety() raises:
+    """The rule is inclusive, and a float32 cosine must not make it
+    exclusive."""
+    # An `Angle` holds radians as a Float32, so ninety degrees is
+    # 1.5707964 and its cosine is -4.37e-8 rather than zero, while two
+    # perpendicular faces give a dot product of exactly zero. Without the
+    # slack the comparison rejected every right angle a cube has.
+    var box = cube(Length(1, METER))
+    assert_equal(segments_of(edges_geometry(box, Angle(90.0, DEGREE))), 12)
+    assert_equal(segments_of(edges_geometry(box, Angle(89.99, DEGREE))), 12)
+    # And just past the right angle nothing survives, so the slack is a
+    # tolerance rather than a widening of the threshold.
+    assert_equal(segments_of(edges_geometry(box, Angle(90.01, DEGREE))), 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

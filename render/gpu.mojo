@@ -102,6 +102,7 @@ from render.texture import (
     Wrap,
     blend_texels,
     mix_color,
+    mix_straight,
     wrap_index,
 )
 from max.gpu import global_idx
@@ -1622,12 +1623,17 @@ def rasterize_kernel(
             )
 
         if mode == Int32(SHADE_UV.value):
-            # Coordinates, not light; written raw. See rasterize_shaded.
-            # Texture coordinates straight out as red and green, matching
-            # rasterize_shaded's SHADE_UV.
-            red = u
-            green = v
-            blue = 0
+            # Coordinates, not light, through the same quantize and decode
+            # the host's `data_color` uses, so the two backends hold the
+            # same light and one resolve serves every pixel. Storing the
+            # raw coordinate and quantizing the whole frame instead worked
+            # only while every pixel in the frame was a coordinate. A line
+            # in the uv view holds real light, and the frame-wide quantize
+            # showed that light undecoded.
+            var shown = _decoded(ramp, u, v, 0)
+            red = shown.r
+            green = shown.g
+            blue = shown.b
             alpha = 1
         else:
             red = (
@@ -1861,7 +1867,9 @@ def rasterize_kernel(
             solid = True
             # A write replaces the pixel, so its answer becomes this
             # fragment's, exactly as `RenderTarget.write` decides it.
-            data = shows_data
+            # The uv view shows coordinates, which the tone mapping has
+            # to leave alone exactly as it leaves a normal alone.
+            data = shows_data or mode == Int32(SHADE_UV.value)
         else:
             # Source-over, premultiplied: a weighted sum with no special case.
             var keep = 1 - share
@@ -1911,15 +1919,22 @@ def rasterize_kernel(
         if total == 0:
             continue
         var toward = away / total
-        var lr = segments[unsafe_offset=base + LANE_R]
-        var lg = segments[unsafe_offset=base + LANE_G]
-        var lb = segments[unsafe_offset=base + LANE_B]
-        var la = segments[unsafe_offset=base + LANE_A]
-        var drawn = FloatColor(
-            lr + (segments[unsafe_offset=far_base + LANE_R] - lr) * toward,
-            lg + (segments[unsafe_offset=far_base + LANE_G] - lg) * toward,
-            lb + (segments[unsafe_offset=far_base + LANE_B] - lb) * toward,
-            la + (segments[unsafe_offset=far_base + LANE_A] - la) * toward,
+        # Straight, through the function the host calls, so the one
+        # convention for a line's color lives in one place.
+        var drawn = mix_straight(
+            FloatColor(
+                segments[unsafe_offset=base + LANE_R],
+                segments[unsafe_offset=base + LANE_G],
+                segments[unsafe_offset=base + LANE_B],
+                segments[unsafe_offset=base + LANE_A],
+            ),
+            FloatColor(
+                segments[unsafe_offset=far_base + LANE_R],
+                segments[unsafe_offset=far_base + LANE_G],
+                segments[unsafe_offset=far_base + LANE_B],
+                segments[unsafe_offset=far_base + LANE_A],
+            ),
+            toward,
         )
         # The host's line pass reads no shading mode: a line has no surface
         # coordinates, so there is no uv view of one, and it is veiled by
@@ -1928,20 +1943,24 @@ def rasterize_kernel(
             var ad = segments[unsafe_offset=base + LANE_DEPTH]
             var bd = segments[unsafe_offset=far_base + LANE_DEPTH]
             var seen = ad + (bd - ad) * toward
+            # By name, as the triangle pass reads it. Written out as
+            # literal slots once, which took the color out of the near,
+            # far and density lanes and the distances out of the color: a
+            # white line in black fog came back yellow.
             drawn = fog_mix(
                 drawn,
                 FloatColor(
-                    fog[unsafe_offset=0],
-                    fog[unsafe_offset=1],
-                    fog[unsafe_offset=2],
+                    fog[unsafe_offset=FOG_R],
+                    fog[unsafe_offset=FOG_G],
+                    fog[unsafe_offset=FOG_B],
                     1,
                 ),
                 fog_factor(
                     FogKind(Int(fog_kind)),
                     seen,
-                    fog[unsafe_offset=3],
-                    fog[unsafe_offset=4],
-                    fog[unsafe_offset=5],
+                    fog[unsafe_offset=FOG_NEAR],
+                    fog[unsafe_offset=FOG_FAR],
+                    fog[unsafe_offset=FOG_DENSITY],
                 ),
             )
         var share_a = drawn.a
@@ -1980,12 +1999,7 @@ def rasterize_kernel(
     # is coverage rather than color so it skips the transfer function. A
     # pixel nothing covers holds the decoded background.
     var lit = FloatColor(mixed_r, mixed_g, mixed_b, mixed_a).unpremultiplied()
-    if mode == Int32(SHADE_UV.value):
-        # Coordinates rather than light, so neither tone mapped nor encoded;
-        # see rasterize_shaded.
-        if found:
-            word = pack(lit.quantize())
-    elif found or tone != Int32(NO_TONE_MAPPING.value):
+    if found or tone != Int32(NO_TONE_MAPPING.value):
         # Tone mapped and then encoded, as `RenderTarget.resolve` does it,
         # from the same function -- the background included, once there
         # is a curve, since the host's target holds its clear color as
@@ -2553,9 +2567,16 @@ struct GpuRenderer(Movable):
         self.texels = texels^
         self.table = table^
         self.uploaded = textures.count()
+        # Every one of these describes the upload that has just
+        # replaced the last, so every one of them is replaced. `heights`
+        # was appended to instead, which left a second upload validating
+        # its gradient maps against the first upload's rows: a good
+        # one-row ramp was refused because the texture that used to hold
+        # that id was two rows tall.
         self.ignores_alpha = List[Bool]()
         self.is_linear = List[Bool]()
         self.has_texels = List[Bool]()
+        self.heights = List[Int]()
         for id in range(textures.count()):
             ref image = textures.get(TextureId(id))
             self.ignores_alpha.append(image.alpha == IGNORED)

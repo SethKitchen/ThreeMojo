@@ -15,7 +15,7 @@ from materials.material import (
     OPAQUE,
 )
 from math.vector2 import Vector2
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, Framebuffer
 from render.linerule import (
     covers,
     major_at,
@@ -446,6 +446,158 @@ def test_a_line_cannot_be_lit() raises:
     also.kind = MaterialKind(9)
     with assert_raises():
         check_line_state(unknown, also)
+
+
+def painted_pixels(image: Framebuffer, clear: Color) raises -> List[Int]:
+    """Return every pixel of `image` that is not the clear color, as
+    `x + y * width`.
+
+    Args:
+        image: The resolved frame.
+        clear: What the target was cleared to.
+
+    Returns:
+        The lit pixels, in row order.
+
+    Raises:
+        Error: If a coordinate is out of bounds.
+    """
+    var lit = List[Int]()
+    for y in range(image.height):
+        for x in range(image.width):
+            var pixel = image.get_pixel(x, y)
+            if pixel.r != clear.r or pixel.g != clear.g or pixel.b != clear.b:
+                lit.append(x + y * image.width)
+    return lit^
+
+
+def drawn_line(
+    ax: Float32, ay: Float32, bx: Float32, by: Float32, workers: Int = 1
+) raises -> Framebuffer:
+    """Return an eight by eight frame holding one white segment.
+
+    Args:
+        ax: One end's column, in pixels.
+        ay: Its row.
+        bx: The other end's column.
+        by: Its row.
+        workers: How many threads to draw with.
+
+    Returns:
+        The resolved frame, cleared to black.
+
+    Raises:
+        Error: If the segment or the target is refused.
+    """
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_lines_all(
+        [end(ax, ay), end(bx, by)], target, workers, FogView.none()
+    )
+    return target.resolve()
+
+
+def test_a_mostly_offscreen_line_paints_only_what_is_on_the_image() raises:
+    """A segment a million columns wide lights the eight that are there."""
+    # The walk is bounded to the target before it starts, so this costs
+    # eight steps rather than two million. What the test can see is that
+    # bounding it moved nothing: the same row, the same eight columns.
+    var wide = painted_pixels(
+        drawn_line(-1000000.0, 3.5, 1000000.0, 3.5), Color(0, 0, 0)
+    )
+    assert_equal(len(wide), 8)
+    for column in range(8):
+        assert_equal(wide[column], column + 3 * 8)
+    # Drawn the other way round, which walks the major axis downward and
+    # so bounds it from the other end.
+    var backwards = painted_pixels(
+        drawn_line(1000000.0, 3.5, -1000000.0, 3.5), Color(0, 0, 0)
+    )
+    assert_equal(len(backwards), 8)
+    for column in range(8):
+        assert_equal(backwards[column], column + 3 * 8)
+
+
+def test_a_mostly_offscreen_upright_line_is_bounded_by_the_band() raises:
+    """A y-major segment is held to the rows its band owns."""
+    var tall = painted_pixels(
+        drawn_line(2.5, -1000000.0, 2.5, 1000000.0), Color(0, 0, 0)
+    )
+    assert_equal(len(tall), 8)
+    for row in range(8):
+        assert_equal(tall[row], 2 + row * 8)
+    # And on more workers, where each band bounds the walk to its own rows
+    # rather than to the whole image.
+    var banded = painted_pixels(
+        drawn_line(2.5, -1000000.0, 2.5, 1000000.0, workers=4),
+        Color(0, 0, 0),
+    )
+    assert_equal(len(banded), 8)
+
+
+def test_a_line_that_misses_the_image_paints_nothing() raises:
+    """A segment wholly off one side leaves an empty step range."""
+    var beside = painted_pixels(
+        drawn_line(-40.5, 3.5, -10.5, 3.5), Color(0, 0, 0)
+    )
+    assert_equal(len(beside), 0)
+    var below = painted_pixels(drawn_line(3.5, 40.5, 3.5, 90.5), Color(0, 0, 0))
+    assert_equal(len(below), 0)
+
+
+def test_a_line_interpolates_its_color_straight() raises:
+    """A transparent end still lends its color, as a varying does."""
+    # `mix_color` premultiplies, which is right for filtering texels and
+    # wrong for a varying: it would drop the red entirely. See
+    # `render.texture.mix_straight`.
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var near = end(0.5, 3.5, color=FloatColor(1, 0, 0, 0), blend=BLEND)
+    var far = end(7.5, 3.5, color=FloatColor(0, 0, 1, 1), blend=BLEND)
+    rasterize_lines_all([near, far], target, 1, FogView.none())
+    var image = target.resolve()
+    var reds = 0
+    for x in range(8):
+        if image.get_pixel(x, 3).r > 40:
+            reds += 1
+    assert_true(reds > 0)
+
+
+def test_a_steep_line_that_wanders_off_the_side_is_held_in() raises:
+    """A y-major segment checks its columns, and an x-major one its rows."""
+    # The major axis is bounded before the walk; the minor one is still
+    # checked per pixel, because a line can leave the image sideways while
+    # every step of its major axis is on it.
+    var steep = painted_pixels(drawn_line(-3.0, 0.5, 3.0, 7.5), Color(0, 0, 0))
+    assert_true(len(steep) > 0)
+    assert_true(len(steep) < 8)
+    # And off the other side, so both halves of the column guard are met.
+    var leaning = painted_pixels(
+        drawn_line(5.0, 0.5, 11.0, 7.5), Color(0, 0, 0)
+    )
+    assert_true(len(leaning) > 0)
+    assert_true(len(leaning) < 8)
+    # Flat, and above the image: every column is on the target and no row
+    # is, which is the other half of the same guard.
+    var above = painted_pixels(drawn_line(0.5, 90.5, 7.5, 90.5), Color(0, 0, 0))
+    assert_equal(len(above), 0)
+    var under = painted_pixels(
+        drawn_line(0.5, -90.5, 7.5, -90.5), Color(0, 0, 0)
+    )
+    assert_equal(len(under), 0)
+
+
+def test_a_segment_no_band_draws_is_still_refused() raises:
+    """A band checks the segments its rows miss, so four workers and one
+    answer alike."""
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    # Off the bottom of every band, and lit, which a line may not be.
+    var one = end(0.5, 90.5)
+    one.kind = LAMBERT
+    var two = end(7.5, 90.5)
+    two.kind = LAMBERT
+    with assert_raises():
+        rasterize_lines_all([one, two], target, 4, FogView.none())
+    with assert_raises():
+        rasterize_lines_all([one, two], target, 1, FogView.none())
 
 
 def main() raises:

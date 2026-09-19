@@ -40,7 +40,7 @@ from materials.material import (
 )
 from render.target import RenderTarget
 from render.srgb import LINEAR
-from render.texture import IGNORED, Texture, mix_color
+from render.texture import IGNORED, Texture, mix_straight
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.lighting import PERSPECTIVE_VIEW, Lighting, toward_eye_at
 from core.fog import FogView, fog_mix
@@ -1695,7 +1695,34 @@ def rasterize_line(
     var steps = span_of(first, second)
     var horizontal = major_is_x(first, second)
     var fogged = fog.is_on()
-    for step in range(steps):  # pragma: no branch
+    # Which steps can land on the target at all, worked out before the
+    # walk rather than discovered inside it. A projection can put an
+    # endpoint a very long way off the image -- a segment from x = -1e6 to
+    # x = 1e6 spans two million columns and lights eight of them -- and a
+    # walk that visits every step to reject all but eight is the line
+    # counterpart of rasterizing a triangle over the whole image.
+    #
+    # The endpoints themselves are untouched, so `share_at` and `other_at`
+    # still answer about the original segment. Only which of their answers
+    # are asked for changes, which is why this cannot move a pixel.
+    var start = major_at(first, second, 0)
+    var forward = second.y >= first.y
+    if horizontal:
+        forward = second.x >= first.x
+    var lowest = 0
+    var highest = target.width - 1
+    if not horizontal:
+        lowest = top
+        highest = bottom
+    var from_step: Int
+    var past_step: Int
+    if forward:
+        from_step = max(0, lowest - start)
+        past_step = min(steps, highest - start + 1)
+    else:
+        from_step = max(0, start - highest)
+        past_step = min(steps, start - lowest + 1)
+    for step in range(from_step, past_step):
         var major = major_at(first, second, step)
         var minor = other_at(first, second, major)
         var x = major
@@ -1703,6 +1730,8 @@ def rasterize_line(
         if not horizontal:
             x = minor
             y = major
+        # The minor axis only. The major one was bounded before the walk,
+        # so a step that reaches here is on the target along it.
         if y < top or y > bottom:
             continue
         if x < 0 or x >= target.width:
@@ -1723,7 +1752,11 @@ def rasterize_line(
         if total == 0:
             continue
         var toward = far / total
-        var color = mix_color(a.color, b.color, toward)
+        # Straight, as a varying is everywhere else in this file and
+        # as the kernel's line pass does it. `mix_color` premultiplies,
+        # which is a filtering rule and not an interpolation rule; see
+        # `render.texture.mix_straight`.
+        var color = mix_straight(a.color, b.color, toward)
         if fogged:
             var depth = a.view_depth + (b.view_depth - a.view_depth) * toward
             color = fog_mix(color, fog.color, fog.factor_at(depth))
@@ -1732,6 +1765,50 @@ def rasterize_line(
         else:
             target.claim_depth(x, y, z)
             target.write(x, y, color, False)
+
+
+async def _line_band(
+    corners: Pointer[RasterVertex, ImmutAnyOrigin],
+    segments: Int,
+    target: MutPointer[RenderTarget, MutAnyOrigin],
+    errors: MutPointer[String, MutAnyOrigin],
+    band: Int,
+    first_row: Int,
+    last_row: Int,
+    fog: FogView,
+):
+    """Draw every segment into one horizontal band of the target.
+
+    `_band` for lines. It takes pointers for the same reason: a coroutine
+    outlives the call that made it, and `rasterize_lines_all` keeps
+    everything alive until `TaskGroup.wait` returns. A band owns its rows,
+    so the threads never touch one pixel, and submission order inside a
+    band is what it is on one thread -- which is what keeps a blended
+    segment mixing over what it should.
+
+    A task cannot raise, so an error goes into this band's slot and
+    `rasterize_lines_all` raises it once every band has finished.
+    """
+    try:
+        for segment in range(segments):
+            var a = corners[unsafe_offset=segment * 2]
+            var b = corners[unsafe_offset=segment * 2 + 1]
+            # Most segments miss most bands, and saying so from two ends is
+            # cheaper than bounding the walk and finding it empty.
+            if (
+                Int(floor(min(a.y, b.y))) > last_row
+                or Int(ceil(max(a.y, b.y))) < first_row
+            ):
+                # Still checked, though nothing here will draw it. A band
+                # owns rows, not segments, so a segment no band drew would
+                # otherwise go unexamined on four workers and be refused on
+                # one -- the same input, two answers. `rasterize_line`
+                # makes the identical check on the ones that do draw.
+                check_line_state(a, b)
+                continue
+            rasterize_line(a, b, target[], first_row, last_row, fog)
+    except e:
+        errors[unsafe_offset=band] = String(e)
 
 
 def rasterize_lines_all(
@@ -1748,8 +1825,17 @@ def rasterize_lines_all(
     Args:
         corners: Raster vertices, two per segment.
         target: The linear render target to draw into.
-        workers: How many threads to draw with, at least one.
+        workers: How many threads to draw with, at least one. The image is
+            cut into that many horizontal bands, each drawn by its own
+            task, exactly as `rasterize_all` cuts it.
         fog: The scene's fog, seen through the camera.
+
+    Every segment's metadata is checked whether or not it is drawn, and
+    on every band, so the same input is refused on one worker and on
+    four. `rasterize_line` makes the check on a segment a band draws and
+    `_line_band` makes it on one the band's rows miss. What a caller does
+    not get is a promise that nothing was drawn before the error: bands
+    run at once, and the target a raise leaves behind is not a frame.
 
     Raises:
         Error: If the corner count is odd, `workers` is less than one, the
@@ -1762,8 +1848,6 @@ def rasterize_lines_all(
         raise Error("Rasterizing lines needs at least one worker")
     fog.validate()
     var segments = len(corners) // 2
-    for segment in range(segments):
-        check_line_state(corners[segment * 2], corners[segment * 2 + 1])
     # Bands, as `rasterize_all` uses them, and for the same reason: a band
     # owns its rows, so two threads never write one pixel. Lines are cheap
     # enough that one worker is the common case, and the split is here so
@@ -1774,18 +1858,42 @@ def rasterize_lines_all(
     # has at least one row and a caller at least one worker, so there is
     # always at least one band.
     var bands = min(workers, target.height)
-    for band in range(bands):  # pragma: no branch
-        var top = band * target.height // bands
-        var bottom = (band + 1) * target.height // bands - 1
+    if bands == 1:
         for segment in range(segments):
             rasterize_line(
                 corners[segment * 2],
                 corners[segment * 2 + 1],
                 target,
-                top,
-                bottom,
+                fog=fog,
+            )
+        return
+
+    # Tasks, as `rasterize_all` creates them, and for the same reason: a
+    # band owns its rows, so no two threads write one pixel. Walking the
+    # bands in an ordinary loop instead is what this used to do, which
+    # asked every worker's worth of rows to be walked on one thread --
+    # more workers meant more work and no more threads.
+    var errors = List[String](length=bands, fill=String(""))
+    var group = TaskGroup()
+    # At least two bands past the early return above, so neither loop can
+    # run zero times.
+    for band in range(bands):  # pragma: no branch
+        group.create_task(
+            _line_band(
+                corners.unsafe_ptr().unsafe_origin_cast[ImmutAnyOrigin](),
+                segments,
+                Pointer(to=target).unsafe_origin_cast[MutAnyOrigin](),
+                errors.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+                band,
+                band * target.height // bands,
+                (band + 1) * target.height // bands - 1,
                 fog,
             )
+        )
+    group.wait()
+    for band in range(bands):  # pragma: no branch
+        if errors[band] != "":
+            raise Error(errors[band])
 
 
 async def _band(

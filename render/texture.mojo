@@ -164,6 +164,38 @@ def mix_color(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
     ).unpremultiplied()
 
 
+def mix_straight(near: FloatColor, far: FloatColor, t: Float32) -> FloatColor:
+    """Return one vertex color a fraction `t` of the way to another.
+
+    For a varying, which is what a color on a corner is: a number the
+    author put there, interpolated component by component, exactly as the
+    triangle rasterizer interpolates the same field across three corners.
+    The GPU line pass calls this too, so the one convention for a line's
+    color lives in one place.
+
+    Not `mix_color`. That one premultiplies first, which is right for
+    filtering the texels of an image -- an invisible texel must not lend
+    its color to a neighbor -- and wrong for a varying, where a corner's
+    color and its alpha are two numbers the author gave separately. Mixing
+    a transparent red toward an opaque blue premultiplied drops the red
+    outright. The triangle path keeps it, and so does this.
+
+    Args:
+        near: The color at one end.
+        far: The color at the other.
+        t: How far along, from zero at `near` to one at `far`.
+
+    Returns:
+        The interpolated color, straight rather than premultiplied.
+    """
+    return FloatColor(
+        mix(near.r, far.r, t),
+        mix(near.g, far.g, t),
+        mix(near.b, far.b, t),
+        mix(near.a, far.a, t),
+    )
+
+
 def blend_texels(
     lower_left: FloatColor,
     lower_right: FloatColor,

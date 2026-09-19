@@ -12,10 +12,15 @@ per segment, for a `Line` in `SEGMENTS` mode to draw. See `objects.line`.
 `wireframe_geometry` keeps every edge. It shows how a surface is built.
 
 `edges_geometry` keeps only the edges that show a shape: an edge where the
-two faces meeting at it turn by more than a threshold angle, and an edge
+two faces meeting at it turn by at least a threshold angle, and an edge
 with one face and no neighbor at all. A cube keeps its twelve edges and
-loses the diagonal across each face. A sphere keeps its silhouette and
-nothing else, because its faces turn by degrees and the threshold is one.
+loses the diagonal across each face.
+
+It is a crease and boundary finder, not a silhouette finder. It is given
+no camera, and its answer does not move when one does. What it keeps of a
+sphere depends on how finely the sphere is divided and on the threshold:
+a sphere of twenty-four segments turns fifteen degrees a facet, so the
+default one-degree threshold keeps most of its edges rather than none.
 
 ## Welding first
 
@@ -54,6 +59,17 @@ comptime WELD = Float32(1e-4)
 # The angle three.js defaults `thresholdAngle` to. An edge whose two faces
 # turn by less than this is not an edge of the shape, only of the mesh.
 comptime DEFAULT_THRESHOLD = Angle(1.0, DEGREE)
+# How far a cosine may fall short of the threshold's and still count as
+# reaching it. The rule is inclusive -- an edge turning *at* the threshold
+# is kept -- and without this it is not, because neither side of the
+# comparison is exact. An `Angle` holds radians as a Float32, so an
+# authored ninety degrees is 1.5707964 and its cosine is -4.37e-8 rather
+# than zero, while two perpendicular faces give a dot product of exactly
+# zero. A cube asked for its right angles lost all twelve of them. A
+# millionth is several times both errors and is far below any angle an
+# image can show: it is the tolerance `renderers.renderer.CULL_SLACK` and
+# `geometries.shape.NOISE` are, for the same reason.
+comptime ANGLE_SLACK = Float32(1e-6)
 
 
 def _hashed(value: Int, buckets: Int) -> Int:
@@ -315,7 +331,10 @@ def edges_geometry(
     if threshold.value < 0:
         raise Error("An edge threshold cannot be a negative angle")
     var paired = _paired(geometry)
-    var limit = cos(threshold.value)
+    # Widened by the slack, so an edge turning exactly as far as the
+    # threshold is kept rather than lost to the rounding of a float32
+    # cosine. See `ANGLE_SLACK`.
+    var limit = cos(threshold.value) + ANGLE_SLACK
     var first = List[Int]()
     var second = List[Int]()
     for edge in range(len(paired[2])):

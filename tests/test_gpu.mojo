@@ -5569,5 +5569,186 @@ def test_both_backends_agree_on_a_scene_with_lines_in_it() raises:
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
+def a_varying_line(
+    ax: Float32,
+    bx: Float32,
+    near: FloatColor,
+    far: FloatColor,
+    near_inv_w: Float32 = 1,
+    far_inv_w: Float32 = 1,
+    depth: Float32 = 0,
+    blend: Blending = OPAQUE,
+) raises -> List[RasterVertex]:
+    """Return one flat segment whose two ends differ in color and in w.
+
+    `a_line` gives both ends one color, which is exactly the case that
+    cannot tell one interpolation convention from another.
+    """
+    return [
+        RasterVertex(
+            ax,
+            8.5,
+            0.5,
+            near_inv_w,
+            near,
+            0,
+            0,
+            NO_TEXTURE,
+            blend,
+            kind=BASIC,
+            view_depth=depth,
+        ),
+        RasterVertex(
+            bx,
+            8.5,
+            0.5,
+            far_inv_w,
+            far,
+            0,
+            0,
+            NO_TEXTURE,
+            blend,
+            kind=BASIC,
+            view_depth=depth,
+        ),
+    ]
+
+
+def test_both_backends_veil_a_line_with_the_same_fog() raises:
+    # The kernel used to read the fog buffer by literal slot, which took
+    # the color out of the near, far and density lanes: a white line in
+    # black fog came back yellow. Its own test because a parity test on a
+    # scene with no fog cannot see it, and one with gray fog barely can.
+    if skipped_for_lack_of_a_gpu("both backends veil a line with one fog"):
+        return
+    var lines = a_varying_line(
+        2.5,
+        13.5,
+        FloatColor(1, 1, 1),
+        FloatColor(1, 1, 1),
+        depth=2.0,
+    )
+    var view = FogView(
+        linear_fog(Color(0, 0, 0), Length(1.0, METER), Length(3.0, METER))
+    )
+    var target = RenderTarget(16, 16, BACKGROUND)
+    rasterize_lines_all(lines, target, 1, view)
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        List[RasterVertex](),
+        16,
+        16,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        view,
+        NO_TONE_MAPPING,
+        1.0,
+        lines,
+    )
+    # Halfway through a one-to-three fog, so half the white survives over
+    # black. The number is here so that a change of convention has to be
+    # deliberate rather than merely agreed on by both backends.
+    var painted = cpu.get_pixel(8, 8)
+    assert_equal(Int(painted.r), 188)
+    assert_equal(Int(painted.g), 188)
+    assert_equal(Int(painted.b), 188)
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_both_backends_interpolate_a_line_color_the_same_way() raises:
+    # Ends that differ in color and in alpha, with unequal w, which is the
+    # only case that tells a straight interpolation from a premultiplied
+    # one. The host used to premultiply and the kernel never did.
+    if skipped_for_lack_of_a_gpu("both backends interpolate a line alike"):
+        return
+    var lines = a_varying_line(
+        2.5,
+        13.5,
+        FloatColor(1, 0, 0, 0),
+        FloatColor(0, 0, 1, 1),
+        near_inv_w=1,
+        far_inv_w=3,
+        blend=BLEND,
+    )
+    var target = RenderTarget(16, 16, BACKGROUND)
+    rasterize_lines_all(lines, target, 1, FogView.none())
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        List[RasterVertex](),
+        16,
+        16,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        FogView.none(),
+        NO_TONE_MAPPING,
+        1.0,
+        lines,
+    )
+    # The transparent red still lends its red, which is what a varying
+    # does and what premultiplying would have thrown away.
+    var reds = 0
+    for x in range(16):
+        if cpu.get_pixel(x, 8).r > 40:
+            reds += 1
+    assert_true(reds > 0, "the transparent end lent no color")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_show_a_line_the_same_way_in_the_uv_view() raises:
+    # A line carries light, not coordinates, and the uv view has to encode
+    # it like any other light. The kernel used to quantize the whole frame
+    # instead, which showed the line's linear value as a byte.
+    if skipped_for_lack_of_a_gpu("both backends show a line in the uv view"):
+        return
+    var gray = Color(128, 128, 128)
+    var lines = a_varying_line(
+        2.5, 13.5, FloatColor(srgb=gray), FloatColor(srgb=gray)
+    )
+    var target = RenderTarget(16, 16, BACKGROUND)
+    rasterize_lines_all(lines, target, 1, FogView.none())
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        List[RasterVertex](),
+        16,
+        16,
+        BACKGROUND,
+        SHADE_UV,
+        TextureStore(),
+        Lighting.uniform(),
+        FogView.none(),
+        NO_TONE_MAPPING,
+        1.0,
+        lines,
+    )
+    assert_equal(Int(cpu.get_pixel(8, 8).r), 128)
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_a_second_upload_describes_its_own_textures() raises:
+    # `set_textures` replaces the store, so every list that describes it is
+    # replaced. The heights were appended to instead, so a second upload
+    # validated its gradient maps against the first upload's rows.
+    if skipped_for_lack_of_a_gpu("a second upload describes its own textures"):
+        return
+    var renderer = GpuRenderer(36, 30)
+    var tones: List[UInt8] = [0, 255]
+    var tall = TextureStore()
+    _ = tall.add(a_tall_gpu_ramp(tones))
+    renderer.set_textures(tall)
+    # The same id, now a one-row ramp, which is the only shape a gradient
+    # map is allowed. It has to be judged on its own rows.
+    var flat = TextureStore()
+    _ = flat.add(a_gpu_ramp(tones))
+    renderer.set_textures(flat)
+    renderer.draw(
+        toon_pair(TextureId(0)), BACKGROUND, SHADE_LIT, Lighting.uniform()
+    )
+    assert_equal(renderer.read_back().width, 36)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
