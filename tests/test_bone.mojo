@@ -6,16 +6,18 @@
 """Tests for bone tissue, occupancy and the procedural PBR maps."""
 
 from extensions.humanoid.skeleton.bone import (
-    CORTICAL,
     MAX_LOOK,
     MIN_LOOK,
-    TRABECULAR,
-    BoneKind,
-    BoneTissue,
     _byte,
     bone_albedo,
     bone_phong,
     bone_roughness,
+)
+from extensions.humanoid.skeleton.tissue import (
+    CORTICAL,
+    TRABECULAR,
+    BoneKind,
+    BoneTissue,
     cortical_tissue,
     trabecular_tissue,
 )
@@ -64,7 +66,7 @@ def test_cortical_tissue_matches_morgan_2018() raises:
         tissue.elastic_modulus.to(GIGAPASCAL), Float32(17.9), atol=TOLERANCE
     )
     assert_almost_equal(
-        tissue.elastic_modulus_compression.to(GIGAPASCAL),
+        tissue.elastic_modulus_secondary.to(GIGAPASCAL),
         Float32(18.16),
         atol=TOLERANCE,
     )
@@ -185,22 +187,22 @@ def test_refuses_a_non_positive_modulus() raises:
         tissue.validate()
 
 
-def test_refuses_a_non_finite_compression_modulus() raises:
+def test_refuses_a_non_finite_secondary_modulus() raises:
     var tissue = cortical_tissue()
-    tissue.elastic_modulus_compression = Pressure(nan[DType.float32](), PASCAL)
+    tissue.elastic_modulus_secondary = Pressure(nan[DType.float32](), PASCAL)
     with assert_raises():
         tissue.validate()
-    tissue.elastic_modulus_compression = Pressure(inf[DType.float32](), PASCAL)
+    tissue.elastic_modulus_secondary = Pressure(inf[DType.float32](), PASCAL)
     with assert_raises():
         tissue.validate()
 
 
-def test_refuses_a_non_positive_compression_modulus() raises:
+def test_refuses_a_non_positive_secondary_modulus() raises:
     var tissue = cortical_tissue()
-    tissue.elastic_modulus_compression = Pressure(0)
+    tissue.elastic_modulus_secondary = Pressure(0)
     with assert_raises():
         tissue.validate()
-    tissue.elastic_modulus_compression = Pressure(-2.0)
+    tissue.elastic_modulus_secondary = Pressure(-2.0)
     with assert_raises():
         tissue.validate()
 

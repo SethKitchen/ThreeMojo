@@ -13,12 +13,13 @@ extensions/
     sex.mojo           MALE, FEMALE
     side.mojo          RIGHT, LEFT
     skeleton/
-      bone.mojo        cortical and trabecular tissue, PBR maps
+      tissue.mojo      density, porosity and moduli
+      bone.mojo        PBR maps and a Phong stand-in
       leg/
         femur/
           dimensions.mojo   osteometry and the implicit solid
-          geometry.mojo     the mesh
-          mass.mojo         mineral mass and Earth weight
+          geometry.mojo     marching-tetrahedra mesh
+          mass.mojo         bone-tissue mass and Earth weight
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.
@@ -27,7 +28,7 @@ Import from the module that defines the symbol. Do not put original content in `
 
 The house rules still apply. Quantities carry units. A kind is a type with `is_valid`. Tests cover every branch. Documentation follows the writing rules. `make check` must pass.
 
-Scale from measured data. A humanoid is a stature and a sex. Each bone reads those and sizes itself. Do not hard-code a length in meters when a formula exists.
+Scale from a named template. A humanoid is a stature and a sex. Each bone reads those and sizes itself. Do not hard-code a length in meters when a published relationship exists.
 
 ## Add one
 

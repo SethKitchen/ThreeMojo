@@ -5,37 +5,45 @@
 
 """Osteometric size of a femur, and the implicit solid that has that size.
 
-Length comes from Trotter and Gleser 1952, inverted: stature from maximum
-femoral length, solved for the bone. The male line is
-`stature_cm = 2.38 * femur_cm + 61.41`. The female line is
-`stature_cm = 2.47 * femur_cm + 54.10`. Those are the American White adult
-formulae, which forensic software uses when no population is named. A six
-foot male therefore gets a femur of 51.04 cm, not a naive 26.7 percent of
-stature.
+Length comes from Trotter and Gleser 1952. That paper predicts stature
+from maximum femoral length. This template inverts the published line so
+a chosen stature picks a bone length. The inverse of a stature-from-bone
+regression is not the regression of bone length on stature. It is a
+modeling choice for a named adult template, not a uniquely determined
+measurement for a person of that height.
 
-Every other linear measure is a sex-specific ratio of that length, taken
-from standard adult osteometry: femoral head diameter, biomechanical neck
-length, midshaft diameters, bicondylar breadth, trochanter offsets and the
-anterior bow. Neck-shaft angle, anteversion and the bicondylar angle are
-the usual adult means, a few degrees different by sex. Thickness therefore
-scales with the bone, not with stature on its own, which is what
-"proportionally" means here.
+The male line is `stature_cm = 2.38 * femur_cm + 61.41`. The female line
+is `stature_cm = 2.47 * femur_cm + 54.10`. Those are the American White
+adult formulae from 1952. Forensic software uses them when no population
+is named. Other populations and later samples use different coefficients.
+A six foot male therefore gets a femur of 51.04 cm on this template.
 
-The solid is a smooth union of anatomical parts: a bowed tapered shaft, a
-neck, a spherical head, both trochanters, both condyles, a patellar
-surface, a linea aspera, and a notch cut between the condyles. The mesh
-builder in `geometry` takes the zero set of that field.
+Every other linear measure is a sex-specific ratio of that length. The
+ratios are authored template parameters. They are not a cited osteometric
+table. Neck-shaft angle, anteversion and the bicondylar angle are authored
+adult means for the two templates. Thickness scales with the bone, not
+with stature on its own.
+
+The solid is a smooth union of anatomical parts: a bowed tapered shaft
+with an elliptical cross-section, a neck, a spherical head, both
+trochanters, both condyles, a patellar surface, a linea aspera, and a
+notch cut between the condyles. The mesh builder in `geometry` takes the
+zero set of that field.
 
 The bone's own frame is osteological. Plus y is proximal, plus x is
 lateral, plus z is anterior, the origin is mid-shaft. A right femur uses
 that frame. A left femur is the same points with x flipped.
+
+`FemurDimensions` is fieldwise-constructible. Editing a measurement does
+not rebuild landmarks. Call `femur_dimensions` to resolve a template.
+Call `validate` at every public consumer of an edited copy.
 """
 
 from extensions.humanoid.sex import FEMALE, MALE, Sex
 from extensions.humanoid.side import LEFT, RIGHT, BodySide
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import cos, isfinite, max, min, sin, sqrt
+from std.math import acos, cos, isfinite, max, min, pi, sin, sqrt
 from units.si import (
     Angle,
     CENTIMETER,
@@ -45,8 +53,8 @@ from units.si import (
     RADIAN,
 )
 
-# Adult range the Trotter and Gleser lines were built for. A stature
-# outside it is refused rather than extrapolated.
+# Software range for a stature argument. This is not the calibration
+# range of the 1952 sample.
 comptime MIN_STATURE = Length(1.2, METER)
 comptime MAX_STATURE = Length(2.5, METER)
 
@@ -57,10 +65,7 @@ comptime MALE_INTERCEPT_CM = Float32(61.41)
 comptime FEMALE_SLOPE = Float32(2.47)
 comptime FEMALE_INTERCEPT_CM = Float32(54.10)
 
-# Ratios of maximum femoral length, adult male. Head diameter, bicondylar
-# breadth and midshaft diameters follow common osteometric means around a
-# 466 mm femur; neck length is the biomechanical length from the shaft
-# axis to the head center; trochanter offsets and bow are the same scale.
+# Authored ratios of maximum femoral length, adult male template.
 comptime MALE_HEAD = Float32(0.1030)
 comptime MALE_NECK = Float32(0.1073)
 comptime MALE_BICONDYLAR = Float32(0.1803)
@@ -69,14 +74,12 @@ comptime MALE_SHAFT_ML = Float32(0.0579)
 comptime MALE_GT = Float32(0.0687)
 comptime MALE_LT = Float32(0.0386)
 comptime MALE_BOW = Float32(0.0129)
-# Neck-shaft (CCD) angle, anteversion and femoral obliquity, in degrees.
+# Authored neck-shaft (CCD) angle, anteversion and femoral obliquity.
 comptime MALE_CCD_DEG = Float32(126.0)
 comptime MALE_ANTEVERSION_DEG = Float32(12.0)
 comptime MALE_OBLIQUITY_DEG = Float32(9.0)
 
-# The matching adult female ratios, around a 432 mm femur. The head and
-# the condyles are relatively smaller; the neck-shaft and bicondylar
-# angles are a little more open, as in the orthopedic means.
+# Authored adult female template ratios.
 comptime FEMALE_HEAD = Float32(0.0977)
 comptime FEMALE_NECK = Float32(0.1065)
 comptime FEMALE_BICONDYLAR = Float32(0.1736)
@@ -95,7 +98,8 @@ struct FemurDimensions(ImplicitlyCopyable):
     """Measured size of one femur, and the landmarks a skeleton will bind.
 
     Positions are in meters in the bone's frame, as a `Vector3` always is.
-    Lengths and angles carry units.
+    Lengths and angles carry units. Landmarks come from `femur_dimensions`.
+    Editing a length does not move them.
     """
 
     var stature: Length
@@ -120,12 +124,41 @@ struct FemurDimensions(ImplicitlyCopyable):
     var medial_condyle: Vector3
     var lateral_condyle: Vector3
 
+    def validate(self) raises:
+        """Refuse dimensions that a field, mesh or mass cannot consume.
+
+        Raises:
+            Error: If sex or side is not valid, if a required length is
+                not finite or not positive, if bow is negative, if an
+                angle is not finite, if the neck-shaft angle is not
+                between 0 and 180 degrees, or if a landmark is not finite.
+        """
+        _check_spec(self.stature, self.sex, self.side)
+        _positive_length(self.length, "length")
+        _positive_length(self.head_diameter, "head diameter")
+        _positive_length(self.neck_length, "neck length")
+        _positive_length(self.bicondylar_width, "bicondylar width")
+        _positive_length(self.midshaft_ap, "midshaft AP diameter")
+        _positive_length(self.midshaft_ml, "midshaft ML diameter")
+        _positive_length(self.greater_trochanter_offset, "greater trochanter")
+        _positive_length(self.lesser_trochanter_offset, "lesser trochanter")
+        _non_negative_length(self.anterior_bow, "anterior bow")
+        _open_angle(self.neck_shaft_angle, "neck-shaft angle")
+        _finite_angle(self.anteversion, "anteversion")
+        _acute_angle(self.bicondylar_angle, "bicondylar angle")
+        _finite_point(self.head_center, "head center")
+        _finite_point(self.neck_base, "neck base")
+        _finite_point(self.greater_trochanter, "greater trochanter")
+        _finite_point(self.lesser_trochanter, "lesser trochanter")
+        _finite_point(self.medial_condyle, "medial condyle")
+        _finite_point(self.lateral_condyle, "lateral condyle")
+
 
 struct FemurField(ImplicitlyCopyable):
     """The implicit solid for one `FemurDimensions`.
 
     `distance` is in meters, negative inside the bone. `geometry` meshes
-    the zero set.
+    the zero set. The shaft uses independent AP and ML radii.
     """
 
     var head_center: Vector3
@@ -145,11 +178,17 @@ struct FemurField(ImplicitlyCopyable):
     var s2: Vector3
     var s3: Vector3
     var s4: Vector3
-    var r0: Float32
-    var r1: Float32
+    var ml0: Float32
+    var ml1: Float32
+    var ml2: Float32
+    var ml3: Float32
+    var ml4: Float32
+    var ap0: Float32
+    var ap1: Float32
+    var ap2: Float32
+    var ap3: Float32
+    var ap4: Float32
     var r2: Float32
-    var r3: Float32
-    var r4: Float32
     var linea_a: Vector3
     var linea_b: Vector3
     var linea_r: Float32
@@ -164,17 +203,26 @@ struct FemurField(ImplicitlyCopyable):
     var low: Vector3
     var high: Vector3
 
-    def __init__(out self, dimensions: FemurDimensions):
-        """Build the solid from already-checked dimensions."""
+    def __init__(out self, dimensions: FemurDimensions) raises:
+        """Build the solid from dimensions that `validate` accepts.
+
+        Args:
+            dimensions: Size and landmarks. Must already pass `validate`,
+                or this constructor runs `validate` itself.
+
+        Raises:
+            Error: If `dimensions.validate` refuses the copy.
+        """
+        dimensions.validate()
         var L = dimensions.length.value
         var head_r = dimensions.head_diameter.value * 0.5
         var W = dimensions.bicondylar_width.value
         var bow = dimensions.anterior_bow.value
         var gt_off = dimensions.greater_trochanter_offset.value
         var lt_off = dimensions.lesser_trochanter_offset.value
-        var r_mid = 0.25 * (
-            dimensions.midshaft_ap.value + dimensions.midshaft_ml.value
-        )
+        var ml_mid = dimensions.midshaft_ml.value * 0.5
+        var ap_mid = dimensions.midshaft_ap.value * 0.5
+        var r_mid = 0.5 * (ml_mid + ap_mid)
         var condyle_ry = 0.39 * W
         var condyle_rz = 0.36 * W
         var condyle_rx = 0.28 * W
@@ -201,11 +249,17 @@ struct FemurField(ImplicitlyCopyable):
         self.s2 = _station(0.5, x0, x4, y0, y4, bow)
         self.s3 = _station(0.75, x0, x4, y0, y4, bow)
         self.s4 = _station(1.0, x0, x4, y0, y4, bow)
-        self.r0 = 1.35 * r_mid
-        self.r1 = 1.10 * r_mid
+        self.ml0 = 1.35 * ml_mid
+        self.ml1 = 1.10 * ml_mid
+        self.ml2 = ml_mid
+        self.ml3 = 1.12 * ml_mid
+        self.ml4 = 1.28 * ml_mid
+        self.ap0 = 1.35 * ap_mid
+        self.ap1 = 1.10 * ap_mid
+        self.ap2 = ap_mid
+        self.ap3 = 1.12 * ap_mid
+        self.ap4 = 1.28 * ap_mid
         self.r2 = r_mid
-        self.r3 = 1.12 * r_mid
-        self.r4 = 1.28 * r_mid
         var posterior = 0.85 * r_mid + 0.20 * bow
         self.linea_a = Vector3(self.s1.x, self.s1.y, self.s1.z - posterior)
         self.linea_b = Vector3(self.s3.x, self.s3.y, self.s3.z - posterior)
@@ -230,6 +284,8 @@ struct FemurField(ImplicitlyCopyable):
         self.k = 0.016 * L
         self.k_notch = 0.007 * L
         self.epsilon = 0.0015 * L
+        var rad0 = max(self.ml0, self.ap0)
+        var rad4 = max(self.ml4, self.ap4)
         var lo_x = self.head_center.x - self.head_r
         var lo_y = self.head_center.y - self.head_r
         var lo_z = self.head_center.z - self.head_r
@@ -260,18 +316,18 @@ struct FemurField(ImplicitlyCopyable):
         hi_x = max(hi_x, self.lateral.x + self.lateral_r.x)
         hi_y = max(hi_y, self.lateral.y + self.lateral_r.y)
         hi_z = max(hi_z, self.lateral.z + self.lateral_r.z)
-        lo_x = min(lo_x, self.s0.x - self.r0)
-        lo_y = min(lo_y, self.s0.y - self.r0)
-        lo_z = min(lo_z, self.s0.z - self.r0)
-        hi_x = max(hi_x, self.s0.x + self.r0)
-        hi_y = max(hi_y, self.s0.y + self.r0)
-        hi_z = max(hi_z, self.s0.z + self.r0)
-        lo_x = min(lo_x, self.s4.x - self.r4)
-        lo_y = min(lo_y, self.s4.y - self.r4)
-        lo_z = min(lo_z, self.s4.z - self.r4)
-        hi_x = max(hi_x, self.s4.x + self.r4)
-        hi_y = max(hi_y, self.s4.y + self.r4)
-        hi_z = max(hi_z, self.s4.z + self.r4)
+        lo_x = min(lo_x, self.s0.x - rad0)
+        lo_y = min(lo_y, self.s0.y - rad0)
+        lo_z = min(lo_z, self.s0.z - rad0)
+        hi_x = max(hi_x, self.s0.x + rad0)
+        hi_y = max(hi_y, self.s0.y + rad0)
+        hi_z = max(hi_z, self.s0.z + rad0)
+        lo_x = min(lo_x, self.s4.x - rad4)
+        lo_y = min(lo_y, self.s4.y - rad4)
+        lo_z = min(lo_z, self.s4.z - rad4)
+        hi_x = max(hi_x, self.s4.x + rad4)
+        hi_y = max(hi_y, self.s4.y + rad4)
+        hi_z = max(hi_z, self.s4.z + rad4)
         var pad = 0.022 * L + Float32(0.004)
         self.low = Vector3(lo_x - pad, lo_y - pad, lo_z - pad)
         self.high = Vector3(hi_x + pad, hi_y + pad, hi_z + pad)
@@ -281,15 +337,29 @@ struct FemurField(ImplicitlyCopyable):
 
         Negative is inside. Zero is the surface.
         """
-        var d = _sd_segment(point, self.s0, self.s1, self.r0, self.r1)
-        d = _smin(
-            d, _sd_segment(point, self.s1, self.s2, self.r1, self.r2), self.k
+        var d = _sd_ellipse_segment(
+            point, self.s0, self.s1, self.ml0, self.ap0, self.ml1, self.ap1
         )
         d = _smin(
-            d, _sd_segment(point, self.s2, self.s3, self.r2, self.r3), self.k
+            d,
+            _sd_ellipse_segment(
+                point, self.s1, self.s2, self.ml1, self.ap1, self.ml2, self.ap2
+            ),
+            self.k,
         )
         d = _smin(
-            d, _sd_segment(point, self.s3, self.s4, self.r3, self.r4), self.k
+            d,
+            _sd_ellipse_segment(
+                point, self.s2, self.s3, self.ml2, self.ap2, self.ml3, self.ap3
+            ),
+            self.k,
+        )
+        d = _smin(
+            d,
+            _sd_ellipse_segment(
+                point, self.s3, self.s4, self.ml3, self.ap3, self.ml4, self.ap4
+            ),
+            self.k,
         )
         d = _smin(
             d,
@@ -349,21 +419,14 @@ def femur_dimensions(
 
     Returns:
         Lengths, angles and landmark positions in the bone's frame.
+        The neck direction is measured from the tilted shaft, not from
+        world y.
 
     Raises:
         Error: If `sex` or `side` is not valid, or stature is not finite
-            or is outside the adult range.
+            or is outside the software range.
     """
-    if not sex.is_valid():
-        raise Error("A femur needs a male or female template")
-    if not side.is_valid():
-        raise Error("A femur needs a left or right side")
-    if not isfinite(stature.value):
-        raise Error("A femur's stature must be finite")
-    if stature < MIN_STATURE:
-        raise Error("A femur's stature must be at least 1.2 meters")
-    if stature > MAX_STATURE:
-        raise Error("A femur's stature cannot exceed 2.5 meters")
+    _check_spec(stature, sex, side)
 
     var stature_cm = stature.to(CENTIMETER)
     var femur_cm: Float32
@@ -419,30 +482,34 @@ def femur_dimensions(
     var head_r = head_d * 0.5
     var condyle_ry = 0.39 * width
     var condyle_rz = 0.36 * width
-    var inclination = Angle(180.0, DEGREE) - ccd
-    var neck_dir = Quaternion.from_axis_angle(
-        Vector3(0, 0, 1), inclination
-    ).rotate(Vector3(0, 1, 0))
-    neck_dir = Quaternion.from_axis_angle(Vector3(0, 1, 0), ante).rotate(
-        neck_dir
+    var medial = Vector3(
+        -0.26 * width, -0.5 * L + condyle_ry * 1.04, 0.08 * condyle_rz
     )
-    neck_dir.normalize()
-    var head_center = Vector3(0, 0.5 * L - head_r, 0)
-    var neck_base = Vector3(
-        head_center.x - neck_dir.x * neck_len,
-        head_center.y - neck_dir.y * neck_len,
-        head_center.z - neck_dir.z * neck_len,
+    var lateral = Vector3(
+        0.24 * width, -0.5 * L + condyle_ry, 0.04 * condyle_rz
     )
-    # The shaft sits more lateral than the knee, by the bicondylar angle.
-    # Shift the proximal cluster so the condyles stay on x of zero and the
-    # neck base is the tilted shaft's top.
-    var y_distal = -0.5 * L + 2.15 * condyle_ry
-    var rise = neck_base.y - y_distal
-    var tilt = sin(obliq.value) / cos(obliq.value)
-    var proximal_x = tilt * rise
-    var shift = proximal_x - neck_base.x
-    head_center = Vector3(head_center.x + shift, head_center.y, head_center.z)
-    neck_base = Vector3(neck_base.x + shift, neck_base.y, neck_base.z)
+    var x0 = 0.5 * (medial.x + lateral.x)
+    var y0 = 0.5 * (medial.y + lateral.y) + 0.085 * L
+    # Shaft first: proximal is more lateral by the bicondylar angle.
+    var shaft_up = Vector3(sin(obliq.value), cos(obliq.value), 0)
+    var shaft_distal = Vector3(-shaft_up.x, -shaft_up.y, -shaft_up.z)
+    var medial_dir = Vector3(-cos(obliq.value), sin(obliq.value), 0)
+    var neck = Vector3(
+        shaft_distal.x * cos(ccd.value) + medial_dir.x * sin(ccd.value),
+        shaft_distal.y * cos(ccd.value) + medial_dir.y * sin(ccd.value),
+        shaft_distal.z * cos(ccd.value) + medial_dir.z * sin(ccd.value),
+    )
+    neck = Quaternion.from_axis_angle(shaft_up, ante).rotate(neck)
+    neck.normalize()
+    var head_center_y = 0.5 * L - head_r
+    var neck_base_y = head_center_y - neck.y * neck_len
+    var along = (neck_base_y - y0) / shaft_up.y
+    var neck_base = Vector3(x0 + along * shaft_up.x, neck_base_y, 0)
+    var head_center = Vector3(
+        neck_base.x + neck.x * neck_len,
+        neck_base.y + neck.y * neck_len,
+        neck_base.z + neck.z * neck_len,
+    )
     var gt = Vector3(
         neck_base.x + gt_off,
         head_center.y - 0.22 * head_r,
@@ -452,12 +519,6 @@ def femur_dimensions(
         neck_base.x - 0.42 * lt_off,
         neck_base.y - 0.065 * L,
         neck_base.z - lt_off,
-    )
-    var medial = Vector3(
-        -0.26 * width, -0.5 * L + condyle_ry * 1.04, 0.08 * condyle_rz
-    )
-    var lateral = Vector3(
-        0.24 * width, -0.5 * L + condyle_ry, 0.04 * condyle_rz
     )
     if side == LEFT:
         head_center = _flip_x(head_center)
@@ -492,7 +553,33 @@ def femur_dimensions(
     )
 
 
-def femur_distance(dimensions: FemurDimensions, point: Vector3) -> Float32:
+def measured_neck_shaft_angle(dimensions: FemurDimensions) raises -> Angle:
+    """Return the angle between the neck axis and the distal shaft chord.
+
+    The neck axis is `head_center - neck_base`. The shaft chord is
+    `s0 - s4` in the field built from `dimensions`. That is the same
+    definition `neck_shaft_angle` is constructed to match.
+
+    Args:
+        dimensions: A femur already sized from stature and sex.
+
+    Returns:
+        The measured angle, in radians inside the `Angle`.
+
+    Raises:
+        Error: If `dimensions.validate` refuses the copy.
+    """
+    var field = FemurField(dimensions)
+    var neck = field.head_center - field.neck_base
+    neck.normalize()
+    var shaft = field.s0 - field.s4
+    shaft.normalize()
+    return Angle(acos(_clamp_unit(neck.dot(shaft))), RADIAN)
+
+
+def femur_distance(
+    dimensions: FemurDimensions, point: Vector3
+) raises -> Float32:
     """Return how far `point` lies outside the femur, in meters.
 
     Negative is inside. The surface `femur` meshes is the zero set.
@@ -503,9 +590,85 @@ def femur_distance(dimensions: FemurDimensions, point: Vector3) -> Float32:
 
     Returns:
         The signed distance, in meters.
+
+    Raises:
+        Error: If `dimensions.validate` refuses the copy.
     """
     var field = FemurField(dimensions)
     return field.distance(point)
+
+
+def _check_spec(stature: Length, sex: Sex, side: BodySide) raises:
+    """Refuse a spec the femur templates cannot use."""
+    if not sex.is_valid():
+        raise Error("A femur needs a male or female template")
+    if not side.is_valid():
+        raise Error("A femur needs a left or right side")
+    if not isfinite(stature.value):
+        raise Error("A femur's stature must be finite")
+    if stature < MIN_STATURE:
+        raise Error("A femur's stature must be at least 1.2 meters")
+    if stature > MAX_STATURE:
+        raise Error("A femur's stature cannot exceed 2.5 meters")
+
+
+def _positive_length(value: Length, name: String) raises:
+    """Refuse a length that is not finite or not positive."""
+    if not isfinite(value.value):
+        raise Error("A femur " + name + " must be finite")
+    if value.value <= 0:
+        raise Error("A femur " + name + " must be positive")
+
+
+def _non_negative_length(value: Length, name: String) raises:
+    """Refuse a length that is not finite or is negative."""
+    if not isfinite(value.value):
+        raise Error("A femur " + name + " must be finite")
+    if value.value < 0:
+        raise Error("A femur " + name + " cannot be negative")
+
+
+def _finite_angle(value: Angle, name: String) raises:
+    """Refuse an angle that is not finite."""
+    if not isfinite(value.value):
+        raise Error("A femur " + name + " must be finite")
+
+
+def _open_angle(value: Angle, name: String) raises:
+    """Refuse an angle that is not finite or not strictly between 0 and pi."""
+    _finite_angle(value, name)
+    if value.value <= 0:
+        raise Error("A femur " + name + " must be positive")
+    if value.value >= pi:
+        raise Error("A femur " + name + " must be less than 180 degrees")
+
+
+def _acute_angle(value: Angle, name: String) raises:
+    """Refuse an angle that is not finite, negative, or 90 degrees or more."""
+    _finite_angle(value, name)
+    if value.value < 0:
+        raise Error("A femur " + name + " cannot be negative")
+    if value.value >= pi * Float32(0.5):
+        raise Error("A femur " + name + " must be less than 90 degrees")
+
+
+def _finite_point(point: Vector3, name: String) raises:
+    """Refuse a landmark with a non-finite coordinate."""
+    if not isfinite(point.x):
+        raise Error("A femur " + name + " must be finite")
+    if not isfinite(point.y):
+        raise Error("A femur " + name + " must be finite")
+    if not isfinite(point.z):
+        raise Error("A femur " + name + " must be finite")
+
+
+def _clamp_unit(value: Float32) -> Float32:
+    """Return `value` held to minus one through one, for `acos`."""
+    if value < -1:
+        return -1
+    if value > 1:
+        return 1
+    return value
 
 
 def _flip_x(point: Vector3) -> Vector3:
@@ -566,6 +729,79 @@ def _sd_segment(
             t = 1
     var radius = radius_a + (radius_b - radius_a) * t
     return (from_a - along * t).length() - radius
+
+
+def _reject(vector: Vector3, unit: Vector3) -> Vector3:
+    """Return the part of `vector` perpendicular to unit `unit`."""
+    var d = vector.dot(unit)
+    return Vector3(
+        vector.x - unit.x * d, vector.y - unit.y * d, vector.z - unit.z * d
+    )
+
+
+def _cross(a: Vector3, b: Vector3) -> Vector3:
+    """Return the cross product of `a` and `b` without mutating them."""
+    var out = a
+    out.cross(b)
+    return out
+
+
+def _sd_ellipse_segment(
+    point: Vector3,
+    a: Vector3,
+    b: Vector3,
+    ml_a: Float32,
+    ap_a: Float32,
+    ml_b: Float32,
+    ap_b: Float32,
+) -> Float32:
+    """Return an approximate signed distance to a tapered elliptical capsule.
+
+    Mediolateral radius is along bone x after projecting out the tangent.
+    Anteroposterior radius is along the remaining anterior axis. The two
+    diameters are independent.
+    """
+    var along = b - a
+    var from_a = point - a
+    var span = along.dot(along)
+    var t = Float32(0)
+    if span > 0:
+        t = from_a.dot(along) / span
+        if t < 0:
+            t = 0
+        if t > 1:
+            t = 1
+    var ml_r = ml_a + (ml_b - ml_a) * t
+    var ap_r = ap_a + (ap_b - ap_a) * t
+    var center = Vector3(
+        a.x + along.x * t, a.y + along.y * t, a.z + along.z * t
+    )
+    var offset = point - center
+    var tangent = Vector3(0, 1, 0)
+    if span > 0:
+        var inv = Float32(1) / sqrt(span)
+        tangent = Vector3(along.x * inv, along.y * inv, along.z * inv)
+    var ml_axis = _reject(Vector3(1, 0, 0), tangent)
+    if ml_axis.length() < Float32(0.000001):
+        ml_axis = _reject(Vector3(0, 0, 1), tangent)
+    ml_axis.normalize()
+    var ap_axis = _cross(tangent, ml_axis)
+    ap_axis.normalize()
+    var u = offset.dot(ml_axis)
+    var v = offset.dot(ap_axis)
+    var w = offset.dot(tangent)
+    var px = u / ml_r
+    var pz = v / ap_r
+    var pr = sqrt(ml_r * ap_r)
+    var py = w / pr
+    var k0 = sqrt(px * px + py * py + pz * pz)
+    var qx = px / ml_r
+    var qy = py / pr
+    var qz = pz / ap_r
+    var k1 = sqrt(qx * qx + qy * qy + qz * qz)
+    if k1 == 0:
+        return -min(ml_r, ap_r)
+    return k0 * (k0 - 1) / k1
 
 
 def _sd_ellipsoid(point: Vector3, center: Vector3, radii: Vector3) -> Float32:

@@ -10,7 +10,7 @@
 The page is Femur. Four adults stand in a row: a five-foot female, a
 five-foot-six female, a six-foot male and a six-foot-six male. Length and
 thickness come from stature and sex. The surface is the cortical bone map.
-The program also prints each bone's mineral mass and Earth weight.
+The program also prints each bone's tissue mass and Earth weight.
 """
 
 from cameras.perspective_camera import PerspectiveCamera

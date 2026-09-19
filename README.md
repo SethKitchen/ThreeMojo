@@ -371,7 +371,7 @@ Every three.js feature in scope is ported: 215 features, and none is open. Each 
 
 Content that is not a three.js port lives under `extensions/`. Each item is tested, documented, and scaled from measured data.
 
-- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a femur from stature and sex, with bone tissue and a PBR look
+- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a stature-scaled femur, with bone tissue and a PBR look
 
 ### Out of scope
 
