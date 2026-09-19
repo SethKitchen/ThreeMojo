@@ -65,6 +65,17 @@ unassociated alpha.
 
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rect import Rect
+from render.texture import (
+    BILINEAR,
+    CLAMP,
+    COVERAGE,
+    Alpha,
+    Filter,
+    Texture,
+    Wrap,
+    depth_texture_of,
+    texture_of,
+)
 from render.tonemap import (
     NO_TONE_MAPPING,
     ToneMapping,
@@ -533,3 +544,72 @@ struct RenderTarget(Movable):
                 )
             group.wait()
         return Framebuffer(self.width, self.height, pixels^, self.depth.copy())
+
+    def texture(
+        self,
+        wrap: Wrap = CLAMP,
+        filter: Filter = BILINEAR,
+        mipmapped: Bool = True,
+        alpha: Alpha = COVERAGE,
+        workers: Int = 1,
+        tone_mapping: ToneMapping = NO_TONE_MAPPING,
+        exposure: Float32 = 1.0,
+    ) raises -> Texture:
+        """Return what this target holds as a texture, so a later draw can
+        sample it: three.js's `WebGLRenderTarget.texture`.
+
+        `resolve` and then `render.texture.texture_of`: the light is
+        encoded to bytes once, through the curve if one is asked for, and
+        those bytes are what the texture decodes back. Ask before drawing
+        into the target again; the texture is a copy, not a view.
+
+        Args:
+            wrap: How coordinates outside the unit square are resolved.
+            filter: `NEAREST` or `BILINEAR`.
+            mipmapped: Build the chain of halved copies.
+            alpha: `COVERAGE` or `IGNORED`; see `texture_of`.
+            workers: How many threads to encode with.
+            tone_mapping: The curve to encode through; see `resolve`.
+            exposure: What the light is scaled by before the curve.
+
+        Returns:
+            The texture, stored `SRGB`.
+
+        Raises:
+            Error: Everything `resolve` raises, or a wrap, filter or alpha
+                mode that is none of the named values.
+        """
+        return texture_of(
+            self.resolve(workers, tone_mapping, exposure),
+            wrap,
+            filter,
+            mipmapped,
+            alpha,
+        )
+
+    def depth_texture(self, wrap: Wrap = CLAMP) raises -> Texture:
+        """Return this target's depth as a texture, three.js's
+        `DepthTexture` on a render target.
+
+        `render.texture.depth_texture_of` of the depth as it stands: the
+        color is not resolved. See there for what a texel holds.
+
+        Args:
+            wrap: How coordinates outside the unit square are resolved.
+
+        Returns:
+            The texture.
+
+        Raises:
+            Error: If the wrap mode is none of the named values.
+        """
+        var count = self.width * self.height
+        return depth_texture_of(
+            Framebuffer(
+                self.width,
+                self.height,
+                List[UInt8](length=count * Framebuffer.CHANNELS, fill=0),
+                self.depth.copy(),
+            ),
+            wrap,
+        )

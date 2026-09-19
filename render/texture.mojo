@@ -56,7 +56,7 @@ mode still decides what a coordinate past the edge reads.
 
 from math.matrix3 import Matrix3
 from math.vector2 import Vector2
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, Framebuffer
 from render.png import DecodedImage
 from render.srgb import (
     LINEAR,
@@ -66,7 +66,7 @@ from render.srgb import (
     decode_ramp,
     linear_to_srgb,
 )
-from std.math import floor
+from std.math import floor, inf, isfinite
 from units.si import Angle, RADIAN
 
 
@@ -1063,6 +1063,191 @@ def texture_from(
         space,
         mipmapped,
         alpha,
+    )
+
+
+def data_texture(
+    width: Int,
+    height: Int,
+    data: List[Float32],
+    channels: Int = 4,
+    wrap: Wrap = CLAMP,
+    filter: Filter = NEAREST,
+    mipmapped: Bool = False,
+    alpha: Alpha = COVERAGE,
+) raises -> Texture:
+    """Return a texture built from raw numbers, three.js's `DataTexture`.
+
+    For data that was never an image file: a ramp a toon material steps
+    through, a mask, a lookup table, a height field. Each number is a
+    fraction from zero to one and becomes one byte, quantized without any
+    transfer function, and the texture is `LINEAR`, so the byte comes
+    back as the fraction it was. A number outside zero to one is clamped:
+    a byte cannot hold it, and this project's textures are bytes.
+
+    The defaults are three.js's own for a `DataTexture`: nearest, no mip
+    chain, and the edges clamped, because data is read where it was
+    written and not filtered, tiled or averaged.
+
+    Args:
+        width: Image width in texels.
+        height: Image height in texels.
+        data: `channels` numbers per texel, row-major from the top.
+        channels: How many numbers each texel holds. One is a gray that
+            fills red, green and blue with alpha at one; two is a gray and
+            an alpha; three is red, green and blue with alpha at one; four
+            is all of them. three.js's `RedFormat`, `RGFormat`, `RGBFormat`
+            and `RGBAFormat`, in that order.
+        wrap: How coordinates outside the unit square are resolved.
+        filter: `NEAREST` or `BILINEAR`.
+        mipmapped: Build the chain of halved copies.
+        alpha: `COVERAGE` if the alpha channel hides color, `IGNORED` if
+            it means nothing, as it does for an alpha map or a ramp.
+
+    Returns:
+        The texture, stored `LINEAR`.
+
+    Raises:
+        Error: If the dimensions are not positive, `channels` is not one
+            through four, the data holds any number that is not finite,
+            or its length is not `width * height * channels`.
+    """
+    if width <= 0 or height <= 0:
+        raise Error("Texture dimensions must be positive")
+    if channels < 1 or channels > 4:
+        raise Error("A data texture holds one through four numbers a texel")
+    if len(data) != width * height * channels:
+        raise Error("Data texture length does not match the dimensions")
+    var pixels = List[UInt8]()
+    pixels.reserve(width * height * Texture.CHANNELS)
+    # Both dimensions are positive, so the loop cannot run zero times.
+    for texel in range(width * height):  # pragma: no branch
+        var base = texel * channels
+        var red = _fraction_byte(data[base])
+        var green = red
+        var blue = red
+        var coverage = UInt8(255)
+        if channels == 2:
+            coverage = _fraction_byte(data[base + 1])
+        if channels >= 3:
+            green = _fraction_byte(data[base + 1])
+            blue = _fraction_byte(data[base + 2])
+        if channels == 4:
+            coverage = _fraction_byte(data[base + 3])
+        pixels.append(red)
+        pixels.append(green)
+        pixels.append(blue)
+        pixels.append(coverage)
+    return Texture(
+        width, height, pixels^, wrap, filter, LINEAR, mipmapped, alpha
+    )
+
+
+def _fraction_byte(value: Float32) raises -> UInt8:
+    """Return a fraction from zero to one as the byte that stands for it,
+    without any transfer function, clamped at either end.
+
+    Raises:
+        Error: If the number is not finite.
+    """
+    if not isfinite(value):
+        raise Error("A data texture holds finite numbers")
+    var held = value
+    if held < 0:
+        held = 0
+    if held > 1:
+        held = 1
+    return UInt8(Int(held * 255 + 0.5))
+
+
+def texture_of(
+    image: Framebuffer,
+    wrap: Wrap = CLAMP,
+    filter: Filter = BILINEAR,
+    mipmapped: Bool = True,
+    alpha: Alpha = COVERAGE,
+) raises -> Texture:
+    """Return a texture holding a rendered image, so a later draw can
+    sample what an earlier one drew: three.js's `WebGLRenderTarget.texture`.
+
+    A `Framebuffer` holds eight-bit sRGB with unassociated alpha, which is
+    exactly what a color texture holds, so nothing is converted: the
+    bytes are copied and read back as the light they encode. Resolve a
+    `RenderTarget` first, or ask it for `texture` directly.
+
+    The edges are clamped by default, as three.js clamps a render
+    target's texture: a rendered image has no reason to tile.
+
+    Args:
+        image: The rendered image.
+        wrap: How coordinates outside the unit square are resolved.
+        filter: `NEAREST` or `BILINEAR`.
+        mipmapped: Build the chain of halved copies.
+        alpha: `COVERAGE`, the default, so a transparent clear color
+            reads as nothing; `IGNORED` to read the color under it.
+
+    Returns:
+        The texture, stored `SRGB`.
+
+    Raises:
+        Error: If the wrap, filter or alpha mode is none of the named
+            values.
+    """
+    return Texture(
+        image.width,
+        image.height,
+        image.pixels.copy(),
+        wrap,
+        filter,
+        SRGB,
+        mipmapped,
+        alpha,
+    )
+
+
+def depth_texture_of(image: Framebuffer, wrap: Wrap = CLAMP) raises -> Texture:
+    """Return a rendered image's depth buffer as a texture, three.js's
+    `DepthTexture`.
+
+    Each texel is the window-space depth a GPU stores, zero at the near
+    plane and one at the far plane, as one gray byte in every color
+    channel: the NDC depth the framebuffer keeps, halved and moved up by
+    a half, quantized without any transfer function. A pixel nothing was
+    drawn into is at the far plane. The texture is `LINEAR` and ignores
+    its alpha, because a depth is data, and it is read nearest with no
+    chain: two depths averaged are the depth of nothing.
+
+    Args:
+        image: The rendered image, with the depth `Framebuffer` carries.
+        wrap: How coordinates outside the unit square are resolved.
+
+    Returns:
+        The texture.
+
+    Raises:
+        Error: If the wrap mode is none of the named values.
+    """
+    var pixels = List[UInt8]()
+    pixels.reserve(image.width * image.height * Texture.CHANNELS)
+    # A framebuffer has positive dimensions, so the loop always runs.
+    for slot in range(image.width * image.height):  # pragma: no branch
+        var z = image.depth[slot]
+        var gray = UInt8(255)
+        if z != inf[DType.float32]():
+            gray = _fraction_byte(z * 0.5 + 0.5)
+        pixels.append(gray)
+        pixels.append(gray)
+        pixels.append(gray)
+        pixels.append(255)
+    return Texture(
+        image.width,
+        image.height,
+        pixels^,
+        wrap,
+        NEAREST,
+        LINEAR,
+        False,
+        IGNORED,
     )
 
 

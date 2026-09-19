@@ -4,7 +4,7 @@
 
 ![ACES tone mapping holds a bright sphere as exposure rises](out/exposure.png)
 
-three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as a texture yet.
+three.js: `WebGLRenderTarget` and the canvas. A render target can be read back as a texture; see [Textures](Textures#from-a-render).
 
 ## Color and FloatColor
 
@@ -48,6 +48,8 @@ three.js: `WebGLRenderTarget` and the canvas. A render target cannot be used as 
 | `depth_at(x, y)`, `color_at(x, y)` | Read a pixel. |
 | `shown(x, y, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Color` | One pixel as it will resolve. |
 | `resolve(workers=1, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Framebuffer` | Unpremultiply, tone map and encode every pixel. |
+| `texture(wrap=CLAMP, filter=BILINEAR, mipmapped=True, alpha=COVERAGE, workers=1, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Texture` | `resolve`, then the image as a texture a later draw can sample. three.js's `WebGLRenderTarget.texture`. |
+| `depth_texture(wrap=CLAMP) -> Texture` | The depth as it stands, as a gray texture. three.js's `DepthTexture`. |
 
 Nothing is clamped before `resolve`. Overexposed light survives every step.
 

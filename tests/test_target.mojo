@@ -12,8 +12,9 @@ eight bits, so the losses compounded.
 """
 
 from render.framebuffer import Color, FloatColor
-from render.srgb import srgb_to_linear
+from render.srgb import LINEAR, SRGB, srgb_to_linear
 from render.target import RenderTarget
+from render.texture import IGNORED, NEAREST, REPEAT
 from render.tonemap import (
     ACES_FILMIC_TONE_MAPPING,
     LINEAR_TONE_MAPPING,
@@ -446,6 +447,36 @@ def test_data_pixels_resolve_the_same_on_several_workers() raises:
     # pixel of 1.5 blue clamps to 255, a light one does not.
     assert_equal(alone.get_pixel(0, 0).b, UInt8(255))
     assert_true(alone.get_pixel(1, 0).b < 255, "the curve missed a pixel")
+
+
+def test_a_target_becomes_a_texture_through_its_resolve() raises:
+    var target = RenderTarget(2, 1, Color(0, 0, 0))
+    target.write(0, 0, FloatColor(1, 0, 0, 1))
+    _ = target.test_depth(0, 0, 0.0)
+    var picture = target.texture()
+    assert_true(picture.color_space == SRGB)
+    assert_equal(picture.texel(0, 0).r, UInt8(255))
+    assert_equal(picture.texel(1, 0).r, UInt8(0))
+    # Through a curve, with the settings passed on.
+    var dimmed = target.texture(
+        REPEAT, NEAREST, False, IGNORED, 1, REINHARD_TONE_MAPPING, 1.0
+    )
+    assert_true(dimmed.wrap == REPEAT)
+    assert_true(dimmed.alpha == IGNORED)
+    assert_equal(dimmed.levels, 1)
+    assert_equal(dimmed.texel(0, 0).r, UInt8(188))
+    with assert_raises():
+        _ = target.texture(workers=0)
+
+
+def test_a_targets_depth_becomes_a_texture() raises:
+    var target = RenderTarget(2, 1, Color(0, 0, 0))
+    _ = target.test_depth(0, 0, 0.0)
+    var seen = target.depth_texture()
+    assert_true(seen.color_space == LINEAR)
+    assert_equal(seen.texel(0, 0).r, UInt8(128))
+    assert_equal(seen.texel(1, 0).r, UInt8(255))
+    assert_true(target.depth_texture(REPEAT).wrap == REPEAT)
 
 
 def main() raises:

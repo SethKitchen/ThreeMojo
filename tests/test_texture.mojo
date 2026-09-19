@@ -16,7 +16,7 @@ from math.vector2 import Vector2
 from render.srgb import UNKNOWN_SPACE, ColorSpace
 from render.texture import Filter, Wrap
 from units.si import Angle, DEGREE
-from render.framebuffer import Color, FloatColor
+from render.framebuffer import Color, FloatColor, Framebuffer
 from render.srgb import LINEAR, SRGB, srgb_to_linear
 from render.texture import (
     BILINEAR,
@@ -30,9 +30,13 @@ from render.texture import (
     Texture,
     blend,
     checkerboard,
+    data_texture,
+    depth_texture_of,
     mix_color,
+    texture_of,
     wrap_index,
 )
+from std.math import inf, nan
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -1171,6 +1175,129 @@ def test_a_copy_keeps_the_transform() raises:
     assert_equal(glow.alpha, IGNORED)
     assert_true(glow.uv_transform() == blank.uv_transform())
     assert_true(glow.uv_transform() != Matrix3())
+
+
+# --- textures from data and from renders -----------------------------------
+
+
+def test_a_data_texture_quantizes_fractions_without_a_curve() raises:
+    var ramp = data_texture(4, 1, [0.0, 0.25, 0.5, 1.0], channels=1)
+    assert_equal(ramp.width, 4)
+    assert_equal(ramp.height, 1)
+    assert_true(ramp.color_space == LINEAR)
+    assert_true(ramp.wrap == CLAMP)
+    assert_true(ramp.filter == NEAREST)
+    assert_equal(ramp.levels, 1)
+    assert_equal(ramp.texel(1, 0).r, UInt8(64))
+    assert_equal(ramp.texel(1, 0).g, UInt8(64))
+    assert_equal(ramp.texel(1, 0).b, UInt8(64))
+    assert_equal(ramp.texel(1, 0).a, UInt8(255))
+    assert_equal(ramp.texel(2, 0).r, UInt8(128))
+    assert_equal(ramp.texel(3, 0).r, UInt8(255))
+    # Linear, so the byte samples back as the fraction it was.
+    assert_almost_equal(
+        Float64(ramp.sample(0.625, 0.5).r), 128.0 / 255, atol=TOLERANCE
+    )
+
+
+def test_a_data_texture_reads_each_channel_count_its_own_way() raises:
+    var two = data_texture(1, 1, [0.5, 0.25], channels=2)
+    assert_equal(two.texel(0, 0).r, UInt8(128))
+    assert_equal(two.texel(0, 0).b, UInt8(128))
+    assert_equal(two.texel(0, 0).a, UInt8(64))
+    var three = data_texture(1, 1, [1.0, 0.5, 0.0], channels=3)
+    assert_equal(three.texel(0, 0).r, UInt8(255))
+    assert_equal(three.texel(0, 0).g, UInt8(128))
+    assert_equal(three.texel(0, 0).b, UInt8(0))
+    assert_equal(three.texel(0, 0).a, UInt8(255))
+    var four = data_texture(1, 1, [1.0, 0.5, 0.0, 0.25])
+    assert_equal(four.texel(0, 0).a, UInt8(64))
+    # The other settings pass through, chain included.
+    var tiled = data_texture(
+        2,
+        2,
+        [0.0, 1.0, 1.0, 0.0],
+        channels=1,
+        wrap=REPEAT,
+        filter=BILINEAR,
+        mipmapped=True,
+        alpha=IGNORED,
+    )
+    assert_true(tiled.wrap == REPEAT)
+    assert_true(tiled.filter == BILINEAR)
+    assert_true(tiled.alpha == IGNORED)
+    assert_equal(tiled.levels, 2)
+
+
+def test_a_data_texture_clamps_what_a_byte_cannot_hold() raises:
+    var wide = data_texture(2, 1, [-3.0, 7.5], channels=1)
+    assert_equal(wide.texel(0, 0).r, UInt8(0))
+    assert_equal(wide.texel(1, 0).r, UInt8(255))
+
+
+def test_a_data_texture_refuses_what_is_not_data() raises:
+    with assert_raises(contains="dimensions must be positive"):
+        _ = data_texture(0, 1, List[Float32](), channels=1)
+    with assert_raises(contains="dimensions must be positive"):
+        _ = data_texture(1, 0, List[Float32](), channels=1)
+    with assert_raises(contains="one through four"):
+        _ = data_texture(1, 1, [0.5], channels=0)
+    with assert_raises(contains="one through four"):
+        _ = data_texture(1, 1, [0.5], channels=5)
+    with assert_raises(contains="does not match"):
+        _ = data_texture(2, 1, [0.5], channels=1)
+    with assert_raises(contains="finite"):
+        _ = data_texture(1, 1, [nan[DType.float32]()], channels=1)
+    with assert_raises(contains="finite"):
+        _ = data_texture(1, 1, [inf[DType.float32]()], channels=1)
+
+
+def test_a_rendered_image_becomes_a_texture_as_it_is() raises:
+    var image = Framebuffer(2, 1, Color(0, 0, 0))
+    image.set_pixel(0, 0, Color(255, 0, 0, 255))
+    image.set_pixel(1, 0, Color(0, 0, 255, 128))
+    var picture = texture_of(image)
+    assert_equal(picture.width, 2)
+    assert_equal(picture.height, 1)
+    assert_true(picture.color_space == SRGB)
+    assert_true(picture.wrap == CLAMP)
+    assert_true(picture.filter == BILINEAR)
+    assert_true(picture.alpha == COVERAGE)
+    assert_equal(picture.levels, 2)
+    assert_equal(picture.texel(0, 0).r, UInt8(255))
+    assert_equal(picture.texel(1, 0).b, UInt8(255))
+    assert_equal(picture.texel(1, 0).a, UInt8(128))
+    # The bytes are sRGB and decode as such.
+    assert_almost_equal(
+        Float64(picture.sample(0.25, 0.5).r), 1.0, atol=TOLERANCE
+    )
+    var plain = texture_of(image, REPEAT, NEAREST, False, IGNORED)
+    assert_true(plain.wrap == REPEAT)
+    assert_true(plain.filter == NEAREST)
+    assert_true(plain.alpha == IGNORED)
+    assert_equal(plain.levels, 1)
+
+
+def test_a_depth_texture_holds_window_space_depth_as_gray() raises:
+    var pixels = List[UInt8](length=3 * 4, fill=0)
+    var depth: List[Float32] = [-1.0, 0.0, inf[DType.float32]()]
+    var image = Framebuffer(3, 1, pixels^, depth^)
+    var seen = depth_texture_of(image)
+    assert_true(seen.color_space == LINEAR)
+    assert_true(seen.alpha == IGNORED)
+    assert_true(seen.filter == NEAREST)
+    assert_true(seen.wrap == CLAMP)
+    assert_equal(seen.levels, 1)
+    # The near plane is zero, the middle a half, and nothing drawn is the
+    # far plane, one.
+    assert_equal(seen.texel(0, 0).r, UInt8(0))
+    assert_equal(seen.texel(1, 0).r, UInt8(128))
+    assert_equal(seen.texel(1, 0).g, UInt8(128))
+    assert_equal(seen.texel(1, 0).b, UInt8(128))
+    assert_equal(seen.texel(1, 0).a, UInt8(255))
+    assert_equal(seen.texel(2, 0).r, UInt8(255))
+    var tiled = depth_texture_of(image, REPEAT)
+    assert_true(tiled.wrap == REPEAT)
 
 
 def main() raises:

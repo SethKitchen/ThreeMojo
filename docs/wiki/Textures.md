@@ -4,7 +4,7 @@
 
 ![Two checkerboard cubes turn, nearest beside bilinear](out/textured.png)
 
-three.js: `Texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`.
+three.js: `Texture`, `DataTexture`, `DepthTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`.
 
 ## Make a texture
 
@@ -12,9 +12,47 @@ three.js: `Texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmap
 checkerboard(size, squares, first, second, wrap=REPEAT, filter=BILINEAR, mipmapped=True, alpha=COVERAGE)
 texture_from(image, wrap=REPEAT, filter=BILINEAR, color_space=None, mipmapped=True, alpha=COVERAGE)
 Texture(width, height, pixels, wrap=REPEAT, filter=BILINEAR, color_space=SRGB, mipmapped=True, alpha=COVERAGE)
+data_texture(width, height, numbers, channels=4, wrap=CLAMP, filter=NEAREST, mipmapped=False, alpha=COVERAGE)
+texture_of(framebuffer, wrap=CLAMP, filter=BILINEAR, mipmapped=True, alpha=COVERAGE)
+depth_texture_of(framebuffer, wrap=CLAMP)
 ```
 
-`checkerboard` builds a test pattern. `texture_from` takes a `DecodedImage` from the PNG reader. `Texture` takes row-major RGBA bytes from the top.
+`checkerboard` builds a test pattern. `texture_from` takes a `DecodedImage` from the PNG reader. `Texture` takes row-major RGBA bytes from the top. The last three are below.
+
+## From numbers
+
+`data_texture` is three.js's `DataTexture`: a texture from raw numbers rather than from an image file. Each number is a fraction from zero to one and becomes one byte, quantized without any transfer function. The texture is `LINEAR`, so the byte samples back as the fraction it was. A number outside zero to one is clamped.
+
+```mojo
+var ramp = data_texture(3, 1, [0.35, 0.7, 1.0], channels=1, alpha=IGNORED)
+var cel = toon_material(Color(255, 170, 60), gradient_map=assets.textures.add(ramp^))
+```
+
+| `channels` | three.js | Each texel holds |
+|---|---|---|
+| `1` | `RedFormat` | A gray, in red, green and blue, with alpha at one. |
+| `2` | `RGFormat` | A gray and an alpha. |
+| `3` | `RGBFormat` | Red, green and blue, with alpha at one. |
+| `4` | `RGBAFormat` | All four. The default. |
+
+The defaults are three.js's own for a `DataTexture`: nearest, no mip chain, and the edges clamped. Data is read where it was written. The length must be `width * height * channels`, and every number must be finite.
+
+## From a render
+
+`texture_of` takes a `Framebuffer` and returns the texture that holds it: three.js's `WebGLRenderTarget.texture`. A framebuffer holds eight-bit sRGB with unassociated alpha, which is what a color texture holds, so nothing is converted. `RenderTarget.texture()` resolves a target and does the same in one call. A later draw can then sample what an earlier one drew.
+
+```mojo
+var target = RenderTarget(160, 120, Color(30, 60, 90))
+renderer.render_into(target, stage, props, studio_camera)
+var picture = assets.textures.add(target.texture())
+var screen = Material(Color(255, 255, 255), picture, kind=BASIC)
+```
+
+The texture is a copy, not a view. Drawing into the target again changes nothing the texture holds. The edges are clamped by default, as three.js clamps a render target's texture.
+
+`depth_texture_of` takes the depth the framebuffer carries and returns it as a texture: three.js's `DepthTexture`. Each texel is the window-space depth a GPU stores, as one gray byte in every channel. It is zero at the near plane and one at the far plane. A pixel nothing was drawn into is at the far plane. The texture is `LINEAR`, ignores its alpha, and is read nearest with no chain: two depths averaged are the depth of nothing. `RenderTarget.depth_texture()` does the same for a target as it stands.
+
+`examples/television.mojo` renders a box into a small target every frame and shows its picture and its depth on two screens.
 
 ## Wrap
 
@@ -97,6 +135,8 @@ var id = assets.textures.add(board^)
 
 | Member | Meaning |
 |---|---|
+| `data_texture(width, height, numbers, channels)` | A texture from fractions. See [From numbers](#from-numbers). |
+| `texture_of(framebuffer)`, `depth_texture_of(framebuffer)` | A texture from a render, and from its depth. See [From a render](#from-a-render). |
 | `sample(u, v) -> FloatColor` | The color at a coordinate, level zero. |
 | `sample_level(u, v, level) -> FloatColor` | Trilinear, between two mip levels. |
 | `texel(x, y) -> Color` | One stored texel. |
@@ -116,6 +156,7 @@ var id = assets.textures.add(board^)
 - Dimensions must be positive, and the buffer length must match.
 - A wrap, filter, color space or alpha mode that is none of its named values raises. The GPU upload checks again.
 - A `checkerboard` size must divide evenly by its square count.
+- A `data_texture` with a channel count outside one through four, a length that does not match, or a number that is not finite.
 - The renderer refuses a map and an emissive map on one material whose transforms differ.
 
 ## Why
