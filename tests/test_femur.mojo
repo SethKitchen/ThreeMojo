@@ -785,7 +785,8 @@ def _max_positive_centroid(
 
 
 def _assert_outward_and_short(bone: BufferGeometry) raises:
-    """Refuse a triangle that winds against its stored normals or spans a gap."""
+    """Refuse a triangle that winds against its stored normals or spans a gap.
+    """
     ref pos = bone.attribute_view(String(POSITION))
     ref normals = bone.attribute_view(String(NORMAL))
     for triangle in range(bone.triangle_count()):
