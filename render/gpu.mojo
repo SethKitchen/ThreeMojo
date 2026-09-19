@@ -42,6 +42,7 @@ is size-dependent. `bench/raster_bench.mojo` measures where the crossover is.
 from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
+from render.linerule import covers, major_is_x, share_at
 from render.framebuffer import Color, FloatColor, Framebuffer
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.lighting import (
@@ -57,6 +58,7 @@ from lights.lighting import (
 from math.smoothstep import smoothstep
 from math.vector3 import Vector3
 from render.rasterizer import (
+    check_line_state,
     SHADE_LIT,
     SHADE_TEXTURE,
     SHADE_UV,
@@ -173,6 +175,9 @@ comptime STATE_ALPHA_MAP = 4
 comptime STATE_GRADIENT_MAP = 5
 # Which image a `MATCAP` triangle is looked up in, or `NO_TEXTURE`.
 comptime STATE_MATCAP = 6
+# How many integers a segment's state takes: its blend policy, and
+# nothing else. A line is unlit and untextured; see `line_state`.
+comptime STATE_PER_LINE = 1
 comptime STATE_PER_TRIANGLE = STATE_MATCAP + 1
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
@@ -957,6 +962,28 @@ def _fetch(
     )
 
 
+def line_state(corners: List[RasterVertex]) -> List[Int32]:
+    """Return each segment's blend policy, `STATE_PER_LINE` entries each.
+
+    A line carries far less per-primitive state than a triangle: it is
+    unlit and untextured, so whether it composites is the only thing the
+    kernel cannot read off a vertex. It is still a table rather than a
+    float lane, for the reason the triangles' is -- a policy that decides
+    both how a color is combined and whether depth is written is not an
+    attribute to interpolate.
+
+    Args:
+        corners: Raster vertices, two per segment.
+
+    Returns:
+        The blend policy per segment, from its first end.
+    """
+    var state = List[Int32]()
+    for segment in range(len(corners) // 2):
+        state.append(Int32(corners[segment * 2].blend.value))
+    return state^
+
+
 def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
     """Return each triangle's texture, blend policy, material kind and
     emissive map, `STATE_PER_TRIANGLE` entries each.
@@ -1254,8 +1281,18 @@ def rasterize_kernel(
     fog_kind: Int32,
     tone: Int32,
     exposure: Float32,
+    segments: MutPointer[Float32, MutAnyOrigin],
+    segment_maps: MutPointer[Int32, MutAnyOrigin],
+    segment_count: Int32,
 ):
-    """Color one pixel from the nearest triangle that covers it."""
+    """Color one pixel from the nearest primitive that covers it.
+
+    Triangles first, then lines, which is the order the host draws them in
+    and the order that matters: a line over a surface has to test its
+    depth against the surface. Both passes composite into the same running
+    color, in linear light, and the pixel is resolved once at the end --
+    exactly as `Renderer.render` fills one target and resolves it once.
+    """
     var x = Int(global_idx.x)
     var y = Int(global_idx.y)
     # The grid is rounded up to whole tiles, so the edges overhang the image.
@@ -1837,6 +1874,106 @@ def rasterize_kernel(
             # `check_triangle_state`. See `render.target`.
             data = False
 
+    # Lines, after every triangle has had its say. One thread per pixel
+    # here too, so the question is "does this segment light me" rather
+    # than "which pixels does this segment light" -- and `render.linerule`
+    # answers both from one expression, which is why the staircase the
+    # host walks and the staircase the device tests are the same one.
+    for index in range(Int(segment_count)):
+        var base = index * 2 * FLOATS_PER_VERTEX
+        var far_base = base + FLOATS_PER_VERTEX
+        var first = Vector2(
+            segments[unsafe_offset=base + LANE_X],
+            segments[unsafe_offset=base + LANE_Y],
+        )
+        var second = Vector2(
+            segments[unsafe_offset=far_base + LANE_X],
+            segments[unsafe_offset=far_base + LANE_Y],
+        )
+        if not covers(first, second, x, y):
+            continue
+        var along = y
+        if major_is_x(first, second):
+            along = x
+        var share = share_at(first, second, along)
+        if share < 0:
+            share = 0
+        if share > 1:
+            share = 1
+        var az = segments[unsafe_offset=base + LANE_Z]
+        var bz = segments[unsafe_offset=far_base + LANE_Z]
+        var z = az + (bz - az) * share
+        if z >= nearest:
+            continue
+        var near = segments[unsafe_offset=base + LANE_INV_W] * (1 - share)
+        var away = segments[unsafe_offset=far_base + LANE_INV_W] * share
+        var total = near + away
+        if total == 0:
+            continue
+        var toward = away / total
+        var lr = segments[unsafe_offset=base + LANE_R]
+        var lg = segments[unsafe_offset=base + LANE_G]
+        var lb = segments[unsafe_offset=base + LANE_B]
+        var la = segments[unsafe_offset=base + LANE_A]
+        var drawn = FloatColor(
+            lr + (segments[unsafe_offset=far_base + LANE_R] - lr) * toward,
+            lg + (segments[unsafe_offset=far_base + LANE_G] - lg) * toward,
+            lb + (segments[unsafe_offset=far_base + LANE_B] - lb) * toward,
+            la + (segments[unsafe_offset=far_base + LANE_A] - la) * toward,
+        )
+        # The host's line pass reads no shading mode: a line has no surface
+        # coordinates, so there is no uv view of one, and it is veiled by
+        # the fog whatever the mode. See `rasterize_line`.
+        if fog_kind != Int32(NO_FOG.value):
+            var ad = segments[unsafe_offset=base + LANE_DEPTH]
+            var bd = segments[unsafe_offset=far_base + LANE_DEPTH]
+            var seen = ad + (bd - ad) * toward
+            drawn = fog_mix(
+                drawn,
+                FloatColor(
+                    fog[unsafe_offset=0],
+                    fog[unsafe_offset=1],
+                    fog[unsafe_offset=2],
+                    1,
+                ),
+                fog_factor(
+                    FogKind(Int(fog_kind)),
+                    seen,
+                    fog[unsafe_offset=3],
+                    fog[unsafe_offset=4],
+                    fog[unsafe_offset=5],
+                ),
+            )
+        var share_a = drawn.a
+        if share_a > 1:
+            share_a = 1
+        if share_a < 0:
+            share_a = 0
+        var mixes = segment_maps[unsafe_offset=index * STATE_PER_LINE] == Int32(
+            BLEND.value
+        )
+        if mixes and share_a == 0:
+            continue
+        found = True
+        if not mixes:
+            mixed_r = drawn.r * share_a
+            mixed_g = drawn.g * share_a
+            mixed_b = drawn.b * share_a
+            mixed_a = share_a
+            nearest = z
+            solid = True
+            # A line is light, never data: it has no normal to show and no
+            # depth material to show one. `check_line_state` refuses any
+            # kind but an unlit one.
+            data = False
+        else:
+            var keep = 1 - share_a
+            mixed_r = drawn.r * share_a + mixed_r * keep
+            mixed_g = drawn.g * share_a + mixed_g * keep
+            mixed_b = drawn.b * share_a + mixed_b * keep
+            mixed_a = share_a + mixed_a * keep
+            data = False
+
     var word = background
     var nearest_depth = inf[DType.float32]()
     # Unpremultiply, then encode. PNG stores unassociated alpha, and alpha
@@ -1917,6 +2054,13 @@ struct GpuRenderer(Movable):
     var fog: DeviceBuffer[DType.float32]
     # One texture id per triangle, beside the vertex buffer rather than in it.
     var maps: DeviceBuffer[DType.int32]
+    # The segments, and how many the two line buffers have room for. Their
+    # own pair rather than a second use of the triangle buffers: a frame
+    # usually has both, and reusing one would mean two launches where the
+    # kernel does both passes in one.
+    var segments: DeviceBuffer[DType.float32]
+    var segment_maps: DeviceBuffer[DType.int32]
+    var line_capacity: Int
     # Every texture the scene can sample, uploaded once rather than per draw.
     var texels: DeviceBuffer[DType.uint8]
     var table: DeviceBuffer[DType.int32]
@@ -2019,6 +2163,15 @@ struct GpuRenderer(Movable):
         self.maps = self.context.enqueue_create_buffer[DType.int32](
             STATE_PER_TRIANGLE
         )
+        # One segment's worth, for the reason one triangle's is allocated
+        # here: a frame with no lines still hands the kernel a pointer.
+        self.line_capacity = 1
+        self.segments = self.context.enqueue_create_buffer[DType.float32](
+            2 * FLOATS_PER_VERTEX
+        )
+        self.segment_maps = self.context.enqueue_create_buffer[DType.int32](
+            STATE_PER_LINE
+        )
         # One texel's worth, standing in for the blank texture. A zero-length
         # device buffer is not worth the special case, and a width of zero is
         # what the kernel actually reads to mean "no texture".
@@ -2088,8 +2241,9 @@ struct GpuRenderer(Movable):
         fog: FogView = FogView.none(),
         tone_mapping: ToneMapping = NO_TONE_MAPPING,
         exposure: Float32 = 1.0,
+        lines: List[RasterVertex] = List[RasterVertex](),
     ) raises:
-        """Rasterize prepared triangles into the device render target.
+        """Rasterize prepared triangles and lines into the device target.
 
         Args:
             corners: Raster vertices, three per triangle. An empty list is
@@ -2109,9 +2263,14 @@ struct GpuRenderer(Movable):
                 light, as `RenderTarget.resolve` takes it. Defaults to
                 `NO_TONE_MAPPING`. The uv view is never tone mapped.
             exposure: What the light is scaled by before the curve.
+            lines: Raster vertices, two per segment, drawn after the
+                triangles and depth tested against them, as the host draws
+                them. Empty by default.
 
         Raises:
-            Error: If the corner count is not a multiple of three, the mode
+            Error: If the corner count is not a multiple of three, the
+                line corner count is not a multiple of two, a segment's
+                ends disagree or its material is lit, the mode
                 is none of the three, the tone mapping is none of the
                 seven, the exposure is negative or not finite, the fog
                 view is refused by `FogView.validate`, a triangle's blend
@@ -2126,6 +2285,8 @@ struct GpuRenderer(Movable):
         """
         if len(corners) % 3 != 0:
             raise Error("Rasterizing needs whole triangles")
+        if len(lines) % 2 != 0:
+            raise Error("Rasterizing needs whole segments")
         if not mode.is_valid():
             raise Error("A shading mode that is none of the three")
         # The kernel cannot raise on a curve or a fog it does not know, so
@@ -2144,6 +2305,12 @@ struct GpuRenderer(Movable):
                 corners[triangle * 3 + 1],
                 corners[triangle * 3 + 2],
             )
+
+        # The same per-segment check the host makes, from the same
+        # function, for the reason the triangles' is made here: the kernel
+        # cannot raise on a policy it does not know.
+        for segment in range(len(lines) // 2):
+            check_line_state(lines[segment * 2], lines[segment * 2 + 1])
 
         # Every texture reference is checked here because it cannot be checked
         # on the device: the kernel reads the descriptor table at whatever
@@ -2272,6 +2439,32 @@ struct GpuRenderer(Movable):
                     count=len(state),
                 )
 
+        var line_count = len(lines) // 2
+        if line_count > self.line_capacity:
+            self.segments = self.context.enqueue_create_buffer[DType.float32](
+                line_count * 2 * FLOATS_PER_VERTEX
+            )
+            self.segment_maps = self.context.enqueue_create_buffer[DType.int32](
+                line_count * STATE_PER_LINE
+            )
+            self.line_capacity = line_count
+
+        if line_count > 0:
+            var drawn = flatten(lines)
+            with self.segments.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=host.unsafe_ptr(),
+                    src=drawn.unsafe_ptr(),
+                    count=len(drawn),
+                )
+            var policies = line_state(lines)
+            with self.segment_maps.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=host.unsafe_ptr(),
+                    src=policies.unsafe_ptr(),
+                    count=len(policies),
+                )
+
         self._upload_lights(lighting)
         self._upload_fog(fog)
         self.context.enqueue_function[rasterize_kernel](
@@ -2296,6 +2489,9 @@ struct GpuRenderer(Movable):
             Int32(fog.kind.value),
             Int32(tone_mapping.value),
             exposure,
+            self.segments.unsafe_ptr(),
+            self.segment_maps.unsafe_ptr(),
+            Int32(line_count),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -2416,8 +2612,9 @@ def render_triangles(
     fog: FogView = FogView.none(),
     tone_mapping: ToneMapping = NO_TONE_MAPPING,
     exposure: Float32 = 1.0,
+    lines: List[RasterVertex] = List[RasterVertex](),
 ) raises -> Framebuffer:
-    """Draw prepared triangles on the GPU and read the image back.
+    """Draw prepared triangles and lines on the GPU and read the image back.
 
     A convenience for one-shot renders. Anything drawing repeatedly should
     hold a `GpuRenderer` instead, so the context and buffers survive between
@@ -2437,18 +2634,28 @@ def render_triangles(
         tone_mapping: The curve that compresses each pixel's light, as
             `RenderTarget.resolve` takes it. Defaults to `NO_TONE_MAPPING`.
         exposure: What the light is scaled by before the curve.
+        lines: Raster vertices, two per segment, drawn after the triangles
+            and depth tested against them. Empty by default.
 
     Returns:
         The rendered image.
 
     Raises:
-        Error: If the dimensions are invalid, no GPU is present, or the
-            corner count is not a multiple of three.
+        Error: If the dimensions are invalid, no GPU is present, the corner
+            count is not a multiple of three, or the line corner count is
+            not a multiple of two.
     """
     var renderer = GpuRenderer(width, height)
     renderer.set_textures(textures)
     renderer.draw(
-        corners, background, mode, lighting, fog, tone_mapping, exposure
+        corners,
+        background,
+        mode,
+        lighting,
+        fog,
+        tone_mapping,
+        exposure,
+        lines,
     )
     return renderer.read_back()
 

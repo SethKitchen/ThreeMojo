@@ -80,7 +80,7 @@ from render.tonemap import (
     REINHARD_TONE_MAPPING,
     ToneMapping,
 )
-from render.rasterizer import rasterize_all
+from render.rasterizer import rasterize_all, rasterize_lines_all
 from units.si import InverseLength, PER_METER
 from core.layers import Layers
 from renderers.renderer import camera_position, camera_up, toward_camera
@@ -4950,6 +4950,156 @@ def test_both_backends_agree_on_a_posed_rig() raises:
     )
     var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
     assert_true(drawn > 300, "the rig barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- lines, both backends ---------------------------------------------------
+
+
+def a_line(
+    ax: Float32,
+    ay: Float32,
+    bx: Float32,
+    by: Float32,
+    z: Float32,
+    color: Color,
+    blend: Blending = OPAQUE,
+) raises -> List[RasterVertex]:
+    """Return one segment's two ends, unlit as a line must be."""
+    return [
+        RasterVertex(
+            ax,
+            ay,
+            z,
+            1,
+            FloatColor(srgb=color),
+            0,
+            0,
+            NO_TEXTURE,
+            blend,
+            kind=BASIC,
+        ),
+        RasterVertex(
+            bx,
+            by,
+            z,
+            1,
+            FloatColor(srgb=color),
+            0,
+            0,
+            NO_TEXTURE,
+            blend,
+            kind=BASIC,
+        ),
+    ]
+
+
+def test_both_backends_draw_the_same_staircase() raises:
+    # The rule lives in `render.linerule` and the two loops are shaped
+    # differently: the host walks the line, the kernel asks each pixel
+    # whether the line lights it. This is what says they agree.
+    if skipped_for_lack_of_a_gpu("both backends draw the same staircase"):
+        return
+    var lines = List[RasterVertex]()
+    # Flat, upright, diagonal, shallow, steep, and two drawn backwards, on
+    # ends that are not on pixel centers.
+    for segment in [
+        a_line(2.0, 2.0, 44.0, 2.0, 0.5, Color(255, 255, 255)),
+        a_line(2.0, 4.0, 2.0, 33.0, 0.5, Color(255, 0, 0)),
+        a_line(3.3, 6.7, 40.1, 30.2, 0.5, Color(0, 255, 0)),
+        a_line(44.0, 8.0, 4.0, 12.0, 0.5, Color(0, 0, 255)),
+        a_line(30.0, 34.0, 36.0, 3.0, 0.5, Color(255, 255, 0)),
+        a_line(10.5, 30.5, 10.5, 30.5, 0.5, Color(0, 255, 255)),
+    ]:
+        for corner in segment:
+            lines.append(corner)
+
+    var empty = List[RasterVertex]()
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_lines_all(lines, target, 1, FogView.none())
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        empty,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        FogView.none(),
+        NO_TONE_MAPPING,
+        1.0,
+        lines,
+    )
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 100, "the lines barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_put_lines_over_the_same_surface() raises:
+    # A line has to test its depth against the triangles, and a blended one
+    # has to mix with what they left. Both passes run in one kernel for
+    # that reason, in the order the host draws them.
+    if skipped_for_lack_of_a_gpu("both backends put lines over a surface"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var floor = assets.geometries.add(
+        plane(Length(4.0, METER), Length(4.0, METER), 2, 2)
+    )
+    var scene = Scene()
+    var node = Object3D()
+    node.set_euler(Angle(-60.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE))
+    var placed = scene.add(node^)
+    scene.add_light(ambient_light(Color(200, 200, 200)))
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(floor, assets.materials.add(Material(Color(90, 90, 120))), placed)
+    )
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0, 0.5, 4.0), Vector3(0, 0, 0))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+
+    var lines = List[RasterVertex]()
+    # One in front of the floor, one behind it, and one blended over it.
+    for segment in [
+        a_line(4.0, 6.0, 44.0, 30.0, 0.2, Color(255, 240, 120)),
+        a_line(4.0, 30.0, 44.0, 6.0, 0.95, Color(255, 0, 0)),
+        a_line(6.0, 18.0, 42.0, 18.0, 0.25, Color(0, 255, 255), BLEND),
+    ]:
+        for corner in segment:
+            lines.append(corner)
+
+    var lighting = Lighting(
+        scene, camera.visible_layers(), camera_position(scene, camera)
+    )
+    var view = FogView(scene.fog)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(
+        corners, target, SHADE_LIT, assets.textures, lighting, 1, view
+    )
+    rasterize_lines_all(lines, target, 1, view)
+    var cpu = target.resolve(1, NO_TONE_MAPPING, 1.0)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_LIT,
+        assets.textures,
+        lighting,
+        view,
+        NO_TONE_MAPPING,
+        1.0,
+        lines,
+    )
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
