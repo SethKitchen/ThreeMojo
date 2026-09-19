@@ -8,7 +8,7 @@ Every feature in the [README checklist](https://github.com/SethKitchen/ThreeMojo
 
 ## 2. Write the module
 
-Put the module in the package that matches three.js: `geometries/`, `lights/`, `materials/`, `cameras/`, `core/`, `math/` or `render/`. Keep three.js names where Mojo allows them.
+Put a three.js port in the package that matches three.js: `geometries/`, `lights/`, `materials/`, `cameras/`, `core/`, `math/` or `render/`. Keep three.js names where Mojo allows them. Put original content under `extensions/`, in a folder per subject.
 
 Follow the house rules:
 

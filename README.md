@@ -179,6 +179,12 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Color as floats](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer#color-and-floatcolor): three.js's hex and HSL setters and getters, lerp, offset and arithmetic on the linear float color [#99](https://github.com/SethKitchen/ThreeMojo/issues/99)
 <!-- /features -->
 
+### Extensions
+
+Content that is not a three.js port lives under `extensions/`. Each item is tested, documented, and scaled from measured data.
+
+- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a femur from stature and sex
+
 ### Out of scope
 
 Browser-only features have no place in a software renderer: the WebGL and WebGPU renderers, the CSS renderers, WebXR, audio, and video and canvas textures.
