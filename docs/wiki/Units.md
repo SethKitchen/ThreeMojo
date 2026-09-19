@@ -22,6 +22,9 @@ three.js has no units. It leaves world units to the application. Here world spac
 | `Velocity` | 1, 0, -1, 0 |
 | `Acceleration` | 1, 0, -2, 0 |
 | `AngularVelocity` | 0, 0, -1, 1 |
+| `Density` | -3, 1, 0, 0 |
+| `Force` | 1, 1, -2, 0 |
+| `Pressure` | -1, 1, -2, 0 |
 
 Angle is a base dimension here. Strict SI treats a radian as dimensionless. The deviation makes degrees-for-radians a compile error.
 
@@ -33,9 +36,16 @@ A `Unit` is a factor to the canonical unit and a symbol.
 |---|---|
 | Length | `METER`, `KILOMETER`, `CENTIMETER`, `MILLIMETER`, `YARD`, `FOOT`, `INCH`, `MILE` |
 | Area | `SQUARE_METER`, `SQUARE_FOOT` |
+| Volume | `CUBIC_METER`, `CUBIC_CENTIMETER` |
 | Mass | `KILOGRAM`, `GRAM`, `POUND` |
+| Density | `KILOGRAM_PER_CUBIC_METER`, `GRAM_PER_CUBIC_CENTIMETER` |
+| Acceleration | `METER_PER_SECOND_SQUARED` |
+| Force | `NEWTON`, `POUND_FORCE` |
+| Pressure | `PASCAL`, `MEGAPASCAL`, `GIGAPASCAL` |
 | Duration | `SECOND`, `MILLISECOND`, `MINUTE`, `HOUR` |
 | Angle | `RADIAN`, `DEGREE`, `TURN` |
+
+`STANDARD_GRAVITY` is 9.80665 meters per second squared. Weight on Earth is mass times that acceleration.
 
 ## Use them
 

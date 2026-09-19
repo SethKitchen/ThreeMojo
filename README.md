@@ -183,7 +183,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 
 Content that is not a three.js port lives under `extensions/`. Each item is tested, documented, and scaled from measured data.
 
-- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a femur from stature and sex
+- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a femur from stature and sex, with bone tissue and a PBR look
 
 ### Out of scope
 
