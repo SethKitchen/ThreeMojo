@@ -1,6 +1,6 @@
 # Geometry
 
-`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes. Two more fill a drawn [shape](Curves) in, and give it thickness.
+`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes. Two more fill a drawn [shape](Curves) in, and give it thickness. Two more read a surface back as the lines of its edges.
 
 ![A torus knot turns under a lamp](out/geometry.png)
 
@@ -255,6 +255,34 @@ An extrusion has no index buffer, and its normals come from its triangles, so ev
 A wall is measured along x or along y, whichever it runs further in, and up the negative of z. That is three.js's own generator.
 
 three.js can also sweep a shape along a path, its `extrudePath`. That is not ported.
+
+## Edges and wireframes
+
+`geometries/edges.mojo` reads a surface of triangles and gives back a geometry of points, two per segment. Draw it with a [`Line`](Lines) in `SEGMENTS` mode.
+
+```mojo
+from geometries.edges import edges_geometry, wireframe_geometry
+from objects.line import Line, SEGMENTS
+
+var outline = assets.geometries.add(edges_geometry(cube(Length(1, METER))))
+scene.add_line(Line(outline, ink, node, mode=SEGMENTS))
+```
+
+| Builder | What it keeps |
+|---|---|
+| `wireframe_geometry(geometry)` | Every edge, once each. |
+| `edges_geometry(geometry, threshold)` | The edges that show the shape. |
+| `welded_points(geometry)` | Which welded point each vertex stands on. |
+
+`edges_geometry` keeps an edge when the two faces meeting at it turn by more than `threshold`, and when it has one face and no neighbor. A cube keeps its twelve edges and drops the diagonal across each face. `threshold` is one degree unless said otherwise, as three.js defaults `thresholdAngle`.
+
+### Welding first
+
+Both weld by position before they pair. Two triangles that meet along an edge often hold two copies of each of its ends. A corner carries a normal and a texture coordinate as well as a position, and the two faces disagree about those. Pairing by vertex index would then find no shared edge anywhere.
+
+`WELD` is the tolerance: a tenth of a millimeter, in meters. It is a distance and not a fraction, which is the bargain three.js makes with its four-decimal position hash. A geometry built at a scale far from one meter has to be welded at its own scale, and neither library does that for you.
+
+A welded cube has eighteen unique edges, not thirty-six: twelve around the shape and one diagonal in each face.
 
 ## Morph targets
 
