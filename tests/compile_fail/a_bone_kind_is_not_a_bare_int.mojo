@@ -5,7 +5,7 @@
 
 """A bone kind must be a `BoneKind`, not a bare integer."""
 
-from extensions.humanoid.skeleton.bone import BoneTissue
+from extensions.humanoid.skeleton.tissue import BoneTissue
 from units.si import Density, GRAM_PER_CUBIC_CENTIMETER, GIGAPASCAL, Pressure
 
 
