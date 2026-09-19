@@ -72,6 +72,7 @@ mkdir -p out
 | `faces.mojo` | `faces.png` | [Meshes and assets](Meshes-and-assets#several-materials) |
 | `utah.mojo` | `teapot.png` | [Geometry addons](Geometry-addons#teapot) |
 | `blobs.mojo` | `blobs.png` | [Scene objects](Scene-objects#marching-cubes) |
+| `femur.mojo` | `femur.png` | [Femur](Femur) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 

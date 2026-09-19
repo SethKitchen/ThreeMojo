@@ -27,7 +27,7 @@ endef
 # Library modules have no main(), so they are checked with `mojo doc`.
 LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   objects renderers materials lights loaders animation \
-                  postprocessing controls window exporters environments \
+                  postprocessing controls window exporters environments extensions \
                   -name '*.mojo' \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
@@ -569,7 +569,8 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/nodes.png $(OUT_DIR)/ktx2.png \
            $(OUT_DIR)/coats.png $(OUT_DIR)/environment.png \
            $(OUT_DIR)/sky.png $(OUT_DIR)/faces.png \
-           $(OUT_DIR)/teapot.png $(OUT_DIR)/blobs.png
+           $(OUT_DIR)/teapot.png $(OUT_DIR)/blobs.png \
+           $(OUT_DIR)/femur.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
 $(OUT_DIR)/mirror.png: $(LIB_SOURCES) examples/mirror.mojo
@@ -904,6 +905,11 @@ $(OUT_DIR)/teapot.png: $(LIB_SOURCES) examples/utah.mojo
 $(OUT_DIR)/blobs.png: $(LIB_SOURCES) examples/blobs.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/blobs.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/femur.png: $(LIB_SOURCES) examples/femur.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/femur.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be

@@ -357,6 +357,12 @@ The port is not at parity with three.js yet. 187 features are ported and 16 are 
 
 <!-- /features -->
 
+### Extensions
+
+Content that is not a three.js port lives under `extensions/`. Each item is tested, documented, and scaled from measured data.
+
+- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a femur from stature and sex
+
 ### Out of scope
 
 Browser-only features have no place in a software renderer: the WebGL and WebGPU renderers, the CSS renderers, WebXR, audio, and video and canvas textures.
