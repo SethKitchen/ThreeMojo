@@ -40,10 +40,11 @@ from materials.material import (
 )
 from render.target import RenderTarget
 from render.srgb import LINEAR
-from render.texture import IGNORED, Texture
+from render.texture import IGNORED, Texture, mix_color
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.lighting import PERSPECTIVE_VIEW, Lighting, toward_eye_at
 from core.fog import FogView, fog_mix
+from render.linerule import major_at, major_is_x, other_at, share_at, span_of
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from std.math import ceil, floor, isfinite, log2, max, min, sqrt
 
@@ -1609,6 +1610,182 @@ def rasterize_shaded(
                     target.claim_depth(x, y, z)
                 target.write(x, y, shaded, data)
         row = row + down
+
+
+# --- lines ------------------------------------------------------------------
+
+
+def check_line_state(a: RasterVertex, b: RasterVertex) raises:
+    """Refuse a segment whose two ends disagree, or whose material is lit.
+
+    The same argument as `check_triangle_state`: per-segment metadata is
+    carried on every corner and the first is read, so the two have to
+    agree or the answer depends on which one is asked.
+
+    A line is unlit. three.js's `LineBasicMaterial` catches no light
+    either, and it cannot: a line has no surface, so it has no normal, and
+    every lighting term here needs one. A lit material on a line would be
+    shaded by whatever its corners happened to carry, which is nothing.
+
+    Args:
+        a: One end.
+        b: The other.
+
+    Raises:
+        Error: If the blend policies differ, if either is not a named
+            policy, if the kinds differ, or if the kind is not unlit.
+    """
+    if not a.blend.is_valid():
+        raise Error("A line needs a blend policy that exists")
+    if a.blend != b.blend:
+        raise Error("A line's ends must agree about blending")
+    if not a.kind.is_valid():
+        raise Error("A line needs a material kind that exists")
+    if a.kind != b.kind:
+        raise Error("A line's ends must agree about the material")
+    if not a.kind.is_unlit():
+        raise Error("A line's material must be unlit")
+
+
+def rasterize_line(
+    a: RasterVertex,
+    b: RasterVertex,
+    mut target: RenderTarget,
+    first_row: Int = 0,
+    last_row: Int = -1,
+    fog: FogView = FogView.none(),
+) raises:
+    """Draw one segment, one pixel wide, into `target`.
+
+    `render.linerule` decides which pixels, and the kernel asks it the same
+    question, so the two staircases are the same staircase.
+
+    What varies along a line is its color and its fog depth, and both are
+    interpolated with the perspective correction a triangle's varyings get:
+    weight by `inv_w`, divide by the interpolated `inv_w`. Depth is not
+    corrected, for the reason it is not corrected across a triangle -- the
+    projection already made it linear in screen space.
+
+    Args:
+        a: One end.
+        b: The other.
+        target: The linear render target to draw into.
+        first_row: The first row this call owns. Below zero is the top.
+        last_row: The last row it owns. Below zero, or past the last row,
+            is the rest of the image.
+        fog: The scene's fog, seen through the camera.
+
+    Raises:
+        Error: If the segment's metadata is refused by `check_line_state`,
+            or the fog view is refused by `FogView.validate`.
+    """
+    check_line_state(a, b)
+    # The rows this call owns, held inside the image. Clamped here rather
+    # than tested per pixel: once the range is known to be inside, a pixel
+    # inside the range is inside the image, and the loop below has only its
+    # columns left to check.
+    var bottom = last_row
+    if bottom < 0 or bottom >= target.height:
+        bottom = target.height - 1
+    var top = first_row
+    if top < 0:
+        top = 0
+    var first = Vector2(a.x, a.y)
+    var second = Vector2(b.x, b.y)
+    var steps = span_of(first, second)
+    var horizontal = major_is_x(first, second)
+    var fogged = fog.is_on()
+    for step in range(steps):  # pragma: no branch
+        var major = major_at(first, second, step)
+        var minor = other_at(first, second, major)
+        var x = major
+        var y = minor
+        if not horizontal:
+            x = minor
+            y = major
+        if y < top or y > bottom:
+            continue
+        if x < 0 or x >= target.width:
+            continue
+        # Held inside the segment: a pixel at either end can sit a hair
+        # beyond it once the major coordinate is taken at a pixel center.
+        var share = share_at(first, second, major)
+        if share < 0:
+            share = 0
+        if share > 1:
+            share = 1
+        var z = a.z + (b.z - a.z) * share
+        if not target.test_depth(x, y, z):
+            continue
+        var near = a.inv_w * (1 - share)
+        var far = b.inv_w * share
+        var total = near + far
+        if total == 0:
+            continue
+        var toward = far / total
+        var color = mix_color(a.color, b.color, toward)
+        if fogged:
+            var depth = a.view_depth + (b.view_depth - a.view_depth) * toward
+            color = fog_mix(color, fog.color, fog.factor_at(depth))
+        if a.blend == BLEND:
+            target.blend(x, y, color)
+        else:
+            target.claim_depth(x, y, z)
+            target.write(x, y, color, False)
+
+
+def rasterize_lines_all(
+    corners: List[RasterVertex],
+    mut target: RenderTarget,
+    workers: Int = 1,
+    fog: FogView = FogView.none(),
+) raises:
+    """Draw every segment in `corners` into `target`, on `workers` threads.
+
+    `rasterize_all` for lines: two corners a segment rather than three, and
+    the same band split, so the image is what one thread would have drawn.
+
+    Args:
+        corners: Raster vertices, two per segment.
+        target: The linear render target to draw into.
+        workers: How many threads to draw with, at least one.
+        fog: The scene's fog, seen through the camera.
+
+    Raises:
+        Error: If the corner count is odd, `workers` is less than one, the
+            fog view is refused, or any segment's metadata is refused by
+            `check_line_state`.
+    """
+    if len(corners) % 2 != 0:
+        raise Error("Rasterizing needs whole segments")
+    if workers < 1:
+        raise Error("Rasterizing lines needs at least one worker")
+    fog.validate()
+    var segments = len(corners) // 2
+    for segment in range(segments):
+        check_line_state(corners[segment * 2], corners[segment * 2 + 1])
+    # Bands, as `rasterize_all` uses them, and for the same reason: a band
+    # owns its rows, so two threads never write one pixel. Lines are cheap
+    # enough that one worker is the common case, and the split is here so
+    # that a frame of lines and triangles is drawn the same way throughout.
+    # The split `rasterize_all` uses, and the same arithmetic: a band's
+    # rows fall out of the band number and the height, so no band can start
+    # past the image or end beyond it and neither needs a guard. A target
+    # has at least one row and a caller at least one worker, so there is
+    # always at least one band.
+    var bands = min(workers, target.height)
+    for band in range(bands):  # pragma: no branch
+        var top = band * target.height // bands
+        var bottom = (band + 1) * target.height // bands - 1
+        for segment in range(segments):
+            rasterize_line(
+                corners[segment * 2],
+                corners[segment * 2 + 1],
+                target,
+                top,
+                bottom,
+                fog,
+            )
 
 
 async def _band(
