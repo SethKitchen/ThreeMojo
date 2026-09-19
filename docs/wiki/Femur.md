@@ -2,9 +2,9 @@
 
 `femur` builds a femur mesh from a humanoid's stature and sex. Thickness, length, neck angle and the condyles all follow from those two facts.
 
-![A six-foot male femur turns under a lamp](out/femur.png)
+![Four femurs of different stature and sex turn under a lamp](out/femur.png)
 
-`extensions/humanoid/spec.mojo`, `extensions/humanoid/sex.mojo`, `extensions/humanoid/side.mojo`, `extensions/humanoid/skeleton/leg/femur/dimensions.mojo` and `extensions/humanoid/skeleton/leg/femur/geometry.mojo`.
+`extensions/humanoid/spec.mojo`, `extensions/humanoid/sex.mojo`, `extensions/humanoid/side.mojo`, `extensions/humanoid/skeleton/bone.mojo`, `extensions/humanoid/skeleton/leg/femur/dimensions.mojo`, `extensions/humanoid/skeleton/leg/femur/geometry.mojo` and `extensions/humanoid/skeleton/leg/femur/mass.mojo`.
 
 This is not a three.js port. See [Extensions](Extensions) and [Why extensions sit beside the port](Why-extensions-sit-beside-the-port).
 
@@ -71,13 +71,54 @@ The solid is a smooth union of anatomical parts. A bowed shaft, a neck and a sph
 
 `femur_distance(dimensions, point)` is the signed distance in meters. Negative is inside.
 
+## Bone tissue
+
+`cortical_tissue()` and `trabecular_tissue()` hold density, porosity and elastic modulus. The values come from Morgan, Unnikrishnan and Hussein 2018 ([PMC6053074](https://pmc.ncbi.nlm.nih.gov/articles/PMC6053074/)).
+
+Tissue density is 2.0 g/cm³ for both tissues. Apparent density is tissue density times one minus porosity.
+
+| Tissue | Porosity | Apparent density | Longitudinal modulus |
+|---|---|---|---|
+| Cortical | 0.10 | 1.8 g/cm³ | 17.9 GPa tension, 18.16 GPa compression |
+| Trabecular | 0.80 | 0.40 g/cm³ | 400 MPa |
+
+Cortical porosity in the paper is 5% to 15%. The template uses the middle. Table 1 of that review gives the cortical moduli. Trabecular modulus sits inside the 10 MPa to 3000 MPa range the paper reports.
+
+`BoneKind` is `CORTICAL` or `TRABECULAR`. A bare integer is a compile error.
+
+## Mass and weight
+
+The mesh is the outer surface. The interior is not solid cortical bone. `femur_mass(spec)` samples the field. Each cell is empty, cortical shell, trabecular fill or marrow.
+
+Mineral mass is apparent density times the cortical and trabecular volume. Marrow adds envelope volume and no mineral mass. Weight on Earth is that mass times `STANDARD_GRAVITY`. The grid step is 5 mm by default.
+
+```mojo
+from extensions.humanoid.skeleton.leg.femur.mass import femur_mass
+from units.si import GRAM, NEWTON, POUND_FORCE
+
+var report = femur_mass(person)
+report.mass.to(GRAM)
+report.weight().to(NEWTON)
+report.weight().to(POUND_FORCE)
+```
+
+`report.envelope` is the volume inside the surface. `report.bone` is the mineral volume. `report.cortical` and `report.trabecular` split that mineral volume.
+
+A six foot male in this solid has about 960 g of mineral tissue. That is 9.4 N, or 2.1 lbf, on Earth. The visual envelope is larger than a dissected femur, so the mass is an upper bound for this sculpted field.
+
+## Look
+
+`bone_albedo` is a procedural sRGB map of dry cortical bone. `bone_roughness` is a linear roughness map. Bone is a dielectric. Metalness is zero.
+
+`MeshStandardMaterial` is not ported. `bone_phong` draws the albedo with a dim highlight until that kind exists.
+
 ## Limits
 
 Stature must lie in 1.2 m through 2.5 m. The formulas are adult. `Sex` must be `MALE` or `FEMALE`. `BodySide` must be `RIGHT` or `LEFT`. A bare integer is a compile error.
 
 ## Example
 
-`examples/femur.mojo` draws a six foot male femur. Run it with:
+`examples/femur.mojo` draws four femurs in a row and writes `out/femur.png`. The row is a five foot female, a five foot six female, a six foot male and a six foot six male. Run it with:
 
 ```bash
 .venv/bin/mojo run -I . examples/femur.mojo out/femur.png

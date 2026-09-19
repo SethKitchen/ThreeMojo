@@ -361,7 +361,7 @@ The port is not at parity with three.js yet. 187 features are ported and 16 are 
 
 Content that is not a three.js port lives under `extensions/`. Each item is tested, documented, and scaled from measured data.
 
-- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a femur from stature and sex
+- [x] [Femur](https://github.com/SethKitchen/ThreeMojo/wiki/Femur): a femur from stature and sex, with bone tissue and a PBR look
 
 ### Out of scope
 

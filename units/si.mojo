@@ -35,9 +35,16 @@ comptime AngularAcceleration = Quantity[0, 0, -2, 1]
 comptime InverseLength = Quantity[-1, 0, 0, 0]
 # Per unit of time: how fast a controller's speed grows with height.
 comptime Frequency = Quantity[0, 0, -1, 0]
+# Mass per volume: what a tissue density is measured in.
+comptime Density = Quantity[-3, 1, 0, 0]
+# Mass times acceleration: a weight, or any other force.
+comptime Force = Quantity[1, 1, -2, 0]
+# Force per area: an elastic modulus is a pressure.
+comptime Pressure = Quantity[-1, 1, -2, 0]
 
 comptime LengthUnit = Unit[1, 0, 0, 0]
 comptime AreaUnit = Unit[2, 0, 0, 0]
+comptime VolumeUnit = Unit[3, 0, 0, 0]
 comptime MassUnit = Unit[0, 1, 0, 0]
 comptime DurationUnit = Unit[0, 0, 1, 0]
 comptime AngleUnit = Unit[0, 0, 0, 1]
@@ -46,6 +53,10 @@ comptime VelocityUnit = Unit[1, 0, -1, 0]
 comptime AngularVelocityUnit = Unit[0, 0, -1, 1]
 comptime AngularAccelerationUnit = Unit[0, 0, -2, 1]
 comptime FrequencyUnit = Unit[0, 0, -1, 0]
+comptime DensityUnit = Unit[-3, 1, 0, 0]
+comptime AccelerationUnit = Unit[1, 0, -2, 0]
+comptime ForceUnit = Unit[1, 1, -2, 0]
+comptime PressureUnit = Unit[-1, 1, -2, 0]
 
 # --- length -----------------------------------------------------------------
 comptime METER = LengthUnit(1.0, "m")
@@ -67,10 +78,34 @@ comptime MILE = LengthUnit(1609.344, "mi")
 comptime SQUARE_METER = AreaUnit(1.0, "m^2")
 comptime SQUARE_FOOT = AreaUnit(0.09290304, "ft^2")
 
+# --- volume -----------------------------------------------------------------
+comptime CUBIC_METER = VolumeUnit(1.0, "m^3")
+comptime CUBIC_CENTIMETER = VolumeUnit(1.0e-6, "cm^3")
+
 # --- mass -------------------------------------------------------------------
 comptime KILOGRAM = MassUnit(1.0, "kg")
 comptime GRAM = MassUnit(0.001, "g")
 comptime POUND = MassUnit(0.45359237, "lb")
+
+# --- density ----------------------------------------------------------------
+# 1 g/cm^3 is exactly 1000 kg/m^3.
+comptime KILOGRAM_PER_CUBIC_METER = DensityUnit(1.0, "kg/m^3")
+comptime GRAM_PER_CUBIC_CENTIMETER = DensityUnit(1000.0, "g/cm^3")
+
+# --- acceleration -----------------------------------------------------------
+comptime METER_PER_SECOND_SQUARED = AccelerationUnit(1.0, "m/s^2")
+# Exact conventional standard gravity, 3rd CGPM (1901).
+comptime STANDARD_GRAVITY = Acceleration(9.80665)
+
+# --- force ------------------------------------------------------------------
+comptime NEWTON = ForceUnit(1.0, "N")
+# Exact: 0.45359237 kg * 9.80665 m/s^2.
+comptime POUND_FORCE = ForceUnit(4.4482216152605, "lbf")
+
+# --- pressure ---------------------------------------------------------------
+comptime PASCAL = PressureUnit(1.0, "Pa")
+comptime MEGAPASCAL = PressureUnit(1.0e6, "MPa")
+comptime GIGAPASCAL = PressureUnit(1.0e9, "GPa")
 
 # --- time -------------------------------------------------------------------
 comptime SECOND = DurationUnit(1.0, "s")
