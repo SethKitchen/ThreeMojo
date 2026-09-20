@@ -59,7 +59,7 @@ comptime WIDTH = 320
 comptime HEIGHT = 240
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-comptime DETAIL = 10
+comptime DETAIL = 16
 
 
 def frame_at(

@@ -64,7 +64,7 @@ from extensions.humanoid.skeleton.field import (
 )
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import acos, cos, max, sin
+from std.math import acos, cos, max, min, sin
 from units.si import (
     Angle,
     CENTIMETER,
@@ -189,6 +189,10 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
     var neck_r: Float32
     var gt: Vector3
     var gt_r: Vector3
+    var gt_bridge_a: Vector3
+    var gt_bridge_b: Vector3
+    var gt_bridge_ra: Float32
+    var gt_bridge_rb: Float32
     var lt: Vector3
     var lt_r: Vector3
     var medial: Vector3
@@ -253,9 +257,13 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
         self.neck_base = dimensions.neck_base
         self.neck_r = 0.58 * head_r
         self.gt = dimensions.greater_trochanter
-        self.gt_r = Vector3(0.62 * gt_off, 0.95 * head_r, 0.55 * gt_off)
+        self.gt_r = Vector3(0.42 * gt_off, 0.62 * head_r, 0.34 * gt_off)
+        self.gt_bridge_a = self.neck_base
+        self.gt_bridge_b = self.gt
+        self.gt_bridge_ra = 0.82 * self.neck_r
+        self.gt_bridge_rb = 0.70 * min(self.gt_r.x, self.gt_r.z)
         self.lt = dimensions.lesser_trochanter
-        self.lt_r = Vector3(0.55 * lt_off, 0.62 * lt_off, 0.50 * lt_off)
+        self.lt_r = Vector3(0.36 * lt_off, 0.42 * lt_off, 0.32 * lt_off)
         self.medial = dimensions.medial_condyle
         self.medial_r = Vector3(
             condyle_rx * 1.06, condyle_ry * 1.04, condyle_rz * 1.04
@@ -291,23 +299,23 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
         self.linea_r = 0.32 * r_mid
         self.notch_a = Vector3(
             self.medial.x * 0.55,
-            self.medial.y + 0.18 * condyle_ry,
-            self.medial.z - 0.72 * condyle_rz,
+            self.medial.y + 0.12 * condyle_ry,
+            self.medial.z - 0.88 * condyle_rz,
         )
         self.notch_b = Vector3(
             self.lateral.x * 0.55,
-            self.lateral.y + 0.18 * condyle_ry,
-            self.lateral.z - 0.72 * condyle_rz,
+            self.lateral.y + 0.12 * condyle_ry,
+            self.lateral.z - 0.88 * condyle_rz,
         )
-        self.notch_r = 0.22 * W
+        self.notch_r = 0.14 * W
         self.patella = Vector3(
             0.5 * (self.medial.x + self.lateral.x),
             0.5 * (self.medial.y + self.lateral.y) + 0.12 * condyle_ry,
             0.5 * (self.medial.z + self.lateral.z) + 0.58 * condyle_rz,
         )
         self.patella_r = Vector3(0.30 * W, 0.38 * condyle_ry, 0.24 * condyle_rz)
-        self.k = 0.016 * L
-        self.k_notch = 0.007 * L
+        self.k = 0.010 * L
+        self.k_notch = 0.004 * L
         self.epsilon = 0.0015 * L
         var rad0 = max(self.ml0, self.ap0)
         var rad4 = max(self.ml4, self.ap4)
@@ -393,6 +401,17 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
             self.k,
         )
         d = smin(d, sd_sphere(point, self.head_center, self.head_r), self.k)
+        d = smin(
+            d,
+            sd_segment(
+                point,
+                self.gt_bridge_a,
+                self.gt_bridge_b,
+                self.gt_bridge_ra,
+                self.gt_bridge_rb,
+            ),
+            self.k,
+        )
         d = smin(d, sd_ellipsoid(point, self.gt, self.gt_r), self.k)
         d = smin(d, sd_ellipsoid(point, self.lt, self.lt_r), self.k)
         d = smin(d, sd_ellipsoid(point, self.medial, self.medial_r), self.k)
@@ -519,14 +538,14 @@ def femur_dimensions(
         neck_base.z + neck.z * neck_len,
     )
     var gt = Vector3(
-        neck_base.x + gt_off,
-        head_center.y - 0.22 * head_r,
-        neck_base.z - 0.28 * gt_off,
+        neck_base.x + 0.78 * gt_off,
+        head_center.y - 0.70 * head_r,
+        neck_base.z - 0.20 * gt_off,
     )
     var lt = Vector3(
-        neck_base.x - 0.42 * lt_off,
-        neck_base.y - 0.065 * L,
-        neck_base.z - lt_off,
+        neck_base.x - 0.35 * lt_off,
+        neck_base.y - 0.055 * L,
+        neck_base.z - 0.75 * lt_off,
     )
     if side == LEFT:
         head_center = flip_x(head_center)

@@ -32,6 +32,7 @@ from extensions.humanoid.skeleton.field import (
     finite_point,
     flip_x,
     positive_length,
+    sd_ellipse_segment,
     sd_ellipsoid,
     sd_segment,
     smin,
@@ -48,6 +49,9 @@ comptime MALE_THICK = Float32(0.0123)
 comptime FEMALE_HEIGHT = Float32(0.0240)
 comptime FEMALE_WIDTH = Float32(0.0236)
 comptime FEMALE_THICK = Float32(0.0118)
+
+# Mediolateral hint for the tapered shield body.
+comptime PATELLA_ML = Vector3(1, 0, 0)
 
 
 @fieldwise_init
@@ -119,12 +123,12 @@ struct PatellaField(DistanceField, ImplicitlyCopyable):
         var H = dimensions.height.value
         var W = dimensions.width.value
         var T = dimensions.thickness.value
-        self.body = Vector3(0, 0.02 * H, 0.08 * T)
-        self.body_r = Vector3(0.46 * W, 0.40 * H, 0.42 * T)
+        self.body = Vector3(0, 0.08 * H, 0.08 * T)
+        self.body_r = Vector3(0.45 * W, 0.32 * H, 0.40 * T)
         self.apex = dimensions.apex
-        self.apex_r = Vector3(0.22 * W, 0.22 * H, 0.28 * T)
+        self.apex_r = Vector3(0.16 * W, 0.10 * H, 0.20 * T)
         self.base = dimensions.base
-        self.base_r = Vector3(0.44 * W, 0.18 * H, 0.32 * T)
+        self.base_r = Vector3(0.42 * W, 0.12 * H, 0.30 * T)
         var lateral_sign = Float32(1)
         if dimensions.side == LEFT:
             lateral_sign = Float32(-1)
@@ -136,7 +140,7 @@ struct PatellaField(DistanceField, ImplicitlyCopyable):
         self.ridge_b = dimensions.ridge + Vector3(0, -0.18 * H, 0)
         self.ridge_r = 0.07 * W
         self.r2 = 0.28 * T
-        self.k = 0.08 * T
+        self.k = 0.12 * T
         self.epsilon = 0.004 * T
         var box = empty_bounds()
         box.include_ellipsoid(self.body, self.body_r)
@@ -153,11 +157,17 @@ struct PatellaField(DistanceField, ImplicitlyCopyable):
 
         Negative is inside. Zero is the surface.
         """
-        var d = sd_ellipsoid(point, self.body, self.body_r)
-        d = smin(d, sd_ellipsoid(point, self.apex, self.apex_r), self.k)
-        d = smin(d, sd_ellipsoid(point, self.base, self.base_r), self.k)
-        d = smin(d, sd_ellipsoid(point, self.medial, self.medial_r), self.k)
-        d = smin(d, sd_ellipsoid(point, self.lateral, self.lateral_r), self.k)
+        var d = sd_ellipse_segment(
+            point,
+            self.apex,
+            self.base,
+            self.apex_r.x,
+            self.apex_r.z,
+            self.base_r.x,
+            self.base_r.z,
+            PATELLA_ML,
+        )
+        d = smin(d, sd_ellipsoid(point, self.body, self.body_r), self.k)
         return smin(
             d,
             sd_segment(

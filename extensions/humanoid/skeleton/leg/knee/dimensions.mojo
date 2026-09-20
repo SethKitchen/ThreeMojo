@@ -266,24 +266,22 @@ struct CartilageField(DistanceField, ImplicitlyCopyable):
         var condyle_rx = 0.28 * W
         self.fem_med = dimensions.femoral_medial_cartilage
         self.fem_med_r = Vector3(
-            condyle_rx * 1.08, 0.32 * condyle_ry + t_f, condyle_rz * 1.05
+            condyle_rx * 0.82, t_f * 0.75, condyle_rz * 0.62
         )
         self.fem_lat = dimensions.femoral_lateral_cartilage
         self.fem_lat_r = Vector3(
-            condyle_rx * 1.02, 0.30 * condyle_ry + t_f, condyle_rz * 1.00
+            condyle_rx * 0.78, t_f * 0.75, condyle_rz * 0.58
         )
         self.troch = dimensions.trochlear_cartilage
-        self.troch_r = Vector3(
-            0.32 * W, 0.40 * condyle_ry, 0.22 * condyle_rz + t_f
-        )
+        self.troch_r = Vector3(0.24 * W, 0.24 * condyle_ry, t_f * 0.70)
         self.tib_med = dimensions.tibial_medial_cartilage
-        self.tib_med_r = Vector3(0.24 * tw, 0.14 * tw + t_t, 0.42 * ap)
+        self.tib_med_r = Vector3(0.20 * tw, t_t * 0.75, 0.30 * ap)
         self.tib_lat = dimensions.tibial_lateral_cartilage
-        self.tib_lat_r = Vector3(0.22 * tw, 0.13 * tw + t_t, 0.40 * ap)
+        self.tib_lat_r = Vector3(0.19 * tw, t_t * 0.75, 0.28 * ap)
         self.pat = dimensions.patellar_cartilage
-        self.pat_r = Vector3(0.38 * pw, 0.32 * ph, t_p * 0.85)
-        self.k = 0.55 * max(t_f, t_t)
-        self.epsilon = 0.20 * t_f
+        self.pat_r = Vector3(0.36 * pw, 0.30 * ph, t_p * 0.65)
+        self.k = 0.20 * t_f
+        self.epsilon = 0.12 * t_f
         var box = empty_bounds()
         box.include_ellipsoid(self.fem_med, self.fem_med_r)
         box.include_ellipsoid(self.fem_lat, self.fem_lat_r)
@@ -575,6 +573,7 @@ def knee_dimensions_from_bones(
     var fi_origin = fibula_origin(tibia, t_origin, fibula)
     var p_origin = patella_origin(femur, f_origin, patella, t_p)
     var W = femur.bicondylar_width.value
+    var tw = tibia.proximal_width.value
     var condyle_ry = 0.39 * W
     var condyle_rz = 0.36 * W
     var fem_med = f_origin + femur.medial_condyle
@@ -584,27 +583,35 @@ def knee_dimensions_from_bones(
     var troch_local = _trochlea_local(femur)
     var troch_world = f_origin + troch_local
     var fem_med_c = Vector3(
-        fem_med.x, fem_med.y * 0.35 + t_f.value * 0.5, fem_med.z
+        fem_med.x,
+        fem_med.y - 1.04 * condyle_ry + t_f.value * 0.35,
+        fem_med.z,
     )
     var fem_lat_c = Vector3(
-        fem_lat.x, fem_lat.y * 0.35 + t_f.value * 0.5, fem_lat.z
+        fem_lat.x,
+        fem_lat.y - condyle_ry + t_f.value * 0.35,
+        fem_lat.z,
     )
     var troch_c = Vector3(
         troch_world.x,
-        troch_world.y - 0.08 * condyle_ry,
-        troch_world.z + 0.12 * condyle_rz,
+        troch_world.y,
+        troch_world.z + 0.24 * condyle_rz + t_f.value * 0.35,
     )
     var tib_med_c = Vector3(
-        tib_med.x, tib_med.y * 0.25 - t_t.value * 0.2, tib_med.z
+        tib_med.x,
+        tib_med.y + 0.085 * tw + t_t.value * 0.35,
+        tib_med.z,
     )
     var tib_lat_c = Vector3(
-        tib_lat.x, tib_lat.y * 0.25 - t_t.value * 0.2, tib_lat.z
+        tib_lat.x,
+        tib_lat.y + 0.080 * tw + t_t.value * 0.35,
+        tib_lat.z,
     )
     var T = patella.thickness.value
     var pat_c = Vector3(
         p_origin.x,
         p_origin.y,
-        p_origin.z - Float32(0.34) * T - t_p.value * 0.35,
+        p_origin.z - Float32(0.38) * T - t_p.value * 0.25,
     )
     var med_men = Vector3(tib_med.x, 0, tib_med.z)
     var lat_men = Vector3(tib_lat.x, 0, tib_lat.z)
