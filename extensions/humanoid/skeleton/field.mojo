@@ -91,9 +91,7 @@ def empty_bounds() -> Bounds:
     )
 
 
-def check_spec(
-    stature: Length, sex: Sex, side: BodySide, bone: String
-) raises:
+def check_spec(stature: Length, sex: Sex, side: BodySide, bone: String) raises:
     """Refuse a spec a bone template cannot use.
 
     Args:
@@ -236,9 +234,7 @@ def flip_x(point: Vector3) -> Vector3:
     return Vector3(-point.x, point.y, point.z)
 
 
-def bowed_station(
-    t: Float32, a: Vector3, b: Vector3, bow: Vector3
-) -> Vector3:
+def bowed_station(t: Float32, a: Vector3, b: Vector3, bow: Vector3) -> Vector3:
     """Return a centerline point at fraction `t` from `a` toward `b`.
 
     The bow offset peaks at mid-shaft, where `4 t (1 - t)` is one.

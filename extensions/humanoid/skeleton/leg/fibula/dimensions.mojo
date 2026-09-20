@@ -189,8 +189,12 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
             dimensions.malleolus_height.value * 0.5,
             dimensions.malleolus_ap.value * 0.5,
         )
-        self.neck_a = Vector3(self.head.x, self.head.y - 0.7 * head_r, self.head.z)
-        self.neck_b = Vector3(self.head.x, self.head.y - 2.2 * head_r, self.head.z)
+        self.neck_a = Vector3(
+            self.head.x, self.head.y - 0.7 * head_r, self.head.z
+        )
+        self.neck_b = Vector3(
+            self.head.x, self.head.y - 2.2 * head_r, self.head.z
+        )
         self.neck_ra = 0.55 * head_r
         self.neck_rb = 1.15 * ml_mid
         var distal = Vector3(
@@ -198,7 +202,9 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
             self.malleolus.y + 0.45 * dimensions.malleolus_height.value,
             self.malleolus.z,
         )
-        var proximal = Vector3(self.head.x, self.head.y - 1.6 * head_r, self.head.z)
+        var proximal = Vector3(
+            self.head.x, self.head.y - 1.6 * head_r, self.head.z
+        )
         var bow_off = Vector3(bow, 0, 0)
         self.s0 = bowed_station(0.0, distal, proximal, bow_off)
         self.s1 = bowed_station(0.25, distal, proximal, bow_off)
@@ -287,7 +293,9 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
         )
         d = smin(d, sd_sphere(point, self.head, self.head_r), self.k)
         d = smin(d, sd_ellipsoid(point, self.styloid, self.styloid_r), self.k)
-        d = smin(d, sd_ellipsoid(point, self.malleolus, self.malleolus_r), self.k)
+        d = smin(
+            d, sd_ellipsoid(point, self.malleolus, self.malleolus_r), self.k
+        )
         return smin(
             d,
             sd_segment(

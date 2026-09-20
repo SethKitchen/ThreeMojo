@@ -125,9 +125,7 @@ def apparent_density_of(
         Error: If `fill` is none of the named occupancies.
     """
     if not fill.is_valid():
-        raise Error(
-            "A bone fill must be empty, cortical, trabecular or marrow"
-        )
+        raise Error("A bone fill must be empty, cortical, trabecular or marrow")
     if fill == CORTICAL_FILL:
         return cortical.apparent_density()
     if fill == TRABECULAR_FILL:

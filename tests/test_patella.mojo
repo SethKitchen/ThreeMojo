@@ -101,9 +101,9 @@ def test_lateral_facet_is_the_larger_side() raises:
 
 
 def test_gradient_at_a_far_point_points_out() raises:
-    var n = PatellaField(patella_dimensions(Length(6.0, FOOT), FEMALE)).gradient(
-        Vector3(10, 0, 0)
-    )
+    var n = PatellaField(
+        patella_dimensions(Length(6.0, FOOT), FEMALE)
+    ).gradient(Vector3(10, 0, 0))
     assert_almost_equal(n.length(), Float32(1), atol=Float64(1e-3))
     assert_true(n.x > 0)
 
@@ -183,7 +183,10 @@ def test_validate_refuses_zero_and_bad_edits() raises:
         _ = patella_occupancy(dims, Vector3(0, 0, 0))
     with assert_raises():
         _ = patella_mass_from_dimensions(
-            dims, cortical_tissue(), trabecular_tissue(), Length(5.0, MILLIMETER)
+            dims,
+            cortical_tissue(),
+            trabecular_tissue(),
+            Length(5.0, MILLIMETER),
         )
     dims = patella_dimensions(Length(6.0, FOOT), MALE)
     dims.width = Length(nan[DType.float32](), METER)
@@ -263,7 +266,9 @@ def test_left_and_right_masses_agree() raises:
 
 def test_a_taller_patella_has_more_mass() raises:
     var step = Length(5.0, MILLIMETER)
-    var short = patella_mass(HumanoidSpec(Length(5.0, FOOT), FEMALE), LEFT, step)
+    var short = patella_mass(
+        HumanoidSpec(Length(5.0, FOOT), FEMALE), LEFT, step
+    )
     var tall = patella_mass(HumanoidSpec(Length(6.5, FOOT), MALE), RIGHT, step)
     assert_true(tall.mass > short.mass)
 
