@@ -746,11 +746,12 @@ def _glute_med(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
+    var origin = _at(d.iliac, d.gt, 0.38)
     return _fusiform(
-        d.iliac,
+        origin,
         d.gt,
-        Vector3(lat * 0.010 * S, 0.002 * S, 0.004 * S),
-        0.62 * rb,
+        Vector3(lat * 0.008 * S, 0, 0.004 * S),
+        0.80 * rb,
         rb,
         0.68,
     )
