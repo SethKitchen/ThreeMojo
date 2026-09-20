@@ -38,7 +38,7 @@ The labeled set follows the major adult lower-limb nerve courses.
 | `COMMON_FIBULAR_NERVE` | Sciatic branch along biceps femoris and around the fibular neck. |
 | `COMMON_PERONEAL_NERVE` | Compatibility name for `COMMON_FIBULAR_NERVE`. |
 | `SAPHENOUS_NERVE` | Femoral branch through the adductor canal and medial leg. |
-| `SURAL_NERVE` | Posterior calf route to the posterior lateral malleolus. |
+| `SURAL_NERVE` | Distal-calf union through the posterior calf to the lateral malleolus. |
 
 The sciatic endpoint equals both terminal-branch origins. The femoral field shares its saphenous branch point.
 
@@ -55,8 +55,10 @@ These values are named research metadata. This extension does not implement a co
 ## Sources
 
 - [Femoral nerve, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK556065/)
+- [Common fibular nerve, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK532968/)
 - [Tibial nerve and popliteal relations, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK537028/)
 - [Saphenous nerve, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK541045/)
+- [Sural nerve, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK546638/)
 - [Sciatic nerve course and bifurcation](https://teachmeanatomy.info/lower-limb/nerves/sciatic-nerve/)
 
 ## Mass
