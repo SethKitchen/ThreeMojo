@@ -1,0 +1,116 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""Tests for a connected stature-scaled leg."""
+
+from core.assets import Assets
+from core.object3d import Object3D
+from core.scene import Scene
+from extensions.humanoid.sex import FEMALE, MALE
+from extensions.humanoid.side import LEFT, RIGHT
+from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.bone import bone_phong
+from extensions.humanoid.skeleton.leg.assembly import add_leg, assemble_leg
+from extensions.humanoid.skeleton.look import (
+    cartilage_phong,
+    ligament_phong,
+    meniscus_phong,
+)
+from math.vector3 import Vector3
+from std.testing import (
+    TestSuite,
+    assert_almost_equal,
+    assert_equal,
+    assert_true,
+)
+from units.si import FOOT, Length
+
+comptime TOLERANCE = Float64(1e-4)
+
+
+def test_right_leg_puts_the_joint_at_the_origin() raises:
+    var pose = assemble_leg(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT)
+    var distal = pose.femur_origin.y - Float32(0.5) * pose.femur.length.value
+    assert_almost_equal(
+        distal, pose.knee.femoral_thickness.value, atol=TOLERANCE
+    )
+    var eminence = pose.tibia_origin.y + pose.tibia.eminence.y
+    assert_almost_equal(
+        eminence, -pose.knee.tibial_thickness.value, atol=TOLERANCE
+    )
+    assert_true(pose.side == RIGHT)
+
+
+def test_fibula_head_sits_lateral_of_the_tibia() raises:
+    var pose = assemble_leg(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT)
+    var head = pose.fibula_origin + pose.fibula.head_center
+    var lat = pose.tibia_origin + pose.tibia.lateral_condyle
+    assert_true(head.x > lat.x)
+    assert_true(head.y < lat.y + Float32(0.01))
+    var left = assemble_leg(HumanoidSpec(Length(6.0, FOOT), MALE), LEFT)
+    var left_head = left.fibula_origin + left.fibula.head_center
+    var left_lat = left.tibia_origin + left.tibia.lateral_condyle
+    assert_true(left_head.x < left_lat.x)
+
+
+def test_patella_sits_anterior_of_the_trochlea() raises:
+    var pose = assemble_leg(HumanoidSpec(Length(6.0, FOOT), FEMALE), RIGHT)
+    assert_true(pose.patella_origin.z > pose.femur_origin.z)
+    assert_true(pose.knee.patellar_cartilage.z < pose.patella_origin.z)
+
+
+def test_hip_and_ankle_centers_follow_the_bones() raises:
+    var pose = assemble_leg(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT)
+    var hip = pose.hip_center()
+    var ankle = pose.ankle_center()
+    assert_almost_equal(
+        hip.x,
+        (pose.femur_origin + pose.femur.head_center).x,
+        atol=TOLERANCE,
+    )
+    assert_true(hip.y > 0)
+    assert_true(ankle.y < 0)
+    assert_true(hip.y - ankle.y > Float32(0.7))
+
+
+def test_left_and_right_hips_mirror() raises:
+    var person = HumanoidSpec(Length(6.0, FOOT), MALE)
+    var right = assemble_leg(person, RIGHT)
+    var left = assemble_leg(person, LEFT)
+    assert_almost_equal(
+        left.hip_center().x, -right.hip_center().x, atol=Float64(1e-3)
+    )
+    assert_almost_equal(
+        left.hip_center().y, right.hip_center().y, atol=Float64(1e-3)
+    )
+
+
+def test_add_leg_places_nine_meshes() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var person = HumanoidSpec(Length(6.0, FOOT), MALE)
+    var node = add_leg(
+        scene,
+        assets,
+        root,
+        person,
+        assets.materials.add(bone_phong()),
+        assets.materials.add(cartilage_phong()),
+        assets.materials.add(meniscus_phong()),
+        assets.materials.add(ligament_phong()),
+        RIGHT,
+        8,
+    )
+    assert_equal(len(scene.meshes), 9)
+    assert_true(node.value >= 0)
+    scene.update()
+    var origin = scene.world_matrix(node).transform_point(Vector3(0, 0, 0))
+    assert_almost_equal(origin.x, Float32(0), atol=TOLERANCE)
+    assert_almost_equal(origin.y, Float32(0), atol=TOLERANCE)
+
+
+def main() raises:
+    TestSuite.discover_tests[__functions_in_module()]().run()

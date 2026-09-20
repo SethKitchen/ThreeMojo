@@ -57,6 +57,8 @@
 - [Tibia](Tibia)
 - [Fibula](Fibula)
 - [Patella](Patella)
+- [Knee](Knee)
+- [Leg](Leg)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)

@@ -68,6 +68,8 @@ Look something up.
 - [Tibia](Tibia)
 - [Fibula](Fibula)
 - [Patella](Patella)
+- [Knee](Knee)
+- [Leg](Leg)
 
 ## Explanation
 

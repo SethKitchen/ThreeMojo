@@ -365,6 +365,8 @@ Content that is not a three.js port lives under `extensions/`. Each item is test
 - [x] [Tibia](https://github.com/SethKitchen/ThreeMojo/wiki/Tibia): a stature-scaled tibia, with bone tissue
 - [x] [Fibula](https://github.com/SethKitchen/ThreeMojo/wiki/Fibula): a stature-scaled fibula, with bone tissue
 - [x] [Patella](https://github.com/SethKitchen/ThreeMojo/wiki/Patella): a stature-scaled patella, with bone tissue
+- [x] [Knee](https://github.com/SethKitchen/ThreeMojo/wiki/Knee): articular cartilage, menisci and collateral ligaments
+- [x] [Leg](https://github.com/SethKitchen/ThreeMojo/wiki/Leg): a connected limb from the bones and the knee tissues
 
 ### Out of scope
 
