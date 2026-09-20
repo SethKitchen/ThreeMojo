@@ -57,8 +57,12 @@ def test_fibula_head_sits_lateral_of_the_tibia() raises:
 
 def test_patella_sits_anterior_of_the_trochlea() raises:
     var pose = assemble_leg(HumanoidSpec(Length(6.0, FOOT), FEMALE), RIGHT)
-    assert_true(pose.patella_origin.z > pose.femur_origin.z)
+    assert_true(pose.patella_origin.z > pose.knee.trochlear_cartilage.z)
     assert_true(pose.knee.patellar_cartilage.z < pose.patella_origin.z)
+    assert_true(
+        pose.patella_origin.z - pose.knee.trochlear_cartilage.z
+        > Float32(0.25) * pose.patella.thickness.value
+    )
 
 
 def test_hip_and_ankle_centers_follow_the_bones() raises:
