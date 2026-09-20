@@ -22,6 +22,7 @@ from extensions.humanoid.skeleton.leg.vessels.dimensions import (
     ANTERIOR_TIBIAL_ARTERY,
     FEMORAL_ARTERY,
     FEMORAL_VEIN,
+    FIBULAR_ARTERY,
     GREAT_SAPHENOUS_VEIN,
     PERONEAL_ARTERY,
     POPLITEAL_ARTERY,
@@ -53,7 +54,6 @@ from extensions.humanoid.skeleton.look import (
     tendon_phong,
     vein_phong,
 )
-from extensions.humanoid.skeleton.occupancy import MAX_STEP
 from extensions.humanoid.skeleton.soft_tissue import (
     ARTERIAL,
     SOFT_EMPTY,
@@ -98,6 +98,7 @@ def test_vessel_parts_are_named() raises:
     assert_false(VesselPart(9).is_valid())
     assert_equal(vessel_part_label(VesselPart(99)), "vessel")
     assert_true(is_artery(FEMORAL_ARTERY))
+    assert_true(FIBULAR_ARTERY == PERONEAL_ARTERY)
     assert_true(is_artery(PERONEAL_ARTERY))
     assert_false(is_artery(FEMORAL_VEIN))
     assert_false(is_artery(SMALL_SAPHENOUS_VEIN))
@@ -114,7 +115,7 @@ def test_vessel_labels_match_the_diagram() raises:
     assert_equal(
         vessel_part_label(POSTERIOR_TIBIAL_ARTERY), "posterior tibial artery"
     )
-    assert_equal(vessel_part_label(PERONEAL_ARTERY), "peroneal artery")
+    assert_equal(vessel_part_label(FIBULAR_ARTERY), "fibular artery")
     assert_equal(vessel_part_label(FEMORAL_VEIN), "femoral vein")
     assert_equal(vessel_part_label(POPLITEAL_VEIN), "popliteal vein")
     assert_equal(
@@ -168,6 +169,29 @@ def test_every_named_vessel_has_an_interior() raises:
         index += 1
 
 
+def test_vessel_continuity_and_surface_relations() raises:
+    var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT)
+    var femoral = VesselField(dims, FEMORAL_ARTERY)
+    var popliteal = VesselField(dims, POPLITEAL_ARTERY)
+    var anterior = VesselField(dims, ANTERIOR_TIBIAL_ARTERY)
+    var posterior = VesselField(dims, POSTERIOR_TIBIAL_ARTERY)
+    var fibular = VesselField(dims, FIBULAR_ARTERY)
+    _assert_same_point(femoral.chain.p4, popliteal.chain.p0)
+    _assert_same_point(popliteal.chain.p4, anterior.chain.p0)
+    _assert_same_point(popliteal.chain.p4, posterior.chain.p0)
+    _assert_same_point(posterior.chain.p1, fibular.chain.p0)
+    var femoral_vein = VesselField(dims, FEMORAL_VEIN)
+    var popliteal_vein = VesselField(dims, POPLITEAL_VEIN)
+    var great = VesselField(dims, GREAT_SAPHENOUS_VEIN)
+    var small = VesselField(dims, SMALL_SAPHENOUS_VEIN)
+    _assert_same_point(popliteal_vein.chain.p4, femoral_vein.chain.p0)
+    _assert_same_point(great.chain.p4, femoral_vein.chain.p4)
+    _assert_same_point(small.chain.p4, popliteal_vein.chain.p2)
+    assert_true(popliteal_vein.chain.p2.z < popliteal.chain.p2.z)
+    assert_true(great.chain.p0.z > dims.med_mal.z)
+    assert_true(small.chain.p0.z < dims.lat_mal.z)
+
+
 def test_vessel_mesh_has_positions_normals_and_uvs() raises:
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     _assert_mesh(vessel_mesh(person, FEMORAL_ARTERY, RIGHT, 8))
@@ -175,7 +199,7 @@ def test_vessel_mesh_has_positions_normals_and_uvs() raises:
 
 
 def test_vessel_mass_is_positive() raises:
-    var step = MAX_STEP
+    var step = Length(5.0, MILLIMETER)
     var artery = vessel_mass(
         HumanoidSpec(Length(6.0, FOOT), MALE), FEMORAL_ARTERY, RIGHT, step
     )
@@ -256,6 +280,13 @@ def _assert_mesh(bone: BufferGeometry) raises:
     assert_true(bone.has_attribute(String(NORMAL)))
     assert_true(bone.has_attribute(String(UV)))
     assert_true(bone.triangle_count() > 0)
+
+
+def _assert_same_point(a: Vector3, b: Vector3) raises:
+    """Assert that two topology endpoints are the same point."""
+    assert_almost_equal(a.x, b.x, atol=TOLERANCE)
+    assert_almost_equal(a.y, b.y, atol=TOLERANCE)
+    assert_almost_equal(a.z, b.z, atol=TOLERANCE)
 
 
 def main() raises:

@@ -17,8 +17,8 @@ from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
 from extensions.humanoid.skeleton.leg.hair.dimensions import (
-    HairField,
     HairPart,
+    _display_hair_field,
     hair_part_label,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
@@ -75,5 +75,5 @@ def hair_from_dimensions(
         raise Error("A hair part must be a named hair group")
     var label = hair_part_label(part)
     check_detail(detail, label)
-    var field = HairField(dimensions, part)
+    var field = _display_hair_field(dimensions, part)
     return mesh_field(field, field.low, field.high, detail, label)

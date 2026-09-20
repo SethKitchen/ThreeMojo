@@ -285,7 +285,7 @@ def skin_phong(map: TextureId = NO_TEXTURE) raises -> Material:
 def hair_phong() raises -> Material:
     """Return a Phong material for a keratin hair shaft.
 
-    The color is dark brown terminal hair.
+    The color is medium brown terminal hair.
 
     Returns:
         A `PHONG` material.
@@ -294,7 +294,7 @@ def hair_phong() raises -> Material:
         Error: If the Phong constructor refuses the values.
     """
     return phong_material(
-        Color(42, 28, 20),
-        specular=Color(80, 60, 44),
-        shininess=30.0,
+        Color(128, 80, 50),
+        specular=Color(150, 112, 82),
+        shininess=24.0,
     )

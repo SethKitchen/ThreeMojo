@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Wet-tissue mass of the skin envelope from its field and tissue.
+"""Wet-tissue mass of the dermal shell around the leg.
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var report = skin_mass(person)
@@ -16,8 +16,7 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     muscle_dimensions,
 )
 from extensions.humanoid.skeleton.leg.skin.dimensions import (
-    SkinField,
-    skin_distance,
+    SkinLayerField,
 )
 from extensions.humanoid.skeleton.soft_tissue import (
     SOFT_STEP,
@@ -35,25 +34,26 @@ from units.si import Length
 def skin_occupancy(
     dimensions: MuscleDimensions, point: Vector3
 ) raises -> SoftOccupancy:
-    """Return what fills `point` in the skin envelope.
+    """Return what fills `point` in the dermal shell.
 
     Args:
         dimensions: Landmarks from `muscle_dimensions`.
         point: A point in the leg frame, in meters.
 
     Returns:
-        `SOFT_EMPTY` outside, `SOFT_FILL` inside.
+        `SOFT_FILL` in the dermis. Deep anatomy and exterior space are
+        `SOFT_EMPTY`.
 
     Raises:
         Error: If `dimensions.validate` refuses the copy.
     """
-    return classify_soft(skin_distance(dimensions, point))
+    return classify_soft(SkinLayerField(dimensions).distance(point))
 
 
 def skin_mass(
     spec: HumanoidSpec, side: BodySide = RIGHT, step: Length = SOFT_STEP
 ) raises -> SoftMass:
-    """Return the wet-tissue mass of the skin envelope sized for `spec`.
+    """Return the wet-tissue mass of the dermal shell sized for `spec`.
 
     Args:
         spec: Standing height, osteological sex and athleticism.
@@ -61,7 +61,7 @@ def skin_mass(
         step: Grid cell size. 2 mm through 20 mm, 2 mm by default.
 
     Returns:
-        Sampled envelope volume and wet-tissue mass.
+        Sampled dermal volume and wet-tissue mass.
 
     Raises:
         Error: If `spec` or `side` is refused, or `step` is out of range.
@@ -76,7 +76,7 @@ def skin_mass_from_dimensions(
     tissue: SoftTissue,
     step: Length = SOFT_STEP,
 ) raises -> SoftMass:
-    """Return the wet-tissue mass of an already-sized skin envelope.
+    """Return the wet-tissue mass of an already-sized dermal shell.
 
     Args:
         dimensions: Landmarks from `muscle_dimensions`.
@@ -84,12 +84,12 @@ def skin_mass_from_dimensions(
         step: Grid cell size.
 
     Returns:
-        Sampled envelope volume and wet-tissue mass.
+        Sampled dermal volume and wet-tissue mass.
 
     Raises:
         Error: If `dimensions.validate` refuses the copy, if `step` is
             out of range, or `tissue` fails `validate`.
     """
     dimensions.validate()
-    var field = SkinField(dimensions)
+    var field = SkinLayerField(dimensions)
     return sample_soft_mass(field, field.low, field.high, tissue, step, "skin")

@@ -6,9 +6,9 @@
 """Named hair groups of one leg, as short implicit shafts.
 
 Thigh hair sits on the anterior and lateral thigh. Calf hair sits on
-the posterior and lateral calf. Shaft length and radius are authored
-ratios of stature. They are template parameters. They are thicker than
-a live hair so the isosurface can hold them.
+the posterior and lateral calf. Physical shaft diameter follows
+published site means. The mesh uses a separate diagrammatic radius so
+the current rasterizer can show the shafts.
 
 The solids live in the leg frame. The origin is the tibiofemoral joint
 line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
@@ -27,6 +27,7 @@ from extensions.humanoid.skeleton.field import (
     smin,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import MuscleDimensions
+from extensions.humanoid.skeleton.leg.skin.dimensions import SkinField
 from math.vector3 import Vector3
 
 
@@ -88,96 +89,103 @@ struct HairField(DistanceField, ImplicitlyCopyable):
         if not part.is_valid():
             raise Error("A hair part must be a named hair group")
         var S = dimensions.stature.value
-        var scale = dimensions.scale
         var lat = Float32(1)
         if dimensions.side == LEFT:
             lat = Float32(-1)
-        var length = 0.022 * S
-        self.radius = 0.0032 * S
-        self.k = 0.0018 * S
-        self.epsilon = dimensions.epsilon
+        var skin = SkinField(dimensions)
+        var length = Float32(0.010)
+        self.radius = Float32(0.0000145)
+        self.k = Float32(0.5) * self.radius
+        self.epsilon = Float32(0.5) * self.radius
         if part == THIGH_HAIR:
-            var standoff = 0.068 * S * scale
             self.a0 = _root(
-                dimensions.hip, dimensions.femur_mid, 0.48, lat, standoff, S
+                skin, dimensions.hip, dimensions.femur_mid, 0.40, lat, 0.000, S
             )
             self.a1 = _root(
-                dimensions.hip, dimensions.femur_mid, 0.52, lat, standoff, S
+                skin, dimensions.hip, dimensions.femur_mid, 0.46, lat, 0.004, S
             )
             self.a2 = _root(
-                dimensions.hip, dimensions.femur_mid, 0.56, lat, standoff, S
+                skin, dimensions.hip, dimensions.femur_mid, 0.52, lat, 0.008, S
             )
             self.a3 = _root(
-                dimensions.hip, dimensions.femur_mid, 0.60, lat, standoff, S
+                skin, dimensions.hip, dimensions.femur_mid, 0.58, lat, 0.012, S
             )
             self.a4 = _root(
-                dimensions.hip, dimensions.femur_mid, 0.64, lat, standoff, S
+                skin, dimensions.hip, dimensions.femur_mid, 0.64, lat, 0.016, S
             )
             self.a5 = _root(
-                dimensions.hip, dimensions.femur_mid, 0.68, lat, standoff, S
+                skin, dimensions.hip, dimensions.femur_mid, 0.70, lat, 0.020, S
             )
-            self.b0 = self.a0 + Vector3(lat * 0.36, 0.08, 0.92) * length
-            self.b1 = self.a1 + Vector3(lat * 0.50, 0.04, 0.86) * length
-            self.b2 = self.a2 + Vector3(lat * 0.22, 0.10, 0.96) * length
-            self.b3 = self.a3 + Vector3(lat * 0.60, 0.02, 0.80) * length
-            self.b4 = self.a4 + Vector3(lat * 0.40, -0.04, 0.90) * length
-            self.b5 = self.a5 + Vector3(lat * 0.30, -0.08, 0.94) * length
+            self.b0 = self.a0 + Vector3(lat * 0.10, -0.92, 0.24) * length
+            self.b1 = self.a1 + Vector3(lat * 0.18, -0.90, 0.28) * length
+            self.b2 = self.a2 + Vector3(lat * 0.08, -0.94, 0.20) * length
+            self.b3 = self.a3 + Vector3(lat * 0.22, -0.88, 0.30) * length
+            self.b4 = self.a4 + Vector3(lat * 0.14, -0.92, 0.26) * length
+            self.b5 = self.a5 + Vector3(lat * 0.10, -0.94, 0.22) * length
         else:
-            var standoff = 0.060 * S * scale
+            self.radius = Float32(0.000021)
+            self.k = Float32(0.5) * self.radius
+            self.epsilon = Float32(0.5) * self.radius
             self.a0 = _calf_root(
+                skin,
                 dimensions.lat_condyle,
                 dimensions.tibia_mid,
-                0.36,
+                0.32,
                 lat,
-                standoff,
+                0.000,
                 S,
             )
             self.a1 = _calf_root(
+                skin,
                 dimensions.lat_condyle,
                 dimensions.tibia_mid,
-                0.42,
+                0.39,
                 lat,
-                standoff,
+                0.003,
                 S,
             )
             self.a2 = _calf_root(
+                skin,
                 dimensions.lat_condyle,
                 dimensions.tibia_mid,
-                0.48,
+                0.46,
                 lat,
-                standoff,
+                0.006,
                 S,
             )
             self.a3 = _calf_root(
+                skin,
                 dimensions.lat_condyle,
                 dimensions.tibia_mid,
-                0.54,
+                0.53,
                 lat,
-                standoff,
+                0.010,
                 S,
             )
             self.a4 = _calf_root(
+                skin,
                 dimensions.lat_condyle,
                 dimensions.tibia_mid,
                 0.60,
                 lat,
-                standoff,
+                0.013,
                 S,
             )
             self.a5 = _calf_root(
+                skin,
                 dimensions.lat_condyle,
                 dimensions.tibia_mid,
-                0.66,
+                0.67,
                 lat,
-                standoff,
+                0.016,
                 S,
             )
-            self.b0 = self.a0 + Vector3(lat * 0.28, -0.06, -0.96) * length
-            self.b1 = self.a1 + Vector3(lat * 0.40, -0.04, -0.90) * length
-            self.b2 = self.a2 + Vector3(lat * 0.18, -0.08, -0.98) * length
-            self.b3 = self.a3 + Vector3(lat * 0.50, -0.02, -0.86) * length
-            self.b4 = self.a4 + Vector3(lat * 0.34, -0.10, -0.92) * length
-            self.b5 = self.a5 + Vector3(lat * 0.22, -0.06, -0.96) * length
+            self.b0 = self.a0 + Vector3(lat * 0.10, -0.92, -0.24) * length
+            self.b1 = self.a1 + Vector3(lat * 0.18, -0.90, -0.28) * length
+            self.b2 = self.a2 + Vector3(lat * 0.08, -0.94, -0.20) * length
+            self.b3 = self.a3 + Vector3(lat * 0.22, -0.88, -0.30) * length
+            self.b4 = self.a4 + Vector3(lat * 0.14, -0.92, -0.26) * length
+            self.b5 = self.a5 + Vector3(lat * 0.10, -0.94, -0.22) * length
         var box = empty_bounds()
         box.include_sphere(self.a0, self.radius)
         box.include_sphere(self.a1, self.radius)
@@ -232,6 +240,34 @@ struct HairField(DistanceField, ImplicitlyCopyable):
         return field_gradient(self, point, self.epsilon)
 
 
+def _display_hair_field(
+    dimensions: MuscleDimensions, part: HairPart
+) raises -> HairField:
+    """Return the same shafts with a diagrammatic mesh radius."""
+    var field = HairField(dimensions, part)
+    var S = dimensions.stature.value
+    field.radius = 0.0015 * S
+    field.k = 0.00020 * S
+    field.epsilon = Float32(0.25) * field.radius
+    var box = empty_bounds()
+    box.include_sphere(field.a0, field.radius)
+    box.include_sphere(field.a1, field.radius)
+    box.include_sphere(field.a2, field.radius)
+    box.include_sphere(field.a3, field.radius)
+    box.include_sphere(field.a4, field.radius)
+    box.include_sphere(field.a5, field.radius)
+    box.include_sphere(field.b0, field.radius)
+    box.include_sphere(field.b1, field.radius)
+    box.include_sphere(field.b2, field.radius)
+    box.include_sphere(field.b3, field.radius)
+    box.include_sphere(field.b4, field.radius)
+    box.include_sphere(field.b5, field.radius)
+    var padded = box.padded(0.006 + field.radius)
+    field.low = padded.low
+    field.high = padded.high
+    return field
+
+
 def hair_distance(
     dimensions: MuscleDimensions, part: HairPart, point: Vector3
 ) raises -> Float32:
@@ -283,26 +319,45 @@ def named_hair_parts() -> List[HairPart]:
 
 
 def _root(
+    skin: SkinField,
     a: Vector3,
     b: Vector3,
     t: Float32,
     lat: Float32,
-    stand_off: Float32,
+    lateral: Float32,
     S: Float32,
 ) -> Vector3:
-    """Return a thigh hair root anterior and slightly lateral of the bone."""
-    var along = mix_point(a, b, t)
-    return along + Vector3(lat * 0.018 * S, 0, stand_off)
+    """Project a thigh hair root onto the actual anterior skin surface."""
+    var inside = mix_point(a, b, t) + Vector3(lat * lateral * S, 0, 0)
+    return _surface_root(skin, inside, Vector3(lat * 0.12, 0, 1), S)
 
 
 def _calf_root(
+    skin: SkinField,
     a: Vector3,
     b: Vector3,
     t: Float32,
     lat: Float32,
-    stand_off: Float32,
+    lateral: Float32,
     S: Float32,
 ) -> Vector3:
-    """Return a calf hair root posterior and slightly lateral of the bone."""
-    var along = mix_point(a, b, t)
-    return along + Vector3(lat * 0.014 * S, 0, -stand_off)
+    """Project a calf hair root onto the actual posterior skin surface."""
+    var inside = mix_point(a, b, t) + Vector3(lat * lateral * S, 0, 0)
+    return _surface_root(skin, inside, Vector3(lat * 0.10, 0, -1), S)
+
+
+def _surface_root(
+    skin: SkinField, inside: Vector3, outward: Vector3, S: Float32
+) -> Vector3:
+    """Return where an outward ray leaves the anatomy-derived skin."""
+    var direction = outward
+    direction.normalize()
+    var low = inside
+    var high = inside + direction * (0.16 * S)
+    for _ in range(18):
+        var middle = (low + high) * Float32(0.5)
+        if skin.distance(middle) < 0:
+            low = middle
+        else:
+            high = middle
+    return high

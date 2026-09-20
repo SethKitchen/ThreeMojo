@@ -46,6 +46,8 @@ The distal femoral condyle surface sits at plus the femoral cartilage thickness.
 
 A bare integer is a compile error. Skin hides the inner layers when drawn with them. Use `INTEGUMENT` for skin and hair. Use `BONES.plus(VESSELS)` for a vessel gallery.
 
+The skin layer fits cross-sections around every modeled entity. Tests require every vessel, lymphatic route and nerve station to remain below that surface.
+
 `HumanoidSpec` stores stature, sex and athleticism. A two-argument spec uses untoned muscle.
 
 ## Pose

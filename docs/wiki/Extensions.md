@@ -45,7 +45,11 @@ Import from the module that defines the symbol. Do not put original content in `
 
 The house rules still apply. Quantities carry units. A kind is a type with `is_valid`. Tests cover every branch. Documentation follows the writing rules. `make check` must pass.
 
-Scale from a named template. A humanoid is a stature, a sex and an athleticism. Each bone reads stature and sex and sizes itself. Each muscle also reads athleticism. Vessels, lymph, nerves, skin and hair reuse the muscle landmarks. Do not hard-code a length in meters when a published relationship exists.
+Scale from a named template. A humanoid is a stature, a sex and an athleticism. Each bone reads stature and sex and sizes itself.
+
+Each muscle also reads athleticism. Vessels, lymph and nerves follow shared anatomical landmarks. Skin fits cross-sections around every modeled system.
+
+Hair roots project onto that fitted skin. Do not hard-code a length in meters when a published relationship exists.
 
 ## Add one
 

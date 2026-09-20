@@ -1,6 +1,6 @@
 # Lymph
 
-`lymph_mesh` builds a named lymph-node group or trunk from stature, sex and athleticism. Nodes are blended spheres. Trunks are tapered tubes.
+`lymph_mesh` builds lower-limb lymph-node groups and collecting routes. The superficial field contains separate medial and posterolateral paths.
 
 ![A six-foot male right leg turns with bones, lymph nodes and lymphatic trunks](out/lymph.png)
 
@@ -28,16 +28,20 @@ The solids live in the leg frame. The origin is the tibiofemoral joint line. Plu
 
 ## Named parts
 
-The labeled set is the inguinal nodes, the popliteal nodes, a superficial trunk and a deep trunk.
+The labeled set connects superficial and deep drainage to the correct node groups.
 
 | Part | Role |
 |---|---|
-| `INGUINAL_NODES` | Three nodes near the inguinal analog. |
-| `POPLITEAL_NODES` | Three nodes in the popliteal fossa. |
-| `SUPERFICIAL_LYMPHATICS` | Medial trunk beside the great saphenous vein. |
-| `DEEP_LYMPHATICS` | Deep trunk beside the femoral and popliteal vessels. |
+| `INGUINAL_NODES` | Five representative superficial and deep nodes below the inguinal ligament. |
+| `POPLITEAL_NODES` | Five representative nodes in the posterior knee fat. |
+| `SUPERFICIAL_LYMPHATICS` | Medial route to inguinal nodes and posterolateral route to popliteal nodes. |
+| `DEEP_LYMPHATICS` | Ankle-to-popliteal-to-deep-inguinal route beside the deep vessels. |
 
-Paths and radii are authored ratios of stature. They are template parameters.
+The medial superficial route follows the great saphenous vein. The posterolateral route follows the small saphenous vein.
+
+The deep route passes through a popliteal node and ends at a deep inguinal node. Route endpoints equal their node centers.
+
+Trunk radii are diagrammatic so the mesher can show them. The centerlines and drainage topology carry the anatomical meaning.
 
 `is_node_group` returns True for the inguinal and popliteal clusters.
 
@@ -48,6 +52,12 @@ Paths and radii are authored ratios of stature. They are template parameters.
 Water fraction is metadata. Mass uses wet density times envelope volume. Do not scale by one minus water fraction again.
 
 These values are named research metadata. This extension does not implement a constitutive model.
+
+## Sources
+
+- [Lower-limb lymphatic anatomy and lymphosomes](https://pmc.ncbi.nlm.nih.gov/articles/PMC5891651/)
+- [Inguinal lymph nodes, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK557639/)
+- [Lower-limb lymphatic drainage](https://teachmeanatomy.info/lower-limb/vessels/lymphatics/)
 
 ## Mass
 
