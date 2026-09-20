@@ -2,7 +2,7 @@
 
 `knee_mesh` builds the articular cartilage, both menisci and both collateral ligaments from a humanoid's stature and sex.
 
-![A close view of a right knee shows blue cartilage, menisci and collaterals](out/knee.png)
+![A right knee shows natural ivory cartilage, menisci and collateral ligaments](out/knee.png)
 
 `extensions/humanoid/skeleton/leg/knee/{dimensions,geometry,mass}.mojo`. Shared field and isosurface code lives under `extensions/humanoid/skeleton/`. Soft-tissue density lives in `soft_tissue.mojo`. The visual look lives in `look.mojo`.
 
@@ -40,7 +40,7 @@ Thickness at the six foot male template uses Shepherd and Seedhom 1999 as named 
 
 Other statures scale those thicknesses in proportion to stature. That scale is an authored template rule. It is not a cited stature regression. The female template uses slightly smaller ratios of stature.
 
-The solid is a cap on each femoral condyle, the trochlea, each tibial plateau and the posterior patella. Thickness at the joint line uses Shepherd and Seedhom 1999. The cap shape is an authored template.
+The solid uses a thin patch on each femoral condyle, the trochlea, each tibial plateau and the posterior patella. Thickness uses Shepherd and Seedhom 1999. Each patch footprint is an authored template.
 
 `knee_dimensions(stature, sex, side)` returns the lengths and landmarks without building a mesh.
 
@@ -86,13 +86,13 @@ report.weight().to(NEWTON)
 report.weight().to(POUND_FORCE)
 ```
 
-`report.envelope` is the volume inside the surface. `report.mass` is wet-tissue mass. The cartilage cap overlaps the bone. That mass is the envelope of the cap, not a peeled 2.2 mm film. The value is a grid-sampled estimate. It is not a proven upper bound.
+`report.envelope` is the volume inside the surface. `report.mass` is wet-tissue mass. Each patch overlaps the adjacent bone enough to prevent a rendering gap. The value is a grid-sampled estimate. It is not a proven upper bound.
 
 Named mass wrappers exist for each of the five solids.
 
 ## Look
 
-`cartilage_phong` is a pale blue, partly transparent Phong surface. `meniscus_phong` is amber. `ligament_phong` is pale fibrous tissue. All three are visual approximations.
+`cartilage_phong` is opaque warm ivory. `meniscus_phong` is natural off-white fibrocartilage. `ligament_phong` is pale fibrous tissue. All three are visual approximations.
 
 ## Limits
 

@@ -64,7 +64,7 @@ The code builds the plateau first. It then twists the distal end. `measured_tors
 
 The shaft cross-section is an ellipse. The AP and ML diameters are independent.
 
-The solid is a smooth union of anatomical parts. A bowed shaft meets both plateau condyles, an eminence, a tuberosity, a plafond and a medial malleolus. A fibular notch is cut from the distal lateral face. The mesh is a marching-tetrahedra isosurface of that field. Connectivity comes from the field.
+The solid is a smooth union of anatomical parts. A bowed shaft meets a flat plateau, both condyles and the intercondylar eminence. A broad ridge joins the tibial tuberosity to the shaft. A plafond and medial malleolus form the distal end. A fibular notch is cut from the distal lateral face. Connectivity and smooth normals come from the sampled field.
 
 `TibiaDimensions` is editable. Editing a length does not rebuild landmarks. Call `tibia_dimensions` to resolve a template. Call `validate` before a field, mesh or mass consumes an edited copy.
 
