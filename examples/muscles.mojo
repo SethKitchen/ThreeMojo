@@ -49,7 +49,7 @@ comptime WIDTH = 320
 comptime HEIGHT = 240
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-comptime DETAIL = 10
+comptime DETAIL = 12
 comptime SPACING = Float32(0.38)
 
 
@@ -225,7 +225,7 @@ def main() raises:
         Length(0.05, METER),
         Length(20.0, METER),
     )
-    camera.place(Vector3(0.20, 0.06, 2.60), Vector3(0.0, 0.02, 0.0))
+    camera.place(Vector3(0.06, 0.06, 2.60), Vector3(0.0, 0.02, 0.0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
