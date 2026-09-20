@@ -3,11 +3,11 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Signed-distance primitives shared by the humanoid bones.
+"""Signed-distance primitives shared by the humanoid solids.
 
-Each bone builds an implicit solid from capsules, ellipsoids and smooth
-unions. The mesh builder takes the zero set. The mass sampler classifies
-the interior. This file holds the arithmetic those solids share.
+Each solid builds from capsules, ellipsoids and smooth unions. The mesh
+builder takes the zero set. The mass sampler classifies the interior.
+This file holds the arithmetic those solids share.
 """
 
 from extensions.humanoid.sex import Sex
@@ -404,3 +404,113 @@ def field_gradient[
     var normal = Vector3(dx, dy, dz)
     normal.normalize()
     return normal
+
+
+def mix_point(a: Vector3, b: Vector3, t: Float32) -> Vector3:
+    """Return the point `t` of the way from `a` to `b`.
+
+    Args:
+        a: Start point, in meters.
+        b: End point, in meters.
+        t: Blend from 0 at `a` to 1 at `b`.
+
+    Returns:
+        The interpolated point, in meters.
+    """
+    return Vector3(
+        a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t
+    )
+
+
+@fieldwise_init
+struct TubeChain(ImplicitlyCopyable):
+    """Five tapered circular stations of one vessel, nerve or tract."""
+
+    var p0: Vector3
+    var p1: Vector3
+    var p2: Vector3
+    var p3: Vector3
+    var p4: Vector3
+    var r0: Float32
+    var r1: Float32
+    var r2: Float32
+    var r3: Float32
+    var r4: Float32
+
+
+def tapered_tube(
+    origin: Vector3,
+    insertion: Vector3,
+    belly_off: Vector3,
+    r_end: Float32,
+    r_belly: Float32,
+) -> TubeChain:
+    """Return a tapered circular tube from origin to insertion.
+
+    Args:
+        origin: Proximal station, in meters.
+        insertion: Distal station, in meters.
+        belly_off: Offset applied at the mid station, in meters.
+        r_end: Radius at the attachments, in meters.
+        r_belly: Radius at the mid station, in meters.
+
+    Returns:
+        Five stations with circular radii.
+    """
+    var belly = mix_point(origin, insertion, 0.46) + belly_off
+    var r0 = 0.72 * r_end
+    var r1 = 0.90 * r_belly
+    var r3 = 0.82 * r_belly
+    var r4 = 0.55 * r_end
+    return TubeChain(
+        origin,
+        mix_point(origin, belly, 0.50),
+        belly,
+        mix_point(belly, insertion, 0.50),
+        insertion,
+        r0,
+        r1,
+        r_belly,
+        r3,
+        r4,
+    )
+
+
+def tube_chain_distance(
+    chain: TubeChain, point: Vector3, k: Float32
+) -> Float32:
+    """Return how far `point` lies outside a tapered circular tube.
+
+    Negative is inside.
+
+    Args:
+        chain: Five stations.
+        point: A point in the same frame, in meters.
+        k: Smooth-union radius, in meters.
+
+    Returns:
+        The signed distance, in meters.
+    """
+    var d = sd_segment(point, chain.p0, chain.p1, chain.r0, chain.r1)
+    d = smin(d, sd_segment(point, chain.p1, chain.p2, chain.r1, chain.r2), k)
+    d = smin(d, sd_segment(point, chain.p2, chain.p3, chain.r2, chain.r3), k)
+    return smin(d, sd_segment(point, chain.p3, chain.p4, chain.r3, chain.r4), k)
+
+
+def tube_chain_bounds(chain: TubeChain, pad: Float32) -> Bounds:
+    """Return a padded box that holds `chain`.
+
+    Args:
+        chain: Five stations.
+        pad: Extra margin, in meters.
+
+    Returns:
+        An axis-aligned box around the tube.
+    """
+    var box = empty_bounds()
+    box.include_sphere(chain.p0, chain.r0)
+    box.include_sphere(chain.p1, chain.r1)
+    box.include_sphere(chain.p2, chain.r2)
+    box.include_sphere(chain.p3, chain.r3)
+    box.include_sphere(chain.p4, chain.r4)
+    return box.padded(pad)

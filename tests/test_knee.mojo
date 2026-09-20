@@ -57,13 +57,19 @@ from extensions.humanoid.skeleton.look import (
 )
 from extensions.humanoid.skeleton.occupancy import MAX_STEP, MIN_STEP
 from extensions.humanoid.skeleton.soft_tissue import (
+    ARTERIAL,
     CARTILAGE,
+    HAIR as HAIR_KIND,
     LIGAMENT,
+    LYMPH as LYMPH_KIND,
     MENISCUS,
     MUSCLE,
+    NERVE,
+    SKIN as SKIN_KIND,
     SOFT_EMPTY,
     SOFT_FILL,
     TENDON,
+    VENOUS,
     SoftOccupancy,
     SoftTissue,
     SoftTissueKind,
@@ -107,7 +113,13 @@ def test_soft_kinds_are_valid() raises:
     assert_true(MENISCUS.is_valid())
     assert_true(MUSCLE.is_valid())
     assert_true(TENDON.is_valid())
-    assert_false(SoftTissueKind(5).is_valid())
+    assert_true(ARTERIAL.is_valid())
+    assert_true(VENOUS.is_valid())
+    assert_true(LYMPH_KIND.is_valid())
+    assert_true(NERVE.is_valid())
+    assert_true(SKIN_KIND.is_valid())
+    assert_true(HAIR_KIND.is_valid())
+    assert_false(SoftTissueKind(11).is_valid())
     assert_false(SoftTissueKind(-1).is_valid())
     assert_true(SOFT_EMPTY.is_valid())
     assert_true(SOFT_FILL.is_valid())
@@ -168,7 +180,7 @@ def test_filled_density_and_classify() raises:
 
 def test_soft_tissue_validate_refusals() raises:
     var tissue = cartilage_tissue()
-    tissue.kind = SoftTissueKind(9)
+    tissue.kind = SoftTissueKind(11)
     with assert_raises():
         tissue.validate()
     tissue = cartilage_tissue()
@@ -584,7 +596,7 @@ def test_mass_refuses_bad_step_and_tissue() raises:
             MAX_STEP + Length(1.0, MILLIMETER),
         )
     var bad = cartilage_tissue()
-    bad.kind = SoftTissueKind(9)
+    bad.kind = SoftTissueKind(11)
     with assert_raises():
         _ = knee_mass_from_dimensions(
             dims, ARTICULAR_CARTILAGE, bad, Length(5.0, MILLIMETER)
