@@ -575,7 +575,6 @@ struct SkinLayerField(DistanceField, ImplicitlyCopyable):
 
     var outer: SkinField
     var thickness: Float32
-    var epsilon: Float32
     var low: Vector3
     var high: Vector3
 
@@ -590,7 +589,6 @@ struct SkinLayerField(DistanceField, ImplicitlyCopyable):
         """
         self.outer = SkinField(dimensions)
         self.thickness = self.outer.dermis
-        self.epsilon = self.outer.epsilon
         self.low = self.outer.low
         self.high = self.outer.high
 
@@ -602,10 +600,6 @@ struct SkinLayerField(DistanceField, ImplicitlyCopyable):
         """
         var d = self.outer.distance(point)
         return max(d, -d - self.thickness)
-
-    def gradient(self, point: Vector3) -> Vector3:
-        """Return the unit outward normal of the shell at `point`."""
-        return field_gradient(self, point, self.epsilon)
 
 
 def _section_distance(

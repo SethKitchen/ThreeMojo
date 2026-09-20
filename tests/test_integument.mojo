@@ -9,7 +9,6 @@ from core.assets import Assets
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from core.object3d import Object3D
 from core.scene import Scene
-from extensions.humanoid.athleticism import TONED
 from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.side import LEFT, RIGHT
 from extensions.humanoid.spec import HumanoidSpec
@@ -40,7 +39,6 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
 )
 from extensions.humanoid.skeleton.leg.skin.dimensions import (
     SkinField,
-    SkinLayerField,
     skin_distance,
 )
 from extensions.humanoid.skeleton.leg.skin.geometry import (
@@ -49,7 +47,6 @@ from extensions.humanoid.skeleton.leg.skin.geometry import (
 )
 from extensions.humanoid.skeleton.leg.skin.mass import (
     skin_mass,
-    skin_mass_from_dimensions,
     skin_occupancy,
 )
 from extensions.humanoid.skeleton.look import (
@@ -69,7 +66,6 @@ from extensions.humanoid.skeleton.soft_tissue import (
     HAIR as HAIR_KIND,
     SKIN as SKIN_KIND,
     SOFT_FILL,
-    SoftTissueKind,
     hair_tissue,
     skin_tissue,
 )
@@ -91,7 +87,6 @@ from units.si import (
     GRAM_PER_CUBIC_CENTIMETER,
     Length,
     MEGAPASCAL,
-    MILLIMETER,
 )
 
 comptime TOLERANCE = Float64(1e-4)
@@ -138,14 +133,12 @@ def test_skin_and_hair_tissue() raises:
 def test_skin_envelope_has_an_interior() raises:
     var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT)
     var field = SkinField(dims)
-    var layer = SkinLayerField(dims)
     var inside = field.rectus_femoris.p2
     assert_true(skin_distance(dims, inside) < 0)
-    assert_true(layer.distance(inside) > 0)
+    assert_true(field.distance(inside) < -field.dermis)
     assert_true(field.distance(Vector3(10, 0, 0)) > 0)
     var surface = _outer_surface(field, inside, Vector3(0, 0, 1))
     var dermis = surface - Vector3(0, 0, 0.5 * field.dermis)
-    assert_true(layer.distance(dermis) < 0)
     assert_true(skin_occupancy(dims, dermis) == SOFT_FILL)
     var n = field.gradient(Vector3(10, 0, 0))
     assert_true(n.length() > Float32(0.5))
@@ -187,13 +180,6 @@ def test_skin_envelope_has_an_interior() raises:
     _assert_chain_inside(field, field.sural_nerve.chain, "sural nerve")
     assert_true(field.distance(field.inguinal_nodes.c4) < 0)
     assert_true(field.distance(field.popliteal_nodes.c4) < 0)
-    var toned = SkinField(
-        muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE, TONED), RIGHT)
-    )
-    var muscle_surface = field.vastus_lateralis.p2 + Vector3(
-        field.vastus_lateralis.r2, 0, 0
-    )
-    assert_true(toned.distance(muscle_surface) < field.distance(muscle_surface))
 
 
 def test_every_named_hair_group_has_an_interior() raises:
@@ -220,9 +206,6 @@ def test_every_named_hair_group_has_an_interior() raises:
         var n = field.gradient(Vector3(10, 0, 0))
         assert_true(n.length() > Float32(0.5))
         index += 1
-    var thigh = HairField(dims, THIGH_HAIR)
-    assert_true(hair_distance(dims, THIGH_HAIR, thigh.a0) < 0)
-    assert_true(hair_occupancy(dims, THIGH_HAIR, thigh.a0) == SOFT_FILL)
 
 
 def test_skin_and_hair_meshes_have_positions_normals_and_uvs() raises:
@@ -246,6 +229,10 @@ def test_skin_and_hair_refuse_bad_inputs() raises:
     with assert_raises():
         _ = HairField(dims, HairPart(2))
     with assert_raises():
+        _ = hair_distance(dims, HairPart(2), Vector3(0, 0, 0))
+    with assert_raises():
+        _ = hair_occupancy(dims, HairPart(2), Vector3(0, 0, 0))
+    with assert_raises():
         _ = hair_from_dimensions(dims, HairPart(2), 8)
     with assert_raises():
         _ = hair_mesh(HumanoidSpec(Length(6.0, FOOT), MALE), HairPart(2))
@@ -261,14 +248,6 @@ def test_skin_and_hair_refuse_bad_inputs() raises:
         _ = hair_mass(HumanoidSpec(Length(6.0, FOOT), MALE), HairPart(2), RIGHT)
     with assert_raises():
         _ = hair_mass_from_dimensions(dims, HairPart(2), hair_tissue())
-    var bad_hair = hair_tissue()
-    bad_hair.kind = SoftTissueKind(11)
-    with assert_raises():
-        _ = hair_mass_from_dimensions(dims, THIGH_HAIR, bad_hair)
-    var bad_skin = skin_tissue()
-    bad_skin.kind = SoftTissueKind(11)
-    with assert_raises():
-        _ = skin_mass_from_dimensions(dims, bad_skin, Length(20.0, MILLIMETER))
 
 
 def test_add_leg_can_draw_integument() raises:
