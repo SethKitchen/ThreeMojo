@@ -54,10 +54,10 @@ from materials.material import (
     Combine,
 )
 from lights.light import directional_light
-from lights.lighting import Lighting
+from lights.lighting import ROUGHNESS_FLOOR, Lighting
 from core.fog import LINEAR_FOG, FogKind, FogView, exp2_fog, linear_fog
 from render.tonemap import REINHARD_TONE_MAPPING, tone_map
-from std.math import nan, sqrt
+from std.math import atan2, nan, sqrt
 from units.si import InverseLength, Length, METER, PER_METER
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -4831,6 +4831,240 @@ def test_a_data_map_that_is_not_stored_as_data_is_refused() raises:
     # A map stored as data passes.
     var proper = textures.add(a_data_texel(128, 128, 255))
     check_data_map(textures.get(proper), "A normal map")
+
+
+def test_every_channel_of_a_normal_map_is_read_and_neutral_is_neutral() raises:
+    var up = Vector3(0, 0, 1)
+    var along_x = Vector3(1, 0, 0)
+    var along_y = Vector3(0, 1, 0)
+    var frame_x = Vector2(1, 0)
+    var frame_y = Vector2(0, 1)
+    # Green alone is the bitangent, blue alone is the normal exactly, and
+    # a blue of zero is the normal turned over, as three.js unpacks them.
+    var forward = mapped_normal(
+        up,
+        along_x,
+        along_y,
+        frame_x,
+        frame_y,
+        FloatColor(0.5, 1, 0.5),
+        Vector2(1, 1),
+    )
+    assert_almost_equal(forward.y, Float32(1), atol=1e-2)
+    assert_almost_equal(forward.x, Float32(0), atol=1e-2)
+    var neutral = mapped_normal(
+        up,
+        along_x,
+        along_y,
+        frame_x,
+        frame_y,
+        FloatColor(Float32(128) / 255, Float32(128) / 255, 1),
+        Vector2(1, 1),
+    )
+    assert_almost_equal(neutral.x, Float32(0), atol=1e-2)
+    assert_almost_equal(neutral.y, Float32(0), atol=1e-2)
+    assert_almost_equal(neutral.z, Float32(1), atol=1e-4)
+    var over = mapped_normal(
+        up,
+        along_x,
+        along_y,
+        frame_x,
+        frame_y,
+        FloatColor(0.5, 0.5, 0),
+        Vector2(1, 1),
+    )
+    assert_almost_equal(over.z, Float32(-1), atol=1e-4)
+    # Coordinates that do not change leave the normal alone, even for a
+    # texel below the horizon that would otherwise turn it over.
+    var still = Vector2(0, 0)
+    var kept = mapped_normal(
+        up, along_x, along_y, still, still, FloatColor(1, 0.5, 0), Vector2(1, 1)
+    )
+    assert_equal(kept.x, Float32(0))
+    assert_equal(kept.z, Float32(1))
+    # Coordinates that change along one direction only make a frame
+    # whose two axes are parallel: the result is still a unit normal,
+    # tilted along that one axis by both of the map's components.
+    var lined = mapped_normal(
+        up,
+        along_x,
+        along_y,
+        Vector2(1, 0),
+        Vector2(2, 0),
+        FloatColor(1, 0.5, 0.75),
+        Vector2(1, 1),
+    )
+    assert_almost_equal(lined.length(), Float32(1), atol=1e-5)
+    assert_true(lined.z < 1, "a collinear frame tilted nothing")
+
+
+def test_a_constant_height_leaves_the_normal_and_a_ramp_tilts_by_its_slope() raises:
+    var up = Vector3(0, 0, 1)
+    var along_x = Vector3(1, 0, 0)
+    var along_y = Vector3(0, 1, 0)
+    # Whatever the height and the scale, no rise is no tilt.
+    for scale in [Float32(0.5), Float32(-2), Float32(10)]:
+        var flat = bumped_normal(up, along_x, along_y, 0 * scale, 0 * scale)
+        assert_equal(flat.x, Float32(0))
+        assert_equal(flat.y, Float32(0))
+        assert_equal(flat.z, Float32(1))
+    # A rise of s over one pixel along x tilts the normal by atan(s)
+    # toward -x: the normal is (-s, 0, 1) made unit.
+    for rise in [Float32(0.25), Float32(1), Float32(3)]:
+        var tilted = bumped_normal(up, along_x, along_y, rise, 0)
+        var expected = Vector3(-rise, 0, 1)
+        expected.normalize()
+        assert_almost_equal(tilted.x, expected.x, atol=1e-6)
+        assert_almost_equal(tilted.z, expected.z, atol=1e-6)
+        assert_almost_equal(
+            atan2(-tilted.x, tilted.z), atan2(rise, Float32(1)), atol=1e-6
+        )
+    # And a rise along both is the two tilts together.
+    var both = bumped_normal(up, along_x, along_y, 1, 1)
+    var corner = Vector3(-1, -1, 1)
+    corner.normalize()
+    assert_almost_equal(both.x, corner.x, atol=1e-6)
+    assert_almost_equal(both.y, corner.y, atol=1e-6)
+
+
+def test_an_asymmetric_normal_map_tilts_each_axis_by_its_own_sign() raises:
+    # A texel tilted along both +u and +v under a lamp from each side in
+    # turn: negating one axis of the scale turns that tilt away from its
+    # lamp and leaves the other, which a symmetric texel could not show.
+    var textures = TextureStore()
+    var slanted = textures.add(a_data_texel(255, 200, 128))
+    var from_x = lit_from_x()
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 1, 0.2)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, FULL))
+    scene.update()
+    var from_y = Lighting(scene, Layers.all(), Vector3(0, 0, 4))
+    var flat_x = physical_pixel(physical_quad(kind=LAMBERT), from_x, textures)
+    var flat_y = physical_pixel(physical_quad(kind=LAMBERT), from_y, textures)
+    var both_x = physical_pixel(
+        physical_quad(kind=LAMBERT, normal_map=slanted), from_x, textures
+    )
+    var both_y = physical_pixel(
+        physical_quad(kind=LAMBERT, normal_map=slanted), from_y, textures
+    )
+    assert_true(both_x.r > flat_x.r, "the +u tilt did not face the x lamp")
+    assert_true(both_y.r > flat_y.r, "the +v tilt did not face the y lamp")
+    var x_turned = physical_quad(
+        kind=LAMBERT, normal_map=slanted, normal_scale=Vector2(-1, 1)
+    )
+    assert_true(
+        physical_pixel(x_turned, from_x, textures).r < flat_x.r,
+        "negating x did not turn the tilt from the x lamp",
+    )
+    assert_true(
+        physical_pixel(x_turned, from_y, textures).r > flat_y.r,
+        "negating x turned the tilt from the y lamp",
+    )
+    var y_turned = physical_quad(
+        kind=LAMBERT, normal_map=slanted, normal_scale=Vector2(1, -1)
+    )
+    assert_true(
+        physical_pixel(y_turned, from_y, textures).r < flat_y.r,
+        "negating y did not turn the tilt from the y lamp",
+    )
+    assert_true(
+        physical_pixel(y_turned, from_x, textures).r > flat_x.r,
+        "negating y turned the tilt from the x lamp",
+    )
+
+
+def test_a_roughness_or_metalness_map_multiplies_before_the_floor() raises:
+    # A map of zero makes the authored number zero, which the floor then
+    # lifts: the same pixel as an authored roughness at the floor and no
+    # map, and a metalness of zero. A map of one changes nothing.
+    var textures = TextureStore()
+    var zeros = textures.add(a_data_texel(0, 0, 0))
+    var ones = textures.add(a_data_texel(255, 255, 255))
+    var lighting = lit_along_z_from(400)
+    var floored = physical_pixel(
+        physical_quad(roughness=0.2, metalness=1, roughness_map=zeros),
+        lighting,
+        textures,
+    )
+    var at_floor = physical_pixel(
+        physical_quad(roughness=ROUGHNESS_FLOOR, metalness=1),
+        lighting,
+        textures,
+    )
+    assert_equal(floored.r, at_floor.r)
+    var unmapped = physical_pixel(
+        physical_quad(roughness=0.2, metalness=1, roughness_map=ones),
+        lighting,
+        textures,
+    )
+    var plain = physical_pixel(
+        physical_quad(roughness=0.2, metalness=1), lighting, textures
+    )
+    assert_equal(unmapped.r, plain.r)
+    var dielectric = physical_pixel(
+        physical_quad(metalness=0.7, metalness_map=zeros), lighting, textures
+    )
+    var chalk = physical_pixel(physical_quad(metalness=0), lighting, textures)
+    assert_equal(dielectric.r, chalk.r)
+    var metal = physical_pixel(
+        physical_quad(metalness=0.7, metalness_map=ones), lighting, textures
+    )
+    var seven_tenths = physical_pixel(
+        physical_quad(metalness=0.7), lighting, textures
+    )
+    assert_equal(metal.r, seven_tenths.r)
+
+
+def test_a_clear_coat_lies_on_the_normal_before_the_map_perturbs_it() raises:
+    # A rough black metal, whose own lobe is next to nothing whichever way
+    # it faces -- Schlick's grazing rise is all a black reflectance keeps
+    # -- with
+    # a normal map that turns its normal well away from a lamp straight
+    # on: the coat's gloss stays at the center, bright, because the coat
+    # reads the geometric normal, and it is the very gloss the unmapped
+    # surface shows.
+    var textures = TextureStore()
+    var toward_x = textures.add(a_data_texel(255, 128, 128))
+    var lighting = lit_along_z_from(400)
+    var bare = physical_pixel(
+        physical_quad(
+            kind=PHYSICAL,
+            color=FloatColor(0, 0, 0),
+            metalness=1,
+            roughness=1,
+            normal_map=toward_x,
+        ),
+        lighting,
+        textures,
+    )
+    var coated = physical_pixel(
+        physical_quad(
+            kind=PHYSICAL,
+            color=FloatColor(0, 0, 0),
+            metalness=1,
+            roughness=1,
+            normal_map=toward_x,
+            clearcoat=1,
+        ),
+        lighting,
+        textures,
+    )
+    assert_true(bare.r < 1e-3, "the turned metal still caught the lamp")
+    assert_true(coated.r > 1, "the coat followed the map off the lamp")
+    var upright = physical_pixel(
+        physical_quad(
+            kind=PHYSICAL,
+            color=FloatColor(0, 0, 0),
+            metalness=1,
+            roughness=1,
+            clearcoat=1,
+        ),
+        lighting,
+        textures,
+    )
+    assert_almost_equal(coated.r, upright.r, atol=1e-3)
 
 
 def main() raises:

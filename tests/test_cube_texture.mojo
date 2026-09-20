@@ -13,6 +13,7 @@ camera that rendered it would see its right, reads that edge.
 """
 
 from math.vector2 import Vector2
+from std.math import sqrt
 from math.vector3 import Vector3
 from render.cube_texture import (
     FACE_COUNT,
@@ -514,6 +515,88 @@ def test_a_roughness_picks_a_level_and_bends_the_reflection() raises:
     # zero vector comes back as it is.
     var cancelled = rough_reflection(Vector3(0, 0, 1), Vector3(0, 0, 0), 1)
     assert_equal(cancelled.length(), Float32(0))
+
+
+def test_a_rising_roughness_moves_a_reflection_steadily_to_the_average() raises:
+    # Four-texel faces of two halves, black and white, with three levels:
+    # the same direction, on the white half, read at a rising roughness
+    # falls from white toward the average and never rises on the way.
+    var faces = List[Texture]()
+    for _ in range(FACE_COUNT):
+        var pixels = List[UInt8]()
+        for _ in range(4):
+            for column in range(4):
+                var tone = UInt8(0)
+                if column >= 2:
+                    tone = 255
+                pixels.append(tone)
+                pixels.append(tone)
+                pixels.append(tone)
+                pixels.append(255)
+        faces.append(Texture(4, 4, pixels^, CLAMP, NEAREST, LINEAR))
+    var cube = CubeTexture(faces^)
+    assert_equal(cube.levels(), 3)
+    var direction = Vector3(1, 0, 0.6)
+    var last = Float32(2)
+    for step in range(5):
+        var roughness = Float32(step) / 4
+        var seen = cube.sample_level(
+            direction, reflection_level(roughness, cube.levels())
+        )
+        assert_true(seen.r <= last, "the reflection sharpened as it roughened")
+        last = seen.r
+    assert_equal(
+        cube.sample_level(direction, reflection_level(0, 3)).r, Float32(1)
+    )
+    assert_almost_equal(
+        cube.sample_level(direction, reflection_level(1, 3)).r,
+        Float32(0.5),
+        atol=1e-2,
+    )
+
+
+def test_the_coarsest_level_over_reads_a_cosine_weighted_irradiance() raises:
+    # A sky that is one white face on black. The coarsest level of the
+    # white face is white, which is what a physical surface facing it
+    # reads as its irradiance. The cosine-weighted integral over the
+    # hemisphere of what that surface sees is smaller: the face fills
+    # the middle of the hemisphere but not the sides, and the sides are
+    # black. The gap is the approximation; see `physical_outgoing`.
+    var faces = List[Texture]()
+    for face in range(FACE_COUNT):
+        var tone = UInt8(0)
+        if face == POSITIVE_Z:
+            tone = 255
+        faces.append(solid(2, Color(tone, tone, tone)))
+    var cube = CubeTexture(faces^)
+    var read = cube.sample_level(Vector3(0, 0, 1), Float32(cube.levels() - 1))
+    assert_equal(read.r, Float32(1))
+    # The integral, by a grid over the hemisphere: each direction's
+    # cosine times what the cube shows there, over the cosine's own sum.
+    var lit = Float64(0)
+    var total = Float64(0)
+    var steps = 96
+    for row in range(steps):
+        for column in range(steps):
+            var x = (Float64(column) + 0.5) / Float64(steps) * 2 - 1
+            var y = (Float64(row) + 0.5) / Float64(steps) * 2 - 1
+            var flat = x * x + y * y
+            if flat >= 1:
+                continue
+            # Directions spread uniformly over the disc are the cosine
+            # weighting already, by Nusselt's analog.
+            var direction = Vector3(
+                Float32(x), Float32(y), Float32(sqrt(1 - flat))
+            )
+            lit += Float64(cube.sample_level(direction, 0).r)
+            total += 1
+    var reference = lit / total
+    assert_true(reference > 0.5, "the face lit less than half the hemisphere")
+    assert_true(reference < 0.7, "the face lit almost the whole hemisphere")
+    assert_true(
+        read.r > Float32(reference) + 0.25,
+        "the coarsest level read the integral",
+    )
 
 
 def main() raises:

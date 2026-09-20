@@ -825,6 +825,15 @@ def mapped_normal(
     corner around; see `renderers.renderer._turned_around`. Shared by
     both rasterizers.
 
+    **Degenerate coordinates leave the normal alone.** Where the
+    coordinates do not change across the pixel at all, there is no
+    direction along which `u` grows, so no frame, and the geometric
+    normal is returned as it is rather than the map's z alone, which
+    would flip it for a texel below the horizon. Coordinates that change
+    along one direction only make a frame whose tangent and bitangent
+    are parallel, and the map's x and y both tilt along that one axis,
+    as three.js's frame does; the result is still a unit normal.
+
     Args:
         normal: The interpolated unit normal.
         along_x: How the world position changes one pixel to the right.
@@ -850,9 +859,9 @@ def mapped_normal(
         q1_perp.z * uv_along_x.y + q0_perp.z * uv_along_y.y,
     )
     var extent = max(tangent.dot(tangent), bitangent.dot(bitangent))
-    var frame = Float32(0)
-    if extent != 0:
-        frame = 1 / sqrt(extent)
+    if extent == 0:
+        return normal
+    var frame = 1 / sqrt(extent)
     var map_x = (texel.r * 2 - 1) * scale.x
     var map_y = (texel.g * 2 - 1) * scale.y
     var map_z = texel.b * 2 - 1

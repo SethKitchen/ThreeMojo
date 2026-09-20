@@ -426,6 +426,13 @@ def reflection_level(roughness: Float32, levels: Int) -> Float32:
     that face sees, which is what a chalky surface reflects. Shared by
     both rasterizers.
 
+    An approximation, and the contract it keeps is monotonic: the same
+    direction read at a rising roughness moves steadily from the texel
+    it lands on toward its face's average. What three.js's PMREM holds
+    at each roughness is the environment weighted by the GGX lobe of that
+    roughness, which a mip chain's box average is not. A prefiltered
+    chain can replace the mip chain here without the callers changing.
+
     Args:
         roughness: How rough the surface is, from zero to one.
         levels: How many levels the cube's faces hold.

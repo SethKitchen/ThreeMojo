@@ -285,7 +285,7 @@ The defaults are three.js's own: a roughness of one and a metalness of zero, a c
 
 | Property | three.js | Default | Meaning |
 |---|---|---|---|
-| `roughness` | `roughness` | `1.0` | Zero is a mirror, one is chalk. Floored at `ROUGHNESS_FLOOR`, three.js's 0.0525. |
+| `roughness` | `roughness` | `1.0` | Zero is a mirror, one is chalk. See [Three roughnesses](#three-roughnesses). |
 | `metalness` | `metalness` | `0.0` | Zero scatters the color, one reflects it. |
 | `roughness_map` | `roughnessMap` | `NO_TEXTURE` | Its green channel multiplies the roughness. Data: `LINEAR` and `IGNORED`. |
 | `metalness_map` | `metalnessMap` | `NO_TEXTURE` | Its blue channel multiplies the metalness. Data: `LINEAR` and `IGNORED`. |
@@ -305,11 +305,17 @@ What the surface reflects head on is `Material.base_reflectance()`. A `STANDARD`
 
 The reciprocal of pi is applied once per sum, as it is for every lit kind. See [The reciprocal of pi](#the-reciprocal-of-pi).
 
+### Three roughnesses
+
+The number you set is the *authored* roughness, from zero to one, times any map. The lobe is evaluated with the *BRDF* roughness: the authored one floored at `ROUGHNESS_FLOOR`, three.js's 0.0525, by `floored_roughness`. three.js applies that floor once and both its lobes read the floored number, the direct lights' included. So a roughness of zero, of 0.01 and of 0.0525 make one lobe under a lamp, there and here. The floor is what keeps `ggx` finite too: at zero and head on its distribution divides zero by zero. The *environment* roughness is the BRDF roughness read as a mip level, below.
+
 ### The environment
 
 A physical surface reflects its environment by its roughness, not by a `combine`. Both refuse a `reflectivity` or a `combine`. The reflection is three.js's split sum: `dfg_approx` fits the lobe's integral, and `physical_outgoing` in `lights/lighting.mojo` joins the radiance and the irradiance with Fdez-Aguera's multiple scattering. The radiance is read along `rough_reflection`, the view turned back and bent toward the normal by the square of the roughness. The irradiance is read around the normal at the coarsest level.
 
-The roughness picks a level of the cube's chain: `reflection_level(roughness, levels)`, from the full size at zero to one texel a face at one. That stands in for three.js's PMREM, which prefilters the environment per roughness. A cube built without a chain reflects sharply at every roughness. See [Textures](Textures#cube-textures).
+The roughness picks a level of the cube's chain: `reflection_level(roughness, levels)`, from the full size at zero to one texel a face at one. That is an approximation. Its contract is monotonic: a rising roughness moves a reflection steadily from the texel it lands on toward its face's average. three.js's PMREM holds the environment weighted by the GGX lobe at each roughness, which a mip chain's box average is not.
+
+The irradiance is an approximation too. The coarsest level is each face's average, not the cosine-weighted integral over the hemisphere. Under a sky that is one bright patch on black it reads high. A cube built without a chain reflects sharply at every roughness. Either level can be replaced by a prefiltered cube without the material changing. See [Textures](Textures#cube-textures).
 
 ### The clear coat
 

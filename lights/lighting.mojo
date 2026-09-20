@@ -368,6 +368,12 @@ def ggx(
     the light or from the eye reflects nothing and returns early, which
     also keeps the visibility term's denominator off zero.
 
+    The roughness is read as given, not floored: at zero and head on the
+    distribution divides zero by zero, so the caller floors it first, as
+    `floored_roughness` floors it and as three.js floors it before either
+    of its lobes. Head on, the lobe is `f0 / (4 alpha^2)`, alpha being the
+    roughness squared, which is what the tests hold it to.
+
     Args:
         toward_light: Unit vector from the surface toward the light.
         toward_eye: Unit vector from the surface toward the camera.
@@ -511,6 +517,17 @@ def floored_roughness(roughness: Float32) -> Float32:
     """Return a roughness never below `ROUGHNESS_FLOOR` and never above one,
     as three.js's `lights_physical_fragment` clamps it.
 
+    **Three roughnesses, and this is the boundary between the first two.**
+    The *authored* roughness is the material's number times its map, from
+    zero to one. The *BRDF* roughness is that floored, and it is what
+    every lobe is evaluated with, the direct lights' included: three.js
+    clamps `material.roughness` once and `RE_Direct_Physical` reads the
+    clamped one, so an authored zero, 0.01 and 0.0525 make one lobe under
+    a lamp, there as here. The floor is also what keeps `ggx` finite, which
+    divides zero by zero at an alpha of zero head on. The third, the
+    *environment* roughness, is the BRDF roughness read as a mip level by
+    `render.cube_texture.reflection_level`, an approximation of its own.
+
     three.js adds a geometric roughness from how fast the normal changes
     across the pixel, which needs the neighboring pixels' normals; this
     project shades each pixel alone and adds none.
@@ -547,10 +564,26 @@ def physical_outgoing(
     The indirect light scatters through the diffuse color. The environment
     reflects through the split sum, and Fdez-Aguera's multiple scattering
     hands the energy a single bounce loses back as a second one, which
-    darkens the diffuse by what the lobe kept. The clear coat, when there
-    is one, dims everything under it by its own Fresnel and adds its own
-    reflection on top, which is why a coated red surface is red under a
-    white gloss. Shared by both rasterizers, as `combine_light` is.
+    darkens the diffuse by what the lobe kept -- by the *largest* channel
+    of what it kept, as three.js's `max3(totalScattering)` takes it, so
+    a red reflectance and a blue one of equal average keep the diffuse by
+    the same amount only when their largest channels agree. The clear
+    coat, when there is one, dims everything under it by its own Fresnel
+    and adds its own reflection on top, which is why a coated red surface
+    is red under a white gloss. Shared by both rasterizers, as
+    `combine_light` is.
+
+    **Two approximations, both in what the caller hands in.** `radiance`
+    is meant to be the environment integrated over the lobe, which
+    three.js's PMREM prefilters per roughness; here it is a mip level of
+    the cube picked by the roughness, a spatial average rather than a
+    GGX-weighted one. `irradiance` is meant to be the environment
+    integrated over the hemisphere weighted by the cosine; here it is the
+    cube's coarsest level, each face's average. Under a sky that is one
+    bright patch on black, the second over-reads: the average of the face
+    the patch is on, where the cosine-weighted integral is smaller. The
+    tests pin both. Either can be replaced by a prefiltered cube without
+    this function changing.
 
     Args:
         direct: The three sums over the lights, from `Lighting.physical_at`.

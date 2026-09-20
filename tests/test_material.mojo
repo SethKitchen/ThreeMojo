@@ -1236,9 +1236,30 @@ def test_a_physical_material_reflects_by_its_index() raises:
     # ((ior - 1) / (ior + 1))^2: the widest index reflects sixteen percent.
     var dense = physical_material(Color(200, 200, 200), ior=2.333)
     assert_almost_equal(dense.base_reflectance().r, Float32(0.16), atol=1e-3)
-    # An index of one reflects nothing at all.
+    # An index of one reflects nothing at all, and two reflects a ninth.
     var air = physical_material(Color(200, 200, 200), ior=1.0)
     assert_equal(air.base_reflectance().r, Float32(0))
+    var dense_two = physical_material(Color(200, 200, 200), ior=2.0)
+    assert_almost_equal(
+        dense_two.base_reflectance().b, Float32(1) / 9, atol=1e-6
+    )
+    # The specular color is authored in sRGB and decoded before it tints:
+    # the reflectance is four percent of the *linear* color.
+    var brown = physical_material(
+        Color(200, 200, 200), specular_color=Color(128, 64, 32)
+    )
+    var tinted_f0 = brown.base_reflectance()
+    var linear = FloatColor(srgb=Color(128, 64, 32))
+    assert_almost_equal(tinted_f0.r, 0.04 * linear.r, atol=1e-6)
+    assert_almost_equal(tinted_f0.g, 0.04 * linear.g, atol=1e-6)
+    assert_almost_equal(tinted_f0.b, 0.04 * linear.b, atol=1e-6)
+    assert_true(tinted_f0.r > 2 * tinted_f0.g, "the tint was read as linear")
+    # A specular intensity of zero removes the reflectance whatever the
+    # index.
+    var none = physical_material(
+        Color(200, 200, 200), ior=2.333, specular_intensity=0.0
+    )
+    assert_equal(none.base_reflectance().r, Float32(0))
     # The specular color tints it and the intensity scales it.
     var tinted = physical_material(
         Color(200, 200, 200),

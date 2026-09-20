@@ -31,7 +31,7 @@ from lights.light import (
     spot_light,
 )
 from math.smoothstep import smoothstep
-from std.math import inf, nan, pi
+from std.math import exp2, inf, nan, pi
 from lights.lighting import (
     CLEARCOAT_F0,
     DIELECTRIC_F0,
@@ -1885,6 +1885,192 @@ def test_the_indirect_light_is_the_ambient_and_the_hemispheres() raises:
     var direct = Lighting(lit)
     assert_equal(direct.indirect_at(UP_Z).r, Float32(0))
     assert_true(direct.intensity_at(UP_Z, ORIGIN).r > 0, "the lamp was lost")
+
+
+# --- the reference equations ------------------------------------------------
+
+
+def reference_fab(
+    dot_nv: Float64, roughness: Float64
+) -> Tuple[Float64, Float64]:
+    """The three.js fit `DFGApprox`, written out again in double
+    precision."""
+    var r_x = roughness * -1 + 1
+    var r_y = roughness * -0.0275 + 0.0425
+    var r_z = roughness * -0.572 + 1.04
+    var r_w = roughness * 0.022 + -0.04
+    var fast = exp2(-9.28 * dot_nv)
+    var least = r_x * r_x
+    if fast < least:
+        least = fast
+    var a004 = least * r_x + r_y
+    return (-1.04 * a004 + r_z, 1.04 * a004 + r_w)
+
+
+def reference_outgoing(
+    f0: List[Float64],
+    diffuse: List[Float64],
+    f90: Float64,
+    roughness: Float64,
+    dot_nv: Float64,
+    radiance: Float64,
+    irradiance: Float64,
+) -> List[Float64]:
+    """The three.js equations `computeMultiscattering` and
+    `RE_IndirectSpecular_Physical`, for one white radiance and irradiance,
+    in double precision: the equations, not the implementation under
+    test."""
+    var fab = reference_fab(dot_nv, roughness)
+    var single = List[Float64]()
+    var multi = List[Float64]()
+    var ess = fab[0] + fab[1]
+    var ems = 1 - ess
+    for channel in range(3):
+        var fss_ess = f0[channel] * fab[0] + f90 * fab[1]
+        var favg = f0[channel] + (1 - f0[channel]) * 0.047619
+        var fms = fss_ess * favg / (1 - ems * favg)
+        single.append(fss_ess)
+        multi.append(fms * ems)
+    var largest = 0.0
+    for channel in range(3):
+        if single[channel] + multi[channel] > largest:
+            largest = single[channel] + multi[channel]
+    var out = List[Float64]()
+    for channel in range(3):
+        out.append(
+            radiance * single[channel]
+            + multi[channel] * irradiance
+            + diffuse[channel] * (1 - largest) * irradiance
+        )
+    return out^
+
+
+def test_the_multiple_scattering_matches_the_reference_equations() raises:
+    # Three reflectances -- a dielectric, a red metal and a blue one --
+    # at several angles and roughnesses, against three.js's equations
+    # written out in double precision. Parity between the two backends
+    # cannot catch a shared mistake here; this can.
+    var none = Reflected(Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0))
+    for f0 in [
+        Vector3(0.04, 0.04, 0.04),
+        Vector3(0.9, 0.04, 0.04),
+        Vector3(0.04, 0.04, 0.9),
+    ]:
+        for dot_nv in [Float32(1.0), Float32(0.6), Float32(0.15)]:
+            for roughness in [Float32(0.0525), Float32(0.4), Float32(1.0)]:
+                var surface = Reflected(
+                    Vector3(0.5, 0.3, 0.1), f0, Vector3(1, 0, 0)
+                )
+                var out = physical_outgoing(
+                    none,
+                    Vector3(0, 0, 0),
+                    surface,
+                    roughness,
+                    dot_nv,
+                    True,
+                    Vector3(0.8, 0.8, 0.8),
+                    Vector3(0.3, 0.3, 0.3),
+                    Vector3(0, 0, 0),
+                    0,
+                    ROUGHNESS_FLOOR,
+                    Vector3(dot_nv, 0, 0),
+                    Vector3(0, 0, 0),
+                )
+                var expected = reference_outgoing(
+                    [Float64(f0.x), Float64(f0.y), Float64(f0.z)],
+                    [0.5, 0.3, 0.1],
+                    1.0,
+                    Float64(roughness),
+                    Float64(dot_nv),
+                    0.8,
+                    0.3,
+                )
+                assert_almost_equal(Float64(out.x), expected[0], atol=1e-4)
+                assert_almost_equal(Float64(out.y), expected[1], atol=1e-4)
+                assert_almost_equal(Float64(out.z), expected[2], atol=1e-4)
+    # And the diffuse survives by the largest channel, as three.js takes
+    # it: a red and a blue reflectance of one shape keep the same diffuse.
+    var red = physical_outgoing(
+        none,
+        Vector3(0, 0, 0),
+        Reflected(Vector3(1, 1, 1), Vector3(0.9, 0.04, 0.04), Vector3(1, 0, 0)),
+        0.5,
+        1,
+        True,
+        Vector3(0, 0, 0),
+        Vector3(1, 1, 1),
+        Vector3(0, 0, 0),
+        0,
+        ROUGHNESS_FLOOR,
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 0),
+    )
+    var blue = physical_outgoing(
+        none,
+        Vector3(0, 0, 0),
+        Reflected(Vector3(1, 1, 1), Vector3(0.04, 0.04, 0.9), Vector3(1, 0, 0)),
+        0.5,
+        1,
+        True,
+        Vector3(0, 0, 0),
+        Vector3(1, 1, 1),
+        Vector3(0, 0, 0),
+        0,
+        ROUGHNESS_FLOOR,
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 0),
+    )
+    assert_almost_equal(red.y, blue.y, atol=1e-6)
+
+
+def test_the_roughness_floor_is_three_js_own_and_ggx_reads_none() raises:
+    # Below the floor `ggx` still answers, and answers differently: head
+    # on the lobe is f0 over four alpha squared, so a roughness of a
+    # hundredth is a lobe a million times taller than one of a tenth.
+    var slight = ggx(UP_Z, UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.01)
+    var floor = ggx(UP_Z, UP_Z, UP_Z, Vector3(1, 1, 1), 1, ROUGHNESS_FLOOR)
+    assert_true(slight.x > floor.x * 100, "the floor was applied inside ggx")
+    assert_almost_equal(
+        Float64(floor.x) * 4 * Float64(ROUGHNESS_FLOOR) ** 4, 1.0, atol=1e-2
+    )
+    # Through a light, an authored zero, a hundredth and the floor make one
+    # lobe, as three.js's clamped `material.roughness` makes one, and the
+    # first roughness above the floor makes another.
+    var scene = lit_from(0, 0, 1)
+    var lighting = Lighting(scene, Layers.all(), Vector3(0, 0, 4))
+    var normal = Vector3(0.2, 0, 1)
+    normal.normalize()
+    var zero = lighting.physical_at(
+        normal, normal, ORIGIN, a_chalk(), floored_roughness(0), 0, 0
+    )
+    var slightly = lighting.physical_at(
+        normal, normal, ORIGIN, a_chalk(), floored_roughness(0.01), 0, 0
+    )
+    var at_floor = lighting.physical_at(
+        normal, normal, ORIGIN, a_chalk(), floored_roughness(0.0525), 0, 0
+    )
+    var above = lighting.physical_at(
+        normal, normal, ORIGIN, a_chalk(), floored_roughness(0.06), 0, 0
+    )
+    assert_equal(zero.specular.x, slightly.specular.x)
+    assert_equal(zero.specular.x, at_floor.specular.x)
+    assert_true(above.specular.x != zero.specular.x, "the floor reached 0.06")
+
+
+def test_an_index_of_refraction_and_a_specular_intensity_set_f0() raises:
+    # Through the surface: a specular intensity of zero leaves a dielectric
+    # with no reflectance and no grazing reflectance either, so its lobe
+    # is nothing under a lamp; a metal keeps its own color regardless.
+    var scene = lit_from(0, 0, 1)
+    var lighting = Lighting(scene, Layers.all(), Vector3(0, 0, 4))
+    var dull = physical_surface(Vector3(1, 1, 1), Vector3(0, 0, 0), 0, 0)
+    assert_equal(dull.clearcoat.x, Float32(0))
+    var lit = lighting.physical_at(UP_Z, UP_Z, ORIGIN, dull, 1, 0, 0)
+    assert_equal(lit.specular.x, Float32(0))
+    assert_almost_equal(lit.diffuse.x, Float32(1), atol=1e-6)
+    var metal = physical_surface(Vector3(1, 0.5, 0), Vector3(0, 0, 0), 1, 0)
+    assert_equal(metal.clearcoat.x, Float32(1))
+    assert_equal(metal.specular.y, Float32(0.5))
 
 
 def main() raises:
