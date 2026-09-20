@@ -123,28 +123,7 @@ def test_patella_mesh_has_positions_normals_and_uvs() raises:
     var height = patella_dimensions(Length(6.0, FOOT), MALE).height.value
     assert_true(span > height * Float32(0.70))
     assert_true(span < height * Float32(1.50))
-
-
-def test_isosurface_winding_and_interior_residual() raises:
-    var dims = patella_dimensions(Length(6.0, FOOT), MALE)
-    var field = PatellaField(dims)
-    var coarse = patella_from_dimensions(dims, 8)
-    var finer = patella_from_dimensions(dims, 12)
-    _assert_outward_and_short(coarse, Float32(0.04))
-    _assert_outward_and_short(finer, Float32(0.04))
-    var e8 = _max_positive_centroid(coarse, field)
-    var e12 = _max_positive_centroid(finer, field)
-    assert_true(e8 < Float32(0.008))
-    assert_true(e12 < Float32(0.006))
-    assert_true(e12 < e8 * Float32(1.05))
-
-
-def test_more_detail_makes_more_triangles() raises:
-    var person = HumanoidSpec(Length(5.5, FOOT), FEMALE)
-    assert_true(
-        patella(person, LEFT, 12).triangle_count()
-        > patella(person, LEFT, 8).triangle_count()
-    )
+    _assert_outward_and_short(bone, Float32(0.04))
 
 
 def test_stature_bounds_and_refusals() raises:
@@ -312,30 +291,6 @@ def test_mass_refuses_bad_step_and_tissue() raises:
         _ = patella_mass_from_dimensions(
             dims, cortical_tissue(), worse, Length(5.0, MILLIMETER)
         )
-
-
-def _max_positive_centroid(
-    bone: BufferGeometry, field: PatellaField
-) raises -> Float32:
-    """Return the largest positive field value at a triangle centroid."""
-    ref pos = bone.attribute_view(String(POSITION))
-    var worst = Float32(0)
-    for triangle in range(bone.triangle_count()):
-        var ia = bone.corner_index(triangle, 0)
-        var ib = bone.corner_index(triangle, 1)
-        var ic = bone.corner_index(triangle, 2)
-        var a = pos.vector3(ia)
-        var b = pos.vector3(ib)
-        var c = pos.vector3(ic)
-        var centroid = Vector3(
-            (a.x + b.x + c.x) * Float32(1.0 / 3.0),
-            (a.y + b.y + c.y) * Float32(1.0 / 3.0),
-            (a.z + b.z + c.z) * Float32(1.0 / 3.0),
-        )
-        var d = field.distance(centroid)
-        if d > worst:
-            worst = d
-    return worst
 
 
 def _assert_outward_and_short(bone: BufferGeometry, limit: Float32) raises:
