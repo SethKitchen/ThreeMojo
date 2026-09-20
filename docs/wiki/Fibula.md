@@ -58,7 +58,7 @@ The other linear measures are sex-specific ratios of that length. They are autho
 
 The shaft is a thin ellipse. The AP and ML diameters are independent. A proximal head and styloid meet a distal lateral malleolus.
 
-The mesh is a marching-tetrahedra isosurface of that field. Connectivity comes from the field.
+The mesh is a marching-tetrahedra isosurface. Connectivity and smooth normals come from the sampled field.
 
 `FibulaDimensions` is editable. Editing a length does not rebuild landmarks. Call `fibula_dimensions` to resolve a template. Call `validate` before a field, mesh or mass consumes an edited copy.
 
