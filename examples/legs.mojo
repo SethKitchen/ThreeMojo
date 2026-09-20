@@ -147,12 +147,12 @@ def main() raises:
     scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.55))
 
     var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
+        Angle(34.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
         Length(0.05, METER),
         Length(20.0, METER),
     )
-    camera.place(Vector3(0.35, 0.14, 2.15), Vector3(0.0, 0.04, 0.0))
+    camera.place(Vector3(0.26, 0.06, 2.85), Vector3(0.0, 0.02, 0.0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
