@@ -8,9 +8,10 @@ This is original work with no three.js lineage.
 
 1. `build_cli.mojo` rewrites every covered module into `coverage/build/`, with a probe before each statement and around each decision. It writes a manifest of everything the probes can report.
 2. The coverage tool and the suites are copied into `coverage/build/` as well, and the suites run from there. Each probe writes one record to `stderr`. `stdout` is unchanged.
-3. `report_cli.mojo` groups the records, matches them to the manifest, and prints the table. It exits with an error when anything is uncovered.
+3. `compact_hits.py` streams the probe files. It keeps each line id once. It keeps each distinct MC-DC vector once. A mesh suite writes millions of repeats. That stream does not fit in RAM.
+4. `report_cli.mojo` groups the compact records, matches them to the manifest, and prints the table. It exits with an error when anything is uncovered.
 
-`make coverage` runs all three. See [How to measure coverage](How-to-measure-coverage).
+`make coverage` runs those steps. See [How to measure coverage](How-to-measure-coverage).
 
 ### Why the run happens inside the build tree
 
@@ -30,6 +31,7 @@ The copies of the tool itself are never instrumented. Measuring the tool with th
 | `mcdc.mojo` | Reconstruct decision vectors from the ordered record stream. |
 | `report.mojo` | Build the report and decide whether it is complete. |
 | `build_cli.mojo`, `report_cli.mojo` | The two commands the Makefile runs. |
+| `compact_hits.py` | Collapse repeated probe records before the report. |
 
 ## Metrics
 

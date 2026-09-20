@@ -283,6 +283,7 @@ def test_menisci_and_collaterals_are_inside_at_landmarks() raises:
     var dims = knee_dimensions(Length(6.0, FOOT), MALE)
     var field = MeniscusField(dims, MEDIAL_MENISCUS)
     assert_true(field.distance(field.p2) < 0)
+    assert_true(knee_distance(dims, MEDIAL_MENISCUS, field.p2) < 0)
     var lateral = MeniscusField(dims, LATERAL_MENISCUS)
     assert_true(lateral.distance(lateral.p2) < 0)
     assert_true(knee_distance(dims, LATERAL_MENISCUS, lateral.p2) < 0)

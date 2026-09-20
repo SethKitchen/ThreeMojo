@@ -355,7 +355,9 @@ $(COV_STAMP):
 	              "not measured. Run its copy under $(COV_DIR)/tests to see" \
 	              "why."; \
 	       fi; exit 1; }
-	@cat $(COV_DIR)/hits/*.txt > $(COV_DIR)/hits.txt
+	@# Mesh suites write gigabytes of repeated probe records. The report
+	@# only needs each line id once and each distinct MC-DC vector once.
+	@python3 coverage/compact_hits.py $(COV_DIR)/hits > $(COV_DIR)/hits.txt
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo \
 	  $(COV_DIR)/manifest.txt $(COV_DIR)/hits.txt); \
 	[ $$rc -eq 0 ] || exit 1
