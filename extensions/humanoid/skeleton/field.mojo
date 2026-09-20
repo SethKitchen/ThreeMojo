@@ -438,44 +438,6 @@ struct TubeChain(ImplicitlyCopyable):
     var r4: Float32
 
 
-def tapered_tube(
-    origin: Vector3,
-    insertion: Vector3,
-    belly_off: Vector3,
-    r_end: Float32,
-    r_belly: Float32,
-) -> TubeChain:
-    """Return a tapered circular tube from origin to insertion.
-
-    Args:
-        origin: Proximal station, in meters.
-        insertion: Distal station, in meters.
-        belly_off: Offset applied at the mid station, in meters.
-        r_end: Radius at the attachments, in meters.
-        r_belly: Radius at the mid station, in meters.
-
-    Returns:
-        Five stations with circular radii.
-    """
-    var belly = mix_point(origin, insertion, 0.46) + belly_off
-    var r0 = 0.72 * r_end
-    var r1 = 0.90 * r_belly
-    var r3 = 0.82 * r_belly
-    var r4 = 0.55 * r_end
-    return TubeChain(
-        origin,
-        mix_point(origin, belly, 0.50),
-        belly,
-        mix_point(belly, insertion, 0.50),
-        insertion,
-        r0,
-        r1,
-        r_belly,
-        r3,
-        r4,
-    )
-
-
 def tube_chain_distance(
     chain: TubeChain, point: Vector3, k: Float32
 ) -> Float32:

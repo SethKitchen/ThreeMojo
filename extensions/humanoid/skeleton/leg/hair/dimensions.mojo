@@ -354,7 +354,7 @@ def _surface_root(
     direction.normalize()
     var low = inside
     var high = inside + direction * (0.16 * S)
-    for _ in range(18):
+    for _ in range(18):  # pragma: no branch
         var middle = (low + high) * Float32(0.5)
         if skin.distance(middle) < 0:
             low = middle
