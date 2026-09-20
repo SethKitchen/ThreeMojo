@@ -147,7 +147,7 @@ def mesh_samples(
                 )
     _require_triangles(indices, bone)
     var count = len(positions) // 3
-    var normals = _sampled_normals(positions, samples, low, grid)
+    var normals = _sampled_normals(positions, indices, samples, low, grid)
     var uvs = List[Float32]()
     var two_pi = pi * Float32(2)
     for index in range(count):  # pragma: no branch
@@ -236,6 +236,7 @@ def _unit_face(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
 
 def _sampled_normals(
     positions: List[Float32],
+    indices: List[Int],
     samples: List[Float32],
     low: Vector3,
     grid: SampleGrid,
@@ -289,6 +290,37 @@ def _sampled_normals(
         normals.append(normal.x)
         normals.append(normal.y)
         normals.append(normal.z)
+    var corner = 0
+    while corner < len(indices):
+        var i0 = indices[corner]
+        var i1 = indices[corner + 1]
+        var i2 = indices[corner + 2]
+        var a = Vector3(
+            positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2]
+        )
+        var b = Vector3(
+            positions[i1 * 3], positions[i1 * 3 + 1], positions[i1 * 3 + 2]
+        )
+        var c = Vector3(
+            positions[i2 * 3], positions[i2 * 3 + 1], positions[i2 * 3 + 2]
+        )
+        var face = _unit_face(a, b, c)
+        var mean = Vector3(
+            normals[i0 * 3] + normals[i1 * 3] + normals[i2 * 3],
+            normals[i0 * 3 + 1] + normals[i1 * 3 + 1] + normals[i2 * 3 + 1],
+            normals[i0 * 3 + 2] + normals[i1 * 3 + 2] + normals[i2 * 3 + 2],
+        )
+        if face.dot(mean) <= 0:
+            normals[i0 * 3] = face.x
+            normals[i0 * 3 + 1] = face.y
+            normals[i0 * 3 + 2] = face.z
+            normals[i1 * 3] = face.x
+            normals[i1 * 3 + 1] = face.y
+            normals[i1 * 3 + 2] = face.z
+            normals[i2 * 3] = face.x
+            normals[i2 * 3 + 1] = face.y
+            normals[i2 * 3 + 2] = face.z
+        corner += 3
     return normals^
 
 
