@@ -261,8 +261,8 @@ struct CartilageField(DistanceField, ImplicitlyCopyable):
         var ap = dimensions.tibial_ap.value
         var ph = dimensions.patella_height.value
         var pw = dimensions.patella_width.value
-        var condyle_ry = 0.39 * W
-        var condyle_rz = 0.36 * W
+        var condyle_ry = 0.32 * W
+        var condyle_rz = 0.34 * W
         var condyle_rx = 0.25 * W
         self.fem_med = dimensions.femoral_medial_cartilage
         self.fem_med_r = Vector3(
@@ -574,8 +574,8 @@ def knee_dimensions_from_bones(
     var p_origin = patella_origin(femur, f_origin, patella, t_p)
     var W = femur.bicondylar_width.value
     var tw = tibia.proximal_width.value
-    var condyle_ry = 0.39 * W
-    var condyle_rz = 0.36 * W
+    var condyle_ry = 0.32 * W
+    var condyle_rz = 0.34 * W
     var fem_med = f_origin + femur.medial_condyle
     var fem_lat = f_origin + femur.lateral_condyle
     var tib_med = t_origin + tibia.medial_condyle
@@ -785,7 +785,7 @@ def patella_origin(
     positive_length(cartilage, "patellar thickness", "knee")
     var troch = _trochlea_local(femur)
     var W = femur.bicondylar_width.value
-    var condyle_rz = 0.36 * W
+    var condyle_rz = 0.34 * W
     var anterior = (
         femur_origin_point.z + troch.z + 0.24 * condyle_rz + cartilage.value
     )
@@ -859,8 +859,8 @@ def _mid(a: Vector3, b: Vector3) -> Vector3:
 def _trochlea_local(femur: FemurDimensions) -> Vector3:
     """Return the trochlear-groove center in the femur frame."""
     var W = femur.bicondylar_width.value
-    var condyle_ry = 0.39 * W
-    var condyle_rz = 0.36 * W
+    var condyle_ry = 0.32 * W
+    var condyle_rz = 0.34 * W
     return Vector3(
         0.5 * (femur.medial_condyle.x + femur.lateral_condyle.x),
         0.5 * (femur.medial_condyle.y + femur.lateral_condyle.y)
