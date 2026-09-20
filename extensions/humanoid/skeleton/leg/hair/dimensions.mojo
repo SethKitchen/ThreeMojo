@@ -97,7 +97,7 @@ struct HairField(DistanceField, ImplicitlyCopyable):
         self.k = 0.0018 * S
         self.epsilon = dimensions.epsilon
         if part == THIGH_HAIR:
-            var standoff = 0.062 * S * scale
+            var standoff = 0.068 * S * scale
             self.a0 = _root(
                 dimensions.hip, dimensions.femur_mid, 0.48, lat, standoff, S
             )
@@ -123,7 +123,7 @@ struct HairField(DistanceField, ImplicitlyCopyable):
             self.b4 = self.a4 + Vector3(lat * 0.40, -0.04, 0.90) * length
             self.b5 = self.a5 + Vector3(lat * 0.30, -0.08, 0.94) * length
         else:
-            var standoff = 0.054 * S * scale
+            var standoff = 0.060 * S * scale
             self.a0 = _calf_root(
                 dimensions.lat_condyle,
                 dimensions.tibia_mid,

@@ -23,6 +23,7 @@ from extensions.humanoid.skeleton.field import (
     field_gradient,
     mix_point,
     sd_ellipse_segment,
+    sd_sphere,
     smin,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import MuscleDimensions
@@ -40,6 +41,7 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
     var c0: Vector3
     var c1: Vector3
     var c2: Vector3
+    var hip_cap: Vector3
     var gr0: Float32
     var gr1: Float32
     var tr0: Float32
@@ -56,6 +58,7 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
     var cd0: Float32
     var cd1: Float32
     var cd2: Float32
+    var hip_r: Float32
     var k: Float32
     var epsilon: Float32
     var low: Vector3
@@ -77,30 +80,34 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         if dimensions.side == LEFT:
             lat = Float32(-1)
         self.g0 = dimensions.iliac + Vector3(0, -0.008 * S, -0.008 * S)
-        self.g1 = dimensions.hip + Vector3(0, -0.040 * S, -0.028 * S)
-        self.t0 = dimensions.hip + Vector3(lat * 0.004 * S, -0.010 * S, 0)
+        self.g1 = mix_point(dimensions.hip, dimensions.gt, 0.45) + Vector3(
+            0, -0.006 * S, -0.012 * S
+        )
+        self.t0 = self.g1
         self.t1 = dimensions.femur_mid + Vector3(0, 0, 0.006 * S)
         self.t2 = mix_point(dimensions.patella, dimensions.tuberosity, 0.20)
         self.c0 = dimensions.lat_condyle + Vector3(0, -0.012 * S, -0.004 * S)
         self.c1 = dimensions.tibia_mid + Vector3(0, 0, -0.008 * S)
         self.c2 = mix_point(dimensions.med_mal, dimensions.lat_mal, 0.50)
-        self.gr0 = 0.038 * S * scale
-        self.gr1 = 0.048 * S * scale
-        self.tr0 = 0.046 * S * scale
-        self.tr1 = 0.052 * S * scale
-        self.tr2 = 0.036 * S * scale
-        self.cr0 = 0.038 * S * scale
-        self.cr1 = 0.042 * S * scale
-        self.cr2 = 0.024 * S * scale
-        self.gd0 = 0.72 * self.gr0
-        self.gd1 = 0.78 * self.gr1
-        self.td0 = 0.82 * self.tr0
-        self.td1 = 0.86 * self.tr1
-        self.td2 = 0.80 * self.tr2
-        self.cd0 = 0.84 * self.cr0
-        self.cd1 = 0.88 * self.cr1
-        self.cd2 = 0.78 * self.cr2
-        self.k = 0.018 * S
+        self.hip_cap = dimensions.gt + Vector3(lat * 0.006 * S, 0, 0)
+        self.gr0 = 0.044 * S * scale
+        self.gr1 = 0.054 * S * scale
+        self.tr0 = 0.052 * S * scale
+        self.tr1 = 0.054 * S * scale
+        self.tr2 = 0.038 * S * scale
+        self.cr0 = 0.040 * S * scale
+        self.cr1 = 0.044 * S * scale
+        self.cr2 = 0.026 * S * scale
+        self.hip_r = 0.046 * S * scale
+        self.gd0 = 0.78 * self.gr0
+        self.gd1 = 0.84 * self.gr1
+        self.td0 = 0.86 * self.tr0
+        self.td1 = 0.88 * self.tr1
+        self.td2 = 0.82 * self.tr2
+        self.cd0 = 0.86 * self.cr0
+        self.cd1 = 0.90 * self.cr1
+        self.cd2 = 0.80 * self.cr2
+        self.k = 0.032 * S
         self.epsilon = dimensions.epsilon
         var box = empty_bounds()
         box.include_sphere(self.g0, self.gr0)
@@ -111,7 +118,8 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         box.include_sphere(self.c0, self.cr0)
         box.include_sphere(self.c1, self.cr1)
         box.include_sphere(self.c2, self.cr2)
-        var padded = box.padded(0.010 + self.tr1)
+        box.include_sphere(self.hip_cap, self.hip_r)
+        var padded = box.padded(0.080 + self.tr1)
         self.low = padded.low
         self.high = padded.high
 
@@ -173,7 +181,7 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
             ),
             self.k,
         )
-        return smin(
+        d = smin(
             d,
             sd_ellipse_segment(
                 point,
@@ -187,6 +195,7 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
             ),
             self.k,
         )
+        return smin(d, sd_sphere(point, self.hip_cap, self.hip_r), self.k)
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""

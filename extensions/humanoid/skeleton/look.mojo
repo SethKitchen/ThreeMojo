@@ -274,7 +274,11 @@ def skin_phong(map: TextureId = NO_TEXTURE) raises -> Material:
     if map != NO_TEXTURE:
         color = Color(255, 255, 255)
     return phong_material(
-        color, map=map, specular=Color(90, 70, 60), shininess=12.0
+        color,
+        map=map,
+        specular=Color(90, 70, 60),
+        shininess=12.0,
+        side=DOUBLE_SIDE,
     )
 
 
