@@ -779,13 +779,15 @@ def patella_origin(
     var troch = _trochlea_local(femur)
     var W = femur.bicondylar_width.value
     var condyle_rz = 0.36 * W
-    var anterior = femur_origin_point.z + troch.z + 0.04 * condyle_rz
+    var anterior = (
+        femur_origin_point.z + troch.z + 0.24 * condyle_rz + cartilage.value
+    )
     var T = patella.thickness.value
-    var posterior_local = Float32(-0.22) * T
+    var posterior_local = Float32(-0.40) * T
     return Vector3(
         femur_origin_point.x + troch.x,
-        femur_origin_point.y + troch.y - 0.08 * patella.height.value,
-        anterior + cartilage.value * 0.4 - posterior_local,
+        femur_origin_point.y + troch.y,
+        anterior - posterior_local,
     )
 
 
