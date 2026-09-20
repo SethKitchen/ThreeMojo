@@ -227,7 +227,10 @@ def test_validate_refuses_zero_and_bad_edits() raises:
         _ = measured_torsion(dims)
     with assert_raises():
         _ = tibia_mass_from_dimensions(
-            dims, cortical_tissue(), trabecular_tissue(), Length(20.0, MILLIMETER)
+            dims,
+            cortical_tissue(),
+            trabecular_tissue(),
+            Length(20.0, MILLIMETER),
         )
     dims = tibia_dimensions(Length(6.0, FOOT), MALE)
     dims.length = Length(nan[DType.float32](), METER)
