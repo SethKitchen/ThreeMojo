@@ -438,10 +438,14 @@ else
 	              "not measured. Run its copy under $(COV_DIR)/tests to see" \
 	              "why."; \
 	       fi; exit 1; }
-	@# Each suite's capture is handed over on its own. Concatenated they
-	@# pass two gigabytes, and one read of that fails on macOS.
+	@# Mesh suites write gigabytes of repeated probe records. The report
+	@# only needs each line id once and each distinct MC-DC vector once.
+	@# The raw captures stay in separate files. One concatenated read of
+	@# them fails on macOS once they pass two gigabytes. The report reads
+	@# the compact stream instead.
+	@python3 coverage/compact_hits.py $(COV_DIR)/hits > $(COV_DIR)/hits.txt
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo \
-	  $(COV_DIR)/manifest.txt $(COV_DIR)/hits/*.txt); \
+	  $(COV_DIR)/manifest.txt $(COV_DIR)/hits.txt); \
 	[ $$rc -eq 0 ] || exit 1
 endif
 	@$(call stamp,coverage)
