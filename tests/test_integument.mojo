@@ -71,7 +71,7 @@ from extensions.humanoid.skeleton.soft_tissue import (
     hair_tissue,
     skin_tissue,
 )
-from materials.material import PHONG
+from materials.material import DOUBLE_SIDE, PHONG
 from math.vector3 import Vector3
 from render.srgb import SRGB
 from render.texture_store import NO_TEXTURE, TextureStore
@@ -299,6 +299,7 @@ def test_skin_and_hair_look_materials() raises:
     assert_equal(mapped.color.r, UInt8(255))
     var keratin = hair_phong()
     assert_true(keratin.kind == PHONG)
+    assert_true(bare.side == DOUBLE_SIDE)
     with assert_raises():
         _ = skin_albedo(MIN_SOFT_LOOK - 1)
     with assert_raises():
