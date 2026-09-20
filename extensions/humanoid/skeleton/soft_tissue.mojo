@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Published wet density and moduli for knee cartilage, meniscus and ligament.
+"""Published wet density and moduli for cartilage, meniscus, ligament, muscle and tendon.
 
 Cartilage numbers follow Mow, Kuei, Lai and Armstrong, *Biphasic creep
 and stress relaxation of articular cartilage in compression*, J. Biomech.
@@ -18,6 +18,13 @@ Orthop. Relat. Res. 1990. Wet density 1.10 g/cm^3 is a named template.
 
 Ligament wet density 1.12 g/cm^3 and water fraction 0.65 are named adult
 templates for hydrated dense connective tissue.
+
+Muscle wet density 1.06 g/cm^3 follows Mendez and Keys, *Density and
+composition of mammalian muscle*, Metabolism 1960, as a named adult
+template. Water fraction 0.75 is a named template.
+
+Tendon wet density 1.12 g/cm^3 and water fraction 0.62 are named adult
+templates for hydrated dense tendon.
 
 Water fraction is metadata. Wet density already describes the hydrated
 tissue. Mass uses wet density times envelope volume. Do not scale by
@@ -60,19 +67,23 @@ struct SoftTissueKind(Equatable, ImplicitlyCopyable, Writable):
     """Which hydrated tissue a `SoftTissue` describes.
 
     The type stops a bare integer at compile time. A value that is not
-    `CARTILAGE`, `LIGAMENT` or `MENISCUS` is still constructible, and
-    the boundary that reads it refuses it.
+    `CARTILAGE`, `LIGAMENT`, `MENISCUS`, `MUSCLE` or `TENDON` is still
+    constructible, and the boundary that reads it refuses it.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is cartilage, ligament or meniscus."""
+        """Return True if this is a named hydrated tissue."""
         if self == CARTILAGE:
             return True
         if self == LIGAMENT:
             return True
-        return self == MENISCUS
+        if self == MENISCUS:
+            return True
+        if self == MUSCLE:
+            return True
+        return self == TENDON
 
 
 # Hyaline articular cartilage of the knee.
@@ -81,6 +92,10 @@ comptime CARTILAGE = SoftTissueKind(0)
 comptime LIGAMENT = SoftTissueKind(1)
 # Fibrocartilage of a meniscus.
 comptime MENISCUS = SoftTissueKind(2)
+# Skeletal muscle belly.
+comptime MUSCLE = SoftTissueKind(3)
+# Dense collagenous tendon or fascia.
+comptime TENDON = SoftTissueKind(4)
 
 
 @fieldwise_init
@@ -131,7 +146,10 @@ struct SoftTissue(ImplicitlyCopyable):
                 1, or if Poisson's ratio is outside 0 through 1.
         """
         if not self.kind.is_valid():
-            raise Error("Soft tissue must be cartilage, ligament or meniscus")
+            raise Error(
+                "Soft tissue must be cartilage, ligament, meniscus, muscle or"
+                " tendon"
+            )
         if not isfinite(self.wet_density.value):
             raise Error("A soft tissue density must be finite")
         if self.wet_density.value <= 0:
@@ -226,6 +244,42 @@ def meniscus_tissue() -> SoftTissue:
         Float32(0.70),
         Pressure(0.20, MEGAPASCAL),
         Float32(0.30),
+    )
+
+
+def muscle_tissue() -> SoftTissue:
+    """Return adult skeletal muscle.
+
+    Wet density is 1.06 g/cm^3. Water fraction is 0.75. Passive
+    modulus is 0.02 MPa, a named template. Poisson's ratio is 0.45.
+
+    Returns:
+        The muscle template.
+    """
+    return SoftTissue(
+        MUSCLE,
+        Density(1.06, GRAM_PER_CUBIC_CENTIMETER),
+        Float32(0.75),
+        Pressure(0.02, MEGAPASCAL),
+        Float32(0.45),
+    )
+
+
+def tendon_tissue() -> SoftTissue:
+    """Return adult dense tendon.
+
+    Wet density is 1.12 g/cm^3. Water fraction is 0.62. Longitudinal
+    modulus is 500 MPa, a named template. Poisson's ratio is 0.40.
+
+    Returns:
+        The tendon template.
+    """
+    return SoftTissue(
+        TENDON,
+        Density(1.12, GRAM_PER_CUBIC_CENTIMETER),
+        Float32(0.62),
+        Pressure(500.0, MEGAPASCAL),
+        Float32(0.40),
     )
 
 

@@ -53,6 +53,7 @@ mkdir -p out
 | `fibula.mojo` | `fibula.png` | [Fibula](Fibula) |
 | `patella.mojo` | `patella.png` | [Patella](Patella) |
 | `knee.mojo` | `knee.png` | [Knee](Knee) |
+| `muscles.mojo` | `muscles.png` | [Muscles](Muscles) |
 | `leg.mojo` | `leg.png` | [Leg](Leg) |
 | `legs.mojo` | `legs.png` | [Leg](Leg) |
 
