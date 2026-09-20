@@ -373,6 +373,17 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
         d = smin(d, sd_ellipsoid(point, self.plateau, self.plateau_r), self.k)
         d = smin(d, sd_sphere(point, self.eminence, self.eminence_r), self.k)
         d = smin(
+            d,
+            sd_segment(
+                point,
+                self.s4,
+                self.tuberosity,
+                0.38 * self.ap4,
+                0.55 * self.tuberosity_r.x,
+            ),
+            self.k,
+        )
+        d = smin(
             d, sd_ellipsoid(point, self.tuberosity, self.tuberosity_r), self.k
         )
         d = smin(d, sd_ellipsoid(point, self.plafond, self.plafond_r), self.k)

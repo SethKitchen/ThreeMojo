@@ -263,7 +263,7 @@ struct CartilageField(DistanceField, ImplicitlyCopyable):
         var pw = dimensions.patella_width.value
         var condyle_ry = 0.39 * W
         var condyle_rz = 0.36 * W
-        var condyle_rx = 0.28 * W
+        var condyle_rx = 0.25 * W
         self.fem_med = dimensions.femoral_medial_cartilage
         self.fem_med_r = Vector3(
             condyle_rx * 0.82, t_f * 0.75, condyle_rz * 0.62
