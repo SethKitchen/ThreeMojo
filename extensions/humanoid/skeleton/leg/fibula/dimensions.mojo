@@ -46,7 +46,6 @@ from extensions.humanoid.skeleton.field import (
     sd_ellipse_segment,
     sd_ellipsoid,
     sd_segment,
-    sd_sphere,
     smin,
 )
 from math.vector3 import Vector3
@@ -130,7 +129,7 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
     """The implicit solid for one `FibulaDimensions`."""
 
     var head: Vector3
-    var head_r: Float32
+    var head_r: Vector3
     var styloid: Vector3
     var styloid_r: Vector3
     var malleolus: Vector3
@@ -176,7 +175,7 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
         var ap_mid = dimensions.midshaft_ap.value * 0.5
         var bow = dimensions.lateral_bow.value
         self.head = dimensions.head_center
-        self.head_r = head_r
+        self.head_r = Vector3(0.82 * head_r, 0.72 * head_r, 0.68 * head_r)
         self.styloid = dimensions.styloid
         self.styloid_r = Vector3(
             0.35 * dimensions.styloid_length.value,
@@ -222,10 +221,10 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
         self.ap3 = 1.08 * ap_mid
         self.ap4 = 0.95 * ap_mid
         self.r2 = 0.5 * (ml_mid + ap_mid)
-        self.k = 0.012 * L
+        self.k = 0.008 * L
         self.epsilon = 0.0015 * L
         var box = empty_bounds()
-        box.include_sphere(self.head, self.head_r)
+        box.include_ellipsoid(self.head, self.head_r)
         box.include_ellipsoid(self.styloid, self.styloid_r)
         box.include_ellipsoid(self.malleolus, self.malleolus_r)
         box.include_sphere(self.s0, max(self.ml0, self.ap0))
@@ -291,7 +290,7 @@ struct FibulaField(DistanceField, ImplicitlyCopyable):
             ),
             self.k,
         )
-        d = smin(d, sd_sphere(point, self.head, self.head_r), self.k)
+        d = smin(d, sd_ellipsoid(point, self.head, self.head_r), self.k)
         d = smin(d, sd_ellipsoid(point, self.styloid, self.styloid_r), self.k)
         d = smin(
             d, sd_ellipsoid(point, self.malleolus, self.malleolus_r), self.k

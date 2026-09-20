@@ -169,6 +169,8 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
     var medial_r: Vector3
     var lateral: Vector3
     var lateral_r: Vector3
+    var plateau: Vector3
+    var plateau_r: Vector3
     var eminence: Vector3
     var eminence_r: Float32
     var tuberosity: Vector3
@@ -226,14 +228,22 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
         var r_mid = 0.5 * (ml_mid + ap_mid)
         self.medial = dimensions.medial_condyle
         self.medial_r = Vector3(
-            0.24 * W, 0.16 * W, 0.42 * dimensions.proximal_ap.value
+            0.24 * W, 0.085 * W, 0.38 * dimensions.proximal_ap.value
         )
         self.lateral = dimensions.lateral_condyle
         self.lateral_r = Vector3(
-            0.22 * W, 0.15 * W, 0.40 * dimensions.proximal_ap.value
+            0.22 * W, 0.080 * W, 0.36 * dimensions.proximal_ap.value
+        )
+        self.plateau = Vector3(
+            0.5 * (self.medial.x + self.lateral.x),
+            0.5 * (self.medial.y + self.lateral.y) - 0.02 * W,
+            0.5 * (self.medial.z + self.lateral.z),
+        )
+        self.plateau_r = Vector3(
+            0.44 * W, 0.085 * W, 0.34 * dimensions.proximal_ap.value
         )
         self.eminence = dimensions.eminence
-        self.eminence_r = 0.055 * W
+        self.eminence_r = 0.045 * W
         self.tuberosity = dimensions.tuberosity
         self.tuberosity_r = Vector3(
             0.55 * dimensions.tuberosity_offset.value,
@@ -284,12 +294,13 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
         self.crest_b = Vector3(self.s3.x, self.s3.y, self.s3.z + 0.85 * ap_mid)
         self.crest_r = 0.28 * r_mid
         self.torsion = dimensions.torsion.value
-        self.k = 0.014 * L
+        self.k = 0.010 * L
         self.k_notch = 0.006 * L
         self.epsilon = 0.0015 * L
         var box = empty_bounds()
         box.include_ellipsoid(self.medial, self.medial_r)
         box.include_ellipsoid(self.lateral, self.lateral_r)
+        box.include_ellipsoid(self.plateau, self.plateau_r)
         box.include_sphere(self.eminence, self.eminence_r)
         box.include_ellipsoid(self.tuberosity, self.tuberosity_r)
         box.include_ellipsoid(self.plafond, self.plafond_r)
@@ -359,6 +370,7 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
         )
         d = smin(d, sd_ellipsoid(point, self.medial, self.medial_r), self.k)
         d = smin(d, sd_ellipsoid(point, self.lateral, self.lateral_r), self.k)
+        d = smin(d, sd_ellipsoid(point, self.plateau, self.plateau_r), self.k)
         d = smin(d, sd_sphere(point, self.eminence, self.eminence_r), self.k)
         d = smin(
             d, sd_ellipsoid(point, self.tuberosity, self.tuberosity_r), self.k
@@ -460,6 +472,7 @@ def tibia_dimensions(
     medial = _pitch(medial, pitch)
     lateral = _pitch(lateral, pitch)
     eminence = _pitch(eminence, pitch)
+    tuberosity = _pitch(tuberosity, pitch)
     var twist = torsion.value
     var mal_y = -0.5 * L - 0.55 * mal
     var notch_y = -0.5 * L + 0.10 * D

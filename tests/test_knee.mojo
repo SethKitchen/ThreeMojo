@@ -614,7 +614,7 @@ def test_look_materials() raises:
     var cart = cartilage_phong()
     assert_true(cart.kind == PHONG)
     assert_true(cart.side == DOUBLE_SIDE)
-    assert_true(cart.transparent)
+    assert_false(cart.transparent)
     var men = meniscus_phong()
     assert_true(men.kind == PHONG)
     var lig = ligament_phong()

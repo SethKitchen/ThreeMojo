@@ -18,8 +18,8 @@ from render.framebuffer import Color
 def cartilage_phong() raises -> Material:
     """Return a Phong material for articular cartilage.
 
-    The color is a pale blue, like wet hyaline cartilage. The surface is
-    double-sided and partly transparent so the condyles stay visible.
+    The color is a warm ivory, like wet hyaline cartilage. The surface is
+    double-sided and opaque so it reads as tissue instead of colored glass.
 
     Returns:
         A `PHONG` material.
@@ -28,19 +28,17 @@ def cartilage_phong() raises -> Material:
         Error: If the Phong constructor refuses the values.
     """
     return phong_material(
-        Color(96, 186, 220),
-        specular=Color(214, 236, 245),
-        shininess=48.0,
+        Color(228, 225, 210),
+        specular=Color(238, 235, 220),
+        shininess=26.0,
         side=DOUBLE_SIDE,
-        opacity=0.88,
-        transparent=True,
     )
 
 
 def meniscus_phong() raises -> Material:
     """Return a Phong material for a meniscus.
 
-    The color is amber fibrocartilage. Shininess is low.
+    The color is natural off-white fibrocartilage. Shininess is low.
 
     Returns:
         A `PHONG` material.
@@ -49,9 +47,9 @@ def meniscus_phong() raises -> Material:
         Error: If the Phong constructor refuses the values.
     """
     return phong_material(
-        Color(220, 176, 96),
-        specular=Color(110, 90, 60),
-        shininess=16.0,
+        Color(205, 199, 181),
+        specular=Color(128, 122, 110),
+        shininess=10.0,
     )
 
 
@@ -67,7 +65,7 @@ def ligament_phong() raises -> Material:
         Error: If the Phong constructor refuses the values.
     """
     return phong_material(
-        Color(245, 232, 196),
-        specular=Color(96, 86, 72),
-        shininess=11.0,
+        Color(226, 214, 180),
+        specular=Color(110, 102, 86),
+        shininess=8.0,
     )
