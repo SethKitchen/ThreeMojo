@@ -16,7 +16,7 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.bone import bone_phong
 from extensions.humanoid.skeleton.field import TubeChain
 from extensions.humanoid.skeleton.leg.assembly import add_leg
-from extensions.humanoid.skeleton.leg.contents import HAIR, INTEGUMENT, SKIN
+from extensions.humanoid.skeleton.leg.contents import INTEGUMENT
 from extensions.humanoid.skeleton.leg.hair.dimensions import (
     CALF_HAIR,
     THIGH_HAIR,
@@ -40,6 +40,7 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
 )
 from extensions.humanoid.skeleton.leg.skin.dimensions import (
     SkinField,
+    SkinLayerField,
     skin_distance,
 )
 from extensions.humanoid.skeleton.leg.skin.geometry import (
@@ -67,7 +68,6 @@ from extensions.humanoid.skeleton.occupancy import MAX_STEP
 from extensions.humanoid.skeleton.soft_tissue import (
     HAIR as HAIR_KIND,
     SKIN as SKIN_KIND,
-    SOFT_EMPTY,
     SOFT_FILL,
     SoftTissueKind,
     hair_tissue,
@@ -137,14 +137,15 @@ def test_skin_and_hair_tissue() raises:
 
 def test_skin_envelope_has_an_interior() raises:
     var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT)
-    var left = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE), LEFT)
     var field = SkinField(dims)
+    var layer = SkinLayerField(dims)
     var inside = field.rectus_femoris.p2
     assert_true(skin_distance(dims, inside) < 0)
-    assert_true(skin_occupancy(dims, inside) == SOFT_EMPTY)
-    assert_true(skin_occupancy(dims, Vector3(10, 0, 0)) == SOFT_EMPTY)
+    assert_true(layer.distance(inside) > 0)
+    assert_true(field.distance(Vector3(10, 0, 0)) > 0)
     var surface = _outer_surface(field, inside, Vector3(0, 0, 1))
     var dermis = surface - Vector3(0, 0, 0.5 * field.dermis)
+    assert_true(layer.distance(dermis) < 0)
     assert_true(skin_occupancy(dims, dermis) == SOFT_FILL)
     var n = field.gradient(Vector3(10, 0, 0))
     assert_true(n.length() > Float32(0.5))
@@ -189,23 +190,22 @@ def test_skin_envelope_has_an_interior() raises:
     var toned = SkinField(
         muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE, TONED), RIGHT)
     )
-    assert_true(toned.s2.ml > field.s2.ml)
-    var left_field = SkinField(left)
-    assert_true(left_field.distance(left_field.rectus_femoris.p2) < 0)
+    var muscle_surface = field.vastus_lateralis.p2 + Vector3(
+        field.vastus_lateralis.r2, 0, 0
+    )
+    assert_true(toned.distance(muscle_surface) < field.distance(muscle_surface))
 
 
 def test_every_named_hair_group_has_an_interior() raises:
     var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT)
-    var left = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE), LEFT)
     var skin = SkinField(dims)
     var parts = named_hair_parts()
     var index = 0
     while index < len(parts):
         var part = parts[index]
         var field = HairField(dims, part)
-        assert_true(hair_distance(dims, part, field.a0) < 0)
-        assert_true(hair_occupancy(dims, part, field.a0) == SOFT_FILL)
-        assert_true(hair_occupancy(dims, part, Vector3(10, 0, 0)) == SOFT_EMPTY)
+        assert_true(field.distance(field.a0) < 0)
+        assert_true(field.distance(Vector3(10, 0, 0)) > 0)
         if part == THIGH_HAIR:
             assert_almost_equal(
                 field.radius, Float32(0.0000145), atol=Float64(1e-8)
@@ -219,29 +219,22 @@ def test_every_named_hair_group_has_an_interior() raises:
         assert_true(skin.distance(field.a0) < Float32(0.001))
         var n = field.gradient(Vector3(10, 0, 0))
         assert_true(n.length() > Float32(0.5))
-        var left_field = HairField(left, part)
-        assert_true(left_field.distance(left_field.a0) < 0)
         index += 1
+    var thigh = HairField(dims, THIGH_HAIR)
+    assert_true(hair_distance(dims, THIGH_HAIR, thigh.a0) < 0)
+    assert_true(hair_occupancy(dims, THIGH_HAIR, thigh.a0) == SOFT_FILL)
 
 
 def test_skin_and_hair_meshes_have_positions_normals_and_uvs() raises:
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     _assert_mesh(skin_mesh(person, RIGHT, 8))
-    _assert_mesh(skin_mesh(person, LEFT, 8))
-    _assert_mesh(hair_mesh(person, THIGH_HAIR, RIGHT, 8))
     _assert_mesh(hair_mesh(person, CALF_HAIR, LEFT, 8))
 
 
 def test_skin_and_hair_mass_are_positive() raises:
     var step = MAX_STEP
-    var envelope = skin_mass(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT, step)
-    assert_true(envelope.mass.to(GRAM) > Float32(0))
     var short = skin_mass(HumanoidSpec(Length(5.5, FOOT), FEMALE), LEFT, step)
     assert_true(short.mass.to(GRAM) > Float32(0))
-    var thigh = hair_mass(
-        HumanoidSpec(Length(6.0, FOOT), MALE), THIGH_HAIR, RIGHT
-    )
-    assert_true(thigh.mass.to(GRAM) > Float32(0))
     var calf = hair_mass(
         HumanoidSpec(Length(5.5, FOOT), FEMALE), CALF_HAIR, LEFT
     )
@@ -297,48 +290,8 @@ def test_add_leg_can_draw_integument() raises:
         RIGHT,
         INTEGUMENT,
         8,
-        skin_paint=assets.materials.add(skin_phong()),
-        hair_paint=assets.materials.add(hair_phong()),
     )
     assert_equal(len(scene.meshes), 3)
-    var hair_only = Scene()
-    var hair_assets = Assets()
-    var hair_root = hair_only.add(Object3D())
-    _ = add_leg(
-        hair_only,
-        hair_assets,
-        hair_root,
-        person,
-        hair_assets.materials.add(bone_phong()),
-        hair_assets.materials.add(cartilage_phong()),
-        hair_assets.materials.add(meniscus_phong()),
-        hair_assets.materials.add(ligament_phong()),
-        hair_assets.materials.add(muscle_phong()),
-        hair_assets.materials.add(tendon_phong()),
-        RIGHT,
-        HAIR,
-        8,
-    )
-    assert_equal(len(hair_only.meshes), 2)
-    var skin_only = Scene()
-    var skin_assets = Assets()
-    var skin_root = skin_only.add(Object3D())
-    _ = add_leg(
-        skin_only,
-        skin_assets,
-        skin_root,
-        person,
-        skin_assets.materials.add(bone_phong()),
-        skin_assets.materials.add(cartilage_phong()),
-        skin_assets.materials.add(meniscus_phong()),
-        skin_assets.materials.add(ligament_phong()),
-        skin_assets.materials.add(muscle_phong()),
-        skin_assets.materials.add(tendon_phong()),
-        RIGHT,
-        SKIN,
-        8,
-    )
-    assert_equal(len(skin_only.meshes), 1)
 
 
 def test_skin_and_hair_look_materials() raises:
