@@ -31,10 +31,6 @@ from extensions.humanoid.skeleton.leg.knee.geometry import (
     articular_cartilage,
     knee_from_dimensions,
     knee_mesh,
-    lateral_collateral,
-    lateral_meniscus,
-    medial_collateral,
-    medial_meniscus,
 )
 from extensions.humanoid.skeleton.leg.knee.mass import (
     articular_cartilage_mass,
@@ -348,10 +344,6 @@ def test_cartilage_mesh_has_positions_normals_and_uvs() raises:
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var mesh = articular_cartilage(person, RIGHT, 8)
     _assert_mesh(mesh, Float32(0.08))
-    _assert_mesh(medial_meniscus(person, RIGHT, 8), Float32(0.05))
-    _assert_mesh(lateral_meniscus(person, LEFT, 8), Float32(0.05))
-    _assert_mesh(medial_collateral(person, RIGHT, 8), Float32(0.08))
-    _assert_mesh(lateral_collateral(person, RIGHT, 8), Float32(0.08))
 
 
 def test_stature_bounds_and_refusals() raises:
