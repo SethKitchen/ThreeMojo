@@ -122,7 +122,7 @@ report.weight().to(POUND_FORCE)
 
 The report does not estimate a mineral-component mass. That would need a mineral fraction. It does not estimate whole-bone mass with marrow.
 
-A six foot male at a 5 mm step has about 960 g of bone tissue. That is 9.4 N, or 2.1 lbf, on Earth. The value is a grid-sampled estimate under the template tissues. A 20 mm step gave about 1011 g. A 2 mm step gave about 965 g. The estimate is not a proven upper bound.
+A six foot male at a 5 mm step has about 853 g of bone tissue. That is 8.4 N, or 1.9 lbf, on Earth. The value is a grid-sampled estimate under the template tissues. It is not a proven upper bound.
 
 Left and right femurs match in mass at the same step, within sampling error.
 
