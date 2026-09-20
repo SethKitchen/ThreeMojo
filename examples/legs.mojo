@@ -154,7 +154,7 @@ def main() raises:
         Length(0.05, METER),
         Length(20.0, METER),
     )
-    camera.place(Vector3(0.26, 0.06, 2.85), Vector3(0.0, 0.02, 0.0))
+    camera.place(Vector3(0.24, 0.06, 2.55), Vector3(0.0, 0.02, 0.0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
