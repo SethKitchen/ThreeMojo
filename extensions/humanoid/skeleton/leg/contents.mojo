@@ -63,7 +63,7 @@ struct LegContents(Equatable, ImplicitlyCopyable, Writable):
 
 # Cortical bones and the five knee tissues.
 comptime BONES = LegContents(0)
-# Named skeletal muscles, the iliotibial tract and the Achilles tendon.
+# Named skeletal muscles and three connective-tissue solids.
 comptime MUSCLES = LegContents(1)
 # Bones, knee tissues and muscles together.
 comptime BOTH = LegContents(2)
