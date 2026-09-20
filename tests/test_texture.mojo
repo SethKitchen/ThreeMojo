@@ -32,6 +32,7 @@ from render.texture import (
     checkerboard,
     data_texture,
     depth_texture_of,
+    depth_texture_of_buffer,
     mix_color,
     texture_of,
     wrap_index,
@@ -1188,9 +1189,11 @@ def test_a_data_texture_quantizes_fractions_without_a_curve() raises:
     assert_true(ramp.wrap == CLAMP)
     assert_true(ramp.filter == NEAREST)
     assert_equal(ramp.levels, 1)
+    # One channel is red: green and blue are zero, as a `RedFormat`
+    # texture samples, and alpha is one.
     assert_equal(ramp.texel(1, 0).r, UInt8(64))
-    assert_equal(ramp.texel(1, 0).g, UInt8(64))
-    assert_equal(ramp.texel(1, 0).b, UInt8(64))
+    assert_equal(ramp.texel(1, 0).g, UInt8(0))
+    assert_equal(ramp.texel(1, 0).b, UInt8(0))
     assert_equal(ramp.texel(1, 0).a, UInt8(255))
     assert_equal(ramp.texel(2, 0).r, UInt8(128))
     assert_equal(ramp.texel(3, 0).r, UInt8(255))
@@ -1201,10 +1204,17 @@ def test_a_data_texture_quantizes_fractions_without_a_curve() raises:
 
 
 def test_a_data_texture_reads_each_channel_count_its_own_way() raises:
-    var two = data_texture(1, 1, [0.5, 0.25], channels=2)
-    assert_equal(two.texel(0, 0).r, UInt8(128))
-    assert_equal(two.texel(0, 0).b, UInt8(128))
-    assert_equal(two.texel(0, 0).a, UInt8(64))
+    # Two channels are red and green, an `RGFormat` texture: the second
+    # number lands in green, blue is zero and alpha is one.
+    var two = data_texture(1, 1, [0.2, 0.8], channels=2)
+    assert_equal(two.texel(0, 0).r, UInt8(51))
+    assert_equal(two.texel(0, 0).g, UInt8(204))
+    assert_equal(two.texel(0, 0).b, UInt8(0))
+    assert_equal(two.texel(0, 0).a, UInt8(255))
+    var sampled = two.sample(0.5, 0.5)
+    assert_almost_equal(Float64(sampled.g), 204.0 / 255, atol=TOLERANCE)
+    assert_almost_equal(Float64(sampled.b), 0.0, atol=TOLERANCE)
+    assert_almost_equal(Float64(sampled.a), 1.0, atol=TOLERANCE)
     var three = data_texture(1, 1, [1.0, 0.5, 0.0], channels=3)
     assert_equal(three.texel(0, 0).r, UInt8(255))
     assert_equal(three.texel(0, 0).g, UInt8(128))
@@ -1257,6 +1267,10 @@ def test_a_rendered_image_becomes_a_texture_as_it_is() raises:
     image.set_pixel(0, 0, Color(255, 0, 0, 255))
     image.set_pixel(1, 0, Color(0, 0, 255, 128))
     var picture = texture_of(image)
+    # A snapshot: the image edited afterward leaves the texture alone.
+    image.set_pixel(0, 0, Color(0, 255, 0, 255))
+    assert_equal(picture.texel(0, 0).r, UInt8(255))
+    assert_equal(picture.texel(0, 0).g, UInt8(0))
     assert_equal(picture.width, 2)
     assert_equal(picture.height, 1)
     assert_true(picture.color_space == SRGB)
@@ -1276,6 +1290,39 @@ def test_a_rendered_image_becomes_a_texture_as_it_is() raises:
     assert_true(plain.filter == NEAREST)
     assert_true(plain.alpha == IGNORED)
     assert_equal(plain.levels, 1)
+
+
+def test_a_depth_texture_is_an_eight_bit_preview_of_perspective_depth() raises:
+    # Planes at a tenth of a meter and a hundred: the NDC depth of a
+    # camera-space distance d is (f + n) / (f - n) - 2 f n / ((f - n) d),
+    # and a byte of window depth cannot tell forty meters from the far
+    # plane. The numbers are worked out by hand, not read off the code.
+    var near = Float64(0.1)
+    var far = Float64(100)
+    var depth = List[Float32]()
+    for d in [1.0, 10.0, 40.0, 80.0, 100.0]:
+        depth.append(
+            Float32(
+                (far + near) / (far - near)
+                - 2 * far * near / ((far - near) * d)
+            )
+        )
+    depth.append(inf[DType.float32]())
+    var pixels = List[UInt8](length=6 * 4, fill=0)
+    var seen = depth_texture_of(Framebuffer(6, 1, pixels^, depth^))
+    assert_equal(seen.texel(0, 0).r, UInt8(230))
+    assert_equal(seen.texel(1, 0).r, UInt8(253))
+    assert_equal(seen.texel(2, 0).r, UInt8(255))
+    assert_equal(seen.texel(3, 0).r, UInt8(255))
+    assert_equal(seen.texel(4, 0).r, UInt8(255))
+    assert_equal(seen.texel(5, 0).r, UInt8(255))
+    # The buffer form refuses what a framebuffer could not hold.
+    with assert_raises(contains="dimensions must be positive"):
+        _ = depth_texture_of_buffer(0, 1, List[Float32]())
+    with assert_raises(contains="dimensions must be positive"):
+        _ = depth_texture_of_buffer(1, 0, List[Float32]())
+    with assert_raises(contains="does not match"):
+        _ = depth_texture_of_buffer(2, 1, [0.0])
 
 
 def test_a_depth_texture_holds_window_space_depth_as_gray() raises:

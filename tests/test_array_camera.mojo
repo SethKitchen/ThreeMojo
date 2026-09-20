@@ -119,6 +119,14 @@ def test_an_array_holds_cameras_and_their_rectangles() raises:
     assert_equal(array.viewports[1].x, 16)
     with assert_raises(contains="positive size"):
         array.add(a_camera(), Rect(0, 0, 0, 16))
+    # The lists are open; one edited alone no longer pairs up.
+    array.viewports.append(Rect(0, 0, 4, 4))
+    with assert_raises(contains="one viewport per camera"):
+        _ = array.count()
+    var pair = a_red_square()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    with assert_raises(contains="one viewport per camera"):
+        _ = renderer.render_array(pair[0], pair[1], array)
 
 
 def test_each_camera_draws_its_own_rectangle() raises:
@@ -149,6 +157,36 @@ def test_an_empty_array_draws_the_background_alone() raises:
     renderer.set_background(Color(0, 0, 40))
     var image = renderer.render_array(pair[0], pair[1], ArrayCamera())
     assert_equal(image.get_pixel(8, 8).b, UInt8(40))
+    # A target of the wrong size is refused even with no camera to draw,
+    # whichever dimension is wrong.
+    var small = RenderTarget(8, 8, Color(0, 0, 0))
+    with assert_raises(contains="renderer's size"):
+        renderer.render_array_into(small, pair[0], pair[1], ArrayCamera())
+    var short = RenderTarget(WIDTH, 8, Color(0, 0, 0))
+    with assert_raises(contains="renderer's size"):
+        renderer.render_array_into(short, pair[0], pair[1], ArrayCamera())
+
+
+def test_a_camera_refused_after_another_drew_puts_the_settings_back() raises:
+    # The second camera rides a node the scene does not have, so it is
+    # refused after the first has drawn its half: the renderer's own
+    # viewport, scissor and test come back, and the first half stays.
+    var pair = a_red_square()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 40))
+    var array = ArrayCamera()
+    array.add(a_camera(), Rect(0, 0, WIDTH // 2, HEIGHT))
+    var stray = a_camera()
+    stray.attach(NodeId(99))
+    array.add(stray, Rect(WIDTH // 2, 0, WIDTH // 2, HEIGHT))
+    var target = RenderTarget(WIDTH, HEIGHT, Color(0, 0, 0))
+    with assert_raises():
+        renderer.render_array_into(target, pair[0], pair[1], array)
+    assert_true(target.shown(8, 8).r > 128)
+    assert_equal(target.shown(24, 8).r, UInt8(0))
+    assert_true(renderer.viewport == Rect.whole(WIDTH, HEIGHT))
+    assert_true(renderer.scissor == Rect.whole(WIDTH, HEIGHT))
+    assert_false(renderer.scissor_test)
 
 
 def test_a_rectangle_outside_the_target_is_refused_before_drawing() raises:
@@ -192,6 +230,56 @@ def test_a_stereo_camera_takes_threejs_defaults() raises:
         _ = StereoCamera(focus=Length(0.0, METER))
     with assert_raises(contains="aspect must be positive"):
         _ = StereoCamera(aspect=0)
+    with assert_raises(contains="cannot be negative"):
+        _ = StereoCamera(eye_separation=Length(nan[DType.float32](), METER))
+    with assert_raises(contains="in front of the camera"):
+        _ = StereoCamera(focus=Length(nan[DType.float32](), METER))
+    with assert_raises(contains="aspect must be positive"):
+        _ = StereoCamera(aspect=nan[DType.float32]())
+
+
+def test_settings_edited_after_construction_are_refused_by_update() raises:
+    # The fields are open. A value the constructor refused is refused
+    # again before an eye is placed, and the pair is left as it was.
+    var scene = Scene()
+    var stereo = StereoCamera(Length(0.2, METER), Length(4.0, METER))
+    stereo.update(a_camera(), scene)
+    stereo.focus = Length(-4.0, METER)
+    with assert_raises(contains="in front of the camera"):
+        stereo.update(a_camera(), scene)
+    assert_almost_equal(
+        Float64(stereo.left.view_shift.to(METER)), 0.025, atol=TOLERANCE
+    )
+    stereo.focus = Length(4.0, METER)
+    stereo.eye_separation = Length(-0.2, METER)
+    with assert_raises(contains="cannot be negative"):
+        stereo.update(a_camera(), scene)
+    stereo.eye_separation = Length(0.2, METER)
+    stereo.aspect = 0
+    with assert_raises(contains="aspect must be positive"):
+        stereo.update(a_camera(), scene)
+    assert_almost_equal(Float64(stereo.left.position.x), -0.1, atol=TOLERANCE)
+
+
+def test_the_baseline_holds_a_thousand_meters_from_the_origin() raises:
+    # A stereo scene lives within a few thousand meters of the origin:
+    # there a Float32 steps in tenths of a millimeter, and the pair's
+    # sixty-four millimeters survive to a part in a hundred. This pins
+    # that promise; see the module docstring for what lies beyond it.
+    var scene = Scene()
+    var camera = PerspectiveCamera(
+        Angle(90.0, DEGREE), 1.0, Length(0.1, METER), Length(100.0, METER)
+    )
+    camera.place(Vector3(1000, 0, 4), Vector3(1000, 0, 0))
+    var stereo = StereoCamera(focus=Length(4.0, METER))
+    stereo.update(camera, scene)
+    var baseline = stereo.right.position.x - stereo.left.position.x
+    assert_almost_equal(Float64(baseline), 0.064, atol=0.00064)
+    # And a point at the focus still lands on one column in both eyes.
+    var focused = Vector3(1000, 0, 0)
+    var left = stereo.left.project(focused, 2048, 2048)
+    var right = stereo.right.project(focused, 2048, 2048)
+    assert_almost_equal(Float64(left.x), Float64(right.x), atol=0.1)
 
 
 def test_the_eyes_stand_either_side_of_the_camera_and_converge() raises:

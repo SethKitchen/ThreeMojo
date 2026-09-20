@@ -79,6 +79,8 @@ var image = renderer.render_array(scene, assets, wall)
 
 Each rectangle is cleared to the background and drawn with the scissor on, so nothing of one reaches another. Pixels outside every rectangle keep the background. A rectangle must lie inside the target, and every rectangle is checked before any is drawn. The renderer's own viewport, scissor and scissor test are put back afterward. Each camera keeps its own aspect: one that does not match its rectangle draws a squeezed image, as three.js's does.
 
+`add` copies its camera. A `StereoCamera` updated afterward does not reach an array that already holds its eyes, so rebuild the array after each update. The two lists are open, and `count` refuses lists of different lengths. A camera refused after an earlier one drew leaves that one's rectangle drawn: the renderer's settings are put back, the target is not. Where two rectangles overlap, the later camera clears and replaces the overlap.
+
 ## StereoCamera
 
 `StereoCamera` makes a left and a right eye from one camera: three.js's `StereoCamera`. Each eye stands half `eye_separation` to its side of the camera and looks the same way. Each eye's frustum is skewed toward the other so the two views cross at `focus`. Draw the eyes through an `ArrayCamera` for a side-by-side image.
@@ -102,6 +104,10 @@ eyes.add(stereo.right, Rect(120, 0, 120, 120))
 | `aspect` | `aspect` | `1.0` | What the camera's aspect is multiplied by for each eye. A half for a side-by-side pair. |
 
 `update(camera, scene)` places `left` and `right` from the camera as it stands, placed or riding a node of the scene. The eyes take the camera's field of view, planes and layers. The skew is `eye_separation / 2 * near / focus` at the near plane, three.js's own arithmetic, set as each eye's `view_shift`. A point at the focus lands on the same column in both eyes. A nearer point lands further apart, which is the parallax.
+
+The three settings are open fields. `validate()` refuses a negative or non-finite separation and a focus or aspect that is not positive and finite. `update` calls it before it places an eye. It builds both eyes before it keeps either, so a refused update leaves the pair as it was.
+
+An eye is a placed camera with a `Float32` position. A million meters from the origin a `Float32` steps in sixteenths of a meter. A sixty-four millimeter baseline is then lost, while the skew still assumes it. Keep a stereo scene within a few thousand meters of the origin, or rebase the scene on the camera. There the baseline holds to a part in a hundred. The test suite pins the baseline at a thousand meters.
 
 `examples/stereo.mojo` draws a stereo pair of a box and a ring, side by side, from a circling camera.
 

@@ -34,12 +34,27 @@ so an eye looks where the camera looks, only from a little to one side.
 `update` reads the camera's view from the scene, as `Renderer` does, so
 a camera riding a node is handled as a placed one is, and places each
 eye to look along the camera's own forward with its own up.
+
+## How far from the origin this works
+
+An eye is a placed camera, and its position is three `Float32`s in the
+world. A `Float32` a million meters from the origin steps in sixteenths
+of a meter, so an offset of thirty-two millimeters added to one rounds
+to nothing or to a whole step, and the pair's baseline is lost while
+its projection skew still says sixty-four millimeters. That is a rule
+of the world coordinates and not of this camera: every vertex of a
+scene that far out steps the same way. Keep a stereo scene within a
+few thousand meters of the origin, where a step is under a millimeter
+and the baseline holds to a part in a hundred, or rebase the scene on
+the camera. `update` refuses nothing here, because it cannot know the
+scene's scale; the test suite pins the baseline at a thousand meters.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
 from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
+from std.math import isfinite
 from units.si import Angle, DEGREE, Length, METER
 
 # three.js's `eyeSep`: the distance between two human eyes.
@@ -79,15 +94,10 @@ struct StereoCamera(Movable):
                 eye. One, the default, as in three.js.
 
         Raises:
-            Error: If the separation is negative, or the focus or the
-                aspect is not positive.
+            Error: If the separation is negative or not finite, or the
+                focus or the aspect is not positive or not finite; see
+                `validate`.
         """
-        if eye_separation.value < 0:
-            raise Error("An eye separation cannot be negative")
-        if focus.value <= 0:
-            raise Error("A stereo focus must be in front of the camera")
-        if aspect <= 0:
-            raise Error("A stereo aspect must be positive")
         self.eye_separation = eye_separation
         self.focus = focus
         self.aspect = aspect
@@ -97,9 +107,38 @@ struct StereoCamera(Movable):
             Angle(50.0, DEGREE), 1.0, Length(0.1, METER), Length(2000.0, METER)
         )
         self.right = self.left
+        self.validate()
+
+    def validate(self) raises:
+        """Refuse a separation, a focus or an aspect that is not one.
+
+        The fields are open, so a value the constructor refused can be
+        written after it: a negative focus would skew each eye toward
+        the wrong side, and a negative separation would swap the eyes.
+        Asked by the constructor and again by `update`, before an eye is
+        placed, so neither eye is built from a value that is not a
+        number.
+
+        Raises:
+            Error: If the separation is negative or not finite, the focus
+                is not positive or not finite, or the aspect is not
+                positive or not finite.
+        """
+        var separation = self.eye_separation.value
+        if not isfinite(separation) or separation < 0:
+            raise Error("An eye separation cannot be negative")
+        var focus = self.focus.value
+        if not isfinite(focus) or focus <= 0:
+            raise Error("A stereo focus must be in front of the camera")
+        if not isfinite(self.aspect) or self.aspect <= 0:
+            raise Error("A stereo aspect must be positive")
 
     def update(mut self, camera: PerspectiveCamera, scene: Scene) raises:
         """Place both eyes from `camera` as it stands.
+
+        Both eyes are built before either is kept, so an update that is
+        refused leaves the pair it found rather than one new eye beside
+        one old one.
 
         Args:
             camera: The camera between the eyes: its field of view, its
@@ -108,10 +147,12 @@ struct StereoCamera(Movable):
             scene: The scene, updated, for a camera riding a node.
 
         Raises:
-            Error: If the camera's view cannot be read -- see
+            Error: If this camera's settings are refused by `validate`,
+                the camera's view cannot be read -- see
                 `PerspectiveCamera.view_matrix_in` -- or an eye's frustum
-                is degenerate.
+                or skew is degenerate.
         """
+        self.validate()
         # The camera's own frame in the world: the inverse of its view.
         var to_world = camera.view_matrix_in(scene)
         to_world.invert()
@@ -126,10 +167,15 @@ struct StereoCamera(Movable):
         # cross at the focus: three.js's `eyeSepOnProjection`.
         var skew = Length(half * camera.near.value / self.focus.value, METER)
         var aspect = camera.aspect * self.aspect
-        self.left = _eye(camera, aspect, skew, eye - across * half, forward, up)
-        self.right = _eye(
+        # Finite inputs can still overflow on the way: an aspect or a
+        # skew that is not a number would build a camera that projects
+        # nothing anywhere, and `PerspectiveCamera` refuses each.
+        var left = _eye(camera, aspect, skew, eye - across * half, forward, up)
+        var right = _eye(
             camera, aspect, -skew, eye + across * half, forward, up
         )
+        self.left = left^
+        self.right = right^
 
 
 def _eye(

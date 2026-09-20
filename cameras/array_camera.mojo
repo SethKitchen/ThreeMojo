@@ -62,6 +62,21 @@ struct ArrayCamera(Movable):
         self.cameras.append(camera)
         self.viewports.append(viewport)
 
-    def count(self) -> Int:
-        """Return how many cameras the array holds."""
+    def count(self) raises -> Int:
+        """Return how many cameras the array holds.
+
+        Returns:
+            The count, which is the length of both lists.
+
+        Raises:
+            Error: If the two lists do not have the same length. `add`
+                keeps them in step; the lists are open, and one edited on
+                its own would send a camera to a rectangle that is not
+                there.
+        """
+        if len(self.cameras) != len(self.viewports):
+            raise Error(
+                "An array camera needs one viewport per camera: the two"
+                " lists have different lengths"
+            )
         return len(self.cameras)

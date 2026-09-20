@@ -30,10 +30,12 @@ var cel = toon_material(Color(255, 170, 60), gradient_map=assets.textures.add(ra
 
 | `channels` | three.js | Each texel holds |
 |---|---|---|
-| `1` | `RedFormat` | A gray, in red, green and blue, with alpha at one. |
-| `2` | `RGFormat` | A gray and an alpha. |
-| `3` | `RGBFormat` | Red, green and blue, with alpha at one. |
+| `1` | `RedFormat` | Red. Green and blue are zero, alpha is one. |
+| `2` | `RGFormat` | Red and green. Blue is zero, alpha is one. |
+| `3` | `RGBFormat` | Red, green and blue. Alpha is one. |
 | `4` | `RGBAFormat` | All four. The default. |
+
+The numbers fill the channels in order, as WebGL samples these formats. A one-channel texture is red, not gray. A toon ramp reads red alone, so one channel serves it. A gray image needs three equal numbers a texel.
 
 The defaults are three.js's own for a `DataTexture`: nearest, no mip chain, and the edges clamped. Data is read where it was written. The length must be `width * height * channels`, and every number must be finite.
 
@@ -50,7 +52,13 @@ var screen = Material(Color(255, 255, 255), picture, kind=BASIC)
 
 The texture is a copy, not a view. Drawing into the target again changes nothing the texture holds. The edges are clamped by default, as three.js clamps a render target's texture.
 
-`depth_texture_of` takes the depth the framebuffer carries and returns it as a texture: three.js's `DepthTexture`. Each texel is the window-space depth a GPU stores, as one gray byte in every channel. It is zero at the near plane and one at the far plane. A pixel nothing was drawn into is at the far plane. The texture is `LINEAR`, ignores its alpha, and is read nearest with no chain: two depths averaged are the depth of nothing. `RenderTarget.depth_texture()` does the same for a target as it stands.
+It is a snapshot in bytes. Light above one was clamped or tone mapped when the image was resolved, and a later exposure cannot bring it back. That suits a picture on a screen in the scene. A linear texture that keeps a render's range for a later pass is a different thing, and this is not it.
+
+`depth_texture_of` takes the depth the framebuffer carries and returns it as a texture: a preview of three.js's `DepthTexture`, at eight bits. Each texel is the window-space depth a GPU stores, as one gray byte in every channel. It is zero at the near plane and one at the far plane. A pixel nothing was drawn into is at the far plane. The texture is `LINEAR`, ignores its alpha, and is read nearest with no chain: two depths averaged are the depth of nothing.
+
+`RenderTarget.depth_texture()` does the same for a target as it stands. `depth_texture_of_buffer` takes a bare depth buffer.
+
+It is a picture of the depth, not the depth. A byte holds 256 steps, and a perspective projection spends most of them near the near plane. Take planes at a tenth of a meter and a hundred. A surface one meter away is byte 230, ten meters is 253, and forty meters is 255, the far plane's own byte. three.js's `DepthTexture` holds a real depth format. Use this to look at a depth, not to compare or reconstruct one.
 
 `examples/television.mojo` renders a box into a small target every frame and shows its picture and its depth on two screens.
 

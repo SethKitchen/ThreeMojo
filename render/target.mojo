@@ -73,7 +73,7 @@ from render.texture import (
     Filter,
     Texture,
     Wrap,
-    depth_texture_of,
+    depth_texture_of_buffer,
     texture_of,
 )
 from render.tonemap import (
@@ -592,7 +592,8 @@ struct RenderTarget(Movable):
         `DepthTexture` on a render target.
 
         `render.texture.depth_texture_of` of the depth as it stands: the
-        color is not resolved. See there for what a texel holds.
+        color is not resolved. See there for what a texel holds, and for
+        why it is a preview at eight bits and not a depth to compare.
 
         Args:
             wrap: How coordinates outside the unit square are resolved.
@@ -603,13 +604,6 @@ struct RenderTarget(Movable):
         Raises:
             Error: If the wrap mode is none of the named values.
         """
-        var count = self.width * self.height
-        return depth_texture_of(
-            Framebuffer(
-                self.width,
-                self.height,
-                List[UInt8](length=count * Framebuffer.CHANNELS, fill=0),
-                self.depth.copy(),
-            ),
-            wrap,
+        return depth_texture_of_buffer(
+            self.width, self.height, self.depth, wrap
         )

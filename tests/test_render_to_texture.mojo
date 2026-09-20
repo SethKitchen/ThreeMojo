@@ -18,7 +18,14 @@ from objects.mesh import Mesh
 from render.framebuffer import Color
 from render.rasterizer import SHADE_TEXTURE
 from render.target import RenderTarget
-from render.texture import IGNORED, data_texture, depth_texture_of, texture_of
+from render.framebuffer import Framebuffer
+from render.texture import (
+    IGNORED,
+    NEAREST,
+    data_texture,
+    depth_texture_of,
+    texture_of,
+)
 from renderers.renderer import Renderer
 from std.math import pi
 from std.testing import TestSuite, assert_equal, assert_true
@@ -73,6 +80,49 @@ def test_a_render_is_drawn_onto_a_surface_in_the_next_render() raises:
     assert_equal(second.get_pixel(6, 6).r, UInt8(0))
     assert_equal(second.get_pixel(6, 6).b, UInt8(0))
     assert_equal(second.get_pixel(1, 1).b, UInt8(40))
+
+
+def test_a_render_keeps_its_tones_orientation_and_alpha_on_a_surface() raises:
+    # A picture that is not symmetric and not primary: a mid gray on the
+    # top row, an orange on the bottom, half covered, shown unlit on a
+    # plane and read back through the second render's bytes.
+    var picture = Framebuffer(2, 2, Color(0, 0, 0))
+    picture.set_pixel(0, 0, Color(128, 128, 128))
+    picture.set_pixel(1, 0, Color(128, 128, 128))
+    picture.set_pixel(0, 1, Color(255, 128, 0))
+    picture.set_pixel(1, 1, Color(255, 128, 0, 128))
+    var assets = Assets()
+    var square = assets.geometries.add(
+        plane(Length(2.0, METER), Length(2.0, METER))
+    )
+    var screen = assets.textures.add(
+        texture_of(picture, filter=NEAREST, mipmapped=False)
+    )
+    var shown = assets.materials.add(
+        Material(Color(255, 255, 255), screen, kind=BASIC, transparent=True)
+    )
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    scene.add_mesh(Mesh(square, shown, node))
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var image = renderer.render(scene, assets, a_camera())
+    # The top row of the picture is at the top of the plane, and its
+    # bytes come back as they went in: the sRGB curve was applied once
+    # on the way in and once on the way out.
+    var top = image.get_pixel(4, 4)
+    assert_equal(top.r, UInt8(128))
+    assert_equal(top.g, UInt8(128))
+    assert_equal(top.b, UInt8(128))
+    var bottom = image.get_pixel(4, 11)
+    assert_equal(bottom.r, UInt8(255))
+    assert_equal(bottom.g, UInt8(128))
+    assert_equal(bottom.b, UInt8(0))
+    # The half-covered texel blends over black to about half the light.
+    var faint = image.get_pixel(11, 11)
+    assert_true(faint.r > 170 and faint.r < 200, "the alpha was lost")
+    assert_true(faint.b == 0)
 
 
 def test_a_depth_texture_shows_a_surface_nearer_than_nothing() raises:

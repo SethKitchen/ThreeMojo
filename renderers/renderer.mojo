@@ -3124,15 +3124,24 @@ struct Renderer(Movable):
             array: The cameras and their rectangles.
 
         Raises:
-            Error: If a rectangle reaches outside the target, the target
-                is not the renderer's size, or anything `render_into`
-                raises for one of the cameras.
+            Error: If the target is not the renderer's size, the array's
+                cameras and rectangles do not pair up, a rectangle
+                reaches outside the target, or anything `render_into`
+                raises for one of the cameras. The first three are
+                refused before anything is drawn. A camera refused after
+                an earlier one drew leaves that one's rectangle drawn:
+                the renderer's settings are put back, the target is not.
         """
+        # Asked here as well as by `render_into`, which an array of no
+        # cameras never calls.
+        if target.width != self.width or target.height != self.height:
+            raise Error("A target must be the renderer's size")
         var viewport = self.viewport
         var scissor = self.scissor
         var scissor_test = self.scissor_test
         # Every rectangle is checked before any is drawn, so a bad one
-        # leaves the target untouched rather than half drawn.
+        # leaves the target untouched rather than half drawn. `count`
+        # refuses lists that do not pair up.
         for index in range(array.count()):
             if not array.viewports[index].fits(self.width, self.height):
                 raise Error(

@@ -134,7 +134,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [ ] CubeTexture and environment maps [#63](https://github.com/SethKitchen/ThreeMojo/issues/63)
 - [x] [DataTexture](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#from-numbers): `data_texture`, a linear texture from one to four fractions a texel, quantized without a curve [#64](https://github.com/SethKitchen/ThreeMojo/issues/64)
 - [ ] CompressedTexture [#65](https://github.com/SethKitchen/ThreeMojo/issues/65)
-- [x] [DepthTexture](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#from-a-render): `depth_texture_of` and `RenderTarget.depth_texture`, the depth buffer as window-space gray [#66](https://github.com/SethKitchen/ThreeMojo/issues/66)
+- [x] [DepthTexture](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#from-a-render): `depth_texture_of` and `RenderTarget.depth_texture`, the depth buffer as eight-bit window-space gray, a preview and not a depth to compare [#66](https://github.com/SethKitchen/ThreeMojo/issues/66)
 - [ ] Anisotropic filtering [#67](https://github.com/SethKitchen/ThreeMojo/issues/67)
 - [x] [Render target as a texture](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#from-a-render): `texture_of` and `RenderTarget.texture`, a render sampled by the next one [#68](https://github.com/SethKitchen/ThreeMojo/issues/68)
 - [ ] JPEG loader [#69](https://github.com/SethKitchen/ThreeMojo/issues/69)
