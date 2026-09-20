@@ -199,6 +199,8 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
     var medial_r: Vector3
     var lateral: Vector3
     var lateral_r: Vector3
+    var distal_metaphysis: Vector3
+    var distal_metaphysis_r: Vector3
     var s0: Vector3
     var s1: Vector3
     var s2: Vector3
@@ -270,6 +272,14 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
         )
         self.lateral = dimensions.lateral_condyle
         self.lateral_r = Vector3(condyle_rx, condyle_ry, condyle_rz)
+        self.distal_metaphysis = Vector3(
+            0.5 * (self.medial.x + self.lateral.x),
+            0.5 * (self.medial.y + self.lateral.y) + 0.65 * condyle_ry,
+            0.5 * (self.medial.z + self.lateral.z),
+        )
+        self.distal_metaphysis_r = Vector3(
+            0.36 * W, 0.42 * condyle_ry, 0.42 * condyle_rz
+        )
         var y0 = 0.5 * (self.medial.y + self.lateral.y) + 0.085 * L
         var y4 = self.neck_base.y
         var x0 = 0.5 * (self.medial.x + self.lateral.x)
@@ -313,7 +323,7 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
             0.5 * (self.medial.y + self.lateral.y) + 0.12 * condyle_ry,
             0.5 * (self.medial.z + self.lateral.z) + 0.58 * condyle_rz,
         )
-        self.patella_r = Vector3(0.30 * W, 0.38 * condyle_ry, 0.24 * condyle_rz)
+        self.patella_r = Vector3(0.34 * W, 0.55 * condyle_ry, 0.20 * condyle_rz)
         self.k = 0.010 * L
         self.k_notch = 0.004 * L
         self.epsilon = 0.0015 * L
@@ -325,6 +335,7 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
         box.include_ellipsoid(self.lt, self.lt_r)
         box.include_ellipsoid(self.medial, self.medial_r)
         box.include_ellipsoid(self.lateral, self.lateral_r)
+        box.include_ellipsoid(self.distal_metaphysis, self.distal_metaphysis_r)
         box.include_sphere(self.s0, rad0)
         box.include_sphere(self.s4, rad4)
         var pad = 0.022 * L + Float32(0.004)
@@ -414,6 +425,13 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
         )
         d = smin(d, sd_ellipsoid(point, self.gt, self.gt_r), self.k)
         d = smin(d, sd_ellipsoid(point, self.lt, self.lt_r), self.k)
+        d = smin(
+            d,
+            sd_ellipsoid(
+                point, self.distal_metaphysis, self.distal_metaphysis_r
+            ),
+            self.k,
+        )
         d = smin(d, sd_ellipsoid(point, self.medial, self.medial_r), self.k)
         d = smin(d, sd_ellipsoid(point, self.lateral, self.lateral_r), self.k)
         d = smin(d, sd_ellipsoid(point, self.patella, self.patella_r), self.k)

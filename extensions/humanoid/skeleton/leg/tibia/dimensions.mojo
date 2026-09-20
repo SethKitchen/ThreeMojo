@@ -246,9 +246,9 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
         self.eminence_r = 0.045 * W
         self.tuberosity = dimensions.tuberosity
         self.tuberosity_r = Vector3(
-            0.55 * dimensions.tuberosity_offset.value,
-            0.90 * dimensions.tuberosity_offset.value,
-            0.70 * dimensions.tuberosity_offset.value,
+            0.45 * dimensions.tuberosity_offset.value,
+            1.10 * dimensions.tuberosity_offset.value,
+            0.38 * dimensions.tuberosity_offset.value,
         )
         self.plafond = dimensions.plafond
         self.plafond_r = Vector3(0.38 * D, 0.14 * D, 0.28 * D)
@@ -478,7 +478,11 @@ def tibia_dimensions(
     var medial = Vector3(-0.28 * W, condyle_y, 0.04 * AP)
     var lateral = Vector3(0.26 * W, condyle_y - 0.01 * L, -0.02 * AP)
     var eminence = Vector3(0.02 * W, 0.5 * L, 0.02 * AP)
-    var tuberosity = Vector3(-0.04 * W, 0.5 * L - 0.12 * L, 0.42 * AP + tuber)
+    var tuberosity = Vector3(
+        -0.04 * W,
+        0.5 * L - 0.12 * L,
+        0.34 * AP + 0.55 * tuber,
+    )
     var pitch = -retro.value
     medial = _pitch(medial, pitch)
     lateral = _pitch(lateral, pitch)
