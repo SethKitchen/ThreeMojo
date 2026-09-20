@@ -24,6 +24,7 @@ from extensions.humanoid.skeleton.leg.contents import MUSCLES
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     ACHILLES_TENDON,
     ADDUCTOR_LONGUS,
+    ADDUCTOR_MAGNUS,
     BICEPS_FEMORIS,
     EXTENSOR_DIGITORUM_LONGUS,
     GASTROCNEMIUS,
@@ -31,6 +32,7 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     GLUTEUS_MEDIUS,
     GRACILIS,
     ILIOTIBIAL_TRACT,
+    PATELLAR_TENDON,
     PECTINEUS,
     PERONEUS_BREVIS,
     PERONEUS_LONGUS,
@@ -41,8 +43,10 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     SOLEUS,
     TENSOR_FASCIAE_LATAE,
     TIBIALIS_ANTERIOR,
+    TIBIALIS_POSTERIOR,
     VASTUS_LATERALIS,
     VASTUS_MEDIALIS,
+    VASTUS_INTERMEDIUS,
     MuscleField,
     MusclePart,
     is_tendon,
@@ -60,7 +64,13 @@ from extensions.humanoid.skeleton.leg.muscles.mass import (
     muscle_mass_from_dimensions,
     muscle_occupancy,
 )
-from extensions.humanoid.skeleton.look import muscle_phong, tendon_phong
+from extensions.humanoid.skeleton.look import (
+    MAX_SOFT_LOOK,
+    MIN_SOFT_LOOK,
+    muscle_albedo,
+    muscle_phong,
+    tendon_phong,
+)
 from extensions.humanoid.skeleton.occupancy import MAX_STEP
 from extensions.humanoid.skeleton.soft_tissue import (
     MUSCLE,
@@ -73,6 +83,8 @@ from extensions.humanoid.skeleton.soft_tissue import (
 )
 from materials.material import PHONG
 from math.vector3 import Vector3
+from render.srgb import SRGB
+from render.texture_store import NO_TEXTURE, TextureStore
 from std.math import nan
 from std.testing import (
     TestSuite,
@@ -114,7 +126,7 @@ def test_spec_defaults_to_untoned() raises:
 
 def test_muscle_parts_are_named() raises:
     var parts = named_muscle_parts()
-    assert_equal(len(parts), 21)
+    assert_equal(len(parts), 25)
     var index = 0
     while index < len(parts):
         assert_true(parts[index].is_valid())
@@ -122,13 +134,14 @@ def test_muscle_parts_are_named() raises:
         assert_true(label.byte_length() > 0)
         index += 1
     assert_false(MusclePart(-1).is_valid())
-    assert_false(MusclePart(21).is_valid())
+    assert_false(MusclePart(25).is_valid())
     assert_equal(muscle_part_label(MusclePart(99)), "muscle")
     assert_true(is_tendon(ILIOTIBIAL_TRACT))
     assert_true(is_tendon(ACHILLES_TENDON))
+    assert_true(is_tendon(PATELLAR_TENDON))
     assert_false(is_tendon(RECTUS_FEMORIS))
     with assert_raises():
-        _ = is_tendon(MusclePart(21))
+        _ = is_tendon(MusclePart(25))
 
 
 def test_muscle_and_tendon_tissue() raises:
@@ -215,11 +228,11 @@ def test_muscle_mesh_has_positions_normals_and_uvs() raises:
 def test_muscle_field_refuses_a_bad_part() raises:
     var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE))
     with assert_raises():
-        _ = MuscleField(dims, MusclePart(21))
+        _ = MuscleField(dims, MusclePart(25))
     with assert_raises():
-        _ = muscle_from_dimensions(dims, MusclePart(21), 8)
+        _ = muscle_from_dimensions(dims, MusclePart(25), 8)
     with assert_raises():
-        _ = muscle_mesh(HumanoidSpec(Length(6.0, FOOT), MALE), MusclePart(21))
+        _ = muscle_mesh(HumanoidSpec(Length(6.0, FOOT), MALE), MusclePart(25))
     with assert_raises():
         _ = muscle_from_dimensions(dims, RECTUS_FEMORIS, 7)
     with assert_raises():
@@ -259,11 +272,11 @@ def test_muscle_mass_refuses_a_bad_part_or_tissue() raises:
     var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE))
     with assert_raises():
         _ = muscle_mass(
-            HumanoidSpec(Length(6.0, FOOT), MALE), MusclePart(21), RIGHT
+            HumanoidSpec(Length(6.0, FOOT), MALE), MusclePart(25), RIGHT
         )
     with assert_raises():
         _ = muscle_mass_from_dimensions(
-            dims, MusclePart(21), muscle_tissue(), Length(20.0, MILLIMETER)
+            dims, MusclePart(25), muscle_tissue(), Length(20.0, MILLIMETER)
         )
     var bad = muscle_tissue()
     bad.kind = SoftTissueKind(9)
@@ -293,14 +306,28 @@ def test_add_leg_can_draw_only_muscles() raises:
         MUSCLES,
         8,
     )
-    assert_equal(len(scene.meshes), 21)
+    assert_equal(len(scene.meshes), 25)
 
 
 def test_look_materials() raises:
     var muscle = muscle_phong()
     assert_true(muscle.kind == PHONG)
+    assert_true(muscle.map == NO_TEXTURE)
+    var image = muscle_albedo(MIN_SOFT_LOOK)
+    assert_equal(image.width, MIN_SOFT_LOOK)
+    assert_equal(image.height, MIN_SOFT_LOOK)
+    assert_true(image.color_space == SRGB)
+    assert_true(image.pixels[0] != image.pixels[4 * 3])
+    var store = TextureStore()
+    var mapped = muscle_phong(store.add(image^))
+    assert_true(mapped.map != NO_TEXTURE)
+    assert_equal(mapped.color.r, UInt8(255))
     var tendon = tendon_phong()
     assert_true(tendon.kind == PHONG)
+    with assert_raises():
+        _ = muscle_albedo(MIN_SOFT_LOOK - 1)
+    with assert_raises():
+        _ = muscle_albedo(MAX_SOFT_LOOK + 1)
 
 
 def _assert_mesh(bone: BufferGeometry) raises:
@@ -322,8 +349,10 @@ def test_part_labels_match_the_diagram() raises:
     assert_equal(muscle_part_label(RECTUS_FEMORIS), "rectus femoris")
     assert_equal(muscle_part_label(VASTUS_LATERALIS), "vastus lateralis")
     assert_equal(muscle_part_label(VASTUS_MEDIALIS), "vastus medialis")
+    assert_equal(muscle_part_label(VASTUS_INTERMEDIUS), "vastus intermedius")
     assert_equal(muscle_part_label(PECTINEUS), "pectineus")
     assert_equal(muscle_part_label(ADDUCTOR_LONGUS), "adductor longus")
+    assert_equal(muscle_part_label(ADDUCTOR_MAGNUS), "adductor magnus")
     assert_equal(muscle_part_label(GRACILIS), "gracilis")
     assert_equal(muscle_part_label(BICEPS_FEMORIS), "biceps femoris")
     assert_equal(muscle_part_label(SEMITENDINOSUS), "semitendinosus")
@@ -331,6 +360,7 @@ def test_part_labels_match_the_diagram() raises:
     assert_equal(muscle_part_label(GASTROCNEMIUS), "gastrocnemius")
     assert_equal(muscle_part_label(SOLEUS), "soleus")
     assert_equal(muscle_part_label(TIBIALIS_ANTERIOR), "tibialis anterior")
+    assert_equal(muscle_part_label(TIBIALIS_POSTERIOR), "tibialis posterior")
     assert_equal(
         muscle_part_label(EXTENSOR_DIGITORUM_LONGUS),
         "extensor digitorum longus",
@@ -338,6 +368,7 @@ def test_part_labels_match_the_diagram() raises:
     assert_equal(muscle_part_label(PERONEUS_LONGUS), "peroneus longus")
     assert_equal(muscle_part_label(PERONEUS_BREVIS), "peroneus brevis")
     assert_equal(muscle_part_label(ACHILLES_TENDON), "Achilles tendon")
+    assert_equal(muscle_part_label(PATELLAR_TENDON), "patellar tendon")
 
 
 def main() raises:
