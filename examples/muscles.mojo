@@ -49,7 +49,7 @@ comptime HEIGHT = 240
 comptime FRAMES = 36
 comptime DELAY_MS = 55
 comptime DETAIL = 10
-comptime SPACING = Float32(0.32)
+comptime SPACING = Float32(0.38)
 
 
 def frame_at(
@@ -208,12 +208,12 @@ def main() raises:
     scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.55))
 
     var camera = PerspectiveCamera(
-        Angle(28.0, DEGREE),
+        Angle(36.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
         Length(0.05, METER),
         Length(20.0, METER),
     )
-    camera.place(Vector3(0.28, 0.10, 2.05), Vector3(0.0, 0.04, 0.0))
+    camera.place(Vector3(0.20, 0.06, 2.90), Vector3(0.0, 0.02, 0.0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()

@@ -411,9 +411,9 @@ def muscle_dimensions_from_bones(
     var med_mal = tibia_origin_point + tibia.medial_malleolus
     var fib_head = fibula_origin_point + fibula.head_center
     var lat_mal = fibula_origin_point + fibula.lateral_malleolus
-    var k = 0.008 * S
+    var k = 0.010 * S
     if athleticism == TONED:
-        k = 0.005 * S
+        k = 0.007 * S
     return MuscleDimensions(
         femur.stature,
         femur.sex,
@@ -597,238 +597,250 @@ def _fusiform(
     r_belly: Float32,
 ) -> MuscleChain:
     """Return a five-station tapered belly from origin to insertion."""
-    var belly = _at(origin, insertion, 0.48) + belly_off
+    var belly = _at(origin, insertion, 0.46) + belly_off
     return MuscleChain(
         origin,
-        _at(origin, belly, 0.55),
+        _at(origin, belly, 0.50),
         belly,
-        _at(belly, insertion, 0.55),
+        _at(belly, insertion, 0.50),
         insertion,
         r_end,
-        0.82 * r_belly,
+        0.90 * r_belly,
         r_belly,
-        0.78 * r_belly,
-        0.62 * r_end,
+        0.86 * r_belly,
+        0.72 * r_end,
     )
 
 
 def _glute_max(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.026)
-    var origin = _at(d.iliac, d.ischial, 0.25) + Vector3(0, 0, -0.02 * S)
-    var insertion = d.femur_mid + Vector3(0, 0.12 * S, -0.028 * S)
-    return _fusiform(
-        origin, insertion, Vector3(0, 0, -0.045 * S), 0.55 * rb, rb
+    var rb = _r(S, scale, 0.042)
+    var origin = _at(d.iliac, d.ischial, 0.18) + Vector3(
+        0, 0.008 * S, -0.018 * S
+    )
+    var insertion = _at(d.gt, d.femur_mid, 0.28) + Vector3(0, 0, -0.022 * S)
+    var belly = d.hip + Vector3(0, -0.022 * S, -0.042 * S)
+    return MuscleChain(
+        origin,
+        _at(origin, belly, 0.50),
+        belly,
+        _at(belly, insertion, 0.50),
+        insertion,
+        0.78 * rb,
+        rb,
+        1.08 * rb,
+        0.82 * rb,
+        0.48 * rb,
     )
 
 
 def _glute_med(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.016)
-    var ant = d.iliac + Vector3(0, 0, 0.018 * S)
-    var post = d.iliac + Vector3(0, 0, -0.022 * S)
-    return MuscleChain(
-        ant,
-        _at(ant, d.gt, 0.55),
+    var rb = _r(S, scale, 0.024)
+    var lat = Float32(1)
+    if d.side == LEFT:
+        lat = Float32(-1)
+    return _fusiform(
+        d.iliac,
         d.gt,
-        _at(post, d.gt, 0.55),
-        post,
-        0.70 * rb,
+        Vector3(lat * 0.014 * S, 0.004 * S, 0.006 * S),
+        0.62 * rb,
         rb,
-        0.55 * rb,
-        rb,
-        0.70 * rb,
     )
 
 
 def _tfl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.010)
-    var insertion = _at(d.gt, d.gerdy, 0.22)
-    return _fusiform(d.asis, insertion, Vector3(0, 0, 0.018 * S), 0.55 * rb, rb)
+    var rb = _r(S, scale, 0.014)
+    var insertion = _at(d.gt, d.gerdy, 0.18)
+    return _fusiform(d.asis, insertion, Vector3(0, 0, 0.016 * S), 0.58 * rb, rb)
 
 
 def _it_band(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.0055)
+    var rb = _r(S, scale, 0.0065)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
     return _fusiform(
-        d.gt, d.gerdy, Vector3(lat * 0.008 * S, 0, 0.004 * S), rb, rb
+        d.gt, d.gerdy, Vector3(lat * 0.010 * S, 0, 0.006 * S), rb, rb
     )
 
 
 def _sartorius(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.0075)
-    return _fusiform(d.asis, d.pes, Vector3(0, 0, 0.032 * S), 0.55 * rb, rb)
+    var rb = _r(S, scale, 0.010)
+    return _fusiform(d.asis, d.pes, Vector3(0, 0, 0.036 * S), 0.62 * rb, rb)
 
 
 def _rectus(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.013)
-    return _fusiform(d.aiis, d.patella, Vector3(0, 0, 0.038 * S), 0.50 * rb, rb)
+    var rb = _r(S, scale, 0.022)
+    return _fusiform(d.aiis, d.patella, Vector3(0, 0, 0.044 * S), 0.55 * rb, rb)
 
 
 def _vastus_lat(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.016)
-    var origin = _at(d.gt, d.femur_mid, 0.35)
-    var insertion = _at(d.lat_condyle, d.patella, 0.55)
+    var rb = _r(S, scale, 0.030)
+    var origin = _at(d.gt, d.femur_mid, 0.18)
+    var insertion = _at(d.lat_condyle, d.patella, 0.42)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
     return _fusiform(
-        origin, insertion, Vector3(lat * 0.032 * S, 0, 0.012 * S), 0.55 * rb, rb
+        origin, insertion, Vector3(lat * 0.038 * S, 0, 0.014 * S), 0.58 * rb, rb
     )
 
 
 def _vastus_med(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.013)
-    var origin = _at(d.lt, d.med_condyle, 0.28)
+    var rb = _r(S, scale, 0.024)
+    var origin = _at(d.lt, d.med_condyle, 0.22)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
     return _fusiform(
         origin,
         d.patella,
-        Vector3(-lat * 0.028 * S, -0.02 * S, 0.016 * S),
-        0.50 * rb,
+        Vector3(-lat * 0.032 * S, -0.016 * S, 0.018 * S),
+        0.55 * rb,
         rb,
     )
 
 
 def _pectineus(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.009)
-    return _fusiform(d.pubis, d.lt, Vector3(0, 0, 0.012 * S), 0.60 * rb, rb)
+    var rb = _r(S, scale, 0.013)
+    return _fusiform(d.pubis, d.lt, Vector3(0, 0, 0.014 * S), 0.62 * rb, rb)
 
 
 def _adductor(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.011)
+    var rb = _r(S, scale, 0.018)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
-    var insertion = d.femur_mid + Vector3(-lat * 0.018 * S, 0, -0.010 * S)
+    var insertion = d.femur_mid + Vector3(-lat * 0.016 * S, 0, -0.008 * S)
     return _fusiform(
-        d.pubis, insertion, Vector3(-lat * 0.016 * S, 0, 0), 0.55 * rb, rb
+        d.pubis,
+        insertion,
+        Vector3(-lat * 0.020 * S, 0, 0.004 * S),
+        0.58 * rb,
+        rb,
     )
 
 
 def _gracilis(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.0065)
+    var rb = _r(S, scale, 0.0095)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
     return _fusiform(
-        d.pubis, d.pes, Vector3(-lat * 0.022 * S, 0, 0.008 * S), 0.55 * rb, rb
+        d.pubis, d.pes, Vector3(-lat * 0.024 * S, 0, 0.010 * S), 0.60 * rb, rb
     )
 
 
 def _biceps(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.012)
+    var rb = _r(S, scale, 0.020)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
     return _fusiform(
         d.ischial,
         d.fib_head,
-        Vector3(lat * 0.018 * S, 0, -0.032 * S),
-        0.50 * rb,
+        Vector3(lat * 0.022 * S, 0, -0.036 * S),
+        0.55 * rb,
         rb,
     )
 
 
 def _semitend(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.0095)
+    var rb = _r(S, scale, 0.016)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
     return _fusiform(
         d.ischial,
         d.pes,
-        Vector3(-lat * 0.012 * S, 0, -0.030 * S),
-        0.48 * rb,
-        rb,
-    )
-
-
-def _semimemb(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.011)
-    var lat = Float32(1)
-    if d.side == LEFT:
-        lat = Float32(-1)
-    var insertion = d.tib_med + Vector3(0, 0, -0.018 * S)
-    return _fusiform(
-        d.ischial,
-        insertion,
-        Vector3(-lat * 0.010 * S, 0, -0.028 * S),
+        Vector3(-lat * 0.014 * S, 0, -0.034 * S),
         0.52 * rb,
         rb,
     )
 
 
+def _semimemb(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
+    var rb = _r(S, scale, 0.018)
+    var lat = Float32(1)
+    if d.side == LEFT:
+        lat = Float32(-1)
+    var insertion = d.tib_med + Vector3(0, 0, -0.016 * S)
+    return _fusiform(
+        d.ischial,
+        insertion,
+        Vector3(-lat * 0.012 * S, 0, -0.032 * S),
+        0.55 * rb,
+        rb,
+    )
+
+
 def _gastroc(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.014)
-    var med = d.med_condyle + Vector3(0, 0, -0.022 * S)
-    var lat = d.lat_condyle + Vector3(0, 0, -0.022 * S)
-    var merge = _at(d.tibia_mid, d.heel, 0.42) + Vector3(0, 0, -0.038 * S)
+    var rb = _r(S, scale, 0.026)
+    var med = d.med_condyle + Vector3(0, -0.008 * S, -0.024 * S)
+    var latc = d.lat_condyle + Vector3(0, -0.008 * S, -0.024 * S)
+    var merge = _at(d.med_condyle, d.heel, 0.48) + Vector3(0, 0, -0.048 * S)
     return MuscleChain(
         med,
-        _at(med, merge, 0.45),
+        _at(med, merge, 0.42),
         merge,
-        _at(lat, merge, 0.45),
-        lat,
-        0.55 * rb,
+        _at(latc, merge, 0.42),
+        latc,
+        0.62 * rb,
         rb,
-        0.72 * rb,
+        0.88 * rb,
         rb,
-        0.55 * rb,
+        0.62 * rb,
     )
 
 
 def _soleus(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.013)
-    var origin = _at(d.tibia_mid, d.fib_head, 0.35) + Vector3(0, 0, -0.018 * S)
-    return _fusiform(origin, d.heel, Vector3(0, 0, -0.030 * S), 0.55 * rb, rb)
+    var rb = _r(S, scale, 0.022)
+    var origin = _at(d.fib_head, d.tibia_mid, 0.40) + Vector3(0, 0, -0.016 * S)
+    return _fusiform(origin, d.heel, Vector3(0, 0, -0.034 * S), 0.58 * rb, rb)
 
 
 def _tib_ant(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.0085)
-    var origin = d.tib_lat + Vector3(0, -0.04 * S, 0.022 * S)
-    var insertion = d.med_mal + Vector3(0, 0.01 * S, 0.028 * S)
-    return _fusiform(origin, insertion, Vector3(0, 0, 0.018 * S), 0.50 * rb, rb)
+    var rb = _r(S, scale, 0.012)
+    var origin = d.tib_lat + Vector3(0, -0.035 * S, 0.024 * S)
+    var insertion = d.med_mal + Vector3(0, 0.012 * S, 0.030 * S)
+    return _fusiform(origin, insertion, Vector3(0, 0, 0.020 * S), 0.52 * rb, rb)
 
 
 def _edl(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.007)
+    var rb = _r(S, scale, 0.010)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
-    var origin = d.fib_head + Vector3(0, -0.02 * S, 0.016 * S)
-    var insertion = d.plafond + Vector3(lat * 0.012 * S, 0, 0.030 * S)
-    return _fusiform(origin, insertion, Vector3(0, 0, 0.016 * S), 0.50 * rb, rb)
+    var origin = d.fib_head + Vector3(0, -0.018 * S, 0.018 * S)
+    var insertion = d.plafond + Vector3(lat * 0.014 * S, 0, 0.032 * S)
+    return _fusiform(origin, insertion, Vector3(0, 0, 0.018 * S), 0.52 * rb, rb)
 
 
 def _per_long(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.0075)
+    var rb = _r(S, scale, 0.011)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
     return _fusiform(
         d.fib_head,
         d.lat_mal,
-        Vector3(lat * 0.016 * S, 0, 0.004 * S),
-        0.52 * rb,
+        Vector3(lat * 0.018 * S, 0, 0.006 * S),
+        0.55 * rb,
         rb,
     )
 
 
 def _per_brev(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.0065)
-    var origin = _at(d.fibula_mid, d.lat_mal, 0.25)
+    var rb = _r(S, scale, 0.009)
+    var origin = _at(d.fibula_mid, d.lat_mal, 0.22)
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
     return _fusiform(
-        origin, d.lat_mal, Vector3(lat * 0.012 * S, 0, 0), 0.55 * rb, rb
+        origin, d.lat_mal, Vector3(lat * 0.014 * S, 0, 0.002 * S), 0.58 * rb, rb
     )
 
 
 def _achilles(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
-    var rb = _r(S, scale, 0.005)
-    var origin = _at(d.tibia_mid, d.heel, 0.58) + Vector3(0, 0, -0.032 * S)
-    return _fusiform(origin, d.heel, Vector3(0, 0, -0.008 * S), rb, rb)
+    var rb = _r(S, scale, 0.0075)
+    var origin = _at(d.med_condyle, d.heel, 0.58) + Vector3(0, 0, -0.040 * S)
+    return _fusiform(origin, d.heel, Vector3(0, 0, -0.010 * S), rb, rb)
