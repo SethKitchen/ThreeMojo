@@ -1,6 +1,6 @@
 # Integument
 
-`skin_mesh` builds the skin envelope of one leg. `hair_mesh` builds a named cluster of short shafts on the thigh or the calf.
+`skin_mesh` fits skin around every modeled leg system. `hair_mesh` places representative shafts directly on that derived surface.
 
 ![A six-foot male right leg turns as a skin envelope with short hair](out/integument.png)
 
@@ -28,9 +28,29 @@ var shafts = hair_mesh(person, THIGH_HAIR)
 
 The solids live in the leg frame. The origin is the tibiofemoral joint line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
 
-The envelope is a stocking around the glute, thigh, knee and calf. Athleticism scales the radii. Toned skin is thicker.
+## Envelope
 
-Hair shafts are authored thicker than live hair so the isosurface can hold them. `THIGH_HAIR` sits on the anterior thigh. `CALF_HAIR` sits on the posterior calf.
+`SkinField` first builds the bones, knee tissues, muscles, vessels, lymphatics and nerves. It does not use an independent stocking silhouette.
+
+The field samples ten thin transverse slabs from the iliac landmark to the ankle. Each section encloses the actual structures in that slab.
+
+Smooth elliptical segments join the fitted sections. This removes gaps between structures while retaining the measured anatomical extents.
+
+The male template adds 7.3 mm over the thigh and 5.5 mm over the calf. The female template adds 15.0 mm and 11.1 mm.
+
+The knee interpolates those values. These measured means represent subcutaneous tissue over the modeled fascia.
+
+Tests require every vessel, lymphatic route and nerve station to lie below the fitted skin. Hair roots use ray projection onto the final surface.
+
+## Hair
+
+`THIGH_HAIR` places representative shafts on the anterior-lateral thigh. `CALF_HAIR` places them on the posterior-lateral calf.
+
+The physical field uses a 29 μm thigh diameter and a 42 μm calf diameter. Hair mass uses analytic capsule volume at these dimensions.
+
+The mesh uses an explicitly diagrammatic radius because a 320 by 240 raster cannot show a 29 μm shaft. The six shafts do not represent density.
+
+Lower-limb hair distribution varies between people. The groups demonstrate rooted geometry and do not define a population pattern.
 
 ## Tissue
 
@@ -38,9 +58,20 @@ Hair shafts are authored thicker than live hair so the isosurface can hold them.
 
 `hair_tissue()` holds wet density 1.32 g/cm³ as a named keratin template. Water fraction is 0.12. Longitudinal modulus is 2000 MPa. Poisson's ratio is 0.35.
 
-Water fraction is metadata. Mass uses wet density times envelope volume. Do not scale by one minus water fraction again.
+The dermal shell is 1.8 mm thick. Skin mass samples only that shell, not the full volume inside the leg.
+
+Water fraction is metadata. Mass uses wet density times tissue volume. Do not scale by one minus water fraction again.
 
 These values are named research metadata. This extension does not implement a constitutive model.
+
+## Sources
+
+- [Extremity skin, fat and muscle reference data](https://www.nature.com/articles/sdata2018193)
+- [Anterior-thigh subcutaneous and fascia thickness](https://www.mdpi.com/2409-9279/2/3/58)
+- [Sex-specific thigh and calf fat thickness](https://doi.org/10.2399/ana.14.037)
+- [Healthy-adult skin thickness by body site](https://pmc.ncbi.nlm.nih.gov/articles/PMC9838783/)
+- [Hair follicle size by body site](https://doi.org/10.1046/j.0022-202x.2003.22110.x)
+- [Lower-limb terminal-hair patterns](https://doi.org/10.1002/ajpa.1330290115)
 
 ## Mass
 

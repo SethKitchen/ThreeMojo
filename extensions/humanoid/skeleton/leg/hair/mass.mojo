@@ -15,23 +15,21 @@ from extensions.humanoid.skeleton.leg.hair.dimensions import (
     HairField,
     HairPart,
     hair_distance,
-    hair_part_label,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     MuscleDimensions,
     muscle_dimensions,
 )
 from extensions.humanoid.skeleton.soft_tissue import (
-    SOFT_STEP,
     SoftMass,
     SoftOccupancy,
     SoftTissue,
     classify_soft,
     hair_tissue,
-    sample_soft_mass,
 )
 from math.vector3 import Vector3
-from units.si import Length
+from std.math import pi
+from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def hair_occupancy(
@@ -58,7 +56,6 @@ def hair_mass(
     spec: HumanoidSpec,
     part: HairPart,
     side: BodySide = RIGHT,
-    step: Length = SOFT_STEP,
 ) raises -> SoftMass:
     """Return the wet-tissue mass of one named hair group sized for `spec`.
 
@@ -66,17 +63,15 @@ def hair_mass(
         spec: Standing height, osteological sex and athleticism.
         part: Which solid to sample.
         side: `RIGHT` or `LEFT`. A right leg is the default.
-        step: Grid cell size. 2 mm through 20 mm, 2 mm by default.
 
     Returns:
-        Sampled envelope volume and wet-tissue mass.
+        Analytic capsule volume and wet-tissue mass.
 
     Raises:
-        Error: If `spec`, `side` or `part` is refused, or `step` is out
-            of range.
+        Error: If `spec`, `side` or `part` is refused.
     """
     return hair_mass_from_dimensions(
-        muscle_dimensions(spec, side), part, hair_tissue(), step
+        muscle_dimensions(spec, side), part, hair_tissue()
     )
 
 
@@ -84,7 +79,6 @@ def hair_mass_from_dimensions(
     dimensions: MuscleDimensions,
     part: HairPart,
     tissue: SoftTissue,
-    step: Length = SOFT_STEP,
 ) raises -> SoftMass:
     """Return the wet-tissue mass of an already-sized hair group.
 
@@ -92,19 +86,31 @@ def hair_mass_from_dimensions(
         dimensions: Landmarks from `muscle_dimensions`.
         part: Which solid to sample.
         tissue: Hydrated tissue. Mass uses `wet_density` once.
-        step: Grid cell size.
 
     Returns:
-        Sampled envelope volume and wet-tissue mass.
+        Analytic capsule volume and wet-tissue mass.
 
     Raises:
         Error: If `dimensions.validate` refuses the copy, if `part` is
-            not named, if `step` is out of range, or `tissue` fails
-            `validate`.
+            not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
     if not part.is_valid():
         raise Error("A hair part must be a named hair group")
-    var label = hair_part_label(part)
+    tissue.validate()
     var field = HairField(dimensions, part)
-    return sample_soft_mass(field, field.low, field.high, tissue, step, label)
+    var length = (field.b0 - field.a0).length()
+    length += (field.b1 - field.a1).length()
+    length += (field.b2 - field.a2).length()
+    length += (field.b3 - field.a3).length()
+    length += (field.b4 - field.a4).length()
+    length += (field.b5 - field.a5).length()
+    var radius = field.radius
+    var volume = (
+        pi * radius * radius * length
+        + Float32(6) * Float32(4.0 / 3.0) * pi * radius * radius * radius
+    )
+    return SoftMass(
+        Volume(volume, CUBIC_METER),
+        Mass(tissue.wet_density.value * volume, KILOGRAM),
+    )

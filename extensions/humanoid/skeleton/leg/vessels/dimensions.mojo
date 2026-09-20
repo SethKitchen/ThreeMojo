@@ -5,10 +5,9 @@
 
 """Named arteries and veins of one leg, as implicit tubes in the leg frame.
 
-The labeled set follows a standard dissection of the lower-limb vessels.
-Paths are authored from the stature-scaled muscle landmarks. Radii are
-authored ratios of stature. They are template parameters. They are not
-a cited vessel-diameter table.
+The centerlines preserve the femoral-popliteal-tibial arterial tree,
+the fibular branch, both deep veins and both saphenous junctions.
+Radii are diagrammatic so the current isosurface can show each vessel.
 
 The solids live in the leg frame. The origin is the tibiofemoral joint
 line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
@@ -23,7 +22,7 @@ from extensions.humanoid.skeleton.field import (
     DistanceField,
     TubeChain,
     field_gradient,
-    tapered_tube,
+    mix_point,
     tube_chain_bounds,
     tube_chain_distance,
 )
@@ -53,7 +52,9 @@ comptime FEMORAL_ARTERY = VesselPart(0)
 comptime POPLITEAL_ARTERY = VesselPart(1)
 comptime ANTERIOR_TIBIAL_ARTERY = VesselPart(2)
 comptime POSTERIOR_TIBIAL_ARTERY = VesselPart(3)
-comptime PERONEAL_ARTERY = VesselPart(4)
+comptime FIBULAR_ARTERY = VesselPart(4)
+# Compatibility name for the fibular artery.
+comptime PERONEAL_ARTERY = FIBULAR_ARTERY
 comptime FEMORAL_VEIN = VesselPart(5)
 comptime POPLITEAL_VEIN = VesselPart(6)
 comptime GREAT_SAPHENOUS_VEIN = VesselPart(7)
@@ -95,7 +96,7 @@ struct VesselField(DistanceField, ImplicitlyCopyable):
             chain = _anterior_tibial_artery(dimensions, S)
         elif part == POSTERIOR_TIBIAL_ARTERY:
             chain = _posterior_tibial_artery(dimensions, S)
-        elif part == PERONEAL_ARTERY:
+        elif part == FIBULAR_ARTERY:
             chain = _peroneal_artery(dimensions, S)
         elif part == FEMORAL_VEIN:
             chain = _femoral_vein(dimensions, S)
@@ -106,7 +107,7 @@ struct VesselField(DistanceField, ImplicitlyCopyable):
         else:
             chain = _small_saphenous(dimensions, S)
         self.chain = chain
-        self.k = 0.003 * S
+        self.k = 0.0008 * S
         self.epsilon = dimensions.epsilon
         var box = tube_chain_bounds(chain, 0.008 + chain.r2)
         self.low = box.low
@@ -163,8 +164,8 @@ def vessel_part_label(part: VesselPart) -> String:
         return "anterior tibial artery"
     if part == POSTERIOR_TIBIAL_ARTERY:
         return "posterior tibial artery"
-    if part == PERONEAL_ARTERY:
-        return "peroneal artery"
+    if part == FIBULAR_ARTERY:
+        return "fibular artery"
     if part == FEMORAL_VEIN:
         return "femoral vein"
     if part == POPLITEAL_VEIN:
@@ -190,7 +191,7 @@ def is_artery(part: VesselPart) raises -> Bool:
     """
     if not part.is_valid():
         raise Error("A vessel part must be a named artery or vein")
-    return part.value <= PERONEAL_ARTERY.value
+    return part.value <= FIBULAR_ARTERY.value
 
 
 def named_vessel_parts() -> List[VesselPart]:
@@ -204,7 +205,7 @@ def named_vessel_parts() -> List[VesselPart]:
     parts.append(POPLITEAL_ARTERY)
     parts.append(ANTERIOR_TIBIAL_ARTERY)
     parts.append(POSTERIOR_TIBIAL_ARTERY)
-    parts.append(PERONEAL_ARTERY)
+    parts.append(FIBULAR_ARTERY)
     parts.append(FEMORAL_VEIN)
     parts.append(POPLITEAL_VEIN)
     parts.append(GREAT_SAPHENOUS_VEIN)
@@ -221,101 +222,254 @@ def _lat(dimensions: MuscleDimensions) -> Float32:
 
 def _femoral_artery(d: MuscleDimensions, S: Float32) -> TubeChain:
     var lat = _lat(d)
-    var origin = d.hip + Vector3(-lat * 0.018 * S, -0.018 * S, 0.014 * S)
-    var insertion = d.med_condyle + Vector3(
-        -lat * 0.010 * S, 0.040 * S, -0.018 * S
+    var p0 = _groin_artery(d, S)
+    var p1 = mix_point(d.hip, d.femur_mid, 0.28) + Vector3(
+        -lat * 0.020 * S, 0, 0.014 * S
     )
-    return tapered_tube(
-        origin,
-        insertion,
-        Vector3(-lat * 0.020 * S, 0, 0.004 * S),
-        0.0044 * S,
-        0.0068 * S,
+    var p2 = d.femur_mid + Vector3(-lat * 0.022 * S, 0, 0.008 * S)
+    var p3 = mix_point(d.femur_mid, d.med_condyle, 0.64) + Vector3(
+        -lat * 0.018 * S, 0, -0.006 * S
+    )
+    return TubeChain(
+        p0,
+        p1,
+        p2,
+        p3,
+        _adductor_hiatus(d, S),
+        0.0026 * S,
+        0.00255 * S,
+        0.00245 * S,
+        0.00235 * S,
+        0.0022 * S,
     )
 
 
 def _popliteal_artery(d: MuscleDimensions, S: Float32) -> TubeChain:
-    var origin = d.med_condyle + Vector3(0, 0.040 * S, -0.018 * S)
-    var insertion = d.tib_med + Vector3(0, -0.030 * S, -0.022 * S)
-    return tapered_tube(
-        origin, insertion, Vector3(0, 0, -0.024 * S), 0.0038 * S, 0.0060 * S
+    var knee = mix_point(d.med_condyle, d.lat_condyle, 0.50)
+    var tibia = mix_point(d.tib_med, d.tib_lat, 0.50)
+    return TubeChain(
+        _adductor_hiatus(d, S),
+        knee + Vector3(0, 0.026 * S, -0.025 * S),
+        knee + Vector3(0, 0, -0.030 * S),
+        tibia + Vector3(0, -0.024 * S, -0.026 * S),
+        _tibial_branch(d, S),
+        0.0022 * S,
+        0.00215 * S,
+        0.0021 * S,
+        0.00195 * S,
+        0.0018 * S,
     )
 
 
 def _anterior_tibial_artery(d: MuscleDimensions, S: Float32) -> TubeChain:
     var lat = _lat(d)
-    var origin = d.tib_lat + Vector3(0, -0.028 * S, 0.008 * S)
-    var insertion = d.plafond + Vector3(lat * 0.006 * S, 0, 0.016 * S)
-    return tapered_tube(
-        origin, insertion, Vector3(0, 0, 0.014 * S), 0.0028 * S, 0.0042 * S
+    var p0 = _tibial_branch(d, S)
+    var p1 = mix_point(d.tib_lat, d.fib_head, 0.48) + Vector3(
+        -lat * 0.004 * S, -0.038 * S, 0.004 * S
+    )
+    var p2 = mix_point(d.tib_lat, d.plafond, 0.45) + Vector3(
+        lat * 0.003 * S, 0, 0.014 * S
+    )
+    var p3 = mix_point(d.tibia_mid, d.plafond, 0.68) + Vector3(
+        lat * 0.004 * S, 0, 0.015 * S
+    )
+    var p4 = d.plafond + Vector3(lat * 0.005 * S, 0, 0.014 * S)
+    return TubeChain(
+        p0,
+        p1,
+        p2,
+        p3,
+        p4,
+        0.00155 * S,
+        0.00145 * S,
+        0.0013 * S,
+        0.00115 * S,
+        0.0010 * S,
     )
 
 
 def _posterior_tibial_artery(d: MuscleDimensions, S: Float32) -> TubeChain:
-    var origin = d.tib_med + Vector3(0, -0.028 * S, -0.018 * S)
-    var insertion = d.med_mal + Vector3(0, 0.016 * S, -0.006 * S)
-    return tapered_tube(
-        origin, insertion, Vector3(0, 0, -0.016 * S), 0.0028 * S, 0.0044 * S
+    var lat = _lat(d)
+    var p0 = _tibial_branch(d, S)
+    var p1 = _fibular_branch(d, S)
+    var p2 = d.tibia_mid + Vector3(-lat * 0.006 * S, 0, -0.018 * S)
+    var p3 = mix_point(d.tibia_mid, d.med_mal, 0.72) + Vector3(
+        -lat * 0.008 * S, 0, -0.014 * S
+    )
+    var p4 = d.med_mal + Vector3(-lat * 0.004 * S, 0.006 * S, -0.010 * S)
+    return TubeChain(
+        p0,
+        p1,
+        p2,
+        p3,
+        p4,
+        0.00165 * S,
+        0.00155 * S,
+        0.0014 * S,
+        0.0012 * S,
+        0.00105 * S,
     )
 
 
 def _peroneal_artery(d: MuscleDimensions, S: Float32) -> TubeChain:
     var lat = _lat(d)
-    var origin = d.fib_head + Vector3(0, -0.020 * S, -0.006 * S)
-    var insertion = d.lat_mal + Vector3(0, 0.016 * S, -0.004 * S)
-    return tapered_tube(
-        origin,
-        insertion,
-        Vector3(lat * 0.006 * S, 0, -0.004 * S),
-        0.0026 * S,
-        0.0038 * S,
+    var p0 = _fibular_branch(d, S)
+    var p1 = mix_point(d.fib_head, d.fibula_mid, 0.32) + Vector3(
+        -lat * 0.004 * S, 0, -0.014 * S
+    )
+    var p2 = d.fibula_mid + Vector3(-lat * 0.004 * S, 0, -0.012 * S)
+    var p3 = mix_point(d.fibula_mid, d.lat_mal, 0.72) + Vector3(
+        -lat * 0.003 * S, 0, -0.010 * S
+    )
+    var p4 = d.lat_mal + Vector3(-lat * 0.002 * S, 0.012 * S, -0.008 * S)
+    return TubeChain(
+        p0,
+        p1,
+        p2,
+        p3,
+        p4,
+        0.0012 * S,
+        0.00115 * S,
+        0.00105 * S,
+        0.00095 * S,
+        0.00085 * S,
     )
 
 
 def _femoral_vein(d: MuscleDimensions, S: Float32) -> TubeChain:
     var lat = _lat(d)
-    var origin = d.hip + Vector3(-lat * 0.022 * S, -0.018 * S, 0.010 * S)
-    var insertion = d.med_condyle + Vector3(
-        -lat * 0.014 * S, 0.040 * S, -0.016 * S
+    var p0 = _vein_hiatus(d, S)
+    var p1 = mix_point(d.med_condyle, d.femur_mid, 0.58) + Vector3(
+        -lat * 0.023 * S, 0, -0.004 * S
     )
-    return tapered_tube(
-        origin,
-        insertion,
-        Vector3(-lat * 0.024 * S, 0, 0.002 * S),
-        0.0048 * S,
-        0.0074 * S,
+    var p2 = d.femur_mid + Vector3(-lat * 0.027 * S, 0, 0.004 * S)
+    var p3 = mix_point(d.femur_mid, d.hip, 0.70) + Vector3(
+        -lat * 0.027 * S, 0, 0.010 * S
+    )
+    return TubeChain(
+        p0,
+        p1,
+        p2,
+        p3,
+        _groin_vein(d, S),
+        0.0027 * S,
+        0.0028 * S,
+        0.0030 * S,
+        0.0032 * S,
+        0.0034 * S,
     )
 
 
 def _popliteal_vein(d: MuscleDimensions, S: Float32) -> TubeChain:
-    var origin = d.med_condyle + Vector3(0, 0.040 * S, -0.016 * S)
-    var insertion = d.tib_med + Vector3(0, -0.028 * S, -0.020 * S)
-    return tapered_tube(
-        origin, insertion, Vector3(0, 0, -0.022 * S), 0.0044 * S, 0.0066 * S
+    var knee = mix_point(d.med_condyle, d.lat_condyle, 0.50)
+    var tibia = mix_point(d.tib_med, d.tib_lat, 0.50)
+    return TubeChain(
+        _venous_branch(d, S),
+        tibia + Vector3(0, -0.022 * S, -0.032 * S),
+        _popliteal_vein_knee(d, S),
+        knee + Vector3(0, 0.028 * S, -0.032 * S),
+        _vein_hiatus(d, S),
+        0.0023 * S,
+        0.0024 * S,
+        0.0025 * S,
+        0.0026 * S,
+        0.0027 * S,
     )
 
 
 def _great_saphenous(d: MuscleDimensions, S: Float32) -> TubeChain:
     var lat = _lat(d)
-    var origin = d.med_mal + Vector3(-lat * 0.010 * S, 0.008 * S, 0.006 * S)
-    var insertion = d.hip + Vector3(-lat * 0.024 * S, -0.028 * S, 0.012 * S)
-    return tapered_tube(
-        origin,
-        insertion,
-        Vector3(-lat * 0.030 * S, 0, 0.010 * S),
-        0.0034 * S,
-        0.0048 * S,
+    var p0 = d.med_mal + Vector3(-lat * 0.010 * S, 0, 0.008 * S)
+    var p1 = mix_point(d.med_mal, d.tibia_mid, 0.58) + Vector3(
+        -lat * 0.020 * S, 0, 0.004 * S
+    )
+    var p2 = d.med_condyle + Vector3(-lat * 0.026 * S, 0, -0.010 * S)
+    var p3 = mix_point(d.med_condyle, d.hip, 0.62) + Vector3(
+        -lat * 0.034 * S, 0, 0.006 * S
+    )
+    return TubeChain(
+        p0,
+        p1,
+        p2,
+        p3,
+        _groin_vein(d, S),
+        0.0011 * S,
+        0.0012 * S,
+        0.0013 * S,
+        0.0014 * S,
+        0.0015 * S,
     )
 
 
 def _small_saphenous(d: MuscleDimensions, S: Float32) -> TubeChain:
     var lat = _lat(d)
-    var origin = d.lat_mal + Vector3(lat * 0.008 * S, 0.010 * S, -0.006 * S)
-    var insertion = d.lat_condyle + Vector3(0, -0.010 * S, -0.024 * S)
-    return tapered_tube(
-        origin,
-        insertion,
-        Vector3(lat * 0.012 * S, 0, -0.018 * S),
-        0.0028 * S,
-        0.0040 * S,
+    var p0 = d.lat_mal + Vector3(lat * 0.006 * S, 0, -0.010 * S)
+    var p1 = mix_point(d.lat_mal, d.tibia_mid, 0.45) + Vector3(
+        lat * 0.004 * S, 0, -0.026 * S
     )
+    var p2 = d.tibia_mid + Vector3(0, 0, -0.032 * S)
+    var p3 = mix_point(d.tibia_mid, d.lat_condyle, 0.70) + Vector3(
+        0, 0, -0.034 * S
+    )
+    return TubeChain(
+        p0,
+        p1,
+        p2,
+        p3,
+        _popliteal_vein_knee(d, S),
+        0.0009 * S,
+        0.0010 * S,
+        0.0011 * S,
+        0.00115 * S,
+        0.0012 * S,
+    )
+
+
+def _groin_artery(d: MuscleDimensions, S: Float32) -> Vector3:
+    """Return the femoral artery below the inguinal ligament."""
+    var lat = _lat(d)
+    return d.hip + Vector3(-lat * 0.018 * S, -0.024 * S, 0.016 * S)
+
+
+def _groin_vein(d: MuscleDimensions, S: Float32) -> Vector3:
+    """Return the femoral vein medial to the artery in the groin."""
+    var lat = _lat(d)
+    return _groin_artery(d, S) + Vector3(-lat * 0.009 * S, 0, -0.002 * S)
+
+
+def _adductor_hiatus(d: MuscleDimensions, S: Float32) -> Vector3:
+    """Return the artery at the posterior opening of adductor magnus."""
+    var lat = _lat(d)
+    var knee = mix_point(d.med_condyle, d.lat_condyle, 0.50)
+    return knee + Vector3(-lat * 0.008 * S, 0.055 * S, -0.026 * S)
+
+
+def _vein_hiatus(d: MuscleDimensions, S: Float32) -> Vector3:
+    """Return the vein beside the artery at the adductor hiatus."""
+    var lat = _lat(d)
+    return _adductor_hiatus(d, S) + Vector3(-lat * 0.006 * S, 0, -0.004 * S)
+
+
+def _tibial_branch(d: MuscleDimensions, S: Float32) -> Vector3:
+    """Return the popliteal arterial bifurcation below the popliteus."""
+    var tibia = mix_point(d.tib_med, d.tib_lat, 0.50)
+    return tibia + Vector3(0, -0.050 * S, -0.022 * S)
+
+
+def _fibular_branch(d: MuscleDimensions, S: Float32) -> Vector3:
+    """Return the fibular arterial branch from the tibioperoneal path."""
+    var lat = _lat(d)
+    return _tibial_branch(d, S) + Vector3(
+        lat * 0.004 * S, -0.035 * S, -0.004 * S
+    )
+
+
+def _venous_branch(d: MuscleDimensions, S: Float32) -> Vector3:
+    """Return the deep-vein confluence below the popliteal fossa."""
+    return _tibial_branch(d, S) + Vector3(0, 0, -0.006 * S)
+
+
+def _popliteal_vein_knee(d: MuscleDimensions, S: Float32) -> Vector3:
+    """Return the popliteal vein superficial to the popliteal artery."""
+    var knee = mix_point(d.med_condyle, d.lat_condyle, 0.50)
+    return knee + Vector3(0, 0, -0.037 * S)

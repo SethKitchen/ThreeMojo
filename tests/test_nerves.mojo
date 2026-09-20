@@ -20,6 +20,7 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
 )
 from extensions.humanoid.skeleton.leg.nerves.dimensions import (
     COMMON_PERONEAL_NERVE,
+    COMMON_FIBULAR_NERVE,
     FEMORAL_NERVE,
     SAPHENOUS_NERVE,
     SCIATIC_NERVE,
@@ -48,7 +49,6 @@ from extensions.humanoid.skeleton.look import (
     nerve_phong,
     tendon_phong,
 )
-from extensions.humanoid.skeleton.occupancy import MAX_STEP
 from extensions.humanoid.skeleton.soft_tissue import (
     NERVE,
     SOFT_EMPTY,
@@ -90,15 +90,14 @@ def test_nerve_parts_are_named() raises:
     assert_false(NervePart(-1).is_valid())
     assert_false(NervePart(6).is_valid())
     assert_equal(nerve_part_label(NervePart(99)), "nerve")
+    assert_true(COMMON_FIBULAR_NERVE == COMMON_PERONEAL_NERVE)
 
 
 def test_nerve_labels_match_the_diagram() raises:
     assert_equal(nerve_part_label(FEMORAL_NERVE), "femoral nerve")
     assert_equal(nerve_part_label(SCIATIC_NERVE), "sciatic nerve")
     assert_equal(nerve_part_label(TIBIAL_NERVE), "tibial nerve")
-    assert_equal(
-        nerve_part_label(COMMON_PERONEAL_NERVE), "common peroneal nerve"
-    )
+    assert_equal(nerve_part_label(COMMON_FIBULAR_NERVE), "common fibular nerve")
     assert_equal(nerve_part_label(SAPHENOUS_NERVE), "saphenous nerve")
     assert_equal(nerve_part_label(SURAL_NERVE), "sural nerve")
 
@@ -139,15 +138,32 @@ def test_every_named_nerve_has_an_interior() raises:
         index += 1
 
 
+def test_nerve_branch_continuity_and_landmarks() raises:
+    var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT)
+    var femoral = NerveField(dims, FEMORAL_NERVE)
+    var sciatic = NerveField(dims, SCIATIC_NERVE)
+    var tibial = NerveField(dims, TIBIAL_NERVE)
+    var fibular = NerveField(dims, COMMON_FIBULAR_NERVE)
+    var saphenous = NerveField(dims, SAPHENOUS_NERVE)
+    var sural = NerveField(dims, SURAL_NERVE)
+    _assert_same_point(sciatic.chain.p4, tibial.chain.p0)
+    _assert_same_point(sciatic.chain.p4, fibular.chain.p0)
+    _assert_same_point(femoral.chain.p3, saphenous.chain.p0)
+    assert_true(fibular.chain.p4.x > dims.fib_head.x)
+    assert_true(tibial.chain.p4.z < dims.med_mal.z)
+    assert_true(sural.chain.p4.z < dims.lat_mal.z)
+    assert_true(saphenous.chain.p4.x < dims.med_mal.x)
+
+
 def test_nerve_mesh_has_positions_normals_and_uvs() raises:
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     _assert_mesh(nerve_mesh(person, SCIATIC_NERVE, RIGHT, 8))
     _assert_mesh(nerve_mesh(person, FEMORAL_NERVE, LEFT, 8))
-    _assert_mesh(nerve_mesh(person, COMMON_PERONEAL_NERVE, RIGHT, 8))
+    _assert_mesh(nerve_mesh(person, COMMON_FIBULAR_NERVE, RIGHT, 8))
 
 
 def test_nerve_mass_is_positive() raises:
-    var step = MAX_STEP
+    var step = Length(5.0, MILLIMETER)
     var sciatic = nerve_mass(
         HumanoidSpec(Length(6.0, FOOT), MALE), SCIATIC_NERVE, RIGHT, step
     )
@@ -225,6 +241,13 @@ def _assert_mesh(bone: BufferGeometry) raises:
     assert_true(bone.has_attribute(String(NORMAL)))
     assert_true(bone.has_attribute(String(UV)))
     assert_true(bone.triangle_count() > 0)
+
+
+def _assert_same_point(a: Vector3, b: Vector3) raises:
+    """Assert that two topology endpoints are the same point."""
+    assert_almost_equal(a.x, b.x, atol=TOLERANCE)
+    assert_almost_equal(a.y, b.y, atol=TOLERANCE)
+    assert_almost_equal(a.z, b.z, atol=TOLERANCE)
 
 
 def main() raises:

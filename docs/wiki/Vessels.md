@@ -1,6 +1,6 @@
 # Vessels
 
-`vessel_mesh` builds a named artery or vein from stature, sex and athleticism. Tapered circular tubes follow the muscle landmarks.
+`vessel_mesh` builds a named lower-limb artery or vein. Connected centerlines preserve the major arterial branches and venous junctions.
 
 ![A six-foot male right leg turns with bones and named arteries and veins](out/vessels.png)
 
@@ -28,21 +28,26 @@ The solids live in the leg frame. The origin is the tibiofemoral joint line. Plu
 
 ## Named parts
 
-The labeled set follows a standard dissection of the lower-limb vessels.
+The labeled set follows the standard adult lower-limb courses.
 
 | Part | Role |
 |---|---|
-| `FEMORAL_ARTERY` | Inguinal analog to the adductor hiatus analog. |
-| `POPLITEAL_ARTERY` | Popliteal fossa behind the knee. |
-| `ANTERIOR_TIBIAL_ARTERY` | Anterior compartment to the ankle. |
-| `POSTERIOR_TIBIAL_ARTERY` | Deep posterior compartment to the medial malleolus. |
-| `PERONEAL_ARTERY` | Lateral deep calf to the lateral malleolus. |
-| `FEMORAL_VEIN` | Beside the femoral artery. |
-| `POPLITEAL_VEIN` | Beside the popliteal artery. |
-| `GREAT_SAPHENOUS_VEIN` | Medial superficial path from ankle to groin. |
-| `SMALL_SAPHENOUS_VEIN` | Posterior superficial path from ankle to knee. |
+| `FEMORAL_ARTERY` | Femoral triangle through the adductor canal and hiatus. |
+| `POPLITEAL_ARTERY` | Adductor hiatus through the posterior knee to the tibial branch point. |
+| `ANTERIOR_TIBIAL_ARTERY` | Branch point through the proximal interosseous route and anterior leg. |
+| `POSTERIOR_TIBIAL_ARTERY` | Branch point through the deep posterior leg and behind the medial malleolus. |
+| `FIBULAR_ARTERY` | Posterior tibial branch along the deep posterior fibula. |
+| `PERONEAL_ARTERY` | Compatibility name for `FIBULAR_ARTERY`. |
+| `FEMORAL_VEIN` | Popliteal continuation through the adductor hiatus to the groin. |
+| `POPLITEAL_VEIN` | Deep-vein confluence through the posterior knee. |
+| `GREAT_SAPHENOUS_VEIN` | Anterior medial malleolus, medial leg and knee, then femoral vein. |
+| `SMALL_SAPHENOUS_VEIN` | Posterior lateral malleolus and calf, then popliteal vein. |
 
-Paths and radii are authored ratios of stature. They are template parameters. They are not a cited vessel-diameter table.
+The femoral artery ends exactly where the popliteal artery starts. Both tibial arteries start at the popliteal branch point.
+
+The fibular artery branches from the proximal posterior tibial path. The saphenous veins end exactly on their deep-vein junctions.
+
+Radii remain diagrammatic so marching tetrahedra can show each vessel. The centerlines and junctions carry the anatomical meaning.
 
 `is_artery` returns True for the five named arteries.
 
@@ -55,6 +60,13 @@ Arterial circumferential modulus is 0.50 MPa. Venous circumferential modulus is 
 Water fraction is metadata. Mass uses wet density times envelope volume. Do not scale by one minus water fraction again.
 
 These values are named research metadata. This extension does not implement a constitutive model.
+
+## Sources
+
+- [Femoral artery, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK538262/)
+- [Popliteal artery, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK537125/)
+- [Lower-extremity venous drainage, NCBI Bookshelf](https://www.ncbi.nlm.nih.gov/books/NBK27332/)
+- [Saphenous neurovasculature, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK541045/)
 
 ## Mass
 

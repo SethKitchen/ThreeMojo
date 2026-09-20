@@ -47,7 +47,6 @@ from extensions.humanoid.skeleton.look import (
     muscle_phong,
     tendon_phong,
 )
-from extensions.humanoid.skeleton.occupancy import MAX_STEP
 from extensions.humanoid.skeleton.soft_tissue import (
     LYMPH as LYMPH_KIND,
     SOFT_EMPTY,
@@ -148,6 +147,24 @@ def test_every_named_lymph_solid_has_an_interior() raises:
         index += 1
 
 
+def test_lymphatic_routes_connect_the_expected_nodes() raises:
+    var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT)
+    var inguinal = LymphField(dims, INGUINAL_NODES)
+    var popliteal = LymphField(dims, POPLITEAL_NODES)
+    var superficial = LymphField(dims, SUPERFICIAL_LYMPHATICS)
+    var deep = LymphField(dims, DEEP_LYMPHATICS)
+    assert_true(superficial.two_chains)
+    assert_false(deep.two_chains)
+    _assert_same_point(superficial.chain.p4, inguinal.c0)
+    _assert_same_point(superficial.chain2.p4, popliteal.c0)
+    _assert_same_point(deep.chain.p2, popliteal.c4)
+    _assert_same_point(deep.chain.p4, inguinal.c4)
+    assert_true(inguinal.distance(inguinal.c3) < 0)
+    assert_true(inguinal.distance(inguinal.c4) < 0)
+    assert_true(popliteal.distance(popliteal.c3) < 0)
+    assert_true(popliteal.distance(popliteal.c4) < 0)
+
+
 def test_lymph_mesh_has_positions_normals_and_uvs() raises:
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     _assert_mesh(lymph_mesh(person, INGUINAL_NODES, RIGHT, 8))
@@ -157,7 +174,7 @@ def test_lymph_mesh_has_positions_normals_and_uvs() raises:
 
 
 def test_lymph_mass_is_positive() raises:
-    var step = MAX_STEP
+    var step = Length(5.0, MILLIMETER)
     var nodes = lymph_mass(
         HumanoidSpec(Length(6.0, FOOT), MALE), INGUINAL_NODES, RIGHT, step
     )
@@ -235,6 +252,13 @@ def _assert_mesh(bone: BufferGeometry) raises:
     assert_true(bone.has_attribute(String(NORMAL)))
     assert_true(bone.has_attribute(String(UV)))
     assert_true(bone.triangle_count() > 0)
+
+
+def _assert_same_point(a: Vector3, b: Vector3) raises:
+    """Assert that two topology endpoints are the same point."""
+    assert_almost_equal(a.x, b.x, atol=TOLERANCE)
+    assert_almost_equal(a.y, b.y, atol=TOLERANCE)
+    assert_almost_equal(a.z, b.z, atol=TOLERANCE)
 
 
 def main() raises:
