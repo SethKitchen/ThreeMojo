@@ -453,9 +453,9 @@ def muscle_dimensions_from_bones(
     var med_mal = tibia_origin_point + tibia.medial_malleolus
     var fib_head = fibula_origin_point + fibula.head_center
     var lat_mal = fibula_origin_point + fibula.lateral_malleolus
-    var k = 0.016 * S
+    var k = 0.0050 * S
     if athleticism == TONED:
-        k = 0.013 * S
+        k = 0.0042 * S
     return MuscleDimensions(
         femur.stature,
         femur.sex,
@@ -655,10 +655,10 @@ def _fusiform(
 ) -> MuscleChain:
     """Return a tapered elliptical belly from origin to insertion."""
     var belly = _at(origin, insertion, 0.46) + belly_off
-    var r0 = 0.72 * r_end
-    var r1 = 0.90 * r_belly
-    var r3 = 0.82 * r_belly
-    var r4 = 0.42 * r_end
+    var r0 = 0.55 * r_end
+    var r1 = 0.76 * r_belly
+    var r3 = 0.68 * r_belly
+    var r4 = 0.45 * r_end
     return MuscleChain(
         origin,
         _at(origin, belly, 0.50),
@@ -687,10 +687,10 @@ def _strap(
 ) -> MuscleChain:
     """Return a long flat strap with tapered attachment ends."""
     var belly = _at(origin, insertion, 0.48) + belly_off
-    var r0 = 0.65 * width
-    var r1 = 0.94 * width
-    var r3 = 0.88 * width
-    var r4 = 0.55 * width
+    var r0 = 0.58 * width
+    var r1 = 0.88 * width
+    var r3 = 0.84 * width
+    var r4 = 0.50 * width
     return MuscleChain(
         origin,
         _at(origin, belly, 0.52),
@@ -717,11 +717,11 @@ def _glute_max(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     )
     var insertion = _at(d.gt, d.femur_mid, 0.30) + Vector3(0, 0, -0.014 * S)
     var belly = d.hip + Vector3(0, -0.034 * S, -0.030 * S)
-    var r0 = 0.55 * rb
-    var r1 = 0.88 * rb
+    var r0 = 0.48 * rb
+    var r1 = 0.78 * rb
     var r2 = rb
-    var r3 = 0.90 * rb
-    var r4 = 0.48 * rb
+    var r3 = 0.75 * rb
+    var r4 = 0.42 * rb
     return MuscleChain(
         origin,
         _at(origin, belly, 0.50),
@@ -733,11 +733,11 @@ def _glute_max(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
         r2,
         r3,
         r4,
-        0.64 * r0,
-        0.70 * r1,
-        0.72 * r2,
-        0.70 * r3,
-        0.62 * r4,
+        0.62 * r0,
+        0.68 * r1,
+        0.70 * r2,
+        0.68 * r3,
+        0.60 * r4,
     )
 
 
@@ -786,8 +786,9 @@ def _sartorius(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 def _rectus(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var rb = _r(S, scale, 0.021)
+    var insertion = d.patella + Vector3(0, 0.012 * S, 0.002 * S)
     return _fusiform(
-        d.aiis, d.patella, Vector3(0, 0, 0.026 * S), 0.55 * rb, rb, 0.78
+        d.aiis, insertion, Vector3(0, 0, 0.026 * S), 0.55 * rb, rb, 0.78
     )
 
 
@@ -797,7 +798,7 @@ def _vastus_lat(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
-    var insertion = d.patella + Vector3(lat * 0.006 * S, 0.004 * S, 0)
+    var insertion = d.patella + Vector3(lat * 0.008 * S, 0.012 * S, 0.002 * S)
     return _fusiform(
         origin,
         insertion,
@@ -814,7 +815,7 @@ def _vastus_med(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var lat = Float32(1)
     if d.side == LEFT:
         lat = Float32(-1)
-    var insertion = d.patella + Vector3(-lat * 0.005 * S, 0.002 * S, 0)
+    var insertion = d.patella + Vector3(-lat * 0.007 * S, 0.010 * S, 0.002 * S)
     return _fusiform(
         origin,
         insertion,
@@ -831,9 +832,10 @@ def _vastus_intermedius(
     """Return the deep quadriceps belly that packs around the femur."""
     var rb = _r(S, scale, 0.027)
     var origin = _at(d.aiis, d.femur_mid, 0.30)
+    var insertion = d.patella + Vector3(0, 0.012 * S, 0.001 * S)
     return _fusiform(
         origin,
-        d.patella,
+        insertion,
         Vector3(0, 0, 0.008 * S),
         0.58 * rb,
         rb,
@@ -948,12 +950,12 @@ def _gastroc(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var rb = _r(S, scale, 0.021)
     var med = d.med_condyle + Vector3(0, -0.008 * S, -0.016 * S)
     var latc = d.lat_condyle + Vector3(0, -0.008 * S, -0.016 * S)
-    var merge = _at(d.med_condyle, d.heel, 0.50) + Vector3(0, 0, -0.026 * S)
-    var r0 = 0.36 * rb
-    var r1 = rb
-    var r2 = 0.42 * rb
-    var r3 = 0.94 * rb
-    var r4 = 0.34 * rb
+    var merge = _at(d.med_condyle, d.heel, 0.52) + Vector3(0, 0, -0.026 * S)
+    var r0 = 0.30 * rb
+    var r1 = 0.95 * rb
+    var r2 = 0.38 * rb
+    var r3 = 0.88 * rb
+    var r4 = 0.28 * rb
     return MuscleChain(
         med,
         _at(med, merge, 0.44),
@@ -1056,13 +1058,13 @@ def _per_brev(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
 
 def _achilles(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     var rb = _r(S, Float32(1), 0.007)
-    var origin = _at(d.med_condyle, d.heel, 0.56) + Vector3(0, 0, -0.028 * S)
+    var origin = _at(d.med_condyle, d.heel, 0.52) + Vector3(0, 0, -0.026 * S)
     return _strap(origin, d.heel, Vector3(0, 0, -0.006 * S), rb, 0.48)
 
 
 def _patellar(d: MuscleDimensions, S: Float32, scale: Float32) -> MuscleChain:
     """Return the flat tendon from the patella to the tibial tuberosity."""
-    var width = _r(S, Float32(1), 0.0065)
-    var origin = d.patella + Vector3(0, -0.006 * S, 0)
-    var insertion = d.tuberosity + Vector3(0, 0.003 * S, 0.004 * S)
-    return _strap(origin, insertion, Vector3(0, 0, 0.002 * S), width, 0.38)
+    var width = _r(S, Float32(1), 0.0075)
+    var origin = d.patella + Vector3(0, -0.012 * S, 0.002 * S)
+    var insertion = d.tuberosity + Vector3(0, 0.002 * S, 0.003 * S)
+    return _strap(origin, insertion, Vector3(0, 0, 0.002 * S), width, 0.45)
