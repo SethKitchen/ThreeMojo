@@ -148,7 +148,7 @@ struct PatellaField(DistanceField, ImplicitlyCopyable):
         box.include_ellipsoid(self.base, self.base_r)
         box.include_ellipsoid(self.medial, self.medial_r)
         box.include_ellipsoid(self.lateral, self.lateral_r)
-        var padded = box.padded(0.12 * T + Float32(0.002))
+        var padded = box.padded(0.25 * T + Float32(0.004))
         self.low = padded.low
         self.high = padded.high
 
