@@ -184,34 +184,6 @@ struct HairField(DistanceField, ImplicitlyCopyable):
         return field_gradient(self, point, self.epsilon)
 
 
-def _display_hair_field(
-    dimensions: MuscleDimensions, part: HairPart
-) raises -> HairField:
-    """Return the same shafts with a diagrammatic mesh radius."""
-    var field = HairField(dimensions, part)
-    var S = dimensions.stature.value
-    field.radius = 0.0015 * S
-    field.k = 0.00020 * S
-    field.epsilon = Float32(0.25) * field.radius
-    var box = empty_bounds()
-    box.include_sphere(field.a0, field.radius)
-    box.include_sphere(field.a1, field.radius)
-    box.include_sphere(field.a2, field.radius)
-    box.include_sphere(field.a3, field.radius)
-    box.include_sphere(field.a4, field.radius)
-    box.include_sphere(field.a5, field.radius)
-    box.include_sphere(field.b0, field.radius)
-    box.include_sphere(field.b1, field.radius)
-    box.include_sphere(field.b2, field.radius)
-    box.include_sphere(field.b3, field.radius)
-    box.include_sphere(field.b4, field.radius)
-    box.include_sphere(field.b5, field.radius)
-    var padded = box.padded(0.006 + field.radius)
-    field.low = padded.low
-    field.high = padded.high
-    return field
-
-
 def hair_distance(
     dimensions: MuscleDimensions, part: HairPart, point: Vector3
 ) raises -> Float32:
