@@ -577,7 +577,9 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/femur.png $(OUT_DIR)/tibia.png \
            $(OUT_DIR)/fibula.png $(OUT_DIR)/patella.png \
            $(OUT_DIR)/knee.png $(OUT_DIR)/muscles.png \
-           $(OUT_DIR)/leg.png $(OUT_DIR)/legs.png
+           $(OUT_DIR)/leg.png $(OUT_DIR)/legs.png \
+           $(OUT_DIR)/vessels.png $(OUT_DIR)/lymph.png \
+           $(OUT_DIR)/nerves.png $(OUT_DIR)/integument.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
 $(OUT_DIR)/mirror.png: $(LIB_SOURCES) examples/mirror.mojo
@@ -952,6 +954,26 @@ $(OUT_DIR)/leg.png: $(LIB_SOURCES) examples/leg.mojo
 $(OUT_DIR)/legs.png: $(LIB_SOURCES) examples/legs.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/legs.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/vessels.png: $(LIB_SOURCES) examples/vessels.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/vessels.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/lymph.png: $(LIB_SOURCES) examples/lymph.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/lymph.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/nerves.png: $(LIB_SOURCES) examples/nerves.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/nerves.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/integument.png: $(LIB_SOURCES) examples/integument.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/integument.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be

@@ -59,6 +59,10 @@
 - [Patella](Patella)
 - [Knee](Knee)
 - [Muscles](Muscles)
+- [Vessels](Vessels)
+- [Lymph](Lymph)
+- [Nerves](Nerves)
+- [Integument](Integument)
 - [Leg](Leg)
 
 **Explanation**

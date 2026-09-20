@@ -14,9 +14,16 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.bone import bone_phong
 from extensions.humanoid.skeleton.leg.assembly import add_leg, assemble_leg
 from extensions.humanoid.skeleton.leg.contents import (
+    ALL,
     BONES,
     BOTH,
+    HAIR,
+    INTEGUMENT,
+    LYMPH,
     MUSCLES,
+    NERVES,
+    SKIN,
+    VESSELS,
     LegContents,
 )
 from extensions.humanoid.skeleton.look import (
@@ -129,23 +136,69 @@ def test_add_leg_places_nine_meshes() raises:
     assert_almost_equal(origin.y, Float32(0), atol=TOLERANCE)
 
 
-def test_leg_contents_toggles_bones_and_muscles() raises:
+def test_leg_contents_toggles_named_layers() raises:
     assert_true(BONES.is_valid())
     assert_true(MUSCLES.is_valid())
+    assert_true(VESSELS.is_valid())
+    assert_true(LYMPH.is_valid())
+    assert_true(NERVES.is_valid())
+    assert_true(SKIN.is_valid())
+    assert_true(HAIR.is_valid())
     assert_true(BOTH.is_valid())
-    assert_false(LegContents(3).is_valid())
+    assert_true(INTEGUMENT.is_valid())
+    assert_true(ALL.is_valid())
+    assert_false(LegContents(0).is_valid())
     assert_false(LegContents(-1).is_valid())
+    assert_false(LegContents(128).is_valid())
     assert_true(BONES.includes_bones())
     assert_false(BONES.includes_muscles())
+    assert_false(BONES.includes_vessels())
+    assert_false(BONES.includes_lymph())
+    assert_false(BONES.includes_nerves())
+    assert_false(BONES.includes_skin())
+    assert_false(BONES.includes_hair())
     assert_false(MUSCLES.includes_bones())
     assert_true(MUSCLES.includes_muscles())
     assert_true(BOTH.includes_bones())
     assert_true(BOTH.includes_muscles())
-    var bad = LegContents(9)
+    assert_true(VESSELS.includes_vessels())
+    assert_true(LYMPH.includes_lymph())
+    assert_true(NERVES.includes_nerves())
+    assert_true(SKIN.includes_skin())
+    assert_true(HAIR.includes_hair())
+    assert_true(INTEGUMENT.includes_skin())
+    assert_true(INTEGUMENT.includes_hair())
+    assert_false(INTEGUMENT.includes_bones())
+    assert_true(ALL.includes_bones())
+    assert_true(ALL.includes_hair())
+    var combined = BONES.plus(VESSELS)
+    assert_true(combined.includes_bones())
+    assert_true(combined.includes_vessels())
+    assert_false(combined.includes_muscles())
+    var layers = VESSELS.plus(LYMPH)
+    layers = layers.plus(NERVES)
+    layers = layers.plus(INTEGUMENT)
+    assert_true(layers.includes_vessels())
+    assert_true(layers.includes_skin())
+    var bad = LegContents(0)
     with assert_raises():
         _ = bad.includes_bones()
     with assert_raises():
         _ = bad.includes_muscles()
+    with assert_raises():
+        _ = bad.includes_vessels()
+    with assert_raises():
+        _ = bad.includes_lymph()
+    with assert_raises():
+        _ = bad.includes_nerves()
+    with assert_raises():
+        _ = bad.includes_skin()
+    with assert_raises():
+        _ = bad.includes_hair()
+    with assert_raises():
+        _ = bad.plus(BONES)
+    with assert_raises():
+        _ = BONES.plus(LegContents(128))
 
 
 def test_add_leg_refuses_invalid_contents() raises:
@@ -166,7 +219,7 @@ def test_add_leg_refuses_invalid_contents() raises:
             assets.materials.add(muscle_phong()),
             assets.materials.add(tendon_phong()),
             RIGHT,
-            LegContents(9),
+            LegContents(0),
             8,
         )
 
@@ -175,6 +228,31 @@ def test_assemble_leg_carries_muscle_landmarks() raises:
     var pose = assemble_leg(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT)
     assert_true(pose.muscles.hip.y > 0)
     assert_true(pose.muscles.heel.y < 0)
+
+
+def test_add_leg_creates_default_paints_for_new_layers() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var person = HumanoidSpec(Length(6.0, FOOT), MALE)
+    var layers = VESSELS.plus(LYMPH)
+    layers = layers.plus(NERVES)
+    _ = add_leg(
+        scene,
+        assets,
+        root,
+        person,
+        assets.materials.add(bone_phong()),
+        assets.materials.add(cartilage_phong()),
+        assets.materials.add(meniscus_phong()),
+        assets.materials.add(ligament_phong()),
+        assets.materials.add(muscle_phong()),
+        assets.materials.add(tendon_phong()),
+        RIGHT,
+        layers,
+        8,
+    )
+    assert_equal(len(scene.meshes), 19)
 
 
 def main() raises:

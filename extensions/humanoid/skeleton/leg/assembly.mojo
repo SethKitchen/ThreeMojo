@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Place the leg bones, knee tissues and muscles in one connected frame.
+"""Place the leg bones, tissues and remaining layers in one connected frame.
 
 The origin is the tibiofemoral joint line. Plus y is proximal. Plus x is
 body-right. Plus z is anterior. Each bone keeps its own osteological
@@ -13,6 +13,7 @@ frame. This module stores the origin of that frame in the leg frame.
     var pose = assemble_leg(person)
     var hip = pose.hip_center()
     _ = add_leg(..., contents=MUSCLES)
+    _ = add_leg(..., contents=BONES.plus(VESSELS))
 """
 
 from core.assets import Assets
@@ -36,6 +37,8 @@ from extensions.humanoid.skeleton.leg.fibula.dimensions import (
 from extensions.humanoid.skeleton.leg.fibula.geometry import (
     fibula_from_dimensions,
 )
+from extensions.humanoid.skeleton.leg.hair.dimensions import named_hair_parts
+from extensions.humanoid.skeleton.leg.hair.geometry import hair_from_dimensions
 from extensions.humanoid.skeleton.leg.knee.dimensions import (
     KneeDimensions,
     femur_origin,
@@ -51,6 +54,10 @@ from extensions.humanoid.skeleton.leg.knee.geometry import (
     medial_collateral,
     medial_meniscus,
 )
+from extensions.humanoid.skeleton.leg.lymph.dimensions import named_lymph_parts
+from extensions.humanoid.skeleton.leg.lymph.geometry import (
+    lymph_from_dimensions,
+)
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     MuscleDimensions,
     is_tendon,
@@ -60,6 +67,10 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
 from extensions.humanoid.skeleton.leg.muscles.geometry import (
     muscle_from_dimensions,
 )
+from extensions.humanoid.skeleton.leg.nerves.dimensions import named_nerve_parts
+from extensions.humanoid.skeleton.leg.nerves.geometry import (
+    nerve_from_dimensions,
+)
 from extensions.humanoid.skeleton.leg.patella.dimensions import (
     PatellaDimensions,
     patella_dimensions,
@@ -67,6 +78,7 @@ from extensions.humanoid.skeleton.leg.patella.dimensions import (
 from extensions.humanoid.skeleton.leg.patella.geometry import (
     patella_from_dimensions,
 )
+from extensions.humanoid.skeleton.leg.skin.geometry import skin_from_dimensions
 from extensions.humanoid.skeleton.leg.tibia.dimensions import (
     TibiaDimensions,
     tibia_dimensions,
@@ -74,14 +86,33 @@ from extensions.humanoid.skeleton.leg.tibia.dimensions import (
 from extensions.humanoid.skeleton.leg.tibia.geometry import (
     tibia_from_dimensions,
 )
-from materials.material import MaterialId
+from extensions.humanoid.skeleton.leg.vessels.dimensions import (
+    is_artery,
+    named_vessel_parts,
+)
+from extensions.humanoid.skeleton.leg.vessels.geometry import (
+    vessel_from_dimensions,
+)
+from extensions.humanoid.skeleton.look import (
+    artery_phong,
+    hair_phong,
+    lymph_phong,
+    nerve_phong,
+    skin_phong,
+    vein_phong,
+)
+from materials.material import Material, MaterialId
 from math.vector3 import Vector3
 from objects.mesh import Mesh
+
+# Optional `add_leg` paint. A negative id asks the assembler to create
+# the default look for that layer.
+comptime UNSET_PAINT = MaterialId(-1)
 
 
 @fieldwise_init
 struct LegAssembly(ImplicitlyCopyable):
-    """Bones, knee tissues, muscles and their origins in one leg frame."""
+    """Bones, knee tissues, muscles and origins in one leg frame."""
 
     var spec: HumanoidSpec
     var side: BodySide
@@ -173,6 +204,12 @@ def add_leg(
     side: BodySide = RIGHT,
     contents: LegContents = BOTH,
     detail: Int = 16,
+    artery_paint: MaterialId = UNSET_PAINT,
+    vein_paint: MaterialId = UNSET_PAINT,
+    lymph_paint: MaterialId = UNSET_PAINT,
+    nerve_paint: MaterialId = UNSET_PAINT,
+    skin_paint: MaterialId = UNSET_PAINT,
+    hair_paint: MaterialId = UNSET_PAINT,
 ) raises -> NodeId:
     """Attach one connected leg under `parent` and return the root node.
 
@@ -188,8 +225,14 @@ def add_leg(
         muscle_paint: Material id of the muscle look.
         tendon_paint: Material id of the tendon and fascia look.
         side: `RIGHT` or `LEFT`. A right leg is the default.
-        contents: `BONES`, `MUSCLES` or `BOTH`. Both is the default.
+        contents: Named layer bits. Bones and muscles are the default.
         detail: Cells along each solid.
+        artery_paint: Arterial look, or the default artery Phong.
+        vein_paint: Venous look, or the default vein Phong.
+        lymph_paint: Lymph look, or the default lymph Phong.
+        nerve_paint: Nerve look, or the default nerve Phong.
+        skin_paint: Skin look, or the default skin Phong.
+        hair_paint: Hair look, or the default hair Phong.
 
     Returns:
         The knee-origin node.
@@ -198,7 +241,7 @@ def add_leg(
         Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
     if not contents.is_valid():
-        raise Error("Leg contents must be bones, muscles or both")
+        raise Error("Leg contents must be a named layer set")
     var pose = assemble_leg(spec, side)
     var root = Object3D()
     var root_id = scene.attach(root^, parent)
@@ -292,7 +335,99 @@ def add_leg(
                 paint,
             )
             index += 1
+    if contents.includes_vessels():
+        var artery = _resolved_paint(assets, artery_paint, artery_phong())
+        var vein = _resolved_paint(assets, vein_paint, vein_phong())
+        var vessels = named_vessel_parts()
+        var v_index = 0
+        while v_index < len(vessels):
+            var vessel = vessels[v_index]
+            var paint = vein
+            if is_artery(vessel):
+                paint = artery
+            _place(
+                scene,
+                assets,
+                root_id,
+                vessel_from_dimensions(pose.muscles, vessel, detail),
+                Vector3(0, 0, 0),
+                paint,
+            )
+            v_index += 1
+    if contents.includes_lymph():
+        var lymph = _resolved_paint(assets, lymph_paint, lymph_phong())
+        var nodes = named_lymph_parts()
+        var l_index = 0
+        while l_index < len(nodes):
+            _place(
+                scene,
+                assets,
+                root_id,
+                lymph_from_dimensions(pose.muscles, nodes[l_index], detail),
+                Vector3(0, 0, 0),
+                lymph,
+            )
+            l_index += 1
+    if contents.includes_nerves():
+        var nerve = _resolved_paint(assets, nerve_paint, nerve_phong())
+        var trunks = named_nerve_parts()
+        var n_index = 0
+        while n_index < len(trunks):
+            _place(
+                scene,
+                assets,
+                root_id,
+                nerve_from_dimensions(pose.muscles, trunks[n_index], detail),
+                Vector3(0, 0, 0),
+                nerve,
+            )
+            n_index += 1
+    if contents.includes_skin():
+        var skin = _resolved_paint(assets, skin_paint, skin_phong())
+        _place(
+            scene,
+            assets,
+            root_id,
+            skin_from_dimensions(pose.muscles, detail),
+            Vector3(0, 0, 0),
+            skin,
+        )
+    if contents.includes_hair():
+        var keratin = _resolved_paint(assets, hair_paint, hair_phong())
+        var groups = named_hair_parts()
+        var h_index = 0
+        while h_index < len(groups):
+            _place(
+                scene,
+                assets,
+                root_id,
+                hair_from_dimensions(pose.muscles, groups[h_index], detail),
+                Vector3(0, 0, 0),
+                keratin,
+            )
+            h_index += 1
     return root_id
+
+
+def _resolved_paint(
+    mut assets: Assets, paint: MaterialId, var material: Material
+) raises -> MaterialId:
+    """Return `paint`, or store `material` when `paint` is unset.
+
+    Args:
+        assets: Material store for a new default look.
+        paint: Caller paint, or `UNSET_PAINT`.
+        material: Default Phong for this layer.
+
+    Returns:
+        A stored material id.
+
+    Raises:
+        Error: If the store refuses the material.
+    """
+    if paint.value >= 0:
+        return paint
+    return assets.materials.add(material^)
 
 
 def _place(
