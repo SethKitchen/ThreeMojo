@@ -476,3 +476,40 @@ def tube_chain_bounds(chain: TubeChain, pad: Float32) -> Bounds:
     box.include_sphere(chain.p3, chain.r3)
     box.include_sphere(chain.p4, chain.r4)
     return box.padded(pad)
+
+
+def tube_chain_volume(chain: TubeChain) -> Float32:
+    """Return the analytic volume of a tapered tube chain.
+
+    The four segments are conical frusta. Two hemispheres cap the
+    exposed ends. Internal station caps are not counted.
+
+    Args:
+        chain: Five centerline stations and radii.
+
+    Returns:
+        Approximate envelope volume, in cubic meters.
+    """
+    var volume = _frustum_volume(chain.p0, chain.p1, chain.r0, chain.r1)
+    volume += _frustum_volume(chain.p1, chain.p2, chain.r1, chain.r2)
+    volume += _frustum_volume(chain.p2, chain.p3, chain.r2, chain.r3)
+    volume += _frustum_volume(chain.p3, chain.p4, chain.r3, chain.r4)
+    volume += (
+        Float32(2.0 / 3.0)
+        * pi
+        * (chain.r0 * chain.r0 * chain.r0 + chain.r4 * chain.r4 * chain.r4)
+    )
+    return volume
+
+
+def _frustum_volume(
+    a: Vector3, b: Vector3, radius_a: Float32, radius_b: Float32
+) -> Float32:
+    """Return the volume of one circular conical frustum."""
+    var length = (b - a).length()
+    return (
+        pi
+        * length
+        * (radius_a * radius_a + radius_a * radius_b + radius_b * radius_b)
+        / Float32(3)
+    )

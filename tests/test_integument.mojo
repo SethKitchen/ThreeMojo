@@ -150,6 +150,9 @@ def test_skin_envelope_has_an_interior() raises:
         field, field.anterior_tibial_artery.chain, "anterior tibial artery"
     )
     _assert_chain_inside(
+        field, field.tibioperoneal_trunk.chain, "tibioperoneal trunk"
+    )
+    _assert_chain_inside(
         field, field.posterior_tibial_artery.chain, "posterior tibial artery"
     )
     _assert_chain_inside(field, field.fibular_artery.chain, "fibular artery")

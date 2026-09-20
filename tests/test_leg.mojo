@@ -252,7 +252,7 @@ def test_add_leg_creates_default_paints_for_new_layers() raises:
         layers,
         8,
     )
-    assert_equal(len(scene.meshes), 19)
+    assert_equal(len(scene.meshes), 20)
 
 
 def main() raises:

@@ -17,8 +17,8 @@ from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
 from extensions.humanoid.skeleton.leg.lymph.dimensions import (
-    LymphField,
     LymphPart,
+    _display_lymph_field,
     lymph_part_label,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
@@ -75,5 +75,5 @@ def lymph_from_dimensions(
         raise Error("A lymph part must be a named node group or trunk")
     var label = lymph_part_label(part)
     check_detail(detail, label)
-    var field = LymphField(dimensions, part)
+    var field = _display_lymph_field(dimensions, part)
     return mesh_field(field, field.low, field.high, detail, label)

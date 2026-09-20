@@ -44,7 +44,9 @@ Tests require every vessel, lymphatic route and nerve station to lie below the f
 
 ## Hair
 
-`THIGH_HAIR` places representative shafts on the anterior-lateral thigh. `CALF_HAIR` places them on the posterior-lateral calf.
+`THIGH_HAIR` spans the hip-to-knee axis. `CALF_HAIR` spans the knee-to-ankle axis.
+
+Each group samples six circumferential directions. This avoids treating one strip of skin as the normal distribution.
 
 The physical field uses a 29 μm thigh diameter and a 42 μm calf diameter. Hair mass uses analytic capsule volume at these dimensions.
 

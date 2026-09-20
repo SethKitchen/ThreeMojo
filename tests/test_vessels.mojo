@@ -13,6 +13,7 @@ from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.side import LEFT, RIGHT
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.bone import bone_phong
+from extensions.humanoid.skeleton.field import tube_chain_volume
 from extensions.humanoid.skeleton.leg.assembly import add_leg
 from extensions.humanoid.skeleton.leg.contents import VESSELS
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
@@ -29,6 +30,7 @@ from extensions.humanoid.skeleton.leg.vessels.dimensions import (
     POPLITEAL_VEIN,
     POSTERIOR_TIBIAL_ARTERY,
     SMALL_SAPHENOUS_VEIN,
+    TIBIOPERONEAL_TRUNK,
     VesselField,
     VesselPart,
     is_artery,
@@ -79,7 +81,6 @@ from units.si import (
     GRAM_PER_CUBIC_CENTIMETER,
     Length,
     MEGAPASCAL,
-    MILLIMETER,
 )
 
 comptime TOLERANCE = Float64(1e-4)
@@ -87,7 +88,7 @@ comptime TOLERANCE = Float64(1e-4)
 
 def test_vessel_parts_are_named() raises:
     var parts = named_vessel_parts()
-    assert_equal(len(parts), 9)
+    assert_equal(len(parts), 10)
     var index = 0
     while index < len(parts):
         assert_true(parts[index].is_valid())
@@ -95,7 +96,7 @@ def test_vessel_parts_are_named() raises:
         assert_true(label.byte_length() > 0)
         index += 1
     assert_false(VesselPart(-1).is_valid())
-    assert_false(VesselPart(9).is_valid())
+    assert_false(VesselPart(10).is_valid())
     assert_equal(vessel_part_label(VesselPart(99)), "vessel")
     assert_true(is_artery(FEMORAL_ARTERY))
     assert_true(FIBULAR_ARTERY == PERONEAL_ARTERY)
@@ -103,7 +104,7 @@ def test_vessel_parts_are_named() raises:
     assert_false(is_artery(FEMORAL_VEIN))
     assert_false(is_artery(SMALL_SAPHENOUS_VEIN))
     with assert_raises():
-        _ = is_artery(VesselPart(9))
+        _ = is_artery(VesselPart(10))
 
 
 def test_vessel_labels_match_the_diagram() raises:
@@ -112,6 +113,7 @@ def test_vessel_labels_match_the_diagram() raises:
     assert_equal(
         vessel_part_label(ANTERIOR_TIBIAL_ARTERY), "anterior tibial artery"
     )
+    assert_equal(vessel_part_label(TIBIOPERONEAL_TRUNK), "tibioperoneal trunk")
     assert_equal(
         vessel_part_label(POSTERIOR_TIBIAL_ARTERY), "posterior tibial artery"
     )
@@ -174,19 +176,28 @@ def test_vessel_continuity_and_surface_relations() raises:
     var femoral = VesselField(dims, FEMORAL_ARTERY)
     var popliteal = VesselField(dims, POPLITEAL_ARTERY)
     var anterior = VesselField(dims, ANTERIOR_TIBIAL_ARTERY)
+    var trunk = VesselField(dims, TIBIOPERONEAL_TRUNK)
     var posterior = VesselField(dims, POSTERIOR_TIBIAL_ARTERY)
     var fibular = VesselField(dims, FIBULAR_ARTERY)
     _assert_same_point(femoral.chain.p4, popliteal.chain.p0)
     _assert_same_point(popliteal.chain.p4, anterior.chain.p0)
-    _assert_same_point(popliteal.chain.p4, posterior.chain.p0)
-    _assert_same_point(posterior.chain.p1, fibular.chain.p0)
+    _assert_same_point(popliteal.chain.p4, trunk.chain.p0)
+    _assert_same_point(trunk.chain.p4, posterior.chain.p0)
+    _assert_same_point(trunk.chain.p4, fibular.chain.p0)
+    assert_almost_equal(
+        trunk.chain.p4.y - trunk.chain.p0.y,
+        Float32(-0.0175) * dims.stature.value,
+        atol=TOLERANCE,
+    )
+    assert_almost_equal(posterior.chain.r2, Float32(0.00105), atol=TOLERANCE)
     var femoral_vein = VesselField(dims, FEMORAL_VEIN)
     var popliteal_vein = VesselField(dims, POPLITEAL_VEIN)
     var great = VesselField(dims, GREAT_SAPHENOUS_VEIN)
     var small = VesselField(dims, SMALL_SAPHENOUS_VEIN)
     _assert_same_point(popliteal_vein.chain.p4, femoral_vein.chain.p0)
     _assert_same_point(great.chain.p4, femoral_vein.chain.p4)
-    _assert_same_point(small.chain.p4, popliteal_vein.chain.p2)
+    _assert_same_point(small.chain.p4, popliteal_vein.chain.p3)
+    assert_true(small.chain.p4.y > Float32(0))
     assert_true(popliteal_vein.chain.p2.z < popliteal.chain.p2.z)
     assert_true(great.chain.p0.z > dims.med_mal.z)
     assert_true(small.chain.p0.z < dims.lat_mal.z)
@@ -199,13 +210,17 @@ def test_vessel_mesh_has_positions_normals_and_uvs() raises:
 
 
 def test_vessel_mass_is_positive() raises:
-    var step = Length(5.0, MILLIMETER)
-    var artery = vessel_mass(
-        HumanoidSpec(Length(6.0, FOOT), MALE), FEMORAL_ARTERY, RIGHT, step
-    )
+    var person = HumanoidSpec(Length(6.0, FOOT), MALE)
+    var artery = vessel_mass(person, FEMORAL_ARTERY, RIGHT)
     assert_true(artery.mass.to(GRAM) > Float32(0))
+    var physical = VesselField(muscle_dimensions(person, RIGHT), FEMORAL_ARTERY)
+    assert_almost_equal(
+        artery.envelope.value,
+        tube_chain_volume(physical.chain),
+        atol=Float64(1e-8),
+    )
     var vein = vessel_mass(
-        HumanoidSpec(Length(5.5, FOOT), FEMALE), FEMORAL_VEIN, LEFT, step
+        HumanoidSpec(Length(5.5, FOOT), FEMALE), FEMORAL_VEIN, LEFT
     )
     assert_true(vein.mass.to(GRAM) > Float32(0))
 
@@ -213,11 +228,11 @@ def test_vessel_mass_is_positive() raises:
 def test_vessel_field_refuses_a_bad_part() raises:
     var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE))
     with assert_raises():
-        _ = VesselField(dims, VesselPart(9))
+        _ = VesselField(dims, VesselPart(10))
     with assert_raises():
-        _ = vessel_from_dimensions(dims, VesselPart(9), 8)
+        _ = vessel_from_dimensions(dims, VesselPart(10), 8)
     with assert_raises():
-        _ = vessel_mesh(HumanoidSpec(Length(6.0, FOOT), MALE), VesselPart(9))
+        _ = vessel_mesh(HumanoidSpec(Length(6.0, FOOT), MALE), VesselPart(10))
     with assert_raises():
         _ = vessel_from_dimensions(dims, FEMORAL_ARTERY, 7)
     with assert_raises():
@@ -228,18 +243,14 @@ def test_vessel_mass_refuses_a_bad_part_or_tissue() raises:
     var dims = muscle_dimensions(HumanoidSpec(Length(6.0, FOOT), MALE))
     with assert_raises():
         _ = vessel_mass(
-            HumanoidSpec(Length(6.0, FOOT), MALE), VesselPart(9), RIGHT
+            HumanoidSpec(Length(6.0, FOOT), MALE), VesselPart(10), RIGHT
         )
     with assert_raises():
-        _ = vessel_mass_from_dimensions(
-            dims, VesselPart(9), arterial_tissue(), Length(20.0, MILLIMETER)
-        )
+        _ = vessel_mass_from_dimensions(dims, VesselPart(10), arterial_tissue())
     var bad = arterial_tissue()
     bad.kind = SoftTissueKind(11)
     with assert_raises():
-        _ = vessel_mass_from_dimensions(
-            dims, FEMORAL_ARTERY, bad, Length(20.0, MILLIMETER)
-        )
+        _ = vessel_mass_from_dimensions(dims, FEMORAL_ARTERY, bad)
 
 
 def test_add_leg_can_draw_only_vessels() raises:
@@ -264,7 +275,7 @@ def test_add_leg_can_draw_only_vessels() raises:
         assets.materials.add(artery_phong()),
         assets.materials.add(vein_phong()),
     )
-    assert_equal(len(scene.meshes), 9)
+    assert_equal(len(scene.meshes), 10)
 
 
 def test_vessel_look_materials() raises:

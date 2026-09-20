@@ -39,6 +39,11 @@ from extensions.humanoid.skeleton.leg.lymph.mass import (
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     muscle_dimensions,
 )
+from extensions.humanoid.skeleton.leg.vessels.dimensions import (
+    GREAT_SAPHENOUS_VEIN,
+    SMALL_SAPHENOUS_VEIN,
+    VesselField,
+)
 from extensions.humanoid.skeleton.look import (
     cartilage_phong,
     ligament_phong,
@@ -70,7 +75,6 @@ from units.si import (
     GRAM_PER_CUBIC_CENTIMETER,
     Length,
     MEGAPASCAL,
-    MILLIMETER,
 )
 
 comptime TOLERANCE = Float64(1e-4)
@@ -154,11 +158,25 @@ def test_lymphatic_routes_connect_the_expected_nodes() raises:
     var superficial = LymphField(dims, SUPERFICIAL_LYMPHATICS)
     var deep = LymphField(dims, DEEP_LYMPHATICS)
     assert_true(superficial.two_chains)
-    assert_false(deep.two_chains)
+    assert_true(deep.two_chains)
+    assert_equal(superficial.chain_count, 2)
+    assert_equal(deep.chain_count, 4)
     _assert_same_point(superficial.chain.p4, inguinal.c0)
     _assert_same_point(superficial.chain2.p4, popliteal.c0)
-    _assert_same_point(deep.chain.p2, popliteal.c4)
-    _assert_same_point(deep.chain.p4, inguinal.c4)
+    _assert_same_point(deep.chain.p4, popliteal.c3)
+    _assert_same_point(deep.chain2.p4, popliteal.c4)
+    _assert_same_point(deep.chain3.p4, popliteal.c3)
+    _assert_same_point(deep.chain4.p0, popliteal.c4)
+    _assert_same_point(deep.chain4.p4, inguinal.c4)
+    var great = VesselField(dims, GREAT_SAPHENOUS_VEIN)
+    var small = VesselField(dims, SMALL_SAPHENOUS_VEIN)
+    assert_true(
+        (superficial.chain.p1 - great.chain.p1).length() > Float32(0.003)
+    )
+    assert_true(
+        (superficial.chain2.p1 - small.chain.p1).length() > Float32(0.003)
+    )
+    assert_almost_equal(superficial.chain.r2, Float32(0.00035), atol=TOLERANCE)
     assert_true(inguinal.distance(inguinal.c3) < 0)
     assert_true(inguinal.distance(inguinal.c4) < 0)
     assert_true(popliteal.distance(popliteal.c3) < 0)
@@ -174,13 +192,12 @@ def test_lymph_mesh_has_positions_normals_and_uvs() raises:
 
 
 def test_lymph_mass_is_positive() raises:
-    var step = Length(5.0, MILLIMETER)
     var nodes = lymph_mass(
-        HumanoidSpec(Length(6.0, FOOT), MALE), INGUINAL_NODES, RIGHT, step
+        HumanoidSpec(Length(6.0, FOOT), MALE), INGUINAL_NODES, RIGHT
     )
     assert_true(nodes.mass.to(GRAM) > Float32(0))
     var trunk = lymph_mass(
-        HumanoidSpec(Length(5.5, FOOT), FEMALE), DEEP_LYMPHATICS, LEFT, step
+        HumanoidSpec(Length(5.5, FOOT), FEMALE), DEEP_LYMPHATICS, LEFT
     )
     assert_true(trunk.mass.to(GRAM) > Float32(0))
 
@@ -206,15 +223,11 @@ def test_lymph_mass_refuses_a_bad_part_or_tissue() raises:
             HumanoidSpec(Length(6.0, FOOT), MALE), LymphPart(4), RIGHT
         )
     with assert_raises():
-        _ = lymph_mass_from_dimensions(
-            dims, LymphPart(4), lymph_tissue(), Length(20.0, MILLIMETER)
-        )
+        _ = lymph_mass_from_dimensions(dims, LymphPart(4), lymph_tissue())
     var bad = lymph_tissue()
     bad.kind = SoftTissueKind(11)
     with assert_raises():
-        _ = lymph_mass_from_dimensions(
-            dims, INGUINAL_NODES, bad, Length(20.0, MILLIMETER)
-        )
+        _ = lymph_mass_from_dimensions(dims, INGUINAL_NODES, bad)
 
 
 def test_add_leg_can_draw_only_lymph() raises:

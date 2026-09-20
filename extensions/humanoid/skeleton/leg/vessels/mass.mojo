@@ -3,10 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Wet-tissue mass of a vessel solid from its field and tissue.
+"""Wet-tissue mass of a vessel from its physical centerline and radii.
 
-The mesh is the outer surface. The interior is a blood-filled tube. Mass
-is wet density times envelope volume. Water fraction is metadata.
+Mass uses analytic tapered-tube volume. The display mesh can enlarge a
+small radius without changing mass. Water fraction is metadata.
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var report = vessel_mass(person, FEMORAL_ARTERY)
@@ -14,6 +14,7 @@ is wet density times envelope volume. Water fraction is metadata.
 
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.field import tube_chain_volume
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     MuscleDimensions,
     muscle_dimensions,
@@ -23,20 +24,17 @@ from extensions.humanoid.skeleton.leg.vessels.dimensions import (
     VesselPart,
     is_artery,
     vessel_distance,
-    vessel_part_label,
 )
 from extensions.humanoid.skeleton.soft_tissue import (
-    SOFT_STEP,
     SoftMass,
     SoftOccupancy,
     SoftTissue,
     arterial_tissue,
     classify_soft,
-    sample_soft_mass,
     venous_tissue,
 )
 from math.vector3 import Vector3
-from units.si import Length
+from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def vessel_occupancy(
@@ -63,7 +61,6 @@ def vessel_mass(
     spec: HumanoidSpec,
     part: VesselPart,
     side: BodySide = RIGHT,
-    step: Length = SOFT_STEP,
 ) raises -> SoftMass:
     """Return the wet-tissue mass of one named vessel sized for `spec`.
 
@@ -71,17 +68,15 @@ def vessel_mass(
         spec: Standing height, osteological sex and athleticism.
         part: Which solid to sample.
         side: `RIGHT` or `LEFT`. A right leg is the default.
-        step: Grid cell size. 2 mm through 20 mm, 2 mm by default.
 
     Returns:
-        Sampled envelope volume and wet-tissue mass.
+        Analytic tube volume and wet-tissue mass.
 
     Raises:
-        Error: If `spec`, `side` or `part` is refused, or `step` is out
-            of range.
+        Error: If `spec`, `side` or `part` is refused.
     """
     return vessel_mass_from_dimensions(
-        muscle_dimensions(spec, side), part, _tissue_of(part), step
+        muscle_dimensions(spec, side), part, _tissue_of(part)
     )
 
 
@@ -89,7 +84,6 @@ def vessel_mass_from_dimensions(
     dimensions: MuscleDimensions,
     part: VesselPart,
     tissue: SoftTissue,
-    step: Length = SOFT_STEP,
 ) raises -> SoftMass:
     """Return the wet-tissue mass of an already-sized vessel solid.
 
@@ -97,22 +91,24 @@ def vessel_mass_from_dimensions(
         dimensions: Landmarks from `muscle_dimensions`.
         part: Which solid to sample.
         tissue: Hydrated tissue. Mass uses `wet_density` once.
-        step: Grid cell size.
 
     Returns:
-        Sampled envelope volume and wet-tissue mass.
+        Analytic tube volume and wet-tissue mass.
 
     Raises:
         Error: If `dimensions.validate` refuses the copy, if `part` is
-            not named, if `step` is out of range, or `tissue` fails
-            `validate`.
+            not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
     if not part.is_valid():
         raise Error("A vessel part must be a named artery or vein")
-    var label = vessel_part_label(part)
+    tissue.validate()
     var field = VesselField(dimensions, part)
-    return sample_soft_mass(field, field.low, field.high, tissue, step, label)
+    var volume = tube_chain_volume(field.chain)
+    return SoftMass(
+        Volume(volume, CUBIC_METER),
+        Mass(tissue.wet_density.value * volume, KILOGRAM),
+    )
 
 
 def _tissue_of(part: VesselPart) raises -> SoftTissue:

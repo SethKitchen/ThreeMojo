@@ -6,9 +6,10 @@
 """Named lymph nodes and trunks of one leg, as implicit solids.
 
 The superficial field has a medial route to inguinal nodes and a
-posterolateral route to popliteal nodes. The deep route connects the
-ankle, popliteal nodes and deep inguinal nodes. Trunk radii are
-diagrammatic so the current isosurface can show them.
+posterolateral route to popliteal nodes. Three deep crural routes
+converge on popliteal nodes. One efferent reaches a deep inguinal node.
+Physical collector radii drive distance and mass. Geometry enlarges
+them only for display.
 
 The solids live in the leg frame. The origin is the tibiofemoral joint
 line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
@@ -19,6 +20,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
 
 from extensions.humanoid.side import LEFT
 from extensions.humanoid.skeleton.field import (
+    Bounds,
     DistanceField,
     TubeChain,
     empty_bounds,
@@ -31,6 +33,7 @@ from extensions.humanoid.skeleton.field import (
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import MuscleDimensions
 from math.vector3 import Vector3
+from std.math import max
 
 
 @fieldwise_init
@@ -62,8 +65,11 @@ struct LymphField(DistanceField, ImplicitlyCopyable):
 
     var nodes: Bool
     var two_chains: Bool
+    var chain_count: Int
     var chain: TubeChain
     var chain2: TubeChain
+    var chain3: TubeChain
+    var chain4: TubeChain
     var c0: Vector3
     var c1: Vector3
     var c2: Vector3
@@ -99,22 +105,24 @@ struct LymphField(DistanceField, ImplicitlyCopyable):
         var lat = Float32(1)
         if dimensions.side == LEFT:
             lat = Float32(-1)
-        self.k = 0.0006 * S
-        self.epsilon = dimensions.epsilon
+        self.k = Float32(0.00010)
+        self.epsilon = Float32(0.00008)
         var dummy = TubeChain(
             dimensions.hip,
             dimensions.hip,
             dimensions.hip,
             dimensions.hip,
             dimensions.hip,
-            0.001 * S,
-            0.001 * S,
-            0.001 * S,
-            0.001 * S,
-            0.001 * S,
+            0.00030,
+            0.00030,
+            0.00030,
+            0.00030,
+            0.00030,
         )
         self.chain = dummy
         self.chain2 = dummy
+        self.chain3 = dummy
+        self.chain4 = dummy
         self.c0 = dimensions.hip
         self.c1 = dimensions.hip
         self.c2 = dimensions.hip
@@ -127,8 +135,10 @@ struct LymphField(DistanceField, ImplicitlyCopyable):
         self.n4 = 0.001 * S
         self.nodes = False
         self.two_chains = False
+        self.chain_count = 1
         if part == INGUINAL_NODES:
             self.nodes = True
+            self.chain_count = 0
             self.c0 = dimensions.hip + Vector3(
                 -lat * 0.018 * S, -0.028 * S, 0.014 * S
             )
@@ -151,6 +161,7 @@ struct LymphField(DistanceField, ImplicitlyCopyable):
             self.n4 = 0.0023 * S
         elif part == POPLITEAL_NODES:
             self.nodes = True
+            self.chain_count = 0
             var knee = mix_point(
                 dimensions.med_condyle, dimensions.lat_condyle, 0.50
             )
@@ -166,55 +177,104 @@ struct LymphField(DistanceField, ImplicitlyCopyable):
             self.n4 = 0.0020 * S
         elif part == SUPERFICIAL_LYMPHATICS:
             self.two_chains = True
+            self.chain_count = 2
             self.chain = TubeChain(
-                dimensions.med_mal + Vector3(-lat * 0.010 * S, 0, 0.008 * S),
+                dimensions.med_mal + Vector3(-lat * 0.006 * S, 0, 0.014 * S),
                 mix_point(dimensions.med_mal, dimensions.tibia_mid, 0.58)
-                + Vector3(-lat * 0.020 * S, 0, 0.004 * S),
+                + Vector3(-lat * 0.014 * S, 0, 0.010 * S),
                 dimensions.med_condyle
-                + Vector3(-lat * 0.026 * S, 0, -0.010 * S),
+                + Vector3(-lat * 0.020 * S, 0, -0.004 * S),
                 mix_point(dimensions.med_condyle, dimensions.hip, 0.62)
-                + Vector3(-lat * 0.034 * S, 0, 0.006 * S),
+                + Vector3(-lat * 0.028 * S, 0, 0.012 * S),
                 dimensions.hip
                 + Vector3(-lat * 0.018 * S, -0.028 * S, 0.014 * S),
-                0.0018 * S,
-                0.0019 * S,
-                0.0020 * S,
-                0.0021 * S,
-                0.0022 * S,
+                0.00030,
+                0.00032,
+                0.00035,
+                0.00040,
+                0.00045,
             )
             var knee = mix_point(
                 dimensions.med_condyle, dimensions.lat_condyle, 0.50
             )
             self.chain2 = TubeChain(
-                dimensions.lat_mal + Vector3(lat * 0.006 * S, 0, -0.010 * S),
+                dimensions.lat_mal + Vector3(lat * 0.010 * S, 0, -0.004 * S),
                 mix_point(dimensions.lat_mal, dimensions.tibia_mid, 0.45)
-                + Vector3(lat * 0.004 * S, 0, -0.020 * S),
-                dimensions.tibia_mid + Vector3(0, 0, -0.020 * S),
+                + Vector3(lat * 0.010 * S, 0, -0.014 * S),
+                dimensions.tibia_mid + Vector3(lat * 0.006 * S, 0, -0.014 * S),
                 mix_point(dimensions.tibia_mid, knee, 0.72)
-                + Vector3(0, 0, -0.024 * S),
+                + Vector3(lat * 0.006 * S, 0, -0.018 * S),
                 knee + Vector3(0, 0.014 * S, -0.034 * S),
-                0.0017 * S,
-                0.0018 * S,
-                0.0019 * S,
-                0.0020 * S,
-                0.0021 * S,
+                0.00025,
+                0.00028,
+                0.00030,
+                0.00035,
+                0.00040,
             )
         else:
+            self.two_chains = True
+            self.chain_count = 4
             var knee = mix_point(
                 dimensions.med_condyle, dimensions.lat_condyle, 0.50
             )
+            var popliteal_lateral = knee + Vector3(
+                lat * 0.005 * S, -0.014 * S, -0.030 * S
+            )
+            var popliteal_medial = knee + Vector3(
+                -lat * 0.005 * S, -0.022 * S, -0.028 * S
+            )
+            var deep_inguinal = dimensions.hip + Vector3(
+                -lat * 0.034 * S, -0.046 * S, 0.008 * S
+            )
             self.chain = TubeChain(
-                dimensions.plafond + Vector3(0, 0.018 * S, -0.008 * S),
-                dimensions.tibia_mid + Vector3(0, 0, -0.018 * S),
-                knee + Vector3(-lat * 0.005 * S, -0.022 * S, -0.028 * S),
+                dimensions.plafond + Vector3(0, 0.018 * S, 0.008 * S),
+                dimensions.tibia_mid + Vector3(0, 0, 0.012 * S),
+                dimensions.tib_lat + Vector3(0, -0.035 * S, 0.004 * S),
+                knee + Vector3(lat * 0.004 * S, -0.020 * S, -0.026 * S),
+                popliteal_lateral,
+                0.00025,
+                0.00028,
+                0.00030,
+                0.00035,
+                0.00040,
+            )
+            self.chain2 = TubeChain(
+                dimensions.med_mal + Vector3(0, 0.010 * S, -0.006 * S),
+                dimensions.tibia_mid + Vector3(-lat * 0.004 * S, 0, -0.014 * S),
+                dimensions.tib_med + Vector3(0, -0.030 * S, -0.018 * S),
+                knee + Vector3(-lat * 0.004 * S, -0.020 * S, -0.026 * S),
+                popliteal_medial,
+                0.00028,
+                0.00030,
+                0.00034,
+                0.00038,
+                0.00042,
+            )
+            self.chain3 = TubeChain(
+                dimensions.lat_mal + Vector3(0, 0.012 * S, -0.006 * S),
+                dimensions.fibula_mid
+                + Vector3(-lat * 0.002 * S, 0, -0.010 * S),
+                dimensions.fib_head + Vector3(0, -0.030 * S, -0.010 * S),
+                knee + Vector3(lat * 0.006 * S, -0.018 * S, -0.026 * S),
+                popliteal_lateral,
+                0.00025,
+                0.00028,
+                0.00030,
+                0.00034,
+                0.00040,
+            )
+            self.chain4 = TubeChain(
+                popliteal_medial,
+                knee + Vector3(-lat * 0.006 * S, 0.030 * S, -0.026 * S),
                 dimensions.femur_mid + Vector3(-lat * 0.022 * S, 0, 0.004 * S),
-                dimensions.hip
-                + Vector3(-lat * 0.034 * S, -0.046 * S, 0.008 * S),
-                0.0018 * S,
-                0.0019 * S,
-                0.0020 * S,
-                0.0021 * S,
-                0.0022 * S,
+                mix_point(dimensions.femur_mid, dimensions.hip, 0.70)
+                + Vector3(-lat * 0.028 * S, 0, 0.010 * S),
+                deep_inguinal,
+                0.00040,
+                0.00042,
+                0.00045,
+                0.00048,
+                0.00050,
             )
         if self.nodes:
             var box = empty_bounds()
@@ -227,13 +287,25 @@ struct LymphField(DistanceField, ImplicitlyCopyable):
             self.low = padded.low
             self.high = padded.high
         else:
-            var tube = tube_chain_bounds(self.chain, 0.008 + self.chain.r2)
-            if self.two_chains:
+            var tube = tube_chain_bounds(self.chain, Float32(0.003))
+            if self.chain_count >= 2:
                 tube.include_sphere(self.chain2.p0, self.chain2.r0)
                 tube.include_sphere(self.chain2.p1, self.chain2.r1)
                 tube.include_sphere(self.chain2.p2, self.chain2.r2)
                 tube.include_sphere(self.chain2.p3, self.chain2.r3)
                 tube.include_sphere(self.chain2.p4, self.chain2.r4)
+            if self.chain_count >= 3:
+                tube.include_sphere(self.chain3.p0, self.chain3.r0)
+                tube.include_sphere(self.chain3.p1, self.chain3.r1)
+                tube.include_sphere(self.chain3.p2, self.chain3.r2)
+                tube.include_sphere(self.chain3.p3, self.chain3.r3)
+                tube.include_sphere(self.chain3.p4, self.chain3.r4)
+            if self.chain_count >= 4:
+                tube.include_sphere(self.chain4.p0, self.chain4.r0)
+                tube.include_sphere(self.chain4.p1, self.chain4.r1)
+                tube.include_sphere(self.chain4.p2, self.chain4.r2)
+                tube.include_sphere(self.chain4.p3, self.chain4.r3)
+                tube.include_sphere(self.chain4.p4, self.chain4.r4)
             self.low = tube.low
             self.high = tube.high
 
@@ -249,15 +321,65 @@ struct LymphField(DistanceField, ImplicitlyCopyable):
             d = smin(d, sd_sphere(point, self.c3, self.n3), self.k)
             return smin(d, sd_sphere(point, self.c4, self.n4), self.k)
         var d = tube_chain_distance(self.chain, point, self.k)
-        if self.two_chains:
-            return smin(
-                d, tube_chain_distance(self.chain2, point, self.k), self.k
-            )
+        if self.chain_count >= 2:
+            d = smin(d, tube_chain_distance(self.chain2, point, self.k), self.k)
+        if self.chain_count >= 3:
+            d = smin(d, tube_chain_distance(self.chain3, point, self.k), self.k)
+        if self.chain_count >= 4:
+            d = smin(d, tube_chain_distance(self.chain4, point, self.k), self.k)
         return d
 
     def gradient(self, point: Vector3) -> Vector3:
         """Return the unit outward normal of the field at `point`."""
         return field_gradient(self, point, self.epsilon)
+
+
+def _display_lymph_field(
+    dimensions: MuscleDimensions, part: LymphPart
+) raises -> LymphField:
+    """Return lymph anatomy with diagrammatic collector radii."""
+    var field = LymphField(dimensions, part)
+    if not field.nodes:
+        var least = 0.0018 * dimensions.stature.value
+        field.chain = _display_chain(field.chain, least)
+        if field.chain_count >= 2:
+            field.chain2 = _display_chain(field.chain2, least)
+        if field.chain_count >= 3:
+            field.chain3 = _display_chain(field.chain3, least)
+        if field.chain_count >= 4:
+            field.chain4 = _display_chain(field.chain4, least)
+        field.k = 0.0006 * dimensions.stature.value
+        field.epsilon = Float32(0.25) * least
+        var box = tube_chain_bounds(field.chain, 0.008 + least)
+        if field.chain_count >= 2:
+            _include_chain_bounds(box, field.chain2)
+        if field.chain_count >= 3:
+            _include_chain_bounds(box, field.chain3)
+        if field.chain_count >= 4:
+            _include_chain_bounds(box, field.chain4)
+        field.low = box.low
+        field.high = box.high
+    return field
+
+
+def _display_chain(chain: TubeChain, least: Float32) -> TubeChain:
+    """Return `chain` with every radius at least `least`."""
+    var out = chain
+    out.r0 = max(out.r0, least)
+    out.r1 = max(out.r1, least)
+    out.r2 = max(out.r2, least)
+    out.r3 = max(out.r3, least)
+    out.r4 = max(out.r4, least)
+    return out
+
+
+def _include_chain_bounds(mut box: Bounds, chain: TubeChain):
+    """Grow `box` to hold `chain`."""
+    box.include_sphere(chain.p0, chain.r0)
+    box.include_sphere(chain.p1, chain.r1)
+    box.include_sphere(chain.p2, chain.r2)
+    box.include_sphere(chain.p3, chain.r3)
+    box.include_sphere(chain.p4, chain.r4)
 
 
 def lymph_distance(
