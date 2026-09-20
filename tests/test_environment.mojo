@@ -13,7 +13,7 @@ checked against the face it must have read.
 """
 
 from cameras.cube_camera import CubeCamera
-from cameras.orthographic_camera import centered
+from cameras.orthographic_camera import OrthographicCamera, centered
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
@@ -41,6 +41,7 @@ from materials.material import (
     MIX_OPERATION,
     Material,
     MaterialId,
+    combine_light,
     line_dashed_material,
     points_material,
     sprite_material,
@@ -64,10 +65,11 @@ from render.cube_texture_store import (
     SCENE_ENVIRONMENT,
     CubeTextureId,
 )
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV
 from render.rect import Rect
 from render.srgb import SRGB
+from render.target import RenderTarget
 from render.texture import CLAMP, NEAREST, Texture
 from render.texture_store import TextureId
 from renderers.renderer import Renderer
@@ -700,6 +702,124 @@ def test_a_cube_camera_rides_a_node_and_keeps_the_scene_background() raises:
     scene.node(node).set_position(0, 0, 2)
     with assert_raises():
         _ = renderer.render_cube(scene, assets, camera)
+
+
+# --- the four the previous review asked for ---------------------------------
+
+
+def an_ortho_camera(
+    x: Float32, y: Float32, z: Float32
+) raises -> OrthographicCamera:
+    """Return a parallel camera at a point, looking at the origin."""
+    var camera = centered(
+        Length(3.0, METER),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(x, y, z), Vector3(0, 0, 0))
+    return camera^
+
+
+def test_a_parallel_camera_reflects_along_its_own_axis() raises:
+    # `envmap_fragment` special-cases a parallel projection where the
+    # matcap does not: under `isOrthographic` it takes the view's third
+    # column, and only otherwise the way to `cameraPosition`.
+    #
+    # The consequence is what this pins. A parallel camera's rays do not
+    # converge, so sliding it along its own axis cannot change which way
+    # any surface is seen, and cannot change what that surface reflects.
+    # Measuring from the camera's *position* made the reflection swim as
+    # the camera moved.
+    var renderer = a_renderer()
+    var assets = Assets()
+    var sky = assets.cube_textures.add(a_cube())
+    var chrome = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, env_map=sky)
+    )
+    var scene = Scene()
+    a_ball(scene, assets, chrome)
+    var near = renderer.render(scene, assets, an_ortho_camera(0, 0, 4))
+    var far = renderer.render(scene, assets, an_ortho_camera(0, 0, 40))
+    # The middle faces the camera, so it reflects the +z face, cyan.
+    assert_color(center(near), CYAN)
+    assert_color(center(far), CYAN)
+    # And not only in the middle: no pixel may move when the camera does.
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_color(near.get_pixel(x, y), far.get_pixel(x, y))
+
+
+def test_a_sky_ray_does_not_depend_on_where_the_camera_stands() raises:
+    # A cube background is read in the direction a pixel's ray leaves the
+    # camera. A direction has no origin, so translating the camera cannot
+    # change one. Unprojecting the near and the far point into *world*
+    # space put the camera's position into both, and a scene far from the
+    # origin spent its Float32 significand on that offset.
+    var renderer = a_renderer()
+    var assets = Assets()
+    var sky = assets.cube_textures.add(a_cube())
+    var scene = Scene()
+    scene.background = cube_background(sky)
+    scene.update()
+    var here = renderer.render(scene, assets, camera_at(0, 0, 4))
+    # The same camera orientation, a long way out. `camera_at` looks at
+    # the origin, so build this one by hand to keep the direction fixed.
+    var moved = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    moved.place(Vector3(0, 0, 100004), Vector3(0, 0, 100000))
+    var there = renderer.render(scene, assets, moved)
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_color(here.get_pixel(x, y), there.get_pixel(x, y))
+
+
+def test_a_dim_surface_keeps_its_light_beside_a_bright_reflection() raises:
+    # `mix` written as `a + (b - a) * t` loses the small side when the two
+    # are decades apart in Float32: the difference carries the larger
+    # exponent, and adding the smaller back rounds it away. A reflection
+    # is where that happens -- a bright sky over a dim surface -- and the
+    # weighted sum keeps it.
+    var dim = FloatColor(1.0e-7, 1.0e-7, 1.0e-7, 1.0)
+    var bright = FloatColor(1.0e7, 1.0e7, 1.0e7, 1.0)
+    # Almost all surface: the reflection contributes a millionth, and the
+    # surface's own light must still be in the answer.
+    var joined = combine_light(dim, bright, 1.0e-9, MIX_OPERATION)
+    assert_true(
+        joined.r > 0.0,
+        "the surface's own light was rounded away by the reflection",
+    )
+    # And the arithmetic is still `mix`: a reflectivity of zero is the
+    # surface, and of one is the reflection.
+    assert_equal(combine_light(dim, bright, 0.0, MIX_OPERATION).r, dim.r)
+    assert_equal(combine_light(dim, bright, 1.0, MIX_OPERATION).r, bright.r)
+
+
+def test_a_refused_background_does_not_erase_the_target_first() raises:
+    # A target is a buffer a caller keeps and draws several views into.
+    # The background is the last thing that can refuse a frame, and it
+    # used to be asked *after* the clear, so a refused background wiped a
+    # view that was already drawn and then raised. Everything that can be
+    # refused is now asked before anything is written.
+    var renderer = a_renderer()
+    var assets = Assets()
+    var paint = assets.materials.add(Material(RED, kind=BASIC))
+    var scene = Scene()
+    a_ball(scene, assets, paint)
+    var target = RenderTarget(WIDTH, HEIGHT, CLEAR)
+    renderer.render_into(target, scene, assets, camera_at(0, 0, 4))
+    var drawn = target.shown(WIDTH // 2, HEIGHT // 2)
+    assert_color(drawn, RED)
+    # Now name a cube texture that is not there and draw again.
+    scene.background = cube_background(CubeTextureId(7))
+    with assert_raises(contains="not there"):
+        renderer.render_into(target, scene, assets, camera_at(0, 0, 4))
+    # The view that was already there is untouched.
+    assert_color(target.shown(WIDTH // 2, HEIGHT // 2), drawn)
 
 
 def main() raises:

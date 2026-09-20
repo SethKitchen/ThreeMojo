@@ -54,29 +54,55 @@ from std.math import ceil, floor, log2
 
 
 def attenuated_size(
-    size: Float32, view_z: Float32, scale: Float32, perspective: Bool
+    size: Float32,
+    view_z: Float32,
+    scale: Float32,
+    perspective: Bool,
+    render_scale: Int = 1,
 ) -> Float32:
-    """Return how many pixels across a point is at one distance.
+    """Return how many raster pixels across a point is at one distance.
 
     three.js's `points_vert` under `USE_SIZEATTENUATION`: `gl_PointSize *=
     scale / -mvPosition.z` when the projection is a perspective one, and
     nothing when it is not.
 
+    **Two kinds of pixel meet here, and the whole of the conversion is
+    here.** A material's size and three.js's `scale` are *output* pixels:
+    what the caller asked for and what the finished image shows. The answer
+    is *raster* pixels: the grid the frame is actually drawn on, which is
+    `render_scale` times finer each way when the renderer is supersampling.
+    Every route in takes the same last step, so neither can be missed and
+    neither can be taken twice.
+
+    That matters most for the sizes three.js does *not* attenuate -- a
+    point with `sizeAttenuation` off, and every point under a parallel
+    projection, which three.js leaves alone because nothing else shrinks
+    with distance either. Those used to come through untouched, so an
+    eight-pixel point drawn on a doubled grid stayed eight raster pixels
+    and averaged down to four: turning anti-aliasing on shrank the point
+    to a quarter of its area. The attenuated size is multiplied here too,
+    and the caller passes half the *output* height as `scale` rather than
+    half the target's, so the two routes scale once each rather than one
+    of them twice.
+
     Args:
-        size: The material's size, in pixels.
+        size: The material's size, in output pixels.
         view_z: The point's camera-space z, negative in front of the
             camera. A point at or behind the camera is clipped away before
             this is asked.
-        scale: Half the image height, in pixels, three.js's `scale`.
+        scale: Half the *output* image height, in output pixels,
+            three.js's `scale`.
         perspective: Whether the camera's rays converge. Under a parallel
-            projection the size is returned as it is.
+            projection the size is not attenuated.
+        render_scale: How many raster pixels stand for one output pixel.
+            One, the default, is a frame drawn at its own size.
 
     Returns:
-        The size on the image, in pixels.
+        The size on the raster grid, in raster pixels.
     """
     if not perspective:
-        return size
-    return size * scale / -view_z
+        return size * Float32(render_scale)
+    return size * scale / -view_z * Float32(render_scale)
 
 
 def covers(center: Vector2, size: Float32, x: Int, y: Int) -> Bool:

@@ -91,11 +91,37 @@ var floor = checkerboard(64, 8, white, blue)
 floor.anisotropy = 16
 ```
 
-One, the default, is the plain trilinear read. Sixteen is what a GPU usually caps it at. Set the field after construction, as in three.js. `validate()` refuses a value below one, and the GPU upload refuses it again.
+One, the default, is the plain trilinear read. `MAX_ANISOTROPY` is sixteen, which is what a desktop GPU reports and what three.js caps a texture at. Set the field after construction, as in three.js. `validate()` refuses a value below one or above the cap, and the GPU upload refuses it again.
 
-`anisotropic_footprint(along_x, along_y, width, height, anisotropy)` returns a `Footprint`: the level, the tap count and the step between taps. The tap count is the ratio of the footprint's two lengths, rounded up. It is capped at the anisotropy and at the long axis's length in texels. The level is that of the long axis divided by the count. With one tap the level is what `mip_level` gives, so a texture that asks for nothing reads as it did.
+### The footprint is an ellipse, not two derivatives
 
-`sample_footprint(u, v, footprint)` takes the taps and averages them premultiplied. Both rasterizers call the same two functions; see [Rasterization](Rasterization).
+`anisotropic_footprint(along_x, along_y, width, height, anisotropy)` returns a `Footprint`: the level, the tap count and the step between taps.
+
+The two arguments are how far the texture coordinates move for one pixel right and one pixel down. They are the columns of a 2x2 matrix, and the footprint is the ellipse that matrix maps the unit disc onto. Its principal lengths are that matrix's singular values, which are **not** the lengths of the two derivatives.
+
+Measure the derivatives instead and a rotation breaks it. Take a footprint 16 texels long and 1 across, then turn the screen's basis 45 degrees. The ellipse is unchanged, but the two derivatives now have the same length. Measuring them calls the footprint round: one tap at level 3.5, where sixteen taps at level 0 are correct. A surface blurs because of how it happens to lie against the screen axes.
+
+`_principal_axes` takes the real lengths from a quadratic, and `_major_direction` takes the real long axis. Neither needs a decomposition library.
+
+### The level follows the short axis
+
+Taps along the long axis filter along the long axis. They do nothing across the short one, so rounding the tap count up must not shrink the level below what the short axis needs:
+
+```
+effective minor = max(1, minor, major / taps allowed)
+taps            = clamp(ceil(major / effective minor), 1, allowed)
+level           = log2(effective minor)
+```
+
+Dividing the major axis by the tap count jumps instead. Take a footprint going from 16 by 16 to 16.001 by 16. It gains one tap, and it used to lose almost a whole level with it, from 4.0 to 3.0. A thousandth of a texel moved the level by one. It now gains the tap and keeps the level. The floor of one stops a tap per texel from reading any texel twice.
+
+With an anisotropy of one the level is the log of the longer derivative. That is the number `mip_level` gives, and the number OpenGL's isotropic rho gives. A texture that asks for nothing reads exactly as it did.
+
+### Sampling a footprint
+
+`sample_footprint(u, v, footprint)` takes the taps and averages them premultiplied. It calls `Footprint.validate()` first, because a `Footprint` is fieldwise-constructible and `Footprint(0, 0, Vector2(0, 0))` builds: zero taps would divide the average by nothing. The rasterizers take `_sample_footprint`, which does not check. What they pass came from `anisotropic_footprint`, and a fragment loop is not a place to handle an error.
+
+Both rasterizers call the same estimator and the same accumulation; see [Rasterization](Rasterization).
 
 ## Cube textures
 
@@ -237,7 +263,7 @@ var id = assets.textures.add(board^)
 | `ignoring_alpha() -> Texture` | A copy that ignores its alpha, with its chain rebuilt. |
 | `uv_transform() -> Matrix3` | The transform on the coordinates, from the four fields above. |
 | `sample_footprint(u, v, footprint) -> FloatColor` | One trilinear sample, or several along a footprint's long axis. See [Anisotropy](#anisotropy). |
-| `validate()` | Refuse a wrap, filter, color space or alpha mode that is none of the named values, or an anisotropy below one. |
+| `validate()` | Refuse a wrap, filter, color space or alpha mode that is none of the named values, or an anisotropy below one or above `MAX_ANISOTROPY`. |
 | `levels`, `width`, `height`, `alpha`, `anisotropy` | The chain length, the base size, the alpha mode and the tap count. |
 | `offset`, `repeat`, `rotation`, `center` | The transform's fields. |
 
@@ -252,7 +278,8 @@ var id = assets.textures.add(board^)
 - A `checkerboard` size must divide evenly by its square count.
 - A `data_texture` with a channel count outside one through four, a length that does not match, or a number that is not finite.
 - The renderer refuses a map and an emissive map on one material whose transforms differ.
-- An anisotropy below one raises in `validate`.
+- An anisotropy below one, or above `MAX_ANISOTROPY`, raises in `validate`.
+- A `Footprint` with no taps, or a non-finite level or step, raises in `sample_footprint`.
 - See [Cube textures](#cube-textures) for what a cube refuses, and [From a compressed file](#from-a-compressed-file) for what a compressed payload refuses.
 
 ## Why

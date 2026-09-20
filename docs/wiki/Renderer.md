@@ -18,7 +18,7 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `Renderer(width, height, workers=1)` | An image size and a thread count. |
 | `set_workers(workers)` | Change the thread count. At least one. |
 | `set_antialias(enabled)` | Supersample `render`, `render_array` and `render_cube`. See below. |
-| `supersampled() -> Renderer` | A renderer `SUPERSAMPLE` times this one's size each way, viewport and scissor scaled. |
+| `supersampled() -> Renderer` | A renderer `SUPERSAMPLE` times this one's size each way, viewport, scissor and `render_scale` scaled. |
 | `set_background(color)` | The clear color. |
 | `set_shading(mode)` | What a fragment's color comes from. See below. |
 | `set_tone_mapping(mode, exposure=1.0)` | The curve that compresses the light for a display. See below. |
@@ -59,11 +59,35 @@ A `NORMALS` or `DEPTH` material writes data under either lit mode. See [Material
 
 ## Anti-aliasing
 
-`set_antialias(True)` is three.js's `antialias`. `render`, `render_array` and `render_cube` then draw the frame at `SUPERSAMPLE` times the size each way, two, and average every block of four pixels into one. `render/antialias.mojo` holds `downsample`, which does the averaging.
+`set_antialias(True)` is three.js's `antialias`. `render`, `render_array` and `render_cube` then draw the frame at `SUPERSAMPLE` times the size each way, two, and average every block of four pixels into one.
 
-The average is taken in linear light. The supersampled frame is resolved to bytes, decoded, averaged premultiplied, and encoded once more. Averaging bytes would darken every edge. The depth of an output pixel is the nearest of its four.
+### The average is taken before the image is made
 
-Supersampling rather than a multisampled fill rule keeps both backends on one coverage rule. A GPU frame comes back as bytes, and the same `downsample` makes the same image of it. Prepare with `supersampled()`, draw at its size, and downsample. The parity test does exactly that.
+The large frame is drawn into a `RenderTarget`, which holds premultiplied linear light. `RenderTarget.downsampled(factor)` averages the blocks there, and `resolve` converts the small target once. Tone mapping and the sRGB encode come after the average.
+
+The order is not a detail. Encoding first clamps each sample and bends it through the tone curve, and the mean of a curve is not the curve of a mean.
+
+Four subsamples holding linear 4, 0, 0, 0 average to a radiance of 1. Encode them first and the bright one saturates to byte 255, which decodes to 1. The average is then a quarter of the light. It comes back as byte 137 with no curve, where 255 is correct. Under Reinhard it is 123 against 188.
+
+The depth of an output pixel is the nearest of its four.
+
+### A size in pixels is scaled with the frame
+
+A point's `PointsMaterial` size and a line's one-pixel thickness are measured in the pixels of the finished image. The renderer carries a `render_scale`: one usually, and `SUPERSAMPLE` in the renderer `supersampled()` returns. `attenuated_size` converts a point's size with it, and `rasterize_frame` draws each line that many raster pixels wide.
+
+Without it, turning anti-aliasing on shrank both. An eight-pixel point covered 64 pixels with the setting off and 16 with it on. A one-pixel line resolved to half coverage, which is a gray line where a white one was asked for. Anti-aliasing must change how cleanly an edge is drawn, not how large an object is.
+
+A world-space length is not scaled: a triangle is projected onto whatever grid it is drawn on and comes out the right size either way.
+
+### The GPU path is display-referred
+
+Supersampling rather than a multisampled fill rule keeps both backends on one coverage rule. `render/antialias.mojo` holds `downsample(Framebuffer, factor)`, which resizes a finished picture: it decodes bytes, averages premultiplied and encodes once. That is what a caller driving `GpuRenderer` must use, because the GPU hands back a resolved image rather than the linear target behind it.
+
+That path loses the range described above. It is the best that can be done with bytes, and it is named here rather than left to be found. Prepare with `supersampled()`, pass that renderer's `render_scale` as the draw's `line_width`, draw at its size, and downsample. Giving the GPU the same linear resolve means keeping its target long enough to average it.
+
+`render_cube` has the same boundary. It captures its six faces through byte-oriented `Framebuffer` images. Supersampling them does not restore range that was already gone.
+
+### What the setting does not change
 
 The viewport and the scissor are given in output pixels and scaled with the frame. `render_into` and `render_array_into` draw into a target the caller holds, at its size, and are not changed by the setting.
 

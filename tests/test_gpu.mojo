@@ -7201,8 +7201,18 @@ def test_both_backends_take_the_same_taps() raises:
 
 
 def test_both_backends_supersample_to_the_same_image() raises:
-    # The CPU renderer's antialiased frame is what the GPU gives once its
-    # supersampled frame goes through the same `downsample`.
+    # What is compared here is the *rasterization*, so both sides take the
+    # same resolve: each draws the large frame, encodes it, and averages
+    # the bytes with `downsample`.
+    #
+    # `Renderer.render` no longer takes that route. It averages the linear
+    # target before the tone mapping and the encode, which is the correct
+    # resolve and the one an HDR edge needs; see `render.antialias`. The
+    # GPU cannot follow yet, because `GpuRenderer` hands back a resolved
+    # image rather than the linear target behind it. Comparing the two
+    # resolves would measure that gap rather than whether the two
+    # rasterizers agree, which is what this test is for. The gap itself is
+    # pinned in `tests/test_antialias.mojo`.
     if skipped_for_lack_of_a_gpu("both backends supersample alike"):
         return
     var renderer = Renderer(48, 36)
@@ -7224,8 +7234,10 @@ def test_both_backends_supersample_to_the_same_image() raises:
         Length(12.0, METER),
     )
     camera.place(Vector3(0.6, 0.8, 3.2), Vector3(0, 0, 0))
-    var cpu = renderer.render(scene, assets, camera)
     var big = renderer.supersampled()
+    # The host's large frame through the byte resolve, which is the route
+    # the device is held to.
+    var cpu = downsample(big.render(scene, assets, camera), SUPERSAMPLE)
     var corners = big.prepare(scene, assets, camera)
     var lighting = Lighting(
         scene,
@@ -7249,6 +7261,13 @@ def test_both_backends_supersample_to_the_same_image() raises:
     assert_equal(cpu.width, 48)
     assert_equal(gpu.width, 48)
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the renderer's own antialiased frame, which resolves in linear
+    # light, is the same picture to within the byte round trip the two
+    # above both paid. It is not asserted equal: it is the better answer,
+    # and where the two differ this is the side that is right.
+    var linear = renderer.render(scene, assets, camera)
+    assert_equal(linear.width, 48)
+    assert_equal(count_mismatches(linear, gpu, tolerance=4), 0)
 
 
 def main() raises:

@@ -133,7 +133,7 @@ from materials.material import (
     MaterialKind,
     Side,
 )
-from render.antialias import SUPERSAMPLE, downsample
+from render.antialias import SUPERSAMPLE
 from render.cube_texture import FACE_COUNT, CubeTexture, cube_texture_of
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
@@ -1775,6 +1775,26 @@ struct Renderer(Movable):
     # `antialias`, by supersampling. Off by default, as there. See
     # `render.antialias` and `set_antialias`.
     var antialias: Bool
+    # How many raster pixels of this renderer stand for one pixel of the
+    # image the caller asked for. One in every renderer a caller builds,
+    # and `SUPERSAMPLE` in the one `supersampled` returns.
+    #
+    # **It is the boundary between two kinds of pixel, and everything
+    # measured in pixels has to cross it exactly once.** A world-space
+    # length does not: a triangle is projected onto whatever grid it is
+    # drawn on and comes out the right size either way. A length given in
+    # pixels does: a `PointsMaterial` size, and the one-pixel thickness of
+    # a line. Those used to cross it zero times, so turning `antialias`
+    # on halved a line and quartered a point's area -- the setting changed
+    # what the objects *were*, not just how cleanly their edges were
+    # drawn. `attenuated_size` takes it for the points and
+    # `rasterize_frame` for the lines, and both take it once.
+    #
+    # Not a public setting: a caller asks for anti-aliasing and this
+    # follows from it. `render_into` draws into a target the caller holds,
+    # at that target's size, so a renderer a caller built has a scale of
+    # one whatever its `antialias` says.
+    var render_scale: Int
 
     def __init__(out self, width: Int, height: Int, workers: Int = 1) raises:
         """Create a renderer with a dark background.
@@ -1802,16 +1822,25 @@ struct Renderer(Movable):
         self.scissor = Rect.whole(width, height)
         self.scissor_test = False
         self.antialias = False
+        self.render_scale = 1
 
     def set_antialias(mut self, enabled: Bool):
         """Turn supersampling on or off, three.js's `antialias`.
 
         On, `render`, `render_array` and `render_cube` draw the frame at
         `SUPERSAMPLE` times the size each way and average every block into
-        one output pixel, in linear light; see `render.antialias`. The
-        viewport and the scissor are given in output pixels and scaled
-        with the frame. `render_into` and `render_array_into` draw into a
-        target the caller holds, at its size, and are not changed by this.
+        one output pixel. The average is taken on the linear render target,
+        before the tone mapping and the sRGB encode, so what is averaged is
+        the scene's light rather than a picture of it; see
+        `render.antialias` and `RenderTarget.downsampled`.
+
+        The viewport and the scissor are given in output pixels and scaled
+        with the frame, and so are the two sizes a caller gives in pixels:
+        a point's size and a line's thickness come out as asked, not
+        smaller. See `render_scale`.
+
+        `render_into` and `render_array_into` draw into a target the caller
+        holds, at its size, and are not changed by this.
 
         Args:
             enabled: Whether to supersample.
@@ -1823,9 +1852,14 @@ struct Renderer(Movable):
         with the same settings, its viewport and scissor scaled to match,
         and no supersampling of its own.
 
-        What `render` draws with when `antialias` is on, and what a
-        caller drawing on the GPU uses to prepare a frame it will
-        `downsample` itself.
+        What `render` draws with when `antialias` is on, and what a caller
+        drawing on the GPU uses to prepare a frame it will `downsample`
+        itself. Its `render_scale` is this one's times `SUPERSAMPLE`, so a
+        point's size and a line's thickness -- the two things a caller
+        gives in pixels -- come out the size they were asked for once the
+        frame is averaged down. A caller driving `GpuRenderer.draw` by
+        hand has to pass that `render_scale` as the draw's `line_width`
+        for the same reason.
 
         Returns:
             The larger renderer.
@@ -1843,6 +1877,12 @@ struct Renderer(Movable):
         big.viewport = _scaled(self.viewport, SUPERSAMPLE)
         big.scissor = _scaled(self.scissor, SUPERSAMPLE)
         big.scissor_test = self.scissor_test
+        # What makes the larger renderer draw a frame that *averages down*
+        # to this one rather than merely one that is bigger: a point's
+        # size and a line's thickness are given in the output pixels this
+        # renderer has, and the larger one converts them once. See
+        # `render_scale`.
+        big.render_scale = self.render_scale * SUPERSAMPLE
         return big^
 
     def set_viewport(mut self, rect: Rect) raises:
@@ -2981,11 +3021,16 @@ struct Renderer(Movable):
         var frustum = Frustum.from_camera(clip, view, near, far)
         var sides = Frustum.side_planes(camera.projection_matrix())
         var perspective = not camera.projection_matrix().is_affine()
-        # Half the target's height: three.js's `scale` uniform, which a
-        # point's size is measured against at a depth of one meter. The
-        # whole target and not the viewport, as three.js reads the drawing
-        # buffer's height whatever the viewport.
-        var scale = Float32(self.height) / 2
+        # Half the height of the image the caller asked for: three.js's
+        # `scale` uniform, which a point's size is measured against at a
+        # depth of one meter. The whole target and not the viewport, as
+        # three.js reads the drawing buffer's height whatever the
+        # viewport -- and the *output* height rather than this renderer's,
+        # so that a supersampled frame measures the size against the image
+        # it will become. `attenuated_size` takes the render scale
+        # separately and applies it to both kinds of point; see
+        # `render_scale`.
+        var scale = Float32(self.height // self.render_scale) / 2
         var bounds = List[Sphere](
             length=assets.geometries.count(), fill=Sphere.empty()
         )
@@ -3095,6 +3140,7 @@ struct Renderer(Movable):
                             seen.z,
                             scale,
                             perspective and material.size_attenuation,
+                            self.render_scale,
                         ),
                     )
                 )
@@ -3241,10 +3287,16 @@ struct Renderer(Movable):
             Error: Everything `render_into` raises.
         """
         if self.antialias:
-            # Drawn at twice the size by a renderer that does not
-            # supersample, then averaged down; see `render.antialias`.
-            return downsample(
-                self.supersampled().render(scene, assets, camera), SUPERSAMPLE
+            # Drawn at `SUPERSAMPLE` times the size by a renderer that
+            # does not supersample, and averaged down *before* the one
+            # conversion below rather than after it: the samples are scene
+            # radiance and the average of radiance is what an output pixel
+            # holds. See `RenderTarget.downsampled` and `render.antialias`.
+            var big = self.supersampled()
+            var drawn = RenderTarget(big.width, big.height, self.background)
+            big.render_into(drawn, scene, assets, camera)
+            return drawn.downsampled(SUPERSAMPLE).resolve(
+                self.workers, self.tone_curve(), self.tone_mapping_exposure
             )
         var target = RenderTarget(self.width, self.height, self.background)
         self.render_into(target, scene, assets, camera)
@@ -3285,6 +3337,10 @@ struct Renderer(Movable):
                 `render_into` raises for one of the cameras.
         """
         if self.antialias:
+            # As `render` does it, and resolved in linear light for the
+            # same reason: every rectangle is drawn at the larger size and
+            # the whole target is averaged down once, before the light
+            # becomes an image.
             var big = self.supersampled()
             var scaled = ArrayCamera()
             for index in range(array.count()):
@@ -3292,8 +3348,10 @@ struct Renderer(Movable):
                     array.cameras[index],
                     _scaled(array.viewports[index], SUPERSAMPLE),
                 )
-            return downsample(
-                big.render_array(scene, assets, scaled), SUPERSAMPLE
+            var drawn = RenderTarget(big.width, big.height, self.background)
+            big.render_array_into(drawn, scene, assets, scaled)
+            return drawn.downsampled(SUPERSAMPLE).resolve(
+                self.workers, self.tone_curve(), self.tone_mapping_exposure
             )
         var target = RenderTarget(self.width, self.height, self.background)
         self.render_array_into(target, scene, assets, array)
@@ -3454,8 +3512,17 @@ struct Renderer(Movable):
         # to `scene.background` when it is a color and to the clear color
         # otherwise, and then draws a texture or a cube background over
         # the clear before the scene. See `core.background`.
-        target.clear_inside(kept, self.clear_color(scene))
+        #
+        # The backdrop is built *before* the clear, though it is painted
+        # after it. It is the last thing in this function that can refuse
+        # the frame -- a background naming a texture that is not there --
+        # and a target is a buffer the caller keeps and draws several
+        # views into. Clearing first meant a refused background erased a
+        # view that had already been drawn and then raised, so the caller
+        # lost an image to an error that touched nothing. Everything that
+        # can be refused is now asked before anything is written.
         var backdrop = self.backdrop(scene, assets, camera)
+        target.clear_inside(kept, self.clear_color(scene))
         # Spelled as a Bool rather than testing the Optional directly,
         # because the coverage instrumenter wraps every condition in a
         # probe that takes a Bool; see `materials.material`.
@@ -3477,6 +3544,7 @@ struct Renderer(Movable):
             fog,
             frame.points,
             assets.cube_textures,
+            self.render_scale,
         )
 
     def clear_color(self, scene: Scene) raises -> Color:
@@ -3520,8 +3588,11 @@ struct Renderer(Movable):
         draws one, and read at its full size through its own filter; its
         transform is not applied. A cube background is read in the
         direction each pixel's ray leaves the camera along: the near and
-        far points of the ray are unprojected through the camera, so any
-        camera serves, and a parallel one sees one direction everywhere.
+        the far point of the ray are unprojected into *view* space through
+        the inverse projection, and their difference is turned into the
+        world by the camera's rotation alone. So any camera serves, a
+        parallel one sees one direction everywhere, and moving a camera
+        without turning it changes no pixel of the sky.
 
         Only `SHADE_TEXTURE` draws an image background: the other two
         modes ignore every texture, and a background is one. Under either
@@ -3573,12 +3644,22 @@ struct Renderer(Movable):
         if backdrop.cube.value >= assets.cube_textures.count():
             raise Error("A background names a cube texture that is not there")
         ref sky = assets.cube_textures.get(backdrop.cube)
-        # From pixels back to the world: the inverse of the camera's
-        # projection and view, so the ray through a pixel is the line from
-        # its near point to its far point.
+        # From pixels back to the camera's own space, and only then out
+        # into the world as a *direction*. Unprojecting through the
+        # projection and the view together puts the near and the far point
+        # in world coordinates, where both carry the camera's translation:
+        # a scene a million meters from the origin spends its Float32
+        # significand on that offset and rounds the difference of the two
+        # points -- the ray -- into steps. The camera's position cannot
+        # change which way a ray leaves it, so it is kept out of the
+        # arithmetic. The inverse projection alone gives both points in
+        # view space, where the camera is at the origin, and
+        # `transform_direction` turns their difference by the camera's
+        # rotation and drops the translation.
         var unproject = camera.projection_matrix()
-        unproject.multiply(camera.view_matrix_in(scene))
         unproject.invert()
+        var to_world = camera.view_matrix_in(scene)
+        to_world.invert()
         for y in range(self.height):  # pragma: no branch
             for x in range(self.width):  # pragma: no branch
                 if not kept.contains_pixel(
@@ -3593,7 +3674,12 @@ struct Renderer(Movable):
                 )
                 var near = unproject.transform_point(Vector3(ndc_x, ndc_y, -1))
                 var far = unproject.transform_point(Vector3(ndc_x, ndc_y, 1))
-                _set_backdrop(image, x, y, sky.sample(far - near))
+                _set_backdrop(
+                    image,
+                    x,
+                    y,
+                    sky.sample(to_world.transform_direction(far - near)),
+                )
         return image^
 
     def render_cube(

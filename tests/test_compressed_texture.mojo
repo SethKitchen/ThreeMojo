@@ -217,5 +217,90 @@ def test_a_compressed_texture_takes_threejs_defaults() raises:
         _ = compressed_texture(4, 4, data, CompressedFormat(4))
 
 
+# --- more than one block, and not square ------------------------------------
+
+
+def channel(
+    pixels: List[UInt8], width: Int, x: Int, y: Int, lane: Int
+) -> UInt8:
+    """Return one channel of one decoded texel, row-major from the top."""
+    return pixels[(y * width + x) * 4 + lane]
+
+
+def test_blocks_land_in_the_right_place_across_several_rows() raises:
+    # A 12 by 8 image is three blocks across and two down, and the two
+    # dimensions differ, so a decoder that walked the grid the other way
+    # round -- or that multiplied by the wrong stride -- gives a different
+    # picture rather than the same one transposed.
+    #
+    # Each of the six blocks is one flat color, so every texel of a block
+    # names the block it came from and the whole grid is checkable.
+    var flat: List[Int] = [RED565, BLUE565, 0x07E0, 0xFFFF, 0x0000, 0xF81F]
+    var data = List[UInt8]()
+    for block in range(6):
+        var one = color_block(flat[block], flat[block], same(0))
+        for byte in range(len(one)):
+            data.append(one[byte])
+    var pixels = decode_s3tc(12, 8, data, RGBA_S3TC_DXT1_FORMAT)
+    assert_equal(len(pixels), 12 * 8 * 4)
+    # Block (0, 0) is red, (1, 0) blue, (2, 0) green; the second row is
+    # white, black and magenta.
+    assert_equal(channel(pixels, 12, 0, 0, 0), UInt8(255))
+    assert_equal(channel(pixels, 12, 3, 3, 0), UInt8(255))
+    assert_equal(channel(pixels, 12, 4, 0, 2), UInt8(255))
+    assert_equal(channel(pixels, 12, 7, 3, 2), UInt8(255))
+    assert_equal(channel(pixels, 12, 8, 0, 1), UInt8(255))
+    assert_equal(channel(pixels, 12, 11, 3, 1), UInt8(255))
+    assert_equal(channel(pixels, 12, 0, 4, 0), UInt8(255))
+    assert_equal(channel(pixels, 12, 0, 4, 1), UInt8(255))
+    assert_equal(channel(pixels, 12, 0, 4, 2), UInt8(255))
+    assert_equal(channel(pixels, 12, 5, 7, 0), UInt8(0))
+    assert_equal(channel(pixels, 12, 5, 7, 1), UInt8(0))
+    assert_equal(channel(pixels, 12, 5, 7, 2), UInt8(0))
+    assert_equal(channel(pixels, 12, 8, 4, 0), UInt8(255))
+    assert_equal(channel(pixels, 12, 8, 4, 1), UInt8(0))
+    assert_equal(channel(pixels, 12, 8, 4, 2), UInt8(255))
+    # Every texel is opaque: the blocks are four-color, so no index is
+    # the transparent one.
+    for y in range(8):
+        for x in range(12):
+            assert_equal(channel(pixels, 12, x, y, 3), UInt8(255))
+
+
+def test_a_tall_image_of_partial_blocks_drops_what_hangs_off() raises:
+    # Three across and nine down is one block wide and three tall with one
+    # texel of the last block row showing, and the width is not a multiple
+    # of four either. A decoder writing whole blocks would run past the
+    # buffer or shear the rows.
+    var data = List[UInt8]()
+    var tones: List[Int] = [RED565, BLUE565, 0x07E0]
+    for block in range(3):
+        var one = color_block(tones[block], tones[block], same(0))
+        for byte in range(len(one)):
+            data.append(one[byte])
+    var pixels = decode_s3tc(3, 9, data, RGBA_S3TC_DXT1_FORMAT)
+    assert_equal(len(pixels), 3 * 9 * 4)
+    # The first four rows are red, the next four blue, and the ninth --
+    # the one texel row of the last block -- is green.
+    assert_equal(pixels[0], UInt8(255))
+    assert_equal(pixels[(3 * 3 + 2) * 4], UInt8(255))
+    assert_equal(pixels[(4 * 3) * 4 + 2], UInt8(255))
+    assert_equal(pixels[(7 * 3 + 2) * 4 + 2], UInt8(255))
+    assert_equal(pixels[(8 * 3) * 4 + 1], UInt8(255))
+    assert_equal(pixels[(8 * 3 + 2) * 4 + 1], UInt8(255))
+
+
+def test_dimensions_that_would_decode_to_too_much_are_refused() raises:
+    # The width and the height come from a file. Their product decides an
+    # allocation, so it is bounded by name rather than left to fail inside
+    # an allocator.
+    with assert_raises(contains="MAX_DECODED_BYTES"):
+        _ = decode_s3tc(100000, 100000, List[UInt8](), RGBA_S3TC_DXT1_FORMAT)
+    # The bound is not so tight that a real texture trips it: the payload
+    # length is what refuses this one, which means the size passed.
+    with assert_raises(contains="payload length"):
+        _ = decode_s3tc(16384, 16384, List[UInt8](), RGBA_S3TC_DXT1_FORMAT)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

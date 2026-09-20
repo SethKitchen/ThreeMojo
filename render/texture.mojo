@@ -564,6 +564,11 @@ struct Texture(Movable):
             raise Error("A texture's alpha mode must be COVERAGE or IGNORED")
         if self.anisotropy < 1:
             raise Error("A texture's anisotropy is at least one")
+        if self.anisotropy > MAX_ANISOTROPY:
+            raise Error(
+                "A texture's anisotropy is at most MAX_ANISOTROPY: every"
+                " tap is work a fragment pays for"
+            )
 
     def __init__(out self, *, copy: Self):
         """Copy another texture, image data included."""
@@ -991,9 +996,35 @@ struct Texture(Movable):
 
     def sample_footprint(
         self, u: Float32, v: Float32, footprint: Footprint
-    ) -> FloatColor:
+    ) raises -> FloatColor:
         """Return the color over a pixel's footprint: one trilinear sample,
         or several along the footprint's long axis averaged.
+
+        The checked entry point. A `Footprint` is fieldwise-constructible,
+        so a caller can hand this one no taps at all, and the average
+        below would divide by it. Anything a caller builds by hand comes
+        through here; the rasterizers take `_sample_footprint`, because
+        `anisotropic_footprint` made what they hand it.
+
+        Args:
+            u: Horizontal coordinate, 0 at the left edge.
+            v: Vertical coordinate, 0 at the *bottom* edge.
+            footprint: The level, the tap count and the step between taps,
+                from `anisotropic_footprint` or built by hand.
+
+        Returns:
+            The color found there, or opaque white if the texture is blank.
+
+        Raises:
+            Error: Everything `Footprint.validate` raises.
+        """
+        footprint.validate()
+        return self._sample_footprint(u, v, footprint)
+
+    def _sample_footprint(
+        self, u: Float32, v: Float32, footprint: Footprint
+    ) -> FloatColor:
+        """Return the color over a footprint `validate` has already passed.
 
         The taps are spread evenly along the long axis, centered on the
         coordinate, each read by `sample_level` at the footprint's level.
@@ -1005,7 +1036,7 @@ struct Texture(Movable):
             u: Horizontal coordinate, 0 at the left edge.
             v: Vertical coordinate, 0 at the *bottom* edge.
             footprint: The level, the tap count and the step between taps,
-                from `anisotropic_footprint`.
+                from `anisotropic_footprint`. At least one tap.
 
         Returns:
             The color found there, or opaque white if the texture is blank.
@@ -1068,6 +1099,15 @@ struct Texture(Movable):
         return self._sample_at(u, v, 0)
 
 
+# The most taps a fragment may take along a footprint's long axis, and so
+# the largest `anisotropy` a texture may ask for. Sixteen is what the
+# desktop GL implementations report and what three.js caps a texture at
+# through `getMaxAnisotropy`. The cap belongs here and not only in the
+# estimator: a tap is per-fragment work, and an asset that asked for a
+# thousand would cost a thousand reads a pixel on both backends.
+comptime MAX_ANISOTROPY = 16
+
+
 @fieldwise_init
 struct Footprint(ImplicitlyCopyable):
     """How a pixel's footprint is read: which level, how many taps along
@@ -1075,11 +1115,132 @@ struct Footprint(ImplicitlyCopyable):
 
     What `anisotropic_footprint` returns and `Texture.sample_footprint`
     reads. One tap with a step of zero is the plain trilinear read.
+
+    Fieldwise-constructible, because building one by hand is a real thing
+    to want -- a test pinning one tap arrangement, a tool asking what a
+    level looks like -- and a struct is not a proof. `Footprint(0, 0,
+    Vector2(0, 0))` builds, and sampling it would divide by a tap count of
+    nothing. So `validate` states the contract and `Texture.sample_footprint`
+    asks it, while the renderer's own footprints come from
+    `anisotropic_footprint` and go to `Texture._sample_footprint`, which
+    does not ask: a fragment loop is not a place to handle an error.
     """
 
     var level: Float32
     var taps: Int
     var step: Vector2
+
+    def validate(self) raises:
+        """Raise unless this footprint can be sampled.
+
+        Raises:
+            Error: If the tap count is below one or above `MAX_ANISOTROPY`,
+                or the level or either component of the step is not finite.
+        """
+        if self.taps < 1:
+            raise Error("A footprint takes at least one tap")
+        if self.taps > MAX_ANISOTROPY:
+            raise Error(
+                "A footprint takes at most MAX_ANISOTROPY taps: a fragment"
+                " pays for every one of them"
+            )
+        if not isfinite(self.level):
+            raise Error("A footprint's level must be finite")
+        if not isfinite(self.step.x) or not isfinite(self.step.y):
+            raise Error("A footprint's step must be finite")
+
+
+def _principal_axes(u: Vector2, v: Vector2) -> Vector2:
+    """Return the footprint ellipse's two principal lengths, longer first.
+
+    `u` and `v` are the columns of the derivative matrix in texels: how far
+    the coordinates move for one pixel right and for one pixel down. The
+    footprint is the image of the unit disc under that matrix, an ellipse
+    whose semi-axes are its singular values. Those are the square roots of
+    the eigenvalues of `J` transpose times `J`, the symmetric two by two
+
+        [ u.u  u.v ]
+        [ u.v  v.v ]
+
+    whose eigenvalues are the roots of a quadratic. No decomposition
+    library, and nothing that can fail: the discriminant of a symmetric
+    matrix is a sum of squares and cannot go negative, bar a rounding,
+    which the clamps below take.
+
+    Args:
+        u: The first column, in texels.
+        v: The second column, in texels.
+
+    Returns:
+        The major length in `x` and the minor in `y`, neither below zero.
+    """
+    var a = u.x * u.x + u.y * u.y
+    var b = u.x * v.x + u.y * v.y
+    var c = v.x * v.x + v.y * v.y
+    var half_sum = (a + c) / 2
+    var half_difference = (a - c) / 2
+    var spread = sqrt(half_difference * half_difference + b * b)
+    # Clamped with `max` rather than with an `if`. Neither can go below
+    # zero in exact arithmetic -- `spread` is at most `half_sum`, because
+    # the Gram matrix of two real vectors is positive semidefinite -- so a
+    # rounding is the only thing either guard is for, and an `if` would be
+    # a branch no test could take.
+    var larger = max(Float32(0), half_sum + spread)
+    var smaller = max(Float32(0), half_sum - spread)
+    return Vector2(sqrt(larger), sqrt(smaller))
+
+
+def _major_direction(u: Vector2, v: Vector2, major: Float32) -> Vector2:
+    """Return the unit direction of the footprint's long axis, in texels.
+
+    The long axis lives in the derivative matrix's *output* space, so it is
+    an eigenvector of `J` times `J` transpose -- not of the `J` transpose
+    times `J` whose eigenvalues `_principal_axes` took. The two share their
+    eigenvalues and not their eigenvectors. That matrix is
+
+        [ p  q ]    p = u.x * u.x + v.x * v.x
+        [ q  r ]    q = u.x * u.y + v.x * v.y
+                    r = u.y * u.y + v.y * v.y
+
+    and either row of it less the eigenvalue on the diagonal gives the
+    eigenvector. Either row can be the zero row, so the longer answer of
+    the two is taken.
+
+    Args:
+        u: The first column of the derivative matrix, in texels.
+        v: The second column, in texels.
+        major: The major length, `_principal_axes`'s `x`.
+
+    Returns:
+        A unit vector along the long axis, in texel space. Its sign is
+        arbitrary: the taps are centered, so both ends span one line.
+    """
+    var q = u.x * u.y + v.x * v.y
+    if q == 0:
+        # Diagonal, which is the axis-aligned footprint: the long axis is
+        # whichever texel axis carries more of the two derivatives.
+        if u.x * u.x + v.x * v.x >= u.y * u.y + v.y * v.y:
+            return Vector2(1, 0)
+        return Vector2(0, 1)
+    var p = u.x * u.x + v.x * v.x
+    var r = u.y * u.y + v.y * v.y
+    var eigenvalue = major * major
+    var first = Vector2(q, eigenvalue - p)
+    var second = Vector2(eigenvalue - r, q)
+    var chosen = first
+    if (
+        second.x * second.x + second.y * second.y
+        > first.x * first.x + first.y * first.y
+    ):
+        chosen = second
+    # No guard on the length, where `q` above guards the diagonal case.
+    # `first` is `(q, ...)` and `q` is not zero on this path, so `first` is
+    # at least `|q|` long, and `chosen` is the longer of the two. The
+    # caller reaches this only when it took more than one tap, which needs
+    # a major axis above one texel, so nothing here is near the range
+    # where a square could underflow to zero.
+    var length = sqrt(chosen.x * chosen.x + chosen.y * chosen.y)
+    return Vector2(chosen.x / length, chosen.y / length)
 
 
 def anisotropic_footprint(
@@ -1092,17 +1253,39 @@ def anisotropic_footprint(
     """Return how to read a pixel's footprint, given how far the texture
     coordinates move one pixel over and one pixel down.
 
-    The two axes are measured in texels, as `render.rasterizer.mip_level`
-    measures them. With an anisotropy of one the level is that of the
-    longer axis, `log2(longest)`, the same number `mip_level` gives, so a
-    texture that asks for nothing reads exactly as it did. With more, the
-    long axis is covered by taps rather than by a coarser level: the tap
-    count is the ratio of the two lengths rounded up, capped at the
-    anisotropy and at the long axis's own length in texels, and the level
-    is that of the long axis divided by the count, which is close to the
-    short axis's own. The taps step along
-    the long axis's direction in texture space, the axis divided by the
-    count, so together they span the footprint once.
+    The two derivatives are measured in texels, as
+    `render.rasterizer.mip_level` measures them.
+
+    **With an anisotropy of one** the level is the log of the longer
+    derivative, the number `mip_level` gives and the number OpenGL's
+    isotropic rho gives, so a texture that asks for nothing reads exactly
+    as it did.
+
+    **With more**, the footprint is treated as what it is: the ellipse the
+    derivative matrix maps the unit disc onto. Its principal lengths are
+    that matrix's singular values, which are *not* the lengths of the two
+    derivatives. Two derivatives of equal length describe a circle only
+    when they are perpendicular. Turn the screen's basis forty-five degrees
+    under a surface seen edge-on and the two lengths become equal while the
+    footprint stays as long and as thin as it was; measuring the
+    derivatives would call that footprint round and blur it by several
+    levels. `_principal_axes` takes the real lengths and `_major_direction`
+    the real long axis, each from one quadratic.
+
+    **The level follows the minor axis, not the major one divided by the
+    taps.** Taps along the long axis filter along the long axis and do
+    nothing across the short one, so rounding the tap count up must not
+    shrink the level below what the short axis needs. The rule is
+
+        effective minor = max(1, minor, major / taps allowed)
+        taps            = clamp(ceil(major / effective minor), 1, allowed)
+        level           = log2(effective minor)
+
+    which is continuous where measuring along the major axis jumped: a
+    footprint going from sixteen by sixteen to sixteen and a thousandth by
+    sixteen gains a tap, and keeps its level instead of losing most of one
+    with it. The floor of one is what stops a tap per texel from reading
+    any texel twice.
 
     Pure and shared by both rasterizers, as `wrap_index` is.
 
@@ -1111,46 +1294,65 @@ def anisotropic_footprint(
         along_y: How they change one pixel down.
         width: The texture's width in texels.
         height: Its height.
-        anisotropy: How many taps the texture allows, at least one.
+        anisotropy: How many taps the texture allows, at least one and
+            clamped to `MAX_ANISOTROPY`.
 
     Returns:
         The footprint. A level at or below zero means magnification.
     """
-    var dx = Vector2(along_x.x * Float32(width), along_x.y * Float32(height))
-    var dy = Vector2(along_y.x * Float32(width), along_y.y * Float32(height))
-    var in_x = sqrt(dx.x * dx.x + dx.y * dx.y)
-    var in_y = sqrt(dy.x * dy.x + dy.y * dy.y)
+    var u = Vector2(along_x.x * Float32(width), along_x.y * Float32(height))
+    var v = Vector2(along_y.x * Float32(width), along_y.y * Float32(height))
+    var in_x = sqrt(u.x * u.x + u.y * u.y)
+    var in_y = sqrt(v.x * v.x + v.y * v.y)
     var longest = in_x
-    var shortest = in_y
-    var axis = along_x
     if in_y > in_x:
         longest = in_y
-        shortest = in_x
-        axis = along_y
     if longest <= 0:
         return Footprint(0, 1, Vector2(0, 0))
-    var taps = 1
-    if anisotropy > 1:
-        # The ratio of the two lengths, or every tap the texture allows
-        # when the short axis is nothing, and never more taps than the
-        # long axis has texels: a tap a texel already reads each once.
-        var ratio = ceil(longest)
-        if shortest > 0 and ceil(longest / shortest) < ratio:
-            ratio = ceil(longest / shortest)
-        if ratio < Float32(anisotropy):
-            taps = Int(ratio)
-        else:
-            taps = anisotropy
-    if taps == 1:
+    # The isotropic read, unchanged: the longer derivative's own level,
+    # negative where the texture is magnified.
+    if anisotropy <= 1:
         return Footprint(log2(longest), 1, Vector2(0, 0))
-    var covered = longest / Float32(taps)
-    var level = Float32(0)
-    if covered > 1:
-        level = log2(covered)
+    var allowed = anisotropy
+    if allowed > MAX_ANISOTROPY:
+        allowed = MAX_ANISOTROPY
+    var axes = _principal_axes(u, v)
+    var major = axes.x
+    var minor = axes.y
+    # A degenerate footprint -- a surface collapsed to a line -- has no
+    # minor axis at all, and this floor is what keeps its level finite.
+    var effective_minor = minor
+    if effective_minor < 1:
+        effective_minor = 1
+    var reach_of_one = major / Float32(allowed)
+    if reach_of_one > effective_minor:
+        effective_minor = reach_of_one
+    # Both ends clamped with `min` and `max` rather than with an `if`.
+    # `effective_minor` is at least one and at least `major / allowed`, so
+    # the quotient already lies between one and `allowed` and neither
+    # guard has a reachable second side. They are here against a rounding
+    # that could put `ceil` one over the cap, which must not happen:
+    # `Footprint.validate` refuses more taps than the cap allows.
+    var taps = max(1, min(Int(ceil(major / effective_minor)), allowed))
+    if taps == 1:
+        # One tap is the trilinear read, and the trilinear read of a round
+        # footprint is the level the longer derivative wants: the same
+        # number the isotropic path above returns, so a texture whose
+        # footprint happens to be round reads the same whether or not it
+        # asked for taps it cannot use.
+        return Footprint(log2(longest), 1, Vector2(0, 0))
+    var direction = _major_direction(u, v, major)
+    # The taps span the long axis once: `taps` steps of the axis divided by
+    # the count, in texels, taken back into texture coordinates by the size
+    # they were measured against.
+    var step = major / Float32(taps)
     return Footprint(
-        level,
+        log2(effective_minor),
         taps,
-        Vector2(axis.x / Float32(taps), axis.y / Float32(taps)),
+        Vector2(
+            direction.x * step / Float32(width),
+            direction.y * step / Float32(height),
+        ),
     )
 
 

@@ -1431,6 +1431,7 @@ def rasterize_kernel(
     scissor_width: Int32,
     scissor_height: Int32,
     backdrop: MutPointer[UInt8, MutAnyOrigin],
+    line_width: Int32,
 ):
     """Color one pixel from the nearest primitive that covers it.
 
@@ -1658,7 +1659,7 @@ def rasterize_kernel(
                     segments[unsafe_offset=far_base + LANE_X],
                     segments[unsafe_offset=far_base + LANE_Y],
                 )
-                if not covers(first, second, x, y):
+                if not covers(first, second, x, y, Int(line_width)):
                     continue
                 var along = y
                 if major_is_x(first, second):
@@ -2263,8 +2264,11 @@ def rasterize_kernel(
                     # Then the reflection, by the host's own three
                     # functions: the view turned back through the normal,
                     # the cube read in that direction, and the two lights
-                    # joined by the material's combine. See
-                    # `rasterize_shaded`.
+                    # joined by the material's combine. The one fixed
+                    # direction under a parallel projection, as
+                    # `rasterize_shaded` takes it and as
+                    # `envmap_fragment` takes it under `isOrthographic`.
+                    # See `rasterize_shaded`.
                     if reflects:
                         var bounce = reflected(
                             toward_eye_at(
@@ -2273,7 +2277,11 @@ def rasterize_kernel(
                                     lights[unsafe_offset=LIGHTS_EYE + 1],
                                     lights[unsafe_offset=LIGHTS_EYE + 2],
                                 ),
-                                PERSPECTIVE_VIEW,
+                                Vector3(
+                                    lights[unsafe_offset=LIGHTS_TOWARD],
+                                    lights[unsafe_offset=LIGHTS_TOWARD + 1],
+                                    lights[unsafe_offset=LIGHTS_TOWARD + 2],
+                                ),
                                 Vector3(wx, wy, wz),
                             ),
                             Vector3(nx, ny, nz),
@@ -2709,6 +2717,7 @@ struct GpuRenderer(Movable):
         scissor: Optional[Rect] = None,
         points: List[RasterVertex] = List[RasterVertex](),
         backdrop: Optional[Framebuffer] = None,
+        line_width: Int = 1,
     ) raises:
         """Rasterize prepared triangles, lines and points into the device
         target.
@@ -2751,6 +2760,14 @@ struct GpuRenderer(Movable):
                 before anything is drawn, and any other pixel holds the
                 clear color. None, the default, clears to `background`
                 alone. It must be the target's size.
+            line_width: How many raster pixels across every segment is,
+                the renderer's render scale, which the host passes to
+                `render.rasterizer.rasterize_frame` and both backends read
+                from `render.linerule`. One, the default, is a frame drawn
+                at its own size; a caller preparing a supersampled frame
+                through `Renderer.supersampled` passes that renderer's
+                `render_scale`, or the lines it draws thin out when the
+                frame is averaged down. Below one is treated as one.
 
         Raises:
             Error: If the corner count is not a multiple of three, the
@@ -2783,6 +2800,11 @@ struct GpuRenderer(Movable):
         # made here, before the launch, by the same functions.
         check_tone_mapping(tone_mapping, exposure)
         fog.validate()
+        # Clamped once here rather than per pixel in the kernel, and
+        # clamped the same way `rasterize_line` clamps it on the host.
+        var strokes = line_width
+        if strokes < 1:
+            strokes = 1
         var kept = Rect.whole(self.width, self.height)
         var narrowed = Bool(scissor)
         if narrowed:
@@ -3132,6 +3154,7 @@ struct GpuRenderer(Movable):
             Int32(kept.width),
             Int32(kept.height),
             self.backdrop.unsafe_ptr(),
+            Int32(strokes),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),

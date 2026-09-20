@@ -16,15 +16,50 @@ at twice the size, each way, and every output pixel is the average of the
 four it covers. Four samples a pixel is what a browser gives three.js by
 default.
 
-**The average is taken in linear light.** The supersampled frame is
-resolved to bytes first, as every frame is, and `downsample` decodes them,
-averages premultiplied, and encodes the result once more. Averaging bytes
-would darken every edge; see `render.srgb`. Going through bytes at all
-costs a rounding, and buys the two backends one path: a GPU frame comes
-back as bytes, and the same function makes the same image of it.
+**The average is taken on the scene's own light, before anything is
+converted for a display.** `Renderer.render` draws the large frame into a
+`RenderTarget`, which holds premultiplied linear light at full precision,
+averages the blocks *there* -- `RenderTarget.downsampled` -- and resolves
+the small target once. Tone mapping and the sRGB encode happen after the
+average, to the average, and to nothing else.
 
-**The depth is the nearest of the four**, so a picture read back for its
+The order matters more than a rounding. Encoding first clamps every
+sample to what a display can show and bends it through the tone curve, and
+the mean of the curve is not the curve of the mean. Four subsamples
+holding linear 4, 0, 0, 0 -- one bright emissive sample on an edge --
+average to a radiance of 1. Resolve them to bytes first and the bright one
+saturates to 255, which decodes to 1, so the average is a quarter of what
+it should be: byte 137 with no curve where the honest answer is 255, and
+123 against 188 under Reinhard. That is not rounding; it is the
+information being thrown away before the average could use it.
+
+**The depth is the nearest of the block**, so a picture read back for its
 depth keeps its nearest surface, as a resolved multisample depth does.
+
+**A size given in pixels is not a size in the scene.** A point's
+`PointsMaterial` size and a line's one-pixel thickness are measured in
+the pixels of the *finished* image, so drawing the frame larger has to
+make them larger to match, or anti-aliasing would shrink them. The
+renderer carries a `render_scale` for exactly that; see
+`renderers.renderer.Renderer.render_scale`, `render.pointrule` and
+`render.linerule`.
+
+## `downsample` resizes an image, and that is a different job
+
+`downsample` below takes a `Framebuffer` -- bytes -- and is what a caller
+resizing a *finished picture* wants: it decodes, averages premultiplied
+and encodes once, so that an edge is not darkened by averaging sRGB
+directly (see `render.srgb`). It is also what a caller driving the GPU has
+to use today, because `GpuRenderer` hands back a resolved image rather
+than the linear target behind it, and averaging those bytes is the best
+that can be done with them.
+
+That path is display-referred, with the loss described above, and it is
+named here rather than left to be discovered. Giving the GPU the same
+resolve means keeping its linear target long enough to average it, which
+is the same boundary the cube camera runs into: `Renderer.render_cube`
+still captures its six faces through byte-oriented `Framebuffer` images,
+and supersampling them does not give back range that was already gone.
 """
 
 from render.framebuffer import Color, FloatColor, Framebuffer

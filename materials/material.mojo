@@ -331,10 +331,17 @@ def combine_light(
             outgoing.b * reflection.b,
             1.0,
         )
+    # `a + (b - a) * t` and `a * (1 - t) + b * t` are one number in exact
+    # arithmetic and two in Float32. A reflection is the one place here
+    # where the two sides can be decades apart -- an HDR sky beside a dim
+    # surface -- and the difference of two such numbers carries the larger
+    # one's exponent, so adding the smaller back rounds it away. The
+    # weighted sum scales each side before it adds, and keeps it.
+    var keep = 1 - reflectivity
     return FloatColor(
-        outgoing.r + (toward.r - outgoing.r) * reflectivity,
-        outgoing.g + (toward.g - outgoing.g) * reflectivity,
-        outgoing.b + (toward.b - outgoing.b) * reflectivity,
+        outgoing.r * keep + toward.r * reflectivity,
+        outgoing.g * keep + toward.g * reflectivity,
+        outgoing.b * keep + toward.b * reflectivity,
         outgoing.a,
     )
 

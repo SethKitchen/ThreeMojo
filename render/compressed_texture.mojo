@@ -10,9 +10,22 @@ A GPU samples a compressed texture as it is, decoding a block per fetch in
 hardware. This project's textures are bytes read by two rasterizers that
 share their arithmetic, and neither has a block decoder in its hot path.
 So a compressed image is decoded once, here, into an ordinary `Texture`,
-and sampled like any other. What is kept is the *file*: a DDS or KTX
-payload lands as the texture it encodes, without an image decoder for a
-format that was never meant to be decoded outside a GPU.
+and sampled like any other.
+
+**This is a block decoder, not a container loader.** The caller supplies
+the width, the height, the format and exactly one level's block bytes.
+Nothing here parses a DDS or KTX header, picks a face or a layer, or reads
+the stored mip chain: a caller holding such a file reads those itself and
+hands the payload over. `render.png` is the module that opens a file.
+
+**It saves storage and not memory.** The asset stays small on disk, and
+`compressed_texture` expands it into an ordinary RGBA `Texture` at load
+time, so nothing downstream pays less bandwidth for it than for any other
+image. Sampling compressed blocks on the device would be a different
+feature, and it would need the block rule in both rasterizers.
+
+Because the dimensions come from outside, `decode_s3tc` bounds what it
+will allocate; see `MAX_DECODED_BYTES`.
 
 **The two S3TC formats, and nothing else yet.** BC1, three.js's
 `RGB_S3TC_DXT1_Format` and `RGBA_S3TC_DXT1_Format`, packs a 4x4 block into
@@ -44,6 +57,14 @@ from render.texture import (
     Texture,
     Wrap,
 )
+
+# The most bytes a decode may produce: one gibibyte, which is a 16384 by
+# 16384 RGBA image. The width and the height come from a file, and the
+# decoded size is their product -- a header that says a hundred thousand
+# each asks for forty gigabytes, and the honest answer is to refuse it by
+# name rather than to fail inside an allocator. Well past any texture a
+# GPU will take: `GL_MAX_TEXTURE_SIZE` is 16384 on current desktop parts.
+comptime MAX_DECODED_BYTES = 1 << 30
 
 
 @fieldwise_init
@@ -220,11 +241,20 @@ def decode_s3tc(
         `width * height * 4` bytes.
 
     Raises:
-        Error: If the dimensions are not positive, the format is none of
+        Error: If the dimensions are not positive, their product would
+            decode to more than `MAX_DECODED_BYTES`, the format is none of
             the three, or the payload's length is not the block grid's.
     """
     if width <= 0 or height <= 0:
         raise Error("Texture dimensions must be positive")
+    # Divided rather than multiplied, so that the check itself cannot be
+    # the thing that overflows.
+    if width > MAX_DECODED_BYTES // 4 // height:
+        raise Error(
+            "A compressed image would decode to more than"
+            " MAX_DECODED_BYTES: the dimensions are refused rather than"
+            " allocated"
+        )
     if not format.is_valid():
         raise Error(
             "A compressed format must be RGB_S3TC_DXT1_FORMAT,"

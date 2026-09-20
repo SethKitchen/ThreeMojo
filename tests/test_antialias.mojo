@@ -9,22 +9,35 @@ staircase."""
 
 from cameras.array_camera import ArrayCamera
 from cameras.cube_camera import CubeCamera
+from cameras.orthographic_camera import OrthographicCamera, centered
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.object3d import Object3D
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import BufferGeometry, POSITION
+from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from geometries.box import cube
 from geometries.sphere import sphere
-from materials.material import BASIC, Material
+from materials.material import (
+    BASIC,
+    Material,
+    PointSize,
+    points_material,
+)
 from math.vector3 import Vector3
+from objects.line import Line
 from objects.mesh import Mesh
+from objects.points import Points
 from render.antialias import SUPERSAMPLE, downsample
-from render.framebuffer import Color, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rect import Rect
+from render.target import RenderTarget
+from render.tonemap import NO_TONE_MAPPING, REINHARD_TONE_MAPPING
 from renderers.renderer import Renderer
 from std.math import inf
 from std.testing import (
     TestSuite,
+    assert_almost_equal,
     assert_equal,
     assert_false,
     assert_raises,
@@ -227,6 +240,252 @@ def test_an_array_camera_and_a_cube_camera_are_antialiased_too() raises:
             if r > 0 and r < 255:
                 between += 1
     assert_true(between > 4, "the cube's faces were not averaged")
+
+
+# --- the resolve happens before the image is made ---------------------------
+
+
+def test_an_hdr_edge_is_averaged_before_it_is_encoded() raises:
+    # One subsample of four holds four times the light a display can show,
+    # which is a bright emissive edge covering a quarter of an output
+    # pixel. The average of the four is a radiance of one, and one encodes
+    # to white.
+    #
+    # Resolving each sample to bytes first cannot reach that answer: the
+    # bright one saturates at 255, which decodes to one, so the average
+    # becomes a quarter of the light and the pixel comes back at 137. That
+    # is the whole reason `downsampled` works on the target and not on the
+    # picture.
+    var big = RenderTarget(2, 2, Color(0, 0, 0))
+    big.write(0, 0, FloatColor(4.0, 4.0, 4.0, 1.0))
+    big.write(1, 0, FloatColor(0.0, 0.0, 0.0, 1.0))
+    big.write(0, 1, FloatColor(0.0, 0.0, 0.0, 1.0))
+    big.write(1, 1, FloatColor(0.0, 0.0, 0.0, 1.0))
+    var small = big.downsampled(SUPERSAMPLE)
+    assert_equal(small.width, 1)
+    assert_equal(small.height, 1)
+    # The light itself, before anything is encoded: four averaged to one.
+    assert_almost_equal(Float64(small.color_at(0, 0).r), 1.0, atol=1e-6)
+    var shown = small.resolve(1, NO_TONE_MAPPING, 1.0)
+    assert_color(shown.get_pixel(0, 0), Color(255, 255, 255))
+    # And through a curve, which must see the average rather than be
+    # averaged itself: Reinhard of one is a half, which encodes to 188.
+    var curved = big.downsampled(SUPERSAMPLE).resolve(
+        1, REINHARD_TONE_MAPPING, 1.0
+    )
+    assert_color(curved.get_pixel(0, 0), Color(188, 188, 188))
+    # What the byte-first path gives for the same four samples, so that the
+    # difference is a number in the record rather than an assertion about
+    # an implementation.
+    var encoded = big.resolve(1, NO_TONE_MAPPING, 1.0)
+    assert_color(
+        downsample(encoded, SUPERSAMPLE).get_pixel(0, 0), Color(137, 137, 137)
+    )
+
+
+def test_a_block_is_data_only_when_every_sample_is() raises:
+    # A normal is not light, and a tone curve must not touch it -- but a
+    # normal half covered by lit smoke is not a normal any more. The flag
+    # follows the whole block.
+    var all_data = RenderTarget(2, 2, Color(0, 0, 0))
+    for y in range(2):
+        for x in range(2):
+            all_data.write(x, y, FloatColor(0.5, 0.5, 0.5, 1.0), True)
+    assert_true(all_data.downsampled(SUPERSAMPLE).is_data(0, 0))
+    var mixed = RenderTarget(2, 2, Color(0, 0, 0))
+    for y in range(2):
+        for x in range(2):
+            mixed.write(x, y, FloatColor(0.5, 0.5, 0.5, 1.0), True)
+    mixed.write(1, 1, FloatColor(0.5, 0.5, 0.5, 1.0), False)
+    assert_false(mixed.downsampled(SUPERSAMPLE).is_data(0, 0))
+
+
+def test_a_resolved_block_keeps_its_nearest_depth() raises:
+    var big = RenderTarget(2, 2, Color(0, 0, 0))
+    _ = big.test_depth(0, 0, 0.75)
+    _ = big.test_depth(1, 0, 0.25)
+    _ = big.test_depth(0, 1, 0.5)
+    _ = big.test_depth(1, 1, 0.9)
+    assert_almost_equal(
+        Float64(big.downsampled(SUPERSAMPLE).depth_at(0, 0)), 0.25, atol=1e-6
+    )
+
+
+def test_downsampling_a_target_refuses_a_factor_that_does_not_fit() raises:
+    var target = RenderTarget(3, 2, Color(0, 0, 0))
+    with assert_raises(contains="at least one"):
+        _ = target.downsampled(0)
+    # The width does not divide, which is the first half of the test.
+    with assert_raises(contains="must divide"):
+        _ = target.downsampled(2)
+    # And a target whose width divides while its height does not, so the
+    # second half is reached rather than short-circuited past.
+    var tall = RenderTarget(2, 3, Color(0, 0, 0))
+    with assert_raises(contains="must divide"):
+        _ = tall.downsampled(2)
+    # One is a copy, not a refusal.
+    assert_equal(target.downsampled(1).width, 3)
+
+
+# --- a size given in pixels survives the round trip -------------------------
+
+
+def a_point_scene(
+    mut assets: Assets, size: Float32, attenuated: Bool
+) raises -> Scene:
+    """Return a scene holding one white point at the world origin."""
+    var geometry = BufferGeometry()
+    geometry.set_attribute(
+        String(POSITION), BufferAttribute([0.0, 0.0, 0.0], 3)
+    )
+    var dot = assets.geometries.add(geometry^)
+    var paint = assets.materials.add(
+        points_material(
+            Color(255, 255, 255),
+            size=PointSize(size),
+            size_attenuation=attenuated,
+        )
+    )
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene.update()
+    scene.add_points(Points(dot, paint, NodeId(0)))
+    return scene^
+
+
+def covered(image: Framebuffer) raises -> Float64:
+    """Return how many output pixels a white shape covers on black.
+
+    Counted as *area* rather than as lit pixels, because that is what
+    survives the resolve. A square eight output pixels across covers
+    sixty-four pixels whether or not the frame was supersampled, but with
+    anti-aliasing on its edge lands on part-covered pixels instead of
+    whole ones, and counting pixels would call that a different size. The
+    light is summed in linear, where white is one and half covered is a
+    half; see `render.srgb`.
+    """
+    var total = Float64(0)
+    for y in range(image.height):  # pragma: no branch
+        for x in range(image.width):  # pragma: no branch
+            total += Float64(FloatColor(srgb=image.get_pixel(x, y)).r)
+    return total
+
+
+def a_point_camera() raises -> PerspectiveCamera:
+    """Return a camera five meters back with a right-angle view."""
+    var camera = PerspectiveCamera(
+        Angle(90.0, DEGREE), 1.0, Length(0.5, METER), Length(100.0, METER)
+    )
+    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
+    return camera^
+
+
+def a_black_renderer() raises -> Renderer:
+    """Return a renderer cleared to black, so that covered area is what
+    the red channel sums to."""
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    return renderer^
+
+
+def test_a_point_keeps_its_size_when_the_frame_is_supersampled() raises:
+    # An eight-pixel point with attenuation off covers sixty-four output
+    # pixels. It has to cover sixty-four with anti-aliasing on too: the
+    # setting is about how cleanly an edge is drawn, not about how large
+    # the object is.
+    #
+    # Before the render scale existed the point stayed eight *raster*
+    # pixels across on a doubled frame and averaged down to four, for
+    # sixteen pixels of coverage -- a quarter of the area, from turning on
+    # a setting that is supposed to preserve appearance.
+    var assets = Assets()
+    var scene = a_point_scene(assets, 8.0, False)
+    var camera = a_point_camera()
+    var renderer = a_black_renderer()
+    assert_almost_equal(
+        covered(renderer.render(scene, assets, camera)), 64.0, atol=1.0
+    )
+    renderer.set_antialias(True)
+    assert_almost_equal(
+        covered(renderer.render(scene, assets, camera)), 64.0, atol=1.0
+    )
+
+
+def test_a_point_under_a_parallel_camera_keeps_its_size_too() raises:
+    # three.js does not attenuate a point under a parallel projection, so
+    # this is the other route through `attenuated_size` -- reached with
+    # the material's attenuation *on* -- and it has to scale the same way.
+    var assets = Assets()
+    var scene = a_point_scene(assets, 8.0, True)
+    var camera = centered(
+        Length(4.0, METER),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.5, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0, 5), Vector3(0, 0, 0))
+    var renderer = a_black_renderer()
+    assert_almost_equal(
+        covered(renderer.render(scene, assets, camera)), 64.0, atol=1.0
+    )
+    renderer.set_antialias(True)
+    assert_almost_equal(
+        covered(renderer.render(scene, assets, camera)), 64.0, atol=1.0
+    )
+
+
+def test_an_attenuated_point_is_not_scaled_twice() raises:
+    # The perspective branch multiplies by half the image height, which
+    # doubles with the frame, so it already grew: scaling it again puts
+    # the point at twice its width and four times its area. It must
+    # measure against the *output* height and take the render scale once.
+    var assets = Assets()
+    var scene = a_point_scene(assets, 4.0, True)
+    var camera = a_point_camera()
+    var renderer = a_black_renderer()
+    var plain = covered(renderer.render(scene, assets, camera))
+    assert_true(plain > 1.0, "the attenuated point drew nothing to compare")
+    renderer.set_antialias(True)
+    assert_almost_equal(
+        covered(renderer.render(scene, assets, camera)), plain, atol=1.0
+    )
+
+
+def test_a_line_keeps_its_thickness_when_the_frame_is_supersampled() raises:
+    # A horizontal white line over black, measured down a column: one
+    # output pixel of thickness, whatever the frame was drawn at.
+    #
+    # Thickness is measured as area for the reason `covered` gives. The
+    # run of raster pixels the line lights is centered on where the line
+    # actually crosses, so it can straddle two output rows and light
+    # neither fully -- that is one pixel of line in the right place, not
+    # half a pixel. Before the width existed the line lit one raster
+    # pixel and the column summed to a half.
+    var assets = Assets()
+    var geometry = BufferGeometry()
+    geometry.set_attribute(
+        String(POSITION), BufferAttribute([-2.0, 0.0, 0.0, 2.0, 0.0, 0.0], 3)
+    )
+    var thread = assets.geometries.add(geometry^)
+    var paint = assets.materials.add(Material(Color(255, 255, 255), kind=BASIC))
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene.update()
+    scene.add_line(Line(thread, paint, NodeId(0)))
+    var camera = a_point_camera()
+    var renderer = a_black_renderer()
+    var plain = renderer.render(scene, assets, camera)
+    renderer.set_antialias(True)
+    var smooth = renderer.render(scene, assets, camera)
+
+    # Down the middle column, which the line crosses.
+    var straight = Float64(0)
+    var averaged = Float64(0)
+    for y in range(HEIGHT):  # pragma: no branch
+        straight += Float64(FloatColor(srgb=plain.get_pixel(WIDTH // 2, y)).r)
+        averaged += Float64(FloatColor(srgb=smooth.get_pixel(WIDTH // 2, y)).r)
+    assert_almost_equal(straight, 1.0, atol=0.05)
+    assert_almost_equal(averaged, 1.0, atol=0.05)
 
 
 def main() raises:

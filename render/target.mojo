@@ -453,6 +453,113 @@ struct RenderTarget(Movable):
             self.colors[slot].unpremultiplied(), curve, exposure
         ).encode()
 
+    def downsampled(self, factor: Int) raises -> Self:
+        """Return this target shrunk by `factor` each way, every pixel of
+        it the average of the `factor` by `factor` block it covers, still
+        in linear light.
+
+        **Where supersampling is resolved, and it has to be here.** The
+        samples a frame is drawn with are scene radiance, and radiance is
+        what an output pixel is the average of. Resolving each sample to
+        bytes first and averaging those averages the *tone curve of* the
+        samples instead, which is a different number: four samples of 4, 0,
+        0, 0 -- one bright emissive sample on an edge -- average to a
+        radiance of 1, and averaging their encoded bytes gives 137 with no
+        curve, where the honest answer is 255. Clamping alone accounts for
+        most of it; a curve accounts for the rest. So the average is taken
+        here, on the light, and `resolve` still converts exactly once,
+        afterward, on a target this size. See `render.antialias`.
+
+        The colors are already premultiplied, which is what makes the
+        average a plain sum: a sample covering nothing contributes nothing
+        and drags no color in behind it.
+
+        **The depth is the nearest of the block**, as a resolved
+        multisample depth is, so a picture read back for its depth keeps
+        its nearest surface.
+
+        **A pixel is data only if every sample in it is.** A block holding
+        a normal beside lit smoke is not a normal any more, and the module
+        docstring's rule applies to it: what comes out is light, and light
+        is what a tone curve is for. A block that is data throughout stays
+        data, so a normal or depth view antialiases without being tone
+        mapped.
+
+        Args:
+            factor: How many pixels across and down become one. One
+                returns a copy.
+
+        Returns:
+            The smaller target, its clear color and scissor carried over,
+            the scissor widened to the whole of it.
+
+        Raises:
+            Error: If the factor is less than one or does not divide both
+                dimensions.
+        """
+        if factor < 1:
+            raise Error("A downsample factor is at least one")
+        if self.width % factor != 0 or self.height % factor != 0:
+            raise Error("A downsample factor must divide the target's size")
+        var width = self.width // factor
+        var height = self.height // factor
+        var count = width * height
+        var colors = List[FloatColor](
+            length=count, fill=FloatColor(0.0, 0.0, 0.0, 0.0)
+        )
+        var depths = List[Float32](length=count, fill=inf[DType.float32]())
+        # Counted rather than flagged: a `Bool` raised in a loop and read
+        # after it is the shape that hangs codegen; see
+        # `docs/wiki/The-Mojo-compiler-hang.md`.
+        var counts = List[Int](length=count, fill=0)
+        # **Walked flat, over the source pixels, and not as four nested
+        # loops over the blocks.** The nested spelling is the one this
+        # reads like and the one `render.antialias.downsample` uses, and
+        # it sends *this* function into the same codegen hang: a twenty
+        # line program that called it stopped building, where the flat
+        # walk compiles in a second. The arithmetic is the same either
+        # way -- each source pixel belongs to exactly one block, so
+        # adding it to that block's running total visits every sample
+        # once, in a different order.
+        # Both dimensions are positive, so this never runs zero times.
+        for source in range(self.width * self.height):  # pragma: no branch
+            var slot = (
+                source // self.width // factor
+            ) * width + source % self.width // factor
+            var sampled = self.colors[source]
+            var running = colors[slot]
+            colors[slot] = FloatColor(
+                running.r + sampled.r,
+                running.g + sampled.g,
+                running.b + sampled.b,
+                running.a + sampled.a,
+            )
+            var z = self.depth[source]
+            if z < depths[slot]:
+                depths[slot] = z
+            if self.data[source]:
+                counts[slot] += 1
+        # The average, taken once per output pixel rather than per sample,
+        # so the sum is exact before anything divides it.
+        var share = 1 / Float32(factor * factor)
+        var flags = List[Bool](length=count, fill=False)
+        var samples = factor * factor
+        for slot in range(count):  # pragma: no branch
+            var total = colors[slot]
+            colors[slot] = FloatColor(
+                total.r * share,
+                total.g * share,
+                total.b * share,
+                total.a * share,
+            )
+            flags[slot] = counts[slot] == samples
+        var small = RenderTarget(width, height, Color(0, 0, 0, 0))
+        small.clear = self.clear
+        small.colors = colors^
+        small.depth = depths^
+        small.data = flags^
+        return small^
+
     def resolve(
         self,
         workers: Int = 1,

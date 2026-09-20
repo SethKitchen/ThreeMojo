@@ -37,6 +37,7 @@ from render.texture import (
     texture_of,
     wrap_index,
     Footprint,
+    MAX_ANISOTROPY,
     anisotropic_footprint,
 )
 from std.math import inf, nan
@@ -1458,6 +1459,162 @@ def test_taps_along_a_stripe_keep_it_sharp() raises:
         0.5, 0.5, anisotropic_footprint(thin, tall, 8, 8, 4)
     )
     assert_equal(blank.r, Float32(1))
+
+
+# --- the footprint is an ellipse, not two derivatives -----------------------
+
+
+def test_a_rotated_screen_basis_keeps_an_anisotropic_footprint() raises:
+    # A footprint sixteen texels long and one across, on a 64 by 64
+    # texture. Axis aligned, it takes sixteen taps at level zero.
+    var aligned = anisotropic_footprint(
+        Vector2(16.0 / 64, 0), Vector2(0, 1.0 / 64), 64, 64, 16
+    )
+    assert_equal(aligned.taps, 16)
+    assert_almost_equal(Float64(aligned.level), 0.0, atol=TOLERANCE)
+    # Now turn the screen's basis forty-five degrees under the same
+    # surface. The ellipse is the one above -- principal lengths sixteen
+    # and one -- but the two derivatives now have equal length. Measuring
+    # them calls the footprint round: one tap at level 3.5, which is a
+    # surface blurring because of how it lies against the screen axes.
+    var diagonal = Float32(1.0) / Float32(64.0 * 1.4142135623730951)
+    var turned = anisotropic_footprint(
+        Vector2(16.0 * diagonal, diagonal),
+        Vector2(-16.0 * diagonal, diagonal),
+        64,
+        64,
+        16,
+    )
+    assert_equal(turned.taps, 16)
+    assert_almost_equal(Float64(turned.level), 0.0, atol=TOLERANCE)
+    # And the taps run along the ellipse's own long axis, which is the
+    # texture's x here whatever the screen is doing.
+    assert_almost_equal(Float64(turned.step.x), 0.015625, atol=TOLERANCE)
+    assert_almost_equal(Float64(turned.step.y), 0.0, atol=TOLERANCE)
+    # The same ellipse stood on its end: sixteen texels down and one
+    # across, again under a basis turned forty-five degrees. The long axis
+    # is the texture's y now, and the step has to follow it there.
+    var upright = anisotropic_footprint(
+        Vector2(diagonal, 16.0 * diagonal),
+        Vector2(diagonal, -16.0 * diagonal),
+        64,
+        64,
+        16,
+    )
+    assert_equal(upright.taps, 16)
+    assert_almost_equal(Float64(upright.level), 0.0, atol=TOLERANCE)
+    assert_almost_equal(Float64(upright.step.x), 0.0, atol=TOLERANCE)
+    assert_almost_equal(Float64(upright.step.y), 0.015625, atol=TOLERANCE)
+
+
+def test_equal_derivatives_are_round_only_when_perpendicular() raises:
+    # Two derivatives of the same length: a circle when they are square to
+    # each other, and an ellipse when they are not. One tap against four.
+    var square = anisotropic_footprint(
+        Vector2(4.0 / 64, 0), Vector2(0, 4.0 / 64), 64, 64, 16
+    )
+    assert_equal(square.taps, 1)
+    var sheared = anisotropic_footprint(
+        Vector2(4.0 / 64, 0), Vector2(3.88 / 64, 1.0 / 64), 64, 64, 16
+    )
+    assert_true(
+        sheared.taps > 1,
+        "a sheared footprint of equal derivatives was called round",
+    )
+
+
+# --- the level follows the short axis ---------------------------------------
+
+
+def test_rounding_the_tap_count_up_does_not_sharpen_the_level() raises:
+    # Sixteen by sixteen is round: one tap at level four.
+    var round_one = anisotropic_footprint(
+        Vector2(16.0 / 64, 0), Vector2(0, 16.0 / 64), 64, 64, 16
+    )
+    assert_equal(round_one.taps, 1)
+    assert_almost_equal(Float64(round_one.level), 4.0, atol=TOLERANCE)
+    # A thousandth of a texel longer takes a second tap along the long
+    # axis. The short axis still spans sixteen texels, so the level must
+    # not move: dividing the major axis by the tap count gave 3.0 here,
+    # nearly a whole level finer for a change of a thousandth.
+    var barely = anisotropic_footprint(
+        Vector2(16.001 / 64, 0), Vector2(0, 16.0 / 64), 64, 64, 16
+    )
+    assert_equal(barely.taps, 2)
+    assert_almost_equal(Float64(barely.level), 4.0, atol=TOLERANCE)
+    # And a quarter of a texel longer, the review's own case.
+    var quarter = anisotropic_footprint(
+        Vector2(16.25 / 64, 0), Vector2(0, 16.0 / 64), 64, 64, 16
+    )
+    assert_equal(quarter.taps, 2)
+    assert_almost_equal(Float64(quarter.level), 4.0, atol=TOLERANCE)
+
+
+def test_the_level_rises_when_the_taps_run_out() raises:
+    # Sixty-four texels long and one across, with only sixteen taps
+    # allowed: each tap has to cover four texels, so the level is two.
+    var capped = anisotropic_footprint(
+        Vector2(64.0 / 64, 0), Vector2(0, 1.0 / 64), 64, 64, 16
+    )
+    assert_equal(capped.taps, 16)
+    assert_almost_equal(Float64(capped.level), 2.0, atol=TOLERANCE)
+
+
+def test_an_anisotropy_above_the_cap_is_clamped_by_the_estimator() raises:
+    # The estimator takes no more taps than `MAX_ANISOTROPY`, whatever it
+    # is handed: a tap is per-fragment work on both backends.
+    var asked = anisotropic_footprint(
+        Vector2(64.0 / 64, 0), Vector2(0, 1.0 / 64), 64, 64, 1024
+    )
+    assert_equal(asked.taps, MAX_ANISOTROPY)
+
+
+# --- a footprint built by hand is checked -----------------------------------
+
+
+def test_a_hand_built_footprint_is_refused_before_it_is_sampled() raises:
+    var image = stripes()
+    # No taps at all, which the average would divide by.
+    with assert_raises(contains="at least one tap"):
+        _ = image.sample_footprint(0.5, 0.5, Footprint(0, 0, Vector2(0, 0)))
+    with assert_raises(contains="at least one tap"):
+        _ = image.sample_footprint(0.5, 0.5, Footprint(0, -4, Vector2(0, 0)))
+    # More taps than any texture may ask for.
+    with assert_raises(contains="MAX_ANISOTROPY"):
+        _ = image.sample_footprint(
+            0.5, 0.5, Footprint(0, MAX_ANISOTROPY + 1, Vector2(0, 0))
+        )
+    # A level or a step that is not a number.
+    with assert_raises(contains="level must be finite"):
+        _ = image.sample_footprint(
+            0.5, 0.5, Footprint(inf[DType.float32](), 2, Vector2(0.1, 0))
+        )
+    with assert_raises(contains="step must be finite"):
+        _ = image.sample_footprint(
+            0.5,
+            0.5,
+            Footprint(0, 2, Vector2(inf[DType.float32](), 0)),
+        )
+    with assert_raises(contains="step must be finite"):
+        _ = image.sample_footprint(
+            0.5,
+            0.5,
+            Footprint(0, 2, Vector2(0, inf[DType.float32]())),
+        )
+    # A footprint that passes is sampled as it always was.
+    var plain = image.sample_footprint(
+        0.0625, 0.5, Footprint(0, 1, Vector2(0, 0))
+    )
+    assert_almost_equal(Float64(plain.r), 1.0, atol=TOLERANCE)
+
+
+def test_a_texture_refuses_an_anisotropy_above_the_cap() raises:
+    var image = stripes()
+    image.anisotropy = MAX_ANISOTROPY
+    image.validate()
+    image.anisotropy = MAX_ANISOTROPY + 1
+    with assert_raises(contains="MAX_ANISOTROPY"):
+        image.validate()
 
 
 def main() raises:

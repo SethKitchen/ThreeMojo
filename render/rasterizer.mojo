@@ -60,9 +60,9 @@ from lights.lighting import PERSPECTIVE_VIEW, Lighting, toward_eye_at
 from core.fog import FogView, fog_mix
 from render.linerule import (
     dash_covers,
+    first_other_at,
     major_at,
     major_is_x,
-    other_at,
     share_at,
     span_of,
 )
@@ -725,7 +725,7 @@ def _sample_map(
     # The level, and the taps along the long axis when the texture
     # allows them: the same function the kernel asks. With one tap the
     # level is what `mip_level` gives.
-    return image.sample_footprint(
+    return image._sample_footprint(
         u,
         v,
         anisotropic_footprint(
@@ -1788,14 +1788,17 @@ def rasterize_shaded(
                 # material's combine, exactly where three.js's
                 # `envmap_fragment` joins it: after the emissive term and
                 # before the fog. The direction is the camera's view
-                # turned back through the normal, measured from where the
-                # camera stands under either projection, as three.js reads
-                # `cameraPosition` here and does not special-case a
-                # parallel one. Read at the cube's full size; see
-                # `render.cube_texture`.
+                # turned back through the normal, and `envmap_fragment`
+                # *does* special-case a parallel projection where the
+                # matcap above does not: under `isOrthographic` it takes
+                # the view's third column and only otherwise the way to
+                # `cameraPosition`. That is what `lighting.toward_eye`
+                # holds, so a reflection under a parallel projection stops
+                # swimming as the camera slides along its own axis. Read
+                # at the cube's full size; see `render.cube_texture`.
                 if reflects:
                     var bounce = reflected(
-                        toward_eye_at(lighting.eye, PERSPECTIVE_VIEW, spot),
+                        toward_eye_at(lighting.eye, lighting.toward_eye, spot),
                         facing,
                     )
                     shaded = combine_light(
@@ -1893,8 +1896,9 @@ def rasterize_line(
     first_row: Int = 0,
     last_row: Int = -1,
     fog: FogView = FogView.none(),
+    line_width: Int = 1,
 ) raises:
-    """Draw one segment, one pixel wide, into `target`.
+    """Draw one segment, `line_width` raster pixels wide, into `target`.
 
     `render.linerule` decides which pixels, and the kernel asks it the same
     question, so the two staircases are the same staircase.
@@ -1918,6 +1922,10 @@ def rasterize_line(
         last_row: The last row it owns. Below zero, or past the last row,
             is the rest of the image.
         fog: The scene's fog, seen through the camera.
+        line_width: How many raster pixels across the line is, the
+            renderer's render scale. One, the default, is the one-pixel
+            line and the rule this drew before there was a width. See
+            `render.linerule`.
 
     Raises:
         Error: If the segment's metadata is refused by `check_line_state`,
@@ -1966,20 +1974,13 @@ def rasterize_line(
     else:
         from_step = max(0, start - highest)
         past_step = min(steps, start - lowest + 1)
+    # Clamped with `max` rather than an `if`: every caller passes a render
+    # scale, which is one or more, so the guard has no reachable second
+    # side and an `if` would be a branch no test could take.
+    var width = max(1, line_width)
     for step in range(from_step, past_step):
         var major = major_at(first, second, step)
-        var minor = other_at(first, second, major)
-        var x = major
-        var y = minor
-        if not horizontal:
-            x = minor
-            y = major
-        # The minor axis only. The major one was bounded before the walk,
-        # so a step that reaches here is on the target along it.
-        if y < top or y > bottom:
-            continue
-        if x < 0 or x >= target.width:
-            continue
+        var first_minor = first_other_at(first, second, major, width)
         # Held inside the segment: a pixel at either end can sit a hair
         # beyond it once the major coordinate is taken at a pixel center.
         var share = share_at(first, second, major)
@@ -2001,17 +2002,6 @@ def rasterize_line(
         )
         if not dash_covers(along, a.dash_size, a.gap_size):
             continue
-        # A blended segment is hidden by what is in front of it and hides
-        # nothing behind it, exactly as a blended triangle: it tests the
-        # depth without claiming it. Claiming it, as this once did, dropped
-        # every later blended segment at a shared pixel, so a translucent
-        # wireframe lost the second edge at every corner, while the kernel
-        # kept it.
-        if a.blend == BLEND:
-            if not target.depth_passes(x, y, z):
-                continue
-        elif not target.test_depth(x, y, z):
-            continue
         # Straight, as a varying is everywhere else in this file and
         # as the kernel's line pass does it. `mix_color` premultiplies,
         # which is a filtering rule and not an interpolation rule; see
@@ -2020,12 +2010,42 @@ def rasterize_line(
         if fogged:
             var depth = a.view_depth + (b.view_depth - a.view_depth) * toward
             color = fog_mix(color, fog.color, fog.factor_at(depth))
-        if a.blend == BLEND:
-            target.blend(x, y, color)
-        else:
-            # Opaque, so written with an alpha of one, as a triangle is.
-            color.a = 1
-            target.write(x, y, color, False)
+        # Everything above this line belongs to the step and not to the
+        # pixel: the share, the depth, the dash and the color are the same
+        # across the run, because the run is one place on the line drawn
+        # at more than one pixel. Only the depth test and the write are
+        # per pixel. Both loops run at least once.
+        for offset in range(width):  # pragma: no branch
+            var minor = first_minor + offset
+            var x = major
+            var y = minor
+            if not horizontal:
+                x = minor
+                y = major
+            # The minor axis only. The major one was bounded before the
+            # walk, so a step that reaches here is on the target along it.
+            if y < top or y > bottom:
+                continue
+            if x < 0 or x >= target.width:
+                continue
+            # A blended segment is hidden by what is in front of it and
+            # hides nothing behind it, exactly as a blended triangle: it
+            # tests the depth without claiming it. Claiming it, as this
+            # once did, dropped every later blended segment at a shared
+            # pixel, so a translucent wireframe lost the second edge at
+            # every corner, while the kernel kept it.
+            if a.blend == BLEND:
+                if not target.depth_passes(x, y, z):
+                    continue
+                target.blend(x, y, color)
+            else:
+                if not target.test_depth(x, y, z):
+                    continue
+                # Opaque, so written with an alpha of one, as a triangle
+                # is.
+                var opaque = color
+                opaque.a = 1
+                target.write(x, y, opaque, False)
 
 
 # --- points -----------------------------------------------------------------
@@ -2340,7 +2360,9 @@ def check_draws(
             raise Error("A draw runs past the primitives the frame holds")
 
 
-def _rows_of(corners: List[RasterVertex], stride: Int) -> List[Int]:
+def _rows_of(
+    corners: List[RasterVertex], stride: Int, pad: Int = 0
+) -> List[Int]:
     """Return the first and last row each primitive can touch, in pairs.
 
     Worked out once for every band rather than once per band: most
@@ -2352,6 +2374,11 @@ def _rows_of(corners: List[RasterVertex], stride: Int) -> List[Int]:
         corners: The primitives' corners.
         stride: Corners per primitive: three for a triangle, two for a
             segment.
+        pad: How many rows to widen the range by, each way. A segment more
+            than one raster pixel wide reaches past its own endpoints by
+            the width less one, and a band that skipped it on the strength
+            of its corners alone would leave a gap across the seam between
+            two workers. Zero, the default, is the range the corners give.
 
     Returns:
         Two entries per primitive, the first row then the last.
@@ -2366,8 +2393,8 @@ def _rows_of(corners: List[RasterVertex], stride: Int) -> List[Int]:
             var y = corners[index * stride + corner].y
             top = min(top, y)
             bottom = max(bottom, y)
-        rows.append(Int(floor(top)))
-        rows.append(Int(ceil(bottom)))
+        rows.append(Int(floor(top)) - pad)
+        rows.append(Int(ceil(bottom)) + pad)
     return rows^
 
 
@@ -2411,6 +2438,7 @@ async def _frame_band(
     last_row: Int,
     fog: FogView,
     cubes: Pointer[CubeTextureStore, ImmutAnyOrigin],
+    line_width: Int = 1,
 ):
     """Draw a frame into one horizontal band of the target.
 
@@ -2489,6 +2517,7 @@ async def _frame_band(
                     first_row,
                     last_row,
                     fog,
+                    line_width,
                 )
     except e:
         errors[unsafe_offset=band] = String(e)
@@ -2506,6 +2535,7 @@ def rasterize_frame(
     fog: FogView = FogView.none(),
     points: List[RasterVertex] = List[RasterVertex](),
     cubes: CubeTextureStore = CubeTextureStore(),
+    line_width: Int = 1,
 ) raises:
     """Draw a frame -- triangles, segments and points, in one order --
     into `target`, on `workers` threads.
@@ -2549,6 +2579,10 @@ def rasterize_frame(
             `rasterize_shaded` and `rasterize_line`.
         points: Raster vertices, one per point. None by default.
         cubes: Where `SHADE_TEXTURE` looks the triangles' env maps up.
+        line_width: How many raster pixels across every segment is, the
+            renderer's render scale; see `rasterize_line` and
+            `render.linerule`. One by default, the frame drawn at its own
+            size.
 
     Raises:
         Error: If the corner count is not a multiple of three, the segment
@@ -2625,6 +2659,7 @@ def rasterize_frame(
                     segments[segment * 2 + 1],
                     target,
                     fog=fog,
+                    line_width=line_width,
                 )
         return
 
@@ -2632,7 +2667,7 @@ def rasterize_frame(
     # which is what makes handing it to a coroutine sound.
     var errors = List[String](length=bands, fill=String(""))
     var triangle_rows = _rows_of(corners, 3)
-    var segment_rows = _rows_of(segments, 2)
+    var segment_rows = _rows_of(segments, 2, max(0, line_width - 1))
     var point_rows = _point_rows(points)
     var group = TaskGroup()
     # At least two bands past the early return above, so neither loop can
@@ -2658,6 +2693,7 @@ def rasterize_frame(
                 (band + 1) * target.height // bands - 1,
                 fog,
                 Pointer(to=cubes).unsafe_origin_cast[ImmutAnyOrigin](),
+                line_width,
             )
         )
     group.wait()
