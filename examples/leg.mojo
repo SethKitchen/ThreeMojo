@@ -7,9 +7,9 @@
 
     mojo run -I . examples/leg.mojo [path.png]
 
-The page is Leg. A six-foot male right leg stands with femur, tibia,
-fibula, patella, articular cartilage, both menisci and both collateral
-ligaments. The program also prints tissue mass and Earth weight.
+The page is Leg. A six-foot male right leg stands with bones, knee
+tissues and skeletal muscles. The program also prints tissue mass and
+Earth weight.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -35,6 +35,8 @@ from extensions.humanoid.skeleton.look import (
     cartilage_phong,
     ligament_phong,
     meniscus_phong,
+    muscle_phong,
+    tendon_phong,
 )
 from lights.light import ambient_light, directional_light
 from math.vector3 import Vector3
@@ -59,7 +61,7 @@ comptime WIDTH = 320
 comptime HEIGHT = 240
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-comptime DETAIL = 16
+comptime DETAIL = 12
 
 
 def frame_at(
@@ -176,6 +178,8 @@ def main() raises:
     var cartilage_paint = assets.materials.add(cartilage_phong())
     var meniscus_paint = assets.materials.add(meniscus_phong())
     var ligament_paint = assets.materials.add(ligament_phong())
+    var muscle_paint = assets.materials.add(muscle_phong())
+    var tendon_paint = assets.materials.add(tendon_phong())
 
     var scene = Scene()
     var pivot = scene.add(Object3D())
@@ -188,6 +192,8 @@ def main() raises:
         cartilage_paint,
         meniscus_paint,
         ligament_paint,
+        muscle_paint,
+        tendon_paint,
         detail=DETAIL,
     )
 

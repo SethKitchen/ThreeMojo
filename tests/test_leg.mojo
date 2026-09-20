@@ -13,16 +13,26 @@ from extensions.humanoid.side import LEFT, RIGHT
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.bone import bone_phong
 from extensions.humanoid.skeleton.leg.assembly import add_leg, assemble_leg
+from extensions.humanoid.skeleton.leg.contents import (
+    BONES,
+    BOTH,
+    MUSCLES,
+    LegContents,
+)
 from extensions.humanoid.skeleton.look import (
     cartilage_phong,
     ligament_phong,
     meniscus_phong,
+    muscle_phong,
+    tendon_phong,
 )
 from math.vector3 import Vector3
 from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
+    assert_raises,
     assert_true,
 )
 from units.si import FOOT, Length
@@ -105,7 +115,10 @@ def test_add_leg_places_nine_meshes() raises:
         assets.materials.add(cartilage_phong()),
         assets.materials.add(meniscus_phong()),
         assets.materials.add(ligament_phong()),
+        assets.materials.add(muscle_phong()),
+        assets.materials.add(tendon_phong()),
         RIGHT,
+        BONES,
         8,
     )
     assert_equal(len(scene.meshes), 9)
@@ -114,6 +127,54 @@ def test_add_leg_places_nine_meshes() raises:
     var origin = scene.world_matrix(node).transform_point(Vector3(0, 0, 0))
     assert_almost_equal(origin.x, Float32(0), atol=TOLERANCE)
     assert_almost_equal(origin.y, Float32(0), atol=TOLERANCE)
+
+
+def test_leg_contents_toggles_bones_and_muscles() raises:
+    assert_true(BONES.is_valid())
+    assert_true(MUSCLES.is_valid())
+    assert_true(BOTH.is_valid())
+    assert_false(LegContents(3).is_valid())
+    assert_false(LegContents(-1).is_valid())
+    assert_true(BONES.includes_bones())
+    assert_false(BONES.includes_muscles())
+    assert_false(MUSCLES.includes_bones())
+    assert_true(MUSCLES.includes_muscles())
+    assert_true(BOTH.includes_bones())
+    assert_true(BOTH.includes_muscles())
+    var bad = LegContents(9)
+    with assert_raises():
+        _ = bad.includes_bones()
+    with assert_raises():
+        _ = bad.includes_muscles()
+
+
+def test_add_leg_refuses_invalid_contents() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var root = scene.add(Object3D())
+    var person = HumanoidSpec(Length(6.0, FOOT), MALE)
+    with assert_raises():
+        _ = add_leg(
+            scene,
+            assets,
+            root,
+            person,
+            assets.materials.add(bone_phong()),
+            assets.materials.add(cartilage_phong()),
+            assets.materials.add(meniscus_phong()),
+            assets.materials.add(ligament_phong()),
+            assets.materials.add(muscle_phong()),
+            assets.materials.add(tendon_phong()),
+            RIGHT,
+            LegContents(9),
+            8,
+        )
+
+
+def test_assemble_leg_carries_muscle_landmarks() raises:
+    var pose = assemble_leg(HumanoidSpec(Length(6.0, FOOT), MALE), RIGHT)
+    assert_true(pose.muscles.hip.y > 0)
+    assert_true(pose.muscles.heel.y < 0)
 
 
 def main() raises:

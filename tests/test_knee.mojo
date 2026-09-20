@@ -60,8 +60,10 @@ from extensions.humanoid.skeleton.soft_tissue import (
     CARTILAGE,
     LIGAMENT,
     MENISCUS,
+    MUSCLE,
     SOFT_EMPTY,
     SOFT_FILL,
+    TENDON,
     SoftOccupancy,
     SoftTissue,
     SoftTissueKind,
@@ -103,7 +105,9 @@ def test_soft_kinds_are_valid() raises:
     assert_true(CARTILAGE.is_valid())
     assert_true(LIGAMENT.is_valid())
     assert_true(MENISCUS.is_valid())
-    assert_false(SoftTissueKind(3).is_valid())
+    assert_true(MUSCLE.is_valid())
+    assert_true(TENDON.is_valid())
+    assert_false(SoftTissueKind(5).is_valid())
     assert_false(SoftTissueKind(-1).is_valid())
     assert_true(SOFT_EMPTY.is_valid())
     assert_true(SOFT_FILL.is_valid())

@@ -8,8 +8,8 @@
     mojo run -I . examples/legs.mojo [path.png]
 
 The page is Leg. A six-foot male stands on both legs. Femoral heads sit
-at plus and minus ten centimeters. Each leg carries the bones and the
-knee tissues.
+at plus and minus ten centimeters. Each leg carries bones, knee tissues
+and skeletal muscles.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -21,10 +21,13 @@ from extensions.humanoid.side import LEFT, RIGHT
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.bone import bone_albedo, bone_phong
 from extensions.humanoid.skeleton.leg.assembly import add_leg, assemble_leg
+from extensions.humanoid.skeleton.leg.contents import BOTH
 from extensions.humanoid.skeleton.look import (
     cartilage_phong,
     ligament_phong,
     meniscus_phong,
+    muscle_phong,
+    tendon_phong,
 )
 from lights.light import ambient_light, directional_light
 from math.vector3 import Vector3
@@ -40,7 +43,7 @@ comptime WIDTH = 320
 comptime HEIGHT = 240
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-comptime DETAIL = 16
+comptime DETAIL = 10
 comptime HIP_HALF = Float32(0.10)
 
 
@@ -89,6 +92,8 @@ def main() raises:
     var cartilage_paint = assets.materials.add(cartilage_phong())
     var meniscus_paint = assets.materials.add(meniscus_phong())
     var ligament_paint = assets.materials.add(ligament_phong())
+    var muscle_paint = assets.materials.add(muscle_phong())
+    var tendon_paint = assets.materials.add(tendon_phong())
 
     var scene = Scene()
     var pivot = scene.add(Object3D())
@@ -107,7 +112,10 @@ def main() raises:
         cartilage_paint,
         meniscus_paint,
         ligament_paint,
+        muscle_paint,
+        tendon_paint,
         RIGHT,
+        BOTH,
         DETAIL,
     )
 
@@ -125,7 +133,10 @@ def main() raises:
         cartilage_paint,
         meniscus_paint,
         ligament_paint,
+        muscle_paint,
+        tendon_paint,
         LEFT,
+        BOTH,
         DETAIL,
     )
 
