@@ -76,6 +76,7 @@ mkdir -p out
 | `tibia.mojo` | `tibia.png` | [Tibia](Tibia) |
 | `fibula.mojo` | `fibula.png` | [Fibula](Fibula) |
 | `patella.mojo` | `patella.png` | [Patella](Patella) |
+| `knee.mojo` | `knee.png` | [Knee](Knee) |
 | `leg.mojo` | `leg.png` | [Leg](Leg) |
 | `legs.mojo` | `legs.png` | [Leg](Leg) |
 
