@@ -18,6 +18,7 @@ line. Plus y is proximal. Plus x is body-right. Plus z is anterior.
 
 from extensions.humanoid.skeleton.field import (
     DistanceField,
+    TubeChain,
     empty_bounds,
     field_gradient,
     mix_point,
@@ -125,6 +126,15 @@ struct _SkinSection(ImplicitlyCopyable):
     var ap: Float32
 
 
+@fieldwise_init
+struct _EnvelopePoint(ImplicitlyCopyable):
+    """One anatomical cross-section used to fit the skin."""
+
+    var center: Vector3
+    var ml: Float32
+    var ap: Float32
+
+
 struct SkinField(DistanceField, ImplicitlyCopyable):
     """The outer skin surface around the modeled leg anatomy."""
 
@@ -188,7 +198,6 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
     var subcutaneous: Float32
     var knee_subcutaneous: Float32
     var calf_subcutaneous: Float32
-    var fascia_blend: Float32
     var dermis: Float32
     var s0: _SkinSection
     var s1: _SkinSection
@@ -325,7 +334,6 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         self.knee_subcutaneous = Float32(0.5) * (
             self.subcutaneous + self.calf_subcutaneous
         )
-        self.fascia_blend = 0.0060 * S
         self.dermis = Float32(0.0018)
         self.skin_blend = 0.0020 * S
         self.epsilon = dimensions.epsilon
@@ -342,6 +350,73 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         self.s9 = dummy
         self.low = dimensions.plafond
         self.high = dimensions.hip
+        var points = List[_EnvelopePoint]()
+        _append_femur(points, self.femur, self.femur_origin)
+        _append_tibia(points, self.tibia, self.tibia_origin)
+        _append_fibula(points, self.fibula, self.fibula_origin)
+        _append_patella(points, self.patella, self.patella_origin)
+        _append_cartilage(points, self.cartilage)
+        _append_circular(points, self.medial_meniscus)
+        _append_circular(points, self.lateral_meniscus)
+        _append_pair(
+            points,
+            self.medial_collateral.a,
+            self.medial_collateral.ra,
+            self.medial_collateral.b,
+            self.medial_collateral.rb,
+        )
+        _append_pair(
+            points,
+            self.lateral_collateral.a,
+            self.lateral_collateral.ra,
+            self.lateral_collateral.b,
+            self.lateral_collateral.rb,
+        )
+        _append_muscle(points, self.gluteus_maximus)
+        _append_muscle(points, self.gluteus_medius)
+        _append_muscle(points, self.tensor_fasciae_latae)
+        _append_muscle(points, self.iliotibial_tract)
+        _append_muscle(points, self.sartorius)
+        _append_muscle(points, self.rectus_femoris)
+        _append_muscle(points, self.vastus_lateralis)
+        _append_muscle(points, self.vastus_medialis)
+        _append_muscle(points, self.vastus_intermedius)
+        _append_muscle(points, self.pectineus)
+        _append_muscle(points, self.adductor_longus)
+        _append_muscle(points, self.adductor_magnus)
+        _append_muscle(points, self.gracilis)
+        _append_muscle(points, self.biceps_femoris)
+        _append_muscle(points, self.semitendinosus)
+        _append_muscle(points, self.semimembranosus)
+        _append_muscle(points, self.gastrocnemius)
+        _append_muscle(points, self.soleus)
+        _append_muscle(points, self.tibialis_anterior)
+        _append_muscle(points, self.tibialis_posterior)
+        _append_muscle(points, self.extensor_digitorum_longus)
+        _append_muscle(points, self.peroneus_longus)
+        _append_muscle(points, self.peroneus_brevis)
+        _append_muscle(points, self.achilles_tendon)
+        _append_muscle(points, self.patellar_tendon)
+        _append_tube(points, self.femoral_artery.chain)
+        _append_tube(points, self.popliteal_artery.chain)
+        _append_tube(points, self.anterior_tibial_artery.chain)
+        _append_tube(points, self.posterior_tibial_artery.chain)
+        _append_tube(points, self.fibular_artery.chain)
+        _append_tube(points, self.femoral_vein.chain)
+        _append_tube(points, self.popliteal_vein.chain)
+        _append_tube(points, self.great_saphenous_vein.chain)
+        _append_tube(points, self.small_saphenous_vein.chain)
+        _append_nodes(points, self.inguinal_nodes)
+        _append_nodes(points, self.popliteal_nodes)
+        _append_tube(points, self.superficial_lymphatics.chain)
+        _append_tube(points, self.superficial_lymphatics.chain2)
+        _append_tube(points, self.deep_lymphatics.chain)
+        _append_tube(points, self.femoral_nerve.chain)
+        _append_tube(points, self.sciatic_nerve.chain)
+        _append_tube(points, self.tibial_nerve.chain)
+        _append_tube(points, self.common_fibular_nerve.chain)
+        _append_tube(points, self.saphenous_nerve.chain)
+        _append_tube(points, self.sural_nerve.chain)
         var knee_center = mix_point(
             dimensions.med_condyle, dimensions.lat_condyle, 0.50
         )
@@ -354,18 +429,18 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         var p4 = mix_point(dimensions.femur_mid, knee_center, 0.72)
         var p6 = mix_point(knee_center, dimensions.tibia_mid, 0.32)
         var p8 = mix_point(dimensions.tibia_mid, ankle_center, 0.62)
-        self.s0 = self._fit_section(dimensions.iliac, S, self.subcutaneous)
-        self.s1 = self._fit_section(p1, S, self.subcutaneous)
-        self.s2 = self._fit_section(p2, S, self.subcutaneous)
-        self.s3 = self._fit_section(p3, S, self.subcutaneous)
-        self.s4 = self._fit_section(p4, S, self.subcutaneous)
-        self.s5 = self._fit_section(knee_center, S, self.knee_subcutaneous)
-        self.s6 = self._fit_section(p6, S, self.calf_subcutaneous)
-        self.s7 = self._fit_section(
-            dimensions.tibia_mid, S, self.calf_subcutaneous
+        self.s0 = _fit_section(points, dimensions.iliac, S, self.subcutaneous)
+        self.s1 = _fit_section(points, p1, S, self.subcutaneous)
+        self.s2 = _fit_section(points, p2, S, self.subcutaneous)
+        self.s3 = _fit_section(points, p3, S, self.subcutaneous)
+        self.s4 = _fit_section(points, p4, S, self.subcutaneous)
+        self.s5 = _fit_section(points, knee_center, S, self.knee_subcutaneous)
+        self.s6 = _fit_section(points, p6, S, self.calf_subcutaneous)
+        self.s7 = _fit_section(
+            points, dimensions.tibia_mid, S, self.calf_subcutaneous
         )
-        self.s8 = self._fit_section(p8, S, self.calf_subcutaneous)
-        self.s9 = self._fit_section(ankle_center, S, self.calf_subcutaneous)
+        self.s8 = _fit_section(points, p8, S, self.calf_subcutaneous)
+        self.s9 = _fit_section(points, ankle_center, S, self.calf_subcutaneous)
         self.s0.ml = max(self.s0.ml, Float32(0.90) * self.s1.ml)
         self.s0.ap = max(self.s0.ap, Float32(0.90) * self.s1.ap)
         var box = empty_bounds()
@@ -441,133 +516,280 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         """Return the unit outward normal of the field at `point`."""
         return field_gradient(self, point, self.epsilon)
 
-    def _fit_section(
-        self, seed: Vector3, S: Float32, cover: Float32
-    ) -> _SkinSection:
-        """Fit one enclosing ellipse to a thin anatomical slab."""
-        var least_x = seed.x
-        var most_x = seed.x
-        var least_z = seed.z
-        var most_z = seed.z
-        var half_slab = 0.010 * S
-        for ix in range(41):
-            var x = (
-                seed.x
-                + (Float32(ix) / Float32(40) * Float32(0.28) - Float32(0.14))
-                * S
-            )
-            for iz in range(41):
-                var z = (
-                    seed.z
-                    + (
-                        Float32(iz) / Float32(40) * Float32(0.28)
-                        - Float32(0.14)
-                    )
-                    * S
-                )
-                var d = self._anatomy_distance(
-                    Vector3(x, seed.y - half_slab, z)
-                )
-                d = min(d, self._anatomy_distance(Vector3(x, seed.y, z)))
-                d = min(
-                    d,
-                    self._anatomy_distance(Vector3(x, seed.y + half_slab, z)),
-                )
-                if d <= 0:
-                    least_x = min(least_x, x)
-                    most_x = max(most_x, x)
-                    least_z = min(least_z, z)
-                    most_z = max(most_z, z)
-        var center = Vector3(
-            Float32(0.5) * (least_x + most_x),
-            seed.y,
-            Float32(0.5) * (least_z + most_z),
-        )
-        # 0.72 encloses the corners of the sampled ML/AP bounds.
-        var ml = Float32(0.72) * (most_x - least_x) + cover
-        var ap = Float32(0.72) * (most_z - least_z) + cover
-        return _SkinSection(center, ml, ap)
 
-    def _anatomy_distance(self, point: Vector3) -> Float32:
-        """Return distance to every modeled structure below the skin."""
-        return min(self._support_distance(point), self._system_distance(point))
+def _fit_section(
+    points: List[_EnvelopePoint],
+    seed: Vector3,
+    S: Float32,
+    cover: Float32,
+) -> _SkinSection:
+    """Fit one enclosing ellipse to nearby anatomical stations."""
+    var least_x = seed.x
+    var most_x = seed.x
+    var least_z = seed.z
+    var most_z = seed.z
+    var half_slab = 0.035 * S
+    for index in range(len(points)):  # pragma: no branch
+        var sample = points[index]
+        var dy = sample.center.y - seed.y
+        if dy < 0:
+            dy = -dy
+        if dy <= half_slab:
+            least_x = min(least_x, sample.center.x - sample.ml)
+            most_x = max(most_x, sample.center.x + sample.ml)
+            least_z = min(least_z, sample.center.z - sample.ap)
+            most_z = max(most_z, sample.center.z + sample.ap)
+    var center = Vector3(
+        Float32(0.5) * (least_x + most_x),
+        seed.y,
+        Float32(0.5) * (least_z + most_z),
+    )
+    # 0.72 encloses the corners of the sampled ML/AP bounds.
+    var ml = Float32(0.72) * (most_x - least_x) + cover
+    var ap = Float32(0.72) * (most_z - least_z) + cover
+    return _SkinSection(center, ml, ap)
 
-    def _support_distance(self, point: Vector3) -> Float32:
-        """Return distance to the bones, knee tissues and muscles."""
-        var d = self.femur.distance(point - self.femur_origin)
-        d = smin(
-            d,
-            self.tibia.distance(point - self.tibia_origin),
-            self.fascia_blend,
-        )
-        d = smin(
-            d,
-            self.fibula.distance(point - self.fibula_origin),
-            self.fascia_blend,
-        )
-        d = smin(
-            d,
-            self.patella.distance(point - self.patella_origin),
-            self.fascia_blend,
-        )
-        d = smin(d, self.cartilage.distance(point), self.fascia_blend)
-        d = smin(d, self.medial_meniscus.distance(point), self.fascia_blend)
-        d = smin(d, self.lateral_meniscus.distance(point), self.fascia_blend)
-        d = smin(d, self.medial_collateral.distance(point), self.fascia_blend)
-        d = smin(d, self.lateral_collateral.distance(point), self.fascia_blend)
-        d = smin(d, self.gluteus_maximus.distance(point), self.fascia_blend)
-        d = smin(d, self.gluteus_medius.distance(point), self.fascia_blend)
-        d = smin(
-            d, self.tensor_fasciae_latae.distance(point), self.fascia_blend
-        )
-        d = smin(d, self.iliotibial_tract.distance(point), self.fascia_blend)
-        d = smin(d, self.sartorius.distance(point), self.fascia_blend)
-        d = smin(d, self.rectus_femoris.distance(point), self.fascia_blend)
-        d = smin(d, self.vastus_lateralis.distance(point), self.fascia_blend)
-        d = smin(d, self.vastus_medialis.distance(point), self.fascia_blend)
-        d = smin(d, self.vastus_intermedius.distance(point), self.fascia_blend)
-        d = smin(d, self.pectineus.distance(point), self.fascia_blend)
-        d = smin(d, self.adductor_longus.distance(point), self.fascia_blend)
-        d = smin(d, self.adductor_magnus.distance(point), self.fascia_blend)
-        d = smin(d, self.gracilis.distance(point), self.fascia_blend)
-        d = smin(d, self.biceps_femoris.distance(point), self.fascia_blend)
-        d = smin(d, self.semitendinosus.distance(point), self.fascia_blend)
-        d = smin(d, self.semimembranosus.distance(point), self.fascia_blend)
-        d = smin(d, self.gastrocnemius.distance(point), self.fascia_blend)
-        d = smin(d, self.soleus.distance(point), self.fascia_blend)
-        d = smin(d, self.tibialis_anterior.distance(point), self.fascia_blend)
-        d = smin(d, self.tibialis_posterior.distance(point), self.fascia_blend)
-        d = smin(
-            d,
-            self.extensor_digitorum_longus.distance(point),
-            self.fascia_blend,
-        )
-        d = smin(d, self.peroneus_longus.distance(point), self.fascia_blend)
-        d = smin(d, self.peroneus_brevis.distance(point), self.fascia_blend)
-        d = smin(d, self.achilles_tendon.distance(point), self.fascia_blend)
-        return smin(d, self.patellar_tendon.distance(point), self.fascia_blend)
 
-    def _system_distance(self, point: Vector3) -> Float32:
-        """Return distance to the vessels, lymphatics and nerves."""
-        var d = self.femoral_artery.distance(point)
-        d = min(d, self.popliteal_artery.distance(point))
-        d = min(d, self.anterior_tibial_artery.distance(point))
-        d = min(d, self.posterior_tibial_artery.distance(point))
-        d = min(d, self.fibular_artery.distance(point))
-        d = min(d, self.femoral_vein.distance(point))
-        d = min(d, self.popliteal_vein.distance(point))
-        d = min(d, self.great_saphenous_vein.distance(point))
-        d = min(d, self.small_saphenous_vein.distance(point))
-        d = min(d, self.inguinal_nodes.distance(point))
-        d = min(d, self.popliteal_nodes.distance(point))
-        d = min(d, self.superficial_lymphatics.distance(point))
-        d = min(d, self.deep_lymphatics.distance(point))
-        d = min(d, self.femoral_nerve.distance(point))
-        d = min(d, self.sciatic_nerve.distance(point))
-        d = min(d, self.tibial_nerve.distance(point))
-        d = min(d, self.common_fibular_nerve.distance(point))
-        d = min(d, self.saphenous_nerve.distance(point))
-        return min(d, self.sural_nerve.distance(point))
+def _append_elliptic_pair(
+    mut points: List[_EnvelopePoint],
+    a: Vector3,
+    aml: Float32,
+    aap: Float32,
+    b: Vector3,
+    bml: Float32,
+    bap: Float32,
+):
+    """Append one cross-section and the midpoint to the next."""
+    points.append(_EnvelopePoint(a, aml, aap))
+    points.append(
+        _EnvelopePoint(
+            mix_point(a, b, 0.50),
+            Float32(0.5) * (aml + bml),
+            Float32(0.5) * (aap + bap),
+        )
+    )
+
+
+def _append_pair(
+    mut points: List[_EnvelopePoint],
+    a: Vector3,
+    ar: Float32,
+    b: Vector3,
+    br: Float32,
+):
+    """Append one circular cross-section and its segment midpoint."""
+    _append_elliptic_pair(points, a, ar, ar, b, br, br)
+    points.append(_EnvelopePoint(b, br, br))
+
+
+def _append_muscle(mut points: List[_EnvelopePoint], field: MuscleField):
+    """Append the nine cross-sections of one muscle field."""
+    _append_elliptic_pair(
+        points, field.p0, field.r0, field.a0, field.p1, field.r1, field.a1
+    )
+    _append_elliptic_pair(
+        points, field.p1, field.r1, field.a1, field.p2, field.r2, field.a2
+    )
+    _append_elliptic_pair(
+        points, field.p2, field.r2, field.a2, field.p3, field.r3, field.a3
+    )
+    _append_elliptic_pair(
+        points, field.p3, field.r3, field.a3, field.p4, field.r4, field.a4
+    )
+    points.append(_EnvelopePoint(field.p4, field.r4, field.a4))
+
+
+def _append_tube(mut points: List[_EnvelopePoint], chain: TubeChain):
+    """Append the nine cross-sections of one circular tube."""
+    _append_elliptic_pair(
+        points, chain.p0, chain.r0, chain.r0, chain.p1, chain.r1, chain.r1
+    )
+    _append_elliptic_pair(
+        points, chain.p1, chain.r1, chain.r1, chain.p2, chain.r2, chain.r2
+    )
+    _append_elliptic_pair(
+        points, chain.p2, chain.r2, chain.r2, chain.p3, chain.r3, chain.r3
+    )
+    _append_elliptic_pair(
+        points, chain.p3, chain.r3, chain.r3, chain.p4, chain.r4, chain.r4
+    )
+    points.append(_EnvelopePoint(chain.p4, chain.r4, chain.r4))
+
+
+def _append_circular(mut points: List[_EnvelopePoint], field: MeniscusField):
+    """Append the nine cross-sections of one meniscus field."""
+    _append_elliptic_pair(
+        points, field.p0, field.r0, field.r0, field.p1, field.r1, field.r1
+    )
+    _append_elliptic_pair(
+        points, field.p1, field.r1, field.r1, field.p2, field.r2, field.r2
+    )
+    _append_elliptic_pair(
+        points, field.p2, field.r2, field.r2, field.p3, field.r3, field.r3
+    )
+    _append_elliptic_pair(
+        points, field.p3, field.r3, field.r3, field.p4, field.r4, field.r4
+    )
+    points.append(_EnvelopePoint(field.p4, field.r4, field.r4))
+
+
+def _append_femur(
+    mut points: List[_EnvelopePoint], field: FemurField, origin: Vector3
+):
+    """Append femoral shaft, head, trochanter and condyle sections."""
+    _append_bone_chain(
+        points,
+        field.s0 + origin,
+        field.ml0,
+        field.ap0,
+        field.s1 + origin,
+        field.ml1,
+        field.ap1,
+        field.s2 + origin,
+        field.ml2,
+        field.ap2,
+        field.s3 + origin,
+        field.ml3,
+        field.ap3,
+        field.s4 + origin,
+        field.ml4,
+        field.ap4,
+    )
+    _append_sphere(points, field.head_center + origin, field.head_r)
+    _append_ellipsoid(points, field.gt + origin, field.gt_r)
+    _append_ellipsoid(points, field.lt + origin, field.lt_r)
+    _append_ellipsoid(points, field.medial + origin, field.medial_r)
+    _append_ellipsoid(points, field.lateral + origin, field.lateral_r)
+    _append_ellipsoid(
+        points, field.distal_metaphysis + origin, field.distal_metaphysis_r
+    )
+
+
+def _append_tibia(
+    mut points: List[_EnvelopePoint], field: TibiaField, origin: Vector3
+):
+    """Append tibial shaft, condyle and ankle sections."""
+    _append_bone_chain(
+        points,
+        field.s0 + origin,
+        field.ml0,
+        field.ap0,
+        field.s1 + origin,
+        field.ml1,
+        field.ap1,
+        field.s2 + origin,
+        field.ml2,
+        field.ap2,
+        field.s3 + origin,
+        field.ml3,
+        field.ap3,
+        field.s4 + origin,
+        field.ml4,
+        field.ap4,
+    )
+    _append_ellipsoid(points, field.medial + origin, field.medial_r)
+    _append_ellipsoid(points, field.lateral + origin, field.lateral_r)
+    _append_ellipsoid(points, field.plateau + origin, field.plateau_r)
+    _append_ellipsoid(points, field.tuberosity + origin, field.tuberosity_r)
+    _append_ellipsoid(points, field.plafond + origin, field.plafond_r)
+    _append_ellipsoid(points, field.malleolus + origin, field.malleolus_r)
+
+
+def _append_fibula(
+    mut points: List[_EnvelopePoint], field: FibulaField, origin: Vector3
+):
+    """Append fibular shaft, head and ankle sections."""
+    _append_bone_chain(
+        points,
+        field.s0 + origin,
+        field.ml0,
+        field.ap0,
+        field.s1 + origin,
+        field.ml1,
+        field.ap1,
+        field.s2 + origin,
+        field.ml2,
+        field.ap2,
+        field.s3 + origin,
+        field.ml3,
+        field.ap3,
+        field.s4 + origin,
+        field.ml4,
+        field.ap4,
+    )
+    _append_ellipsoid(points, field.head + origin, field.head_r)
+    _append_ellipsoid(points, field.styloid + origin, field.styloid_r)
+    _append_ellipsoid(points, field.malleolus + origin, field.malleolus_r)
+
+
+def _append_patella(
+    mut points: List[_EnvelopePoint], field: PatellaField, origin: Vector3
+):
+    """Append patellar body, apex, base and facet sections."""
+    _append_ellipsoid(points, field.body + origin, field.body_r)
+    _append_ellipsoid(points, field.apex + origin, field.apex_r)
+    _append_ellipsoid(points, field.base + origin, field.base_r)
+    _append_ellipsoid(points, field.medial + origin, field.medial_r)
+    _append_ellipsoid(points, field.lateral + origin, field.lateral_r)
+
+
+def _append_cartilage(mut points: List[_EnvelopePoint], field: CartilageField):
+    """Append the articular-cartilage cross-sections."""
+    _append_ellipsoid(points, field.fem_med, field.fem_med_r)
+    _append_ellipsoid(points, field.fem_lat, field.fem_lat_r)
+    _append_ellipsoid(points, field.troch, field.troch_r)
+    _append_ellipsoid(points, field.tib_med, field.tib_med_r)
+    _append_ellipsoid(points, field.tib_lat, field.tib_lat_r)
+    _append_ellipsoid(points, field.pat, field.pat_r)
+
+
+def _append_nodes(mut points: List[_EnvelopePoint], field: LymphField):
+    """Append all five representative nodes."""
+    _append_sphere(points, field.c0, field.n0)
+    _append_sphere(points, field.c1, field.n1)
+    _append_sphere(points, field.c2, field.n2)
+    _append_sphere(points, field.c3, field.n3)
+    _append_sphere(points, field.c4, field.n4)
+
+
+def _append_bone_chain(
+    mut points: List[_EnvelopePoint],
+    p0: Vector3,
+    ml0: Float32,
+    ap0: Float32,
+    p1: Vector3,
+    ml1: Float32,
+    ap1: Float32,
+    p2: Vector3,
+    ml2: Float32,
+    ap2: Float32,
+    p3: Vector3,
+    ml3: Float32,
+    ap3: Float32,
+    p4: Vector3,
+    ml4: Float32,
+    ap4: Float32,
+):
+    """Append the nine cross-sections of one bone shaft."""
+    _append_elliptic_pair(points, p0, ml0, ap0, p1, ml1, ap1)
+    _append_elliptic_pair(points, p1, ml1, ap1, p2, ml2, ap2)
+    _append_elliptic_pair(points, p2, ml2, ap2, p3, ml3, ap3)
+    _append_elliptic_pair(points, p3, ml3, ap3, p4, ml4, ap4)
+    points.append(_EnvelopePoint(p4, ml4, ap4))
+
+
+def _append_sphere(
+    mut points: List[_EnvelopePoint], center: Vector3, radius: Float32
+):
+    """Append one spherical anatomical cross-section."""
+    points.append(_EnvelopePoint(center, radius, radius))
+
+
+def _append_ellipsoid(
+    mut points: List[_EnvelopePoint], center: Vector3, radii: Vector3
+):
+    """Append one ellipsoidal anatomical cross-section."""
+    points.append(_EnvelopePoint(center, radii.x, radii.z))
 
 
 struct SkinLayerField(DistanceField, ImplicitlyCopyable):

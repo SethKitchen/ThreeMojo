@@ -32,7 +32,7 @@ The solids live in the leg frame. The origin is the tibiofemoral joint line. Plu
 
 `SkinField` first builds the bones, knee tissues, muscles, vessels, lymphatics and nerves. It does not use an independent stocking silhouette.
 
-The field samples ten thin transverse slabs from the iliac landmark to the ankle. Each section encloses the actual structures in that slab.
+The field collects actual primitive stations in ten transverse slabs from the iliac landmark to the ankle. Each fitted section encloses those stations.
 
 Smooth elliptical segments join the fitted sections. This removes gaps between structures while retaining the measured anatomical extents.
 
