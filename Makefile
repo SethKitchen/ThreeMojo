@@ -466,7 +466,7 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/helpers.png $(OUT_DIR)/split.png \
            $(OUT_DIR)/femur.png $(OUT_DIR)/tibia.png \
            $(OUT_DIR)/fibula.png $(OUT_DIR)/patella.png \
-           $(OUT_DIR)/leg.png $(OUT_DIR)/legs.png
+           $(OUT_DIR)/knee.png $(OUT_DIR)/leg.png $(OUT_DIR)/legs.png
 
 # A split screen: two viewports and two scissors drawing into one target.
 $(OUT_DIR)/split.png: $(LIB_SOURCES) examples/split.mojo
@@ -679,6 +679,11 @@ $(OUT_DIR)/fibula.png: $(LIB_SOURCES) examples/fibula.mojo
 $(OUT_DIR)/patella.png: $(LIB_SOURCES) examples/patella.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/patella.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/knee.png: $(LIB_SOURCES) examples/knee.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/knee.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 $(OUT_DIR)/leg.png: $(LIB_SOURCES) examples/leg.mojo
