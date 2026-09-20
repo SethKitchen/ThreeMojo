@@ -576,7 +576,8 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/teapot.png $(OUT_DIR)/blobs.png \
            $(OUT_DIR)/femur.png $(OUT_DIR)/tibia.png \
            $(OUT_DIR)/fibula.png $(OUT_DIR)/patella.png \
-           $(OUT_DIR)/knee.png $(OUT_DIR)/leg.png $(OUT_DIR)/legs.png
+           $(OUT_DIR)/knee.png $(OUT_DIR)/muscles.png \
+           $(OUT_DIR)/leg.png $(OUT_DIR)/legs.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
 $(OUT_DIR)/mirror.png: $(LIB_SOURCES) examples/mirror.mojo
@@ -936,6 +937,11 @@ $(OUT_DIR)/patella.png: $(LIB_SOURCES) examples/patella.mojo
 $(OUT_DIR)/knee.png: $(LIB_SOURCES) examples/knee.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/knee.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/muscles.png: $(LIB_SOURCES) examples/muscles.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/muscles.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 $(OUT_DIR)/leg.png: $(LIB_SOURCES) examples/leg.mojo

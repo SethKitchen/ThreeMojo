@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Phong stand-ins for knee cartilage, meniscus and ligament.
+"""Phong stand-ins for cartilage, meniscus, ligament, muscle and tendon.
 
 The maps are visual approximations. MeshStandardMaterial is not ported,
 so these surfaces are what the current renderer can draw.
@@ -68,4 +68,40 @@ def ligament_phong() raises -> Material:
         Color(228, 222, 206),
         specular=Color(160, 155, 140),
         shininess=16.0,
+    )
+
+
+def muscle_phong() raises -> Material:
+    """Return a Phong material for skeletal muscle.
+
+    The color is red muscle belly, like dissected skeletal muscle.
+
+    Returns:
+        A `PHONG` material.
+
+    Raises:
+        Error: If the Phong constructor refuses the values.
+    """
+    return phong_material(
+        Color(168, 58, 48),
+        specular=Color(96, 42, 36),
+        shininess=10.0,
+    )
+
+
+def tendon_phong() raises -> Material:
+    """Return a Phong material for tendon and fascia.
+
+    The color is pale fibrous connective tissue.
+
+    Returns:
+        A `PHONG` material.
+
+    Raises:
+        Error: If the Phong constructor refuses the values.
+    """
+    return phong_material(
+        Color(214, 200, 176),
+        specular=Color(150, 140, 124),
+        shininess=18.0,
     )

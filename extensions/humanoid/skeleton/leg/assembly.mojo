@@ -3,15 +3,16 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Place the leg bones and the knee tissues in one connected frame.
+"""Place the leg bones, knee tissues and muscles in one connected frame.
 
 The origin is the tibiofemoral joint line. Plus y is proximal. Plus x is
 body-right. Plus z is anterior. Each bone keeps its own osteological
 frame. This module stores the origin of that frame in the leg frame.
 
-    var person = HumanoidSpec(Length(6.0, FOOT), MALE)
+    var person = HumanoidSpec(Length(6.0, FOOT), MALE, TONED)
     var pose = assemble_leg(person)
     var hip = pose.hip_center()
+    _ = add_leg(..., contents=MUSCLES)
 """
 
 from core.assets import Assets
@@ -20,6 +21,7 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.leg.contents import BOTH, LegContents
 from extensions.humanoid.skeleton.leg.femur.dimensions import (
     FemurDimensions,
     femur_dimensions,
@@ -49,6 +51,15 @@ from extensions.humanoid.skeleton.leg.knee.geometry import (
     medial_collateral,
     medial_meniscus,
 )
+from extensions.humanoid.skeleton.leg.muscles.dimensions import (
+    MuscleDimensions,
+    is_tendon,
+    muscle_dimensions_from_bones,
+    named_muscle_parts,
+)
+from extensions.humanoid.skeleton.leg.muscles.geometry import (
+    muscle_from_dimensions,
+)
 from extensions.humanoid.skeleton.leg.patella.dimensions import (
     PatellaDimensions,
     patella_dimensions,
@@ -70,7 +81,7 @@ from objects.mesh import Mesh
 
 @fieldwise_init
 struct LegAssembly(ImplicitlyCopyable):
-    """Bones, knee tissues and their origins in one leg frame."""
+    """Bones, knee tissues, muscles and their origins in one leg frame."""
 
     var spec: HumanoidSpec
     var side: BodySide
@@ -79,6 +90,7 @@ struct LegAssembly(ImplicitlyCopyable):
     var fibula: FibulaDimensions
     var patella: PatellaDimensions
     var knee: KneeDimensions
+    var muscles: MuscleDimensions
     var femur_origin: Vector3
     var tibia_origin: Vector3
     var fibula_origin: Vector3
@@ -99,14 +111,15 @@ def assemble_leg(
     """Return a connected leg sized for `spec`.
 
     Args:
-        spec: Standing height and osteological sex.
+        spec: Standing height, osteological sex and athleticism.
         side: `RIGHT` or `LEFT`. A right leg is the default.
 
     Returns:
-        Bone dimensions, knee dimensions and origins in the leg frame.
+        Bone dimensions, knee dimensions, muscle dimensions and origins
+        in the leg frame.
 
     Raises:
-        Error: If `spec` or `side` is refused by a bone template.
+        Error: If `spec` or `side` is refused by a bone or muscle template.
     """
     var femur = femur_dimensions(spec.stature, spec.sex, side)
     var tibia = tibia_dimensions(spec.stature, spec.sex, side)
@@ -119,6 +132,17 @@ def assemble_leg(
     var p_origin = patella_origin(
         femur, f_origin, patella, knee.patellar_thickness
     )
+    var muscles = muscle_dimensions_from_bones(
+        spec.athleticism,
+        femur,
+        tibia,
+        fibula,
+        patella,
+        f_origin,
+        t_origin,
+        fi_origin,
+        p_origin,
+    )
     return LegAssembly(
         spec,
         side,
@@ -127,6 +151,7 @@ def assemble_leg(
         fibula,
         patella,
         knee,
+        muscles,
         f_origin,
         t_origin,
         fi_origin,
@@ -143,7 +168,10 @@ def add_leg(
     cartilage_paint: MaterialId,
     meniscus_paint: MaterialId,
     ligament_paint: MaterialId,
+    muscle_paint: MaterialId,
+    tendon_paint: MaterialId,
     side: BodySide = RIGHT,
+    contents: LegContents = BOTH,
     detail: Int = 16,
 ) raises -> NodeId:
     """Attach one connected leg under `parent` and return the root node.
@@ -152,95 +180,118 @@ def add_leg(
         scene: The scene that receives the nodes and the meshes.
         assets: Geometry store for the new meshes.
         parent: Node the knee origin hangs from.
-        spec: Standing height and osteological sex.
+        spec: Standing height, osteological sex and athleticism.
         bone_paint: Material id of the cortical look.
         cartilage_paint: Material id of the cartilage look.
         meniscus_paint: Material id of the meniscus look.
         ligament_paint: Material id of the ligament look.
+        muscle_paint: Material id of the muscle look.
+        tendon_paint: Material id of the tendon and fascia look.
         side: `RIGHT` or `LEFT`. A right leg is the default.
+        contents: `BONES`, `MUSCLES` or `BOTH`. Both is the default.
         detail: Cells along each solid.
 
     Returns:
         The knee-origin node.
 
     Raises:
-        Error: If the spec, a mesh or the scene is invalid.
+        Error: If the spec, a mesh, `contents` or the scene is invalid.
     """
+    if not contents.is_valid():
+        raise Error("Leg contents must be bones, muscles or both")
     var pose = assemble_leg(spec, side)
     var root = Object3D()
     var root_id = scene.attach(root^, parent)
-    _place(
-        scene,
-        assets,
-        root_id,
-        femur_from_dimensions(pose.femur, detail),
-        pose.femur_origin,
-        bone_paint,
-    )
-    _place(
-        scene,
-        assets,
-        root_id,
-        tibia_from_dimensions(pose.tibia, detail),
-        pose.tibia_origin,
-        bone_paint,
-    )
-    _place(
-        scene,
-        assets,
-        root_id,
-        fibula_from_dimensions(pose.fibula, detail),
-        pose.fibula_origin,
-        bone_paint,
-    )
-    _place(
-        scene,
-        assets,
-        root_id,
-        patella_from_dimensions(pose.patella, detail),
-        pose.patella_origin,
-        bone_paint,
-    )
-    _place(
-        scene,
-        assets,
-        root_id,
-        articular_cartilage(spec, side, detail),
-        Vector3(0, 0, 0),
-        cartilage_paint,
-    )
-    _place(
-        scene,
-        assets,
-        root_id,
-        medial_meniscus(spec, side, detail),
-        Vector3(0, 0, 0),
-        meniscus_paint,
-    )
-    _place(
-        scene,
-        assets,
-        root_id,
-        lateral_meniscus(spec, side, detail),
-        Vector3(0, 0, 0),
-        meniscus_paint,
-    )
-    _place(
-        scene,
-        assets,
-        root_id,
-        medial_collateral(spec, side, detail),
-        Vector3(0, 0, 0),
-        ligament_paint,
-    )
-    _place(
-        scene,
-        assets,
-        root_id,
-        lateral_collateral(spec, side, detail),
-        Vector3(0, 0, 0),
-        ligament_paint,
-    )
+    if contents.includes_bones():
+        _place(
+            scene,
+            assets,
+            root_id,
+            femur_from_dimensions(pose.femur, detail),
+            pose.femur_origin,
+            bone_paint,
+        )
+        _place(
+            scene,
+            assets,
+            root_id,
+            tibia_from_dimensions(pose.tibia, detail),
+            pose.tibia_origin,
+            bone_paint,
+        )
+        _place(
+            scene,
+            assets,
+            root_id,
+            fibula_from_dimensions(pose.fibula, detail),
+            pose.fibula_origin,
+            bone_paint,
+        )
+        _place(
+            scene,
+            assets,
+            root_id,
+            patella_from_dimensions(pose.patella, detail),
+            pose.patella_origin,
+            bone_paint,
+        )
+        _place(
+            scene,
+            assets,
+            root_id,
+            articular_cartilage(spec, side, detail),
+            Vector3(0, 0, 0),
+            cartilage_paint,
+        )
+        _place(
+            scene,
+            assets,
+            root_id,
+            medial_meniscus(spec, side, detail),
+            Vector3(0, 0, 0),
+            meniscus_paint,
+        )
+        _place(
+            scene,
+            assets,
+            root_id,
+            lateral_meniscus(spec, side, detail),
+            Vector3(0, 0, 0),
+            meniscus_paint,
+        )
+        _place(
+            scene,
+            assets,
+            root_id,
+            medial_collateral(spec, side, detail),
+            Vector3(0, 0, 0),
+            ligament_paint,
+        )
+        _place(
+            scene,
+            assets,
+            root_id,
+            lateral_collateral(spec, side, detail),
+            Vector3(0, 0, 0),
+            ligament_paint,
+        )
+    if contents.includes_muscles():
+        var parts = named_muscle_parts()
+        var index = 0
+        while index < len(parts):
+            var part = parts[index]
+            var paint = muscle_paint
+            if is_tendon(part):
+                paint = tendon_paint
+            _place(
+                scene,
+                assets,
+                root_id,
+                muscle_from_dimensions(pose.muscles, part, detail),
+                Vector3(0, 0, 0),
+                paint,
+            )
+            index += 1
     return root_id
 
 
