@@ -13,6 +13,7 @@ from extensions.humanoid.sex import FEMALE, MALE
 from extensions.humanoid.side import LEFT, RIGHT
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.bone import bone_phong
+from extensions.humanoid.skeleton.field import tube_chain_volume
 from extensions.humanoid.skeleton.leg.assembly import add_leg
 from extensions.humanoid.skeleton.leg.contents import NERVES
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
@@ -40,6 +41,10 @@ from extensions.humanoid.skeleton.leg.nerves.mass import (
     nerve_mass,
     nerve_mass_from_dimensions,
     nerve_occupancy,
+)
+from extensions.humanoid.skeleton.leg.vessels.dimensions import (
+    POPLITEAL_VEIN,
+    VesselField,
 )
 from extensions.humanoid.skeleton.look import (
     cartilage_phong,
@@ -72,7 +77,6 @@ from units.si import (
     GRAM_PER_CUBIC_CENTIMETER,
     Length,
     MEGAPASCAL,
-    MILLIMETER,
 )
 
 comptime TOLERANCE = Float64(1e-4)
@@ -149,6 +153,20 @@ def test_nerve_branch_continuity_and_landmarks() raises:
     _assert_same_point(sciatic.chain.p4, tibial.chain.p0)
     _assert_same_point(sciatic.chain.p4, fibular.chain.p0)
     _assert_same_point(femoral.chain.p3, saphenous.chain.p0)
+    assert_almost_equal(sciatic.chain.r4, Float32(0.0041), atol=TOLERANCE)
+    assert_almost_equal(fibular.chain.r2, Float32(0.0016), atol=TOLERANCE)
+    assert_almost_equal(sural.chain.r0, Float32(0.0009), atol=TOLERANCE)
+    assert_almost_equal(
+        sciatic.chain.p0.x,
+        Float32(0.5) * (dims.ischial.x + dims.gt.x),
+        atol=TOLERANCE,
+    )
+    var popliteal_vein = VesselField(dims, POPLITEAL_VEIN)
+    assert_true(tibial.chain.p1.z < popliteal_vein.chain.p2.z)
+    assert_true(
+        (tibial.chain.p1 - popliteal_vein.chain.p2).length()
+        > tibial.chain.r1 + popliteal_vein.chain.r2
+    )
     assert_true(fibular.chain.p4.x > dims.fib_head.x)
     assert_true(tibial.chain.p4.z < dims.med_mal.z)
     assert_true(sural.chain.p0.y < dims.tibia_mid.y)
@@ -164,13 +182,17 @@ def test_nerve_mesh_has_positions_normals_and_uvs() raises:
 
 
 def test_nerve_mass_is_positive() raises:
-    var step = Length(5.0, MILLIMETER)
-    var sciatic = nerve_mass(
-        HumanoidSpec(Length(6.0, FOOT), MALE), SCIATIC_NERVE, RIGHT, step
-    )
+    var person = HumanoidSpec(Length(6.0, FOOT), MALE)
+    var sciatic = nerve_mass(person, SCIATIC_NERVE, RIGHT)
     assert_true(sciatic.mass.to(GRAM) > Float32(0))
+    var physical = NerveField(muscle_dimensions(person, RIGHT), SCIATIC_NERVE)
+    assert_almost_equal(
+        sciatic.envelope.value,
+        tube_chain_volume(physical.chain),
+        atol=Float64(1e-8),
+    )
     var femoral = nerve_mass(
-        HumanoidSpec(Length(5.5, FOOT), FEMALE), SURAL_NERVE, LEFT, step
+        HumanoidSpec(Length(5.5, FOOT), FEMALE), SURAL_NERVE, LEFT
     )
     assert_true(femoral.mass.to(GRAM) > Float32(0))
 
@@ -196,15 +218,11 @@ def test_nerve_mass_refuses_a_bad_part_or_tissue() raises:
             HumanoidSpec(Length(6.0, FOOT), MALE), NervePart(6), RIGHT
         )
     with assert_raises():
-        _ = nerve_mass_from_dimensions(
-            dims, NervePart(6), nerve_tissue(), Length(20.0, MILLIMETER)
-        )
+        _ = nerve_mass_from_dimensions(dims, NervePart(6), nerve_tissue())
     var bad = nerve_tissue()
     bad.kind = SoftTissueKind(11)
     with assert_raises():
-        _ = nerve_mass_from_dimensions(
-            dims, SCIATIC_NERVE, bad, Length(20.0, MILLIMETER)
-        )
+        _ = nerve_mass_from_dimensions(dims, SCIATIC_NERVE, bad)
 
 
 def test_add_leg_can_draw_only_nerves() raises:

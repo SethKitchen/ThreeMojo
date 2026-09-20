@@ -110,6 +110,7 @@ from extensions.humanoid.skeleton.leg.vessels.dimensions import (
     POPLITEAL_VEIN,
     POSTERIOR_TIBIAL_ARTERY,
     SMALL_SAPHENOUS_VEIN,
+    TIBIOPERONEAL_TRUNK,
     VesselField,
 )
 from extensions.humanoid.sex import MALE
@@ -179,6 +180,7 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
     var femoral_artery: VesselField
     var popliteal_artery: VesselField
     var anterior_tibial_artery: VesselField
+    var tibioperoneal_trunk: VesselField
     var posterior_tibial_artery: VesselField
     var fibular_artery: VesselField
     var femoral_vein: VesselField
@@ -301,6 +303,7 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         self.anterior_tibial_artery = VesselField(
             dimensions, ANTERIOR_TIBIAL_ARTERY
         )
+        self.tibioperoneal_trunk = VesselField(dimensions, TIBIOPERONEAL_TRUNK)
         self.posterior_tibial_artery = VesselField(
             dimensions, POSTERIOR_TIBIAL_ARTERY
         )
@@ -400,6 +403,7 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         _append_tube(points, self.femoral_artery.chain)
         _append_tube(points, self.popliteal_artery.chain)
         _append_tube(points, self.anterior_tibial_artery.chain)
+        _append_tube(points, self.tibioperoneal_trunk.chain)
         _append_tube(points, self.posterior_tibial_artery.chain)
         _append_tube(points, self.fibular_artery.chain)
         _append_tube(points, self.femoral_vein.chain)
@@ -411,6 +415,9 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         _append_tube(points, self.superficial_lymphatics.chain)
         _append_tube(points, self.superficial_lymphatics.chain2)
         _append_tube(points, self.deep_lymphatics.chain)
+        _append_tube(points, self.deep_lymphatics.chain2)
+        _append_tube(points, self.deep_lymphatics.chain3)
+        _append_tube(points, self.deep_lymphatics.chain4)
         _append_tube(points, self.femoral_nerve.chain)
         _append_tube(points, self.sciatic_nerve.chain)
         _append_tube(points, self.tibial_nerve.chain)

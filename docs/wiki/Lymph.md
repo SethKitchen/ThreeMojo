@@ -34,14 +34,14 @@ The labeled set connects superficial and deep drainage to the correct node group
 |---|---|
 | `INGUINAL_NODES` | Five representative superficial and deep nodes below the inguinal ligament. |
 | `POPLITEAL_NODES` | Five representative nodes in the posterior knee fat. |
-| `SUPERFICIAL_LYMPHATICS` | Medial route to inguinal nodes and posterolateral route to popliteal nodes. |
-| `DEEP_LYMPHATICS` | Ankle-to-popliteal-to-deep-inguinal route beside the deep vessels. |
+| `SUPERFICIAL_LYMPHATICS` | Separate medial and posterolateral routes beside the saphenous veins. |
+| `DEEP_LYMPHATICS` | Three crural collectors, popliteal nodes and one deep-inguinal efferent. |
 
-The medial superficial route follows the great saphenous vein. The posterolateral route follows the small saphenous vein.
+The medial superficial route accompanies but does not overlap the great saphenous vein. The posterolateral route does the same beside the small vein.
 
-The deep route passes through a popliteal node and ends at a deep inguinal node. Route endpoints equal their node centers.
+Anterior tibial, posterior tibial and fibular collectors converge on representative popliteal nodes. Their efferent ends at the deep inguinal representative.
 
-Trunk radii are diagrammatic so the mesher can show them. The centerlines and drainage topology carry the anatomical meaning.
+Physical collector radii drive distance, containment and analytic mass. The mesh alone enlarges collectors for visibility.
 
 `is_node_group` returns True for the inguinal and popliteal clusters.
 
@@ -58,6 +58,7 @@ These values are named research metadata. This extension does not implement a co
 - [Lower-limb lymphatic anatomy and lymphosomes](https://pmc.ncbi.nlm.nih.gov/articles/PMC5891651/)
 - [Inguinal lymph nodes, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK557639/)
 - [Lower-limb lymphatic drainage](https://teachmeanatomy.info/lower-limb/vessels/lymphatics/)
+- [Healthy lower-limb lymphatic diameters](https://pubmed.ncbi.nlm.nih.gov/34597838/)
 
 ## Mass
 

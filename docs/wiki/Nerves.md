@@ -40,9 +40,13 @@ The labeled set follows the major adult lower-limb nerve courses.
 | `SAPHENOUS_NERVE` | Femoral branch through the adductor canal and medial leg. |
 | `SURAL_NERVE` | Distal-calf union through the posterior calf to the lateral malleolus. |
 
-The sciatic endpoint equals both terminal-branch origins. The femoral field shares its saphenous branch point.
+The sciatic endpoint equals both terminal-branch origins. Its proximal point lies between the ischial and greater-trochanter landmarks.
 
-Nerve radii remain diagrammatic so marching tetrahedra can show them. The centerlines and branch topology carry the anatomical meaning.
+The femoral field shares its saphenous branch point. The tibial nerve remains posterior to the popliteal vein.
+
+Physical radii drive distance, containment and analytic mass. The mesh alone applies a diagrammatic minimum radius for visibility.
+
+The model truncates at the ankle or fibular neck. It omits plantar, superficial/deep fibular, infrapatellar and foot branches.
 
 ## Tissue
 
@@ -60,6 +64,7 @@ These values are named research metadata. This extension does not implement a co
 - [Saphenous nerve, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK541045/)
 - [Sural nerve, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK546638/)
 - [Sciatic nerve course and bifurcation](https://teachmeanatomy.info/lower-limb/nerves/sciatic-nerve/)
+- [Lower-extremity nerve cross-sectional areas](https://pubmed.ncbi.nlm.nih.gov/33794049/)
 
 ## Mass
 

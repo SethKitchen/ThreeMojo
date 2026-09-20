@@ -3,7 +3,10 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Wet-tissue mass of a lymph solid from its field and tissue.
+"""Wet-tissue mass from physical lymph-node and collector dimensions.
+
+Mass uses analytic sphere and tapered-tube volume. Collector display
+radius does not change mass.
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)
     var report = lymph_mass(person, INGUINAL_NODES)
@@ -11,27 +14,26 @@
 
 from extensions.humanoid.side import RIGHT, BodySide
 from extensions.humanoid.spec import HumanoidSpec
+from extensions.humanoid.skeleton.field import tube_chain_volume
 from extensions.humanoid.skeleton.leg.lymph.dimensions import (
     LymphField,
     LymphPart,
     lymph_distance,
-    lymph_part_label,
 )
 from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     MuscleDimensions,
     muscle_dimensions,
 )
 from extensions.humanoid.skeleton.soft_tissue import (
-    SOFT_STEP,
     SoftMass,
     SoftOccupancy,
     SoftTissue,
     classify_soft,
     lymph_tissue,
-    sample_soft_mass,
 )
 from math.vector3 import Vector3
-from units.si import Length
+from std.math import pi
+from units.si import CUBIC_METER, KILOGRAM, Mass, Volume
 
 
 def lymph_occupancy(
@@ -58,7 +60,6 @@ def lymph_mass(
     spec: HumanoidSpec,
     part: LymphPart,
     side: BodySide = RIGHT,
-    step: Length = SOFT_STEP,
 ) raises -> SoftMass:
     """Return the wet-tissue mass of one named lymph solid sized for `spec`.
 
@@ -66,17 +67,15 @@ def lymph_mass(
         spec: Standing height, osteological sex and athleticism.
         part: Which solid to sample.
         side: `RIGHT` or `LEFT`. A right leg is the default.
-        step: Grid cell size. 2 mm through 20 mm, 2 mm by default.
 
     Returns:
-        Sampled envelope volume and wet-tissue mass.
+        Analytic node or collector volume and wet-tissue mass.
 
     Raises:
-        Error: If `spec`, `side` or `part` is refused, or `step` is out
-            of range.
+        Error: If `spec`, `side` or `part` is refused.
     """
     return lymph_mass_from_dimensions(
-        muscle_dimensions(spec, side), part, lymph_tissue(), step
+        muscle_dimensions(spec, side), part, lymph_tissue()
     )
 
 
@@ -84,7 +83,6 @@ def lymph_mass_from_dimensions(
     dimensions: MuscleDimensions,
     part: LymphPart,
     tissue: SoftTissue,
-    step: Length = SOFT_STEP,
 ) raises -> SoftMass:
     """Return the wet-tissue mass of an already-sized lymph solid.
 
@@ -92,19 +90,41 @@ def lymph_mass_from_dimensions(
         dimensions: Landmarks from `muscle_dimensions`.
         part: Which solid to sample.
         tissue: Hydrated tissue. Mass uses `wet_density` once.
-        step: Grid cell size.
 
     Returns:
-        Sampled envelope volume and wet-tissue mass.
+        Analytic node or collector volume and wet-tissue mass.
 
     Raises:
         Error: If `dimensions.validate` refuses the copy, if `part` is
-            not named, if `step` is out of range, or `tissue` fails
-            `validate`.
+            not named, or `tissue` fails `validate`.
     """
     dimensions.validate()
     if not part.is_valid():
         raise Error("A lymph part must be a named node group or trunk")
-    var label = lymph_part_label(part)
+    tissue.validate()
     var field = LymphField(dimensions, part)
-    return sample_soft_mass(field, field.low, field.high, tissue, step, label)
+    var volume: Float32
+    if field.nodes:
+        volume = (
+            Float32(4.0 / 3.0)
+            * pi
+            * (
+                field.n0 * field.n0 * field.n0
+                + field.n1 * field.n1 * field.n1
+                + field.n2 * field.n2 * field.n2
+                + field.n3 * field.n3 * field.n3
+                + field.n4 * field.n4 * field.n4
+            )
+        )
+    else:
+        volume = tube_chain_volume(field.chain)
+        if field.chain_count >= 2:
+            volume += tube_chain_volume(field.chain2)
+        if field.chain_count >= 3:
+            volume += tube_chain_volume(field.chain3)
+        if field.chain_count >= 4:
+            volume += tube_chain_volume(field.chain4)
+    return SoftMass(
+        Volume(volume, CUBIC_METER),
+        Mass(tissue.wet_density.value * volume, KILOGRAM),
+    )

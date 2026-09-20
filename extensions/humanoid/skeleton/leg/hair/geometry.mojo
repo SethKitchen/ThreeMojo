@@ -76,4 +76,4 @@ def hair_from_dimensions(
     var label = hair_part_label(part)
     check_detail(detail, label)
     var field = _display_hair_field(dimensions, part)
-    return mesh_field(field, field.low, field.high, detail, label)
+    return mesh_field(field, field.low, field.high, 48, label)

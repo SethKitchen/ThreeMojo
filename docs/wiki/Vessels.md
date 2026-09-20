@@ -35,19 +35,22 @@ The labeled set follows the standard adult lower-limb courses.
 | `FEMORAL_ARTERY` | Femoral triangle through the adductor canal and hiatus. |
 | `POPLITEAL_ARTERY` | Adductor hiatus through the posterior knee to the tibial branch point. |
 | `ANTERIOR_TIBIAL_ARTERY` | Branch point through the proximal interosseous route and anterior leg. |
-| `POSTERIOR_TIBIAL_ARTERY` | Branch point through the deep posterior leg and behind the medial malleolus. |
-| `FIBULAR_ARTERY` | Posterior tibial branch along the deep posterior fibula. |
+| `TIBIOPERONEAL_TRUNK` | Short common segment from the popliteal split to the posterior/fibular split. |
+| `POSTERIOR_TIBIAL_ARTERY` | Tibioperoneal split through the deep posterior leg and behind the medial malleolus. |
+| `FIBULAR_ARTERY` | Tibioperoneal split along the deep posterior fibula. |
 | `PERONEAL_ARTERY` | Compatibility name for `FIBULAR_ARTERY`. |
 | `FEMORAL_VEIN` | Popliteal continuation through the adductor hiatus to the groin. |
 | `POPLITEAL_VEIN` | Deep-vein confluence through the posterior knee. |
 | `GREAT_SAPHENOUS_VEIN` | Anterior medial malleolus, medial leg and knee, then femoral vein. |
 | `SMALL_SAPHENOUS_VEIN` | Posterior lateral malleolus and calf, then popliteal vein. |
 
-The femoral artery ends exactly where the popliteal artery starts. Both tibial arteries start at the popliteal branch point.
+The femoral artery ends exactly where the popliteal artery starts. The anterior tibial artery and tibioperoneal trunk share the popliteal split.
 
-The fibular artery branches from the proximal posterior tibial path. The saphenous veins end exactly on their deep-vein junctions.
+The trunk then splits into posterior tibial and fibular arteries. The saphenous veins end exactly on their deep-vein junctions.
 
-Radii remain diagrammatic so marching tetrahedra can show each vessel. The centerlines and junctions carry the anatomical meaning.
+Physical radii drive distance, containment and analytic mass. The mesh alone applies a diagrammatic minimum radius for visibility.
+
+The model ends at the ankle. It omits profunda, genicular, plantar, dorsalis-pedis and paired distal deep-vein branches.
 
 `is_artery` returns True for the five named arteries.
 
@@ -65,8 +68,10 @@ These values are named research metadata. This extension does not implement a co
 
 - [Femoral artery, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK538262/)
 - [Popliteal artery, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK537125/)
+- [Popliteal branch biometrics](https://doi.org/10.4067/S0717-95022014000400041)
 - [Lower-extremity venous drainage, NCBI Bookshelf](https://www.ncbi.nlm.nih.gov/books/NBK27332/)
 - [Saphenous neurovasculature, StatPearls](https://www.ncbi.nlm.nih.gov/books/NBK541045/)
+- [Normal lower-limb arterial calibers](https://pmc.ncbi.nlm.nih.gov/articles/PMC4603227/)
 
 ## Mass
 

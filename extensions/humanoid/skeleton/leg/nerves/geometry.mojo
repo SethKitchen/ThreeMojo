@@ -21,8 +21,8 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     muscle_dimensions,
 )
 from extensions.humanoid.skeleton.leg.nerves.dimensions import (
-    NerveField,
     NervePart,
+    _display_nerve_field,
     nerve_part_label,
 )
 
@@ -75,5 +75,5 @@ def nerve_from_dimensions(
         raise Error("A nerve part must be a named peripheral nerve")
     var label = nerve_part_label(part)
     check_detail(detail, label)
-    var field = NerveField(dimensions, part)
+    var field = _display_nerve_field(dimensions, part)
     return mesh_field(field, field.low, field.high, detail, label)

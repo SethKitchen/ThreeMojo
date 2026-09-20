@@ -21,8 +21,8 @@ from extensions.humanoid.skeleton.leg.muscles.dimensions import (
     muscle_dimensions,
 )
 from extensions.humanoid.skeleton.leg.vessels.dimensions import (
-    VesselField,
     VesselPart,
+    _display_vessel_field,
     vessel_part_label,
 )
 
@@ -75,5 +75,5 @@ def vessel_from_dimensions(
         raise Error("A vessel part must be a named artery or vein")
     var label = vessel_part_label(part)
     check_detail(detail, label)
-    var field = VesselField(dimensions, part)
+    var field = _display_vessel_field(dimensions, part)
     return mesh_field(field, field.low, field.high, detail, label)
