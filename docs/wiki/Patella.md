@@ -44,7 +44,7 @@ The accepted stature interval is 1.2 m through 2.5 m. That is the software range
 
 The solid is a triangular sesamoid. A proximal base meets a distal apex. The anterior face is convex. The posterior face holds two articular facets and a vertical ridge. The lateral facet is the larger of the two.
 
-The mesh is a marching-tetrahedra isosurface of that field. Connectivity comes from the field.
+The mesh is a tapered shield with a broad base and a narrow apex. Its posterior ridge separates the facets. The mesh is a marching-tetrahedra isosurface. Connectivity and smooth normals come from the sampled field.
 
 `PatellaDimensions` is editable. Editing a length does not rebuild landmarks. Call `patella_dimensions` to resolve a template. Call `validate` before a field, mesh or mass consumes an edited copy.
 

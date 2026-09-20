@@ -64,7 +64,7 @@ The code builds the shaft frame first. It then places the neck relative to that 
 
 The shaft cross-section is an ellipse. The AP and ML diameters are independent.
 
-The solid is a smooth union of anatomical parts. A bowed shaft, a neck and a spherical head meet both trochanters. Both condyles, a patellar surface, a linea aspera and a notch complete the distal end. The mesh is a marching-tetrahedra isosurface of that field. Connectivity comes from the field.
+The solid is a smooth union of anatomical parts. A bowed shaft, a neck and a spherical head meet both trochanters. A metaphyseal flare joins the shaft to both condyles. A patellar surface, a linea aspera and a posterior notch complete the distal end. The mesh is a marching-tetrahedra isosurface. Connectivity and smooth normals come from the sampled field.
 
 `FemurDimensions` is editable. Editing a length does not rebuild landmarks. Call `femur_dimensions` to resolve a template. Call `validate` before a field, mesh or mass consumes an edited copy.
 
