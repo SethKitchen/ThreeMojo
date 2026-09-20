@@ -1,6 +1,6 @@
 # Muscles
 
-`muscle_mesh` builds a named skeletal muscle from stature, sex and athleticism.
+`muscle_mesh` builds a named skeletal muscle from stature, sex and athleticism. Tapered elliptical sections give each belly independent width and depth.
 
 ![A six-foot male right leg as bones, untoned muscle and toned muscle](out/muscles.png)
 
@@ -47,8 +47,10 @@ The labeled set follows a standard dissection of the lower limb.
 | `RECTUS_FEMORIS` | AIIS analog to the patella. |
 | `VASTUS_LATERALIS` | Lateral thigh to the patella. |
 | `VASTUS_MEDIALIS` | Medial thigh to the patella. |
+| `VASTUS_INTERMEDIUS` | Deep anterior femur to the patella. |
 | `PECTINEUS` | Pubic analog to the lesser trochanter. |
 | `ADDUCTOR_LONGUS` | Pubic analog to the medial femoral shaft. |
+| `ADDUCTOR_MAGNUS` | Deep medial thigh to the medial femoral condyle. |
 | `GRACILIS` | Pubic analog to the pes anserinus. |
 | `BICEPS_FEMORIS` | Ischial analog to the fibular head. |
 | `SEMITENDINOSUS` | Ischial analog to the pes anserinus. |
@@ -56,10 +58,14 @@ The labeled set follows a standard dissection of the lower limb.
 | `GASTROCNEMIUS` | Both femoral condyles to the Achilles origin. |
 | `SOLEUS` | Posterior tibia and fibula to the heel analog. |
 | `TIBIALIS_ANTERIOR` | Proximal tibia to the medial midfoot analog. |
+| `TIBIALIS_POSTERIOR` | Deep calf to the medial ankle. |
 | `EXTENSOR_DIGITORUM_LONGUS` | Fibular head to the anterior ankle. |
 | `PERONEUS_LONGUS` | Fibular head to the lateral malleolus. |
 | `PERONEUS_BREVIS` | Distal fibula to the lateral malleolus. |
 | `ACHILLES_TENDON` | Distal calf to the heel analog. |
+| `PATELLAR_TENDON` | Patella to the tibial tuberosity. |
+
+Vastus intermedius and adductor magnus fill the deep thigh compartments. Tibialis posterior fills the deep calf compartment.
 
 Pelvic origins and the heel are authored offsets from the femoral head and the tibial plafond. This template has no pelvis and no foot bones yet.
 
@@ -69,7 +75,7 @@ Pelvic origins and the heel are authored offsets from the femoral head and the t
 
 `muscle_tissue()` holds wet density 1.06 g/cm³ from Mendez and Keys 1960 as a named adult template. Water fraction is 0.75. Passive modulus is 0.02 MPa. Poisson's ratio is 0.45.
 
-`tendon_tissue()` holds wet density 1.12 g/cm³. Water fraction is 0.62. Longitudinal modulus is 500 MPa. The iliotibial tract and the Achilles tendon use this tissue.
+`tendon_tissue()` holds wet density 1.12 g/cm³. Water fraction is 0.62. Longitudinal modulus is 500 MPa. The three connective-tissue solids use this tissue.
 
 Water fraction is metadata. Mass uses wet density times envelope volume. Do not scale by one minus water fraction again.
 
@@ -94,7 +100,7 @@ Toned muscle is heavier than untoned muscle at the same stature, sex and step.
 | Value | Draws |
 |---|---|
 | `BONES` | Four bones and five knee tissues. |
-| `MUSCLES` | The twenty-one named muscle solids. |
+| `MUSCLES` | The labeled muscles and three connective-tissue solids. |
 | `BOTH` | Bones, knee tissues and muscles. |
 
 A bare integer is a compile error. Both is the default.

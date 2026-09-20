@@ -35,6 +35,7 @@ from extensions.humanoid.skeleton.look import (
     cartilage_phong,
     ligament_phong,
     meniscus_phong,
+    muscle_albedo,
     muscle_phong,
     tendon_phong,
 )
@@ -174,11 +175,12 @@ def main() raises:
 
     var assets = Assets()
     var map = assets.textures.add(bone_albedo(64))
+    var muscle_map = assets.textures.add(muscle_albedo(64))
     var bone_paint = assets.materials.add(bone_phong(map))
     var cartilage_paint = assets.materials.add(cartilage_phong())
     var meniscus_paint = assets.materials.add(meniscus_phong())
     var ligament_paint = assets.materials.add(ligament_phong())
-    var muscle_paint = assets.materials.add(muscle_phong())
+    var muscle_paint = assets.materials.add(muscle_phong(muscle_map))
     var tendon_paint = assets.materials.add(tendon_phong())
 
     var scene = Scene()

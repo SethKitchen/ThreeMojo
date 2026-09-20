@@ -30,6 +30,7 @@ from extensions.humanoid.skeleton.look import (
     cartilage_phong,
     ligament_phong,
     meniscus_phong,
+    muscle_albedo,
     muscle_phong,
     tendon_phong,
 )
@@ -57,17 +58,21 @@ def frame_at(
     camera: PerspectiveCamera,
     assets: Assets,
     mut scene: Scene,
-    node: NodeId,
+    bones_node: NodeId,
+    untoned_node: NodeId,
+    toned_node: NodeId,
     step: Angle,
 ) raises -> Framebuffer:
-    """Turn the row by `step` and render one frame.
+    """Turn each leg by `step` and render one frame.
 
     Args:
         renderer: The renderer to draw with.
         camera: The camera to view through.
         assets: The geometry, materials and textures.
         scene: The persistent scene, edited in place.
-        node: The parent of every leg.
+        bones_node: Parent of the bones-only leg.
+        untoned_node: Parent of the untoned muscle leg.
+        toned_node: Parent of the toned muscle leg.
         step: How much further to turn this frame.
 
     Returns:
@@ -76,7 +81,9 @@ def frame_at(
     Raises:
         Error: If the scene or the render is invalid.
     """
-    scene.node(node).rotate_y(step)
+    scene.node(bones_node).rotate_y(step)
+    scene.node(untoned_node).rotate_y(step)
+    scene.node(toned_node).rotate_y(step)
     scene.update()
     return renderer.render(scene, assets, camera)
 
@@ -94,7 +101,7 @@ def _add(
     ligament_paint: MaterialId,
     muscle_paint: MaterialId,
     tendon_paint: MaterialId,
-) raises:
+) raises -> NodeId:
     """Place one layered leg on the gallery row.
 
     Args:
@@ -110,6 +117,9 @@ def _add(
         ligament_paint: Ligament look.
         muscle_paint: Muscle look.
         tendon_paint: Tendon look.
+
+    Returns:
+        The holder that can turn this leg in place.
 
     Raises:
         Error: If the spec, the mesh or the scene is invalid.
@@ -132,6 +142,7 @@ def _add(
         contents,
         DETAIL,
     )
+    return nid
 
 
 def main() raises:
@@ -149,16 +160,17 @@ def main() raises:
 
     var assets = Assets()
     var map = assets.textures.add(bone_albedo(64))
+    var muscle_map = assets.textures.add(muscle_albedo(64))
     var bone_paint = assets.materials.add(bone_phong(map))
     var cartilage_paint = assets.materials.add(cartilage_phong())
     var meniscus_paint = assets.materials.add(meniscus_phong())
     var ligament_paint = assets.materials.add(ligament_phong())
-    var muscle_paint = assets.materials.add(muscle_phong())
+    var muscle_paint = assets.materials.add(muscle_phong(muscle_map))
     var tendon_paint = assets.materials.add(tendon_phong())
 
     var scene = Scene()
     var pivot = scene.add(Object3D())
-    _add(
+    var bones_node = _add(
         scene,
         assets,
         pivot,
@@ -172,7 +184,7 @@ def main() raises:
         muscle_paint,
         tendon_paint,
     )
-    _add(
+    var untoned_node = _add(
         scene,
         assets,
         pivot,
@@ -186,7 +198,7 @@ def main() raises:
         muscle_paint,
         tendon_paint,
     )
-    _add(
+    var toned_node = _add(
         scene,
         assets,
         pivot,
@@ -218,7 +230,18 @@ def main() raises:
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
     for _ in range(FRAMES):
-        frames.append(frame_at(renderer, camera, assets, scene, pivot, step))
+        frames.append(
+            frame_at(
+                renderer,
+                camera,
+                assets,
+                scene,
+                bones_node,
+                untoned_node,
+                toned_node,
+                step,
+            )
+        )
 
     Path(destination).write_bytes(encode(frames, delay_ms=DELAY_MS))
     print("Wrote", destination, "-", FRAMES, "frames")
