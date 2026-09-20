@@ -160,6 +160,7 @@ from render.rasterizer import (
     RasterVertex,
     ShadeMode,
     check_alpha_map,
+    check_data_map,
     check_gradient_map,
     check_output_kinds,
     edge,
@@ -414,10 +415,14 @@ def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
         material.map,
         material.emissive_map,
         material.alpha_map,
+        material.roughness_map,
+        material.metalness_map,
+        material.normal_map,
+        material.bump_map,
     ]
     var chosen = Matrix3()
     var settled = False
-    # Three maps, always, so the loop never runs zero times.
+    # Seven maps, always, so the loop never runs zero times.
     for index in range(len(named)):  # pragma: no branch
         if named[index] == NO_TEXTURE:
             continue
@@ -1030,36 +1035,30 @@ def _sort_by(mut items: List[Int], mut keys: List[Float32]):
 
 
 def _turned_around(corner: RasterVertex) -> RasterVertex:
-    """Return `corner` with its normal reversed.
+    """Return `corner` with its normal reversed, and its normal and bump
+    map scales with it.
 
-    For a surface being seen from its far side. Every other field is carried
-    across unchanged, which is why this exists rather than a mutation: a
-    `RasterVertex` has fifteen fields and rebuilding one by hand at three
-    call sites is three chances to drop one.
+    For a surface being seen from its far side. Every other field is
+    carried across unchanged, which is why this exists rather than a
+    mutation: rebuilding a `RasterVertex` by hand at three call sites is
+    three chances to drop a field. It dropped seven once anyway, when
+    fields were added after it: a two-sided reflective mesh lost its env
+    map on its back. So it copies the corner and changes what it must.
+
+    The map scales turn with the normal because a map perturbs the normal
+    in a frame the surface's own front defines, and the far side's
+    perturbed normal is the front's negated: three.js negates the tangent
+    and the bitangent under `DOUBLE_SIDED` by `faceDirection`, and a bump
+    map's slope by the same sign. Negating the scales does exactly that;
+    see `render.rasterizer.mapped_normal`.
     """
-    return RasterVertex(
-        corner.x,
-        corner.y,
-        corner.z,
-        corner.inv_w,
-        corner.color,
-        corner.u,
-        corner.v,
-        corner.texture,
-        corner.blend,
-        -corner.normal,
-        corner.world,
-        corner.kind,
-        corner.emissive,
-        corner.emissive_map,
-        corner.view_depth,
-        corner.alpha_map,
-        corner.alpha_test,
-        corner.specular,
-        corner.shininess,
-        corner.gradient_map,
-        corner.matcap,
+    var turned = corner
+    turned.normal = -corner.normal
+    turned.normal_scale = Vector2(
+        -corner.normal_scale.x, -corner.normal_scale.y
     )
+    turned.bump_scale = -corner.bump_scale
+    return turned
 
 
 def _to_raster(
@@ -1081,6 +1080,7 @@ def _to_raster(
     env_map: CubeTextureId = NO_CUBE_TEXTURE,
     reflectivity: Float32 = 1,
     combine: Combine = MULTIPLY_OPERATION,
+    physics: _Physics = _Physics(),
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -1128,7 +1128,56 @@ def _to_raster(
         env_map,
         reflectivity,
         combine,
+        physics.roughness,
+        physics.metalness,
+        physics.env_map_intensity,
+        physics.roughness_map,
+        physics.metalness_map,
+        physics.specular_intensity,
+        physics.clearcoat,
+        physics.clearcoat_roughness,
+        physics.normal_map,
+        physics.normal_scale,
+        physics.bump_map,
+        physics.bump_scale,
     )
+
+
+@fieldwise_init
+struct _Physics(ImplicitlyCopyable):
+    """What a physical surface and a normal or bump map add to every corner
+    of one draw: the numbers and the maps `RasterVertex` carries for them,
+    gathered so `_to_raster` takes one more argument rather than twelve.
+    """
+
+    var roughness: Float32
+    var metalness: Float32
+    var env_map_intensity: Float32
+    var roughness_map: TextureId
+    var metalness_map: TextureId
+    var specular_intensity: Float32
+    var clearcoat: Float32
+    var clearcoat_roughness: Float32
+    var normal_map: TextureId
+    var normal_scale: Vector2
+    var bump_map: TextureId
+    var bump_scale: Float32
+
+    def __init__(out self):
+        """Describe a surface that is not physical and carries no map: the
+        `RasterVertex` defaults."""
+        self.roughness = 1
+        self.metalness = 0
+        self.env_map_intensity = 1
+        self.roughness_map = NO_TEXTURE
+        self.metalness_map = NO_TEXTURE
+        self.specular_intensity = 1
+        self.clearcoat = 0
+        self.clearcoat_roughness = 0
+        self.normal_map = NO_TEXTURE
+        self.normal_scale = Vector2(1, 1)
+        self.bump_map = NO_TEXTURE
+        self.bump_scale = 1
 
 
 def _whole_in_view(
@@ -1200,6 +1249,9 @@ struct _Paint(ImplicitlyCopyable):
     var env: CubeTextureId
     var reflectivity: Float32
     var combine: Combine
+    # The physical terms and the normal or bump map, with the maps the
+    # shading mode would not open already erased.
+    var physics: _Physics
 
     def raster(self, vertex: ClipVertex) -> RasterVertex:
         """Project one clipped corner into the rasterizer's input."""
@@ -1219,6 +1271,7 @@ struct _Paint(ImplicitlyCopyable):
             env_map=self.env,
             reflectivity=self.reflectivity,
             combine=self.combine,
+            physics=self.physics,
         )
 
     def emit(
@@ -1290,6 +1343,32 @@ def _column_length(matrix: Matrix4, axis: Int) -> Float32:
     var y = e[start + 1]
     var z = e[start + 2]
     return Vector3(x, y, z).length()
+
+
+def _checked_data_map(
+    assets: Assets, map: TextureId, name: String
+) raises -> TextureId:
+    """Return `map` once it is known to be in the store and stored as data,
+    or `NO_TEXTURE` as it was.
+
+    Args:
+        assets: Where the textures live.
+        map: The id the material names, or `NO_TEXTURE`.
+        name: What to call the map in an error: "A normal map", say.
+
+    Returns:
+        `map`, unchanged.
+
+    Raises:
+        Error: If the id names nothing in the store, or the texture is not
+            `LINEAR` or does not ignore its alpha; see `check_data_map`.
+    """
+    if map == NO_TEXTURE:
+        return map
+    if map.value >= assets.textures.count():
+        raise Error(name + " is named that is not there")
+    check_data_map(assets.textures.get(map), name)
+    return map
 
 
 def _checked_maps(
@@ -1494,6 +1573,7 @@ def _emit_sprite(
         NO_CUBE_TEXTURE,
         1,
         MULTIPLY_OPERATION,
+        _Physics(),
     )
     var thirds: List[Int] = [2, 3]
     for half in range(2):  # pragma: no branch
@@ -2300,6 +2380,32 @@ struct Renderer(Movable):
             # The environment the surface reflects, the scene's if the
             # material asked for it, checked against the store here.
             var env = _resolved_env(scene, assets, material, self.shading)
+            # The four maps that hold numbers, each checked the way the
+            # alpha map is -- there, and stored as data, whatever the
+            # shading mode -- and each erased unless textures are opened.
+            var physics = _Physics(
+                material.roughness,
+                material.metalness,
+                material.env_map_intensity,
+                _checked_data_map(
+                    assets, material.roughness_map, "A roughness map"
+                ),
+                _checked_data_map(
+                    assets, material.metalness_map, "A metalness map"
+                ),
+                material.specular_intensity,
+                material.clearcoat,
+                material.clearcoat_roughness,
+                _checked_data_map(assets, material.normal_map, "A normal map"),
+                material.normal_scale,
+                _checked_data_map(assets, material.bump_map, "A bump map"),
+                material.bump_scale,
+            )
+            if self.shading != SHADE_TEXTURE:
+                physics.roughness_map = NO_TEXTURE
+                physics.metalness_map = NO_TEXTURE
+                physics.normal_map = NO_TEXTURE
+                physics.bump_map = NO_TEXTURE
             # Where the maps are moved, tiled and turned on this surface,
             # asked of the material's own maps whatever the shading mode:
             # the uv view shows the coordinates the texture would be
@@ -2309,10 +2415,11 @@ struct Renderer(Movable):
             # Light the surface gives off, decoded to linear once and carried
             # on every corner like the base color below.
             var glow = material.emissive_light()
-            # How much the surface sends toward the camera, decoded once and
-            # carried the same way. Black unless the material is `PHONG`,
-            # which is the only kind the constructor lets carry one.
-            var sheen = material.specular_light()
+            # How much the surface reflects head on, decoded once and
+            # carried the same way: a `PHONG` material's specular, a
+            # physical material's reflectance, and black for every other
+            # kind. See `Material.base_reflectance`.
+            var sheen = material.base_reflectance()
             var smooth = geometry.has_attribute(String(NORMAL))
             var mapped = geometry.has_attribute(String(UV))
 
@@ -2453,6 +2560,7 @@ struct Renderer(Movable):
                 env,
                 material.reflectivity,
                 material.combine,
+                physics,
             )
             if wireframe:
                 # The mesh's own edges, each once, clipped as segments.

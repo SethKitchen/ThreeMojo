@@ -43,9 +43,10 @@ from lights.light import (
     Light,
 )
 from math.smoothstep import smoothstep
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
-from std.math import cos, exp2, log2, max, min, pi
+from std.math import cos, exp2, log2, max, min, pi, sqrt
 
 # What every lit sum is multiplied by: three.js's `RECIPROCAL_PI`, the
 # factor in `BRDF_Lambert` and `D_BlinnPhong`. See the module docstring.
@@ -238,6 +239,21 @@ comptime BLINN_PHONG_G = Float32(0.25)
 # more a surface reflects at a grazing angle.
 comptime _FRESNEL_SLOPE = Float32(-5.55473)
 comptime _FRESNEL_OFFSET = Float32(-6.98316)
+# The roughness a physical surface is never smoother than: three.js's
+# 0.0525, the base mip of a 256-texel cube map, below which a GGX lobe
+# is narrower than a pixel and sparkles.
+comptime ROUGHNESS_FLOOR = Float32(0.0525)
+# What a dielectric reflects head on, per channel: three.js's `vec3(0.04)`,
+# the reflectance of an index of refraction of one and a half.
+comptime DIELECTRIC_F0 = Vector3(0.04, 0.04, 0.04)
+# What a clear coat reflects head on: the same, three.js's `clearcoatF0`.
+comptime CLEARCOAT_F0 = Vector3(0.04, 0.04, 0.04)
+# Where the GGX visibility term's denominator is held off zero: three.js's
+# `EPSILON`.
+comptime GGX_EPSILON = Float32(1e-6)
+# The average Fresnel over the hemisphere, one twenty-first, as
+# `computeMultiscattering` uses it.
+comptime MULTISCATTER_MEAN = Float32(0.047619)
 
 
 def blinn_phong(
@@ -292,16 +308,414 @@ def blinn_phong(
     var grazing = max(Float32(0), min(Float32(1), toward_eye.dot(half)))
     # three.js's F_Schlick with an f90 of one: the surface reflects its own
     # color head on and white at a grazing angle.
-    var fresnel = exp2((_FRESNEL_SLOPE * grazing + _FRESNEL_OFFSET) * grazing)
-    var keep = 1 - fresnel
+    var fresnel = f_schlick(specular, 1, grazing)
     # three.js's D_BlinnPhong, without its reciprocal pi.
     var lobe = (shininess * 0.5 + 1) * exp2(shininess * log2(facing))
     var scale = BLINN_PHONG_G * lobe
+    return Vector3(fresnel.x * scale, fresnel.y * scale, fresnel.z * scale)
+
+
+def f_schlick(f0: Vector3, f90: Float32, cos_vh: Float32) -> Vector3:
+    """Return how much a surface reflects at an angle: three.js's `F_Schlick`.
+
+    A surface reflects `f0` of the light head on and `f90` at a grazing
+    angle, and Schlick's approximation rises from the one to the other by
+    the fifth power of one minus the cosine. three.js spells that power as
+    `exp2` of a quadratic in the cosine, and so does this, so the kernel
+    and the host compute it from one intrinsic both already have.
+
+    Args:
+        f0: The reflectance head on, per channel, linear.
+        f90: The reflectance at a grazing angle, one for every surface but
+            a physical one with a specular intensity below one.
+        cos_vh: The cosine between the eye and the half vector, from zero
+            to one.
+
+    Returns:
+        The reflectance per channel.
+    """
+    var fresnel = exp2((_FRESNEL_SLOPE * cos_vh + _FRESNEL_OFFSET) * cos_vh)
+    var keep = 1 - fresnel
     return Vector3(
-        (specular.x * keep + fresnel) * scale,
-        (specular.y * keep + fresnel) * scale,
-        (specular.z * keep + fresnel) * scale,
+        f0.x * keep + f90 * fresnel,
+        f0.y * keep + f90 * fresnel,
+        f0.z * keep + f90 * fresnel,
     )
+
+
+def _saturated(value: Float32) -> Float32:
+    """Return `value` clamped to zero through one: GLSL's `saturate`."""
+    return max(Float32(0), min(Float32(1), value))
+
+
+def ggx(
+    toward_light: Vector3,
+    toward_eye: Vector3,
+    normal: Vector3,
+    f0: Vector3,
+    f90: Float32,
+    roughness: Float32,
+) -> Vector3:
+    """Return the fraction of light arriving from one direction that a
+    physical surface sends toward another: three.js's `BRDF_GGX`.
+
+    Three factors multiply, each three.js's own: `F_Schlick` for the
+    Fresnel rise, `V_GGX_SmithCorrelated` for how much of the surface's
+    microfacets shadow each other, and `D_GGX` for how many of them face the
+    half vector -- with one factor of pi dropped from the last, for the
+    reason `blinn_phong` drops it. The roughness is squared first, Disney's
+    reparameterization, as three.js squares it. A surface turned away from
+    the light or from the eye reflects nothing and returns early, which
+    also keeps the visibility term's denominator off zero.
+
+    Args:
+        toward_light: Unit vector from the surface toward the light.
+        toward_eye: Unit vector from the surface toward the camera.
+        normal: The surface's unit normal.
+        f0: The surface's reflectance head on, per channel, linear.
+        f90: Its reflectance at a grazing angle.
+        roughness: How rough the surface is, from zero to one. The
+            caller floors it; see `ROUGHNESS_FLOOR`.
+
+    Returns:
+        The reflected fraction per channel. Above one at the center of a
+        tight highlight, which is what a highlight is.
+    """
+    var half = toward_light + toward_eye
+    if half.length() == 0:
+        return Vector3(0, 0, 0)
+    half.normalize()
+    var alpha = roughness * roughness
+    var dot_nl = _saturated(normal.dot(toward_light))
+    var dot_nv = _saturated(normal.dot(toward_eye))
+    var dot_nh = _saturated(normal.dot(half))
+    var dot_vh = _saturated(toward_eye.dot(half))
+    if dot_nl == 0 or dot_nv == 0:
+        return Vector3(0, 0, 0)
+    var fresnel = f_schlick(f0, f90, dot_vh)
+    # three.js's V_GGX_SmithCorrelated.
+    var a2 = alpha * alpha
+    var gv = dot_nl * sqrt(a2 + (1 - a2) * dot_nv * dot_nv)
+    var gl = dot_nv * sqrt(a2 + (1 - a2) * dot_nl * dot_nl)
+    var visibility = 0.5 / max(gv + gl, GGX_EPSILON)
+    # three.js's D_GGX, without its reciprocal pi.
+    var denominator = dot_nh * dot_nh * (a2 - 1) + 1
+    var lobe = a2 / (denominator * denominator)
+    var scale = visibility * lobe
+    return Vector3(fresnel.x * scale, fresnel.y * scale, fresnel.z * scale)
+
+
+def dfg_approx(dot_nv: Float32, roughness: Float32) -> Vector2:
+    """Return the two numbers that sum an environment's reflection over a
+    rough lobe: three.js's `DFGApprox`, Karis's fit to the split-sum table.
+
+    Args:
+        dot_nv: The cosine between the normal and the eye, from zero to one.
+        roughness: How rough the surface is, from zero to one.
+
+    Returns:
+        What to multiply the reflectance head on by, and what to add to it
+        scaled by the grazing reflectance.
+    """
+    var r_x = roughness * -1 + 1
+    var r_y = roughness * -0.0275 + 0.0425
+    var r_z = roughness * -0.572 + 1.04
+    var r_w = roughness * 0.022 + -0.04
+    var a004 = min(r_x * r_x, exp2(-9.28 * dot_nv)) * r_x + r_y
+    return Vector2(-1.04 * a004 + r_z, 1.04 * a004 + r_w)
+
+
+def environment_brdf(
+    dot_nv: Float32, f0: Vector3, f90: Float32, roughness: Float32
+) -> Vector3:
+    """Return how much of an environment's radiance a rough surface sends
+    toward the eye: three.js's `EnvironmentBRDF`.
+
+    Args:
+        dot_nv: The cosine between the normal and the eye, from zero to one.
+        f0: The reflectance head on, per channel, linear.
+        f90: The reflectance at a grazing angle.
+        roughness: How rough the surface is, from zero to one.
+
+    Returns:
+        The fraction per channel.
+    """
+    var fab = dfg_approx(dot_nv, roughness)
+    return Vector3(
+        f0.x * fab.x + f90 * fab.y,
+        f0.y * fab.x + f90 * fab.y,
+        f0.z * fab.x + f90 * fab.y,
+    )
+
+
+@fieldwise_init
+struct Reflected(ImplicitlyCopyable):
+    """What a physical surface sends toward the camera, split the way
+    three.js's `ReflectedLight` splits it, so the environment can join
+    each part on its own terms.
+
+    Linear light per channel, as a `Vector3` because the kernel has no
+    color type. Alpha is coverage, not light, and never appears here.
+    """
+
+    # Light scattered by the surface's color: the Lambert term.
+    var diffuse: Vector3
+    # Light bounced off the surface's microfacets: the GGX lobe.
+    var specular: Vector3
+    # Light bounced off the clear coat over the surface, on the surface's
+    # unperturbed normal. Zero for a surface without one.
+    var clearcoat: Vector3
+
+
+def physical_surface(
+    base: Vector3,
+    f0: Vector3,
+    metalness: Float32,
+    specular_intensity: Float32,
+) -> Reflected:
+    """Return a physical surface's three colors from its base color and
+    its metalness: three.js's `lights_physical_fragment`.
+
+    A metal has no diffuse color and reflects its own color; a dielectric
+    scatters its color and reflects `f0`. The two are mixed by the
+    metalness, as three.js mixes them. The grazing reflectance rides in
+    `clearcoat.x`, since a `Reflected` has no fourth slot and this is what
+    both rasterizers unpack.
+
+    Args:
+        base: The surface's color, linear, with any map applied.
+        f0: Its reflectance head on, linear: `Material.base_reflectance`.
+        metalness: How much of a metal it is, from zero to one.
+        specular_intensity: What scales the reflectance, three.js's
+            `specularIntensity`; one for a `STANDARD` surface.
+
+    Returns:
+        `diffuse` as the color that scatters, `specular` as the color that
+        reflects head on, and `clearcoat.x` as the reflectance at a grazing
+        angle.
+    """
+    var keep = 1 - metalness
+    var f90 = specular_intensity + (1 - specular_intensity) * metalness
+    return Reflected(
+        Vector3(base.x * keep, base.y * keep, base.z * keep),
+        Vector3(
+            f0.x + (base.x - f0.x) * metalness,
+            f0.y + (base.y - f0.y) * metalness,
+            f0.z + (base.z - f0.z) * metalness,
+        ),
+        Vector3(f90, 0, 0),
+    )
+
+
+def floored_roughness(roughness: Float32) -> Float32:
+    """Return a roughness never below `ROUGHNESS_FLOOR` and never above one,
+    as three.js's `lights_physical_fragment` clamps it.
+
+    three.js adds a geometric roughness from how fast the normal changes
+    across the pixel, which needs the neighboring pixels' normals; this
+    project shades each pixel alone and adds none.
+
+    Args:
+        roughness: The authored roughness, times any map.
+
+    Returns:
+        The roughness the lobe is evaluated with.
+    """
+    return min(max(roughness, ROUGHNESS_FLOOR), Float32(1))
+
+
+def physical_outgoing(
+    direct: Reflected,
+    indirect: Vector3,
+    surface: Reflected,
+    roughness: Float32,
+    dot_nv: Float32,
+    reflects: Bool,
+    radiance: Vector3,
+    irradiance: Vector3,
+    glow: Vector3,
+    clearcoat: Float32,
+    clearcoat_roughness: Float32,
+    dot_nv_coat: Vector3,
+    coat_radiance: Vector3,
+) -> Vector3:
+    """Return the light a physical surface sends toward the camera, from
+    its direct light, its indirect light and its environment: three.js's
+    `RE_IndirectDiffuse_Physical`, `RE_IndirectSpecular_Physical` and the
+    end of `meshphysical_frag`, in that order.
+
+    The indirect light scatters through the diffuse color. The environment
+    reflects through the split sum, and Fdez-Aguera's multiple scattering
+    hands the energy a single bounce loses back as a second one, which
+    darkens the diffuse by what the lobe kept. The clear coat, when there
+    is one, dims everything under it by its own Fresnel and adds its own
+    reflection on top, which is why a coated red surface is red under a
+    white gloss. Shared by both rasterizers, as `combine_light` is.
+
+    Args:
+        direct: The three sums over the lights, from `Lighting.physical_at`.
+        indirect: The ambient and hemisphere light arriving, already scaled.
+        surface: The three colors from `physical_surface`.
+        roughness: The floored roughness.
+        dot_nv: The cosine between the normal and the eye, from zero to one.
+        reflects: Whether an environment was sampled at all.
+        radiance: What the environment shows along the rough reflection,
+            times the env map intensity. Read only when `reflects`.
+        irradiance: What the environment shows around the normal, times
+            the intensity: the cosine-weighted irradiance, which three.js
+            multiplies by pi and divides again. Read only when `reflects`.
+        glow: The emissive term, times its map.
+        clearcoat: How much clear coat there is, from zero to one; zero
+            for none.
+        clearcoat_roughness: Its floored roughness.
+        dot_nv_coat: The cosine between the coat's normal and the eye in
+            `.x`; the other two are unused. A vector so a kernel with no
+            optional can pass one shape.
+        coat_radiance: What the environment shows along the coat's own
+            reflection, times the intensity. Read only when `reflects`.
+
+    Returns:
+        The outgoing light, linear.
+    """
+    var diffuse = Vector3(
+        direct.diffuse.x + surface.diffuse.x * indirect.x,
+        direct.diffuse.y + surface.diffuse.y * indirect.y,
+        direct.diffuse.z + surface.diffuse.z * indirect.z,
+    )
+    var specular = direct.specular
+    var coat = direct.clearcoat
+    var f90 = surface.clearcoat.x
+    if reflects:
+        # three.js's `computeMultiscattering`.
+        var fab = dfg_approx(dot_nv, roughness)
+        var single = Vector3(
+            surface.specular.x * fab.x + f90 * fab.y,
+            surface.specular.y * fab.x + f90 * fab.y,
+            surface.specular.z * fab.x + f90 * fab.y,
+        )
+        var ess = fab.x + fab.y
+        var ems = 1 - ess
+        var average = Vector3(
+            surface.specular.x + (1 - surface.specular.x) * MULTISCATTER_MEAN,
+            surface.specular.y + (1 - surface.specular.y) * MULTISCATTER_MEAN,
+            surface.specular.z + (1 - surface.specular.z) * MULTISCATTER_MEAN,
+        )
+        var multi = Vector3(
+            single.x * average.x / (1 - ems * average.x) * ems,
+            single.y * average.y / (1 - ems * average.y) * ems,
+            single.z * average.z / (1 - ems * average.z) * ems,
+        )
+        var total = max(
+            max(single.x + multi.x, single.y + multi.y), single.z + multi.z
+        )
+        var kept = 1 - total
+        specular = Vector3(
+            specular.x + radiance.x * single.x + multi.x * irradiance.x,
+            specular.y + radiance.y * single.y + multi.y * irradiance.y,
+            specular.z + radiance.z * single.z + multi.z * irradiance.z,
+        )
+        diffuse = Vector3(
+            diffuse.x + surface.diffuse.x * kept * irradiance.x,
+            diffuse.y + surface.diffuse.y * kept * irradiance.y,
+            diffuse.z + surface.diffuse.z * kept * irradiance.z,
+        )
+        if clearcoat > 0:
+            var sheen = environment_brdf(
+                dot_nv_coat.x, CLEARCOAT_F0, 1, clearcoat_roughness
+            )
+            coat = Vector3(
+                coat.x + coat_radiance.x * sheen.x,
+                coat.y + coat_radiance.y * sheen.y,
+                coat.z + coat_radiance.z * sheen.z,
+            )
+    var outgoing = Vector3(
+        diffuse.x + specular.x + glow.x,
+        diffuse.y + specular.y + glow.y,
+        diffuse.z + specular.z + glow.z,
+    )
+    if clearcoat > 0:
+        var fresnel = f_schlick(CLEARCOAT_F0, 1, dot_nv_coat.x)
+        outgoing = Vector3(
+            outgoing.x * (1 - clearcoat * fresnel.x) + coat.x * clearcoat,
+            outgoing.y * (1 - clearcoat * fresnel.y) + coat.y * clearcoat,
+            outgoing.z * (1 - clearcoat * fresnel.z) + coat.z * clearcoat,
+        )
+    return outgoing
+
+
+def physical_light(
+    sum: Reflected,
+    light: Vector3,
+    lambert: Float32,
+    coat_lambert: Float32,
+    toward_light: Vector3,
+    toward_eye: Vector3,
+    normal: Vector3,
+    coat_normal: Vector3,
+    surface: Reflected,
+    roughness: Float32,
+    clearcoat_roughness: Float32,
+) -> Reflected:
+    """Return `sum` with one light's contribution added: three.js's
+    `RE_Direct_Physical` for one `IncidentLight`.
+
+    Shared by `Lighting.physical_at` and the kernel's `_physical`, so the
+    three products are formed in one order on both backends.
+
+    Args:
+        sum: The three sums so far.
+        light: The light's radiance reaching the surface, linear, with any
+            falloff and rim already applied.
+        lambert: The cosine between the surface's normal and the light,
+            floored at zero.
+        coat_lambert: The same on the coat's normal, or zero for no coat.
+        toward_light: Unit vector from the surface toward the light.
+        toward_eye: Unit vector from the surface toward the camera.
+        normal: The surface's unit normal.
+        coat_normal: The coat's unit normal.
+        surface: The surface's three colors, from `physical_surface`.
+        roughness: The floored roughness.
+        clearcoat_roughness: The coat's floored roughness.
+
+    Returns:
+        The three sums with this light added.
+    """
+    var f90 = surface.clearcoat.x
+    var diffuse = sum.diffuse
+    var specular = sum.specular
+    var coat = sum.clearcoat
+    if lambert > 0:
+        var irradiance = Vector3(
+            light.x * lambert, light.y * lambert, light.z * lambert
+        )
+        var lobe = ggx(
+            toward_light, toward_eye, normal, surface.specular, f90, roughness
+        )
+        specular = Vector3(
+            specular.x + irradiance.x * lobe.x,
+            specular.y + irradiance.y * lobe.y,
+            specular.z + irradiance.z * lobe.z,
+        )
+        diffuse = Vector3(
+            diffuse.x + irradiance.x * surface.diffuse.x,
+            diffuse.y + irradiance.y * surface.diffuse.y,
+            diffuse.z + irradiance.z * surface.diffuse.z,
+        )
+    if coat_lambert > 0:
+        var lobe = ggx(
+            toward_light,
+            toward_eye,
+            coat_normal,
+            CLEARCOAT_F0,
+            1,
+            clearcoat_roughness,
+        )
+        coat = Vector3(
+            coat.x + light.x * coat_lambert * lobe.x,
+            coat.y + light.y * coat_lambert * lobe.y,
+            coat.z + light.z * coat_lambert * lobe.z,
+        )
+    return Reflected(diffuse, specular, coat)
 
 
 def _aimed_at(scene: Scene, light: Light) raises -> Vector3:
@@ -918,6 +1332,180 @@ struct Lighting(Movable):
             green += bulb.g * reach * sent.y
             blue += bulb.b * reach * sent.z
         return FloatColor(red, green, blue, 1.0).scaled(self.scale)
+
+    def indirect_at(self, normal: Vector3) -> FloatColor:
+        """Return the light with no direction reaching a surface here: the
+        ambient term and the hemisphere lights, three.js's `irradiance` in
+        `lights_fragment_begin`.
+
+        The half of `intensity_at` that a physical surface scatters through
+        its diffuse color alone: three.js's `RE_IndirectDiffuse_Physical`.
+        The lights with a direction go through `physical_at` instead, where
+        they make a lobe as well. Summed in the order `intensity_at` sums
+        the same two kinds, and scaled once, as there.
+
+        Args:
+            normal: The surface's unit normal, in world space.
+
+        Returns:
+            The arriving light, linear. Alpha is not light and stays at one.
+        """
+        var total = self.ambient
+        for index in range(len(self.sky_directions)):
+            var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
+            ref sky = self.skies[index]
+            ref ground = self.grounds[index]
+            var lift = FloatColor(
+                ground.r + (sky.r - ground.r) * weight,
+                ground.g + (sky.g - ground.g) * weight,
+                ground.b + (sky.b - ground.b) * weight,
+                1.0,
+            )
+            total = FloatColor(
+                total.r + lift.r, total.g + lift.g, total.b + lift.b, 1.0
+            )
+        return total.scaled(self.scale)
+
+    def physical_at(
+        self,
+        normal: Vector3,
+        coat_normal: Vector3,
+        position: Vector3,
+        surface: Reflected,
+        roughness: Float32,
+        clearcoat: Float32,
+        clearcoat_roughness: Float32,
+    ) -> Reflected:
+        """Return what a physical surface here sends to the camera from the
+        lights that have a direction: three.js's `RE_Direct_Physical`,
+        summed over them.
+
+        Each light's irradiance, its radiance times the Lambert cosine,
+        scatters through the diffuse color and reflects through `ggx` on
+        the surface's normal; with a clear coat it reflects once more, on
+        the coat's own normal, which is the surface's before any map
+        perturbed it. The kinds are summed in the order `specular_at` sums
+        them, for the reason given there, and scaled once at the end.
+
+        Args:
+            normal: The surface's unit normal, in world space, after any
+                normal or bump map.
+            coat_normal: The unperturbed unit normal the clear coat lies
+                on. Read only when `clearcoat` is above zero.
+            position: Where the surface is, in world space.
+            surface: Its three colors, from `physical_surface`.
+            roughness: Its floored roughness.
+            clearcoat: How much clear coat there is; zero for none.
+            clearcoat_roughness: The coat's floored roughness.
+
+        Returns:
+            The diffuse, specular and clear coat sums, linear, each scaled.
+        """
+        var none = Reflected(
+            Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0)
+        )
+        var toward_eye = toward_eye_at(self.eye, self.toward_eye, position)
+        if toward_eye.length() == 0:
+            return none
+        var sum = none
+        for index in range(len(self.directions)):
+            var lambert = max(Float32(0), normal.dot(self.directions[index]))
+            var coat_lambert = Float32(0)
+            if clearcoat > 0:
+                coat_lambert = max(
+                    Float32(0), coat_normal.dot(self.directions[index])
+                )
+            if lambert == 0 and coat_lambert == 0:
+                continue
+            ref light = self.radiances[index]
+            sum = physical_light(
+                sum,
+                Vector3(light.r, light.g, light.b),
+                lambert,
+                coat_lambert,
+                self.directions[index],
+                toward_eye,
+                normal,
+                coat_normal,
+                surface,
+                roughness,
+                clearcoat_roughness,
+            )
+        for index in range(len(self.positions)):
+            var toward = self.positions[index] - position
+            var distance = toward.length()
+            if distance == 0:
+                continue
+            var lambert = max(Float32(0), normal.dot(toward) / distance)
+            var coat_lambert = Float32(0)
+            if clearcoat > 0:
+                coat_lambert = max(
+                    Float32(0), coat_normal.dot(toward) / distance
+                )
+            if lambert == 0 and coat_lambert == 0:
+                continue
+            var reach = falloff(
+                distance, self.decays[index], self.cutoffs[index]
+            )
+            toward.normalize()
+            ref bulb = self.point_radiances[index]
+            sum = physical_light(
+                sum,
+                Vector3(bulb.r * reach, bulb.g * reach, bulb.b * reach),
+                lambert,
+                coat_lambert,
+                toward,
+                toward_eye,
+                normal,
+                coat_normal,
+                surface,
+                roughness,
+                clearcoat_roughness,
+            )
+        for index in range(len(self.spot_positions)):
+            var toward = self.spot_positions[index] - position
+            var distance = toward.length()
+            if distance == 0:
+                continue
+            var angle_cos = toward.dot(self.spot_directions[index]) / distance
+            var rim = smoothstep(
+                self.cone_cosines[index],
+                self.penumbra_cosines[index],
+                angle_cos,
+            )
+            if rim <= 0:
+                continue
+            var lambert = max(Float32(0), normal.dot(toward) / distance)
+            var coat_lambert = Float32(0)
+            if clearcoat > 0:
+                coat_lambert = max(
+                    Float32(0), coat_normal.dot(toward) / distance
+                )
+            if lambert == 0 and coat_lambert == 0:
+                continue
+            var reach = rim * falloff(
+                distance, self.spot_decays[index], self.spot_cutoffs[index]
+            )
+            toward.normalize()
+            ref bulb = self.spot_radiances[index]
+            sum = physical_light(
+                sum,
+                Vector3(bulb.r * reach, bulb.g * reach, bulb.b * reach),
+                lambert,
+                coat_lambert,
+                toward,
+                toward_eye,
+                normal,
+                coat_normal,
+                surface,
+                roughness,
+                clearcoat_roughness,
+            )
+        return Reflected(
+            sum.diffuse * self.scale,
+            sum.specular * self.scale,
+            sum.clearcoat * self.scale,
+        )
 
     def shade(
         self, base: Color, normal: Vector3, position: Vector3

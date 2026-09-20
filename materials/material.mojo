@@ -160,7 +160,8 @@ from render.cube_texture_store import (
 )
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import isfinite
+from math.vector2 import Vector2
+from std.math import isfinite, min
 from units.si import Angle, Length, METER, RADIAN
 
 # No dash and no gap: a solid line, and what a material says unless asked.
@@ -170,6 +171,17 @@ comptime DEFAULT_DASH_SIZE = Length(3.0, METER)
 comptime DEFAULT_GAP_SIZE = Length(1.0, METER)
 # A sprite drawn as its image is: three.js's `SpriteMaterial.rotation`.
 comptime NO_ROTATION = Angle(0.0, RADIAN)
+# A normal map read as authored: three.js's `normalScale` default.
+comptime UNIT_NORMAL_SCALE = Vector2(1, 1)
+# What glass and most plastics refract at: three.js's `ior` default, and
+# the index a `STANDARD` surface's reflectance of 0.04 corresponds to.
+comptime DEFAULT_IOR = Float32(1.5)
+# The narrowest and widest index three.js accepts.
+comptime MIN_IOR = Float32(1.0)
+comptime MAX_IOR = Float32(2.333)
+# What a dielectric reflects head on: three.js's `vec3(0.04)`.
+comptime DIELECTRIC_REFLECTANCE = Float32(0.04)
+comptime _WHITE = Color(255, 255, 255)
 
 
 @fieldwise_init
@@ -358,7 +370,7 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the seven kinds there are."""
+        """Return True if this is one of the nine kinds there are."""
         return (
             self == BASIC
             or self == LAMBERT
@@ -367,6 +379,8 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
             or self == PHONG
             or self == TOON
             or self == MATCAP
+            or self == STANDARD
+            or self == PHYSICAL
         )
 
     def is_unlit(self) -> Bool:
@@ -381,12 +395,41 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_lit(self) -> Bool:
         """Return True if the scene's lights reach a surface of this kind:
-        `LAMBERT`, `PHONG` or `TOON`.
+        `LAMBERT`, `PHONG`, `TOON`, `STANDARD` or `PHYSICAL`.
 
         Both rasterizers ask this before they evaluate a light, so a kind
         that is lit in one place and not the other is not expressible.
         """
-        return self == LAMBERT or self == PHONG or self == TOON
+        return (
+            self == LAMBERT
+            or self == PHONG
+            or self == TOON
+            or self == STANDARD
+            or self == PHYSICAL
+        )
+
+    def is_physical(self) -> Bool:
+        """Return True if a surface of this kind is shaded by a metalness
+        and a roughness rather than by a color and a highlight: `STANDARD`
+        or `PHYSICAL`.
+
+        Both rasterizers ask this to pick the shader, so a kind that is
+        physical in one place and not the other is not expressible.
+        """
+        return self == STANDARD or self == PHYSICAL
+
+    def has_normal(self) -> Bool:
+        """Return True if a surface of this kind reads its normal in the
+        world's frame, and so can carry a normal map or a bump map: every
+        lit kind, and `MATCAP`.
+
+        A basic surface shows its own color whatever way it is turned, and
+        a depth surface shows how far away it is; neither shader reads a
+        normal, so neither has anything for a map to perturb. A normal
+        material reads one, but in the camera's frame, and the frame a
+        map perturbs is measured in the world's, so it refuses one too.
+        """
+        return self.is_lit() or self == MATCAP
 
     def is_data(self) -> Bool:
         """Return True if a material of this kind shows data rather than
@@ -401,14 +444,23 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
 
     def reflects(self) -> Bool:
         """Return True if a material of this kind can carry an environment
-        map: `BASIC`, `LAMBERT` or `PHONG`.
+        map: `BASIC`, `LAMBERT`, `PHONG`, `STANDARD` or `PHYSICAL`.
 
-        The three kinds three.js gives an `envMap`. A toon surface steps
+        The five kinds three.js gives an `envMap`. A toon surface steps
         through a ramp and a matcap surface is an image already, and the
         data kinds show no light at all, so none of them has anywhere for
         a reflection to go. Both rasterizers ask this before they reflect.
+        The first three join the reflection by `combine`; the physical two
+        reflect by their roughness and metalness instead, and refuse a
+        `reflectivity` or a `combine`.
         """
-        return self == BASIC or self == LAMBERT or self == PHONG
+        return (
+            self == BASIC
+            or self == LAMBERT
+            or self == PHONG
+            or self == STANDARD
+            or self == PHYSICAL
+        )
 
 
 # Unlit: the surface's own color, and its texture, reach the pixel as they
@@ -435,6 +487,13 @@ comptime TOON = MaterialKind(5)
 # the camera's frame: three.js's `MeshMatcapMaterial`. The image is
 # `matcap`, or three.js's gray gradient when there is none.
 comptime MATCAP = MaterialKind(6)
+# Lit per fragment by a metalness and a roughness, with a GGX lobe and an
+# environment reflected by the split sum: three.js's `MeshStandardMaterial`.
+comptime STANDARD = MaterialKind(7)
+# `STANDARD` with an index of refraction, a specular color and intensity,
+# and a clear coat: three.js's `MeshPhysicalMaterial`, in part. Its
+# transmission, sheen, iridescence and anisotropy are not ported.
+comptime PHYSICAL = MaterialKind(8)
 
 
 @fieldwise_init
@@ -554,6 +613,43 @@ struct Material(ImplicitlyCopyable):
     # How the reflection joins the surface's light, three.js's `combine`.
     # `MULTIPLY_OPERATION` by default, as there. See `combine_light`.
     var combine: Combine
+    # How rough a `STANDARD` or `PHYSICAL` surface is, from zero for a
+    # mirror to one for chalk, three.js's `roughness`, and how much of a
+    # metal it is, three.js's `metalness`. One and zero by default, as
+    # there: a rough dielectric. A map for each multiplies the number per
+    # texel: the roughness map's *green* channel and the metalness map's
+    # *blue*, as three.js reads them, so one image can carry both. Data
+    # rather than color, so each must be `LINEAR` and `IGNORED`.
+    var roughness: Float32
+    var metalness: Float32
+    var roughness_map: TextureId
+    var metalness_map: TextureId
+    # What a physical surface's environment is multiplied by, three.js's
+    # `envMapIntensity`. One by default, as there.
+    var env_map_intensity: Float32
+    # A texture whose texels are tangent-space normals, three.js's
+    # `normalMap`, and what its x and y are scaled by, three.js's
+    # `normalScale`. Or a texture whose red channel is a height, three.js's
+    # `bumpMap`, and what that height is scaled by, three.js's `bumpScale`.
+    # Either perturbs the normal every lit shader reads, so any kind that
+    # reads a normal can carry one, and a kind that reads none refuses
+    # both. Data rather than color, so each must be `LINEAR` and `IGNORED`.
+    var normal_map: TextureId
+    var normal_scale: Vector2
+    var bump_map: TextureId
+    var bump_scale: Float32
+    # A `PHYSICAL` surface's index of refraction, three.js's `ior`, and
+    # what its reflectance head on is tinted and scaled by, three.js's
+    # `specularColor` and `specularIntensity`. Together they replace the
+    # `STANDARD` reflectance of 0.04; see `base_reflectance`.
+    var ior: Float32
+    var specular_color: Color
+    var specular_intensity: Float32
+    # How much clear coat lies over a `PHYSICAL` surface, from zero to
+    # one, three.js's `clearcoat`, and how rough that coat is, three.js's
+    # `clearcoatRoughness`. Zero and zero by default, as there.
+    var clearcoat: Float32
+    var clearcoat_roughness: Float32
 
     def __init__(
         out self,
@@ -584,6 +680,20 @@ struct Material(ImplicitlyCopyable):
         env_map: CubeTextureId = NO_CUBE_TEXTURE,
         reflectivity: Float32 = 1.0,
         combine: Combine = MULTIPLY_OPERATION,
+        roughness: Float32 = 1.0,
+        metalness: Float32 = 0.0,
+        roughness_map: TextureId = NO_TEXTURE,
+        metalness_map: TextureId = NO_TEXTURE,
+        env_map_intensity: Float32 = 1.0,
+        normal_map: TextureId = NO_TEXTURE,
+        normal_scale: Vector2 = UNIT_NORMAL_SCALE,
+        bump_map: TextureId = NO_TEXTURE,
+        bump_scale: Float32 = 1.0,
+        ior: Float32 = DEFAULT_IOR,
+        specular_color: Color = _WHITE,
+        specular_intensity: Float32 = 1.0,
+        clearcoat: Float32 = 0.0,
+        clearcoat_roughness: Float32 = 0.0,
     ) raises:
         """Describe a surface.
 
@@ -672,7 +782,39 @@ struct Material(ImplicitlyCopyable):
                 by default, as there.
             combine: How the reflection joins, three.js's `combine`:
                 `MULTIPLY_OPERATION`, the default, `MIX_OPERATION` or
-                `ADD_OPERATION`. See `combine_light`.
+                `ADD_OPERATION`. See `combine_light`. A `STANDARD` or
+                `PHYSICAL` material reflects by its roughness instead and
+                refuses both this and `reflectivity`.
+            roughness: How rough a `STANDARD` or `PHYSICAL` surface is,
+                from zero to one, three.js's `roughness`. One by default.
+            metalness: How much of a metal it is, from zero to one,
+                three.js's `metalness`. Zero by default.
+            roughness_map: Id of a texture whose green channel multiplies
+                the roughness, or `NO_TEXTURE`. Data: `LINEAR`, `IGNORED`.
+            metalness_map: Id of a texture whose blue channel multiplies
+                the metalness, or `NO_TEXTURE`. Data: `LINEAR`, `IGNORED`.
+            env_map_intensity: What a physical surface's environment is
+                multiplied by, three.js's `envMapIntensity`. One by default.
+            normal_map: Id of a texture of tangent-space normals, or
+                `NO_TEXTURE`. Data: `LINEAR`, `IGNORED`. Sampled at the
+                same coordinate as `map`, so their transforms must agree.
+            normal_scale: What the map's x and y are scaled by, three.js's
+                `normalScale`. One and one by default.
+            bump_map: Id of a texture whose red channel is a height, or
+                `NO_TEXTURE`. Data: `LINEAR`, `IGNORED`. A material names
+                a normal map or a bump map, not both.
+            bump_scale: What that height is scaled by, three.js's
+                `bumpScale`. One by default.
+            ior: A `PHYSICAL` surface's index of refraction, from one to
+                2.333, three.js's `ior`. One and a half by default.
+            specular_color: What its reflectance head on is tinted by, as
+                authored in sRGB, three.js's `specularColor`. White.
+            specular_intensity: What that reflectance is scaled by, from
+                zero to one, three.js's `specularIntensity`. One.
+            clearcoat: How much clear coat lies over a `PHYSICAL` surface,
+                from zero to one. Zero by default.
+            clearcoat_roughness: How rough the coat is, from zero to one.
+                Zero by default.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -720,7 +862,27 @@ struct Material(ImplicitlyCopyable):
                 combine that is not `MULTIPLY_OPERATION` on a `TOON`,
                 `MATCAP`, `NORMALS` or `DEPTH` material -- are refused,
                 as is an env map on a wireframe, which has no surface to
-                reflect from.
+                reflect from. A `roughness`, `metalness`, `clearcoat`,
+                `clearcoat_roughness` or `specular_intensity` outside
+                zero to one or not finite, an `ior` outside one to 2.333
+                or not finite, an `env_map_intensity` that is negative or
+                not finite, a `normal_scale` or `bump_scale` that is not
+                finite, and any map id that is a negative other than
+                `NO_TEXTURE` are refused. A roughness that is not one, a
+                metalness that is not zero, a roughness or metalness map,
+                or an env map intensity that is not one on a kind that is
+                not `STANDARD` or `PHYSICAL` is refused, and so is a
+                `reflectivity` that is not one or a `combine` that is not
+                the default on one that is: a physical surface reflects by
+                its roughness. An `ior` that is not the default, a
+                `specular_color` that is not white, a `specular_intensity`
+                that is not one, or any clear coat on a kind that is not
+                `PHYSICAL` is refused. A normal map or a bump map on a
+                `BASIC`, `DEPTH` or `NORMALS` material is refused, which
+                refuses one on a wireframe too, as are both on one
+                material, a `normal_scale` that is not one and one with no
+                normal map, and a `bump_scale` that is not one with no
+                bump map.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -920,6 +1082,102 @@ struct Material(ImplicitlyCopyable):
         self.env_map = env_map
         self.reflectivity = reflectivity
         self.combine = combine
+        # The physical terms, refused where nothing reads them: only the
+        # two physical shaders read a roughness or a metalness, and only
+        # the physical one an index, a specular color or a clear coat.
+        if not _is_unit_fraction(roughness):
+            raise Error("A roughness must be between zero and one")
+        if not _is_unit_fraction(metalness):
+            raise Error("A metalness must be between zero and one")
+        if roughness_map.value < 0 and roughness_map != NO_TEXTURE:
+            raise Error("A material's roughness map id cannot be negative")
+        if metalness_map.value < 0 and metalness_map != NO_TEXTURE:
+            raise Error("A material's metalness map id cannot be negative")
+        if not isfinite(env_map_intensity) or env_map_intensity < 0:
+            raise Error("An env map intensity cannot be negative")
+        if not kind.is_physical() and (
+            roughness != 1
+            or metalness != 0
+            or roughness_map != NO_TEXTURE
+            or metalness_map != NO_TEXTURE
+            or env_map_intensity != 1
+        ):
+            raise Error(
+                "Only a standard or physical material has a roughness and a"
+                " metalness: give it kind=STANDARD, or build it with"
+                " standard_material"
+            )
+        if kind.is_physical() and (
+            reflectivity != 1 or combine != MULTIPLY_OPERATION
+        ):
+            raise Error(
+                "A standard or physical material reflects by its roughness"
+                " and metalness: it reads no reflectivity and no combine"
+            )
+        if not isfinite(ior) or ior < MIN_IOR or ior > MAX_IOR:
+            raise Error("An index of refraction must be between one and 2.333")
+        if not _is_unit_fraction(specular_intensity):
+            raise Error("A specular intensity must be between zero and one")
+        if not _is_unit_fraction(clearcoat):
+            raise Error("A clearcoat must be between zero and one")
+        if not _is_unit_fraction(clearcoat_roughness):
+            raise Error("A clearcoat roughness must be between zero and one")
+        if kind != PHYSICAL and (
+            ior != DEFAULT_IOR
+            or not _is_opaque_white(specular_color)
+            or specular_intensity != 1
+            or clearcoat != 0
+            or clearcoat_roughness != 0
+        ):
+            raise Error(
+                "Only a physical material has an index of refraction, a"
+                " specular color or a clear coat: give it kind=PHYSICAL, or"
+                " build it with physical_material"
+            )
+        self.roughness = roughness
+        self.metalness = metalness
+        self.roughness_map = roughness_map
+        self.metalness_map = metalness_map
+        self.env_map_intensity = env_map_intensity
+        self.ior = ior
+        self.specular_color = specular_color
+        self.specular_intensity = specular_intensity
+        self.clearcoat = clearcoat
+        self.clearcoat_roughness = clearcoat_roughness
+        # The normal and bump maps, refused where no normal is read: a
+        # basic or depth shader consults none. A wireframe is `BASIC`, so
+        # the same rule refuses a map on one, and the line pass never
+        # sees a normal to perturb.
+        if normal_map.value < 0 and normal_map != NO_TEXTURE:
+            raise Error("A material's normal map id cannot be negative")
+        if bump_map.value < 0 and bump_map != NO_TEXTURE:
+            raise Error("A material's bump map id cannot be negative")
+        if not isfinite(normal_scale.x) or not isfinite(normal_scale.y):
+            raise Error("A normal scale must be finite")
+        if not isfinite(bump_scale):
+            raise Error("A bump scale must be finite")
+        if normal_map != NO_TEXTURE and bump_map != NO_TEXTURE:
+            raise Error(
+                "A material names a normal map or a bump map, not both:"
+                " three.js reads the normal map and ignores the bump map"
+            )
+        if not kind.has_normal() and (
+            normal_map != NO_TEXTURE or bump_map != NO_TEXTURE
+        ):
+            raise Error(
+                "Only a lit or matcap material has a normal map: no other"
+                " shader reads a normal in the frame a map perturbs"
+            )
+        if normal_map == NO_TEXTURE and (
+            normal_scale.x != 1 or normal_scale.y != 1
+        ):
+            raise Error("A normal scale needs a normal map to scale")
+        if bump_map == NO_TEXTURE and bump_scale != 1:
+            raise Error("A bump scale needs a bump map to scale")
+        self.normal_map = normal_map
+        self.normal_scale = normal_scale
+        self.bump_map = bump_map
+        self.bump_scale = bump_scale
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -1016,6 +1274,59 @@ struct Material(ImplicitlyCopyable):
         """Return True if a fragment of this surface can be thrown away for
         being too transparent, three.js's `alphaTest` above zero."""
         return self.alpha_test > 0
+
+    def is_physical(self) -> Bool:
+        """Return True if this surface is shaded by a metalness and a
+        roughness: a `STANDARD` or `PHYSICAL` material. See
+        `MaterialKind.is_physical`."""
+        return self.kind.is_physical()
+
+    def has_normal_map(self) -> Bool:
+        """Return True if this material names a texture of normals."""
+        return self.normal_map != NO_TEXTURE
+
+    def has_bump_map(self) -> Bool:
+        """Return True if this material names a texture of heights."""
+        return self.bump_map != NO_TEXTURE
+
+    def has_clearcoat(self) -> Bool:
+        """Return True if a clear coat lies over this surface at all."""
+        return self.clearcoat > 0
+
+    def base_reflectance(self) -> FloatColor:
+        """Return how much of the light arriving head on this surface
+        reflects, per channel, linear: the `f0` of three.js's `F_Schlick`.
+
+        A `PHONG` material's is its `specular`, decoded. A `STANDARD`
+        material's is three.js's `vec3(0.04)`, a dielectric's. A
+        `PHYSICAL` material's is worked out from its index of refraction,
+        `((ior - 1) / (ior + 1))^2`, tinted by its specular color, capped
+        at one per channel and scaled by its specular intensity, exactly
+        as `lights_physical_fragment` works it out before the metalness
+        mixes the base color in. Every other kind reflects nothing.
+
+        Alpha is not light and is left at one.
+        """
+        if self.kind == PHONG:
+            return self.specular_light()
+        if self.kind == STANDARD:
+            return FloatColor(
+                DIELECTRIC_REFLECTANCE,
+                DIELECTRIC_REFLECTANCE,
+                DIELECTRIC_REFLECTANCE,
+                1.0,
+            )
+        if self.kind == PHYSICAL:
+            var ratio = (self.ior - 1) / (self.ior + 1)
+            var head_on = ratio * ratio
+            var tint = FloatColor(srgb=self.specular_color)
+            return FloatColor(
+                min(head_on * tint.r, Float32(1)) * self.specular_intensity,
+                min(head_on * tint.g, Float32(1)) * self.specular_intensity,
+                min(head_on * tint.b, Float32(1)) * self.specular_intensity,
+                1.0,
+            )
+        return FloatColor(0.0, 0.0, 0.0, 1.0)
 
     def is_textured(self) -> Bool:
         """Return True if this material names a texture."""
@@ -1117,6 +1428,197 @@ def phong_material(
         kind=PHONG,
         specular=specular,
         shininess=shininess,
+    )
+
+
+def standard_material(
+    color: Color,
+    map: TextureId = NO_TEXTURE,
+    roughness: Float32 = 1.0,
+    metalness: Float32 = 0.0,
+    side: Side = FRONT_SIDE,
+    opacity: Float32 = 1.0,
+    blending: Optional[Blending] = None,
+    transparent: Bool = False,
+    env_map: CubeTextureId = NO_CUBE_TEXTURE,
+    env_map_intensity: Float32 = 1.0,
+    roughness_map: TextureId = NO_TEXTURE,
+    metalness_map: TextureId = NO_TEXTURE,
+    normal_map: TextureId = NO_TEXTURE,
+    normal_scale: Vector2 = UNIT_NORMAL_SCALE,
+    bump_map: TextureId = NO_TEXTURE,
+    bump_scale: Float32 = 1.0,
+    emissive: Color = Color(0, 0, 0),
+    emissive_intensity: Float32 = 1.0,
+    emissive_map: TextureId = NO_TEXTURE,
+) raises -> Material:
+    """Return a physically shaded material, three.js's
+    `MeshStandardMaterial` at three.js's defaults.
+
+    A metalness of zero and a roughness of one: a chalky dielectric, which
+    reflects four percent of the light arriving head on. Its diffuse term
+    is Lambert's, its lobe is GGX with Smith's correlated visibility, and
+    an environment reflects through the split sum with multiple scattering,
+    all as three.js shades them. See `lights.lighting.ggx`.
+
+    Args:
+        color: The base color, as authored in sRGB.
+        map: Id of the texture that multiplies the color, or `NO_TEXTURE`.
+        roughness: How rough the surface is, from zero to one.
+        metalness: How much of a metal it is, from zero to one.
+        side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
+        opacity: One for an opaque surface, less to see through it.
+        blending: `OPAQUE` or `BLEND`, or unset to follow `transparent`.
+        transparent: Whether the surface blends over what is behind it.
+        env_map: Id of the cube texture the surface reflects, or
+            `NO_CUBE_TEXTURE`, or `SCENE_ENVIRONMENT`.
+        env_map_intensity: What the environment is multiplied by.
+        roughness_map: Id of a texture whose green channel multiplies the
+            roughness, or `NO_TEXTURE`.
+        metalness_map: Id of a texture whose blue channel multiplies the
+            metalness, or `NO_TEXTURE`.
+        normal_map: Id of a texture of tangent-space normals, or
+            `NO_TEXTURE`.
+        normal_scale: What the normal map's x and y are scaled by.
+        bump_map: Id of a texture whose red channel is a height, or
+            `NO_TEXTURE`.
+        bump_scale: What that height is scaled by.
+        emissive: Light the surface gives off, as authored in sRGB.
+        emissive_intensity: What `emissive` is scaled by.
+        emissive_map: Id of a texture that multiplies the emissive, or
+            `NO_TEXTURE`.
+
+    Returns:
+        The material, of kind `STANDARD`.
+
+    Raises:
+        Error: If any argument holds a value `Material` refuses; see there.
+    """
+    return Material(
+        color,
+        map=map,
+        side=side,
+        opacity=opacity,
+        blending=blending,
+        transparent=transparent,
+        kind=STANDARD,
+        emissive=emissive,
+        emissive_intensity=emissive_intensity,
+        emissive_map=emissive_map,
+        env_map=env_map,
+        roughness=roughness,
+        metalness=metalness,
+        roughness_map=roughness_map,
+        metalness_map=metalness_map,
+        env_map_intensity=env_map_intensity,
+        normal_map=normal_map,
+        normal_scale=normal_scale,
+        bump_map=bump_map,
+        bump_scale=bump_scale,
+    )
+
+
+def physical_material(
+    color: Color,
+    map: TextureId = NO_TEXTURE,
+    roughness: Float32 = 1.0,
+    metalness: Float32 = 0.0,
+    ior: Float32 = DEFAULT_IOR,
+    specular_color: Color = _WHITE,
+    specular_intensity: Float32 = 1.0,
+    clearcoat: Float32 = 0.0,
+    clearcoat_roughness: Float32 = 0.0,
+    side: Side = FRONT_SIDE,
+    opacity: Float32 = 1.0,
+    blending: Optional[Blending] = None,
+    transparent: Bool = False,
+    env_map: CubeTextureId = NO_CUBE_TEXTURE,
+    env_map_intensity: Float32 = 1.0,
+    roughness_map: TextureId = NO_TEXTURE,
+    metalness_map: TextureId = NO_TEXTURE,
+    normal_map: TextureId = NO_TEXTURE,
+    normal_scale: Vector2 = UNIT_NORMAL_SCALE,
+    bump_map: TextureId = NO_TEXTURE,
+    bump_scale: Float32 = 1.0,
+    emissive: Color = Color(0, 0, 0),
+    emissive_intensity: Float32 = 1.0,
+    emissive_map: TextureId = NO_TEXTURE,
+) raises -> Material:
+    """Return a physically shaded material with an index of refraction and
+    a clear coat, three.js's `MeshPhysicalMaterial` at three.js's defaults.
+
+    `standard_material` with three more knobs. The index of refraction,
+    the specular color and the specular intensity together set what the
+    surface reflects head on, in place of the standard 0.04; see
+    `Material.base_reflectance`. The clear coat is a second, colorless
+    GGX lobe over the surface, on the surface's own normal, that dims
+    what is under it by its own Fresnel. three.js's transmission, sheen,
+    iridescence, anisotropy and dispersion are not ported.
+
+    Args:
+        color: The base color, as authored in sRGB.
+        map: Id of the texture that multiplies the color, or `NO_TEXTURE`.
+        roughness: How rough the surface is, from zero to one.
+        metalness: How much of a metal it is, from zero to one.
+        ior: The index of refraction, from one to 2.333.
+        specular_color: What the reflectance head on is tinted by.
+        specular_intensity: What it is scaled by, from zero to one.
+        clearcoat: How much clear coat there is, from zero to one.
+        clearcoat_roughness: How rough the coat is, from zero to one.
+        side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
+        opacity: One for an opaque surface, less to see through it.
+        blending: `OPAQUE` or `BLEND`, or unset to follow `transparent`.
+        transparent: Whether the surface blends over what is behind it.
+        env_map: Id of the cube texture the surface reflects, or
+            `NO_CUBE_TEXTURE`, or `SCENE_ENVIRONMENT`.
+        env_map_intensity: What the environment is multiplied by.
+        roughness_map: Id of a texture whose green channel multiplies the
+            roughness, or `NO_TEXTURE`.
+        metalness_map: Id of a texture whose blue channel multiplies the
+            metalness, or `NO_TEXTURE`.
+        normal_map: Id of a texture of tangent-space normals, or
+            `NO_TEXTURE`.
+        normal_scale: What the normal map's x and y are scaled by.
+        bump_map: Id of a texture whose red channel is a height, or
+            `NO_TEXTURE`.
+        bump_scale: What that height is scaled by.
+        emissive: Light the surface gives off, as authored in sRGB.
+        emissive_intensity: What `emissive` is scaled by.
+        emissive_map: Id of a texture that multiplies the emissive, or
+            `NO_TEXTURE`.
+
+    Returns:
+        The material, of kind `PHYSICAL`.
+
+    Raises:
+        Error: If any argument holds a value `Material` refuses; see there.
+    """
+    return Material(
+        color,
+        map=map,
+        side=side,
+        opacity=opacity,
+        blending=blending,
+        transparent=transparent,
+        kind=PHYSICAL,
+        emissive=emissive,
+        emissive_intensity=emissive_intensity,
+        emissive_map=emissive_map,
+        env_map=env_map,
+        roughness=roughness,
+        metalness=metalness,
+        roughness_map=roughness_map,
+        metalness_map=metalness_map,
+        env_map_intensity=env_map_intensity,
+        normal_map=normal_map,
+        normal_scale=normal_scale,
+        bump_map=bump_map,
+        bump_scale=bump_scale,
+        ior=ior,
+        specular_color=specular_color,
+        specular_intensity=specular_intensity,
+        clearcoat=clearcoat,
+        clearcoat_roughness=clearcoat_roughness,
     )
 
 
@@ -1494,6 +1996,11 @@ def depth_material(
         alpha_map=alpha_map,
         alpha_test=alpha_test,
     )
+
+
+def _is_unit_fraction(value: Float32) -> Bool:
+    """Return True if `value` is finite and between zero and one."""
+    return isfinite(value) and value >= 0 and value <= 1
 
 
 def _gives_off_light(emissive: Color, intensity: Float32) -> Bool:

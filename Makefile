@@ -354,9 +354,10 @@ $(COV_STAMP):
 	              "not measured. Run its copy under $(COV_DIR)/tests to see" \
 	              "why."; \
 	       fi; exit 1; }
-	@cat $(COV_DIR)/hits/*.txt > $(COV_DIR)/hits.txt
+	@# Each suite's capture is handed over on its own. Concatenated they
+	@# pass two gigabytes, and one read of that fails on macOS.
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo \
-	  $(COV_DIR)/manifest.txt $(COV_DIR)/hits.txt); \
+	  $(COV_DIR)/manifest.txt $(COV_DIR)/hits/*.txt); \
 	[ $$rc -eq 0 ] || exit 1
 	@$(call stamp,coverage)
 
@@ -463,7 +464,7 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/normals.png $(OUT_DIR)/fragments.png \
            $(OUT_DIR)/coverage.png $(OUT_DIR)/lines.png \
            $(OUT_DIR)/helpers.png $(OUT_DIR)/split.png \
-           $(OUT_DIR)/mirror.png
+           $(OUT_DIR)/mirror.png $(OUT_DIR)/physical.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
 $(OUT_DIR)/mirror.png: $(LIB_SOURCES) examples/mirror.mojo
@@ -592,6 +593,12 @@ $(OUT_DIR)/keyframes.png: $(LIB_SOURCES) examples/keyframes.mojo
 $(OUT_DIR)/skinning.png: $(LIB_SOURCES) examples/skinning.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/skinning.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+# Ten spheres from chalk to mirror and from dielectric to metal, under a sky.
+$(OUT_DIR)/physical.png: $(LIB_SOURCES) examples/physical.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/physical.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 $(OUT_DIR)/phong.png: $(LIB_SOURCES) examples/phong.mojo

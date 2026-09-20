@@ -77,6 +77,19 @@ struct Hits(Movable):
                 return True
         return False
 
+    def absorb(mut self, other: Hits):
+        """Record everything `other` observed that this has not.
+
+        One suite's hits joined to the rest, so the report reads each
+        suite's capture on its own rather than one concatenation of them
+        all: past two gigabytes a single read fails on macOS.
+
+        Args:
+            other: Another run's hits.
+        """
+        for seen in other.ids:
+            self.add(seen)
+
 
 struct Report(Movable):
     """A rendered report and the totals behind it."""

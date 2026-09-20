@@ -54,14 +54,20 @@ from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.lighting import (
     PERSPECTIVE_VIEW,
     Lighting,
+    Reflected,
     blinn_phong,
     falloff,
+    floored_roughness,
+    physical_light,
+    physical_outgoing,
+    physical_surface,
     toon_coord,
     toon_index,
     toon_step,
     toward_eye_at,
 )
 from math.smoothstep import smoothstep
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.rasterizer import (
     check_line_state,
@@ -80,7 +86,9 @@ from render.rasterizer import (
     check_draws,
     check_output_kinds,
     check_triangle_state,
+    bumped_normal,
     interpolate_alpha,
+    mapped_normal,
     matcap_fallback,
     matcap_uv,
     packed_depth,
@@ -93,11 +101,20 @@ from materials.material import (
     MATCAP,
     NORMALS,
     PHONG,
+    PHYSICAL,
+    STANDARD,
     TOON,
     Combine,
     combine_light,
 )
-from render.cube_texture import FACE_COUNT, face_of, face_uv, reflected
+from render.cube_texture import (
+    FACE_COUNT,
+    face_of,
+    face_uv,
+    reflected,
+    reflection_level,
+    rough_reflection,
+)
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     CubeTextureId,
@@ -196,7 +213,23 @@ comptime LANE_POINT_SIZE = 28
 # How much of a reflection joins the surface's light. Per triangle, read
 # from the first corner's lane like the shininess, and a float like it.
 comptime LANE_REFLECTIVITY = 29
-comptime FLOATS_PER_VERTEX = LANE_REFLECTIVITY + 1
+# A physical surface's roughness and metalness, what its environment is
+# multiplied by, what its reflectance is scaled by at a grazing angle, and
+# its clear coat's amount and roughness. Per triangle, read from the first
+# corner's lane like the shininess, and floats like it.
+comptime LANE_ROUGHNESS = 30
+comptime LANE_METALNESS = 31
+comptime LANE_ENV_INTENSITY = 32
+comptime LANE_SPECULAR_INTENSITY = 33
+comptime LANE_CLEARCOAT = 34
+comptime LANE_CLEARCOAT_ROUGHNESS = 35
+# What a normal map's x and y are scaled by, and what a bump map's height
+# is scaled by. Per triangle, from the first corner's lane, and signed:
+# the renderer negates them when it turns a corner around.
+comptime LANE_NORMAL_SCALE_X = 36
+comptime LANE_NORMAL_SCALE_Y = 37
+comptime LANE_BUMP_SCALE = 38
+comptime FLOATS_PER_VERTEX = LANE_BUMP_SCALE + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -221,9 +254,22 @@ comptime STATE_MATCAP = 6
 comptime STATE_ENV_MAP = 7
 # How the reflection joins the surface's light: a `Combine` value.
 comptime STATE_COMBINE = 8
-# How many integers a segment's state takes: its blend policy, and
-# nothing else. A line is unlit and untextured; see `line_state`.
-comptime STATE_PER_LINE = 1
+# Which textures multiply a physical triangle's roughness and metalness,
+# and which perturb its normal: a map of normals, or a map of heights.
+# Each `NO_TEXTURE` for none.
+comptime STATE_ROUGHNESS_MAP = 9
+comptime STATE_METALNESS_MAP = 10
+comptime STATE_NORMAL_MAP = 11
+comptime STATE_BUMP_MAP = 12
+# How a segment's metadata is laid out in its state buffer: its blend
+# policy, and how many pixels across it is drawn. A line is unlit and
+# untextured, so it carries nothing else; see `line_state`. The width is
+# one number per frame, carried per segment rather than as a kernel
+# argument, because Metal binds at most thirty-one arguments to a kernel
+# and this one has thirty-one.
+comptime LINE_STATE_BLEND = 0
+comptime LINE_STATE_WIDTH = 1
+comptime STATE_PER_LINE = LINE_STATE_WIDTH + 1
 # How a point's metadata is laid out in its state buffer: its texture, its
 # blend policy and its alpha map. A point is unlit, so it has no kind to
 # carry, no emissive map, no ramp and no matcap.
@@ -234,7 +280,7 @@ comptime STATE_PER_POINT = POINT_STATE_ALPHA_MAP + 1
 # How a `Draw` crosses to the device: its kind, its first primitive and its
 # count, as three integers.
 comptime INTS_PER_DRAW = 3
-comptime STATE_PER_TRIANGLE = STATE_COMBINE + 1
+comptime STATE_PER_TRIANGLE = STATE_BUMP_MAP + 1
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
 # density, then the fog color, linear. Six floats, whatever the kind,
@@ -418,6 +464,15 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.gap_size)
         flat.append(corner.point_size)
         flat.append(corner.reflectivity)
+        flat.append(corner.roughness)
+        flat.append(corner.metalness)
+        flat.append(corner.env_map_intensity)
+        flat.append(corner.specular_intensity)
+        flat.append(corner.clearcoat)
+        flat.append(corner.clearcoat_roughness)
+        flat.append(corner.normal_scale.x)
+        flat.append(corner.normal_scale.y)
+        flat.append(corner.bump_scale)
     return flat^
 
 
@@ -950,6 +1005,289 @@ def _highlight(
     return Vector3(red * scale, green * scale, blue * scale)
 
 
+def _world_at(
+    corners: MutPointer[Float32, MutAnyOrigin],
+    base: Int,
+    ax: Int,
+    ay: Int,
+    bx: Int,
+    by: Int,
+    cx: Int,
+    cy: Int,
+    span_inv: Float32,
+    swapped: Bool,
+    px: Int,
+    py: Int,
+) -> Vector3:
+    """Return the perspective-correct world position at a sample point:
+    `_uv_at` for the world lanes, the device counterpart of
+    `render.rasterizer._world_at`."""
+    var b_base = base + FLOATS_PER_VERTEX
+    var c_base = base + 2 * FLOATS_PER_VERTEX
+    var e_ab = edge_at(ax, ay, bx, by, px, py)
+    var e_bc = edge_at(bx, by, cx, cy, px, py)
+    var e_ca = edge_at(cx, cy, ax, ay, px, py)
+    var first = Float32(e_bc) * span_inv
+    var second = Float32(e_ca) * span_inv
+    var third = Float32(e_ab) * span_inv
+    var wa = first
+    var wb = second
+    var wc = third
+    if swapped:
+        wb = third
+        wc = second
+    var aw = corners[unsafe_offset=base + LANE_INV_W]
+    var bw = corners[unsafe_offset=b_base + LANE_INV_W]
+    var cw = corners[unsafe_offset=c_base + LANE_INV_W]
+    var inv_w = wa * aw + wb * bw + wc * cw
+    var share_a = wa
+    var share_b = wb
+    var share_c = wc
+    if inv_w != 0:
+        var rcp = Float32(1) / inv_w
+        share_a = wa * aw * rcp
+        share_b = wb * bw * rcp
+        share_c = wc * cw * rcp
+    return Vector3(
+        corners[unsafe_offset=base + LANE_WX] * share_a
+        + corners[unsafe_offset=b_base + LANE_WX] * share_b
+        + corners[unsafe_offset=c_base + LANE_WX] * share_c,
+        corners[unsafe_offset=base + LANE_WY] * share_a
+        + corners[unsafe_offset=b_base + LANE_WY] * share_b
+        + corners[unsafe_offset=c_base + LANE_WY] * share_c,
+        corners[unsafe_offset=base + LANE_WZ] * share_a
+        + corners[unsafe_offset=b_base + LANE_WZ] * share_b
+        + corners[unsafe_offset=c_base + LANE_WZ] * share_c,
+    )
+
+
+def _sample_cube_level(
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
+    first: Int,
+    direction: Vector3,
+    level: Float32,
+) -> FloatColor:
+    """Sample a cube texture in a direction, `level` down its chain: the
+    device counterpart of `CubeTexture.sample_level`."""
+    var face = face_of(direction)
+    var place = face_uv(face, direction)
+    return _sample_level(
+        texels, ramp, _describe(table, first + face), place.x, place.y, level
+    )
+
+
+def _indirect(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    count: Int,
+    points: Int,
+    hemispheres: Int,
+    nx: Float32,
+    ny: Float32,
+    nz: Float32,
+) -> Vector3:
+    """Return the light with no direction reaching a surface facing
+    (nx, ny, nz): the device counterpart of `Lighting.indirect_at`."""
+    var red = lights[unsafe_offset=LIGHTS_AMBIENT]
+    var green = lights[unsafe_offset=LIGHTS_AMBIENT + 1]
+    var blue = lights[unsafe_offset=LIGHTS_AMBIENT + 2]
+    var first_sky = LIGHTS_FIRST + count * 6 + points * 8
+    for index in range(hemispheres):
+        var at = first_sky + index * 9
+        var weight = (
+            0.5
+            * (
+                nx * lights[unsafe_offset=at]
+                + ny * lights[unsafe_offset=at + 1]
+                + nz * lights[unsafe_offset=at + 2]
+            )
+            + 0.5
+        )
+        var lift_r = (
+            lights[unsafe_offset=at + 6]
+            + (lights[unsafe_offset=at + 3] - lights[unsafe_offset=at + 6])
+            * weight
+        )
+        var lift_g = (
+            lights[unsafe_offset=at + 7]
+            + (lights[unsafe_offset=at + 4] - lights[unsafe_offset=at + 7])
+            * weight
+        )
+        var lift_b = (
+            lights[unsafe_offset=at + 8]
+            + (lights[unsafe_offset=at + 5] - lights[unsafe_offset=at + 8])
+            * weight
+        )
+        red += lift_r
+        green += lift_g
+        blue += lift_b
+    var scale = lights[unsafe_offset=LIGHTS_SCALE]
+    return Vector3(red * scale, green * scale, blue * scale)
+
+
+def _physical(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    count: Int,
+    points: Int,
+    hemispheres: Int,
+    spots: Int,
+    normal: Vector3,
+    coat_normal: Vector3,
+    position: Vector3,
+    surface: Reflected,
+    roughness: Float32,
+    clearcoat: Float32,
+    clearcoat_roughness: Float32,
+) -> Reflected:
+    """Return what a physical surface sends toward the camera from the
+    lights that have a direction: the device counterpart of
+    `Lighting.physical_at`, held to the same answer by the parity tests
+    and summing the kinds in the same order through the same
+    `physical_light`."""
+    var none = Reflected(Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0))
+    var toward_eye = toward_eye_at(
+        Vector3(
+            lights[unsafe_offset=LIGHTS_EYE],
+            lights[unsafe_offset=LIGHTS_EYE + 1],
+            lights[unsafe_offset=LIGHTS_EYE + 2],
+        ),
+        Vector3(
+            lights[unsafe_offset=LIGHTS_TOWARD],
+            lights[unsafe_offset=LIGHTS_TOWARD + 1],
+            lights[unsafe_offset=LIGHTS_TOWARD + 2],
+        ),
+        position,
+    )
+    if toward_eye.length() == 0:
+        return none
+    var sum = none
+    for index in range(count):
+        var at = LIGHTS_FIRST + index * 6
+        var toward = Vector3(
+            lights[unsafe_offset=at],
+            lights[unsafe_offset=at + 1],
+            lights[unsafe_offset=at + 2],
+        )
+        var lambert = max(Float32(0), normal.dot(toward))
+        var coat_lambert = Float32(0)
+        if clearcoat > 0:
+            coat_lambert = max(Float32(0), coat_normal.dot(toward))
+        if lambert == 0 and coat_lambert == 0:
+            continue
+        sum = physical_light(
+            sum,
+            Vector3(
+                lights[unsafe_offset=at + 3],
+                lights[unsafe_offset=at + 4],
+                lights[unsafe_offset=at + 5],
+            ),
+            lambert,
+            coat_lambert,
+            toward,
+            toward_eye,
+            normal,
+            coat_normal,
+            surface,
+            roughness,
+            clearcoat_roughness,
+        )
+    var first_point = LIGHTS_FIRST + count * 6
+    for index in range(points):
+        var at = first_point + index * 8
+        var toward = Vector3(
+            lights[unsafe_offset=at] - position.x,
+            lights[unsafe_offset=at + 1] - position.y,
+            lights[unsafe_offset=at + 2] - position.z,
+        )
+        var distance = toward.length()
+        if distance == 0:
+            continue
+        var lambert = max(Float32(0), normal.dot(toward) / distance)
+        var coat_lambert = Float32(0)
+        if clearcoat > 0:
+            coat_lambert = max(Float32(0), coat_normal.dot(toward) / distance)
+        if lambert == 0 and coat_lambert == 0:
+            continue
+        var reach = falloff(
+            distance, lights[unsafe_offset=at + 6], lights[unsafe_offset=at + 7]
+        )
+        toward.normalize()
+        sum = physical_light(
+            sum,
+            Vector3(
+                lights[unsafe_offset=at + 3] * reach,
+                lights[unsafe_offset=at + 4] * reach,
+                lights[unsafe_offset=at + 5] * reach,
+            ),
+            lambert,
+            coat_lambert,
+            toward,
+            toward_eye,
+            normal,
+            coat_normal,
+            surface,
+            roughness,
+            clearcoat_roughness,
+        )
+    var first_spot = first_point + points * 8 + hemispheres * 9
+    for index in range(spots):
+        var at = first_spot + index * 13
+        var toward = Vector3(
+            lights[unsafe_offset=at] - position.x,
+            lights[unsafe_offset=at + 1] - position.y,
+            lights[unsafe_offset=at + 2] - position.z,
+        )
+        var distance = toward.length()
+        if distance == 0:
+            continue
+        var angle_cos = (
+            toward.x * lights[unsafe_offset=at + 3]
+            + toward.y * lights[unsafe_offset=at + 4]
+            + toward.z * lights[unsafe_offset=at + 5]
+        ) / distance
+        var rim = smoothstep(
+            lights[unsafe_offset=at + 11],
+            lights[unsafe_offset=at + 12],
+            angle_cos,
+        )
+        if rim <= 0:
+            continue
+        var lambert = max(Float32(0), normal.dot(toward) / distance)
+        var coat_lambert = Float32(0)
+        if clearcoat > 0:
+            coat_lambert = max(Float32(0), coat_normal.dot(toward) / distance)
+        if lambert == 0 and coat_lambert == 0:
+            continue
+        var reach = rim * falloff(
+            distance,
+            lights[unsafe_offset=at + 9],
+            lights[unsafe_offset=at + 10],
+        )
+        toward.normalize()
+        sum = physical_light(
+            sum,
+            Vector3(
+                lights[unsafe_offset=at + 6] * reach,
+                lights[unsafe_offset=at + 7] * reach,
+                lights[unsafe_offset=at + 8] * reach,
+            ),
+            lambert,
+            coat_lambert,
+            toward,
+            toward_eye,
+            normal,
+            coat_normal,
+            surface,
+            roughness,
+            clearcoat_roughness,
+        )
+    var scale = lights[unsafe_offset=LIGHTS_SCALE]
+    return Reflected(
+        sum.diffuse * scale, sum.specular * scale, sum.clearcoat * scale
+    )
+
+
 def _extent(extent: Int, level: Int) -> Int:
     """Return an image's size at `level`, never below one."""
     var at = extent >> level
@@ -1057,25 +1395,30 @@ def _fetch(
     )
 
 
-def line_state(corners: List[RasterVertex]) -> List[Int32]:
-    """Return each segment's blend policy, `STATE_PER_LINE` entries each.
+def line_state(corners: List[RasterVertex], line_width: Int = 1) -> List[Int32]:
+    """Return each segment's blend policy and width, `STATE_PER_LINE`
+    entries each.
 
     A line carries far less per-primitive state than a triangle: it is
     unlit and untextured, so whether it composites is the only thing the
     kernel cannot read off a vertex. It is still a table rather than a
     float lane, for the reason the triangles' is -- a policy that decides
     both how a color is combined and whether depth is written is not an
-    attribute to interpolate.
+    attribute to interpolate. The width rides beside it, the same on every
+    segment of a frame, so the kernel needs no argument for it.
 
     Args:
         corners: Raster vertices, two per segment.
+        line_width: How many pixels across every segment is drawn, never
+            below one.
 
     Returns:
-        The blend policy per segment, from its first end.
+        The blend policy and the width per segment, from its first end.
     """
     var state = List[Int32]()
     for segment in range(len(corners) // 2):
         state.append(Int32(corners[segment * 2].blend.value))
+        state.append(Int32(line_width))
     return state^
 
 
@@ -1125,7 +1468,8 @@ def triangle_state(
         Texture id, blend policy, the material kind's value, the emissive
         map id, the alpha map id, the gradient map id, the matcap id, the
         row of the env map's first face or -1 for none, then the combine's
-        value, per triangle, from its first corner.
+        value, then the roughness, metalness, normal and bump map ids, per
+        triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -1142,6 +1486,10 @@ def triangle_state(
             row = cube_base + cube.value * FACE_COUNT
         state.append(Int32(row))
         state.append(Int32(corners[triangle * 3].combine.value))
+        state.append(Int32(corners[triangle * 3].roughness_map.value))
+        state.append(Int32(corners[triangle * 3].metalness_map.value))
+        state.append(Int32(corners[triangle * 3].normal_map.value))
+        state.append(Int32(corners[triangle * 3].bump_map.value))
     return state^
 
 
@@ -1335,6 +1683,22 @@ def _sample_slot(
     var image = _describe(table, slot)
     if image.levels == 1 and image.anisotropy == 1:
         return _sample_at(texels, ramp, image, u, v, 0)
+    # The center from the same function as its neighbors, as
+    # `render.rasterizer._sample_map` takes it, and for the same reason.
+    var here = _uv_at(
+        corners,
+        base,
+        ax,
+        ay,
+        bx,
+        by,
+        cx,
+        cy,
+        span_inv,
+        swapped,
+        px,
+        py,
+    )
     var along_x = _uv_at(
         corners,
         base,
@@ -1366,8 +1730,8 @@ def _sample_slot(
     # The level and the taps, from the host's own function, and v flipped
     # and wrapped by the same routine the host uses -- see render.texture.
     var footprint = anisotropic_footprint(
-        Vector2(along_x.x - u, along_x.y - v),
-        Vector2(along_y.x - u, along_y.y - v),
+        Vector2(along_x.x - here.x, along_x.y - here.y),
+        Vector2(along_y.x - here.x, along_y.y - here.y),
         image.width,
         image.height,
         image.anisotropy,
@@ -1431,7 +1795,6 @@ def rasterize_kernel(
     scissor_width: Int32,
     scissor_height: Int32,
     backdrop: MutPointer[UInt8, MutAnyOrigin],
-    line_width: Int32,
 ):
     """Color one pixel from the nearest primitive that covers it.
 
@@ -1659,7 +2022,12 @@ def rasterize_kernel(
                     segments[unsafe_offset=far_base + LANE_X],
                     segments[unsafe_offset=far_base + LANE_Y],
                 )
-                if not covers(first, second, x, y, Int(line_width)):
+                var strokes = Int(
+                    segment_maps[
+                        unsafe_offset=index * STATE_PER_LINE + LINE_STATE_WIDTH
+                    ]
+                )
+                if not covers(first, second, x, y, strokes):
                     continue
                 var along = y
                 if major_is_x(first, second):
@@ -1744,7 +2112,7 @@ def rasterize_kernel(
                 if share_a < 0:
                     share_a = 0
                 var mixes = segment_maps[
-                    unsafe_offset=index * STATE_PER_LINE
+                    unsafe_offset=index * STATE_PER_LINE + LINE_STATE_BLEND
                 ] == Int32(BLEND.value)
                 if mixes and share_a == 0:
                     continue
@@ -1867,10 +2235,16 @@ def rasterize_kernel(
             var kind = maps[
                 unsafe_offset=index * STATE_PER_TRIANGLE + STATE_KIND
             ]
+            # Whether this surface is shaded by a roughness and a metalness,
+            # which is lit, but lit below once its maps have had their say.
+            var physical = kind == Int32(STANDARD.value) or kind == Int32(
+                PHYSICAL.value
+            )
             var lit = (
                 kind == Int32(LAMBERT.value)
                 or kind == Int32(PHONG.value)
                 or kind == Int32(TOON.value)
+                or physical
             )
             # Unlit, but looked up by which way the surface is turned, so it
             # needs the normal and the world position that a lit surface needs.
@@ -1940,6 +2314,218 @@ def rasterize_kernel(
                     + corners[unsafe_offset=b_base + LANE_WZ] * share_b
                     + corners[unsafe_offset=c_base + LANE_WZ] * share_c
                 )
+            # Texture coordinates, for the two modes that read them.
+            var u = Float32(0)
+            var v = Float32(0)
+            if mode != Int32(SHADE_LIT.value):
+                u = (
+                    corners[unsafe_offset=base + LANE_U] * share_a
+                    + corners[unsafe_offset=b_base + LANE_U] * share_b
+                    + corners[unsafe_offset=c_base + LANE_U] * share_c
+                )
+                v = (
+                    corners[unsafe_offset=base + LANE_V] * share_a
+                    + corners[unsafe_offset=b_base + LANE_V] * share_b
+                    + corners[unsafe_offset=c_base + LANE_V] * share_c
+                )
+            # The normal before any map perturbs it: what a clear coat
+            # lies on. Then the map, by the host's own two functions, from
+            # the position and the coordinates one pixel right and one
+            # pixel up, evaluated from the triangle's own functions --
+            # exactly as `rasterize_shaded` measures them.
+            var cnx = nx
+            var cny = ny
+            var cnz = nz
+            var normal_slot = maps[
+                unsafe_offset=index * STATE_PER_TRIANGLE + STATE_NORMAL_MAP
+            ]
+            var bump_slot = maps[
+                unsafe_offset=index * STATE_PER_TRIANGLE + STATE_BUMP_MAP
+            ]
+            if (
+                mode == Int32(SHADE_TEXTURE.value)
+                and (normal_slot >= 0 or bump_slot >= 0)
+                and (lit or looked_up)
+            ):
+                var here = Vector3(wx, wy, wz)
+                var along_x = (
+                    _world_at(
+                        corners,
+                        base,
+                        sax,
+                        say,
+                        sbx,
+                        sby,
+                        scx,
+                        scy,
+                        span_inv,
+                        swapped,
+                        px + SUBPIXEL,
+                        py,
+                    )
+                    - here
+                )
+                var along_y = (
+                    _world_at(
+                        corners,
+                        base,
+                        sax,
+                        say,
+                        sbx,
+                        sby,
+                        scx,
+                        scy,
+                        span_inv,
+                        swapped,
+                        px,
+                        py - SUBPIXEL,
+                    )
+                    - here
+                )
+                var uv_right = _uv_at(
+                    corners,
+                    base,
+                    sax,
+                    say,
+                    sbx,
+                    sby,
+                    scx,
+                    scy,
+                    span_inv,
+                    swapped,
+                    px + SUBPIXEL,
+                    py,
+                )
+                var uv_up = _uv_at(
+                    corners,
+                    base,
+                    sax,
+                    say,
+                    sbx,
+                    sby,
+                    scx,
+                    scy,
+                    span_inv,
+                    swapped,
+                    px,
+                    py - SUBPIXEL,
+                )
+                var uv_along_x = Vector2(uv_right.x - u, uv_right.y - v)
+                var uv_along_y = Vector2(uv_up.x - u, uv_up.y - v)
+                var facing = Vector3(nx, ny, nz)
+                if normal_slot >= 0:
+                    facing = mapped_normal(
+                        Vector3(nx, ny, nz),
+                        along_x,
+                        along_y,
+                        uv_along_x,
+                        uv_along_y,
+                        _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            Int(normal_slot),
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ),
+                        Vector2(
+                            corners[unsafe_offset=base + LANE_NORMAL_SCALE_X],
+                            corners[unsafe_offset=base + LANE_NORMAL_SCALE_Y],
+                        ),
+                    )
+                else:
+                    var bump_scale = corners[
+                        unsafe_offset=base + LANE_BUMP_SCALE
+                    ]
+                    var height = (
+                        bump_scale
+                        * _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            Int(bump_slot),
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).r
+                    )
+                    var rise_x = (
+                        bump_scale
+                        * _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            Int(bump_slot),
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u + uv_along_x.x,
+                            v + uv_along_x.y,
+                        ).r
+                        - height
+                    )
+                    var rise_y = (
+                        bump_scale
+                        * _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            Int(bump_slot),
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u + uv_along_y.x,
+                            v + uv_along_y.y,
+                        ).r
+                        - height
+                    )
+                    facing = bumped_normal(
+                        Vector3(nx, ny, nz), along_x, along_y, rise_x, rise_y
+                    )
+                nx = facing.x
+                ny = facing.y
+                nz = facing.z
             if mode != Int32(SHADE_UV.value) and (lit or looked_up):
                 if looked_up:
                     # Which way the surface is turned in the camera's frame,
@@ -2013,7 +2599,9 @@ def rasterize_kernel(
                         wy,
                         wz,
                     )
-                else:
+                elif not physical:
+                    # A physical surface is lit below, once its maps have
+                    # had their say, exactly as `rasterize_shaded` defers it.
                     arriving = _arriving(
                         lights,
                         Int(light_count),
@@ -2063,21 +2651,10 @@ def rasterize_kernel(
                         corners[unsafe_offset=base + LANE_SHININESS],
                     )
 
-            # Texture coordinates, for the two modes that read them.
-            var u = Float32(0)
-            var v = Float32(0)
-            if mode != Int32(SHADE_LIT.value):
-                u = (
-                    corners[unsafe_offset=base + LANE_U] * share_a
-                    + corners[unsafe_offset=b_base + LANE_U] * share_b
-                    + corners[unsafe_offset=c_base + LANE_U] * share_c
-                )
-                v = (
-                    corners[unsafe_offset=base + LANE_V] * share_a
-                    + corners[unsafe_offset=b_base + LANE_V] * share_b
-                    + corners[unsafe_offset=c_base + LANE_V] * share_c
-                )
-
+            # What a physical surface's roughness and metalness are
+            # multiplied by: its maps' green and blue, or one for none.
+            var rough_factor = Float32(1)
+            var metal_factor = Float32(1)
             if mode == Int32(SHADE_UV.value):
                 # Coordinates, not light, through the same quantize and decode
                 # the host's `data_color` uses, so the two backends hold the
@@ -2233,6 +2810,62 @@ def rasterize_kernel(
                         glow_r *= glowing.r
                         glow_g *= glowing.g
                         glow_b *= glowing.b
+                    # The roughness map's green and the metalness map's
+                    # blue, exactly as `rasterize_shaded` reads them.
+                    var rough_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_ROUGHNESS_MAP
+                        ]
+                    )
+                    if rough_slot != NO_TEXTURE.value:
+                        rough_factor = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            rough_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).g
+                    var metal_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_METALNESS_MAP
+                        ]
+                    )
+                    if metal_slot != NO_TEXTURE.value:
+                        metal_factor = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            metal_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).b
                 # Thrown away for being too transparent, three.js's
                 # `alphatest_fragment`. Leaving `nearest` alone is the late
                 # depth write the host makes with `claim_depth`: the hole
@@ -2255,6 +2888,144 @@ def rasterize_kernel(
                     red = shown.r
                     green = shown.g
                     blue = shown.b
+                elif physical:
+                    # Lit here, once the map has multiplied the color, by
+                    # the host's own functions in the host's own order;
+                    # see `rasterize_shaded`. The reflectance head on
+                    # rides in the specular lanes, from the first corner.
+                    var surface = physical_surface(
+                        Vector3(red, green, blue),
+                        Vector3(
+                            corners[unsafe_offset=base + LANE_SPECULAR_R],
+                            corners[unsafe_offset=base + LANE_SPECULAR_G],
+                            corners[unsafe_offset=base + LANE_SPECULAR_B],
+                        ),
+                        corners[unsafe_offset=base + LANE_METALNESS]
+                        * metal_factor,
+                        corners[unsafe_offset=base + LANE_SPECULAR_INTENSITY],
+                    )
+                    var rough = floored_roughness(
+                        corners[unsafe_offset=base + LANE_ROUGHNESS]
+                        * rough_factor
+                    )
+                    var coat = corners[unsafe_offset=base + LANE_CLEARCOAT]
+                    var coat_rough = floored_roughness(
+                        corners[unsafe_offset=base + LANE_CLEARCOAT_ROUGHNESS]
+                    )
+                    var facing = Vector3(nx, ny, nz)
+                    var coat_facing = Vector3(cnx, cny, cnz)
+                    var spot = Vector3(wx, wy, wz)
+                    var direct = _physical(
+                        lights,
+                        Int(light_count),
+                        Int(point_count),
+                        Int(hemisphere_count),
+                        Int(spot_count),
+                        facing,
+                        coat_facing,
+                        spot,
+                        surface,
+                        rough,
+                        coat,
+                        coat_rough,
+                    )
+                    var indirect = _indirect(
+                        lights,
+                        Int(light_count),
+                        Int(point_count),
+                        Int(hemisphere_count),
+                        nx,
+                        ny,
+                        nz,
+                    )
+                    var toward_eye = toward_eye_at(
+                        Vector3(
+                            lights[unsafe_offset=LIGHTS_EYE],
+                            lights[unsafe_offset=LIGHTS_EYE + 1],
+                            lights[unsafe_offset=LIGHTS_EYE + 2],
+                        ),
+                        Vector3(
+                            lights[unsafe_offset=LIGHTS_TOWARD],
+                            lights[unsafe_offset=LIGHTS_TOWARD + 1],
+                            lights[unsafe_offset=LIGHTS_TOWARD + 2],
+                        ),
+                        spot,
+                    )
+                    var dot_nv = max(
+                        Float32(0), min(Float32(1), facing.dot(toward_eye))
+                    )
+                    var dot_nv_coat = max(
+                        Float32(0),
+                        min(Float32(1), coat_facing.dot(toward_eye)),
+                    )
+                    var radiance = Vector3(0, 0, 0)
+                    var irradiance = Vector3(0, 0, 0)
+                    var coat_radiance = Vector3(0, 0, 0)
+                    if reflects:
+                        var levels = _describe(table, Int(env_slot)).levels
+                        var strength = corners[
+                            unsafe_offset=base + LANE_ENV_INTENSITY
+                        ]
+                        var seen = _sample_cube_level(
+                            texels,
+                            ramp,
+                            table,
+                            Int(env_slot),
+                            rough_reflection(toward_eye, facing, rough),
+                            reflection_level(rough, levels),
+                        )
+                        var around = _sample_cube_level(
+                            texels,
+                            ramp,
+                            table,
+                            Int(env_slot),
+                            facing,
+                            Float32(levels - 1),
+                        )
+                        radiance = Vector3(
+                            seen.r * strength,
+                            seen.g * strength,
+                            seen.b * strength,
+                        )
+                        irradiance = Vector3(
+                            around.r * strength,
+                            around.g * strength,
+                            around.b * strength,
+                        )
+                        if coat > 0:
+                            var gloss = _sample_cube_level(
+                                texels,
+                                ramp,
+                                table,
+                                Int(env_slot),
+                                rough_reflection(
+                                    toward_eye, coat_facing, coat_rough
+                                ),
+                                reflection_level(coat_rough, levels),
+                            )
+                            coat_radiance = Vector3(
+                                gloss.r * strength,
+                                gloss.g * strength,
+                                gloss.b * strength,
+                            )
+                    var outgoing = physical_outgoing(
+                        direct,
+                        indirect,
+                        surface,
+                        rough,
+                        dot_nv,
+                        reflects,
+                        radiance,
+                        irradiance,
+                        Vector3(glow_r, glow_g, glow_b),
+                        coat,
+                        coat_rough,
+                        Vector3(dot_nv_coat, 0, 0),
+                        coat_radiance,
+                    )
+                    red = outgoing.x
+                    green = outgoing.y
+                    blue = outgoing.z
                 else:
                     # The highlight and then the glow, exactly as
                     # `rasterize_shaded` sums them.
@@ -2870,6 +3641,10 @@ struct GpuRenderer(Movable):
                 corners[index].alpha_map,
                 corners[index].gradient_map,
                 corners[index].matcap,
+                corners[index].roughness_map,
+                corners[index].metalness_map,
+                corners[index].normal_map,
+                corners[index].bump_map,
             ]:
                 if slot == NO_TEXTURE:
                     continue
@@ -2937,6 +3712,20 @@ struct GpuRenderer(Movable):
                             "An alpha map must ignore its own alpha; build"
                             " the texture with alpha=IGNORED"
                         )
+                # The four maps that hold numbers, asked the same two
+                # questions with the same words `check_data_map` uses.
+                self._check_data_map(
+                    corners[triangle * 3].roughness_map, "A roughness map"
+                )
+                self._check_data_map(
+                    corners[triangle * 3].metalness_map, "A metalness map"
+                )
+                self._check_data_map(
+                    corners[triangle * 3].normal_map, "A normal map"
+                )
+                self._check_data_map(
+                    corners[triangle * 3].bump_map, "A bump map"
+                )
         # Two output representations cannot share a tone-mapped frame.
         # Asked here, before the launch, exactly where `Renderer.render`
         # asks it before it draws. The uv view is data throughout and is
@@ -3040,7 +3829,7 @@ struct GpuRenderer(Movable):
                     src=drawn.unsafe_ptr(),
                     count=len(drawn),
                 )
-            var policies = line_state(lines)
+            var policies = line_state(lines, strokes)
             with self.segment_maps.map_to_host() as host:
                 unsafe_memcpy(
                     dest=host.unsafe_ptr(),
@@ -3154,7 +3943,6 @@ struct GpuRenderer(Movable):
             Int32(kept.width),
             Int32(kept.height),
             self.backdrop.unsafe_ptr(),
-            Int32(strokes),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -3241,6 +4029,34 @@ struct GpuRenderer(Movable):
             self.is_linear.append(image.color_space == LINEAR)
             self.has_texels.append(not image.is_blank())
             self.heights.append(image.height)
+
+    def _check_data_map(self, map: TextureId, name: String) raises:
+        """Refuse a map that holds data and was not uploaded as data: the
+        question `check_data_map` asks on the host, asked of the
+        descriptors this renderer uploaded.
+
+        Args:
+            map: The id a triangle names, or `NO_TEXTURE` for none.
+            name: What to call it in the error.
+
+        Raises:
+            Error: If the texture is not linear or reads its alpha as
+                coverage.
+        """
+        if map == NO_TEXTURE:
+            return
+        if not self.is_linear[map.value]:
+            raise Error(
+                name
+                + " holds data, not color; build the texture with"
+                " color_space=LINEAR"
+            )
+        if not self.ignores_alpha[map.value]:
+            raise Error(
+                name
+                + " must ignore its own alpha; build the texture with"
+                " alpha=IGNORED"
+            )
 
     def read_back(self) raises -> Framebuffer:
         """Copy the device render target into a host framebuffer.

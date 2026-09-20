@@ -33,6 +33,8 @@ from render.cube_texture import (
     face_up,
     face_uv,
     reflected,
+    reflection_level,
+    rough_reflection,
 )
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
@@ -447,6 +449,71 @@ def test_the_store_refuses_what_is_not_an_id() raises:
     assert_true(NO_CUBE_TEXTURE != SCENE_ENVIRONMENT)
     assert_true(NO_CUBE_TEXTURE.value < 0)
     assert_true(SCENE_ENVIRONMENT.value < 0)
+
+
+# --- reading the chain by roughness ------------------------------------------
+
+
+def test_a_cube_reads_its_chain_by_level() raises:
+    # Faces of two halves, left black and right white, with a chain: the
+    # full size reads one half, and the coarsest level reads the average.
+    var faces = List[Texture]()
+    for _ in range(FACE_COUNT):
+        faces.append(
+            Texture(
+                2,
+                2,
+                halves(Color(0, 0, 0), Color(255, 255, 255)),
+                CLAMP,
+                NEAREST,
+                LINEAR,
+            )
+        )
+    var cube = CubeTexture(faces^)
+    assert_equal(cube.levels(), 2)
+    # Straight along +x reads the middle of the face, which is the seam;
+    # a lean toward the camera's right reads the white half.
+    var sharp = cube.sample_level(Vector3(1, 0, 0.4), 0)
+    assert_equal(sharp.r, Float32(1))
+    var blurred = cube.sample_level(Vector3(1, 0, 0.4), 1)
+    assert_almost_equal(blurred.r, Float32(0.5), atol=1e-2)
+    # Between the two, between the two.
+    var between = cube.sample_level(Vector3(1, 0, 0.4), 0.5)
+    assert_almost_equal(between.r, Float32(0.75), atol=1e-2)
+    # A cube without a chain reads its one image at every level.
+    var flat = CubeTexture(six_solid())
+    assert_equal(flat.levels(), 1)
+    assert_color(flat.sample_level(Vector3(1, 0, 0), 3).encode(), RED)
+    assert_color(flat.sample_level(Vector3(0, 1, 0), 0).encode(), BLUE)
+
+
+def test_a_roughness_picks_a_level_and_bends_the_reflection() raises:
+    # Zero reads the full size and one the coarsest level, linearly.
+    assert_equal(reflection_level(0, 5), Float32(0))
+    assert_equal(reflection_level(1, 5), Float32(4))
+    assert_equal(reflection_level(0.5, 5), Float32(2))
+    assert_equal(reflection_level(1, 1), Float32(0))
+    # A smooth surface reflects the view exactly; a rough one bends the
+    # reflection toward the normal by the square of the roughness, and
+    # what comes back is unit length.
+    var eye = Vector3(0, 0, 1)
+    var tilted = Vector3(1, 0, 1)
+    tilted.normalize()
+    var sharp = rough_reflection(eye, tilted, 0)
+    var exact = reflected(eye, tilted)
+    assert_almost_equal(sharp.x, exact.x, atol=1e-6)
+    assert_almost_equal(sharp.z, exact.z, atol=1e-6)
+    var rough = rough_reflection(eye, tilted, 1)
+    assert_almost_equal(rough.x, tilted.x, atol=1e-6)
+    assert_almost_equal(rough.z, tilted.z, atol=1e-6)
+    var half = rough_reflection(eye, tilted, 0.5)
+    assert_almost_equal(half.length(), Float32(1), atol=1e-6)
+    assert_true(half.x < exact.x, "the reflection did not bend")
+    assert_true(half.x > tilted.x, "the reflection bent past the normal")
+    # Opposite directions that cancel leave nothing to normalize, and the
+    # zero vector comes back as it is.
+    var cancelled = rough_reflection(Vector3(0, 0, 1), Vector3(0, 0, 0), 1)
+    assert_equal(cancelled.length(), Float32(0))
 
 
 def main() raises:

@@ -117,6 +117,8 @@ A `PHONG` material adds a highlight to the diffuse term. `specular_at` sums it o
 
 `blinn_phong(toward_light, toward_eye, normal, specular, shininess)` is three.js's `BRDF_BlinnPhong`, shared with the GPU kernel as `falloff` is.
 
+A `STANDARD` or `PHYSICAL` material has a GGX lobe instead. `ggx(toward_light, toward_eye, normal, f0, f90, roughness)` is three.js's `BRDF_GGX`, and `f_schlick(f0, f90, cos_vh)` its Fresnel, which `blinn_phong` reads too. `physical_at` sums the lobe, the diffuse term and the clear coat over the lights that have a direction. `indirect_at` gathers the ambient and hemisphere light. See [Materials](Materials#standard-and-physical).
+
 ### The toon ramp
 
 A `TOON` material replaces each cosine with a tone off a ramp. `toon_at` sums that over the lights, where `intensity_at` sums the cosines themselves. Four functions do the arithmetic, and both rasterizers call them:

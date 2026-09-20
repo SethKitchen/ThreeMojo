@@ -11,6 +11,7 @@ from coverage.mcdc import (
     MASKED,
     find_trace,
     is_mcdc_covered,
+    merge_traces,
     parse_traces,
     split_last,
 )
@@ -241,6 +242,27 @@ def test_find_trace_reports_a_missing_decision() raises:
     assert_equal(
         find_trace(parse_traces(String(BOTH_TRUE)), String("m:99")), -1
     )
+
+
+def test_traces_from_two_captures_merge_decision_by_decision() raises:
+    # One suite saw the decision both true; another saw its first operand
+    # false. Joined, the decision holds both evaluations and an
+    # independence pair spans the two, as it would in one capture. A
+    # decision only the second suite saw is appended whole, and one seen
+    # the same way twice is held once.
+    var traces = parse_traces(String(BOTH_TRUE))
+    merge_traces(
+        traces,
+        parse_traces(String(FIRST_FALSE + BOTH_TRUE + "COVBRANCH:m:9:T\n")),
+    )
+    assert_equal(len(traces), 2)
+    var slot = find_trace(traces, String("m:4"))
+    assert_equal(len(traces[slot].evaluations), 2)
+    assert_true(is_mcdc_covered(traces[slot], 0))
+    assert_equal(find_trace(traces, String("m:9")), 1)
+    # Nothing to merge changes nothing.
+    merge_traces(traces, List[DecisionTrace]())
+    assert_equal(len(traces), 2)
 
 
 def main() raises:

@@ -216,6 +216,28 @@ def parse_traces(text: String) raises -> List[DecisionTrace]:
     return traces^
 
 
+def merge_traces(mut into: List[DecisionTrace], more: List[DecisionTrace]):
+    """Join one run's traces to another's, decision by decision.
+
+    A decision evaluated by two suites has one trace holding both suites'
+    distinct evaluations, as one trace of the two captures joined would
+    hold them: an independence pair can span the suites. The report reads
+    each suite's capture on its own, because past two gigabytes a single
+    read of their concatenation fails on macOS.
+
+    Args:
+        into: The traces so far, extended in place.
+        more: Another run's traces.
+    """
+    for trace in more:
+        var slot = find_trace(into, trace.id)
+        if slot < 0:
+            into.append(trace.copy())
+            continue
+        for evaluation in trace.evaluations:
+            into[slot].add(evaluation.copy())
+
+
 def find_trace(traces: List[DecisionTrace], id: String) -> Int:
     """Return the index of the trace for `id`, or -1 if it was never evaluated.
     """

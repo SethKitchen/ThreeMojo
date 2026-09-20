@@ -35,13 +35,15 @@ from materials.material import (
     MATCAP,
     OPAQUE,
     PHONG,
+    PHYSICAL,
+    STANDARD,
     TOON,
     Blending,
     Combine,
     MaterialKind,
     combine_light,
 )
-from render.cube_texture import reflected
+from render.cube_texture import reflected, reflection_level, rough_reflection
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     CubeTextureId,
@@ -56,7 +58,15 @@ from render.texture import (
     mix_straight,
 )
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
-from lights.lighting import PERSPECTIVE_VIEW, Lighting, toward_eye_at
+from lights.lighting import (
+    PERSPECTIVE_VIEW,
+    Lighting,
+    Reflected,
+    floored_roughness,
+    physical_outgoing,
+    physical_surface,
+    toward_eye_at,
+)
 from core.fog import FogView, fog_mix
 from render.linerule import (
     dash_covers,
@@ -556,6 +566,35 @@ struct RasterVertex(ImplicitlyCopyable):
     # like the shininess and the blend policy, read from the first corner.
     var reflectivity: Float32
     var combine: Combine
+    # How rough a physical surface is and how much of a metal, three.js's
+    # `roughness` and `metalness`, and what its environment is multiplied
+    # by, three.js's `envMapIntensity`. Per-triangle like the shininess,
+    # read from the first corner; only a `STANDARD` or `PHYSICAL` triangle
+    # reads them. The two maps multiply them per texel: green for the
+    # roughness, blue for the metalness, as three.js reads them.
+    var roughness: Float32
+    var metalness: Float32
+    var env_map_intensity: Float32
+    var roughness_map: TextureId
+    var metalness_map: TextureId
+    # What a `PHYSICAL` surface's reflectance is scaled by at a grazing
+    # angle, three.js's `specularIntensity`; its reflectance head on rides
+    # in `specular`, as a `PHONG` triangle's does. How much clear coat
+    # lies over it and how rough that coat is. Per-triangle, read from the
+    # first corner.
+    var specular_intensity: Float32
+    var clearcoat: Float32
+    var clearcoat_roughness: Float32
+    # A texture of tangent-space normals and what its x and y are scaled
+    # by, or a texture of heights and what they are scaled by: three.js's
+    # `normalMap`, `normalScale`, `bumpMap` and `bumpScale`. Per-triangle.
+    # The renderer negates both scales when it turns a corner around, so
+    # a back face is perturbed the way three.js's `faceDirection` perturbs
+    # it; see `mapped_normal`.
+    var normal_map: TextureId
+    var normal_scale: Vector2
+    var bump_map: TextureId
+    var bump_scale: Float32
 
     def __init__(
         out self,
@@ -587,6 +626,18 @@ struct RasterVertex(ImplicitlyCopyable):
         env_map: CubeTextureId = NO_CUBE_TEXTURE,
         reflectivity: Float32 = 1,
         combine: Combine = MULTIPLY_OPERATION,
+        roughness: Float32 = 1,
+        metalness: Float32 = 0,
+        env_map_intensity: Float32 = 1,
+        roughness_map: TextureId = NO_TEXTURE,
+        metalness_map: TextureId = NO_TEXTURE,
+        specular_intensity: Float32 = 1,
+        clearcoat: Float32 = 0,
+        clearcoat_roughness: Float32 = 0,
+        normal_map: TextureId = NO_TEXTURE,
+        normal_scale: Vector2 = Vector2(1, 1),
+        bump_map: TextureId = NO_TEXTURE,
+        bump_scale: Float32 = 1,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -636,6 +687,18 @@ struct RasterVertex(ImplicitlyCopyable):
         self.env_map = env_map
         self.reflectivity = reflectivity
         self.combine = combine
+        self.roughness = roughness
+        self.metalness = metalness
+        self.env_map_intensity = env_map_intensity
+        self.roughness_map = roughness_map
+        self.metalness_map = metalness_map
+        self.specular_intensity = specular_intensity
+        self.clearcoat = clearcoat
+        self.clearcoat_roughness = clearcoat_roughness
+        self.normal_map = normal_map
+        self.normal_scale = normal_scale
+        self.bump_map = bump_map
+        self.bump_scale = bump_scale
 
 
 @fieldwise_init
@@ -696,6 +759,178 @@ def _coordinates_at(
     )
 
 
+def _world_at(
+    a: RasterVertex,
+    b: RasterVertex,
+    c: RasterVertex,
+    weights: _Fragment,
+) -> Vector3:
+    """Return the perspective-correct world position at one sample.
+
+    `_coordinates_at` for the world position, factored out because the
+    tangent frame a normal map needs is measured from the positions at the
+    pixels one over and one up, as their coordinates are.
+    """
+    var inv_w = (
+        weights.wa * a.inv_w + weights.wb * b.inv_w + weights.wc * c.inv_w
+    )
+    var share_a = weights.wa
+    var share_b = weights.wb
+    var share_c = weights.wc
+    if inv_w != 0:
+        var rcp = Float32(1) / inv_w
+        share_a = weights.wa * a.inv_w * rcp
+        share_b = weights.wb * b.inv_w * rcp
+        share_c = weights.wc * c.inv_w * rcp
+    return Vector3(
+        a.world.x * share_a + b.world.x * share_b + c.world.x * share_c,
+        a.world.y * share_a + b.world.y * share_b + c.world.y * share_c,
+        a.world.z * share_a + b.world.z * share_b + c.world.z * share_c,
+    )
+
+
+def _cross(left: Vector3, right: Vector3) -> Vector3:
+    """Return the cross product of two vectors, as a value."""
+    var product = left
+    product.cross(right)
+    return product
+
+
+def mapped_normal(
+    normal: Vector3,
+    along_x: Vector3,
+    along_y: Vector3,
+    uv_along_x: Vector2,
+    uv_along_y: Vector2,
+    texel: FloatColor,
+    scale: Vector2,
+) -> Vector3:
+    """Return a normal perturbed by a normal map's texel: three.js's
+    `getTangentFrame` and the `USE_NORMALMAP_TANGENTSPACE` branch of
+    `normal_fragment_maps`.
+
+    The tangent frame is built from how the world position and the
+    texture coordinates change across one pixel, as three.js builds it
+    without a tangent attribute: the tangent is the direction along which
+    `u` grows and the bitangent the one along which `v` grows, both made
+    perpendicular to the normal. The two are scaled by one number, so an
+    image stretched more one way than the other keeps that stretch. The
+    texel's bytes are unpacked from zero to one into minus one to one,
+    its x and y are scaled, and the three are summed along the frame.
+
+    The changes are measured one pixel to the right and one pixel *up*,
+    because that is the way `dFdy` points on a screen whose rows count
+    upward, and the frame's handedness depends on it. A back face is
+    handled by the renderer, which negates `scale` when it turns a
+    corner around; see `renderers.renderer._turned_around`. Shared by
+    both rasterizers.
+
+    Args:
+        normal: The interpolated unit normal.
+        along_x: How the world position changes one pixel to the right.
+        along_y: How it changes one pixel up.
+        uv_along_x: How the texture coordinates change one pixel right.
+        uv_along_y: How they change one pixel up.
+        texel: The map's texel, linear: red is x, green y, blue z.
+        scale: What the unpacked x and y are multiplied by.
+
+    Returns:
+        The perturbed unit normal.
+    """
+    var q1_perp = _cross(along_y, normal)
+    var q0_perp = _cross(normal, along_x)
+    var tangent = Vector3(
+        q1_perp.x * uv_along_x.x + q0_perp.x * uv_along_y.x,
+        q1_perp.y * uv_along_x.x + q0_perp.y * uv_along_y.x,
+        q1_perp.z * uv_along_x.x + q0_perp.z * uv_along_y.x,
+    )
+    var bitangent = Vector3(
+        q1_perp.x * uv_along_x.y + q0_perp.x * uv_along_y.y,
+        q1_perp.y * uv_along_x.y + q0_perp.y * uv_along_y.y,
+        q1_perp.z * uv_along_x.y + q0_perp.z * uv_along_y.y,
+    )
+    var extent = max(tangent.dot(tangent), bitangent.dot(bitangent))
+    var frame = Float32(0)
+    if extent != 0:
+        frame = 1 / sqrt(extent)
+    var map_x = (texel.r * 2 - 1) * scale.x
+    var map_y = (texel.g * 2 - 1) * scale.y
+    var map_z = texel.b * 2 - 1
+    var perturbed = Vector3(
+        tangent.x * frame * map_x
+        + bitangent.x * frame * map_y
+        + normal.x * map_z,
+        tangent.y * frame * map_x
+        + bitangent.y * frame * map_y
+        + normal.y * map_z,
+        tangent.z * frame * map_x
+        + bitangent.z * frame * map_y
+        + normal.z * map_z,
+    )
+    if perturbed.length() == 0:
+        return normal
+    perturbed.normalize()
+    return perturbed
+
+
+def bumped_normal(
+    normal: Vector3,
+    along_x: Vector3,
+    along_y: Vector3,
+    rise_x: Float32,
+    rise_y: Float32,
+) -> Vector3:
+    """Return a normal perturbed by a bump map's slope: three.js's
+    `perturbNormalArb`, Mikkelsen's bump mapping of an unparametrized
+    surface.
+
+    The height rises by `rise_x` over one pixel to the right and by
+    `rise_y` over one pixel up, and the normal is tilted against the
+    slope. The two position changes are normalized first, so the bump
+    looks the same however the texture is scaled, as three.js's comment
+    says. The determinant's sign takes care of a mirrored frame, and a
+    back face is handled by the renderer, which negates the bump scale
+    when it turns a corner around, exactly as three.js's `faceDirection`
+    flips the sign here. Shared by both rasterizers.
+
+    Args:
+        normal: The interpolated unit normal.
+        along_x: How the world position changes one pixel to the right.
+        along_y: How it changes one pixel up.
+        rise_x: How much the scaled height rises one pixel to the right.
+        rise_y: How much it rises one pixel up.
+
+    Returns:
+        The perturbed unit normal.
+    """
+    var sigma_x = along_x
+    if sigma_x.length() != 0:
+        sigma_x.normalize()
+    var sigma_y = along_y
+    if sigma_y.length() != 0:
+        sigma_y.normalize()
+    var r1 = _cross(sigma_y, normal)
+    var r2 = _cross(normal, sigma_x)
+    var determinant = sigma_x.dot(r1)
+    var sign = Float32(0)
+    if determinant > 0:
+        sign = 1
+    elif determinant < 0:
+        sign = -1
+    var size = determinant
+    if size < 0:
+        size = -size
+    var perturbed = Vector3(
+        size * normal.x - sign * (rise_x * r1.x + rise_y * r2.x),
+        size * normal.y - sign * (rise_x * r1.y + rise_y * r2.y),
+        size * normal.z - sign * (rise_x * r1.z + rise_y * r2.z),
+    )
+    if perturbed.length() == 0:
+        return normal
+    perturbed.normalize()
+    return perturbed
+
+
 def _sample_map(
     image: Texture,
     u: Float32,
@@ -719,7 +954,15 @@ def _sample_map(
     """
     if image.levels == 1 and image.anisotropy == 1:
         return image.sample(u, v)
-    var here = Vector2(u, v)
+    # The center is evaluated by the same function as its neighbors, and
+    # not taken from `u` and `v`, so the two differences are exact where
+    # the coordinates do not move: `u` is the same sum spelled in the
+    # fragment loop, and the compiler is free to fuse its multiplies and
+    # adds differently there, which once left a difference of one ulp
+    # along an axis the footprint did not cross. That ulp turned the long
+    # axis a hair, put a tap a hair past a texel's edge, and read the
+    # neighboring texel. The kernel's `_sample_slot` does the same.
+    var here = _coordinates_at(a, b, c, _weights(coverage, x, y))
     var right = _coordinates_at(a, b, c, _weights(coverage, x + 1, y))
     var below = _coordinates_at(a, b, c, _weights(coverage, x, y + 1))
     # The level, and the taps along the long axis when the texture
@@ -983,7 +1226,7 @@ def check_triangle_state(
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is neither OPAQUE nor BLEND")
     if not a.kind.is_valid():
-        raise Error("A triangle's material kind is none of the seven")
+        raise Error("A triangle's material kind is none of the nine")
     # Only a matcap shader looks a surface up in an image, so one on any
     # other kind is a mistake rather than a value to ignore.
     if a.kind != MATCAP and a.matcap != NO_TEXTURE:
@@ -1045,6 +1288,92 @@ def check_triangle_state(
             "A triangle names a cube texture id that nothing can hold: the"
             " renderer resolves SCENE_ENVIRONMENT before a corner is built"
         )
+    # The physical terms and the normal maps, asked as the rest are: the
+    # numbers before their agreement checks, then the maps, then the kind.
+    if not _is_unit_fraction(a.roughness):
+        raise Error("A triangle's roughness must be between zero and one")
+    if not _is_unit_fraction(a.metalness):
+        raise Error("A triangle's metalness must be between zero and one")
+    if not isfinite(a.env_map_intensity) or a.env_map_intensity < 0:
+        raise Error("A triangle's env map intensity cannot be negative")
+    if not _is_unit_fraction(a.specular_intensity):
+        raise Error(
+            "A triangle's specular intensity must be between zero and one"
+        )
+    if not _is_unit_fraction(a.clearcoat):
+        raise Error("A triangle's clearcoat must be between zero and one")
+    if not _is_unit_fraction(a.clearcoat_roughness):
+        raise Error(
+            "A triangle's clearcoat roughness must be between zero and one"
+        )
+    if not isfinite(a.normal_scale.x) or not isfinite(a.normal_scale.y):
+        raise Error("A triangle's normal scale must be finite")
+    if not isfinite(a.bump_scale):
+        raise Error("A triangle's bump scale must be finite")
+    if (
+        b.roughness != a.roughness
+        or c.roughness != a.roughness
+        or b.metalness != a.metalness
+        or c.metalness != a.metalness
+        or b.env_map_intensity != a.env_map_intensity
+        or c.env_map_intensity != a.env_map_intensity
+        or b.specular_intensity != a.specular_intensity
+        or c.specular_intensity != a.specular_intensity
+        or b.clearcoat != a.clearcoat
+        or c.clearcoat != a.clearcoat
+        or b.clearcoat_roughness != a.clearcoat_roughness
+        or c.clearcoat_roughness != a.clearcoat_roughness
+    ):
+        raise Error("A triangle's corners disagree about their physical terms")
+    if (
+        b.roughness_map != a.roughness_map
+        or c.roughness_map != a.roughness_map
+        or b.metalness_map != a.metalness_map
+        or c.metalness_map != a.metalness_map
+        or b.normal_map != a.normal_map
+        or c.normal_map != a.normal_map
+        or b.bump_map != a.bump_map
+        or c.bump_map != a.bump_map
+    ):
+        raise Error("A triangle's corners disagree about their maps")
+    if (
+        b.normal_scale.x != a.normal_scale.x
+        or c.normal_scale.x != a.normal_scale.x
+        or b.normal_scale.y != a.normal_scale.y
+        or c.normal_scale.y != a.normal_scale.y
+        or b.bump_scale != a.bump_scale
+        or c.bump_scale != a.bump_scale
+    ):
+        raise Error("A triangle's corners disagree about their map scales")
+    if a.roughness_map != NO_TEXTURE and a.roughness_map.value < 0:
+        raise Error("A triangle names a roughness map id that nothing can hold")
+    if a.metalness_map != NO_TEXTURE and a.metalness_map.value < 0:
+        raise Error("A triangle names a metalness map id that nothing can hold")
+    if a.normal_map != NO_TEXTURE and a.normal_map.value < 0:
+        raise Error("A triangle names a normal map id that nothing can hold")
+    if a.bump_map != NO_TEXTURE and a.bump_map.value < 0:
+        raise Error("A triangle names a bump map id that nothing can hold")
+    if not a.kind.is_physical() and (
+        a.roughness_map != NO_TEXTURE or a.metalness_map != NO_TEXTURE
+    ):
+        raise Error(
+            "Only a standard or physical triangle reads a roughness or"
+            " metalness map: no other shader reads one"
+        )
+    if a.normal_map != NO_TEXTURE and a.bump_map != NO_TEXTURE:
+        raise Error("A triangle names a normal map or a bump map, not both")
+    if not a.kind.has_normal() and (
+        a.normal_map != NO_TEXTURE or a.bump_map != NO_TEXTURE
+    ):
+        raise Error(
+            "Only a lit or matcap triangle has a normal map: no other"
+            " shader reads a normal in the frame a map perturbs"
+        )
+
+
+def _is_unit_fraction(value: Float32) -> Bool:
+    """Return True if `value` is finite and between zero and one."""
+    return isfinite(value) and value >= 0 and value <= 1
 
 
 def check_output_kinds(
@@ -1141,15 +1470,36 @@ def check_alpha_map(image: Texture) raises:
         Error: If the texture's color space is not `LINEAR`, or it reads its
             alpha as coverage.
     """
+    check_data_map(image, "An alpha map")
+
+
+def check_data_map(image: Texture, name: String) raises:
+    """Refuse a map that holds data and is not stored as data.
+
+    The rule `check_alpha_map` states, for every map whose bytes are
+    numbers rather than colors: an alpha map, a roughness map, a metalness
+    map, a normal map and a bump map. Shared by both backends, so neither
+    can accept what the other refuses, and the kernel's host side asks the
+    same two questions of its descriptors with the same words.
+
+    Args:
+        image: The texture named as the map.
+        name: What to call it in the error: "An alpha map", say.
+
+    Raises:
+        Error: If the texture's color space is not `LINEAR`, or it reads its
+            alpha as coverage.
+    """
     if image.color_space != LINEAR:
         raise Error(
-            "An alpha map holds data, not color; build the texture with"
+            name
+            + " holds data, not color; build the texture with"
             " color_space=LINEAR"
         )
     if image.alpha != IGNORED:
         raise Error(
-            "An alpha map must ignore its own alpha; build the texture with"
-            " alpha=IGNORED"
+            name
+            + " must ignore its own alpha; build the texture with alpha=IGNORED"
         )
 
 
@@ -1365,6 +1715,17 @@ def check_triangle_maps(
     # it at the first fragment and a band with no fragment would not.
     if a.env_map != NO_CUBE_TEXTURE and mode == SHADE_TEXTURE:
         _ = cubes.get(a.env_map).size
+    # The four maps that hold numbers, each asked the alpha map's two
+    # questions, and only under the mode that opens them.
+    if mode == SHADE_TEXTURE:
+        if a.roughness_map != NO_TEXTURE:
+            check_data_map(textures.get(a.roughness_map), "A roughness map")
+        if a.metalness_map != NO_TEXTURE:
+            check_data_map(textures.get(a.metalness_map), "A metalness map")
+        if a.normal_map != NO_TEXTURE:
+            check_data_map(textures.get(a.normal_map), "A normal map")
+        if a.bump_map != NO_TEXTURE:
+            check_data_map(textures.get(a.bump_map), "A bump map")
 
 
 def rasterize_shaded(
@@ -1512,6 +1873,22 @@ def rasterize_shaded(
     # reflecting surface needs its normal and its world position whether
     # or not it is lit, which is why the two are gated on this below.
     var reflects = a.env_map != NO_CUBE_TEXTURE and mode == SHADE_TEXTURE
+    # Whether these fragments are shaded by a roughness and a metalness
+    # rather than by a color and a highlight, and whether a clear coat
+    # lies over them.
+    var physical = a.kind.is_physical()
+    var coated = physical and a.clearcoat > 0
+    # Whether the normal is perturbed by a map before anything reads it:
+    # only when the triangle names one and the mode opens textures, since
+    # a normal map is one.
+    var perturbed = (
+        a.normal_map != NO_TEXTURE or a.bump_map != NO_TEXTURE
+    ) and mode == SHADE_TEXTURE
+    # How many levels the environment's faces hold, read once: what a
+    # physical surface's roughness picks between.
+    var env_levels = 1
+    if reflects:
+        env_levels = cubes.get(a.env_map).levels()
 
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
@@ -1626,6 +2003,86 @@ def rasterize_shaded(
                     + b.world.z * share_b
                     + c.world.z * share_c,
                 )
+            # Texture coordinates, for the two modes that read them.
+            var u = Float32(0)
+            var v = Float32(0)
+            if mode != SHADE_LIT:
+                u = a.u * share_a + b.u * share_b + c.u * share_c
+                v = a.v * share_a + b.v * share_b + c.v * share_c
+            # The normal before any map perturbs it: what a clear coat lies
+            # on, three.js's `nonPerturbedNormal`.
+            var coat_facing = facing
+            # `check_triangle_state` has refused a map on any kind that is
+            # not lit or a matcap, so a perturbed triangle has a normal
+            # above to perturb.
+            if perturbed:
+                # The tangent frame, from how the position and the
+                # coordinates change one pixel to the right and one pixel
+                # up, evaluated from the triangle's own functions rather
+                # than read from a neighboring thread -- as `mip_level`
+                # measures a footprint. Up rather than down, because the
+                # frame's handedness follows the screen's rows counting
+                # upward, as three.js's `dFdy` does; see `mapped_normal`.
+                var right = _weights(coverage, x + 1, y)
+                var up = _weights(coverage, x, y - 1)
+                var along_x = _world_at(a, b, c, right) - spot
+                var along_y = _world_at(a, b, c, up) - spot
+                var uv_right = _coordinates_at(a, b, c, right)
+                var uv_up = _coordinates_at(a, b, c, up)
+                var uv_along_x = Vector2(uv_right.x - u, uv_right.y - v)
+                var uv_along_y = Vector2(uv_up.x - u, uv_up.y - v)
+                if a.normal_map != NO_TEXTURE:
+                    ref normals = textures.get(a.normal_map)
+                    facing = mapped_normal(
+                        facing,
+                        along_x,
+                        along_y,
+                        uv_along_x,
+                        uv_along_y,
+                        _sample_map(normals, u, v, a, b, c, coverage, x, y),
+                        a.normal_scale,
+                    )
+                else:
+                    # The height here and one pixel over each way, scaled:
+                    # three.js's `dHdxy_fwd`.
+                    ref heights = textures.get(a.bump_map)
+                    var here = (
+                        a.bump_scale
+                        * _sample_map(heights, u, v, a, b, c, coverage, x, y).r
+                    )
+                    var rise_x = (
+                        a.bump_scale
+                        * _sample_map(
+                            heights,
+                            u + uv_along_x.x,
+                            v + uv_along_x.y,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).r
+                        - here
+                    )
+                    var rise_y = (
+                        a.bump_scale
+                        * _sample_map(
+                            heights,
+                            u + uv_along_y.x,
+                            v + uv_along_y.y,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).r
+                        - here
+                    )
+                    facing = bumped_normal(
+                        facing, along_x, along_y, rise_x, rise_y
+                    )
             if (a.kind.is_lit() or a.kind == MATCAP) and mode != SHADE_UV:
                 if a.kind == MATCAP:
                     # Looked up by which way the surface is turned in the
@@ -1655,7 +2112,9 @@ def rasterize_shaded(
                     # Every cosine read off the ramp rather than faded, and
                     # never clamped at zero: see `Lighting.toon_at`.
                     arriving = lighting.toon_at(facing, spot, ramp)
-                else:
+                elif not physical:
+                    # A physical surface is lit below, once its maps have
+                    # had their say over the color the lobe is tinted by.
                     arriving = lighting.intensity_at(facing, spot)
                 if a.kind == PHONG:
                     # Interpolated like the emissive, and summed over the
@@ -1699,11 +2158,13 @@ def rasterize_shaded(
                 + c.emissive.b * share_c,
                 1.0,
             )
+            # What a physical surface's roughness and metalness are
+            # multiplied by: its maps' green and blue, or one for none.
+            var rough_factor = Float32(1)
+            var metal_factor = Float32(1)
             # Each mode by name, as the kernel does, so there is no "else"
             # for an unrecognized one to fall into differently on each side.
             if mode == SHADE_UV or mode == SHADE_TEXTURE:
-                var u = a.u * share_a + b.u * share_b + c.u * share_c
-                var v = a.v * share_a + b.v * share_b + c.v * share_c
                 if mode == SHADE_UV:
                     # Coordinates, not light: written as data, which
                     # bypasses the transfer function and the tone mapping
@@ -1752,6 +2213,20 @@ def rasterize_shaded(
                             glow.b * glowing.b,
                             1.0,
                         )
+                    # The roughness map's green and the metalness map's
+                    # blue, three.js's `roughnessmap_fragment` and
+                    # `metalnessmap_fragment`, which read those channels
+                    # so one image can carry both.
+                    if a.roughness_map != NO_TEXTURE:
+                        ref rough_image = textures.get(a.roughness_map)
+                        rough_factor = _sample_map(
+                            rough_image, u, v, a, b, c, coverage, x, y
+                        ).g
+                    if a.metalness_map != NO_TEXTURE:
+                        ref metal_image = textures.get(a.metalness_map)
+                        metal_factor = _sample_map(
+                            metal_image, u, v, a, b, c, coverage, x, y
+                        ).b
             # Thrown away for being too transparent, three.js's
             # `alphatest_fragment`: no color, and no depth either, so what
             # is behind this hole is drawn instead. Asked once the maps have
@@ -1772,6 +2247,95 @@ def rasterize_shaded(
                 else:
                     var seen = packed_depth(z)
                     shaded = data_color(seen, seen, seen, shaded.a)
+            elif physical:
+                # Lit here, once the map has multiplied the color: a metal
+                # tints its lobe by that color, so the lobe cannot be
+                # summed before the texel is known. `shaded` is the base
+                # color times the map, three.js's `diffuseColor`, since a
+                # physical surface's `arriving` is one. The reflectance
+                # head on rides in `specular`, read from the first corner.
+                var surface = physical_surface(
+                    Vector3(shaded.r, shaded.g, shaded.b),
+                    Vector3(a.specular.r, a.specular.g, a.specular.b),
+                    a.metalness * metal_factor,
+                    a.specular_intensity,
+                )
+                var rough = floored_roughness(a.roughness * rough_factor)
+                var coat_rough = floored_roughness(a.clearcoat_roughness)
+                var direct = lighting.physical_at(
+                    facing,
+                    coat_facing,
+                    spot,
+                    surface,
+                    rough,
+                    a.clearcoat,
+                    coat_rough,
+                )
+                var indirect = lighting.indirect_at(facing)
+                var toward_eye = toward_eye_at(
+                    lighting.eye, lighting.toward_eye, spot
+                )
+                var dot_nv = max(
+                    Float32(0), min(Float32(1), facing.dot(toward_eye))
+                )
+                var dot_nv_coat = max(
+                    Float32(0), min(Float32(1), coat_facing.dot(toward_eye))
+                )
+                # The environment along the rough reflection and around
+                # the normal, three.js's `getIBLRadiance` and
+                # `getIBLIrradiance`, each read down the chain by the
+                # roughness; see `render.cube_texture.reflection_level`.
+                var radiance = Vector3(0, 0, 0)
+                var irradiance = Vector3(0, 0, 0)
+                var coat_radiance = Vector3(0, 0, 0)
+                if reflects:
+                    ref cube = cubes.get(a.env_map)
+                    var seen = cube.sample_level(
+                        rough_reflection(toward_eye, facing, rough),
+                        reflection_level(rough, env_levels),
+                    )
+                    var around = cube.sample_level(
+                        facing, Float32(env_levels - 1)
+                    )
+                    var strength = a.env_map_intensity
+                    radiance = Vector3(
+                        seen.r * strength, seen.g * strength, seen.b * strength
+                    )
+                    irradiance = Vector3(
+                        around.r * strength,
+                        around.g * strength,
+                        around.b * strength,
+                    )
+                    if coated:
+                        var gloss = cube.sample_level(
+                            rough_reflection(
+                                toward_eye, coat_facing, coat_rough
+                            ),
+                            reflection_level(coat_rough, env_levels),
+                        )
+                        coat_radiance = Vector3(
+                            gloss.r * strength,
+                            gloss.g * strength,
+                            gloss.b * strength,
+                        )
+                var outgoing = physical_outgoing(
+                    direct,
+                    Vector3(indirect.r, indirect.g, indirect.b),
+                    surface,
+                    rough,
+                    dot_nv,
+                    reflects,
+                    radiance,
+                    irradiance,
+                    Vector3(glow.r, glow.g, glow.b),
+                    a.clearcoat,
+                    coat_rough,
+                    Vector3(dot_nv_coat, 0, 0),
+                    coat_radiance,
+                )
+                shaded = FloatColor(
+                    outgoing.x, outgoing.y, outgoing.z, shaded.a
+                )
             else:
                 # The highlight and then the glow, both added after the
                 # lights and neither touched by the texture: three.js sums

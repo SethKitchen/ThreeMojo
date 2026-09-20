@@ -33,7 +33,13 @@ each face once, on the way in, so a sampler has one convention to read. See
 direction changes across a surface at a rate that has nothing to do with
 the surface's own texture coordinates, and the footprint `mip_level`
 measures is theirs. The same reasoning keeps a matcap out of its chain. A
-face can still hold a chain, since it is a `Texture`; nothing reads it.
+face can still hold a chain, since it is a `Texture`, and one reader asks
+for it: a physical surface reads the chain by its *roughness* rather than
+by any footprint, through `sample_level`, because a rough surface reflects
+a blurred environment and a blurred face is what a coarser level holds.
+That stands in for three.js's PMREM, which prefilters the environment per
+roughness with a Gaussian lobe; a box-filtered chain is coarser, and a
+cube built with `mipmapped=False` reflects sharply at every roughness.
 
 **A face is clamped.** A coordinate past a face's edge belongs to the next
 face, and a flat image has no next face to read. `REPEAT` would read the
@@ -354,6 +360,80 @@ struct CubeTexture(Movable):
         var face = face_of(direction)
         var place = face_uv(face, direction)
         return self.faces[face].sample(place.x, place.y)
+
+    def sample_level(self, direction: Vector3, level: Float32) -> FloatColor:
+        """Return the color in a direction, read `level` down the chain.
+
+        `sample` with the face read through `Texture.sample_level` rather
+        than at its full size: what a physical surface asks, by its
+        roughness. A face with no chain reads its one image whatever the
+        level, so a cube built with `mipmapped=False` reflects sharply.
+
+        Args:
+            direction: Any vector; it need not be unit length.
+            level: How far down the chain, fractional; see
+                `reflection_level`.
+
+        Returns:
+            The color found there.
+        """
+        var face = face_of(direction)
+        var place = face_uv(face, direction)
+        return self.faces[face].sample_level(place.x, place.y, level)
+
+    def levels(self) -> Int:
+        """Return how many mip levels each face holds, one for a cube built
+        without a chain."""
+        return self.faces[0].levels
+
+
+def rough_reflection(
+    toward_eye: Vector3, normal: Vector3, roughness: Float32
+) -> Vector3:
+    """Return the direction a rough surface reflects the camera's view:
+    three.js's `getIBLRadiance`, which bends `reflected` toward the normal
+    by the square of the roughness.
+
+    Mixing the reflection with the normal keeps a rough surface from
+    gathering light from behind its own tangent plane, as three.js's
+    comment says. Shared by both rasterizers.
+
+    Args:
+        toward_eye: Unit direction from the surface toward the camera.
+        normal: The surface's unit normal.
+        roughness: How rough the surface is, from zero to one.
+
+    Returns:
+        The unit direction to read the environment in.
+    """
+    var bounce = reflected(toward_eye, normal)
+    var bend = roughness * roughness
+    var bent = Vector3(
+        bounce.x + (normal.x - bounce.x) * bend,
+        bounce.y + (normal.y - bounce.y) * bend,
+        bounce.z + (normal.z - bounce.z) * bend,
+    )
+    if bent.length() != 0:
+        bent.normalize()
+    return bent
+
+
+def reflection_level(roughness: Float32, levels: Int) -> Float32:
+    """Return how far down a cube's chain a roughness reads.
+
+    Linear in the roughness, from the full size at zero to the coarsest
+    level at one, where each face is one texel: the average of everything
+    that face sees, which is what a chalky surface reflects. Shared by
+    both rasterizers.
+
+    Args:
+        roughness: How rough the surface is, from zero to one.
+        levels: How many levels the cube's faces hold.
+
+    Returns:
+        The fractional level, zero for a chain of one.
+    """
+    return roughness * Float32(levels - 1)
 
 
 def _mirrored(width: Int, height: Int, pixels: List[UInt8]) -> List[UInt8]:

@@ -1106,6 +1106,10 @@ struct Texture(Movable):
 # estimator: a tap is per-fragment work, and an asset that asked for a
 # thousand would cost a thousand reads a pixel on both backends.
 comptime MAX_ANISOTROPY = 16
+# Below this fraction of the footprint's diagonal terms, an off-diagonal
+# term is rounding noise and the footprint is axis-aligned; see
+# `_major_direction`. Ten times a Float32's relative precision.
+comptime DIAGONAL_TOLERANCE = Float32(1e-6)
 
 
 @fieldwise_init
@@ -1216,14 +1220,23 @@ def _major_direction(u: Vector2, v: Vector2, major: Float32) -> Vector2:
         arbitrary: the taps are centered, so both ends span one line.
     """
     var q = u.x * u.y + v.x * v.y
-    if q == 0:
-        # Diagonal, which is the axis-aligned footprint: the long axis is
-        # whichever texel axis carries more of the two derivatives.
-        if u.x * u.x + v.x * v.x >= u.y * u.y + v.y * v.y:
-            return Vector2(1, 0)
-        return Vector2(0, 1)
     var p = u.x * u.x + v.x * v.x
     var r = u.y * u.y + v.y * v.y
+    # Diagonal, which is the axis-aligned footprint: the long axis is
+    # whichever texel axis carries more of the two derivatives. Asked
+    # with a tolerance rather than of zero, because a derivative that
+    # should be zero along one axis arrives as the rounding residue of
+    # two interpolations that differ in their last bit, and a `q` made
+    # of that residue would turn the long axis by a hair. A tap then
+    # landed a hair past a texel's edge, and which texel it read changed
+    # with how the compiler fused the interpolation's multiplies and adds.
+    var noise = q
+    if noise < 0:
+        noise = -noise
+    if noise <= (p + r) * DIAGONAL_TOLERANCE:
+        if p >= r:
+            return Vector2(1, 0)
+        return Vector2(0, 1)
     var eigenvalue = major * major
     var first = Vector2(q, eigenvalue - p)
     var second = Vector2(eigenvalue - r, q)

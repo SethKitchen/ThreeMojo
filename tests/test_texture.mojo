@@ -1396,6 +1396,33 @@ def test_one_tap_reads_the_level_of_the_longer_axis() raises:
     assert_equal(none.level, Float32(0))
 
 
+def test_a_rounding_residue_does_not_tilt_the_long_axis() raises:
+    # The two derivatives come from two interpolations that differ in
+    # their last bit, so a derivative that is zero along one axis arrives
+    # as a residue. The long axis stays exactly on the texel axis, so a
+    # tap on a texel's edge reads the same texel however the compiler
+    # rounded; a residue that is really a tilt still turns it.
+    var residue = anisotropic_footprint(
+        Vector2(0.125, 1e-9), Vector2(-1e-9, 0.5), 8, 8, 16
+    )
+    assert_equal(residue.taps, 4)
+    assert_equal(residue.step.x, Float32(0))
+    assert_almost_equal(Float64(residue.step.y), 0.125, atol=TOLERANCE)
+    var across = anisotropic_footprint(
+        Vector2(0.5, 1e-9), Vector2(1e-9, 0.125), 8, 8, 16
+    )
+    assert_equal(across.step.y, Float32(0))
+    var tilted = anisotropic_footprint(
+        Vector2(0.125, 0.01), Vector2(0, 0.5), 8, 8, 16
+    )
+    assert_true(tilted.step.x != 0, "a real tilt was snapped to the axis")
+    # A residue of either sign is noise.
+    var negative = anisotropic_footprint(
+        Vector2(0.125, -1e-9), Vector2(0, 0.5), 8, 8, 16
+    )
+    assert_equal(negative.step.x, Float32(0))
+
+
 def test_taps_cover_the_long_axis_at_the_short_axis_level() raises:
     # Four to one: four taps along y, each a texel apart, at level zero.
     var four = anisotropic_footprint(

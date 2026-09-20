@@ -13,6 +13,8 @@ from materials.material import (
     MATCAP,
     NORMALS,
     PHONG,
+    PHYSICAL,
+    STANDARD,
     TOON,
 )
 from materials.material import (
@@ -27,8 +29,10 @@ from materials.material import (
     matcap_material,
     normal_material,
     phong_material,
+    physical_material,
     points_material,
     sprite_material,
+    standard_material,
     toon_material,
 )
 from materials.material import MaterialId
@@ -65,6 +69,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
+from math.vector2 import Vector2
 from std.math import inf, nan
 from units.si import Angle, DEGREE, Length, METER, RADIAN
 
@@ -244,13 +249,15 @@ def test_a_wrong_value_in_the_right_type_is_refused() raises:
     assert_true(PHONG.is_valid())
     assert_true(TOON.is_valid())
     assert_true(MATCAP.is_valid())
+    assert_true(STANDARD.is_valid())
+    assert_true(PHYSICAL.is_valid())
     assert_false(MaterialKind(9).is_valid())
     with assert_raises():
         _ = Material(Color(0, 0, 0), NO_TEXTURE, Side(99))
     with assert_raises():
         _ = Material(Color(0, 0, 0), blending=Blending(7))
     with assert_raises():
-        _ = Material(Color(0, 0, 0), kind=MaterialKind(7))
+        _ = Material(Color(0, 0, 0), kind=MaterialKind(9))
     # Editing one after the fact is possible too; the rasterizers check.
     var changed = OPAQUE
     changed.value = 7
@@ -1153,6 +1160,307 @@ def test_each_combine_joins_the_reflection_its_own_way() raises:
     # would; both refuse it before a fragment is shaded.
     var odd = combine_light(own, seen, 1.0, Combine(9))
     assert_almost_equal(Float64(odd.r), 0.2, atol=1e-6)
+
+
+# --- standard and physical --------------------------------------------------
+
+
+def test_a_standard_material_carries_three_js_defaults() raises:
+    # three.js's MeshStandardMaterial: a roughness of one and a metalness
+    # of zero, a chalky dielectric that reflects four percent head on.
+    var chalk = standard_material(Color(200, 40, 40))
+    assert_equal(chalk.kind, STANDARD)
+    assert_equal(chalk.roughness, Float32(1))
+    assert_equal(chalk.metalness, Float32(0))
+    assert_equal(chalk.env_map_intensity, Float32(1))
+    assert_equal(chalk.roughness_map, NO_TEXTURE)
+    assert_equal(chalk.metalness_map, NO_TEXTURE)
+    assert_true(chalk.is_physical())
+    assert_true(chalk.is_lit())
+    assert_true(chalk.kind.reflects())
+    assert_true(chalk.kind.has_normal())
+    assert_false(chalk.has_highlight())
+    assert_false(chalk.has_clearcoat())
+    var head_on = chalk.base_reflectance()
+    assert_almost_equal(head_on.r, Float32(0.04), atol=1e-6)
+    assert_almost_equal(head_on.g, Float32(0.04), atol=1e-6)
+    assert_almost_equal(head_on.b, Float32(0.04), atol=1e-6)
+    assert_equal(head_on.a, Float32(1))
+    # And every other property comes through as it does on any material.
+    var brushed = standard_material(
+        Color(1, 2, 3),
+        TextureId(4),
+        0.25,
+        1.0,
+        DOUBLE_SIDE,
+        0.5,
+        transparent=True,
+        env_map=CubeTextureId(2),
+        env_map_intensity=1.5,
+        roughness_map=TextureId(5),
+        metalness_map=TextureId(6),
+        emissive=Color(10, 20, 30),
+        emissive_intensity=2.0,
+        emissive_map=TextureId(7),
+    )
+    assert_equal(brushed.map, TextureId(4))
+    assert_equal(brushed.roughness, Float32(0.25))
+    assert_equal(brushed.metalness, Float32(1))
+    assert_equal(brushed.side, DOUBLE_SIDE)
+    assert_true(brushed.is_transparent())
+    assert_equal(brushed.env_map, CubeTextureId(2))
+    assert_equal(brushed.env_map_intensity, Float32(1.5))
+    assert_equal(brushed.roughness_map, TextureId(5))
+    assert_equal(brushed.metalness_map, TextureId(6))
+    assert_true(brushed.is_emissive())
+    assert_equal(brushed.emissive_map, TextureId(7))
+    # A standard material by hand is the same surface.
+    var plain = Material(Color(200, 40, 40), kind=STANDARD)
+    assert_equal(plain.roughness, chalk.roughness)
+    assert_equal(plain.base_reflectance().r, head_on.r)
+
+
+def test_a_physical_material_reflects_by_its_index() raises:
+    # three.js's MeshPhysicalMaterial: an ior of one and a half, which is
+    # the same four percent a standard surface reflects, so the default
+    # physical surface is the default standard one.
+    var glass = physical_material(Color(200, 200, 200))
+    assert_equal(glass.kind, PHYSICAL)
+    assert_equal(glass.ior, Float32(1.5))
+    assert_equal(glass.specular_intensity, Float32(1))
+    assert_equal(glass.clearcoat, Float32(0))
+    assert_equal(glass.clearcoat_roughness, Float32(0))
+    assert_true(glass.is_physical())
+    assert_false(glass.has_clearcoat())
+    assert_almost_equal(glass.base_reflectance().r, Float32(0.04), atol=1e-6)
+    # ((ior - 1) / (ior + 1))^2: the widest index reflects sixteen percent.
+    var dense = physical_material(Color(200, 200, 200), ior=2.333)
+    assert_almost_equal(dense.base_reflectance().r, Float32(0.16), atol=1e-3)
+    # An index of one reflects nothing at all.
+    var air = physical_material(Color(200, 200, 200), ior=1.0)
+    assert_equal(air.base_reflectance().r, Float32(0))
+    # The specular color tints it and the intensity scales it.
+    var tinted = physical_material(
+        Color(200, 200, 200),
+        specular_color=Color(0, 0, 0),
+        specular_intensity=0.5,
+    )
+    assert_equal(tinted.base_reflectance().r, Float32(0))
+    var halved = physical_material(Color(200, 200, 200), specular_intensity=0.5)
+    assert_almost_equal(halved.base_reflectance().g, Float32(0.02), atol=1e-6)
+    # A clear coat comes through.
+    var coated = physical_material(
+        Color(200, 40, 40), clearcoat=1.0, clearcoat_roughness=0.3
+    )
+    assert_true(coated.has_clearcoat())
+    assert_equal(coated.clearcoat, Float32(1))
+    assert_equal(coated.clearcoat_roughness, Float32(0.3))
+    # And the rest of the arguments reach the material.
+    var full = physical_material(
+        Color(1, 2, 3),
+        TextureId(4),
+        0.5,
+        0.5,
+        2.0,
+        Color(255, 0, 0),
+        0.75,
+        0.5,
+        0.25,
+        BACK_SIDE,
+        0.5,
+        None,
+        True,
+        CubeTextureId(1),
+        2.0,
+        TextureId(5),
+        TextureId(6),
+        NO_TEXTURE,
+        Vector2(1, 1),
+        TextureId(7),
+        0.5,
+        Color(10, 10, 10),
+        1.0,
+        TextureId(8),
+    )
+    assert_equal(full.side, BACK_SIDE)
+    assert_equal(full.ior, Float32(2))
+    assert_equal(full.specular_color.r, UInt8(255))
+    assert_equal(full.bump_map, TextureId(7))
+    assert_equal(full.bump_scale, Float32(0.5))
+    assert_equal(full.emissive_map, TextureId(8))
+    # No other kind reflects anything head on.
+    assert_equal(Material(Color(1, 1, 1)).base_reflectance().r, Float32(0))
+    assert_equal(
+        Material(Color(1, 1, 1), kind=BASIC).base_reflectance().b, Float32(0)
+    )
+
+
+def test_only_a_physical_kind_has_a_roughness_or_a_metalness() raises:
+    # No other shader reads them, so a value in one is a mistake rather
+    # than a choice. Each refuses on its own.
+    for kind in [BASIC, LAMBERT, PHONG, TOON, MATCAP]:
+        var color = Color(255, 255, 255)
+        with assert_raises():
+            _ = Material(color, kind=kind, roughness=0.5)
+        with assert_raises():
+            _ = Material(color, kind=kind, metalness=1.0)
+        with assert_raises():
+            _ = Material(color, kind=kind, roughness_map=TextureId(0))
+        with assert_raises():
+            _ = Material(color, kind=kind, metalness_map=TextureId(0))
+        with assert_raises():
+            _ = Material(color, kind=kind, env_map_intensity=2.0)
+        # The defaults are fine on every kind.
+        _ = Material(color, kind=kind, roughness=1.0, metalness=0.0)
+    # And a physical surface reflects by them, so it reads no reflectivity
+    # and no combine.
+    for kind in [STANDARD, PHYSICAL]:
+        with assert_raises():
+            _ = Material(Color(255, 255, 255), kind=kind, reflectivity=0.5)
+        with assert_raises():
+            _ = Material(Color(255, 255, 255), kind=kind, combine=MIX_OPERATION)
+        _ = Material(Color(255, 255, 255), kind=kind, env_map=SCENE_ENVIRONMENT)
+
+
+def test_only_a_physical_material_has_an_index_or_a_coat() raises:
+    for kind in [BASIC, LAMBERT, PHONG, TOON, MATCAP, STANDARD]:
+        var color = Color(255, 255, 255)
+        with assert_raises():
+            _ = Material(color, kind=kind, ior=2.0)
+        with assert_raises():
+            _ = Material(color, kind=kind, specular_color=Color(255, 0, 0))
+        with assert_raises():
+            _ = Material(color, kind=kind, specular_intensity=0.5)
+        with assert_raises():
+            _ = Material(color, kind=kind, clearcoat=1.0)
+        with assert_raises():
+            _ = Material(color, kind=kind, clearcoat_roughness=0.5)
+    _ = Material(
+        Color(255, 255, 255),
+        kind=PHYSICAL,
+        ior=2.0,
+        specular_color=Color(255, 0, 0),
+        specular_intensity=0.5,
+        clearcoat=1.0,
+        clearcoat_roughness=0.5,
+    )
+
+
+def test_a_physical_number_outside_its_range_is_refused() raises:
+    var color = Color(255, 255, 255)
+    for wrong in [
+        Float32(-0.1),
+        Float32(1.5),
+        nan[DType.float32](),
+        inf[DType.float32](),
+    ]:
+        with assert_raises():
+            _ = Material(color, kind=STANDARD, roughness=wrong)
+        with assert_raises():
+            _ = Material(color, kind=STANDARD, metalness=wrong)
+        with assert_raises():
+            _ = Material(color, kind=PHYSICAL, specular_intensity=wrong)
+        with assert_raises():
+            _ = Material(color, kind=PHYSICAL, clearcoat=wrong)
+        with assert_raises():
+            _ = Material(color, kind=PHYSICAL, clearcoat_roughness=wrong)
+    for wrong in [Float32(0.9), Float32(3.0), nan[DType.float32]()]:
+        with assert_raises():
+            _ = Material(color, kind=PHYSICAL, ior=wrong)
+    for wrong in [Float32(-1), nan[DType.float32](), inf[DType.float32]()]:
+        with assert_raises():
+            _ = Material(color, kind=STANDARD, env_map_intensity=wrong)
+    with assert_raises():
+        _ = Material(color, kind=STANDARD, roughness_map=TextureId(-2))
+    with assert_raises():
+        _ = Material(color, kind=STANDARD, metalness_map=TextureId(-2))
+    # The ends of every range are allowed.
+    _ = Material(color, kind=PHYSICAL, roughness=0, metalness=1, ior=1.0)
+    _ = Material(
+        color,
+        kind=PHYSICAL,
+        ior=2.333,
+        specular_intensity=0,
+        clearcoat=1,
+        clearcoat_roughness=1,
+        env_map_intensity=0,
+    )
+
+
+def test_a_normal_map_or_a_bump_map_needs_a_normal_to_perturb() raises:
+    var color = Color(255, 255, 255)
+    # Every lit kind reads one in the world's frame, and so does a matcap.
+    for kind in [LAMBERT, PHONG, TOON, MATCAP, STANDARD, PHYSICAL]:
+        var mapped = Material(
+            color,
+            kind=kind,
+            normal_map=TextureId(0),
+            normal_scale=Vector2(2, -1),
+        )
+        assert_true(mapped.has_normal_map())
+        assert_false(mapped.has_bump_map())
+        assert_equal(mapped.normal_scale.x, Float32(2))
+        assert_equal(mapped.normal_scale.y, Float32(-1))
+        var bumped = Material(
+            color, kind=kind, bump_map=TextureId(0), bump_scale=0.5
+        )
+        assert_true(bumped.has_bump_map())
+        assert_false(bumped.has_normal_map())
+        assert_equal(bumped.bump_scale, Float32(0.5))
+        # Not both: three.js reads the normal map and ignores the bump map.
+        with assert_raises():
+            _ = Material(
+                color, kind=kind, normal_map=TextureId(0), bump_map=TextureId(1)
+            )
+    # A basic surface reads no normal, a depth surface none either, and a
+    # normal material reads one in the camera's frame.
+    with assert_raises():
+        _ = Material(color, kind=BASIC, normal_map=TextureId(0))
+    with assert_raises():
+        _ = Material(color, kind=BASIC, bump_map=TextureId(0))
+    with assert_raises():
+        _ = Material(color, kind=DEPTH, normal_map=TextureId(0))
+    with assert_raises():
+        _ = Material(color, kind=NORMALS, bump_map=TextureId(0))
+    assert_false(BASIC.has_normal())
+    assert_false(DEPTH.has_normal())
+    assert_false(NORMALS.has_normal())
+    assert_true(MATCAP.has_normal())
+    # A wireframe is drawn by the line pass, which has no surface.
+    with assert_raises():
+        _ = Material(color, kind=BASIC, wireframe=True, normal_map=TextureId(0))
+    # A scale needs a map to scale, and must be a number.
+    with assert_raises():
+        _ = Material(color, normal_scale=Vector2(2, 2))
+    with assert_raises():
+        _ = Material(color, bump_scale=2.0)
+    with assert_raises():
+        _ = Material(
+            color,
+            normal_map=TextureId(0),
+            normal_scale=Vector2(nan[DType.float32](), 1),
+        )
+    with assert_raises():
+        _ = Material(
+            color,
+            normal_map=TextureId(0),
+            normal_scale=Vector2(1, inf[DType.float32]()),
+        )
+    with assert_raises():
+        _ = Material(
+            color, bump_map=TextureId(0), bump_scale=nan[DType.float32]()
+        )
+    # And an id nothing can hold is refused, as every map's is.
+    with assert_raises():
+        _ = Material(color, normal_map=TextureId(-2))
+    with assert_raises():
+        _ = Material(color, bump_map=TextureId(-2))
+    # A plain material names neither.
+    var plain = Material(color)
+    assert_false(plain.has_normal_map())
+    assert_false(plain.has_bump_map())
+    assert_equal(plain.normal_scale.x, Float32(1))
+    assert_equal(plain.bump_scale, Float32(1))
 
 
 def main() raises:

@@ -4,9 +4,11 @@
 
 ![A white highlight follows the camera around a red sphere](out/phong.png)
 
-three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `LineBasicMaterial`, `LineDashedMaterial`, `PointsMaterial`, `SpriteMaterial`.
+three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshStandardMaterial`, `MeshPhysicalMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `LineBasicMaterial`, `LineDashedMaterial`, `PointsMaterial`, `SpriteMaterial`.
 
 Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`, `size`, `sizeAttenuation`, `rotation`, `envMap`, `reflectivity`, `combine`.
+
+Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `clearcoat`, `clearcoatRoughness`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`.
 
 ## Construct one
 
@@ -49,6 +51,20 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `env_map` | `CubeTextureId` | `NO_CUBE_TEXTURE` | The cube texture the surface reflects, or `SCENE_ENVIRONMENT`. See [Environment map](#environment-map). |
 | `reflectivity` | `Float32` | `1.0` | How much of the reflection joins the surface's light. |
 | `combine` | `Combine` | `MULTIPLY_OPERATION` | How the reflection joins. |
+| `roughness` | `Float32` | `1.0` | How rough a `STANDARD` or `PHYSICAL` surface is. See [Standard and physical](#standard-and-physical). |
+| `metalness` | `Float32` | `0.0` | How much of a metal it is. |
+| `roughness_map` | `TextureId` | `NO_TEXTURE` | A texture whose green channel multiplies the roughness. |
+| `metalness_map` | `TextureId` | `NO_TEXTURE` | A texture whose blue channel multiplies the metalness. |
+| `env_map_intensity` | `Float32` | `1.0` | What a physical surface's environment is multiplied by. |
+| `normal_map` | `TextureId` | `NO_TEXTURE` | A texture of tangent-space normals. See [Normal maps and bump maps](#normal-maps-and-bump-maps). |
+| `normal_scale` | `Vector2` | `Vector2(1, 1)` | What the map's x and y are scaled by. |
+| `bump_map` | `TextureId` | `NO_TEXTURE` | A texture whose red channel is a height. |
+| `bump_scale` | `Float32` | `1.0` | What that height is scaled by. |
+| `ior` | `Float32` | `1.5` | A `PHYSICAL` surface's index of refraction. |
+| `specular_color` | `Color` | white | What its reflectance head on is tinted by. |
+| `specular_intensity` | `Float32` | `1.0` | What that reflectance is scaled by. |
+| `clearcoat` | `Float32` | `0.0` | How much clear coat lies over a `PHYSICAL` surface. |
+| `clearcoat_roughness` | `Float32` | `0.0` | How rough the coat is. |
 
 ## Side
 
@@ -66,11 +82,13 @@ A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is th
 |---|---|---|
 | `LAMBERT` | `MeshLambertMaterial` | The lights reach the surface. |
 | `PHONG` | `MeshPhongMaterial` | Lit, and with a highlight that follows the camera. |
+| `STANDARD` | `MeshStandardMaterial` | Lit by a roughness and a metalness, with a GGX lobe. See [Standard and physical](#standard-and-physical). |
+| `PHYSICAL` | `MeshPhysicalMaterial` | `STANDARD` with an index of refraction and a clear coat. |
 | `BASIC` | `MeshBasicMaterial`, `LineBasicMaterial`, `PointsMaterial`, `SpriteMaterial` | The color and texture show as they are. The kind a [line](Lines), a [point or a sprite](Points-and-sprites) is drawn with. |
 | `NORMALS` | `MeshNormalMaterial` | The normal the camera sees, as a color. |
 | `DEPTH` | `MeshDepthMaterial` | How far away the surface is, as a gray. |
 
-`is_lit()` is true for the first two. `is_data()` is true for the last two, which show data rather than light. See [Data materials](#data-materials).
+`is_lit()` is true for the first four. `is_physical()` is true for `STANDARD` and `PHYSICAL`. `is_data()` is true for the last two, which show data rather than light. See [Data materials](#data-materials).
 
 ## Phong
 
@@ -211,7 +229,7 @@ A matcap's own alpha means nothing: three.js reads `.rgb` and no more. So the te
 
 ## Environment map
 
-A `BASIC`, `LAMBERT` or `PHONG` material can reflect a [cube texture](Textures#cube-textures): three.js's `envMap` on `MeshBasicMaterial`, `MeshLambertMaterial` and `MeshPhongMaterial`. The direction the camera sees a fragment along is turned back through the fragment's normal, and the cube is read in that direction. That is what a mirror shows.
+A `BASIC`, `LAMBERT` or `PHONG` material can reflect a [cube texture](Textures#cube-textures): three.js's `envMap` on `MeshBasicMaterial`, `MeshLambertMaterial` and `MeshPhongMaterial`. A `STANDARD` or `PHYSICAL` material reflects one by its roughness instead; see [The environment](#the-environment). The direction the camera sees a fragment along is turned back through the fragment's normal, and the cube is read in that direction. That is what a mirror shows.
 
 ```mojo
 var chrome = Material(Color(255, 255, 255), kind=BASIC, env_map=sky)
@@ -239,9 +257,105 @@ A reflection is a texture. `SHADE_TEXTURE` draws it and the other two shading mo
 
 `SCENE_ENVIRONMENT` is not an id. The renderer replaces it with whatever the scene's `environment` names when it prepares the frame. A scene with no environment gives the material nothing to reflect, as three.js's `material.envMap || scene.environment` gives nothing. three.js applies the environment to its physically based materials without asking. Those are not ported, and this project's materials reflect nothing unless told to, so a material asks. See [Scene graph](Scene-graph#background-and-environment).
 
-No other kind reflects. A toon surface steps through a ramp, a matcap surface is an image already, and the data kinds show no light. Each refuses an env map, a reflectivity that is not one, and a combine that is not the default. A wireframe refuses an env map too. So do a line, a point and a sprite, in their own passes: none has a surface to reflect from.
+No other kind reflects this way. A toon surface steps through a ramp, a matcap surface is an image already, and the data kinds show no light. Each refuses an env map, a reflectivity that is not one, and a combine that is not the default. A physical kind takes an env map and refuses the other two. A wireframe refuses an env map too. So do a line, a point and a sprite, in their own passes: none has a surface to reflect from.
 
 `examples/mirror.mojo` reflects a scene in a chrome ball, through a [CubeCamera](Cameras#cubecamera).
+
+## Standard and physical
+
+![Ten spheres from chalk to mirror, dielectric above and metal below](out/physical.png)
+
+A `STANDARD` surface is shaded by a roughness and a metalness rather than by a color and a highlight: three.js's `MeshStandardMaterial`. A `PHYSICAL` surface adds an index of refraction, a specular color and intensity, and a clear coat: part of three.js's `MeshPhysicalMaterial`. Build either with its own function:
+
+```mojo
+var chalk = assets.materials.add(standard_material(Color(200, 200, 200)))
+var gold = assets.materials.add(
+    standard_material(Color(255, 200, 90), roughness=0.3, metalness=1.0, env_map=sky)
+)
+var lacquer = assets.materials.add(
+    physical_material(Color(180, 30, 30), roughness=0.5, clearcoat=1.0, clearcoat_roughness=0.1)
+)
+```
+
+`standard_material(color, map=NO_TEXTURE, roughness=1.0, metalness=0.0, side=FRONT_SIDE, opacity=1.0, blending=None, transparent=False, env_map=NO_CUBE_TEXTURE, env_map_intensity=1.0, roughness_map=NO_TEXTURE, metalness_map=NO_TEXTURE, normal_map=NO_TEXTURE, normal_scale=Vector2(1, 1), bump_map=NO_TEXTURE, bump_scale=1.0, emissive=black, emissive_intensity=1.0, emissive_map=NO_TEXTURE)`.
+
+`physical_material(color, map=NO_TEXTURE, roughness=1.0, metalness=0.0, ior=1.5, specular_color=white, specular_intensity=1.0, clearcoat=0.0, clearcoat_roughness=0.0, ...)` takes the same arguments after those.
+
+The defaults are three.js's own: a roughness of one and a metalness of zero, a chalky dielectric. `Material(color, kind=STANDARD)` is the same surface.
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `roughness` | `roughness` | `1.0` | Zero is a mirror, one is chalk. Floored at `ROUGHNESS_FLOOR`, three.js's 0.0525. |
+| `metalness` | `metalness` | `0.0` | Zero scatters the color, one reflects it. |
+| `roughness_map` | `roughnessMap` | `NO_TEXTURE` | Its green channel multiplies the roughness. Data: `LINEAR` and `IGNORED`. |
+| `metalness_map` | `metalnessMap` | `NO_TEXTURE` | Its blue channel multiplies the metalness. Data: `LINEAR` and `IGNORED`. |
+| `env_map` | `envMap` | `NO_CUBE_TEXTURE` | The cube texture the surface reflects, or `SCENE_ENVIRONMENT`. |
+| `env_map_intensity` | `envMapIntensity` | `1.0` | What the environment is multiplied by. |
+| `ior` | `ior` | `1.5` | The index of refraction, from one to 2.333. `PHYSICAL` only. |
+| `specular_color` | `specularColor` | white | What the reflectance head on is tinted by. `PHYSICAL` only. |
+| `specular_intensity` | `specularIntensity` | `1.0` | What that reflectance is scaled by, from zero to one. `PHYSICAL` only. |
+| `clearcoat` | `clearcoat` | `0.0` | How much clear coat lies over the surface, from zero to one. `PHYSICAL` only. |
+| `clearcoat_roughness` | `clearcoatRoughness` | `0.0` | How rough the coat is. `PHYSICAL` only. |
+
+### What the shader does
+
+The diffuse term is Lambert's, on the color times one minus the metalness. The lobe is three.js's `BRDF_GGX`: Schlick's Fresnel, Smith's correlated visibility and the GGX distribution. `ggx(toward_light, toward_eye, normal, f0, f90, roughness)` is that arithmetic, in `lights/lighting.mojo`. Both rasterizers call it. `Lighting.physical_at` sums it over the lights that have a direction, and `Lighting.indirect_at` gathers the ambient and hemisphere light for the diffuse term.
+
+What the surface reflects head on is `Material.base_reflectance()`. A `STANDARD` surface reflects four percent, three.js's `vec3(0.04)`. A `PHYSICAL` surface reflects `((ior - 1) / (ior + 1))^2`, tinted by its specular color and scaled by its specular intensity. A metal reflects its own color instead, and the metalness mixes between the two, as `lights_physical_fragment` mixes them.
+
+The reciprocal of pi is applied once per sum, as it is for every lit kind. See [The reciprocal of pi](#the-reciprocal-of-pi).
+
+### The environment
+
+A physical surface reflects its environment by its roughness, not by a `combine`. Both refuse a `reflectivity` or a `combine`. The reflection is three.js's split sum: `dfg_approx` fits the lobe's integral, and `physical_outgoing` in `lights/lighting.mojo` joins the radiance and the irradiance with Fdez-Aguera's multiple scattering. The radiance is read along `rough_reflection`, the view turned back and bent toward the normal by the square of the roughness. The irradiance is read around the normal at the coarsest level.
+
+The roughness picks a level of the cube's chain: `reflection_level(roughness, levels)`, from the full size at zero to one texel a face at one. That stands in for three.js's PMREM, which prefilters the environment per roughness. A cube built without a chain reflects sharply at every roughness. See [Textures](Textures#cube-textures).
+
+### The clear coat
+
+A clear coat is a second, colorless GGX lobe over the surface. It lies on the surface's own normal, before any normal map perturbs it, as three.js's `nonPerturbedNormal` does. It dims everything under it by its own Fresnel and adds its own reflection on top: a red car under a white gloss. `clearcoat=0`, the default, is no coat.
+
+### What is not ported
+
+three.js's transmission, sheen, iridescence, anisotropy, dispersion and their maps are not ported. Nor is the geometric roughness three.js adds from how fast the normal changes across a pixel, which needs neighboring pixels this project shades without.
+
+`examples/physical.mojo` draws the range: a row of spheres from chalk to mirror, and from dielectric to metal.
+
+## Normal maps and bump maps
+
+A normal map is a texture whose texels are tangent-space normals: three.js's `normalMap`. A bump map is a texture whose red channel is a height: three.js's `bumpMap`. Either perturbs the normal every lit shader reads, so every lit kind and a `MATCAP` surface can carry one.
+
+```mojo
+var brick = assets.materials.add(Material(Color(200, 120, 90), normal_map=bricks))
+var leather = assets.materials.add(
+    standard_material(Color(60, 40, 30), roughness=0.8, bump_map=grain, bump_scale=0.05)
+)
+```
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `normal_map` | `normalMap` | `NO_TEXTURE` | Red is x, green is y, blue is z, each unpacked from zero to one into minus one to one. |
+| `normal_scale` | `normalScale` | `Vector2(1, 1)` | What the unpacked x and y are multiplied by. |
+| `bump_map` | `bumpMap` | `NO_TEXTURE` | Its red channel is a height. |
+| `bump_scale` | `bumpScale` | `1.0` | What the height is multiplied by. |
+
+Both are data. A texture named as either must be `LINEAR` and `IGNORED`, as an alpha map must. Both are sampled at the same coordinate as `map`, so their transforms must agree with it. A material names one or the other, not both: three.js reads the normal map and ignores the bump map.
+
+### The tangent frame
+
+Neither needs a tangent attribute. The frame is built from how the world position and the texture coordinates change across one pixel, as three.js's `getTangentFrame` builds it without one. The tangent is the direction along which `u` grows, the bitangent the direction along which `v` grows, both made perpendicular to the normal. Both rasterizers evaluate the change one pixel to the right and one pixel up from the triangle's own functions, as they evaluate a mip footprint. `mapped_normal` in `render/rasterizer.mojo` is the arithmetic. The GPU kernel calls the same function.
+
+A bump map's slope is three.js's `perturbNormalArb`. The height one pixel over and one pixel up, less the height here, tilts the normal against the rise. `bumped_normal` is that arithmetic. The position changes are normalized first, so the bump looks the same however the texture is scaled.
+
+### The far side
+
+A `DOUBLE_SIDE` or `BACK_SIDE` face seen from behind is lit with its normal flipped. Its frame flips with it: the far side's perturbed normal is the front's, negated, as three.js negates the tangent and the bitangent by `faceDirection`. The renderer does that by negating `normal_scale` and `bump_scale` on a corner it turns around. So a bump that rises toward the light on the front falls away from it on the back.
+
+### What refuses one
+
+A `BASIC` surface reads no normal and a `DEPTH` surface reads none. A `NORMALS` surface reads one in the camera's frame, and the frame a map is measured in is the world's. Each refuses both maps. A wireframe is `BASIC`, so it refuses them too. A `normal_scale` that is not one and one needs a normal map, and a `bump_scale` that is not one needs a bump map.
+
+Only `SHADE_TEXTURE` reads either. A normal map is a texture, and the other two shading modes ignore every texture.
 
 ## Data materials
 
@@ -445,8 +559,16 @@ The constructor raises for:
 - A reflectivity outside zero to one or not finite, or a `Combine` that is none of the three.
 - An env map, a reflectivity that is not one, or a combine that is not the default, on a kind that does not reflect.
 - An env map on a wireframe.
+- A roughness, metalness, clearcoat, clearcoat roughness or specular intensity outside zero to one, or not finite.
+- An index of refraction outside one to 2.333, or not finite. A negative or non-finite env map intensity.
+- A roughness that is not one or a metalness that is not zero on a kind that is not `STANDARD` or `PHYSICAL`. A roughness or metalness map, or an env map intensity that is not one, on such a kind.
+- A reflectivity that is not one, or a combine that is not the default, on a `STANDARD` or `PHYSICAL` material.
+- An index of refraction that is not the default, or a specular color that is not white, on a kind that is not `PHYSICAL`. A specular intensity that is not one, or a clear coat, on such a kind.
+- A normal map or a bump map on a `BASIC`, `DEPTH` or `NORMALS` material, which a wireframe is. Both on one material.
+- A normal scale that is not one and one with no normal map. A bump scale that is not one with no bump map. A scale that is not finite.
+- A roughness, metalness, normal or bump map id below zero that is not `NO_TEXTURE`.
 
-`Renderer.prepare` raises for an emissive map that reads its alpha as coverage. It raises for an env map, or a scene environment, that is not in the assets.
+`Renderer.prepare` raises for an emissive map that reads its alpha as coverage. It raises for an env map, or a scene environment, that is not in the assets. It raises for a roughness, metalness, normal or bump map that is not in the assets or is not stored as data.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.
 
 ## MaterialStore

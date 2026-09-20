@@ -33,10 +33,21 @@ from lights.light import (
 from math.smoothstep import smoothstep
 from std.math import inf, nan, pi
 from lights.lighting import (
+    CLEARCOAT_F0,
+    DIELECTRIC_F0,
+    ROUGHNESS_FLOOR,
     TOON_EDGE,
     TOON_SHADE,
     Lighting,
+    Reflected,
     blinn_phong,
+    dfg_approx,
+    environment_brdf,
+    f_schlick,
+    floored_roughness,
+    ggx,
+    physical_outgoing,
+    physical_surface,
     toon_coord,
     toon_index,
     toon_step,
@@ -1448,6 +1459,432 @@ def test_the_cameras_up_axis_is_carried_and_made_unit_length() raises:
     # A zero vector names no frame and is left as it is.
     var none = Lighting(scene, Layers.all(), ORIGIN, ORIGIN, Vector3(0, 0, 0))
     assert_equal(none.up.length(), Float32(0))
+
+
+# --- The physical lobe ------------------------------------------------------
+
+
+def a_chalk() -> Reflected:
+    """Return a white dielectric's three colors: what a default standard
+    material is made of."""
+    return physical_surface(Vector3(1, 1, 1), DIELECTRIC_F0, 0, 1)
+
+
+def a_metal() -> Reflected:
+    """Return a red metal's three colors."""
+    return physical_surface(Vector3(1, 0, 0), DIELECTRIC_F0, 1, 1)
+
+
+def test_schlick_rises_from_f0_head_on_to_f90_at_a_grazing_angle() raises:
+    # Head on, three.js's exp2 spelling leaves a fresnel of 2^-12.5, so the
+    # reflectance is f0 to within a part in five thousand.
+    var head_on = f_schlick(Vector3(0.04, 0.5, 1), 1, 1)
+    assert_almost_equal(head_on.x, Float32(0.04), atol=1e-3)
+    assert_almost_equal(head_on.y, Float32(0.5), atol=1e-3)
+    assert_almost_equal(head_on.z, Float32(1), atol=1e-3)
+    # At a grazing angle the fresnel is exactly one, so the answer is f90
+    # whatever f0 was.
+    var grazing = f_schlick(Vector3(0.04, 0.5, 1), 0.25, 0)
+    assert_equal(grazing.x, Float32(0.25))
+    assert_equal(grazing.y, Float32(0.25))
+    assert_equal(grazing.z, Float32(0.25))
+    # blinn_phong reads the same function, with an f90 of one.
+    var rim = blinn_phong(
+        Vector3(1, 0, 0),
+        Vector3(-1, 0.001, 0),
+        Vector3(0, 1, 0),
+        Vector3(0, 0, 0),
+        0,
+    )
+    assert_true(rim.x > 0, "a black specular caught no rim")
+
+
+def test_ggx_head_on_is_the_reflectance_over_four_alpha_squared() raises:
+    # Light, eye and normal all along z: every dot saturates to one, the
+    # visibility term is a quarter, and the lobe is one over alpha
+    # squared, alpha being the roughness squared. At a roughness of a
+    # half that is sixteen; a quarter of sixteen is four.
+    var sent = ggx(UP_Z, UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.5)
+    assert_almost_equal(sent.x, Float32(4.0), atol=1e-2)
+    assert_almost_equal(sent.y, Float32(4.0), atol=1e-2)
+    # Tinted by f0, per channel.
+    var tinted = ggx(UP_Z, UP_Z, UP_Z, Vector3(0.5, 0, 1), 1, 0.5)
+    assert_almost_equal(tinted.x, Float32(2.0), atol=1e-2)
+    assert_almost_equal(tinted.y, Float32(0.0), atol=1e-2)
+    assert_almost_equal(tinted.z, Float32(4.0), atol=1e-2)
+    # A roughness of one is the widest lobe: alpha squared is one, and the
+    # answer is a quarter of f0.
+    var rough = ggx(UP_Z, UP_Z, UP_Z, Vector3(1, 1, 1), 1, 1.0)
+    assert_almost_equal(rough.x, Float32(0.25), atol=1e-3)
+    # Smoother is a tighter, brighter lobe.
+    var smooth = ggx(UP_Z, UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.25)
+    assert_true(smooth.x > sent.x, "a smoother surface made a dimmer lobe")
+
+
+def test_ggx_reflects_nothing_off_a_surface_turned_away() raises:
+    # From the light, from the eye, or with no half direction at all.
+    var from_light = ggx(-UP_Z, UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.5)
+    assert_equal(from_light.x, Float32(0))
+    var from_eye = ggx(UP_Z, -UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.5)
+    assert_equal(from_eye.y, Float32(0))
+    # Edge-on to the light, or to the eye, with a half direction that is
+    # not zero: still nothing, on either cosine alone.
+    var edge_light = ggx(Vector3(1, 0, 0), UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.5)
+    assert_equal(edge_light.x, Float32(0))
+    var edge_eye = ggx(UP_Z, Vector3(1, 0, 0), UP_Z, Vector3(1, 1, 1), 1, 0.5)
+    assert_equal(edge_eye.x, Float32(0))
+    var opposite = ggx(
+        Vector3(1, 0, 0), Vector3(-1, 0, 0), UP_Z, Vector3(1, 1, 1), 1, 0.5
+    )
+    assert_equal(opposite.z, Float32(0))
+    # Off to the side of the half vector, the lobe is small but not zero.
+    var aside = Vector3(1, 0, 1)
+    aside.normalize()
+    var side = ggx(aside, UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.5)
+    assert_true(side.x > 0, "a lit surface reflected nothing")
+    assert_true(side.x < 4.0, "the lobe did not fall off")
+
+
+def test_the_split_sum_fit_sums_to_at_most_one() raises:
+    # Karis's fit: a smooth surface seen head on reflects almost all of
+    # the environment's radiance through the lobe, and a rough one about
+    # half, with a small negative bias at the grazing term.
+    var smooth = dfg_approx(1, 0)
+    assert_almost_equal(smooth.x + smooth.y, Float32(1.0), atol=1e-2)
+    assert_true(smooth.x > 0.99, "a smooth surface kept too little")
+    var rough = dfg_approx(1, 1)
+    assert_almost_equal(rough.x, Float32(0.4524), atol=1e-3)
+    assert_true(rough.x + rough.y < smooth.x + smooth.y, "rougher kept more")
+    # And the environment BRDF is f0 times the one and f90 times the other.
+    var fab = dfg_approx(0.5, 0.5)
+    var sent = environment_brdf(0.5, Vector3(0.04, 0.5, 1), 0.75, 0.5)
+    assert_almost_equal(sent.x, 0.04 * fab.x + 0.75 * fab.y, atol=TOLERANCE)
+    assert_almost_equal(sent.y, 0.5 * fab.x + 0.75 * fab.y, atol=TOLERANCE)
+    assert_almost_equal(sent.z, 1.0 * fab.x + 0.75 * fab.y, atol=TOLERANCE)
+
+
+def test_a_metal_reflects_its_color_and_scatters_none() raises:
+    # A dielectric scatters its color and reflects four percent; a metal
+    # scatters nothing and reflects its color; half way is half of each.
+    var chalk = a_chalk()
+    assert_equal(chalk.diffuse.x, Float32(1))
+    assert_almost_equal(chalk.specular.x, Float32(0.04), atol=TOLERANCE)
+    assert_equal(chalk.clearcoat.x, Float32(1))
+    var metal = a_metal()
+    assert_equal(metal.diffuse.x, Float32(0))
+    assert_equal(metal.specular.x, Float32(1))
+    assert_almost_equal(metal.specular.y, Float32(0), atol=TOLERANCE)
+    var half = physical_surface(Vector3(1, 0, 0), DIELECTRIC_F0, 0.5, 0.5)
+    assert_equal(half.diffuse.x, Float32(0.5))
+    assert_almost_equal(half.specular.x, Float32(0.52), atol=TOLERANCE)
+    # The grazing reflectance rides in the third slot: the specular
+    # intensity for a dielectric, one for a metal, mixed between.
+    assert_equal(half.clearcoat.x, Float32(0.75))
+    assert_equal(
+        physical_surface(Vector3(1, 1, 1), DIELECTRIC_F0, 0, 0.25).clearcoat.x,
+        Float32(0.25),
+    )
+
+
+def test_a_roughness_is_floored_and_capped() raises:
+    assert_equal(floored_roughness(0), ROUGHNESS_FLOOR)
+    assert_equal(floored_roughness(0.5), Float32(0.5))
+    assert_equal(floored_roughness(2), Float32(1))
+    assert_equal(floored_roughness(1), Float32(1))
+
+
+def test_the_outgoing_light_sums_the_three_parts_and_the_glow() raises:
+    # With no environment and no coat, it is the direct diffuse plus the
+    # indirect light through the diffuse color, plus the lobe, plus the
+    # glow.
+    var direct = Reflected(
+        Vector3(0.1, 0.2, 0.3), Vector3(0.01, 0.02, 0.03), Vector3(0, 0, 0)
+    )
+    var out = physical_outgoing(
+        direct,
+        Vector3(0.5, 0.5, 0.5),
+        physical_surface(Vector3(1, 0.5, 0), DIELECTRIC_F0, 0, 1),
+        1,
+        1,
+        False,
+        Vector3(9, 9, 9),
+        Vector3(9, 9, 9),
+        Vector3(0.001, 0.002, 0.003),
+        0,
+        ROUGHNESS_FLOOR,
+        Vector3(1, 0, 0),
+        Vector3(9, 9, 9),
+    )
+    assert_almost_equal(out.x, 0.1 + 0.5 + 0.01 + 0.001, atol=TOLERANCE)
+    assert_almost_equal(out.y, 0.2 + 0.25 + 0.02 + 0.002, atol=TOLERANCE)
+    assert_almost_equal(out.z, 0.3 + 0.0 + 0.03 + 0.003, atol=TOLERANCE)
+
+
+def test_a_clear_coat_dims_what_is_under_it_and_adds_its_own_gloss() raises:
+    # A full coat seen head on dims the surface by its four percent and
+    # adds the coat's own reflection on top.
+    var direct = Reflected(
+        Vector3(1, 1, 1), Vector3(0, 0, 0), Vector3(0.5, 0.5, 0.5)
+    )
+    var out = physical_outgoing(
+        direct,
+        Vector3(0, 0, 0),
+        a_chalk(),
+        1,
+        1,
+        False,
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        1,
+        ROUGHNESS_FLOOR,
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 0),
+    )
+    assert_almost_equal(out.x, 1 * (1 - 0.04) + 0.5, atol=1e-3)
+    # Half a coat dims by half as much and adds half the gloss.
+    var half = physical_outgoing(
+        direct,
+        Vector3(0, 0, 0),
+        a_chalk(),
+        1,
+        1,
+        False,
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        0.5,
+        ROUGHNESS_FLOOR,
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 0),
+    )
+    assert_almost_equal(half.x, 1 * (1 - 0.02) + 0.25, atol=1e-3)
+
+
+def test_an_environment_reflects_through_the_split_sum() raises:
+    # A metal with no direct light and no ambient shows the environment's
+    # radiance through the environment BRDF alone -- the single scattering
+    # -- plus the multiple scattering of the cosine-weighted irradiance,
+    # which is zero here, so the two agree exactly.
+    var none = Reflected(Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0))
+    var metal = a_metal()
+    var out = physical_outgoing(
+        none,
+        Vector3(0, 0, 0),
+        metal,
+        0.5,
+        0.8,
+        True,
+        Vector3(1, 1, 1),
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        0,
+        ROUGHNESS_FLOOR,
+        Vector3(0.8, 0, 0),
+        Vector3(0, 0, 0),
+    )
+    var single = environment_brdf(0.8, metal.specular, 1, 0.5)
+    assert_almost_equal(out.x, single.x, atol=TOLERANCE)
+    assert_almost_equal(out.y, single.y, atol=TOLERANCE)
+    # A dielectric under a white irradiance scatters most of it and keeps
+    # the rest for the lobe: less than one, more than nine tenths.
+    var lit = physical_outgoing(
+        none,
+        Vector3(0, 0, 0),
+        a_chalk(),
+        1,
+        1,
+        True,
+        Vector3(0, 0, 0),
+        Vector3(1, 1, 1),
+        Vector3(0, 0, 0),
+        0,
+        ROUGHNESS_FLOOR,
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 0),
+    )
+    assert_true(lit.x < 1.0, "a surface reflected more than it received")
+    assert_true(lit.x > 0.9, "a white surface under a white sky went dark")
+    # A coated surface adds the coat's reflection of its own radiance.
+    var coated = physical_outgoing(
+        none,
+        Vector3(0, 0, 0),
+        a_chalk(),
+        1,
+        1,
+        True,
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        1,
+        0.5,
+        Vector3(1, 0, 0),
+        Vector3(1, 1, 1),
+    )
+    var gloss = environment_brdf(1, CLEARCOAT_F0, 1, 0.5)
+    assert_almost_equal(coated.x, gloss.x, atol=1e-3)
+
+
+def test_a_physical_surface_under_a_lamp_scatters_and_reflects() raises:
+    # One white light straight on at full strength, the camera up the z
+    # axis: a white dielectric scatters one, and its lobe is a quarter of
+    # four percent; a red metal scatters nothing and its lobe is a quarter
+    # of red. Nothing on the coat when there is none.
+    var scene = lit_from(0, 0, 1)
+    var lighting = Lighting(scene, Layers.all(), Vector3(0, 0, 4))
+    var chalk = lighting.physical_at(
+        UP_Z, UP_Z, ORIGIN, a_chalk(), 1, 0, ROUGHNESS_FLOOR
+    )
+    assert_almost_equal(chalk.diffuse.x, Float32(1), atol=1e-6)
+    assert_almost_equal(chalk.specular.x, Float32(0.01), atol=1e-3)
+    assert_equal(chalk.clearcoat.x, Float32(0))
+    var metal = lighting.physical_at(
+        UP_Z, UP_Z, ORIGIN, a_metal(), 1, 0, ROUGHNESS_FLOOR
+    )
+    assert_equal(metal.diffuse.x, Float32(0))
+    assert_almost_equal(metal.specular.x, Float32(0.25), atol=1e-3)
+    assert_almost_equal(metal.specular.y, Float32(0), atol=1e-3)
+    # A coat reflects on its own normal, and a smooth one is very bright
+    # at its center.
+    var coated = lighting.physical_at(
+        UP_Z, UP_Z, ORIGIN, a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_true(coated.clearcoat.x > 1, "a smooth coat made no gloss")
+    assert_equal(coated.diffuse.x, chalk.diffuse.x)
+    # Turned away from the light, nothing arrives on either normal.
+    var away = lighting.physical_at(
+        -UP_Z, -UP_Z, ORIGIN, a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_equal(away.diffuse.x, Float32(0))
+    assert_equal(away.specular.x, Float32(0))
+    assert_equal(away.clearcoat.x, Float32(0))
+    # A coat turned toward the light on a surface turned away still
+    # glosses, and the other way round still scatters.
+    var coat_only = lighting.physical_at(
+        -UP_Z, UP_Z, ORIGIN, a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_equal(coat_only.diffuse.x, Float32(0))
+    assert_true(coat_only.clearcoat.x > 0, "the coat took no light")
+    var surface_only = lighting.physical_at(
+        UP_Z, -UP_Z, ORIGIN, a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_equal(surface_only.clearcoat.x, Float32(0))
+    assert_true(surface_only.diffuse.x > 0, "the surface took no light")
+    # A surface exactly at a converging camera has no direction to be seen
+    # along, and takes nothing.
+    var on_camera = Lighting(scene, Layers.all(), ORIGIN).physical_at(
+        UP_Z, UP_Z, ORIGIN, a_chalk(), 1, 0, ROUGHNESS_FLOOR
+    )
+    assert_equal(on_camera.diffuse.x, Float32(0))
+
+
+def test_a_physical_point_light_falls_off_and_a_spot_light_stops() raises:
+    var scene = Scene()
+    var near_node = scene.add(Object3D())
+    var bulb = Object3D()
+    bulb.set_position(0, 0, 1)
+    var bulb_node = scene.add(bulb^)
+    scene.add_light(point_light(WHITE, bulb_node, FULL))
+    scene.update()
+    var lighting = Lighting(scene, Layers.all(), Vector3(0, 0, 4))
+    var close = lighting.physical_at(
+        UP_Z, UP_Z, ORIGIN, a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    var far = lighting.physical_at(
+        UP_Z, UP_Z, Vector3(0, 0, -1), a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_true(close.diffuse.x > far.diffuse.x, "the bulb did not fall off")
+    assert_true(close.specular.x > far.specular.x, "the lobe did not fall off")
+    assert_true(close.clearcoat.x > 0, "the coat took nothing from a bulb")
+    # A surface exactly on the bulb has no direction to be lit from, and
+    # one turned from it on both normals takes nothing.
+    var on_bulb = lighting.physical_at(
+        UP_Z, UP_Z, Vector3(0, 0, 1), a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_equal(on_bulb.diffuse.x, Float32(0))
+    var away = lighting.physical_at(
+        -UP_Z, -UP_Z, ORIGIN, a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_equal(away.diffuse.x, Float32(0))
+    # With no coat, the bulb lights the surface alone.
+    var uncoated = lighting.physical_at(
+        UP_Z, UP_Z, ORIGIN, a_chalk(), 1, 0, ROUGHNESS_FLOOR
+    )
+    assert_equal(uncoated.clearcoat.x, Float32(0))
+    assert_equal(uncoated.diffuse.x, close.diffuse.x)
+    # And a coat turned toward the bulb on a surface turned away glosses.
+    var coat_only = lighting.physical_at(
+        -UP_Z, UP_Z, ORIGIN, a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_equal(coat_only.diffuse.x, Float32(0))
+    assert_true(coat_only.clearcoat.x > 0, "the coat took nothing from a bulb")
+    _ = near_node
+    # A spot light, aimed down at the origin from above: lit inside the
+    # cone and not outside it, on both normals.
+    var stage = Scene()
+    var target = stage.add(Object3D())
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 2)
+    var lamp_node = stage.add(lamp^)
+    stage.add_light(
+        spot_light(
+            WHITE, lamp_node, FULL, target=target, angle=Angle(20.0, DEGREE)
+        )
+    )
+    stage.update()
+    var spots = Lighting(stage, Layers.all(), Vector3(0, 0, 4))
+    var inside = spots.physical_at(
+        UP_Z, UP_Z, ORIGIN, a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_true(inside.diffuse.x > 0, "the cone lit nothing at its center")
+    assert_true(inside.clearcoat.x > 0, "the cone glossed no coat")
+    var outside = spots.physical_at(
+        UP_Z, UP_Z, Vector3(5, 0, 0), a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_equal(outside.diffuse.x, Float32(0))
+    var on_lamp = spots.physical_at(
+        UP_Z, UP_Z, Vector3(0, 0, 2), a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_equal(on_lamp.diffuse.x, Float32(0))
+    var turned = spots.physical_at(
+        -UP_Z, -UP_Z, ORIGIN, a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_equal(turned.diffuse.x, Float32(0))
+    var coat_up = spots.physical_at(
+        -UP_Z, UP_Z, ORIGIN, a_chalk(), 1, 1, ROUGHNESS_FLOOR
+    )
+    assert_equal(coat_up.diffuse.x, Float32(0))
+    assert_true(coat_up.clearcoat.x > 0, "the coat took nothing from a spot")
+    var bare = spots.physical_at(
+        UP_Z, UP_Z, ORIGIN, a_chalk(), 1, 0, ROUGHNESS_FLOOR
+    )
+    assert_equal(bare.clearcoat.x, Float32(0))
+    assert_equal(bare.diffuse.x, inside.diffuse.x)
+
+
+def test_the_indirect_light_is_the_ambient_and_the_hemispheres() raises:
+    # With no light that has a direction, the indirect term is the whole
+    # of what arrives, to the bit: the same sums in the same order.
+    var scene = Scene()
+    var sky = Object3D()
+    sky.set_position(0, 1, 0)
+    var sky_node = scene.add(sky^)
+    scene.add_light(ambient_light(Color(40, 80, 120), 0.5))
+    scene.add_light(hemisphere_light(WHITE, Color(60, 30, 0), sky_node, FULL))
+    scene.update()
+    var lighting = Lighting(scene)
+    for normal in [UP_Z, Vector3(0, 1, 0), Vector3(0, -1, 0)]:
+        var indirect = lighting.indirect_at(normal)
+        var arriving = lighting.intensity_at(normal, ORIGIN)
+        assert_equal(indirect.r, arriving.r)
+        assert_equal(indirect.g, arriving.g)
+        assert_equal(indirect.b, arriving.b)
+        assert_equal(indirect.a, Float32(1))
+    # A directional light adds to what arrives and not to the indirect.
+    var lit = lit_from(0, 0, 1)
+    var direct = Lighting(lit)
+    assert_equal(direct.indirect_at(UP_Z).r, Float32(0))
+    assert_true(direct.intensity_at(UP_Z, ORIGIN).r > 0, "the lamp was lost")
 
 
 def main() raises:

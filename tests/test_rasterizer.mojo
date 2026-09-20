@@ -13,6 +13,8 @@ from materials.material import (
     MATCAP,
     NORMALS,
     PHONG,
+    PHYSICAL,
+    STANDARD,
     TOON,
     Blending,
     MaterialKind,
@@ -55,7 +57,7 @@ from lights.light import directional_light
 from lights.lighting import Lighting
 from core.fog import LINEAR_FOG, FogKind, FogView, exp2_fog, linear_fog
 from render.tonemap import REINHARD_TONE_MAPPING, tone_map
-from std.math import nan
+from std.math import nan, sqrt
 from units.si import InverseLength, Length, METER, PER_METER
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -77,11 +79,14 @@ from render.rasterizer import (
     RasterVertex,
     ShadeMode,
     Triangle,
+    bumped_normal,
     check_alpha_map,
+    check_data_map,
     check_gradient_map,
     check_output_kinds,
     check_triangle_state,
     data_color,
+    mapped_normal,
     gradient_ramp,
     interpolate_alpha,
     matcap_fallback,
@@ -4058,6 +4063,774 @@ def test_a_textures_anisotropy_reaches_the_pixels() raises:
     )
     assert_equal(flat.shown(2, 4).r, UInt8(255))
     assert_equal(flat.shown(3, 4).r, UInt8(0))
+
+
+# --- physical surfaces and normal maps --------------------------------------
+
+
+def lit_from_x(z: Float32 = 4) raises -> Lighting:
+    """Return one white directional light shining from far up the x axis,
+    a little above the surface, with the camera `z` meters up the z axis."""
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(1, 0, 0.2)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, FULL))
+    scene.update()
+    return Lighting(scene, Layers.all(), Vector3(0, 0, z))
+
+
+def a_data_texel(r: UInt8, g: UInt8, b: UInt8) raises -> Texture:
+    """Return a one-texel map stored as data: linear, alpha ignored."""
+    var pixels = List[UInt8]()
+    pixels.append(r)
+    pixels.append(g)
+    pixels.append(b)
+    pixels.append(255)
+    return Texture(1, 1, pixels^, REPEAT, NEAREST, LINEAR, False, IGNORED)
+
+
+def a_step_map() raises -> Texture:
+    """Return a two-texel height map: zero on the left, full on the right,
+    stored as data."""
+    var pixels = List[UInt8]()
+    for value in [0, 255]:
+        pixels.append(UInt8(value))
+        pixels.append(UInt8(value))
+        pixels.append(UInt8(value))
+        pixels.append(255)
+    return Texture(2, 1, pixels^, CLAMP, NEAREST, LINEAR, False, IGNORED)
+
+
+def physical_quad(
+    kind: MaterialKind = STANDARD,
+    roughness: Float32 = 1,
+    metalness: Float32 = 0,
+    color: FloatColor = FloatColor(1, 1, 1),
+    specular: FloatColor = FloatColor(0.04, 0.04, 0.04),
+    env: CubeTextureId = NO_CUBE_TEXTURE,
+    env_map_intensity: Float32 = 1,
+    clearcoat: Float32 = 0,
+    clearcoat_roughness: Float32 = 0,
+    roughness_map: TextureId = NO_TEXTURE,
+    metalness_map: TextureId = NO_TEXTURE,
+    normal_map: TextureId = NO_TEXTURE,
+    normal_scale: Vector2 = Vector2(1, 1),
+    bump_map: TextureId = NO_TEXTURE,
+    bump_scale: Float32 = 1,
+    texture: TextureId = NO_TEXTURE,
+    glow: FloatColor = FloatColor(0.0, 0.0, 0.0),
+    mirrored_uv: Bool = False,
+) -> List[RasterVertex]:
+    """Return two triangles of one kind covering an eight-pixel target,
+    facing the camera in the xy plane with the coordinates running across
+    it, so a map's tangent frame is the world's own axes."""
+    var corners = List[RasterVertex]()
+    var places: List[Tuple[Float32, Float32]] = [
+        (Float32(0), Float32(0)),
+        (Float32(8), Float32(0)),
+        (Float32(8), Float32(8)),
+        (Float32(0), Float32(0)),
+        (Float32(8), Float32(8)),
+        (Float32(0), Float32(8)),
+    ]
+    for place in places:
+        var u = place[0] / 8
+        if mirrored_uv:
+            u = 1 - u
+        corners.append(
+            RasterVertex(
+                place[0],
+                place[1],
+                0.5,
+                1,
+                color,
+                u,
+                1 - place[1] / 8,
+                texture,
+                normal=Vector3(0, 0, 1),
+                # The screen's rows count downward and the world's y counts
+                # upward, so the world position mirrors the row.
+                world=Vector3(place[0] / 8, 1 - place[1] / 8, 0),
+                kind=kind,
+                emissive=glow,
+                specular=specular,
+                env_map=env,
+                roughness=roughness,
+                metalness=metalness,
+                env_map_intensity=env_map_intensity,
+                roughness_map=roughness_map,
+                metalness_map=metalness_map,
+                clearcoat=clearcoat,
+                clearcoat_roughness=clearcoat_roughness,
+                normal_map=normal_map,
+                normal_scale=normal_scale,
+                bump_map=bump_map,
+                bump_scale=bump_scale,
+            )
+        )
+    return corners^
+
+
+def viewed_from_z() -> Lighting:
+    """Return no lights at all, with the camera far up the z axis, so a
+    sheet at the origin is seen square on."""
+    var lighting = Lighting(ambient=FloatColor(0.0, 0.0, 0.0))
+    lighting.eye = Vector3(0, 0, 400)
+    return lighting^
+
+
+def physical_pixel(
+    corners: List[RasterVertex],
+    lighting: Lighting = viewed_from_z(),
+    textures: TextureStore = TextureStore(),
+    mode: ShadeMode = SHADE_TEXTURE,
+    workers: Int = 1,
+    x: Int = 3,
+    y: Int = 3,
+) raises -> FloatColor:
+    """Draw `corners` over the cube store and return one pixel's light."""
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(
+        corners,
+        target,
+        mode,
+        textures,
+        lighting,
+        workers,
+        cubes=a_cube_store(),
+    )
+    return target.color_at(x, y)
+
+
+def test_a_corner_is_a_rough_dielectric_with_no_map_unless_asked() raises:
+    var corner = RasterVertex(0, 0, 0, 1, FloatColor(1, 1, 1))
+    assert_equal(corner.roughness, Float32(1))
+    assert_equal(corner.metalness, Float32(0))
+    assert_equal(corner.env_map_intensity, Float32(1))
+    assert_equal(corner.specular_intensity, Float32(1))
+    assert_equal(corner.clearcoat, Float32(0))
+    assert_equal(corner.clearcoat_roughness, Float32(0))
+    assert_equal(corner.roughness_map, NO_TEXTURE)
+    assert_equal(corner.metalness_map, NO_TEXTURE)
+    assert_equal(corner.normal_map, NO_TEXTURE)
+    assert_equal(corner.bump_map, NO_TEXTURE)
+    assert_equal(corner.normal_scale.x, Float32(1))
+    assert_equal(corner.normal_scale.y, Float32(1))
+    assert_equal(corner.bump_scale, Float32(1))
+
+
+def test_a_standard_surface_scatters_like_lambert_plus_a_lobe() raises:
+    # A white dielectric under one white light head on scatters one, and
+    # its lobe adds a quarter of four percent on top.
+    var lighting = lit_along_z_from(400)
+    var chalk = physical_pixel(physical_quad(), lighting)
+    assert_almost_equal(chalk.r, Float32(1.01), atol=1e-3)
+    assert_equal(chalk.a, Float32(1))
+    # A red metal scatters nothing and reflects a quarter of red.
+    var metal = physical_pixel(
+        physical_quad(metalness=1, color=FloatColor(1, 0, 0)), lighting
+    )
+    assert_almost_equal(metal.r, Float32(0.25), atol=1e-3)
+    assert_almost_equal(metal.g, Float32(0), atol=1e-3)
+    # A smoother metal is brighter at the center of its lobe.
+    var polished = physical_pixel(
+        physical_quad(roughness=0.4, metalness=1, color=FloatColor(1, 0, 0)),
+        lighting,
+    )
+    assert_true(polished.r > metal.r, "a smoother metal made a dimmer lobe")
+    # A physical surface is the same under every lit mode: it reads no
+    # map here, and reads the same lights.
+    var lit = physical_pixel(physical_quad(), lighting, mode=SHADE_LIT)
+    assert_equal(lit.r, chalk.r)
+    # And it is lit the same on four workers as on one.
+    var banded = physical_pixel(physical_quad(), lighting, workers=4)
+    assert_equal(banded.r, chalk.r)
+    # The glow is added after the lights, as on every lit surface.
+    var glowing = physical_pixel(
+        physical_quad(glow=FloatColor(0.5, 0.0, 0.0)), lighting
+    )
+    assert_almost_equal(glowing.r, Float32(1.51), atol=1e-3)
+    assert_almost_equal(glowing.g, Float32(1.01), atol=1e-3)
+    # A physical material is lit; the two kinds are the same shader with
+    # the physical one's extra terms at their defaults.
+    var physical = physical_pixel(physical_quad(kind=PHYSICAL), lighting)
+    assert_equal(physical.r, chalk.r)
+
+
+def test_a_map_multiplies_the_base_color_before_the_lobe_is_tinted() raises:
+    # A red metal under a green map reflects nothing: the map multiplies
+    # the color the lobe is tinted by, not the finished light.
+    var textures = TextureStore()
+    var green = textures.add(a_data_texel(0, 255, 0))
+    var lighting = lit_along_z_from(400)
+    var tinted = physical_pixel(
+        physical_quad(metalness=1, color=FloatColor(1, 0, 0), texture=green),
+        lighting,
+        textures,
+    )
+    assert_almost_equal(tinted.r, Float32(0), atol=1e-3)
+    assert_almost_equal(tinted.g, Float32(0), atol=1e-3)
+    # A roughness map's green multiplies the roughness, and a metalness
+    # map's blue the metalness: a white metal under a map that is black
+    # in blue scatters as a dielectric, and one that is black in green is
+    # a mirror-smooth lobe.
+    var no_blue = textures.add(a_data_texel(255, 255, 0))
+    var dielectric = physical_pixel(
+        physical_quad(metalness=1, metalness_map=no_blue), lighting, textures
+    )
+    assert_almost_equal(dielectric.r, Float32(1.01), atol=1e-3)
+    var no_green = textures.add(a_data_texel(255, 0, 255))
+    var smooth = physical_pixel(
+        physical_quad(
+            metalness=1, color=FloatColor(1, 0, 0), roughness_map=no_green
+        ),
+        lighting,
+        textures,
+    )
+    var rough = physical_pixel(
+        physical_quad(metalness=1, color=FloatColor(1, 0, 0)),
+        lighting,
+        textures,
+    )
+    assert_true(smooth.r > rough.r, "the roughness map did not smooth")
+    # Neither map is read under lit shading.
+    var ignored = physical_pixel(
+        physical_quad(metalness=1, metalness_map=no_blue),
+        lighting,
+        textures,
+        mode=SHADE_LIT,
+    )
+    assert_almost_equal(ignored.r, Float32(0.25), atol=1e-3)
+
+
+def test_a_physical_surface_reflects_its_environment_by_its_roughness() raises:
+    # A smooth white metal square on to the camera reflects the face
+    # behind the camera, cyan, almost whole: the split sum keeps nearly
+    # all of it head on.
+    var mirror = physical_pixel(
+        physical_quad(
+            roughness=0,
+            metalness=1,
+            env=CubeTextureId(0),
+        )
+    )
+    assert_true(mirror.g > 0.9, "a smooth metal lost its reflection")
+    assert_true(mirror.b > 0.9, "a smooth metal lost its reflection")
+    assert_true(mirror.r < 0.1, "a smooth metal reflected the wrong face")
+    # The intensity scales it, and zero is no reflection.
+    var dimmed = physical_pixel(
+        physical_quad(
+            roughness=0,
+            metalness=1,
+            env=CubeTextureId(0),
+            env_map_intensity=0.5,
+        )
+    )
+    assert_almost_equal(dimmed.g, mirror.g * 0.5, atol=1e-3)
+    var none = physical_pixel(
+        physical_quad(
+            roughness=0,
+            metalness=1,
+            env=CubeTextureId(0),
+            env_map_intensity=0,
+        )
+    )
+    assert_equal(none.g, Float32(0))
+    # A dielectric under the same sky scatters the irradiance around its
+    # normal, cyan, through its color: white takes it, red keeps the red
+    # of it, which is none.
+    var chalk = physical_pixel(physical_quad(env=CubeTextureId(0)))
+    assert_true(chalk.g > 0.5, "a white surface under a cyan sky went dark")
+    var red = physical_pixel(
+        physical_quad(env=CubeTextureId(0), color=FloatColor(1, 0, 0))
+    )
+    assert_true(red.g < chalk.g, "a red surface scattered as much green")
+    # Only under textured shading: a reflection is a texture.
+    var lit = physical_pixel(
+        physical_quad(roughness=0, metalness=1, env=CubeTextureId(0)),
+        mode=SHADE_LIT,
+    )
+    assert_equal(lit.g, Float32(0))
+    # A coat reflects the sky too, on its own: a black coated dielectric
+    # with no lights shows the coat's gloss and nothing else.
+    var coated = physical_pixel(
+        physical_quad(
+            color=FloatColor(0, 0, 0),
+            env=CubeTextureId(0),
+            clearcoat=1,
+        )
+    )
+    var bare = physical_pixel(
+        physical_quad(color=FloatColor(0, 0, 0), env=CubeTextureId(0))
+    )
+    assert_true(coated.g > bare.g, "the coat reflected nothing")
+    # A rough reflection reads the chain: a cube of one level reads the
+    # same texel at every roughness, so the two agree here, which is what
+    # the mipmapped cube in the renderer's tests distinguishes.
+    var rough = physical_pixel(
+        physical_quad(roughness=1, metalness=1, env=CubeTextureId(0))
+    )
+    assert_true(rough.g > 0, "a rough metal lost the sky")
+
+
+def test_a_clear_coat_glosses_a_black_surface() raises:
+    # A black dielectric under one light shows a quarter of four percent
+    # from its lobe; a full smooth coat over it adds a bright gloss at
+    # the center, dimmed only by the coat's own Fresnel.
+    var lighting = lit_along_z_from(400)
+    var bare = physical_pixel(
+        physical_quad(color=FloatColor(0, 0, 0)), lighting
+    )
+    assert_almost_equal(bare.r, Float32(0.01), atol=1e-3)
+    var coated = physical_pixel(
+        physical_quad(color=FloatColor(0, 0, 0), clearcoat=1), lighting
+    )
+    assert_true(coated.r > 1, "a smooth coat made no gloss")
+    # A rougher coat spreads the gloss and dims its center.
+    var matte = physical_pixel(
+        physical_quad(
+            color=FloatColor(0, 0, 0), clearcoat=1, clearcoat_roughness=1
+        ),
+        lighting,
+    )
+    assert_true(matte.r < coated.r, "a rough coat was as bright")
+    assert_true(matte.r > bare.r, "a rough coat added nothing")
+
+
+def test_a_normal_map_tilts_the_normal_in_the_surfaces_frame() raises:
+    # A flat sheet lit from far along x catches little; a map whose one
+    # texel points along +x, which is the sheet's own +u, turns the normal
+    # toward the light and catches most of it.
+    var textures = TextureStore()
+    var toward_x = textures.add(a_data_texel(255, 128, 128))
+    var lighting = lit_from_x()
+    var flat = physical_pixel(physical_quad(kind=LAMBERT), lighting, textures)
+    var tilted = physical_pixel(
+        physical_quad(kind=LAMBERT, normal_map=toward_x), lighting, textures
+    )
+    assert_true(tilted.r > flat.r + 0.3, "the normal map did not tilt")
+    # The scale turns it back: a negative scale, which is what the
+    # renderer hands a corner it turns around, tilts toward -x and away
+    # from the light.
+    var turned = physical_pixel(
+        physical_quad(
+            kind=LAMBERT, normal_map=toward_x, normal_scale=Vector2(-1, -1)
+        ),
+        lighting,
+        textures,
+    )
+    assert_true(turned.r < flat.r, "a negated scale did not tilt away")
+    # Mirrored coordinates mirror the frame: +u is now -x, so the same
+    # texel tilts away from the light.
+    var mirrored = physical_pixel(
+        physical_quad(kind=LAMBERT, normal_map=toward_x, mirrored_uv=True),
+        lighting,
+        textures,
+    )
+    assert_true(mirrored.r < flat.r, "a mirrored frame did not mirror")
+    # A texel straight up leaves the normal alone.
+    var straight = textures.add(a_data_texel(128, 128, 255))
+    var same = physical_pixel(
+        physical_quad(kind=LAMBERT, normal_map=straight), lighting, textures
+    )
+    assert_almost_equal(same.r, flat.r, atol=1e-2)
+    # Every kind that reads a normal reads the map: phong, toon, matcap
+    # and the physical two all change.
+    for kind in [PHONG, TOON, STANDARD, PHYSICAL]:
+        var plain = physical_pixel(physical_quad(kind=kind), lighting, textures)
+        var mapped = physical_pixel(
+            physical_quad(kind=kind, normal_map=toward_x), lighting, textures
+        )
+        assert_true(mapped.r != plain.r, "a lit kind ignored the normal map")
+    var ball = physical_pixel(physical_quad(kind=MATCAP), lighting, textures)
+    var looked = physical_pixel(
+        physical_quad(kind=MATCAP, normal_map=toward_x), lighting, textures
+    )
+    assert_true(looked.r != ball.r, "a matcap ignored the normal map")
+    # Not under lit shading, where no texture is opened.
+    var unread = physical_pixel(
+        physical_quad(kind=LAMBERT, normal_map=toward_x),
+        lighting,
+        textures,
+        mode=SHADE_LIT,
+    )
+    assert_equal(unread.r, flat.r)
+    # And the same on four workers.
+    var banded = physical_pixel(
+        physical_quad(kind=LAMBERT, normal_map=toward_x),
+        lighting,
+        textures,
+        workers=4,
+    )
+    assert_equal(banded.r, tilted.r)
+
+
+def test_a_hand_built_corner_with_no_divisor_is_still_perturbed() raises:
+    # Nothing the renderer builds carries a reciprocal depth of zero, but
+    # a hand-built corner can, and the frame's derivatives then fall back
+    # to the screen-space weights as every other varying does.
+    var textures = TextureStore()
+    var toward_x = textures.add(a_data_texel(255, 128, 128))
+    var lighting = lit_from_x()
+    var flat = physical_quad(kind=LAMBERT)
+    var tilted = physical_quad(kind=LAMBERT, normal_map=toward_x)
+    for corner in range(6):
+        flat[corner].inv_w = 0
+        tilted[corner].inv_w = 0
+    var plain = physical_pixel(flat, lighting, textures)
+    var mapped = physical_pixel(tilted, lighting, textures)
+    assert_true(mapped.r > plain.r, "the map did not tilt without a divisor")
+
+
+def test_a_bump_map_tilts_the_normal_against_the_slope() raises:
+    # Heights that rise toward +x tilt the normal toward -x, away from a
+    # light along x; a negative scale, which is what a turned corner
+    # carries, tilts it the other way. The pixel is the one whose next
+    # pixel over crosses from the low texel to the high one.
+    var textures = TextureStore()
+    var step = textures.add(a_step_map())
+    var lighting = lit_from_x()
+    var flat = physical_pixel(
+        physical_quad(kind=LAMBERT), lighting, textures, x=3
+    )
+    var against = physical_pixel(
+        physical_quad(kind=LAMBERT, bump_map=step, bump_scale=0.5),
+        lighting,
+        textures,
+        x=3,
+    )
+    assert_true(against.r < flat.r, "the bump did not tilt against the rise")
+    var toward = physical_pixel(
+        physical_quad(kind=LAMBERT, bump_map=step, bump_scale=-0.5),
+        lighting,
+        textures,
+        x=3,
+    )
+    assert_true(toward.r > flat.r, "a negated bump did not tilt toward")
+    # Where the height does not change, nothing tilts.
+    var level = physical_pixel(
+        physical_quad(kind=LAMBERT, bump_map=step, bump_scale=0.5),
+        lighting,
+        textures,
+        x=1,
+    )
+    assert_almost_equal(level.r, flat.r, atol=1e-6)
+
+
+def test_mapped_normal_builds_the_frame_from_the_derivatives() raises:
+    # A sheet in the xy plane with u along x and v along y: a texel along
+    # +x is the world's +x, and one along +y its +y.
+    var up = Vector3(0, 0, 1)
+    var along_x = Vector3(1, 0, 0)
+    var along_y = Vector3(0, 1, 0)
+    var right = mapped_normal(
+        up,
+        along_x,
+        along_y,
+        Vector2(1, 0),
+        Vector2(0, 1),
+        FloatColor(1, 0.5, 0.5),
+        Vector2(1, 1),
+    )
+    assert_almost_equal(right.x, Float32(1), atol=1e-2)
+    assert_almost_equal(right.z, Float32(0), atol=1e-2)
+    var forward = mapped_normal(
+        up,
+        along_x,
+        along_y,
+        Vector2(1, 0),
+        Vector2(0, 1),
+        FloatColor(0.5, 1, 0.5),
+        Vector2(1, 1),
+    )
+    assert_almost_equal(forward.y, Float32(1), atol=1e-2)
+    # Mirrored coordinates mirror the tangent.
+    var mirrored = mapped_normal(
+        up,
+        along_x,
+        along_y,
+        Vector2(-1, 0),
+        Vector2(0, 1),
+        FloatColor(1, 0.5, 0.5),
+        Vector2(1, 1),
+    )
+    assert_almost_equal(mirrored.x, Float32(-1), atol=1e-2)
+    # The scale multiplies x and y, and a texel straight up is the normal.
+    var scaled = mapped_normal(
+        up,
+        along_x,
+        along_y,
+        Vector2(1, 0),
+        Vector2(0, 1),
+        FloatColor(0.75, 0.5, 1),
+        Vector2(2, 1),
+    )
+    assert_almost_equal(scaled.x, scaled.z, atol=1e-6)
+    var same = mapped_normal(
+        up,
+        along_x,
+        along_y,
+        Vector2(1, 0),
+        Vector2(0, 1),
+        FloatColor(0.5, 0.5, 1),
+        Vector2(1, 1),
+    )
+    assert_almost_equal(same.z, Float32(1), atol=1e-6)
+    # A degenerate frame leaves the normal alone, and so does a texel
+    # that unpacks to nothing at all.
+    var none = Vector3(0, 0, 0)
+    var flat = mapped_normal(
+        up,
+        none,
+        none,
+        Vector2(0, 0),
+        Vector2(0, 0),
+        FloatColor(1, 0.5, 0.5),
+        Vector2(1, 1),
+    )
+    assert_equal(flat.z, Float32(1))
+    var zero = mapped_normal(
+        up,
+        along_x,
+        along_y,
+        Vector2(1, 0),
+        Vector2(0, 1),
+        FloatColor(0.5, 0.5, 0.5),
+        Vector2(1, 1),
+    )
+    assert_equal(zero.z, Float32(1))
+
+
+def test_bumped_normal_tilts_against_the_rise_in_either_frame() raises:
+    var up = Vector3(0, 0, 1)
+    # A right-handed frame: a rise toward +x tilts the normal toward -x.
+    var against = bumped_normal(up, Vector3(1, 0, 0), Vector3(0, 1, 0), 0.5, 0)
+    assert_true(against.x < 0, "the normal tilted with the rise")
+    assert_almost_equal(against.x, -0.5 / sqrt(Float32(1.25)), atol=1e-6)
+    # A mirrored frame, x running the other way: the same rise on the
+    # screen is a rise toward -x in the world, so the tilt is toward +x.
+    var mirrored = bumped_normal(
+        up, Vector3(-1, 0, 0), Vector3(0, 1, 0), 0.5, 0
+    )
+    assert_true(mirrored.x > 0, "the mirrored frame did not mirror")
+    # The changes are normalized first, so a longer step is the same tilt.
+    var far = bumped_normal(up, Vector3(4, 0, 0), Vector3(0, 4, 0), 0.5, 0)
+    assert_almost_equal(far.x, against.x, atol=1e-6)
+    # A rise along y tilts along -y.
+    var back = bumped_normal(up, Vector3(1, 0, 0), Vector3(0, 1, 0), 0, 0.5)
+    assert_true(back.y < 0, "the y rise did not tilt")
+    # A degenerate frame leaves the normal alone.
+    var none = Vector3(0, 0, 0)
+    assert_equal(bumped_normal(up, none, none, 0.5, 0.5).z, Float32(1))
+
+
+def test_a_physical_triangle_state_is_checked_like_the_rest() raises:
+    var good = physical_quad()
+    check_triangle_state(good[0], good[1], good[2])
+    # Every number in its range, and finite.
+    for wrong in [Float32(-0.5), Float32(1.5), nan[DType.float32]()]:
+        var rough = physical_quad(roughness=wrong)
+        with assert_raises():
+            check_triangle_state(rough[0], rough[1], rough[2])
+        var metal = physical_quad(metalness=wrong)
+        with assert_raises():
+            check_triangle_state(metal[0], metal[1], metal[2])
+        var coat = physical_quad(clearcoat=wrong)
+        with assert_raises():
+            check_triangle_state(coat[0], coat[1], coat[2])
+        var coat_rough = physical_quad(clearcoat_roughness=wrong)
+        with assert_raises():
+            check_triangle_state(coat_rough[0], coat_rough[1], coat_rough[2])
+        var intensity = physical_quad()
+        intensity[0].specular_intensity = wrong
+        with assert_raises():
+            check_triangle_state(intensity[0], intensity[1], intensity[2])
+    for wrong in [Float32(-1), nan[DType.float32]()]:
+        var strength = physical_quad(env_map_intensity=wrong)
+        with assert_raises():
+            check_triangle_state(strength[0], strength[1], strength[2])
+    var wide = physical_quad(normal_scale=Vector2(nan[DType.float32](), 1))
+    with assert_raises():
+        check_triangle_state(wide[0], wide[1], wide[2])
+    var tall = physical_quad(normal_scale=Vector2(1, nan[DType.float32]()))
+    with assert_raises():
+        check_triangle_state(tall[0], tall[1], tall[2])
+    var high = physical_quad(bump_scale=nan[DType.float32]())
+    with assert_raises():
+        check_triangle_state(high[0], high[1], high[2])
+    # The corners must agree, on every number, map and scale, and a
+    # disagreement on the second corner or the third is caught alike.
+    for corner in [1, 2]:
+        var rough = physical_quad()
+        rough[corner].roughness = 0.5
+        with assert_raises():
+            check_triangle_state(rough[0], rough[1], rough[2])
+        var metal = physical_quad()
+        metal[corner].metalness = 0.5
+        with assert_raises():
+            check_triangle_state(metal[0], metal[1], metal[2])
+        var strength = physical_quad()
+        strength[corner].env_map_intensity = 0.5
+        with assert_raises():
+            check_triangle_state(strength[0], strength[1], strength[2])
+        var intensity = physical_quad()
+        intensity[corner].specular_intensity = 0.5
+        with assert_raises():
+            check_triangle_state(intensity[0], intensity[1], intensity[2])
+        var coat = physical_quad()
+        coat[corner].clearcoat = 0.5
+        with assert_raises():
+            check_triangle_state(coat[0], coat[1], coat[2])
+        var coat_rough = physical_quad()
+        coat_rough[corner].clearcoat_roughness = 0.5
+        with assert_raises():
+            check_triangle_state(coat_rough[0], coat_rough[1], coat_rough[2])
+        var rough_map = physical_quad()
+        rough_map[corner].roughness_map = TextureId(0)
+        with assert_raises():
+            check_triangle_state(rough_map[0], rough_map[1], rough_map[2])
+        var metal_map = physical_quad()
+        metal_map[corner].metalness_map = TextureId(0)
+        with assert_raises():
+            check_triangle_state(metal_map[0], metal_map[1], metal_map[2])
+        var normal_map = physical_quad()
+        normal_map[corner].normal_map = TextureId(0)
+        with assert_raises():
+            check_triangle_state(normal_map[0], normal_map[1], normal_map[2])
+        var bump_map = physical_quad()
+        bump_map[corner].bump_map = TextureId(0)
+        with assert_raises():
+            check_triangle_state(bump_map[0], bump_map[1], bump_map[2])
+        var wide = physical_quad()
+        wide[corner].normal_scale = Vector2(2, 1)
+        with assert_raises():
+            check_triangle_state(wide[0], wide[1], wide[2])
+        var tall = physical_quad()
+        tall[corner].normal_scale = Vector2(1, 2)
+        with assert_raises():
+            check_triangle_state(tall[0], tall[1], tall[2])
+        var high = physical_quad()
+        high[corner].bump_scale = 2
+        with assert_raises():
+            check_triangle_state(high[0], high[1], high[2])
+    # An id nothing can hold, in any of the four.
+    for slot in range(4):
+        var held = physical_quad()
+        for corner in range(6):
+            if slot == 0:
+                held[corner].roughness_map = TextureId(-2)
+            elif slot == 1:
+                held[corner].metalness_map = TextureId(-2)
+            elif slot == 2:
+                held[corner].normal_map = TextureId(-2)
+            else:
+                held[corner].bump_map = TextureId(-2)
+        with assert_raises():
+            check_triangle_state(held[0], held[1], held[2])
+    # A roughness or metalness map on a kind that is not physical.
+    var lambert_rough = physical_quad(kind=LAMBERT, roughness_map=TextureId(0))
+    with assert_raises():
+        check_triangle_state(
+            lambert_rough[0], lambert_rough[1], lambert_rough[2]
+        )
+    var lambert_metal = physical_quad(kind=LAMBERT, metalness_map=TextureId(0))
+    with assert_raises():
+        check_triangle_state(
+            lambert_metal[0], lambert_metal[1], lambert_metal[2]
+        )
+    # Both maps at once, and a map on a kind with no normal to perturb.
+    var both = physical_quad(normal_map=TextureId(0), bump_map=TextureId(1))
+    with assert_raises():
+        check_triangle_state(both[0], both[1], both[2])
+    for kind in [BASIC, DEPTH, NORMALS]:
+        var flat = physical_quad(kind=kind, normal_map=TextureId(0))
+        with assert_raises():
+            check_triangle_state(flat[0], flat[1], flat[2])
+        var bumpy = physical_quad(kind=kind, bump_map=TextureId(0))
+        with assert_raises():
+            check_triangle_state(bumpy[0], bumpy[1], bumpy[2])
+    # A lit kind takes either, and the ends of every range pass.
+    var mapped = physical_quad(
+        kind=PHONG, normal_map=TextureId(0), normal_scale=Vector2(-2, 3)
+    )
+    check_triangle_state(mapped[0], mapped[1], mapped[2])
+    var edges = physical_quad(
+        roughness=0,
+        metalness=1,
+        env_map_intensity=0,
+        clearcoat=1,
+        clearcoat_roughness=1,
+        bump_map=TextureId(0),
+        bump_scale=-1,
+    )
+    edges[0].specular_intensity = 0
+    edges[1].specular_intensity = 0
+    edges[2].specular_intensity = 0
+    check_triangle_state(edges[0], edges[1], edges[2])
+
+
+def test_a_data_map_that_is_not_stored_as_data_is_refused() raises:
+    # Each of the four maps, under the mode that opens it, on one worker
+    # and on four; not under lit shading, which opens none.
+    var textures = TextureStore()
+    var encoded = textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+            IGNORED,
+        )
+    )
+    var covered = textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            LINEAR,
+            False,
+            COVERAGE,
+        )
+    )
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    for wrong in [encoded, covered]:
+        var quads = List[List[RasterVertex]]()
+        quads.append(physical_quad(roughness_map=wrong))
+        quads.append(physical_quad(metalness_map=wrong))
+        quads.append(physical_quad(normal_map=wrong))
+        quads.append(physical_quad(bump_map=wrong))
+        for index in range(len(quads)):
+            ref quad = quads[index]
+            with assert_raises():
+                rasterize_shaded(
+                    quad[0], quad[1], quad[2], target, SHADE_TEXTURE, textures
+                )
+            for workers in [1, 4]:
+                with assert_raises():
+                    rasterize_all(
+                        quad, target, SHADE_TEXTURE, textures, workers=workers
+                    )
+            rasterize_shaded(
+                quad[0], quad[1], quad[2], target, SHADE_LIT, textures
+            )
+    # A map that is not in the store is refused before a fragment too.
+    var missing = physical_quad(normal_map=TextureId(7))
+    with assert_raises():
+        rasterize_all(missing, target, SHADE_TEXTURE, textures)
+    # `check_data_map` names the map it refuses.
+    with assert_raises(contains="A bump map holds data"):
+        check_data_map(textures.get(encoded), "A bump map")
+    with assert_raises(contains="A normal map must ignore"):
+        check_data_map(textures.get(covered), "A normal map")
+    # A map stored as data passes.
+    var proper = textures.add(a_data_texel(128, 128, 255))
+    check_data_map(textures.get(proper), "A normal map")
 
 
 def main() raises:

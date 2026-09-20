@@ -103,9 +103,22 @@ from core.layers import Layers
 from renderers.renderer import camera_position, camera_up, toward_camera
 from render.gpu import (
     FLOATS_PER_VERTEX,
+    LANE_BUMP_SCALE,
+    LANE_CLEARCOAT,
+    LANE_CLEARCOAT_ROUGHNESS,
+    LANE_ENV_INTENSITY,
+    LANE_METALNESS,
+    LANE_NORMAL_SCALE_X,
+    LANE_NORMAL_SCALE_Y,
     LANE_REFLECTIVITY,
+    LANE_ROUGHNESS,
+    LANE_SPECULAR_INTENSITY,
+    STATE_BUMP_MAP,
     STATE_COMBINE,
     STATE_ENV_MAP,
+    STATE_METALNESS_MAP,
+    STATE_NORMAL_MAP,
+    STATE_ROUGHNESS_MAP,
     LANE_DASH,
     LANE_GAP,
     LANE_LINE_DISTANCE,
@@ -165,11 +178,15 @@ from materials.material import (
     MATCAP,
     NORMALS,
     PHONG,
+    PHYSICAL,
+    STANDARD,
     TOON,
     depth_material,
     matcap_material,
     normal_material,
     phong_material,
+    physical_material,
+    standard_material,
     toon_material,
 )
 from render.target import RenderTarget
@@ -988,7 +1005,7 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 30)
+    assert_equal(len(flat), 39)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -4302,7 +4319,7 @@ def test_flattening_carries_the_alpha_test_in_its_own_lane() raises:
         RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), alpha_test=0.375)
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 30)
+    assert_equal(len(flat), 39)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[20], Float32(0.375))
     # And a corner that says nothing about it carries zero, no test.
@@ -4326,7 +4343,7 @@ def test_the_state_table_carries_the_alpha_map() raises:
         )
     var state = triangle_state(corners)
     assert_equal(len(state), STATE_PER_TRIANGLE)
-    assert_equal(len(state), 9)
+    assert_equal(len(state), 13)
     assert_equal(state[4], Int32(7))
     var plain = List[RasterVertex]()
     for _ in range(3):
@@ -4484,7 +4501,7 @@ def test_flattening_carries_the_specular_and_the_shininess() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 30)
+    assert_equal(len(flat), 39)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[21], Float32(0.25))
     assert_equal(flat[22], Float32(0.5))
@@ -7268,6 +7285,535 @@ def test_both_backends_supersample_to_the_same_image() raises:
     var linear = renderer.render(scene, assets, camera)
     assert_equal(linear.width, 48)
     assert_equal(count_mismatches(linear, gpu, tolerance=4), 0)
+
+
+# --- physical surfaces and normal maps, both backends ------------------------
+
+
+def physical_pair(
+    kind: MaterialKind,
+    roughness: Float32,
+    metalness: Float32,
+    clearcoat: Float32 = 0,
+    clearcoat_roughness: Float32 = 0,
+    env: CubeTextureId = NO_CUBE_TEXTURE,
+    normal_map: TextureId = NO_TEXTURE,
+    bump_map: TextureId = NO_TEXTURE,
+    roughness_map: TextureId = NO_TEXTURE,
+    metalness_map: TextureId = NO_TEXTURE,
+    texture: TextureId = NO_TEXTURE,
+) -> List[RasterVertex]:
+    """Return `overlapping_pair` as physical surfaces, each corner facing
+    a different way with its own coordinates, so the lobe, the maps and
+    the reflection all vary across the triangles."""
+    var normals: List[Vector3] = [
+        Vector3(0, 0, 1),
+        Vector3(0.3, 0, 1),
+        Vector3(0, 0.4, 1),
+        Vector3(-0.2, 0.1, 1),
+        Vector3(0.1, -0.3, 1),
+        Vector3(0, 0, 1),
+    ]
+    var corners = List[RasterVertex]()
+    var base = overlapping_pair()
+    for index in range(len(base)):
+        var here = base[index]
+        corners.append(
+            RasterVertex(
+                here.x,
+                here.y,
+                here.z,
+                here.inv_w,
+                here.color,
+                here.x / 36,
+                1 - here.y / 30,
+                texture,
+                here.blend,
+                normals[index],
+                Vector3(here.x / 36 - 0.5, 0.5 - here.y / 30, 0.0),
+                kind,
+                here.emissive,
+                here.emissive_map,
+                here.view_depth,
+                NO_TEXTURE,
+                0,
+                FloatColor(0.04, 0.04, 0.04),
+                0,
+                env_map=env,
+                roughness=roughness,
+                metalness=metalness,
+                clearcoat=clearcoat,
+                clearcoat_roughness=clearcoat_roughness,
+                normal_map=normal_map,
+                normal_scale=Vector2(1.5, 0.5),
+                bump_map=bump_map,
+                bump_scale=0.3,
+                roughness_map=roughness_map,
+                metalness_map=metalness_map,
+            )
+        )
+    return corners^
+
+
+def a_gpu_data_map(mipmapped: Bool = True) raises -> Texture:
+    """Return a 2x2 map of four different texels, stored as data: read
+    as normals they point four ways, as heights they step, and as
+    roughness and metalness their green and blue differ."""
+    var pixels = List[UInt8]()
+    for texel in [
+        Color(255, 128, 128),
+        Color(128, 255, 128),
+        Color(128, 128, 255),
+        Color(64, 40, 200),
+    ]:
+        pixels.append(texel.r)
+        pixels.append(texel.g)
+        pixels.append(texel.b)
+        pixels.append(255)
+    return Texture(2, 2, pixels^, REPEAT, BILINEAR, LINEAR, mipmapped, IGNORED)
+
+
+def test_the_physical_lanes_and_columns_ride_last() raises:
+    # Nine more lanes after the reflectivity, and four more columns after
+    # the combine, each from the first corner.
+    var corners = physical_pair(
+        PHYSICAL,
+        0.3,
+        0.6,
+        0.9,
+        0.2,
+        CubeTextureId(1),
+        TextureId(2),
+        NO_TEXTURE,
+        TextureId(4),
+        TextureId(5),
+    )
+    corners[0].env_map_intensity = 1.5
+    corners[0].specular_intensity = 0.75
+    var flat = flatten(corners)
+    assert_equal(len(flat), FLOATS_PER_VERTEX * 6)
+    assert_equal(flat[LANE_ROUGHNESS], Float32(0.3))
+    assert_equal(flat[LANE_METALNESS], Float32(0.6))
+    assert_equal(flat[LANE_ENV_INTENSITY], Float32(1.5))
+    assert_equal(flat[LANE_SPECULAR_INTENSITY], Float32(0.75))
+    assert_equal(flat[LANE_CLEARCOAT], Float32(0.9))
+    assert_equal(flat[LANE_CLEARCOAT_ROUGHNESS], Float32(0.2))
+    assert_equal(flat[LANE_NORMAL_SCALE_X], Float32(1.5))
+    assert_equal(flat[LANE_NORMAL_SCALE_Y], Float32(0.5))
+    assert_equal(flat[LANE_BUMP_SCALE], Float32(0.3))
+    assert_equal(LANE_BUMP_SCALE, FLOATS_PER_VERTEX - 1)
+    # A corner that says nothing carries a rough dielectric with no map.
+    var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
+    assert_equal(plain[LANE_ROUGHNESS], Float32(1))
+    assert_equal(plain[LANE_METALNESS], Float32(0))
+    assert_equal(plain[LANE_ENV_INTENSITY], Float32(1))
+    assert_equal(plain[LANE_SPECULAR_INTENSITY], Float32(1))
+    assert_equal(plain[LANE_CLEARCOAT], Float32(0))
+    assert_equal(plain[LANE_NORMAL_SCALE_X], Float32(1))
+    assert_equal(plain[LANE_NORMAL_SCALE_Y], Float32(1))
+    assert_equal(plain[LANE_BUMP_SCALE], Float32(1))
+    var state = triangle_state(corners, 3)
+    assert_equal(len(state), 2 * STATE_PER_TRIANGLE)
+    assert_equal(state[STATE_ROUGHNESS_MAP], Int32(4))
+    assert_equal(state[STATE_METALNESS_MAP], Int32(5))
+    assert_equal(state[STATE_NORMAL_MAP], Int32(2))
+    assert_equal(state[STATE_BUMP_MAP], Int32(NO_TEXTURE.value))
+    assert_equal(state[STATE_ENV_MAP], Int32(3 + 6))
+    assert_equal(STATE_BUMP_MAP, STATE_PER_TRIANGLE - 1)
+
+
+def test_both_backends_agree_on_a_physical_lobe() raises:
+    # GGX with Smith's correlated visibility and Schlick's Fresnel, summed
+    # over a sun, a bulb and a cone, with the ambient scattered through the
+    # diffuse color: the kernel calls the host's own functions and must
+    # reach the same pixels, for a rough dielectric, a half metal and a
+    # smooth coated surface.
+    if skipped_for_lack_of_a_gpu("both backends agree on a physical lobe"):
+        return
+    var lighting = phong_lighting()
+    var pairs = List[List[RasterVertex]]()
+    pairs.append(physical_pair(STANDARD, 1.0, 0.0))
+    pairs.append(physical_pair(STANDARD, 0.4, 0.5))
+    pairs.append(physical_pair(PHYSICAL, 0.2, 1.0, 1.0, 0.1))
+    pairs.append(physical_pair(PHYSICAL, 0.7, 0.0, 0.5, 0.6))
+    for index in range(len(pairs)):
+        ref corners = pairs[index]
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(corners, target, SHADE_LIT, TextureStore(), lighting)
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners, 36, 30, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+        )
+        assert_true(
+            count_background(cpu, BACKGROUND) < 36 * 30,
+            "the triangles drew nothing",
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the lobe really is there: a lambert surface differs.
+    var plain = List[RasterVertex]()
+    for here in physical_pair(STANDARD, 0.4, 0.5):
+        plain.append(of_kind(here, LAMBERT, here.normal))
+    var flat = render_triangles(
+        plain, 36, 30, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    var shiny = render_triangles(
+        physical_pair(STANDARD, 0.4, 0.5),
+        36,
+        30,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        lighting,
+    )
+    assert_true(count_mismatches(shiny, flat) > 50, "the lobe changed nothing")
+
+
+def test_both_backends_reflect_a_physical_environment_alike() raises:
+    # The split sum, the multiple scattering and the rough reflection read
+    # down the cube's chain, on a metal, a dielectric and a coated
+    # surface, with the maps that multiply the roughness and metalness.
+    if skipped_for_lack_of_a_gpu("both backends reflect physically alike"):
+        return
+    var lighting = phong_lighting()
+    var textures = TextureStore()
+    var map = textures.add(a_gpu_data_map())
+    var cubes = CubeTextureStore()
+    var faces = List[Texture]()
+    for color in [
+        Color(255, 0, 0),
+        Color(0, 255, 0),
+        Color(0, 0, 255),
+        Color(255, 255, 0),
+        Color(0, 255, 255),
+        Color(255, 0, 255),
+    ]:
+        var pixels = List[UInt8]()
+        for corner in range(4):
+            pixels.append(color.r if corner % 2 == 0 else 0)
+            pixels.append(color.g)
+            pixels.append(color.b if corner < 2 else 0)
+            pixels.append(255)
+        faces.append(Texture(2, 2, pixels^, CLAMP, BILINEAR, SRGB, True))
+    _ = cubes.add(CubeTexture(faces^))
+    var pairs = List[List[RasterVertex]]()
+    pairs.append(physical_pair(STANDARD, 0.0, 1.0, env=CubeTextureId(0)))
+    pairs.append(physical_pair(STANDARD, 0.5, 0.0, env=CubeTextureId(0)))
+    pairs.append(
+        physical_pair(PHYSICAL, 0.3, 0.5, 1.0, 0.4, env=CubeTextureId(0))
+    )
+    pairs.append(
+        physical_pair(
+            STANDARD,
+            1.0,
+            1.0,
+            env=CubeTextureId(0),
+            roughness_map=map,
+            metalness_map=map,
+            texture=map,
+        )
+    )
+    for index in range(len(pairs)):
+        ref corners = pairs[index]
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(
+            corners, target, SHADE_TEXTURE, textures, lighting, cubes=cubes
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            36,
+            30,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            textures,
+            lighting,
+            cubes=cubes,
+        )
+        assert_true(
+            count_background(cpu, BACKGROUND) < 36 * 30,
+            "the triangles drew nothing",
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_perturb_the_normal_alike() raises:
+    # The tangent frame from the derivatives one pixel over and one up,
+    # the map's texel through the same footprint, and the bump's slope
+    # from three taps: on every kind that reads a normal, on both sides.
+    if skipped_for_lack_of_a_gpu("both backends perturb the normal alike"):
+        return
+    var lighting = phong_lighting()
+    var textures = TextureStore()
+    var chained = textures.add(a_gpu_data_map())
+    var single = textures.add(a_gpu_data_map(False))
+    for kind in [LAMBERT, PHONG, TOON, MATCAP, STANDARD]:
+        for map in [chained, single]:
+            var pairs = List[List[RasterVertex]]()
+            var mapped = physical_pair(kind, 0.5, 0.5, normal_map=map)
+            var bumped = physical_pair(kind, 0.5, 0.5, bump_map=map)
+            if kind != STANDARD:
+                for index in range(len(mapped)):
+                    mapped[index].roughness = 1
+                    mapped[index].metalness = 0
+                    bumped[index].roughness = 1
+                    bumped[index].metalness = 0
+            pairs.append(mapped^)
+            pairs.append(bumped^)
+            for index in range(len(pairs)):
+                ref corners = pairs[index]
+                var target = RenderTarget(36, 30, BACKGROUND)
+                rasterize_all(
+                    corners, target, SHADE_TEXTURE, textures, lighting
+                )
+                var cpu = target.resolve()
+                var gpu = render_triangles(
+                    corners,
+                    36,
+                    30,
+                    BACKGROUND,
+                    SHADE_TEXTURE,
+                    textures,
+                    lighting,
+                )
+                assert_true(
+                    count_background(cpu, BACKGROUND) < 36 * 30,
+                    "the triangles drew nothing",
+                )
+                assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the maps change the picture: a sheet without one differs.
+    var plain = physical_pair(LAMBERT, 1, 0)
+    var flat = render_triangles(
+        plain, 36, 30, BACKGROUND, SHADE_TEXTURE, textures, lighting
+    )
+    var tilted = physical_pair(LAMBERT, 1, 0, normal_map=chained)
+    var mapped_image = render_triangles(
+        tilted, 36, 30, BACKGROUND, SHADE_TEXTURE, textures, lighting
+    )
+    assert_true(
+        count_mismatches(flat, mapped_image) > 50, "the map did nothing"
+    )
+
+
+def test_both_backends_agree_on_a_prepared_physical_scene() raises:
+    # A whole frame: a normal-mapped floor, a metal ball under a sky and a
+    # coated bumpy ball, prepared once and filled twice.
+    if skipped_for_lack_of_a_gpu("both backends agree on a physical scene"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var floor = assets.geometries.add(
+        plane(Length(12.0, METER), Length(12.0, METER), 4, 4)
+    )
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 16, 12))
+    var sky = assets.cube_textures.add(a_gpu_cube())
+    var map = assets.textures.add(a_gpu_data_map())
+
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_position(0, -1.0, 0)
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var left = Object3D()
+    left.set_position(-1.0, 0, 0)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(1.0, 0, -0.4)
+    var right_node = scene.add(right^)
+    light_the(scene)
+    var up = Object3D()
+    up.set_position(0, 1, 0)
+    var up_node = scene.add(up^)
+    scene.add_light(
+        hemisphere_light(Color(200, 220, 255), Color(80, 60, 40), up_node, 0.5)
+    )
+    scene.environment = sky
+    scene.update()
+
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            floor,
+            assets.materials.add(
+                standard_material(
+                    Color(200, 200, 200),
+                    roughness=0.6,
+                    normal_map=map,
+                    normal_scale=Vector2(0.8, 0.8),
+                    env_map=SCENE_ENVIRONMENT,
+                )
+            ),
+            ground_node,
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(
+                standard_material(
+                    Color(255, 220, 120),
+                    roughness=0.2,
+                    metalness=1.0,
+                    env_map=sky,
+                    roughness_map=map,
+                )
+            ),
+            left_node,
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(
+                physical_material(
+                    Color(180, 40, 40),
+                    roughness=0.5,
+                    clearcoat=1.0,
+                    clearcoat_roughness=0.2,
+                    bump_map=map,
+                    bump_scale=0.05,
+                    env_map=sky,
+                    emissive=Color(20, 0, 0),
+                )
+            ),
+            right_node,
+        )
+    )
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0.6, 0.8, 3.2), Vector3(0, 0, 0))
+
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the scene prepared no triangles")
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+    )
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+        cubes=assets.cube_textures,
+    )
+    assert_true(
+        count_background(cpu, BACKGROUND) < 48 * 36, "the scene drew nothing"
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_the_gpu_refuses_a_data_map_it_cannot_sample() raises:
+    # Each of the four maps: encoded as color, reading its alpha as
+    # coverage, or never uploaded, refused before the launch as the host
+    # refuses it before the first fragment.
+    if skipped_for_lack_of_a_gpu("the gpu refuses a bad data map"):
+        return
+    var textures = TextureStore()
+    var good = textures.add(a_gpu_data_map())
+    var encoded = textures.add(
+        Texture(
+            2,
+            2,
+            [
+                UInt8(128),
+                128,
+                255,
+                255,
+                128,
+                128,
+                255,
+                255,
+                128,
+                128,
+                255,
+                255,
+                128,
+                128,
+                255,
+                255,
+            ],
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+            IGNORED,
+        )
+    )
+    var covered = textures.add(
+        Texture(
+            2,
+            2,
+            [
+                UInt8(128),
+                128,
+                255,
+                255,
+                128,
+                128,
+                255,
+                255,
+                128,
+                128,
+                255,
+                255,
+                128,
+                128,
+                255,
+                255,
+            ],
+            REPEAT,
+            NEAREST,
+            LINEAR,
+            False,
+            COVERAGE,
+        )
+    )
+    var renderer = GpuRenderer(36, 30)
+    renderer.set_textures(textures)
+    var target = RenderTarget(36, 30, BACKGROUND)
+    for wrong in [encoded, covered, TextureId(9)]:
+        var pairs = List[List[RasterVertex]]()
+        pairs.append(physical_pair(STANDARD, 1, 0, roughness_map=wrong))
+        pairs.append(physical_pair(STANDARD, 1, 0, metalness_map=wrong))
+        pairs.append(physical_pair(STANDARD, 1, 0, normal_map=wrong))
+        pairs.append(physical_pair(STANDARD, 1, 0, bump_map=wrong))
+        for index in range(len(pairs)):
+            ref corners = pairs[index]
+            with assert_raises():
+                renderer.draw(corners, BACKGROUND, SHADE_TEXTURE)
+            with assert_raises():
+                rasterize_all(corners, target, SHADE_TEXTURE, textures)
+            # Not opened under lit shading, so not refused there, unless
+            # it was never uploaded at all.
+            if wrong != TextureId(9):
+                renderer.draw(corners, BACKGROUND, SHADE_LIT)
+                rasterize_all(corners, target, SHADE_LIT, textures)
+    # One stored as data draws on both.
+    renderer.draw(
+        physical_pair(STANDARD, 1, 0, normal_map=good),
+        BACKGROUND,
+        SHADE_TEXTURE,
+    )
+    rasterize_all(
+        physical_pair(STANDARD, 1, 0, normal_map=good),
+        target,
+        SHADE_TEXTURE,
+        textures,
+    )
 
 
 def main() raises:

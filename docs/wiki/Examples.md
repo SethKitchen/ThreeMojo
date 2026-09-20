@@ -38,6 +38,7 @@ mkdir -p out
 | `keyframes.mojo` | `keyframes.png` | [Animation](Animation) |
 | `skinning.mojo` | `skinning.png` | [Skinning](Skinning) |
 | `phong.mojo` | `phong.png` | [Materials](Materials) |
+| `physical.mojo` | `physical.png` | [Materials](Materials#standard-and-physical) |
 | `fog.mojo` | `fog.png` | [Fog](Fog) |
 | `culling.mojo` | `culling.png` | [Renderer](Renderer) |
 | `split.mojo` | `split.png` | [Renderer](Renderer#viewport-and-scissor) |

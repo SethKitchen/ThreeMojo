@@ -38,8 +38,12 @@ from materials.material import (
     matcap_material,
     normal_material,
     phong_material,
+    physical_material,
+    standard_material,
     toon_material,
 )
+from render.cube_texture import CubeTexture
+from render.cube_texture_store import SCENE_ENVIRONMENT
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
 from lights.lighting import Lighting
@@ -4860,6 +4864,368 @@ def test_the_uv_view_is_data_throughout_and_is_never_refused() raises:
     _ = rendered(
         renderer, scene, assets, mixed_scene(assets, BLEND), camera_at(0, 0, 4)
     )
+
+
+# --- standard and physical materials, normal and bump maps -------------------
+
+
+def a_data_texel(r: UInt8, g: UInt8, b: UInt8) raises -> Texture:
+    """Return a one-texel map stored as data: linear, alpha ignored."""
+    var pixels = List[UInt8]()
+    pixels.append(r)
+    pixels.append(g)
+    pixels.append(b)
+    pixels.append(255)
+    return Texture(1, 1, pixels^, REPEAT, NEAREST, LINEAR, False, IGNORED)
+
+
+def a_split_sky() raises -> CubeTexture:
+    """Return a cube whose every face is black on the left and white on
+    the right, with a chain, so a rough reflection reads gray."""
+    var faces = List[Texture]()
+    for _ in range(6):
+        var pixels = List[UInt8]()
+        for _ in range(2):
+            for value in [0, 255]:
+                pixels.append(UInt8(value))
+                pixels.append(UInt8(value))
+                pixels.append(UInt8(value))
+                pixels.append(255)
+        faces.append(Texture(2, 2, pixels^, CLAMP, NEAREST, SRGB))
+    return CubeTexture(faces^)
+
+
+def lamp_from_x_scene() raises -> Scene:
+    """Return a scene with a node at the origin and one white lamp far
+    along +x and a little toward the camera, so a sheet facing the camera
+    is lit at a grazing angle from its own +u side."""
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    var lamp = Object3D()
+    lamp.set_position(1, 0, 0.15)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, FULL))
+    scene.update()
+    return scene^
+
+
+def sum_red(image: Framebuffer) raises -> Int:
+    """Return the sum of every pixel's red."""
+    var total = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            total += Int(image.get_pixel(x, y).r)
+    return total
+
+
+def test_a_standard_sheet_scatters_and_a_metal_one_reflects() raises:
+    # Under one lamp straight on, a white chalk sheet is lit white; a red
+    # metal sheet scatters nothing and shows a quarter of red from its
+    # lobe; and a physical sheet at its defaults is the standard one.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var chalk = assets.materials.add(standard_material(Color(255, 255, 255)))
+    var metal = assets.materials.add(
+        standard_material(Color(255, 0, 0), metalness=1.0)
+    )
+    var physical = assets.materials.add(physical_material(Color(255, 255, 255)))
+    var scene = lamp_scene()
+    var white = rendered(
+        renderer, scene, assets, sheet_of(assets, chalk), camera_at(0, 0, 4)
+    )
+    var center = white.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(center.r, UInt8(255))
+    var red = rendered(
+        renderer, scene, assets, sheet_of(assets, metal), camera_at(0, 0, 4)
+    )
+    var spot = red.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(spot.r > 100, "the metal's lobe did not show")
+    assert_true(spot.r < 200, "the metal scattered like chalk")
+    assert_equal(spot.g, UInt8(0))
+    var same = rendered(
+        renderer, scene, assets, sheet_of(assets, physical), camera_at(0, 0, 4)
+    )
+    assert_equal(same.get_pixel(WIDTH // 2, HEIGHT // 2).r, center.r)
+    # A coat over the black sheet glosses it.
+    var coated = assets.materials.add(
+        physical_material(Color(0, 0, 0), clearcoat=1.0)
+    )
+    var glossed = rendered(
+        renderer, scene, assets, sheet_of(assets, coated), camera_at(0, 0, 4)
+    )
+    var bare = assets.materials.add(physical_material(Color(0, 0, 0)))
+    var dull = rendered(
+        renderer, scene, assets, sheet_of(assets, bare), camera_at(0, 0, 4)
+    )
+    assert_true(sum_red(glossed) > sum_red(dull), "the coat added no gloss")
+    # Lit shading shades a physical surface too.
+    renderer.set_shading(SHADE_LIT)
+    var lit = rendered(
+        renderer, scene, assets, sheet_of(assets, metal), camera_at(0, 0, 4)
+    )
+    assert_equal(lit.get_pixel(WIDTH // 2, HEIGHT // 2).r, spot.r)
+
+
+def test_a_physical_sheet_reflects_the_environment_by_its_roughness() raises:
+    # A smooth metal sheet square on reflects the +z face sharply: black
+    # or white, whichever half the view lands on. A rough one reads the
+    # coarsest level, which is the average, gray.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var sky = assets.cube_textures.add(a_split_sky())
+    var smooth = assets.materials.add(
+        standard_material(
+            Color(255, 255, 255), roughness=0.0, metalness=1.0, env_map=sky
+        )
+    )
+    var rough = assets.materials.add(
+        standard_material(
+            Color(255, 255, 255),
+            roughness=1.0,
+            metalness=1.0,
+            env_map=SCENE_ENVIRONMENT,
+        )
+    )
+    var scene = scene_with_node_at(0)
+    scene.environment = sky
+    var sharp = rendered(
+        renderer, scene, assets, sheet_of(assets, smooth), camera_at(0, 0, 4)
+    )
+    var blurred = rendered(
+        renderer, scene, assets, sheet_of(assets, rough), camera_at(0, 0, 4)
+    )
+    var soft = blurred.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(soft.r > 40, "a rough metal lost the sky")
+    assert_true(soft.r < 220, "a rough metal reflected one half alone")
+    assert_equal(soft.r, soft.g)
+    # The sharp sheet shows both halves somewhere and no gray between.
+    var lows = 0
+    var highs = 0
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            var seen = sharp.get_pixel(x, y).r
+            if seen > 220:
+                highs += 1
+            elif seen < 40:
+                lows += 1
+    assert_true(highs > 0, "the smooth metal reflected no white")
+    assert_true(lows + highs > WIDTH * HEIGHT // 2, "the smooth metal blurred")
+    # A dielectric under the same sky scatters its irradiance, so it is
+    # lit with no lamp at all.
+    var chalk = assets.materials.add(
+        standard_material(Color(255, 255, 255), env_map=sky)
+    )
+    var glow = rendered(
+        renderer, scene, assets, sheet_of(assets, chalk), camera_at(0, 0, 4)
+    )
+    assert_true(
+        glow.get_pixel(WIDTH // 2, HEIGHT // 2).r > 40,
+        "a white surface under a sky went dark",
+    )
+
+
+def test_a_normal_map_and_a_bump_map_perturb_a_sheet_in_the_renderer() raises:
+    # Lit from far along +x, a flat sheet catches little. A one-texel
+    # normal map pointing along +u, which the plane lays along +x, tilts
+    # every normal toward the lamp and the sheet brightens.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var toward_u = assets.textures.add(a_data_texel(255, 128, 128))
+    var flat = assets.materials.add(Material(Color(255, 255, 255)))
+    var mapped = assets.materials.add(
+        Material(Color(255, 255, 255), normal_map=toward_u)
+    )
+    var scene = lamp_from_x_scene()
+    var plain = rendered(
+        renderer, scene, assets, sheet_of(assets, flat), camera_at(0, 0, 4)
+    )
+    var tilted = rendered(
+        renderer, scene, assets, sheet_of(assets, mapped), camera_at(0, 0, 4)
+    )
+    assert_true(sum_red(tilted) > sum_red(plain) * 2, "the map did not tilt")
+    # A bump map whose height rises along +u tilts against the rise, away
+    # from the lamp, and the sheet darkens where the height changes.
+    var pixels = List[UInt8]()
+    for value in [0, 255]:
+        pixels.append(UInt8(value))
+        pixels.append(UInt8(value))
+        pixels.append(UInt8(value))
+        pixels.append(255)
+    var step = assets.textures.add(
+        Texture(2, 1, pixels^, CLAMP, NEAREST, LINEAR, False, IGNORED)
+    )
+    var bumped = assets.materials.add(
+        Material(Color(255, 255, 255), bump_map=step, bump_scale=0.2)
+    )
+    var ridged = rendered(
+        renderer, scene, assets, sheet_of(assets, bumped), camera_at(0, 0, 4)
+    )
+    assert_true(sum_red(ridged) < sum_red(plain), "the bump did not tilt")
+    # Neither is read under lit shading.
+    renderer.set_shading(SHADE_LIT)
+    var unread = rendered(
+        renderer, scene, assets, sheet_of(assets, mapped), camera_at(0, 0, 4)
+    )
+    assert_equal(sum_red(unread), sum_red(plain))
+
+
+def test_a_turned_corner_keeps_its_env_map_and_turns_its_frame() raises:
+    # A two-sided mirror seen from behind still reflects: the -z face,
+    # magenta. Its back once lost the env map on the way through
+    # `_turned_around` and drew plain white.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var faces = List[Texture]()
+    for color in [
+        Color(255, 0, 0),
+        Color(0, 255, 0),
+        Color(0, 0, 255),
+        Color(255, 255, 0),
+        Color(0, 255, 255),
+        Color(255, 0, 255),
+    ]:
+        var pixels = List[UInt8]()
+        for _ in range(4):
+            pixels.append(color.r)
+            pixels.append(color.g)
+            pixels.append(color.b)
+            pixels.append(255)
+        faces.append(Texture(2, 2, pixels^, CLAMP, NEAREST, SRGB, False))
+    var sky = assets.cube_textures.add(CubeTexture(faces^))
+    var mirror = assets.materials.add(
+        Material(
+            Color(255, 255, 255), kind=BASIC, side=DOUBLE_SIDE, env_map=sky
+        )
+    )
+    var scene = scene_with_node_at(0)
+    var behind = rendered(
+        renderer, scene, assets, sheet_of(assets, mirror), camera_at(0, 0, -4)
+    )
+    var seen = behind.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(seen.r, UInt8(255))
+    assert_equal(seen.g, UInt8(0))
+    assert_equal(seen.b, UInt8(255))
+    # And a normal map on a two-sided sheet seen from behind tilts the far
+    # side's normal the far side's way: the map points along +u, the lamp
+    # is on the +x side of the camera behind the sheet, and the back's
+    # frame is the front's negated, so the back tilts away and darkens.
+    var toward_u = assets.textures.add(a_data_texel(255, 128, 128))
+    var flat = assets.materials.add(
+        Material(Color(255, 255, 255), side=DOUBLE_SIDE)
+    )
+    var mapped = assets.materials.add(
+        Material(Color(255, 255, 255), side=DOUBLE_SIDE, normal_map=toward_u)
+    )
+    var lit = Scene()
+    _ = lit.add(Object3D())
+    var lamp = Object3D()
+    lamp.set_position(1, 0, -0.15)
+    var node = lit.add(lamp^)
+    lit.add_light(directional_light(Color(255, 255, 255), node, FULL))
+    lit.update()
+    var plain = rendered(
+        renderer, lit, assets, sheet_of(assets, flat), camera_at(0, 0, -4)
+    )
+    var turned = rendered(
+        renderer, lit, assets, sheet_of(assets, mapped), camera_at(0, 0, -4)
+    )
+    assert_true(sum_red(plain) > 0, "the back of the sheet was unlit")
+    assert_true(sum_red(turned) < sum_red(plain), "the back tilted toward")
+    # From the front the same map tilts toward a lamp on the +x side.
+    var front = Scene()
+    _ = front.add(Object3D())
+    var lamp_front = Object3D()
+    lamp_front.set_position(1, 0, 0.15)
+    var front_node = front.add(lamp_front^)
+    front.add_light(directional_light(Color(255, 255, 255), front_node, FULL))
+    front.update()
+    var facing = rendered(
+        renderer, front, assets, sheet_of(assets, mapped), camera_at(0, 0, 4)
+    )
+    var facing_flat = rendered(
+        renderer, front, assets, sheet_of(assets, flat), camera_at(0, 0, 4)
+    )
+    assert_true(sum_red(facing) > sum_red(facing_flat), "the front tilted away")
+
+
+def test_a_data_map_must_be_there_and_stored_as_data_in_the_renderer() raises:
+    # Each of the four maps: an id naming nothing, a texture encoded as
+    # color, and one that reads its alpha as coverage, refused whatever
+    # the shading mode. A wrong asset, not a wrong frame.
+    var assets = Assets()
+    var pixels = List[UInt8]()
+    for value in [128, 128, 255, 255]:
+        pixels.append(UInt8(value))
+    var encoded = assets.textures.add(
+        Texture(1, 1, pixels.copy(), REPEAT, NEAREST, SRGB, False, IGNORED)
+    )
+    var covered = assets.textures.add(
+        Texture(1, 1, pixels^, REPEAT, NEAREST, LINEAR, False, COVERAGE)
+    )
+    var scene = scene_with_node_at(0)
+    for slot in [encoded, covered, TextureId(9)]:
+        var wrongs = List[MaterialId]()
+        wrongs.append(
+            assets.materials.add(
+                standard_material(Color(255, 255, 255), roughness_map=slot)
+            )
+        )
+        wrongs.append(
+            assets.materials.add(
+                standard_material(Color(255, 255, 255), metalness_map=slot)
+            )
+        )
+        wrongs.append(
+            assets.materials.add(
+                Material(Color(255, 255, 255), normal_map=slot)
+            )
+        )
+        wrongs.append(
+            assets.materials.add(Material(Color(255, 255, 255), bump_map=slot))
+        )
+        for index in range(len(wrongs)):
+            var meshes = sheet_of(assets, wrongs[index])
+            for mode in [SHADE_TEXTURE, SHADE_LIT]:
+                var renderer = Renderer(WIDTH, HEIGHT)
+                renderer.set_shading(mode)
+                with assert_raises():
+                    _ = rendered(
+                        renderer, scene, assets, meshes, camera_at(0, 0, 4)
+                    )
+    # A map stored as data draws.
+    var proper = assets.textures.add(a_data_texel(128, 128, 255))
+    var fine = assets.materials.add(
+        standard_material(
+            Color(255, 255, 255),
+            roughness_map=proper,
+            metalness_map=proper,
+            normal_map=proper,
+        )
+    )
+    var renderer = Renderer(WIDTH, HEIGHT)
+    _ = rendered(
+        renderer, scene, assets, sheet_of(assets, fine), camera_at(0, 0, 4)
+    )
+    # And every map on one material must share one transform, the normal
+    # map included.
+    var moved = a_data_texel(128, 128, 255)
+    moved.repeat = Vector2(2, 2)
+    var shifted = assets.textures.add(moved^)
+    var disagreeing = assets.materials.add(
+        Material(Color(255, 255, 255), proper, normal_map=shifted)
+    )
+    with assert_raises():
+        _ = rendered(
+            renderer,
+            scene,
+            assets,
+            sheet_of(assets, disagreeing),
+            camera_at(0, 0, 4),
+        )
 
 
 def main() raises:

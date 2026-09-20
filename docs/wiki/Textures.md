@@ -156,7 +156,7 @@ The six images of an OpenGL cube map are the same views mirrored left for right.
 
 `sample(direction)` returns the color in a direction. `face_of(direction)` picks the face on the axis the direction leans along most. A tie goes to x, then y, then z, as OpenGL picks it. `face_uv(face, direction)` projects the direction onto that face and reads how far it lands across and up, in the camera's own right and up axes. Both are pure, and both rasterizers call them.
 
-A face is read at its full size, never down a mip chain. A reflection's direction changes across a surface at a rate that is not the surface's own texture footprint. The same rule keeps a matcap out of its chain. A chain can still be built; nothing reads it.
+A face is read at its full size, never down a mip chain. A reflection's direction changes across a surface at a rate that is not the surface's own texture footprint. The same rule keeps a matcap out of its chain. One reader asks for the chain by a number of its own: a physical surface reads it by its roughness. `sample_level(direction, level)` reads a face `level` down, and `levels()` says how many there are. See [Materials](Materials#the-environment).
 
 A face must be wrapped `CLAMP`. A coordinate past a face's edge belongs to the next face, and a flat image has no next face to read. The bilinear filter's neighbors at an edge hold that edge.
 

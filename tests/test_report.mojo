@@ -61,6 +61,18 @@ def test_repeated_hits_are_collapsed() raises:
     assert_equal(len(hits.ids), 2)
 
 
+def test_one_suites_hits_are_absorbed_into_anothers() raises:
+    # The report reads each suite's capture on its own and joins them, so
+    # a payload seen by either suite counts once and a payload seen by
+    # both counts once too.
+    var hits = parse_hits(String("COVLINE:m:1\nCOVLINE:m:2\n"))
+    hits.absorb(parse_hits(String("COVLINE:m:2\nCOVLINE:m:3\n")))
+    assert_equal(len(hits.ids), 3)
+    assert_true(hits.contains(String("m:3")))
+    hits.absorb(Hits())
+    assert_equal(len(hits.ids), 3)
+
+
 def test_unrelated_stderr_output_is_ignored() raises:
     var hits = parse_hits(
         String("Failed to initialize Crashpad\nCOVLINE:m:1\n")
