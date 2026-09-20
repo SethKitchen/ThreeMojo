@@ -79,9 +79,7 @@ def make_grid(low: Vector3, high: Vector3, detail: Int) -> SampleGrid:
     var dx = span_x / Float32(nx)
     var dy = span_y / Float32(ny)
     var dz = span_z / Float32(nz)
-    return SampleGrid(
-        nx, ny, nz, dx, dy, dz, nx + 1, ny + 1, nz + 1, span_y
-    )
+    return SampleGrid(nx, ny, nz, dx, dy, dz, nx + 1, ny + 1, nz + 1, span_y)
 
 
 def sample_field[
@@ -172,7 +170,9 @@ def mesh_samples(
 
 def mesh_field[
     F: DistanceField
-](field: F, low: Vector3, high: Vector3, detail: Int, bone: String) raises -> BufferGeometry:
+](
+    field: F, low: Vector3, high: Vector3, detail: Int, bone: String
+) raises -> BufferGeometry:
     """Sample `field` and return its marching-tetrahedra surface.
 
     Args:

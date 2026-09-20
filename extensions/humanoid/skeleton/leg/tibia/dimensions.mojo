@@ -225,7 +225,9 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
         var ap_mid = dimensions.midshaft_ap.value * 0.5
         var r_mid = 0.5 * (ml_mid + ap_mid)
         self.medial = dimensions.medial_condyle
-        self.medial_r = Vector3(0.24 * W, 0.16 * W, 0.42 * dimensions.proximal_ap.value)
+        self.medial_r = Vector3(
+            0.24 * W, 0.16 * W, 0.42 * dimensions.proximal_ap.value
+        )
         self.lateral = dimensions.lateral_condyle
         self.lateral_r = Vector3(
             0.22 * W, 0.15 * W, 0.40 * dimensions.proximal_ap.value
@@ -358,9 +360,13 @@ struct TibiaField(DistanceField, ImplicitlyCopyable):
         d = smin(d, sd_ellipsoid(point, self.medial, self.medial_r), self.k)
         d = smin(d, sd_ellipsoid(point, self.lateral, self.lateral_r), self.k)
         d = smin(d, sd_sphere(point, self.eminence, self.eminence_r), self.k)
-        d = smin(d, sd_ellipsoid(point, self.tuberosity, self.tuberosity_r), self.k)
+        d = smin(
+            d, sd_ellipsoid(point, self.tuberosity, self.tuberosity_r), self.k
+        )
         d = smin(d, sd_ellipsoid(point, self.plafond, self.plafond_r), self.k)
-        d = smin(d, sd_ellipsoid(point, self.malleolus, self.malleolus_r), self.k)
+        d = smin(
+            d, sd_ellipsoid(point, self.malleolus, self.malleolus_r), self.k
+        )
         d = smin(
             d,
             sd_segment(
@@ -449,9 +455,7 @@ def tibia_dimensions(
     var medial = Vector3(-0.28 * W, condyle_y, 0.04 * AP)
     var lateral = Vector3(0.26 * W, condyle_y - 0.01 * L, -0.02 * AP)
     var eminence = Vector3(0.02 * W, 0.5 * L, 0.02 * AP)
-    var tuberosity = Vector3(
-        -0.04 * W, 0.5 * L - 0.12 * L, 0.42 * AP + tuber
-    )
+    var tuberosity = Vector3(-0.04 * W, 0.5 * L - 0.12 * L, 0.42 * AP + tuber)
     var pitch = -retro.value
     medial = _pitch(medial, pitch)
     lateral = _pitch(lateral, pitch)

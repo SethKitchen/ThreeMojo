@@ -196,7 +196,10 @@ def test_validate_refuses_zero_and_bad_edits() raises:
         _ = fibula_occupancy(dims, Vector3(0, 0, 0))
     with assert_raises():
         _ = fibula_mass_from_dimensions(
-            dims, cortical_tissue(), trabecular_tissue(), Length(20.0, MILLIMETER)
+            dims,
+            cortical_tissue(),
+            trabecular_tissue(),
+            Length(20.0, MILLIMETER),
         )
     dims = fibula_dimensions(Length(6.0, FOOT), MALE)
     dims.lateral_bow = Length(-0.01, METER)
@@ -222,7 +225,9 @@ def test_occupancy_regions() raises:
     assert_true(fibula_occupancy(dims, Vector3(10, 0, 0)) == EMPTY)
     assert_true(fibula_occupancy(dims, field.s2) == MARROW)
     assert_true(fibula_occupancy(dims, dims.head_center) == TRABECULAR_FILL)
-    assert_true(fibula_occupancy(dims, dims.lateral_malleolus) == TRABECULAR_FILL)
+    assert_true(
+        fibula_occupancy(dims, dims.lateral_malleolus) == TRABECULAR_FILL
+    )
     assert_true(fibula_occupancy(dims, field.s0) != MARROW)
     assert_true(fibula_occupancy(dims, field.s4) != MARROW)
     var found_shell = False
