@@ -3,12 +3,13 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""What a humanoid is, as far as the bones and muscles need to know.
+"""What a humanoid is, as far as the limb layers need to know.
 
 Each bone reads stature and sex from this spec and sizes itself. Each
-muscle also reads athleticism and scales its belly radius. Age and
-population are not fields yet. Long-bone templates invert the Trotter
-and Gleser 1952 American White adult lines. That is a named choice, not
+muscle also reads athleticism and scales its belly radius. The other
+leg layers reuse those landmarks. Age and population are not fields
+yet. Long-bone templates invert the Trotter and Gleser 1952 American
+White adult lines. That is a named choice, not
 a unique measurement for a person of that stature.
 
     var person = HumanoidSpec(Length(6.0, FOOT), MALE)

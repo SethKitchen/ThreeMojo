@@ -1,10 +1,10 @@
 # Leg
 
-`assemble_leg` places the femur, tibia, fibula, patella, the knee tissues and the named muscles in one connected frame.
+`assemble_leg` places the femur, tibia, fibula, patella, the knee tissues and the named muscles in one connected frame. `add_leg` can also attach vessels, lymph, nerves, skin and hair.
 
 ![A six-foot male right leg turns, with bones, knee tissues and muscles connected](out/leg.png)
 
-`extensions/humanoid/skeleton/leg/assembly.mojo` stores the origin of each bone frame in the leg frame. The knee tissues and the muscles already live in that frame. See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee) and [Muscles](Muscles).
+`extensions/humanoid/skeleton/leg/assembly.mojo` stores the origin of each bone frame in the leg frame. The knee tissues and the later layers already live in that frame. See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee), [Muscles](Muscles), [Vessels](Vessels), [Lymph](Lymph), [Nerves](Nerves) and [Integument](Integument).
 
 This is not a three.js port. See [Extensions](Extensions).
 
@@ -29,7 +29,22 @@ The origin is the tibiofemoral joint line. Plus y is proximal. Plus x is body-ri
 
 The distal femoral condyle surface sits at plus the femoral cartilage thickness. The tibial eminence sits at minus the tibial cartilage thickness. The fibular head sits just lateral and slightly distal of the tibial lateral condyle. The patella sits just anterior of the trochlea.
 
-`add_leg` attaches the selected layers under a parent node. Pass `contents=BONES`, `contents=MUSCLES` or `contents=BOTH`. Both is the default.
+`add_leg` attaches the selected layers under a parent node. Pass `contents=BONES`, `contents=MUSCLES` or `contents=BOTH`. Combine layers with `plus`. Both is the default.
+
+| Value | Draws |
+|---|---|
+| `BONES` | Four bones and five knee tissues. |
+| `MUSCLES` | The labeled muscles and three connective-tissue solids. |
+| `VESSELS` | Arteries and veins. |
+| `LYMPH` | Lymph nodes and trunks. |
+| `NERVES` | Named peripheral nerves. |
+| `SKIN` | Skin envelope. |
+| `HAIR` | Thigh and calf hair shafts. |
+| `BOTH` | Bones, knee tissues and muscles. |
+| `INTEGUMENT` | Skin envelope and hair shafts. |
+| `ALL` | Every named layer. |
+
+A bare integer is a compile error. Skin hides the inner layers when drawn with them. Use `INTEGUMENT` for skin and hair. Use `BONES.plus(VESSELS)` for a vessel gallery.
 
 `HumanoidSpec` stores stature, sex and athleticism. A two-argument spec uses untoned muscle.
 

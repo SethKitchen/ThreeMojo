@@ -4,7 +4,7 @@
 
 ![A six-foot male right leg as bones, untoned muscle and toned muscle](out/muscles.png)
 
-`extensions/humanoid/athleticism.mojo` holds `UNTONED` and `TONED`. The solids live in `extensions/humanoid/skeleton/leg/muscles/`. `add_leg` can draw bones, muscles, or both. See [Leg](Leg).
+`extensions/humanoid/athleticism.mojo` holds `UNTONED` and `TONED`. The solids live in `extensions/humanoid/skeleton/leg/muscles/`. `add_leg` can draw bones, muscles, or both. See [Leg](Leg) for the other layers.
 
 This is not a three.js port. See [Extensions](Extensions).
 
@@ -101,7 +101,14 @@ Toned muscle is heavier than untoned muscle at the same stature, sex and step.
 |---|---|
 | `BONES` | Four bones and five knee tissues. |
 | `MUSCLES` | The labeled muscles and three connective-tissue solids. |
+| `VESSELS` | Arteries and veins. See [Vessels](Vessels). |
+| `LYMPH` | Lymph nodes and trunks. See [Lymph](Lymph). |
+| `NERVES` | Named peripheral nerves. See [Nerves](Nerves). |
+| `SKIN` | Skin envelope. See [Integument](Integument). |
+| `HAIR` | Thigh and calf hair shafts. See [Integument](Integument). |
 | `BOTH` | Bones, knee tissues and muscles. |
+| `INTEGUMENT` | Skin envelope and hair shafts. |
+| `ALL` | Every named layer. |
 
 A bare integer is a compile error. Both is the default.
 

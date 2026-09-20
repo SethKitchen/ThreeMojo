@@ -2,7 +2,9 @@
 
 `extensions/` holds content that is not a three.js port. Core stays a port of three.js. Water, plants, buildings and a humanoid live here, in a folder per subject.
 
-The first subject is the humanoid. The first bones are the femur, tibia, fibula and patella. The knee adds articular cartilage, both menisci and both collateral ligaments. The leg adds named skeletal muscles with an athleticism scale. `assemble_leg` connects one limb. See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee), [Muscles](Muscles) and [Leg](Leg).
+The first subject is the humanoid. The first bones are the femur, tibia, fibula and patella. The knee adds articular cartilage, both menisci and both collateral ligaments. The leg adds named skeletal muscles with an athleticism scale. Later layers add vessels, lymph, nerves, skin and hair. `assemble_leg` connects one limb.
+
+See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee), [Muscles](Muscles), [Vessels](Vessels), [Lymph](Lymph), [Nerves](Nerves), [Integument](Integument) and [Leg](Leg).
 
 ## Layout
 
@@ -19,17 +21,22 @@ extensions/
       field.mojo       signed-distance primitives
       isosurface.mojo  marching tetrahedra
       occupancy.mojo   tissue fill and mass tally
-      look.mojo        cartilage, meniscus, ligament, muscle and tendon Phong
-      soft_tissue.mojo cartilage, meniscus, ligament, muscle and tendon density
+      look.mojo        cartilage, meniscus, ligament, muscle, vessel, lymph, nerve, skin and hair Phong
+      soft_tissue.mojo named hydrated-tissue density
       leg/
         assembly.mojo  one connected limb
-        contents.mojo  BONES, MUSCLES, BOTH
+        contents.mojo  named layer bits
         femur/     dimensions, geometry, mass
         tibia/     dimensions, geometry, mass
         fibula/    dimensions, geometry, mass
         patella/   dimensions, geometry, mass
         knee/      cartilage, menisci, collaterals
         muscles/   named skeletal muscles
+        vessels/   arteries and veins
+        lymph/     nodes and trunks
+        nerves/    peripheral nerves
+        skin/      envelope
+        hair/      thigh and calf shafts
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.
@@ -38,7 +45,7 @@ Import from the module that defines the symbol. Do not put original content in `
 
 The house rules still apply. Quantities carry units. A kind is a type with `is_valid`. Tests cover every branch. Documentation follows the writing rules. `make check` must pass.
 
-Scale from a named template. A humanoid is a stature, a sex and an athleticism. Each bone reads stature and sex and sizes itself. Each muscle also reads athleticism. Do not hard-code a length in meters when a published relationship exists.
+Scale from a named template. A humanoid is a stature, a sex and an athleticism. Each bone reads stature and sex and sizes itself. Each muscle also reads athleticism. Vessels, lymph, nerves, skin and hair reuse the muscle landmarks. Do not hard-code a length in meters when a published relationship exists.
 
 ## Add one
 

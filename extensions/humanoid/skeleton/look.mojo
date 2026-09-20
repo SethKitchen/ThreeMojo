@@ -3,7 +3,7 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Visual stand-ins for cartilage, meniscus, ligament, muscle and tendon.
+"""Visual stand-ins for the named hydrated tissues of the limb.
 
 The maps are visual approximations. MeshStandardMaterial is not ported,
 so these surfaces are what the current renderer can draw.
@@ -150,4 +150,147 @@ def tendon_phong() raises -> Material:
         Color(214, 200, 176),
         specular=Color(180, 172, 158),
         shininess=24.0,
+    )
+
+
+def artery_phong() raises -> Material:
+    """Return a Phong material for an artery.
+
+    The color is saturated arterial red.
+
+    Returns:
+        A `PHONG` material.
+
+    Raises:
+        Error: If the Phong constructor refuses the values.
+    """
+    return phong_material(
+        Color(168, 28, 42),
+        specular=Color(190, 90, 90),
+        shininess=28.0,
+    )
+
+
+def vein_phong() raises -> Material:
+    """Return a Phong material for a vein.
+
+    The color is deep venous blue.
+
+    Returns:
+        A `PHONG` material.
+
+    Raises:
+        Error: If the Phong constructor refuses the values.
+    """
+    return phong_material(
+        Color(52, 74, 142),
+        specular=Color(110, 130, 180),
+        shininess=26.0,
+    )
+
+
+def lymph_phong() raises -> Material:
+    """Return a Phong material for lymph nodes and trunks.
+
+    The color is pale yellow-green lymph.
+
+    Returns:
+        A `PHONG` material.
+
+    Raises:
+        Error: If the Phong constructor refuses the values.
+    """
+    return phong_material(
+        Color(196, 208, 154),
+        specular=Color(170, 180, 140),
+        shininess=16.0,
+    )
+
+
+def nerve_phong() raises -> Material:
+    """Return a Phong material for a peripheral nerve.
+
+    The color is pale dissected nerve.
+
+    Returns:
+        A `PHONG` material.
+
+    Raises:
+        Error: If the Phong constructor refuses the values.
+    """
+    return phong_material(
+        Color(236, 220, 158),
+        specular=Color(200, 190, 150),
+        shininess=20.0,
+    )
+
+
+def skin_albedo(size: Int = 64) raises -> Texture:
+    """Return a skin texture with pores and a faint hair grain.
+
+    Args:
+        size: Width and height in texels. Eight through 256, 64 by default.
+
+    Returns:
+        An sRGB texture that tiles around a limb.
+
+    Raises:
+        Error: If `size` is less than eight or more than 256.
+    """
+    if size < MIN_SOFT_LOOK:
+        raise Error("A skin map needs a size of at least eight")
+    if size > MAX_SOFT_LOOK:
+        raise Error("A skin map's size cannot exceed 256")
+    var pixels = List[UInt8]()
+    for y in range(size):  # pragma: no branch
+        for x in range(size):  # pragma: no branch
+            var pore = Float32((x * 13 + y * 29) % 9) / Float32(8)
+            var grain = Float32((x * 19 + y * 7 + (x * y) % 11) & 7) / Float32(
+                7
+            )
+            pixels.append(UInt8(Int(Float32(210) + 18 * pore + 8 * grain)))
+            pixels.append(UInt8(Int(Float32(158) + 14 * pore + 6 * grain)))
+            pixels.append(UInt8(Int(Float32(128) + 10 * pore + 5 * grain)))
+            pixels.append(255)
+    return Texture(size, size, pixels^, REPEAT, color_space=SRGB)
+
+
+def skin_phong(map: TextureId = NO_TEXTURE) raises -> Material:
+    """Return a Phong material for dermis.
+
+    The color is light adult skin. With a map the color is white so the
+    albedo arrives unshifted.
+
+    Args:
+        map: Id of a skin albedo texture, or `NO_TEXTURE`.
+
+    Returns:
+        A `PHONG` material.
+
+    Raises:
+        Error: If the Phong constructor refuses the values.
+    """
+    var color = Color(222, 174, 146)
+    if map != NO_TEXTURE:
+        color = Color(255, 255, 255)
+    return phong_material(
+        color, map=map, specular=Color(90, 70, 60), shininess=12.0
+    )
+
+
+def hair_phong() raises -> Material:
+    """Return a Phong material for a keratin hair shaft.
+
+    The color is dark brown terminal hair.
+
+    Returns:
+        A `PHONG` material.
+
+    Raises:
+        Error: If the Phong constructor refuses the values.
+    """
+    return phong_material(
+        Color(42, 28, 20),
+        specular=Color(80, 60, 44),
+        shininess=30.0,
     )
