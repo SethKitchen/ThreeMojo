@@ -179,7 +179,7 @@ def main() raises:
 
     var scene = Scene()
     var pivot = scene.add(Object3D())
-    add_leg(
+    _ = add_leg(
         scene,
         assets,
         pivot,

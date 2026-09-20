@@ -28,11 +28,11 @@ def cartilage_phong() raises -> Material:
         Error: If the Phong constructor refuses the values.
     """
     return phong_material(
-        Color(170, 214, 228),
-        specular=Color(214, 232, 240),
-        shininess=44.0,
+        Color(96, 186, 220),
+        specular=Color(214, 236, 245),
+        shininess=48.0,
         side=DOUBLE_SIDE,
-        opacity=0.78,
+        opacity=0.88,
         transparent=True,
     )
 
@@ -40,7 +40,7 @@ def cartilage_phong() raises -> Material:
 def meniscus_phong() raises -> Material:
     """Return a Phong material for a meniscus.
 
-    The color is cream fibrocartilage. Shininess is low.
+    The color is amber fibrocartilage. Shininess is low.
 
     Returns:
         A `PHONG` material.
@@ -49,8 +49,8 @@ def meniscus_phong() raises -> Material:
         Error: If the Phong constructor refuses the values.
     """
     return phong_material(
-        Color(228, 208, 168),
-        specular=Color(96, 86, 70),
+        Color(220, 176, 96),
+        specular=Color(110, 90, 60),
         shininess=16.0,
     )
 
@@ -67,7 +67,7 @@ def ligament_phong() raises -> Material:
         Error: If the Phong constructor refuses the values.
     """
     return phong_material(
-        Color(236, 226, 210),
-        specular=Color(88, 80, 70),
+        Color(245, 232, 196),
+        specular=Color(96, 86, 72),
         shininess=11.0,
     )

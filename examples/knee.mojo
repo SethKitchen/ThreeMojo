@@ -3,13 +3,12 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""Both stature-scaled legs, turning under a lamp.
+"""A close view of one connected knee, turning under a lamp.
 
-    mojo run -I . examples/legs.mojo [path.png]
+    mojo run -I . examples/knee.mojo [path.png]
 
-The page is Leg. A six-foot male stands on both legs. Femoral heads sit
-at plus and minus ten centimeters. Each leg carries the bones and the
-knee tissues.
+The page is Knee. A six-foot male right knee shows articular cartilage,
+both menisci and both collateral ligaments on the assembled bones.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
@@ -17,10 +16,9 @@ from core.assets import Assets
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from extensions.humanoid.sex import MALE
-from extensions.humanoid.side import LEFT, RIGHT
 from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.bone import bone_albedo, bone_phong
-from extensions.humanoid.skeleton.leg.assembly import add_leg, assemble_leg
+from extensions.humanoid.skeleton.leg.assembly import add_leg
 from extensions.humanoid.skeleton.look import (
     cartilage_phong,
     ligament_phong,
@@ -35,13 +33,12 @@ from std.pathlib import Path
 from std.sys import argv
 from units.si import Angle, DEGREE, FOOT, Length, METER
 
-comptime DEFAULT_OUTPUT = "out/legs.png"
+comptime DEFAULT_OUTPUT = "out/knee.png"
 comptime WIDTH = 320
 comptime HEIGHT = 240
 comptime FRAMES = 36
 comptime DELAY_MS = 55
-comptime DETAIL = 10
-comptime HIP_HALF = Float32(0.10)
+comptime DETAIL = 16
 
 
 def frame_at(
@@ -52,14 +49,14 @@ def frame_at(
     node: NodeId,
     step: Angle,
 ) raises -> Framebuffer:
-    """Turn both legs by `step` and render one frame.
+    """Turn the knee by `step` and render one frame.
 
     Args:
         renderer: The renderer to draw with.
         camera: The camera to view through.
         assets: The geometry, materials and textures.
         scene: The persistent scene, edited in place.
-        node: The parent of both legs.
+        node: The parent of the leg.
         step: How much further to turn this frame.
 
     Returns:
@@ -92,56 +89,31 @@ def main() raises:
 
     var scene = Scene()
     var pivot = scene.add(Object3D())
-
-    var right_pose = assemble_leg(person, RIGHT)
-    var right_hip = right_pose.hip_center()
-    var right_holder = Object3D()
-    right_holder.set_position(HIP_HALF - right_hip.x, 0, 0)
-    var right_parent = scene.attach(right_holder^, pivot)
     _ = add_leg(
         scene,
         assets,
-        right_parent,
+        pivot,
         person,
         bone_paint,
         cartilage_paint,
         meniscus_paint,
         ligament_paint,
-        RIGHT,
-        DETAIL,
-    )
-
-    var left_pose = assemble_leg(person, LEFT)
-    var left_hip = left_pose.hip_center()
-    var left_holder = Object3D()
-    left_holder.set_position(-HIP_HALF - left_hip.x, 0, 0)
-    var left_parent = scene.attach(left_holder^, pivot)
-    _ = add_leg(
-        scene,
-        assets,
-        left_parent,
-        person,
-        bone_paint,
-        cartilage_paint,
-        meniscus_paint,
-        ligament_paint,
-        LEFT,
-        DETAIL,
+        detail=DETAIL,
     )
 
     var lamp = Object3D()
-    lamp.set_position(0.65, 0.70, 1.2)
+    lamp.set_position(0.22, 0.18, 0.35)
     var lamp_node = scene.add(lamp^)
-    scene.add_light(ambient_light(Color(255, 248, 235), 0.52))
-    scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.55))
+    scene.add_light(ambient_light(Color(255, 248, 235), 0.55))
+    scene.add_light(directional_light(Color(255, 244, 220), lamp_node, 2.70))
 
     var camera = PerspectiveCamera(
-        Angle(30.0, DEGREE),
+        Angle(38.0, DEGREE),
         Float32(WIDTH) / Float32(HEIGHT),
-        Length(0.05, METER),
-        Length(20.0, METER),
+        Length(0.02, METER),
+        Length(8.0, METER),
     )
-    camera.place(Vector3(0.35, 0.14, 2.15), Vector3(0.0, 0.04, 0.0))
+    camera.place(Vector3(0.17, 0.04, 0.24), Vector3(-0.01, 0.0, 0.01))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
