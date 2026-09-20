@@ -131,7 +131,7 @@ def muscle_phong(map: TextureId = NO_TEXTURE) raises -> Material:
     if map != NO_TEXTURE:
         color = Color(255, 255, 255)
     return phong_material(
-        color, map=map, specular=Color(112, 54, 46), shininess=15.0
+        color, map=map, specular=Color(180, 110, 100), shininess=22.0
     )
 
 
@@ -148,6 +148,6 @@ def tendon_phong() raises -> Material:
     """
     return phong_material(
         Color(214, 200, 176),
-        specular=Color(150, 140, 124),
-        shininess=18.0,
+        specular=Color(180, 172, 158),
+        shininess=24.0,
     )
