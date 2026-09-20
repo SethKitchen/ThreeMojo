@@ -51,9 +51,9 @@ def bone_albedo(size: Int = 64) raises -> Texture:
         for x in range(size):  # pragma: no branch
             var u = (Float32(x) + Float32(0.5)) / Float32(size)
             var v = (Float32(y) + Float32(0.5)) / Float32(size)
-            var grain = _hash(x, y) * Float32(0.55) + _hash(
+            var grain = _hash(x // 2, y // 2) * Float32(0.60) + _hash(
                 x // 4, y // 3
-            ) * Float32(0.45)
+            ) * Float32(0.40)
             var end = v - Float32(0.5)
             if end < 0:
                 end = -end
@@ -65,22 +65,22 @@ def bone_albedo(size: Int = 64) raises -> Texture:
             if du < Float32(0.10):
                 aspera = (Float32(0.10) - du) / Float32(0.10)
             var r = (
-                Float32(214)
-                + Float32(22) * (Float32(1) - grain)
-                - Float32(16) * end
-                - Float32(24) * aspera
+                Float32(220)
+                + Float32(10) * (Float32(1) - grain)
+                - Float32(10) * end
+                - Float32(12) * aspera
             )
             var g = (
-                Float32(196)
-                + Float32(18) * (Float32(1) - grain)
-                - Float32(14) * end
-                - Float32(20) * aspera
+                Float32(204)
+                + Float32(8) * (Float32(1) - grain)
+                - Float32(8) * end
+                - Float32(10) * aspera
             )
             var b = (
-                Float32(162)
-                + Float32(16) * (Float32(1) - grain)
-                - Float32(12) * end
-                - Float32(16) * aspera
+                Float32(172)
+                + Float32(8) * (Float32(1) - grain)
+                - Float32(6) * end
+                - Float32(8) * aspera
             )
             pixels.append(_byte(r))
             pixels.append(_byte(g))
@@ -156,8 +156,8 @@ def bone_phong(map: TextureId = NO_TEXTURE) raises -> Material:
     return phong_material(
         color,
         map=map,
-        specular=Color(82, 74, 62),
-        shininess=14.0,
+        specular=Color(48, 44, 38),
+        shininess=8.0,
     )
 
 

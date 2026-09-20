@@ -236,7 +236,7 @@ def _unit_face(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
 
 def _sampled_normals(
     positions: List[Float32],
-    indices: List[Int],
+    mut indices: List[Int],
     samples: List[Float32],
     low: Vector3,
     grid: SampleGrid,
@@ -311,15 +311,8 @@ def _sampled_normals(
             normals[i0 * 3 + 2] + normals[i1 * 3 + 2] + normals[i2 * 3 + 2],
         )
         if face.dot(mean) <= 0:
-            normals[i0 * 3] = face.x
-            normals[i0 * 3 + 1] = face.y
-            normals[i0 * 3 + 2] = face.z
-            normals[i1 * 3] = face.x
-            normals[i1 * 3 + 1] = face.y
-            normals[i1 * 3 + 2] = face.z
-            normals[i2 * 3] = face.x
-            normals[i2 * 3 + 1] = face.y
-            normals[i2 * 3 + 2] = face.z
+            indices[corner + 1] = i2
+            indices[corner + 2] = i1
         corner += 3
     return normals^
 
@@ -379,20 +372,12 @@ def _march_cube(
     var d5 = _sample(samples, sx, sy, ix + 1, iy, iz + 1)
     var d6 = _sample(samples, sx, sy, ix + 1, iy + 1, iz + 1)
     var d7 = _sample(samples, sx, sy, ix, iy + 1, iz + 1)
-    if (ix + iy + iz) % 2 == 0:
-        _clip_tetrahedron(positions, indices, p0, p1, p2, p6, d0, d1, d2, d6)
-        _clip_tetrahedron(positions, indices, p0, p2, p3, p6, d0, d2, d3, d6)
-        _clip_tetrahedron(positions, indices, p0, p3, p7, p6, d0, d3, d7, d6)
-        _clip_tetrahedron(positions, indices, p0, p7, p4, p6, d0, d7, d4, d6)
-        _clip_tetrahedron(positions, indices, p0, p4, p5, p6, d0, d4, d5, d6)
-        _clip_tetrahedron(positions, indices, p0, p5, p1, p6, d0, d5, d1, d6)
-        return
-    _clip_tetrahedron(positions, indices, p1, p2, p3, p7, d1, d2, d3, d7)
-    _clip_tetrahedron(positions, indices, p1, p3, p0, p7, d1, d3, d0, d7)
-    _clip_tetrahedron(positions, indices, p1, p0, p4, p7, d1, d0, d4, d7)
-    _clip_tetrahedron(positions, indices, p1, p4, p5, p7, d1, d4, d5, d7)
-    _clip_tetrahedron(positions, indices, p1, p5, p6, p7, d1, d5, d6, d7)
-    _clip_tetrahedron(positions, indices, p1, p6, p2, p7, d1, d6, d2, d7)
+    _clip_tetrahedron(positions, indices, p0, p1, p2, p6, d0, d1, d2, d6)
+    _clip_tetrahedron(positions, indices, p0, p2, p3, p6, d0, d2, d3, d6)
+    _clip_tetrahedron(positions, indices, p0, p3, p7, p6, d0, d3, d7, d6)
+    _clip_tetrahedron(positions, indices, p0, p7, p4, p6, d0, d7, d4, d6)
+    _clip_tetrahedron(positions, indices, p0, p4, p5, p6, d0, d4, d5, d6)
+    _clip_tetrahedron(positions, indices, p0, p5, p1, p6, d0, d5, d1, d6)
 
 
 def _lerp_zero(a: Vector3, b: Vector3, da: Float32, db: Float32) -> Vector3:
