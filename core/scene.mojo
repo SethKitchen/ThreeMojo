@@ -55,12 +55,14 @@ to catch the case where something reached past it anyway, and `update` runs it
 first, because a mutable reference to a node is also a way past it.
 """
 
+from core.background import Background, no_background
 from core.fog import Fog, no_fog
 from core.object3d import NO_PARENT, NodeId, Object3D, facing
 from lights.light import Light
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
+from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from units.si import Length, METER
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
 from objects.line import Line
@@ -119,6 +121,15 @@ struct Scene(Movable):
     # and assignable, as the lights are: set it to the value `linear_fog`
     # or `exp2_fog` returns, and the renderer reads it every frame.
     var fog: Fog
+    # What shows where nothing is drawn, three.js's `scene.background`.
+    # Public and assignable, as the fog is: set it to the value
+    # `color_background`, `texture_background` or `cube_background`
+    # returns, and the renderer reads it every frame. See `core.background`.
+    var background: Background
+    # The cube texture a material reflects when its `env_map` is
+    # `SCENE_ENVIRONMENT`, three.js's `scene.environment`, or
+    # `NO_CUBE_TEXTURE` for none. Public and assignable for the same reason.
+    var environment: CubeTextureId
     # False only when every world matrix reflects every node as it stands.
     var _stale: Bool
 
@@ -136,6 +147,8 @@ struct Scene(Movable):
         self.points = List[Points]()
         self.sprites = List[Sprite]()
         self.fog = no_fog()
+        self.background = no_background()
+        self.environment = NO_CUBE_TEXTURE
         # An empty scene has nothing to recompute, so it starts current.
         self._stale = False
 

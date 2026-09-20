@@ -37,12 +37,43 @@ A `NodeId` wraps an integer. A bare integer does not compile where a node id is 
 | `add_instanced_mesh(mesh)`, `add_batched_mesh(mesh)`, `add_lod(lod)` | Add the other things a scene draws. See [Meshes and assets](Meshes-and-assets#instancedmesh). |
 | `add_light(light)` | Add a light. See [Lights](Lights). |
 | `fog: Fog` | The scene's fog. `no_fog()` to begin with. See [Fog](Fog). |
+| `background: Background` | What shows where nothing is drawn. `no_background()` to begin with. See below. |
+| `environment: CubeTextureId` | The cube texture a material reflects when its `env_map` is `SCENE_ENVIRONMENT`. `NO_CUBE_TEXTURE` to begin with. |
 | `update()` | Compute every world matrix in one forward pass. |
 | `world_matrix(id) -> Matrix4` | A node's world transform. Raises if the scene is stale. |
 | `world_position(id) -> Vector3` | A node's origin in world space. |
 | `look_at(id, target, camera=False)` | Turn a node to face a world-space point. See [Rotations](Rotations). |
 | `is_stale() -> Bool` | True when a node changed after the last `update`. |
 | `validate()` | Check that every parent index is an earlier node. |
+
+## Background and environment
+
+`core/background.mojo`. A scene holds one background in `scene.background`. three.js's `Scene.background` holds a color, a texture or a cube texture, or nothing. Here the four are one struct with a kind, as a `Fog` is.
+
+```mojo
+scene.background = color_background(Color(30, 60, 90))
+scene.background = texture_background(picture)
+scene.background = cube_background(sky)
+scene.background = no_background()
+scene.environment = sky
+```
+
+| Builder | Kind | The renderer |
+|---|---|---|
+| `no_background()` | `NO_BACKGROUND` | Clears to its own `background` color. What a scene starts with. |
+| `color_background(color)` | `COLOR_BACKGROUND` | Clears to that color instead. three.js's `setClearColor` gives way to `scene.background`. |
+| `texture_background(id)` | `TEXTURE_BACKGROUND` | Stretches the texture over the viewport, behind everything. |
+| `cube_background(id)` | `CUBE_BACKGROUND` | Draws the cube texture as a sky: each pixel reads the direction its ray leaves the camera along. |
+
+A background is behind everything and claims no depth. A surface at any depth covers it, and a translucent surface blends over it. The fog does not reach it. three.js draws its image backgrounds the same way, with the depth test off, before the scene.
+
+A texture background is read at its full size through its own filter. Its transform is not applied, and its alpha is not read: three.js draws the plane opaque. A cube background turns as the camera turns and holds still as the camera moves. A parallel camera sees one direction everywhere. An image background is a texture, so only `SHADE_TEXTURE` draws it. The other two shading modes clear to the color.
+
+`Renderer.backdrop(scene, assets, camera)` returns the image background as the camera sees it, as an opaque `Framebuffer`, or none. `Renderer.render` paints it under the scene, and `GpuRenderer.draw` takes it, so both backends start a frame from the same bytes. See [Renderer](Renderer#what-render-does) and [GPU backend](GPU-backend).
+
+`environment` is the cube texture a material reflects when its `env_map` is `SCENE_ENVIRONMENT`. three.js applies `scene.environment` to every physically based material without asking. Those are not ported, and this project's materials reflect nothing unless told to, so a material asks. See [Materials](Materials#environment-map).
+
+The fields of a `Background` are open. `validate()` refuses a kind that is none of the four, and a texture or cube background that names no id. The renderer calls it every frame, and refuses an id the assets do not hold. `tests/compile_fail/` proves a bare `Color` is not a background.
 
 ## Layers
 

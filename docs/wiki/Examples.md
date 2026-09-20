@@ -33,6 +33,7 @@ mkdir -p out
 | `lines.mojo` | `lines.png` | [Lines](Lines) |
 | `sprites.mojo` | `sprites.png` | [Points and sprites](Points-and-sprites) |
 | `television.mojo` | `television.png` | [Textures](Textures#from-a-render) |
+| `mirror.mojo` | `mirror.png` | [Textures](Textures#cube-textures) |
 | `outlines.mojo` | `helpers.png` | [Helpers](Helpers) |
 | `keyframes.mojo` | `keyframes.png` | [Animation](Animation) |
 | `skinning.mojo` | `skinning.png` | [Skinning](Skinning) |

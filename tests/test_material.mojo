@@ -42,6 +42,18 @@ from materials.material import (
     Material,
     MaterialStore,
 )
+from materials.material import (
+    ADD_OPERATION,
+    MIX_OPERATION,
+    MULTIPLY_OPERATION,
+    Combine,
+    combine_light,
+)
+from render.cube_texture_store import (
+    NO_CUBE_TEXTURE,
+    SCENE_ENVIRONMENT,
+    CubeTextureId,
+)
 from render.framebuffer import Color, FloatColor
 from render.texture import Texture, checkerboard
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
@@ -1023,6 +1035,124 @@ def test_only_a_basic_material_draws_points_or_sprites() raises:
     # material carries them.
     var lit = Material(Color(255, 0, 0), kind=LAMBERT)
     assert_true(lit.point_size == DEFAULT_POINT_SIZE)
+
+
+# --- the environment ----------------------------------------------------------
+
+
+def test_a_material_reflects_nothing_by_default() raises:
+    var paint = Material(Color(1, 2, 3))
+    assert_equal(paint.env_map, NO_CUBE_TEXTURE)
+    assert_equal(paint.reflectivity, Float32(1))
+    assert_equal(paint.combine, MULTIPLY_OPERATION)
+    assert_false(paint.has_env_map())
+
+
+def test_the_three_reflecting_kinds_take_an_env_map() raises:
+    # three.js gives `envMap` to its basic, lambert and phong materials.
+    for kind in [BASIC, LAMBERT, PHONG]:
+        assert_true(kind.reflects())
+        var paint = Material(
+            Color(1, 2, 3),
+            kind=kind,
+            env_map=CubeTextureId(2),
+            reflectivity=0.25,
+            combine=ADD_OPERATION,
+        )
+        assert_equal(paint.env_map, CubeTextureId(2))
+        assert_equal(paint.reflectivity, Float32(0.25))
+        assert_equal(paint.combine, ADD_OPERATION)
+        assert_true(paint.has_env_map())
+    # And the scene's environment, which is not an id but is a map.
+    var shared = Material(Color(1, 2, 3), env_map=SCENE_ENVIRONMENT)
+    assert_true(shared.has_env_map())
+
+
+def test_the_other_kinds_refuse_any_environment_term() raises:
+    # No other three.js shader has an envmap chunk, so a value there is a
+    # mistake rather than a value to ignore.
+    for kind in [TOON, MATCAP, NORMALS, DEPTH]:
+        assert_false(kind.reflects())
+        var color = Color(1, 2, 3)
+        if kind.is_data():
+            color = Color(255, 255, 255)
+        with assert_raises():
+            _ = Material(color, kind=kind, env_map=CubeTextureId(0))
+        with assert_raises():
+            _ = Material(color, kind=kind, env_map=SCENE_ENVIRONMENT)
+        with assert_raises():
+            _ = Material(color, kind=kind, reflectivity=0.5)
+        with assert_raises():
+            _ = Material(color, kind=kind, combine=MIX_OPERATION)
+        # The defaults, which nothing reads, are fine.
+        _ = Material(color, kind=kind)
+
+
+def test_a_reflectivity_is_a_fraction() raises:
+    _ = Material(Color(1, 2, 3), reflectivity=0.0)
+    _ = Material(Color(1, 2, 3), reflectivity=1.0)
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), reflectivity=-0.1)
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), reflectivity=1.1)
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), reflectivity=nan[DType.float32]())
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), reflectivity=inf[DType.float32]())
+
+
+def test_a_combine_and_an_env_map_id_are_checked() raises:
+    for combine in [MULTIPLY_OPERATION, MIX_OPERATION, ADD_OPERATION]:
+        assert_true(combine.is_valid())
+        _ = Material(Color(1, 2, 3), combine=combine)
+    assert_false(Combine(3).is_valid())
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), combine=Combine(3))
+    with assert_raises():
+        _ = Material(Color(1, 2, 3), env_map=CubeTextureId(-3))
+
+
+def test_a_wireframe_cannot_reflect() raises:
+    # A line has no surface to reflect from.
+    with assert_raises():
+        _ = Material(
+            Color(1, 2, 3),
+            kind=BASIC,
+            wireframe=True,
+            env_map=CubeTextureId(0),
+        )
+    _ = Material(Color(1, 2, 3), kind=BASIC, wireframe=True)
+
+
+def test_each_combine_joins_the_reflection_its_own_way() raises:
+    # three.js's `envmap_fragment`, term for term.
+    var own = FloatColor(0.5, 0.2, 1.0, 0.3)
+    var seen = FloatColor(0.4, 1.0, 0.5, 1.0)
+    var multiplied = combine_light(own, seen, 1.0, MULTIPLY_OPERATION)
+    assert_almost_equal(Float64(multiplied.r), 0.2, atol=1e-6)
+    assert_almost_equal(Float64(multiplied.g), 0.2, atol=1e-6)
+    assert_almost_equal(Float64(multiplied.b), 0.5, atol=1e-6)
+    var mixed = combine_light(own, seen, 0.5, MIX_OPERATION)
+    assert_almost_equal(Float64(mixed.r), 0.45, atol=1e-6)
+    assert_almost_equal(Float64(mixed.g), 0.6, atol=1e-6)
+    assert_almost_equal(Float64(mixed.b), 0.75, atol=1e-6)
+    var added = combine_light(own, seen, 0.5, ADD_OPERATION)
+    assert_almost_equal(Float64(added.r), 0.7, atol=1e-6)
+    assert_almost_equal(Float64(added.g), 0.7, atol=1e-6)
+    assert_almost_equal(Float64(added.b), 1.25, atol=1e-6)
+    # Alpha is coverage and is left alone by all three.
+    for joined in [multiplied, mixed, added]:
+        assert_equal(joined.a, Float32(0.3))
+    # A reflectivity of zero leaves the light alone under the two mixes,
+    # and half a multiply is halfway to the product.
+    var untouched = combine_light(own, seen, 0.0, MULTIPLY_OPERATION)
+    assert_almost_equal(Float64(untouched.g), 0.2, atol=1e-6)
+    var half = combine_light(own, seen, 0.5, MULTIPLY_OPERATION)
+    assert_almost_equal(Float64(half.r), 0.35, atol=1e-6)
+    # An operation neither backend can reach multiplies, as the kernel
+    # would; both refuse it before a fragment is shaded.
+    var odd = combine_light(own, seen, 1.0, Combine(9))
+    assert_almost_equal(Float64(odd.r), 0.2, atol=1e-6)
 
 
 def main() raises:

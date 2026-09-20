@@ -6,7 +6,7 @@
 
 three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `LineBasicMaterial`, `LineDashedMaterial`, `PointsMaterial`, `SpriteMaterial`.
 
-Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`, `size`, `sizeAttenuation`, `rotation`.
+Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`, `size`, `sizeAttenuation`, `rotation`, `envMap`, `reflectivity`, `combine`.
 
 ## Construct one
 
@@ -46,6 +46,9 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `point_size` | `PointSize` | `PointSize(1.0)` | How many pixels across a point is. See [points](Points-and-sprites#points). |
 | `size_attenuation` | `Bool` | `True` | Whether a point or a sprite shrinks with distance. |
 | `rotation` | `Angle` | zero | How far a sprite is turned about the line of sight. See [sprites](Points-and-sprites#sprites). |
+| `env_map` | `CubeTextureId` | `NO_CUBE_TEXTURE` | The cube texture the surface reflects, or `SCENE_ENVIRONMENT`. See [Environment map](#environment-map). |
+| `reflectivity` | `Float32` | `1.0` | How much of the reflection joins the surface's light. |
+| `combine` | `Combine` | `MULTIPLY_OPERATION` | How the reflection joins. |
 
 ## Side
 
@@ -205,6 +208,40 @@ An emissive term. The image already holds every bit of light the surface shows, 
 The image is sampled at its full-size level and never down a mip chain. A mip chain is only progressively filtered copies of an image, so normal-derived coordinates could use one. What is missing is the screen-space footprint of *those* coordinates. `mip_level` measures the footprint of the surface's own texture coordinates, which is a different quantity. Matcap-coordinate derivatives and mip selection are not implemented.
 
 A matcap's own alpha means nothing: three.js reads `.rgb` and no more. So the texture must be built `IGNORED`, or filtering would weight its channels by an alpha that says nothing. Its color space is free, because a matcap really is color.
+
+## Environment map
+
+A `BASIC`, `LAMBERT` or `PHONG` material can reflect a [cube texture](Textures#cube-textures): three.js's `envMap` on `MeshBasicMaterial`, `MeshLambertMaterial` and `MeshPhongMaterial`. The direction the camera sees a fragment along is turned back through the fragment's normal, and the cube is read in that direction. That is what a mirror shows.
+
+```mojo
+var chrome = Material(Color(255, 255, 255), kind=BASIC, env_map=sky)
+var glossy = phong_material(Color(200, 40, 40))
+var tinted = Material(Color(150, 150, 150), env_map=SCENE_ENVIRONMENT, reflectivity=0.35, combine=MIX_OPERATION)
+```
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `env_map` | `envMap` | `NO_CUBE_TEXTURE` | The cube texture to reflect. `SCENE_ENVIRONMENT` reflects the scene's `environment`. |
+| `reflectivity` | `reflectivity` | `1.0` | How much of the reflection joins, from zero to one. |
+| `combine` | `combine` | `MULTIPLY_OPERATION` | How it joins. See the table below. |
+
+| `combine` | three.js | The surface's light becomes |
+|---|---|---|
+| `MULTIPLY_OPERATION` | `MultiplyOperation` | `mix(light, light * reflection, reflectivity)`. A tinted mirror. |
+| `MIX_OPERATION` | `MixOperation` | `mix(light, reflection, reflectivity)`. A reflection laid over the surface. |
+| `ADD_OPERATION` | `AddOperation` | `light + reflection * reflectivity`. A gloss on top. |
+
+`combine_light` in `materials/material.mojo` is that arithmetic, three.js's `envmap_fragment`. Both rasterizers call it. The reflection joins after the lights, the highlight and the emissive term, and before the fog, where three.js joins it. Alpha is coverage and is left alone. A white `BASIC` surface with a multiply is a plain mirror. A colored one is a mirror tinted by its color.
+
+The reflected direction is `reflected(toward_eye, normal)` in `render/cube_texture.mojo`, GLSL's `reflect`. It is measured from where the camera stands under either projection, as three.js reads `cameraPosition` here. The cube is read at its full size, never down a mip chain; see [Textures](Textures#cube-textures).
+
+A reflection is a texture. `SHADE_TEXTURE` draws it and the other two shading modes ignore it, as they ignore every map.
+
+`SCENE_ENVIRONMENT` is not an id. The renderer replaces it with whatever the scene's `environment` names when it prepares the frame. A scene with no environment gives the material nothing to reflect, as three.js's `material.envMap || scene.environment` gives nothing. three.js applies the environment to its physically based materials without asking. Those are not ported, and this project's materials reflect nothing unless told to, so a material asks. See [Scene graph](Scene-graph#background-and-environment).
+
+No other kind reflects. A toon surface steps through a ramp, a matcap surface is an image already, and the data kinds show no light. Each refuses an env map, a reflectivity that is not one, and a combine that is not the default. A wireframe refuses an env map too. So do a line, a point and a sprite, in their own passes: none has a surface to reflect from.
+
+`examples/mirror.mojo` reflects a scene in a chrome ball, through a [CubeCamera](Cameras#cubecamera).
 
 ## Data materials
 
@@ -404,8 +441,12 @@ The constructor raises for:
 - Dashes on a kind that is not `BASIC`, or on a wireframe.
 - A point size that is not a positive number, or a rotation that is not finite.
 - A point size that is not the default, attenuation off, or a rotation, on a kind that is not `BASIC`.
+- An env map id below zero that is not `NO_CUBE_TEXTURE` or `SCENE_ENVIRONMENT`.
+- A reflectivity outside zero to one or not finite, or a `Combine` that is none of the three.
+- An env map, a reflectivity that is not one, or a combine that is not the default, on a kind that does not reflect.
+- An env map on a wireframe.
 
-`Renderer.prepare` raises for an emissive map that reads its alpha as coverage.
+`Renderer.prepare` raises for an emissive map that reads its alpha as coverage. It raises for an env map, or a scene environment, that is not in the assets.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.
 
 ## MaterialStore

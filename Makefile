@@ -462,7 +462,14 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/chain.png $(OUT_DIR)/additive.png \
            $(OUT_DIR)/normals.png $(OUT_DIR)/fragments.png \
            $(OUT_DIR)/coverage.png $(OUT_DIR)/lines.png \
-           $(OUT_DIR)/helpers.png $(OUT_DIR)/split.png
+           $(OUT_DIR)/helpers.png $(OUT_DIR)/split.png \
+           $(OUT_DIR)/mirror.png
+
+# A chrome ball under a sky, reflecting a cube camera's view of two boxes.
+$(OUT_DIR)/mirror.png: $(LIB_SOURCES) examples/mirror.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/mirror.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
 
 # A split screen: two viewports and two scissors drawing into one target.
 $(OUT_DIR)/split.png: $(LIB_SOURCES) examples/split.mojo

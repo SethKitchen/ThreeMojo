@@ -38,6 +38,19 @@ from render.texture import (
     checkerboard,
 )
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
+from render.cube_texture import CubeTexture
+from render.cube_texture_store import (
+    NO_CUBE_TEXTURE,
+    SCENE_ENVIRONMENT,
+    CubeTextureId,
+    CubeTextureStore,
+)
+from materials.material import (
+    ADD_OPERATION,
+    MIX_OPERATION,
+    MULTIPLY_OPERATION,
+    Combine,
+)
 from lights.light import directional_light
 from lights.lighting import Lighting
 from core.fog import LINEAR_FOG, FogKind, FogView, exp2_fog, linear_fog
@@ -3725,6 +3738,246 @@ def test_a_matcap_is_looked_up_the_right_way_up_and_round() raises:
         var shown = target.shown(4, 4)
         assert_equal(shown.r, want[2])
         assert_equal(shown.g, want[3])
+
+
+# --- a surface that reflects -------------------------------------------------
+
+
+def a_flat_face(color: Color) raises -> Texture:
+    """Return a 2x2 face of one color, clamped and nearest."""
+    var pixels = List[UInt8]()
+    for _ in range(4):
+        pixels.append(color.r)
+        pixels.append(color.g)
+        pixels.append(color.b)
+        pixels.append(255)
+    return Texture(2, 2, pixels^, CLAMP, NEAREST, SRGB, False)
+
+
+def a_cube_store() raises -> CubeTextureStore:
+    """Return a store holding one cube: red +x, green -x, blue +y, yellow
+    -y, cyan +z, magenta -z."""
+    var faces = List[Texture]()
+    for color in [
+        Color(255, 0, 0),
+        Color(0, 255, 0),
+        Color(0, 0, 255),
+        Color(255, 255, 0),
+        Color(0, 255, 255),
+        Color(255, 0, 255),
+    ]:
+        faces.append(a_flat_face(color))
+    var store = CubeTextureStore()
+    _ = store.add(CubeTexture(faces^))
+    return store^
+
+
+def mirror_quad(
+    env: CubeTextureId = CubeTextureId(0),
+    reflectivity: Float32 = 1,
+    combine: Combine = MULTIPLY_OPERATION,
+    normal: Vector3 = Vector3(0, 0, 1),
+    kind: MaterialKind = BASIC,
+    color: FloatColor = FloatColor(1, 1, 1),
+) -> List[RasterVertex]:
+    """Return two triangles covering an eight-pixel target, at the origin
+    with one normal, reflecting `env`."""
+    var corners = List[RasterVertex]()
+    var places: List[Tuple[Float32, Float32]] = [
+        (Float32(0), Float32(0)),
+        (Float32(8), Float32(0)),
+        (Float32(8), Float32(8)),
+        (Float32(0), Float32(0)),
+        (Float32(8), Float32(8)),
+        (Float32(0), Float32(8)),
+    ]
+    for place in places:
+        corners.append(
+            RasterVertex(
+                place[0],
+                place[1],
+                0.5,
+                1,
+                color,
+                normal=normal,
+                world=Vector3(0, 0, 0),
+                kind=kind,
+                env_map=env,
+                reflectivity=reflectivity,
+                combine=combine,
+            )
+        )
+    return corners^
+
+
+def mirror_pixel(
+    corners: List[RasterVertex],
+    mode: ShadeMode = SHADE_TEXTURE,
+    workers: Int = 1,
+    lit: Bool = False,
+) raises -> Color:
+    """Rasterize `corners` over a cube store and return one pixel, seen
+    from up the z axis, under one lamp straight on when `lit`."""
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var scene = Scene()
+    if lit:
+        var lamp = Object3D()
+        lamp.set_position(0, 0, 1)
+        var node = scene.add(lamp^)
+        scene.add_light(directional_light(Color(255, 255, 255), node, FULL))
+        scene.update()
+    rasterize_all(
+        corners,
+        target,
+        mode,
+        TextureStore(),
+        Lighting(scene, Layers.all(), Vector3(0, 0, 3)),
+        workers,
+        cubes=a_cube_store(),
+    )
+    return target.shown(3, 3)
+
+
+def test_a_corner_reflects_nothing_unless_asked() raises:
+    var corner = RasterVertex(0, 0, 0, 1, FloatColor(1, 1, 1))
+    assert_equal(corner.env_map, NO_CUBE_TEXTURE)
+    assert_equal(corner.reflectivity, Float32(1))
+    assert_equal(corner.combine, MULTIPLY_OPERATION)
+
+
+def test_a_mirror_square_on_reflects_the_face_behind_the_camera() raises:
+    # The view down -z turned back through a +z normal is +z: cyan.
+    var seen = mirror_pixel(mirror_quad())
+    assert_equal(seen.r, UInt8(0))
+    assert_equal(seen.g, UInt8(255))
+    assert_equal(seen.b, UInt8(255))
+    # Tilted halfway toward +x, the view bounces off along +x: red.
+    var tilted = Vector3(1, 0, 1)
+    tilted.normalize()
+    var side = mirror_pixel(mirror_quad(normal=tilted))
+    assert_equal(side.r, UInt8(255))
+    assert_equal(side.g, UInt8(0))
+    assert_equal(side.b, UInt8(0))
+
+
+def test_each_combine_reaches_the_pixel() raises:
+    # Red times cyan is black; red mixed halfway to cyan is half of each;
+    # red plus cyan is white.
+    var red = FloatColor(1, 0, 0)
+    var multiplied = mirror_pixel(mirror_quad(color=red))
+    assert_equal(multiplied.r, UInt8(0))
+    assert_equal(multiplied.g, UInt8(0))
+    var mixed = mirror_pixel(
+        mirror_quad(color=red, reflectivity=0.5, combine=MIX_OPERATION)
+    )
+    assert_equal(mixed.r, UInt8(188))
+    assert_equal(mixed.g, UInt8(188))
+    assert_equal(mixed.b, UInt8(188))
+    var added = mirror_pixel(mirror_quad(color=red, combine=ADD_OPERATION))
+    assert_equal(added.r, UInt8(255))
+    assert_equal(added.g, UInt8(255))
+    assert_equal(added.b, UInt8(255))
+
+
+def test_the_bands_reflect_as_one_thread_does() raises:
+    var one = mirror_pixel(
+        mirror_quad(combine=ADD_OPERATION, color=FloatColor(1, 0, 0))
+    )
+    var four = mirror_pixel(
+        mirror_quad(combine=ADD_OPERATION, color=FloatColor(1, 0, 0)),
+        workers=4,
+    )
+    assert_equal(one.r, four.r)
+    assert_equal(one.g, four.g)
+    assert_equal(one.b, four.b)
+    assert_equal(four.g, UInt8(255))
+
+
+def test_a_reflection_is_a_texture_the_other_modes_ignore() raises:
+    var corners = mirror_quad(combine=ADD_OPERATION, color=FloatColor(1, 0, 0))
+    var lit = mirror_pixel(corners, SHADE_LIT)
+    assert_equal(lit.r, UInt8(255))
+    assert_equal(lit.g, UInt8(0))
+    var uv = mirror_pixel(corners, SHADE_UV)
+    assert_equal(uv.b, UInt8(0))
+
+
+def test_a_lit_mirror_reflects_after_it_is_lit() raises:
+    # A white lambert surface under no light is black, and black times
+    # cyan is black; under a lamp straight on it is white, and white
+    # times cyan is cyan.
+    var dark = mirror_pixel(mirror_quad(kind=LAMBERT))
+    assert_equal(dark.g, UInt8(0))
+    var lit = mirror_pixel(mirror_quad(kind=LAMBERT), lit=True)
+    assert_equal(lit.r, UInt8(0))
+    assert_equal(lit.g, UInt8(255))
+    assert_equal(lit.b, UInt8(255))
+
+
+def test_an_env_map_the_store_lacks_is_refused_before_a_fragment() raises:
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var corners = mirror_quad(CubeTextureId(1))
+    with assert_raises():
+        rasterize_shaded(
+            corners[0], corners[1], corners[2], target, SHADE_TEXTURE
+        )
+    for workers in [1, 4]:
+        with assert_raises():
+            rasterize_all(
+                corners,
+                target,
+                SHADE_TEXTURE,
+                workers=workers,
+                cubes=a_cube_store(),
+            )
+    # A mode that never opens the cube never asks for it.
+    rasterize_all(corners, target, SHADE_LIT)
+
+
+def test_corners_that_disagree_about_their_environment_are_rejected() raises:
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var cubes = a_cube_store()
+    var one = mirror_quad()
+    for other in [
+        mirror_quad(NO_CUBE_TEXTURE),
+        mirror_quad(reflectivity=0.5),
+        mirror_quad(combine=ADD_OPERATION),
+    ]:
+        with assert_raises():
+            rasterize_shaded(one[0], other[1], one[2], target, cubes=cubes)
+        with assert_raises():
+            rasterize_shaded(one[0], one[1], other[2], target, cubes=cubes)
+    rasterize_shaded(one[0], one[1], one[2], target, cubes=cubes)
+
+
+def test_a_bad_environment_value_is_refused_on_both_paths() raises:
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var cubes = a_cube_store()
+    var bad = List[List[RasterVertex]]()
+    for value in [Float32(-0.5), Float32(1.5), nan[DType.float32]()]:
+        bad.append(mirror_quad(reflectivity=value))
+    bad.append(mirror_quad(combine=Combine(7)))
+    # Only a reflecting kind carries an env map.
+    for kind in [TOON, MATCAP]:
+        bad.append(mirror_quad(kind=kind))
+    # A data kind, whose color must be white and which cannot reflect.
+    bad.append(mirror_quad(kind=NORMALS))
+    # The scene's environment is resolved by the renderer, and an id
+    # nothing can hold is refused with it.
+    bad.append(mirror_quad(SCENE_ENVIRONMENT))
+    bad.append(mirror_quad(CubeTextureId(-4)))
+    for corners in bad:
+        with assert_raises():
+            rasterize_shaded(
+                corners[0], corners[1], corners[2], target, cubes=cubes
+            )
+        for workers in [1, 4]:
+            with assert_raises():
+                rasterize_all(corners, target, workers=workers, cubes=cubes)
+    # The three kinds that reflect, and the whole range of reflectivity.
+    for kind in [BASIC, LAMBERT, PHONG]:
+        rasterize_all(mirror_quad(kind=kind), target, cubes=cubes)
+    rasterize_all(mirror_quad(reflectivity=0), target, cubes=cubes)
 
 
 def main() raises:

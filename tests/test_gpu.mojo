@@ -103,6 +103,9 @@ from core.layers import Layers
 from renderers.renderer import camera_position, camera_up, toward_camera
 from render.gpu import (
     FLOATS_PER_VERTEX,
+    LANE_REFLECTIVITY,
+    STATE_COMBINE,
+    STATE_ENV_MAP,
     LANE_DASH,
     LANE_GAP,
     LANE_LINE_DISTANCE,
@@ -133,6 +136,20 @@ from render.gpu import (
 )
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import Alpha
+from render.cube_texture import CubeTexture, face_forward
+from render.cube_texture_store import (
+    NO_CUBE_TEXTURE,
+    SCENE_ENVIRONMENT,
+    CubeTextureId,
+    CubeTextureStore,
+)
+from core.background import cube_background
+from materials.material import (
+    ADD_OPERATION,
+    MIX_OPERATION,
+    MULTIPLY_OPERATION,
+    Combine,
+)
 from geometries.plane import plane
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, COLOR, POSITION
@@ -970,7 +987,7 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 29)
+    assert_equal(len(flat), 30)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -1017,6 +1034,12 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
     var dotted = List[RasterVertex]()
     dotted.append(RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), point_size=5.5))
     assert_equal(flatten(dotted)[LANE_POINT_SIZE], Float32(5.5))
+    # The reflectivity rides after the point size, and a corner that
+    # says nothing about it carries three.js's one.
+    assert_equal(flat[LANE_REFLECTIVITY], Float32(1))
+    var dim = List[RasterVertex]()
+    dim.append(RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), reflectivity=0.25))
+    assert_equal(flatten(dim)[LANE_REFLECTIVITY], Float32(0.25))
 
 
 def test_the_point_state_table_has_an_entry_per_map_and_policy() raises:
@@ -1079,6 +1102,17 @@ def test_the_state_table_has_an_entry_per_map_and_policy() raises:
     assert_equal(state[4], Int32(NO_TEXTURE.value))
     assert_equal(state[5], Int32(NO_TEXTURE.value))
     assert_equal(state[6], Int32(NO_TEXTURE.value))
+    # No env map crosses as -1, and the combine as its value.
+    assert_equal(state[STATE_ENV_MAP], Int32(-1))
+    assert_equal(state[STATE_COMBINE], Int32(MULTIPLY_OPERATION.value))
+    # An env map crosses as the row of its first face: after the flat
+    # textures, six rows a cube.
+    var mirrored = mirror_pair(CubeTextureId(2), 0.5, ADD_OPERATION)
+    assert_equal(triangle_state(mirrored)[STATE_ENV_MAP], Int32(12))
+    assert_equal(triangle_state(mirrored, 5)[STATE_ENV_MAP], Int32(17))
+    assert_equal(
+        triangle_state(mirrored)[STATE_COMBINE], Int32(ADD_OPERATION.value)
+    )
     # A matcap triangle's image rides the column after the ramp.
     assert_equal(triangle_state(matcap_pair(TextureId(8)))[6], Int32(8))
     assert_equal(triangle_state(matcap_pair())[6], Int32(NO_TEXTURE.value))
@@ -4267,7 +4301,7 @@ def test_flattening_carries_the_alpha_test_in_its_own_lane() raises:
         RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), alpha_test=0.375)
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 29)
+    assert_equal(len(flat), 30)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[20], Float32(0.375))
     # And a corner that says nothing about it carries zero, no test.
@@ -4291,7 +4325,7 @@ def test_the_state_table_carries_the_alpha_map() raises:
         )
     var state = triangle_state(corners)
     assert_equal(len(state), STATE_PER_TRIANGLE)
-    assert_equal(len(state), 7)
+    assert_equal(len(state), 9)
     assert_equal(state[4], Int32(7))
     var plain = List[RasterVertex]()
     for _ in range(3):
@@ -4449,7 +4483,7 @@ def test_flattening_carries_the_specular_and_the_shininess() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 29)
+    assert_equal(len(flat), 30)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[21], Float32(0.25))
     assert_equal(flat[22], Float32(0.5))
@@ -6813,6 +6847,272 @@ def test_a_second_upload_describes_its_own_textures() raises:
         toon_pair(TextureId(0)), BACKGROUND, SHADE_LIT, Lighting.uniform()
     )
     assert_equal(renderer.read_back().width, 36)
+
+
+# --- a surface that reflects, both backends ------------------------------------
+
+
+def a_gpu_face(color: Color) raises -> Texture:
+    """Return a 2x2 face of one color, clamped and nearest."""
+    var pixels = List[UInt8]()
+    for _ in range(4):
+        pixels.append(color.r)
+        pixels.append(color.g)
+        pixels.append(color.b)
+        pixels.append(255)
+    return Texture(2, 2, pixels^, CLAMP, NEAREST, SRGB, False)
+
+
+def a_gpu_cube() raises -> CubeTexture:
+    """Return a cube of six flat faces: red +x, green -x, blue +y, yellow
+    -y, cyan +z, magenta -z."""
+    var faces = List[Texture]()
+    for color in [
+        Color(255, 0, 0),
+        Color(0, 255, 0),
+        Color(0, 0, 255),
+        Color(255, 255, 0),
+        Color(0, 255, 255),
+        Color(255, 0, 255),
+    ]:
+        faces.append(a_gpu_face(color))
+    return CubeTexture(faces^)
+
+
+def a_cube_store() raises -> CubeTextureStore:
+    """Return a store holding two of `a_gpu_cube`."""
+    var store = CubeTextureStore()
+    _ = store.add(a_gpu_cube())
+    _ = store.add(a_gpu_cube())
+    return store^
+
+
+def mirror_pair(
+    env: CubeTextureId,
+    reflectivity: Float32 = 1,
+    combine: Combine = MULTIPLY_OPERATION,
+) -> List[RasterVertex]:
+    """Return `overlapping_pair` as basic surfaces reflecting `env`, each
+    corner facing a different way so the reflection sweeps the faces."""
+    var normals: List[Vector3] = [
+        Vector3(0, 0, 1),
+        Vector3(0.9, 0, 0.4),
+        Vector3(0, 0.9, -0.4),
+        Vector3(-0.8, 0.2, 0.5),
+        Vector3(0.3, -0.9, 0.1),
+        Vector3(0, -0.6, 0.8),
+    ]
+    var corners = List[RasterVertex]()
+    var base = overlapping_pair()
+    for index in range(len(base)):
+        var here = base[index]
+        corners.append(
+            RasterVertex(
+                here.x,
+                here.y,
+                here.z,
+                here.inv_w,
+                here.color,
+                here.u,
+                here.v,
+                here.texture,
+                here.blend,
+                normals[index],
+                Vector3(Float32(index) * 0.2 - 0.5, Float32(index) * 0.1, 0.0),
+                BASIC,
+                env_map=env,
+                reflectivity=reflectivity,
+                combine=combine,
+            )
+        )
+    return corners^
+
+
+def test_flattening_lays_the_cube_faces_out_after_the_textures() raises:
+    var textures = TextureStore()
+    _ = textures.add(a_gpu_face(Color(1, 2, 3)))
+    var flat = flatten_textures(textures, a_cube_store())
+    ref table = flat[1]
+    # One flat texture, then two cubes of six faces: thirteen rows.
+    assert_equal(len(table), 13 * TABLE_COLUMNS)
+    # The +x face of the first cube is the second row, red, 2x2, clamped.
+    assert_equal(table[TABLE_COLUMNS + 1], Int32(2))
+    assert_equal(table[TABLE_COLUMNS + 3], Int32(CLAMP.value))
+    var start = Int(table[TABLE_COLUMNS])
+    assert_equal(flat[0][start], UInt8(255))
+    assert_equal(flat[0][start + 1], UInt8(0))
+    # The -x face is the third row, green.
+    var next = Int(table[2 * TABLE_COLUMNS])
+    assert_equal(flat[0][next + 1], UInt8(255))
+    # A cube edited into nonsense is refused, as a texture is.
+    var store = a_cube_store()
+    store.textures[1].faces[3].wrap = REPEAT
+    with assert_raises():
+        _ = flatten_textures(textures, store)
+
+
+def test_both_backends_reflect_the_same_faces() raises:
+    if skipped_for_lack_of_a_gpu("both backends reflect the same faces"):
+        return
+    var cubes = a_cube_store()
+    for combine in [MULTIPLY_OPERATION, MIX_OPERATION, ADD_OPERATION]:
+        var corners = mirror_pair(CubeTextureId(1), 0.75, combine)
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(
+            corners,
+            target,
+            SHADE_TEXTURE,
+            TextureStore(),
+            watching(),
+            1,
+            cubes=cubes,
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            36,
+            30,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            TextureStore(),
+            watching(),
+            cubes=cubes,
+        )
+        # The reflection reaches the pixels: some are neither of the two
+        # flat colors nor the background.
+        var changed = 0
+        for y in range(30):
+            for x in range(36):
+                var pixel = cpu.get_pixel(x, y)
+                var red = pixel.r == 255 and pixel.g == 0 and pixel.b == 0
+                var green = pixel.r == 0 and pixel.g == 255 and pixel.b == 0
+                var clear = (
+                    pixel.r == BACKGROUND.r
+                    and pixel.g == BACKGROUND.g
+                    and pixel.b == BACKGROUND.b
+                )
+                if not (red or green or clear):
+                    changed += 1
+        assert_true(changed >= 20, "the reflection left the surfaces flat")
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_the_gpu_refuses_a_cube_it_cannot_sample() raises:
+    if skipped_for_lack_of_a_gpu("gpu refuses a cube it cannot sample"):
+        return
+    var renderer = GpuRenderer(36, 30)
+    renderer.set_textures(TextureStore(), a_cube_store())
+    # Two cubes were uploaded: the third is a read past the table.
+    with assert_raises():
+        renderer.draw(mirror_pair(CubeTextureId(2)), BACKGROUND, SHADE_TEXTURE)
+    # And none at all after an upload without cubes.
+    renderer.set_textures(TextureStore())
+    with assert_raises():
+        renderer.draw(mirror_pair(CubeTextureId(0)), BACKGROUND, SHADE_TEXTURE)
+    # The scene's environment is the renderer's to resolve, and a corner
+    # carrying it is refused by the shared check, as on the host.
+    with assert_raises():
+        renderer.draw(mirror_pair(SCENE_ENVIRONMENT), BACKGROUND, SHADE_TEXTURE)
+    # A mode that never opens the cube still checks the id, as it checks
+    # a texture's: the kernel reads the table at whatever index it holds.
+    with assert_raises():
+        renderer.draw(mirror_pair(CubeTextureId(0)), BACKGROUND, SHADE_LIT)
+    renderer.draw(mirror_pair(NO_CUBE_TEXTURE), BACKGROUND, SHADE_TEXTURE)
+    # A backdrop of the wrong size is refused before the launch.
+    with assert_raises():
+        renderer.draw(
+            List[RasterVertex](),
+            BACKGROUND,
+            backdrop=Framebuffer(8, 8, BACKGROUND),
+        )
+
+
+def test_both_backends_agree_on_a_mirror_ball_under_a_sky() raises:
+    # A whole frame: a lit floor, a chrome sphere reflecting the sky, and
+    # the sky itself behind everything, painted as the backdrop.
+    if skipped_for_lack_of_a_gpu("both backends agree on a mirror ball"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var floor = assets.geometries.add(
+        plane(Length(12.0, METER), Length(12.0, METER), 4, 4)
+    )
+    var ball = assets.geometries.add(sphere(Length(0.8, METER), 16, 12))
+    var sky = assets.cube_textures.add(a_gpu_cube())
+
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_position(0, -1.0, 0)
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var middle = scene.add(Object3D())
+    light_the(scene)
+    scene.background = cube_background(sky)
+    scene.environment = sky
+    scene.update()
+
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            floor,
+            assets.materials.add(
+                Material(
+                    Color(200, 200, 200),
+                    env_map=SCENE_ENVIRONMENT,
+                    reflectivity=0.3,
+                    combine=MIX_OPERATION,
+                )
+            ),
+            ground_node,
+        )
+    )
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(
+                Material(Color(255, 255, 255), kind=BASIC, env_map=sky)
+            ),
+            middle,
+        )
+    )
+
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0.6, 0.8, 3.2), Vector3(0, 0, 0))
+
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the scene prepared no triangles")
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+    )
+    var backdrop = renderer.backdrop(scene, assets, camera)
+    assert_true(Bool(backdrop), "the sky painted no backdrop")
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+        cubes=assets.cube_textures,
+        backdrop=backdrop,
+    )
+    # The sky shows: no pixel holds the clear color.
+    assert_equal(count_background(cpu, BACKGROUND), 0)
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def main() raises:

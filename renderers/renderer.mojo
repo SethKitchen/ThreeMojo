@@ -79,6 +79,13 @@ work; dropping one changes the image.
 
 from cameras.array_camera import ArrayCamera
 from cameras.camera import Camera
+from cameras.cube_camera import CubeCamera
+from core.background import (
+    COLOR_BACKGROUND,
+    CUBE_BACKGROUND,
+    TEXTURE_BACKGROUND,
+    Background,
+)
 from core.deform import morphed_normals, morphed_positions
 from core.buffer_geometry import (
     COLOR,
@@ -117,12 +124,20 @@ from materials.material import (
     BASIC,
     DOUBLE_SIDE,
     FRONT_SIDE,
+    MULTIPLY_OPERATION,
     NORMALS,
     Blending,
+    Combine,
     Material,
     MaterialId,
     MaterialKind,
     Side,
+)
+from render.cube_texture import FACE_COUNT, CubeTexture, cube_texture_of
+from render.cube_texture_store import (
+    NO_CUBE_TEXTURE,
+    SCENE_ENVIRONMENT,
+    CubeTextureId,
 )
 from units.si import Length, METER, RADIAN
 from render.pointrule import attenuated_size
@@ -1062,6 +1077,9 @@ def _to_raster(
     dash_size: Float32 = 0,
     gap_size: Float32 = 0,
     point_size: Float32 = 0,
+    env_map: CubeTextureId = NO_CUBE_TEXTURE,
+    reflectivity: Float32 = 1,
+    combine: Combine = MULTIPLY_OPERATION,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -1106,6 +1124,9 @@ def _to_raster(
         dash_size,
         gap_size,
         point_size,
+        env_map,
+        reflectivity,
+        combine,
     )
 
 
@@ -1173,6 +1194,11 @@ struct _Paint(ImplicitlyCopyable):
     # Whether the draw's world transform reflects it; see `_faces_away`.
     var mirrored: Bool
     var side: Side
+    # The environment the draw reflects, already resolved from
+    # `SCENE_ENVIRONMENT`, and how; see `_resolved_env`.
+    var env: CubeTextureId
+    var reflectivity: Float32
+    var combine: Combine
 
     def raster(self, vertex: ClipVertex) -> RasterVertex:
         """Project one clipped corner into the rasterizer's input."""
@@ -1189,6 +1215,9 @@ struct _Paint(ImplicitlyCopyable):
             self.shininess,
             self.tones,
             self.ball,
+            env_map=self.env,
+            reflectivity=self.reflectivity,
+            combine=self.combine,
         )
 
     def emit(
@@ -1301,6 +1330,43 @@ def _checked_maps(
     return (map, mask)
 
 
+def _resolved_env(
+    scene: Scene, assets: Assets, material: Material, shading: ShadeMode
+) raises -> CubeTextureId:
+    """Return the cube texture a material reflects, or `NO_CUBE_TEXTURE`.
+
+    `SCENE_ENVIRONMENT` becomes whatever the scene's `environment` names,
+    which can be nothing: three.js's `material.envMap || scene.environment`.
+    The id is then checked against the store, here, where the store is in
+    reach, as the material's maps are checked in `_prepared`. Only
+    `SHADE_TEXTURE` reflects: a reflection is a texture, and the other two
+    modes ignore every texture. The store is asked whatever the mode, as
+    the maps are: a wrong asset, not a wrong frame.
+
+    Args:
+        scene: The scene, for its environment.
+        assets: Where the cube textures live.
+        material: The material, for what it names.
+        shading: The renderer's shading mode.
+
+    Returns:
+        The id, or `NO_CUBE_TEXTURE`.
+
+    Raises:
+        Error: If the id names a cube texture that is not there.
+    """
+    var env = material.env_map
+    if env == SCENE_ENVIRONMENT:
+        env = scene.environment
+    if env != NO_CUBE_TEXTURE and (
+        env.value < 0 or env.value >= assets.cube_textures.count()
+    ):
+        raise Error("A material names a cube texture that is not there")
+    if shading != SHADE_TEXTURE:
+        env = NO_CUBE_TEXTURE
+    return env
+
+
 def _emit_sprite(
     mut corners: List[RasterVertex],
     assets: Assets,
@@ -1360,6 +1426,13 @@ def _emit_sprite(
             "A sprite cannot be a wireframe: it is a picture, and its"
             " edges say nothing"
         )
+    # A sprite has no surface of its own to turn, so nothing to reflect
+    # from: three.js's `SpriteMaterial` has no `envMap`.
+    if material.has_env_map():
+        raise Error(
+            "A sprite cannot reflect an environment: it is a picture facing"
+            " the camera, with no surface to reflect from"
+        )
     var maps = _checked_maps(assets, material, shading)
     var to_uv = _uv_transform(assets, material)
     ref world = draw.world
@@ -1417,6 +1490,9 @@ def _emit_sprite(
         NO_TEXTURE,
         False,
         DOUBLE_SIDE,
+        NO_CUBE_TEXTURE,
+        1,
+        MULTIPLY_OPERATION,
     )
     var thirds: List[Int] = [2, 3]
     for half in range(2):  # pragma: no branch
@@ -1563,6 +1639,35 @@ def camera_up[C: Camera](scene: Scene, camera: C) raises -> Vector3:
     var up = to_world.transform_direction(Vector3(0, 1, 0))
     up.normalize()
     return up^
+
+
+def _set_backdrop(
+    mut image: Framebuffer, x: Int, y: Int, color: FloatColor
+) raises:
+    """Write one backdrop pixel: the color encoded to sRGB bytes, opaque.
+
+    Opaque whatever the texture's alpha said, as three.js's background
+    plane is drawn opaque: a background hides nothing but the clear color.
+    """
+    var shown = color.encode()
+    image.set_pixel(x, y, Color(shown.r, shown.g, shown.b, 255))
+
+
+def _paint_backdrop(
+    mut target: RenderTarget, kept: Rect, image: Framebuffer
+) raises:
+    """Write a backdrop's opaque pixels into the target as light, decoded
+    from the same bytes the kernel decodes; see `Renderer.backdrop`.
+
+    Nothing is claimed in depth: a background is behind everything.
+    """
+    var top = kept.top(target.height)
+    for y in range(top, top + kept.height):  # pragma: no branch
+        for x in range(kept.x, kept.x + kept.width):  # pragma: no branch
+            var pixel = image.get_pixel(x, y)
+            if pixel.a != 255:
+                continue
+            target.write(x, y, FloatColor(srgb=pixel), False)
 
 
 def available_workers() -> Int:
@@ -1909,8 +2014,9 @@ struct Renderer(Movable):
 
         Raises:
             Error: If a mesh names a node, a geometry or a material that is
-                not there, if a material names a texture, an emissive map
-                or an alpha map that is not there, if its emissive map does
+                not there, if a material names a texture, an emissive map,
+                an alpha map or a cube texture that is not there, if its
+                emissive map does
                 not ignore its alpha, if its alpha map is not stored as
                 data, if its geometry has no positions, or if its material
                 asks for vertex colors and the geometry has no `color`
@@ -2091,6 +2197,9 @@ struct Renderer(Movable):
                 )
             if self.shading == SHADE_UV:
                 ball = NO_TEXTURE
+            # The environment the surface reflects, the scene's if the
+            # material asked for it, checked against the store here.
+            var env = _resolved_env(scene, assets, material, self.shading)
             # Where the maps are moved, tiled and turned on this surface,
             # asked of the material's own maps whatever the shading mode:
             # the uv view shows the coordinates the texture would be
@@ -2241,6 +2350,9 @@ struct Renderer(Movable):
                 ball,
                 mirrored,
                 material.side,
+                env,
+                material.reflectivity,
+                material.combine,
             )
             if wireframe:
                 # The mesh's own edges, each once, clipped as segments.
@@ -2533,6 +2645,11 @@ struct Renderer(Movable):
                 raise Error(
                     "A line material has no map: a line has no surface"
                     " coordinates to sample one with"
+                )
+            if material.has_env_map():
+                raise Error(
+                    "A line material has no env map: a line has no surface"
+                    " to reflect from"
                 )
             # An index buffer here is a triangle index -- `set_index`
             # demands whole triangles -- so it cannot say which points a
@@ -2845,6 +2962,11 @@ struct Renderer(Movable):
                 raise Error(
                     "A points material cannot be a wireframe: a point has"
                     " no edges to draw"
+                )
+            if material.has_env_map():
+                raise Error(
+                    "A points material has no env map: a point has no"
+                    " surface to reflect from"
                 )
             var maps = _checked_maps(assets, material, self.shading)
             # A point samples its maps at its own coordinate, as stored;
@@ -3251,7 +3373,18 @@ struct Renderer(Movable):
         if self.scissor_test:
             kept = self.scissor
         target.set_scissor(kept)
-        target.clear_inside(kept, self.background)
+        # The scene's background, then the renderer's own: three.js clears
+        # to `scene.background` when it is a color and to the clear color
+        # otherwise, and then draws a texture or a cube background over
+        # the clear before the scene. See `core.background`.
+        target.clear_inside(kept, self.clear_color(scene))
+        var backdrop = self.backdrop(scene, assets, camera)
+        # Spelled as a Bool rather than testing the Optional directly,
+        # because the coverage instrumenter wraps every condition in a
+        # probe that takes a Bool; see `materials.material`.
+        var painted = Bool(backdrop)
+        if painted:
+            _paint_backdrop(target, kept, backdrop.value())
         # Triangles, segments and points in the frame's one order, which
         # is the order the kernel walks too. See
         # `render.rasterizer.rasterize_frame` and `prepare_frame`.
@@ -3266,4 +3399,158 @@ struct Renderer(Movable):
             self.workers,
             fog,
             frame.points,
+            assets.cube_textures,
         )
+
+    def clear_color(self, scene: Scene) raises -> Color:
+        """Return what a frame of `scene` is cleared to: the scene's color
+        background if it has one, else this renderer's `background`.
+
+        three.js's rule: `scene.background` as a color replaces the clear
+        color, and any other background is drawn over the clear color.
+
+        Args:
+            scene: The scene, for its background.
+
+        Returns:
+            The clear color, as authored in sRGB.
+
+        Raises:
+            Error: If the background is refused by `Background.validate`.
+        """
+        scene.background.validate()
+        if scene.background.kind == COLOR_BACKGROUND:
+            return scene.background.color
+        return self.background
+
+    def backdrop[
+        C: Camera
+    ](self, scene: Scene, assets: Assets, camera: C) raises -> Optional[
+        Framebuffer
+    ]:
+        """Return the scene's image background as this camera sees it, or
+        none when the scene has no image background.
+
+        What `render_into` paints under the scene and `GpuRenderer.draw`
+        takes as its `backdrop`, so both backends start a frame from the
+        same bytes. A pixel inside the viewport holds the background's
+        color there with full alpha; every other pixel is transparent,
+        and holds the clear color on either backend. The image is sRGB
+        bytes, as a background image is, and both backends decode the
+        same bytes into linear light through the same ramp.
+
+        A texture background is stretched over the viewport, as three.js
+        draws one, and read at its full size through its own filter; its
+        transform is not applied. A cube background is read in the
+        direction each pixel's ray leaves the camera along: the near and
+        far points of the ray are unprojected through the camera, so any
+        camera serves, and a parallel one sees one direction everywhere.
+
+        Only `SHADE_TEXTURE` draws an image background: the other two
+        modes ignore every texture, and a background is one. Under either
+        of them this returns none and the frame is cleared to the color.
+
+        Args:
+            scene: The scene, for its background.
+            assets: Where the texture or the cube texture lives.
+            camera: The camera the frame is drawn through.
+
+        Returns:
+            The backdrop, the renderer's size, or none.
+
+        Raises:
+            Error: If the background is refused by `Background.validate`,
+                names a texture or a cube texture that is not there, or
+                the camera's matrices cannot be built.
+        """
+        scene.background.validate()
+        var backdrop = scene.background
+        if not backdrop.is_image() or self.shading != SHADE_TEXTURE:
+            return None
+        var image = Framebuffer(self.width, self.height, Color(0, 0, 0, 0))
+        var kept = Rect.whole(self.width, self.height)
+        if self.scissor_test:
+            kept = self.scissor
+        var viewport = self.viewport
+        var top = viewport.top(self.height)
+        if backdrop.kind == TEXTURE_BACKGROUND:
+            if backdrop.texture.value >= assets.textures.count():
+                raise Error("A background names a texture that is not there")
+            ref picture = assets.textures.get(backdrop.texture)
+            for y in range(self.height):  # pragma: no branch
+                for x in range(self.width):  # pragma: no branch
+                    if not kept.contains_pixel(
+                        x, y, self.height
+                    ) or not viewport.contains_pixel(x, y, self.height):
+                        continue
+                    # Stretched over the viewport: the pixel's center as a
+                    # fraction of the rectangle, `v` counting up.
+                    var u = (Float32(x - viewport.x) + 0.5) / Float32(
+                        viewport.width
+                    )
+                    var v = 1 - (Float32(y - top) + 0.5) / Float32(
+                        viewport.height
+                    )
+                    _set_backdrop(image, x, y, picture.sample(u, v))
+            return image^
+        if backdrop.cube.value >= assets.cube_textures.count():
+            raise Error("A background names a cube texture that is not there")
+        ref sky = assets.cube_textures.get(backdrop.cube)
+        # From pixels back to the world: the inverse of the camera's
+        # projection and view, so the ray through a pixel is the line from
+        # its near point to its far point.
+        var unproject = camera.projection_matrix()
+        unproject.multiply(camera.view_matrix_in(scene))
+        unproject.invert()
+        for y in range(self.height):  # pragma: no branch
+            for x in range(self.width):  # pragma: no branch
+                if not kept.contains_pixel(
+                    x, y, self.height
+                ) or not viewport.contains_pixel(x, y, self.height):
+                    continue
+                var ndc_x = (Float32(x - viewport.x) + 0.5) / Float32(
+                    viewport.width
+                ) * 2 - 1
+                var ndc_y = (
+                    1 - (Float32(y - top) + 0.5) / Float32(viewport.height) * 2
+                )
+                var near = unproject.transform_point(Vector3(ndc_x, ndc_y, -1))
+                var far = unproject.transform_point(Vector3(ndc_x, ndc_y, 1))
+                _set_backdrop(image, x, y, sky.sample(far - near))
+        return image^
+
+    def render_cube(
+        self, scene: Scene, assets: Assets, camera: CubeCamera
+    ) raises -> CubeTexture:
+        """Draw the scene six times from one point, once along each axis,
+        and return the six views as a cube texture: three.js's
+        `CubeCamera.update(renderer, scene)`.
+
+        Each face is drawn by a renderer of the face's size with this
+        one's background, shading and workers, through `render`, so the
+        scene's own background and every material are in the faces.
+        The tone mapping is left off, as three.js turns it off around its
+        update: the faces are light the main frame will map once, when a
+        surface reflects them or the sky shows them.
+
+        Args:
+            scene: The transform hierarchy, and what it draws.
+            assets: The geometry, materials and textures it names.
+            camera: Where to stand, how far to see, and how big a face is.
+
+        Returns:
+            The cube texture, stored `SRGB`; see `cube_texture_of`.
+
+        Raises:
+            Error: Everything `render` raises for one of the six faces, or
+                `CubeCamera.face_camera` for the camera's node.
+        """
+        var side = Renderer(camera.size, camera.size, self.workers)
+        side.background = self.background
+        side.shading = self.shading
+        var faces = List[Framebuffer]()
+        for face in range(FACE_COUNT):  # pragma: no branch
+            faces.append(
+                side.render(scene, assets, camera.face_camera(face, scene))
+            )
+        return cube_texture_of(faces)

@@ -28,6 +28,9 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `render_into(target, scene, assets, camera)` | The same into a target of the renderer's size, cleared first, resolved by the caller. See below. |
 | `render_array(scene, assets, array) -> Framebuffer` | Once per camera of an [ArrayCamera](Cameras#arraycamera), each into its own rectangle. |
 | `render_array_into(target, scene, assets, array)` | The same into a target you hold. |
+| `render_cube(scene, assets, camera) -> CubeTexture` | Six faces through a [CubeCamera](Cameras#cubecamera), as a cube texture. |
+| `clear_color(scene) -> Color` | What a frame is cleared to: the scene's color background, or `background`. |
+| `backdrop(scene, assets, camera) -> Optional[Framebuffer]` | The scene's image background as the camera sees it, or none. See [Scene graph](Scene-graph#background-and-environment). |
 | `tone_curve() -> ToneMapping` | The curve `render` resolves through: the one set, or none in the uv view. |
 | `set_viewport(rect)` | Where the image lands on the target. See below. |
 | `set_scissor(rect)`, `set_scissor_test(enabled)` | Which pixels a draw may touch, and whether that is enforced. See below. |
@@ -100,7 +103,7 @@ Each instance of an instanced or batched mesh is tested on its own, with the ins
 
 `camera_up` goes with them for a `MATCAP` surface, which is looked up in the camera's own frame. It is the view space +y axis carried back into the world. Every projection answers the same way. See [Materials](Materials#matcap).
 
-It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). Then it rasterizes the frame with `rasterize_frame`, in the frame's order, and resolves the image through the tone mapping curve.
+It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). It clears the target to `clear_color(scene)` and paints `backdrop(scene, assets, camera)` under the scene, where the scene has an image background. Then it rasterizes the frame with `rasterize_frame`, in the frame's order, with the assets' cube textures for the surfaces that reflect one. Last, it resolves the image through the tone mapping curve.
 
 ## Viewport and scissor
 

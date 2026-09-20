@@ -111,6 +111,38 @@ An eye is a placed camera with a `Float32` position. A million meters from the o
 
 `examples/stereo.mojo` draws a stereo pair of a box and a ring, side by side, from a circling camera.
 
+## CubeCamera
+
+`CubeCamera` stands at one point and looks out along each axis in turn. Its six square views have a ninety degree field of view, and together they see everything around it. three.js's `CubeCamera.update(renderer, scene)` renders the six into a cube render target. Here `Renderer.render_cube(scene, assets, camera)` renders them into six images and returns the [cube texture](Textures#cube-textures) built from them.
+
+```mojo
+from cameras.cube_camera import CubeCamera
+
+var eye = CubeCamera(Length(0.1, METER), Length(50.0, METER), 64)
+eye.attach(ball_node)
+var seen = assets.cube_textures.add(renderer.render_cube(scene, assets, eye))
+var chrome = Material(Color(255, 255, 255), kind=BASIC, env_map=seen)
+```
+
+| Member | Meaning |
+|---|---|
+| `CubeCamera(near, far, size)` | Two `Length` planes and the width of each face in pixels. |
+| `place(position)` | Stand at a world-space point. Lets go of any node. |
+| `attach(node)` | Stand wherever the scene puts a node. Only its position is read. |
+| `eye(scene) -> Vector3` | Where the camera stands. |
+| `face_camera(face, scene) -> PerspectiveCamera` | The camera that draws one face, placed. |
+| `layers` | Which layers the six faces draw. Layer zero alone to begin with. |
+
+Each face camera looks along `face_forward(face)` with `face_up(face)` as its up. Those are the two tables the cube texture sampler reads with, and three.js's own six ups. So a rendered cube reflects the scene it was rendered from with no flip. The node's own turn is not read: a cube texture is sampled in world space.
+
+`render_cube` draws each face with a renderer of the face's size and this renderer's background, shading and workers, through `render`. The scene's own background is in the faces. The tone mapping is left off, as three.js turns it off around its update: the faces are light the main frame maps once.
+
+A cube camera at the center of a mirror ball sees the inside of the ball. three.js's examples hide the ball around the update. Here the camera has `layers`, as every camera has. Put the ball on a layer of its own and the main camera on both, and the cube camera does not draw it.
+
+The constructor refuses a size that is not positive. It refuses a near plane that is not in front of the camera, and a far plane that is not beyond it. A face that is none of the six is refused, and so is a stale scene or a missing node. `tests/compile_fail/` proves a bare float is not a plane.
+
+`examples/mirror.mojo` renders a cube camera's view every frame and reflects it in a chrome ball.
+
 ## Attach a camera to a node
 
 ```mojo

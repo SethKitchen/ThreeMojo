@@ -94,6 +94,14 @@ from materials.material import (
     NORMALS,
     PHONG,
     TOON,
+    Combine,
+    combine_light,
+)
+from render.cube_texture import FACE_COUNT, face_of, face_uv, reflected
+from render.cube_texture_store import (
+    NO_CUBE_TEXTURE,
+    CubeTextureId,
+    CubeTextureStore,
 )
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.srgb import LINEAR, SRGB, ColorSpace, decode_ramp
@@ -183,7 +191,10 @@ comptime LANE_GAP = 27
 # so it is a lane like everything else a point carries. A triangle's
 # corners and a segment's ends carry zero.
 comptime LANE_POINT_SIZE = 28
-comptime FLOATS_PER_VERTEX = LANE_POINT_SIZE + 1
+# How much of a reflection joins the surface's light. Per triangle, read
+# from the first corner's lane like the shininess, and a float like it.
+comptime LANE_REFLECTIVITY = 29
+comptime FLOATS_PER_VERTEX = LANE_REFLECTIVITY + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -200,6 +211,14 @@ comptime STATE_ALPHA_MAP = 4
 comptime STATE_GRADIENT_MAP = 5
 # Which image a `MATCAP` triangle is looked up in, or `NO_TEXTURE`.
 comptime STATE_MATCAP = 6
+# Where the six faces of the cube a triangle reflects begin in the
+# descriptor table, or -1 for none. A slot rather than a cube id, because
+# the table holds faces: `set_textures` lays every cube's six faces out
+# after the flat textures, and `triangle_state` turns the id into the slot
+# of its first face. See `_sample_cube`.
+comptime STATE_ENV_MAP = 7
+# How the reflection joins the surface's light: a `Combine` value.
+comptime STATE_COMBINE = 8
 # How many integers a segment's state takes: its blend policy, and
 # nothing else. A line is unlit and untextured; see `line_state`.
 comptime STATE_PER_LINE = 1
@@ -213,7 +232,7 @@ comptime STATE_PER_POINT = POINT_STATE_ALPHA_MAP + 1
 # How a `Draw` crosses to the device: its kind, its first primitive and its
 # count, as three integers.
 comptime INTS_PER_DRAW = 3
-comptime STATE_PER_TRIANGLE = STATE_MATCAP + 1
+comptime STATE_PER_TRIANGLE = STATE_COMBINE + 1
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
 # density, then the fog color, linear. Six floats, whatever the kind,
@@ -252,11 +271,18 @@ comptime TABLE_COLUMNS = 8
 
 def flatten_textures(
     textures: TextureStore,
+    cubes: CubeTextureStore = CubeTextureStore(),
 ) raises -> Tuple[List[UInt8], List[Int32]]:
     """Return every texture's bytes end to end, and the table describing them.
 
+    The flat textures first, one row each in id order, then every cube
+    texture's six faces in id order, one row each: cube `c` begins at row
+    `textures.count() + c * FACE_COUNT`, which is what `triangle_state`
+    writes for a triangle that reflects it.
+
     Args:
         textures: The store to upload.
+        cubes: The cube textures to upload after it.
 
     Returns:
         The concatenated texels, and `TABLE_COLUMNS` entries per texture:
@@ -267,42 +293,18 @@ def flatten_textures(
         Error: If a texture cannot be read, or its wrap, filter, color
             space or alpha mode is none of the named values -- a texture's
             fields are open, so one can have been edited since it was built,
-            and the kernel cannot raise on what it finds in the table.
+            and the kernel cannot raise on what it finds in the table -- or
+            a cube texture is refused by `CubeTexture.validate`.
     """
     var texels = List[UInt8]()
     var table = List[Int32]()
     for id in range(textures.count()):
-        ref image = textures.get(TextureId(id))
-        image.validate()
-        table.append(Int32(len(texels)))
-        if image.is_blank():
-            # A blank texture is a legitimate thing to store, and on the host
-            # it samples as opaque white. Rather than teach the kernel a
-            # second meaning for "no texture", it crosses as one white texel:
-            # the device invariant stays "every descriptor has a real size",
-            # and sampling a 1x1 white image gives white at any coordinate
-            # under any wrap mode. Left as a zero width it reached
-            # `wrap_index(..., 0, REPEAT)`, which is a modulo by zero, and the
-            # GPU returned black where the CPU returned white.
-            table.append(1)
-            table.append(1)
-            table.append(Int32(image.wrap.value))
-            table.append(Int32(image.filter.value))
-            table.append(Int32(image.color_space.value))
-            table.append(1)
-            table.append(Int32(COVERAGE.value))
-            for _ in range(4):
-                texels.append(255)
-            continue
-        table.append(Int32(image.width))
-        table.append(Int32(image.height))
-        table.append(Int32(image.wrap.value))
-        table.append(Int32(image.filter.value))
-        table.append(Int32(image.color_space.value))
-        table.append(Int32(image.levels))
-        table.append(Int32(image.alpha.value))
-        # One bulk copy rather than an append per byte.
-        texels.extend(image.pixels.copy())
+        _flatten_one(textures.get(TextureId(id)), texels, table)
+    for cube in range(cubes.count()):
+        ref six = cubes.get(CubeTextureId(cube))
+        six.validate()
+        for face in range(FACE_COUNT):  # pragma: no branch
+            _flatten_one(six.face(face), texels, table)
     # Never empty: a zero-length device buffer is not worth the special case,
     # and a vertex naming NO_TEXTURE never reads either of these.
     if len(texels) == 0:
@@ -311,6 +313,47 @@ def flatten_textures(
         for _ in range(TABLE_COLUMNS):
             table.append(0)
     return (texels^, table^)
+
+
+def _flatten_one(
+    image: Texture, mut texels: List[UInt8], mut table: List[Int32]
+) raises:
+    """Append one texture's bytes and its row of the table.
+
+    Raises:
+        Error: If the texture's wrap, filter, color space or alpha mode is
+            none of the named values.
+    """
+    image.validate()
+    table.append(Int32(len(texels)))
+    if image.is_blank():
+        # A blank texture is a legitimate thing to store, and on the host
+        # it samples as opaque white. Rather than teach the kernel a
+        # second meaning for "no texture", it crosses as one white texel:
+        # the device invariant stays "every descriptor has a real size",
+        # and sampling a 1x1 white image gives white at any coordinate
+        # under any wrap mode. Left as a zero width it reached
+        # `wrap_index(..., 0, REPEAT)`, which is a modulo by zero, and the
+        # GPU returned black where the CPU returned white.
+        table.append(1)
+        table.append(1)
+        table.append(Int32(image.wrap.value))
+        table.append(Int32(image.filter.value))
+        table.append(Int32(image.color_space.value))
+        table.append(1)
+        table.append(Int32(COVERAGE.value))
+        for _ in range(4):
+            texels.append(255)
+        return
+    table.append(Int32(image.width))
+    table.append(Int32(image.height))
+    table.append(Int32(image.wrap.value))
+    table.append(Int32(image.filter.value))
+    table.append(Int32(image.color_space.value))
+    table.append(Int32(image.levels))
+    table.append(Int32(image.alpha.value))
+    # One bulk copy rather than an append per byte.
+    texels.extend(image.pixels.copy())
 
 
 def pack(color: Color) -> UInt32:
@@ -370,6 +413,7 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.dash_size)
         flat.append(corner.gap_size)
         flat.append(corner.point_size)
+        flat.append(corner.reflectivity)
     return flat^
 
 
@@ -1051,7 +1095,9 @@ def point_state(points: List[RasterVertex]) -> List[Int32]:
     return state^
 
 
-def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
+def triangle_state(
+    corners: List[RasterVertex], cube_base: Int = 0
+) -> List[Int32]:
     """Return each triangle's texture, blend policy, material kind and
     emissive map, `STATE_PER_TRIANGLE` entries each.
 
@@ -1066,11 +1112,14 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
 
     Args:
         corners: Raster vertices, three per triangle.
+        cube_base: The table row the first cube texture's first face is
+            on: how many flat textures were uploaded before the cubes.
 
     Returns:
         Texture id, blend policy, the material kind's value, the emissive
-        map id, the alpha map id, the gradient map id, then the matcap id,
-        per triangle, from its first corner.
+        map id, the alpha map id, the gradient map id, the matcap id, the
+        row of the env map's first face or -1 for none, then the combine's
+        value, per triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -1081,6 +1130,12 @@ def triangle_state(corners: List[RasterVertex]) -> List[Int32]:
         state.append(Int32(corners[triangle * 3].alpha_map.value))
         state.append(Int32(corners[triangle * 3].gradient_map.value))
         state.append(Int32(corners[triangle * 3].matcap.value))
+        var cube = corners[triangle * 3].env_map
+        var row = -1
+        if cube != NO_CUBE_TEXTURE:
+            row = cube_base + cube.value * FACE_COUNT
+        state.append(Int32(row))
+        state.append(Int32(corners[triangle * 3].combine.value))
     return state^
 
 
@@ -1214,6 +1269,29 @@ def _sample_level(
     var near = _sample_at(texels, ramp, image, u, v, lower)
     var far = _sample_at(texels, ramp, image, u, v, lower + 1)
     return mix_color(near, far, level - Float32(lower))
+
+
+def _sample_cube(
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
+    first: Int,
+    direction: Vector3,
+) -> FloatColor:
+    """Sample a cube texture in a direction, the device counterpart of
+    `CubeTexture.sample`.
+
+    The six faces are six consecutive rows of the table from `first`, in
+    `POSITIVE_X` through `NEGATIVE_Z` order, as `flatten_textures` laid
+    them out. `face_of` picks the row and `face_uv` the place on it, both
+    the host's own functions, and the face is read at its full size as the
+    host reads it.
+    """
+    var face = face_of(direction)
+    var place = face_uv(face, direction)
+    return _sample_at(
+        texels, ramp, _describe(table, first + face), place.x, place.y, 0
+    )
 
 
 def _mip_level(
@@ -1357,6 +1435,7 @@ def rasterize_kernel(
     scissor_y: Int32,
     scissor_width: Int32,
     scissor_height: Int32,
+    backdrop: MutPointer[UInt8, MutAnyOrigin],
 ):
     """Color one pixel from the nearest primitive that covers it.
 
@@ -1408,6 +1487,19 @@ def rasterize_kernel(
     var mixed_r = ramp[unsafe_offset=Int((background >> 24) & 0xFF)] * mixed_a
     var mixed_g = ramp[unsafe_offset=Int((background >> 16) & 0xFF)] * mixed_a
     var mixed_b = ramp[unsafe_offset=Int((background >> 8) & 0xFF)] * mixed_a
+    # A scene's image background, where it was painted: opaque bytes
+    # decoded through the ramp, exactly as `Renderer.render_into` decodes
+    # the same bytes into its target before it draws. A pixel the backdrop
+    # left transparent keeps the clear color, and a frame with no backdrop
+    # is handed a transparent buffer. Asked of the buffer rather than of a
+    # flag, because Metal binds at most thirty-one arguments to a kernel
+    # and this one has thirty-one. See `Renderer.backdrop`.
+    var painted = (y * Int(width) + x) * 4
+    if backdrop[unsafe_offset=painted + 3] == 255:
+        mixed_r = ramp[unsafe_offset=Int(backdrop[unsafe_offset=painted])]
+        mixed_g = ramp[unsafe_offset=Int(backdrop[unsafe_offset=painted + 1])]
+        mixed_b = ramp[unsafe_offset=Int(backdrop[unsafe_offset=painted + 2])]
+        mixed_a = 1
     # Whether the pixel holds data rather than light, decided by the last
     # fragment into it exactly as `RenderTarget.write` and `blend` decide
     # it: a normal or a depth, which the tone mapping must leave alone.
@@ -1787,6 +1879,13 @@ def rasterize_kernel(
             # Unlit, but looked up by which way the surface is turned, so it
             # needs the normal and the world position that a lit surface needs.
             var looked_up = kind == Int32(MATCAP.value)
+            # Whether this surface reflects an environment, which needs the
+            # same two whether or not it is lit, and only under the mode
+            # that opens textures, as `rasterize_shaded` decides it.
+            var env_slot = maps[
+                unsafe_offset=index * STATE_PER_TRIANGLE + STATE_ENV_MAP
+            ]
+            var reflects = env_slot >= 0 and mode == Int32(SHADE_TEXTURE.value)
             var shows_normal = kind == Int32(NORMALS.value)
             var shows_data = shows_normal or kind == Int32(DEPTH.value)
             # The interpolated normal, made a unit vector again here. That
@@ -1802,7 +1901,7 @@ def rasterize_kernel(
             var ny = Float32(0)
             var nz = Float32(1)
             if mode != Int32(SHADE_UV.value) and (
-                lit or shows_normal or looked_up
+                lit or shows_normal or looked_up or reflects
             ):
                 nx = (
                     corners[unsafe_offset=base + LANE_NX] * share_a
@@ -1824,24 +1923,28 @@ def rasterize_kernel(
                     nx /= unit
                     ny /= unit
                     nz /= unit
-            if mode != Int32(SHADE_UV.value) and (lit or looked_up):
-                # Where this fragment is in the world, for the lights that have
-                # a position.
-                var wx = (
+            # Where this fragment is in the world, for the lights that have
+            # a position, and for the direction a reflection turns back.
+            var wx = Float32(0)
+            var wy = Float32(0)
+            var wz = Float32(0)
+            if mode != Int32(SHADE_UV.value) and (lit or looked_up or reflects):
+                wx = (
                     corners[unsafe_offset=base + LANE_WX] * share_a
                     + corners[unsafe_offset=b_base + LANE_WX] * share_b
                     + corners[unsafe_offset=c_base + LANE_WX] * share_c
                 )
-                var wy = (
+                wy = (
                     corners[unsafe_offset=base + LANE_WY] * share_a
                     + corners[unsafe_offset=b_base + LANE_WY] * share_b
                     + corners[unsafe_offset=c_base + LANE_WY] * share_c
                 )
-                var wz = (
+                wz = (
                     corners[unsafe_offset=base + LANE_WZ] * share_a
                     + corners[unsafe_offset=b_base + LANE_WZ] * share_b
                     + corners[unsafe_offset=c_base + LANE_WZ] * share_c
                 )
+            if mode != Int32(SHADE_UV.value) and (lit or looked_up):
                 if looked_up:
                     # Which way the surface is turned in the camera's frame,
                     # and the image read there: the host's own two functions.
@@ -2162,6 +2265,42 @@ def rasterize_kernel(
                     red += highlight.x + glow_r
                     green += highlight.y + glow_g
                     blue += highlight.z + glow_b
+                    # Then the reflection, by the host's own three
+                    # functions: the view turned back through the normal,
+                    # the cube read in that direction, and the two lights
+                    # joined by the material's combine. See
+                    # `rasterize_shaded`.
+                    if reflects:
+                        var bounce = reflected(
+                            toward_eye_at(
+                                Vector3(
+                                    lights[unsafe_offset=LIGHTS_EYE],
+                                    lights[unsafe_offset=LIGHTS_EYE + 1],
+                                    lights[unsafe_offset=LIGHTS_EYE + 2],
+                                ),
+                                PERSPECTIVE_VIEW,
+                                Vector3(wx, wy, wz),
+                            ),
+                            Vector3(nx, ny, nz),
+                        )
+                        var joined = combine_light(
+                            FloatColor(red, green, blue, alpha),
+                            _sample_cube(
+                                texels, ramp, table, Int(env_slot), bounce
+                            ),
+                            corners[unsafe_offset=base + LANE_REFLECTIVITY],
+                            Combine(
+                                Int(
+                                    maps[
+                                        unsafe_offset=index * STATE_PER_TRIANGLE
+                                        + STATE_COMBINE
+                                    ]
+                                )
+                            ),
+                        )
+                        red = joined.r
+                        green = joined.g
+                        blue = joined.b
                 # Veiled by the fog last, in linear light, from the same depth
                 # lane and with the same function as `rasterize_shaded`. Alpha
                 # is coverage and is left alone.
@@ -2356,6 +2495,16 @@ struct GpuRenderer(Movable):
     # exactly one: the kernel reads the row the host reads, and a taller
     # image has no unambiguous one. See `check_gradient_map`.
     var heights: List[Int]
+    # How many cube textures the last upload laid out after the flat
+    # textures, six rows each. A triangle's env map id is checked against
+    # it before the launch, as its texture id is against `uploaded`.
+    var uploaded_cubes: Int
+    # A scene's image background, one pixel per pixel of the target, read
+    # by the kernel where its alpha is full; see `Renderer.backdrop`.
+    # Rewritten by every draw that has one, and cleared to transparent by
+    # the first draw after it that has none: `painted` says which.
+    var backdrop: DeviceBuffer[DType.uint8]
+    var painted: Bool
     # Declared last so that it is released last. See `__deinit__`.
     var context: DeviceContext
 
@@ -2396,6 +2545,7 @@ struct GpuRenderer(Movable):
         _ = self.texels^
         _ = self.table^
         _ = self.ramp^
+        _ = self.backdrop^
         _ = self.context^
 
     def __init__(out self, width: Int, height: Int) raises:
@@ -2471,16 +2621,42 @@ struct GpuRenderer(Movable):
         # Allocated but never filled, so until `set_textures` runs the only
         # legal reference is NO_TEXTURE.
         self.uploaded = 0
+        self.uploaded_cubes = 0
         self.ignores_alpha = List[Bool]()
         self.is_linear = List[Bool]()
         self.has_texels = List[Bool]()
         self.heights = List[Int]()
+        self.backdrop = self.context.enqueue_create_buffer[DType.uint8](
+            width * height * Framebuffer.CHANNELS
+        )
         self.ramp = self.context.enqueue_create_buffer[DType.float32](256)
         var steps = decode_ramp()
         with self.ramp.map_to_host() as host:
             unsafe_memcpy(
                 dest=host.unsafe_ptr(), src=steps.unsafe_ptr(), count=256
             )
+        # Transparent everywhere, so the first draw reads the clear color
+        # rather than whatever the allocation held. Last, once every
+        # field is set, because it is a method.
+        self.painted = True
+        self._clear_backdrop()
+
+    def _clear_backdrop(mut self) raises:
+        """Make every backdrop pixel transparent, once, after a draw that
+        painted one is followed by a draw that does not.
+
+        Raises:
+            Error: If the device buffer cannot be written.
+        """
+        if not self.painted:
+            return
+        var count = self.width * self.height * Framebuffer.CHANNELS
+        var clear = List[UInt8](length=count, fill=0)
+        with self.backdrop.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(), src=clear.unsafe_ptr(), count=count
+            )
+        self.painted = False
 
     def _upload_lights(mut self, lighting: Lighting) raises:
         """Put `lighting` on the device.
@@ -2537,6 +2713,7 @@ struct GpuRenderer(Movable):
         draws: List[Draw] = List[Draw](),
         scissor: Optional[Rect] = None,
         points: List[RasterVertex] = List[RasterVertex](),
+        backdrop: Optional[Framebuffer] = None,
     ) raises:
         """Rasterize prepared triangles, lines and points into the device
         target.
@@ -2574,6 +2751,11 @@ struct GpuRenderer(Movable):
                 into another rectangle leaves this one's pixels alone.
                 The corner counts up from the bottom; see `render.rect`.
             points: Raster vertices, one per point. Empty by default.
+            backdrop: A scene's image background, as `Renderer.backdrop`
+                paints it: a pixel with full alpha is what the pixel holds
+                before anything is drawn, and any other pixel holds the
+                clear color. None, the default, clears to `background`
+                alone. It must be the target's size.
 
         Raises:
             Error: If the corner count is not a multiple of three, the
@@ -2590,9 +2772,10 @@ struct GpuRenderer(Movable):
                 neither backend knows, a vertex names a texture, an
                 emissive map or an alpha map that is not uploaded, an
                 emissive map that
-                `SHADE_TEXTURE` would open does not ignore its alpha, or an
+                `SHADE_TEXTURE` would open does not ignore its alpha, an
                 alpha map it would open is not linear or does not ignore
-                its alpha.
+                its alpha, a vertex names a cube texture that is not
+                uploaded, or the backdrop is not the target's size.
         """
         if len(corners) % 3 != 0:
             raise Error("Rasterizing needs whole triangles")
@@ -2678,6 +2861,15 @@ struct GpuRenderer(Movable):
                         "A vertex names a texture that has not been uploaded;"
                         " call set_textures() first"
                     )
+            # The env map, checked the same way against the cubes the last
+            # upload laid out. `check_triangle_state` has refused every
+            # negative but `NO_CUBE_TEXTURE`.
+            var cube = corners[index].env_map
+            if cube != NO_CUBE_TEXTURE and cube.value >= self.uploaded_cubes:
+                raise Error(
+                    "A vertex names a cube texture that has not been"
+                    " uploaded; call set_textures() first"
+                )
         # A point's two maps, checked the same way and for the same
         # reason, and its alpha map for holding data as a triangle's is.
         for index in range(len(points)):
@@ -2804,7 +2996,7 @@ struct GpuRenderer(Movable):
                     src=flat.unsafe_ptr(),
                     count=len(flat),
                 )
-            var state = triangle_state(corners)
+            var state = triangle_state(corners, self.uploaded)
             with self.maps.map_to_host() as host:
                 unsafe_memcpy(
                     dest=host.unsafe_ptr(),
@@ -2887,6 +3079,25 @@ struct GpuRenderer(Movable):
 
         self._upload_lights(lighting)
         self._upload_fog(fog)
+        # The backdrop, whole, rewritten for this draw, or cleared if the
+        # last draw painted one and this one does not. A pixel it leaves
+        # transparent is the clear color on the device as on the host.
+        # Spelled as a Bool for the coverage instrumenter's probe, as
+        # `scissor` is above.
+        var given = Bool(backdrop)
+        if given:
+            ref image = backdrop.value()
+            if image.width != self.width or image.height != self.height:
+                raise Error("A backdrop must be the target's size")
+            with self.backdrop.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=host.unsafe_ptr(),
+                    src=image.pixels.unsafe_ptr(),
+                    count=len(image.pixels),
+                )
+            self.painted = True
+        else:
+            self._clear_backdrop()
         # The uv view is coordinates rather than light and is never tone
         # mapped, background included, exactly as `Renderer.render` turns
         # the curve off for it. The curve was checked above as given;
@@ -2925,6 +3136,7 @@ struct GpuRenderer(Movable):
             Int32(kept.y),
             Int32(kept.width),
             Int32(kept.height),
+            self.backdrop.unsafe_ptr(),
             grid_dim=(
                 ceildiv(self.width, TILE),
                 ceildiv(self.height, TILE),
@@ -2933,8 +3145,13 @@ struct GpuRenderer(Movable):
         )
         self.drawn = True
 
-    def set_textures(mut self, textures: TextureStore) raises:
-        """Upload every texture in `textures`, replacing any previous set.
+    def set_textures(
+        mut self,
+        textures: TextureStore,
+        cubes: CubeTextureStore = CubeTextureStore(),
+    ) raises:
+        """Upload every texture in `textures` and every cube texture in
+        `cubes`, replacing any previous set.
 
         Separate from `draw` on purpose: an animation samples the same images
         every frame, and re-uploading them each time would cost more than the
@@ -2953,13 +3170,16 @@ struct GpuRenderer(Movable):
         Args:
             textures: The store to upload. An empty one is allowed and means
                 no mesh can be textured.
+            cubes: The cube textures to upload after it, six faces each.
+                An empty one is allowed and means no mesh can reflect.
 
         Raises:
             Error: If a texture holds a wrap, filter or color space that is
-                none of the named values, or the device buffers cannot be
+                none of the named values, a cube texture is refused by
+                `CubeTexture.validate`, or the device buffers cannot be
                 made or filled. Either way nothing on the device has changed.
         """
-        var flattened = flatten_textures(textures)
+        var flattened = flatten_textures(textures, cubes)
         ref bytes = flattened[0]
         ref rows = flattened[1]
 
@@ -2986,6 +3206,7 @@ struct GpuRenderer(Movable):
         self.texels = texels^
         self.table = table^
         self.uploaded = textures.count()
+        self.uploaded_cubes = cubes.count()
         # Every one of these describes the upload that has just
         # replaced the last, so every one of them is replaced. `heights`
         # was appended to instead, which left a second upload validating
@@ -3056,6 +3277,8 @@ def render_triangles(
     draws: List[Draw] = List[Draw](),
     scissor: Optional[Rect] = None,
     points: List[RasterVertex] = List[RasterVertex](),
+    cubes: CubeTextureStore = CubeTextureStore(),
+    backdrop: Optional[Framebuffer] = None,
 ) raises -> Framebuffer:
     """Draw prepared triangles, lines and points on the GPU and read the
     image back.
@@ -3083,6 +3306,9 @@ def render_triangles(
             every segment; see `GpuRenderer.draw`.
         scissor: The pixels the draw may touch, or none for all of them.
         points: Raster vertices, one per point. Empty by default.
+        cubes: The cube textures the triangles reflect. Empty by default.
+        backdrop: A scene's image background, or none; see
+            `GpuRenderer.draw`.
 
     Returns:
         The rendered image.
@@ -3093,7 +3319,7 @@ def render_triangles(
             not a multiple of two.
     """
     var renderer = GpuRenderer(width, height)
-    renderer.set_textures(textures)
+    renderer.set_textures(textures, cubes)
     renderer.draw(
         corners,
         background,
@@ -3106,6 +3332,7 @@ def render_triangles(
         draws,
         scissor,
         points,
+        backdrop,
     )
     return renderer.read_back()
 

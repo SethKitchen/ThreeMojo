@@ -62,6 +62,56 @@ It is a picture of the depth, not the depth. A byte holds 256 steps, and a persp
 
 `examples/television.mojo` renders a box into a small target every frame and shows its picture and its depth on two screens.
 
+## Cube textures
+
+`render/cube_texture.mojo` and `render/cube_texture_store.mojo`. A `CubeTexture` is six square textures, one per face of a box around the viewer, sampled by direction rather than by place. It is what a mirror reflects and what a sky is made of.
+
+![A chrome ball under a sky reflects two boxes that circle it](out/mirror.png)
+
+three.js: `CubeTexture`, `CubeTextureLoader`, `WebGLCubeRenderTarget.texture`.
+
+```mojo
+var sky = assets.cube_textures.add(cube_texture_from(images, SEEN_FROM_OUTSIDE))
+var seen = assets.cube_textures.add(renderer.render_cube(scene, assets, cube_camera))
+var chrome = Material(Color(255, 255, 255), kind=BASIC, env_map=sky)
+scene.background = cube_background(sky)
+```
+
+| Builder | Meaning |
+|---|---|
+| `CubeTexture(faces)` | Six textures in face order, each square, all one size, all `CLAMP`. |
+| `cube_texture_from(images, layout=SEEN_FROM_INSIDE, filter=BILINEAR, color_space=None, mipmapped=False, alpha=COVERAGE)` | Six `DecodedImage`s. three.js's `CubeTextureLoader`. |
+| `cube_texture_of(images, filter=BILINEAR, mipmapped=False, alpha=COVERAGE)` | Six `Framebuffer`s, as a [CubeCamera](Cameras#cubecamera) renders them. |
+
+The faces are held in three.js's order: `POSITIVE_X`, `NEGATIVE_X`, `POSITIVE_Y`, `NEGATIVE_Y`, `POSITIVE_Z`, `NEGATIVE_Z`. `FACE_COUNT` is six.
+
+### One convention
+
+Every face is what a camera at the center of the box sees looking out along one axis. `face_forward(face)` is the axis and `face_up(face)` is the camera's up. The up is positive y for the four side faces, and the z axis for the two faces on y. These are three.js's own six ups. A `CubeCamera` renders the faces this way, and the sampler reads them this way, so a rendered cube needs no flip.
+
+The six images of an OpenGL cube map are the same views mirrored left for right. three.js flips a sign for them, `flipEnvMap`. Here `cube_texture_from` takes a `CubeLayout`. `SEEN_FROM_INSIDE`, the default, reads each image as it is. `SEEN_FROM_OUTSIDE` mirrors each face once, on the way in. Use it for a set of six image files stored the usual way.
+
+### Sampling
+
+`sample(direction)` returns the color in a direction. `face_of(direction)` picks the face on the axis the direction leans along most. A tie goes to x, then y, then z, as OpenGL picks it. `face_uv(face, direction)` projects the direction onto that face and reads how far it lands across and up, in the camera's own right and up axes. Both are pure, and both rasterizers call them.
+
+A face is read at its full size, never down a mip chain. A reflection's direction changes across a surface at a rate that is not the surface's own texture footprint. The same rule keeps a matcap out of its chain. A chain can still be built; nothing reads it.
+
+A face must be wrapped `CLAMP`. A coordinate past a face's edge belongs to the next face, and a flat image has no next face to read. The bilinear filter's neighbors at an edge hold that edge.
+
+### CubeTextureStore
+
+`assets.cube_textures.add(cube)` returns a `CubeTextureId`. `get(id)` borrows it. `NO_CUBE_TEXTURE` is the id of no cube texture. `SCENE_ENVIRONMENT` is not an id either: a material naming it reflects the scene's `environment`. See [Materials](Materials#environment-map) and [Scene graph](Scene-graph#background-and-environment).
+
+### Errors
+
+- A cube needs exactly six faces. Each must hold texels, be square, be the size of the others, and be wrapped `CLAMP`.
+- `cube_texture_from` refuses a layout that is neither named value, and an empty image. It refuses a file whose color space cannot be interpreted when none is given.
+- `validate()` refuses a face edited into nonsense after the cube was built. The GPU upload calls it again.
+- The store refuses `NO_CUBE_TEXTURE`, `SCENE_ENVIRONMENT` and any id it does not hold.
+
+`examples/mirror.mojo` builds a sky from six computed faces, renders a cube camera's view every frame, and reflects it in a chrome ball.
+
 ## Wrap
 
 | Value | A coordinate of 1.5 reads |
@@ -166,6 +216,7 @@ var id = assets.textures.add(board^)
 - A `checkerboard` size must divide evenly by its square count.
 - A `data_texture` with a channel count outside one through four, a length that does not match, or a number that is not finite.
 - The renderer refuses a map and an emissive map on one material whose transforms differ.
+- See [Cube textures](#cube-textures) for what a cube refuses.
 
 ## Why
 

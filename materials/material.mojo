@@ -137,8 +137,27 @@ three.js has a class for each, and both are unlit, so here they are a
 point reads the size, only a sprite reads the rotation, and both read the
 attenuation, so a value on any other kind is refused: `points_material`
 and `sprite_material` build them at three.js's defaults.
+
+`env_map`, `reflectivity` and `combine` are the seventeenth through the
+nineteenth: three.js's `envMap`, `reflectivity` and `combine` on
+`MeshBasicMaterial`, `MeshLambertMaterial` and `MeshPhongMaterial`, the
+three kinds three.js gives an environment to. The map is a `CubeTexture`,
+six images sampled by direction, and the direction is the camera's view
+turned back through the surface: what a mirror shows. `combine` says how
+what the mirror shows joins the surface's own light, and `reflectivity`
+how much of it. three.js's default is `MultiplyOperation` at a
+reflectivity of one, which tints the reflection by the surface, and so
+are these. A material can name `SCENE_ENVIRONMENT` instead of a cube
+texture of its own, and reflect whatever the scene's `environment` names.
+A toon, matcap or data material refuses all three: three.js's shaders for
+them read none.
 """
 
+from render.cube_texture_store import (
+    NO_CUBE_TEXTURE,
+    SCENE_ENVIRONMENT,
+    CubeTextureId,
+)
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import isfinite
@@ -234,6 +253,93 @@ comptime BLEND = Blending(1)
 
 
 @fieldwise_init
+struct Combine(Equatable, ImplicitlyCopyable, Writable):
+    """How a reflected environment joins a surface's own light, as a type
+    rather than a bare int: three.js's `combine`.
+
+    A type for the reason `Blending` is one. Both rasterizers read this
+    from a corner, and a bare integer neither recognized would be read one
+    way by one and another way by the other. The type does not stop
+    `Combine(7)`, so `Material` and `check_triangle_state` ask `is_valid`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the three operations there are."""
+        return (
+            self == MULTIPLY_OPERATION
+            or self == MIX_OPERATION
+            or self == ADD_OPERATION
+        )
+
+
+# The surface's light times the reflection, faded in by the reflectivity:
+# a tinted mirror. three.js's `MultiplyOperation`, and its default.
+comptime MULTIPLY_OPERATION = Combine(0)
+# The surface's light faded toward the reflection by the reflectivity: a
+# reflection laid over the surface. three.js's `MixOperation`.
+comptime MIX_OPERATION = Combine(1)
+# The reflection times the reflectivity, added to the surface's light: a
+# gloss on top. three.js's `AddOperation`.
+comptime ADD_OPERATION = Combine(2)
+
+
+def combine_light(
+    outgoing: FloatColor,
+    reflection: FloatColor,
+    reflectivity: Float32,
+    combine: Combine,
+) -> FloatColor:
+    """Return a surface's light with its reflection joined to it, three.js's
+    `envmap_fragment`.
+
+        MULTIPLY  mix(outgoing, outgoing * reflection, reflectivity)
+        MIX       mix(outgoing, reflection, reflectivity)
+        ADD       outgoing + reflection * reflectivity
+
+    Applied after the lights, the highlight and the emissive term and
+    before the fog, exactly where three.js applies it. Alpha is coverage
+    rather than light and is left as it was: three.js reads the
+    reflection's `.xyz` and no more. Shared by both rasterizers, as
+    `fog_mix` is, so the one arithmetic lives in one place. A `combine`
+    that is none of the three is treated as `MULTIPLY_OPERATION`, which
+    neither backend can reach: both refuse it before a fragment is shaded.
+
+    Args:
+        outgoing: The surface's light so far, linear.
+        reflection: What the environment shows in the reflected direction,
+            linear.
+        reflectivity: How much of the reflection joins, from zero to one.
+        combine: Which of the three operations.
+
+    Returns:
+        The combined light, with `outgoing`'s alpha.
+    """
+    if combine == ADD_OPERATION:
+        return FloatColor(
+            outgoing.r + reflection.r * reflectivity,
+            outgoing.g + reflection.g * reflectivity,
+            outgoing.b + reflection.b * reflectivity,
+            outgoing.a,
+        )
+    var toward = reflection
+    if combine != MIX_OPERATION:
+        toward = FloatColor(
+            outgoing.r * reflection.r,
+            outgoing.g * reflection.g,
+            outgoing.b * reflection.b,
+            1.0,
+        )
+    return FloatColor(
+        outgoing.r + (toward.r - outgoing.r) * reflectivity,
+        outgoing.g + (toward.g - outgoing.g) * reflectivity,
+        outgoing.b + (toward.b - outgoing.b) * reflectivity,
+        outgoing.a,
+    )
+
+
+@fieldwise_init
 struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     """Whether a surface is lit, as a type rather than a bare int.
 
@@ -285,6 +391,17 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
         debug view out of them.
         """
         return self == NORMALS or self == DEPTH
+
+    def reflects(self) -> Bool:
+        """Return True if a material of this kind can carry an environment
+        map: `BASIC`, `LAMBERT` or `PHONG`.
+
+        The three kinds three.js gives an `envMap`. A toon surface steps
+        through a ramp and a matcap surface is an image already, and the
+        data kinds show no light at all, so none of them has anywhere for
+        a reflection to go. Both rasterizers ask this before they reflect.
+        """
+        return self == BASIC or self == LAMBERT or self == PHONG
 
 
 # Unlit: the surface's own color, and its texture, reach the pixel as they
@@ -419,6 +536,17 @@ struct Material(ImplicitlyCopyable):
     # sprite reads it, so a turn is refused on anything but a `BASIC`
     # material.
     var rotation: Angle
+    # The cube texture this surface reflects, three.js's `envMap`, or
+    # `NO_CUBE_TEXTURE` for none, or `SCENE_ENVIRONMENT` to reflect whatever
+    # the scene's `environment` names. Only a `BASIC`, `LAMBERT` or `PHONG`
+    # material carries one; see `MaterialKind.reflects`.
+    var env_map: CubeTextureId
+    # How much of the reflection joins the surface's light, from zero to
+    # one, three.js's `reflectivity`. One, the default, is three.js's.
+    var reflectivity: Float32
+    # How the reflection joins the surface's light, three.js's `combine`.
+    # `MULTIPLY_OPERATION` by default, as there. See `combine_light`.
+    var combine: Combine
 
     def __init__(
         out self,
@@ -446,6 +574,9 @@ struct Material(ImplicitlyCopyable):
         point_size: PointSize = DEFAULT_POINT_SIZE,
         size_attenuation: Bool = True,
         rotation: Angle = NO_ROTATION,
+        env_map: CubeTextureId = NO_CUBE_TEXTURE,
+        reflectivity: Float32 = 1.0,
+        combine: Combine = MULTIPLY_OPERATION,
     ) raises:
         """Describe a surface.
 
@@ -525,6 +656,16 @@ struct Material(ImplicitlyCopyable):
             rotation: How far a sprite is turned about the line of sight,
                 counterclockwise, three.js's `SpriteMaterial.rotation`.
                 Zero by default. Only a sprite reads it.
+            env_map: Id of the cube texture the surface reflects, three.js's
+                `envMap`, or `NO_CUBE_TEXTURE` for none, or
+                `SCENE_ENVIRONMENT` to reflect the scene's `environment`.
+                Only a `BASIC`, `LAMBERT` or `PHONG` material reflects.
+            reflectivity: How much of the reflection joins the surface's
+                light, from zero to one, three.js's `reflectivity`. One
+                by default, as there.
+            combine: How the reflection joins, three.js's `combine`:
+                `MULTIPLY_OPERATION`, the default, `MIX_OPERATION` or
+                `ADD_OPERATION`. See `combine_light`.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -563,7 +704,16 @@ struct Material(ImplicitlyCopyable):
                 finite, and any of the three -- a size that is not the
                 default, attenuation off, or a turn -- on a kind that is
                 not `BASIC` are refused: only a point or a sprite reads
-                them, and both are drawn unlit.
+                them, and both are drawn unlit. An `env_map` that is a
+                negative other than `NO_CUBE_TEXTURE` or
+                `SCENE_ENVIRONMENT`, a `reflectivity` outside zero to one
+                or not finite, a `combine` that is none of the three, and
+                any of the three set on a kind that does not reflect -- an
+                env map at all, a reflectivity that is not one, or a
+                combine that is not `MULTIPLY_OPERATION` on a `TOON`,
+                `MATCAP`, `NORMALS` or `DEPTH` material -- are refused,
+                as is an env map on a wireframe, which has no surface to
+                reflect from.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -729,6 +879,40 @@ struct Material(ImplicitlyCopyable):
         self.point_size = point_size
         self.size_attenuation = size_attenuation
         self.rotation = rotation
+        # The environment, refused where nothing reads it: three.js's toon,
+        # matcap, normal and depth shaders have no envmap chunk, so a value
+        # there is a mistake rather than a choice, and a wireframe is drawn
+        # by the line pass, which reads no normal to reflect from.
+        if (
+            env_map.value < 0
+            and env_map != NO_CUBE_TEXTURE
+            and env_map != SCENE_ENVIRONMENT
+        ):
+            raise Error("A material's env map id cannot be negative")
+        if not isfinite(reflectivity) or reflectivity < 0 or reflectivity > 1:
+            raise Error("A reflectivity must be between zero and one")
+        if not combine.is_valid():
+            raise Error(
+                "A material's combine must be MULTIPLY_OPERATION,"
+                " MIX_OPERATION or ADD_OPERATION"
+            )
+        if not kind.reflects() and (
+            env_map != NO_CUBE_TEXTURE
+            or reflectivity != 1
+            or combine != MULTIPLY_OPERATION
+        ):
+            raise Error(
+                "Only a basic, lambert or phong material reflects an"
+                " environment: no other shader reads an env map"
+            )
+        if wireframe and env_map != NO_CUBE_TEXTURE:
+            raise Error(
+                "A wireframe material has no env map: a line has no surface"
+                " to reflect from"
+            )
+        self.env_map = env_map
+        self.reflectivity = reflectivity
+        self.combine = combine
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -809,6 +993,17 @@ struct Material(ImplicitlyCopyable):
     def has_alpha_map(self) -> Bool:
         """Return True if this material names a texture that thins it."""
         return self.alpha_map != NO_TEXTURE
+
+    def has_env_map(self) -> Bool:
+        """Return True if this material reflects an environment: a cube
+        texture of its own, or the scene's.
+
+        The scene's environment counts, though the scene may name none:
+        the renderer settles that when it prepares the frame, and a
+        material that asked for the scene's environment in a scene without
+        one reflects nothing, as three.js's does.
+        """
+        return self.env_map != NO_CUBE_TEXTURE
 
     def is_alpha_tested(self) -> Bool:
         """Return True if a fragment of this surface can be thrown away for

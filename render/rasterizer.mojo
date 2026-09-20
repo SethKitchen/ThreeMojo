@@ -30,13 +30,22 @@ from materials.material import (
     BLEND,
     DEPTH,
     LAMBERT,
+    MULTIPLY_OPERATION,
     NORMALS,
     MATCAP,
     OPAQUE,
     PHONG,
     TOON,
     Blending,
+    Combine,
     MaterialKind,
+    combine_light,
+)
+from render.cube_texture import reflected
+from render.cube_texture_store import (
+    NO_CUBE_TEXTURE,
+    CubeTextureId,
+    CubeTextureStore,
 )
 from render.target import RenderTarget
 from render.srgb import LINEAR
@@ -530,6 +539,18 @@ struct RasterVertex(ImplicitlyCopyable):
     # point alone, which is one corner rather than three or two; a
     # triangle's corners and a segment's ends carry zero.
     var point_size: Float32
+    # Which cube texture this surface reflects, or `NO_CUBE_TEXTURE` for
+    # none: three.js's `envMap`, already resolved from `SCENE_ENVIRONMENT`
+    # by `Renderer.prepare`. Per-triangle metadata like `texture`, read
+    # from the first corner and checked to agree. Sampled by the camera's
+    # view turned back through the normal, so no surface coordinate and
+    # no transform applies to it.
+    var env_map: CubeTextureId
+    # How much of the reflection joins the surface's light, three.js's
+    # `reflectivity`, and how it joins, three.js's `combine`. Per-triangle
+    # like the shininess and the blend policy, read from the first corner.
+    var reflectivity: Float32
+    var combine: Combine
 
     def __init__(
         out self,
@@ -558,6 +579,9 @@ struct RasterVertex(ImplicitlyCopyable):
         dash_size: Float32 = 0,
         gap_size: Float32 = 0,
         point_size: Float32 = 0,
+        env_map: CubeTextureId = NO_CUBE_TEXTURE,
+        reflectivity: Float32 = 1,
+        combine: Combine = MULTIPLY_OPERATION,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -575,7 +599,9 @@ struct RasterVertex(ImplicitlyCopyable):
         three.js's gray gradient for a `MATCAP` corner. The line distance
         and the dash and gap default to zero, which is a solid line. The
         point size defaults to zero, which no point may carry: a corner
-        that says nothing about it is not a point.
+        that says nothing about it is not a point. The env map defaults
+        to none, which reflects nothing, at three.js's reflectivity of one
+        and its `MultiplyOperation`.
         """
         self.x = x
         self.y = y
@@ -602,6 +628,9 @@ struct RasterVertex(ImplicitlyCopyable):
         self.dash_size = dash_size
         self.gap_size = gap_size
         self.point_size = point_size
+        self.env_map = env_map
+        self.reflectivity = reflectivity
+        self.combine = combine
 
 
 @fieldwise_init
@@ -904,7 +933,14 @@ def check_triangle_state(
             the agreed kind shows data and the agreed policy is `BLEND`,
             which no pixel could resolve; or if any
             texture id is a negative other than `NO_TEXTURE`, which
-            nothing can ever hold.
+            nothing can ever hold. The environment is asked the same
+            three questions: the corners must agree on their env map,
+            their reflectivity and their combine; the reflectivity must be
+            finite and between zero and one and the combine one of the
+            three; an env map is refused on a kind that does not reflect;
+            and an env map id that is a negative other than
+            `NO_CUBE_TEXTURE` is refused, `SCENE_ENVIRONMENT` included,
+            which `Renderer.prepare` resolves before a corner is built.
     """
     if b.blend != a.blend or c.blend != a.blend:
         raise Error("A triangle's corners disagree about blending")
@@ -971,6 +1007,33 @@ def check_triangle_state(
         raise Error("A triangle names a gradient map id that nothing can hold")
     if a.matcap != NO_TEXTURE and a.matcap.value < 0:
         raise Error("A triangle names a matcap id that nothing can hold")
+    # The environment, asked as the maps are: agreement first, the number
+    # before its agreement check because not-a-number is not equal to
+    # itself, then the value and the kind.
+    if b.env_map != a.env_map or c.env_map != a.env_map:
+        raise Error("A triangle's corners disagree about their env map")
+    if (
+        not isfinite(a.reflectivity)
+        or a.reflectivity < 0
+        or (a.reflectivity > 1)
+    ):
+        raise Error("A triangle's reflectivity must be between zero and one")
+    if b.reflectivity != a.reflectivity or c.reflectivity != a.reflectivity:
+        raise Error("A triangle's corners disagree about their reflectivity")
+    if b.combine != a.combine or c.combine != a.combine:
+        raise Error("A triangle's corners disagree about their combine")
+    if not a.combine.is_valid():
+        raise Error("A triangle's combine is none of the three operations")
+    if not a.kind.reflects() and a.env_map != NO_CUBE_TEXTURE:
+        raise Error(
+            "Only a basic, lambert or phong triangle reflects an"
+            " environment: no other shader reads an env map"
+        )
+    if a.env_map != NO_CUBE_TEXTURE and a.env_map.value < 0:
+        raise Error(
+            "A triangle names a cube texture id that nothing can hold: the"
+            " renderer resolves SCENE_ENVIRONMENT before a corner is built"
+        )
 
 
 def check_output_kinds(
@@ -1226,7 +1289,10 @@ def gradient_ramp(image: Texture) raises -> List[Float32]:
 
 
 def check_triangle_maps(
-    a: RasterVertex, mode: ShadeMode, textures: TextureStore
+    a: RasterVertex,
+    mode: ShadeMode,
+    textures: TextureStore,
+    cubes: CubeTextureStore = CubeTextureStore(),
 ) raises:
     """Refuse a triangle whose maps are not stored the way its shader reads
     them, under the mode that would read them.
@@ -1245,13 +1311,17 @@ def check_triangle_maps(
             opens the base, emissive and alpha maps, and only the uv view
             opens neither the ramp nor the matcap.
         textures: Where the maps live.
+        cubes: Where the env map lives. Only `SHADE_TEXTURE` opens it: a
+            reflection is a texture, and the other two modes ignore every
+            texture.
 
     Raises:
         Error: If a map the mode would open is not in the store; an
             emissive map or a matcap does not ignore its alpha; an alpha
-            map is not stored as data; or a gradient map is not a
+            map is not stored as data; a gradient map is not a
             one-row linear table -- see `check_alpha_map` and
-            `check_gradient_map`.
+            `check_gradient_map`; or an env map `SHADE_TEXTURE` would open
+            is not in the cube store.
     """
     # An emissive map's alpha means nothing, and only a texture built to
     # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
@@ -1279,6 +1349,11 @@ def check_triangle_maps(
                 "A matcap must ignore its alpha; build the texture with"
                 " alpha=IGNORED"
             )
+    # The environment a reflecting surface samples, which must be there:
+    # asked before the first fragment, as the store's own `get` would ask
+    # it at the first fragment and a band with no fragment would not.
+    if a.env_map != NO_CUBE_TEXTURE and mode == SHADE_TEXTURE:
+        _ = cubes.get(a.env_map).size
 
 
 def rasterize_shaded(
@@ -1292,6 +1367,7 @@ def rasterize_shaded(
     first_row: Int = 0,
     last_row: Int = -1,
     fog: FogView = FogView.none(),
+    cubes: CubeTextureStore = CubeTextureStore(),
 ) raises:
     """Fill a triangle whose corners each carry their own color.
 
@@ -1355,6 +1431,10 @@ def rasterize_shaded(
             `FogView.none`, which leaves every fragment alone. `SHADE_UV`
             is never fogged, and nor is a `NORMALS` or `DEPTH` triangle:
             they show data, not light.
+        cubes: Where `SHADE_TEXTURE` looks the triangle's env map up. A
+            triangle that names one reflects it after the lights, the
+            highlight and the glow and before the fog, by
+            `materials.material.combine_light`; see `render.cube_texture`.
 
     Raises:
         Error: If the mode is none of the three, the fog view holds a kind
@@ -1365,6 +1445,7 @@ def rasterize_shaded(
             one that is none of the named values, an emissive map that
             `SHADE_TEXTURE` would open does not ignore its alpha, an alpha
             map it would open is not linear or does not ignore its alpha,
+            an env map it would open is not in the cube store,
             or a pixel
             write lands out of bounds — the last of which the loop prevents.
     """
@@ -1377,7 +1458,7 @@ def rasterize_shaded(
     fog.validate()
     # The maps, asked before the first fragment as the GPU asks before the
     # launch, and only under the mode that would open each.
-    check_triangle_maps(a, mode, textures)
+    check_triangle_maps(a, mode, textures, cubes)
     # The ramp a `TOON` surface steps through, read once here. Its top row
     # is the whole lookup table, and it is the same for every fragment, so
     # opening the texture per light per pixel would buy nothing. Empty for
@@ -1415,6 +1496,11 @@ def rasterize_shaded(
     # nearest surface's coordinates and cuts nothing out, as it samples no
     # texture.
     var tested = a.alpha_test > 0 and mode != SHADE_UV
+    # Whether these fragments reflect an environment: only when they name
+    # one and the mode opens textures, since a reflection is one. A
+    # reflecting surface needs its normal and its world position whether
+    # or not it is lit, which is why the two are gated on this below.
+    var reflects = a.env_map != NO_CUBE_TEXTURE and mode == SHADE_TEXTURE
 
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
@@ -1486,7 +1572,12 @@ def rasterize_shaded(
             # before the emissive, exactly where three.js sums it.
             var highlight = FloatColor(0.0, 0.0, 0.0, 1.0)
             var facing = Vector3(0, 0, 1)
-            if a.kind.is_lit() or a.kind == NORMALS or a.kind == MATCAP:
+            if (
+                a.kind.is_lit()
+                or a.kind == NORMALS
+                or a.kind == MATCAP
+                or reflects
+            ):
                 # The normal is interpolated like every other varying and
                 # made a unit vector again here. That renormalization is the
                 # whole difference between this and shading at the corners:
@@ -1506,11 +1597,14 @@ def rasterize_shaded(
                 )
                 if facing.length() != 0:
                     facing.normalize()
-            if (a.kind.is_lit() or a.kind == MATCAP) and mode != SHADE_UV:
-                # Where this fragment is in the world, for the lights that
-                # have a position, and for the direction the camera sees it
-                # along.
-                var spot = Vector3(
+            # Where this fragment is in the world, for the lights that have
+            # a position, and for the direction the camera sees it along --
+            # which a reflection needs of an unlit surface too.
+            var spot = Vector3(0, 0, 0)
+            if (
+                (a.kind.is_lit() or a.kind == MATCAP) and mode != SHADE_UV
+            ) or reflects:
+                spot = Vector3(
                     a.world.x * share_a
                     + b.world.x * share_b
                     + c.world.x * share_c,
@@ -1521,6 +1615,7 @@ def rasterize_shaded(
                     + b.world.z * share_b
                     + c.world.z * share_c,
                 )
+            if (a.kind.is_lit() or a.kind == MATCAP) and mode != SHADE_UV:
                 if a.kind == MATCAP:
                     # Looked up by which way the surface is turned in the
                     # camera's frame, and multiplied into the color exactly
@@ -1678,6 +1773,26 @@ def rasterize_shaded(
                     shaded.b + highlight.b + glow.b,
                     shaded.a,
                 )
+                # Then the reflection, joined to the finished light by the
+                # material's combine, exactly where three.js's
+                # `envmap_fragment` joins it: after the emissive term and
+                # before the fog. The direction is the camera's view
+                # turned back through the normal, measured from where the
+                # camera stands under either projection, as three.js reads
+                # `cameraPosition` here and does not special-case a
+                # parallel one. Read at the cube's full size; see
+                # `render.cube_texture`.
+                if reflects:
+                    var bounce = reflected(
+                        toward_eye_at(lighting.eye, PERSPECTIVE_VIEW, spot),
+                        facing,
+                    )
+                    shaded = combine_light(
+                        shaded,
+                        cubes.get(a.env_map).sample(bounce),
+                        a.reflectivity,
+                        a.combine,
+                    )
             # Veiled by the fog last, after the lights and the glow, as
             # three.js mixes its finished color -- but in linear light,
             # before anything is encoded. The depth is a varying of its
@@ -2284,6 +2399,7 @@ async def _frame_band(
     first_row: Int,
     last_row: Int,
     fog: FogView,
+    cubes: Pointer[CubeTextureStore, ImmutAnyOrigin],
 ):
     """Draw a frame into one horizontal band of the target.
 
@@ -2329,6 +2445,7 @@ async def _frame_band(
                         first_row,
                         last_row,
                         fog,
+                        cubes[],
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -2377,6 +2494,7 @@ def rasterize_frame(
     workers: Int = 1,
     fog: FogView = FogView.none(),
     points: List[RasterVertex] = List[RasterVertex](),
+    cubes: CubeTextureStore = CubeTextureStore(),
 ) raises:
     """Draw a frame -- triangles, segments and points, in one order --
     into `target`, on `workers` threads.
@@ -2419,6 +2537,7 @@ def rasterize_frame(
         fog: The scene's fog, seen through the camera; see
             `rasterize_shaded` and `rasterize_line`.
         points: Raster vertices, one per point. None by default.
+        cubes: Where `SHADE_TEXTURE` looks the triangles' env maps up.
 
     Raises:
         Error: If the corner count is not a multiple of three, the segment
@@ -2456,7 +2575,7 @@ def rasterize_frame(
         # rows miss before `rasterize_shaded` can open them, so without
         # this a bad map on a triangle above the image was refused on one
         # worker and drawn around on four.
-        check_triangle_maps(corners[triangle * 3], mode, textures)
+        check_triangle_maps(corners[triangle * 3], mode, textures, cubes)
     for segment in range(lines):
         check_line_state(segments[segment * 2], segments[segment * 2 + 1])
     for point in range(len(points)):
@@ -2480,6 +2599,7 @@ def rasterize_frame(
                         textures,
                         lighting,
                         fog=fog,
+                        cubes=cubes,
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -2526,6 +2646,7 @@ def rasterize_frame(
                 band * target.height // bands,
                 (band + 1) * target.height // bands - 1,
                 fog,
+                Pointer(to=cubes).unsafe_origin_cast[ImmutAnyOrigin](),
             )
         )
     group.wait()
@@ -2548,6 +2669,7 @@ def rasterize_all(
     lighting: Lighting = Lighting.uniform(),
     workers: Int = 1,
     fog: FogView = FogView.none(),
+    cubes: CubeTextureStore = CubeTextureStore(),
 ) raises:
     """Draw every triangle in `corners` into `target`, on `workers` threads.
 
@@ -2563,6 +2685,7 @@ def rasterize_all(
         workers: How many threads to draw with, at least one.
         fog: The scene's fog, seen through the camera; see
             `rasterize_shaded`.
+        cubes: Where `SHADE_TEXTURE` looks the triangles' env maps up.
 
     Raises:
         Error: Everything `rasterize_frame` raises of the triangles: a
@@ -2583,6 +2706,7 @@ def rasterize_all(
         lighting,
         workers,
         fog,
+        cubes=cubes,
     )
 
 

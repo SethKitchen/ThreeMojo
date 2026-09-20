@@ -5,9 +5,10 @@
 
 """Everything a scene draws with, owned in one place.
 
-Three stores arrived one at a time and for the same reason each time: meshes
-share geometry, materials share textures, meshes share materials, and the thing
-being shared has to be owned by exactly one owner. Passing all three to
+Four stores arrived one at a time and for the same reason each time: meshes
+share geometry, materials share textures, meshes share materials, materials
+and skies share cube textures, and the thing being shared has to be owned by
+exactly one owner. Passing all three to
 `Renderer.render` alongside the scene and the mesh list made a six-argument
 call out of what is really two ideas — where things are, and what they are made
 of. This is the second idea.
@@ -24,18 +25,26 @@ directly and ownership never has to be stated. Here it does.
 
 from core.geometry_store import GeometryStore
 from materials.material import MaterialStore
+from render.cube_texture_store import CubeTextureStore
 from render.texture_store import TextureStore
 
 
 struct Assets(Movable):
-    """The geometry, materials and textures a scene draws with."""
+    """The geometry, materials, textures and cube textures a scene draws
+    with."""
 
     var geometries: GeometryStore
     var materials: MaterialStore
     var textures: TextureStore
+    # The environments: what a material reflects and what a scene's sky
+    # is made of. Their own store because a cube texture is six textures
+    # sampled by direction, and a `TextureId` names one image sampled by
+    # place; see `render.cube_texture`.
+    var cube_textures: CubeTextureStore
 
     def __init__(out self):
         """Create empty stores."""
         self.geometries = GeometryStore()
         self.materials = MaterialStore()
         self.textures = TextureStore()
+        self.cube_textures = CubeTextureStore()
