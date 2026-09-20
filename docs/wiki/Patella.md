@@ -84,7 +84,7 @@ report.weight().to(POUND_FORCE)
 
 The report does not estimate a mineral-component mass.
 
-A six foot male at a 5 mm step has about 30 g of bone tissue. That is 0.30 N, or 0.067 lbf, on Earth. The value is a grid-sampled estimate under the template tissues. It is not a proven upper bound.
+A six foot male at a 5 mm step has about 23 g of bone tissue. That is 0.23 N, or 0.052 lbf, on Earth. The value is a grid-sampled estimate under the template tissues. It is not a proven upper bound.
 
 Left and right patellas match in mass at the same step, within sampling error.
 
