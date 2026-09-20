@@ -52,6 +52,8 @@ mkdir -p out
 | `tibia.mojo` | `tibia.png` | [Tibia](Tibia) |
 | `fibula.mojo` | `fibula.png` | [Fibula](Fibula) |
 | `patella.mojo` | `patella.png` | [Patella](Patella) |
+| `leg.mojo` | `leg.png` | [Leg](Leg) |
+| `legs.mojo` | `legs.png` | [Leg](Leg) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 
