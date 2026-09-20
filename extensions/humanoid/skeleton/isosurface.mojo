@@ -6,9 +6,9 @@
 """Marching-tetrahedra zero set of a humanoid bone field.
 
 Each cube of the bounding grid splits into six tetrahedra. Connectivity
-comes from the field. It does not come from a deformed capsule. Normals
-come from triangle winding. Texture coordinates are cylindrical around y:
-`u` around, `v` up.
+comes from the field. It does not come from a deformed capsule. Normals come
+from the sampled field gradient. Texture coordinates are cylindrical around
+y: `u` around, `v` up.
 
 `detail` sets how many cells run along the bone. Eight is the least.
 Twenty-four is the default. Sixty-four is the most.
@@ -18,7 +18,7 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from extensions.humanoid.skeleton.field import DistanceField
 from math.vector3 import Vector3
-from std.math import atan2, pi
+from std.math import atan2, max, min, pi
 
 comptime MIN_DETAIL = 8
 comptime MAX_DETAIL = 64
@@ -147,7 +147,7 @@ def mesh_samples(
                 )
     _require_triangles(indices, bone)
     var count = len(positions) // 3
-    var normals = _face_normals(positions, indices, count)
+    var normals = _sampled_normals(positions, samples, low, grid)
     var uvs = List[Float32]()
     var two_pi = pi * Float32(2)
     for index in range(count):  # pragma: no branch
@@ -234,40 +234,61 @@ def _unit_face(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
     return n
 
 
-def _face_normals(
-    positions: List[Float32], indices: List[Int], count: Int
+def _sampled_normals(
+    positions: List[Float32],
+    samples: List[Float32],
+    low: Vector3,
+    grid: SampleGrid,
 ) -> List[Float32]:
-    """Return a normal for every vertex from its triangle's winding."""
+    """Return the trilinear sampled-field gradient at each mesh vertex."""
     var normals = List[Float32]()
-    for _ in range(count):  # pragma: no branch
-        normals.append(0)
-        normals.append(0)
-        normals.append(0)
-    var t = 0
-    while t < len(indices):
-        var i0 = indices[t]
-        var i1 = indices[t + 1]
-        var i2 = indices[t + 2]
-        var a = Vector3(
-            positions[i0 * 3], positions[i0 * 3 + 1], positions[i0 * 3 + 2]
-        )
-        var b = Vector3(
-            positions[i1 * 3], positions[i1 * 3 + 1], positions[i1 * 3 + 2]
-        )
-        var c = Vector3(
-            positions[i2 * 3], positions[i2 * 3 + 1], positions[i2 * 3 + 2]
-        )
-        var n = _unit_face(a, b, c)
-        normals[i0 * 3] = n.x
-        normals[i0 * 3 + 1] = n.y
-        normals[i0 * 3 + 2] = n.z
-        normals[i1 * 3] = n.x
-        normals[i1 * 3 + 1] = n.y
-        normals[i1 * 3 + 2] = n.z
-        normals[i2 * 3] = n.x
-        normals[i2 * 3 + 1] = n.y
-        normals[i2 * 3 + 2] = n.z
-        t = t + 3
+    for vertex in range(len(positions) // 3):  # pragma: no branch
+        var gx = (positions[vertex * 3] - low.x) / grid.dx
+        var gy = (positions[vertex * 3 + 1] - low.y) / grid.dy
+        var gz = (positions[vertex * 3 + 2] - low.z) / grid.dz
+        gx = max(Float32(0), min(Float32(grid.nx), gx))
+        gy = max(Float32(0), min(Float32(grid.ny), gy))
+        gz = max(Float32(0), min(Float32(grid.nz), gz))
+        var ix = min(Int(gx), grid.nx - 1)
+        var iy = min(Int(gy), grid.ny - 1)
+        var iz = min(Int(gz), grid.nz - 1)
+        var tx = gx - Float32(ix)
+        var ty = gy - Float32(iy)
+        var tz = gz - Float32(iz)
+        var ux = Float32(1) - tx
+        var uy = Float32(1) - ty
+        var uz = Float32(1) - tz
+        var f000 = _sample(samples, grid.sx, grid.sy, ix, iy, iz)
+        var f100 = _sample(samples, grid.sx, grid.sy, ix + 1, iy, iz)
+        var f010 = _sample(samples, grid.sx, grid.sy, ix, iy + 1, iz)
+        var f110 = _sample(samples, grid.sx, grid.sy, ix + 1, iy + 1, iz)
+        var f001 = _sample(samples, grid.sx, grid.sy, ix, iy, iz + 1)
+        var f101 = _sample(samples, grid.sx, grid.sy, ix + 1, iy, iz + 1)
+        var f011 = _sample(samples, grid.sx, grid.sy, ix, iy + 1, iz + 1)
+        var f111 = _sample(samples, grid.sx, grid.sy, ix + 1, iy + 1, iz + 1)
+        var dx = (
+            uy * uz * (f100 - f000)
+            + ty * uz * (f110 - f010)
+            + uy * tz * (f101 - f001)
+            + ty * tz * (f111 - f011)
+        ) / grid.dx
+        var dy = (
+            ux * uz * (f010 - f000)
+            + tx * uz * (f110 - f100)
+            + ux * tz * (f011 - f001)
+            + tx * tz * (f111 - f101)
+        ) / grid.dy
+        var dz = (
+            ux * uy * (f001 - f000)
+            + tx * uy * (f101 - f100)
+            + ux * ty * (f011 - f010)
+            + tx * ty * (f111 - f110)
+        ) / grid.dz
+        var normal = Vector3(dx, dy, dz)
+        normal.normalize()
+        normals.append(normal.x)
+        normals.append(normal.y)
+        normals.append(normal.z)
     return normals^
 
 
