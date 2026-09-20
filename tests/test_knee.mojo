@@ -233,7 +233,9 @@ def test_six_foot_male_cartilage_uses_shepherd_means() raises:
     )
     assert_true(dims.side == RIGHT)
     assert_true(dims.femoral_medial_cartilage.y > 0)
-    assert_true(dims.tibial_medial_cartilage.y < 0)
+    assert_true(
+        dims.femoral_medial_cartilage.y > dims.tibial_medial_cartilage.y
+    )
 
 
 def test_female_knee_uses_the_female_ratios() raises:

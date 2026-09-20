@@ -251,7 +251,7 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
         var r_mid = 0.5 * (ml_mid + ap_mid)
         var condyle_ry = 0.39 * W
         var condyle_rz = 0.36 * W
-        var condyle_rx = 0.28 * W
+        var condyle_rx = 0.25 * W
         self.head_center = dimensions.head_center
         self.head_r = head_r
         self.neck_base = dimensions.neck_base
@@ -307,7 +307,7 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
             self.lateral.y + 0.12 * condyle_ry,
             self.lateral.z - 0.88 * condyle_rz,
         )
-        self.notch_r = 0.14 * W
+        self.notch_r = 0.10 * W
         self.patella = Vector3(
             0.5 * (self.medial.x + self.lateral.x),
             0.5 * (self.medial.y + self.lateral.y) + 0.12 * condyle_ry,
