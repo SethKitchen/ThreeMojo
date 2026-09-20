@@ -4,7 +4,7 @@
 
 ![Two checkerboard cubes turn, nearest beside bilinear](out/textured.png)
 
-three.js: `Texture`, `DataTexture`, `DepthTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`.
+three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `CubeTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`, `anisotropy`.
 
 ## Make a texture
 
@@ -61,6 +61,41 @@ It is a snapshot in bytes. Light above one was clamped or tone mapped when the i
 It is a picture of the depth, not the depth. A byte holds 256 steps, and a perspective projection spends most of them near the near plane. Take planes at a tenth of a meter and a hundred. A surface one meter away is byte 230, ten meters is 253, and forty meters is 255, the far plane's own byte. three.js's `DepthTexture` holds a real depth format. Use this to look at a depth, not to compare or reconstruct one.
 
 `examples/television.mojo` renders a box into a small target every frame and shows its picture and its depth on two screens.
+
+## From a compressed file
+
+`render/compressed_texture.mojo`. `compressed_texture` decodes a block-compressed payload into an ordinary texture: three.js's `CompressedTexture`. The GPU samples a compressed texture as it is. This project's rasterizers read bytes, so the blocks are decoded once, on the host, and sampled like any other image.
+
+```mojo
+var image = compressed_texture(width, height, blocks, RGBA_S3TC_DXT5_FORMAT)
+```
+
+`compressed_texture(width, height, data, format, wrap=CLAMP, filter=BILINEAR, color_space=SRGB, mipmapped=False, alpha=COVERAGE)`. The defaults are three.js's own for the class: edges clamped and no chain, since a compressed file usually carries its own levels. Only the first level is read. Pass `mipmapped=True` to build a chain from the decoded image.
+
+| `format` | three.js | A 4x4 block is |
+|---|---|---|
+| `RGB_S3TC_DXT1_FORMAT` | `RGB_S3TC_DXT1_Format` | Eight bytes: two RGB565 colors and a two-bit index per texel. The transparent index reads as opaque black. |
+| `RGBA_S3TC_DXT1_FORMAT` | `RGBA_S3TC_DXT1_Format` | The same, with the transparent index read as transparent black. |
+| `RGBA_S3TC_DXT5_FORMAT` | `RGBA_S3TC_DXT5_Format` | Sixteen bytes: two alphas and a three-bit index per texel, then a color block always read in its four-color order. |
+
+The 565 channels widen to eight bits by copying their top bits down, as the hardware widens them. The blends round to nearest. An image need not be whole blocks: the texels past the edge are decoded and dropped. `decode_s3tc` returns the RGBA bytes without building a texture.
+
+`compressed_texture` refuses a format that is none of the three, dimensions that are not positive, and a payload whose length is not the block grid's. `tests/compile_fail/` proves a bare integer is not a format.
+
+## Anisotropy
+
+A surface seen at a glancing angle covers a footprint that is long one way and short the other. A mip level is square. The level the long axis wants blurs the short axis, and the level the short axis wants sparkles along the long one. `anisotropy`, three.js's `Texture.anisotropy`, is how many samples a fragment can take along the long axis instead, each read at the level the short axis wants.
+
+```mojo
+var floor = checkerboard(64, 8, white, blue)
+floor.anisotropy = 16
+```
+
+One, the default, is the plain trilinear read. Sixteen is what a GPU usually caps it at. Set the field after construction, as in three.js. `validate()` refuses a value below one, and the GPU upload refuses it again.
+
+`anisotropic_footprint(along_x, along_y, width, height, anisotropy)` returns a `Footprint`: the level, the tap count and the step between taps. The tap count is the ratio of the footprint's two lengths, rounded up. It is capped at the anisotropy and at the long axis's length in texels. The level is that of the long axis divided by the count. With one tap the level is what `mip_level` gives, so a texture that asks for nothing reads as it did.
+
+`sample_footprint(u, v, footprint)` takes the taps and averages them premultiplied. Both rasterizers call the same two functions; see [Rasterization](Rasterization).
 
 ## Cube textures
 
@@ -201,8 +236,9 @@ var id = assets.textures.add(board^)
 | `is_blank() -> Bool` | The blank texture, which samples as opaque white. |
 | `ignoring_alpha() -> Texture` | A copy that ignores its alpha, with its chain rebuilt. |
 | `uv_transform() -> Matrix3` | The transform on the coordinates, from the four fields above. |
-| `validate()` | Refuse a wrap, filter, color space or alpha mode that is none of the named values. |
-| `levels`, `width`, `height`, `alpha` | The chain length, the base size and the alpha mode. |
+| `sample_footprint(u, v, footprint) -> FloatColor` | One trilinear sample, or several along a footprint's long axis. See [Anisotropy](#anisotropy). |
+| `validate()` | Refuse a wrap, filter, color space or alpha mode that is none of the named values, or an anisotropy below one. |
+| `levels`, `width`, `height`, `alpha`, `anisotropy` | The chain length, the base size, the alpha mode and the tap count. |
 | `offset`, `repeat`, `rotation`, `center` | The transform's fields. |
 
 ## TextureStore
@@ -216,7 +252,8 @@ var id = assets.textures.add(board^)
 - A `checkerboard` size must divide evenly by its square count.
 - A `data_texture` with a channel count outside one through four, a length that does not match, or a number that is not finite.
 - The renderer refuses a map and an emissive map on one material whose transforms differ.
-- See [Cube textures](#cube-textures) for what a cube refuses.
+- An anisotropy below one raises in `validate`.
+- See [Cube textures](#cube-textures) for what a cube refuses, and [From a compressed file](#from-a-compressed-file) for what a compressed payload refuses.
 
 ## Why
 

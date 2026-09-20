@@ -17,6 +17,8 @@ var fast = Renderer(1280, 720, workers=available_workers())
 |---|---|
 | `Renderer(width, height, workers=1)` | An image size and a thread count. |
 | `set_workers(workers)` | Change the thread count. At least one. |
+| `set_antialias(enabled)` | Supersample `render`, `render_array` and `render_cube`. See below. |
+| `supersampled() -> Renderer` | A renderer `SUPERSAMPLE` times this one's size each way, viewport and scissor scaled. |
 | `set_background(color)` | The clear color. |
 | `set_shading(mode)` | What a fragment's color comes from. See below. |
 | `set_tone_mapping(mode, exposure=1.0)` | The curve that compresses the light for a display. See below. |
@@ -54,6 +56,16 @@ The two passes are separate because almost nothing a triangle carries applies to
 A `NORMALS` or `DEPTH` material writes data under either lit mode. See [Materials](Materials#data-materials).
 
 `set_shading` refuses a mode that is none of the three.
+
+## Anti-aliasing
+
+`set_antialias(True)` is three.js's `antialias`. `render`, `render_array` and `render_cube` then draw the frame at `SUPERSAMPLE` times the size each way, two, and average every block of four pixels into one. `render/antialias.mojo` holds `downsample`, which does the averaging.
+
+The average is taken in linear light. The supersampled frame is resolved to bytes, decoded, averaged premultiplied, and encoded once more. Averaging bytes would darken every edge. The depth of an output pixel is the nearest of its four.
+
+Supersampling rather than a multisampled fill rule keeps both backends on one coverage rule. A GPU frame comes back as bytes, and the same `downsample` makes the same image of it. Prepare with `supersampled()`, draw at its size, and downsample. The parity test does exactly that.
+
+The viewport and the scissor are given in output pixels and scaled with the frame. `render_into` and `render_array_into` draw into a target the caller holds, at its size, and are not changed by the setting.
 
 ## Tone mapping
 

@@ -144,6 +144,7 @@ from render.cube_texture_store import (
     CubeTextureStore,
 )
 from core.background import cube_background
+from render.antialias import SUPERSAMPLE, downsample
 from materials.material import (
     ADD_OPERATION,
     MIX_OPERATION,
@@ -7112,6 +7113,141 @@ def test_both_backends_agree_on_a_mirror_ball_under_a_sky() raises:
     )
     # The sky shows: no pixel holds the clear color.
     assert_equal(count_background(cpu, BACKGROUND), 0)
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- anisotropy and supersampling, both backends ----------------------------------
+
+
+def gpu_striped_store(anisotropy: Int) raises -> TextureStore:
+    """Return a store holding an 8x8 image of vertical stripes with the
+    given anisotropy."""
+    var pixels = List[UInt8]()
+    for _ in range(8):
+        for x in range(8):
+            var tone = UInt8(255) if x % 2 == 0 else UInt8(0)
+            pixels.append(tone)
+            pixels.append(tone)
+            pixels.append(tone)
+            pixels.append(255)
+    var image = Texture(8, 8, pixels^, CLAMP, NEAREST, LINEAR, True)
+    image.anisotropy = anisotropy
+    var store = TextureStore()
+    _ = store.add(image^)
+    return store^
+
+
+def gpu_stretched_quad() -> List[RasterVertex]:
+    """Return two basic triangles covering a 36x30 target whose
+    coordinates run once across and six times down."""
+    var corners = List[RasterVertex]()
+    var places: List[Tuple[Float32, Float32, Float32, Float32]] = [
+        (Float32(0), Float32(0), Float32(0), Float32(6)),
+        (Float32(36), Float32(0), Float32(1), Float32(6)),
+        (Float32(36), Float32(30), Float32(1), Float32(0)),
+        (Float32(0), Float32(0), Float32(0), Float32(6)),
+        (Float32(36), Float32(30), Float32(1), Float32(0)),
+        (Float32(0), Float32(30), Float32(0), Float32(0)),
+    ]
+    for place in places:
+        corners.append(
+            RasterVertex(
+                place[0],
+                place[1],
+                0.5,
+                1,
+                FloatColor(1, 1, 1),
+                place[2],
+                place[3],
+                TextureId(0),
+                kind=BASIC,
+            )
+        )
+    return corners^
+
+
+def test_the_table_carries_the_anisotropy() raises:
+    var store = gpu_striped_store(8)
+    var flat = flatten_textures(store)
+    assert_equal(len(flat[1]), TABLE_COLUMNS)
+    assert_equal(flat[1][8], Int32(8))
+    # The blank texture allows one tap.
+    var blank = TextureStore()
+    _ = blank.add(Texture())
+    assert_equal(flatten_textures(blank)[1][8], Int32(1))
+    # And an anisotropy edited below one is refused on the way up.
+    store.textures[0].anisotropy = 0
+    with assert_raises():
+        _ = flatten_textures(store)
+
+
+def test_both_backends_take_the_same_taps() raises:
+    if skipped_for_lack_of_a_gpu("both backends take the same taps"):
+        return
+    for anisotropy in [1, 4, 16]:
+        var store = gpu_striped_store(anisotropy)
+        var corners = gpu_stretched_quad()
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(corners, target, SHADE_TEXTURE, store)
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners, 36, 30, BACKGROUND, SHADE_TEXTURE, store
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+        if anisotropy > 1:
+            # The taps keep the stripes: the columns alternate.
+            assert_equal(cpu.get_pixel(2, 15).r, UInt8(255))
+            assert_equal(cpu.get_pixel(6, 15).r, UInt8(0))
+
+
+def test_both_backends_supersample_to_the_same_image() raises:
+    # The CPU renderer's antialiased frame is what the GPU gives once its
+    # supersampled frame goes through the same `downsample`.
+    if skipped_for_lack_of_a_gpu("both backends supersample alike"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    renderer.set_antialias(True)
+    var assets = Assets()
+    var ball = assets.geometries.add(sphere(Length(0.8, METER), 12, 8))
+    var scene = Scene()
+    var middle = scene.add(Object3D())
+    light_the(scene)
+    scene.update()
+    scene.add_mesh(
+        Mesh(ball, assets.materials.add(Material(Color(220, 120, 60))), middle)
+    )
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0.6, 0.8, 3.2), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var big = renderer.supersampled()
+    var corners = big.prepare(scene, assets, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+    )
+    var gpu = downsample(
+        render_triangles(
+            corners,
+            48 * SUPERSAMPLE,
+            36 * SUPERSAMPLE,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            assets.textures,
+            lighting,
+        ),
+        SUPERSAMPLE,
+    )
+    assert_equal(cpu.width, 48)
+    assert_equal(gpu.width, 48)
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 

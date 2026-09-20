@@ -43,6 +43,15 @@ coordinates outside anything the author wrote. `REPEAT` tiles, `CLAMP` holds
 the edge color, and `MIRROR` alternates direction each tile — the same three
 three.js offers.
 
+**A texture can be read along the long axis of a footprint.** A surface
+seen at a glancing angle covers a footprint that is long one way and short
+the other, and a mip level is square: the level the long axis wants blurs
+the short axis, and the level the short axis wants sparkles along the long
+one. `anisotropy`, three.js's `Texture.anisotropy`, is how many samples a
+fragment may take along the long axis instead, each read at the level the
+short axis wants; see `anisotropic_footprint`. One, the default, is the
+plain trilinear read.
+
 **A texture can move, tile and turn on its surface.** three.js's `offset`,
 `repeat`, `rotation` and `center` are fields here as there, and
 `uv_transform` is the 2D affine matrix they come to, three.js's
@@ -66,7 +75,7 @@ from render.srgb import (
     decode_ramp,
     linear_to_srgb,
 )
-from std.math import floor, inf, isfinite
+from std.math import ceil, floor, inf, isfinite, log2, sqrt
 from units.si import Angle, RADIAN
 
 
@@ -428,6 +437,12 @@ struct Texture(Movable):
     var repeat: Vector2
     var rotation: Angle
     var center: Vector2
+    # How many samples a fragment may take along the long axis of its
+    # footprint, three.js's `anisotropy`. One, the default, reads one
+    # trilinear sample; sixteen is what a GPU usually caps it at. Set
+    # after construction, as in three.js, and refused below one by
+    # `validate`. Read by both rasterizers where they pick a level.
+    var anisotropy: Int
 
     def __init__(out self):
         """Create the blank texture, which samples as opaque white.
@@ -450,6 +465,7 @@ struct Texture(Movable):
         self.repeat = Vector2(1, 1)
         self.rotation = Angle(0.0, RADIAN)
         self.center = Vector2(0, 0)
+        self.anisotropy = 1
 
     def __init__(
         out self,
@@ -511,6 +527,7 @@ struct Texture(Movable):
         self.repeat = Vector2(1, 1)
         self.rotation = Angle(0.0, RADIAN)
         self.center = Vector2(0, 0)
+        self.anisotropy = 1
         # After every field is set, so it is the same check the GPU upload
         # makes on a texture that may have been edited since.
         self.validate()
@@ -545,6 +562,8 @@ struct Texture(Movable):
             )
         if not self.alpha.is_valid():
             raise Error("A texture's alpha mode must be COVERAGE or IGNORED")
+        if self.anisotropy < 1:
+            raise Error("A texture's anisotropy is at least one")
 
     def __init__(out self, *, copy: Self):
         """Copy another texture, image data included."""
@@ -562,6 +581,7 @@ struct Texture(Movable):
         self.repeat = copy.repeat
         self.rotation = copy.rotation
         self.center = copy.center
+        self.anisotropy = copy.anisotropy
 
     def ignoring_alpha(self) raises -> Texture:
         """Return a copy of this texture that ignores its alpha.
@@ -613,6 +633,7 @@ struct Texture(Movable):
         copy.repeat = self.repeat
         copy.rotation = self.rotation
         copy.center = self.center
+        copy.anisotropy = self.anisotropy
         return copy^
 
     def is_blank(self) -> Bool:
@@ -968,6 +989,48 @@ struct Texture(Movable):
             level - Float32(lower),
         )
 
+    def sample_footprint(
+        self, u: Float32, v: Float32, footprint: Footprint
+    ) -> FloatColor:
+        """Return the color over a pixel's footprint: one trilinear sample,
+        or several along the footprint's long axis averaged.
+
+        The taps are spread evenly along the long axis, centered on the
+        coordinate, each read by `sample_level` at the footprint's level.
+        Averaged premultiplied, as `mix_color` mixes, so a transparent tap
+        lends no color. The GPU kernel takes the same taps in the same
+        order; see `render.gpu._sample_slot`.
+
+        Args:
+            u: Horizontal coordinate, 0 at the left edge.
+            v: Vertical coordinate, 0 at the *bottom* edge.
+            footprint: The level, the tap count and the step between taps,
+                from `anisotropic_footprint`.
+
+        Returns:
+            The color found there, or opaque white if the texture is blank.
+        """
+        if footprint.taps == 1:
+            return self.sample_level(u, v, footprint.level)
+        var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+        for tap in range(footprint.taps):  # pragma: no branch
+            var along = Float32(tap) - Float32(footprint.taps - 1) / 2
+            var sampled = self.sample_level(
+                u + footprint.step.x * along,
+                v + footprint.step.y * along,
+                footprint.level,
+            ).premultiplied()
+            total = FloatColor(
+                total.r + sampled.r,
+                total.g + sampled.g,
+                total.b + sampled.b,
+                total.a + sampled.a,
+            )
+        var share = 1 / Float32(footprint.taps)
+        return FloatColor(
+            total.r * share, total.g * share, total.b * share, total.a * share
+        ).unpremultiplied()
+
     def sample(self, u: Float32, v: Float32) -> FloatColor:
         """Return the color at a texture coordinate.
 
@@ -1003,6 +1066,92 @@ struct Texture(Movable):
             return FloatColor(1.0, 1.0, 1.0, 1.0)
 
         return self._sample_at(u, v, 0)
+
+
+@fieldwise_init
+struct Footprint(ImplicitlyCopyable):
+    """How a pixel's footprint is read: which level, how many taps along
+    its long axis, and how far apart in texture coordinates they are.
+
+    What `anisotropic_footprint` returns and `Texture.sample_footprint`
+    reads. One tap with a step of zero is the plain trilinear read.
+    """
+
+    var level: Float32
+    var taps: Int
+    var step: Vector2
+
+
+def anisotropic_footprint(
+    along_x: Vector2,
+    along_y: Vector2,
+    width: Int,
+    height: Int,
+    anisotropy: Int,
+) -> Footprint:
+    """Return how to read a pixel's footprint, given how far the texture
+    coordinates move one pixel over and one pixel down.
+
+    The two axes are measured in texels, as `render.rasterizer.mip_level`
+    measures them. With an anisotropy of one the level is that of the
+    longer axis, `log2(longest)`, the same number `mip_level` gives, so a
+    texture that asks for nothing reads exactly as it did. With more, the
+    long axis is covered by taps rather than by a coarser level: the tap
+    count is the ratio of the two lengths rounded up, capped at the
+    anisotropy and at the long axis's own length in texels, and the level
+    is that of the long axis divided by the count, which is close to the
+    short axis's own. The taps step along
+    the long axis's direction in texture space, the axis divided by the
+    count, so together they span the footprint once.
+
+    Pure and shared by both rasterizers, as `wrap_index` is.
+
+    Args:
+        along_x: How the coordinates change one pixel to the right.
+        along_y: How they change one pixel down.
+        width: The texture's width in texels.
+        height: Its height.
+        anisotropy: How many taps the texture allows, at least one.
+
+    Returns:
+        The footprint. A level at or below zero means magnification.
+    """
+    var dx = Vector2(along_x.x * Float32(width), along_x.y * Float32(height))
+    var dy = Vector2(along_y.x * Float32(width), along_y.y * Float32(height))
+    var in_x = sqrt(dx.x * dx.x + dx.y * dx.y)
+    var in_y = sqrt(dy.x * dy.x + dy.y * dy.y)
+    var longest = in_x
+    var shortest = in_y
+    var axis = along_x
+    if in_y > in_x:
+        longest = in_y
+        shortest = in_x
+        axis = along_y
+    if longest <= 0:
+        return Footprint(0, 1, Vector2(0, 0))
+    var taps = 1
+    if anisotropy > 1:
+        # The ratio of the two lengths, or every tap the texture allows
+        # when the short axis is nothing, and never more taps than the
+        # long axis has texels: a tap a texel already reads each once.
+        var ratio = ceil(longest)
+        if shortest > 0 and ceil(longest / shortest) < ratio:
+            ratio = ceil(longest / shortest)
+        if ratio < Float32(anisotropy):
+            taps = Int(ratio)
+        else:
+            taps = anisotropy
+    if taps == 1:
+        return Footprint(log2(longest), 1, Vector2(0, 0))
+    var covered = longest / Float32(taps)
+    var level = Float32(0)
+    if covered > 1:
+        level = log2(covered)
+    return Footprint(
+        level,
+        taps,
+        Vector2(axis.x / Float32(taps), axis.y / Float32(taps)),
+    )
 
 
 def texture_from(

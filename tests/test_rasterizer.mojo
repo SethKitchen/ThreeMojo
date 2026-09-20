@@ -3980,5 +3980,85 @@ def test_a_bad_environment_value_is_refused_on_both_paths() raises:
     rasterize_all(mirror_quad(reflectivity=0), target, cubes=cubes)
 
 
+# --- anisotropy, through the rasterizer -----------------------------------------
+
+
+def striped_store(
+    anisotropy: Int, mipmapped: Bool = True
+) raises -> TextureStore:
+    """Return a store holding an 8x8 image of vertical stripes with the
+    given anisotropy."""
+    var pixels = List[UInt8]()
+    for _ in range(8):
+        for x in range(8):
+            var tone = UInt8(255) if x % 2 == 0 else UInt8(0)
+            pixels.append(tone)
+            pixels.append(tone)
+            pixels.append(tone)
+            pixels.append(255)
+    var image = Texture(8, 8, pixels^, CLAMP, NEAREST, LINEAR, mipmapped)
+    image.anisotropy = anisotropy
+    var store = TextureStore()
+    _ = store.add(image^)
+    return store^
+
+
+def stretched_quad() -> List[RasterVertex]:
+    """Return two basic triangles covering an eight-pixel target whose
+    coordinates run once across and four times down: one texel a pixel
+    across, four a pixel down."""
+    var corners = List[RasterVertex]()
+    var places: List[Tuple[Float32, Float32, Float32, Float32]] = [
+        (Float32(0), Float32(0), Float32(0), Float32(4)),
+        (Float32(8), Float32(0), Float32(1), Float32(4)),
+        (Float32(8), Float32(8), Float32(1), Float32(0)),
+        (Float32(0), Float32(0), Float32(0), Float32(4)),
+        (Float32(8), Float32(8), Float32(1), Float32(0)),
+        (Float32(0), Float32(8), Float32(0), Float32(0)),
+    ]
+    for place in places:
+        corners.append(
+            RasterVertex(
+                place[0],
+                place[1],
+                0.5,
+                1,
+                FloatColor(1, 1, 1),
+                place[2],
+                place[3],
+                TextureId(0),
+                kind=BASIC,
+            )
+        )
+    return corners^
+
+
+def test_a_textures_anisotropy_reaches_the_pixels() raises:
+    # One tap reads the stripes off a coarse level, gray; eight taps read
+    # them off the full-size image, and the columns alternate.
+    var gray = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(stretched_quad(), gray, SHADE_TEXTURE, striped_store(1))
+    var soft = gray.shown(2, 4).r
+    assert_true(soft > 60 and soft < 200, "one tap was not gray")
+    var sharp = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(stretched_quad(), sharp, SHADE_TEXTURE, striped_store(8))
+    assert_equal(sharp.shown(2, 4).r, UInt8(255))
+    assert_equal(sharp.shown(3, 4).r, UInt8(0))
+    # The bands agree with one thread.
+    var banded = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(
+        stretched_quad(), banded, SHADE_TEXTURE, striped_store(8), workers=4
+    )
+    assert_equal(banded.shown(2, 4).r, UInt8(255))
+    assert_equal(banded.shown(3, 4).r, UInt8(0))
+    # A texture with no chain still takes its taps, off its one level.
+    var flat = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(
+        stretched_quad(), flat, SHADE_TEXTURE, striped_store(8, False)
+    )
+    assert_equal(flat.shown(2, 4).r, UInt8(255))
+    assert_equal(flat.shown(3, 4).r, UInt8(0))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

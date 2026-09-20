@@ -36,6 +36,8 @@ from render.texture import (
     mix_color,
     texture_of,
     wrap_index,
+    Footprint,
+    anisotropic_footprint,
 )
 from std.math import inf, nan
 from std.testing import (
@@ -1345,6 +1347,117 @@ def test_a_depth_texture_holds_window_space_depth_as_gray() raises:
     assert_equal(seen.texel(2, 0).r, UInt8(255))
     var tiled = depth_texture_of(image, REPEAT)
     assert_true(tiled.wrap == REPEAT)
+
+
+# --- anisotropy --------------------------------------------------------------------
+
+
+def stripes() raises -> Texture:
+    """Return an 8x8 image of vertical stripes, white and black columns,
+    linear, nearest and chained."""
+    var pixels = List[UInt8]()
+    for _ in range(8):
+        for x in range(8):
+            var tone = UInt8(255) if x % 2 == 0 else UInt8(0)
+            pixels.append(tone)
+            pixels.append(tone)
+            pixels.append(tone)
+            pixels.append(255)
+    return Texture(8, 8, pixels^, CLAMP, NEAREST, LINEAR, True)
+
+
+def test_a_texture_allows_one_tap_unless_told_otherwise() raises:
+    var image = quad()
+    assert_equal(image.anisotropy, 1)
+    assert_equal(Texture().anisotropy, 1)
+    image.anisotropy = 8
+    image.validate()
+    var twin = Texture(copy=image)
+    assert_equal(twin.anisotropy, 8)
+    assert_equal(image.ignoring_alpha().anisotropy, 8)
+    image.anisotropy = 0
+    with assert_raises():
+        image.validate()
+    image.anisotropy = -3
+    with assert_raises():
+        image.validate()
+
+
+def test_one_tap_reads_the_level_of_the_longer_axis() raises:
+    # Four texels down and one across: level two, as `mip_level` says.
+    var one = anisotropic_footprint(Vector2(0.125, 0), Vector2(0, 0.5), 8, 8, 1)
+    assert_equal(one.taps, 1)
+    assert_almost_equal(Float64(one.level), 2.0, atol=TOLERANCE)
+    assert_equal(one.step.x, Float32(0))
+    # A footprint of nothing is magnification, one tap at level zero.
+    var none = anisotropic_footprint(Vector2(0, 0), Vector2(0, 0), 8, 8, 16)
+    assert_equal(none.taps, 1)
+    assert_equal(none.level, Float32(0))
+
+
+def test_taps_cover_the_long_axis_at_the_short_axis_level() raises:
+    # Four to one: four taps along y, each a texel apart, at level zero.
+    var four = anisotropic_footprint(
+        Vector2(0.125, 0), Vector2(0, 0.5), 8, 8, 16
+    )
+    assert_equal(four.taps, 4)
+    assert_equal(four.level, Float32(0))
+    assert_almost_equal(Float64(four.step.y), 0.125, atol=TOLERANCE)
+    assert_equal(four.step.x, Float32(0))
+    # Capped at the anisotropy, and the level then rises to cover the rest:
+    # eight texels in two taps is four each, level two.
+    var capped = anisotropic_footprint(
+        Vector2(0.125, 0), Vector2(0, 1.0), 8, 8, 2
+    )
+    assert_equal(capped.taps, 2)
+    assert_almost_equal(Float64(capped.level), 2.0, atol=TOLERANCE)
+    assert_almost_equal(Float64(capped.step.y), 0.5, atol=TOLERANCE)
+    # The long axis can be x, and a short axis of nothing takes every tap.
+    var across = anisotropic_footprint(Vector2(0.5, 0), Vector2(0, 0), 8, 8, 16)
+    assert_equal(across.taps, 4)
+    assert_almost_equal(Float64(across.step.x), 0.125, atol=TOLERANCE)
+    assert_equal(across.step.y, Float32(0))
+    # A ratio that rounds up: three texels to one is three taps.
+    var three = anisotropic_footprint(
+        Vector2(0.125, 0), Vector2(0, 0.3), 8, 8, 16
+    )
+    assert_equal(three.taps, 3)
+    # A short axis of two texels under a long one of four: two taps, each
+    # reading two texels, so level one.
+    var two = anisotropic_footprint(Vector2(0.25, 0), Vector2(0, 0.5), 8, 8, 16)
+    assert_equal(two.taps, 2)
+    assert_almost_equal(Float64(two.level), 1.0, atol=TOLERANCE)
+
+
+def test_taps_along_a_stripe_keep_it_sharp() raises:
+    # Reading a column of stripes four texels tall and one wide: one tap
+    # reads level two, where the stripes have averaged to gray; four taps
+    # read level zero down the column and find the stripe's own tone.
+    var image = stripes()
+    var tall = Vector2(0, 0.5)
+    var thin = Vector2(0.125, 0)
+    var gray = image.sample_footprint(
+        0.0625, 0.5, anisotropic_footprint(thin, tall, 8, 8, 1)
+    )
+    assert_true(gray.r > 0.3 and gray.r < 0.7, "one tap was not gray")
+    var white = image.sample_footprint(
+        0.0625, 0.5, anisotropic_footprint(thin, tall, 8, 8, 4)
+    )
+    assert_almost_equal(Float64(white.r), 1.0, atol=TOLERANCE)
+    var black = image.sample_footprint(
+        0.1875, 0.5, anisotropic_footprint(thin, tall, 8, 8, 4)
+    )
+    assert_almost_equal(Float64(black.r), 0.0, atol=TOLERANCE)
+    # A footprint built by hand with one tap is `sample_level`.
+    var plain = image.sample_footprint(
+        0.0625, 0.5, Footprint(0, 1, Vector2(0, 0))
+    )
+    assert_almost_equal(Float64(plain.r), 1.0, atol=TOLERANCE)
+    # A blank texture is white however it is read.
+    var blank = Texture().sample_footprint(
+        0.5, 0.5, anisotropic_footprint(thin, tall, 8, 8, 4)
+    )
+    assert_equal(blank.r, Float32(1))
 
 
 def main() raises:

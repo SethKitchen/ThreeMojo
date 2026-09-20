@@ -118,8 +118,10 @@ from render.texture import (
     NEAREST,
     Alpha,
     Filter,
+    Footprint,
     Texture,
     Wrap,
+    anisotropic_footprint,
     blend_texels,
     mix_color,
     mix_straight,
@@ -266,7 +268,7 @@ comptime FURTHEST = Float32(1.0e30)
 # One row per texture in the store: where its bytes start, how big it is, and
 # how to sample it. A device cannot hold a `List` of `List`s, so every image
 # goes into one buffer end to end and this says where each one begins.
-comptime TABLE_COLUMNS = 8
+comptime TABLE_COLUMNS = 9
 
 
 def flatten_textures(
@@ -287,7 +289,7 @@ def flatten_textures(
     Returns:
         The concatenated texels, and `TABLE_COLUMNS` entries per texture:
         byte offset, width, height, wrap mode, filter mode, color space,
-        how many mip levels follow, and the alpha mode.
+        how many mip levels follow, the alpha mode, and the anisotropy.
 
     Raises:
         Error: If a texture cannot be read, or its wrap, filter, color
@@ -342,6 +344,7 @@ def _flatten_one(
         table.append(Int32(image.color_space.value))
         table.append(1)
         table.append(Int32(COVERAGE.value))
+        table.append(1)
         for _ in range(4):
             texels.append(255)
         return
@@ -352,6 +355,7 @@ def _flatten_one(
     table.append(Int32(image.color_space.value))
     table.append(Int32(image.levels))
     table.append(Int32(image.alpha.value))
+    table.append(Int32(image.anisotropy))
     # One bulk copy rather than an append per byte.
     texels.extend(image.pixels.copy())
 
@@ -984,6 +988,7 @@ struct _Descriptor(ImplicitlyCopyable):
     var space: ColorSpace
     var levels: Int
     var alpha: Alpha
+    var anisotropy: Int
 
 
 def _describe(table: MutPointer[Int32, MutAnyOrigin], slot: Int) -> _Descriptor:
@@ -999,6 +1004,7 @@ def _describe(table: MutPointer[Int32, MutAnyOrigin], slot: Int) -> _Descriptor:
         ColorSpace(Int(table[unsafe_offset=entry + 5])),
         Int(table[unsafe_offset=entry + 6]),
         Alpha(Int(table[unsafe_offset=entry + 7])),
+        Int(table[unsafe_offset=entry + 8]),
     )
 
 
@@ -1294,34 +1300,6 @@ def _sample_cube(
     )
 
 
-def _mip_level(
-    u: Float32,
-    v: Float32,
-    along_x: Vector2,
-    along_y: Vector2,
-    width: Float32,
-    height: Float32,
-) -> Float32:
-    """How far down the chain this pixel's footprint reaches.
-
-    `along_x` and `along_y` already hold the coordinates at the neighboring
-    pixels, worked out from the same analytic expression the host uses; see
-    `render.rasterizer.mip_level`.
-    """
-    var dx_u = (along_x.x - u) * width
-    var dx_v = (along_x.y - v) * height
-    var dy_u = (along_y.x - u) * width
-    var dy_v = (along_y.y - v) * height
-    var in_x = sqrt(dx_u * dx_u + dx_v * dx_v)
-    var in_y = sqrt(dy_u * dy_u + dy_v * dy_v)
-    var longest = in_x
-    if in_y > longest:
-        longest = in_y
-    if longest <= 0:
-        return 0
-    return log2(longest)
-
-
 def _sample_slot(
     texels: MutPointer[UInt8, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
@@ -1355,7 +1333,7 @@ def _sample_slot(
     alike on both sides.
     """
     var image = _describe(table, slot)
-    if image.levels == 1:
+    if image.levels == 1 and image.anisotropy == 1:
         return _sample_at(texels, ramp, image, u, v, 0)
     var along_x = _uv_at(
         corners,
@@ -1385,23 +1363,40 @@ def _sample_slot(
         px,
         py + SUBPIXEL,
     )
-    # v flipped and wrapped by the same routine the host uses, and blended
-    # by the same one -- see render.texture.
-    return _sample_level(
-        texels,
-        ramp,
-        image,
-        u,
-        v,
-        _mip_level(
-            u,
-            v,
-            along_x,
-            along_y,
-            Float32(image.width),
-            Float32(image.height),
-        ),
+    # The level and the taps, from the host's own function, and v flipped
+    # and wrapped by the same routine the host uses -- see render.texture.
+    var footprint = anisotropic_footprint(
+        Vector2(along_x.x - u, along_x.y - v),
+        Vector2(along_y.x - u, along_y.y - v),
+        image.width,
+        image.height,
+        image.anisotropy,
     )
+    if footprint.taps == 1:
+        return _sample_level(texels, ramp, image, u, v, footprint.level)
+    # The taps along the long axis, averaged premultiplied, exactly as
+    # `Texture.sample_footprint` averages them.
+    var total = FloatColor(0.0, 0.0, 0.0, 0.0)
+    for tap in range(footprint.taps):
+        var along = Float32(tap) - Float32(footprint.taps - 1) / 2
+        var sampled = _sample_level(
+            texels,
+            ramp,
+            image,
+            u + footprint.step.x * along,
+            v + footprint.step.y * along,
+            footprint.level,
+        ).premultiplied()
+        total = FloatColor(
+            total.r + sampled.r,
+            total.g + sampled.g,
+            total.b + sampled.b,
+            total.a + sampled.a,
+        )
+    var share = 1 / Float32(footprint.taps)
+    return FloatColor(
+        total.r * share, total.g * share, total.b * share, total.a * share
+    ).unpremultiplied()
 
 
 def rasterize_kernel(

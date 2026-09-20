@@ -133,6 +133,7 @@ from materials.material import (
     MaterialKind,
     Side,
 )
+from render.antialias import SUPERSAMPLE, downsample
 from render.cube_texture import FACE_COUNT, CubeTexture, cube_texture_of
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
@@ -1641,6 +1642,17 @@ def camera_up[C: Camera](scene: Scene, camera: C) raises -> Vector3:
     return up^
 
 
+def _scaled(rect: Rect, factor: Int) -> Rect:
+    """Return `rect` with its corner and size multiplied by `factor`: where
+    a rectangle of output pixels lands on a supersampled frame."""
+    return Rect(
+        rect.x * factor,
+        rect.y * factor,
+        rect.width * factor,
+        rect.height * factor,
+    )
+
+
 def _set_backdrop(
     mut image: Framebuffer, x: Int, y: Int, color: FloatColor
 ) raises:
@@ -1758,6 +1770,11 @@ struct Renderer(Movable):
     # target.
     var scissor: Rect
     var scissor_test: Bool
+    # Whether `render` and `render_array` draw the frame at twice the size
+    # each way and average every four pixels into one: three.js's
+    # `antialias`, by supersampling. Off by default, as there. See
+    # `render.antialias` and `set_antialias`.
+    var antialias: Bool
 
     def __init__(out self, width: Int, height: Int, workers: Int = 1) raises:
         """Create a renderer with a dark background.
@@ -1784,6 +1801,49 @@ struct Renderer(Movable):
         self.viewport = Rect.whole(width, height)
         self.scissor = Rect.whole(width, height)
         self.scissor_test = False
+        self.antialias = False
+
+    def set_antialias(mut self, enabled: Bool):
+        """Turn supersampling on or off, three.js's `antialias`.
+
+        On, `render`, `render_array` and `render_cube` draw the frame at
+        `SUPERSAMPLE` times the size each way and average every block into
+        one output pixel, in linear light; see `render.antialias`. The
+        viewport and the scissor are given in output pixels and scaled
+        with the frame. `render_into` and `render_array_into` draw into a
+        target the caller holds, at its size, and are not changed by this.
+
+        Args:
+            enabled: Whether to supersample.
+        """
+        self.antialias = enabled
+
+    def supersampled(self) raises -> Renderer:
+        """Return a renderer `SUPERSAMPLE` times this one's size each way,
+        with the same settings, its viewport and scissor scaled to match,
+        and no supersampling of its own.
+
+        What `render` draws with when `antialias` is on, and what a
+        caller drawing on the GPU uses to prepare a frame it will
+        `downsample` itself.
+
+        Returns:
+            The larger renderer.
+
+        Raises:
+            Error: If the larger renderer cannot be built.
+        """
+        var big = Renderer(
+            self.width * SUPERSAMPLE, self.height * SUPERSAMPLE, self.workers
+        )
+        big.background = self.background
+        big.shading = self.shading
+        big.tone_mapping = self.tone_mapping
+        big.tone_mapping_exposure = self.tone_mapping_exposure
+        big.viewport = _scaled(self.viewport, SUPERSAMPLE)
+        big.scissor = _scaled(self.scissor, SUPERSAMPLE)
+        big.scissor_test = self.scissor_test
+        return big^
 
     def set_viewport(mut self, rect: Rect) raises:
         """Put the camera's image in `rect`, three.js's `setViewport`.
@@ -3180,6 +3240,12 @@ struct Renderer(Movable):
         Raises:
             Error: Everything `render_into` raises.
         """
+        if self.antialias:
+            # Drawn at twice the size by a renderer that does not
+            # supersample, then averaged down; see `render.antialias`.
+            return downsample(
+                self.supersampled().render(scene, assets, camera), SUPERSAMPLE
+            )
         var target = RenderTarget(self.width, self.height, self.background)
         self.render_into(target, scene, assets, camera)
         # Linear light becomes an image exactly once, here, on as many
@@ -3218,6 +3284,17 @@ struct Renderer(Movable):
             Error: If a rectangle reaches outside the target, or anything
                 `render_into` raises for one of the cameras.
         """
+        if self.antialias:
+            var big = self.supersampled()
+            var scaled = ArrayCamera()
+            for index in range(array.count()):
+                scaled.add(
+                    array.cameras[index],
+                    _scaled(array.viewports[index], SUPERSAMPLE),
+                )
+            return downsample(
+                big.render_array(scene, assets, scaled), SUPERSAMPLE
+            )
         var target = RenderTarget(self.width, self.height, self.background)
         self.render_array_into(target, scene, assets, array)
         return target.resolve(
@@ -3548,6 +3625,7 @@ struct Renderer(Movable):
         var side = Renderer(camera.size, camera.size, self.workers)
         side.background = self.background
         side.shading = self.shading
+        side.antialias = self.antialias
         var faces = List[Framebuffer]()
         for face in range(FACE_COUNT):  # pragma: no branch
             faces.append(

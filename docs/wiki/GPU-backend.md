@@ -39,6 +39,8 @@ An alpha map must be `LINEAR` and `IGNORED`. `draw` asks that of the descriptors
 
 `set_textures` builds the new buffers first and replaces the old ones together with the count. A failed upload leaves the previous upload whole.
 
+An antialiased frame is drawn at `Renderer.supersampled()`'s size and shrunk with `render.antialias.downsample`, the function the CPU renderer uses; see [Renderer](Renderer#anti-aliasing). A texture's `anisotropy` crosses in the descriptor table, and the kernel takes the same taps the host takes; see [Textures](Textures#anisotropy).
+
 ## Parity with the CPU
 
 Coverage is integer arithmetic and matches the CPU exactly. Shading is floating point and matches within one level per channel, because the device fuses multiply and add. `tests/test_gpu.mojo` holds both backends to those standards on hand-built triangles and on whole prepared scenes.

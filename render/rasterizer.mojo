@@ -49,7 +49,12 @@ from render.cube_texture_store import (
 )
 from render.target import RenderTarget
 from render.srgb import LINEAR
-from render.texture import IGNORED, Texture, mix_straight
+from render.texture import (
+    IGNORED,
+    Texture,
+    anisotropic_footprint,
+    mix_straight,
+)
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.lighting import PERSPECTIVE_VIEW, Lighting, toward_eye_at
 from core.fog import FogView, fog_mix
@@ -704,25 +709,31 @@ def _sample_map(
 ) -> FloatColor:
     """Return `image` sampled at (u, v) for the pixel at (x, y).
 
-    Straight from the one level when the image has one. Otherwise from the
-    level the pixel's footprint chooses, measured from the coordinates at
-    the pixels one over and one down -- see `mip_level`. Shared by the
-    material's map and its emissive map, so both are filtered alike, and
-    mirrored on the device by `render.gpu._sample_slot`.
+    Straight from the one level when the image has one and allows one
+    tap. Otherwise from the level the pixel's footprint chooses, measured
+    from the coordinates at the pixels one over and one down -- see
+    `mip_level` and `anisotropic_footprint` -- with several taps along
+    the footprint's long axis when the texture's anisotropy allows them.
+    Shared by the material's map and its emissive map, so both are
+    filtered alike, and mirrored on the device by `render.gpu._sample_slot`.
     """
-    if image.levels == 1:
+    if image.levels == 1 and image.anisotropy == 1:
         return image.sample(u, v)
     var here = Vector2(u, v)
     var right = _coordinates_at(a, b, c, _weights(coverage, x + 1, y))
     var below = _coordinates_at(a, b, c, _weights(coverage, x, y + 1))
-    return image.sample_level(
+    # The level, and the taps along the long axis when the texture
+    # allows them: the same function the kernel asks. With one tap the
+    # level is what `mip_level` gives.
+    return image.sample_footprint(
         u,
         v,
-        mip_level(
+        anisotropic_footprint(
             Vector2(right.x - here.x, right.y - here.y),
             Vector2(below.x - here.x, below.y - here.y),
             image.width,
             image.height,
+            image.anisotropy,
         ),
     )
 
