@@ -151,6 +151,7 @@ def test_nerve_branch_continuity_and_landmarks() raises:
     _assert_same_point(femoral.chain.p3, saphenous.chain.p0)
     assert_true(fibular.chain.p4.x > dims.fib_head.x)
     assert_true(tibial.chain.p4.z < dims.med_mal.z)
+    assert_true(sural.chain.p0.y < dims.tibia_mid.y)
     assert_true(sural.chain.p4.z < dims.lat_mal.z)
     assert_true(saphenous.chain.p4.x < dims.med_mal.x)
 

@@ -307,16 +307,17 @@ def _saphenous_nerve(d: MuscleDimensions, S: Float32) -> TubeChain:
 
 def _sural_nerve(d: MuscleDimensions, S: Float32) -> TubeChain:
     var lat = _lat(d)
-    var knee = mix_point(d.med_condyle, d.lat_condyle, 0.50)
-    var p0 = knee + Vector3(0, -0.030 * S, -0.034 * S)
-    var p1 = mix_point(knee, d.tibia_mid, 0.35) + Vector3(
-        lat * 0.004 * S, 0, -0.032 * S
+    var p0 = mix_point(d.tibia_mid, d.lat_mal, 0.20) + Vector3(0, 0, -0.028 * S)
+    var p1 = mix_point(d.tibia_mid, d.lat_mal, 0.38) + Vector3(
+        lat * 0.003 * S, 0, -0.026 * S
     )
-    var p2 = d.tibia_mid + Vector3(lat * 0.006 * S, 0, -0.030 * S)
-    var p3 = mix_point(d.tibia_mid, d.lat_mal, 0.72) + Vector3(
-        lat * 0.008 * S, 0, -0.022 * S
+    var p2 = mix_point(d.tibia_mid, d.lat_mal, 0.56) + Vector3(
+        lat * 0.005 * S, 0, -0.022 * S
     )
-    var p4 = d.lat_mal + Vector3(lat * 0.006 * S, 0.006 * S, -0.012 * S)
+    var p3 = mix_point(d.tibia_mid, d.lat_mal, 0.76) + Vector3(
+        lat * 0.007 * S, 0, -0.018 * S
+    )
+    var p4 = d.lat_mal + Vector3(lat * 0.006 * S, 0.006 * S, -0.014 * S)
     return TubeChain(
         p0,
         p1,
