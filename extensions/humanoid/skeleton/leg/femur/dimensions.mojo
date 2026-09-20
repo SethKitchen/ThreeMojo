@@ -251,8 +251,8 @@ struct FemurField(DistanceField, ImplicitlyCopyable):
         var ml_mid = dimensions.midshaft_ml.value * 0.5
         var ap_mid = dimensions.midshaft_ap.value * 0.5
         var r_mid = 0.5 * (ml_mid + ap_mid)
-        var condyle_ry = 0.39 * W
-        var condyle_rz = 0.36 * W
+        var condyle_ry = 0.32 * W
+        var condyle_rz = 0.34 * W
         var condyle_rx = 0.25 * W
         self.head_center = dimensions.head_center
         self.head_r = head_r
@@ -525,8 +525,8 @@ def femur_dimensions(
     var ante = Angle(ante_deg, DEGREE)
     var obliq = Angle(obliq_deg, DEGREE)
     var head_r = head_d * 0.5
-    var condyle_ry = 0.39 * width
-    var condyle_rz = 0.36 * width
+    var condyle_ry = 0.32 * width
+    var condyle_rz = 0.34 * width
     var medial = Vector3(
         -0.26 * width, -0.5 * L + condyle_ry * 1.04, 0.08 * condyle_rz
     )
