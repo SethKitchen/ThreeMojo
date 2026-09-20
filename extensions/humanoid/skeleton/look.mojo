@@ -18,8 +18,8 @@ from render.framebuffer import Color
 def cartilage_phong() raises -> Material:
     """Return a Phong material for articular cartilage.
 
-    The color is a warm ivory, like wet hyaline cartilage. The surface is
-    double-sided and opaque so it reads as tissue instead of colored glass.
+    The color is pearlescent glistening white/ivory, like wet hyaline cartilage.
+    The surface is double-sided and opaque so it reads as tissue instead of colored glass.
 
     Returns:
         A `PHONG` material.
@@ -28,9 +28,9 @@ def cartilage_phong() raises -> Material:
         Error: If the Phong constructor refuses the values.
     """
     return phong_material(
-        Color(228, 225, 210),
-        specular=Color(238, 235, 220),
-        shininess=26.0,
+        Color(240, 242, 245),
+        specular=Color(255, 255, 255),
+        shininess=36.0,
         side=DOUBLE_SIDE,
     )
 
@@ -38,7 +38,7 @@ def cartilage_phong() raises -> Material:
 def meniscus_phong() raises -> Material:
     """Return a Phong material for a meniscus.
 
-    The color is natural off-white fibrocartilage. Shininess is low.
+    The color is natural fibrocartilaginous off-white / light cream. Shininess is low.
 
     Returns:
         A `PHONG` material.
@@ -47,16 +47,16 @@ def meniscus_phong() raises -> Material:
         Error: If the Phong constructor refuses the values.
     """
     return phong_material(
-        Color(205, 199, 181),
-        specular=Color(128, 122, 110),
-        shininess=10.0,
+        Color(230, 226, 215),
+        specular=Color(140, 135, 125),
+        shininess=12.0,
     )
 
 
 def ligament_phong() raises -> Material:
     """Return a Phong material for a collateral ligament.
 
-    The color is pale fibrous connective tissue. Shininess is low.
+    The color is pale fibrous silvery-tan connective tissue. Shininess is low.
 
     Returns:
         A `PHONG` material.
@@ -65,7 +65,7 @@ def ligament_phong() raises -> Material:
         Error: If the Phong constructor refuses the values.
     """
     return phong_material(
-        Color(226, 214, 180),
-        specular=Color(110, 102, 86),
-        shininess=8.0,
+        Color(228, 222, 206),
+        specular=Color(160, 155, 140),
+        shininess=16.0,
     )
