@@ -14,6 +14,7 @@ from materials.material import (
     NORMALS,
     PHONG,
     PHYSICAL,
+    SHADOW,
     STANDARD,
     TOON,
 )
@@ -31,6 +32,7 @@ from materials.material import (
     phong_material,
     physical_material,
     points_material,
+    shadow_material,
     sprite_material,
     standard_material,
     toon_material,
@@ -251,13 +253,13 @@ def test_a_wrong_value_in_the_right_type_is_refused() raises:
     assert_true(MATCAP.is_valid())
     assert_true(STANDARD.is_valid())
     assert_true(PHYSICAL.is_valid())
-    assert_false(MaterialKind(9).is_valid())
+    assert_false(MaterialKind(10).is_valid())
     with assert_raises():
         _ = Material(Color(0, 0, 0), NO_TEXTURE, Side(99))
     with assert_raises():
         _ = Material(Color(0, 0, 0), blending=Blending(7))
     with assert_raises():
-        _ = Material(Color(0, 0, 0), kind=MaterialKind(9))
+        _ = Material(Color(0, 0, 0), kind=MaterialKind(10))
     # Editing one after the fact is possible too; the rasterizers check.
     var changed = OPAQUE
     changed.value = 7
@@ -1482,6 +1484,55 @@ def test_a_normal_map_or_a_bump_map_needs_a_normal_to_perturb() raises:
     assert_false(plain.has_bump_map())
     assert_equal(plain.normal_scale.x, Float32(1))
     assert_equal(plain.bump_scale, Float32(1))
+
+
+# --- shadow -----------------------------------------------------------------
+
+
+def test_a_shadow_material_is_black_and_blends_by_default() raises:
+    # three.js's ShadowMaterial: black, opaque where a shadow falls, and
+    # transparent, so it blends, wherever none does.
+    var catcher = shadow_material()
+    assert_equal(catcher.kind, SHADOW)
+    assert_equal(catcher.color.r, UInt8(0))
+    assert_equal(catcher.opacity, Float32(1))
+    assert_true(catcher.is_transparent())
+    assert_true(catcher.kind.is_unlit())
+    assert_false(catcher.is_lit())
+    assert_false(catcher.kind.is_physical())
+    assert_false(catcher.kind.has_normal())
+    assert_false(catcher.kind.reflects())
+    assert_true(SHADOW.is_valid())
+    var faint = shadow_material(Color(40, 0, 80), 0.5, DOUBLE_SIDE)
+    assert_equal(faint.color.b, UInt8(80))
+    assert_equal(faint.opacity, Float32(0.5))
+    assert_equal(faint.side, DOUBLE_SIDE)
+    # By hand it blends too, and refuses to be made opaque.
+    var plain = Material(Color(0, 0, 0), kind=SHADOW)
+    assert_equal(plain.blending, BLEND)
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), kind=SHADOW, blending=OPAQUE)
+    _ = Material(Color(0, 0, 0), kind=SHADOW, blending=BLEND, transparent=True)
+
+
+def test_a_shadow_material_shows_its_shadow_and_nothing_else() raises:
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), kind=SHADOW, map=TextureId(0))
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), kind=SHADOW, alpha_map=TextureId(0))
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), kind=SHADOW, vertex_colors=True)
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), kind=SHADOW, wireframe=True)
+    # Unlit, so no emissive term either, and no highlight or environment.
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), kind=SHADOW, emissive=Color(1, 1, 1))
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), kind=SHADOW, env_map=CubeTextureId(0))
+    with assert_raises():
+        _ = Material(Color(0, 0, 0), kind=SHADOW, normal_map=TextureId(0))
+    with assert_raises():
+        _ = shadow_material(opacity=1.5)
 
 
 def main() raises:

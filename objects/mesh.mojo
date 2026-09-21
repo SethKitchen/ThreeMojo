@@ -76,6 +76,12 @@ struct Mesh(ImplicitlyCopyable):
     # How much of each of the geometry's morph targets this mesh wears:
     # three.js's `morphTargetInfluences`. See the module docstring.
     var morph_influences: SIMD[DType.float32, MAX_MORPH_TARGETS]
+    # Whether this mesh is drawn into the shadow maps of the lights that
+    # cast, and whether the lights' shadows fall on it: three.js's
+    # `castShadow` and `receiveShadow`, both off by default as there.
+    # See `lights.shadow`.
+    var cast_shadow: Bool
+    var receive_shadow: Bool
 
     def __init__(
         out self,
@@ -84,6 +90,8 @@ struct Mesh(ImplicitlyCopyable):
         node: NodeId,
         *,
         frustum_culled: Bool = True,
+        cast_shadow: Bool = False,
+        receive_shadow: Bool = False,
     ) raises:
         """Bind a stored geometry and material to a scene node.
 
@@ -98,6 +106,10 @@ struct Mesh(ImplicitlyCopyable):
             frustum_culled: Whether the renderer may skip this mesh when
                 its bounds are out of view. On unless said otherwise, as
                 three.js's `frustumCulled` is.
+            cast_shadow: Whether this mesh is drawn into the shadow maps,
+                three.js's `castShadow`. Off unless said otherwise.
+            receive_shadow: Whether the shadows fall on this mesh,
+                three.js's `receiveShadow`. Off unless said otherwise.
 
         Raises:
             Error: If any id is negative.
@@ -113,6 +125,8 @@ struct Mesh(ImplicitlyCopyable):
         self.node = node
         self.frustum_culled = frustum_culled
         self.morph_influences = SIMD[DType.float32, MAX_MORPH_TARGETS](0)
+        self.cast_shadow = cast_shadow
+        self.receive_shadow = receive_shadow
 
     def set_morph_influence(mut self, target: Int, weight: Float32) raises:
         """Set how much of one morph target this mesh wears.

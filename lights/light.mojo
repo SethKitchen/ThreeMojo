@@ -69,6 +69,7 @@ target the same way, three.js's `DirectionalLight.target`.
 
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
+from lights.shadow import LightShadow
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
 from std.math import cos, isfinite
@@ -182,6 +183,14 @@ struct Light(ImplicitlyCopyable):
     # Which node a directional or spot light shines toward, three.js's
     # `target`, or `NO_PARENT` for the world origin. Read only by those two.
     var target: NodeId
+    # Whether this light draws a shadow map and the surfaces it lights
+    # compare against it, three.js's `castShadow`, and how it draws it,
+    # three.js's `shadow`. Off by default, as there. Only a directional
+    # or a spot light can cast: a point light's six-faced shadow is not
+    # ported, and an ambient or hemisphere light has no direction to
+    # draw from. See `lights.shadow`.
+    var cast_shadow: Bool
+    var shadow: LightShadow
 
     def radiance(self) -> FloatColor:
         """Return the light this contributes, decoded and scaled.
@@ -212,12 +221,23 @@ struct Light(ImplicitlyCopyable):
         Raises:
             Error: If the intensity is negative or not finite; a point or
                 spot light's decay or distance is negative or not finite;
-                or a spot light's angle is not finite, not above zero, or
+                a spot light's angle is not finite, not above zero, or
                 past a quarter turn, its cosine rounds to one, or its
-                penumbra is not finite or outside zero to one.
+                penumbra is not finite or outside zero to one; or the
+                light casts a shadow and is not directional or spot, or
+                its `shadow` is refused by `LightShadow.validate`.
         """
         if not isfinite(self.intensity) or self.intensity < 0:
             raise Error("A light's intensity must be finite and not negative")
+        if self.cast_shadow:
+            if self.kind != DIRECTIONAL and self.kind != SPOT:
+                raise Error(
+                    "Only a directional or a spot light casts a shadow: a"
+                    " point light's six-faced shadow is not ported, and an"
+                    " ambient or hemisphere light has no direction to draw"
+                    " from"
+                )
+            self.shadow.validate()
         if self.kind == POINT or self.kind == SPOT:
             if not isfinite(self.decay) or self.decay < 0:
                 raise Error("A light's decay must be finite and not negative")
@@ -286,6 +306,8 @@ def _bare(
         _NO_ANGLE,
         0.0,
         NO_PARENT,
+        False,
+        LightShadow(),
     )
 
 

@@ -39,13 +39,15 @@ from materials.material import (
     normal_material,
     phong_material,
     physical_material,
+    shadow_material,
     standard_material,
     toon_material,
 )
 from render.cube_texture import CubeTexture
 from render.cube_texture_store import SCENE_ENVIRONMENT
 from core.scene import Scene
-from lights.light import ambient_light, directional_light
+from lights.light import ambient_light, directional_light, spot_light
+from core.layers import Layers
 from lights.lighting import Lighting
 from core.fog import FogKind, exp2_fog, linear_fog, no_fog
 from render.tonemap import (
@@ -60,6 +62,12 @@ from geometries.sphere import sphere
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
+from objects.instanced_mesh import BatchedMesh, InstancedMesh
+from objects.lod import Lod
+from objects.skeleton import Bone, Skeleton
+from objects.skinned_mesh import SkinnedMesh
+from objects.sprite import Sprite
+from math.matrix4 import Matrix4
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV, ShadeMode
 from geometries.polyhedron import octahedron
@@ -5226,6 +5234,218 @@ def test_a_data_map_must_be_there_and_stored_as_data_in_the_renderer() raises:
             sheet_of(assets, disagreeing),
             camera_at(0, 0, 4),
         )
+
+
+# --- shadows ----------------------------------------------------------------
+
+
+def shadow_scene(
+    mut assets: Assets,
+    cast: Bool,
+    receive: Bool,
+    light: String,
+    catcher: Bool = False,
+    bias: Float32 = -0.002,
+) raises -> Scene:
+    """Return a scene with a floor at the origin and a block a meter above
+    it under one white light straight above: a `"sun"`, a `"beam"`, a
+    `"dark sun"` that casts nothing, or `"none"`. The block casts or not,
+    the floor receives or not, and is drawn with a shadow material when
+    `catcher`."""
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var lift = Object3D()
+    lift.set_position(0, 1.0, 0)
+    var lift_node = scene.add(lift^)
+    var floor = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER))
+    )
+    var block = assets.geometries.add(cube(Length(1.0, METER)))
+    var paint = assets.materials.add(Material(Color(200, 200, 200)))
+    if catcher:
+        paint = assets.materials.add(shadow_material())
+    var red = assets.materials.add(Material(Color(200, 60, 60)))
+    scene.add_mesh(Mesh(floor, paint, ground_node, receive_shadow=receive))
+    scene.add_mesh(Mesh(block, red, lift_node, cast_shadow=cast))
+    if light != "none":
+        var lamp = Object3D()
+        lamp.set_position(-3, 4, 0)
+        var node = scene.add(lamp^)
+        if light == "beam":
+            var beam = spot_light(
+                Color(255, 255, 255), node, 16 * FULL, angle=Angle(50.0, DEGREE)
+            )
+            beam.cast_shadow = True
+            beam.shadow.map_size = 64
+            beam.shadow.bias = bias
+            scene.add_light(beam)
+        else:
+            var sun = directional_light(Color(255, 255, 255), node, FULL)
+            sun.cast_shadow = light == "sun"
+            sun.shadow.map_size = 64
+            sun.shadow.bias = bias
+            scene.add_light(sun)
+    scene.update()
+    return scene^
+
+
+def floor_under_and_beside(image: Framebuffer) raises -> Tuple[UInt8, UInt8]:
+    """Return the red of the floor just beside the block on the side away
+    from the light, where its shadow falls, and the red of the floor well
+    away from it, seen from above and in front."""
+    return (
+        image.get_pixel(WIDTH * 5 // 8, HEIGHT // 2 - 1).r,
+        image.get_pixel(WIDTH // 8, HEIGHT * 3 // 4).r,
+    )
+
+
+def test_a_block_casts_a_shadow_on_the_floor_under_it() raises:
+    # Seen from above and a little in front, the floor straight under the
+    # block is dark and the floor beside it is lit; without the light
+    # casting, without the block casting, or without the floor receiving,
+    # the two are alike.
+    var assets = Assets()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var camera = camera_at(0, 6, 3)
+    var scene = shadow_scene(assets, True, True, "sun")
+    var seen = floor_under_and_beside(renderer.render(scene, assets, camera))
+    assert_true(seen[1] > 150, "the floor beside the block was dark")
+    assert_true(Int(seen[0]) + 100 < Int(seen[1]), "no shadow fell")
+    # The shadow maps are what render_into drew, one per casting light.
+    var maps = renderer.shadow_maps(scene, assets)
+    assert_equal(len(maps), 1)
+    assert_equal(maps[0].size, 64)
+    assert_equal(maps[0].light, 0)
+    var no_cast = shadow_scene(assets, False, True, "sun")
+    var unshadowed = floor_under_and_beside(
+        renderer.render(no_cast, assets, camera)
+    )
+    assert_equal(unshadowed[0], unshadowed[1])
+    var no_receive = shadow_scene(assets, True, False, "sun")
+    var ignored = floor_under_and_beside(
+        renderer.render(no_receive, assets, camera)
+    )
+    assert_equal(ignored[0], ignored[1])
+    var dark_sun = shadow_scene(assets, True, True, "dark sun")
+    var plain = floor_under_and_beside(
+        renderer.render(dark_sun, assets, camera)
+    )
+    assert_equal(plain[0], plain[1])
+    assert_equal(len(renderer.shadow_maps(dark_sun, assets)), 0)
+
+
+def test_a_spot_light_casts_a_shadow_through_its_own_camera() raises:
+    var assets = Assets()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var scene = shadow_scene(assets, True, True, "beam")
+    var seen = floor_under_and_beside(
+        renderer.render(scene, assets, camera_at(0, 6, 3))
+    )
+    assert_true(seen[1] > 100, "the floor beside the block was dark")
+    assert_true(Int(seen[0]) + 60 < Int(seen[1]), "no shadow fell")
+
+
+def test_a_shadow_material_catches_the_shadow_and_nothing_else() raises:
+    # Over a white background, a shadow material floor is invisible
+    # except where the block's shadow falls, which is black.
+    var assets = Assets()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(255, 255, 255))
+    var scene = shadow_scene(assets, True, True, "sun", True)
+    var seen = floor_under_and_beside(
+        renderer.render(scene, assets, camera_at(0, 6, 3))
+    )
+    assert_equal(seen[1], UInt8(255))
+    assert_true(seen[0] < 100, "the shadow material caught nothing")
+    # With no shadow to catch it shows nothing at all.
+    var quiet = shadow_scene(assets, True, True, "dark sun", True)
+    var empty = floor_under_and_beside(
+        renderer.render(quiet, assets, camera_at(0, 6, 3))
+    )
+    assert_equal(empty[0], UInt8(255))
+
+
+def test_a_shadow_is_drawn_under_lit_shading_and_follows_the_layers() raises:
+    # Lit shading casts and receives as textured shading does: a shadow is
+    # not a texture. And a light on a layer the camera does not watch draws
+    # no map.
+    var assets = Assets()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    renderer.set_shading(SHADE_LIT)
+    var scene = shadow_scene(assets, True, True, "sun")
+    var lit = floor_under_and_beside(
+        renderer.render(scene, assets, camera_at(0, 6, 3))
+    )
+    assert_true(Int(lit[0]) + 100 < Int(lit[1]), "no shadow under lit shading")
+    var aside = Layers()
+    aside.set(3)
+    scene.lights[0].layers = aside
+    assert_equal(len(renderer.shadow_maps(scene, assets, Layers())), 0)
+    assert_equal(len(renderer.shadow_maps(scene, assets)), 1)
+
+
+def test_a_casting_light_on_its_target_is_refused() raises:
+    var assets = Assets()
+    var scene = shadow_scene(assets, True, True, "none")
+    var sun = directional_light(Color(255, 255, 255), NodeId(0), FULL)
+    sun.cast_shadow = True
+    scene.add_light(sun)
+    scene.update()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    with assert_raises():
+        _ = renderer.shadow_maps(scene, assets)
+    with assert_raises():
+        _ = renderer.render(scene, assets, camera_at(0, 6, 3))
+    # Aimed at a target node it sits on, the same.
+    scene.lights[0] = directional_light(
+        Color(255, 255, 255), NodeId(1), FULL, target=NodeId(1)
+    )
+    scene.lights[0].cast_shadow = True
+    with assert_raises():
+        _ = renderer.shadow_maps(scene, assets)
+    # Aimed at a target node it does not sit on, a map is drawn, from the
+    # block's node down at the floor's.
+    scene.lights[0] = directional_light(
+        Color(255, 255, 255), NodeId(1), FULL, target=NodeId(0)
+    )
+    scene.lights[0].cast_shadow = True
+    assert_equal(len(renderer.shadow_maps(scene, assets)), 1)
+
+
+def test_only_meshes_cast_shadows_yet() raises:
+    # A skinned, instanced or batched mesh, an LOD and a sprite are left
+    # out of a light's view: the map holds the block alone, the same map
+    # the scene draws without them.
+    var assets = Assets()
+    var scene = shadow_scene(assets, True, True, "sun")
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var alone = renderer.shadow_maps(scene, assets)
+    var block = scene.meshes[1].geometry
+    var red = scene.meshes[1].material
+    var lift = scene.meshes[1].node
+    scene.add_instanced_mesh(InstancedMesh(block, red, lift, 3))
+    var batch = BatchedMesh(red, lift)
+    _ = batch.add_instance(block)
+    scene.add_batched_mesh(batch^)
+    var lod = Lod(lift)
+    lod.add_level(block, red)
+    scene.add_lod(lod^)
+    scene.add_sprite(Sprite(red, lift))
+    scene.add_skinned_mesh(
+        SkinnedMesh(block, red, lift, Skeleton([Bone(lift, Matrix4())]))
+    )
+    scene.update()
+    var crowded = renderer.shadow_maps(scene, assets)
+    assert_equal(len(crowded), 1)
+    for texel in range(len(alone[0].depths)):
+        assert_equal(crowded[0].depths[texel], alone[0].depths[texel])
 
 
 def main() raises:

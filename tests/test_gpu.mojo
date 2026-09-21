@@ -36,6 +36,7 @@ from core.object3d import Object3D
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from lights.light import ambient_light, directional_light, point_light
+from lights.shadow import SHADOW_HEADER
 from geometries.box import cube
 from geometries.sphere import sphere
 from math.matrix4 import translation
@@ -135,6 +136,8 @@ from render.gpu import (
     LIGHTS_TOWARD,
     LIGHTS_UP,
     STATE_PER_TRIANGLE,
+    STATE_RECEIVES_SHADOW,
+    NO_SHADOW,
     TABLE_COLUMNS,
     GpuRenderer,
     available,
@@ -186,6 +189,7 @@ from materials.material import (
     normal_material,
     phong_material,
     physical_material,
+    shadow_material,
     standard_material,
     toon_material,
 )
@@ -1503,7 +1507,7 @@ def test_flattening_lights_lays_out_the_sky_and_the_cone() raises:
     )
     var lighting = Lighting(scene)
     var flat = flatten_lights(lighting)
-    assert_equal(len(flat), LIGHTS_FIRST + 9 + 13)
+    assert_equal(len(flat), LIGHTS_FIRST + 9 + 14)
     assert_almost_equal(flat[LIGHTS_AMBIENT], Float32(0.5), atol=Float64(1e-6))
     # The sky is straight up, white at a quarter, over a black ground.
     var sky = LIGHTS_FIRST
@@ -4130,7 +4134,7 @@ def test_the_gpu_refuses_a_material_kind_it_has_no_path_for() raises:
         return
     var renderer = GpuRenderer(8, 8)
     with assert_raises():
-        renderer.draw(data_pair(MaterialKind(9)), BACKGROUND)
+        renderer.draw(data_pair(MaterialKind(10)), BACKGROUND)
     # And corners that disagree, which is the check it shares with the CPU.
     var mixed = data_pair(NORMALS)
     mixed[1] = of_kind(mixed[1], DEPTH)
@@ -4343,7 +4347,7 @@ def test_the_state_table_carries_the_alpha_map() raises:
         )
     var state = triangle_state(corners)
     assert_equal(len(state), STATE_PER_TRIANGLE)
-    assert_equal(len(state), 13)
+    assert_equal(len(state), 14)
     assert_equal(state[4], Int32(7))
     var plain = List[RasterVertex]()
     for _ in range(3):
@@ -4521,7 +4525,7 @@ def test_the_light_buffer_begins_with_the_camera_and_its_direction() raises:
     scene.add_light(directional_light(Color(255, 255, 255), node, 1.0))
     scene.update()
     var flat = flatten_lights(Lighting(scene, Layers.all(), Vector3(7, 8, 9)))
-    assert_equal(len(flat), LIGHTS_FIRST + 6)
+    assert_equal(len(flat), LIGHTS_FIRST + 7)
     assert_equal(flat[LIGHTS_EYE], Float32(7))
     assert_equal(flat[LIGHTS_EYE + 1], Float32(8))
     assert_equal(flat[LIGHTS_EYE + 2], Float32(9))
@@ -7419,7 +7423,7 @@ def test_the_physical_lanes_and_columns_ride_last() raises:
     assert_equal(state[STATE_NORMAL_MAP], Int32(2))
     assert_equal(state[STATE_BUMP_MAP], Int32(NO_TEXTURE.value))
     assert_equal(state[STATE_ENV_MAP], Int32(3 + 6))
-    assert_equal(STATE_BUMP_MAP, STATE_PER_TRIANGLE - 1)
+    assert_equal(STATE_BUMP_MAP, STATE_PER_TRIANGLE - 2)
 
 
 def test_both_backends_agree_on_a_physical_lobe() raises:
@@ -7814,6 +7818,154 @@ def test_the_gpu_refuses_a_data_map_it_cannot_sample() raises:
         SHADE_TEXTURE,
         textures,
     )
+
+
+# --- shadows, both backends -------------------------------------------------
+
+
+def a_shadowed_scene(mut assets: Assets, catcher: Bool = False) raises -> Scene:
+    """Return a floor and a block above it under a sun off to one side
+    that casts, the block casting and the floor receiving, the floor a
+    shadow material when `catcher`; and a spot light from the other side
+    that casts too."""
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var lift = Object3D()
+    lift.set_position(0, 1.0, 0)
+    var lift_node = scene.add(lift^)
+    var floor = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER), 2, 2)
+    )
+    var block = assets.geometries.add(cube(Length(1.0, METER)))
+    var paint = assets.materials.add(Material(Color(200, 200, 200)))
+    if catcher:
+        paint = assets.materials.add(shadow_material())
+    var red = assets.materials.add(
+        phong_material(Color(200, 60, 60), specular=Color(80, 80, 80))
+    )
+    scene.add_mesh(Mesh(floor, paint, ground_node, receive_shadow=True))
+    scene.add_mesh(
+        Mesh(block, red, lift_node, cast_shadow=True, receive_shadow=True)
+    )
+    var lamp = Object3D()
+    lamp.set_position(-3, 4, 0)
+    var lamp_node = scene.add(lamp^)
+    var sun = directional_light(Color(255, 250, 240), lamp_node, 2.5)
+    sun.cast_shadow = True
+    sun.shadow.map_size = 48
+    sun.shadow.bias = -0.002
+    sun.shadow.radius = 1.5
+    scene.add_light(sun)
+    var beam = Object3D()
+    beam.set_position(2.5, 4, 1)
+    var beam_node = scene.add(beam^)
+    var spot = spot_light(
+        Color(200, 220, 255), beam_node, 30.0, angle=Angle(45.0, DEGREE)
+    )
+    spot.cast_shadow = True
+    spot.shadow.map_size = 32
+    spot.shadow.normal_bias = 0.02
+    scene.add_light(spot)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.15))
+    scene.update()
+    return scene^
+
+
+def test_the_light_buffer_carries_the_shadow_maps_after_the_lights() raises:
+    # A directional light's seventh float and a spot light's fourteenth
+    # say where their maps begin, and the maps follow with a header of
+    # twenty floats and then their depths.
+    var assets = Assets()
+    var scene = a_shadowed_scene(assets)
+    var renderer = Renderer(24, 18)
+    var maps = renderer.shadow_maps(scene, assets)
+    assert_equal(len(maps), 2)
+    var lighting = Lighting(scene, shadows=maps^)
+    var flat = flatten_lights(lighting)
+    var lights_end = LIGHTS_FIRST + 7 + 14
+    var first_map = lights_end
+    var second_map = first_map + SHADOW_HEADER + 48 * 48
+    assert_equal(len(flat), second_map + SHADOW_HEADER + 32 * 32)
+    assert_equal(flat[LIGHTS_FIRST + 6], Float32(first_map))
+    assert_equal(flat[LIGHTS_FIRST + 7 + 13], Float32(second_map))
+    assert_equal(flat[first_map], Float32(48))
+    assert_equal(flat[first_map + 1], Float32(-0.002))
+    assert_equal(flat[first_map + 3], Float32(1.5))
+    assert_equal(flat[second_map], Float32(32))
+    assert_equal(flat[second_map + 2], Float32(0.02))
+    assert_equal(flat[first_map + 4], lighting.shadows[0].frame[0])
+    assert_equal(flat[first_map + SHADOW_HEADER], lighting.shadows[0].depths[0])
+    # Without maps, the lights carry `NO_SHADOW`.
+    var bare = flatten_lights(Lighting(scene))
+    assert_equal(len(bare), lights_end)
+    assert_equal(bare[LIGHTS_FIRST + 6], NO_SHADOW)
+    assert_equal(bare[LIGHTS_FIRST + 7 + 13], NO_SHADOW)
+    # And the state table says whether a triangle receives.
+    var corners = renderer.prepare(
+        scene,
+        assets,
+        PerspectiveCamera(
+            Angle(45.0, DEGREE),
+            4.0 / 3.0,
+            Length(0.1, METER),
+            Length(50.0, METER),
+        ),
+    )
+    var state = triangle_state(corners)
+    assert_equal(STATE_RECEIVES_SHADOW, STATE_PER_TRIANGLE - 1)
+    assert_equal(state[STATE_RECEIVES_SHADOW], Int32(1))
+    var plain = data_pair(LAMBERT)
+    for index in range(len(plain)):
+        plain[index].receives_shadow = False
+    assert_equal(triangle_state(plain)[STATE_RECEIVES_SHADOW], Int32(0))
+
+
+def test_both_backends_agree_on_a_shadowed_scene() raises:
+    # Two maps, nine taps each, a bias on one and a normal bias on the
+    # other, read by a lambert floor and a phong block: the kernel calls
+    # the host's own five functions and must reach the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends agree on a shadowed scene"):
+        return
+    for catcher in [False, True]:
+        var assets = Assets()
+        var scene = a_shadowed_scene(assets, catcher)
+        var renderer = Renderer(48, 36)
+        renderer.set_background(BACKGROUND)
+        var camera = PerspectiveCamera(
+            Angle(45.0, DEGREE),
+            Float32(48) / Float32(36),
+            Length(0.1, METER),
+            Length(50.0, METER),
+        )
+        camera.place(Vector3(1, 5, 5), Vector3(0, 0, 0))
+        var corners = renderer.prepare(scene, assets, camera)
+        var lighting = Lighting(
+            scene,
+            camera.visible_layers(),
+            camera_position(scene, camera),
+            toward_camera(scene, camera),
+            camera_up(scene, camera),
+            shadows=renderer.shadow_maps(scene, assets),
+        )
+        var cpu = renderer.render(scene, assets, camera)
+        var gpu = render_triangles(
+            corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+        )
+        assert_true(
+            count_background(cpu, BACKGROUND) < 48 * 36,
+            "the scene drew nothing",
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+        # And the shadow is there: the same scene with the lights not
+        # casting differs.
+        scene.lights[0].cast_shadow = False
+        scene.lights[1].cast_shadow = False
+        var unshadowed = renderer.render(scene, assets, camera)
+        assert_true(count_mismatches(cpu, unshadowed) > 20, "no shadow fell")
 
 
 def main() raises:

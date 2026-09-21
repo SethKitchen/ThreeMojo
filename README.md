@@ -105,7 +105,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [MeshToonMaterial and MeshMatcapMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#toon): a gradient ramp on the diffuse term, and an image looked up by which way a surface is turned [#40](https://github.com/SethKitchen/ThreeMojo/issues/40)
 - [x] [LineBasicMaterial and LineDashedMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Lines#dashed-lines): a `BASIC` material draws a line, and `line_dashed_material` draws it in dashes measured along the line, on both backends [#41](https://github.com/SethKitchen/ThreeMojo/issues/41)
 - [x] [PointsMaterial and SpriteMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Points-and-sprites#what-a-point-is-drawn-with): `points_material` with a `PointSize` and an attenuation, `sprite_material` with a rotation, both `BASIC` and both mapped [#42](https://github.com/SethKitchen/ThreeMojo/issues/42)
-- [ ] ShadowMaterial [#43](https://github.com/SethKitchen/ThreeMojo/issues/43)
+- [x] [ShadowMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#shadow-material): `shadow_material`, transparent where the lights reach and its color where they are blocked, on both backends [#43](https://github.com/SethKitchen/ThreeMojo/issues/43)
 - [x] [Normal maps and bump maps](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#normal-maps-and-bump-maps): a tangent frame from the derivatives at every fragment, with no tangent attribute, on both backends [#44](https://github.com/SethKitchen/ThreeMojo/issues/44)
 - [x] [Emissive color and emissive map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#emissive): light a surface gives off, added after the lights on both rasterizers [#45](https://github.com/SethKitchen/ThreeMojo/issues/45)
 - [x] [Alpha map and alpha test](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#alpha-map-and-alpha-test): a map's green channel thins a surface, and a test cuts away what claims no depth [#46](https://github.com/SethKitchen/ThreeMojo/issues/46)
@@ -122,7 +122,7 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [SpotLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#spot): a bulb with a cone, a penumbra and a target, on both rasterizers [#54](https://github.com/SethKitchen/ThreeMojo/issues/54)
 - [x] [HemisphereLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#hemisphere): a sky color and a ground color, blended by how far a surface is turned toward the sky [#55](https://github.com/SethKitchen/ThreeMojo/issues/55)
 - [ ] RectAreaLight [#56](https://github.com/SethKitchen/ThreeMojo/issues/56)
-- [ ] Shadow maps [#57](https://github.com/SethKitchen/ThreeMojo/issues/57)
+- [x] [Shadow maps](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#shadows): directional and spot lights draw the scene's depth and every lit sum compares nine taps against it [#57](https://github.com/SethKitchen/ThreeMojo/issues/57)
 
 ### Textures
 

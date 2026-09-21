@@ -111,6 +111,48 @@ The kinds are summed in one fixed order: ambient, directional, point, hemisphere
 
 Every builder calls `validate`. `Lighting(scene)` calls it again on every light, because the fields are open and a light in a persistent scene is there to be edited.
 
+## Shadows
+
+`lights/shadow.mojo`. A directional or a spot light can cast shadows: three.js's `castShadow` and `LightShadow`, with `DirectionalLightShadow` and `SpotLightShadow`. A point light's six-faced shadow is not ported.
+
+```mojo
+var sun = directional_light(Color(255, 255, 255), lamp_node, 3.0)
+sun.cast_shadow = True
+sun.shadow.map_size = 1024
+sun.shadow.bias = -0.002
+sun.shadow.extent = Length(8.0, METER)
+scene.add_light(sun)
+scene.add_mesh(Mesh(box, paint, node, cast_shadow=True, receive_shadow=True))
+```
+
+A shadow needs three things to be said, as in three.js. The light must cast. The mesh that blocks it must cast. The mesh the shadow falls on must receive. Every one is off by default.
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `cast_shadow` | `castShadow` | `False` | Whether the light draws a shadow map. |
+| `shadow.map_size` | `shadow.mapSize` | `512` | How many texels a side the map is. |
+| `shadow.bias` | `shadow.bias` | `0.0` | Added to a fragment's depth, from zero to one across the planes, before it is compared. Negative moves it toward the light. |
+| `shadow.normal_bias` | `shadow.normalBias` | `0.0` | How far a fragment is moved along its normal before it is projected, in meters. |
+| `shadow.radius` | `shadow.radius` | `1.0` | How many texels the nine taps spread over. |
+| `shadow.near`, `shadow.far` | `shadow.camera.near`, `far` | `0.5 m`, `500 m` | The shadow camera's planes. |
+| `shadow.extent` | `shadow.camera.left` through `top` | `5 m` | How far to each side a directional light's camera sees. A spot light's camera is as wide as its cone. |
+
+### How a shadow is drawn
+
+The renderer draws the scene once per casting light, from the light, keeping only the depth: `Renderer.shadow_maps`. A directional light draws through an orthographic camera at its node looking at its target, `extent` meters to each side. A spot light draws through a perspective camera twice its angle wide. Only the meshes that cast are drawn, under lit shading with no lights. A skinned, instanced or batched mesh, an LOD and a sprite cast nothing yet. A cut-out map cuts nothing out of a shadow, and a translucent surface, which claims no depth, casts none.
+
+Each fragment the camera then shades is projected into each map, `shadow_coordinate`, and compared against the depth stored there. Nine taps in a three-by-three square of `radius` texels are compared on their own and averaged: three.js's `PCFShadowMap`, its default. A fragment off the map or past the far plane is lit. `ShadowMap.lit` is the arithmetic, from five functions the GPU kernel calls too.
+
+Every lit sum reads the map: the diffuse term, the toon ramp, the highlight and the physical lobe. Each is scaled by what the light's map lets through, as three.js scales `directLight.color`. A surface that does not receive skips every map.
+
+### Acne and the two biases
+
+A surface compared against its own depth is half in shadow, because the map's depth is quantized: the stripes called shadow acne. `bias` moves the fragment toward the light in the map's depth. `normal_bias` moves it along its normal before it is projected. Both are zero by default, as three.js's are. A scene that shows stripes is the scene to raise them in, by a few thousandths and a few centimeters.
+
+### The GPU
+
+The maps ride in the light buffer after the lights, each its header and its depths. Each directional and spot light carries where its map begins. Nothing is added to the kernel's arguments. See [GPU backend](GPU-backend).
+
 ## Highlights
 
 A `PHONG` material adds a highlight to the diffuse term. `specular_at` sums it over the lights that have a direction: directional, point and spot. An ambient light and a hemisphere light make none. See [Materials](Materials#phong).

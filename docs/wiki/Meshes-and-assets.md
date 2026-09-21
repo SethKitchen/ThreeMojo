@@ -35,6 +35,8 @@ A mesh holds no transform. The node holds it. One geometry can be drawn at many 
 
 `frustum_culled` lets the renderer skip the mesh when its bounds are out of view. It is on by default, as three.js's `Object3D.frustumCulled` is. See [Renderer](Renderer#frustum-culling).
 
+`cast_shadow` and `receive_shadow` are three.js's `castShadow` and `receiveShadow`, both off by default. See [Shadows](Lights#shadows).
+
 ## InstancedMesh
 
 `objects/instanced_mesh.mojo`. An `InstancedMesh` draws one geometry with one material at many transforms, each relative to one node. three.js: `InstancedMesh`, `instanceMatrix`, `setMatrixAt`, `getMatrixAt`.

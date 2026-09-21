@@ -370,7 +370,7 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the nine kinds there are."""
+        """Return True if this is one of the ten kinds there are."""
         return (
             self == BASIC
             or self == LAMBERT
@@ -381,17 +381,19 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
             or self == MATCAP
             or self == STANDARD
             or self == PHYSICAL
+            or self == SHADOW
         )
 
     def is_unlit(self) -> Bool:
         """Return True if the scene's lights leave a surface of this kind
-        alone and it shows light of its own: `BASIC` or `MATCAP`.
+        alone and it shows light of its own: `BASIC`, `MATCAP` or `SHADOW`.
 
-        Neither has an emissive term, because neither needs one. A basic
-        surface already shows its own color whatever the lights do, and a
-        matcap surface shows an image that is light already.
+        None has an emissive term, because none needs one. A basic
+        surface already shows its own color whatever the lights do, a
+        matcap surface shows an image that is light already, and a shadow
+        surface shows its color only where the lights do not reach.
         """
-        return self == BASIC or self == MATCAP
+        return self == BASIC or self == MATCAP or self == SHADOW
 
     def is_lit(self) -> Bool:
         """Return True if the scene's lights reach a surface of this kind:
@@ -494,6 +496,10 @@ comptime STANDARD = MaterialKind(7)
 # and a clear coat: three.js's `MeshPhysicalMaterial`, in part. Its
 # transmission, sheen, iridescence and anisotropy are not ported.
 comptime PHYSICAL = MaterialKind(8)
+# Unlit and transparent everywhere but where a shadow falls, where it shows
+# its color by how much of the light is blocked: three.js's
+# `ShadowMaterial`, the surface that catches a shadow on nothing.
+comptime SHADOW = MaterialKind(9)
 
 
 @fieldwise_init
@@ -895,7 +901,7 @@ struct Material(ImplicitlyCopyable):
         if not kind.is_valid():
             raise Error(
                 "A material's kind must be BASIC, LAMBERT, NORMALS, DEPTH,"
-                " PHONG, TOON or MATCAP"
+                " PHONG, TOON, MATCAP, STANDARD, PHYSICAL or SHADOW"
             )
         if gradient_map.value < 0 and gradient_map != NO_TEXTURE:
             raise Error("A material's gradient map id cannot be negative")
@@ -1187,10 +1193,29 @@ struct Material(ImplicitlyCopyable):
             if not chosen.is_valid():
                 raise Error("A material's blending must be OPAQUE or BLEND")
             self.blending = chosen
-        elif transparent:
+        elif transparent or kind == SHADOW:
+            # A shadow material is transparent wherever no shadow falls,
+            # which is what it is for: three.js's is built `transparent`.
             self.blending = BLEND
         else:
             self.blending = OPAQUE
+        if kind == SHADOW:
+            if self.blending != BLEND:
+                raise Error(
+                    "A shadow material blends: it is transparent wherever"
+                    " no shadow falls, and an opaque one would hide the"
+                    " floor it catches a shadow on"
+                )
+            if (
+                map != NO_TEXTURE
+                or alpha_map != NO_TEXTURE
+                or vertex_colors
+                or wireframe
+            ):
+                raise Error(
+                    "A shadow material shows its shadow and nothing else: no"
+                    " map, no alpha map, no vertex colors and no wireframe"
+                )
         # A surface that shows data cannot be mixed into one that shows
         # light: the pixel would hold part of each and resolve as neither.
         # Asked of the *resolved* policy, so an opacity below one is
@@ -1620,6 +1645,37 @@ def physical_material(
         clearcoat=clearcoat,
         clearcoat_roughness=clearcoat_roughness,
     )
+
+
+def shadow_material(
+    color: Color = Color(0, 0, 0),
+    opacity: Float32 = 1.0,
+    side: Side = FRONT_SIDE,
+) raises -> Material:
+    """Return a material that shows only the shadows falling on it,
+    three.js's `ShadowMaterial` at three.js's defaults.
+
+    The surface is transparent wherever the lights that cast reach it and
+    shows `color` wherever they are blocked, by how much: its alpha is
+    `opacity` times one minus `Lighting.shadow_mask`, three.js's
+    `opacity * (1.0 - getShadowMask())`. Black at an opacity of one is the
+    default, as there: a plain shadow on whatever is behind. The mesh must
+    receive shadows, as any surface must, for the mask to be read at all.
+    See `lights.shadow`.
+
+    Args:
+        color: The shadow's color, as authored in sRGB.
+        opacity: How dark the fullest shadow is, from zero to one.
+        side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
+
+    Returns:
+        The material, of kind `SHADOW`, which blends.
+
+    Raises:
+        Error: If `opacity` is outside zero to one or `side` is none of
+            the three.
+    """
+    return Material(color, side=side, opacity=opacity, kind=SHADOW)
 
 
 def toon_material(

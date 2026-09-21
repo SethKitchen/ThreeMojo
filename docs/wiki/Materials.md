@@ -363,6 +363,20 @@ A `BASIC` surface reads no normal and a `DEPTH` surface reads none. A `NORMALS` 
 
 Only `SHADE_TEXTURE` reads either. A normal map is a texture, and the other two shading modes ignore every texture.
 
+## Shadow material
+
+A `SHADOW` material shows the shadows falling on it and nothing else: three.js's `ShadowMaterial`. It is transparent wherever the lights that cast reach it and shows its color wherever they are blocked, by how much. A floor drawn with one catches a shadow on whatever is behind it.
+
+```mojo
+var catcher = assets.materials.add(shadow_material())
+var faint = assets.materials.add(shadow_material(Color(20, 0, 40), 0.6))
+scene.add_mesh(Mesh(floor, catcher, node, receive_shadow=True))
+```
+
+`shadow_material(color=Color(0, 0, 0), opacity=1.0, side=FRONT_SIDE)`. Black at an opacity of one is three.js's default.
+
+The alpha is `opacity` times one minus `Lighting.shadow_mask`, three.js's `opacity * (1.0 - getShadowMask())`, the product of what every casting light lets through. The material always blends, as three.js's is built `transparent`, and refuses to be made opaque. It is unlit, so it refuses an emissive term, and it refuses every map, vertex colors, a wireframe and an environment. See [Shadows](Lights#shadows).
+
 ## Data materials
 
 A normal material and a depth material write bytes that a display must show as they are. Build one with its own function:

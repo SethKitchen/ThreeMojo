@@ -14,6 +14,7 @@ from materials.material import (
     NORMALS,
     PHONG,
     PHYSICAL,
+    SHADOW,
     STANDARD,
     TOON,
     Blending,
@@ -55,6 +56,7 @@ from materials.material import (
 )
 from lights.light import directional_light
 from lights.lighting import ROUGHNESS_FLOOR, Lighting
+from lights.shadow import ShadowMap
 from core.fog import LINEAR_FOG, FogKind, FogView, exp2_fog, linear_fog
 from render.tonemap import REINHARD_TONE_MAPPING, tone_map
 from std.math import atan2, nan, sqrt
@@ -2485,10 +2487,10 @@ def test_a_data_material_draws_the_same_on_one_worker_and_on_four() raises:
 
 
 def test_an_unknown_material_kind_is_refused_even_when_agreed() raises:
-    # `MaterialKind(9)` constructs, because a struct's fields are open, and
+    # `MaterialKind(10)` constructs, because a struct's fields are open, and
     # neither backend has a fragment path for it. Agreement is not enough.
     var target = RenderTarget(8, 8, Color(0, 0, 0))
-    var corners = data_quad(MaterialKind(9))
+    var corners = data_quad(MaterialKind(10))
     with assert_raises():
         rasterize_shaded(corners[0], corners[1], corners[2], target)
     for workers in [1, 4]:
@@ -5065,6 +5067,150 @@ def test_a_clear_coat_lies_on_the_normal_before_the_map_perturbs_it() raises:
         textures,
     )
     assert_almost_equal(coated.r, upright.r, atol=1e-3)
+
+
+# --- shadows ----------------------------------------------------------------
+
+
+def a_shadowed_lighting(receives_map: Bool = True) raises -> Lighting:
+    """Return one white sun up the z axis, with the camera far up it, and
+    a shadow map over the unit square whose left half holds a caster at
+    z = 0.5: the eight-pixel quads of `physical_quad` lie in that square,
+    their left half in shadow."""
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    var sun = directional_light(Color(255, 255, 255), node, FULL)
+    sun.cast_shadow = receives_map
+    scene.add_light(sun)
+    scene.update()
+    var frame = SIMD[DType.float32, 16](0)
+    frame[0] = 1
+    frame[5] = 1
+    frame[10] = -1
+    frame[15] = 1
+    var depths = List[Float32]()
+    for _ in range(4):
+        for column in range(4):
+            if column < 2:
+                depths.append(-0.5)
+            else:
+                depths.append(inf[DType.float32]())
+    var maps = List[ShadowMap]()
+    if receives_map:
+        maps.append(ShadowMap(0, 4, frame, depths^, 0, 0, 0))
+    return Lighting(scene, Layers.all(), Vector3(0, 0, 400), shadows=maps^)
+
+
+def shadow_quad(
+    kind: MaterialKind, receives: Bool = True
+) -> List[RasterVertex]:
+    """Return `physical_quad` of `kind` spanning x from -1 to 1 in the
+    world, so its left half lies under the caster of `a_shadowed_lighting`,
+    blending when the kind is `SHADOW`."""
+    var corners = physical_quad(kind=kind)
+    for index in range(len(corners)):
+        corners[index].world = Vector3(
+            corners[index].world.x * 2 - 1, corners[index].world.y * 2 - 1, 0
+        )
+        corners[index].receives_shadow = receives
+        if kind == SHADOW:
+            corners[index].blend = BLEND
+            corners[index].color = FloatColor(0, 0, 0, 1)
+    return corners^
+
+
+def test_a_shadow_falls_on_the_half_of_a_quad_under_the_caster() raises:
+    # Pixel x = 1 lies under the caster and x = 6 does not: the lit kinds
+    # go dark on the left and stay lit on the right, unless the surface
+    # does not receive.
+    var lighting = a_shadowed_lighting()
+    for kind in [LAMBERT, PHONG, TOON, STANDARD]:
+        var dark = physical_pixel(shadow_quad(kind), lighting, x=1)
+        var lit = physical_pixel(shadow_quad(kind), lighting, x=6)
+        assert_true(lit.r > dark.r + 0.3, "the shadow did not fall")
+        var ignored = physical_pixel(shadow_quad(kind, False), lighting, x=1)
+        assert_equal(ignored.r, lit.r)
+    # A toon surface in full shadow is black, as three.js's is: the
+    # shadow scales the light before the ramp is read, not the tone after.
+    var toon = physical_pixel(shadow_quad(TOON), lighting, x=1)
+    assert_equal(toon.r, Float32(0))
+    # Without a map the two halves are one.
+    var plain = a_shadowed_lighting(False)
+    assert_equal(
+        physical_pixel(shadow_quad(LAMBERT), plain, x=1).r,
+        physical_pixel(shadow_quad(LAMBERT), plain, x=6).r,
+    )
+
+
+def test_a_shadow_material_shows_the_shadow_as_its_alpha() raises:
+    # Black where the caster blocks the sun, transparent where it does
+    # not, over a black target: the pixel's own color tells nothing, so
+    # the target's alpha is read through a blend over white instead.
+    var lighting = a_shadowed_lighting()
+    var target = RenderTarget(8, 8, Color(255, 255, 255))
+    rasterize_all(
+        shadow_quad(SHADOW), target, SHADE_TEXTURE, TextureStore(), lighting
+    )
+    assert_equal(target.shown(1, 3).r, UInt8(0))
+    assert_equal(target.shown(6, 3).r, UInt8(255))
+    # Under lit shading too: a shadow is not a texture.
+    var lit = RenderTarget(8, 8, Color(255, 255, 255))
+    rasterize_all(shadow_quad(SHADOW), lit, SHADE_LIT, TextureStore(), lighting)
+    assert_equal(lit.shown(1, 3).r, UInt8(0))
+    assert_equal(lit.shown(6, 3).r, UInt8(255))
+    # An opacity below one is a fainter shadow.
+    var faint = shadow_quad(SHADOW)
+    for index in range(len(faint)):
+        faint[index].color = FloatColor(0, 0, 0, 0.5)
+    var half = RenderTarget(8, 8, Color(255, 255, 255))
+    rasterize_all(faint, half, SHADE_LIT, TextureStore(), lighting)
+    assert_true(half.shown(1, 3).r > 100, "the faint shadow was full")
+    assert_true(half.shown(1, 3).r < 255, "the faint shadow was none")
+    # The uv view shows coordinates, as it does for every kind.
+    var view = RenderTarget(8, 8, Color(255, 255, 255))
+    rasterize_all(shadow_quad(SHADOW), view, SHADE_UV, TextureStore(), lighting)
+    assert_true(view.shown(1, 3).b == 0, "the uv view shaded a shadow")
+    # Without a map, nothing is caught anywhere: fully transparent.
+    var none = RenderTarget(8, 8, Color(255, 255, 255))
+    rasterize_all(
+        shadow_quad(SHADOW),
+        none,
+        SHADE_LIT,
+        TextureStore(),
+        a_shadowed_lighting(False),
+    )
+    assert_equal(none.shown(1, 3).r, UInt8(255))
+
+
+def test_a_shadow_triangle_is_checked_like_the_rest() raises:
+    var good = shadow_quad(SHADOW)
+    check_triangle_state(good[0], good[1], good[2])
+    # Opaque is refused, a map is refused, and the corners must agree
+    # about receiving.
+    var opaque = shadow_quad(SHADOW)
+    for index in range(3):
+        opaque[index].blend = OPAQUE
+    with assert_raises():
+        check_triangle_state(opaque[0], opaque[1], opaque[2])
+    var mapped = shadow_quad(SHADOW)
+    for index in range(3):
+        mapped[index].texture = TextureId(0)
+    with assert_raises():
+        check_triangle_state(mapped[0], mapped[1], mapped[2])
+    var masked = shadow_quad(SHADOW)
+    for index in range(3):
+        masked[index].alpha_map = TextureId(0)
+    with assert_raises():
+        check_triangle_state(masked[0], masked[1], masked[2])
+    for corner in [1, 2]:
+        var split = shadow_quad(LAMBERT)
+        split[corner].receives_shadow = False
+        with assert_raises():
+            check_triangle_state(split[0], split[1], split[2])
+    # A corner receives unless told otherwise.
+    assert_true(RasterVertex(0, 0, 0, 1, FloatColor(1, 1, 1)).receives_shadow)
 
 
 def main() raises:

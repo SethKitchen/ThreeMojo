@@ -449,7 +449,7 @@ def test_a_point_must_be_well_formed() raises:
     with assert_raises(contains="blend policy"):
         check_point_state(bad_blend)
     var bad_kind = dot(4.5, 4.5)
-    bad_kind.kind = MaterialKind(9)
+    bad_kind.kind = MaterialKind(10)
     with assert_raises(contains="material kind that exists"):
         check_point_state(bad_kind)
     var lit_point = dot(4.5, 4.5)

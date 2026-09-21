@@ -36,6 +36,7 @@ from materials.material import (
     OPAQUE,
     PHONG,
     PHYSICAL,
+    SHADOW,
     STANDARD,
     TOON,
     Blending,
@@ -595,6 +596,11 @@ struct RasterVertex(ImplicitlyCopyable):
     var normal_scale: Vector2
     var bump_map: TextureId
     var bump_scale: Float32
+    # Whether the lights' shadows fall on this surface, three.js's
+    # `receiveShadow`. Per-triangle, read from the first corner. On by
+    # default here, where a mesh's is off: a hand-built corner asks for
+    # every shadow the lighting holds, and the renderer says otherwise.
+    var receives_shadow: Bool
 
     def __init__(
         out self,
@@ -638,6 +644,7 @@ struct RasterVertex(ImplicitlyCopyable):
         normal_scale: Vector2 = Vector2(1, 1),
         bump_map: TextureId = NO_TEXTURE,
         bump_scale: Float32 = 1,
+        receives_shadow: Bool = True,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -699,6 +706,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.normal_scale = normal_scale
         self.bump_map = bump_map
         self.bump_scale = bump_scale
+        self.receives_shadow = receives_shadow
 
 
 @fieldwise_init
@@ -1235,7 +1243,20 @@ def check_triangle_state(
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is neither OPAQUE nor BLEND")
     if not a.kind.is_valid():
-        raise Error("A triangle's material kind is none of the nine")
+        raise Error("A triangle's material kind is none of the ten")
+    if b.receives_shadow != a.receives_shadow or (
+        c.receives_shadow != a.receives_shadow
+    ):
+        raise Error("A triangle's corners disagree about receiving shadows")
+    # A shadow material is transparent wherever no shadow falls, and reads
+    # no map: refused here as the material refuses it, so a hand-built
+    # triangle cannot smuggle either past.
+    if a.kind == SHADOW and a.blend != BLEND:
+        raise Error("A shadow triangle blends: it is transparent where lit")
+    if a.kind == SHADOW and (
+        a.texture != NO_TEXTURE or a.alpha_map != NO_TEXTURE
+    ):
+        raise Error("A shadow triangle shows its shadow and no map")
     # Only a matcap shader looks a surface up in an image, so one on any
     # other kind is a mistake rather than a value to ignore.
     if a.kind != MATCAP and a.matcap != NO_TEXTURE:
@@ -1893,6 +1914,9 @@ def rasterize_shaded(
     var perturbed = (
         a.normal_map != NO_TEXTURE or a.bump_map != NO_TEXTURE
     ) and mode == SHADE_TEXTURE
+    # Whether these fragments show the shadows falling on them and
+    # nothing else: a `SHADOW` material, transparent wherever lit.
+    var catches = a.kind == SHADOW and mode != SHADE_UV
     # How many levels the environment's faces hold, read once: what a
     # physical surface's roughness picks between.
     var env_levels = 1
@@ -1974,6 +1998,7 @@ def rasterize_shaded(
                 or a.kind == NORMALS
                 or a.kind == MATCAP
                 or reflects
+                or catches
             ):
                 # The normal is interpolated like every other varying and
                 # made a unit vector again here. That renormalization is the
@@ -1999,8 +2024,10 @@ def rasterize_shaded(
             # which a reflection needs of an unlit surface too.
             var spot = Vector3(0, 0, 0)
             if (
-                (a.kind.is_lit() or a.kind == MATCAP) and mode != SHADE_UV
-            ) or reflects:
+                ((a.kind.is_lit() or a.kind == MATCAP) and mode != SHADE_UV)
+                or reflects
+                or catches
+            ):
                 spot = Vector3(
                     a.world.x * share_a
                     + b.world.x * share_b
@@ -2120,11 +2147,15 @@ def rasterize_shaded(
                 elif a.kind == TOON:
                     # Every cosine read off the ramp rather than faded, and
                     # never clamped at zero: see `Lighting.toon_at`.
-                    arriving = lighting.toon_at(facing, spot, ramp)
+                    arriving = lighting.toon_at(
+                        facing, spot, ramp, a.receives_shadow
+                    )
                 elif not physical:
                     # A physical surface is lit below, once its maps have
                     # had their say over the color the lobe is tinted by.
-                    arriving = lighting.intensity_at(facing, spot)
+                    arriving = lighting.intensity_at(
+                        facing, spot, a.receives_shadow
+                    )
                 if a.kind == PHONG:
                     # Interpolated like the emissive, and summed over the
                     # lights that have a direction; see `specular_at`.
@@ -2145,6 +2176,7 @@ def rasterize_shaded(
                         spot,
                         Vector3(sheen.r, sheen.g, sheen.b),
                         a.shininess,
+                        a.receives_shadow,
                     )
             var shaded = FloatColor(
                 base.r * arriving.r,
@@ -2256,6 +2288,18 @@ def rasterize_shaded(
                 else:
                     var seen = packed_depth(z)
                     shaded = data_color(seen, seen, seen, shaded.a)
+            elif catches:
+                # The shadow and nothing else: the color where the lights
+                # that cast are blocked, transparent where they reach,
+                # three.js's `opacity * (1.0 - getShadowMask())`. Whether
+                # this surface receives is not asked, because a shadow
+                # material that received nothing would show nothing.
+                shaded = FloatColor(
+                    shaded.r,
+                    shaded.g,
+                    shaded.b,
+                    shaded.a * (1 - lighting.shadow_mask(spot, facing)),
+                )
             elif physical:
                 # Lit here, once the map has multiplied the color: a metal
                 # tints its lobe by that color, so the lobe cannot be
@@ -2279,6 +2323,7 @@ def rasterize_shaded(
                     rough,
                     a.clearcoat,
                     coat_rough,
+                    a.receives_shadow,
                 )
                 var indirect = lighting.indirect_at(facing)
                 var toward_eye = toward_eye_at(

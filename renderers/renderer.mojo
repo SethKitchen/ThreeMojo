@@ -98,9 +98,13 @@ from core.buffer_geometry import (
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.fog import FogView
+from lights.light import DIRECTIONAL, SPOT
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
+from lights.shadow import ShadowMap
+from cameras.orthographic_camera import OrthographicCamera
+from cameras.perspective_camera import PerspectiveCamera
 from core.layers import Layers
-from core.object3d import NodeId
+from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.bounds import Plane, Sphere
 from math.frustum import Frustum
@@ -140,10 +144,10 @@ from render.cube_texture_store import (
     SCENE_ENVIRONMENT,
     CubeTextureId,
 )
-from units.si import Length, METER, RADIAN
+from units.si import Angle, Length, METER, RADIAN
 from render.pointrule import attenuated_size
 from render.texture import IGNORED
-from render.texture_store import NO_TEXTURE, TextureId
+from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, check_tone_mapping
@@ -164,6 +168,7 @@ from render.rasterizer import (
     check_gradient_map,
     check_output_kinds,
     edge,
+    rasterize_all,
     rasterize_frame,
 )
 from renderers.clip import (
@@ -573,6 +578,9 @@ struct _Draw(ImplicitlyCopyable):
     # triangles from its node's world matrix instead; see
     # `objects.sprite`.
     var sprite: Int
+    # Whether the lights' shadows fall on this draw: its mesh's
+    # `receive_shadow`, and false for everything that is not a mesh.
+    var receives_shadow: Bool
 
 
 @fieldwise_init
@@ -642,6 +650,7 @@ def _gather(
         DType.float32, MAX_MORPH_TARGETS
     ](0),
     skin: Int = -1,
+    receive_shadow: Bool = False,
 ) raises:
     """Add the draws of one scene object to `draws`, each with its sort
     key alongside, unless the camera leaves it out.
@@ -689,6 +698,8 @@ def _gather(
             A mesh's own, and all zero for everything else.
         skin: Which of the frame's skins carries the object, or minus one.
             Only a skinned mesh has one.
+        receive_shadow: Whether the lights' shadows fall on the object,
+            a mesh's `receive_shadow`. Off for everything else.
 
     Raises:
         Error: If the node, a geometry or the material is not there, a
@@ -728,6 +739,7 @@ def _gather(
                 depth,
                 blends,
                 -1,
+                receive_shadow,
             )
         )
 
@@ -741,6 +753,7 @@ def _draws(
     frustum: Frustum,
     slack: Float32,
     mut skins: List[_Skin],
+    casters_only: Bool = False,
 ) raises -> List[_Draw]:
     """Return what the camera draws, in the order to draw it: opaque
     draws nearest first, then the translucent ones furthest first.
@@ -791,6 +804,10 @@ def _draws(
             see `CULL_SLACK`.
         skins: The frame's posed skeletons; one is appended per skinned
             mesh, and the draws name them by index.
+        casters_only: Whether this is a light's view for a shadow map,
+            which holds the meshes that cast and nothing else: not a
+            mesh that does not cast, and not a skinned, instanced or
+            batched mesh, an LOD or a sprite, none of which casts yet.
 
     Returns:
         The draws the camera makes, in the order to make them.
@@ -812,6 +829,8 @@ def _draws(
     var one: List[Matrix4] = [Matrix4()]
     for index in range(len(scene.meshes)):
         ref mesh = scene.meshes[index]
+        if casters_only and not mesh.cast_shadow:
+            continue
         var geometry: List[GeometryId] = [mesh.geometry]
         # A mesh wearing a morph target is not where its geometry's bound
         # says it is, so it is not measured against the frustum. The bound
@@ -836,8 +855,11 @@ def _draws(
             bounds,
             known,
             mesh.morph_influences,
+            receive_shadow=mesh.receive_shadow,
         )
     for index in range(len(scene.skinned_meshes)):
+        if casters_only:
+            continue
         ref skinned = scene.skinned_meshes[index]
         # The bones' world matrices, then how far each has moved since the
         # bind. Once per mesh per frame, whatever the vertex count.
@@ -884,6 +906,8 @@ def _draws(
             len(skins) - 1,
         )
     for index in range(len(scene.instanced_meshes)):
+        if casters_only:
+            continue
         ref group = scene.instanced_meshes[index]
         _gather(
             draws,
@@ -904,6 +928,8 @@ def _draws(
             known,
         )
     for index in range(len(scene.batched_meshes)):
+        if casters_only:
+            continue
         ref batch = scene.batched_meshes[index]
         var geometries = List[GeometryId]()
         var matrices = List[Matrix4]()
@@ -929,6 +955,8 @@ def _draws(
             known,
         )
     for index in range(len(scene.lods)):
+        if casters_only:
+            continue
         ref lod = scene.lods[index]
         # The level `Scene.update_lods` last chose sets the hysteresis; a
         # scene never updated gets the stateless choice.
@@ -963,6 +991,8 @@ def _draws(
     # side of it. Culled by the sphere around the unit square carried by
     # the world matrix, three.js's `Sprite` geometry bound.
     for index in range(len(scene.sprites)):
+        if casters_only:
+            continue
         ref sprite = scene.sprites[index]
         if not scene.get(sprite.node).layers.test(visible):
             continue
@@ -989,6 +1019,7 @@ def _draws(
                 depth,
                 blends,
                 index,
+                False,
             )
         )
 
@@ -1081,6 +1112,7 @@ def _to_raster(
     reflectivity: Float32 = 1,
     combine: Combine = MULTIPLY_OPERATION,
     physics: _Physics = _Physics(),
+    receives_shadow: Bool = True,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -1140,6 +1172,7 @@ def _to_raster(
         physics.normal_scale,
         physics.bump_map,
         physics.bump_scale,
+        receives_shadow,
     )
 
 
@@ -1252,6 +1285,8 @@ struct _Paint(ImplicitlyCopyable):
     # The physical terms and the normal or bump map, with the maps the
     # shading mode would not open already erased.
     var physics: _Physics
+    # Whether the lights' shadows fall on the draw.
+    var receives_shadow: Bool
 
     def raster(self, vertex: ClipVertex) -> RasterVertex:
         """Project one clipped corner into the rasterizer's input."""
@@ -1272,6 +1307,7 @@ struct _Paint(ImplicitlyCopyable):
             reflectivity=self.reflectivity,
             combine=self.combine,
             physics=self.physics,
+            receives_shadow=self.receives_shadow,
         )
 
     def emit(
@@ -1574,6 +1610,7 @@ def _emit_sprite(
         1,
         MULTIPLY_OPERATION,
         _Physics(),
+        False,
     )
     var thirds: List[Int] = [2, 3]
     for half in range(2):  # pragma: no branch
@@ -2133,6 +2170,7 @@ struct Renderer(Movable):
         camera: C,
         wireframe: Bool,
         mut spans: List[_Span],
+        casters_only: Bool = False,
     ) raises -> List[RasterVertex]:
         """Turn a scene into the triangles a rasterizer can fill.
 
@@ -2181,6 +2219,8 @@ struct Renderer(Movable):
             spans: Where each draw's run of primitives is recorded, with
                 its depth and whether it blends, for `prepare_frame` to
                 order against the other kind's. Appended to.
+            casters_only: Whether this is a light's view for a shadow
+                map, holding only the meshes that cast; see `_draws`.
 
         Returns:
             Raster vertices, three per triangle, in submission order, or
@@ -2242,6 +2282,7 @@ struct Renderer(Movable):
             frustum,
             far * CULL_SLACK,
             skins,
+            casters_only,
         )
         # Whether the camera's rays converge, for a sprite that keeps its
         # size on the image; see `_emit_sprite`.
@@ -2561,6 +2602,7 @@ struct Renderer(Movable):
                 material.reflectivity,
                 material.combine,
                 physics,
+                draws[slot].receives_shadow,
             )
             if wireframe:
                 # The mesh's own edges, each once, clipped as segments.
@@ -3607,6 +3649,7 @@ struct Renderer(Movable):
             eye=camera_position(scene, camera),
             toward_eye=toward_camera(scene, camera),
             up=camera_up(scene, camera),
+            shadows=self.shadow_maps(scene, assets, camera.visible_layers()),
         )
         # The scene's fog as the rasterizer takes it. Each corner already
         # carries the depth `prepare` measured for it along this view.
@@ -3654,6 +3697,122 @@ struct Renderer(Movable):
             assets.cube_textures,
             self.render_scale,
         )
+
+    def shadow_maps(
+        self, scene: Scene, assets: Assets, visible: Layers = Layers.all()
+    ) raises -> List[ShadowMap]:
+        """Draw the scene's depth from every light that casts a shadow,
+        and return the maps for `Lighting` to compare against.
+
+        One map per directional or spot light on the camera's layers
+        whose `cast_shadow` is set, drawn through the camera the light's
+        `shadow` describes: an orthographic one `extent` meters to each
+        side for a directional light, three.js's `DirectionalLightShadow`,
+        and a perspective one twice the cone's angle wide for a spot
+        light, three.js's `SpotLightShadow`, each at the light's node
+        looking at its target, between the shadow's near and far planes.
+        Only the meshes that cast are drawn, under lit shading with no
+        lights, so a cut-out map cuts nothing out of a shadow and a
+        translucent surface, which claims no depth, casts none; see
+        `_draws`. What is kept is the target's depth, and the transform
+        that put it there.
+
+        `render_into` draws these itself. Call this to hand the same maps
+        to `GpuRenderer.draw`, through `Lighting`.
+
+        Args:
+            scene: The transform hierarchy, updated, with its lights.
+            assets: The geometry and materials the casters name.
+            visible: The camera's layers; a light on none of them draws
+                nothing, as `Lighting` leaves it out.
+
+        Returns:
+            The maps, each naming its light by index.
+
+        Raises:
+            Error: If a light is refused by `Light.validate`, a casting
+                light names a node or a target the scene lacks or sits on
+                its target, or anything `prepare` raises for the casters.
+        """
+        var maps = List[ShadowMap]()
+        for index in range(len(scene.lights)):
+            ref light = scene.lights[index]
+            light.validate()
+            if not light.cast_shadow or not light.layers.test(visible):
+                continue
+            var at = scene.world_position(light.node)
+            var aimed = Vector3(0, 0, 0)
+            if light.target != NO_PARENT:
+                aimed = scene.world_position(light.target)
+            if (at - aimed).length() == 0:
+                raise Error(
+                    "A light that casts a shadow needs a direction: its node"
+                    " sits on its target"
+                )
+            ref shadow = light.shadow
+            var corners: List[RasterVertex]
+            var frame: Matrix4
+            if light.kind == DIRECTIONAL:
+                var camera = OrthographicCamera(
+                    Length(-shadow.extent.to(METER), METER),
+                    shadow.extent,
+                    shadow.extent,
+                    Length(-shadow.extent.to(METER), METER),
+                    shadow.near,
+                    shadow.far,
+                )
+                camera.place(at, aimed)
+                corners = self._casters(scene, assets, camera, shadow.map_size)
+                frame = camera.projection_matrix()
+                frame.multiply(camera.view_matrix_in(scene))
+            else:
+                var camera = PerspectiveCamera(
+                    Angle(light.angle.value * 2, RADIAN),
+                    1.0,
+                    shadow.near,
+                    shadow.far,
+                )
+                camera.place(at, aimed)
+                corners = self._casters(scene, assets, camera, shadow.map_size)
+                frame = camera.projection_matrix()
+                frame.multiply(camera.view_matrix_in(scene))
+            var target = RenderTarget(
+                shadow.map_size, shadow.map_size, Color(0, 0, 0)
+            )
+            rasterize_all(
+                corners,
+                target,
+                SHADE_LIT,
+                TextureStore(),
+                Lighting.uniform(),
+                self.workers,
+            )
+            var held = SIMD[DType.float32, 16](0)
+            for element in range(16):  # pragma: no branch
+                held[element] = frame.elements[element]
+            maps.append(
+                ShadowMap(
+                    index,
+                    shadow.map_size,
+                    held,
+                    target.depth.copy(),
+                    shadow.bias,
+                    shadow.normal_bias,
+                    shadow.radius,
+                )
+            )
+        return maps^
+
+    def _casters[
+        C: Camera
+    ](self, scene: Scene, assets: Assets, camera: C, size: Int) raises -> List[
+        RasterVertex
+    ]:
+        """Return the triangles of the meshes that cast a shadow, as a
+        light's camera sees them, on a square of `size` pixels a side."""
+        var spans = List[_Span]()
+        var square = Renderer(size, size, workers=self.workers)
+        return square._prepared(scene, assets, camera, False, spans, True)
 
     def clear_color(self, scene: Scene) raises -> Color:
         """Return what a frame of `scene` is cleared to: the scene's color
