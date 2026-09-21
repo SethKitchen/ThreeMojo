@@ -288,12 +288,11 @@ struct LymphField(DistanceField, ImplicitlyCopyable):
             self.high = padded.high
         else:
             var tube = tube_chain_bounds(self.chain, Float32(0.003))
-            if self.chain_count >= 2:
-                tube.include_sphere(self.chain2.p0, self.chain2.r0)
-                tube.include_sphere(self.chain2.p1, self.chain2.r1)
-                tube.include_sphere(self.chain2.p2, self.chain2.r2)
-                tube.include_sphere(self.chain2.p3, self.chain2.r3)
-                tube.include_sphere(self.chain2.p4, self.chain2.r4)
+            tube.include_sphere(self.chain2.p0, self.chain2.r0)
+            tube.include_sphere(self.chain2.p1, self.chain2.r1)
+            tube.include_sphere(self.chain2.p2, self.chain2.r2)
+            tube.include_sphere(self.chain2.p3, self.chain2.r3)
+            tube.include_sphere(self.chain2.p4, self.chain2.r4)
             if self.chain_count >= 3:
                 tube.include_sphere(self.chain3.p0, self.chain3.r0)
                 tube.include_sphere(self.chain3.p1, self.chain3.r1)
@@ -321,8 +320,7 @@ struct LymphField(DistanceField, ImplicitlyCopyable):
             d = smin(d, sd_sphere(point, self.c3, self.n3), self.k)
             return smin(d, sd_sphere(point, self.c4, self.n4), self.k)
         var d = tube_chain_distance(self.chain, point, self.k)
-        if self.chain_count >= 2:
-            d = smin(d, tube_chain_distance(self.chain2, point, self.k), self.k)
+        d = smin(d, tube_chain_distance(self.chain2, point, self.k), self.k)
         if self.chain_count >= 3:
             d = smin(d, tube_chain_distance(self.chain3, point, self.k), self.k)
         if self.chain_count >= 4:
@@ -342,8 +340,7 @@ def _display_lymph_field(
     if not field.nodes:
         var least = 0.0018 * dimensions.stature.value
         field.chain = _display_chain(field.chain, least)
-        if field.chain_count >= 2:
-            field.chain2 = _display_chain(field.chain2, least)
+        field.chain2 = _display_chain(field.chain2, least)
         if field.chain_count >= 3:
             field.chain3 = _display_chain(field.chain3, least)
         if field.chain_count >= 4:
@@ -351,8 +348,7 @@ def _display_lymph_field(
         field.k = 0.0006 * dimensions.stature.value
         field.epsilon = Float32(0.25) * least
         var box = tube_chain_bounds(field.chain, 0.008 + least)
-        if field.chain_count >= 2:
-            _include_chain_bounds(box, field.chain2)
+        _include_chain_bounds(box, field.chain2)
         if field.chain_count >= 3:
             _include_chain_bounds(box, field.chain3)
         if field.chain_count >= 4:
