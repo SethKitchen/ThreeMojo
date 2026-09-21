@@ -21,7 +21,9 @@ from lights.light import (
     DEFAULT_SPOT_ANGLE,
     DIRECTIONAL,
     HEMISPHERE,
+    DEFAULT_RECT_SIZE,
     POINT,
+    RECT_AREA,
     SPOT,
     Light,
     LightKind,
@@ -29,6 +31,7 @@ from lights.light import (
     directional_light,
     hemisphere_light,
     point_light,
+    rect_area_light,
     spot_light,
 )
 from math.smoothstep import smoothstep
@@ -55,7 +58,7 @@ from lights.lighting import (
     toon_tone,
 )
 from math.vector3 import Vector3
-from units.si import Angle, DEGREE, RADIAN
+from units.si import Angle, DEGREE, Length, METER, RADIAN
 from render.framebuffer import Color, FloatColor
 from std.testing import (
     TestSuite,
@@ -518,12 +521,15 @@ def test_a_light_of_an_unknown_kind_is_refused() raises:
             NO_PARENT,
             False,
             LightShadow(),
+            Length(0.0, METER),
+            Length(0.0, METER),
         )
     )
     with assert_raises():
         _ = Lighting(scene)
     assert_true(HEMISPHERE.is_valid())
     assert_true(SPOT.is_valid())
+    assert_true(RECT_AREA.is_valid())
 
 
 # --- layers -----------------------------------------------------------------

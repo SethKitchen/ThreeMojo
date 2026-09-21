@@ -101,6 +101,7 @@ from core.fog import FogView
 from lights.light import DIRECTIONAL, SPOT
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
 from lights.shadow import ShadowMap
+from lights.ltc import LtcTables
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.layers import Layers
@@ -1912,6 +1913,9 @@ struct Renderer(Movable):
     # at that target's size, so a renderer a caller built has a scale of
     # one whatever its `antialias` says.
     var render_scale: Int
+    # The tables a rect area light is evaluated with, or none until
+    # `set_ltc_tables`.
+    var ltc: LtcTables
 
     def __init__(out self, width: Int, height: Int, workers: Int = 1) raises:
         """Create a renderer with a dark background.
@@ -1940,6 +1944,7 @@ struct Renderer(Movable):
         self.scissor_test = False
         self.antialias = False
         self.render_scale = 1
+        self.ltc = LtcTables()
 
     def set_antialias(mut self, enabled: Bool):
         """Turn supersampling on or off, three.js's `antialias`.
@@ -3650,6 +3655,7 @@ struct Renderer(Movable):
             toward_eye=toward_camera(scene, camera),
             up=camera_up(scene, camera),
             shadows=self.shadow_maps(scene, assets, camera.visible_layers()),
+            ltc=self.ltc_tables(),
         )
         # The scene's fog as the rasterizer takes it. Each corner already
         # carries the depth `prepare` measured for it along this view.
@@ -3697,6 +3703,24 @@ struct Renderer(Movable):
             assets.cube_textures,
             self.render_scale,
         )
+
+    def set_ltc_tables(mut self, var tables: LtcTables):
+        """Hold the tables a rect area light is evaluated with.
+
+        `lights.ltc.load_ltc_tables` reads them from `assets/ltc.f32`.
+        A scene with a rect area light and no tables is refused when its
+        lighting is resolved; a scene without one never needs them.
+
+        Args:
+            tables: The two tables, loaded.
+        """
+        self.ltc = tables^
+
+    def ltc_tables(self) -> LtcTables:
+        """Return a copy of the tables this renderer holds, or none."""
+        if not self.ltc.is_loaded():
+            return LtcTables()
+        return LtcTables(copy=self.ltc)
 
     def shadow_maps(
         self, scene: Scene, assets: Assets, visible: Layers = Layers.all()

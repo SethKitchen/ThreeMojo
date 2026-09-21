@@ -46,7 +46,13 @@ from materials.material import (
 from render.cube_texture import CubeTexture
 from render.cube_texture_store import SCENE_ENVIRONMENT
 from core.scene import Scene
-from lights.light import ambient_light, directional_light, spot_light
+from lights.light import (
+    ambient_light,
+    directional_light,
+    rect_area_light,
+    spot_light,
+)
+from lights.ltc import LtcTables, load_ltc_tables
 from core.layers import Layers
 from lights.lighting import Lighting
 from core.fog import FogKind, exp2_fog, linear_fog, no_fog
@@ -5349,6 +5355,58 @@ def test_a_spot_light_casts_a_shadow_through_its_own_camera() raises:
     )
     assert_true(seen[1] > 100, "the floor beside the block was dark")
     assert_true(Int(seen[0]) + 60 < Int(seen[1]), "no shadow fell")
+
+
+def test_a_rectangle_of_light_lights_a_standard_sheet_through_the_tables() raises:
+    # A two-meter square one meter over a white chalk sheet, seen head on:
+    # the sheet takes the square's form factor, about 0.554 of white,
+    # once the renderer holds the tables; without them the render is
+    # refused; and a lambert sheet is not lit by it at all.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var chalk = assets.materials.add(standard_material(Color(255, 255, 255)))
+    var plain = assets.materials.add(Material(Color(255, 255, 255)))
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(
+        rect_area_light(
+            Color(255, 255, 255),
+            node,
+            1.0,
+            Length(2.0, METER),
+            Length(2.0, METER),
+        )
+    )
+    scene.update()
+    assert_false(renderer.ltc_tables().is_loaded())
+    with assert_raises():
+        _ = rendered(
+            renderer, scene, assets, sheet_of(assets, chalk), camera_at(0, 0, 4)
+        )
+    renderer.set_ltc_tables(load_ltc_tables())
+    assert_true(renderer.ltc_tables().is_loaded())
+    var lit = rendered(
+        renderer, scene, assets, sheet_of(assets, chalk), camera_at(0, 0, 4)
+    )
+    var center = lit.get_pixel(WIDTH // 2, HEIGHT // 2)
+    # 0.554 linear is 195 in sRGB, and the lobe adds a little.
+    assert_true(center.r > 190, "the rectangle lit the sheet too little")
+    assert_true(center.r < 215, "the rectangle lit the sheet too much")
+    assert_equal(center.r, center.b)
+    var unlit = rendered(
+        renderer, scene, assets, sheet_of(assets, plain), camera_at(0, 0, 4)
+    )
+    assert_equal(unlit.get_pixel(WIDTH // 2, HEIGHT // 2).r, UInt8(0))
+    # The tables can be taken away again.
+    renderer.set_ltc_tables(LtcTables())
+    with assert_raises():
+        _ = rendered(
+            renderer, scene, assets, sheet_of(assets, chalk), camera_at(0, 0, 4)
+        )
 
 
 def test_a_shadow_material_catches_the_shadow_and_nothing_else() raises:

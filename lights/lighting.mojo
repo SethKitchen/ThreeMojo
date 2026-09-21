@@ -40,14 +40,17 @@ from lights.light import (
     DIRECTIONAL,
     HEMISPHERE,
     POINT,
+    RECT_AREA,
     SPOT,
     Light,
 )
+from lights.ltc import LtcTables, ltc_lookup, ltc_uv, rect_area_light
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
 from std.math import cos, exp2, log2, max, min, pi, sqrt
+from units.si import METER
 
 # What every lit sum is multiplied by: three.js's `RECIPROCAL_PI`, the
 # factor in `BRDF_Lambert` and `D_BlinnPhong`. See the module docstring.
@@ -827,6 +830,17 @@ struct Lighting(Movable):
     var shadows: List[ShadowMap]
     var direction_shadows: List[Int]
     var spot_shadows: List[Int]
+    # One entry per rect area light, parallel lists: where its center is,
+    # from the center to the middle of a side and of the other side, in
+    # world space, and what it carries. Read only by a physical surface;
+    # see `lights.ltc`.
+    var rect_positions: List[Vector3]
+    var rect_half_widths: List[Vector3]
+    var rect_half_heights: List[Vector3]
+    var rect_radiances: List[FloatColor]
+    # The LTC tables a rect area light is evaluated with, or none, which
+    # is refused when there is such a light.
+    var ltc: LtcTables
 
     def __init__(
         out self,
@@ -836,6 +850,7 @@ struct Lighting(Movable):
         toward_eye: Vector3 = PERSPECTIVE_VIEW,
         up: Vector3 = Vector3(0, 1, 0),
         var shadows: List[ShadowMap] = List[ShadowMap](),
+        var ltc: LtcTables = LtcTables(),
     ) raises:
         """Resolve a scene's lights against the world transforms it holds.
 
@@ -867,6 +882,9 @@ struct Lighting(Movable):
             shadows: The shadow maps drawn this frame, each naming the
                 light that drew it; `Renderer.shadow_maps` builds them.
                 None by default, which lights every surface in full.
+            ltc: The tables a rect area light is evaluated with,
+                `lights.ltc.load_ltc_tables`. None by default, which is
+                refused only when the scene holds such a light.
 
         Raises:
             Error: If a light's numbers are refused by `Light.validate`,
@@ -875,8 +893,10 @@ struct Lighting(Movable):
                 light has no direction, because its node sits exactly
                 where it points from — the origin, or its target — which
                 is a mistake rather than a dark light; a light's kind
-                is none of the five; or a shadow map names a light that
-                is not there, or one that is not directional or spot.
+                is none of the six; a shadow map names a light that
+                is not there, or one that is not directional or spot; or
+                the scene holds a rect area light and no LTC tables were
+                given.
         """
         self.eye = eye
         # Normalized here rather than at every fragment, and left alone when
@@ -911,6 +931,11 @@ struct Lighting(Movable):
         self.shadows = shadows^
         self.direction_shadows = List[Int]()
         self.spot_shadows = List[Int]()
+        self.rect_positions = List[Vector3]()
+        self.rect_half_widths = List[Vector3]()
+        self.rect_half_heights = List[Vector3]()
+        self.rect_radiances = List[FloatColor]()
+        self.ltc = ltc^
         for slot in range(len(self.shadows)):
             var owner = self.shadows[slot].light
             if owner < 0 or owner >= len(scene.lights):
@@ -992,6 +1017,30 @@ struct Lighting(Movable):
                 self.penumbra_cosines.append(
                     cos(light.angle.value * (1 - light.penumbra))
                 )
+            elif light.kind == RECT_AREA:
+                # The rectangle's center, and its half width and half
+                # height turned and scaled by its node's world matrix, as
+                # three.js applies `matrixWorld` to `halfWidth` and
+                # `halfHeight`: a scaled node makes a larger rectangle.
+                if not self.ltc.is_loaded():
+                    raise Error(
+                        "A rect area light needs the LTC tables: load them"
+                        " with lights.ltc.load_ltc_tables and hand them to"
+                        " the renderer with set_ltc_tables"
+                    )
+                var placed = scene.world_matrix(light.node)
+                self.rect_positions.append(scene.world_position(light.node))
+                self.rect_half_widths.append(
+                    placed.transform_direction(
+                        Vector3(light.width.to(METER) * 0.5, 0, 0)
+                    )
+                )
+                self.rect_half_heights.append(
+                    placed.transform_direction(
+                        Vector3(0, light.height.to(METER) * 0.5, 0)
+                    )
+                )
+                self.rect_radiances.append(light.radiance())
             else:
                 # The type stops a bare integer; it does not stop
                 # `LightKind(7)`, and a light that is none of the five has
@@ -1028,6 +1077,15 @@ struct Lighting(Movable):
         self.shadows = List[ShadowMap]()
         self.direction_shadows = List[Int]()
         self.spot_shadows = List[Int]()
+        self.rect_positions = List[Vector3]()
+        self.rect_half_widths = List[Vector3]()
+        self.rect_half_heights = List[Vector3]()
+        self.rect_radiances = List[FloatColor]()
+        self.ltc = LtcTables()
+
+    def rect_count(self) -> Int:
+        """Return how many rect area lights there are."""
+        return len(self.rect_positions)
 
     def _shadow_of(self, light: Int) -> Int:
         """Return which of the shadow maps `light` drew, or -1 for none."""
@@ -1664,11 +1722,51 @@ struct Lighting(Movable):
                 roughness,
                 clearcoat_roughness,
             )
-        return Reflected(
+        var scaled = Reflected(
             sum.diffuse * self.scale,
             sum.specular * self.scale,
             sum.clearcoat * self.scale,
         )
+        # The rectangles, after the scale: their form factor integrates
+        # the cosine over the light's outline and carries no reciprocal
+        # pi, as three.js's `RE_Direct_RectArea_Physical` carries none.
+        # The tables are looked up once per fragment, by the roughness
+        # and the angle to the eye, and serve every rectangle.
+        if len(self.rect_positions) > 0:
+            var dot_nv = max(
+                Float32(0), min(Float32(1), normal.dot(toward_eye))
+            )
+            var uv = ltc_uv(dot_nv, roughness)
+            var minv = ltc_lookup(self.ltc.first, uv)
+            var fresnel = ltc_lookup(self.ltc.second, uv)
+            var diffuse = scaled.diffuse
+            var specular = scaled.specular
+            for index in range(len(self.rect_positions)):  # pragma: no branch
+                var added = rect_area_light(
+                    normal,
+                    toward_eye,
+                    position,
+                    self.rect_positions[index],
+                    self.rect_half_widths[index],
+                    self.rect_half_heights[index],
+                    surface.diffuse,
+                    surface.specular,
+                    minv,
+                    fresnel,
+                )
+                ref glow = self.rect_radiances[index]
+                diffuse = Vector3(
+                    diffuse.x + added.diffuse.x * glow.r,
+                    diffuse.y + added.diffuse.y * glow.g,
+                    diffuse.z + added.diffuse.z * glow.b,
+                )
+                specular = Vector3(
+                    specular.x + added.specular.x * glow.r,
+                    specular.y + added.specular.y * glow.g,
+                    specular.z + added.specular.z * glow.b,
+                )
+            scaled = Reflected(diffuse, specular, scaled.clearcoat)
+        return scaled
 
     def shade(
         self, base: Color, normal: Vector3, position: Vector3

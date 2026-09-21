@@ -60,6 +60,14 @@ from lights.shadow import (
     shadow_tap,
     shadow_texel,
 )
+from lights.ltc import (
+    LTC_FLOATS,
+    ltc_blend,
+    ltc_neighbor,
+    ltc_texel,
+    ltc_uv,
+    rect_area_light,
+)
 from lights.lighting import (
     PERSPECTIVE_VIEW,
     Lighting,
@@ -316,7 +324,11 @@ comptime LIGHTS_UP = 6
 comptime LIGHTS_AMBIENT = 9
 # What every sum of arriving light is multiplied by: `Lighting.scale`.
 comptime LIGHTS_SCALE = 12
-comptime LIGHTS_FIRST = 13
+# How many rect area lights follow the spot lights. In the header rather
+# than a kernel argument of its own, for the reason the shadow maps ride
+# in this buffer: the kernel has no argument left.
+comptime LIGHTS_RECT_COUNT = 13
+comptime LIGHTS_FIRST = 14
 # How many floats each kind of light takes in the buffer. A directional
 # light's seventh and a spot light's fourteenth is where its shadow map
 # begins in the same buffer, or -1 for none: the maps ride after the
@@ -327,6 +339,10 @@ comptime DIRECTIONAL_FLOATS = 7
 comptime POINT_FLOATS = 8
 comptime HEMISPHERE_FLOATS = 9
 comptime SPOT_FLOATS = 14
+# A rect area light: its center, its half width and its half height in
+# world space, and its radiance. When there is at least one, the two LTC
+# tables follow the last, `LTC_FLOATS` each; see `lights.ltc`.
+comptime RECT_FLOATS = 12
 comptime NO_SHADOW = Float32(-1)
 
 # Further than any NDC depth, so the first covering triangle always wins. The
@@ -533,7 +549,8 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
 
     Returns:
         `LIGHTS_FIRST + 7 * count + 8 * point_count + 9 * hemisphere_count
-        + 14 * spot_count` floats, then the shadow maps.
+        + 14 * spot_count + 12 * rect_count` floats, then the two LTC
+        tables when `rect_count` is not zero, then the shadow maps.
     """
     var flat = List[Float32]()
     # Where each shadow map will begin, worked out before the lights that
@@ -545,7 +562,10 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         + lighting.point_count() * POINT_FLOATS
         + lighting.hemisphere_count() * HEMISPHERE_FLOATS
         + lighting.spot_count() * SPOT_FLOATS
+        + lighting.rect_count() * RECT_FLOATS
     )
+    if lighting.rect_count() > 0:
+        next += 2 * LTC_FLOATS
     for slot in range(len(lighting.shadows)):
         starts.append(next)
         next += SHADOW_HEADER + len(lighting.shadows[slot].depths)
@@ -562,6 +582,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     flat.append(lighting.ambient.g)
     flat.append(lighting.ambient.b)
     flat.append(lighting.scale)
+    flat.append(Float32(lighting.rect_count()))
     for index in range(lighting.count()):
         ref direction = lighting.directions[index]
         flat.append(direction.x)
@@ -614,6 +635,28 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(lighting.cone_cosines[index])
         flat.append(lighting.penumbra_cosines[index])
         flat.append(_shadow_start(starts, lighting.spot_shadows[index]))
+    for index in range(lighting.rect_count()):
+        ref center = lighting.rect_positions[index]
+        flat.append(center.x)
+        flat.append(center.y)
+        flat.append(center.z)
+        ref half_width = lighting.rect_half_widths[index]
+        flat.append(half_width.x)
+        flat.append(half_width.y)
+        flat.append(half_width.z)
+        ref half_height = lighting.rect_half_heights[index]
+        flat.append(half_height.x)
+        flat.append(half_height.y)
+        flat.append(half_height.z)
+        ref glow = lighting.rect_radiances[index]
+        flat.append(glow.r)
+        flat.append(glow.g)
+        flat.append(glow.b)
+    if lighting.rect_count() > 0:
+        for at in range(LTC_FLOATS):
+            flat.append(lighting.ltc.first[at])
+        for at in range(LTC_FLOATS):
+            flat.append(lighting.ltc.second[at])
     for slot in range(len(lighting.shadows)):
         ref map = lighting.shadows[slot]
         flat.append(Float32(map.size))
@@ -1461,8 +1504,92 @@ def _physical(
             clearcoat_roughness,
         )
     var scale = lights[unsafe_offset=LIGHTS_SCALE]
-    return Reflected(
+    var scaled = Reflected(
         sum.diffuse * scale, sum.specular * scale, sum.clearcoat * scale
+    )
+    # The rectangles after the scale, as `Lighting.physical_at` adds them:
+    # one table lookup for the fragment, then every rectangle through it.
+    var rects = Int(lights[unsafe_offset=LIGHTS_RECT_COUNT])
+    if rects > 0:
+        var first_rect = first_spot + spots * SPOT_FLOATS
+        var first_table = first_rect + rects * RECT_FLOATS
+        var dot_nv = max(Float32(0), min(Float32(1), normal.dot(toward_eye)))
+        var uv = ltc_uv(dot_nv, roughness)
+        var minv = _ltc_lookup(lights, first_table, uv)
+        var fresnel = _ltc_lookup(lights, first_table + LTC_FLOATS, uv)
+        var diffuse = scaled.diffuse
+        var specular = scaled.specular
+        for index in range(rects):
+            var at = first_rect + index * RECT_FLOATS
+            var added = rect_area_light(
+                normal,
+                toward_eye,
+                position,
+                Vector3(
+                    lights[unsafe_offset=at],
+                    lights[unsafe_offset=at + 1],
+                    lights[unsafe_offset=at + 2],
+                ),
+                Vector3(
+                    lights[unsafe_offset=at + 3],
+                    lights[unsafe_offset=at + 4],
+                    lights[unsafe_offset=at + 5],
+                ),
+                Vector3(
+                    lights[unsafe_offset=at + 6],
+                    lights[unsafe_offset=at + 7],
+                    lights[unsafe_offset=at + 8],
+                ),
+                surface.diffuse,
+                surface.specular,
+                minv,
+                fresnel,
+            )
+            diffuse = Vector3(
+                diffuse.x + added.diffuse.x * lights[unsafe_offset=at + 9],
+                diffuse.y + added.diffuse.y * lights[unsafe_offset=at + 10],
+                diffuse.z + added.diffuse.z * lights[unsafe_offset=at + 11],
+            )
+            specular = Vector3(
+                specular.x + added.specular.x * lights[unsafe_offset=at + 9],
+                specular.y + added.specular.y * lights[unsafe_offset=at + 10],
+                specular.z + added.specular.z * lights[unsafe_offset=at + 11],
+            )
+        scaled = Reflected(diffuse, specular, scaled.clearcoat)
+    return scaled
+
+
+def _ltc_texel(
+    lights: MutPointer[Float32, MutAnyOrigin], at: Int
+) -> SIMD[DType.float32, 4]:
+    """Return the four floats of an LTC table from `at` in the buffer.
+
+    Lane by lane: a `SIMD` built from four loads written straight into
+    its constructor comes back all zero from the Metal compiler, while
+    the same four loads assigned one lane at a time come back right.
+    """
+    var texel = SIMD[DType.float32, 4](0)
+    for lane in range(4):  # pragma: no branch
+        texel[lane] = lights[unsafe_offset=at + lane]
+    return texel
+
+
+def _ltc_lookup(
+    lights: MutPointer[Float32, MutAnyOrigin], table: Int, uv: Vector2
+) -> SIMD[DType.float32, 4]:
+    """Return a table's four numbers at a coordinate, bilinearly
+    filtered: the device counterpart of `ltc_lookup`, the same texels
+    through the same `ltc_blend`."""
+    var place = ltc_texel(uv)
+    var column = Int(place[0])
+    var row = Int(place[1])
+    return ltc_blend(
+        _ltc_texel(lights, table + ltc_neighbor(column, row)),
+        _ltc_texel(lights, table + ltc_neighbor(column + 1, row)),
+        _ltc_texel(lights, table + ltc_neighbor(column, row + 1)),
+        _ltc_texel(lights, table + ltc_neighbor(column + 1, row + 1)),
+        place[2],
+        place[3],
     )
 
 

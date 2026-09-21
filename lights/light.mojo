@@ -73,7 +73,7 @@ from lights.shadow import LightShadow
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
 from std.math import cos, isfinite
-from units.si import Angle, DEGREE, RADIAN
+from units.si import Angle, DEGREE, Length, METER, RADIAN
 
 
 @fieldwise_init
@@ -97,6 +97,7 @@ struct LightKind(Equatable, ImplicitlyCopyable, Writable):
             or self == POINT
             or self == HEMISPHERE
             or self == SPOT
+            or self == RECT_AREA
         )
 
 
@@ -117,6 +118,13 @@ comptime HEMISPHERE = LightKind(3)
 # A bulb that shines only within a cone: a point light with an angle, a
 # penumbra and a target it points at.
 comptime SPOT = LightKind(4)
+# A rectangle that glows, `width` by `height` meters, shining along its
+# node's -z: three.js's `RectAreaLight`. Only a `STANDARD` or `PHYSICAL`
+# surface is lit by one, as only three.js's physical materials are, through
+# linearly transformed cosines; see `lights.ltc`.
+comptime RECT_AREA = LightKind(5)
+# three.js's default `width` and `height` for a rectangle of light.
+comptime DEFAULT_RECT_SIZE = Length(10.0, METER)
 
 # three.js's default `decay`: the inverse-square law, which is what light does
 # in the real world.
@@ -131,6 +139,7 @@ comptime DEFAULT_SPOT_ANGLE = Angle(60.0, DEGREE)
 comptime WIDEST_SPOT_ANGLE = Angle(90.0, DEGREE)
 # What the kinds that have no cone, no ground and no target carry there.
 comptime _NO_ANGLE = Angle(0.0, RADIAN)
+comptime _NO_LENGTH = Length(0.0, METER)
 comptime _BLACK = Color(0, 0, 0)
 
 
@@ -191,6 +200,10 @@ struct Light(ImplicitlyCopyable):
     # draw from. See `lights.shadow`.
     var cast_shadow: Bool
     var shadow: LightShadow
+    # How wide and how tall a rectangle of light is, in meters, three.js's
+    # `width` and `height`. Read only by a rect area light; zero elsewhere.
+    var width: Length
+    var height: Length
 
     def radiance(self) -> FloatColor:
         """Return the light this contributes, decoded and scaled.
@@ -223,12 +236,27 @@ struct Light(ImplicitlyCopyable):
                 spot light's decay or distance is negative or not finite;
                 a spot light's angle is not finite, not above zero, or
                 past a quarter turn, its cosine rounds to one, or its
-                penumbra is not finite or outside zero to one; or the
-                light casts a shadow and is not directional or spot, or
-                its `shadow` is refused by `LightShadow.validate`.
+                penumbra is not finite or outside zero to one; a rect
+                area light's width or height is not a positive finite
+                length; or the light casts a shadow and is not directional
+                or spot, or its `shadow` is refused by
+                `LightShadow.validate`.
         """
         if not isfinite(self.intensity) or self.intensity < 0:
             raise Error("A light's intensity must be finite and not negative")
+        if self.kind == RECT_AREA:
+            var width = self.width.to(METER)
+            var height = self.height.to(METER)
+            if (
+                not isfinite(width)
+                or not isfinite(height)
+                or width <= 0
+                or height <= 0
+            ):
+                raise Error(
+                    "A rect area light's width and height must be positive"
+                    " lengths"
+                )
         if self.cast_shadow:
             if self.kind != DIRECTIONAL and self.kind != SPOT:
                 raise Error(
@@ -308,6 +336,8 @@ def _bare(
         NO_PARENT,
         False,
         LightShadow(),
+        _NO_LENGTH,
+        _NO_LENGTH,
     )
 
 
@@ -485,5 +515,48 @@ def spot_light(
     light.penumbra = penumbra
     light.decay = decay
     light.target = target
+    light.validate()
+    return light
+
+
+def rect_area_light(
+    color: Color,
+    node: NodeId,
+    intensity: Float32 = 1.0,
+    width: Length = DEFAULT_RECT_SIZE,
+    height: Length = DEFAULT_RECT_SIZE,
+) raises -> Light:
+    """Return a rectangle that glows, three.js's `RectAreaLight`.
+
+    The node is where the rectangle's center is and which way it faces:
+    it shines along the node's -z, its width along the node's x and its
+    height along its y, turned and scaled by the node's world matrix as
+    three.js turns `halfWidth` and `halfHeight`. Aim it as a camera is
+    aimed, by turning its node. It has no target, no falloff of its own
+    beyond the geometry of a rectangle seen from further away, and no
+    shadow, as three.js's has none.
+
+    Only a `STANDARD` or `PHYSICAL` surface is lit by one, as only
+    three.js's physical materials are; every other kind leaves it out.
+    The scene's renderer must hold the LTC tables, `lights.ltc`, or the
+    lighting refuses to resolve it.
+
+    Args:
+        color: Its color.
+        node: The node at its center, facing the way it shines.
+        intensity: How bright, multiplying the color.
+        width: How wide, three.js's `width`. Ten meters by default.
+        height: How tall, three.js's `height`. Ten meters by default.
+
+    Returns:
+        The light.
+
+    Raises:
+        Error: If the intensity is negative or not finite, or the width or
+            height is not a positive finite length.
+    """
+    var light = _bare(RECT_AREA, color, intensity, node)
+    light.width = width
+    light.height = height
     light.validate()
     return light

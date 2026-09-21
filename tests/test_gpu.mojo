@@ -76,9 +76,11 @@ from lights.light import (
     directional_light,
     hemisphere_light,
     point_light,
+    rect_area_light,
     spot_light,
 )
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
+from lights.ltc import LTC_FLOATS, load_ltc_tables
 from core.fog import Fog, FogView, exp2_fog, linear_fog, no_fog
 from render.tonemap import (
     ACES_FILMIC_TONE_MAPPING,
@@ -133,8 +135,10 @@ from render.gpu import (
     LIGHTS_AMBIENT,
     LIGHTS_EYE,
     LIGHTS_FIRST,
+    LIGHTS_RECT_COUNT,
     LIGHTS_TOWARD,
     LIGHTS_UP,
+    RECT_FLOATS,
     STATE_PER_TRIANGLE,
     STATE_RECEIVES_SHADOW,
     NO_SHADOW,
@@ -7966,6 +7970,130 @@ def test_both_backends_agree_on_a_shadowed_scene() raises:
         scene.lights[1].cast_shadow = False
         var unshadowed = renderer.render(scene, assets, camera)
         assert_true(count_mismatches(cpu, unshadowed) > 20, "no shadow fell")
+
+
+def with_a_rectangle(
+    mut scene: Scene, x: Float32, y: Float32, z: Float32
+) raises:
+    """Add a warm two-by-one-meter rectangle of light at a point, shining
+    down -z, to a scene."""
+    var lamp = Object3D()
+    lamp.set_position(x, y, z)
+    var node = scene.add(lamp^)
+    scene.add_light(
+        rect_area_light(
+            Color(255, 220, 180),
+            node,
+            1.5,
+            Length(2.0, METER),
+            Length(1.0, METER),
+        )
+    )
+
+
+def test_the_light_buffer_carries_the_rectangles_and_the_tables() raises:
+    # The header counts the rectangles; each is twelve floats after the
+    # spot lights; the two tables follow them, and the shadow maps follow
+    # the tables. Without a rectangle, no table rides.
+    var assets = Assets()
+    var scene = a_shadowed_scene(assets)
+    with_a_rectangle(scene, 0, 3, 0)
+    scene.update()
+    var renderer = Renderer(24, 18)
+    var maps = renderer.shadow_maps(scene, assets)
+    var lighting = Lighting(scene, shadows=maps^, ltc=load_ltc_tables())
+    var flat = flatten_lights(lighting)
+    assert_equal(flat[LIGHTS_RECT_COUNT], Float32(1))
+    assert_equal(LIGHTS_FIRST, LIGHTS_RECT_COUNT + 1)
+    assert_equal(RECT_FLOATS, 12)
+    var first_rect = LIGHTS_FIRST + 7 + 14
+    var first_table = first_rect + RECT_FLOATS
+    var first_map = first_table + 2 * LTC_FLOATS
+    assert_equal(flat[first_rect + 1], Float32(3))
+    assert_equal(flat[first_rect + 3], Float32(1))
+    assert_equal(flat[first_rect + 7], Float32(0.5))
+    assert_equal(flat[first_rect + 9], Float32(1.5))
+    assert_equal(flat[first_rect + 11], lighting.rect_radiances[0].b)
+    assert_true(flat[first_rect + 11] < 1, "the radiance was not decoded")
+    assert_equal(flat[first_table], lighting.ltc.first[0])
+    assert_equal(flat[first_table + 3], lighting.ltc.first[3])
+    assert_equal(flat[first_table + LTC_FLOATS], lighting.ltc.second[0])
+    assert_equal(flat[LIGHTS_FIRST + 6], Float32(first_map))
+    assert_equal(flat[first_map], Float32(48))
+    var second_map = first_map + SHADOW_HEADER + 48 * 48
+    assert_equal(flat[LIGHTS_FIRST + 7 + 13], Float32(second_map))
+    assert_equal(len(flat), second_map + SHADOW_HEADER + 32 * 32)
+    var bare = flatten_lights(Lighting(a_shadowed_scene(assets)))
+    assert_equal(bare[LIGHTS_RECT_COUNT], Float32(0))
+    assert_equal(len(bare), first_rect)
+
+
+def test_both_backends_agree_on_a_rectangle_of_light() raises:
+    # The tables looked up in the buffer, the corners taken through the
+    # frame and the transform, the edges summed and clipped: the kernel
+    # calls the host's own functions and must reach the same pixels, on
+    # a rough dielectric, a half metal and a smooth coated surface, with
+    # the other lights there as well.
+    if skipped_for_lack_of_a_gpu("both backends agree on a rectangle of light"):
+        return
+    var scene = Scene()
+    var sun = Object3D()
+    sun.set_position(0.4, 0.8, 0.6)
+    var sun_node = scene.add(sun^)
+    scene.add_light(directional_light(Color(255, 250, 240), sun_node, 0.4))
+    with_a_rectangle(scene, 0.3, -0.2, 1.2)
+    with_a_rectangle(scene, -1.0, 0.8, 0.9)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.1))
+    scene.update()
+    var lighting = Lighting(
+        scene, Layers.all(), Vector3(0, 0, 3), ltc=load_ltc_tables()
+    )
+    var pairs = List[List[RasterVertex]]()
+    pairs.append(physical_pair(STANDARD, 1.0, 0.0))
+    pairs.append(physical_pair(STANDARD, 0.4, 0.5))
+    pairs.append(physical_pair(PHYSICAL, 0.1, 1.0, 1.0, 0.1))
+    for index in range(len(pairs)):
+        ref corners = pairs[index]
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(corners, target, SHADE_LIT, TextureStore(), lighting)
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners, 36, 30, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+        )
+        assert_true(
+            count_background(cpu, BACKGROUND) < 36 * 30,
+            "the triangles drew nothing",
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the rectangles are there: without them the pixels differ.
+    var without = Scene()
+    var lone = Object3D()
+    lone.set_position(0.4, 0.8, 0.6)
+    var lone_node = without.add(lone^)
+    without.add_light(directional_light(Color(255, 250, 240), lone_node, 0.4))
+    without.add_light(ambient_light(Color(255, 255, 255), 0.1))
+    without.update()
+    var dim = render_triangles(
+        physical_pair(STANDARD, 0.4, 0.5),
+        36,
+        30,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting(without, Layers.all(), Vector3(0, 0, 3)),
+    )
+    var glowing = render_triangles(
+        physical_pair(STANDARD, 0.4, 0.5),
+        36,
+        30,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        lighting,
+    )
+    assert_true(
+        count_mismatches(glowing, dim) > 50, "the rectangles changed nothing"
+    )
 
 
 def main() raises:

@@ -74,6 +74,37 @@ The cone must be wide enough to resolve. The fragment compares cosines, and the 
 
 three.js: `SpotLight(color, intensity, distance, angle, penumbra, decay)` and `SpotLight.target`. The spot light's `map` and shadow are not ported.
 
+## Rect area
+
+`lights/ltc.mojo`. A rectangle that glows: three.js's `RectAreaLight`. The node is the rectangle's center. The rectangle shines along the node's -z, as a camera looks. Its width runs along the node's x and its height along its y. A scaled node makes a larger rectangle, as it does in three.js.
+
+```mojo
+var panel = Object3D()
+panel.set_position(0, 3, 0)
+panel.rotate_x(Angle(-90.0, DEGREE))
+var node = scene.add(panel^)
+scene.add_light(
+    rect_area_light(Color(255, 220, 180), node, 2.0, Length(4.0, METER), Length(1.0, METER))
+)
+renderer.set_ltc_tables(load_ltc_tables())
+```
+
+`width` and `height` are `Length`s. The default is ten meters each. Zero, a negative length and a non-finite length are refused.
+
+Only a `STANDARD` or `PHYSICAL` surface is lit by a rectangle. Every other material kind leaves it out, as only three.js's physical materials define `RE_Direct_RectArea`. The light has no falloff setting, no target and no shadow, as three.js's has none.
+
+### The tables
+
+A rectangle is integrated with linearly transformed cosines, the method of Heitz, Dupuy, Hill and Neubelt. The lobe of the surface at its roughness and viewing angle is fitted by a linear transform of a cosine lobe. The rectangle is pushed through the inverse transform and the cosine lobe's form factor is summed over its edges.
+
+The transforms are three.js's own `LTC_MAT_1` and `LTC_MAT_2`, sixty-four roughnesses by sixty-four angles. They are read from `assets/ltc.f32` by `load_ltc_tables` and handed to the renderer with `set_ltc_tables`. A scene with a rectangle and no tables is refused when its lighting is resolved. A scene without one never opens the file.
+
+The form factor already integrates the cosine over the rectangle. It is added after the reciprocal pi that scales every other lit sum, as three.js adds it. Seen straight along the normal the lookup frame takes the axis least along the normal, where GLSL would normalize a zero vector.
+
+### The GPU
+
+The rectangles ride in the light buffer after the spot lights, twelve floats each. Their count is in the buffer's header. When there is at least one, the two tables follow the last rectangle and the shadow maps follow the tables. Nothing is added to the kernel's arguments. See [GPU backend](GPU-backend).
+
 ## Lighting
 
 `Lighting(scene)` resolves every light against the scene's world matrices. Build it after `scene.update()`. `Lighting(scene, visible=camera.visible_layers())` resolves only the lights on the camera's layers. Pass the camera's world position as `eye` as well, which a `PHONG` material measures its highlight from.
