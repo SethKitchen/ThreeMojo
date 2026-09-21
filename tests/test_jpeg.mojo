@@ -289,18 +289,22 @@ def test_upsampling_reads_full_resolution_as_it_is_and_halves_by_thirds() raises
     # own; read at twice the width, the pixel nearer a sample takes three
     # quarters of it, and the edge repeats.
     var plane: List[UInt8] = [0, 100, 200, 40, 10, 110, 210, 50]
-    assert_equal(upsampled(plane, 4, 2, 1, 1, 1), UInt8(210))
-    assert_equal(upsampled(plane, 4, 0, 0, 2, 1), UInt8(0))
-    assert_equal(upsampled(plane, 4, 1, 0, 2, 1), UInt8(25))
-    assert_equal(upsampled(plane, 4, 2, 0, 2, 1), UInt8(75))
-    assert_equal(upsampled(plane, 4, 3, 0, 2, 1), UInt8(125))
+    assert_equal(upsampled(plane, 4, 2, 2, 1, 1, 1), UInt8(210))
+    assert_equal(upsampled(plane, 4, 2, 0, 0, 2, 1), UInt8(0))
+    assert_equal(upsampled(plane, 4, 2, 1, 0, 2, 1), UInt8(25))
+    assert_equal(upsampled(plane, 4, 2, 2, 0, 2, 1), UInt8(75))
+    assert_equal(upsampled(plane, 4, 2, 3, 0, 2, 1), UInt8(125))
     # Down as well: the top edge repeats, and the second row leans down.
-    assert_equal(upsampled(plane, 4, 0, 0, 1, 2), UInt8(0))
-    assert_equal(upsampled(plane, 4, 1, 1, 1, 2), UInt8(103))
-    assert_equal(upsampled(plane, 4, 1, 2, 1, 2), UInt8(108))
+    assert_equal(upsampled(plane, 4, 2, 0, 0, 1, 2), UInt8(0))
+    assert_equal(upsampled(plane, 4, 2, 1, 1, 1, 2), UInt8(103))
+    assert_equal(upsampled(plane, 4, 2, 1, 2, 1, 2), UInt8(108))
     # Both ways at once.
-    assert_equal(upsampled(plane, 4, 0, 0, 2, 2), UInt8(0))
-    assert_equal(upsampled(plane, 4, 1, 1, 2, 2), UInt8(28))
+    assert_equal(upsampled(plane, 4, 2, 0, 0, 2, 2), UInt8(0))
+    assert_equal(upsampled(plane, 4, 2, 1, 1, 2, 2), UInt8(28))
+    # The far corner of an image that is whole units across and down
+    # leans past the plane's last sample, and reads the edge again.
+    assert_equal(upsampled(plane, 4, 2, 7, 3, 2, 2), UInt8(50))
+    assert_equal(upsampled(plane, 4, 2, 7, 0, 2, 1), UInt8(40))
 
 
 def test_a_huffman_table_is_checked_as_it_is_built() raises:
@@ -606,6 +610,54 @@ def test_a_table_segment_is_checked_field_by_field() raises:
     # A truncated scan.
     var scan = segment(whole, 0xDA)
     refused(cut(whole, scan + 40))
+
+
+def test_components_are_known_by_their_ids_and_not_their_order() raises:
+    # The frame lists the blue difference first and the luma second. The
+    # scan still names the luma first, and the blocks arrive in the
+    # scan's order, so the picture is the same one: the ids say which
+    # plane is which, not the frame's order.
+    var whole = fixture("gradient444.jpg")
+    var reference = decode(whole)
+    var frame = segment(whole, 0xC0)
+    var swapped_frame = whole.copy()
+    for offset in range(3):
+        swapped_frame[frame + 10 + offset] = whole[frame + 13 + offset]
+        swapped_frame[frame + 13 + offset] = whole[frame + 10 + offset]
+    assert_equal(worst_difference(decode(swapped_frame), reference), 0)
+    # Three components numbered any other way are not a YCbCr file this
+    # decoder can read: Adobe's R, G and B, and a luma numbered zero.
+    var adobe = patched(
+        patched(patched(whole, frame + 10, 82), frame + 13, 71), frame + 16, 66
+    )
+    with assert_raises(contains="JFIF"):
+        _ = decode(adobe)
+    refused(patched(whole, frame + 10, 0))
+    # And a scan naming one component twice is refused.
+    var scan = segment(whole, 0xDA)
+    refused(patched(whole, scan + 7, Int(whole[scan + 5])))
+
+
+def test_a_quantization_table_holds_no_zero() raises:
+    var whole = fixture("gradient444.jpg")
+    var quant = segment(whole, 0xDB)
+    refused(patched(whole, quant + 5, 0))
+    refused(patched(whole, quant + 5 + 63, 0))
+    var gray = fixture("gray.jpg")
+    refused(patched(gray, segment(gray, 0xDB) + 5 + 20, 0))
+
+
+def test_a_file_the_macos_encoder_wrote_decodes_to_two_levels() raises:
+    # `sips` wrote this one from assets/brick.png: an EXIF segment, a
+    # Photoshop segment, 4:2:0 chroma, the tables after the Huffman
+    # tables and a restart interval, none of which PIL's files have.
+    var image = decode(fixture("brick_sips.jpg"))
+    assert_equal(image.width, 64)
+    assert_equal(image.height, 64)
+    var reference = decode_png(fixture("brick_sips_ref.png"))
+    assert_true(
+        worst_difference(image, reference) <= 2, "further than two levels"
+    )
 
 
 def main() raises:

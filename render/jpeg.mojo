@@ -18,10 +18,13 @@ quantization table and the survivors are Huffman coded in a zigzag
 order, low frequencies first. Decoding is that in reverse: Huffman
 codes to coefficients, coefficients times the table, an inverse cosine
 transform to samples, and the samples of the three components joined
-into a color. A chroma component is often stored at half the size of
-the luma, and is read back through the triangle filter the standard
-recommends and libjpeg calls fancy upsampling: the luma sample nearer a
-chroma sample takes three quarters of it and a quarter of the next.
+into a color, each known by its id: JFIF numbers the luma one and the
+two chroma two and three, in whatever order the frame lists them. A
+chroma component is often stored at half the size of the luma, and is
+read back through a triangle filter, the reconstruction libjpeg calls
+fancy upsampling: the luma sample nearer a chroma sample takes three
+quarters of it and a quarter of the next. The standard leaves the
+filter to the decoder, and this one follows libjpeg so the two agree.
 
 **The inverse transform is the separable float one**, the definition
 rather than a fast integer approximation, rounded once at the end. A
@@ -32,12 +35,14 @@ tolerance.
 
 **Structure is checked, as the PNG reader checks it.** A marker segment
 must fit in the file, a frame header must come once and before the scan,
-every table the scan names must have been defined, the scan must name
-the frame's components, the restart markers must arrive in order, and
-the file must end with its end marker. A file that asks for progressive
-coding, arithmetic coding, twelve bits a sample, sixteen-bit quantization
-tables, four components, or a scan that does not hold every component is
-refused by name rather than mis-decoded.
+every table the scan names must have been defined and hold no zero, the
+scan must name the frame's components, the restart markers must arrive
+in order, and the file must end with its end marker. A file that asks
+for progressive coding, arithmetic coding, twelve bits a sample,
+sixteen-bit quantization tables, four components, a sampling factor
+past two, three components not numbered as JFIF numbers them, or a scan
+that does not hold every component is refused by name rather than
+mis-decoded.
 
 JPEG carries no color space of its own. What every viewer assumes is
 sRGB, and so does this: a decoded JPEG is `SRGB`.
@@ -76,8 +81,15 @@ comptime BLOCK_SAMPLES = 64
 comptime TABLE_COUNT = 4
 # The most components a frame can hold here: gray, or luma and two chroma.
 comptime MAX_COMPONENTS = 3
-# The largest sampling factor a component can have: three.js's browsers
-# read files up to four, but every encoder in use writes one or two.
+# The ids a three-component frame gives its luma, its blue difference and
+# its red difference: JFIF's, which every YCbCr encoder writes. A frame
+# with any other three ids is refused rather than read by position.
+comptime LUMA_ID = 1
+comptime BLUE_DIFFERENCE_ID = 2
+comptime RED_DIFFERENCE_ID = 3
+# The largest sampling factor a component can have. JPEG allows up to
+# four; this decoder reads one and two, which are 4:4:4, 4:2:2 and 4:2:0,
+# and refuses the rest by name.
 comptime MAX_SAMPLING = 2
 # Half the sample range: what a level-shifted sample is moved back by.
 comptime LEVEL_SHIFT = Float32(128)
@@ -256,22 +268,31 @@ def ycbcr_to_rgb(y: UInt8, cb: UInt8, cr: UInt8) -> Color:
     )
 
 
-def _weighted(plane: List[UInt8], stride: Int, x: Int, y: Int) -> Float32:
-    """Return the sample at (x, y) of a plane, the top and left edges
-    repeated. The right and bottom never run out: a plane holds whole
-    minimum coded units, which reach past the image."""
+def _weighted(
+    plane: List[UInt8], width: Int, height: Int, x: Int, y: Int
+) -> Float32:
+    """Return the sample at (x, y) of a plane, every edge repeated.
+
+    The right and bottom edges run out when the image is whole minimum
+    coded units across or down: the last pixel's far neighbor is then
+    one past the plane, which reads the edge again."""
     var column = x
     if column < 0:
         column = 0
+    if column >= width:
+        column = width - 1
     var row = y
     if row < 0:
         row = 0
-    return Float32(Int(plane[row * stride + column]))
+    if row >= height:
+        row = height - 1
+    return Float32(Int(plane[row * width + column]))
 
 
 def upsampled(
     plane: List[UInt8],
     width: Int,
+    height: Int,
     x: Int,
     y: Int,
     across: Int,
@@ -289,6 +310,7 @@ def upsampled(
     Args:
         plane: The component's samples, row-major, in whole blocks.
         width: How many samples a row holds.
+        height: How many rows there are.
         x: The image pixel's column.
         y: Its row.
         across: How many pixels one sample covers across, one or two.
@@ -308,12 +330,12 @@ def upsampled(
     var tx = fx - Float32(left)
     var ty = fy - Float32(top)
     var above = (
-        _weighted(plane, width, left, top) * (1 - tx)
-        + _weighted(plane, width, left + 1, top) * tx
+        _weighted(plane, width, height, left, top) * (1 - tx)
+        + _weighted(plane, width, height, left + 1, top) * tx
     )
     var below = (
-        _weighted(plane, width, left, top + 1) * (1 - tx)
-        + _weighted(plane, width, left + 1, top + 1) * tx
+        _weighted(plane, width, height, left, top + 1) * (1 - tx)
+        + _weighted(plane, width, height, left + 1, top + 1) * tx
     )
     return clamp_sample(above * (1 - ty) + below * ty)
 
@@ -581,8 +603,8 @@ def _read_quant_tables(
         defined: Which of the four have been defined, marked in place.
 
     Raises:
-        Error: If a table is sixteen-bit, has an id past three, or does
-            not fit in the segment.
+        Error: If a table is sixteen-bit, has an id past three, holds a
+            zero, or does not fit in the segment.
     """
     var at = start
     while at < end:
@@ -599,7 +621,13 @@ def _read_quant_tables(
             raise Error("A quantization table does not fit its segment")
         var table = List[Int]()
         for index in range(BLOCK_SAMPLES):  # pragma: no branch
-            table.append(Int(bytes[at + 1 + index]))
+            var step = Int(bytes[at + 1 + index])
+            # A step of zero is not a quantization: it would turn every
+            # coefficient it scales to nothing and make a plausible wrong
+            # image, where the standard allows no such step.
+            if step == 0:
+                raise Error("A quantization table holds no zero")
+            table.append(step)
         tables[id] = table^
         defined[id] = True
         at += 1 + BLOCK_SAMPLES
@@ -717,11 +745,32 @@ def _read_frame(
         components.append(
             Component(id, h, v, table, 0, 0, 0, 0, List[UInt8](), 0)
         )
+    # Three components are luma and two chroma by their ids, not by their
+    # order in the frame: JFIF numbers them one, two and three, and a
+    # frame numbered any other way -- Adobe's RGB, say -- is something this
+    # decoder cannot turn into a color and says so.
+    if count == MAX_COMPONENTS:
+        var wanted: List[Int] = [LUMA_ID, BLUE_DIFFERENCE_ID, RED_DIFFERENCE_ID]
+        for index in range(len(wanted)):  # pragma: no branch
+            if _slot_of(components, wanted[index]) < 0:
+                raise Error(
+                    "A three-component JPEG must number its components one,"
+                    " two and three, luma first, as JFIF does: no other"
+                    " numbering names a YCbCr file this decoder can read"
+                )
+
+
+def _slot_of(components: List[Component], id: Int) -> Int:
+    """Return which component has `id`, or -1 for none."""
+    for slot in range(len(components)):  # pragma: no branch
+        if components[slot].id == id:
+            return slot
+    return -1
 
 
 def _read_scan(
     bytes: List[UInt8], start: Int, end: Int, mut components: List[Component]
-) raises:
+) raises -> List[Int]:
     """Read a scan header, assigning each component its Huffman tables.
 
     Args:
@@ -730,10 +779,14 @@ def _read_scan(
         end: The first byte after the segment.
         components: The frame's components, given their tables in place.
 
+    Returns:
+        Which component each of the scan's entries names, in the scan's
+        order, which is the order their blocks arrive in.
+
     Raises:
         Error: If the scan does not name every component of the frame,
-            names one the frame lacks, names a Huffman table id past
-            three, or asks for a spectral selection or successive
+            names one the frame lacks or one twice, names a Huffman table
+            id past three, or asks for a spectral selection or successive
             approximation other than baseline's.
     """
     if start >= end:
@@ -746,6 +799,7 @@ def _read_scan(
         )
     if start + 1 + count * 2 + 3 != end:
         raise Error("A scan header's length does not match its components")
+    var order = List[Int]()
     for index in range(count):  # pragma: no branch
         var at = start + 1 + index * 2
         var id = Int(bytes[at])
@@ -753,20 +807,22 @@ def _read_scan(
         var ac = Int(bytes[at + 1]) & 15
         if dc >= TABLE_COUNT or ac >= TABLE_COUNT:
             raise Error("A Huffman table id must be zero through three")
-        var found = False
-        for slot in range(len(components)):  # pragma: no branch
-            if components[slot].id == id:
-                components[slot].dc_table = dc
-                components[slot].ac_table = ac
-                found = True
-        if not found:
+        var slot = _slot_of(components, id)
+        if slot < 0:
             raise Error("A scan names a component the frame does not have")
+        for earlier in range(len(order)):
+            if order[earlier] == slot:
+                raise Error("A scan names one component twice")
+        components[slot].dc_table = dc
+        components[slot].ac_table = ac
+        order.append(slot)
     var tail = start + 1 + count * 2
     if bytes[tail] != 0 or bytes[tail + 1] != 63 or bytes[tail + 2] != 0:
         raise Error(
             "A scan must cover every coefficient at once: progressive"
             " JPEG is not supported by this decoder"
         )
+    return order^
 
 
 def _decode_block(
@@ -837,11 +893,13 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     """Return the image a baseline JPEG file holds, as RGBA.
 
     Reads a gray or a YCbCr file, sequential and Huffman coded at eight
-    bits a sample, with any sampling factors of one or two and any
-    restart interval, and widens it to opaque RGBA, since that is what a
-    `Texture` holds. Everything else JPEG allows -- progressive and
-    arithmetic coding, twelve bits, sixteen-bit quantization tables, four
-    components, a scan per component -- is refused by name.
+    bits a sample, with sampling factors of one or two -- 4:4:4, 4:2:2
+    and 4:2:0 -- and any restart interval, and widens it to opaque RGBA,
+    since that is what a `Texture` holds. Everything else JPEG allows --
+    progressive and arithmetic coding, twelve bits, sixteen-bit
+    quantization tables, larger sampling factors, four components, a
+    scan per component, components numbered other than JFIF's one, two
+    and three -- is refused by name.
 
     Args:
         bytes: The complete file.
@@ -877,6 +935,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     var restart_interval = 0
     var at = 2
     var scan_start = -1
+    var order = List[Int]()
     while scan_start < 0:
         if at + 1 >= len(bytes):
             raise Error("A JPEG file ended before its scan")
@@ -914,7 +973,7 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
         elif marker == SOS:
             if not framed:
                 raise Error("A scan arrived before the frame header")
-            _read_scan(bytes, start, end, components)
+            order = _read_scan(bytes, start, end, components)
             scan_start = end
         elif (marker >= APP0 and marker <= APP15) or marker == COM:
             pass
@@ -983,8 +1042,10 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
                 next_restart = RST0 + UInt8((Int(next_restart - RST0) + 1) % 8)
                 for index in range(len(components)):  # pragma: no branch
                     components[index].predictor = 0
-            for index in range(len(components)):  # pragma: no branch
-                ref component = components[index]
+            # The blocks arrive in the scan's order, which need not be the
+            # frame's.
+            for entry in range(len(order)):  # pragma: no branch
+                ref component = components[order[entry]]
                 for v in range(component.v):  # pragma: no branch
                     for h in range(component.h):  # pragma: no branch
                         _decode_block(
@@ -1004,6 +1065,12 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
     if trailer + 2 != len(bytes) or bytes[trailer + 1] != EOI:
         raise Error("A JPEG file must end with its end-of-image marker")
 
+    # Which component is the luma and which the two chroma, by id.
+    var planes = List[Int]()
+    if len(components) == MAX_COMPONENTS:
+        planes.append(_slot_of(components, LUMA_ID))
+        planes.append(_slot_of(components, BLUE_DIFFERENCE_ID))
+        planes.append(_slot_of(components, RED_DIFFERENCE_ID))
     var pixels = List[UInt8]()
     pixels.reserve(width * height * DecodedImage.CHANNELS)
     for y in range(height):  # pragma: no branch
@@ -1017,11 +1084,12 @@ def decode(bytes: List[UInt8]) raises -> DecodedImage:
             else:
                 var samples = List[UInt8]()
                 for index in range(MAX_COMPONENTS):  # pragma: no branch
-                    ref component = components[index]
+                    ref component = components[planes[index]]
                     samples.append(
                         upsampled(
                             component.samples,
                             component.blocks_wide * BLOCK,
+                            component.blocks_tall * BLOCK,
                             x,
                             y,
                             h_max // component.h,

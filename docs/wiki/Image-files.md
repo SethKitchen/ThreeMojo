@@ -74,18 +74,18 @@ var skin = assets.textures.add(texture_from(photo, REPEAT, BILINEAR, mipmapped=T
 | Supported | Refused by name |
 |---|---|
 | Baseline sequential Huffman coding, `SOF0` and `SOF1` at 8 bits | Progressive and arithmetic coding |
-| Gray, and YCbCr in three components | Four components, which is CMYK |
-| Sampling factors of one or two each way, so 4:4:4, 4:2:2 and 4:2:0 | Twelve bits a sample, and sixteen-bit quantization tables |
-| Restart intervals | A scan per component |
-| Application and comment segments, skipped | |
+| Gray, and YCbCr in three components numbered one, two and three as JFIF numbers them | Four components, which is CMYK, and three numbered any other way |
+| 4:4:4, 4:2:2 and 4:2:0 | Other sampling factors |
+| Restart intervals | Twelve bits a sample, and sixteen-bit quantization tables |
+| Application and comment segments, skipped | A scan per component |
 
 ### What the decoder computes
 
-The inverse cosine transform is the separable float one, the standard's own definition, rounded once at the end. A chroma component stored at half size is read through the triangle filter the standard recommends, which libjpeg calls fancy upsampling. Two decoders agree on a JPEG to within a level or two and never to the bit. `tests/test_jpeg.mojo` holds this one to two levels of libjpeg's output.
+The inverse cosine transform is the separable float one, the standard's own definition, rounded once at the end. A chroma component stored at half size is read through a triangle filter. The standard leaves the reconstruction filter to the decoder, and this one uses the filter libjpeg calls fancy upsampling so that the two agree. Two decoders agree on a JPEG to within a level or two and never to the bit. `tests/test_jpeg.mojo` holds this one to two levels of libjpeg's output.
 
 ### Integrity checks
 
-The decoder checks that every marker segment fits and that the frame header comes once and before the scan. It checks that every table the scan names was defined and that the scan names the frame's components. It checks that the restart markers arrive in order and that the end marker closes the file. A truncated scan, a code no table defines and a run past a block's end are refused rather than padded.
+The decoder checks that every marker segment fits and that the frame header comes once and before the scan. It checks that every table the scan names was defined and holds no zero, and that the scan names the frame's components. It checks that the restart markers arrive in order and that the end marker closes the file. A truncated scan, a code no table defines and a run past a block's end are refused rather than padded.
 
 ## Color space of a decoded file
 
