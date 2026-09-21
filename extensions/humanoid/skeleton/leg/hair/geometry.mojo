@@ -19,7 +19,6 @@ from extensions.humanoid.spec import HumanoidSpec
 from extensions.humanoid.skeleton.field import (
     DistanceField,
     empty_bounds,
-    field_gradient,
     sd_segment,
 )
 from extensions.humanoid.skeleton.isosurface import check_detail, mesh_field
@@ -101,7 +100,6 @@ struct _HairShaftField(DistanceField, ImplicitlyCopyable):
     var a: Vector3
     var b: Vector3
     var radius: Float32
-    var epsilon: Float32
     var low: Vector3
     var high: Vector3
 
@@ -110,7 +108,6 @@ struct _HairShaftField(DistanceField, ImplicitlyCopyable):
         self.a = a
         self.b = b
         self.radius = radius
-        self.epsilon = Float32(0.25) * radius
         var box = empty_bounds()
         box.include_sphere(a, radius)
         box.include_sphere(b, radius)
@@ -121,10 +118,6 @@ struct _HairShaftField(DistanceField, ImplicitlyCopyable):
     def distance(self, point: Vector3) -> Float32:
         """Return distance to the display shaft, in meters."""
         return sd_segment(point, self.a, self.b, self.radius, self.radius)
-
-    def gradient(self, point: Vector3) -> Vector3:
-        """Return the unit outward normal at `point`."""
-        return field_gradient(self, point, self.epsilon)
 
 
 def _shaft_mesh(

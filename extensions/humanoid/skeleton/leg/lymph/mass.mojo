@@ -118,8 +118,7 @@ def lymph_mass_from_dimensions(
         )
     else:
         volume = tube_chain_volume(field.chain)
-        if field.chain_count >= 2:
-            volume += tube_chain_volume(field.chain2)
+        volume += tube_chain_volume(field.chain2)
         if field.chain_count >= 3:
             volume += tube_chain_volume(field.chain3)
         if field.chain_count >= 4:

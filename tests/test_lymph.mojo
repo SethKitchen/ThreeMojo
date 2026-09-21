@@ -200,6 +200,10 @@ def test_lymph_mass_is_positive() raises:
         HumanoidSpec(Length(5.5, FOOT), FEMALE), DEEP_LYMPHATICS, LEFT
     )
     assert_true(trunk.mass.to(GRAM) > Float32(0))
+    var superficial = lymph_mass(
+        HumanoidSpec(Length(6.0, FOOT), MALE), SUPERFICIAL_LYMPHATICS, RIGHT
+    )
+    assert_true(superficial.mass.to(GRAM) > Float32(0))
 
 
 def test_lymph_field_refuses_a_bad_part() raises:
