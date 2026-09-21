@@ -1,0 +1,1177 @@
+# Copyright (c) 2026 Seth Kitchen, PE
+# SPDX-License-Identifier: PolyForm-Noncommercial-1.0.0
+# Noncommercial use is free; commercial use requires a paid license.
+# See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
+
+"""Post-processing: passes over the light a frame leaves in a target,
+three.js's `EffectComposer` from `examples/jsm/postprocessing/` and the
+passes and shaders beside it.
+
+**What a pass is.** A render leaves linear light in a `RenderTarget`. A
+pass reads every pixel of it and writes every pixel back: a blur, a bloom,
+a film grain, a dot screen, a sepia, a vignette, a gray, a trail, a copy at
+an opacity, or the tone mapping curve. The composer runs its passes in
+order on one target and resolves it once at the end. three.js ping-pongs
+between two targets because a shader cannot read the texture it writes;
+a pass here reads the whole target before it writes, so one target serves.
+
+**Where the curve is.** three.js applies its tone mapping in an
+`OutputPass`, not in the render, once a composer is in use. So does this:
+the composer resolves through no curve of its own, and `output_pass` puts
+the renderer's curve wherever it is asked for, in the order it is asked,
+on the light of every pixel that holds light. A composer without one shows
+the light as it is, as three.js does.
+
+**What operates on what.** A blur, a bloom, a copy and a trail work on the
+premultiplied light, where a sum is a sum. A color transform -- the sepia,
+the gray, the dot screen, the vignette, the grain and the curve -- works on
+the straight color of each pixel and premultiplies it back, as a shader
+sees a straight texel. Alpha is kept by every pass but the copy, which
+scales it as three.js's `CopyShader` scales the whole texel.
+
+The passes run on the host. The GPU backend draws bytes, not light, and
+has no target a pass could read; see `docs/wiki/Post-processing.md`.
+"""
+
+from cameras.camera import Camera
+from core.assets import Assets
+from core.scene import Scene
+from math.smoothstep import smoothstep
+from math.vector2 import Vector2
+from render.antialias import SUPERSAMPLE
+from render.framebuffer import FloatColor, Framebuffer
+from render.target import RenderTarget
+from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
+from renderers.renderer import Renderer
+from std.math import cos, exp, floor, isfinite, sin
+from units.si import Angle, RADIAN
+
+
+@fieldwise_init
+struct PassKind(Equatable, ImplicitlyCopyable, Writable):
+    """What a pass does, as a type rather than a bare int.
+
+    three.js has a class per pass and this has a tag, for the reason
+    `Material` has one: a composer holds one list of one type. The type
+    stops a bare integer at compile time; it does not stop `PassKind(11)`,
+    which `check_pass` refuses.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the eleven kinds there are."""
+        return (
+            self == RENDER
+            or self == COPY
+            or self == BLUR
+            or self == BLOOM
+            or self == FILM
+            or self == DOT_SCREEN
+            or self == SEPIA
+            or self == VIGNETTE
+            or self == LUMINOSITY
+            or self == AFTERIMAGE
+            or self == OUTPUT
+        )
+
+
+# Draw the scene, clearing first: three.js's `RenderPass`.
+comptime RENDER = PassKind(0)
+# Scale every channel by an opacity: `ShaderPass(CopyShader)`.
+comptime COPY = PassKind(1)
+# A nine-tap blur across and then down: `ShaderPass(HorizontalBlurShader)`
+# followed by `ShaderPass(VerticalBlurShader)`.
+comptime BLUR = PassKind(2)
+# Bright light bleeding over its edges: `UnrealBloomPass`.
+comptime BLOOM = PassKind(3)
+# Grain, and gray if asked: `FilmPass`.
+comptime FILM = PassKind(4)
+# A halftone of dots: `DotScreenPass`.
+comptime DOT_SCREEN = PassKind(5)
+# An old photograph's tint: `ShaderPass(SepiaShader)`.
+comptime SEPIA = PassKind(6)
+# Darkened corners: `ShaderPass(VignetteShader)`.
+comptime VIGNETTE = PassKind(7)
+# Gray by luminance: `ShaderPass(LuminosityShader)`.
+comptime LUMINOSITY = PassKind(8)
+# The last frame fading under this one: `AfterimagePass`.
+comptime AFTERIMAGE = PassKind(9)
+# The renderer's tone mapping curve: `OutputPass`.
+comptime OUTPUT = PassKind(10)
+
+# three.js's `LuminosityHighPassShader` fades a pixel in over this much
+# luminance above the threshold.
+comptime BLOOM_SMOOTH_WIDTH = Float32(0.01)
+# How many halved copies `UnrealBloomPass` blurs, and what each weighs.
+comptime BLOOM_LEVELS = 5
+# The dot screen measures its pattern over a fixed 256 by 256 grid, as
+# three.js's `DotScreenPass` sets `tSize` once and never resizes it.
+comptime DOT_SCREEN_SIZE = Float32(256)
+# `AfterimageShader` keeps only the channels of the last frame above this.
+comptime AFTERIMAGE_FLOOR = Float32(0.1)
+# The weights three.js's blur shaders give their nine taps, four to each
+# side of the pixel, summing to one.
+comptime BLUR_WEIGHTS = SIMD[DType.float32, 8](
+    0.051, 0.0918, 0.12245, 0.1531, 0.1633, 0.1531, 0.12245, 0.0918
+)
+comptime BLUR_LAST_WEIGHT = Float32(0.051)
+
+
+struct Pass(Copyable, Movable):
+    """One step of a composer: its kind, whether it runs, and every
+    setting any kind reads, named as three.js names them.
+
+    Each kind reads the settings its builder takes and leaves the rest at
+    their defaults. Build one with `render_pass`, `copy_pass`, `blur_pass`,
+    `bloom_pass`, `film_pass`, `dot_screen_pass`, `sepia_pass`,
+    `vignette_pass`, `luminosity_pass`, `afterimage_pass` or
+    `output_pass`, and change a setting afterward as three.js changes a
+    pass's uniforms; `EffectComposer.render` checks each again.
+    """
+
+    var kind: PassKind
+    # three.js's `Pass.enabled`: a pass that is off is skipped.
+    var enabled: Bool
+    # The copy's opacity, the bloom's strength, the film's intensity, the
+    # sepia's amount, the vignette's darkness or the afterimage's damp.
+    var strength: Float32
+    # The blur's spread in pixels per tap, or the bloom's radius, zero
+    # to one.
+    var radius: Float32
+    # The bloom's luminance threshold.
+    var threshold: Float32
+    # The vignette's offset.
+    var offset: Float32
+    # The dot screen's scale.
+    var scale: Float32
+    # The dot screen's angle.
+    var angle: Angle
+    # The dot screen's center, in its 256-texel grid.
+    var center: Vector2
+    # Whether the film pass grays the frame.
+    var grayscale: Bool
+    # The film pass's noise seed, advanced by `EffectComposer.render`.
+    var time: Float32
+
+    def __init__(out self, kind: PassKind):
+        """Start a pass of `kind` with every setting at its default.
+
+        Args:
+            kind: What the pass does.
+        """
+        self.kind = kind
+        self.enabled = True
+        self.strength = 1.0
+        self.radius = 1.0
+        self.threshold = 0.0
+        self.offset = 1.0
+        self.scale = 1.0
+        self.angle = Angle(1.57, RADIAN)
+        self.center = Vector2(0.5, 0.5)
+        self.grayscale = False
+        self.time = 0.0
+
+
+def check_pass(step: Pass) raises:
+    """Refuse a pass no kind could run.
+
+    Args:
+        step: The pass.
+
+    Raises:
+        Error: If the kind is none of the eleven; a strength, radius,
+            threshold, offset, scale, angle or time is not finite; a
+            strength, radius, threshold, offset or scale is negative; a
+            bloom's radius or an afterimage's damp is above one.
+    """
+    if not step.kind.is_valid():
+        raise Error("A pass kind must be one of the eleven named kinds")
+    if not (
+        isfinite(step.strength)
+        and isfinite(step.radius)
+        and isfinite(step.threshold)
+        and isfinite(step.offset)
+        and isfinite(step.scale)
+        and isfinite(step.angle.value)
+        and isfinite(step.time)
+        and isfinite(step.center.x)
+        and isfinite(step.center.y)
+    ):
+        raise Error("A pass setting must be finite")
+    if (
+        step.strength < 0
+        or step.radius < 0
+        or step.threshold < 0
+        or step.offset < 0
+        or step.scale < 0
+    ):
+        raise Error("A pass setting must not be negative")
+    if step.kind == BLOOM and step.radius > 1:
+        raise Error("A bloom's radius runs from zero to one")
+    if step.kind == AFTERIMAGE and step.strength > 1:
+        raise Error("An afterimage's damp runs from zero to one")
+
+
+def render_pass() -> Pass:
+    """Return a pass that draws the scene, clearing the frame first:
+    three.js's `RenderPass`.
+
+    Returns:
+        The pass.
+    """
+    return Pass(RENDER)
+
+
+def copy_pass(opacity: Float32 = 1.0) raises -> Pass:
+    """Return a pass that scales every channel of every pixel: three.js's
+    `CopyShader`, alpha included.
+
+    Args:
+        opacity: What to scale by. One copies.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the opacity is negative or not finite.
+    """
+    var step = Pass(COPY)
+    step.strength = opacity
+    check_pass(step)
+    return step^
+
+
+def blur_pass(spread: Float32 = 1.0) raises -> Pass:
+    """Return a pass that blurs across and then down, nine taps each way:
+    three.js's `HorizontalBlurShader` and `VerticalBlurShader`, one after
+    the other.
+
+    Args:
+        spread: How many pixels apart the taps are. three.js's `h` and
+            `v` are a five-hundred-and-twelfth of the frame; one pixel
+            here.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the spread is negative or not finite.
+    """
+    var step = Pass(BLUR)
+    step.radius = spread
+    check_pass(step)
+    return step^
+
+
+def bloom_pass(
+    strength: Float32 = 1.0, radius: Float32 = 0.0, threshold: Float32 = 0.0
+) raises -> Pass:
+    """Return a pass that lets bright light bleed over its edges:
+    three.js's `UnrealBloomPass`.
+
+    The light above `threshold` is blurred at five halved sizes, the
+    blurs are weighted and summed, and the sum is added to the frame.
+
+    Args:
+        strength: What the sum is scaled by.
+        radius: How much the larger blurs weigh against the smaller, zero
+            to one. Zero weighs the smallest most, as three.js does.
+        threshold: The luminance a pixel must reach to bloom.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If a setting is negative or not finite, or the radius is
+            above one.
+    """
+    var step = Pass(BLOOM)
+    step.strength = strength
+    step.radius = radius
+    step.threshold = threshold
+    check_pass(step)
+    return step^
+
+
+def film_pass(intensity: Float32 = 0.5, grayscale: Bool = False) raises -> Pass:
+    """Return a pass that adds grain, and grays if asked: three.js's
+    `FilmPass`.
+
+    The grain is a hash of each pixel's coordinate and the pass's `time`,
+    which `EffectComposer.render` advances by the frame time it is given.
+
+    Args:
+        intensity: How much grain, zero to one. Zero leaves the light.
+        grayscale: Whether to gray the frame by luminance afterward.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the intensity is negative or not finite.
+    """
+    var step = Pass(FILM)
+    step.strength = intensity
+    step.grayscale = grayscale
+    check_pass(step)
+    return step^
+
+
+def dot_screen_pass(
+    center: Vector2 = Vector2(0.5, 0.5),
+    angle: Angle = Angle(1.57, RADIAN),
+    scale: Float32 = 1.0,
+) raises -> Pass:
+    """Return a pass that turns the frame into a halftone of dots:
+    three.js's `DotScreenPass`.
+
+    Args:
+        center: Where the pattern is measured from, in the 256-texel grid
+            three.js measures it over.
+        angle: The pattern's angle.
+        scale: How fine the dots are.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the scale is negative, or a setting is not finite.
+    """
+    var step = Pass(DOT_SCREEN)
+    step.center = center
+    step.angle = angle
+    step.scale = scale
+    check_pass(step)
+    return step^
+
+
+def sepia_pass(amount: Float32 = 1.0) raises -> Pass:
+    """Return a pass that tints the frame like an old photograph:
+    three.js's `SepiaShader`.
+
+    Args:
+        amount: How far toward sepia, zero to one.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the amount is negative or not finite.
+    """
+    var step = Pass(SEPIA)
+    step.strength = amount
+    check_pass(step)
+    return step^
+
+
+def vignette_pass(
+    offset: Float32 = 1.0, darkness: Float32 = 1.0
+) raises -> Pass:
+    """Return a pass that darkens the corners: three.js's `VignetteShader`.
+
+    Args:
+        offset: How far in from the corners the darkening reaches.
+        darkness: How dark the corners go, zero to one.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If a setting is negative or not finite.
+    """
+    var step = Pass(VIGNETTE)
+    step.offset = offset
+    step.strength = darkness
+    check_pass(step)
+    return step^
+
+
+def luminosity_pass() -> Pass:
+    """Return a pass that grays the frame by luminance: three.js's
+    `LuminosityShader`.
+
+    Returns:
+        The pass.
+    """
+    return Pass(LUMINOSITY)
+
+
+def afterimage_pass(damp: Float32 = 0.96) raises -> Pass:
+    """Return a pass that keeps the last frame fading under this one:
+    three.js's `AfterimagePass`.
+
+    Args:
+        damp: What the last frame is scaled by each frame, zero to one.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the damp is negative, above one or not finite.
+    """
+    var step = Pass(AFTERIMAGE)
+    step.strength = damp
+    check_pass(step)
+    return step^
+
+
+def output_pass() -> Pass:
+    """Return a pass that applies the renderer's tone mapping curve to the
+    light of every pixel that holds light: three.js's `OutputPass`.
+
+    Returns:
+        The pass.
+    """
+    return Pass(OUTPUT)
+
+
+struct EffectComposer(Movable):
+    """The passes a frame goes through, in order: three.js's
+    `EffectComposer`.
+
+    ```
+    var composer = EffectComposer()
+    composer.add_pass(render_pass())
+    composer.add_pass(bloom_pass(1.5, 0.4, 0.85))
+    composer.add_pass(output_pass())
+    var image = composer.render(renderer, scene, assets, camera)
+    ```
+    """
+
+    var passes: List[Pass]
+    # What an afterimage pass saw last, one entry per pass and empty for
+    # every other kind and before the first frame.
+    var memories: List[List[FloatColor]]
+
+    def __init__(out self):
+        """Start with no passes."""
+        self.passes = List[Pass]()
+        self.memories = List[List[FloatColor]]()
+
+    def add_pass(mut self, var step: Pass) raises:
+        """Append a pass: three.js's `addPass`.
+
+        Args:
+            step: The pass.
+
+        Raises:
+            Error: Everything `check_pass` raises.
+        """
+        check_pass(step)
+        self.passes.append(step^)
+        self.memories.append(List[FloatColor]())
+
+    def insert_pass(mut self, var step: Pass, index: Int) raises:
+        """Put a pass before the one at `index`: three.js's `insertPass`.
+
+        Args:
+            step: The pass.
+            index: Where it goes, zero through the count.
+
+        Raises:
+            Error: Everything `check_pass` raises, or if the index is
+                outside zero through the count.
+        """
+        check_pass(step)
+        if index < 0 or index > len(self.passes):
+            raise Error("A pass is inserted at zero through the count")
+        self.passes.insert(index, step^)
+        self.memories.insert(index, List[FloatColor]())
+
+    def remove_pass(mut self, index: Int) raises:
+        """Take a pass out: three.js's `removePass`.
+
+        Args:
+            index: Which, in order.
+
+        Raises:
+            Error: If the index is outside the passes.
+        """
+        if index < 0 or index >= len(self.passes):
+            raise Error("There is no pass at that index")
+        _ = self.passes.pop(index)
+        _ = self.memories.pop(index)
+
+    def pass_count(self) -> Int:
+        """Return how many passes there are."""
+        return len(self.passes)
+
+    def reset(mut self):
+        """Forget what every afterimage pass saw, so the next frame
+        starts a fresh trail: three.js's `reset`.
+        """
+        for index in range(len(self.memories)):
+            self.memories[index] = List[FloatColor]()
+
+    def render[
+        C: Camera
+    ](
+        mut self,
+        renderer: Renderer,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        delta_time: Float32 = 0.0,
+    ) raises -> Framebuffer:
+        """Run every enabled pass in order on one frame and return it:
+        three.js's `render`.
+
+        The frame starts cleared to the renderer's background. A render
+        pass draws the scene into it, through the renderer's antialias
+        when that is on. Every other pass reads and writes the light. The
+        frame is resolved once at the end, through no curve: an
+        `output_pass` is where the renderer's curve is applied.
+
+        Args:
+            renderer: What a render pass draws with, and whose size,
+                background, workers and curve the frame takes.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera a render pass projects through.
+            delta_time: How many seconds since the last frame, which
+                advances each film pass's grain. Zero holds the grain.
+
+        Returns:
+            The rendered image.
+
+        Raises:
+            Error: Everything `check_pass` raises for a pass changed since
+                it was added, everything `Renderer.render_into` raises, or
+                if the frame time is negative or not finite.
+        """
+        if not isfinite(delta_time) or delta_time < 0:
+            raise Error("A frame time is a non-negative number of seconds")
+        var frame = RenderTarget(
+            renderer.width, renderer.height, renderer.background
+        )
+        for index in range(len(self.passes)):
+            check_pass(self.passes[index])
+            ref step = self.passes[index]
+            if not step.enabled:
+                continue
+            if step.kind == RENDER:
+                _draw(frame, renderer, scene, assets, camera)
+            elif step.kind == COPY:
+                copy_light(frame, step.strength)
+            elif step.kind == BLUR:
+                blur_light(frame, step.radius)
+            elif step.kind == BLOOM:
+                bloom_light(frame, step.strength, step.radius, step.threshold)
+            elif step.kind == FILM:
+                self.passes[index].time += delta_time
+                film_light(
+                    frame,
+                    step.strength,
+                    step.grayscale,
+                    self.passes[index].time,
+                )
+            elif step.kind == DOT_SCREEN:
+                dot_screen_light(frame, step.center, step.angle, step.scale)
+            elif step.kind == SEPIA:
+                sepia_light(frame, step.strength)
+            elif step.kind == VIGNETTE:
+                vignette_light(frame, step.offset, step.strength)
+            elif step.kind == LUMINOSITY:
+                luminosity_light(frame)
+            elif step.kind == AFTERIMAGE:
+                afterimage_light(frame, self.memories[index], step.strength)
+            else:
+                # `OUTPUT`: the only kind left once `check_pass` has had
+                # its say.
+                output_light(
+                    frame, renderer.tone_curve(), renderer.tone_mapping_exposure
+                )
+        return frame.resolve(renderer.workers, NO_TONE_MAPPING, 1.0)
+
+
+def _draw[
+    C: Camera
+](
+    mut frame: RenderTarget,
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+) raises:
+    """Draw the scene into `frame` as `Renderer.render` would before it
+    resolves: supersampled and averaged down when the renderer
+    antialiases, straight in when it does not."""
+    if renderer.antialias:
+        var big = renderer.supersampled()
+        var drawn = RenderTarget(big.width, big.height, renderer.background)
+        big.render_into(drawn, scene, assets, camera)
+        frame = drawn.downsampled(SUPERSAMPLE)
+        return
+    renderer.render_into(frame, scene, assets, camera)
+
+
+def luminance(color: FloatColor) -> Float32:
+    """Return a color's luminance: three.js's `luminance`, rec. 709's
+    weights on the linear channels.
+
+    Args:
+        color: The color, straight or premultiplied.
+
+    Returns:
+        The weighted sum of red, green and blue.
+    """
+    return 0.2126729 * color.r + 0.7151522 * color.g + 0.0721750 * color.b
+
+
+def _clamped_tap(
+    colors: List[FloatColor], width: Int, height: Int, x: Float32, y: Float32
+) -> FloatColor:
+    """Return the light at a point in pixel coordinates, pixel centers on
+    the integers, blended from the four pixels around it and held at the
+    edges: a bilinear clamped texture read of the frame."""
+    var px = x
+    var py = y
+    if px < 0:
+        px = 0
+    if py < 0:
+        py = 0
+    if px > Float32(width - 1):
+        px = Float32(width - 1)
+    if py > Float32(height - 1):
+        py = Float32(height - 1)
+    var x0 = Int(px)
+    var y0 = Int(py)
+    var fx = px - Float32(x0)
+    var fy = py - Float32(y0)
+    var x1 = x0 + 1
+    var y1 = y0 + 1
+    if x1 >= width:
+        x1 = width - 1
+    if y1 >= height:
+        y1 = height - 1
+    var top = _mix(colors[y0 * width + x0], colors[y0 * width + x1], fx)
+    var bottom = _mix(colors[y1 * width + x0], colors[y1 * width + x1], fx)
+    return _mix(top, bottom, fy)
+
+
+def _sample(
+    colors: List[FloatColor], width: Int, height: Int, u: Float32, v: Float32
+) -> FloatColor:
+    """Return the light at a texture coordinate, `v` up from the bottom
+    as a shader's `vUv` runs, through `_clamped_tap`."""
+    return _clamped_tap(
+        colors,
+        width,
+        height,
+        u * Float32(width) - 0.5,
+        (1 - v) * Float32(height) - 0.5,
+    )
+
+
+def _mix(a: FloatColor, b: FloatColor, t: Float32) -> FloatColor:
+    """Return `a` moved toward `b` by `t`, every channel."""
+    return FloatColor(
+        a.r + (b.r - a.r) * t,
+        a.g + (b.g - a.g) * t,
+        a.b + (b.b - a.b) * t,
+        a.a + (b.a - a.a) * t,
+    )
+
+
+def _u_of(x: Int, width: Int) -> Float32:
+    """Return a column's texture coordinate, its center."""
+    return (Float32(x) + 0.5) / Float32(width)
+
+
+def _v_of(y: Int, height: Int) -> Float32:
+    """Return a row's texture coordinate, its center, up from the bottom."""
+    return 1 - (Float32(y) + 0.5) / Float32(height)
+
+
+def copy_light(mut frame: RenderTarget, opacity: Float32):
+    """Scale every channel of every pixel: three.js's `CopyShader`.
+
+    Args:
+        frame: The frame, changed in place.
+        opacity: What to scale by.
+    """
+    for index in range(len(frame.colors)):  # pragma: no branch
+        ref color = frame.colors[index]
+        frame.colors[index] = FloatColor(
+            color.r * opacity,
+            color.g * opacity,
+            color.b * opacity,
+            color.a * opacity,
+        )
+
+
+def _blur_along(mut frame: RenderTarget, spread: Float32, across: Bool):
+    """Blur the frame with three.js's nine taps along one axis, the taps
+    `spread` pixels apart and held at the edges."""
+    var width = frame.width
+    var height = frame.height
+    var source = frame.colors.copy()
+    # Spelled with `while`: three nested `for` loops over computed
+    # bounds send the compiler into the hang described in
+    # docs/wiki/The-Mojo-compiler-hang.md.
+    var y = 0
+    while y < height:
+        var x = 0
+        while x < width:
+            var sum = FloatColor(0, 0, 0, 0)
+            var tap = 0
+            while tap < 9:
+                var weight = BLUR_LAST_WEIGHT
+                if tap < 8:
+                    weight = BLUR_WEIGHTS[tap]
+                var step = Float32(tap - 4) * spread
+                var tx = Float32(x)
+                var ty = Float32(y)
+                if across:
+                    tx += step
+                else:
+                    ty += step
+                var here = _clamped_tap(source, width, height, tx, ty)
+                sum = FloatColor(
+                    sum.r + here.r * weight,
+                    sum.g + here.g * weight,
+                    sum.b + here.b * weight,
+                    sum.a + here.a * weight,
+                )
+                tap += 1
+            frame.colors[y * width + x] = sum
+            x += 1
+        y += 1
+
+
+def blur_light(mut frame: RenderTarget, spread: Float32):
+    """Blur the frame across and then down, nine taps each way: three.js's
+    `HorizontalBlurShader` and then its `VerticalBlurShader`.
+
+    Args:
+        frame: The frame, changed in place.
+        spread: How many pixels apart the taps are.
+    """
+    _blur_along(frame, spread, True)
+    _blur_along(frame, spread, False)
+
+
+def _gaussian(x: Float32, sigma: Float32) -> Float32:
+    """Return three.js's `gaussianPdf`."""
+    return 0.39894 * exp(-0.5 * x * x / (sigma * sigma)) / sigma
+
+
+def _separable_blur(
+    source: List[FloatColor],
+    source_width: Int,
+    source_height: Int,
+    width: Int,
+    height: Int,
+    kernel: Int,
+    across: Bool,
+) -> List[FloatColor]:
+    """Return `source` blurred along one axis into a `width` by `height`
+    image: `UnrealBloomPass`'s separable blur at one size, a Gaussian of
+    `kernel` taps to each side whose sigma is the kernel."""
+    var out = List[FloatColor](
+        length=width * height, fill=FloatColor(0, 0, 0, 1)
+    )
+    var sigma = Float32(kernel)
+    var step_u = Float32(0)
+    var step_v = Float32(0)
+    if across:
+        step_u = 1 / Float32(width)
+    else:
+        step_v = 1 / Float32(height)
+    var y = 0
+    while y < height:
+        var x = 0
+        while x < width:
+            var u = _u_of(x, width)
+            var v = _v_of(y, height)
+            var weight = _gaussian(0, sigma)
+            var center = _sample(source, source_width, source_height, u, v)
+            var sum = center.scaled(weight)
+            var total = weight
+            var tap = 1
+            while tap < kernel:
+                var offset = Float32(tap)
+                var w = _gaussian(offset, sigma)
+                var ahead = _sample(
+                    source,
+                    source_width,
+                    source_height,
+                    u + step_u * offset,
+                    v + step_v * offset,
+                )
+                var behind = _sample(
+                    source,
+                    source_width,
+                    source_height,
+                    u - step_u * offset,
+                    v - step_v * offset,
+                )
+                sum = FloatColor(
+                    sum.r + (ahead.r + behind.r) * w,
+                    sum.g + (ahead.g + behind.g) * w,
+                    sum.b + (ahead.b + behind.b) * w,
+                    1,
+                )
+                total += 2 * w
+                tap += 1
+            out[y * width + x] = FloatColor(
+                sum.r / total, sum.g / total, sum.b / total, 1
+            )
+            x += 1
+        y += 1
+    return out^
+
+
+def _bloom_factor(level: Int, radius: Float32) -> Float32:
+    """Return what a bloom level weighs: three.js's `lerpBloomFactor` of
+    its `bloomFactors`, one down to a fifth, mirrored about 0.6 by the
+    radius."""
+    var factor = 1 - 0.2 * Float32(level)
+    var mirror = 1.2 - factor
+    return factor + (mirror - factor) * radius
+
+
+def _halved(size: Int) -> Int:
+    """Return a size halved and rounded as three.js's `Math.round(x / 2)`
+    rounds it: never below one, since no target is narrower than one."""
+    return (size + 1) // 2
+
+
+def bloom_light(
+    mut frame: RenderTarget,
+    strength: Float32,
+    radius: Float32,
+    threshold: Float32,
+):
+    """Add the frame's bright light back over its edges: three.js's
+    `UnrealBloomPass`.
+
+    The light whose luminance is above `threshold` is kept, faded in over
+    a hundredth; it is blurred at five halved sizes, each blur across and
+    then down with a kernel two taps wider than the last; the five are
+    weighted by `radius` and summed; and the sum, scaled by `strength`,
+    is added to the red, green and blue of every pixel. Alpha is kept.
+
+    Args:
+        frame: The frame, changed in place.
+        strength: What the sum is scaled by.
+        radius: How much the larger blurs weigh against the smaller.
+        threshold: The luminance a pixel must reach to bloom.
+    """
+    var width = frame.width
+    var height = frame.height
+    var bright = List[FloatColor](
+        length=width * height, fill=FloatColor(0, 0, 0, 0)
+    )
+    for index in range(len(frame.colors)):  # pragma: no branch
+        ref color = frame.colors[index]
+        var alpha = smoothstep(
+            threshold, threshold + BLOOM_SMOOTH_WIDTH, luminance(color)
+        )
+        bright[index] = FloatColor(
+            color.r * alpha, color.g * alpha, color.b * alpha, color.a * alpha
+        )
+    # Each level blurs the one before it into half its size, the first
+    # blurring the bright light at the frame's own size.
+    var levels = List[List[FloatColor]]()
+    var level_widths = List[Int]()
+    var level_heights = List[Int]()
+    var source = bright^
+    var source_width = width
+    var source_height = height
+    var level_width = _halved(width)
+    var level_height = _halved(height)
+    for level in range(BLOOM_LEVELS):  # pragma: no branch
+        var kernel = 3 + 2 * level
+        var across = _separable_blur(
+            source,
+            source_width,
+            source_height,
+            level_width,
+            level_height,
+            kernel,
+            True,
+        )
+        var down = _separable_blur(
+            across,
+            level_width,
+            level_height,
+            level_width,
+            level_height,
+            kernel,
+            False,
+        )
+        levels.append(down.copy())
+        level_widths.append(level_width)
+        level_heights.append(level_height)
+        source = down^
+        source_width = level_width
+        source_height = level_height
+        level_width = _halved(level_width)
+        level_height = _halved(level_height)
+    var y = 0
+    while y < height:
+        var x = 0
+        while x < width:
+            var u = _u_of(x, width)
+            var v = _v_of(y, height)
+            var glow = FloatColor(0, 0, 0, 0)
+            var level = 0
+            while level < BLOOM_LEVELS:
+                var weight = _bloom_factor(level, radius) * strength
+                var here = _sample(
+                    levels[level],
+                    level_widths[level],
+                    level_heights[level],
+                    u,
+                    v,
+                )
+                glow = FloatColor(
+                    glow.r + here.r * weight,
+                    glow.g + here.g * weight,
+                    glow.b + here.b * weight,
+                    0,
+                )
+                level += 1
+            var index = y * width + x
+            ref color = frame.colors[index]
+            frame.colors[index] = FloatColor(
+                color.r + glow.r, color.g + glow.g, color.b + glow.b, color.a
+            )
+            x += 1
+        y += 1
+
+
+def _fract(value: Float32) -> Float32:
+    """Return GLSL's `fract`: what is left above the floor."""
+    return value - floor(value)
+
+
+def _rand(u: Float32, v: Float32) -> Float32:
+    """Return three.js's `rand`: the fractional part of a large sine of
+    the coordinate's dot with a fixed vector."""
+    return _fract(sin(u * 12.9898 + v * 78.233) * 43758.5453)
+
+
+def film_light(
+    mut frame: RenderTarget, intensity: Float32, grayscale: Bool, time: Float32
+):
+    """Add grain to the frame, and gray it if asked: three.js's
+    `FilmShader`.
+
+    Each pixel's straight color is brightened by itself times a hash of
+    its coordinate and the time, from a tenth to one and a tenth, and
+    the brightened color is mixed in by `intensity`. Alpha is kept.
+
+    Args:
+        frame: The frame, changed in place.
+        intensity: How much of the grain shows, zero to one.
+        grayscale: Whether to gray the result by luminance.
+        time: The grain's seed.
+    """
+    var width = frame.width
+    var height = frame.height
+    var y = 0
+    while y < height:
+        var x = 0
+        while x < width:
+            var index = y * width + x
+            var base = frame.colors[index].unpremultiplied()
+            var noise = _rand(_u_of(x, width) + time, _v_of(y, height) + time)
+            var grain = noise + 0.1
+            if grain > 1:
+                grain = 1
+            var color = FloatColor(
+                base.r + base.r * grain,
+                base.g + base.g * grain,
+                base.b + base.b * grain,
+                base.a,
+            )
+            color = _mix(base, color, intensity)
+            if grayscale:
+                var gray = luminance(color)
+                color = FloatColor(gray, gray, gray, base.a)
+            frame.colors[index] = color.premultiplied()
+            x += 1
+        y += 1
+
+
+def dot_screen_light(
+    mut frame: RenderTarget, center: Vector2, angle: Angle, scale: Float32
+):
+    """Turn the frame into a halftone of dots: three.js's
+    `DotScreenShader`.
+
+    Each pixel's straight color becomes its average, stretched ten times
+    about a half, plus a sine grid turned by `angle` and scaled by `scale`
+    over a 256-texel square, as three.js's pass measures it. Alpha is
+    kept. The result runs past black and white and is clamped when the
+    frame is resolved.
+
+    Args:
+        frame: The frame, changed in place.
+        center: Where the grid is measured from, in that square.
+        angle: The grid's angle.
+        scale: How fine the dots are.
+    """
+    var width = frame.width
+    var height = frame.height
+    var s = sin(angle.value)
+    var c = cos(angle.value)
+    var y = 0
+    while y < height:
+        var x = 0
+        while x < width:
+            var index = y * width + x
+            var base = frame.colors[index].unpremultiplied()
+            var tx = _u_of(x, width) * DOT_SCREEN_SIZE - center.x
+            var ty = _v_of(y, height) * DOT_SCREEN_SIZE - center.y
+            var px = (c * tx - s * ty) * scale
+            var py = (s * tx + c * ty) * scale
+            var pattern = sin(px) * sin(py) * 4
+            var average = (base.r + base.g + base.b) / 3
+            var value = average * 10 - 5 + pattern
+            frame.colors[index] = FloatColor(
+                value, value, value, base.a
+            ).premultiplied()
+            x += 1
+        y += 1
+
+
+def sepia_light(mut frame: RenderTarget, amount: Float32):
+    """Tint the frame like an old photograph: three.js's `SepiaShader`.
+
+    Args:
+        frame: The frame, changed in place.
+        amount: How far toward sepia, zero to one.
+    """
+    for index in range(len(frame.colors)):  # pragma: no branch
+        var base = frame.colors[index].unpremultiplied()
+        var r = (
+            base.r * (1 - 0.607 * amount)
+            + base.g * (0.769 * amount)
+            + base.b * (0.189 * amount)
+        )
+        var g = (
+            base.r * (0.349 * amount)
+            + base.g * (1 - 0.314 * amount)
+            + base.b * (0.168 * amount)
+        )
+        var b = (
+            base.r * (0.272 * amount)
+            + base.g * (0.534 * amount)
+            + base.b * (1 - 0.869 * amount)
+        )
+        if r > 1:
+            r = 1
+        if g > 1:
+            g = 1
+        if b > 1:
+            b = 1
+        frame.colors[index] = FloatColor(r, g, b, base.a).premultiplied()
+
+
+def vignette_light(mut frame: RenderTarget, offset: Float32, darkness: Float32):
+    """Darken the frame's corners: three.js's `VignetteShader`.
+
+    Each pixel's straight color is mixed toward one minus `darkness` by
+    the square of its distance from the center, that distance scaled by
+    `offset`. Alpha is kept.
+
+    Args:
+        frame: The frame, changed in place.
+        offset: How far in from the corners the darkening reaches.
+        darkness: How dark the corners go.
+    """
+    var width = frame.width
+    var height = frame.height
+    var edge = FloatColor(1 - darkness, 1 - darkness, 1 - darkness, 0)
+    var y = 0
+    while y < height:
+        var x = 0
+        while x < width:
+            var index = y * width + x
+            var base = frame.colors[index].unpremultiplied()
+            var u = (_u_of(x, width) - 0.5) * offset
+            var v = (_v_of(y, height) - 0.5) * offset
+            var mixed = _mix(base, edge, u * u + v * v)
+            frame.colors[index] = FloatColor(
+                mixed.r, mixed.g, mixed.b, base.a
+            ).premultiplied()
+            x += 1
+        y += 1
+
+
+def luminosity_light(mut frame: RenderTarget):
+    """Gray the frame by luminance: three.js's `LuminosityShader`.
+
+    Args:
+        frame: The frame, changed in place.
+    """
+    for index in range(len(frame.colors)):  # pragma: no branch
+        var base = frame.colors[index].unpremultiplied()
+        var gray = luminance(base)
+        frame.colors[index] = FloatColor(
+            gray, gray, gray, base.a
+        ).premultiplied()
+
+
+def afterimage_light(
+    mut frame: RenderTarget, mut memory: List[FloatColor], damp: Float32
+):
+    """Keep the last frame fading under this one: three.js's
+    `AfterimageShader`.
+
+    Each channel of the last frame above a tenth is scaled by `damp`, and
+    each channel of this frame is the larger of its own and that. The
+    result is what the next frame sees as its last. A first frame, or one
+    of another size, starts the trail.
+
+    Args:
+        frame: The frame, changed in place.
+        memory: What the pass saw last, replaced by the result.
+        damp: What the last frame is scaled by.
+    """
+    if len(memory) == len(frame.colors):
+        for index in range(len(frame.colors)):  # pragma: no branch
+            ref old = memory[index]
+            ref new = frame.colors[index]
+            frame.colors[index] = FloatColor(
+                _trail(new.r, old.r, damp),
+                _trail(new.g, old.g, damp),
+                _trail(new.b, old.b, damp),
+                _trail(new.a, old.a, damp),
+            )
+    memory = frame.colors.copy()
+
+
+def _trail(new: Float32, old: Float32, damp: Float32) -> Float32:
+    """Return one channel of `AfterimageShader`: the new value, or the
+    old one damped when it was above the floor and is still the larger."""
+    var kept = Float32(0)
+    if old > AFTERIMAGE_FLOOR:
+        kept = old * damp
+    if kept > new:
+        return kept
+    return new
+
+
+def output_light(
+    mut frame: RenderTarget, curve: ToneMapping, exposure: Float32
+):
+    """Apply a tone mapping curve to the light of every pixel that holds
+    light: three.js's `OutputPass`, less its encode, which `resolve` does.
+
+    Args:
+        frame: The frame, changed in place.
+        curve: Which curve; `NO_TONE_MAPPING` changes nothing.
+        exposure: What the light is scaled by first.
+    """
+    if curve == NO_TONE_MAPPING:
+        return
+    for index in range(len(frame.colors)):  # pragma: no branch
+        if frame.data[index]:
+            continue
+        var base = frame.colors[index].unpremultiplied()
+        frame.colors[index] = tone_map(base, curve, exposure).premultiplied()
