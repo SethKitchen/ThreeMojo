@@ -75,9 +75,59 @@ The light buffer begins with three floats of camera position at `LIGHTS_EYE`, th
 
 The scale every lit sum takes is at `LIGHTS_SCALE` and the count of rect area lights at `LIGHTS_RECT_COUNT`. The light probes' 27 coefficients follow at `LIGHTS_PROBE`; see [Lights](Lights#light-probes). The lights follow at `LIGHTS_FIRST`. The rect area lights come last among them, then the LTC tables when there is one, then the shadow maps, then the spot light maps. See [Lights](Lights#rect-area), [Lights](Lights#shadows) and [Lights](Lights#spot-light-maps).
 
+## Post-processing on the GPU
+
+`GpuComposer` runs an [`EffectComposer`](Post-processing) with the frame on the device. The frame stays on the device between passes. It crosses the bus only for a pass that has no kernel.
+
+```mojo
+var device = GpuComposer(renderer.width, renderer.height)
+var image = device.render(composer, renderer, scene, assets, camera)
+```
+
+The device frame holds four floats of premultiplied light per pixel, one data byte, the depth and the stencil. `render` puts the cleared frame on the device once and reads it back once at the end. The host resolves it through no curve, as `EffectComposer.render` does.
+
+| Member | Meaning |
+|---|---|
+| `GpuComposer(width, height)` | Create the context and the device frame. Raises without a GPU. |
+| `render(composer, renderer, scene, assets, camera, delta_time=0.0) -> Framebuffer` | Run every enabled pass in order. Raises everything `EffectComposer.render` raises, and raises if the renderer is another size. |
+| `upload(frame)` and `download(frame)` | Copy a `RenderTarget` to the device frame and back. |
+| `round_trips` | How many passes of the last `render` ran on the host. |
+| `runs_on_device(kind) -> Bool` | Whether a kind of pass has a kernel. |
+
+These passes run as kernels:
+
+- Copy, blur, bloom, film, dot screen, sepia, vignette, luminosity, afterimage and output.
+- FXAA, glitch, halftone, clear, texture and LUT.
+- Bokeh. The host draws the depth, and the device blurs the light.
+
+These passes use the fallback. The composer reads the frame back, runs `EffectComposer.run_step` on the host, and puts the frame back:
+
+- Render, SSAA, TAA, SSAO, SAO, SSR, outline and mask. Each draws the scene. The GPU rasterizer resolves to bytes, and a pass needs the light.
+- SMAA. Its three stages walk rows and columns of edges, and the port keeps them on the host.
+
+A mask works on the device. Before each pass inside a mask, a kernel copies the frame aside. After the pass, a kernel puts back each pixel that `inside_mask` refuses.
+
+### Shared arithmetic
+
+Each kernel calls the per-pixel function that the host pass calls. Examples are `copy_pixel`, `blur_pixel`, `bloom_glow`, `fxaa_pixel`, `glitch_pixel`, `halftone_pixel` and `lut_pixel`. A pass that reads its neighbors reads a `LightView`. The host builds one over a list, and a kernel builds one over a device buffer. Both read through the same `tap` and `sample`.
+
+The LUT kernel reads a `DecodedVolume` through `filter_volume`, the function `Data3DTexture.sample` calls. The host decodes the table and uploads it for each LUT pass.
+
+The host computes these values once per frame and passes them to the kernel:
+
+- The sine and the cosine of the dot screen's angle and of the glitch's shift.
+- The glitch's uniforms and its displacement map.
+- The texture pass's texel at each pixel center, which does not depend on the frame.
+
+The afterimage's trail stays in the composer on the host. Both backends then share it, and `reset` clears it. The GPU composer uploads the trail and reads the result back for each afterimage pass.
+
+### Parity of the passes
+
+`tests/test_gpu.mojo` runs each pass on both backends after a render pass and compares the images. The images agree within one level per channel. The film, glitch and halftone passes read a sine hash, and they agree within two levels. A device `sin` can differ from the host's in the last place, and the hash magnifies the difference. Each test also checks `round_trips`, so a pass with a kernel cannot fall back to the host without a failure.
+
 ## Teardown
 
-`__deinit__` waits for the queue, releases every buffer, and then releases the context. That order prevents a hang under CUDA. See [The CUDA teardown hang](The-CUDA-teardown-hang).
+`GpuRenderer.__deinit__` and `GpuComposer.__deinit__` wait for the queue, release every buffer, and then release the context. That order prevents a hang under CUDA. See [The CUDA teardown hang](The-CUDA-teardown-hang).
 
 ## Coverage
 

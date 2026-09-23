@@ -85,6 +85,7 @@ from postprocessing.effects import (
     sine_hash,
     texture_light,
 )
+from postprocessing.sampling import LightView
 from postprocessing.screen_space import DepthView
 from render.framebuffer import Color, FloatColor
 from render.target import RenderTarget
@@ -708,10 +709,11 @@ def test_the_reference_cell_is_the_grid_square_around_a_point() raises:
 
 def test_a_halftone_sample_of_one_color_is_that_color() raises:
     var colors = List[FloatColor](length=16, fill=FloatColor(0.2, 0.4, 0.6, 1))
-    var here = halftone_sample(colors, 4, 4, Vector2(2, 2), 4)
+    var here = halftone_sample(LightView(colors, 4, 4), Vector2(2, 2), 4)
     assert_almost_equal(here.r, Float32(0.2), atol=TOLERANCE)
     assert_almost_equal(here.b, Float32(0.6), atol=TOLERANCE)
     assert_almost_equal(here.a, Float32(1), atol=TOLERANCE)
+    _ = colors^
 
 
 def test_each_halftone_blending_mode() raises:

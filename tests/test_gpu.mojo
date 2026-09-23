@@ -290,9 +290,57 @@ from std.testing import (
     TestSuite,
     assert_almost_equal,
     assert_equal,
+    assert_false,
     assert_raises,
     assert_true,
 )
+from postprocessing.composer import (
+    BOKEH,
+    COPY,
+    LUT,
+    MASK,
+    RENDER,
+    SMAA,
+    TEXTURE,
+    EffectComposer,
+    Pass,
+    PassKind,
+    afterimage_pass,
+    bloom_pass,
+    blur_pass,
+    bokeh_pass,
+    clear_mask_pass,
+    clear_pass,
+    copy_pass,
+    dot_screen_pass,
+    film_pass,
+    fxaa_pass,
+    glitch_pass,
+    halftone_pass,
+    luminosity_pass,
+    lut_pass,
+    mask_pass,
+    output_pass,
+    render_pass,
+    sepia_pass,
+    sao_pass,
+    smaa_pass,
+    ssao_pass,
+    ssr_pass,
+    texture_pass,
+    vignette_pass,
+)
+from postprocessing.effects import (
+    HALFTONE_DOT,
+    HALFTONE_ELLIPSE,
+    HALFTONE_LINE,
+    HALFTONE_MULTIPLY,
+    HALFTONE_SQUARE,
+    HalftoneShape,
+)
+from render.gpu import GpuComposer, runs_on_device
+from render.volume_texture import Data3DTexture, VolumeImage
+from render.volume_texture_store import Data3DTextureId
 
 
 def light_the(mut scene: Scene) raises:
@@ -9836,3 +9884,349 @@ def test_the_gpu_refuses_a_volume_it_cannot_draw() raises:
     renderer.draw(
         glass_pair(), BACKGROUND, SHADE_TEXTURE, transmission=a_scene_behind()
     )
+
+
+# --- post-processing on the GPU -----------------------------------------------
+#
+# Each pass runs twice, once in an `EffectComposer` on the host and once in
+# a `GpuComposer`, after a render pass of the same scene, and the two
+# images must agree. A pass that runs on the device must do so without a
+# round trip: the render pass is the only one.
+
+comptime POST_WIDTH = 40
+comptime POST_HEIGHT = 30
+
+
+def post_scene(mut assets: Assets) raises -> Scene:
+    """Return a lit cube and a ball in front of it, on layers one and two:
+    edges for the anti-aliasing, light for the bloom and depth for the
+    bokeh."""
+    var scene = Scene()
+    var box = Object3D()
+    box.set_position(-0.6, 0, -0.5)
+    box.set_euler(Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE))
+    box.layers.enable(1)
+    var box_node = scene.add(box^)
+    var ball = Object3D()
+    ball.set_position(0.6, 0.1, 0.4)
+    ball.layers.enable(2)
+    var ball_node = scene.add(ball^)
+    light_the(scene)
+    var white = assets.materials.add(Material(Color(255, 255, 255)))
+    var orange = assets.materials.add(Material(FOREGROUND))
+    scene.add_mesh(
+        Mesh(assets.geometries.add(cube(Length(1.0, METER))), white, box_node)
+    )
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(sphere(Length(0.5, METER), 16, 12)),
+            orange,
+            ball_node,
+        )
+    )
+    scene.update()
+    return scene^
+
+
+def post_camera() raises -> PerspectiveCamera:
+    """Return a camera looking at the scene from three meters up z."""
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(POST_WIDTH) / Float32(POST_HEIGHT),
+        Length(0.1, METER),
+        Length(20.0, METER),
+    )
+    camera.place(Vector3(0, 0.3, 3.0), Vector3(0, 0, 0))
+    return camera^
+
+
+def post_renderer() raises -> Renderer:
+    """Return a renderer of the test size, tone mapped."""
+    var renderer = Renderer(POST_WIDTH, POST_HEIGHT)
+    renderer.set_background(BACKGROUND)
+    renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING)
+    return renderer^
+
+
+def compare_post(
+    steps: List[Pass],
+    tolerance: Int = 1,
+    frames: Int = 1,
+) raises -> Int:
+    """Run `steps` after a render pass on both backends for `frames`
+    frames, assert every frame agrees, and return the GPU composer's
+    round trips on the last one.
+
+    Args:
+        steps: The passes after the render pass.
+        tolerance: How many levels a channel may differ by.
+        frames: How many frames to run, a quarter second apart.
+
+    Returns:
+        How many passes of the last frame ran on the host.
+
+    Raises:
+        Error: If the images differ.
+    """
+    var assets = Assets()
+    var scene = post_scene(assets)
+    var lut = assets.data_3d_textures.add(a_post_lut())
+    var tint = assets.textures.add(
+        checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 255))
+    )
+    var camera = post_camera()
+    var renderer = post_renderer()
+    var host = EffectComposer()
+    var device_side = EffectComposer()
+    host.add_pass(render_pass())
+    device_side.add_pass(render_pass())
+    for index in range(len(steps)):
+        var step = steps[index].copy()
+        # The two tables the tests name by a placeholder.
+        if step.kind == LUT:
+            step.lut = lut
+        if step.kind == TEXTURE:
+            step.texture = tint
+        host.add_pass(step.copy())
+        device_side.add_pass(step^)
+    var device = GpuComposer(POST_WIDTH, POST_HEIGHT)
+    for _ in range(frames):
+        var cpu = host.render(renderer, scene, assets, camera, 0.25)
+        var gpu = device.render(
+            device_side, renderer, scene, assets, camera, 0.25
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance), 0)
+    return device.round_trips
+
+
+def a_post_lut() raises -> Data3DTexture:
+    """Return a four-texel-a-side table that swaps red and blue and darks
+    green, filtered, so the lookup blends."""
+    var data = List[Float32]()
+    for b in range(4):
+        for g in range(4):
+            for r in range(4):
+                data.append(Float32(b) / 3)
+                data.append(Float32(g) / 6)
+                data.append(Float32(r) / 3)
+                data.append(1)
+    return Data3DTexture(VolumeImage.of_floats(4, 4, 4, data), filter=BILINEAR)
+
+
+def one_pass(step: Pass) -> List[Pass]:
+    """Return a list of one pass."""
+    var steps = List[Pass]()
+    steps.append(step.copy())
+    return steps^
+
+
+def test_the_gpu_composer_runs_the_per_pixel_passes_on_the_device() raises:
+    assert_true(runs_on_device(COPY))
+    assert_true(runs_on_device(LUT))
+    assert_true(runs_on_device(BOKEH))
+    assert_false(runs_on_device(RENDER))
+    assert_false(runs_on_device(SMAA))
+    assert_false(runs_on_device(MASK))
+    assert_false(runs_on_device(PassKind(27)))
+
+
+def test_a_gpu_composer_refuses_a_bad_size() raises:
+    if skipped_for_lack_of_a_gpu("gpu composer size"):
+        return
+    with assert_raises():
+        _ = GpuComposer(0, 4)
+    var device = GpuComposer(8, 8)
+    var composer = EffectComposer()
+    composer.add_pass(render_pass())
+    var assets = Assets()
+    var scene = post_scene(assets)
+    with assert_raises():
+        _ = device.render(
+            composer, post_renderer(), scene, assets, post_camera()
+        )
+    with assert_raises():
+        _ = device.render(
+            composer, Renderer(8, 8), scene, assets, post_camera(), -1.0
+        )
+    var wrong = RenderTarget(4, 4, BACKGROUND)
+    with assert_raises():
+        device.upload(wrong)
+    with assert_raises():
+        device.download(wrong)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_render_alone() raises:
+    if skipped_for_lack_of_a_gpu("post render"):
+        return
+    assert_equal(compare_post(List[Pass]()), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_copy() raises:
+    if skipped_for_lack_of_a_gpu("post copy"):
+        return
+    assert_equal(compare_post(one_pass(copy_pass(0.6))), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_blur() raises:
+    if skipped_for_lack_of_a_gpu("post blur"):
+        return
+    assert_equal(compare_post(one_pass(blur_pass(1.5))), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_bloom() raises:
+    if skipped_for_lack_of_a_gpu("post bloom"):
+        return
+    assert_equal(compare_post(one_pass(bloom_pass(1.2, 0.4, 0.3))), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_film() raises:
+    if skipped_for_lack_of_a_gpu("post film"):
+        return
+    # Two levels: the grain is a sine hash, and a device's `sin` may
+    # differ from the host's in the last place, which the hash magnifies.
+    assert_equal(compare_post(one_pass(film_pass(0.6)), 2, 2), 1)
+    assert_equal(compare_post(one_pass(film_pass(0.6, True)), 2), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_dot_screen() raises:
+    if skipped_for_lack_of_a_gpu("post dot screen"):
+        return
+    assert_equal(compare_post(one_pass(dot_screen_pass())), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_sepia_and_vignette() raises:
+    if skipped_for_lack_of_a_gpu("post sepia and vignette"):
+        return
+    var steps = List[Pass]()
+    steps.append(sepia_pass(0.8))
+    steps.append(vignette_pass(1.2, 1.4))
+    steps.append(luminosity_pass())
+    assert_equal(compare_post(steps), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_an_afterimage() raises:
+    if skipped_for_lack_of_a_gpu("post afterimage"):
+        return
+    # Three frames: the first starts the trail, the others fade it.
+    assert_equal(compare_post(one_pass(afterimage_pass(0.9)), 1, 3), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_an_output_pass() raises:
+    if skipped_for_lack_of_a_gpu("post output"):
+        return
+    assert_equal(compare_post(one_pass(output_pass())), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_fxaa() raises:
+    if skipped_for_lack_of_a_gpu("post fxaa"):
+        return
+    var steps = List[Pass]()
+    steps.append(output_pass())
+    steps.append(fxaa_pass())
+    assert_equal(compare_post(steps), 1)
+
+
+def test_the_gpu_composer_runs_smaa_on_the_host() raises:
+    if skipped_for_lack_of_a_gpu("post smaa"):
+        return
+    var steps = List[Pass]()
+    steps.append(output_pass())
+    steps.append(smaa_pass())
+    steps.append(copy_pass(0.9))
+    assert_equal(compare_post(steps), 2)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_bokeh() raises:
+    if skipped_for_lack_of_a_gpu("post bokeh"):
+        return
+    var step = bokeh_pass(Length(3.0, METER), 0.05, 0.02)
+    assert_equal(compare_post(one_pass(step)), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_glitch() raises:
+    if skipped_for_lack_of_a_gpu("post glitch"):
+        return
+    var wild = glitch_pass(16, 7)
+    wild.glitch.go_wild = True
+    # Two frames: the tear and the shift change, and the snow is a hash.
+    assert_equal(compare_post(one_pass(wild), 2, 2), 1)
+    # A bypassed frame launches nothing.
+    var still = glitch_pass(16, 7)
+    still.glitch.frame = 50
+    still.glitch.trigger = 200
+    assert_equal(compare_post(one_pass(still)), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_each_halftone() raises:
+    if skipped_for_lack_of_a_gpu("post halftone"):
+        return
+    var shapes: List[HalftoneShape] = [
+        HALFTONE_DOT,
+        HALFTONE_ELLIPSE,
+        HALFTONE_LINE,
+        HALFTONE_SQUARE,
+    ]
+    for index in range(len(shapes)):
+        var step = halftone_pass(3.0)
+        step.halftone.shape = shapes[index]
+        step.halftone.scatter = 0.5
+        step.halftone.blending = 0.7
+        step.halftone.blending_mode = HALFTONE_MULTIPLY
+        step.halftone.grayscale = index == 3
+        assert_equal(compare_post(one_pass(step), 2), 1)
+    var off = halftone_pass()
+    off.halftone.disable = True
+    assert_equal(compare_post(one_pass(off)), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_clear_and_a_texture() raises:
+    if skipped_for_lack_of_a_gpu("post clear and texture"):
+        return
+    var steps = List[Pass]()
+    steps.append(clear_pass(Color(40, 80, 120, 200)))
+    # `compare_post` puts its checkerboard in place of the first texture.
+    steps.append(texture_pass(TextureId(0), 0.5))
+    assert_equal(compare_post(steps), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_lut() raises:
+    if skipped_for_lack_of_a_gpu("post lut"):
+        return
+    var steps = List[Pass]()
+    steps.append(output_pass())
+    # `compare_post` puts its table in place of the first one.
+    steps.append(lut_pass(Data3DTextureId(0), 0.75))
+    assert_equal(compare_post(steps), 1)
+
+
+def test_the_gpu_composer_masks_on_the_device() raises:
+    if skipped_for_lack_of_a_gpu("post mask"):
+        return
+    var steps = List[Pass]()
+    steps.append(mask_pass(Layers(UInt32(2))))
+    steps.append(sepia_pass(1.0))
+    steps.append(clear_pass(Color(0, 255, 0)))
+    steps.append(clear_mask_pass())
+    var inverse = mask_pass(Layers(UInt32(4)), True)
+    steps.append(inverse^)
+    steps.append(blur_pass(2.0))
+    steps.append(clear_mask_pass())
+    var disabled = copy_pass(0.1)
+    disabled.enabled = False
+    steps.append(disabled^)
+    # The render pass and the two masks draw on the host.
+    assert_equal(compare_post(steps), 3)
+
+
+def test_the_gpu_composer_keeps_the_normals_the_screen_space_passes_read() raises:
+    if skipped_for_lack_of_a_gpu("post screen space"):
+        return
+    # SSAO, SAO and SSR read the normal attachment, which the host frame
+    # keeps through every round trip; a copy on the device sits between.
+    var steps = List[Pass]()
+    steps.append(ssao_pass())
+    steps.append(copy_pass(0.9))
+    steps.append(sao_pass())
+    steps.append(ssr_pass())
+    # The render pass and the three screen-space passes run on the host.
+    assert_equal(compare_post(steps), 4)

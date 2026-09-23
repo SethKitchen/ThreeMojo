@@ -25,14 +25,17 @@ copy three.js's composer makes after a pass inside a mask.
 draws it from `math.utils.SeededRandom`, so a pass with the same seed
 gives the same frames.
 
-The passes run on the host, as every pass in `postprocessing` does.
+The passes run on the host. Each one's arithmetic for one pixel is a
+function of its own, `bokeh_pixel`, `glitch_pixel`, `halftone_pixel`,
+`texture_pixel` and `lut_pixel`, which the GPU backend's kernels call as
+well; see `render.gpu.GpuComposer`.
 """
 
 from core.layers import Layers
 from math.utils import SeededRandom
 from math.vector2 import Vector2
 from postprocessing.screen_space import DepthView
-from postprocessing.sampling import sample, u_of, v_of
+from postprocessing.sampling import LightView, Untracked, u_of, v_of
 from render.framebuffer import Color, FloatColor
 from render.raster_state import (
     EQUAL_STENCIL_FUNC,
@@ -45,7 +48,7 @@ from render.raster_state import (
 from render.srgb import linear_to_srgb, srgb_to_linear
 from render.target import RenderTarget
 from render.texture import Texture
-from render.volume_texture import Data3DTexture
+from render.volume_texture import Data3DTexture, VolumeSampler
 from std.math import atan2, cos, floor, isfinite, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
 
@@ -97,64 +100,130 @@ def check_bokeh(settings: BokehSettings) raises:
         raise Error("A bokeh setting must not be negative")
 
 
-def bokeh_taps() -> List[Vector2]:
-    """Return the 41 offsets `BokehShader` reads, each already scaled by
+# `BokehShader`'s rings, before each is scaled: sixteen taps at the full
+# blur, eight at nine tenths, and eight read at seven tenths and again at
+# four tenths.
+comptime _BOKEH_FULL_X = SIMD[DType.float32, 16](
+    0.0,
+    0.15,
+    0.29,
+    -0.37,
+    0.4,
+    0.37,
+    0.29,
+    -0.15,
+    0.0,
+    -0.15,
+    -0.29,
+    0.37,
+    -0.4,
+    -0.37,
+    -0.29,
+    0.15,
+)
+comptime _BOKEH_FULL_Y = SIMD[DType.float32, 16](
+    0.4,
+    0.37,
+    0.29,
+    0.15,
+    0.0,
+    -0.15,
+    -0.29,
+    -0.37,
+    -0.4,
+    0.37,
+    0.29,
+    0.15,
+    0.0,
+    -0.15,
+    -0.29,
+    -0.37,
+)
+comptime _BOKEH_NINE_X = SIMD[DType.float32, 8](
+    0.15, -0.37, 0.37, -0.15, -0.15, 0.37, -0.37, 0.15
+)
+comptime _BOKEH_NINE_Y = SIMD[DType.float32, 8](
+    0.37, 0.15, -0.15, -0.37, 0.37, 0.15, -0.15, -0.37
+)
+comptime _BOKEH_INNER_X = SIMD[DType.float32, 8](
+    0.29, 0.4, 0.29, 0.0, -0.29, -0.4, -0.29, 0.0
+)
+comptime _BOKEH_INNER_Y = SIMD[DType.float32, 8](
+    0.29, 0.0, -0.29, -0.4, 0.29, 0.0, -0.29, 0.4
+)
+
+
+def bokeh_tap(index: Int) -> Vector2:
+    """Return one of the 41 offsets `BokehShader` reads, already scaled by
     its ring: the center, 16 at the full blur, 8 at nine tenths, 8 at
     seven tenths and 8 at four tenths.
+
+    A function rather than a list, so a GPU kernel reads the same numbers
+    the host does without a buffer to carry them.
+
+    Args:
+        index: Which tap, zero through 40.
+
+    Returns:
+        The offset, in units of the blur.
+    """
+    if index < 1:
+        return Vector2(0, 0)
+    if index < 17:
+        return Vector2(_BOKEH_FULL_X[index - 1], _BOKEH_FULL_Y[index - 1])
+    if index < 25:
+        return Vector2(
+            _BOKEH_NINE_X[index - 17] * 0.9, _BOKEH_NINE_Y[index - 17] * 0.9
+        )
+    if index < 33:
+        return Vector2(
+            _BOKEH_INNER_X[index - 25] * 0.7, _BOKEH_INNER_Y[index - 25] * 0.7
+        )
+    return Vector2(
+        _BOKEH_INNER_X[index - 33] * 0.4, _BOKEH_INNER_Y[index - 33] * 0.4
+    )
+
+
+def bokeh_taps() -> List[Vector2]:
+    """Return the 41 offsets `BokehShader` reads: `bokeh_tap` in order.
 
     Returns:
         The offsets, in units of the blur.
     """
-    var full: List[Vector2] = [
-        Vector2(0.0, 0.4),
-        Vector2(0.15, 0.37),
-        Vector2(0.29, 0.29),
-        Vector2(-0.37, 0.15),
-        Vector2(0.4, 0.0),
-        Vector2(0.37, -0.15),
-        Vector2(0.29, -0.29),
-        Vector2(-0.15, -0.37),
-        Vector2(0.0, -0.4),
-        Vector2(-0.15, 0.37),
-        Vector2(-0.29, 0.29),
-        Vector2(0.37, 0.15),
-        Vector2(-0.4, 0.0),
-        Vector2(-0.37, -0.15),
-        Vector2(-0.29, -0.29),
-        Vector2(0.15, -0.37),
-    ]
-    var nine: List[Vector2] = [
-        Vector2(0.15, 0.37),
-        Vector2(-0.37, 0.15),
-        Vector2(0.37, -0.15),
-        Vector2(-0.15, -0.37),
-        Vector2(-0.15, 0.37),
-        Vector2(0.37, 0.15),
-        Vector2(-0.37, -0.15),
-        Vector2(0.15, -0.37),
-    ]
-    # The seven-tenths ring and the four-tenths ring read the same eight.
-    var inner: List[Vector2] = [
-        Vector2(0.29, 0.29),
-        Vector2(0.4, 0.0),
-        Vector2(0.29, -0.29),
-        Vector2(0.0, -0.4),
-        Vector2(-0.29, 0.29),
-        Vector2(-0.4, 0.0),
-        Vector2(-0.29, -0.29),
-        Vector2(0.0, 0.4),
-    ]
     var taps = List[Vector2](capacity=BOKEH_TAPS)
-    taps.append(Vector2(0, 0))
-    for tap in full:  # pragma: no branch
-        taps.append(tap)
-    for tap in nine:  # pragma: no branch
-        taps.append(Vector2(tap.x * 0.9, tap.y * 0.9))
-    for tap in inner:  # pragma: no branch
-        taps.append(Vector2(tap.x * 0.7, tap.y * 0.7))
-    for tap in inner:  # pragma: no branch
-        taps.append(Vector2(tap.x * 0.4, tap.y * 0.4))
+    for index in range(BOKEH_TAPS):  # pragma: no branch
+        taps.append(bokeh_tap(index))
     return taps^
+
+
+def bokeh_reach(
+    near: Length,
+    far: Length,
+    depth: Float32,
+    focus: Length,
+    aperture: Float32,
+    max_blur: Float32,
+) -> Float32:
+    """Return how far a pixel's taps reach: `BokehShader`'s `dofblur`,
+    from values a GPU kernel can hold.
+
+    Args:
+        near: The camera's near distance.
+        far: The camera's far distance.
+        depth: The pixel's window depth.
+        focus: The distance in focus.
+        aperture: How fast the blur grows away from the focus, in texture
+            widths per meter.
+        max_blur: The most blur, in texture widths.
+
+    Returns:
+        The reach, in texture widths, negative in front of the focus.
+    """
+    var n = near.value
+    var f = far.value
+    var z = (n * f) / ((f - n) * depth - f)
+    var factor = (focus.value + z) * aperture
+    return max(-max_blur, min(max_blur, factor))
 
 
 def bokeh_blur(
@@ -175,9 +244,41 @@ def bokeh_blur(
     Returns:
         The reach, in texture widths, negative in front of the focus.
     """
-    var z = (view.near * view.far) / ((view.far - view.near) * depth - view.far)
-    var factor = (settings.focus.value + z) * settings.aperture
-    return max(-settings.max_blur, min(settings.max_blur, factor))
+    return bokeh_reach(
+        Length(view.near, METER),
+        Length(view.far, METER),
+        depth,
+        settings.focus,
+        settings.aperture,
+        settings.max_blur,
+    )
+
+
+def bokeh_pixel(source: LightView, x: Int, y: Int, blur: Float32) -> FloatColor:
+    """Return one pixel of `BokehShader`: the average of its 41 taps, the
+    vertical offsets scaled by the frame's aspect.
+
+    Args:
+        source: The frame before the pass.
+        x: The column.
+        y: The row, down from the top.
+        blur: The pixel's reach, from `bokeh_reach`.
+
+    Returns:
+        The blurred light, opaque.
+    """
+    var u = u_of(x, source.width)
+    var v = v_of(y, source.height)
+    var aspect = Float32(source.width) / Float32(source.height)
+    var sum = FloatColor(0, 0, 0, 0)
+    var index = 0
+    while index < BOKEH_TAPS:
+        var tap = bokeh_tap(index)
+        index += 1
+        var here = source.sample(u + tap.x * blur, v + tap.y * aspect * blur)
+        sum = FloatColor(sum.r + here.r, sum.g + here.g, sum.b + here.b, 0)
+    var share = 1 / Float32(BOKEH_TAPS)
+    return FloatColor(sum.r * share, sum.g * share, sum.b * share, 1)
 
 
 def bokeh_light(
@@ -199,40 +300,20 @@ def bokeh_light(
     var width = frame.width
     var height = frame.height
     var source = frame.colors.copy()
-    var taps = bokeh_taps()
-    var aspect = Float32(width) / Float32(height)
+    var light = LightView(source, width, height)
     var y = 0
     while y < height:
         var x = 0
         while x < width:
             var slot = y * width + x
-            var u = u_of(x, width)
-            var v = v_of(y, height)
-            var blur = bokeh_blur(view, view.depth[slot], settings)
-            var sum = FloatColor(0, 0, 0, 0)
-            # Spelled with `while`: a `for` over the taps inside the two
-            # loops over the pixels does not finish compiling.
-            var index = 0
-            while index < BOKEH_TAPS:
-                var tap = taps[index]
-                index += 1
-                var here = sample(
-                    source,
-                    width,
-                    height,
-                    u + tap.x * blur,
-                    v + tap.y * aspect * blur,
-                )
-                sum = FloatColor(
-                    sum.r + here.r, sum.g + here.g, sum.b + here.b, 0
-                )
-            var share = 1 / Float32(BOKEH_TAPS)
-            frame.colors[slot] = FloatColor(
-                sum.r * share, sum.g * share, sum.b * share, 1
+            frame.colors[slot] = bokeh_pixel(
+                light, x, y, bokeh_blur(view, view.depth[slot], settings)
             )
             frame.data[slot] = False
             x += 1
         y += 1
+    # The view does not keep the copy alive; this does.
+    _ = source^
 
 
 # --- glitch -----------------------------------------------------------------
@@ -427,16 +508,95 @@ def sine_hash(u: Float32, v: Float32) -> Float32:
     return s - floor(s)
 
 
-def _nearest(
-    values: List[Float32], size: Int, u: Float32, v: Float32
+def nearest_texel(
+    values: Pointer[Float32, Untracked], size: Int, u: Float32, v: Float32
 ) -> Float32:
     """Return a square map's texel at a texture coordinate, as a
     `DataTexture` with `NearestFilter` and `ClampToEdgeWrapping` reads it.
-    The rows run up from the bottom."""
+
+    Args:
+        values: The map, `size` squared values, the rows running up from
+            the bottom. The memory must outlive the call.
+        size: Texels a side.
+        u: Across, zero to one.
+        v: Up, zero to one.
+
+    Returns:
+        The texel.
+    """
     var top = Float32(size - 1)
     var column = Int(max(Float32(0), min(top, floor(u * Float32(size)))))
     var row = Int(max(Float32(0), min(top, floor(v * Float32(size)))))
-    return values[row * size + column]
+    return values[unsafe_offset=row * size + column]
+
+
+def glitch_pixel(
+    source: LightView,
+    heightmap: Pointer[Float32, Untracked],
+    size: Int,
+    uniforms: GlitchUniforms,
+    shift_x: Float32,
+    shift_y: Float32,
+    x: Int,
+    y: Int,
+) -> FloatColor:
+    """Return one pixel of three.js's `DigitalGlitch`, not bypassed.
+
+    The host takes the shift's cosine and sine once a frame, so both
+    backends read the same two numbers.
+
+    Args:
+        source: The frame before the pass.
+        heightmap: The displacement map, `size` squared values.
+        size: The map's texels a side.
+        uniforms: The frame's uniforms.
+        shift_x: How far the channels shift across: the amount times the
+            cosine of the angle.
+        shift_y: How far they shift up: the amount times the sine.
+        x: The column.
+        y: The row, down from the top.
+
+    Returns:
+        The torn, shifted and snowed light.
+    """
+    var width = source.width
+    var height = source.height
+    var seed = uniforms.seed
+    var u = u_of(x, width)
+    var v = v_of(y, height)
+    # `gl_FragCoord` counts up from the bottom left, at centers.
+    var xs = floor((Float32(x) + 0.5) / 0.5)
+    var ys = floor((Float32(height - 1 - y) + 0.5) / 0.5)
+    var disp = nearest_texel(heightmap, size, u * seed * seed, v * seed * seed)
+    var px = u
+    var py = v
+    if (
+        py < uniforms.distortion_x + GLITCH_BAND
+        and py > uniforms.distortion_x - GLITCH_BAND * seed
+    ):
+        if uniforms.seed_x > 0:
+            py = 1 - (py + uniforms.distortion_y)
+        else:
+            py = uniforms.distortion_y
+    if (
+        px < uniforms.distortion_y + GLITCH_BAND
+        and px > uniforms.distortion_y - GLITCH_BAND * seed
+    ):
+        if uniforms.seed_y > 0:
+            px = uniforms.distortion_x
+        else:
+            px = 1 - (px + uniforms.distortion_x)
+    px += disp * uniforms.seed_x * (seed / 5)
+    py += disp * uniforms.seed_y * (seed / 5)
+    var red = source.sample(px + shift_x, py + shift_y)
+    var middle = source.sample(px, py)
+    var blue = source.sample(px - shift_x, py - shift_y)
+    var snow = (
+        200 * uniforms.amount * sine_hash(xs * seed, ys * seed * 50) * 0.2
+    )
+    return FloatColor(
+        red.r + snow, middle.g + snow, blue.b + snow, middle.a + snow
+    )
 
 
 def glitch_light(
@@ -462,55 +622,21 @@ def glitch_light(
     var width = frame.width
     var height = frame.height
     var source = frame.colors.copy()
-    var seed = uniforms.seed
+    var light = LightView(source, width, height)
+    var map = heightmap.unsafe_ptr().unsafe_origin_cast[Untracked]()
     var shift_x = uniforms.amount * cos(uniforms.angle.value)
     var shift_y = uniforms.amount * sin(uniforms.angle.value)
     var y = 0
     while y < height:
         var x = 0
         while x < width:
-            var u = u_of(x, width)
-            var v = v_of(y, height)
-            # `gl_FragCoord` counts up from the bottom left, at centers.
-            var xs = floor((Float32(x) + 0.5) / 0.5)
-            var ys = floor((Float32(height - 1 - y) + 0.5) / 0.5)
-            var disp = _nearest(
-                heightmap, size, u * seed * seed, v * seed * seed
-            )
-            var px = u
-            var py = v
-            if (
-                py < uniforms.distortion_x + GLITCH_BAND
-                and py > uniforms.distortion_x - GLITCH_BAND * seed
-            ):
-                if uniforms.seed_x > 0:
-                    py = 1 - (py + uniforms.distortion_y)
-                else:
-                    py = uniforms.distortion_y
-            if (
-                px < uniforms.distortion_y + GLITCH_BAND
-                and px > uniforms.distortion_y - GLITCH_BAND * seed
-            ):
-                if uniforms.seed_y > 0:
-                    px = uniforms.distortion_x
-                else:
-                    px = 1 - (px + uniforms.distortion_x)
-            px += disp * uniforms.seed_x * (seed / 5)
-            py += disp * uniforms.seed_y * (seed / 5)
-            var red = sample(source, width, height, px + shift_x, py + shift_y)
-            var middle = sample(source, width, height, px, py)
-            var blue = sample(source, width, height, px - shift_x, py - shift_y)
-            var snow = (
-                200
-                * uniforms.amount
-                * sine_hash(xs * seed, ys * seed * 50)
-                * 0.2
-            )
-            frame.colors[y * width + x] = FloatColor(
-                red.r + snow, middle.g + snow, blue.b + snow, middle.a + snow
+            frame.colors[y * width + x] = glitch_pixel(
+                light, map, size, uniforms, shift_x, shift_y, x, y
             )
             x += 1
         y += 1
+    # The views do not keep the copy alive; this does.
+    _ = source^
 
 
 # --- halftone ---------------------------------------------------------------
@@ -806,43 +932,35 @@ def reference_cell(
 
 
 def halftone_sample(
-    colors: List[FloatColor],
-    width: Int,
-    height: Int,
-    point: Vector2,
-    radius: Float32,
+    source: LightView, point: Vector2, radius: Float32
 ) -> FloatColor:
     """Return the light around a grid point: `HalftoneShader`'s
     `getSample`, the point and eight taps on a ring about it, averaged.
 
     Args:
-        colors: The frame's pixels, row by row from the top.
-        width: The frame's width in pixels.
-        height: The frame's height in pixels.
+        source: The frame, row by row from the top.
         point: The grid point, in pixels up from the bottom left.
         radius: The grid's spacing; the ring is two thirds of it.
 
     Returns:
         The average of nine bilinear reads.
     """
-    var w = Float32(width)
-    var h = Float32(height)
-    var tex = sample(colors, width, height, point.x / w, point.y / h)
+    var w = Float32(source.width)
+    var h = Float32(source.height)
+    var tex = source.sample(point.x / w, point.y / h)
     var base = sine_hash(floor(point.x), floor(point.y)) * HALFTONE_PI2
     var step = HALFTONE_PI2 / Float32(HALFTONE_SAMPLES)
     var dist = radius * 0.66
-    for i in range(HALFTONE_SAMPLES):  # pragma: no branch
+    var i = 0
+    while i < HALFTONE_SAMPLES:
         var r = base + step * Float32(i)
-        var here = sample(
-            colors,
-            width,
-            height,
-            (point.x + cos(r) * dist) / w,
-            (point.y + sin(r) * dist) / h,
+        var here = source.sample(
+            (point.x + cos(r) * dist) / w, (point.y + sin(r) * dist) / h
         )
         tex = FloatColor(
             tex.r + here.r, tex.g + here.g, tex.b + here.b, tex.a + here.a
         )
+        i += 1
     var share = 1 / (Float32(HALFTONE_SAMPLES) + 1)
     return FloatColor(
         tex.r * share, tex.g * share, tex.b * share, tex.a * share
@@ -917,20 +1035,33 @@ def _dot_color(
     return min(sum, Float32(1))
 
 
+struct _Corners(ImplicitlyCopyable):
+    """One channel of `halftone_sample` at a cell's four points, in order:
+    red, green or blue, whichever the cell is for."""
+
+    var r: SIMD[DType.float32, 4]
+    var g: SIMD[DType.float32, 4]
+    var b: SIMD[DType.float32, 4]
+
+    def __init__(
+        out self, a: FloatColor, b: FloatColor, c: FloatColor, d: FloatColor
+    ):
+        """Gather the four samples by channel."""
+        self.r = SIMD[DType.float32, 4](a.r, b.r, c.r, d.r)
+        self.g = SIMD[DType.float32, 4](a.g, b.g, c.g, d.g)
+        self.b = SIMD[DType.float32, 4](a.b, b.b, c.b, d.b)
+
+
 def _corners(
-    colors: List[FloatColor],
-    width: Int,
-    height: Int,
-    cell: HalftoneCell,
-    radius: Float32,
-) -> List[FloatColor]:
-    """Return `halftone_sample` at a cell's four points, in order."""
-    return [
-        halftone_sample(colors, width, height, cell.p1, radius),
-        halftone_sample(colors, width, height, cell.p2, radius),
-        halftone_sample(colors, width, height, cell.p3, radius),
-        halftone_sample(colors, width, height, cell.p4, radius),
-    ]
+    source: LightView, cell: HalftoneCell, radius: Float32
+) -> _Corners:
+    """Return `halftone_sample` at a cell's four points, by channel."""
+    return _Corners(
+        halftone_sample(source, cell.p1, radius),
+        halftone_sample(source, cell.p2, radius),
+        halftone_sample(source, cell.p3, radius),
+        halftone_sample(source, cell.p4, radius),
+    )
 
 
 def halftone_blend(
@@ -965,6 +1096,55 @@ def halftone_blend(
     return a * (1 - t) + other * t
 
 
+def halftone_pixel(
+    source: LightView, x: Int, y: Int, settings: HalftoneSettings
+) -> FloatColor:
+    """Return one pixel of three.js's `HalftoneShader`, not disabled.
+
+    Args:
+        source: The frame before the pass.
+        x: The column.
+        y: The row, down from the top.
+        settings: The shape, the grids and the blending.
+
+    Returns:
+        The halftone, opaque.
+    """
+    var width = source.width
+    var height = source.height
+    var radius = settings.radius
+    var aa = radius * 0.5 if radius < 2.5 else Float32(1.25)
+    var p = Vector2(
+        u_of(x, width) * Float32(width),
+        v_of(y, height) * Float32(height),
+    )
+    var cell_r = reference_cell(
+        p, settings.rotate_r.value, radius, settings.scatter
+    )
+    var cell_g = reference_cell(
+        p, settings.rotate_g.value, radius, settings.scatter
+    )
+    var cell_b = reference_cell(
+        p, settings.rotate_b.value, radius, settings.scatter
+    )
+    var at_r = _corners(source, cell_r, radius)
+    var at_g = _corners(source, cell_g, radius)
+    var at_b = _corners(source, cell_b, radius)
+    var r = _dot_color(at_r.r, cell_r, p, settings.rotate_r.value, aa, settings)
+    var g = _dot_color(at_g.g, cell_g, p, settings.rotate_g.value, aa, settings)
+    var b = _dot_color(at_b.b, cell_b, p, settings.rotate_b.value, aa, settings)
+    var under = source.at(x, y)
+    r = halftone_blend(r, under.r, settings.blending, settings.blending_mode)
+    g = halftone_blend(g, under.g, settings.blending, settings.blending_mode)
+    b = halftone_blend(b, under.b, settings.blending, settings.blending_mode)
+    if settings.grayscale:
+        var gray = (r + b + g) / 3
+        r = gray
+        g = gray
+        b = gray
+    return FloatColor(r, g, b, 1)
+
+
 def halftone_light(mut frame: RenderTarget, settings: HalftoneSettings):
     """Redraw each channel as a grid of dots: three.js's
     `HalftoneShader`.
@@ -985,78 +1165,18 @@ def halftone_light(mut frame: RenderTarget, settings: HalftoneSettings):
     var width = frame.width
     var height = frame.height
     var source = frame.colors.copy()
-    var radius = settings.radius
-    var aa = radius * 0.5 if radius < 2.5 else Float32(1.25)
+    var light = LightView(source, width, height)
     var y = 0
     while y < height:
         var x = 0
         while x < width:
             var slot = y * width + x
-            var p = Vector2(
-                u_of(x, width) * Float32(width),
-                v_of(y, height) * Float32(height),
-            )
-            var cell_r = reference_cell(
-                p, settings.rotate_r.value, radius, settings.scatter
-            )
-            var cell_g = reference_cell(
-                p, settings.rotate_g.value, radius, settings.scatter
-            )
-            var cell_b = reference_cell(
-                p, settings.rotate_b.value, radius, settings.scatter
-            )
-            var at_r = _corners(source, width, height, cell_r, radius)
-            var at_g = _corners(source, width, height, cell_g, radius)
-            var at_b = _corners(source, width, height, cell_b, radius)
-            var r = _dot_color(
-                SIMD[DType.float32, 4](
-                    at_r[0].r, at_r[1].r, at_r[2].r, at_r[3].r
-                ),
-                cell_r,
-                p,
-                settings.rotate_r.value,
-                aa,
-                settings,
-            )
-            var g = _dot_color(
-                SIMD[DType.float32, 4](
-                    at_g[0].g, at_g[1].g, at_g[2].g, at_g[3].g
-                ),
-                cell_g,
-                p,
-                settings.rotate_g.value,
-                aa,
-                settings,
-            )
-            var b = _dot_color(
-                SIMD[DType.float32, 4](
-                    at_b[0].b, at_b[1].b, at_b[2].b, at_b[3].b
-                ),
-                cell_b,
-                p,
-                settings.rotate_b.value,
-                aa,
-                settings,
-            )
-            var under = source[slot]
-            r = halftone_blend(
-                r, under.r, settings.blending, settings.blending_mode
-            )
-            g = halftone_blend(
-                g, under.g, settings.blending, settings.blending_mode
-            )
-            b = halftone_blend(
-                b, under.b, settings.blending, settings.blending_mode
-            )
-            if settings.grayscale:
-                var gray = (r + b + g) / 3
-                r = gray
-                g = gray
-                b = gray
-            frame.colors[slot] = FloatColor(r, g, b, 1)
+            frame.colors[slot] = halftone_pixel(light, x, y, settings)
             frame.data[slot] = False
             x += 1
         y += 1
+    # The view does not keep the copy alive; this does.
+    _ = source^
 
 
 # --- mask, clear and texture -------------------------------------------------
@@ -1176,6 +1296,56 @@ def clear_light(mut frame: RenderTarget, color: Color):
         frame.stencil[slot] = 0
 
 
+def texture_overlay(
+    texture: Texture, width: Int, height: Int
+) -> List[FloatColor]:
+    """Return a texture sampled at the center of every pixel of a frame,
+    through its own wrap and filter: what a texture pass adds.
+
+    The texels do not depend on the frame, so the GPU backend samples
+    them here, on the host, and adds them on the device.
+
+    Args:
+        texture: The image.
+        width: The frame's width in pixels.
+        height: The frame's height in pixels.
+
+    Returns:
+        One texel per pixel, row by row from the top.
+    """
+    var texels = List[FloatColor](capacity=width * height)
+    var y = 0
+    while y < height:
+        var x = 0
+        while x < width:
+            texels.append(texture.sample(u_of(x, width), v_of(y, height)))
+            x += 1
+        y += 1
+    return texels^
+
+
+def texture_pixel(
+    base: FloatColor, texel: FloatColor, opacity: Float32
+) -> FloatColor:
+    """Return one pixel of three.js's `TexturePass`: the texel scaled by
+    the opacity and added, every channel.
+
+    Args:
+        base: The pixel's light.
+        texel: The texture at the pixel's center.
+        opacity: What the texture is scaled by.
+
+    Returns:
+        The sum.
+    """
+    return FloatColor(
+        base.r + texel.r * opacity,
+        base.g + texel.g * opacity,
+        base.b + texel.b * opacity,
+        base.a + texel.a * opacity,
+    )
+
+
 def texture_light(mut frame: RenderTarget, texture: Texture, opacity: Float32):
     """Add a texture over the frame: three.js's `TexturePass`, which draws
     `CopyShader` with additive blending.
@@ -1189,24 +1359,12 @@ def texture_light(mut frame: RenderTarget, texture: Texture, opacity: Float32):
         texture: The image, sampled through its own wrap and filter.
         opacity: What the texture is scaled by.
     """
-    var width = frame.width
-    var height = frame.height
-    var y = 0
-    while y < height:
-        var x = 0
-        while x < width:
-            var slot = y * width + x
-            var texel = texture.sample(u_of(x, width), v_of(y, height))
-            var base = frame.colors[slot]
-            frame.colors[slot] = FloatColor(
-                base.r + texel.r * opacity,
-                base.g + texel.g * opacity,
-                base.b + texel.b * opacity,
-                base.a + texel.a * opacity,
-            )
-            frame.data[slot] = False
-            x += 1
-        y += 1
+    var texels = texture_overlay(texture, frame.width, frame.height)
+    for slot in range(len(frame.colors)):  # pragma: no branch
+        frame.colors[slot] = texture_pixel(
+            frame.colors[slot], texels[slot], opacity
+        )
+        frame.data[slot] = False
 
 
 # --- lut --------------------------------------------------------------------
@@ -1232,9 +1390,9 @@ def _decoded(color: FloatColor) -> FloatColor:
     )
 
 
-def lut_color(
-    color: FloatColor, lut: Data3DTexture, intensity: Float32
-) -> FloatColor:
+def lut_color[
+    T: VolumeSampler
+](color: FloatColor, lut: T, intensity: Float32) -> FloatColor:
     """Return one straight, sRGB-encoded color looked up in a table:
     three.js's `LUTShader`.
 
@@ -1245,14 +1403,14 @@ def lut_color(
 
     Args:
         color: The color, encoded as the table expects it.
-        lut: The table. Its size is its `width`, as three.js's `lutSize`
-            is.
+        lut: The table: a `Data3DTexture` on the host, a `DecodedVolume`
+            on the GPU. Its size is its width, as three.js's `lutSize` is.
         intensity: How far toward the lookup, one replacing the color.
 
     Returns:
         The graded color, still encoded.
     """
-    var size = Float32(lut.image.width)
+    var size = Float32(lut.volume_width())
     var pixel_width = 1 / size
     var half_pixel_width = Float32(0.5) / size
     var looked = lut.sample(
@@ -1266,6 +1424,24 @@ def lut_color(
         color.b + (looked.b - color.b) * intensity,
         color.a,
     )
+
+
+def lut_pixel[
+    T: VolumeSampler
+](color: FloatColor, lut: T, intensity: Float32) -> FloatColor:
+    """Return one pixel of three.js's `LUTPass`: the light encoded, looked
+    up by `lut_color`, and decoded again.
+
+    Args:
+        color: The pixel's light, premultiplied.
+        lut: The table.
+        intensity: How far toward the lookup, one replacing the color.
+
+    Returns:
+        The graded light, premultiplied.
+    """
+    var base = _encoded(color.unpremultiplied())
+    return _decoded(lut_color(base, lut, intensity)).premultiplied()
 
 
 def lut_light(
@@ -1289,7 +1465,4 @@ def lut_light(
     """
     lut.validate()
     for index in range(len(frame.colors)):  # pragma: no branch
-        var base = _encoded(frame.colors[index].unpremultiplied())
-        frame.colors[index] = _decoded(
-            lut_color(base, lut, intensity)
-        ).premultiplied()
+        frame.colors[index] = lut_pixel(frame.colors[index], lut, intensity)

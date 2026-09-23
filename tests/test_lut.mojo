@@ -22,19 +22,27 @@ from postprocessing.composer import (
     lut_pass,
     output_pass,
 )
-from postprocessing.effects import lut_color, lut_light
+from postprocessing.effects import lut_color, lut_light, lut_pixel
 from render.framebuffer import Color, FloatColor
-from render.srgb import LINEAR, linear_to_srgb, srgb_to_linear
+from render.srgb import LINEAR, SRGB, linear_to_srgb, srgb_to_linear
 from render.target import RenderTarget
 from render.texture import (
     BILINEAR,
     CLAMP,
+    MIRROR,
+    NEAREST,
+    REPEAT,
     FLOAT_TYPE,
     UNSIGNED_BYTE_TYPE,
     Filter,
     TexelType,
 )
-from render.volume_texture import Data3DTexture
+from render.volume_texture import (
+    Data3DTexture,
+    DecodedVolume,
+    VolumeImage,
+    decoded_texels,
+)
 from render.volume_texture_store import NO_DATA_3D_TEXTURE, Data3DTextureId
 from renderers.renderer import Renderer
 from std.pathlib import Path
@@ -313,6 +321,62 @@ def test_the_composer_grades_the_frame_through_the_table() raises:
     composer.passes[2].lut = Data3DTextureId(1)
     with assert_raises(contains="No 3D texture"):
         _ = composer.render(renderer, scene, assets, camera)
+
+
+def test_a_decoded_volume_samples_as_its_texture_does() raises:
+    # A byte table in sRGB, so decoding matters, three by two by two.
+    var bytes = List[UInt8]()
+    for index in range(12):
+        bytes.append(UInt8(index * 20))
+        bytes.append(UInt8(250 - index * 20))
+        bytes.append(UInt8(index * 7))
+        bytes.append(UInt8(128 + index))
+    var filters: List[Filter] = [NEAREST, BILINEAR]
+    for which in range(2):
+        var lut = Data3DTexture(
+            VolumeImage.of_bytes(3, 2, 2, bytes),
+            filter=filters[which],
+            color_space=SRGB,
+        )
+        lut.wrap_s = REPEAT
+        lut.wrap_t = MIRROR
+        var texels = decoded_texels(lut)
+        assert_equal(len(texels), 12)
+        var decoded = DecodedVolume(texels, lut)
+        assert_equal(decoded.volume_width(), 3)
+        var floats = List[Float32]()
+        for index in range(len(texels)):
+            floats.append(texels[index].r)
+            floats.append(texels[index].g)
+            floats.append(texels[index].b)
+            floats.append(texels[index].a)
+        var device_like = DecodedVolume(
+            floats=floats.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+            width=3,
+            height=2,
+            depth=2,
+            wrap_s=lut.wrap_s,
+            wrap_t=lut.wrap_t,
+            wrap_r=lut.wrap_r,
+            filter=lut.filter,
+        )
+        var coords: List[Float32] = [-0.4, 0.1, 0.37, 0.5, 0.93, 1.3]
+        for i in range(len(coords)):
+            var s = coords[i]
+            var t = coords[(i + 2) % len(coords)]
+            var r = coords[(i + 4) % len(coords)]
+            var want = lut.sample(s, t, r)
+            assert_close(
+                decoded.sample(s, t, r), want.r, want.g, want.b, want.a
+            )
+            var got = device_like.sample(s, t, r)
+            assert_close(got, want.r, want.g, want.b, want.a)
+        var color = FloatColor(0.3, 0.6, 0.2, 0.5)
+        var host = lut_pixel(color, lut, 0.7)
+        var viewed = lut_pixel(color, decoded, 0.7)
+        assert_close(viewed, host.r, host.g, host.b, host.a)
+        _ = floats^
+        _ = texels^
 
 
 def main() raises:

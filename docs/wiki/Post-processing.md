@@ -12,6 +12,8 @@ var image = composer.render(renderer, scene, assets, camera)
 
 The frame starts cleared to the renderer's background. A render pass draws the scene into it. Every other pass reads the light and writes it back. The frame is resolved through no curve of its own. An `output_pass` is where the renderer's tone mapping curve is applied, as three.js applies it in an `OutputPass` once a composer is in use.
 
+To run the passes on the GPU, give the composer to a `GpuComposer`. Most passes then run as kernels, and the frame stays on the device between them. See [GPU backend](GPU-backend#post-processing-on-the-gpu).
+
 ## The passes
 
 | Builder | three.js | Meaning |
@@ -62,6 +64,7 @@ The defaults are three.js's. The dot screen's angle is an `Angle`. A bare number
 | `pass_count() -> Int` | | How many passes there are. |
 | `reset()` | `reset` | Forget what every afterimage pass saw and what every TAA pass accumulated. |
 | `render(renderer, scene, assets, camera, delta_time=0) -> Framebuffer` | `render` | Run every enabled pass in order and return the image. |
+| `run_step(index, frame, renderer, scene, assets, camera, delta_time)` | | Run one pass on a frame, less the mask's bookkeeping. The GPU composer calls it for a pass with no kernel. |
 
 `delta_time` is how many seconds passed since the last frame. It advances each film pass's grain and each outline pass's pulse. Zero holds them still.
 
@@ -373,6 +376,6 @@ Put the LUT pass after the output pass, as three.js's example does. Then the tab
 
 ## Not ported
 
-The passes run on the host. The GPU backend draws bytes rather than light and has no target a pass could read. `GTAOPass`, `RenderPixelatedPass` and the other passes are not ported.
+The passes run on the host. `GpuComposer` runs the same composer with the frame on the GPU. See [GPU backend](GPU-backend#post-processing-on-the-gpu). `GTAOPass`, `RenderPixelatedPass` and the other passes are not ported.
 
 The SSAA and TAA passes use the renderer's background as their clear color. three.js's passes have their own `clearColor` and `clearAlpha`, and these are not ported. An SSAA pass jitters the camera with no view offset of its own, because the cameras here have none.

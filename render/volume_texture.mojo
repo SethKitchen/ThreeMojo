@@ -41,9 +41,10 @@ they are and must be `LINEAR`. See `render.texture.TexelType`.
 **Not ported.** No mip chain: three.js turns `generateMipmaps` off for
 both. One filter serves both magnification and minification. three.js's
 `layerUpdates`, `addLayerUpdate` and `unpackAlignment` concern the upload
-to WebGL and have no counterpart. The GPU backend samples neither kind:
-three.js reads them only from a custom shader or from `LUTPass`, and this
-port has no custom shaders.
+to WebGL and have no counterpart. The GPU backend's rasterizer samples
+neither kind: three.js reads them only from a custom shader or from
+`LUTPass`, and this port has no custom shaders. Its `LUTPass` reads a
+`DecodedVolume` through the same `filter_volume` as the host.
 """
 
 from render.framebuffer import FloatColor
@@ -405,7 +406,7 @@ def _check_modes(
         raise Error("A float texture holds linear light: it must be LINEAR")
 
 
-struct Data3DTexture(Movable):
+struct Data3DTexture(Movable, VolumeSampler, VolumeTexels):
     """A volume of texels sampled by three coordinates: three.js's
     `Data3DTexture`, as a GLSL `sampler3D` reads it.
 
@@ -497,23 +498,28 @@ struct Data3DTexture(Movable):
         """
         return self.image._fetch(x, y, z, self.color_space)
 
-    def _wrapped(self, x: Int, y: Int, z: Int) -> FloatColor:
-        """Return a texel by index, each index wrapped first."""
-        return self.image._texel(
-            wrap_index(x, self.image.width, self.wrap_s),
-            wrap_index(y, self.image.height, self.wrap_t),
-            wrap_index(z, self.image.depth, self.wrap_r),
-            self.color_space,
-        )
+    def texel_at(self, x: Int, y: Int, z: Int) -> FloatColor:
+        """Return texel `(x, y, z)` as it samples, unchecked: what
+        `filter_volume` reads.
+
+        Args:
+            x: Column, inside the image.
+            y: Row, up from the first, inside the image.
+            z: Slice, inside the image.
+
+        Returns:
+            The color.
+        """
+        return self.image._texel(x, y, z, self.color_space)
+
+    def volume_width(self) -> Int:
+        """Return how many texels across the volume is: three.js's
+        `lutSize` for a color lookup table."""
+        return self.image.width
 
     def sample(self, s: Float32, t: Float32, r: Float32) -> FloatColor:
         """Return the color at a coordinate: GLSL's `texture` on a
-        `sampler3D`.
-
-        Under `NEAREST`, the texel the coordinate lands in. Under
-        `BILINEAR`, the eight around it blended by distance, the texel
-        centers at half-integers: trilinear in the sense of three axes,
-        not of mip levels.
+        `sampler3D`, by `filter_volume`.
 
         Args:
             s: Across, zero at the first column's edge.
@@ -523,43 +529,299 @@ struct Data3DTexture(Movable):
         Returns:
             The color, straight.
         """
-        var wide = Float32(self.image.width)
-        var tall = Float32(self.image.height)
-        var deep = Float32(self.image.depth)
-        if self.filter == NEAREST:
-            return self._wrapped(
-                Int(floor(s * wide)), Int(floor(t * tall)), Int(floor(r * deep))
-            )
-        var across = s * wide - 0.5
-        var up = t * tall - 0.5
-        var into = r * deep - 0.5
-        var x = Int(floor(across))
-        var y = Int(floor(up))
-        var z = Int(floor(into))
-        var fx = across - Float32(x)
-        var fy = up - Float32(y)
-        var fz = into - Float32(z)
-        var near = mix_straight_texels(
-            mix_straight_texels(
-                self._wrapped(x, y, z), self._wrapped(x + 1, y, z), fx
-            ),
-            mix_straight_texels(
-                self._wrapped(x, y + 1, z), self._wrapped(x + 1, y + 1, z), fx
-            ),
-            fy,
+        return filter_volume(
+            self,
+            self.image.width,
+            self.image.height,
+            self.image.depth,
+            self.wrap_s,
+            self.wrap_t,
+            self.wrap_r,
+            self.filter,
+            s,
+            t,
+            r,
         )
-        var far = mix_straight_texels(
-            mix_straight_texels(
-                self._wrapped(x, y, z + 1), self._wrapped(x + 1, y, z + 1), fx
-            ),
-            mix_straight_texels(
-                self._wrapped(x, y + 1, z + 1),
-                self._wrapped(x + 1, y + 1, z + 1),
-                fx,
-            ),
-            fy,
+
+
+trait VolumeTexels:
+    """Something `filter_volume` can read texels from: a `Data3DTexture`,
+    which decodes its bytes as it reads, or a `DecodedVolume`, which holds
+    them decoded, as a GPU kernel reads them."""
+
+    def texel_at(self, x: Int, y: Int, z: Int) -> FloatColor:
+        """Return texel `(x, y, z)` as it samples, all three inside.
+
+        Args:
+            x: Column.
+            y: Row, up from the first.
+            z: Slice.
+
+        Returns:
+            The color.
+        """
+        ...
+
+
+trait VolumeSampler:
+    """Something a color lookup reads: a volume's width and its `texture`
+    reads. Both `Data3DTexture` and `DecodedVolume` are one, so `LUTPass`'s
+    arithmetic is the same on the host and on the GPU."""
+
+    def volume_width(self) -> Int:
+        """Return how many texels across the volume is.
+
+        Returns:
+            The width.
+        """
+        ...
+
+    def sample(self, s: Float32, t: Float32, r: Float32) -> FloatColor:
+        """Return the color at a coordinate, as a `sampler3D` reads it.
+
+        Args:
+            s: Across.
+            t: Up.
+            r: Deep.
+
+        Returns:
+            The color, straight.
+        """
+        ...
+
+
+def filter_volume[
+    T: VolumeTexels
+](
+    texels: T,
+    width: Int,
+    height: Int,
+    depth: Int,
+    wrap_s: Wrap,
+    wrap_t: Wrap,
+    wrap_r: Wrap,
+    filter: Filter,
+    s: Float32,
+    t: Float32,
+    r: Float32,
+) -> FloatColor:
+    """Return the color at a coordinate: GLSL's `texture` on a
+    `sampler3D`.
+
+    Under `NEAREST`, the texel the coordinate lands in. Under `BILINEAR`,
+    the eight around it blended by distance, the texel centers at
+    half-integers: trilinear in the sense of three axes, not of mip
+    levels. Each index is wrapped by its axis's mode.
+
+    Args:
+        texels: Where the texels are read from.
+        width: Texels across.
+        height: Texels up.
+        depth: Texels deep.
+        wrap_s: How a column outside the image is resolved.
+        wrap_t: How a row outside the image is resolved.
+        wrap_r: How a slice outside the image is resolved.
+        filter: `NEAREST` or `BILINEAR`.
+        s: Across, zero at the first column's edge.
+        t: Up, zero at the first row's edge.
+        r: Deep, zero at the first slice's edge.
+
+    Returns:
+        The color, straight.
+    """
+    var wide = Float32(width)
+    var tall = Float32(height)
+    var deep = Float32(depth)
+    if filter == NEAREST:
+        return texels.texel_at(
+            wrap_index(Int(floor(s * wide)), width, wrap_s),
+            wrap_index(Int(floor(t * tall)), height, wrap_t),
+            wrap_index(Int(floor(r * deep)), depth, wrap_r),
         )
-        return mix_straight_texels(near, far, fz)
+    var across = s * wide - 0.5
+    var up = t * tall - 0.5
+    var into = r * deep - 0.5
+    var x = Int(floor(across))
+    var y = Int(floor(up))
+    var z = Int(floor(into))
+    var fx = across - Float32(x)
+    var fy = up - Float32(y)
+    var fz = into - Float32(z)
+    var x0 = wrap_index(x, width, wrap_s)
+    var x1 = wrap_index(x + 1, width, wrap_s)
+    var y0 = wrap_index(y, height, wrap_t)
+    var y1 = wrap_index(y + 1, height, wrap_t)
+    var z0 = wrap_index(z, depth, wrap_r)
+    var z1 = wrap_index(z + 1, depth, wrap_r)
+    var near = mix_straight_texels(
+        mix_straight_texels(
+            texels.texel_at(x0, y0, z0), texels.texel_at(x1, y0, z0), fx
+        ),
+        mix_straight_texels(
+            texels.texel_at(x0, y1, z0), texels.texel_at(x1, y1, z0), fx
+        ),
+        fy,
+    )
+    var far = mix_straight_texels(
+        mix_straight_texels(
+            texels.texel_at(x0, y0, z1), texels.texel_at(x1, y0, z1), fx
+        ),
+        mix_straight_texels(
+            texels.texel_at(x0, y1, z1), texels.texel_at(x1, y1, z1), fx
+        ),
+        fy,
+    )
+    return mix_straight_texels(near, far, fz)
+
+
+def decoded_texels(volume: Data3DTexture) -> List[FloatColor]:
+    """Return every texel of a 3D texture as it samples, `x` fastest,
+    then `y`, then `z`: what a `DecodedVolume` reads, and what the GPU
+    backend uploads for a LUT pass.
+
+    Args:
+        volume: The texture.
+
+    Returns:
+        The texels, `width` times `height` times `depth` of them.
+    """
+    var image = VolumeImage(copy=volume.image)
+    var texels = List[FloatColor](
+        capacity=image.width * image.height * image.depth
+    )
+    var z = 0
+    while z < image.depth:
+        var y = 0
+        while y < image.height:
+            var x = 0
+            while x < image.width:
+                texels.append(volume.texel_at(x, y, z))
+                x += 1
+            y += 1
+        z += 1
+    return texels^
+
+
+struct DecodedVolume(ImplicitlyCopyable, VolumeSampler, VolumeTexels):
+    """A 3D texture's texels already decoded, with its size, wrap modes
+    and filter: how a GPU kernel reads a `Data3DTexture`.
+
+    It does not own the texels: the list or the device buffer must
+    outlive every read. Build its texels with `decoded_texels`.
+    """
+
+    var texels: Pointer[FloatColor, UntrackedOrigin[mut=False]]
+    var width: Int
+    var height: Int
+    var depth: Int
+    var wrap_s: Wrap
+    var wrap_t: Wrap
+    var wrap_r: Wrap
+    var filter: Filter
+
+    def __init__(out self, texels: List[FloatColor], volume: Data3DTexture):
+        """View decoded texels with a texture's size and modes.
+
+        Args:
+            texels: The texture's `decoded_texels`. The list must outlive
+                the view.
+            volume: The texture.
+        """
+        self.texels = texels.unsafe_ptr().unsafe_origin_cast[
+            UntrackedOrigin[mut=False]
+        ]()
+        self.width = volume.image.width
+        self.height = volume.image.height
+        self.depth = volume.image.depth
+        self.wrap_s = volume.wrap_s
+        self.wrap_t = volume.wrap_t
+        self.wrap_r = volume.wrap_r
+        self.filter = volume.filter
+
+    def __init__(
+        out self,
+        *,
+        floats: MutPointer[Float32, MutAnyOrigin],
+        width: Int,
+        height: Int,
+        depth: Int,
+        wrap_s: Wrap,
+        wrap_t: Wrap,
+        wrap_r: Wrap,
+        filter: Filter,
+    ):
+        """View four floats a texel, as a device buffer holds them.
+
+        Args:
+            floats: The first texel's red. The memory must outlive the
+                view.
+            width: Texels across.
+            height: Texels up.
+            depth: Texels deep.
+            wrap_s: How a column outside the image is resolved.
+            wrap_t: How a row outside the image is resolved.
+            wrap_r: How a slice outside the image is resolved.
+            filter: `NEAREST` or `BILINEAR`.
+        """
+        self.texels = (
+            floats.unsafe_bitcast[FloatColor]()
+            .unsafe_mut_cast[False]()
+            .unsafe_origin_cast[UntrackedOrigin[mut=False]]()
+        )
+        self.width = width
+        self.height = height
+        self.depth = depth
+        self.wrap_s = wrap_s
+        self.wrap_t = wrap_t
+        self.wrap_r = wrap_r
+        self.filter = filter
+
+    def texel_at(self, x: Int, y: Int, z: Int) -> FloatColor:
+        """Return texel `(x, y, z)`, unchecked.
+
+        Args:
+            x: Column, inside the image.
+            y: Row, up from the first, inside the image.
+            z: Slice, inside the image.
+
+        Returns:
+            The color.
+        """
+        return self.texels[unsafe_offset=(z * self.height + y) * self.width + x]
+
+    def volume_width(self) -> Int:
+        """Return how many texels across the volume is.
+
+        Returns:
+            The width.
+        """
+        return self.width
+
+    def sample(self, s: Float32, t: Float32, r: Float32) -> FloatColor:
+        """Return the color at a coordinate, by `filter_volume`, as
+        `Data3DTexture.sample` returns it.
+
+        Args:
+            s: Across, zero at the first column's edge.
+            t: Up, zero at the first row's edge.
+            r: Deep, zero at the first slice's edge.
+
+        Returns:
+            The color, straight.
+        """
+        return filter_volume(
+            self,
+            self.width,
+            self.height,
+            self.depth,
+            self.wrap_s,
+            self.wrap_t,
+            self.wrap_r,
+            self.filter,
+            s,
+            t,
+            r,
+        )
 
 
 def array_layer(layer: Float32, depth: Int) -> Int:

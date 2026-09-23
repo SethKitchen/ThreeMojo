@@ -220,8 +220,76 @@ from render.texture import (
     mix_straight,
     wrap_index,
 )
+from cameras.camera import Camera
+from core.assets import Assets
+from core.scene import Scene
+from postprocessing.antialiasing import fxaa_pixel
+from postprocessing.composer import (
+    BLOOM,
+    BLOOM_LEVELS,
+    BLUR,
+    CLEAR_MASK,
+    COPY,
+    DOT_SCREEN,
+    FILM,
+    FXAA,
+    LUMINOSITY,
+    MASK,
+    OUTPUT,
+    SEPIA,
+    VIGNETTE,
+    AFTERIMAGE,
+    BOKEH,
+    CLEAR,
+    GLITCH,
+    HALFTONE,
+    LUT,
+    TEXTURE,
+    EffectComposer,
+    PassKind,
+    afterimage_pixel,
+    bloom_glow,
+    bloom_kernel,
+    blur_pixel,
+    bright_pixel,
+    check_frame_time,
+    check_pass,
+    copy_pixel,
+    depth_view,
+    dot_screen_pixel,
+    frame_outputs,
+    film_pixel,
+    glow_pixel,
+    halved_size,
+    luminosity_pixel,
+    output_pixel,
+    separable_blur_pixel,
+    sepia_pixel,
+    vignette_pixel,
+)
+from postprocessing.effects import (
+    GlitchUniforms,
+    HalftoneBlending,
+    HalftoneSettings,
+    HalftoneShape,
+    bokeh_pixel,
+    bokeh_reach,
+    glitch_heightmap,
+    glitch_pixel,
+    glitch_uniforms,
+    halftone_pixel,
+    inside_mask,
+    lut_pixel,
+    texture_overlay,
+    texture_pixel,
+)
+from postprocessing.sampling import LightView, Untracked, u_of, v_of
+from render.target import RenderTarget
+from render.volume_texture import DecodedVolume, decoded_texels
+from renderers.renderer import Renderer
+from units.si import Angle, Length, METER, RADIAN
 from max.gpu import global_idx
-from std.math import ceildiv, floor, inf, log2, sqrt
+from std.math import ceildiv, cos, floor, inf, log2, sin, sqrt
 from std.memory import bitcast, unsafe_memcpy
 from std.sys import has_accelerator
 
@@ -5848,3 +5916,1245 @@ def render(
     corners.append(RasterVertex(triangle.b.x, triangle.b.y, 0, 1, tint, 0, 0))
     corners.append(RasterVertex(triangle.c.x, triangle.c.y, 0, 1, tint, 0, 0))
     return render_triangles(corners^, width, height, background)
+
+
+# --- post-processing ---------------------------------------------------------
+#
+# A composer's frame on the device: four floats of premultiplied light a
+# pixel, one byte saying whether the pixel holds data, its depth and its
+# stencil. The kernels below run the passes on it, one thread per pixel,
+# each calling the per-pixel function the host pass calls. See
+# `GpuComposer`.
+
+
+def _load(light: MutPointer[Float32, MutAnyOrigin], slot: Int) -> FloatColor:
+    """Return one pixel of a device frame."""
+    var at = slot * 4
+    return FloatColor(
+        light[unsafe_offset=at],
+        light[unsafe_offset=at + 1],
+        light[unsafe_offset=at + 2],
+        light[unsafe_offset=at + 3],
+    )
+
+
+def _store(
+    light: MutPointer[Float32, MutAnyOrigin], slot: Int, color: FloatColor
+):
+    """Write one pixel of a device frame."""
+    var at = slot * 4
+    light[unsafe_offset=at] = color.r
+    light[unsafe_offset=at + 1] = color.g
+    light[unsafe_offset=at + 2] = color.b
+    light[unsafe_offset=at + 3] = color.a
+
+
+def copy_floats_kernel(
+    destination: MutPointer[Float32, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    count: Int32,
+):
+    """Copy `count` floats, one thread each: what a pass that reads its
+    neighbors reads, taken before it writes."""
+    var at = Int(global_idx.x)
+    if at >= Int(count):
+        return
+    destination[unsafe_offset=at] = source[unsafe_offset=at]
+
+
+def copy_bytes_kernel(
+    destination: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[UInt8, MutAnyOrigin],
+    count: Int32,
+):
+    """Copy `count` bytes, one thread each."""
+    var at = Int(global_idx.x)
+    if at >= Int(count):
+        return
+    destination[unsafe_offset=at] = source[unsafe_offset=at]
+
+
+def post_pixel_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    kind: Int32,
+    a: Float32,
+    b: Float32,
+    c: Float32,
+    d: Float32,
+    e: Float32,
+    flag: Int32,
+):
+    """Run one pass that reads nothing but its own pixel: a copy, a film,
+    a dot screen, a sepia, a vignette, a luminosity or an output pass.
+
+    The numbers `a` through `e` and `flag` are the pass's settings, in the
+    order `GpuComposer` hands them over; each kind reads its own.
+    """
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var slot = y * w + x
+    var color = _load(light, slot)
+    var step = PassKind(Int(kind))
+    var shown: FloatColor
+    if step == COPY:
+        shown = copy_pixel(color, a)
+    elif step == FILM:
+        shown = film_pixel(color, x, y, w, h, a, flag != 0, b)
+    elif step == DOT_SCREEN:
+        shown = dot_screen_pixel(color, x, y, w, h, Vector2(a, b), c, d, e)
+    elif step == SEPIA:
+        shown = sepia_pixel(color, a)
+    elif step == VIGNETTE:
+        shown = vignette_pixel(color, x, y, w, h, a, b)
+    elif step == LUMINOSITY:
+        shown = luminosity_pixel(color)
+    else:
+        # `OUTPUT`: a pixel that holds data keeps its numbers.
+        if data[unsafe_offset=slot] != 0:
+            return
+        shown = output_pixel(color, ToneMapping(Int(flag)), a)
+    _store(light, slot, shown)
+
+
+def afterimage_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    memory: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    damp: Float32,
+):
+    """Keep the last frame fading under this one: `afterimage_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    if x >= Int(width) or y >= Int(height):
+        return
+    var slot = y * Int(width) + x
+    _store(
+        light,
+        slot,
+        afterimage_pixel(_load(light, slot), _load(memory, slot), damp),
+    )
+
+
+def blur_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    spread: Float32,
+    across: Int32,
+):
+    """Blur along one axis, nine taps: `blur_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var view = LightView(floats=source, width=w, height=h)
+    _store(light, y * w + x, blur_pixel(view, x, y, spread, across != 0))
+
+
+def bright_kernel(
+    bright: MutPointer[Float32, MutAnyOrigin],
+    light: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    threshold: Float32,
+):
+    """Keep the light above the bloom's threshold: `bright_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    if x >= Int(width) or y >= Int(height):
+        return
+    var slot = y * Int(width) + x
+    _store(bright, slot, bright_pixel(_load(light, slot), threshold))
+
+
+def bloom_blur_kernel(
+    destination: MutPointer[Float32, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    source_width: Int32,
+    source_height: Int32,
+    width: Int32,
+    height: Int32,
+    kernel: Int32,
+    across: Int32,
+):
+    """Blur one bloom level along one axis: `separable_blur_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var view = LightView(
+        floats=source, width=Int(source_width), height=Int(source_height)
+    )
+    _store(
+        destination,
+        y * w + x,
+        separable_blur_pixel(view, x, y, w, h, Int(kernel), across != 0),
+    )
+
+
+def bloom_composite_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    levels: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    radius: Float32,
+    strength: Float32,
+):
+    """Add the five blurred levels to the frame: `bloom_glow` for each,
+    then `glow_pixel`. The levels lie back to back, each half the size
+    of the one before, as `GpuComposer` lays them out."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var u = u_of(x, w)
+    var v = v_of(y, h)
+    var glow = FloatColor(0, 0, 0, 0)
+    var level_width = halved_size(w)
+    var level_height = halved_size(h)
+    var start = 0
+    var level = 0
+    while level < BLOOM_LEVELS:
+        var view = LightView(
+            floats=levels.unsafe_offset(start),
+            width=level_width,
+            height=level_height,
+        )
+        glow = bloom_glow(glow, view, level, u, v, radius, strength)
+        start += level_width * level_height * 4
+        level_width = halved_size(level_width)
+        level_height = halved_size(level_height)
+        level += 1
+    var slot = y * w + x
+    _store(light, slot, glow_pixel(_load(light, slot), glow))
+
+
+def fxaa_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+):
+    """Smooth jagged edges: `fxaa_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var view = LightView(floats=source, width=w, height=h)
+    _store(light, y * w + x, fxaa_pixel(view, u_of(x, w), v_of(y, h)))
+
+
+def bokeh_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    depth: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    near: Float32,
+    far: Float32,
+    focus: Float32,
+    aperture: Float32,
+    max_blur: Float32,
+):
+    """Blur by distance from the focus: `bokeh_reach`, then
+    `bokeh_pixel`. `depth` is the window depth of every pixel."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var slot = y * w + x
+    var blur = bokeh_reach(
+        Length(near, METER),
+        Length(far, METER),
+        depth[unsafe_offset=slot],
+        Length(focus, METER),
+        aperture,
+        max_blur,
+    )
+    var view = LightView(floats=source, width=w, height=h)
+    _store(light, slot, bokeh_pixel(view, x, y, blur))
+    data[unsafe_offset=slot] = 0
+
+
+def glitch_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    heightmap: MutPointer[Float32, MutAnyOrigin],
+    size: Int32,
+    width: Int32,
+    height: Int32,
+    seed: Float32,
+    amount: Float32,
+    seed_x: Float32,
+    seed_y: Float32,
+    distortion_x: Float32,
+    distortion_y: Float32,
+    shift_x: Float32,
+    shift_y: Float32,
+):
+    """Tear, shift and snow the frame: `glitch_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var uniforms = GlitchUniforms()
+    uniforms.seed = seed
+    uniforms.amount = amount
+    uniforms.seed_x = seed_x
+    uniforms.seed_y = seed_y
+    uniforms.distortion_x = distortion_x
+    uniforms.distortion_y = distortion_y
+    var view = LightView(floats=source, width=w, height=h)
+    var map = heightmap.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked]()
+    _store(
+        light,
+        y * w + x,
+        glitch_pixel(view, map, Int(size), uniforms, shift_x, shift_y, x, y),
+    )
+
+
+def halftone_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    shape: Int32,
+    radius: Float32,
+    rotate_r: Float32,
+    rotate_g: Float32,
+    rotate_b: Float32,
+    scatter: Float32,
+    blending: Float32,
+    blending_mode: Int32,
+    grayscale: Int32,
+):
+    """Redraw each channel as a grid of dots: `halftone_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var settings = HalftoneSettings()
+    settings.shape = HalftoneShape(Int(shape))
+    settings.radius = radius
+    settings.rotate_r = Angle(rotate_r, RADIAN)
+    settings.rotate_g = Angle(rotate_g, RADIAN)
+    settings.rotate_b = Angle(rotate_b, RADIAN)
+    settings.scatter = scatter
+    settings.blending = blending
+    settings.blending_mode = HalftoneBlending(Int(blending_mode))
+    settings.grayscale = grayscale != 0
+    var view = LightView(floats=source, width=w, height=h)
+    var slot = y * w + x
+    _store(light, slot, halftone_pixel(view, x, y, settings))
+    data[unsafe_offset=slot] = 0
+
+
+def clear_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    depth: MutPointer[Float32, MutAnyOrigin],
+    stencil: MutPointer[UInt8, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    red: Float32,
+    green: Float32,
+    blue: Float32,
+    alpha: Float32,
+    cleared: Float32,
+):
+    """Clear the light, the data flags, the depth and the stencil:
+    `clear_light`, whose color the host has already premultiplied."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    if x >= Int(width) or y >= Int(height):
+        return
+    var slot = y * Int(width) + x
+    _store(light, slot, FloatColor(red, green, blue, alpha))
+    data[unsafe_offset=slot] = 0
+    depth[unsafe_offset=slot] = cleared
+    stencil[unsafe_offset=slot] = 0
+
+
+def texture_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    overlay: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    opacity: Float32,
+):
+    """Add a texture sampled at every pixel: `texture_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    if x >= Int(width) or y >= Int(height):
+        return
+    var slot = y * Int(width) + x
+    _store(
+        light,
+        slot,
+        texture_pixel(_load(light, slot), _load(overlay, slot), opacity),
+    )
+    data[unsafe_offset=slot] = 0
+
+
+def lut_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    texels: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    lut_width: Int32,
+    lut_height: Int32,
+    lut_depth: Int32,
+    wrap_s: Int32,
+    wrap_t: Int32,
+    wrap_r: Int32,
+    filter: Int32,
+    intensity: Float32,
+):
+    """Grade through a color lookup table: `lut_pixel` on a
+    `DecodedVolume`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    if x >= Int(width) or y >= Int(height):
+        return
+    var lut = DecodedVolume(
+        floats=texels,
+        width=Int(lut_width),
+        height=Int(lut_height),
+        depth=Int(lut_depth),
+        wrap_s=Wrap(Int(wrap_s)),
+        wrap_t=Wrap(Int(wrap_t)),
+        wrap_r=Wrap(Int(wrap_r)),
+        filter=Filter(Int(filter)),
+    )
+    var slot = y * Int(width) + x
+    _store(light, slot, lut_pixel(_load(light, slot), lut, intensity))
+
+
+def keep_outside_mask_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    depth: MutPointer[Float32, MutAnyOrigin],
+    stencil: MutPointer[UInt8, MutAnyOrigin],
+    saved_light: MutPointer[Float32, MutAnyOrigin],
+    saved_data: MutPointer[UInt8, MutAnyOrigin],
+    saved_depth: MutPointer[Float32, MutAnyOrigin],
+    saved_stencil: MutPointer[UInt8, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+):
+    """Put back every pixel the mask keeps, and the whole stencil:
+    `keep_outside_mask`, deciding each pixel by `inside_mask`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    if x >= Int(width) or y >= Int(height):
+        return
+    var slot = y * Int(width) + x
+    var stored = saved_stencil[unsafe_offset=slot]
+    if not inside_mask(Int(stored)):
+        _store(light, slot, _load(saved_light, slot))
+        data[unsafe_offset=slot] = saved_data[unsafe_offset=slot]
+        depth[unsafe_offset=slot] = saved_depth[unsafe_offset=slot]
+    stencil[unsafe_offset=slot] = stored
+
+
+def runs_on_device(kind: PassKind) -> Bool:
+    """Return True if `GpuComposer` runs a pass of this kind on the
+    device, and False if it reads the frame back and runs it on the host.
+
+    The host runs every pass that draws the scene into the frame --
+    render, SSAA, TAA, SSAO, SAO, SSR, outline and mask -- because the
+    GPU rasterizer resolves to bytes and a pass needs the light. It runs
+    SMAA too: its three stages walk rows and columns of edges. A bokeh
+    pass draws its depth on the host and blurs on the device.
+
+    Args:
+        kind: The pass's kind.
+
+    Returns:
+        Whether a kernel runs it.
+    """
+    return (
+        kind == COPY
+        or kind == BLUR
+        or kind == BLOOM
+        or kind == FILM
+        or kind == DOT_SCREEN
+        or kind == SEPIA
+        or kind == VIGNETTE
+        or kind == LUMINOSITY
+        or kind == AFTERIMAGE
+        or kind == OUTPUT
+        or kind == FXAA
+        or kind == BOKEH
+        or kind == GLITCH
+        or kind == HALFTONE
+        or kind == CLEAR
+        or kind == TEXTURE
+        or kind == LUT
+    )
+
+
+def _bloom_floats(width: Int, height: Int) -> Int:
+    """Return how many floats the five bloom levels take back to back."""
+    var total = 0
+    var level_width = halved_size(width)
+    var level_height = halved_size(height)
+    for _ in range(BLOOM_LEVELS):
+        total += level_width * level_height * 4
+        level_width = halved_size(level_width)
+        level_height = halved_size(level_height)
+    return total
+
+
+struct GpuComposer(Movable):
+    """An `EffectComposer`'s frame kept on the GPU between passes.
+
+    `render` runs a composer's passes as `EffectComposer.render` does,
+    on a frame that lives in device buffers. A pass `runs_on_device`
+    says yes to is one or more kernel launches, and the frame does not
+    cross the bus. Any other pass reads the frame back, runs on the host
+    through `EffectComposer.run_step`, and puts it back: a round trip,
+    counted in `round_trips`. Every kernel calls the per-pixel function
+    the host pass calls, so the two agree; `tests/test_gpu.mojo` checks
+    each pass.
+    """
+
+    var width: Int
+    var height: Int
+    # How many passes of the last `render` ran on the host.
+    var round_trips: Int
+    # How many floats `extra` has room for.
+    var extra_room: Int
+    # Every device buffer is declared before the context that owns it,
+    # and `__deinit__` releases them first; see `GpuRenderer.__deinit__`.
+    # The frame: four floats of premultiplied light a pixel, a byte of
+    # whether it holds data, its depth and its stencil.
+    var light: DeviceBuffer[DType.float32]
+    var data: DeviceBuffer[DType.uint8]
+    var depth: DeviceBuffer[DType.float32]
+    var stencil: DeviceBuffer[DType.uint8]
+    # The light before a pass that reads its neighbors, or the bloom's
+    # bright light.
+    var source: DeviceBuffer[DType.float32]
+    # The frame before a pass inside a mask.
+    var saved_light: DeviceBuffer[DType.float32]
+    var saved_data: DeviceBuffer[DType.uint8]
+    var saved_depth: DeviceBuffer[DType.float32]
+    var saved_stencil: DeviceBuffer[DType.uint8]
+    # The bloom's five levels back to back, and one level blurred across.
+    var levels: DeviceBuffer[DType.float32]
+    var across: DeviceBuffer[DType.float32]
+    # What one pass reads besides the frame: a depth, a displacement map,
+    # a texture, a table or a trail. Grown on demand.
+    var extra: DeviceBuffer[DType.float32]
+    # Declared last so that it is released last.
+    var context: DeviceContext
+
+    def __deinit__(deinit self):
+        """Drain the queue, release the buffers, then the context, for the
+        reason `GpuRenderer.__deinit__` gives."""
+        try:
+            self.context.synchronize()
+        except:
+            pass
+        _ = self.light^
+        _ = self.data^
+        _ = self.depth^
+        _ = self.stencil^
+        _ = self.source^
+        _ = self.saved_light^
+        _ = self.saved_data^
+        _ = self.saved_depth^
+        _ = self.saved_stencil^
+        _ = self.levels^
+        _ = self.across^
+        _ = self.extra^
+        _ = self.context^
+
+    def __init__(out self, width: Int, height: Int) raises:
+        """Create the device frame for one size.
+
+        Args:
+            width: The frame's width in pixels.
+            height: The frame's height in pixels.
+
+        Raises:
+            Error: If the dimensions are not positive, or no GPU is
+                present.
+        """
+        if width <= 0 or height <= 0:
+            raise Error("Framebuffer dimensions must be positive")
+        if not available():
+            raise Error("No GPU available")
+        self.width = width
+        self.height = height
+        self.round_trips = 0
+        var count = width * height
+        self.context = DeviceContext()
+        self.light = self.context.enqueue_create_buffer[DType.float32](
+            count * 4
+        )
+        self.data = self.context.enqueue_create_buffer[DType.uint8](count)
+        self.depth = self.context.enqueue_create_buffer[DType.float32](count)
+        self.stencil = self.context.enqueue_create_buffer[DType.uint8](count)
+        self.source = self.context.enqueue_create_buffer[DType.float32](
+            count * 4
+        )
+        self.saved_light = self.context.enqueue_create_buffer[DType.float32](
+            count * 4
+        )
+        self.saved_data = self.context.enqueue_create_buffer[DType.uint8](count)
+        self.saved_depth = self.context.enqueue_create_buffer[DType.float32](
+            count
+        )
+        self.saved_stencil = self.context.enqueue_create_buffer[DType.uint8](
+            count
+        )
+        self.levels = self.context.enqueue_create_buffer[DType.float32](
+            _bloom_floats(width, height)
+        )
+        self.across = self.context.enqueue_create_buffer[DType.float32](
+            halved_size(width) * halved_size(height) * 4
+        )
+        # One pixel's worth to begin with; never zero, as `GpuRenderer`
+        # never allocates zero.
+        self.extra_room = 4
+        self.extra = self.context.enqueue_create_buffer[DType.float32](4)
+
+    def upload(mut self, frame: RenderTarget) raises:
+        """Put a host frame's light, data flags, depth and stencil on the
+        device.
+
+        Args:
+            frame: The frame, of this composer's size.
+
+        Raises:
+            Error: If the frame is another size, or a buffer cannot be
+                written.
+        """
+        if frame.width != self.width or frame.height != self.height:
+            raise Error("A GPU composer's frame must be its own size")
+        var count = self.width * self.height
+        var flags = List[UInt8](length=count, fill=0)
+        for slot in range(count):
+            if frame.data[slot]:
+                flags[slot] = 1
+        with self.light.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=frame.colors.unsafe_ptr().unsafe_bitcast[Float32](),
+                count=count * 4,
+            )
+        with self.data.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(), src=flags.unsafe_ptr(), count=count
+            )
+        with self.depth.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=frame.depth.unsafe_ptr(),
+                count=count,
+            )
+        with self.stencil.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=frame.stencil.unsafe_ptr(),
+                count=count,
+            )
+
+    def download(self, mut frame: RenderTarget) raises:
+        """Copy the device frame into a host frame of the same size,
+        keeping the host frame's clear color, scissor, depth mode and
+        normal attachment.
+
+        Args:
+            frame: The frame, overwritten.
+
+        Raises:
+            Error: If the frame is another size, or a buffer cannot be
+                read.
+        """
+        if frame.width != self.width or frame.height != self.height:
+            raise Error("A GPU composer's frame must be its own size")
+        var count = self.width * self.height
+        var flags = List[UInt8](length=count, fill=0)
+        with self.light.map_to_host() as host:
+            unsafe_memcpy(
+                dest=frame.colors.unsafe_ptr().unsafe_bitcast[Float32](),
+                src=host.unsafe_ptr(),
+                count=count * 4,
+            )
+        with self.data.map_to_host() as host:
+            unsafe_memcpy(
+                dest=flags.unsafe_ptr(), src=host.unsafe_ptr(), count=count
+            )
+        with self.depth.map_to_host() as host:
+            unsafe_memcpy(
+                dest=frame.depth.unsafe_ptr(),
+                src=host.unsafe_ptr(),
+                count=count,
+            )
+        with self.stencil.map_to_host() as host:
+            unsafe_memcpy(
+                dest=frame.stencil.unsafe_ptr(),
+                src=host.unsafe_ptr(),
+                count=count,
+            )
+        for slot in range(count):
+            frame.data[slot] = flags[slot] != 0
+
+    def _room(mut self, count: Int) raises:
+        """Grow `extra` to hold `count` floats."""
+        if count <= self.extra_room:
+            return
+        # The old buffer may still be read by a launch in flight.
+        self.context.synchronize()
+        self.extra = self.context.enqueue_create_buffer[DType.float32](count)
+        self.extra_room = count
+
+    def _put_floats(mut self, values: List[Float32]) raises:
+        """Write `values` to the start of `extra`."""
+        self._room(len(values))
+        with self.extra.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=values.unsafe_ptr(),
+                count=len(values),
+            )
+
+    def _put_colors(mut self, colors: List[FloatColor]) raises:
+        """Write `colors`, four floats each, to the start of `extra`."""
+        self._room(len(colors) * 4)
+        with self.extra.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=colors.unsafe_ptr().unsafe_bitcast[Float32](),
+                count=len(colors) * 4,
+            )
+
+    def _grid(self) -> Tuple[Int, Int]:
+        """Return the 2D grid that covers the frame in whole tiles."""
+        return (ceildiv(self.width, TILE), ceildiv(self.height, TILE))
+
+    def _copy_floats(
+        self,
+        destination: DeviceBuffer[DType.float32],
+        source: DeviceBuffer[DType.float32],
+        count: Int,
+    ) raises:
+        """Copy `count` floats from one device buffer to another."""
+        self.context.enqueue_function[copy_floats_kernel](
+            destination.unsafe_ptr(),
+            source.unsafe_ptr(),
+            Int32(count),
+            grid_dim=ceildiv(count, TILE * TILE),
+            block_dim=TILE * TILE,
+        )
+
+    def _copy_bytes(
+        self,
+        destination: DeviceBuffer[DType.uint8],
+        source: DeviceBuffer[DType.uint8],
+        count: Int,
+    ) raises:
+        """Copy `count` bytes from one device buffer to another."""
+        self.context.enqueue_function[copy_bytes_kernel](
+            destination.unsafe_ptr(),
+            source.unsafe_ptr(),
+            Int32(count),
+            grid_dim=ceildiv(count, TILE * TILE),
+            block_dim=TILE * TILE,
+        )
+
+    def _take_source(mut self) raises:
+        """Copy the light to `source`, for a pass that reads its
+        neighbors as they were."""
+        self._copy_floats(self.source, self.light, self.width * self.height * 4)
+
+    def _save(mut self) raises:
+        """Copy the whole frame aside, before a pass inside a mask."""
+        var count = self.width * self.height
+        self._copy_floats(self.saved_light, self.light, count * 4)
+        self._copy_bytes(self.saved_data, self.data, count)
+        self._copy_floats(self.saved_depth, self.depth, count)
+        self._copy_bytes(self.saved_stencil, self.stencil, count)
+
+    def _keep_outside_mask(mut self) raises:
+        """Put back what the mask keeps, after a pass inside it."""
+        var grid = self._grid()
+        self.context.enqueue_function[keep_outside_mask_kernel](
+            self.light.unsafe_ptr(),
+            self.data.unsafe_ptr(),
+            self.depth.unsafe_ptr(),
+            self.stencil.unsafe_ptr(),
+            self.saved_light.unsafe_ptr(),
+            self.saved_data.unsafe_ptr(),
+            self.saved_depth.unsafe_ptr(),
+            self.saved_stencil.unsafe_ptr(),
+            Int32(self.width),
+            Int32(self.height),
+            grid_dim=grid,
+            block_dim=(TILE, TILE),
+        )
+
+    def _per_pixel(
+        mut self,
+        kind: PassKind,
+        a: Float32 = 0,
+        b: Float32 = 0,
+        c: Float32 = 0,
+        d: Float32 = 0,
+        e: Float32 = 0,
+        flag: Int = 0,
+    ) raises:
+        """Launch `post_pixel_kernel` for one pass."""
+        var grid = self._grid()
+        self.context.enqueue_function[post_pixel_kernel](
+            self.light.unsafe_ptr(),
+            self.data.unsafe_ptr(),
+            Int32(self.width),
+            Int32(self.height),
+            Int32(kind.value),
+            a,
+            b,
+            c,
+            d,
+            e,
+            Int32(flag),
+            grid_dim=grid,
+            block_dim=(TILE, TILE),
+        )
+
+    def _blur(mut self, spread: Float32, across: Bool) raises:
+        """Blur the frame along one axis."""
+        self._take_source()
+        var grid = self._grid()
+        self.context.enqueue_function[blur_kernel](
+            self.light.unsafe_ptr(),
+            self.source.unsafe_ptr(),
+            Int32(self.width),
+            Int32(self.height),
+            spread,
+            Int32(1 if across else 0),
+            grid_dim=grid,
+            block_dim=(TILE, TILE),
+        )
+
+    def _bloom(
+        mut self, strength: Float32, radius: Float32, threshold: Float32
+    ) raises:
+        """Run `bloom_light`'s stages as kernels: the bright light, five
+        levels each blurred across and then down, and the composite."""
+        var grid = self._grid()
+        self.context.enqueue_function[bright_kernel](
+            self.source.unsafe_ptr(),
+            self.light.unsafe_ptr(),
+            Int32(self.width),
+            Int32(self.height),
+            threshold,
+            grid_dim=grid,
+            block_dim=(TILE, TILE),
+        )
+        var from_pointer = self.source.unsafe_ptr().unsafe_origin_cast[
+            MutAnyOrigin
+        ]()
+        var from_width = self.width
+        var from_height = self.height
+        var level_width = halved_size(self.width)
+        var level_height = halved_size(self.height)
+        var start = 0
+        for level in range(BLOOM_LEVELS):
+            var level_grid = (
+                ceildiv(level_width, TILE),
+                ceildiv(level_height, TILE),
+            )
+            var kernel = bloom_kernel(level)
+            self.context.enqueue_function[bloom_blur_kernel](
+                self.across.unsafe_ptr(),
+                from_pointer,
+                Int32(from_width),
+                Int32(from_height),
+                Int32(level_width),
+                Int32(level_height),
+                Int32(kernel),
+                Int32(1),
+                grid_dim=level_grid,
+                block_dim=(TILE, TILE),
+            )
+            var to_pointer = (
+                self.levels.unsafe_ptr()
+                .unsafe_offset(start)
+                .unsafe_origin_cast[MutAnyOrigin]()
+            )
+            self.context.enqueue_function[bloom_blur_kernel](
+                to_pointer,
+                self.across.unsafe_ptr(),
+                Int32(level_width),
+                Int32(level_height),
+                Int32(level_width),
+                Int32(level_height),
+                Int32(kernel),
+                Int32(0),
+                grid_dim=level_grid,
+                block_dim=(TILE, TILE),
+            )
+            from_pointer = to_pointer
+            from_width = level_width
+            from_height = level_height
+            start += level_width * level_height * 4
+            level_width = halved_size(level_width)
+            level_height = halved_size(level_height)
+        self.context.enqueue_function[bloom_composite_kernel](
+            self.light.unsafe_ptr(),
+            self.levels.unsafe_ptr(),
+            Int32(self.width),
+            Int32(self.height),
+            radius,
+            strength,
+            grid_dim=grid,
+            block_dim=(TILE, TILE),
+        )
+
+    def _run[
+        C: Camera
+    ](
+        mut self,
+        mut composer: EffectComposer,
+        index: Int,
+        frame: RenderTarget,
+        renderer: Renderer,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        delta_time: Float32,
+    ) raises:
+        """Run one pass `runs_on_device` says yes to, as
+        `EffectComposer.run_step` runs it on the host."""
+        var grid = self._grid()
+        var kind = composer.passes[index].kind
+        var count = self.width * self.height
+        if kind == COPY:
+            self._per_pixel(COPY, composer.passes[index].strength)
+        elif kind == BLUR:
+            self._blur(composer.passes[index].radius, True)
+            self._blur(composer.passes[index].radius, False)
+        elif kind == BLOOM:
+            self._bloom(
+                composer.passes[index].strength,
+                composer.passes[index].radius,
+                composer.passes[index].threshold,
+            )
+        elif kind == FILM:
+            composer.passes[index].time += delta_time
+            ref step = composer.passes[index]
+            self._per_pixel(
+                FILM,
+                step.strength,
+                step.time,
+                flag=1 if step.grayscale else 0,
+            )
+        elif kind == DOT_SCREEN:
+            ref step = composer.passes[index]
+            self._per_pixel(
+                DOT_SCREEN,
+                step.center.x,
+                step.center.y,
+                sin(step.angle.value),
+                cos(step.angle.value),
+                step.scale,
+            )
+        elif kind == SEPIA:
+            self._per_pixel(SEPIA, composer.passes[index].strength)
+        elif kind == VIGNETTE:
+            self._per_pixel(
+                VIGNETTE,
+                composer.passes[index].offset,
+                composer.passes[index].strength,
+            )
+        elif kind == LUMINOSITY:
+            self._per_pixel(LUMINOSITY)
+        elif kind == AFTERIMAGE:
+            # The trail is kept on the host, in the composer, so both
+            # backends share it and `reset` forgets it.
+            if len(composer.memories[index]) == count:
+                self._put_colors(composer.memories[index])
+                self.context.enqueue_function[afterimage_kernel](
+                    self.light.unsafe_ptr(),
+                    self.extra.unsafe_ptr(),
+                    Int32(self.width),
+                    Int32(self.height),
+                    composer.passes[index].strength,
+                    grid_dim=grid,
+                    block_dim=(TILE, TILE),
+                )
+            var trail = List[FloatColor](
+                length=count, fill=FloatColor(0, 0, 0, 0)
+            )
+            with self.light.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=trail.unsafe_ptr().unsafe_bitcast[Float32](),
+                    src=host.unsafe_ptr(),
+                    count=count * 4,
+                )
+            composer.memories[index] = trail^
+        elif kind == OUTPUT:
+            var curve = renderer.tone_curve()
+            if curve != NO_TONE_MAPPING:
+                self._per_pixel(
+                    OUTPUT, renderer.tone_mapping_exposure, flag=curve.value
+                )
+        elif kind == FXAA:
+            self._take_source()
+            self.context.enqueue_function[fxaa_kernel](
+                self.light.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == BOKEH:
+            var view = depth_view(renderer, scene, assets, camera)
+            self._put_floats(view.depth)
+            self._take_source()
+            ref settings = composer.passes[index].bokeh
+            self.context.enqueue_function[bokeh_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                self.extra.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                view.near,
+                view.far,
+                settings.focus.value,
+                settings.aperture,
+                settings.max_blur,
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == GLITCH:
+            var uniforms = glitch_uniforms(composer.passes[index].glitch)
+            if uniforms.bypass:
+                return
+            ref glitch = composer.passes[index].glitch
+            self._put_floats(glitch_heightmap(glitch.size, glitch.seed))
+            self._take_source()
+            self.context.enqueue_function[glitch_kernel](
+                self.light.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                self.extra.unsafe_ptr(),
+                Int32(glitch.size),
+                Int32(self.width),
+                Int32(self.height),
+                uniforms.seed,
+                uniforms.amount,
+                uniforms.seed_x,
+                uniforms.seed_y,
+                uniforms.distortion_x,
+                uniforms.distortion_y,
+                uniforms.amount * cos(uniforms.angle.value),
+                uniforms.amount * sin(uniforms.angle.value),
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == HALFTONE:
+            ref settings = composer.passes[index].halftone
+            if settings.disable:
+                return
+            self._take_source()
+            self.context.enqueue_function[halftone_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                Int32(settings.shape.value),
+                settings.radius,
+                settings.rotate_r.value,
+                settings.rotate_g.value,
+                settings.rotate_b.value,
+                settings.scatter,
+                settings.blending,
+                Int32(settings.blending_mode.value),
+                Int32(1 if settings.grayscale else 0),
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == CLEAR:
+            var value = FloatColor(
+                srgb=composer.passes[index].clear_color
+            ).premultiplied()
+            self.context.enqueue_function[clear_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.depth.unsafe_ptr(),
+                self.stencil.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                value.r,
+                value.g,
+                value.b,
+                value.a,
+                cleared_depth(frame.depth_mode),
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == TEXTURE:
+            self._put_colors(
+                texture_overlay(
+                    assets.textures.get(composer.passes[index].texture),
+                    self.width,
+                    self.height,
+                )
+            )
+            self.context.enqueue_function[texture_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.extra.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                composer.passes[index].strength,
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        else:
+            # `LUT`: the last kind `runs_on_device` says yes to.
+            ref lut = assets.data_3d_textures.get(composer.passes[index].lut)
+            lut.validate()
+            self._put_colors(decoded_texels(lut))
+            self.context.enqueue_function[lut_kernel](
+                self.light.unsafe_ptr(),
+                self.extra.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                Int32(lut.image.width),
+                Int32(lut.image.height),
+                Int32(lut.image.depth),
+                Int32(lut.wrap_s.value),
+                Int32(lut.wrap_t.value),
+                Int32(lut.wrap_r.value),
+                Int32(lut.filter.value),
+                composer.passes[index].strength,
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+
+    def render[
+        C: Camera
+    ](
+        mut self,
+        mut composer: EffectComposer,
+        renderer: Renderer,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        delta_time: Float32 = 0.0,
+    ) raises -> Framebuffer:
+        """Run every enabled pass of `composer` in order on one frame and
+        return it: `EffectComposer.render`, with the frame on the device.
+
+        The frame starts cleared to the renderer's background, on the
+        host, and goes up once. Each pass then runs on the device, or on
+        the host through a round trip; see `runs_on_device`. A mask works
+        as on the host: the frame is copied aside on the device before a
+        pass inside it and put back outside it after. The frame comes back
+        once at the end and is resolved through no curve, as the host
+        composer resolves it.
+
+        Args:
+            composer: The passes, and what the afterimage and TAA passes
+                keep between frames.
+            renderer: What a render pass draws with, and whose size,
+                background, workers and curve the frame takes.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera a render pass projects through.
+            delta_time: How many seconds since the last frame.
+
+        Returns:
+            The rendered image.
+
+        Raises:
+            Error: Everything `EffectComposer.render` raises, if the
+                renderer is not this composer's size, or if a device
+                buffer cannot be read or written.
+        """
+        check_frame_time(delta_time)
+        if renderer.width != self.width or renderer.height != self.height:
+            raise Error("A GPU composer must be the renderer's size")
+        # The frame carries the normal attachment the host composer's
+        # frame carries. The normals stay on the host: only a render
+        # writes them and only a screen-space pass reads them, and both
+        # run on the host frame, which `download` and `upload` leave them
+        # in.
+        var frame = RenderTarget(
+            self.width,
+            self.height,
+            renderer.background,
+            outputs=frame_outputs(composer.passes),
+        )
+        self.upload(frame)
+        self.round_trips = 0
+        var mask_active = False
+        for index in range(composer.pass_count()):
+            check_pass(composer.passes[index])
+            if not composer.passes[index].enabled:
+                continue
+            var kind = composer.passes[index].kind
+            if kind == CLEAR_MASK:
+                mask_active = False
+                continue
+            var masked = mask_active and kind != MASK
+            if masked:
+                self._save()
+            if runs_on_device(kind):
+                self._run(
+                    composer,
+                    index,
+                    frame,
+                    renderer,
+                    scene,
+                    assets,
+                    camera,
+                    delta_time,
+                )
+            else:
+                self.download(frame)
+                composer.run_step(
+                    index, frame, renderer, scene, assets, camera, delta_time
+                )
+                self.upload(frame)
+                self.round_trips += 1
+            if kind == MASK:
+                mask_active = True
+            elif masked:
+                self._keep_outside_mask()
+        self.download(frame)
+        return frame.resolve(renderer.workers, NO_TONE_MAPPING, 1.0)

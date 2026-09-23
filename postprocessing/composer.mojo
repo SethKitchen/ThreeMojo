@@ -35,8 +35,11 @@ the straight color of each pixel and premultiplies it back, as a shader
 sees a straight texel. Alpha is kept by every pass but the copy, which
 scales it as three.js's `CopyShader` scales the whole texel.
 
-The passes run on the host. The GPU backend draws bytes, not light, and
-has no target a pass could read; see `docs/wiki/Post-processing.md`.
+The passes run on the host. Each pass's arithmetic for one pixel is a
+function of its own, `copy_pixel`, `blur_pixel`, `bloom_glow` and the
+rest, which `render.gpu.GpuComposer`'s kernels call as well, so a
+composer can run with its frame on the GPU; see
+`docs/wiki/GPU-backend.md`.
 """
 
 from cameras.camera import Camera
@@ -73,7 +76,7 @@ from postprocessing.effects import (
     mask_stencil,
     texture_light,
 )
-from postprocessing.sampling import clamped_tap, mix, sample, u_of, v_of
+from postprocessing.sampling import LightView, mix, u_of, v_of
 from postprocessing.screen_space import (
     DepthView,
     OutlineSettings,
@@ -1141,13 +1144,12 @@ struct EffectComposer(Movable):
                 or fails its `validate`, or if the frame time is negative
                 or not finite.
         """
-        if not isfinite(delta_time) or delta_time < 0:
-            raise Error("A frame time is a non-negative number of seconds")
+        check_frame_time(delta_time)
         # A frame with a normal attachment when a screen-space pass reads
         # normals, so the render that fills it leaves them in the same
         # pass, as three.js's multiple render targets would. See
         # `postprocessing.screen_space`.
-        var outputs = _frame_outputs(self.passes)
+        var outputs = frame_outputs(self.passes)
         var frame = RenderTarget(
             renderer.width,
             renderer.height,
@@ -1159,138 +1161,223 @@ struct EffectComposer(Movable):
         var mask_active = False
         for index in range(len(self.passes)):
             check_pass(self.passes[index])
-            ref step = self.passes[index]
-            if not step.enabled:
+            if not self.passes[index].enabled:
                 continue
-            if step.kind == MASK:
-                _mask(frame, step, renderer, scene, assets, camera)
-                mask_active = True
-                continue
-            if step.kind == CLEAR_MASK:
+            var kind = self.passes[index].kind
+            if kind == CLEAR_MASK:
                 mask_active = False
+                continue
+            if kind == MASK:
+                self.run_step(
+                    index, frame, renderer, scene, assets, camera, delta_time
+                )
+                mask_active = True
                 continue
             var saved = FrameCopy()
             if mask_active:
                 saved = FrameCopy(frame)
-            if step.kind == RENDER:
-                _draw(frame, renderer, scene, assets, camera)
-            elif step.kind == COPY:
-                copy_light(frame, step.strength)
-            elif step.kind == BLUR:
-                blur_light(frame, step.radius)
-            elif step.kind == BLOOM:
-                bloom_light(frame, step.strength, step.radius, step.threshold)
-            elif step.kind == FILM:
-                self.passes[index].time += delta_time
-                film_light(
-                    frame,
-                    step.strength,
-                    step.grayscale,
-                    self.passes[index].time,
-                )
-            elif step.kind == DOT_SCREEN:
-                dot_screen_light(frame, step.center, step.angle, step.scale)
-            elif step.kind == SEPIA:
-                sepia_light(frame, step.strength)
-            elif step.kind == VIGNETTE:
-                vignette_light(frame, step.offset, step.strength)
-            elif step.kind == LUMINOSITY:
-                luminosity_light(frame)
-            elif step.kind == AFTERIMAGE:
-                afterimage_light(frame, self.memories[index], step.strength)
-            elif step.kind == FXAA:
-                fxaa_light(frame)
-            elif step.kind == SMAA:
-                smaa_light(frame)
-            elif step.kind == SSAA_RENDER:
-                frame = supersample(
-                    renderer,
-                    scene,
-                    assets,
-                    camera,
-                    step.sample_level,
-                    step.unbiased,
-                )
-            elif step.kind == SSAO:
-                _draw(frame, renderer, scene, assets, camera)
-                ssao_light(frame, _depth_view(frame, camera), step.ssao)
-            elif step.kind == SAO:
-                var drawn = RenderTarget(
-                    renderer.width,
-                    renderer.height,
-                    renderer.background,
-                    outputs=outputs,
-                )
-                _draw(drawn, renderer, scene, assets, camera)
-                # three.js draws a fresh `randomSeed` every frame.
-                var random = SeededRandom(step.sao.seed)
-                var random_seed = Float32(random.next())
-                self.passes[index].sao.seed = Int(random.state)
-                sao_light(
-                    frame,
-                    _depth_view(drawn, camera),
-                    self.passes[index].sao,
-                    random_seed,
-                )
-            elif step.kind == SSR:
-                _draw(frame, renderer, scene, assets, camera)
-                ssr_light(frame, _depth_view(frame, camera), step.ssr)
-            elif step.kind == OUTLINE:
-                self.passes[index].time += delta_time
-                _outline(
-                    frame,
-                    self.passes[index],
-                    renderer,
-                    scene,
-                    assets,
-                    camera,
-                )
-            elif step.kind == TAA_RENDER:
-                taa_render(
-                    frame,
-                    self.passes[index],
-                    self.accumulations[index],
-                    renderer,
-                    scene,
-                    assets,
-                    camera,
-                )
-            elif step.kind == BOKEH:
-                var depth = RenderTarget(
-                    renderer.width, renderer.height, renderer.background
-                )
-                _draw(depth, renderer, scene, assets, camera)
-                bokeh_light(frame, _depth_view(depth, camera), step.bokeh)
-            elif step.kind == GLITCH:
-                var uniforms = glitch_uniforms(self.passes[index].glitch)
-                ref glitch = self.passes[index].glitch
-                glitch_light(
-                    frame,
-                    glitch_heightmap(glitch.size, glitch.seed),
-                    glitch.size,
-                    uniforms,
-                )
-            elif step.kind == HALFTONE:
-                halftone_light(frame, step.halftone)
-            elif step.kind == CLEAR:
-                clear_light(frame, step.clear_color)
-            elif step.kind == TEXTURE:
-                texture_light(
-                    frame, assets.textures.get(step.texture), step.strength
-                )
-            elif step.kind == LUT:
-                lut_light(
-                    frame, assets.data_3d_textures.get(step.lut), step.strength
-                )
-            else:
-                # `OUTPUT`: the only kind left once `check_pass` has had
-                # its say.
-                output_light(
-                    frame, renderer.tone_curve(), renderer.tone_mapping_exposure
-                )
+            self.run_step(
+                index, frame, renderer, scene, assets, camera, delta_time
+            )
             if mask_active:
                 keep_outside_mask(frame, saved)
         return frame.resolve(renderer.workers, NO_TONE_MAPPING, 1.0)
+
+    def run_step[
+        C: Camera
+    ](
+        mut self,
+        index: Int,
+        mut frame: RenderTarget,
+        renderer: Renderer,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        delta_time: Float32,
+    ) raises:
+        """Run one pass on the host, as `render` runs it, less the mask's
+        bookkeeping: `render` saves the frame before a pass inside a mask
+        and puts back what the mask keeps after it.
+
+        The GPU backend runs this for a pass it has no kernel for, on a
+        frame it has read back; see `render.gpu.GpuComposer`.
+
+        Args:
+            index: Which pass, in order.
+            frame: The frame, changed in place.
+            renderer: What a pass draws with.
+            scene: The transform hierarchy, and the meshes and lights in it.
+            assets: The geometry, materials and textures the meshes name.
+            camera: The camera a pass projects through.
+            delta_time: How many seconds since the last frame.
+
+        Raises:
+            Error: Everything `Renderer.render_into` raises, or if a
+                texture or a table a pass names is not in the assets or
+                fails its `validate`.
+        """
+        ref step = self.passes[index]
+        if step.kind == MASK:
+            _mask(frame, step, renderer, scene, assets, camera)
+        elif step.kind == CLEAR_MASK:
+            # Nothing to draw: `render` turns the mask off.
+            pass
+        elif step.kind == RENDER:
+            _draw(frame, renderer, scene, assets, camera)
+        elif step.kind == COPY:
+            copy_light(frame, step.strength)
+        elif step.kind == BLUR:
+            blur_light(frame, step.radius)
+        elif step.kind == BLOOM:
+            bloom_light(frame, step.strength, step.radius, step.threshold)
+        elif step.kind == FILM:
+            self.passes[index].time += delta_time
+            film_light(
+                frame,
+                step.strength,
+                step.grayscale,
+                self.passes[index].time,
+            )
+        elif step.kind == DOT_SCREEN:
+            dot_screen_light(frame, step.center, step.angle, step.scale)
+        elif step.kind == SEPIA:
+            sepia_light(frame, step.strength)
+        elif step.kind == VIGNETTE:
+            vignette_light(frame, step.offset, step.strength)
+        elif step.kind == LUMINOSITY:
+            luminosity_light(frame)
+        elif step.kind == AFTERIMAGE:
+            afterimage_light(frame, self.memories[index], step.strength)
+        elif step.kind == FXAA:
+            fxaa_light(frame)
+        elif step.kind == SMAA:
+            smaa_light(frame)
+        elif step.kind == SSAA_RENDER:
+            frame = supersample(
+                renderer,
+                scene,
+                assets,
+                camera,
+                step.sample_level,
+                step.unbiased,
+            )
+        elif step.kind == SSAO:
+            _draw(frame, renderer, scene, assets, camera)
+            ssao_light(frame, _depth_view(frame, camera), step.ssao)
+        elif step.kind == SAO:
+            # The frame's own outputs, so the drawn target carries the
+            # normals the SAO reads, as `render`'s frame does.
+            var drawn = RenderTarget(
+                renderer.width,
+                renderer.height,
+                renderer.background,
+                outputs=frame_outputs(self.passes),
+            )
+            _draw(drawn, renderer, scene, assets, camera)
+            # three.js draws a fresh `randomSeed` every frame.
+            var random = SeededRandom(step.sao.seed)
+            var random_seed = Float32(random.next())
+            self.passes[index].sao.seed = Int(random.state)
+            sao_light(
+                frame,
+                _depth_view(drawn, camera),
+                self.passes[index].sao,
+                random_seed,
+            )
+        elif step.kind == SSR:
+            _draw(frame, renderer, scene, assets, camera)
+            ssr_light(frame, _depth_view(frame, camera), step.ssr)
+        elif step.kind == OUTLINE:
+            self.passes[index].time += delta_time
+            _outline(
+                frame,
+                self.passes[index],
+                renderer,
+                scene,
+                assets,
+                camera,
+            )
+        elif step.kind == TAA_RENDER:
+            taa_render(
+                frame,
+                self.passes[index],
+                self.accumulations[index],
+                renderer,
+                scene,
+                assets,
+                camera,
+            )
+        elif step.kind == BOKEH:
+            bokeh_light(
+                frame, depth_view(renderer, scene, assets, camera), step.bokeh
+            )
+        elif step.kind == GLITCH:
+            var uniforms = glitch_uniforms(self.passes[index].glitch)
+            ref glitch = self.passes[index].glitch
+            glitch_light(
+                frame,
+                glitch_heightmap(glitch.size, glitch.seed),
+                glitch.size,
+                uniforms,
+            )
+        elif step.kind == HALFTONE:
+            halftone_light(frame, step.halftone)
+        elif step.kind == CLEAR:
+            clear_light(frame, step.clear_color)
+        elif step.kind == TEXTURE:
+            texture_light(
+                frame, assets.textures.get(step.texture), step.strength
+            )
+        elif step.kind == LUT:
+            lut_light(
+                frame, assets.data_3d_textures.get(step.lut), step.strength
+            )
+        else:
+            # `OUTPUT`: the only kind left once `check_pass` has had
+            # its say.
+            output_light(
+                frame, renderer.tone_curve(), renderer.tone_mapping_exposure
+            )
+
+
+def check_frame_time(delta_time: Float32) raises:
+    """Refuse a frame time no composer could advance by.
+
+    Args:
+        delta_time: How many seconds since the last frame.
+
+    Raises:
+        Error: If the time is negative or not finite.
+    """
+    if not isfinite(delta_time) or delta_time < 0:
+        raise Error("A frame time is a non-negative number of seconds")
+
+
+def depth_view[
+    C: Camera
+](
+    renderer: Renderer, scene: Scene, assets: Assets, camera: C
+) raises -> DepthView:
+    """Draw the scene into a fresh target and return its depth read
+    through the camera: what a bokeh pass reads, on either backend.
+
+    Args:
+        renderer: What the scene is drawn with.
+        scene: The transform hierarchy, and the meshes and lights in it.
+        assets: The geometry, materials and textures the meshes name.
+        camera: The camera the scene is drawn through.
+
+    Returns:
+        The depth, with the camera's near and far distances.
+
+    Raises:
+        Error: Everything `Renderer.render_into` and `DepthView` raise.
+    """
+    var drawn = RenderTarget(
+        renderer.width, renderer.height, renderer.background
+    )
+    _draw(drawn, renderer, scene, assets, camera)
+    return _depth_view(drawn, camera)
 
 
 def _draw[
@@ -1314,10 +1401,17 @@ def _draw[
     renderer.render_into(frame, scene, assets, camera)
 
 
-def _frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
+def frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
     """Return the outputs a composer's frame is drawn with: the color and
     a normal attachment when an enabled SSAO, SAO or SSR pass reads
-    normals, and the color alone otherwise."""
+    normals, and the color alone otherwise.
+
+    Args:
+        passes: The composer's passes.
+
+    Returns:
+        The outputs.
+    """
     for index in range(len(passes)):
         ref step = passes[index]
         var reads = step.kind == SSAO or step.kind == SAO or step.kind == SSR
@@ -1594,6 +1688,24 @@ def luminance(color: FloatColor) -> Float32:
     return 0.2126729 * color.r + 0.7151522 * color.g + 0.0721750 * color.b
 
 
+def copy_pixel(color: FloatColor, opacity: Float32) -> FloatColor:
+    """Return one pixel of `CopyShader`: every channel scaled.
+
+    Args:
+        color: The pixel's light, premultiplied.
+        opacity: What to scale by.
+
+    Returns:
+        The scaled light.
+    """
+    return FloatColor(
+        color.r * opacity,
+        color.g * opacity,
+        color.b * opacity,
+        color.a * opacity,
+    )
+
+
 def copy_light(mut frame: RenderTarget, opacity: Float32):
     """Scale every channel of every pixel: three.js's `CopyShader`.
 
@@ -1602,13 +1714,48 @@ def copy_light(mut frame: RenderTarget, opacity: Float32):
         opacity: What to scale by.
     """
     for index in range(len(frame.colors)):  # pragma: no branch
-        ref color = frame.colors[index]
-        frame.colors[index] = FloatColor(
-            color.r * opacity,
-            color.g * opacity,
-            color.b * opacity,
-            color.a * opacity,
+        frame.colors[index] = copy_pixel(frame.colors[index], opacity)
+
+
+def blur_pixel(
+    source: LightView, x: Int, y: Int, spread: Float32, across: Bool
+) -> FloatColor:
+    """Return one pixel of three.js's nine-tap blur along one axis, the
+    taps `spread` pixels apart and held at the edges:
+    `HorizontalBlurShader` when `across`, `VerticalBlurShader` otherwise.
+
+    Args:
+        source: The frame before the pass.
+        x: The column.
+        y: The row, down from the top.
+        spread: How many pixels apart the taps are.
+        across: Whether the taps run along the row.
+
+    Returns:
+        The weighted sum of the nine taps.
+    """
+    var sum = FloatColor(0, 0, 0, 0)
+    var tap = 0
+    while tap < 9:
+        var weight = BLUR_LAST_WEIGHT
+        if tap < 8:
+            weight = BLUR_WEIGHTS[tap]
+        var step = Float32(tap - 4) * spread
+        var tx = Float32(x)
+        var ty = Float32(y)
+        if across:
+            tx += step
+        else:
+            ty += step
+        var here = source.tap(tx, ty)
+        sum = FloatColor(
+            sum.r + here.r * weight,
+            sum.g + here.g * weight,
+            sum.b + here.b * weight,
+            sum.a + here.a * weight,
         )
+        tap += 1
+    return sum
 
 
 def _blur_along(mut frame: RenderTarget, spread: Float32, across: Bool):
@@ -1617,6 +1764,7 @@ def _blur_along(mut frame: RenderTarget, spread: Float32, across: Bool):
     var width = frame.width
     var height = frame.height
     var source = frame.colors.copy()
+    var view = LightView(source, width, height)
     # Spelled with `while`: three nested `for` loops over computed
     # bounds send the compiler into the hang described in
     # docs/wiki/The-Mojo-compiler-hang.md.
@@ -1624,30 +1772,11 @@ def _blur_along(mut frame: RenderTarget, spread: Float32, across: Bool):
     while y < height:
         var x = 0
         while x < width:
-            var sum = FloatColor(0, 0, 0, 0)
-            var tap = 0
-            while tap < 9:
-                var weight = BLUR_LAST_WEIGHT
-                if tap < 8:
-                    weight = BLUR_WEIGHTS[tap]
-                var step = Float32(tap - 4) * spread
-                var tx = Float32(x)
-                var ty = Float32(y)
-                if across:
-                    tx += step
-                else:
-                    ty += step
-                var here = clamped_tap(source, width, height, tx, ty)
-                sum = FloatColor(
-                    sum.r + here.r * weight,
-                    sum.g + here.g * weight,
-                    sum.b + here.b * weight,
-                    sum.a + here.a * weight,
-                )
-                tap += 1
-            frame.colors[y * width + x] = sum
+            frame.colors[y * width + x] = blur_pixel(view, x, y, spread, across)
             x += 1
         y += 1
+    # The view does not keep the copy alive; this does.
+    _ = source^
 
 
 def blur_light(mut frame: RenderTarget, spread: Float32):
@@ -1667,6 +1796,61 @@ def _gaussian(x: Float32, sigma: Float32) -> Float32:
     return 0.39894 * exp(-0.5 * x * x / (sigma * sigma)) / sigma
 
 
+def separable_blur_pixel(
+    source: LightView,
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    kernel: Int,
+    across: Bool,
+) -> FloatColor:
+    """Return one pixel of `UnrealBloomPass`'s separable blur at one size:
+    a Gaussian of `kernel` taps to each side whose sigma is the kernel,
+    read from `source` at the pixel's texture coordinate.
+
+    Args:
+        source: The image blurred, of any size.
+        x: The column of the image written.
+        y: The row of the image written, down from the top.
+        width: The width of the image written.
+        height: The height of the image written.
+        kernel: How many taps to each side, the center included.
+        across: Whether the taps run along the row.
+
+    Returns:
+        The blurred light, opaque.
+    """
+    var sigma = Float32(kernel)
+    var step_u = Float32(0)
+    var step_v = Float32(0)
+    if across:
+        step_u = 1 / Float32(width)
+    else:
+        step_v = 1 / Float32(height)
+    var u = u_of(x, width)
+    var v = v_of(y, height)
+    var weight = _gaussian(0, sigma)
+    var center = source.sample(u, v)
+    var sum = center.scaled(weight)
+    var total = weight
+    var tap = 1
+    while tap < kernel:
+        var offset = Float32(tap)
+        var w = _gaussian(offset, sigma)
+        var ahead = source.sample(u + step_u * offset, v + step_v * offset)
+        var behind = source.sample(u - step_u * offset, v - step_v * offset)
+        sum = FloatColor(
+            sum.r + (ahead.r + behind.r) * w,
+            sum.g + (ahead.g + behind.g) * w,
+            sum.b + (ahead.b + behind.b) * w,
+            1,
+        )
+        total += 2 * w
+        tap += 1
+    return FloatColor(sum.r / total, sum.g / total, sum.b / total, 1)
+
+
 def _separable_blur(
     source: List[FloatColor],
     source_width: Int,
@@ -1677,56 +1861,17 @@ def _separable_blur(
     across: Bool,
 ) -> List[FloatColor]:
     """Return `source` blurred along one axis into a `width` by `height`
-    image: `UnrealBloomPass`'s separable blur at one size, a Gaussian of
-    `kernel` taps to each side whose sigma is the kernel."""
+    image: `separable_blur_pixel` at every pixel."""
     var out = List[FloatColor](
         length=width * height, fill=FloatColor(0, 0, 0, 1)
     )
-    var sigma = Float32(kernel)
-    var step_u = Float32(0)
-    var step_v = Float32(0)
-    if across:
-        step_u = 1 / Float32(width)
-    else:
-        step_v = 1 / Float32(height)
+    var view = LightView(source, source_width, source_height)
     var y = 0
     while y < height:
         var x = 0
         while x < width:
-            var u = u_of(x, width)
-            var v = v_of(y, height)
-            var weight = _gaussian(0, sigma)
-            var center = sample(source, source_width, source_height, u, v)
-            var sum = center.scaled(weight)
-            var total = weight
-            var tap = 1
-            while tap < kernel:
-                var offset = Float32(tap)
-                var w = _gaussian(offset, sigma)
-                var ahead = sample(
-                    source,
-                    source_width,
-                    source_height,
-                    u + step_u * offset,
-                    v + step_v * offset,
-                )
-                var behind = sample(
-                    source,
-                    source_width,
-                    source_height,
-                    u - step_u * offset,
-                    v - step_v * offset,
-                )
-                sum = FloatColor(
-                    sum.r + (ahead.r + behind.r) * w,
-                    sum.g + (ahead.g + behind.g) * w,
-                    sum.b + (ahead.b + behind.b) * w,
-                    1,
-                )
-                total += 2 * w
-                tap += 1
-            out[y * width + x] = FloatColor(
-                sum.r / total, sum.g / total, sum.b / total, 1
+            out[y * width + x] = separable_blur_pixel(
+                view, x, y, width, height, kernel, across
             )
             x += 1
         y += 1
@@ -1742,10 +1887,100 @@ def _bloom_factor(level: Int, radius: Float32) -> Float32:
     return factor + (mirror - factor) * radius
 
 
-def _halved(size: Int) -> Int:
+def halved_size(size: Int) -> Int:
     """Return a size halved and rounded as three.js's `Math.round(x / 2)`
-    rounds it: never below one, since no target is narrower than one."""
+    rounds it: never below one, since no target is narrower than one.
+
+    Args:
+        size: A width or a height, positive.
+
+    Returns:
+        Half of it, rounded up.
+    """
     return (size + 1) // 2
+
+
+def bloom_kernel(level: Int) -> Int:
+    """Return how many taps to each side a bloom level's blur reads:
+    three.js's `kernelSizeArray`, three and two more a level.
+
+    Args:
+        level: The level, zero through four.
+
+    Returns:
+        The taps to each side, the center included.
+    """
+    return 3 + 2 * level
+
+
+def bright_pixel(color: FloatColor, threshold: Float32) -> FloatColor:
+    """Return one pixel of `LuminosityHighPassShader` as the bloom runs
+    it: the light kept by how far its luminance passes `threshold`, faded
+    in over a hundredth.
+
+    Args:
+        color: The pixel's light, premultiplied.
+        threshold: The luminance the pixel must reach.
+
+    Returns:
+        The light kept.
+    """
+    var alpha = smoothstep(
+        threshold, threshold + BLOOM_SMOOTH_WIDTH, luminance(color)
+    )
+    return FloatColor(
+        color.r * alpha, color.g * alpha, color.b * alpha, color.a * alpha
+    )
+
+
+def bloom_glow(
+    glow: FloatColor,
+    level: LightView,
+    index: Int,
+    u: Float32,
+    v: Float32,
+    radius: Float32,
+    strength: Float32,
+) -> FloatColor:
+    """Return `glow` with one more bloom level added: one term of
+    `UnrealBloomPass`'s composite shader.
+
+    Args:
+        glow: The sum of the levels before this one; its alpha is zero.
+        level: This level's blurred light.
+        index: Which level, zero through four.
+        u: The pixel's texture coordinate across.
+        v: The pixel's texture coordinate up.
+        radius: How much the larger blurs weigh against the smaller.
+        strength: What every level is scaled by.
+
+    Returns:
+        The sum with this level.
+    """
+    var weight = _bloom_factor(index, radius) * strength
+    var here = level.sample(u, v)
+    return FloatColor(
+        glow.r + here.r * weight,
+        glow.g + here.g * weight,
+        glow.b + here.b * weight,
+        0,
+    )
+
+
+def glow_pixel(color: FloatColor, glow: FloatColor) -> FloatColor:
+    """Return a pixel with the bloom's glow added to its red, green and
+    blue; alpha is kept.
+
+    Args:
+        color: The pixel's light, premultiplied.
+        glow: The sum of the five levels.
+
+    Returns:
+        The light with the glow.
+    """
+    return FloatColor(
+        color.r + glow.r, color.g + glow.g, color.b + glow.b, color.a
+    )
 
 
 def bloom_light(
@@ -1775,13 +2010,7 @@ def bloom_light(
         length=width * height, fill=FloatColor(0, 0, 0, 0)
     )
     for index in range(len(frame.colors)):  # pragma: no branch
-        ref color = frame.colors[index]
-        var alpha = smoothstep(
-            threshold, threshold + BLOOM_SMOOTH_WIDTH, luminance(color)
-        )
-        bright[index] = FloatColor(
-            color.r * alpha, color.g * alpha, color.b * alpha, color.a * alpha
-        )
+        bright[index] = bright_pixel(frame.colors[index], threshold)
     # Each level blurs the one before it into half its size, the first
     # blurring the bright light at the frame's own size.
     var levels = List[List[FloatColor]]()
@@ -1790,10 +2019,10 @@ def bloom_light(
     var source = bright^
     var source_width = width
     var source_height = height
-    var level_width = _halved(width)
-    var level_height = _halved(height)
+    var level_width = halved_size(width)
+    var level_height = halved_size(height)
     for level in range(BLOOM_LEVELS):  # pragma: no branch
-        var kernel = 3 + 2 * level
+        var kernel = bloom_kernel(level)
         var across = _separable_blur(
             source,
             source_width,
@@ -1818,8 +2047,8 @@ def bloom_light(
         source = down^
         source_width = level_width
         source_height = level_height
-        level_width = _halved(level_width)
-        level_height = _halved(level_height)
+        level_width = halved_size(level_width)
+        level_height = halved_size(level_height)
     var y = 0
     while y < height:
         var x = 0
@@ -1829,28 +2058,24 @@ def bloom_light(
             var glow = FloatColor(0, 0, 0, 0)
             var level = 0
             while level < BLOOM_LEVELS:
-                var weight = _bloom_factor(level, radius) * strength
-                var here = sample(
-                    levels[level],
-                    level_widths[level],
-                    level_heights[level],
+                glow = bloom_glow(
+                    glow,
+                    LightView(
+                        levels[level], level_widths[level], level_heights[level]
+                    ),
+                    level,
                     u,
                     v,
-                )
-                glow = FloatColor(
-                    glow.r + here.r * weight,
-                    glow.g + here.g * weight,
-                    glow.b + here.b * weight,
-                    0,
+                    radius,
+                    strength,
                 )
                 level += 1
             var index = y * width + x
-            ref color = frame.colors[index]
-            frame.colors[index] = FloatColor(
-                color.r + glow.r, color.g + glow.g, color.b + glow.b, color.a
-            )
+            frame.colors[index] = glow_pixel(frame.colors[index], glow)
             x += 1
         y += 1
+    # The views do not keep the levels alive; this does.
+    _ = levels^
 
 
 def _fract(value: Float32) -> Float32:
@@ -1862,6 +2087,49 @@ def _rand(u: Float32, v: Float32) -> Float32:
     """Return three.js's `rand`: the fractional part of a large sine of
     the coordinate's dot with a fixed vector."""
     return _fract(sin(u * 12.9898 + v * 78.233) * 43758.5453)
+
+
+def film_pixel(
+    color: FloatColor,
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    intensity: Float32,
+    grayscale: Bool,
+    time: Float32,
+) -> FloatColor:
+    """Return one pixel of three.js's `FilmShader`.
+
+    Args:
+        color: The pixel's light, premultiplied.
+        x: The column.
+        y: The row, down from the top.
+        width: The frame's width in pixels.
+        height: The frame's height in pixels.
+        intensity: How much of the grain shows, zero to one.
+        grayscale: Whether to gray the result by luminance.
+        time: The grain's seed.
+
+    Returns:
+        The grained light, premultiplied.
+    """
+    var base = color.unpremultiplied()
+    var noise = _rand(u_of(x, width) + time, v_of(y, height) + time)
+    var grain = noise + 0.1
+    if grain > 1:
+        grain = 1
+    var grained = FloatColor(
+        base.r + base.r * grain,
+        base.g + base.g * grain,
+        base.b + base.b * grain,
+        base.a,
+    )
+    grained = mix(base, grained, intensity)
+    if grayscale:
+        var gray = luminance(grained)
+        grained = FloatColor(gray, gray, gray, base.a)
+    return grained.premultiplied()
 
 
 def film_light(
@@ -1887,24 +2155,59 @@ def film_light(
         var x = 0
         while x < width:
             var index = y * width + x
-            var base = frame.colors[index].unpremultiplied()
-            var noise = _rand(u_of(x, width) + time, v_of(y, height) + time)
-            var grain = noise + 0.1
-            if grain > 1:
-                grain = 1
-            var color = FloatColor(
-                base.r + base.r * grain,
-                base.g + base.g * grain,
-                base.b + base.b * grain,
-                base.a,
+            frame.colors[index] = film_pixel(
+                frame.colors[index],
+                x,
+                y,
+                width,
+                height,
+                intensity,
+                grayscale,
+                time,
             )
-            color = mix(base, color, intensity)
-            if grayscale:
-                var gray = luminance(color)
-                color = FloatColor(gray, gray, gray, base.a)
-            frame.colors[index] = color.premultiplied()
             x += 1
         y += 1
+
+
+def dot_screen_pixel(
+    color: FloatColor,
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    center: Vector2,
+    sine: Float32,
+    cosine: Float32,
+    scale: Float32,
+) -> FloatColor:
+    """Return one pixel of three.js's `DotScreenShader`.
+
+    The host takes the sine and the cosine of the grid's angle once a
+    frame, so both backends read the same two numbers.
+
+    Args:
+        color: The pixel's light, premultiplied.
+        x: The column.
+        y: The row, down from the top.
+        width: The frame's width in pixels.
+        height: The frame's height in pixels.
+        center: Where the grid is measured from, in its 256-texel square.
+        sine: The sine of the grid's angle.
+        cosine: The cosine of the grid's angle.
+        scale: How fine the dots are.
+
+    Returns:
+        The dotted light, premultiplied.
+    """
+    var base = color.unpremultiplied()
+    var tx = u_of(x, width) * DOT_SCREEN_SIZE - center.x
+    var ty = v_of(y, height) * DOT_SCREEN_SIZE - center.y
+    var px = (cosine * tx - sine * ty) * scale
+    var py = (sine * tx + cosine * ty) * scale
+    var pattern = sin(px) * sin(py) * 4
+    var average = (base.r + base.g + base.b) / 3
+    var value = average * 10 - 5 + pattern
+    return FloatColor(value, value, value, base.a).premultiplied()
 
 
 def dot_screen_light(
@@ -1934,19 +2237,46 @@ def dot_screen_light(
         var x = 0
         while x < width:
             var index = y * width + x
-            var base = frame.colors[index].unpremultiplied()
-            var tx = u_of(x, width) * DOT_SCREEN_SIZE - center.x
-            var ty = v_of(y, height) * DOT_SCREEN_SIZE - center.y
-            var px = (c * tx - s * ty) * scale
-            var py = (s * tx + c * ty) * scale
-            var pattern = sin(px) * sin(py) * 4
-            var average = (base.r + base.g + base.b) / 3
-            var value = average * 10 - 5 + pattern
-            frame.colors[index] = FloatColor(
-                value, value, value, base.a
-            ).premultiplied()
+            frame.colors[index] = dot_screen_pixel(
+                frame.colors[index], x, y, width, height, center, s, c, scale
+            )
             x += 1
         y += 1
+
+
+def sepia_pixel(color: FloatColor, amount: Float32) -> FloatColor:
+    """Return one pixel of three.js's `SepiaShader`.
+
+    Args:
+        color: The pixel's light, premultiplied.
+        amount: How far toward sepia, zero to one.
+
+    Returns:
+        The tinted light, premultiplied.
+    """
+    var base = color.unpremultiplied()
+    var r = (
+        base.r * (1 - 0.607 * amount)
+        + base.g * (0.769 * amount)
+        + base.b * (0.189 * amount)
+    )
+    var g = (
+        base.r * (0.349 * amount)
+        + base.g * (1 - 0.314 * amount)
+        + base.b * (0.168 * amount)
+    )
+    var b = (
+        base.r * (0.272 * amount)
+        + base.g * (0.534 * amount)
+        + base.b * (1 - 0.869 * amount)
+    )
+    if r > 1:
+        r = 1
+    if g > 1:
+        g = 1
+    if b > 1:
+        b = 1
+    return FloatColor(r, g, b, base.a).premultiplied()
 
 
 def sepia_light(mut frame: RenderTarget, amount: Float32):
@@ -1957,29 +2287,38 @@ def sepia_light(mut frame: RenderTarget, amount: Float32):
         amount: How far toward sepia, zero to one.
     """
     for index in range(len(frame.colors)):  # pragma: no branch
-        var base = frame.colors[index].unpremultiplied()
-        var r = (
-            base.r * (1 - 0.607 * amount)
-            + base.g * (0.769 * amount)
-            + base.b * (0.189 * amount)
-        )
-        var g = (
-            base.r * (0.349 * amount)
-            + base.g * (1 - 0.314 * amount)
-            + base.b * (0.168 * amount)
-        )
-        var b = (
-            base.r * (0.272 * amount)
-            + base.g * (0.534 * amount)
-            + base.b * (1 - 0.869 * amount)
-        )
-        if r > 1:
-            r = 1
-        if g > 1:
-            g = 1
-        if b > 1:
-            b = 1
-        frame.colors[index] = FloatColor(r, g, b, base.a).premultiplied()
+        frame.colors[index] = sepia_pixel(frame.colors[index], amount)
+
+
+def vignette_pixel(
+    color: FloatColor,
+    x: Int,
+    y: Int,
+    width: Int,
+    height: Int,
+    offset: Float32,
+    darkness: Float32,
+) -> FloatColor:
+    """Return one pixel of three.js's `VignetteShader`.
+
+    Args:
+        color: The pixel's light, premultiplied.
+        x: The column.
+        y: The row, down from the top.
+        width: The frame's width in pixels.
+        height: The frame's height in pixels.
+        offset: How far in from the corners the darkening reaches.
+        darkness: How dark the corners go.
+
+    Returns:
+        The darkened light, premultiplied.
+    """
+    var edge = FloatColor(1 - darkness, 1 - darkness, 1 - darkness, 0)
+    var base = color.unpremultiplied()
+    var u = (u_of(x, width) - 0.5) * offset
+    var v = (v_of(y, height) - 0.5) * offset
+    var mixed = mix(base, edge, u * u + v * v)
+    return FloatColor(mixed.r, mixed.g, mixed.b, base.a).premultiplied()
 
 
 def vignette_light(mut frame: RenderTarget, offset: Float32, darkness: Float32):
@@ -1996,21 +2335,30 @@ def vignette_light(mut frame: RenderTarget, offset: Float32, darkness: Float32):
     """
     var width = frame.width
     var height = frame.height
-    var edge = FloatColor(1 - darkness, 1 - darkness, 1 - darkness, 0)
     var y = 0
     while y < height:
         var x = 0
         while x < width:
             var index = y * width + x
-            var base = frame.colors[index].unpremultiplied()
-            var u = (u_of(x, width) - 0.5) * offset
-            var v = (v_of(y, height) - 0.5) * offset
-            var mixed = mix(base, edge, u * u + v * v)
-            frame.colors[index] = FloatColor(
-                mixed.r, mixed.g, mixed.b, base.a
-            ).premultiplied()
+            frame.colors[index] = vignette_pixel(
+                frame.colors[index], x, y, width, height, offset, darkness
+            )
             x += 1
         y += 1
+
+
+def luminosity_pixel(color: FloatColor) -> FloatColor:
+    """Return one pixel of three.js's `LuminosityShader`.
+
+    Args:
+        color: The pixel's light, premultiplied.
+
+    Returns:
+        The gray of the same luminance, premultiplied.
+    """
+    var base = color.unpremultiplied()
+    var gray = luminance(base)
+    return FloatColor(gray, gray, gray, base.a).premultiplied()
 
 
 def luminosity_light(mut frame: RenderTarget):
@@ -2020,11 +2368,30 @@ def luminosity_light(mut frame: RenderTarget):
         frame: The frame, changed in place.
     """
     for index in range(len(frame.colors)):  # pragma: no branch
-        var base = frame.colors[index].unpremultiplied()
-        var gray = luminance(base)
-        frame.colors[index] = FloatColor(
-            gray, gray, gray, base.a
-        ).premultiplied()
+        frame.colors[index] = luminosity_pixel(frame.colors[index])
+
+
+def afterimage_pixel(
+    new: FloatColor, old: FloatColor, damp: Float32
+) -> FloatColor:
+    """Return one pixel of three.js's `AfterimageShader`: each channel the
+    new one, or the old one damped when it was above a tenth and is still
+    the larger.
+
+    Args:
+        new: This frame's light.
+        old: The last frame's light.
+        damp: What the last frame is scaled by.
+
+    Returns:
+        The trail.
+    """
+    return FloatColor(
+        _trail(new.r, old.r, damp),
+        _trail(new.g, old.g, damp),
+        _trail(new.b, old.b, damp),
+        _trail(new.a, old.a, damp),
+    )
 
 
 def afterimage_light(
@@ -2045,13 +2412,8 @@ def afterimage_light(
     """
     if len(memory) == len(frame.colors):
         for index in range(len(frame.colors)):  # pragma: no branch
-            ref old = memory[index]
-            ref new = frame.colors[index]
-            frame.colors[index] = FloatColor(
-                _trail(new.r, old.r, damp),
-                _trail(new.g, old.g, damp),
-                _trail(new.b, old.b, damp),
-                _trail(new.a, old.a, damp),
+            frame.colors[index] = afterimage_pixel(
+                frame.colors[index], memory[index], damp
             )
     memory = frame.colors.copy()
 
@@ -2065,6 +2427,23 @@ def _trail(new: Float32, old: Float32, damp: Float32) -> Float32:
     if kept > new:
         return kept
     return new
+
+
+def output_pixel(
+    color: FloatColor, curve: ToneMapping, exposure: Float32
+) -> FloatColor:
+    """Return one pixel of three.js's `OutputPass`, less its encode: the
+    light through the curve. A pixel that holds data is not passed here.
+
+    Args:
+        color: The pixel's light, premultiplied.
+        curve: Which curve.
+        exposure: What the light is scaled by first.
+
+    Returns:
+        The mapped light, premultiplied.
+    """
+    return tone_map(color.unpremultiplied(), curve, exposure).premultiplied()
 
 
 def output_light(
@@ -2083,5 +2462,4 @@ def output_light(
     for index in range(len(frame.colors)):  # pragma: no branch
         if frame.data[index]:
             continue
-        var base = frame.colors[index].unpremultiplied()
-        frame.colors[index] = tone_map(base, curve, exposure).premultiplied()
+        frame.colors[index] = output_pixel(frame.colors[index], curve, exposure)

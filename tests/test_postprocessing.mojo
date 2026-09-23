@@ -39,6 +39,7 @@ from postprocessing.composer import (
     blur_light,
     blur_pass,
     check_pass,
+    clear_mask_pass,
     copy_light,
     copy_pass,
     dot_screen_light,
@@ -56,6 +57,7 @@ from postprocessing.composer import (
     vignette_light,
     vignette_pass,
 )
+from postprocessing.sampling import LightView
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
 from render.tonemap import (
@@ -741,6 +743,47 @@ def test_every_kind_runs_in_the_composer_and_the_film_keeps_time() raises:
     assert_true(
         same(normals.get_pixel(WIDTH // 2, HEIGHT // 2), Color(128, 128, 255))
     )
+
+
+def test_a_view_of_floats_reads_as_a_view_of_colors() raises:
+    # Four floats a pixel is how a device buffer holds a frame.
+    var colors: List[FloatColor] = [
+        FloatColor(0.1, 0.2, 0.3, 0.4),
+        FloatColor(0.5, 0.6, 0.7, 0.8),
+        FloatColor(0.9, 1.0, 1.1, 1.2),
+        FloatColor(1.3, 1.4, 1.5, 1.6),
+    ]
+    var floats = List[Float32]()
+    for index in range(len(colors)):
+        floats.append(colors[index].r)
+        floats.append(colors[index].g)
+        floats.append(colors[index].b)
+        floats.append(colors[index].a)
+    var listed = LightView(colors, 2, 2)
+    var device_like = LightView(
+        floats=floats.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin](),
+        width=2,
+        height=2,
+    )
+    assert_true(device_like.at(1, 1) == colors[3])
+    var a = listed.sample(0.3, 0.6)
+    var b = device_like.sample(0.3, 0.6)
+    assert_true(a == b)
+    assert_true(listed.tap(-3, 9) == colors[2])
+    _ = floats^
+    _ = colors^
+
+
+def test_a_clear_mask_step_run_alone_changes_nothing() raises:
+    # `render` turns the mask off itself; the step has nothing to draw.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var scene = lit_sheet(assets)
+    var composer = EffectComposer()
+    composer.add_pass(clear_mask_pass())
+    var frame = flat(WIDTH, HEIGHT, FloatColor(0.2, 0.4, 0.6, 1))
+    composer.run_step(0, frame, renderer, scene, assets, a_camera(), 0.0)
+    assert_almost_equal(straight(frame, 3, 3).g, Float32(0.4), atol=TOLERANCE)
 
 
 def main() raises:
