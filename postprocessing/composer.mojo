@@ -2047,8 +2047,12 @@ def bloom_glow(
     """Return `glow` with one more bloom level added: one term of
     `UnrealBloomPass`'s composite shader.
 
+    The alpha is summed as the color is. Each level is opaque, so the sum's
+    alpha is the strength times the level weights, as in three.js's
+    composite target. `glow_pixel` reads it.
+
     Args:
-        glow: The sum of the levels before this one; its alpha is zero.
+        glow: The sum of the levels before this one.
         level: This level's blurred light.
         index: Which level, zero through four.
         u: The pixel's texture coordinate across.
@@ -2065,23 +2069,35 @@ def bloom_glow(
         glow.r + here.r * weight,
         glow.g + here.g * weight,
         glow.b + here.b * weight,
-        0,
+        glow.a + here.a * weight,
     )
 
 
 def glow_pixel(color: FloatColor, glow: FloatColor) -> FloatColor:
     """Return a pixel with the bloom's glow added to its red, green and
-    blue; alpha is kept.
+    blue, times the glow's own alpha; alpha is kept.
+
+    three.js blends the composite over the frame with `AdditiveBlending`,
+    whose color factors are `SRC_ALPHA` and `ONE`, so the glow is added
+    times its alpha: the strength times the level weights. Twice the
+    strength is four times the glow. three.js also adds the glow's alpha
+    to the frame's. This frame is premultiplied, where a larger alpha
+    would dim the color when it is resolved, so alpha is kept instead. An
+    opaque pixel comes out the same, since three.js's alpha is clamped
+    to one on display.
 
     Args:
         color: The pixel's light, premultiplied.
-        glow: The sum of the five levels.
+        glow: The sum of the five levels, from `bloom_glow`.
 
     Returns:
         The light with the glow.
     """
     return FloatColor(
-        color.r + glow.r, color.g + glow.g, color.b + glow.b, color.a
+        color.r + glow.r * glow.a,
+        color.g + glow.g * glow.a,
+        color.b + glow.b * glow.a,
+        color.a,
     )
 
 
@@ -2098,7 +2114,9 @@ def bloom_light(
     a hundredth; it is blurred at five halved sizes, each blur across and
     then down with a kernel two taps wider than the last; the five are
     weighted by `radius` and summed; and the sum, scaled by `strength`,
-    is added to the red, green and blue of every pixel. Alpha is kept.
+    is added to the red, green and blue of every pixel, times its own
+    alpha, as three.js's additive blend adds it; see `glow_pixel`. Alpha
+    is kept.
 
     Args:
         frame: The frame, changed in place.

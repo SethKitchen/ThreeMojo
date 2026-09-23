@@ -21,7 +21,7 @@ To run the passes on the GPU, give the composer to a `GpuComposer`. Most passes 
 | `render_pass()` | `RenderPass` | Draw the scene, clearing first. Through the renderer's antialias when that is on. |
 | `copy_pass(opacity=1)` | `ShaderPass(CopyShader)` | Scale every channel of every pixel, alpha included. |
 | `blur_pass(spread=1)` | `HorizontalBlurShader` then `VerticalBlurShader` | Nine taps across, then nine down, `spread` pixels apart. |
-| `bloom_pass(strength=1, radius=0, threshold=0)` | `UnrealBloomPass` | The light above `threshold` blurred at five halved sizes, weighted by `radius`, scaled by `strength` and added back. |
+| `bloom_pass(strength=1, radius=0, threshold=0)` | `UnrealBloomPass` | The light above `threshold` blurred at five halved sizes, weighted by `radius`, scaled by `strength` and added back times its own alpha. |
 | `film_pass(intensity=0.5, grayscale=False)` | `FilmPass` | Grain from a hash of the pixel and the time, and gray if asked. |
 | `dot_screen_pass(center, angle, scale=1)` | `DotScreenPass` | A halftone of dots over a 256-texel grid. |
 | `sepia_pass(amount=1)` | `SepiaShader` | An old photograph's tint. |
@@ -82,7 +82,7 @@ A blur, a bloom, a copy and an afterimage work on the premultiplied light, where
 
 A tap past the edge of the frame reads the edge pixel, as a clamped texture does. A pixel that holds data rather than light, a normal or a depth, is not tone mapped by the output pass. The other passes treat it as light.
 
-The bloom's five levels are halved as three.js halves them, rounded up, never below one pixel. Its blur kernels are three, five, seven, nine and eleven taps to each side, each with a sigma of its own width. The dot screen measures its pattern over a fixed 256 by 256 grid, as three.js's pass sets `tSize` once.
+The bloom's five levels are halved as three.js halves them, rounded up, never below one pixel. Its blur kernels are three, five, seven, nine and eleven taps to each side, each with a sigma of its own width. three.js adds the glow with `AdditiveBlending`, which multiplies the color by the glow's alpha. That alpha is the strength times the level weights, so twice the strength gives four times the glow. The bloom keeps the frame's alpha. The dot screen measures its pattern over a fixed 256 by 256 grid, as three.js's pass sets `tSize` once.
 
 ## Anti-aliasing
 

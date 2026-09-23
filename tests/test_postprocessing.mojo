@@ -416,12 +416,13 @@ def test_a_bloom_bleeds_light_past_the_threshold_and_none_below() raises:
     bloom_light(wide, 1.0, 1.0, 0.5)
     assert_true(wide.color_at(0, 0).r > frame.color_at(0, 0).r, "no wider")
     assert_true(wide.color_at(8, 6).r < frame.color_at(8, 6).r, "no dimmer")
-    # Twice the strength is twice the glow.
+    # Twice the strength is four times the glow: twice the light, added
+    # at twice the alpha, as three.js's additive blend adds it.
     var strong = RenderTarget(16, 12, BLACK)
     strong.write(8, 6, FloatColor(4, 4, 4, 1))
     bloom_light(strong, 2.0, 0.0, 0.5)
     assert_almost_equal(
-        strong.color_at(10, 6).r, frame.color_at(10, 6).r * 2, atol=1e-6
+        strong.color_at(10, 6).r, frame.color_at(10, 6).r * 4, atol=1e-5
     )
     # A frame one pixel wide has one-pixel levels and still blooms.
     var thin = RenderTarget(1, 3, BLACK)
@@ -467,6 +468,25 @@ def test_film_grain_brightens_by_at_most_the_light_and_holds_at_zero() raises:
         straight(later, 0, 0).r != straight(full, 0, 0).r,
         "time changed nothing",
     )
+
+
+def test_a_bloom_adds_its_glow_weighted_by_its_own_alpha() raises:
+    # three.js composites the five levels into a target whose alpha is
+    # the strength times the level weights, since each blurred level is
+    # opaque, and blends that over the frame with `AdditiveBlending`:
+    # `SRC_ALPHA, ONE`. So the glow is added times its own alpha. On a
+    # flat frame every level blurs to the frame itself, and with a radius
+    # of zero the weights are one, 0.8, 0.6, 0.4 and 0.2, which sum to 3.
+    var frame = flat(8, 8, FloatColor(0.5, 0.25, 0.125, 1))
+    bloom_light(frame, 1.0, 0.0, 0.0)
+    var glow = Float32(3.0 * 3.0)
+    assert_almost_equal(frame.color_at(3, 3).r, 0.5 + 0.5 * glow, atol=1e-4)
+    assert_almost_equal(frame.color_at(3, 3).b, 0.125 * (1 + glow), atol=1e-4)
+    assert_equal(frame.color_at(3, 3).a, Float32(1))
+    # Half the strength halves both the glow and its alpha.
+    var half = flat(8, 8, FloatColor(0.5, 0.25, 0.125, 1))
+    bloom_light(half, 0.5, 0.0, 0.0)
+    assert_almost_equal(half.color_at(3, 3).r, 0.5 + 0.5 * 1.5 * 1.5, atol=1e-4)
 
 
 def test_film_grain_is_three_js_rand_of_the_wrapped_coordinate() raises:
