@@ -39,6 +39,7 @@
 - [Post-processing](Post-processing)
 - [Image files](Image-files)
 - [Model files](Model-files)
+- [More model files](More-model-files)
 - [Exporters](Exporters)
 - [Scene JSON](Scene-JSON)
 - [Windowing and controls](Windowing-and-controls)
