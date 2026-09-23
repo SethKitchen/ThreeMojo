@@ -1,10 +1,12 @@
 # Geometry
 
-`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes. Two more fill a drawn [shape](Curves) in and give it thickness, and four [addon builders](#parametric) make parametric surfaces, convex hulls, decals and rounded boxes. Two more read a surface back as the lines of its edges, and [utilities](#merge-weld-and-tangents) merge, weld and compute tangents.
+`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds.
+
+Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes. Two more fill a drawn [shape](Curves) in and give it thickness. One sets [text](#text) in a font and gives it thickness. Four [addon builders](#parametric) make parametric surfaces, convex hulls, decals and rounded boxes. Two more read a surface back as the lines of its edges, and [utilities](#merge-weld-and-tangents) merge, weld and compute tangents.
 
 ![A torus knot turns under a lamp](out/geometry.png)
 
-three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`. Also `ShapeGeometry`, `ExtrudeGeometry` and `ShapeUtils.triangulateShape`. From the addons: `ParametricGeometry`, `ParametricFunctions`, `ConvexGeometry`, `ConvexHull`, `DecalGeometry` and `RoundedBoxGeometry`. Also `toNonIndexed`, `center`, `computeTangents`, `addGroup`, `clone`, and `BufferGeometryUtils.mergeGeometries`, `mergeVertices` and `toCreasedNormals`.
+three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`. Also `ShapeGeometry`, `ExtrudeGeometry` and `ShapeUtils.triangulateShape`. From the addons: `TextGeometry`, `ParametricGeometry`, `ParametricFunctions`, `ConvexGeometry`, `ConvexHull`, `DecalGeometry` and `RoundedBoxGeometry`. Also `toNonIndexed`, `center`, `computeTangents`, `addGroup`, `clone`, and `BufferGeometryUtils.mergeGeometries`, `mergeVertices` and `toCreasedNormals`.
 
 ## BufferAttribute
 
@@ -281,6 +283,37 @@ This form has no bevel and no depth. three.js turns the bevel off when it gets a
 A wall between two frames that turn is not flat. So the diagonal that splits a quad changes the surface. Both forms split each quad across its second and fourth corners, as the three.js `f4` does.
 
 The tests compare every triangle with the output of three.js 0.180 for a Bezier curve and for a path of two lines.
+
+## Text
+
+```mojo
+from geometries.text import text_geometry
+from loaders.font import read_font
+
+var font = read_font("assets/fonts/fixture.typeface.json")
+var sign = text_geometry("AO i8", font, Length(1, METER), Length(0.2, METER))
+var bold = text_geometry(
+    "A\nD",
+    font,
+    Length(1, METER),
+    Length(0.2, METER),
+    bevel_enabled=True,
+    bevel_thickness=Length(0.02, METER),
+    bevel_size=Length(0.01, METER),
+)
+```
+
+`text_geometry` sets text in a [font](Model-files#fonts) and gives it thickness. This is the three.js `TextGeometry`.
+
+The font lays the text out as shapes, with `Font.generate_shapes`. `extrude` gives each shape its depth, with the same options as [Extrude](#extrude). The parts are joined end to end, one shape after another, which is the order three.js writes them in.
+
+`size` is one em, and `depth` runs along z from zero. Both are a `Length`. The defaults are from three.js: a size of 100 meters and a depth of 50 meters. A bevel is 10 meters thick and 8 meters out. Set `size` to the height you want.
+
+A text with nothing to draw, such as spaces, gives a geometry with empty `position`, `normal` and `uv` attributes. The options are checked all the same.
+
+three.js adds two groups to each shape, one for the caps and one for the walls. `extrude` writes no groups, so a text has none.
+
+The tests compare the vertex count and the bounding box with three.js 0.180, with and without a bevel.
 
 ## Parametric
 
@@ -563,6 +596,7 @@ Eight targets is this port's ceiling, not three.js's. Older three.js had the sam
 - A shape's hole must lie inside its outline, and not inside another hole.
 - An outline that crosses itself raises, because it has no inside and runs out of ears.
 - An extrusion needs a positive depth, one step and one curve segment. A bevel needs a positive thickness, a size that is not negative, and one band.
+- A text needs the same options as an extrusion and a positive size. Every character needs a glyph, or the font needs a `?` glyph.
 - An extrusion along a path needs one step, one curve segment and a curve path with one curve. The curve must have a frame at each step.
 - A parametric surface needs one slice and one stack, and its function must give finite points.
 - A convex hull needs four finite points, not all on one point, one line or one plane.

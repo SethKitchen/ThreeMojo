@@ -422,6 +422,50 @@ def extrude(
     )
 
 
+def check_extrusion(
+    depth: Length,
+    steps: Int,
+    curve_segments: Int,
+    bevel_enabled: Bool,
+    bevel_thickness: Length,
+    bevel_size: Length,
+    bevel_segments: Int,
+) raises:
+    """Refuse the options an extrusion along z cannot be built with.
+
+    `extrude` calls this before it looks at the shape, and so does a
+    caller such as `text_geometry` that may have no shape to hand it.
+
+    Args:
+        depth: How thick the solid is; positive.
+        steps: How many layers the extrusion is cut into; at least one.
+        curve_segments: How many straight runs each curve is sampled into;
+            at least one.
+        bevel_enabled: True to round the two edges off.
+        bevel_thickness: How far past each end face the bevel reaches;
+            positive when there is a bevel.
+        bevel_size: How far out from the outline the body stands; not
+            negative when there is a bevel.
+        bevel_segments: How many bands each bevel is cut into; at least one
+            when there is a bevel.
+
+    Raises:
+        Error: If any option is outside the range given above.
+    """
+    if depth.value <= 0:
+        raise Error("An extrusion needs a positive depth")
+    if steps < 1:
+        raise Error("An extrusion needs at least one step")
+    if curve_segments < 1:
+        raise Error("An extrusion needs at least one curve segment")
+    if bevel_enabled and bevel_segments < 1:
+        raise Error("A bevel needs at least one band")
+    if bevel_enabled and bevel_thickness.value <= 0:
+        raise Error("A bevel needs a positive thickness")
+    if bevel_enabled and bevel_size.value < 0:
+        raise Error("A bevel cannot reach a negative distance in")
+
+
 def extrude(
     shape: Shape,
     depth: Length,
@@ -466,17 +510,15 @@ def extrude(
             negative size or fewer than one band, or if the shape cannot
             be filled in; see `geometries.shape.triangulate`.
     """
-    if depth.value <= 0:
-        raise Error("An extrusion needs a positive depth")
-    if steps < 1:
-        raise Error("An extrusion needs at least one step")
-    if bevel_enabled and bevel_segments < 1:
-        raise Error("A bevel needs at least one band")
-    if bevel_enabled and bevel_thickness.value <= 0:
-        raise Error("A bevel needs a positive thickness")
-    if bevel_enabled and bevel_size.value < 0:
-        raise Error("A bevel cannot reach a negative distance in")
-
+    check_extrusion(
+        depth,
+        steps,
+        curve_segments,
+        bevel_enabled,
+        bevel_thickness,
+        bevel_size,
+        bevel_segments,
+    )
     var cut = triangulate(shape, curve_segments)
     # Without a bevel every layer sits on the outline itself, so there is
     # no distance to move a corner by and no miter to work out.

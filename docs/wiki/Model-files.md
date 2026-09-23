@@ -1,10 +1,12 @@
 # Model files
 
-`loaders/obj.mojo`, `loaders/mtl.mojo`, `loaders/stl.mojo`, `loaders/ply.mojo` and `loaders/gltf.mojo`. `read_obj` reads a Wavefront OBJ file into named objects, each with a `BufferGeometry`. `parse_obj` reads the text of one. `read_obj_with_materials` also reads the OBJ file's material libraries and gives each object a `MaterialId`. `read_stl` and `read_ply` read an STL or a PLY file into one `BufferGeometry`. `read_gltf` reads a glTF 2.0 file, `.gltf` or `.glb`, into a scene and its assets.
+`loaders/obj.mojo`, `loaders/mtl.mojo`, `loaders/stl.mojo`, `loaders/ply.mojo`, `loaders/gltf.mojo` and `loaders/font.mojo`. `read_obj` reads a Wavefront OBJ file into named objects, each with a `BufferGeometry`. `parse_obj` reads the text of one.
+
+`read_obj_with_materials` also reads the OBJ file's material libraries and gives each object a `MaterialId`. `read_stl` and `read_ply` read an STL or a PLY file into one `BufferGeometry`. `read_gltf` reads a glTF 2.0 file, `.gltf` or `.glb`, into a scene and its assets. `read_font` reads a typeface.js font, which lays text out as [shapes](#fonts).
 
 ![A cube loaded from an OBJ file turns under a lamp](out/model.png)
 
-three.js: `OBJLoader`, `MTLLoader`, `STLLoader` and `PLYLoader`.
+three.js: `OBJLoader`, `MTLLoader`, `STLLoader`, `PLYLoader` and `FontLoader`.
 
 To write these files, see [Exporters](Exporters).
 
@@ -335,6 +337,84 @@ The loader raises for:
 - An image that is not PNG, JPEG or TGA. A texture or material that names something the file does not have.
 - An unknown wrap mode or alpha mode.
 - A node reached twice. A node matrix that flattens an axis.
+
+## Fonts
+
+```mojo
+from loaders.font import read_font
+
+var font = read_font("assets/fonts/fixture.typeface.json")
+var shapes = font.generate_shapes("AO i8\nD", Length(1, METER))
+```
+
+`loaders/font.mojo`. `read_font(path)` reads a typeface.js JSON font into a `Font`. `parse_font(text)` reads the text of one. `Font.generate_shapes(text, size)` lays the text out as [shapes](Curves#shape) with holes. [Text](Geometry#text) extrudes them. three.js: `FontLoader`, `Font` and `ShapePath`.
+
+### What is read
+
+| Key | Meaning |
+|---|---|
+| `resolution` | The font units in one em. It must be positive. |
+| `boundingBox.yMin`, `boundingBox.yMax` | The lowest and highest point of a glyph, in font units. |
+| `underlineThickness` | The underline, in font units. |
+| `familyName` | The name of the font. It is optional. |
+| `glyphs` | One object for each character. The key must be one character. |
+| `glyphs.X.ha` | The advance of the glyph: how far the next glyph starts to the right. |
+| `glyphs.X.o` | The outline of the glyph. It is optional. A space has none. |
+
+An outline is a string of commands, each with its numbers, in font units. Other keys are ignored.
+
+| Command | Draws |
+|---|---|
+| `m x y` | A new outline that starts at the point. |
+| `l x y` | A straight run to the point. |
+| `q x y cx cy` | A quadratic Bezier curve to `x y`, with the control point `cx cy`. |
+| `b x y c1x c1y c2x c2y` | A cubic Bezier curve to `x y`, with two control points. |
+
+The end point comes first in `q` and `b`. That is the order of the file, and three.js reads it the same way.
+
+### Layout
+
+One font unit is `size / resolution` meters. The glyphs run left to right from the origin. Each glyph starts at the advance of the glyph before it. A line break, `\n`, moves back to x zero and down by one line height:
+
+```
+(boundingBox.yMax - boundingBox.yMin + underlineThickness) * size / resolution
+```
+
+`Font.line_height(size)` gives it. A character with no glyph takes the `?` glyph, as in three.js.
+
+### Holes
+
+A font does not mark its holes. A solid runs clockwise and a hole runs counterclockwise. `ShapePath.to_shapes` sorts the outlines of a glyph by that rule, as three.js does:
+
+- An outline that runs clockwise is a solid. `to_shapes(is_ccw=True)` swaps the rule.
+- A hole goes to the solid before it. When the first outline is a hole, each hole goes to the solid after it.
+- With two or more solids, a hole that lies inside a different solid moves to it. No hole moves when one hole lies inside two solids.
+- When no outline is a solid, each outline is a shape of its own.
+
+`math/shape_path.mojo` holds `ShapePath`, `signed_area`, `is_clockwise` and `is_point_inside_polygon`. The point test is the three.js ray test, and a point on an edge is inside.
+
+### Differences from three.js
+
+- The file is checked when it is read. three.js reads a glyph when it draws it, and skips a command it does not know.
+- A `Shape` must be closed. `to_shapes` adds the closing run when an outline does not end where it started. The surface is the same.
+- A step that draws nothing, such as a line to the current point, is skipped. three.js keeps it and then drops the repeated point.
+- The layout is calculated in `Float64`, as in three.js. Each point is stored as a `Float32`.
+
+### Errors
+
+`parse_font` raises, with the glyph when there is one, for:
+
+- A document that is not a JSON object.
+- A missing or non-positive `resolution`, or a missing `boundingBox`, `yMin`, `yMax`, `underlineThickness` or `glyphs`. A metric that is not a finite `Float32`.
+- A glyph key that is not one character. A glyph that is not an object, or has no `ha`. An `o` that is not a string.
+- An outline command other than `m`, `l`, `q` and `b`. A command with too few numbers. A number that is not a finite `Float32`.
+- An outline that draws before its first `m`. An `m` that draws nothing before the next `m` or the end.
+
+`generate_shapes` raises for a size that is not positive. It raises for a character with no glyph in a font with no `?` glyph.
+
+### Example
+
+`assets/fonts/fixture.typeface.json` is a small font made for the tests. It has `A`, `D`, `O`, `i`, `8`, `?` and a space. `tests/test_font.mojo` compares its layout with three.js 0.180.
 
 ## JSON
 
