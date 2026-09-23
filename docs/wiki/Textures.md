@@ -9,15 +9,17 @@ three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `KTX2Lo
 ## Make a texture
 
 ```mojo
-checkerboard(size, squares, first, second, wrap=REPEAT, filter=BILINEAR, mipmapped=True, alpha=COVERAGE)
-texture_from(image, wrap=REPEAT, filter=BILINEAR, color_space=None, mipmapped=True, alpha=COVERAGE)
-Texture(width, height, pixels, wrap=REPEAT, filter=BILINEAR, color_space=SRGB, mipmapped=True, alpha=COVERAGE)
+checkerboard(size, squares, first, second, wrap=CLAMP, filter=BILINEAR, mipmapped=True, alpha=COVERAGE)
+texture_from(image, wrap=CLAMP, filter=BILINEAR, color_space=None, mipmapped=True, alpha=COVERAGE)
+Texture(width, height, pixels, wrap=CLAMP, filter=BILINEAR, color_space=SRGB, mipmapped=True, alpha=COVERAGE)
 data_texture(width, height, numbers, channels=4, wrap=CLAMP, filter=NEAREST, mipmapped=False, alpha=COVERAGE)
 texture_of(framebuffer, wrap=CLAMP, filter=BILINEAR, mipmapped=True, alpha=COVERAGE)
 depth_texture_of(framebuffer, wrap=CLAMP)
 float_texture(width, height, floats, wrap=CLAMP, filter=BILINEAR, mipmapped=False, alpha=COVERAGE)
 float_texture_from(hdr_image, wrap=CLAMP, filter=BILINEAR, mipmapped=False, alpha=COVERAGE)
 ```
+
+Every texture clamps its edges by default, as three.js's `ClampToEdgeWrapping` does. Pass `REPEAT` to tile a texture. The glTF, OBJ, FBX and Collada loaders repeat by default, as their three.js loaders do.
 
 `checkerboard` builds a test pattern. `texture_from` takes a `DecodedImage` from the PNG reader. `Texture` takes row-major RGBA bytes from the top. The next three are below. The float textures are in [HDR images](#hdr-images).
 

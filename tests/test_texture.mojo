@@ -135,6 +135,18 @@ def test_every_known_wrap_mode_is_accepted() raises:
     _ = quad(MIRROR)
 
 
+def test_a_texture_clamps_by_default_as_three_js_does() raises:
+    """Every constructor defaults to three.js's `ClampToEdgeWrapping`."""
+    assert_equal(Texture().wrap, CLAMP)
+    var pixels = List[UInt8](length=4, fill=255)
+    assert_equal(Texture(1, 1, pixels^).wrap, CLAMP)
+    var board = checkerboard(4, 2, Color(255, 255, 255), Color(0, 0, 0))
+    assert_equal(board.wrap, CLAMP)
+    # The dark edge texel holds past the edge. A tiling read would come
+    # back to the light square at the left.
+    assert_equal(board.sample(1.3, 0.9).r, 0)
+
+
 def test_copying_a_texture_leaves_the_original_alone() raises:
     var original = quad()
     var duplicate = Texture(copy=original)

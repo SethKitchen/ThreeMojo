@@ -41,7 +41,8 @@ the chain, and so filters its color as it is. See `Alpha`.
 a geometry can ask for its texture five times across, and clipping can produce
 coordinates outside anything the author wrote. `REPEAT` tiles, `CLAMP` holds
 the edge color, and `MIRROR` alternates direction each tile — the same three
-three.js offers.
+three.js offers. `CLAMP` is the default, as three.js's `ClampToEdgeWrapping`
+is, so a texture meant to tile must ask for `REPEAT`.
 
 **A texture can be read along the long axis of a footprint.** A surface
 seen at a glancing angle covers a footprint that is long one way and short
@@ -576,7 +577,7 @@ struct Texture(Movable):
         self.pixels = List[UInt8]()
         self.texel_type = UNSIGNED_BYTE_TYPE
         self.data = List[Float32]()
-        self.wrap = REPEAT
+        self.wrap = CLAMP
         self.filter = NEAREST
         self.color_space = LINEAR
         self.alpha = COVERAGE
@@ -595,7 +596,7 @@ struct Texture(Movable):
         width: Int,
         height: Int,
         var pixels: List[UInt8],
-        wrap: Wrap = REPEAT,
+        wrap: Wrap = CLAMP,
         filter: Filter = BILINEAR,
         color_space: ColorSpace = SRGB,
         mipmapped: Bool = True,
@@ -608,6 +609,7 @@ struct Texture(Movable):
             height: Image height in texels.
             pixels: Row-major RGBA bytes from the top, width * height * 4.
             wrap: How coordinates outside the unit square are resolved.
+                `CLAMP` by default, as three.js's `ClampToEdgeWrapping` is.
             filter: `NEAREST` or `BILINEAR`. Bilinear by default, as
                 three.js's `LinearFilter` is.
             color_space: `SRGB` for a color image, the default because that
@@ -1585,7 +1587,7 @@ def anisotropic_footprint(
 
 def texture_from(
     image: DecodedImage,
-    wrap: Wrap = REPEAT,
+    wrap: Wrap = CLAMP,
     filter: Filter = BILINEAR,
     color_space: Optional[ColorSpace] = None,
     mipmapped: Bool = True,
@@ -1611,7 +1613,8 @@ def texture_from(
 
     Args:
         image: The decoded image.
-        wrap: How coordinates outside the unit square are resolved.
+        wrap: How coordinates outside the unit square are resolved;
+            `CLAMP` by default, as three.js's `ClampToEdgeWrapping` is.
         filter: `NEAREST` or `BILINEAR`.
         color_space: `SRGB` or `LINEAR` to override, or nothing to use
             whatever the file declared.
@@ -1982,7 +1985,7 @@ def checkerboard(
     squares: Int,
     light: Color,
     dark: Color,
-    wrap: Wrap = REPEAT,
+    wrap: Wrap = CLAMP,
     filter: Filter = BILINEAR,
     color_space: ColorSpace = SRGB,
     mipmapped: Bool = True,
@@ -2001,7 +2004,8 @@ def checkerboard(
         squares: How many squares fit across it; must divide `size`.
         light: Color of the square at the top left.
         dark: Color of its neighbors.
-        wrap: How coordinates outside the unit square are resolved.
+        wrap: How coordinates outside the unit square are resolved;
+            `CLAMP` by default, as three.js's. Pass `REPEAT` to tile.
         filter: `NEAREST` or `BILINEAR`.
         color_space: `SRGB` or `LINEAR`.
         mipmapped: Build the chain of halved copies.

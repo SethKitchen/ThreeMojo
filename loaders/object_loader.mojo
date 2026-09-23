@@ -1247,7 +1247,8 @@ struct _Loader(Movable):
         if self.integer(item, "mapping", UV_MAPPING) != UV_MAPPING:
             raise Error("Object JSON: only a UVMapping texture is read")
         var wraps = self.numbers(item, "wrap", 2)
-        var wrap = REPEAT
+        # three.js's `Texture` clamps unless the entry says otherwise.
+        var wrap = CLAMP
         if len(wraps) == 2:
             if wraps[0] != wraps[1]:
                 raise Error("Object JSON: a texture's two wraps must agree")

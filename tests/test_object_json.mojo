@@ -1163,11 +1163,11 @@ def test_a_one_row_image_flips_to_itself() raises:
 
 
 def test_texture_defaults_are_three_js_defaults() raises:
-    """A texture with no settings repeats, filters linearly, builds its
+    """A texture with no settings clamps, filters linearly, builds its
     mipmaps and is not decoded."""
     var read = _read(_textured(""))
     ref texture = read[1].textures.get(TextureId(0))
-    assert_equal(texture.wrap, REPEAT)
+    assert_equal(texture.wrap, CLAMP)
     assert_equal(texture.filter, BILINEAR)
     assert_true(texture.levels > 1)
     assert_equal(texture.color_space, LINEAR)
