@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 154 features are ported and 2 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 156 features are ported and 1 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -163,7 +163,7 @@ The port is not at parity with three.js yet. 154 features are ported and 2 are o
 
 
 <details>
-<summary>Ported: 11</summary>
+<summary>Ported: 12</summary>
 
 - [x] [AmbientLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#ambient) [#50](https://github.com/SethKitchen/ThreeMojo/issues/50)
 - [x] [DirectionalLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#directional) [#51](https://github.com/SethKitchen/ThreeMojo/issues/51)
@@ -175,6 +175,7 @@ The port is not at parity with three.js yet. 154 features are ported and 2 are o
 - [x] [Shadow maps](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#shadows): directional and spot lights draw the scene's depth and every lit sum compares nine taps against it [#57](https://github.com/SethKitchen/ThreeMojo/issues/57)
 - [x] [Point light shadows and spot light maps](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#point-light-shadows): point light shadows through six cube faces, and spot lights that project a texture [#127](https://github.com/SethKitchen/ThreeMojo/issues/127)
 - [x] [Image-based lighting: PMREM and LightProbe](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#pmrem): environments prefiltered per roughness for physical surfaces, and light probes of nine spherical-harmonic colors [#129](https://github.com/SethKitchen/ThreeMojo/issues/129)
+- [x] [Faster PMREM prefiltering](https://github.com/SethKitchen/ThreeMojo/wiki/Benchmarks#pmrem-and-the-coverage-run): the blur and hot texture helpers cut coverage capture by up to 74%, with bit-identical output. [#157](https://github.com/SethKitchen/ThreeMojo/issues/157)
 - [x] [Soft shadows: PCFSoft and VSM](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#soft-shadows): basic, PCF, soft PCF or variance shadow maps, chosen on the renderer as in three.js [#128](https://github.com/SethKitchen/ThreeMojo/issues/128)
 
 </details>
@@ -207,10 +208,9 @@ The port is not at parity with three.js yet. 154 features are ported and 2 are o
 
 ### Loaders and exporters
 
-- [ ] Scene JSON: environment maps, clipping planes and the remaining fields [#160](https://github.com/SethKitchen/ThreeMojo/issues/160)
 
 <details>
-<summary>Ported: 12</summary>
+<summary>Ported: 13</summary>
 
 - [x] [GLTF loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf): `.gltf` and `.glb` into geometries, standard materials, textures and a node hierarchy, with a JSON reader of its own [#70](https://github.com/SethKitchen/ThreeMojo/issues/70)
 - [x] [OBJ loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files): positions, texture coordinates, normals and polygon faces, split by object and material [#71](https://github.com/SethKitchen/ThreeMojo/issues/71)
@@ -223,6 +223,7 @@ The port is not at parity with three.js yet. 154 features are ported and 2 are o
 - [x] [glTF occlusion and material export](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#occlusion): occlusion maps and the second UV set; export of texture transforms, emissive strength and physical material extensions. [#154](https://github.com/SethKitchen/ThreeMojo/issues/154)
 - [x] [glTF export of sheen, iridescence and anisotropy](https://github.com/SethKitchen/ThreeMojo/wiki/Exporters#sheen-iridescence-and-anisotropy): the three layer extensions, with their maps, channels and texture transforms. [#158](https://github.com/SethKitchen/ThreeMojo/issues/158)
 - [x] [Scene JSON: newer fields and objects](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-JSON#other-objects): every newer material field, plus lines, points, sprites, LODs, batched and skinned meshes. [#155](https://github.com/SethKitchen/ThreeMojo/issues/155)
+- [x] [Scene JSON: environments and clipping](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-JSON#cube-textures): cube textures, environment maps, clipping planes, distance ranges, morph influences and calculated bone inverses. [#160](https://github.com/SethKitchen/ThreeMojo/issues/160)
 - [x] [FBX and Collada loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#collada): Collada and ASCII or binary FBX files read into meshes, materials, textures, nodes, cameras and lights [#138](https://github.com/SethKitchen/ThreeMojo/issues/138)
 
 </details>
