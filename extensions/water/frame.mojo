@@ -11,7 +11,9 @@ the page adds while time is running.
 """
 
 from extensions.water.caustics import CausticField, render_caustics
+from extensions.water.filter import anisotropic_step
 from extensions.water.glare import apply_glare, glare_kernels
+from extensions.water.pebbles import PebbleBed
 from extensions.water.optics import (
     Refracted,
     aces_channel,
@@ -39,6 +41,7 @@ from extensions.water.ripple import (
 from extensions.water.surface import (
     SurfaceField,
     sample_surface,
+    sample_surface_filtered,
     shader_time,
     slope_variance,
     water_surface,
@@ -75,18 +78,19 @@ struct CameraLook(ImplicitlyCopyable):
     var pz: Float32
 
 
-def camera_look(clock: Duration, sway: Bool) -> CameraLook:
+def camera_look(clock: Duration, sway: Bool, pitch: Angle) -> CameraLook:
     """Return the page's camera at one clock time.
 
     Args:
         clock: Seconds since the start. The screenshot clock is 5.
         sway: True adds the idle bob. `?t=` on the page sets this false.
+        pitch: Radians, positive up. The page starts at -0.72.
 
     Returns:
         The basis and the eye position. Y is up.
     """
     var yaw = Float32(0.0)
-    var pitch = Float32(-0.72)
+    var pitch_rad = pitch.value
     var roll = Float32(0.0)
     var x = Float32(0.0)
     var y = Float32(1.55)
@@ -94,14 +98,14 @@ def camera_look(clock: Duration, sway: Bool) -> CameraLook:
     var t = clock.value
     if sway:
         yaw += 0.010 * sin(t * 0.31) + 0.005 * sin(t * 0.83 + 1.3)
-        pitch += 0.007 * sin(t * 0.47 + 2.0) + 0.003 * sin(t * 1.13)
+        pitch_rad += 0.007 * sin(t * 0.47 + 2.0) + 0.003 * sin(t * 1.13)
         roll += 0.006 * sin(t * 0.39 + 0.4)
         x = 0.03 * sin(t * 0.21)
         y += 0.015 * sin(t * 0.57)
         z = 0.03 * cos(t * 0.17)
-    var fx = sin(yaw) * cos(pitch)
-    var fy = sin(pitch)
-    var fz = -cos(yaw) * cos(pitch)
+    var fx = sin(yaw) * cos(pitch_rad)
+    var fy = sin(pitch_rad)
+    var fz = -cos(yaw) * cos(pitch_rad)
     var rx = cos(yaw)
     var ry = Float32(0.0)
     var rz = sin(yaw)
@@ -134,7 +138,10 @@ def water_radiance(
     surface: SurfaceField,
     ripples: RippleField,
     caustics: CausticField,
+    bed: PebbleBed,
     clock: Duration,
+    pixel_x: Float32 = 0.0,
+    pixel_y: Float32 = 0.0,
 ) -> Vector3:
     """Shade one view ray.
 
@@ -146,22 +153,15 @@ def water_radiance(
         surface: The ocean FFT surface.
         ripples: The local wave-equation window.
         caustics: The refracted-grid texture.
+        bed: The pebble photograph.
         clock: Frame time, used by the suspended specks.
+        pixel_x: Normalized width of one pixel. Zero skips the mip footprint.
+        pixel_y: Normalized height of one pixel. Zero skips the mip footprint.
 
     Returns:
         Linear radiance before grading.
     """
-    var tan_f = tan(Angle(32.0, DEGREE).value)
-    var rdx = (
-        look.fx + ndc_x * aspect * tan_f * look.rx + ndc_y * tan_f * look.ux
-    )
-    var rdy = (
-        look.fy + ndc_x * aspect * tan_f * look.ry + ndc_y * tan_f * look.uy
-    )
-    var rdz = (
-        look.fz + ndc_x * aspect * tan_f * look.rz + ndc_y * tan_f * look.uz
-    )
-    var rd = _unit(rdx, rdy, rdz)
+    var rd = _ray(look, ndc_x, ndc_y, aspect)
     var wdy = rd.y
     if wdy > -0.0015:
         wdy = -0.0015
@@ -175,7 +175,10 @@ def water_radiance(
         hit_z = look.pz + wd.z * t
         height = _wave_height(surface, ripples, hit_x, hit_z)
         t = (height - look.py) / wd.y
-    var slope = _wave_slope(surface, ripples, hit_x, hit_z, t)
+    var foot = _footprint(look, ndc_x, ndc_y, aspect, height, pixel_x, pixel_y)
+    var slope = _wave_slope(
+        surface, ripples, hit_x, hit_z, t, foot[0], foot[1], foot[2], foot[3]
+    )
     var normal = _unit(-slope.x, 1.0, -slope.y)
     var vx = -wd.x
     var vy = -wd.y
@@ -224,7 +227,13 @@ def water_radiance(
         sun,
         caustics,
         ripples,
+        bed,
         clock,
+        foot[0],
+        foot[1],
+        foot[2],
+        foot[3],
+        t,
     )
     var color = Vector3(
         f * refl.x + (1.0 - f) * under.x + sun_rgb.x,
@@ -276,13 +285,35 @@ def _wave_slope(
     x: Float32,
     z: Float32,
     dist: Float32,
+    dpx_x: Float32,
+    dpx_z: Float32,
+    dpy_x: Float32,
+    dpy_z: Float32,
 ) -> Vector3:
-    var a = sample_surface(surface, x, z)
+    var patch = surface.patch.value
+    var a = sample_surface_filtered(
+        surface,
+        x,
+        z,
+        dpx_x / patch,
+        dpx_z / patch,
+        dpy_x / patch,
+        dpy_z / patch,
+        True,
+    )
     # The second tile is `(M * xz) / (L * 0.41) + 0.37` in texture space.
-    var b_uv_x = (0.8 * x + 0.6 * z) / (surface.patch.value * 0.41) + 0.37
-    var b_uv_z = (-0.6 * x + 0.8 * z) / (surface.patch.value * 0.41) + 0.37
-    var b = sample_surface(
-        surface, b_uv_x * surface.patch.value, b_uv_z * surface.patch.value
+    var tile = patch * 0.41
+    var b_uv_x = (0.8 * x + 0.6 * z) / tile + 0.37
+    var b_uv_z = (-0.6 * x + 0.8 * z) / tile + 0.37
+    var b = sample_surface_filtered(
+        surface,
+        b_uv_x * patch,
+        b_uv_z * patch,
+        (0.8 * dpx_x + 0.6 * dpx_z) / tile,
+        (-0.6 * dpx_x + 0.8 * dpx_z) / tile,
+        (0.8 * dpy_x + 0.6 * dpy_z) / tile,
+        (-0.6 * dpy_x + 0.8 * dpy_z) / tile,
+        True,
     )
     var ripple = sample_ripple(ripples, x, z)
     var sx = (
@@ -291,14 +322,23 @@ def _wave_slope(
     var sz = (
         a.slope_z + 0.10 * (-0.6 * b.slope_x + 0.8 * b.slope_z) + ripple.slope_z
     )
-    var c_uv_x = (0.28 * x - 0.96 * z) / (surface.patch.value * 0.13) + 0.71
-    var c_uv_z = (0.96 * x + 0.28 * z) / (surface.patch.value * 0.13) + 0.71
-    var c = sample_surface(
-        surface, c_uv_x * surface.patch.value, c_uv_z * surface.patch.value
+    var detail_tile = patch * 0.13
+    var c_uv_x = (0.28 * x - 0.96 * z) / detail_tile + 0.71
+    var c_uv_z = (0.96 * x + 0.28 * z) / detail_tile + 0.71
+    var c = sample_surface_filtered(
+        surface,
+        c_uv_x * patch,
+        c_uv_z * patch,
+        (0.28 * dpx_x - 0.96 * dpx_z) / detail_tile,
+        (0.96 * dpx_x + 0.28 * dpx_z) / detail_tile,
+        (0.28 * dpy_x - 0.96 * dpy_z) / detail_tile,
+        (0.96 * dpy_x + 0.28 * dpy_z) / detail_tile,
+        False,
     )
     var detail = 0.13 * exp(-dist * 0.18)
-    sx += detail * (0.28 * c.slope_x - 0.96 * c.slope_z)
-    sz += detail * (0.96 * c.slope_x + 0.28 * c.slope_z)
+    # `transpose(M2)` turns texture slopes back into world slopes.
+    sx += detail * (0.28 * c.slope_x + 0.96 * c.slope_z)
+    sz += detail * (-0.96 * c.slope_x + 0.28 * c.slope_z)
     var variance = slope_variance(a) + 0.01 * slope_variance(b)
     return Vector3(sx, sz, variance)
 
@@ -312,7 +352,13 @@ def _underwater(
     sun: Vector3,
     caustics: CausticField,
     ripples: RippleField,
+    bed_photo: PebbleBed,
     clock: Duration,
+    dpx_x: Float32,
+    dpx_z: Float32,
+    dpy_x: Float32,
+    dpy_z: Float32,
+    camera_t: Float32,
 ) -> Vector3:
     # Air into water cannot totally reflect, and a downward view stays downward.
     var ray = refract(
@@ -328,15 +374,36 @@ def _underwater(
             travel = 0.0
         bed_x = x + ray.x * travel
         bed_z = z + ray.z * travel
-    var bed = bed_color(bed_x, bed_z)
+    var span = camera_t
+    if span < 0.05:
+        span = 0.05
+    span = (span + travel) / span
+    var bed = bed_color(
+        bed_photo,
+        bed_x,
+        bed_z,
+        dpx_x * span,
+        dpx_z * span,
+        dpy_x * span,
+        dpy_z * span,
+    )
     var sun_ray = refract(0.0, -1.0, 0.0, 0.0, 1.0, 0.0, 1.0 / water_ior())
     var ts = 1.0 - fresnel(sun.y, water_ior())
     var column = height - (-floor_depth(bed_x, bed_z))
     if column < 0.0:
         column = 0.0
-    var cu = (bed_x - caustics.shift_x) / caustics.patch
-    var cv = (bed_z - caustics.shift_z) / caustics.patch
-    var caus = _caustic_at(caustics, cu, cv)
+    var nudge = (bed.height - 0.35) * 0.05 / -sun_ray.y
+    var cu = (bed_x - caustics.shift_x + sun_ray.x * nudge) / caustics.patch
+    var cv = (bed_z - caustics.shift_z + sun_ray.z * nudge) / caustics.patch
+    var caus = _caustic_grad(
+        caustics,
+        cu,
+        cv,
+        dpx_x * span / caustics.patch,
+        dpx_z * span / caustics.patch,
+        dpy_x * span / caustics.patch,
+        dpy_z * span / caustics.patch,
+    )
     var entered = sample_ripple(ripples, bed_x, bed_z)
     var focus = 1.0 / (1.0 + 0.12 * column * entered.laplacian)
     if focus < 0.45:
@@ -351,20 +418,21 @@ def _underwater(
     var sun_t_y = sun_ray.y
     var absorb = _exp3(sig_t * (column / -sun_t_y))
     var ao = 0.55 + 0.45 * smoothstep(0.08, 0.42, bed.height)
-    var sun_light = Vector3(6.0, 5.4, 4.44) * ts
+    var sun_rgb = Vector3(1.0, 0.90, 0.74) * 6.0
+    var sun_light = sun_rgb * ts
     var esun = Vector3(
         sun_light.x * absorb.x * caus.x * (-sun_t_y) * (0.75 + 0.25 * ao),
         sun_light.y * absorb.y * caus.y * (-sun_t_y) * (0.75 + 0.25 * ao),
         sun_light.z * absorb.z * caus.z * (-sun_t_y) * (0.75 + 0.25 * ao),
     )
-    var sky_abs = _exp3((sig_a + sig_s * 0.4) * (column * 1.25))
-    var sky_gain = Float32(3.14159265 * 0.22) * ao
-    var esky = Vector3(
-        0.62 * sky_gain * sky_abs.x,
-        0.70 * sky_gain * sky_abs.y,
-        0.78 * sky_gain * sky_abs.z,
-    )
     var pi = Float32(3.141592653589793)
+    var sky_irr = Vector3(0.62, 0.70, 0.78) * (pi * 0.22)
+    var sky_abs = _exp3((sig_a + sig_s * 0.4) * (column * 1.25))
+    var esky = Vector3(
+        sky_irr.x * sky_abs.x * ao,
+        sky_irr.y * sky_abs.y * ao,
+        sky_irr.z * sky_abs.z * ao,
+    )
     var floor_l = Vector3(
         bed.r / pi * (esun.x + esky.x),
         bed.g / pi * (esun.y + esky.y),
@@ -378,7 +446,16 @@ def _underwater(
     var phase = (1.0 - g * g) / (
         4.0 * pi * pow(1.0 + g * g - 2.0 * g * cos_s, Float32(1.5))
     )
-    var mid = sun_light * ts * phase
+    var mid_abs = _exp3(sig_t * (column * 0.5 / -sun_t_y))
+    var sky_mid = _exp3(sig_a * (column * 0.6))
+    var mid = Vector3(
+        sun_light.x * mid_abs.x * (phase + 0.02)
+        + sky_irr.x * sky_mid.x / (4.0 * pi),
+        sun_light.y * mid_abs.y * (phase + 0.02)
+        + sky_irr.y * sky_mid.y / (4.0 * pi),
+        sun_light.z * mid_abs.z * (phase + 0.02)
+        + sky_irr.z * sky_mid.z / (4.0 * pi),
+    )
     var scatter = Vector3(
         sig_s.x / sig_t.x * mid.x * (1.0 - view_abs.x) * 3.2,
         sig_s.y / sig_t.y * mid.y * (1.0 - view_abs.y) * 3.2,
@@ -389,7 +466,7 @@ def _underwater(
         floor_l.y * view_abs.y + scatter.y,
         floor_l.z * view_abs.z + scatter.z,
     )
-    return _specks(color, x, z, ray, travel, clock, sun_light * ts)
+    return _specks(color, x, z, ray, travel, clock, sun_light)
 
 
 def _specks(
@@ -449,16 +526,117 @@ def floor_f(value: Float32) -> Float32:
     return floor(value)
 
 
+def _caustic_grad(
+    field: CausticField,
+    u: Float32,
+    v: Float32,
+    du_dx: Float32,
+    dv_dx: Float32,
+    du_dy: Float32,
+    dv_dy: Float32,
+) -> Vector3:
+    var step = anisotropic_step(
+        du_dx,
+        dv_dx,
+        du_dy,
+        dv_dy,
+        Float32(field.n),
+        Float32(field.n),
+        8.0,
+        1.0,
+        Float32(len(field.mip_n)),
+    )
+    var acc = Vector3(0.0, 0.0, 0.0)
+    var count = step.taps
+    for i in range(count):  # pragma: no branch
+        var o = (Float32(i) + 0.5) / Float32(count) - 0.5
+        var sample = _caustic_lod(
+            field, u + step.du * o, v + step.dv * o, step.lod
+        )
+        acc = Vector3(acc.x + sample.x, acc.y + sample.y, acc.z + sample.z)
+    var inv = 1.0 / Float32(count)
+    return Vector3(acc.x * inv, acc.y * inv, acc.z * inv)
+
+
+def _caustic_lod(
+    field: CausticField, u: Float32, v: Float32, lod: Float32
+) -> Vector3:
+    var levels = len(field.mip_n)
+    var i0 = Int(floor_f(lod))
+    var i1 = i0 + 1
+    if i1 > levels:
+        i1 = levels
+    var frac = lod - Float32(i0)
+    var a = _caustic_level(field, i0, u, v)
+    var b = _caustic_level(field, i1, u, v)
+    return _mix3(a, b, frac)
+
+
+def _caustic_level(
+    field: CausticField, level: Int, u: Float32, v: Float32
+) -> Vector3:
+    var n = field.n
+    if level > 0:
+        n = field.mip_n[level - 1]
+    var fu = u - _floor_wrap(u)
+    var fv = v - _floor_wrap(v)
+    var px = fu * Float32(n)
+    var py = fv * Float32(n)
+    var x0 = Int(floor_f(px)) % n
+    var y0 = Int(floor_f(py)) % n
+    var x1 = (x0 + 1) % n
+    var y1 = (y0 + 1) % n
+    var tx = px - floor_f(px)
+    var ty = py - floor_f(py)
+    var c00 = _caustic_level_texel(field, level, x0, y0)
+    var c10 = _caustic_level_texel(field, level, x1, y0)
+    var c01 = _caustic_level_texel(field, level, x0, y1)
+    var c11 = _caustic_level_texel(field, level, x1, y1)
+    var top = _mix3(c00, c10, tx)
+    var bottom = _mix3(c01, c11, tx)
+    return _mix3(top, bottom, ty)
+
+
+def _caustic_level_texel(
+    field: CausticField, level: Int, x: Int, y: Int
+) -> Vector3:
+    return Vector3(
+        field.level_channel(level, x, y, 0),
+        field.level_channel(level, x, y, 1),
+        field.level_channel(level, x, y, 2),
+    )
+
+
 def _caustic_at(field: CausticField, u: Float32, v: Float32) -> Vector3:
     var fu = u - _floor_wrap(u)
     var fv = v - _floor_wrap(v)
     var n = field.n
-    # `fu` is in `[0, 1)`, so the product stays inside the texture.
-    var x = Int(fu * Float32(n)) % n
-    var y = Int(fv * Float32(n)) % n
+    var px = fu * Float32(n)
+    var py = fv * Float32(n)
+    var x0 = Int(floor_f(px)) % n
+    var y0 = Int(floor_f(py)) % n
+    var x1 = (x0 + 1) % n
+    var y1 = (y0 + 1) % n
+    var tx = px - floor_f(px)
+    var ty = py - floor_f(py)
+    var c00 = _caustic_texel(field, x0, y0)
+    var c10 = _caustic_texel(field, x1, y0)
+    var c01 = _caustic_texel(field, x0, y1)
+    var c11 = _caustic_texel(field, x1, y1)
+    var top = _mix3(c00, c10, tx)
+    var bottom = _mix3(c01, c11, tx)
+    return _mix3(top, bottom, ty)
+
+
+def _caustic_texel(field: CausticField, x: Int, y: Int) -> Vector3:
     return Vector3(
         field.channel(x, y, 0), field.channel(x, y, 1), field.channel(x, y, 2)
     )
+
+
+def _mix3(a: Vector3, b: Vector3, t: Float32) -> Vector3:
+    var s = 1.0 - t
+    return Vector3(a.x * s + b.x * t, a.y * s + b.y * t, a.z * s + b.z * t)
 
 
 def _floor_wrap(value: Float32) -> Float32:
@@ -478,6 +656,59 @@ def _reflect(ix: Float32, iy: Float32, iz: Float32, normal: Vector3) -> Vector3:
         iy - 2.0 * dot * normal.y,
         iz - 2.0 * dot * normal.z,
     )
+
+
+def _ray(
+    look: CameraLook, ndc_x: Float32, ndc_y: Float32, aspect: Float32
+) -> Vector3:
+    var tan_f = tan(Angle(32.0, DEGREE).value)
+    return _unit(
+        look.fx + ndc_x * aspect * tan_f * look.rx + ndc_y * tan_f * look.ux,
+        look.fy + ndc_x * aspect * tan_f * look.ry + ndc_y * tan_f * look.uy,
+        look.fz + ndc_x * aspect * tan_f * look.rz + ndc_y * tan_f * look.uz,
+    )
+
+
+def _footprint(
+    look: CameraLook,
+    ndc_x: Float32,
+    ndc_y: Float32,
+    aspect: Float32,
+    plane_y: Float32,
+    pixel_x: Float32,
+    pixel_y: Float32,
+) -> Tuple[Float32, Float32, Float32, Float32]:
+    var dpx_x = Float32(0.0)
+    var dpx_z = Float32(0.0)
+    var dpy_x = Float32(0.0)
+    var dpy_z = Float32(0.0)
+    if pixel_x != 0.0:
+        var here = _plane_xz(look, ndc_x, ndc_y, aspect, plane_y)
+        var right = _plane_xz(look, ndc_x + pixel_x, ndc_y, aspect, plane_y)
+        dpx_x = right[0] - here[0]
+        dpx_z = right[1] - here[1]
+    if pixel_y != 0.0:
+        var here = _plane_xz(look, ndc_x, ndc_y, aspect, plane_y)
+        var up = _plane_xz(look, ndc_x, ndc_y + pixel_y, aspect, plane_y)
+        dpy_x = up[0] - here[0]
+        dpy_z = up[1] - here[1]
+    return (dpx_x, dpx_z, dpy_x, dpy_z)
+
+
+def _plane_xz(
+    look: CameraLook,
+    ndc_x: Float32,
+    ndc_y: Float32,
+    aspect: Float32,
+    plane_y: Float32,
+) -> Tuple[Float32, Float32]:
+    var rd = _ray(look, ndc_x, ndc_y, aspect)
+    var wdy = rd.y
+    if wdy > -0.0015:
+        wdy = -0.0015
+    var wd = _unit(rd.x, wdy, rd.z)
+    var dist = (plane_y - look.py) / wd.y
+    return (look.px + wd.x * dist, look.pz + wd.z * dist)
 
 
 def _unit(x: Float32, y: Float32, z: Float32) -> Vector3:
@@ -586,6 +817,8 @@ def render_water(
     caustic_resolution: Int,
     glare_resolution: SpectrumResolution,
     drop: Bool,
+    bed: PebbleBed,
+    pitch: Angle,
 ) raises -> Framebuffer:
     """Draw one Clearwater picture.
 
@@ -600,6 +833,8 @@ def render_water(
         caustic_resolution: Caustic texels on one side.
         glare_resolution: Diffraction FFT size.
         drop: True places one tap at the middle of the ripple window.
+        bed: The pebble photograph.
+        pitch: Camera pitch. The page starts at -0.72 radians.
 
     Returns:
         A framebuffer of display-ready pixels. `CAUSTICS` is the raw
@@ -626,14 +861,24 @@ def render_water(
     if view == CAUSTICS:
         return _caustic_picture(width, height, caustics)
     var hdr = List[Float32](length=width * height * 3, fill=0.0)
-    var look = camera_look(clock, sway)
+    var look = camera_look(clock, sway, pitch)
     var aspect = Float32(width) / Float32(height)
     for y in range(height):  # pragma: no branch
         for x in range(width):  # pragma: no branch
             var ndc_x = ((Float32(x) + 0.5) / Float32(width)) * 2.0 - 1.0
             var ndc_y = 1.0 - ((Float32(y) + 0.5) / Float32(height)) * 2.0
             var rgb = water_radiance(
-                look, ndc_x, ndc_y, aspect, surface, ripples, caustics, clock
+                look,
+                ndc_x,
+                ndc_y,
+                aspect,
+                surface,
+                ripples,
+                caustics,
+                bed,
+                clock,
+                2.0 / Float32(width),
+                2.0 / Float32(height),
             )
             var p = (y * width + x) * 3
             hdr[p] = rgb.x

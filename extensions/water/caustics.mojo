@@ -25,6 +25,9 @@ struct CausticField(Movable):
     var samples: List[Float32]
     var shift_x: Float32
     var shift_z: Float32
+    var mip_n: List[Int]
+    var mip_off: List[Int]
+    var mip_px: List[Float32]
 
     def __init__(out self, n: Int, patch: Length) raises:
         """Allocate a black texture.
@@ -45,6 +48,9 @@ struct CausticField(Movable):
         self.samples = List[Float32](length=n * n * 3, fill=0.0)
         self.shift_x = 0.0
         self.shift_z = 0.0
+        self.mip_n = List[Int]()
+        self.mip_off = List[Int]()
+        self.mip_px = List[Float32]()
 
     def channel(self, x: Int, y: Int, c: Int) -> Float32:
         """Return one texel of one color.
@@ -58,6 +64,24 @@ struct CausticField(Movable):
             The summed intensity.
         """
         return self.samples[(y * self.n + x) * 3 + c]
+
+    def level_channel(self, level: Int, x: Int, y: Int, c: Int) -> Float32:
+        """Return one channel of one mip texel.
+
+        Args:
+            level: 0 is the base texture. Larger values are coarser.
+            x: Column inside that level.
+            y: Row inside that level.
+            c: 0 red, 1 green, 2 blue.
+
+        Returns:
+            The stored intensity.
+        """
+        if level <= 0:
+            return self.channel(x, y, c)
+        var w = self.mip_n[level - 1]
+        var at = self.mip_off[level - 1] + (y * w + x) * 3 + c
+        return self.mip_px[at]
 
 
 def flat_shift(sun: Vector3, depth: Float32) -> Tuple[Float32, Float32]:
@@ -182,6 +206,7 @@ def render_caustics(
                     source_area,
                     norm,
                 )
+    _build_caustic_mips(image)
     return image^
 
 
@@ -352,3 +377,40 @@ def _max3(a: Float32, b: Float32, c: Float32) -> Float32:
     if c > m:
         m = c
     return m
+
+
+def _build_caustic_mips(mut image: CausticField):
+    var n = image.n
+    var level = 0
+    for _step in range(16):  # pragma: no branch
+        if n <= 1:
+            break
+        var half = n // 2
+        var dst = List[Float32](length=half * half * 3, fill=0.0)
+        for y in range(half):  # pragma: no branch
+            var y0 = y * n // half
+            var y1 = (y + 1) * n // half
+            for x in range(half):  # pragma: no branch
+                var x0 = x * n // half
+                var x1 = (x + 1) * n // half
+                var r = Float32(0.0)
+                var g = Float32(0.0)
+                var b = Float32(0.0)
+                var count = Float32(0.0)
+                for sy in range(y0, y1):  # pragma: no branch
+                    for sx in range(x0, x1):  # pragma: no branch
+                        r += image.level_channel(level, sx, sy, 0)
+                        g += image.level_channel(level, sx, sy, 1)
+                        b += image.level_channel(level, sx, sy, 2)
+                        count += 1.0
+                var inv = 1.0 / count
+                var at = (y * half + x) * 3
+                dst[at] = r * inv
+                dst[at + 1] = g * inv
+                dst[at + 2] = b * inv
+        image.mip_off.append(len(image.mip_px))
+        image.mip_n.append(half)
+        for index in range(len(dst)):  # pragma: no branch
+            image.mip_px.append(dst[index])
+        n = half
+        level += 1

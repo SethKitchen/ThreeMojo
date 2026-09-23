@@ -977,7 +977,7 @@ $(OUT_DIR)/integument.png: $(LIB_SOURCES) examples/integument.mojo
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/integument.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
-$(OUT_DIR)/water.png: $(LIB_SOURCES) examples/water.mojo
+$(OUT_DIR)/water.png: $(LIB_SOURCES) examples/water.mojo assets/pebbles.jpg
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/water.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
