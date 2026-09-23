@@ -29,6 +29,15 @@ them.
 Tracks match when they drive the same target, which is three.js matching
 them by name and type.
 
+## Cubic spline tracks
+
+A `CUBIC_SPLINE` key is three numbers deep: in-tangent, value and
+out-tangent. `subclip` keeps all three of every key it keeps, as three.js
+keeps a glTF key's whole stride. `make_clip_additive` changes the values
+alone and leaves the tangents, as three.js does: a number less a constant
+has the same slope. A rotation's tangents are left unturned, which is
+three.js's arithmetic too.
+
 ## What differs from three.js
 
 Both return a new clip. three.js's `makeClipAdditive` changes the clip it
@@ -39,13 +48,18 @@ three.js falls back to thirty frames a second when it is given a rate of
 zero or less. Here such a rate is refused, since a caller who asked for it
 asked for something else. A frame below zero is refused too.
 
+A cubic spline reference read between two of its keys gives the value of
+its curve there. three.js slices that value out of its result as though
+the result held the tangents as well, which it does not, and takes off
+nothing it can use: every key of the target comes out not a number.
+
 A subclip is a clip and must last longer than no time, so a range that
 keeps one key of every track, or none, is refused. three.js returns a
 clip of no length and nothing can play it.
 """
 
 from animation.animation_clip import ADDITIVE_BLEND_MODE, AnimationClip
-from animation.keyframe_track import KeyframeTrack, QUATERNION
+from animation.keyframe_track import CUBIC_SPLINE, KeyframeTrack, QUATERNION
 from math.quaternion import Quaternion
 from std.math import isfinite
 from units.si import Duration, SECOND
@@ -107,6 +121,8 @@ def subclip(
     var last = Float32(end_frame)
     var kept_times = List[List[Float32]]()
     var kept_values = List[List[Float32]]()
+    var kept_in = List[List[Float32]]()
+    var kept_out = List[List[Float32]]()
     var kept_from = List[Int]()
     var earliest = Float32(0)
     for index in range(len(source.tracks)):  # pragma: no branch
@@ -114,6 +130,9 @@ def subclip(
         var width = track.target.kind.component_count()
         var times = List[Float32]()
         var values = List[Float32]()
+        var ins = List[Float32]()
+        var outs = List[Float32]()
+        var tangents = track.interpolation == CUBIC_SPLINE
         for key in range(len(track.times)):  # pragma: no branch
             var frame = track.times[key] * rate
             if frame < first or frame >= last:
@@ -121,12 +140,19 @@ def subclip(
             times.append(track.times[key])
             for offset in range(width):  # pragma: no branch
                 values.append(track.values[key * width + offset])
+                if tangents:
+                    # A glTF key is three values, and three.js's subclip
+                    # keeps all three.
+                    ins.append(track.in_tangents[key * width + offset])
+                    outs.append(track.out_tangents[key * width + offset])
         if len(times) == 0:
             continue
         if len(kept_from) == 0 or times[0] < earliest:
             earliest = times[0]
         kept_times.append(times^)
         kept_values.append(values^)
+        kept_in.append(ins^)
+        kept_out.append(outs^)
         kept_from.append(index)
     var tracks = List[KeyframeTrack]()
     for index in range(len(kept_from)):
@@ -134,6 +160,17 @@ def subclip(
         for key in range(len(kept_times[index])):  # pragma: no branch
             shifted.append(Duration(kept_times[index][key] - earliest, SECOND))
         ref track = source.tracks[kept_from[index]]
+        if track.interpolation == CUBIC_SPLINE:
+            tracks.append(
+                KeyframeTrack(
+                    track.target,
+                    shifted,
+                    in_tangents=kept_in[index].copy(),
+                    values=kept_values[index].copy(),
+                    out_tangents=kept_out[index].copy(),
+                )
+            )
+            continue
         tracks.append(
             KeyframeTrack(
                 track.target,

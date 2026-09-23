@@ -4,7 +4,7 @@
 
 ![A mixer slides and turns a cube from keyframes](out/keyframes.png)
 
-three.js: `KeyframeTrack`, `VectorKeyframeTrack`, `QuaternionKeyframeTrack`, `NumberKeyframeTrack`, `ColorKeyframeTrack`, `BooleanKeyframeTrack`, `PropertyBinding`, `PropertyMixer`, `AnimationClip`, `AnimationAction`, `AnimationMixer`, `AnimationObjectGroup`, `AnimationUtils.subclip`, `AnimationUtils.makeClipAdditive`, `AdditiveAnimationBlendMode`, and the mixer's `loop` and `finished` events.
+three.js: `KeyframeTrack`, `VectorKeyframeTrack`, `QuaternionKeyframeTrack`, `NumberKeyframeTrack`, `ColorKeyframeTrack`, `BooleanKeyframeTrack`, `PropertyBinding`, `PropertyMixer`, `AnimationClip`, `AnimationAction`, `AnimationMixer`, `AnimationObjectGroup`, `AnimationUtils.subclip`, `AnimationUtils.makeClipAdditive`, `AdditiveAnimationBlendMode`, and the mixer's `loop` and `finished` events. The smooth and cubic spline modes port `CubicInterpolant` and the glTF loader's `GLTFCubicSplineInterpolant`.
 
 ## KeyframeTrack
 
@@ -44,8 +44,8 @@ This port has no `StringKeyframeTrack`. Nothing in the port has a string propert
 |---|---|
 | `key_count() -> Int` | How many keys the track holds. |
 | `duration() -> Duration` | When the last key is. |
-| `sample(at) -> List[Float32]` | The value at a time, as numbers. |
-| `sample_vector3(at) -> Vector3` | The value of a `POSITION` or `SCALE` track. |
+| `sample(at, start, end) -> List[Float32]` | The value at a time, as numbers. `start` and `end` are the [ending modes](#ending-modes) of a `SMOOTH` track. |
+| `sample_vector3(at, start, end) -> Vector3` | The value of a `POSITION` or `SCALE` track. |
 | `sample_quaternion(at) -> Quaternion` | The value of a `QUATERNION` track. |
 
 Before the first key the value is the first key's. After the last it is the last key's. three.js's interpolants do the same at their ends.
@@ -89,13 +89,79 @@ A color key holds three linear channels from 0 to 1, as three.js's `Color` holds
 
 ### How two keys are mixed
 
-`LINEAR`, the default, runs evenly from each key to the next. `STEP` holds each key's value until the next key, which is three.js's `InterpolateDiscrete`.
+There are four interpolations.
+
+| Interpolation | three.js | Between two keys |
+|---|---|---|
+| `LINEAR`, the default | `InterpolateLinear` | Runs evenly from one key to the next. |
+| `STEP` | `InterpolateDiscrete` | Holds the first key's value. |
+| `SMOOTH` | `InterpolateSmooth` | A cubic curve through the keys. See [Smooth tracks](#smooth-tracks). |
+| `CUBIC_SPLINE` | glTF's `CUBICSPLINE` | A cubic curve from values and tangents. See [Cubic spline tracks](#cubic-spline-tracks). |
 
 A `VISIBLE` track is always `STEP`, as three.js's `BooleanKeyframeTrack` is. Leave `interpolation` out, or give `STEP`. A key must be 0 or 1.
 
 Two rotations are mixed by `slerp`, not one number at a time. A rotation is not four numbers to average. Averaging them makes a turn that speeds up in the middle. It also makes a quaternion that is no longer a rotation. three.js keeps `QuaternionLinearInterpolant` apart for the same reason.
 
-three.js has a third mode, `InterpolateSmooth`. It is not ported. It is not a Catmull-Rom spline through the keys. It takes the uneven spacing of the times into account, and the spline in [Curves and paths](Curves) does not.
+### Smooth tracks
+
+`SMOOTH` runs a cubic curve through the keys, as three.js's `CubicInterpolant` does. The slope at a key comes from the keys on each side of it, divided by the time between them. So uneven spacing of the times changes the curve.
+
+```mojo
+from animation.keyframe_track import SMOOTH
+
+var glide = KeyframeTrack(
+    NodeId(0), POSITION, times, [0, 0, 0, 4, 0, 0], SMOOTH
+)
+```
+
+`SMOOTH` is not a Catmull-Rom spline. The spline in [Curves and paths](Curves) does not use the times, so it is a different curve.
+
+A `POSITION`, `SCALE`, `MORPH_INFLUENCE`, color or material number track can be `SMOOTH`. A `QUATERNION` track cannot. three.js's `QuaternionKeyframeTrack` has no smooth interpolant. There it prints a warning and uses `LINEAR`. This port raises an error, because a caller who asks for smooth did not ask for linear.
+
+#### Ending modes
+
+The first and the last pair of keys have no key on one side. An `Ending` tells the curve what to use there.
+
+| Ending | three.js | The curve at that end |
+|---|---|---|
+| `ZERO_CURVATURE_ENDING` | `ZeroCurvatureEnding` | Does not bend. This is a natural spline. |
+| `ZERO_SLOPE_ENDING` | `ZeroSlopeEnding` | Is flat. |
+| `WRAP_AROUND_ENDING` | `WrapAroundEnding` | Continues into the other end of the track. |
+
+`sample(at)` uses `ZERO_CURVATURE_ENDING` at both ends, as a three.js `CubicInterpolant` does on its own. An action sets the endings from its loop mode, as three.js's `_setEndings` does:
+
+| Loop | Start | End |
+|---|---|---|
+| `ONCE` | Flat | Flat |
+| `REPEAT`, forward | Flat until the first loop, then wraps | Wraps |
+| `REPEAT`, backward | Wraps | Flat until the first loop, then wraps |
+| `PING_PONG` | Flat | Flat |
+
+Set `zero_slope_at_start` or `zero_slope_at_end` to False on an action to use `ZERO_CURVATURE_ENDING` in place of flat. Both are True by default, as in three.js. `stop` starts the sequence again.
+
+### Cubic spline tracks
+
+A `CUBIC_SPLINE` track is glTF's cubic spline sampler, three.js's `GLTFCubicSplineInterpolant`. Each key has an in-tangent, a value and an out-tangent. The curve between two keys is a Hermite cubic. It starts at the first value along the first out-tangent and ends at the second value along the second in-tangent. A tangent is in value units per second, so the curve scales it by the time between the two keys.
+
+A cubic spline track has its own constructor. It takes the tangents as two lists, laid out as the values are:
+
+```mojo
+from animation.keyframe_track import node_target
+
+var arc = KeyframeTrack(
+    node_target(NodeId(0), POSITION),
+    times,
+    in_tangents=[0, 0, 0, -2, 0, 0],
+    values=[0, 0, 0, 4, 0, 0],
+    out_tangents=[2, 0, 0, 0, 0, 0],
+)
+```
+
+glTF puts the in-tangent, the value and the out-tangent of each key one after the other. Split them into the three lists. The in-tangent of the first key and the out-tangent of the last key have no effect.
+
+Every kind except `VISIBLE` can be `CUBIC_SPLINE`. A `QUATERNION` track is run one number at a time and then made of unit length, as three.js's `GLTFCubicSplineQuaternionInterpolant` does. Endings have no effect on a cubic spline track.
+
+`subclip` keeps the tangents of each key that it keeps. `make_clip_additive` changes the values and keeps the tangents, as three.js does.
 
 ## AnimationClip
 
@@ -364,6 +430,9 @@ three.js dispatches `loop` and `finished` to listener functions. A Mojo closure 
 | Times that are negative, or that do not rise. | An error at construction. |
 | Values that do not divide into one per key. | An error at construction. |
 | A rotation key that is not of unit length. | An error at construction. |
+| A `QUATERNION` track that is `SMOOTH`. | An error at construction. |
+| A `CUBIC_SPLINE` track without tangents, or with tangents that are not one per value. | An error at construction. |
+| An ending mode that is not named. | An error at `sample`. |
 | Reading a rotation off a position track, or the other way round. | An error. |
 | A clip with no tracks, or one that lasts no time. | An error at construction. |
 | A weight below zero, or a loop mode that is not named. | An error. |
@@ -379,7 +448,7 @@ three.js dispatches `loop` and `finished` to listener functions. A Mojo closure 
 | A value that its property cannot hold. | An error at `update`. |
 | A target function given a kind of another thing. | An error. |
 | A morph target below 0 or above 7. | An error. |
-| A `VISIBLE` track that is `LINEAR`, or a key of one that is not 0 or 1. | An error at construction. |
+| A `VISIBLE` track that is not `STEP`, or a key of one that is not 0 or 1. | An error at construction. |
 | A blend mode that is not named. | An error. |
 | A frame rate that is not above zero, or a frame below zero. | An error. |
 | A subclip range that ends before it starts, or that keeps no clip. | An error. |
@@ -389,6 +458,7 @@ A clip of no length is refused where clips are built. That is what lets an actio
 ## Not ported
 
 - `StringKeyframeTrack`: nothing in the port has a string property.
+- `InterpolateBezier`, three.js's cubic Bezier keys with 2D control points.
 - Tracks on other properties. A track drives only the properties in the table of kinds.
 - `AnimationObjectGroup.uncache` and its statistics. An action keeps no binding per member to release.
 - `repetitions`: a `REPEAT` or `PING_PONG` action loops without end. So a `FINISHED` event comes only from `ONCE`.
@@ -396,6 +466,10 @@ A clip of no length is refused where clips are built. That is what lets an actio
 - `setDuration` and `syncWith`.
 
 ## Where this port differs from three.js
+
+- A `SMOOTH` rotation track is an error. three.js prints a warning and uses `LINEAR`.
+- A `SMOOTH` track reads the action's endings on every frame. three.js keeps the weights of a pair of keys until the time moves to a different pair. On a track with two keys it keeps the endings of the first frame, so a `REPEAT` clip never wraps.
+- `make_clip_additive` with a `CUBIC_SPLINE` reference read between two keys takes off the value of the curve. three.js reads the wrong numbers from its result there, and every key of the target becomes not a number.
 
 - `make_clip_additive` returns a new clip. three.js changes the clip that you give it.
 - A frame rate of zero or less is an error. three.js uses 30 frames a second in its place.

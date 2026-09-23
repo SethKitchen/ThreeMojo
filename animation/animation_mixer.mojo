@@ -87,6 +87,21 @@ around again. It bounced near the end for ever, and moving the same
 elapsed time in smaller steps gave a different answer from moving it in
 one.
 
+## Smooth tracks and the ends of a clip
+
+A `SMOOTH` track needs a key past each end of the track, and the action
+says which, three.js's `_setEndings`. A `ONCE` clip is flat at both ends,
+or unbent if `zero_slope_at_start` or `zero_slope_at_end` is False. A
+`REPEAT` clip wraps an end once it runs on past it: going forward it is
+flat at the start until the first loop, and wraps the end from the first
+frame. A `PING_PONG` clip turns back at both ends, so both are flat.
+`stop` starts this over, as three.js's `reset` does.
+
+three.js works the weights out once per pair of keys and keeps them until
+the time moves to another pair. A track of two keys never moves to another
+pair, so three.js goes on using the endings of the first frame it read.
+Here the track is read with the action's endings every frame.
+
 ## Pausing, and holding at the end
 
 Three things are kept apart that a single flag ran together.
@@ -210,6 +225,7 @@ from animation.animation_clip import (
 )
 from animation.animation_object_group import AnimationObjectGroup
 from animation.keyframe_track import (
+    Ending,
     LIGHT_COLOR,
     LIGHT_INTENSITY,
     MATERIAL_ALPHA_TEST,
@@ -233,6 +249,9 @@ from animation.keyframe_track import (
     TrackKind,
     TrackTarget,
     VISIBLE,
+    WRAP_AROUND_ENDING,
+    ZERO_CURVATURE_ENDING,
+    ZERO_SLOPE_ENDING,
 )
 from core.assets import Assets
 from core.object3d import NodeId
@@ -1062,6 +1081,18 @@ struct AnimationAction(Copyable, Movable):
     # name, three.js's group given to `clipAction`, when `grouped` is True.
     var group: AnimationObjectGroup
     var grouped: Bool
+    # Whether a `SMOOTH` track is flat, rather than unbent, at the start
+    # and at the end of a clip that does not run on past it. three.js's
+    # `zeroSlopeAtStart` and `zeroSlopeAtEnd`, True by default as there.
+    var zero_slope_at_start: Bool
+    var zero_slope_at_end: Bool
+    # The ending modes a `SMOOTH` track is read with, three.js's
+    # `_interpolantSettings`. Set by `_move` from the loop mode.
+    var ending_start: Ending
+    var ending_end: Ending
+    # Whether the clock has moved since the action was built or stopped,
+    # three.js's `_loopCount` being other than -1.
+    var started: Bool
 
     def __init__(
         out self,
@@ -1121,6 +1152,11 @@ struct AnimationAction(Copyable, Movable):
         self.direction = 1
         self.group = AnimationObjectGroup()
         self.grouped = False
+        self.zero_slope_at_start = True
+        self.zero_slope_at_end = True
+        self.ending_start = ZERO_CURVATURE_ENDING
+        self.ending_end = ZERO_CURVATURE_ENDING
+        self.started = False
 
     def __init__(out self, *, copy: Self):
         """Copy another action, its clip included."""
@@ -1147,6 +1183,11 @@ struct AnimationAction(Copyable, Movable):
         self.blend_mode = copy.blend_mode
         self.group = AnimationObjectGroup(copy=copy.group)
         self.grouped = copy.grouped
+        self.zero_slope_at_start = copy.zero_slope_at_start
+        self.zero_slope_at_end = copy.zero_slope_at_end
+        self.ending_start = copy.ending_start
+        self.ending_end = copy.ending_end
+        self.started = copy.started
 
     def use_group(mut self, var group: AnimationObjectGroup):
         """Play every track on every member of a group instead of on the
@@ -1182,6 +1223,7 @@ struct AnimationAction(Copyable, Movable):
         self.active = False
         self.paused = False
         self.phase = 0
+        self.started = False
         self.scheduled = False
         self.stop_fading()
         self.stop_warping()
@@ -1418,6 +1460,30 @@ struct AnimationAction(Copyable, Movable):
             )
         self._move(seconds * self.time_scale)
 
+    def _set_endings(mut self, at_start: Bool, at_end: Bool, ping_pong: Bool):
+        """Set the ending modes a `SMOOTH` track is read with, three.js's
+        `_setEndings`.
+
+        An end the clip does not run on past is flat, or unbent if the
+        action's `zero_slope_at_` flag for it is False. An end it runs on
+        past wraps around to the other end. A `PING_PONG` clip turns back
+        at both ends, so both are flat.
+        """
+        if ping_pong:
+            self.ending_start = ZERO_SLOPE_ENDING
+            self.ending_end = ZERO_SLOPE_ENDING
+            return
+        self.ending_start = WRAP_AROUND_ENDING
+        if at_start:
+            self.ending_start = (
+                ZERO_SLOPE_ENDING if self.zero_slope_at_start else ZERO_CURVATURE_ENDING
+            )
+        self.ending_end = WRAP_AROUND_ENDING
+        if at_end:
+            self.ending_end = (
+                ZERO_SLOPE_ENDING if self.zero_slope_at_end else ZERO_CURVATURE_ENDING
+            )
+
     def _move(mut self, moved_by: Float32):
         """Move the phase by `moved_by` seconds of clip time, and note in
         `loop_delta`, `just_finished` and `direction` what that did.
@@ -1433,7 +1499,11 @@ struct AnimationAction(Copyable, Movable):
             return
         var length = self.clip.duration().to(SECOND)
         var moved = self.phase + moved_by
+        var ping_pong = self.loop == PING_PONG
         if self.loop == ONCE:
+            if not self.started:
+                self.started = True
+                self._set_endings(True, True, False)
             if moved >= length:
                 moved = length
                 self._finish(moved_by)
@@ -1442,15 +1512,27 @@ struct AnimationAction(Copyable, Movable):
                 self._finish(moved_by)
             self.phase = moved
             return
+        if not self.started:
+            # A clip that repeats without end runs on past the end it is
+            # heading for. three.js counts a start backward as not started
+            # until it passes the end, and so does this.
+            if moved_by > 0:
+                self.started = True
+                self._set_endings(True, False, ping_pong)
+            else:
+                self._set_endings(False, True, ping_pong)
         # Each end of the clip passed is one of three.js's loops, for
         # `PING_PONG` as much as for `REPEAT`: the phase has one end every
         # clip's length, whichever leg it is on.
         self.loop_delta = Int(floor(moved / length)) - Int(
             floor(self.phase / length)
         )
+        if self.loop_delta != 0:
+            self.started = True
+            self._set_endings(False, False, ping_pong)
         self.direction = -1 if moved_by < 0 else 1
         var period = length
-        if self.loop == PING_PONG:
+        if ping_pong:
             # The phase runs over the whole there-and-back, and `at` folds
             # it. Folding it here instead would lose which leg it is on.
             period = length * 2
@@ -1822,7 +1904,15 @@ struct AnimationMixer(Movable):
             ):  # pragma: no branch
                 var named = self.actions[index].clip.tracks[which].target
                 var kind = named.kind
-                var value = self.actions[index].clip.tracks[which].sample(at)
+                var value = (
+                    self.actions[index]
+                    .clip.tracks[which]
+                    .sample(
+                        at,
+                        self.actions[index].ending_start,
+                        self.actions[index].ending_end,
+                    )
+                )
                 var reached: List[TrackTarget] = [named]
                 if self.actions[index].grouped:
                     reached = resolve_targets(
