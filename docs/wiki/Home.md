@@ -52,6 +52,7 @@ Look something up.
 - [Exporters](Exporters)
 - [Windowing and controls](Windowing-and-controls)
 - [Math](Math)
+- [Math addons](Math-addons)
 - [Units](Units)
 - [Coverage tool](Coverage-tool)
 - [Commands](Commands)
