@@ -151,6 +151,14 @@ are these. A material can name `SCENE_ENVIRONMENT` instead of a cube
 texture of its own, and reflect whatever the scene's `environment` names.
 A toon, matcap or data material refuses all three: three.js's shaders for
 them read none.
+
+`ao_map` and `light_map` act on the indirect light alone, as three.js's
+`aoMap` and `lightMap` do. The light map adds baked light to the ambient
+and hemisphere light, and the ao map's red channel dims the sum, the
+environment's diffuse term and, on a physical surface, its reflection.
+The direct lights are left alone: a lamp still lights a crevice. Each map
+reads the coordinates its texture's `channel` names, so a baked map can
+use the geometry's second set, `uv1`.
 """
 
 from render.cube_texture_store import (
@@ -571,6 +579,19 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return self.is_lit() or self == MATCAP
 
+    def has_indirect(self) -> Bool:
+        """Return True if a surface of this kind has an indirect diffuse
+        term, and so can carry an ambient occlusion map and a light map:
+        `BASIC` and every lit kind.
+
+        The six kinds three.js gives an `aoMap` and a `lightMap`. A basic
+        surface's whole color is its indirect term, which the two maps
+        scale and replace. A matcap surface is an image of light already,
+        a shadow surface shows a mask, and the data kinds show no light,
+        so none of them has an indirect term for either map to reach.
+        """
+        return self == BASIC or self.is_lit()
+
     def is_data(self) -> Bool:
         """Return True if a material of this kind shows data rather than
         light: `NORMALS` or `DEPTH`.
@@ -790,6 +811,21 @@ struct Material(ImplicitlyCopyable):
     var normal_scale: Vector2
     var bump_map: TextureId
     var bump_scale: Float32
+    # A texture whose red channel says how much of the indirect light
+    # reaches the surface, three.js's `aoMap`, and how strongly it says
+    # so, three.js's `aoMapIntensity`. It dims the ambient light, the
+    # hemisphere lights, the light map and the environment's diffuse and
+    # specular terms, and leaves the direct lights alone. Data rather
+    # than color, so it must be `LINEAR` and `IGNORED`.
+    var ao_map: TextureId
+    var ao_map_intensity: Float32
+    # A texture of baked light added to the indirect diffuse light,
+    # three.js's `lightMap`, and what it is scaled by, three.js's
+    # `lightMapIntensity`. Its alpha means nothing, so it must be
+    # `IGNORED`. Both maps read the texture's `channel`, which can be the
+    # geometry's second set of coordinates; see `render.texture.UvChannel`.
+    var light_map: TextureId
+    var light_map_intensity: Float32
     # A `PHYSICAL` surface's index of refraction, three.js's `ior`, and
     # what its reflectance head on is tinted and scaled by, three.js's
     # `specularColor` and `specularIntensity`. Together they replace the
@@ -887,6 +923,10 @@ struct Material(ImplicitlyCopyable):
         clearcoat_roughness: Float32 = 0.0,
         line_width: LineWidth = DEFAULT_LINE_WIDTH,
         dash_offset: Length = NO_DASH,
+        ao_map: TextureId = NO_TEXTURE,
+        ao_map_intensity: Float32 = 1.0,
+        light_map: TextureId = NO_TEXTURE,
+        light_map_intensity: Float32 = 1.0,
     ) raises:
         """Describe a surface.
 
@@ -1013,6 +1053,15 @@ struct Material(ImplicitlyCopyable):
                 by default. Only a wide line reads it.
             dash_offset: How far the dashes of a wide line are slid along
                 it, three.js's `dashOffset`. Zero by default.
+            ao_map: Id of a texture whose red channel dims the indirect
+                light, or `NO_TEXTURE`. Data: `LINEAR`, `IGNORED`.
+            ao_map_intensity: How strongly the ao map dims, three.js's
+                `aoMapIntensity`. One by default; zero dims nothing.
+            light_map: Id of a texture of baked light added to the
+                indirect diffuse light, or `NO_TEXTURE`. Its alpha must be
+                `IGNORED`.
+            light_map_intensity: What the light map is scaled by,
+                three.js's `lightMapIntensity`. One by default.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -1083,7 +1132,12 @@ struct Material(ImplicitlyCopyable):
                 bump map. A `line_width` that is not a positive number, a
                 `dash_offset` that is not finite, and either set on a kind
                 that is not `BASIC` or on a wireframe are refused: only a
-                wide line reads them, and a wide line is unlit.
+                wide line reads them, and a wide line is unlit. An
+                `ao_map` or a `light_map` that is a negative other than
+                `NO_TEXTURE`, an intensity for either that is negative or
+                not finite, an intensity that is not one with no map to
+                scale, and either map on a kind with no indirect term or
+                on a wireframe are refused.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -1419,6 +1473,37 @@ struct Material(ImplicitlyCopyable):
         self.normal_scale = normal_scale
         self.bump_map = bump_map
         self.bump_scale = bump_scale
+        # The two baked maps, refused where no indirect diffuse term is
+        # read: three.js's matcap, normal, depth and shadow shaders have no
+        # `aomap_fragment` and no light map, and a wireframe is drawn by
+        # the line pass, which reads neither.
+        if ao_map.value < 0 and ao_map != NO_TEXTURE:
+            raise Error("A material's ao map id cannot be negative")
+        if light_map.value < 0 and light_map != NO_TEXTURE:
+            raise Error("A material's light map id cannot be negative")
+        if not isfinite(ao_map_intensity) or ao_map_intensity < 0:
+            raise Error("An ao map intensity cannot be negative")
+        if not isfinite(light_map_intensity) or light_map_intensity < 0:
+            raise Error("A light map intensity cannot be negative")
+        if ao_map == NO_TEXTURE and ao_map_intensity != 1:
+            raise Error("An ao map intensity needs an ao map to scale")
+        if light_map == NO_TEXTURE and light_map_intensity != 1:
+            raise Error("A light map intensity needs a light map to scale")
+        var baked = ao_map != NO_TEXTURE or light_map != NO_TEXTURE
+        if baked and not kind.has_indirect():
+            raise Error(
+                "Only a basic or lit material has an ao map or a light map:"
+                " no other shader has an indirect term for either to reach"
+            )
+        if baked and wireframe:
+            raise Error(
+                "A wireframe material has no ao map or light map: a line"
+                " has no surface coordinates to sample one with"
+            )
+        self.ao_map = ao_map
+        self.ao_map_intensity = ao_map_intensity
+        self.light_map = light_map
+        self.light_map_intensity = light_map_intensity
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -1551,6 +1636,19 @@ struct Material(ImplicitlyCopyable):
     def has_bump_map(self) -> Bool:
         """Return True if this material names a texture of heights."""
         return self.bump_map != NO_TEXTURE
+
+    def has_ao_map(self) -> Bool:
+        """Return True if this material names an ambient occlusion map."""
+        return self.ao_map != NO_TEXTURE
+
+    def has_light_map(self) -> Bool:
+        """Return True if this material names a light map."""
+        return self.light_map != NO_TEXTURE
+
+    def has_baked_map(self) -> Bool:
+        """Return True if this material names an ambient occlusion map or a
+        light map: the two maps that act on the indirect light."""
+        return self.ao_map != NO_TEXTURE or self.light_map != NO_TEXTURE
 
     def has_clearcoat(self) -> Bool:
         """Return True if a clear coat lies over this surface at all."""
@@ -1829,6 +1927,10 @@ def standard_material(
     emissive: Color = Color(0, 0, 0),
     emissive_intensity: Float32 = 1.0,
     emissive_map: TextureId = NO_TEXTURE,
+    ao_map: TextureId = NO_TEXTURE,
+    ao_map_intensity: Float32 = 1.0,
+    light_map: TextureId = NO_TEXTURE,
+    light_map_intensity: Float32 = 1.0,
 ) raises -> Material:
     """Return a physically shaded material, three.js's
     `MeshStandardMaterial` at three.js's defaults.
@@ -1865,6 +1967,11 @@ def standard_material(
         emissive_intensity: What `emissive` is scaled by.
         emissive_map: Id of a texture that multiplies the emissive, or
             `NO_TEXTURE`.
+        ao_map: Id of a texture whose red channel dims the indirect light,
+            or `NO_TEXTURE`.
+        ao_map_intensity: How strongly the ao map dims.
+        light_map: Id of a texture of baked light, or `NO_TEXTURE`.
+        light_map_intensity: What the light map is scaled by.
 
     Returns:
         The material, of kind `STANDARD`.
@@ -1893,6 +2000,10 @@ def standard_material(
         normal_scale=normal_scale,
         bump_map=bump_map,
         bump_scale=bump_scale,
+        ao_map=ao_map,
+        ao_map_intensity=ao_map_intensity,
+        light_map=light_map,
+        light_map_intensity=light_map_intensity,
     )
 
 
@@ -1921,6 +2032,10 @@ def physical_material(
     emissive: Color = Color(0, 0, 0),
     emissive_intensity: Float32 = 1.0,
     emissive_map: TextureId = NO_TEXTURE,
+    ao_map: TextureId = NO_TEXTURE,
+    ao_map_intensity: Float32 = 1.0,
+    light_map: TextureId = NO_TEXTURE,
+    light_map_intensity: Float32 = 1.0,
 ) raises -> Material:
     """Return a physically shaded material with an index of refraction and
     a clear coat, three.js's `MeshPhysicalMaterial` at three.js's defaults.
@@ -1964,6 +2079,11 @@ def physical_material(
         emissive_intensity: What `emissive` is scaled by.
         emissive_map: Id of a texture that multiplies the emissive, or
             `NO_TEXTURE`.
+        ao_map: Id of a texture whose red channel dims the indirect light,
+            or `NO_TEXTURE`.
+        ao_map_intensity: How strongly the ao map dims.
+        light_map: Id of a texture of baked light, or `NO_TEXTURE`.
+        light_map_intensity: What the light map is scaled by.
 
     Returns:
         The material, of kind `PHYSICAL`.
@@ -1997,6 +2117,10 @@ def physical_material(
         specular_intensity=specular_intensity,
         clearcoat=clearcoat,
         clearcoat_roughness=clearcoat_roughness,
+        ao_map=ao_map,
+        ao_map_intensity=ao_map_intensity,
+        light_map=light_map,
+        light_map_intensity=light_map_intensity,
     )
 
 

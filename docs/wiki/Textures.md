@@ -4,7 +4,7 @@
 
 ![Two checkerboard cubes turn, nearest beside bilinear](out/textured.png)
 
-three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CubeTexture`, `Data3DTexture`, `DataArrayTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`, `anisotropy`, `type`, `RGBELoader`, `EXRLoader`.
+three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CubeTexture`, `Data3DTexture`, `DataArrayTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`, `anisotropy`, `type`, `channel`, `RGBELoader`, `EXRLoader`.
 
 ## Make a texture
 
@@ -527,6 +527,8 @@ An alpha map must ignore its alpha too, and must be `LINEAR`. Its green channel 
 
 `u` runs from left to right and `v` from bottom to top. Rows in memory run from the top. Sampling flips once, as three.js's `flipY` does.
 
+`channel`, three.js's `Texture.channel`, says which set of the geometry's coordinates a texture reads. `UV_CHANNEL_0`, the default, reads `uv`. `UV_CHANNEL_1` reads `uv1`. Only an ambient occlusion map or a light map can read the second set. See [Light map](Materials#light-map).
+
 ## Transform
 
 A texture can move, tile and turn on a surface. three.js: `offset`, `repeat`, `rotation`, `center`, `matrix`.
@@ -566,8 +568,9 @@ var id = assets.textures.add(board^)
 | `ignoring_alpha() -> Texture` | A copy that ignores its alpha, with its chain rebuilt. |
 | `uv_transform() -> Matrix3` | The transform on the coordinates, from the four fields above. |
 | `sample_footprint(u, v, footprint) -> FloatColor` | One trilinear sample, or several along a footprint's long axis. See [Anisotropy](#anisotropy). |
-| `validate()` | Refuse a wrap, filter, color space, alpha mode or texel type that is none of the named values, a float texture that is not `LINEAR`, or an anisotropy below one or above `MAX_ANISOTROPY`. |
+| `validate()` | Refuse a wrap, filter, color space, alpha mode, texel type or channel that is none of the named values, a float texture that is not `LINEAR`, or an anisotropy below one or above `MAX_ANISOTROPY`. |
 | `levels`, `width`, `height`, `alpha`, `anisotropy` | The chain length, the base size, the alpha mode and the tap count. |
+| `channel` | Which coordinates the texture reads: `UV_CHANNEL_0` or `UV_CHANNEL_1`. |
 | `texel_type`, `pixels`, `data` | `UNSIGNED_BYTE_TYPE` with bytes in `pixels`, or `FLOAT_TYPE` with floats in `data`. See [HDR images](#hdr-images). |
 | `offset`, `repeat`, `rotation`, `center` | The transform's fields. |
 
@@ -578,7 +581,7 @@ var id = assets.textures.add(board^)
 ## Errors
 
 - Dimensions must be positive, and the buffer length must match.
-- A wrap, filter, color space or alpha mode that is none of its named values raises. The GPU upload checks again.
+- A wrap, filter, color space, alpha mode or channel that is none of its named values raises. The GPU upload checks again.
 - A `checkerboard` size must divide evenly by its square count.
 - A `data_texture` with a channel count outside one through four, a length that does not match, or a number that is not finite.
 - A `float_texture` with a length that does not match, or a number that is not finite. A float texture that is not `LINEAR`, or a texel type that is none of the two, raises in `validate`.

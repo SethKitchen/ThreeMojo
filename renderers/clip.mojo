@@ -75,6 +75,10 @@ struct ClipVertex(ImplicitlyCopyable):
     # else, and carried through a cut like every other varying: a segment
     # cut at the near plane keeps its dashes where they were.
     var line_distance: Float32
+    # The second texture coordinates, where an ambient occlusion map and a
+    # light map are sampled. Carried through a cut like the first pair.
+    var u1: Float32
+    var v1: Float32
 
     def __init__(
         out self,
@@ -86,13 +90,16 @@ struct ClipVertex(ImplicitlyCopyable):
         world: Vector3 = Vector3(0, 0, 0),
         emissive: FloatColor = FloatColor(0.0, 0.0, 0.0),
         line_distance: Float32 = 0,
+        u1: Float32 = 0,
+        v1: Float32 = 0,
     ):
         """Create a corner.
 
         The world position defaults to the origin, which is what a hand-built
         triangle with no point lights in reach wants, and the emissive to
         black, which is no light at all. The line distance defaults to
-        zero, which is where every corner of a triangle is.
+        zero, which is where every corner of a triangle is, and so do the
+        second texture coordinates.
         """
         self.position = position
         self.color = color
@@ -102,6 +109,8 @@ struct ClipVertex(ImplicitlyCopyable):
         self.world = world
         self.emissive = emissive
         self.line_distance = line_distance
+        self.u1 = u1
+        self.v1 = v1
 
 
 def _mix(a: Float32, b: Float32, t: Float32) -> Float32:
@@ -182,6 +191,8 @@ def _mix_vertex(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
             _mix(a.emissive.a, b.emissive.a, t),
         ),
         _mix(a.line_distance, b.line_distance, t),
+        _mix(a.u1, b.u1, t),
+        _mix(a.v1, b.v1, t),
     )
 
 

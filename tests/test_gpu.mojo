@@ -138,7 +138,13 @@ from core.layers import Layers
 from renderers.renderer import camera_position, camera_up, toward_camera
 from render.gpu import (
     FLOATS_PER_VERTEX,
+    LANE_AO_INTENSITY,
     LANE_BUMP_SCALE,
+    LANE_LIGHT_MAP_INTENSITY,
+    LANE_U1,
+    LANE_V1,
+    STATE_AO_MAP,
+    STATE_LIGHT_MAP,
     LANE_CLEARCOAT,
     LANE_CLEARCOAT_ROUGHNESS,
     LANE_ENV_INTENSITY,
@@ -7645,7 +7651,7 @@ def test_the_physical_lanes_and_columns_ride_last() raises:
     assert_equal(flat[LANE_NORMAL_SCALE_X], Float32(1.5))
     assert_equal(flat[LANE_NORMAL_SCALE_Y], Float32(0.5))
     assert_equal(flat[LANE_BUMP_SCALE], Float32(0.3))
-    assert_equal(LANE_BUMP_SCALE, FLOATS_PER_VERTEX - 1)
+    assert_equal(LANE_BUMP_SCALE, LANE_U1 - 1)
     # A corner that says nothing carries a rough dielectric with no map.
     var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
     assert_equal(plain[LANE_ROUGHNESS], Float32(1))
@@ -7663,7 +7669,7 @@ def test_the_physical_lanes_and_columns_ride_last() raises:
     assert_equal(state[STATE_NORMAL_MAP], Int32(2))
     assert_equal(state[STATE_BUMP_MAP], Int32(NO_TEXTURE.value))
     assert_equal(state[STATE_ENV_MAP], Int32(3 + 6))
-    assert_equal(STATE_BUMP_MAP, STATE_PER_TRIANGLE - 2)
+    assert_equal(STATE_BUMP_MAP, STATE_RECEIVES_SHADOW - 1)
 
 
 def test_both_backends_agree_on_a_physical_lobe() raises:
@@ -8159,7 +8165,7 @@ def test_the_light_buffer_carries_the_shadow_maps_after_the_lights() raises:
         ),
     )
     var state = triangle_state(corners)
-    assert_equal(STATE_RECEIVES_SHADOW, STATE_PER_TRIANGLE - 1)
+    assert_equal(STATE_RECEIVES_SHADOW, STATE_OPS - 1)
     assert_equal(state[STATE_RECEIVES_SHADOW], Int32(1))
     var plain = data_pair(LAMBERT)
     for index in range(len(plain)):
@@ -8868,6 +8874,169 @@ def test_both_backends_agree_on_a_stencil_mask_and_a_polygon_offset() raises:
     var gpu = device.read_back()
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
     assert_equal(cpu.get_pixel(16, 16).r, 255)
+
+
+# --- ambient occlusion and light maps ---------------------------------------
+
+
+def baked_pair(
+    kind: MaterialKind,
+    ao_map: TextureId,
+    light_map: TextureId,
+    env: CubeTextureId = NO_CUBE_TEXTURE,
+) -> List[RasterVertex]:
+    """Return `physical_pair` with an ao map and a light map, sampled at
+    second coordinates that run across the pair the other way round from
+    the first, so reading the wrong pair shows."""
+    var corners = physical_pair(
+        kind,
+        Float32(0.4) if kind.is_physical() else Float32(1),
+        Float32(0.3) if kind.is_physical() else Float32(0),
+        env=env,
+    )
+    for index in range(len(corners)):
+        corners[index].u1 = 1 - corners[index].u
+        corners[index].v1 = corners[index].v * 2
+        corners[index].ao_map = ao_map
+        corners[index].ao_map_intensity = 0.8
+        corners[index].light_map = light_map
+        corners[index].light_map_intensity = 1.5
+    return corners^
+
+
+def test_the_baked_lanes_and_columns_ride_last() raises:
+    var corners = baked_pair(LAMBERT, TextureId(2), TextureId(3))
+    corners[0].u1 = 0.25
+    corners[0].v1 = 0.75
+    var flat = flatten(corners)
+    assert_equal(len(flat), FLOATS_PER_VERTEX * 6)
+    assert_equal(flat[LANE_U1], Float32(0.25))
+    assert_equal(flat[LANE_V1], Float32(0.75))
+    assert_equal(LANE_V1, LANE_U1 + 1)
+    assert_equal(flat[LANE_AO_INTENSITY], Float32(0.8))
+    assert_equal(flat[LANE_LIGHT_MAP_INTENSITY], Float32(1.5))
+    assert_equal(LANE_LIGHT_MAP_INTENSITY, FLOATS_PER_VERTEX - 1)
+    var state = triangle_state(corners)
+    assert_equal(len(state), 2 * STATE_PER_TRIANGLE)
+    assert_equal(state[STATE_AO_MAP], Int32(2))
+    assert_equal(state[STATE_LIGHT_MAP], Int32(3))
+    assert_equal(STATE_LIGHT_MAP, STATE_PER_TRIANGLE - 1)
+    # A corner that says nothing names neither map, at intensities of one.
+    var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
+    assert_equal(plain[LANE_AO_INTENSITY], Float32(1))
+    assert_equal(plain[LANE_LIGHT_MAP_INTENSITY], Float32(1))
+    var none = triangle_state(
+        [
+            RasterVertex(0, 0, 0, 1, FloatColor(1, 1, 1)),
+            RasterVertex(1, 0, 0, 1, FloatColor(1, 1, 1)),
+            RasterVertex(0, 1, 0, 1, FloatColor(1, 1, 1)),
+        ]
+    )
+    assert_equal(none[STATE_AO_MAP], Int32(NO_TEXTURE.value))
+    assert_equal(none[STATE_LIGHT_MAP], Int32(NO_TEXTURE.value))
+
+
+def test_both_backends_occlude_and_bake_alike() raises:
+    # The ao map's red through three.js's `aomap_fragment`, the light map
+    # joined to the indirect light, and the specular occlusion of a
+    # reflection, sampled at the second coordinates with and without a
+    # chain: on every kind that has an indirect term.
+    if skipped_for_lack_of_a_gpu("both backends occlude and bake alike"):
+        return
+    var lighting = phong_lighting()
+    var textures = TextureStore()
+    var chained = textures.add(a_gpu_data_map())
+    var single = textures.add(a_gpu_data_map(False))
+    var cubes = CubeTextureStore()
+    _ = cubes.add(a_gpu_cube())
+    for kind in [BASIC, LAMBERT, PHONG, TOON, STANDARD, PHYSICAL]:
+        var pairs = List[List[RasterVertex]]()
+        pairs.append(baked_pair(kind, chained, NO_TEXTURE))
+        pairs.append(baked_pair(kind, NO_TEXTURE, single))
+        pairs.append(baked_pair(kind, single, chained))
+        if kind.is_physical():
+            pairs.append(
+                baked_pair(kind, chained, chained, env=CubeTextureId(0))
+            )
+        for index in range(len(pairs)):
+            ref corners = pairs[index]
+            var target = RenderTarget(36, 30, BACKGROUND)
+            rasterize_all(
+                corners, target, SHADE_TEXTURE, textures, lighting, cubes=cubes
+            )
+            var cpu = target.resolve()
+            var gpu = render_triangles(
+                corners,
+                36,
+                30,
+                BACKGROUND,
+                SHADE_TEXTURE,
+                textures,
+                lighting,
+                cubes=cubes,
+            )
+            assert_true(
+                count_background(cpu, BACKGROUND) < 36 * 30,
+                "the triangles drew nothing",
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the maps change the picture: a sheet without them differs.
+    var plain = render_triangles(
+        baked_pair(LAMBERT, NO_TEXTURE, NO_TEXTURE),
+        36,
+        30,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+    )
+    var baked = render_triangles(
+        baked_pair(LAMBERT, chained, chained),
+        36,
+        30,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+    )
+    assert_true(count_mismatches(plain, baked) > 50, "the maps did nothing")
+
+
+def test_both_backends_refuse_a_baked_map_stored_the_wrong_way() raises:
+    # The host's two rules, asked before the launch.
+    if skipped_for_lack_of_a_gpu("both backends refuse a wrong baked map"):
+        return
+    var textures = TextureStore()
+    var encoded = textures.add(
+        Texture(1, 1, [UInt8(255), 255, 255, 255], REPEAT, NEAREST, SRGB, False)
+    )
+    with assert_raises(contains="An ao map"):
+        _ = render_triangles(
+            baked_pair(LAMBERT, encoded, NO_TEXTURE),
+            36,
+            30,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            textures,
+        )
+    with assert_raises(contains="A light map must ignore"):
+        _ = render_triangles(
+            baked_pair(LAMBERT, NO_TEXTURE, encoded),
+            36,
+            30,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            textures,
+        )
+    with assert_raises(contains="has not been uploaded"):
+        _ = render_triangles(
+            baked_pair(LAMBERT, TextureId(7), NO_TEXTURE),
+            36,
+            30,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            textures,
+        )
 
 
 def main() raises:

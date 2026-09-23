@@ -193,6 +193,31 @@ comptime UNSIGNED_BYTE_TYPE = TexelType(0)
 comptime FLOAT_TYPE = TexelType(1)
 
 
+@fieldwise_init
+struct UvChannel(Equatable, ImplicitlyCopyable, Writable):
+    """Which set of texture coordinates a texture is sampled with, as a
+    type: three.js's `Texture.channel`.
+
+    `UV_CHANNEL_0` reads the geometry's `uv` and `UV_CHANNEL_1` its `uv1`.
+    Only an ambient occlusion map or a light map can read the second set;
+    the renderer refuses it on any other map. The type does not stop
+    `UvChannel(9)`, so `Texture.validate` asks `is_valid`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `UV_CHANNEL_0` or `UV_CHANNEL_1`."""
+        return self == UV_CHANNEL_0 or self == UV_CHANNEL_1
+
+
+# The geometry's `uv`: three.js's default channel, and every map's here.
+comptime UV_CHANNEL_0 = UvChannel(0)
+# The geometry's `uv1`, or its `uv` when it has no `uv1`. What a baked
+# ambient occlusion map or light map usually reads.
+comptime UV_CHANNEL_1 = UvChannel(1)
+
+
 def float_from_bytes(b0: UInt8, b1: UInt8, b2: UInt8, b3: UInt8) -> Float32:
     """Return the float four little-endian bytes hold.
 
@@ -536,6 +561,11 @@ struct Texture(Movable):
     # after construction, as in three.js, and refused below one by
     # `validate`. Read by both rasterizers where they pick a level.
     var anisotropy: Int
+    # Which set of the geometry's texture coordinates this texture is
+    # sampled with, three.js's `channel`. `UV_CHANNEL_0`, the default, is
+    # three.js's. Set after construction, as in three.js, and refused by
+    # `validate` when it is neither channel.
+    var channel: UvChannel
 
     def __init__(out self):
         """Create the blank texture, which samples as opaque white.
@@ -561,6 +591,7 @@ struct Texture(Movable):
         self.rotation = Angle(0.0, RADIAN)
         self.center = Vector2(0, 0)
         self.anisotropy = 1
+        self.channel = UV_CHANNEL_0
 
     def __init__(
         out self,
@@ -625,6 +656,7 @@ struct Texture(Movable):
         self.rotation = Angle(0.0, RADIAN)
         self.center = Vector2(0, 0)
         self.anisotropy = 1
+        self.channel = UV_CHANNEL_0
         # After every field is set, so it is the same check the GPU upload
         # makes on a texture that may have been edited since.
         self.validate()
@@ -632,8 +664,8 @@ struct Texture(Movable):
             self._build_mipmaps()
 
     def validate(self) raises:
-        """Refuse a wrap, filter, color space, alpha mode or texel type that
-        is none of the named values.
+        """Refuse a wrap, filter, color space, alpha mode, texel type or
+        channel that is none of the named values.
 
         The types stop a bare integer at compile time and nothing else: a
         struct's fields are open, so `Wrap(9)` constructs, and so does
@@ -645,8 +677,8 @@ struct Texture(Movable):
 
         Raises:
             Error: If the wrap mode, the filter, the color space, the
-                alpha mode or the texel type is not one of its named
-                constants, or a float texture is not `LINEAR`.
+                alpha mode, the texel type or the channel is not one of
+                its named constants, or a float texture is not `LINEAR`.
                 `UNKNOWN_SPACE` counts: it is a decoder's admission, not a
                 way to read texels.
         """
@@ -677,6 +709,10 @@ struct Texture(Movable):
                 "A texture's anisotropy is at most MAX_ANISOTROPY: every"
                 " tap is work a fragment pays for"
             )
+        if not self.channel.is_valid():
+            raise Error(
+                "A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1"
+            )
 
     def __init__(out self, *, copy: Self):
         """Copy another texture, image data included."""
@@ -697,6 +733,7 @@ struct Texture(Movable):
         self.rotation = copy.rotation
         self.center = copy.center
         self.anisotropy = copy.anisotropy
+        self.channel = copy.channel
 
     def ignoring_alpha(self) raises -> Texture:
         """Return a copy of this texture that ignores its alpha.
@@ -765,6 +802,7 @@ struct Texture(Movable):
         copy.rotation = self.rotation
         copy.center = self.center
         copy.anisotropy = self.anisotropy
+        copy.channel = self.channel
         return copy^
 
     def is_blank(self) -> Bool:

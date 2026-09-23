@@ -561,6 +561,7 @@ def physical_outgoing(
     clearcoat_roughness: Float32,
     dot_nv_coat: Vector3,
     coat_radiance: Vector3,
+    occlusion: Float32 = 1,
 ) -> Vector3:
     """Return the light a physical surface sends toward the camera, from
     its direct light, its indirect light and its environment: three.js's
@@ -612,14 +613,20 @@ def physical_outgoing(
             optional can pass one shape.
         coat_radiance: What the environment shows along the coat's own
             reflection, times the intensity. Read only when `reflects`.
+        occlusion: How much of the indirect light reaches the surface,
+            from `ambient_occlusion`: three.js's `aomap_fragment`. It
+            multiplies the indirect diffuse and the coat's reflection, and
+            `specular_occlusion` of it multiplies the environment's
+            reflection. One, the default, occludes nothing, and each term
+            is multiplied by it last, so a one leaves every bit alone.
 
     Returns:
         The outgoing light, linear.
     """
     var diffuse = Vector3(
-        direct.diffuse.x + surface.diffuse.x * indirect.x,
-        direct.diffuse.y + surface.diffuse.y * indirect.y,
-        direct.diffuse.z + surface.diffuse.z * indirect.z,
+        direct.diffuse.x + surface.diffuse.x * indirect.x * occlusion,
+        direct.diffuse.y + surface.diffuse.y * indirect.y * occlusion,
+        direct.diffuse.z + surface.diffuse.z * indirect.z * occlusion,
     )
     var specular = direct.specular
     var coat = direct.clearcoat
@@ -648,24 +655,33 @@ def physical_outgoing(
             max(single.x + multi.x, single.y + multi.y), single.z + multi.z
         )
         var kept = 1 - total
+        # three.js's `computeSpecularOcclusion`, which dims a reflection
+        # less than the diffuse where the surface faces the eye.
+        var shade = specular_occlusion(dot_nv, occlusion, roughness)
         specular = Vector3(
-            specular.x + radiance.x * single.x + multi.x * irradiance.x,
-            specular.y + radiance.y * single.y + multi.y * irradiance.y,
-            specular.z + radiance.z * single.z + multi.z * irradiance.z,
+            specular.x
+            + radiance.x * single.x * shade
+            + multi.x * irradiance.x * shade,
+            specular.y
+            + radiance.y * single.y * shade
+            + multi.y * irradiance.y * shade,
+            specular.z
+            + radiance.z * single.z * shade
+            + multi.z * irradiance.z * shade,
         )
         diffuse = Vector3(
-            diffuse.x + surface.diffuse.x * kept * irradiance.x,
-            diffuse.y + surface.diffuse.y * kept * irradiance.y,
-            diffuse.z + surface.diffuse.z * kept * irradiance.z,
+            diffuse.x + surface.diffuse.x * kept * irradiance.x * occlusion,
+            diffuse.y + surface.diffuse.y * kept * irradiance.y * occlusion,
+            diffuse.z + surface.diffuse.z * kept * irradiance.z * occlusion,
         )
         if clearcoat > 0:
             var sheen = environment_brdf(
                 dot_nv_coat.x, CLEARCOAT_F0, 1, clearcoat_roughness
             )
             coat = Vector3(
-                coat.x + coat_radiance.x * sheen.x,
-                coat.y + coat_radiance.y * sheen.y,
-                coat.z + coat_radiance.z * sheen.z,
+                coat.x + coat_radiance.x * sheen.x * occlusion,
+                coat.y + coat_radiance.y * sheen.y * occlusion,
+                coat.z + coat_radiance.z * sheen.z * occlusion,
             )
     var outgoing = Vector3(
         diffuse.x + specular.x + glow.x,
@@ -680,6 +696,83 @@ def physical_outgoing(
             outgoing.z * (1 - clearcoat * fresnel.z) + coat.z * clearcoat,
         )
     return outgoing
+
+
+def ambient_occlusion(texel: Float32, intensity: Float32) -> Float32:
+    """Return how much of the indirect light reaches a surface, from an
+    ambient occlusion map's red channel: three.js's `aomap_fragment`.
+
+    `(texel - 1) * intensity + 1`, so a white texel occludes nothing, a
+    black one occludes everything at an intensity of one, and an
+    intensity of zero switches the map off. Shared by both rasterizers.
+
+    Args:
+        texel: The map's red channel, linear, from zero to one.
+        intensity: The material's `ao_map_intensity`.
+
+    Returns:
+        The fraction of the indirect light that arrives.
+    """
+    return (texel - 1) * intensity + 1
+
+
+def specular_occlusion(
+    dot_nv: Float32, occlusion: Float32, roughness: Float32
+) -> Float32:
+    """Return how much of an environment's reflection reaches the eye
+    from an occluded surface: three.js's `computeSpecularOcclusion`,
+    after Lagarde and de Rousiers.
+
+    `saturate(pow(dot_nv + occlusion, exp2(-16 * roughness - 1)) - 1 +
+    occlusion)`. A surface that faces the eye keeps more of its reflection
+    than of its diffuse light, and a smooth one more than a rough one.
+    The power is spelled as `exp2` of `log2`, as `blinn_phong` spells it,
+    and its base is floored at zero: an intensity above one can make the
+    occlusion negative, where GLSL's `pow` is undefined. Shared by both
+    rasterizers.
+
+    Args:
+        dot_nv: The cosine between the normal and the eye, from zero to one.
+        occlusion: What `ambient_occlusion` returned.
+        roughness: The floored roughness.
+
+    Returns:
+        The fraction of the reflection that arrives, from zero to one.
+    """
+    var base = max(Float32(0), dot_nv + occlusion)
+    var power = exp2(exp2(-16 * roughness - 1) * log2(base))
+    return _saturated(power - 1 + occlusion)
+
+
+def occluded_light(
+    arriving: Vector3, indirect: Vector3, baked: Vector3, occlusion: Float32
+) -> Vector3:
+    """Return a surface's arriving light with its indirect part occluded
+    and a light map's baked light added: three.js's `lights_fragment_maps`
+    and `aomap_fragment` for a shader that sums its light before the
+    surface's color multiplies it.
+
+    `arriving` holds the direct and the indirect light together, as
+    `Lighting.intensity_at` and `Lighting.toon_at` return it. The indirect
+    part is taken out, the baked light is added to it, and the sum is
+    occluded and put back: `arriving - indirect + (indirect + baked) *
+    occlusion`. The direct lights are not occluded, as three.js leaves
+    `directDiffuse` alone. Shared by both rasterizers.
+
+    Args:
+        arriving: The direct and indirect light together, linear.
+        indirect: The indirect part of it: `Lighting.indirect_at`.
+        baked: The light map's light, already scaled, or zero for none.
+        occlusion: What `ambient_occlusion` returned, or one for none.
+
+    Returns:
+        The arriving light, linear.
+    """
+    return Vector3(
+        arriving.x - indirect.x + (indirect.x + baked.x) * occlusion,
+        arriving.y - indirect.y + (indirect.y + baked.y) * occlusion,
+        arriving.z - indirect.z + (indirect.z + baked.z) * occlusion,
+    )
 
 
 def physical_light(

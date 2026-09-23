@@ -8,7 +8,7 @@ three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshStandardM
 
 Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`, `size`, `sizeAttenuation`, `rotation`, `envMap`, `reflectivity`, `combine`.
 
-Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `clearcoat`, `clearcoatRoughness`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`.
+Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `clearcoat`, `clearcoatRoughness`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`, `aoMap`, `aoMapIntensity`, `lightMap`, `lightMapIntensity`.
 
 ## Construct one
 
@@ -65,6 +65,10 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `specular_intensity` | `Float32` | `1.0` | What that reflectance is scaled by. |
 | `clearcoat` | `Float32` | `0.0` | How much clear coat lies over a `PHYSICAL` surface. |
 | `clearcoat_roughness` | `Float32` | `0.0` | How rough the coat is. |
+| `ao_map` | `TextureId` | `NO_TEXTURE` | A texture whose red channel dims the indirect light. See [Ambient occlusion map](#ambient-occlusion-map). |
+| `ao_map_intensity` | `Float32` | `1.0` | How strongly the ao map dims. |
+| `light_map` | `TextureId` | `NO_TEXTURE` | A texture of baked light added to the indirect light. See [Light map](#light-map). |
+| `light_map_intensity` | `Float32` | `1.0` | What the light map is multiplied by. |
 
 ## Side
 
@@ -362,6 +366,74 @@ A `DOUBLE_SIDE` or `BACK_SIDE` face seen from behind is lit with its normal flip
 A `BASIC` surface reads no normal and a `DEPTH` surface reads none. A `NORMALS` surface reads one in the camera's frame, and the frame a map is measured in is the world's. Each refuses both maps. A wireframe is `BASIC`, so it refuses them too. A `normal_scale` that is not one and one needs a normal map, and a `bump_scale` that is not one needs a bump map.
 
 Only `SHADE_TEXTURE` reads either. A normal map is a texture, and the other two shading modes ignore every texture.
+
+## Ambient occlusion map
+
+An ambient occlusion map dims the indirect light and leaves the direct lights alone: three.js's `aoMap`. Its red channel says how much of the light with no direction reaches each texel. A lamp still lights a crevice, but the ambient light and the sky do not.
+
+```mojo
+# Two texels of occlusion, stored as data: dark on the left, clear on the right.
+var baked = data_texture(2, 1, [0.3, 1.0], channels=1, alpha=IGNORED)
+baked.channel = UV_CHANNEL_1
+var ao = assets.textures.add(baked^)
+var wall = assets.materials.add(
+    standard_material(Color(200, 200, 200), ao_map=ao, ao_map_intensity=0.8)
+)
+```
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `ao_map` | `aoMap` | `NO_TEXTURE` | Its red channel is the fraction of the indirect light that arrives. |
+| `ao_map_intensity` | `aoMapIntensity` | `1.0` | How strongly the map dims. Zero switches the map off. |
+
+The occlusion is three.js's `aomap_fragment`: `(red - 1) * intensity + 1`. `ambient_occlusion` in `lights/lighting.mojo` is the arithmetic. Both rasterizers call it.
+
+What the occlusion multiplies:
+
+| Kind | What it dims |
+|---|---|
+| `BASIC` | The whole color, which is all indirect light. |
+| `LAMBERT`, `PHONG`, `TOON` | The ambient light, the hemisphere lights and the light map. |
+| `STANDARD`, `PHYSICAL` | The same, the environment's diffuse term and the clear coat's reflection. |
+
+A physical surface's reflection of the environment is dimmed by three.js's `computeSpecularOcclusion` of the occlusion, `specular_occlusion` here. A surface that faces the eye keeps more of its reflection than of its diffuse light. A smooth surface keeps more than a rough one.
+
+The map is data. Its texture must be `LINEAR` and `IGNORED`, as a normal map must.
+
+The reflection of a `BASIC`, `LAMBERT` or `PHONG` surface is not dimmed. three.js adds that reflection after the occlusion, and so does this port.
+
+## Light map
+
+A light map is a texture of baked light that joins the indirect diffuse light: three.js's `lightMap`. It holds the light that bounced around the scene when the scene was baked.
+
+```mojo
+var baked = assets.materials.add(
+    Material(Color(255, 255, 255), light_map=bounce, light_map_intensity=2.0)
+)
+```
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `light_map` | `lightMap` | `NO_TEXTURE` | Light added to the ambient and hemisphere light, per texel. |
+| `light_map_intensity` | `lightMapIntensity` | `1.0` | What the texel is multiplied by. |
+
+On a lit kind the texel joins three.js's `irradiance`, so it is divided by pi like every lit term. On a `BASIC` surface the texel replaces the white indirect light, divided by pi, as three.js's `meshbasic_frag` does. The ao map dims the light map with the rest of the indirect light. `occluded_light` in `lights/lighting.mojo` does both for every kind that is not physical.
+
+The map holds light, so its texture can be `SRGB` or `LINEAR`. Its alpha means nothing, so it must be `IGNORED`, as an emissive map must.
+
+### The second texture coordinates
+
+Both maps read the coordinates their texture's `channel` names: three.js's `Texture.channel`. `UV_CHANNEL_0`, the default, reads the geometry's `uv`. `UV_CHANNEL_1` reads its `uv1`, the `UV1` attribute. A baked map is usually laid out apart from the color map, which is why the second set exists.
+
+A fragment carries a second coordinate pair for these two maps. The pair has its own transform, from the ao map or the light map, apart from the transform every other map shares. So the ao map and the light map must agree about their transform and their channel. The renderer refuses a pair that disagrees.
+
+A geometry with no `uv1` falls back to its `uv`. three.js reads zero there instead, which samples one texel everywhere. This port reads the first set, because a baked map on the first set is the usual case.
+
+Only an ao map or a light map can read the second channel. The renderer refuses `UV_CHANNEL_1` on any other map.
+
+### What refuses one
+
+A `MATCAP`, `NORMALS`, `DEPTH` or `SHADOW` surface has no indirect term, and refuses both maps. A wireframe, a line, a point and a sprite refuse both too. An intensity that is not one needs its map. Only `SHADE_TEXTURE` reads either map.
 
 ## Shadow material
 
@@ -667,10 +739,13 @@ The constructor raises for:
 - A normal map or a bump map on a `BASIC`, `DEPTH` or `NORMALS` material, which a wireframe is. Both on one material.
 - A normal scale that is not one and one with no normal map. A bump scale that is not one with no bump map. A scale that is not finite.
 - A roughness, metalness, normal or bump map id below zero that is not `NO_TEXTURE`.
+- An ao map or a light map id below zero that is not `NO_TEXTURE`. An intensity for either that is negative or not finite.
+- An ao map intensity that is not one with no ao map. A light map intensity that is not one with no light map.
+- An ao map or a light map on a `MATCAP`, `NORMALS`, `DEPTH` or `SHADOW` material, or on a wireframe.
 
 `Renderer.prepare` raises for a depth function, a stencil function or a stencil operation that is none of the eight. It raises for a stencil reference or mask outside 0 to 255, and for a polygon offset that is not finite. `Material.raster_state` and `Material.depth_offset` make these checks.
 
-`Renderer.prepare` raises for an emissive map that reads its alpha as coverage. It raises for an env map, or a scene environment, that is not in the assets. It raises for a roughness, metalness, normal or bump map that is not in the assets or is not stored as data.
+`Renderer.prepare` raises for an emissive map that reads its alpha as coverage. It raises for an env map, or a scene environment, that is not in the assets. It raises for a roughness, metalness, normal or bump map that is not in the assets or is not stored as data. It raises for an ao map that is not in the assets or is not stored as data. It raises for a light map that is not in the assets or reads its alpha as coverage. It raises for an ao map and a light map whose transforms or channels differ, and for the second channel on any other map.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.
 
 ## MaterialStore

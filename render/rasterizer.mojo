@@ -63,9 +63,12 @@ from render.texture import (
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from lights.lighting import (
     PERSPECTIVE_VIEW,
+    RECIPROCAL_PI,
     Lighting,
     Reflected,
+    ambient_occlusion,
     floored_roughness,
+    occluded_light,
     physical_outgoing,
     physical_surface,
     toward_eye_at,
@@ -608,6 +611,20 @@ struct RasterVertex(ImplicitlyCopyable):
     # Per-primitive metadata like the blend policy: read from the first
     # corner, checked to agree. Any polygon offset is already in `z`.
     var state: RasterState
+    # The second texture coordinates, where the ambient occlusion map and
+    # the light map are sampled: the geometry's `uv1` or `uv`, as their
+    # texture's `channel` says, through their own transform. A varying,
+    # interpolated like `u` and `v`.
+    var u1: Float32
+    var v1: Float32
+    # A texture whose red channel dims the indirect light and how strongly,
+    # three.js's `aoMap` and `aoMapIntensity`, and a texture of baked light
+    # and what it is scaled by, three.js's `lightMap` and
+    # `lightMapIntensity`. Per-triangle, read from the first corner.
+    var ao_map: TextureId
+    var ao_map_intensity: Float32
+    var light_map: TextureId
+    var light_map_intensity: Float32
 
     def __init__(
         out self,
@@ -653,6 +670,12 @@ struct RasterVertex(ImplicitlyCopyable):
         bump_scale: Float32 = 1,
         receives_shadow: Bool = True,
         state: RasterState = RasterState(),
+        u1: Float32 = 0,
+        v1: Float32 = 0,
+        ao_map: TextureId = NO_TEXTURE,
+        ao_map_intensity: Float32 = 1,
+        light_map: TextureId = NO_TEXTURE,
+        light_map_intensity: Float32 = 1,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -674,7 +697,8 @@ struct RasterVertex(ImplicitlyCopyable):
         to none, which reflects nothing, at three.js's reflectivity of one
         and its `MultiplyOperation`. The depth, color and stencil state
         defaults to three.js's: the depth tested and written, the color
-        written, and no stencil test.
+        written, and no stencil test. The ambient occlusion map and the
+        light map default to none, at intensities of one.
         """
         self.x = x
         self.y = y
@@ -718,6 +742,12 @@ struct RasterVertex(ImplicitlyCopyable):
         self.bump_scale = bump_scale
         self.receives_shadow = receives_shadow
         self.state = state
+        self.u1 = u1
+        self.v1 = v1
+        self.ao_map = ao_map
+        self.ao_map_intensity = ao_map_intensity
+        self.light_map = light_map
+        self.light_map_intensity = light_map_intensity
 
 
 @fieldwise_init
@@ -755,11 +785,14 @@ def _coordinates_at(
     b: RasterVertex,
     c: RasterVertex,
     weights: _Fragment,
+    second: Bool = False,
 ) -> Vector2:
     """Return the perspective-correct texture coordinates at one sample.
 
     The same correction `rasterize_shaded` applies to color, factored out
     because mip selection needs it at three sample points rather than one.
+    `second` reads `u1` and `v1` rather than `u` and `v`: the coordinates
+    an ambient occlusion map and a light map are sampled at.
     """
     var inv_w = (
         weights.wa * a.inv_w + weights.wb * b.inv_w + weights.wc * c.inv_w
@@ -772,6 +805,11 @@ def _coordinates_at(
         share_a = weights.wa * a.inv_w * rcp
         share_b = weights.wb * b.inv_w * rcp
         share_c = weights.wc * c.inv_w * rcp
+    if second:
+        return Vector2(
+            a.u1 * share_a + b.u1 * share_b + c.u1 * share_c,
+            a.v1 * share_a + b.v1 * share_b + c.v1 * share_c,
+        )
     return Vector2(
         a.u * share_a + b.u * share_b + c.u * share_c,
         a.v * share_a + b.v * share_b + c.v * share_c,
@@ -969,6 +1007,7 @@ def _sample_map(
     coverage: _Coverage,
     x: Int,
     y: Int,
+    second: Bool = False,
 ) -> FloatColor:
     """Return `image` sampled at (u, v) for the pixel at (x, y).
 
@@ -979,6 +1018,8 @@ def _sample_map(
     the footprint's long axis when the texture's anisotropy allows them.
     Shared by the material's map and its emissive map, so both are
     filtered alike, and mirrored on the device by `render.gpu._sample_slot`.
+    `second` measures the footprint on the second coordinates, `u1` and
+    `v1`, which is where an ambient occlusion map and a light map are read.
     """
     if image.levels == 1 and image.anisotropy == 1:
         return image.sample(u, v)
@@ -990,9 +1031,9 @@ def _sample_map(
     # along an axis the footprint did not cross. That ulp turned the long
     # axis a hair, put a tap a hair past a texel's edge, and read the
     # neighboring texel. The kernel's `_sample_slot` does the same.
-    var here = _coordinates_at(a, b, c, _weights(coverage, x, y))
-    var right = _coordinates_at(a, b, c, _weights(coverage, x + 1, y))
-    var below = _coordinates_at(a, b, c, _weights(coverage, x, y + 1))
+    var here = _coordinates_at(a, b, c, _weights(coverage, x, y), second)
+    var right = _coordinates_at(a, b, c, _weights(coverage, x + 1, y), second)
+    var below = _coordinates_at(a, b, c, _weights(coverage, x, y + 1), second)
     # The level, and the taps along the long axis when the texture
     # allows them: the same function the kernel asks. With one tap the
     # level is what `mip_level` gives.
@@ -1224,7 +1265,12 @@ def check_triangle_state(
             `NO_CUBE_TEXTURE` is refused, `SCENE_ENVIRONMENT` included,
             which `Renderer.prepare` resolves before a corner is built.
             The corners must agree on their depth, color and stencil
-            state, and it must be one `RasterState.check` accepts.
+            state, and it must be one `RasterState.check` accepts. The
+            corners must agree on their ao map, their light map and their
+            two intensities; either id that is a negative other than
+            `NO_TEXTURE`, either intensity that is negative or not
+            finite, and either map on a kind with no indirect term are
+            refused.
     """
     if b.blend != a.blend or c.blend != a.blend:
         raise Error("A triangle's corners disagree about blending")
@@ -1417,6 +1463,35 @@ def check_triangle_state(
         raise Error(
             "Only a lit or matcap triangle has a normal map: no other"
             " shader reads a normal in the frame a map perturbs"
+        )
+    # The two baked maps and their intensities, asked as the material asks
+    # them: agreed, finite, not negative, and only where an indirect
+    # diffuse term is read. The numbers first, since a NaN never agrees.
+    if not isfinite(a.ao_map_intensity) or a.ao_map_intensity < 0:
+        raise Error("A triangle's ao map intensity cannot be negative")
+    if not isfinite(a.light_map_intensity) or a.light_map_intensity < 0:
+        raise Error("A triangle's light map intensity cannot be negative")
+    if (
+        b.ao_map != a.ao_map
+        or c.ao_map != a.ao_map
+        or b.light_map != a.light_map
+        or c.light_map != a.light_map
+        or b.ao_map_intensity != a.ao_map_intensity
+        or c.ao_map_intensity != a.ao_map_intensity
+        or b.light_map_intensity != a.light_map_intensity
+        or c.light_map_intensity != a.light_map_intensity
+    ):
+        raise Error("A triangle's corners disagree about their baked maps")
+    if a.ao_map != NO_TEXTURE and a.ao_map.value < 0:
+        raise Error("A triangle names an ao map id that nothing can hold")
+    if a.light_map != NO_TEXTURE and a.light_map.value < 0:
+        raise Error("A triangle names a light map id that nothing can hold")
+    if not a.kind.has_indirect() and (
+        a.ao_map != NO_TEXTURE or a.light_map != NO_TEXTURE
+    ):
+        raise Error(
+            "Only a basic or lit triangle has an ao map or a light map: no"
+            " other shader has an indirect term for either to reach"
         )
 
 
@@ -1735,8 +1810,9 @@ def check_triangle_maps(
             emissive map or a matcap does not ignore its alpha; an alpha
             map is not stored as data; a gradient map is not a
             one-row linear table -- see `check_alpha_map` and
-            `check_gradient_map`; or an env map `SHADE_TEXTURE` would open
-            is not in the cube store.
+            `check_gradient_map`; an env map `SHADE_TEXTURE` would open
+            is not in the cube store; an ao map is not stored as data; or
+            a light map does not ignore its alpha.
     """
     # An emissive map's alpha means nothing, and only a texture built to
     # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
@@ -1780,6 +1856,33 @@ def check_triangle_maps(
             check_data_map(textures.get(a.normal_map), "A normal map")
         if a.bump_map != NO_TEXTURE:
             check_data_map(textures.get(a.bump_map), "A bump map")
+        # An ao map holds a number, and a light map holds light whose
+        # alpha means nothing, the rule an emissive map follows.
+        if a.ao_map != NO_TEXTURE:
+            check_data_map(textures.get(a.ao_map), "An ao map")
+        if a.light_map != NO_TEXTURE:
+            check_light_map(textures.get(a.light_map))
+
+
+def check_light_map(image: Texture) raises:
+    """Refuse a light map whose alpha is read as coverage.
+
+    A light map holds light, so either color space is right, but its alpha
+    means nothing: filtered as coverage, a texel with a low alpha would
+    darken its neighbors, the reason an emissive map asks the same. Shared
+    by both backends, so neither can accept what the other refuses.
+
+    Args:
+        image: The texture named as a light map.
+
+    Raises:
+        Error: If the texture reads its alpha as coverage.
+    """
+    if image.alpha != IGNORED:
+        raise Error(
+            "A light map must ignore its alpha; build the texture with"
+            " alpha=IGNORED"
+        )
 
 
 def rasterize_shaded(
@@ -1945,6 +2048,11 @@ def rasterize_shaded(
     # Whether these fragments show the shadows falling on them and
     # nothing else: a `SHADOW` material, transparent wherever lit.
     var catches = a.kind == SHADOW and mode != SHADE_UV
+    # Whether an ambient occlusion map or a light map acts on the indirect
+    # light: only when the triangle names one and the mode opens textures.
+    var bakes = (
+        a.ao_map != NO_TEXTURE or a.light_map != NO_TEXTURE
+    ) and mode == SHADE_TEXTURE
 
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
@@ -2204,6 +2312,73 @@ def rasterize_shaded(
                         a.shininess,
                         a.receives_shadow,
                     )
+            # The baked maps, three.js's `lights_fragment_maps` and
+            # `aomap_fragment`, sampled at the second coordinates. The
+            # light map's light joins the indirect diffuse light, and the
+            # ao map's red dims the sum and leaves the direct lights alone.
+            # A basic surface's whole color is indirect: a light map
+            # replaces it, divided by pi as three.js's `meshbasic_frag`
+            # divides it, and the ao map dims it. A physical surface
+            # takes both below, where its indirect light is summed.
+            var occlusion = Float32(1)
+            var baked = Vector3(0, 0, 0)
+            if bakes:
+                var u1 = a.u1 * share_a + b.u1 * share_b + c.u1 * share_c
+                var v1 = a.v1 * share_a + b.v1 * share_b + c.v1 * share_c
+                if a.ao_map != NO_TEXTURE:
+                    occlusion = ambient_occlusion(
+                        _sample_map(
+                            textures.get(a.ao_map),
+                            u1,
+                            v1,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                            True,
+                        ).r,
+                        a.ao_map_intensity,
+                    )
+                var lit = a.kind.is_lit()
+                if a.light_map != NO_TEXTURE:
+                    var glowed = _sample_map(
+                        textures.get(a.light_map),
+                        u1,
+                        v1,
+                        a,
+                        b,
+                        c,
+                        coverage,
+                        x,
+                        y,
+                        True,
+                    )
+                    var strength = a.light_map_intensity * (
+                        lighting.scale if lit else RECIPROCAL_PI
+                    )
+                    baked = Vector3(
+                        glowed.r * strength,
+                        glowed.g * strength,
+                        glowed.b * strength,
+                    )
+                    if not lit:
+                        arriving = FloatColor(0.0, 0.0, 0.0, 1.0)
+                if not physical:
+                    var indirect = Vector3(arriving.r, arriving.g, arriving.b)
+                    if lit:
+                        var around = lighting.indirect_at(facing)
+                        indirect = Vector3(around.r, around.g, around.b)
+                    var occluded = occluded_light(
+                        Vector3(arriving.r, arriving.g, arriving.b),
+                        indirect,
+                        baked,
+                        occlusion,
+                    )
+                    arriving = FloatColor(
+                        occluded.x, occluded.y, occluded.z, 1.0
+                    )
             var shaded = FloatColor(
                 base.r * arriving.r,
                 base.g * arriving.g,
@@ -2355,7 +2530,12 @@ def rasterize_shaded(
                     coat_rough,
                     a.receives_shadow,
                 )
-                var indirect = lighting.indirect_at(facing)
+                # The light map's light joins the indirect light here, as
+                # three.js adds it to `irradiance`; zero adds nothing.
+                var around = lighting.indirect_at(facing)
+                var indirect = Vector3(
+                    around.r + baked.x, around.g + baked.y, around.b + baked.z
+                )
                 var toward_eye = toward_eye_at(
                     lighting.eye, lighting.toward_eye, spot
                 )
@@ -2403,7 +2583,7 @@ def rasterize_shaded(
                         )
                 var outgoing = physical_outgoing(
                     direct,
-                    Vector3(indirect.r, indirect.g, indirect.b),
+                    indirect,
                     surface,
                     rough,
                     dot_nv,
@@ -2415,6 +2595,7 @@ def rasterize_shaded(
                     coat_rough,
                     Vector3(dot_nv_coat, 0, 0),
                     coat_radiance,
+                    occlusion,
                 )
                 shaded = FloatColor(
                     outgoing.x, outgoing.y, outgoing.z, shaded.a

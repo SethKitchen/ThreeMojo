@@ -99,6 +99,7 @@ from core.buffer_geometry import (
     NORMAL,
     POSITION,
     UV,
+    UV1,
     BufferGeometry,
 )
 from core.assets import Assets
@@ -166,7 +167,13 @@ from render.cube_texture_store import (
 )
 from units.si import Angle, DEGREE, Length, METER, RADIAN
 from render.pointrule import attenuated_size
-from render.texture import IGNORED, Texture
+from render.texture import (
+    IGNORED,
+    UV_CHANNEL_0,
+    UV_CHANNEL_1,
+    Texture,
+    UvChannel,
+)
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
@@ -187,6 +194,7 @@ from render.rasterizer import (
     check_alpha_map,
     check_data_map,
     check_gradient_map,
+    check_light_map,
     check_output_kinds,
     edge,
     rasterize_all,
@@ -361,11 +369,17 @@ def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
         assets: Where the textures live. The ids are already checked.
         material: The material, for which maps it names.
 
+    The ambient occlusion map and the light map are not among them: they
+    are sampled at a second coordinate pair with a transform of their own;
+    see `_baked_transform`. So only those two can read the second channel,
+    and a map here whose texture names another is refused.
+
     Returns:
         The matrix. The identity for a material with no map at all.
 
     Raises:
-        Error: If the material names two maps whose transforms differ.
+        Error: If the material names two maps whose transforms differ, or
+            a map whose texture's channel is not `UV_CHANNEL_0`.
     """
     var named: List[TextureId] = [
         material.map,
@@ -382,7 +396,13 @@ def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
     for index in range(len(named)):  # pragma: no branch
         if named[index] == NO_TEXTURE:
             continue
-        var to_uv = assets.textures.get(named[index]).uv_transform()
+        ref image = assets.textures.get(named[index])
+        if image.channel != UV_CHANNEL_0:
+            raise Error(
+                "Only an ao map or a light map reads the second texture"
+                " coordinates: give this texture UV_CHANNEL_0"
+            )
+        var to_uv = image.uv_transform()
         if not settled:
             chosen = to_uv^
             settled = True
@@ -392,6 +412,100 @@ def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
                 " samples them all at one coordinate"
             )
     return chosen^
+
+
+def _baked_transform(
+    assets: Assets, material: Material
+) raises -> Tuple[Matrix3, UvChannel]:
+    """Return the transform and the channel an ambient occlusion map and a
+    light map are sampled with: three.js's `aoMapTransform` and
+    `aoMap.channel`, or the light map's.
+
+    A fragment carries a second coordinate pair for these two maps, apart
+    from the pair every other map shares, so a baked map can be laid out
+    on its own. The two share that pair, so they must agree on both, which
+    is asked here as `_uv_transform` asks it of the others.
+
+    Args:
+        assets: Where the textures live. The ids are already checked.
+        material: The material, for which maps it names.
+
+    Returns:
+        The matrix and the channel: the identity and `UV_CHANNEL_0` for a
+        material with neither map.
+
+    Raises:
+        Error: If a texture names a channel that is none of the two, or
+            the two maps disagree about their transform or their channel.
+    """
+    var named: List[TextureId] = [material.ao_map, material.light_map]
+    var chosen = Matrix3()
+    var channel = UV_CHANNEL_0
+    var settled = False
+    # Two maps, always, so the loop never runs zero times.
+    for index in range(len(named)):  # pragma: no branch
+        if named[index] == NO_TEXTURE:
+            continue
+        ref image = assets.textures.get(named[index])
+        if not image.channel.is_valid():
+            raise Error(
+                "A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1"
+            )
+        var to_uv = image.uv_transform()
+        if not settled:
+            chosen = to_uv^
+            channel = image.channel
+            settled = True
+        elif to_uv != chosen or image.channel != channel:
+            raise Error(
+                "A material's ao map and light map must share one transform"
+                " and one channel: a fragment samples both at one coordinate"
+            )
+    return (chosen^, channel)
+
+
+def _placed_coordinates(
+    geometry: BufferGeometry, name: String, to_uv: Matrix3, count: Int
+) raises -> Tuple[List[Float32], List[Float32]]:
+    """Return every vertex's texture coordinates from one attribute, moved
+    by a texture's transform.
+
+    Texture coordinates do not go through the world transform: they name
+    a place in an image, not a place in the world. They go through the
+    texture's own transform instead, once per vertex as three.js's vertex
+    shader does it, so a repeat tiles the image and an offset slides it.
+    A geometry without the attribute gets zeroes, through the transform
+    too, so a geometry without coordinates and one whose coordinates are
+    all zero name the same place in the image.
+
+    Args:
+        geometry: The geometry, for the attribute.
+        name: Which attribute: `UV` or `UV1`.
+        to_uv: The transform.
+        count: How many vertices the geometry has.
+
+    Returns:
+        The u of every vertex, then the v.
+
+    Raises:
+        Error: If the attribute holds fewer than `count` pairs.
+    """
+    var us = List[Float32]()
+    var vs = List[Float32]()
+    if geometry.has_attribute(name):
+        ref uvs = geometry.attribute_view(name)
+        for vertex in range(count):
+            var placed = to_uv.transform_point(
+                Vector2(uvs.component(vertex, 0), uvs.component(vertex, 1))
+            )
+            us.append(placed.x)
+            vs.append(placed.y)
+    else:
+        var fallback = to_uv.transform_point(Vector2(0, 0))
+        for _ in range(count):
+            us.append(fallback.x)
+            vs.append(fallback.y)
+    return (us^, vs^)
 
 
 # How far past a frustum plane a bound may lie and still be drawn, as a
@@ -1157,14 +1271,21 @@ def _to_raster(
         physics.bump_scale,
         receives_shadow,
         state,
+        vertex.u1,
+        vertex.v1,
+        physics.ao_map,
+        physics.ao_map_intensity,
+        physics.light_map,
+        physics.light_map_intensity,
     )
 
 
 @fieldwise_init
 struct _Physics(ImplicitlyCopyable):
-    """What a physical surface and a normal or bump map add to every corner
-    of one draw: the numbers and the maps `RasterVertex` carries for them,
-    gathered so `_to_raster` takes one more argument rather than twelve.
+    """What a physical surface, a normal or bump map and the two baked maps
+    add to every corner of one draw: the numbers and the maps
+    `RasterVertex` carries for them, gathered so `_to_raster` takes one
+    more argument rather than sixteen.
     """
 
     var roughness: Float32
@@ -1179,6 +1300,10 @@ struct _Physics(ImplicitlyCopyable):
     var normal_scale: Vector2
     var bump_map: TextureId
     var bump_scale: Float32
+    var ao_map: TextureId
+    var ao_map_intensity: Float32
+    var light_map: TextureId
+    var light_map_intensity: Float32
 
     def __init__(out self):
         """Describe a surface that is not physical and carries no map: the
@@ -1195,6 +1320,10 @@ struct _Physics(ImplicitlyCopyable):
         self.normal_scale = Vector2(1, 1)
         self.bump_map = NO_TEXTURE
         self.bump_scale = 1
+        self.ao_map = NO_TEXTURE
+        self.ao_map_intensity = 1
+        self.light_map = NO_TEXTURE
+        self.light_map_intensity = 1
 
 
 def _plane_in_view(plane: Plane, view: Matrix4) raises -> Plane:
@@ -1556,6 +1685,29 @@ def _checked_data_map(
     return map
 
 
+def _checked_light_map(assets: Assets, map: TextureId) raises -> TextureId:
+    """Return a light map once it is known to be in the store and to
+    ignore its alpha, or `NO_TEXTURE` as it was.
+
+    Args:
+        assets: Where the textures live.
+        map: The id the material names, or `NO_TEXTURE`.
+
+    Returns:
+        `map`, unchanged.
+
+    Raises:
+        Error: If the id names nothing in the store, or the texture reads
+            its alpha as coverage; see `check_light_map`.
+    """
+    if map == NO_TEXTURE:
+        return map
+    if map.value >= assets.textures.count():
+        raise Error("A light map is named that is not there")
+    check_light_map(assets.textures.get(map))
+    return map
+
+
 def _checked_maps(
     assets: Assets, material: Material, shading: ShadeMode
 ) raises -> Tuple[TextureId, TextureId]:
@@ -1681,8 +1833,9 @@ def _emit_sprite(
     Raises:
         Error: If the material is not `BASIC` or is a wireframe, names a
             map or an alpha map that is not there, names an alpha map
-            that is not stored as data, or holds a depth, color, stencil
-            or offset state that is refused.
+            that is not stored as data, reflects an environment, names an
+            ao map or a light map, or holds a depth, color, stencil or
+            offset state that is refused.
     """
     var material = assets.materials.get(draw.material)
     # Refused for the reason a line refuses a lit kind: a sprite is unlit,
@@ -1704,6 +1857,13 @@ def _emit_sprite(
         raise Error(
             "A sprite cannot reflect an environment: it is a picture facing"
             " the camera, with no surface to reflect from"
+        )
+    # Nor any indirect light for a baked map to act on: three.js's
+    # `SpriteMaterial` has no `aoMap` and no `lightMap`.
+    if material.has_baked_map():
+        raise Error(
+            "A sprite has no ao map or light map: it is a picture, with no"
+            " indirect light for either to reach"
         )
     var maps = _checked_maps(assets, material, shading)
     var to_uv = _uv_transform(assets, material)
@@ -2083,7 +2243,7 @@ def _emit_wide_line(
 
     Raises:
         Error: If the material is not `BASIC`, carries a map, an alpha
-            map or an env map, or is a wireframe; if the geometry is
+            map, an env map, an ao map or a light map, or is a wireframe; if the geometry is
             indexed, has no positions or an odd count of them; if the
             material asks for vertex colors the geometry does not have;
             if a dash pattern is too fine for a segment; or if the
@@ -2104,6 +2264,11 @@ def _emit_wide_line(
         raise Error(
             "A wide line material has no env map: a line has no surface to"
             " reflect from"
+        )
+    if material.has_baked_map():
+        raise Error(
+            "A wide line material has no ao map or light map: three.js's"
+            " LineMaterial samples none"
         )
     if material.wireframe:
         raise Error(
@@ -3159,18 +3324,27 @@ struct Renderer(Movable):
                 material.normal_scale,
                 _checked_data_map(assets, material.bump_map, "A bump map"),
                 material.bump_scale,
+                _checked_data_map(assets, material.ao_map, "An ao map"),
+                material.ao_map_intensity,
+                _checked_light_map(assets, material.light_map),
+                material.light_map_intensity,
             )
             if self.shading != SHADE_TEXTURE:
                 physics.roughness_map = NO_TEXTURE
                 physics.metalness_map = NO_TEXTURE
                 physics.normal_map = NO_TEXTURE
                 physics.bump_map = NO_TEXTURE
+                physics.ao_map = NO_TEXTURE
+                physics.light_map = NO_TEXTURE
             # Where the maps are moved, tiled and turned on this surface,
             # asked of the material's own maps whatever the shading mode:
             # the uv view shows the coordinates the texture would be
             # sampled with, and a pair of maps that disagree is a wrong
             # asset under any mode.
             var to_uv = _uv_transform(assets, material)
+            # And where the two baked maps are, which have a pair of their
+            # own; asked the same way, whatever the shading mode.
+            var baked = _baked_transform(assets, material)
             # Light the surface gives off, decoded to linear once and carried
             # on every corner like the base color below.
             var glow = material.emissive_light()
@@ -3180,7 +3354,6 @@ struct Renderer(Movable):
             # kind. See `Material.base_reflectance`.
             var sheen = material.base_reflectance()
             var smooth = geometry.has_attribute(String(NORMAL))
-            var mapped = geometry.has_attribute(String(UV))
 
             # World positions are kept as well as camera-space ones: a
             # geometric normal needs the triangle's real shape, and the view
@@ -3222,26 +3395,23 @@ struct Renderer(Movable):
             # the image and an offset slides it. A geometry without them
             # gets zeroes, which map everything to one corner -- harmless
             # until something is actually sampled with them.
-            var vertex_u = List[Float32]()
-            var vertex_v = List[Float32]()
-            if mapped:
-                ref uvs = geometry.attribute_view(String(UV))
-                for vertex in range(vertex_count):
-                    var placed = to_uv.transform_point(
-                        Vector2(
-                            uvs.component(vertex, 0), uvs.component(vertex, 1)
-                        )
-                    )
-                    vertex_u.append(placed.x)
-                    vertex_v.append(placed.y)
-            else:
-                # Through the transform too, so a geometry without
-                # coordinates and one whose coordinates are all zero name
-                # the same place in the image.
-                var fallback = to_uv.transform_point(Vector2(0, 0))
-                for _ in range(vertex_count):
-                    vertex_u.append(fallback.x)
-                    vertex_v.append(fallback.y)
+            var first_set = _placed_coordinates(
+                geometry, String(UV), to_uv, vertex_count
+            )
+            ref vertex_u = first_set[0]
+            ref vertex_v = first_set[1]
+            # The second pair, where the ambient occlusion map and the
+            # light map are sampled: the geometry's `uv1` when their
+            # texture's channel names it and the geometry has one, and its
+            # `uv` otherwise, through their own transform.
+            var second_name = String(UV)
+            if baked[1] == UV_CHANNEL_1 and geometry.has_attribute(String(UV1)):
+                second_name = String(UV1)
+            var second_set = _placed_coordinates(
+                geometry, second_name, baked[0], vertex_count
+            )
+            ref vertex_u1 = second_set[0]
+            ref vertex_v1 = second_set[1]
 
             # World-space normals are their own pass so the normal array can
             # be borrowed only when there is one, and the normal matrix built
@@ -3435,6 +3605,8 @@ struct Renderer(Movable):
                     vertex_v[first],
                     world_points[first],
                     glow,
+                    u1=vertex_u1[first],
+                    v1=vertex_v1[first],
                 )
                 var corner_b = ClipVertex(
                     view_points[second],
@@ -3444,6 +3616,8 @@ struct Renderer(Movable):
                     vertex_v[second],
                     world_points[second],
                     glow,
+                    u1=vertex_u1[second],
+                    v1=vertex_v1[second],
                 )
                 var corner_c = ClipVertex(
                     view_points[third],
@@ -3453,6 +3627,8 @@ struct Renderer(Movable):
                     vertex_v[third],
                     world_points[third],
                     glow,
+                    u1=vertex_u1[third],
+                    v1=vertex_v1[third],
                 )
                 # A triangle wholly between the two planes is what the
                 # clipper would hand back untouched, so it is not sent
@@ -3656,6 +3832,11 @@ struct Renderer(Movable):
                 raise Error(
                     "A Line is one pixel wide and has no dash offset: draw"
                     " a wider one as a LineSegments2"
+                )
+            if material.has_baked_map():
+                raise Error(
+                    "A line material has no ao map or light map: a line has"
+                    " no surface coordinates to sample one with"
                 )
             # An index buffer here is a triangle index -- `set_index`
             # demands whole triangles -- so it cannot say which points a
@@ -4002,6 +4183,11 @@ struct Renderer(Movable):
                 raise Error(
                     "A points material has no env map: a point has no"
                     " surface to reflect from"
+                )
+            if material.has_baked_map():
+                raise Error(
+                    "A points material has no ao map or light map: a point"
+                    " has no surface for either to reach"
                 )
             var maps = _checked_maps(assets, material, self.shading)
             # A point samples its maps at its own coordinate, as stored;

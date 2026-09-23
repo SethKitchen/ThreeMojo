@@ -82,6 +82,10 @@ comptime NORMAL = "normal"
 # opposite of how a framebuffer's rows are numbered. Sampling is where that
 # gets reconciled, not here.
 comptime UV = "uv"
+# A second set of texture coordinates, two per vertex, three.js's `uv1`.
+# Read by an ambient occlusion map or a light map whose texture names
+# `UV_CHANNEL_1`: a baked map is usually laid out apart from the color map.
+comptime UV1 = "uv1"
 # A color per vertex, three or four floats, in linear light as three.js's
 # are since its color management: what a material's `vertex_colors`
 # multiplies the material's color by. Decode an authored sRGB color with

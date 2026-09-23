@@ -12,7 +12,14 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from cameras.perspective_camera import PerspectiveCamera
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, COLOR, NORMAL, POSITION, UV
+from core.buffer_geometry import (
+    BufferGeometry,
+    COLOR,
+    NORMAL,
+    POSITION,
+    UV,
+    UV1,
+)
 from core.object3d import Object3D
 from geometries.plane import plane
 from core.assets import Assets
@@ -35,11 +42,14 @@ from materials.material import (
     PHONG,
     TOON,
     depth_material,
+    line_dashed_material,
     matcap_material,
     normal_material,
     phong_material,
     physical_material,
+    points_material,
     shadow_material,
+    sprite_material,
     standard_material,
     toon_material,
 )
@@ -80,6 +90,8 @@ from objects.lod import Lod
 from objects.skeleton import Bone, Skeleton
 from objects.skinned_mesh import SkinnedMesh
 from objects.sprite import Sprite
+from objects.line import Line
+from objects.points import Points
 from math.matrix4 import Matrix4
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rasterizer import SHADE_LIT, SHADE_TEXTURE, SHADE_UV, ShadeMode
@@ -94,6 +106,8 @@ from render.texture import (
     NEAREST,
     REPEAT,
     Texture,
+    UV_CHANNEL_1,
+    UvChannel,
     checkerboard,
     texture_of,
 )
@@ -5673,6 +5687,267 @@ def test_only_meshes_cast_shadows_yet() raises:
     assert_equal(len(crowded), 1)
     for texel in range(len(alone[0].depths)):
         assert_equal(crowded[0].depths[texel], alone[0].depths[texel])
+
+
+# --- ambient occlusion and light maps ---------------------------------------
+
+
+def two_channel_triangle(with_second: Bool = True) raises -> BufferGeometry:
+    """Return one triangle whose first coordinates run over the unit
+    square and whose second, when asked for, run from two to three."""
+    var triangle = BufferGeometry()
+    var data: List[Float32] = [-1, -1, 0, 1, -1, 0, 0, 1, 0]
+    triangle.set_attribute(String(POSITION), BufferAttribute(data^, 3))
+    var first: List[Float32] = [0, 0, 1, 0, 0, 1]
+    triangle.set_attribute(String(UV), BufferAttribute(first^, 2))
+    if with_second:
+        var second: List[Float32] = [2, 2, 3, 2, 2, 3]
+        triangle.set_attribute(String(UV1), BufferAttribute(second^, 2))
+    return triangle^
+
+
+def second_span(corners: List[RasterVertex]) -> Tuple[Float32, Float32]:
+    """Return the least and the most `u1` the prepared corners carry."""
+    var least = corners[0].u1
+    var most = corners[0].u1
+    for index in range(len(corners)):
+        least = min(least, corners[index].u1)
+        most = max(most, corners[index].u1)
+    return (least, most)
+
+
+def prepared_with(
+    renderer: Renderer,
+    mut assets: Assets,
+    geometry: GeometryId,
+    material: Material,
+) raises -> List[RasterVertex]:
+    """Return what `prepare` makes of one mesh drawn with `material`."""
+    var scene = unlit_scene_with_a_node()
+    var skin = assets.materials.add(material)
+    scene.add_mesh(Mesh(geometry, skin, NodeId(0)))
+    return renderer.prepare(scene, assets, a_camera())
+
+
+def test_the_baked_maps_ride_a_second_coordinate_pair() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var both = assets.geometries.add(two_channel_triangle())
+    var one = assets.geometries.add(two_channel_triangle(False))
+    var first_map = a_data_texel(255, 255, 255)
+    var second_map = a_data_texel(128, 128, 128)
+    second_map.channel = UV_CHANNEL_1
+    var on_first = assets.textures.add(first_map^)
+    var on_second = assets.textures.add(second_map^)
+    # The first channel reads `uv`, as three.js's default does.
+    var plain = prepared_with(
+        renderer, assets, both, Material(Color(255, 255, 255), ao_map=on_first)
+    )
+    assert_equal(len(plain), 3)
+    var span = second_span(plain)
+    assert_almost_equal(span[0], Float32(0), atol=1e-5)
+    assert_almost_equal(span[1], Float32(1), atol=1e-5)
+    # The second reads `uv1`, and each corner names both maps.
+    var baked = prepared_with(
+        renderer,
+        assets,
+        both,
+        Material(
+            Color(255, 255, 255),
+            ao_map=on_second,
+            ao_map_intensity=0.5,
+            light_map=on_second,
+            light_map_intensity=2,
+        ),
+    )
+    span = second_span(baked)
+    assert_almost_equal(span[0], Float32(2), atol=1e-5)
+    assert_almost_equal(span[1], Float32(3), atol=1e-5)
+    assert_equal(baked[0].ao_map, on_second)
+    assert_equal(baked[0].light_map, on_second)
+    assert_equal(baked[0].ao_map_intensity, Float32(0.5))
+    assert_equal(baked[0].light_map_intensity, Float32(2))
+    # A geometry with no `uv1` falls back to its `uv`.
+    var fallen = prepared_with(
+        renderer, assets, one, Material(Color(255, 255, 255), ao_map=on_second)
+    )
+    span = second_span(fallen)
+    assert_almost_equal(span[1], Float32(1), atol=1e-5)
+    # The pair has its own transform, apart from the base map's.
+    var tiled_map = a_data_texel(128, 128, 128)
+    tiled_map.channel = UV_CHANNEL_1
+    tiled_map.repeat = Vector2(2, 2)
+    var tiled = assets.textures.add(tiled_map^)
+    var board = assets.textures.add(
+        checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0))
+    )
+    var apart = prepared_with(
+        renderer,
+        assets,
+        both,
+        Material(Color(255, 255, 255), board, light_map=tiled),
+    )
+    span = second_span(apart)
+    assert_almost_equal(span[0], Float32(4), atol=1e-5)
+    assert_almost_equal(span[1], Float32(6), atol=1e-5)
+    assert_coordinates_span(apart, 0, 1, 0, 1)
+    # Only textured shading opens either map; the coordinates still ride.
+    renderer.set_shading(SHADE_LIT)
+    var unopened = prepared_with(
+        renderer, assets, both, Material(Color(255, 255, 255), ao_map=tiled)
+    )
+    assert_equal(unopened[0].ao_map, NO_TEXTURE)
+    assert_equal(unopened[0].light_map, NO_TEXTURE)
+    span = second_span(unopened)
+    assert_almost_equal(span[1], Float32(6), atol=1e-5)
+
+
+def test_a_baked_map_is_refused_where_it_cannot_be_read() raises:
+    var assets = Assets()
+    var sheet = assets.geometries.add(two_channel_triangle())
+    var proper = assets.textures.add(a_data_texel(128, 128, 128))
+    var moved_map = a_data_texel(128, 128, 128)
+    moved_map.repeat = Vector2(2, 2)
+    var moved = assets.textures.add(moved_map^)
+    var second_map = a_data_texel(128, 128, 128)
+    second_map.channel = UV_CHANNEL_1
+    var second = assets.textures.add(second_map^)
+    var odd_map = a_data_texel(128, 128, 128)
+    odd_map.channel = UvChannel(5)
+    var odd = assets.textures.add(odd_map^)
+    var encoded = assets.textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+            IGNORED,
+        )
+    )
+    var covered = assets.textures.add(
+        Texture(
+            1, 1, [UInt8(255), 255, 255, 255], REPEAT, NEAREST, LINEAR, False
+        )
+    )
+    var white = Color(255, 255, 255)
+    var wrongs = List[Material]()
+    var reasons = List[String]()
+    # The two share a pair, so they share a transform and a channel.
+    wrongs.append(Material(white, ao_map=proper, light_map=moved))
+    reasons.append("share one transform and one channel")
+    wrongs.append(Material(white, ao_map=proper, light_map=second))
+    reasons.append("share one transform and one channel")
+    # A channel that is neither is refused, and so is the second channel
+    # on any other map.
+    wrongs.append(Material(white, ao_map=odd))
+    reasons.append("channel must be")
+    wrongs.append(Material(white, second))
+    reasons.append("Only an ao map or a light map")
+    # A map that is not there, or not stored the way it is read.
+    wrongs.append(Material(white, ao_map=TextureId(40)))
+    reasons.append("An ao map is named")
+    wrongs.append(Material(white, ao_map=encoded))
+    reasons.append("An ao map holds data")
+    wrongs.append(Material(white, light_map=TextureId(40)))
+    reasons.append("A light map is named")
+    wrongs.append(Material(white, light_map=covered))
+    reasons.append("A light map must ignore")
+    for mode in [SHADE_TEXTURE, SHADE_LIT]:
+        var renderer = Renderer(WIDTH, HEIGHT)
+        renderer.set_shading(mode)
+        for index in range(len(wrongs)):
+            with assert_raises(contains=reasons[index]):
+                _ = prepared_with(renderer, assets, sheet, wrongs[index])
+    # Two maps from one image agree, and a light map may hold sRGB light.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    _ = prepared_with(
+        renderer,
+        assets,
+        sheet,
+        Material(white, ao_map=proper, light_map=proper),
+    )
+    _ = prepared_with(
+        renderer, assets, sheet, Material(white, light_map=encoded)
+    )
+
+
+def test_lines_points_and_sprites_take_no_baked_map() raises:
+    # None has an indirect term, so each pass refuses the material rather
+    # than carrying a map it would never read.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var gray = assets.textures.add(a_data_texel(128, 128, 128))
+    var scene = unlit_scene_with_a_node()
+    var bare = BufferGeometry()
+    bare.set_attribute(
+        String(POSITION),
+        BufferAttribute([-0.5, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 0.0], 3),
+    )
+    var shape = assets.geometries.add(bare^)
+    var dashed = line_dashed_material(Color(255, 255, 255))
+    dashed.ao_map = gray
+    scene.add_line(Line(shape, assets.materials.add(dashed), NodeId(0)))
+    with assert_raises(contains="A line material has no ao map"):
+        _ = renderer.render(scene, assets, camera_at(0, 0, 4))
+    scene.lines = List[Line]()
+    var dots = points_material(Color(255, 255, 255))
+    dots.light_map = gray
+    scene.add_points(Points(shape, assets.materials.add(dots), NodeId(0)))
+    with assert_raises(contains="A points material has no ao map"):
+        _ = renderer.render(scene, assets, camera_at(0, 0, 4))
+    scene.points = List[Points]()
+    var badge = sprite_material()
+    badge.ao_map = gray
+    scene.add_sprite(Sprite(assets.materials.add(badge), NodeId(0)))
+    with assert_raises(contains="A sprite has no ao map"):
+        _ = renderer.render(scene, assets, camera_at(0, 0, 4))
+
+
+def test_an_ao_map_darkens_a_sheet_under_the_ambient_light_alone() raises:
+    # Under an ambient light and no lamp, all of a sheet's light is
+    # indirect: a black ao map takes it all, and a light map adds its own.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var black = assets.textures.add(a_data_texel(0, 0, 0))
+    var red = assets.textures.add(a_data_texel(255, 0, 0))
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    scene.add_light(ambient_light(Color(255, 255, 255), FULL * 0.5))
+    scene.update()
+    var plain = rendered(
+        renderer,
+        scene,
+        assets,
+        sheet_of(assets, assets.materials.add(Material(Color(255, 255, 255)))),
+        camera_at(0, 0, 4),
+    )
+    assert_true(sum_red(plain) > 0, "the ambient light lit nothing")
+    var occluded = rendered(
+        renderer,
+        scene,
+        assets,
+        sheet_of(
+            assets,
+            assets.materials.add(Material(Color(255, 255, 255), ao_map=black)),
+        ),
+        camera_at(0, 0, 4),
+    )
+    assert_equal(sum_red(occluded), 0)
+    var baked = rendered(
+        renderer,
+        scene,
+        assets,
+        sheet_of(
+            assets,
+            assets.materials.add(Material(Color(255, 255, 255), light_map=red)),
+        ),
+        camera_at(0, 0, 4),
+    )
+    assert_true(sum_red(baked) > sum_red(plain), "the light map added nothing")
 
 
 def main() raises:

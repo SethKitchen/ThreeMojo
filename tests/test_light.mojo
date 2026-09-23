@@ -45,14 +45,17 @@ from lights.lighting import (
     TOON_SHADE,
     Lighting,
     Reflected,
+    ambient_occlusion,
     blinn_phong,
     dfg_approx,
     environment_brdf,
     f_schlick,
     floored_roughness,
     ggx,
+    occluded_light,
     physical_outgoing,
     physical_surface,
+    specular_occlusion,
     toon_coord,
     toon_index,
     toon_step,
@@ -1631,6 +1634,118 @@ def test_the_outgoing_light_sums_the_three_parts_and_the_glow() raises:
     assert_almost_equal(out.x, 0.1 + 0.5 + 0.01 + 0.001, atol=TOLERANCE)
     assert_almost_equal(out.y, 0.2 + 0.25 + 0.02 + 0.002, atol=TOLERANCE)
     assert_almost_equal(out.z, 0.3 + 0.0 + 0.03 + 0.003, atol=TOLERANCE)
+
+
+def test_an_ao_texel_dims_by_its_intensity() raises:
+    # three.js's `(texel - 1) * intensity + 1`: white occludes nothing,
+    # an intensity of zero switches the map off, and one takes the texel.
+    assert_equal(ambient_occlusion(1, 3), Float32(1))
+    assert_equal(ambient_occlusion(0.5, 0), Float32(1))
+    assert_equal(ambient_occlusion(0.25, 1), Float32(0.25))
+    assert_equal(ambient_occlusion(0, 0.5), Float32(0.5))
+
+
+def test_a_reflection_is_occluded_less_where_the_surface_faces_the_eye() raises:
+    # Nothing occluded keeps the whole reflection, whatever the angle.
+    for dot_nv in [Float32(0), Float32(0.5), Float32(1)]:
+        for rough in [ROUGHNESS_FLOOR, Float32(0.5), Float32(1)]:
+            assert_equal(specular_occlusion(dot_nv, 1, rough), Float32(1))
+    # three.js's `pow(dotNV + ao, exp2(-16 r - 1)) - 1 + ao`, saturated.
+    # At a roughness of zero the power is a half: the square root of 1.3.
+    assert_almost_equal(
+        specular_occlusion(0.8, 0.5, 0),
+        Float32(1.1401754 - 1 + 0.5),
+        atol=TOLERANCE,
+    )
+    # Edge-on and fully occluded, nothing arrives.
+    assert_equal(specular_occlusion(0, 0, 0.5), Float32(0))
+    # An intensity above one can make the occlusion negative; the power's
+    # base is floored at zero there, and the answer is saturated.
+    assert_equal(specular_occlusion(0.5, -1, 0.5), Float32(0))
+
+
+def test_occluded_light_dims_the_indirect_part_and_adds_the_baked() raises:
+    var out = occluded_light(
+        Vector3(1, 2, 3),
+        Vector3(0.5, 0.5, 0.5),
+        Vector3(0.1, 0.2, 0.3),
+        0.5,
+    )
+    # The direct part, then the indirect part and the baked light halved.
+    assert_almost_equal(out.x, 0.5 + 0.3, atol=TOLERANCE)
+    assert_almost_equal(out.y, 1.5 + 0.35, atol=TOLERANCE)
+    assert_almost_equal(out.z, 2.5 + 0.4, atol=TOLERANCE)
+
+
+def test_an_occlusion_dims_a_physical_surfaces_indirect_light() raises:
+    # The diffuse indirect term is halved; the direct terms are not.
+    var direct = Reflected(
+        Vector3(0.1, 0.2, 0.3), Vector3(0.01, 0.02, 0.03), Vector3(0, 0, 0)
+    )
+    var out = physical_outgoing(
+        direct,
+        Vector3(0.5, 0.5, 0.5),
+        physical_surface(Vector3(1, 0.5, 0), DIELECTRIC_F0, 0, 1),
+        1,
+        1,
+        False,
+        Vector3(9, 9, 9),
+        Vector3(9, 9, 9),
+        Vector3(0.001, 0.002, 0.003),
+        0,
+        ROUGHNESS_FLOOR,
+        Vector3(1, 0, 0),
+        Vector3(9, 9, 9),
+        0.5,
+    )
+    assert_almost_equal(out.x, 0.1 + 0.25 + 0.01 + 0.001, atol=TOLERANCE)
+    assert_almost_equal(out.y, 0.2 + 0.125 + 0.02 + 0.002, atol=TOLERANCE)
+    # A metal's reflection is dimmed by the specular occlusion.
+    var none = Reflected(Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0))
+    var metal = a_metal()
+    var dimmed = physical_outgoing(
+        none,
+        Vector3(0, 0, 0),
+        metal,
+        0.5,
+        0.8,
+        True,
+        Vector3(1, 1, 1),
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        0,
+        ROUGHNESS_FLOOR,
+        Vector3(0.8, 0, 0),
+        Vector3(0, 0, 0),
+        0.25,
+    )
+    var single = environment_brdf(0.8, metal.specular, 1, 0.5)
+    var shade = specular_occlusion(0.8, 0.25, 0.5)
+    assert_true(shade < 1)
+    assert_almost_equal(dimmed.x, single.x * shade, atol=TOLERANCE)
+    # And a coat's reflection is dimmed by the occlusion itself.
+    var coated = List[Vector3]()
+    for occlusion in [Float32(1), Float32(0.5)]:
+        coated.append(
+            physical_outgoing(
+                none,
+                Vector3(0, 0, 0),
+                a_chalk(),
+                1,
+                1,
+                True,
+                Vector3(0, 0, 0),
+                Vector3(0, 0, 0),
+                Vector3(0, 0, 0),
+                1,
+                ROUGHNESS_FLOOR,
+                Vector3(1, 0, 0),
+                Vector3(1, 1, 1),
+                occlusion,
+            )
+        )
+    assert_true(coated[0].x > 0)
+    assert_almost_equal(coated[1].x, coated[0].x * 0.5, atol=TOLERANCE)
 
 
 def test_a_clear_coat_dims_what_is_under_it_and_adds_its_own_gloss() raises:

@@ -492,6 +492,37 @@ def test_a_cut_carries_the_line_distance_across() raises:
     assert_equal(at(0, 0, -2).line_distance, Float32(0))
 
 
+def test_a_cut_carries_the_second_coordinates_across() raises:
+    # The ao map's and the light map's coordinates are cut a quarter of
+    # the way along, as the first pair is.
+    var a = ClipVertex(
+        Vector3(0, 0, -0.5),
+        FloatColor(1, 1, 1),
+        Vector3(0, 0, 1),
+        0,
+        0,
+        u1=0,
+        v1=1,
+    )
+    var b = ClipVertex(
+        Vector3(0, 0, -2.5),
+        FloatColor(1, 1, 1),
+        Vector3(0, 0, 1),
+        0,
+        0,
+        u1=4,
+        v1=5,
+    )
+    var kept = clip_segment(a, b, NEAR, FAR)
+    assert_equal(len(kept), 2)
+    assert_almost_equal(Float64(kept[0].u1), Float64(1), atol=TOLERANCE)
+    assert_almost_equal(Float64(kept[0].v1), Float64(2), atol=TOLERANCE)
+    assert_almost_equal(Float64(kept[1].u1), Float64(4), atol=TOLERANCE)
+    # A corner built without them sits at zero.
+    assert_equal(at(0, 0, -2).u1, Float32(0))
+    assert_equal(at(0, 0, -2).v1, Float32(0))
+
+
 def unit_sides() raises -> List[Plane]:
     """Return the four sides of a volume two meters wide and tall."""
     return Frustum.side_planes(orthographic(-1, 1, 1, -1, NEAR, FAR))

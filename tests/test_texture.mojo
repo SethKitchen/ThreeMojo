@@ -38,6 +38,9 @@ from render.texture import (
     wrap_index,
     Footprint,
     MAX_ANISOTROPY,
+    UV_CHANNEL_0,
+    UV_CHANNEL_1,
+    UvChannel,
     anisotropic_footprint,
 )
 from std.math import inf, nan
@@ -1381,6 +1384,26 @@ def test_a_texture_allows_one_tap_unless_told_otherwise() raises:
         image.validate()
     image.anisotropy = -3
     with assert_raises():
+        image.validate()
+
+
+def test_a_texture_reads_the_first_channel_unless_told_otherwise() raises:
+    # three.js's `channel`: zero by default, set after construction, and
+    # carried by every copy.
+    var image = quad()
+    assert_equal(image.channel, UV_CHANNEL_0)
+    assert_equal(Texture().channel, UV_CHANNEL_0)
+    image.channel = UV_CHANNEL_1
+    image.validate()
+    assert_equal(Texture(copy=image).channel, UV_CHANNEL_1)
+    assert_equal(image.ignoring_alpha().channel, UV_CHANNEL_1)
+    assert_true(UV_CHANNEL_0.is_valid())
+    assert_true(UV_CHANNEL_1.is_valid())
+    # A struct's fields are open, so a third channel constructs; the
+    # texture refuses it.
+    assert_false(UvChannel(2).is_valid())
+    image.channel = UvChannel(2)
+    with assert_raises(contains="channel"):
         image.validate()
 
 

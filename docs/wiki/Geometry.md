@@ -44,7 +44,9 @@ A flat `List[Float32]` with an item size. `BufferAttribute(data, 3)` holds vecto
 | `stream_length() -> Int` | The index entries, or the vertices without an index. |
 | `vertex_at(slot) -> Int` | Which vertex one slot of that stream reads. |
 
-Attribute names are the constants `POSITION`, `NORMAL`, `UV`, `COLOR` and `TANGENT`. A geometry needs `position`. It needs `normal` for smooth shading and `uv` for a texture. It needs `color`, three or four linear floats per vertex, for a material with `vertex_colors`. See [Materials](Materials#vertex-colors).
+Attribute names are the constants `POSITION`, `NORMAL`, `UV`, `UV1`, `COLOR` and `TANGENT`. A geometry needs `position`. It needs `normal` for smooth shading and `uv` for a texture. It needs `color`, three or four linear floats per vertex, for a material with `vertex_colors`. See [Materials](Materials#vertex-colors).
+
+A geometry can carry `uv1`, a second set of coordinates, for a baked map. See [Light map](Materials#light-map).
 
 `compute_vertex_normals` averages the normals of the triangles a vertex is in, weighted by their areas. A shared vertex shades smoothly. A vertex used once shades flat. A vertex no triangle uses keeps a zero normal, as in three.js.
 

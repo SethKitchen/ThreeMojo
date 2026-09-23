@@ -1535,5 +1535,82 @@ def test_a_shadow_material_shows_its_shadow_and_nothing_else() raises:
         _ = shadow_material(opacity=1.5)
 
 
+def test_an_ao_map_and_a_light_map_need_an_indirect_term() raises:
+    var color = Color(255, 255, 255)
+    # A basic surface and every lit kind have an indirect diffuse term.
+    for kind in [BASIC, LAMBERT, PHONG, TOON, STANDARD, PHYSICAL]:
+        assert_true(kind.has_indirect())
+        var baked = Material(
+            color,
+            kind=kind,
+            ao_map=TextureId(0),
+            ao_map_intensity=0.5,
+            light_map=TextureId(1),
+            light_map_intensity=2.0,
+        )
+        assert_true(baked.has_ao_map())
+        assert_true(baked.has_light_map())
+        assert_true(baked.has_baked_map())
+        assert_equal(baked.ao_map_intensity, Float32(0.5))
+        assert_equal(baked.light_map_intensity, Float32(2.0))
+    # Either map alone counts, and a plain surface names neither.
+    assert_true(Material(color, ao_map=TextureId(0)).has_baked_map())
+    assert_true(Material(color, light_map=TextureId(0)).has_baked_map())
+    var plain = Material(color)
+    assert_false(plain.has_ao_map())
+    assert_false(plain.has_light_map())
+    assert_false(plain.has_baked_map())
+    assert_equal(plain.ao_map_intensity, Float32(1))
+    assert_equal(plain.light_map_intensity, Float32(1))
+    # No other kind has one, whichever map is named.
+    for kind in [MATCAP, NORMALS, DEPTH, SHADOW]:
+        assert_false(kind.has_indirect())
+    with assert_raises(contains="indirect term"):
+        _ = Material(color, kind=MATCAP, ao_map=TextureId(0))
+    with assert_raises(contains="indirect term"):
+        _ = Material(color, kind=SHADOW, light_map=TextureId(0))
+    # A wireframe is drawn by the line pass, which samples no map.
+    with assert_raises(contains="wireframe"):
+        _ = Material(color, kind=BASIC, wireframe=True, ao_map=TextureId(0))
+    # An intensity must be a number that is not negative, and needs a map.
+    for wrong in [Float32(-1), nan[DType.float32](), inf[DType.float32]()]:
+        with assert_raises(contains="ao map intensity"):
+            _ = Material(color, ao_map=TextureId(0), ao_map_intensity=wrong)
+        with assert_raises(contains="light map intensity"):
+            _ = Material(
+                color, light_map=TextureId(0), light_map_intensity=wrong
+            )
+    with assert_raises(contains="needs an ao map"):
+        _ = Material(color, ao_map_intensity=0.5)
+    with assert_raises(contains="needs a light map"):
+        _ = Material(color, light_map_intensity=0.5)
+    # An intensity of zero is allowed: it switches the map off.
+    _ = Material(color, ao_map=TextureId(0), ao_map_intensity=0)
+    # And an id nothing can hold is refused, as every map's is.
+    with assert_raises(contains="ao map id"):
+        _ = Material(color, ao_map=TextureId(-2))
+    with assert_raises(contains="light map id"):
+        _ = Material(color, light_map=TextureId(-2))
+
+
+def test_the_physical_factories_pass_the_baked_maps_on() raises:
+    var standard = standard_material(
+        Color(200, 200, 200),
+        ao_map=TextureId(3),
+        ao_map_intensity=0.25,
+        light_map=TextureId(4),
+        light_map_intensity=3.0,
+    )
+    assert_equal(standard.ao_map, TextureId(3))
+    assert_equal(standard.ao_map_intensity, Float32(0.25))
+    assert_equal(standard.light_map, TextureId(4))
+    assert_equal(standard.light_map_intensity, Float32(3.0))
+    var physical = physical_material(
+        Color(200, 200, 200), ao_map=TextureId(5), light_map=TextureId(6)
+    )
+    assert_equal(physical.ao_map, TextureId(5))
+    assert_equal(physical.light_map, TextureId(6))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

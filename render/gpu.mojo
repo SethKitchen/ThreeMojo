@@ -92,11 +92,14 @@ from lights.ltc import (
 )
 from lights.lighting import (
     PERSPECTIVE_VIEW,
+    RECIPROCAL_PI,
     Lighting,
     Reflected,
+    ambient_occlusion,
     blinn_phong,
     falloff,
     floored_roughness,
+    occluded_light,
     physical_light,
     physical_outgoing,
     physical_surface,
@@ -276,7 +279,16 @@ comptime LANE_CLEARCOAT_ROUGHNESS = 35
 comptime LANE_NORMAL_SCALE_X = 36
 comptime LANE_NORMAL_SCALE_Y = 37
 comptime LANE_BUMP_SCALE = 38
-comptime FLOATS_PER_VERTEX = LANE_BUMP_SCALE + 1
+# The second texture coordinates, where an ambient occlusion map and a
+# light map are sampled: a varying like `LANE_U` and `LANE_V`, and next to
+# each other so `_uv_at` reads either pair from its first lane. Then how
+# strongly the ao map dims and what the light map is scaled by, per
+# triangle, from the first corner's lanes.
+comptime LANE_U1 = 39
+comptime LANE_V1 = 40
+comptime LANE_AO_INTENSITY = 41
+comptime LANE_LIGHT_MAP_INTENSITY = 42
+comptime FLOATS_PER_VERTEX = LANE_LIGHT_MAP_INTENSITY + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -315,6 +327,10 @@ comptime STATE_RECEIVES_SHADOW = 13
 # way a custom blending mode rides `STATE_BLEND`.
 comptime STATE_OPS = 14
 comptime STATE_STENCIL = 15
+# Which texture dims the triangle's indirect light and which adds baked
+# light to it, each `NO_TEXTURE` for none.
+comptime STATE_AO_MAP = 16
+comptime STATE_LIGHT_MAP = 17
 # How a segment's metadata is laid out in its state buffer: its blend
 # policy, and how many pixels across it is drawn. A line is unlit and
 # untextured, so it carries nothing else; see `line_state`. The width is
@@ -340,7 +356,7 @@ comptime STATE_PER_POINT = POINT_STATE_STENCIL + 1
 # How a `Draw` crosses to the device: its kind, its first primitive and its
 # count, as three integers.
 comptime INTS_PER_DRAW = 3
-comptime STATE_PER_TRIANGLE = STATE_STENCIL + 1
+comptime STATE_PER_TRIANGLE = STATE_LIGHT_MAP + 1
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
 # density, then the fog color, linear. Six floats, whatever the kind,
@@ -578,6 +594,10 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.normal_scale.x)
         flat.append(corner.normal_scale.y)
         flat.append(corner.bump_scale)
+        flat.append(corner.u1)
+        flat.append(corner.v1)
+        flat.append(corner.ao_map_intensity)
+        flat.append(corner.light_map_intensity)
     return flat^
 
 
@@ -2182,8 +2202,8 @@ def triangle_state(
         row of the env map's first face or -1 for none, then the combine's
         value, then the roughness, metalness, normal and bump map ids, then
         one or zero for whether the shadows fall on it, then the packed
-        depth, color and stencil state, per triangle, from its first
-        corner.
+        depth, color and stencil state, then the ao and light map ids,
+        per triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -2207,6 +2227,8 @@ def triangle_state(
         state.append(Int32(1 if corners[triangle * 3].receives_shadow else 0))
         state.append(Int32(corners[triangle * 3].state.ops_word()))
         state.append(Int32(corners[triangle * 3].state.stencil_word()))
+        state.append(Int32(corners[triangle * 3].ao_map.value))
+        state.append(Int32(corners[triangle * 3].light_map.value))
     return state^
 
 
@@ -2243,13 +2265,16 @@ def _uv_at(
     swapped: Bool,
     px: Int,
     py: Int,
+    lane: Int = LANE_U,
 ) -> Vector2:
     """Return the perspective-correct texture coordinates at a sample point.
 
     Coverage is not tested: this is called for the pixels either side, which
     are routinely outside the triangle. Barycentric coordinates extrapolate
     perfectly well; it is only coverage that stops at the edge. That is what
-    replaces the helper invocations a hardware quad would need.
+    replaces the helper invocations a hardware quad would need. `lane` is
+    the first of the pair to read: `LANE_U`, or `LANE_U1` for the second
+    coordinates, as `render.rasterizer._coordinates_at` takes `second`.
     """
     var b_base = base + FLOATS_PER_VERTEX
     var c_base = base + 2 * FLOATS_PER_VERTEX
@@ -2279,12 +2304,12 @@ def _uv_at(
         share_b = wb * bw * rcp
         share_c = wc * cw * rcp
     return Vector2(
-        corners[unsafe_offset=base + LANE_U] * share_a
-        + corners[unsafe_offset=b_base + LANE_U] * share_b
-        + corners[unsafe_offset=c_base + LANE_U] * share_c,
-        corners[unsafe_offset=base + LANE_V] * share_a
-        + corners[unsafe_offset=b_base + LANE_V] * share_b
-        + corners[unsafe_offset=c_base + LANE_V] * share_c,
+        corners[unsafe_offset=base + lane] * share_a
+        + corners[unsafe_offset=b_base + lane] * share_b
+        + corners[unsafe_offset=c_base + lane] * share_c,
+        corners[unsafe_offset=base + lane + 1] * share_a
+        + corners[unsafe_offset=b_base + lane + 1] * share_b
+        + corners[unsafe_offset=c_base + lane + 1] * share_c,
     )
 
 
@@ -2384,6 +2409,7 @@ def _sample_slot(
     py: Int,
     u: Float32,
     v: Float32,
+    lane: Int = LANE_U,
 ) -> FloatColor:
     """Sample texture `slot` at (u, v) for the pixel at (px, py).
 
@@ -2395,7 +2421,8 @@ def _sample_slot(
     rather than read from a neighboring thread -- see
     `render.rasterizer.mip_level`. Shared by the material's map and its
     emissive map, as `_sample_map` is on the host, so both are filtered
-    alike on both sides.
+    alike on both sides. `lane` says which pair the footprint is measured
+    on: `LANE_U`, or `LANE_U1` for an ambient occlusion map or a light map.
     """
     var image = _describe(table, slot)
     if image.levels == 1 and image.anisotropy == 1:
@@ -2415,6 +2442,7 @@ def _sample_slot(
         swapped,
         px,
         py,
+        lane,
     )
     var along_x = _uv_at(
         corners,
@@ -2429,6 +2457,7 @@ def _sample_slot(
         swapped,
         px + SUBPIXEL,
         py,
+        lane,
     )
     var along_y = _uv_at(
         corners,
@@ -2443,6 +2472,7 @@ def _sample_slot(
         swapped,
         px,
         py + SUBPIXEL,
+        lane,
     )
     # The level and the taps, from the host's own function, and v flipped
     # and wrapped by the same routine the host uses -- see render.texture.
@@ -3476,6 +3506,106 @@ def rasterize_kernel(
                         receives,
                     )
 
+            # The baked maps, sampled at the second coordinates by the
+            # host's own functions in the host's own order; see
+            # `rasterize_shaded`. A physical surface takes both below.
+            var occlusion = Float32(1)
+            var baked = Vector3(0, 0, 0)
+            var ao_slot = maps[
+                unsafe_offset=index * STATE_PER_TRIANGLE + STATE_AO_MAP
+            ]
+            var light_slot = maps[
+                unsafe_offset=index * STATE_PER_TRIANGLE + STATE_LIGHT_MAP
+            ]
+            if mode == Int32(SHADE_TEXTURE.value) and (
+                ao_slot >= 0 or light_slot >= 0
+            ):
+                var u1 = (
+                    corners[unsafe_offset=base + LANE_U1] * share_a
+                    + corners[unsafe_offset=b_base + LANE_U1] * share_b
+                    + corners[unsafe_offset=c_base + LANE_U1] * share_c
+                )
+                var v1 = (
+                    corners[unsafe_offset=base + LANE_V1] * share_a
+                    + corners[unsafe_offset=b_base + LANE_V1] * share_b
+                    + corners[unsafe_offset=c_base + LANE_V1] * share_c
+                )
+                if ao_slot >= 0:
+                    occlusion = ambient_occlusion(
+                        _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            Int(ao_slot),
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u1,
+                            v1,
+                            LANE_U1,
+                        ).r,
+                        corners[unsafe_offset=base + LANE_AO_INTENSITY],
+                    )
+                if light_slot >= 0:
+                    var glowed = _sample_slot(
+                        texels,
+                        ramp,
+                        table,
+                        Int(light_slot),
+                        corners,
+                        base,
+                        sax,
+                        say,
+                        sbx,
+                        sby,
+                        scx,
+                        scy,
+                        span_inv,
+                        swapped,
+                        px,
+                        py,
+                        u1,
+                        v1,
+                        LANE_U1,
+                    )
+                    var strength = corners[
+                        unsafe_offset=base + LANE_LIGHT_MAP_INTENSITY
+                    ] * (
+                        lights[
+                            unsafe_offset=LIGHTS_SCALE
+                        ] if lit else RECIPROCAL_PI
+                    )
+                    baked = Vector3(
+                        glowed.r * strength,
+                        glowed.g * strength,
+                        glowed.b * strength,
+                    )
+                    if not lit:
+                        arriving = Vector3(0, 0, 0)
+                if not physical:
+                    var indirect = arriving
+                    if lit:
+                        indirect = _indirect(
+                            lights,
+                            Int(light_count),
+                            Int(point_count),
+                            Int(hemisphere_count),
+                            nx,
+                            ny,
+                            nz,
+                        )
+                    arriving = occluded_light(
+                        arriving, indirect, baked, occlusion
+                    )
             # What a physical surface's roughness and metalness are
             # multiplied by: its maps' green and blue, or one for none.
             var rough_factor = Float32(1)
@@ -3772,7 +3902,7 @@ def rasterize_kernel(
                         coat_rough,
                         receives,
                     )
-                    var indirect = _indirect(
+                    var around = _indirect(
                         lights,
                         Int(light_count),
                         Int(point_count),
@@ -3780,6 +3910,11 @@ def rasterize_kernel(
                         nx,
                         ny,
                         nz,
+                    )
+                    var indirect = Vector3(
+                        around.x + baked.x,
+                        around.y + baked.y,
+                        around.z + baked.z,
                     )
                     var toward_eye = toward_eye_at(
                         Vector3(
@@ -3859,6 +3994,7 @@ def rasterize_kernel(
                         coat_rough,
                         Vector3(dot_nv_coat, 0, 0),
                         coat_radiance,
+                        occlusion,
                     )
                     red = outgoing.x
                     green = outgoing.y
@@ -4501,6 +4637,8 @@ struct GpuRenderer(Movable):
                 corners[index].metalness_map,
                 corners[index].normal_map,
                 corners[index].bump_map,
+                corners[index].ao_map,
+                corners[index].light_map,
             ]:
                 if slot == NO_TEXTURE:
                     continue
@@ -4591,6 +4729,15 @@ struct GpuRenderer(Movable):
                 self._check_data_map(
                     corners[triangle * 3].bump_map, "A bump map"
                 )
+                # An ao map holds a number, and a light map light whose
+                # alpha means nothing: `check_triangle_maps`'s two rules.
+                self._check_data_map(corners[triangle * 3].ao_map, "An ao map")
+                var baked = corners[triangle * 3].light_map
+                if baked != NO_TEXTURE and not self.ignores_alpha[baked.value]:
+                    raise Error(
+                        "A light map must ignore its alpha; build the"
+                        " texture with alpha=IGNORED"
+                    )
         # Two output representations cannot share a tone-mapped frame.
         # Asked here, before the launch, exactly where `Renderer.render`
         # asks it before it draws. The uv view is data throughout and is

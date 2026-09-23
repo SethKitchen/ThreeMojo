@@ -55,8 +55,13 @@ from materials.material import (
     MULTIPLY_OPERATION,
     Combine,
 )
-from lights.light import directional_light
-from lights.lighting import ROUGHNESS_FLOOR, Lighting
+from lights.light import ambient_light, directional_light
+from lights.lighting import (
+    ROUGHNESS_FLOOR,
+    Lighting,
+    floored_roughness,
+    specular_occlusion,
+)
 from lights.shadow import ShadowMap
 from core.fog import LINEAR_FOG, FogKind, FogView, exp2_fog, linear_fog
 from render.tonemap import REINHARD_TONE_MAPPING, tone_map
@@ -86,6 +91,7 @@ from render.rasterizer import (
     check_alpha_map,
     check_data_map,
     check_gradient_map,
+    check_light_map,
     check_output_kinds,
     check_triangle_state,
     data_color,
@@ -5220,6 +5226,334 @@ def test_a_shadow_triangle_is_checked_like_the_rest() raises:
             check_triangle_state(split[0], split[1], split[2])
     # A corner receives unless told otherwise.
     assert_true(RasterVertex(0, 0, 0, 1, FloatColor(1, 1, 1)).receives_shadow)
+
+
+# --- ambient occlusion and light maps ---------------------------------------
+
+
+def baked_quad(
+    kind: MaterialKind = LAMBERT,
+    ao_map: TextureId = NO_TEXTURE,
+    light_map: TextureId = NO_TEXTURE,
+    ao_map_intensity: Float32 = 1,
+    light_map_intensity: Float32 = 1,
+    second_u: Float32 = -1,
+    roughness: Float32 = 1,
+    metalness: Float32 = 0,
+    env: CubeTextureId = NO_CUBE_TEXTURE,
+) -> List[RasterVertex]:
+    """Return `physical_quad` with the two baked maps, sampled at second
+    coordinates that copy the first, or that hold `second_u` across the
+    whole quad when it is not negative."""
+    var corners = physical_quad(
+        kind=kind,
+        roughness=roughness,
+        metalness=metalness,
+        env=env,
+    )
+    for index in range(len(corners)):
+        corners[index].u1 = corners[index].u
+        corners[index].v1 = corners[index].v
+        if second_u >= 0:
+            corners[index].u1 = second_u
+        corners[index].ao_map = ao_map
+        corners[index].light_map = light_map
+        corners[index].ao_map_intensity = ao_map_intensity
+        corners[index].light_map_intensity = light_map_intensity
+    return corners^
+
+
+def lit_and_filled() raises -> Lighting:
+    """Return a white sun head on along z that reflects one from a white
+    surface, and an ambient light that reflects a half, seen from far up
+    the z axis."""
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, FULL))
+    scene.add_light(ambient_light(Color(255, 255, 255), FULL * 0.5))
+    scene.update()
+    return Lighting(scene, Layers.all(), Vector3(0, 0, 400))
+
+
+def filled() raises -> Lighting:
+    """Return the ambient half of `lit_and_filled` alone."""
+    var scene = Scene()
+    scene.add_light(ambient_light(Color(255, 255, 255), FULL * 0.5))
+    scene.update()
+    return Lighting(scene, Layers.all(), Vector3(0, 0, 400))
+
+
+def a_mipmapped_gray() raises -> Texture:
+    """Return a two-by-two map of one gray, stored as data, with a chain:
+    every level and every footprint reads the same number."""
+    var pixels = List[UInt8]()
+    for _ in range(4):
+        for _ in range(3):
+            pixels.append(128)
+        pixels.append(255)
+    return Texture(2, 2, pixels^, REPEAT, NEAREST, LINEAR, True, IGNORED)
+
+
+comptime HALF_GRAY = Float32(128) / Float32(255)
+
+
+def test_an_ao_map_dims_the_indirect_light_and_not_the_direct() raises:
+    var textures = TextureStore()
+    var gray = textures.add(a_data_texel(128, 128, 128))
+    var lighting = lit_and_filled()
+    # One from the sun and a half from the ambient light, unoccluded.
+    var bare = physical_pixel(baked_quad(), lighting, textures)
+    assert_almost_equal(bare.r, Float32(1.5), atol=1e-4)
+    # The ambient half is dimmed by the gray; the sun is not.
+    var dimmed = physical_pixel(baked_quad(ao_map=gray), lighting, textures)
+    assert_almost_equal(dimmed.r, 1 + 0.5 * HALF_GRAY, atol=1e-4)
+    # An intensity of zero switches the map off.
+    var off = physical_pixel(
+        baked_quad(ao_map=gray, ao_map_intensity=0), lighting, textures
+    )
+    assert_almost_equal(off.r, Float32(1.5), atol=1e-4)
+    # Lit shading opens no map.
+    var lit = physical_pixel(
+        baked_quad(ao_map=gray), lighting, textures, mode=SHADE_LIT
+    )
+    assert_almost_equal(lit.r, Float32(1.5), atol=1e-4)
+    # A toon and a phong surface are dimmed the same way.
+    for kind in [TOON, PHONG]:
+        var plain = physical_pixel(baked_quad(kind=kind), lighting, textures)
+        var shaded = physical_pixel(
+            baked_quad(kind=kind, ao_map=gray), lighting, textures
+        )
+        assert_almost_equal(
+            plain.r - shaded.r, 0.5 * (1 - HALF_GRAY), atol=1e-4
+        )
+
+
+def test_a_light_map_adds_to_the_indirect_light() raises:
+    var textures = TextureStore()
+    var red = textures.add(a_data_texel(255, 0, 0))
+    var black = textures.add(a_data_texel(0, 0, 0))
+    var lighting = lit_and_filled()
+    # Divided by pi like every lit term, so an intensity of pi adds one.
+    var baked = physical_pixel(
+        baked_quad(light_map=red, light_map_intensity=FULL),
+        lighting,
+        textures,
+    )
+    assert_almost_equal(baked.r, Float32(2.5), atol=1e-4)
+    assert_almost_equal(baked.g, Float32(1.5), atol=1e-4)
+    # A black ao map occludes it with the ambient light, and leaves the sun.
+    var hidden = physical_pixel(
+        baked_quad(ao_map=black, light_map=red, light_map_intensity=FULL),
+        lighting,
+        textures,
+    )
+    assert_almost_equal(hidden.r, Float32(1), atol=1e-4)
+    assert_almost_equal(hidden.g, Float32(1), atol=1e-4)
+
+
+def test_a_basic_surface_shows_its_light_map_and_is_occluded() raises:
+    var textures = TextureStore()
+    var orange = textures.add(a_data_texel(255, 128, 0))
+    var gray = textures.add(a_data_texel(128, 128, 128))
+    var black = textures.add(a_data_texel(0, 0, 0))
+    # three.js's `meshbasic_frag`: the light map replaces the white
+    # indirect light, divided by pi, whatever the scene's lights are.
+    var baked = physical_pixel(
+        baked_quad(kind=BASIC, light_map=orange), lit_and_filled(), textures
+    )
+    assert_almost_equal(baked.r, Float32(1 / pi), atol=1e-4)
+    assert_almost_equal(baked.g, HALF_GRAY / Float32(pi), atol=1e-4)
+    assert_almost_equal(baked.b, Float32(0), atol=1e-4)
+    # An ao map dims the whole color, which is all indirect.
+    var dimmed = physical_pixel(
+        baked_quad(kind=BASIC, ao_map=gray), lit_and_filled(), textures
+    )
+    assert_almost_equal(dimmed.r, HALF_GRAY, atol=1e-4)
+    var dark = physical_pixel(
+        baked_quad(kind=BASIC, ao_map=black, light_map=orange),
+        lit_and_filled(),
+        textures,
+    )
+    assert_almost_equal(dark.r, Float32(0), atol=1e-4)
+
+
+def test_the_baked_maps_read_the_second_coordinates() raises:
+    # A map black on its left half and white on its right. The pixel sits
+    # on the left of the first coordinates, and the second say right.
+    var textures = TextureStore()
+    var step = textures.add(a_step_map())
+    var right = physical_pixel(
+        baked_quad(ao_map=step, second_u=0.9), filled(), textures
+    )
+    assert_almost_equal(right.r, Float32(0.5), atol=1e-4)
+    var left = physical_pixel(
+        baked_quad(ao_map=step, second_u=0.1), filled(), textures
+    )
+    assert_almost_equal(left.r, Float32(0), atol=1e-4)
+    # A map with a chain measures its footprint on the second pair too.
+    var chained = textures.add(a_mipmapped_gray())
+    var gray = physical_pixel(baked_quad(ao_map=chained), filled(), textures)
+    assert_almost_equal(gray.r, 0.5 * HALF_GRAY, atol=1e-4)
+    var banded = physical_pixel(
+        baked_quad(ao_map=chained), filled(), textures, workers=4
+    )
+    assert_equal(banded.r, gray.r)
+
+
+def test_a_physical_surface_occludes_its_indirect_light() raises:
+    var textures = TextureStore()
+    var gray = textures.add(a_data_texel(128, 128, 128))
+    var white = textures.add(a_data_texel(255, 255, 255))
+    # A white dielectric under the ambient light alone scatters a half.
+    var bare = physical_pixel(baked_quad(kind=STANDARD), filled(), textures)
+    assert_almost_equal(bare.r, Float32(0.5), atol=1e-4)
+    var dimmed = physical_pixel(
+        baked_quad(kind=STANDARD, ao_map=gray), filled(), textures
+    )
+    assert_almost_equal(dimmed.r, 0.5 * HALF_GRAY, atol=1e-4)
+    # A light map joins the ambient light before the ao map dims both.
+    var baked = physical_pixel(
+        baked_quad(
+            kind=PHYSICAL,
+            ao_map=gray,
+            light_map=white,
+            light_map_intensity=FULL,
+        ),
+        filled(),
+        textures,
+    )
+    assert_almost_equal(baked.r, 1.5 * HALF_GRAY, atol=1e-4)
+    # A mirror's reflection is dimmed by the specular occlusion, which
+    # keeps more of it than the gray alone would.
+    var mirror = physical_pixel(
+        baked_quad(
+            kind=STANDARD, roughness=0, metalness=1, env=CubeTextureId(0)
+        ),
+        textures=textures,
+    )
+    var occluded = physical_pixel(
+        baked_quad(
+            kind=STANDARD,
+            roughness=0,
+            metalness=1,
+            env=CubeTextureId(0),
+            ao_map=gray,
+        ),
+        textures=textures,
+    )
+    var kept = specular_occlusion(1, HALF_GRAY, floored_roughness(0))
+    assert_true(kept > HALF_GRAY)
+    assert_almost_equal(occluded.g, mirror.g * kept, atol=1e-2)
+
+
+def test_corners_that_disagree_about_their_baked_maps_are_rejected() raises:
+    for corner in range(1, 3):
+        for field in range(4):
+            var quad = baked_quad(ao_map=TextureId(0), light_map=TextureId(1))
+            if field == 0:
+                quad[corner].ao_map = TextureId(2)
+            elif field == 1:
+                quad[corner].light_map = TextureId(2)
+            elif field == 2:
+                quad[corner].ao_map_intensity = 0.5
+            else:
+                quad[corner].light_map_intensity = 0.5
+            with assert_raises(contains="baked maps"):
+                check_triangle_state(quad[0], quad[1], quad[2])
+    # An id nothing can hold.
+    var ao = baked_quad(ao_map=TextureId(-2))
+    with assert_raises(contains="ao map id"):
+        check_triangle_state(ao[0], ao[1], ao[2])
+    var light = baked_quad(light_map=TextureId(-2))
+    with assert_raises(contains="light map id"):
+        check_triangle_state(light[0], light[1], light[2])
+    # An intensity that is negative or not a number.
+    for wrong in [Float32(-1), nan[DType.float32](), inf[DType.float32]()]:
+        var dim = baked_quad(ao_map=TextureId(0), ao_map_intensity=wrong)
+        with assert_raises(contains="ao map intensity"):
+            check_triangle_state(dim[0], dim[1], dim[2])
+        var bright = baked_quad(
+            light_map=TextureId(0), light_map_intensity=wrong
+        )
+        with assert_raises(contains="light map intensity"):
+            check_triangle_state(bright[0], bright[1], bright[2])
+    # Either map on a kind with no indirect term.
+    for kind in [MATCAP, NORMALS, DEPTH, SHADOW]:
+        var occluded = baked_quad(kind=kind, ao_map=TextureId(0))
+        var lightened = baked_quad(kind=kind, light_map=TextureId(0))
+        if kind == SHADOW:
+            # A shadow surface blends wherever it is lit.
+            for index in range(6):
+                occluded[index].blend = BLEND
+                lightened[index].blend = BLEND
+        with assert_raises(contains="indirect term"):
+            check_triangle_state(occluded[0], occluded[1], occluded[2])
+        with assert_raises(contains="indirect term"):
+            check_triangle_state(lightened[0], lightened[1], lightened[2])
+    # A corner that says nothing names neither, and a basic one takes both.
+    var corner = RasterVertex(0, 0, 0, 1, FloatColor(1, 1, 1))
+    assert_equal(corner.ao_map, NO_TEXTURE)
+    assert_equal(corner.light_map, NO_TEXTURE)
+    assert_equal(corner.ao_map_intensity, Float32(1))
+    assert_equal(corner.light_map_intensity, Float32(1))
+    assert_equal(corner.u1, Float32(0))
+    assert_equal(corner.v1, Float32(0))
+    var basic = baked_quad(
+        kind=BASIC,
+        ao_map=TextureId(0),
+        light_map=TextureId(1),
+        ao_map_intensity=0,
+        light_map_intensity=0,
+    )
+    check_triangle_state(basic[0], basic[1], basic[2])
+
+
+def test_a_baked_map_stored_the_wrong_way_is_refused() raises:
+    var textures = TextureStore()
+    var encoded = textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+            IGNORED,
+        )
+    )
+    var covered = textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            LINEAR,
+            False,
+            COVERAGE,
+        )
+    )
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    # An ao map holds data, and says so twice.
+    for wrong in [encoded, covered]:
+        var quad = baked_quad(ao_map=wrong)
+        with assert_raises(contains="An ao map"):
+            rasterize_all(quad, target, SHADE_TEXTURE, textures)
+        rasterize_all(quad, target, SHADE_LIT, textures)
+    # A light map holds light, in either space, but ignores its alpha.
+    var lit = baked_quad(light_map=covered)
+    with assert_raises(contains="A light map must ignore"):
+        rasterize_all(lit, target, SHADE_TEXTURE, textures)
+    rasterize_all(lit, target, SHADE_LIT, textures)
+    rasterize_all(
+        baked_quad(light_map=encoded), target, SHADE_TEXTURE, textures
+    )
+    with assert_raises(contains="A light map must ignore"):
+        check_light_map(textures.get(covered))
+    check_light_map(textures.get(encoded))
 
 
 def main() raises:
