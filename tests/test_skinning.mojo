@@ -31,6 +31,8 @@ from objects.skinned_mesh import (
     SKIN_INDEX,
     SKIN_WEIGHT,
     SkinnedMesh,
+    normalize_skin_weights,
+    normalized_skin_weights,
 )
 from render.rasterizer import RasterVertex
 from core.deform import whole_bone
@@ -229,14 +231,70 @@ def test_blending_refuses_what_it_cannot_read() raises:
     var below: List[Int] = [-1, 0]
     with assert_raises():
         _ = blend_bones(palette, below, [Float32(1), Float32(0)])
-    # No bones at all, which sums to nothing rather than to one.
-    with assert_raises():
-        _ = blend_bones(palette, List[Int](), List[Float32]())
-    # Weights that do not sum to one, either way.
-    with assert_raises():
-        _ = blend_bones(palette, bones, [Float32(0.5), Float32(0)])
-    with assert_raises():
-        _ = blend_bones(palette, bones, [Float32(1), Float32(1)])
+
+
+def test_blending_takes_weights_that_do_not_sum_to_one() raises:
+    # three.js's shader sums the weighted matrices as they are: a half
+    # scales every element by a half, and two ones double them.
+    var palette: List[Matrix4] = [translation(2, 0, 0)]
+    var bones: List[Int] = [0, 0]
+    var half = blend_bones(palette, bones, [Float32(0.5), Float32(0)])
+    assert_equal(half.elements[12], 1)
+    assert_equal(half.elements[15], 0.5)
+    var double = blend_bones(palette, bones, [Float32(1), Float32(1)])
+    assert_equal(double.elements[12], 4)
+    # No bones at all is the zero matrix.
+    var none = blend_bones(palette, List[Int](), List[Float32]())
+    for element in range(16):  # pragma: no branch
+        assert_equal(none.elements[element], 0)
+
+
+def test_a_rig_scales_a_vertex_by_weights_that_sum_to_two() raises:
+    # three.js keeps the xyz of the weighted sum and drops its w, so two
+    # full weights on bones at the origin put a vertex twice as far out.
+    var assets = Assets()
+    var first: List[Float32] = [0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0]
+    var second: List[Float32] = [1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0]
+    var corners = rigged(
+        assets, skinned_triangle(first, second), Vector3(0, 0, 0)
+    )
+    assert_almost_equal(corners[1].world.x, Float32(2), atol=TOLERANCE)
+    assert_almost_equal(corners[2].world.y, Float32(2), atol=TOLERANCE)
+    # Weights of zero collapse every vertex onto the mesh's origin.
+    var nothing = List[Float32](length=12, fill=0)
+    var collapsed = rigged(
+        assets, skinned_triangle(first, nothing), Vector3(0, 0, 0)
+    )
+    for corner in range(len(collapsed)):  # pragma: no branch
+        assert_equal(collapsed[corner].world.x, 0)
+        assert_equal(collapsed[corner].world.y, 0)
+
+
+def test_normalize_skin_weights_scales_each_vertex_to_one() raises:
+    # three.js's `normalizeSkinWeights`: by the sum of the magnitudes, and
+    # all to the first bone when there is nothing to scale.
+    var first = List[Float32](length=12, fill=0)
+    var second: List[Float32] = [1, 1, 0, 0, 0, 0, 0, 0, 0.25, 0, 0, 0]
+    var geometry = skinned_triangle(first, second)
+    normalize_skin_weights(geometry)
+    ref weights = geometry.attribute_view(String(SKIN_WEIGHT))
+    assert_equal(weights.component(0, 0), 0.5)
+    assert_equal(weights.component(0, 1), 0.5)
+    assert_equal(weights.component(1, 0), 1)
+    assert_equal(weights.component(1, 3), 0)
+    assert_equal(weights.component(2, 0), 1)
+    var scaled = normalized_skin_weights(SIMD[DType.float32, 4](2, 0, 0, 2))
+    assert_equal(scaled, SIMD[DType.float32, 4](0.5, 0, 0, 0.5))
+
+
+def test_normalize_skin_weights_needs_four_weights_a_vertex() raises:
+    var bare = BufferGeometry()
+    with assert_raises(contains="skinWeight"):
+        normalize_skin_weights(bare)
+    var three: List[Float32] = [1, 0, 0]
+    bare.set_attribute(String(SKIN_WEIGHT), BufferAttribute(three^, 3))
+    with assert_raises(contains="four numbers"):
+        normalize_skin_weights(bare)
 
 
 # --- SkinnedMesh ------------------------------------------------------------

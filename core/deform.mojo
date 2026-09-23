@@ -343,8 +343,7 @@ def skin_carriers(
         Error: If the geometry has no skin attributes, if either is not
             four numbers a vertex or does not cover every vertex, or if a
             vertex names a bone that is not a whole number in range or
-            carries weights that are not numbers, are negative, or do not
-            sum to one.
+            carries weights that are not numbers or are negative.
     """
     var out = List[Matrix4]()
     if not geometry.has_attribute(String(SKIN_INDEX)) or not (
@@ -376,6 +375,14 @@ def skin_carriers(
         var carry = Matrix4(copy=pose.bind_inverse)
         carry.multiply(blended)
         carry.multiply(pose.bind)
+        # three.js keeps the `xyz` of that product and drops its `w`, which
+        # is the weights' sum. A bottom row of (0, 0, 0, 1) makes
+        # `transform_point` do the same, so weights that do not sum to one
+        # scale the vertex as they do there, and are not divided back out.
+        carry.elements[3] = 0
+        carry.elements[7] = 0
+        carry.elements[11] = 0
+        carry.elements[15] = 1
         out.append(carry^)
     return out^
 

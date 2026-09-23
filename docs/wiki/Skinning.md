@@ -48,7 +48,7 @@ The geometry must carry two attributes, named as three.js and glTF name them:
 | Attribute | Meaning |
 |---|---|
 | `skinIndex` | Four bone numbers per vertex. |
-| `skinWeight` | Four weights per vertex, summing to one. |
+| `skinWeight` | Four weights per vertex, usually summing to one. |
 
 Four is this port's limit and the common one: glTF's first `JOINTS_0` and `WEIGHTS_0` pair holds four. It is not a limit of skinning — glTF allows further sets for vertices that need more, and those are simply not read yet. The attribute names here are three.js's.
 
@@ -100,7 +100,6 @@ Skinning happens in `Renderer.prepare`, which is the one place the CPU and GPU r
 | A geometry without `skinIndex` and `skinWeight`. | An error at `prepare`. |
 | A skin attribute that is not four numbers a vertex. | An error at `prepare`. |
 | A vertex naming a bone the skeleton does not have. | An error at `prepare`. |
-| Weights that do not sum to one. | An error at `prepare`. |
 | A weight that is not a number, or is below zero. | An error at `prepare`. |
 | A bone index that is not a whole number in range. | An error at `prepare`. |
 | A supplied inverse bind with no inverse of its own. | An error at construction. |
@@ -109,7 +108,11 @@ Skinning happens in `Renderer.prepare`, which is the one place the CPU and GPU r
 
 Negative weights are refused for the same reason. Two bones at minus one and two sum to one, and send a vertex twice as far as the further one. glTF forbids them.
 
-The sum rule is stricter than three.js, which normalizes in its loader and lets the shader take whatever arrives. Weights summing to two put a vertex twice as far from the origin as the bones do. That reads as a mesh which swells where it bends, and it is a rig with a mistake in it.
+### Weights that do not sum to one
+
+The renderer uses the weights as they are, as three.js's shader does. Weights summing to two put a vertex twice as far from the mesh's origin as the bones do. Weights of zero put it at the origin.
+
+`normalize_skin_weights(geometry)` is three.js's `SkinnedMesh.normalizeSkinWeights`. It divides each vertex's weights by the sum of their magnitudes. A vertex with no weight goes to its first bone. The glTF loader calls it, as three.js's glTF, FBX and Collada loaders do. The scene JSON loader does not, as three.js's `ObjectLoader` does not. Call it for a geometry that you build.
 
 ## See also
 

@@ -14,7 +14,7 @@ are shared between the two bones and follow both.
 The two attributes are three.js's, and glTF's, under the same names:
 
     skinIndex    four bone numbers per vertex
-    skinWeight   four weights per vertex, summing to one
+    skinWeight   four weights per vertex, usually summing to one
 
 Four is this port's limit, and it is the common one: glTF's first
 `JOINTS_0` and `WEIGHTS_0` pair holds four, and four is enough for an
@@ -99,12 +99,19 @@ inverse this frame, which is a mesh scaled to nothing.
 
 The skin attributes are checked where they are read, by the renderer,
 because that is where the geometry is known: a mesh names a geometry by id
-and cannot see it. What is checked there is every part of them -- that a
-bone index is a whole number in range, that a weight is a number and not
-negative, and that the four sum to one.
+and cannot see it. What is checked there is that a bone index is a whole
+number in range, and that a weight is a number and not negative.
+
+## Weights that do not sum to one
+
+three.js's shader takes the weights as they arrive, and so does this: four
+weights summing to two put a vertex twice as far from the mesh's origin.
+three.js's glTF, FBX and Collada loaders call `normalizeSkinWeights`
+first, and this port's glTF loader calls `normalize_skin_weights` the same
+way. Call it for a geometry built by hand whose weights do not sum to one.
 """
 
-from core.buffer_geometry import MAX_MORPH_TARGETS
+from core.buffer_geometry import MAX_MORPH_TARGETS, BufferGeometry
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from materials.material import MaterialId
@@ -275,3 +282,51 @@ struct SkinnedMesh(Copyable, Movable):
         if target < 0 or target >= MAX_MORPH_TARGETS:
             raise Error("A mesh has eight morph target influences")
         return self.morph_influences[target]
+
+
+def normalized_skin_weights(
+    four: SIMD[DType.float32, BONES_PER_VERTEX]
+) -> SIMD[DType.float32, BONES_PER_VERTEX]:
+    """Return one vertex's weights scaled to sum to one, as three.js's
+    `SkinnedMesh.normalizeSkinWeights` scales them.
+
+    The divisor is the Manhattan length, the sum of the magnitudes. When
+    every weight is zero, the first bone takes all of the vertex, as
+    three.js does "something reasonable".
+
+    Args:
+        four: The vertex's four weights.
+
+    Returns:
+        The four weights, scaled.
+    """
+    var total = abs(four).reduce_add()
+    if total == 0:
+        return SIMD[DType.float32, BONES_PER_VERTEX](1, 0, 0, 0)
+    return four / total
+
+
+def normalize_skin_weights(mut geometry: BufferGeometry) raises:
+    """Scale every vertex's skin weights to sum to one, in place: three.js's
+    `SkinnedMesh.normalizeSkinWeights`.
+
+    Args:
+        geometry: The geometry, which must carry `skinWeight`.
+
+    Raises:
+        Error: If the geometry has no `skinWeight`, or it is not four
+            numbers a vertex.
+    """
+    if not geometry.has_attribute(String(SKIN_WEIGHT)):
+        raise Error("Only a geometry with skinWeight has weights to normalize")
+    var weights = geometry.attribute_view(String(SKIN_WEIGHT)).copy()
+    if weights.item_size != BONES_PER_VERTEX:
+        raise Error("A skin attribute holds four numbers a vertex")
+    for vertex in range(weights.count()):
+        var four = SIMD[DType.float32, BONES_PER_VERTEX](0)
+        for lane in range(BONES_PER_VERTEX):  # pragma: no branch
+            four[lane] = weights.component(vertex, lane)
+        var scaled = normalized_skin_weights(four)
+        for lane in range(BONES_PER_VERTEX):  # pragma: no branch
+            weights.set_component(vertex, lane, scaled[lane])
+    geometry.set_attribute(String(SKIN_WEIGHT), weights^)

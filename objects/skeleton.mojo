@@ -47,11 +47,12 @@ anything. A pose given a different number of world matrices than there are
 bones, which is the one way the caller's lookup and the skeleton can
 disagree.
 
-A weight that is not a number, one below zero, or a set that does not sum
-to one. Negative weights are not a mixture: two bones at minus one and two
-sum to one and send a vertex to twice the distance of the further one,
-outside anything either bone names. glTF forbids them for the same
-reason.
+A weight that is not a number, or one below zero. Negative weights are not
+a mixture: two bones at minus one and two sum to one and send a vertex to
+twice the distance of the further one, outside anything either bone names.
+glTF forbids them for the same reason. A set that does not sum to one is
+taken as it is, as three.js's shader takes it; see
+`objects.skinned_mesh.normalize_skin_weights`.
 """
 
 from core.object3d import NodeId
@@ -147,15 +148,6 @@ struct Skeleton(Copyable, Movable):
         return matrices^
 
 
-# How far the four weights carrying one vertex may sum from one. glTF
-# requires them normalized and three.js's loader normalizes them, so a set
-# that misses is a rig with a mistake in it rather than a convention this
-# does not know: weights summing to two make a vertex twice as far from the
-# origin as the bones put it, which reads as a mesh that swells where it
-# bends.
-comptime WEIGHT_SLACK = Float32(1e-3)
-
-
 def blend_bones(
     palette: List[Matrix4], bones: List[Int], weights: List[Float32]
 ) raises -> Matrix4:
@@ -183,27 +175,26 @@ def blend_bones(
     Args:
         palette: One matrix per bone, from `Skeleton.pose`.
         bones: Which bones carry this vertex; as many as `weights`.
-        weights: How much of each, summing to one.
+        weights: How much of each. They are used as they are, as
+            three.js's shader uses them, whatever they sum to.
 
     Returns:
         The blended matrix.
 
     Raises:
         Error: If the two lists are different lengths, if a weight is not a
-            number or is below zero, if a weight names a bone the palette
-            does not have, or if the weights do not sum to one.
+            number or is below zero, or if a weight names a bone the
+            palette does not have.
     """
     if len(bones) != len(weights):
         raise Error("A vertex needs one weight for every bone it names")
     var summed = Array[Float32, 16](fill=0.0)
-    var total = Float32(0)
     for slot in range(len(bones)):
         var weight = weights[slot]
         if not isfinite(weight):
             raise Error("A vertex's bone weights must be numbers")
         if weight < 0:
             raise Error("A vertex's bone weights cannot be negative")
-        total += weight
         if weight == 0:
             continue
         var bone = bones[slot]
@@ -211,11 +202,6 @@ def blend_bones(
             raise Error("A vertex names a bone the skeleton does not have")
         for element in range(16):  # pragma: no branch
             summed[element] += palette[bone].elements[element] * weight
-    # Written so that a total which is not a number fails. `abs(nan - 1) >
-    # slack` is false, so the obvious spelling lets one through, and the
-    # same spelling let a rotation key through before it.
-    if not (abs(total - 1) <= WEIGHT_SLACK):
-        raise Error("A vertex's bone weights must sum to one")
     var blended = Matrix4()
     for element in range(16):  # pragma: no branch
         blended.elements[element] = summed[element]

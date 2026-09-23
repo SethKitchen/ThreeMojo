@@ -174,7 +174,12 @@ from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from objects.skeleton import Bone, Skeleton
 from objects.instanced_mesh import InstancedMesh
-from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
+from objects.skinned_mesh import (
+    SKIN_INDEX,
+    SKIN_WEIGHT,
+    SkinnedMesh,
+    normalized_skin_weights,
+)
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -2564,19 +2569,16 @@ def _check_one_transform(assets: Assets, material: Material) raises:
 
 
 def _normalize_skin_weights(weights: List[Float32]) -> List[Float32]:
-    """Return each vertex's four weights scaled to sum to one, as three.js's
-    `SkinnedMesh.normalizeSkinWeights` scales them: by their Manhattan
-    length, and to the first bone alone when they are all zero."""
+    """Return each vertex's four weights scaled to sum to one, by
+    `normalized_skin_weights`, three.js's `normalizeSkinWeights`."""
     var out = List[Float32]()
     for vertex in range(len(weights) // 4):
-        var total = Float32(0)
+        var four = SIMD[DType.float32, 4](0)
         for lane in range(4):  # pragma: no branch
-            total += abs(weights[vertex * 4 + lane])
+            four[lane] = weights[vertex * 4 + lane]
+        var scaled = normalized_skin_weights(four)
         for lane in range(4):  # pragma: no branch
-            if total == 0:
-                out.append(Float32(1) if lane == 0 else Float32(0))
-            else:
-                out.append(weights[vertex * 4 + lane] / total)
+            out.append(scaled[lane])
     return out^
 
 
