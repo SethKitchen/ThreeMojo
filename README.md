@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 101 features are ported and 48 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 102 features are ported and 47 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -229,10 +229,9 @@ The port is not at parity with three.js yet. 101 features are ported and 48 are 
 - [ ] Post-processing on the GPU backend [#144](https://github.com/SethKitchen/ThreeMojo/issues/144)
 - [ ] Logarithmic and reversed depth buffers [#145](https://github.com/SethKitchen/ThreeMojo/issues/145)
 - [ ] Multiple render targets and float render targets [#146](https://github.com/SethKitchen/ThreeMojo/issues/146)
-- [ ] Light, arrow, plane, skeleton and normals helpers [#150](https://github.com/SethKitchen/ThreeMojo/issues/150)
 
 <details>
-<summary>Ported: 15</summary>
+<summary>Ported: 16</summary>
 
 - [x] [Depth buffer](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#depth) [#72](https://github.com/SethKitchen/ThreeMojo/issues/72)
 - [x] [Backface culling](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#culling) [#73](https://github.com/SethKitchen/ThreeMojo/issues/73)
@@ -249,6 +248,7 @@ The port is not at parity with three.js yet. 101 features are ported and 48 are 
 - [x] [Scissor and viewport](https://github.com/SethKitchen/ThreeMojo/wiki/Renderer#viewport-and-scissor): `set_viewport`, `set_scissor` and `set_scissor_test`, enforced by both backends, and `render_into` for a split screen in one target [#84](https://github.com/SethKitchen/ThreeMojo/issues/84)
 - [x] [Post-processing](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing): an `EffectComposer` with render, copy, blur, bloom, film, dot screen, sepia, vignette, luminosity, afterimage and output passes over the frame's light [#85](https://github.com/SethKitchen/ThreeMojo/issues/85)
 - [x] [Helpers: axes, grid, box, camera](https://github.com/SethKitchen/ThreeMojo/wiki/Helpers): line geometries for the axes, a ground grid, the box around a mesh and a camera's frustum [#86](https://github.com/SethKitchen/ThreeMojo/issues/86)
+- [x] [Light, arrow, plane, skeleton and normals helpers](https://github.com/SethKitchen/ThreeMojo/wiki/Helpers#arrowhelper): arrow, polar grid, plane, skeleton, light, and vertex normal and tangent helpers as line geometries [#150](https://github.com/SethKitchen/ThreeMojo/issues/150)
 
 </details>
 
