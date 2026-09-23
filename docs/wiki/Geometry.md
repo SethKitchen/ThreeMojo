@@ -1,10 +1,10 @@
 # Geometry
 
-`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes. Two more fill a drawn [shape](Curves) in, and give it thickness. Two more read a surface back as the lines of its edges, and [utilities](#merge-weld-and-tangents) merge, weld and compute tangents.
+`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes. Two more fill a drawn [shape](Curves) in and give it thickness, and four [addon builders](#parametric) make parametric surfaces, convex hulls, decals and rounded boxes. Two more read a surface back as the lines of its edges, and [utilities](#merge-weld-and-tangents) merge, weld and compute tangents.
 
 ![A torus knot turns under a lamp](out/geometry.png)
 
-three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`. Also `ShapeGeometry`, `ExtrudeGeometry` and `ShapeUtils.triangulateShape`. Also `toNonIndexed`, `center`, `computeTangents`, `addGroup`, `clone`, and `BufferGeometryUtils.mergeGeometries`, `mergeVertices` and `toCreasedNormals`.
+three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`. Also `ShapeGeometry`, `ExtrudeGeometry` and `ShapeUtils.triangulateShape`. From the addons: `ParametricGeometry`, `ParametricFunctions`, `ConvexGeometry`, `ConvexHull`, `DecalGeometry` and `RoundedBoxGeometry`. Also `toNonIndexed`, `center`, `computeTangents`, `addGroup`, `clone`, and `BufferGeometryUtils.mergeGeometries`, `mergeVertices` and `toCreasedNormals`.
 
 ## BufferAttribute
 
@@ -267,6 +267,98 @@ A wall is measured along x or along y, whichever it runs further in, and up the 
 
 three.js can also sweep a shape along a path, its `extrudePath`. That is not ported.
 
+## Parametric
+
+```mojo
+from geometries.parametric import SurfaceFunction, klein, parametric
+
+var bottle = parametric(SurfaceFunction[klein]())            # 8 slices, 8 stacks
+var sheet = parametric(SurfaceFunction[my_function](), 24, 12)
+var dome = parametric(Dome(Float32(2)), 24, 12)              # a struct that holds a radius
+```
+
+A grid sampled from a function of `u` and `v`, each from zero to one. The function returns a point in meters. There are `slices` cells along `u` and `stacks` cells along `v`, and each cell is two triangles. The texture coordinate of a vertex is its `(u, v)`.
+
+The surface is a type, not a closure. Any struct that implements `ParametricSurface` is a surface: it has `point(self, u, v) -> Vector3`. `SurfaceFunction[f]` makes a surface from a plain function `def f(u: Float32, v: Float32) -> Vector3`. A surface that needs its own numbers is a struct that holds them.
+
+The normals are three.js's finite differences. A vertex asks for a second point `EPS` away along `u`, and a third along `v`. The normal is the cross product of the two differences, made unit length. At the first row and column the step goes forward, so the function never gets a negative number.
+
+The arithmetic is `Float32`, and three.js uses `Float64`. A step of `1e-5` in `Float32` loses digits, so a normal can differ from three.js by a few parts in a thousand. The positions agree.
+
+`klein`, `mobius`, `mobius3d` and `parametric_plane` are three.js's `ParametricFunctions`. `klein` swaps the names of its arguments, as three.js does.
+
+## Convex hull
+
+```mojo
+from geometries.convex import convex
+from math.convex_hull import ConvexHull
+
+var pebble = convex(points)                  # a List[Vector3]
+var hull = ConvexHull(points)
+var inside = hull.contains_point(Vector3(0, 0, 0))
+```
+
+`convex` returns the smallest convex solid that holds every point. Points inside it are left out. Each face is a triangle with three vertices of its own, and all three carry the face's normal. So the hull shades flat. There is no index and no texture coordinate, as in three.js.
+
+`ConvexHull` is three.js's quickhull, step by step. It starts from a tetrahedron of four extreme points. It adds the farthest point that a face can see, again and again, until no face can see a point.
+
+| Member | Meaning |
+|---|---|
+| `face_count() -> Int` | The number of triangles. |
+| `face_vertex(face, corner) -> Int` | Which input point is at one corner. |
+| `face_normal(face) -> Vector3` | The outward unit normal of one face. |
+| `contains_point(point) -> Bool` | Whether no face can see the point. |
+| `tolerance` | How far outside a face a point must be before the face can see it. |
+
+The hull does its arithmetic in `Float64`, as JavaScript does. The tolerance is three.js's: three times the `Float64` epsilon, times the size of the point set. Coplanar faces are not merged, as in three.js.
+
+three.js returns an empty hull for fewer than four points. It returns a flat or broken hull for points on one line or one plane. This port raises in all three cases. `setFromObject` and `intersectRay` are not ported.
+
+## Decal
+
+```mojo
+from geometries.decal import decal
+
+var sticker = decal(
+    head_geometry,
+    scene.world_matrix(head_node),
+    Vector3(0.1, 1.6, 0.2),                                 # the center of the box
+    Euler(Angle(0, DEGREE), Angle(30, DEGREE), Angle(0, DEGREE), XYZ),
+    Length(0.2, METER),                                     # width, along the box's x
+    Length(0.2, METER),                                     # height, along its y
+    Length(0.3, METER),                                     # depth, along its z
+)
+```
+
+The part of a mesh inside a box, with texture coordinates from the box. The box is the projector. It stands at a position with an orientation, and it projects the image along its own z axis. `u` runs across its width and `v` across its height.
+
+Each triangle of the mesh moves into the frame of the box. Then it is cut against the six faces of the box, in three.js's order. A triangle with one corner outside a face becomes two triangles. A triangle with two corners outside becomes one. A triangle with three corners outside is dropped.
+
+A new corner gets the normal that is the same blend of the two ends' normals. three.js does not make that normal unit length again, and this port does not.
+
+The result is in world space, as in three.js. Put it on a mesh with no transform. Draw it with a polygon offset, or it fights the surface under it for depth.
+
+The mesh's normals are carried through its normal matrix when it has them. The result has no `normal` attribute when the mesh has none, or when nothing is inside the box. three.js takes a `Mesh`. This port takes the geometry and the world matrix, because a mesh here holds ids and the scene holds its matrix.
+
+## Rounded box
+
+```mojo
+from geometries.rounded_box import rounded_box
+
+var soft = rounded_box(Length(2, METER), Length(1, METER), Length(1, METER))   # 2 segments, 0.1 m radius
+var pill = rounded_box(Length(1, METER), Length(1, METER), Length(1, METER), 4, Length(0.5, METER))
+```
+
+A box with rounded edges and corners, centered on the origin: three.js's `RoundedBoxGeometry` addon. `segments` is the number of cells round each edge. `radius` is the radius of the edges. A radius larger than half the shortest side is cut down to that half.
+
+The builder starts from a unit box with `2 * segments + 1` cells each way on every face. Each vertex gets a normal from the center of that box, pulled half a cell in on each axis. The vertex moves to the corner of a box smaller by the radius, plus the radius along the normal. The middle band of each face stays flat.
+
+The texture coordinates are three.js's. They measure the arc of each rounded edge and the flat band between, so a texture is not squeezed where the surface bends.
+
+The geometry has no index. It has six groups, one for each face, in three.js's order: right, left, top, bottom, front, back. This order is not the order of `box`.
+
+three.js returns a unit box for zero segments, whatever the size. This port raises.
+
 ## Edges and wireframes
 
 `geometries/edges.mojo` reads a surface of triangles and gives back a geometry of points, two per segment. Draw it with a [`Line`](Lines) in `SEGMENTS` mode.
@@ -456,6 +548,10 @@ Eight targets is this port's ceiling, not three.js's. Older three.js had the sam
 - A shape's hole must lie inside its outline, and not inside another hole.
 - An outline that crosses itself raises, because it has no inside and runs out of ears.
 - An extrusion needs a positive depth, one step and one curve segment. A bevel needs a positive thickness, a size that is not negative, and one band.
+- A parametric surface needs one slice and one stack, and its function must give finite points.
+- A convex hull needs four finite points, not all on one point, one line or one plane.
+- A decal needs positive extents. A mesh with normals needs a world matrix that does not flatten a dimension.
+- A rounded box needs positive extents, one segment and a radius that is not negative.
 - An index entry beyond the last vertex raises.
 - A group needs a start and a count that are not negative, and a material index of zero or more.
 - A merge needs one geometry at least. The parts must all be indexed or none, and carry the same attributes, item sizes and morph targets.
