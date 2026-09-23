@@ -265,7 +265,22 @@ An extrusion has no index buffer, and its normals come from its triangles, so ev
 
 A wall is measured along x or along y, whichever it runs further in, and up the negative of z. That is three.js's own generator.
 
-three.js can also sweep a shape along a path, its `extrudePath`. That is not ported.
+### Along a path
+
+```mojo
+var rail = extrude(plate, curve, steps=32)                # a Curve3
+var rail = extrude(plate, path, steps=32)                 # a CurvePath3
+```
+
+A shape swept along a curve in space. This is the three.js `ExtrudeGeometry` with an `extrudePath`.
+
+The layers stand at `steps + 1` equal distances along the curve. Each layer is placed in the [Frenet frame](Curves#frames) of the curve at that point. The x of a shape point runs along the normal of the frame, and its y runs along the binormal. The back cap is at the start of the curve, and the front cap faces on along the curve at its end.
+
+This form has no bevel and no depth. three.js turns the bevel off when it gets a path, and the curve gives the length. The texture coordinates come from the same world generator, read from the swept vertices.
+
+A wall between two frames that turn is not flat. So the diagonal that splits a quad changes the surface. Both forms split each quad across its second and fourth corners, as the three.js `f4` does.
+
+The tests compare every triangle with the output of three.js 0.180 for a Bezier curve and for a path of two lines.
 
 ## Parametric
 
@@ -548,6 +563,7 @@ Eight targets is this port's ceiling, not three.js's. Older three.js had the sam
 - A shape's hole must lie inside its outline, and not inside another hole.
 - An outline that crosses itself raises, because it has no inside and runs out of ears.
 - An extrusion needs a positive depth, one step and one curve segment. A bevel needs a positive thickness, a size that is not negative, and one band.
+- An extrusion along a path needs one step, one curve segment and a curve path with one curve. The curve must have a frame at each step.
 - A parametric surface needs one slice and one stack, and its function must give finite points.
 - A convex hull needs four finite points, not all on one point, one line or one plane.
 - A decal needs positive extents. A mesh with normals needs a world matrix that does not flatten a dimension.

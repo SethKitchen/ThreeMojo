@@ -254,6 +254,8 @@ var pipe = tube(track, Length(0.1, METER), 64, 8, closed=True)
 
 `tube(points, radius, radial_segments, closed)` still takes a list of points. Both forms use the same frames.
 
+`extrude(shape, curve, steps)` sweeps a `Shape` along a `Curve3` or a `CurvePath3` in the same frames. See [Extrude along a path](Geometry#along-a-path).
+
 ### CurvePath3
 
 `CurvePath3` is the three.js `CurvePath` for curves in space. As in three.js, nothing makes one curve start where the last one ended.

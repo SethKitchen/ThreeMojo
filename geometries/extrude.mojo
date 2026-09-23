@@ -79,18 +79,34 @@ curve. This is the same, because the texture coordinates on a wall are not
 shared either: a wall is measured along x or along y, whichever it runs
 further in, and two walls that meet at a corner disagree about which.
 
-## What is not here
+## Along a path
 
-three.js can also sweep a shape along a path, its `extrudePath`. That is a
-tube with a shape for a cross-section, and the frames it needs are the
-ones `geometries.tube` already carries. It is not ported here.
+three.js can also sweep a shape along a curve, its `extrudePath`, and the
+two overloads that take a `Curve3` or a `CurvePath3` do that. It is a tube
+with a shape for a cross-section. The layers stand at `steps + 1` equal
+distances along the curve, from `spaced_points`, and each is turned into
+the curve's Frenet frame there, from `frenet_frames`: a point's x runs
+along the frame's normal and its y along the binormal. The binormal is the
+tangent crossed with the normal, so the tangent takes the place of z, and
+the front cap faces on along the curve as it faces up z without one.
+
+three.js turns the bevel off when it is given a path, so these overloads
+take no bevel. It also has no `depth`: the curve is the depth. The
+texture coordinates are the same world generator, read from the swept
+vertices, so a cap's are its x and y wherever the curve has carried it.
+
+A wall between two frames that turn is not flat, so the diagonal a quad
+is split along is part of the surface. Both forms split it as three.js's
+`f4` does, across the quad's second and fourth corners.
 """
 
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, POSITION, UV
 from geometries.shape import Contours, triangulate
+from math.curve3 import Curve3, CurvePath3, FrenetFrames
 from math.path import Shape
 from math.vector2 import Vector2
+from math.vector3 import Vector3
 from std.math import cos, pi, sin, sqrt
 from units.si import Length, METER
 
@@ -225,6 +241,187 @@ def _copy_vertex(
     return Vector2(placed[vertex * 3], placed[vertex * 3 + 1])
 
 
+def _faces(
+    cut: Contours, placed: List[Float32], layers: Int
+) raises -> BufferGeometry:
+    """Return the two caps and the walls between `layers` layers of placed
+    vertices, as three.js's `buildLidFaces` and `buildSideWalls` write
+    them.
+
+    The texture coordinates are three.js's `WorldUVGenerator`, read from
+    the placed vertices: a cap takes its x and y, and a wall takes x or y,
+    whichever its first edge covers more of, and one minus z.
+    """
+    var wide = len(cut.points)
+    var top = (layers - 1) * wide
+    var data = List[Float32]()
+    var uvs = List[Float32]()
+
+    # The two ends. The back one faces away from the front one, so its
+    # triangles are wound the other way round.
+    for triangle in range(cut.triangle_count()):  # pragma: no branch
+        var first = cut.index[triangle * 3]
+        var second = cut.index[triangle * 3 + 1]
+        var third = cut.index[triangle * 3 + 2]
+        var back: List[Int] = [third, second, first]
+        for corner in range(3):  # pragma: no branch
+            var flat = _copy_vertex(placed, back[corner], data)
+            uvs.append(flat.x)
+            uvs.append(flat.y)
+        var front: List[Int] = [first, second, third]
+        for corner in range(3):  # pragma: no branch
+            var flat = _copy_vertex(placed, top + front[corner], data)
+            uvs.append(flat.x)
+            uvs.append(flat.y)
+
+    # The walls: one quad per edge per layer, two triangles each.
+    for contour in range(cut.contour_count()):  # pragma: no branch
+        var start = cut.starts[contour]
+        var count = cut.counts[contour]
+        for edge in range(count):  # pragma: no branch
+            var here = start + edge
+            var next = start + (edge + 1) % count
+            for layer in range(layers - 1):  # pragma: no branch
+                var low = layer * wide
+                var high = (layer + 1) * wide
+                var quad: List[Int] = [
+                    low + here,
+                    low + next,
+                    high + next,
+                    high + here,
+                ]
+                # Which way the wall runs: three.js measures it along the
+                # axis the first edge covers more of.
+                var along_x = abs(
+                    placed[quad[0] * 3 + 1] - placed[quad[1] * 3 + 1]
+                ) < abs(placed[quad[0] * 3] - placed[quad[1] * 3])
+                # three.js's `f4` splits the quad across its second and
+                # fourth corners. A wall swept along a twisting path is
+                # not flat, so the diagonal is part of the surface.
+                var corners: List[Int] = [
+                    quad[0],
+                    quad[1],
+                    quad[3],
+                    quad[1],
+                    quad[2],
+                    quad[3],
+                ]
+                for corner in range(6):  # pragma: no branch
+                    var vertex = corners[corner]
+                    _ = _copy_vertex(placed, vertex, data)
+                    if along_x:
+                        uvs.append(placed[vertex * 3])
+                    else:
+                        uvs.append(placed[vertex * 3 + 1])
+                    uvs.append(1 - placed[vertex * 3 + 2])
+
+    var geometry = BufferGeometry()
+    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
+    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
+    geometry.compute_vertex_normals()
+    return geometry^
+
+
+def _sweep(
+    cut: Contours, spine: List[Vector3], frames: FrenetFrames
+) raises -> BufferGeometry:
+    """Return `cut` swept through one layer per point of `spine`, each
+    point of the shape placed `x` along that step's normal and `y` along
+    its binormal, as three.js's `extrudePath` places it."""
+    var placed = List[Float32]()
+    for step in range(len(spine)):  # pragma: no branch
+        # At least two steps, so this runs.
+        for index in range(len(cut.points)):  # pragma: no branch
+            # At least three points in a contour, so this runs.
+            var flat = cut.points[index]
+            var moved = (
+                spine[step]
+                + frames.normals[step] * flat.x
+                + frames.binormals[step] * flat.y
+            )
+            placed.append(moved.x)
+            placed.append(moved.y)
+            placed.append(moved.z)
+    return _faces(cut, placed, len(spine))
+
+
+def _check_sweep(steps: Int) raises:
+    """Refuse a sweep of fewer than one step."""
+    if steps < 1:
+        raise Error("An extrusion needs at least one step")
+
+
+def extrude(
+    shape: Shape, path: Curve3, steps: Int = 1, curve_segments: Int = 12
+) raises -> BufferGeometry:
+    """Return `shape` swept along `path`, three.js's `ExtrudeGeometry`
+    with an `extrudePath`.
+
+    The shape stands at `steps + 1` equal distances along the curve, in
+    the curve's Frenet frames: its x runs along the frame's normal and its
+    y along the binormal. The back cap is at the start of the curve and
+    the front cap at the end. There is no bevel, as three.js turns its
+    bevel off when it is given a path.
+
+    Args:
+        shape: The outline and its holes, the cross-section of the sweep.
+        path: The curve the shape is swept along.
+        steps: How many equal runs the curve is cut into; at least one.
+        curve_segments: How many straight runs each curve of the shape is
+            sampled into; at least one.
+
+    Returns:
+        A geometry with `position`, `normal` and `uv` attributes and no
+        index buffer, wound counter-clockwise seen from outside. The
+        texture coordinates are three.js's `WorldUVGenerator` on the swept
+        vertices.
+
+    Raises:
+        Error: If there are fewer than one step or one curve segment, if
+            the shape cannot be filled in (see
+            `geometries.shape.triangulate`), or if the curve has no frame
+            at one of the steps (see `Curve3.frenet_frames`).
+    """
+    _check_sweep(steps)
+    var cut = triangulate(shape, curve_segments)
+    return _sweep(
+        cut, path.spaced_points(steps), path.frenet_frames(steps, False)
+    )
+
+
+def extrude(
+    shape: Shape, path: CurvePath3, steps: Int = 1, curve_segments: Int = 12
+) raises -> BufferGeometry:
+    """Return `shape` swept along a path of curves, three.js's
+    `ExtrudeGeometry` with a `CurvePath` for its `extrudePath`.
+
+    The same sweep as the `Curve3` form, measured along the whole path by
+    distance.
+
+    Args:
+        shape: The outline and its holes, the cross-section of the sweep.
+        path: The curves the shape is swept along, end to end.
+        steps: How many equal runs the path is cut into; at least one.
+        curve_segments: How many straight runs each curve of the shape is
+            sampled into; at least one.
+
+    Returns:
+        A geometry with `position`, `normal` and `uv` attributes and no
+        index buffer, wound counter-clockwise seen from outside.
+
+    Raises:
+        Error: If there are fewer than one step or one curve segment, if
+            the shape cannot be filled in, if the path has no curves, or
+            if it has no frame at one of the steps (see
+            `CurvePath3.frenet_frames`).
+    """
+    _check_sweep(steps)
+    var cut = triangulate(shape, curve_segments)
+    return _sweep(
+        cut, path.spaced_points(steps), path.frenet_frames(steps, False)
+    )
+
+
 def extrude(
     shape: Shape,
     depth: Length,
@@ -309,69 +506,4 @@ def extrude(
         insets,
     )
     var placed = _place(cut, miters, heights, insets)
-
-    var wide = len(cut.points)
-    var top = (len(heights) - 1) * wide
-    var data = List[Float32]()
-    var uvs = List[Float32]()
-
-    # The two ends. The back one faces away from the camera's half of the
-    # z axis, so its triangles are wound the other way round.
-    for triangle in range(cut.triangle_count()):  # pragma: no branch
-        var first = cut.index[triangle * 3]
-        var second = cut.index[triangle * 3 + 1]
-        var third = cut.index[triangle * 3 + 2]
-        var back: List[Int] = [third, second, first]
-        for corner in range(3):  # pragma: no branch
-            var flat = _copy_vertex(placed, back[corner], data)
-            uvs.append(flat.x)
-            uvs.append(flat.y)
-        var front: List[Int] = [first, second, third]
-        for corner in range(3):  # pragma: no branch
-            var flat = _copy_vertex(placed, top + front[corner], data)
-            uvs.append(flat.x)
-            uvs.append(flat.y)
-
-    # The walls: one quad per edge per layer, two triangles each.
-    for contour in range(cut.contour_count()):  # pragma: no branch
-        var start = cut.starts[contour]
-        var count = cut.counts[contour]
-        for edge in range(count):  # pragma: no branch
-            var here = start + edge
-            var next = start + (edge + 1) % count
-            for layer in range(len(heights) - 1):  # pragma: no branch
-                var low = layer * wide
-                var high = (layer + 1) * wide
-                var quad: List[Int] = [
-                    low + here,
-                    low + next,
-                    high + next,
-                    high + here,
-                ]
-                # Which way the wall runs: three.js measures it along the
-                # axis the first edge covers more of.
-                var along_x = abs(
-                    placed[quad[0] * 3 + 1] - placed[quad[1] * 3 + 1]
-                ) < abs(placed[quad[0] * 3] - placed[quad[1] * 3])
-                var corners: List[Int] = [
-                    quad[0],
-                    quad[1],
-                    quad[2],
-                    quad[0],
-                    quad[2],
-                    quad[3],
-                ]
-                for corner in range(6):  # pragma: no branch
-                    var vertex = corners[corner]
-                    _ = _copy_vertex(placed, vertex, data)
-                    if along_x:
-                        uvs.append(placed[vertex * 3])
-                    else:
-                        uvs.append(placed[vertex * 3 + 1])
-                    uvs.append(1 - placed[vertex * 3 + 2])
-
-    var geometry = BufferGeometry()
-    geometry.set_attribute(String(POSITION), BufferAttribute(data^, 3))
-    geometry.set_attribute(String(UV), BufferAttribute(uvs^, 2))
-    geometry.compute_vertex_normals()
-    return geometry^
+    return _faces(cut, placed, len(heights))
