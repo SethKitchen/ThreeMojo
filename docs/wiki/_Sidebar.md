@@ -37,6 +37,7 @@
 - [Post-processing](Post-processing)
 - [Image files](Image-files)
 - [Model files](Model-files)
+- [Windowing and controls](Windowing-and-controls)
 - [Math](Math)
 - [Units](Units)
 - [Coverage tool](Coverage-tool)

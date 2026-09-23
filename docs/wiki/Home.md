@@ -49,6 +49,7 @@ Look something up.
 - [Render target and framebuffer](Render-target-and-framebuffer)
 - [Image files](Image-files)
 - [Model files](Model-files)
+- [Windowing and controls](Windowing-and-controls)
 - [Math](Math)
 - [Units](Units)
 - [Coverage tool](Coverage-tool)

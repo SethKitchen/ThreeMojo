@@ -56,6 +56,8 @@ mkdir -p out
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 
+`viewer.mojo` writes no file. It opens a window in the terminal, and `make viewer` runs it. See [Windowing and controls](Windowing-and-controls).
+
 Animated outputs are APNG files. A browser or VS Code plays them. A viewer that does not know APNG shows the first frame.
 
 ## Benchmarks

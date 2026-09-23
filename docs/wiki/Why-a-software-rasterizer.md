@@ -20,4 +20,4 @@ The buffer is the product. Displaying it belongs to whatever presents it: a canv
 
 ## What is missing
 
-There is no window and no interactive loop. The examples write image files. Windowing is listed as future work in the README checklist.
+The examples write image files, and one shows its frames in the terminal. The terminal is the window: see [Windowing and controls](Windowing-and-controls). There is no window from the operating system's window system. The standard library cannot reach one, and a library that can is a dependency.

@@ -27,7 +27,7 @@ endef
 # Library modules have no main(), so they are checked with `mojo doc`.
 LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   objects renderers materials lights loaders animation \
-                  postprocessing \
+                  postprocessing controls window \
                   -name '*.mojo' \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.
@@ -153,7 +153,7 @@ endef
 
 .PHONY: help check check-cpu check-gpu ci test test-cpu test-gpu docs-check wiki-publish \
         lint lint-cpu lint-gpu gpu-status docstrings fmt fmt-check coverage \
-        compile-fail example animation bench bench-scene bench-examples \
+        compile-fail example animation viewer bench bench-scene bench-examples \
         clean clean-images
 
 help:
@@ -174,6 +174,7 @@ help:
 	@echo "  make wiki-publish  copy docs/wiki/ to the GitHub wiki"
 	@echo "  make example    render out/triangle.png"
 	@echo "  make animation  render the animated examples into out/"
+	@echo "  make viewer     orbit a scene in this terminal with the mouse"
 	@echo "  make bench      CPU vs GPU rasterization across sizes"
 	@echo "  make bench-scene  a textured sphere through the CPU renderer, per stage"
 	@echo "  make bench-examples  each example vs three.js, and vs Mojo 1.0"
@@ -447,6 +448,11 @@ bench-examples:
 	@python3 tools/bench_examples.py
 
 example: $(OUT_DIR)/triangle.png
+
+# Interactive, so it needs a terminal and is not part of `animation`. Not run
+# through `run`: that captures the output, and this output is the window.
+viewer:
+	@$(MOJO) run $(MOJOFLAGS) examples/viewer.mojo
 
 animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/uv.png $(OUT_DIR)/textured.png $(OUT_DIR)/glass.png \
