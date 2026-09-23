@@ -11,6 +11,8 @@
 | `FirstPersonControls` | `controls/first_person_controls.mojo` | Walks, and turns toward the pointer. |
 | `PointerLockControls` | `controls/pointer_lock_controls.mojo` | Turns by the pointer's movement, and walks. |
 
+Two more controls move objects, not the camera. [DragControls](#dragcontrols) drags an object across the view. [TransformControls](#transformcontrols) moves, turns and scales one object with a gizmo.
+
 three.js: a `WebGLRenderer` canvas, and the controls of the same names in `examples/jsm/controls/`. `ArcballControls` is not ported.
 
 Run the example in a terminal:
@@ -334,13 +336,113 @@ Unless `static_moving` is set, each frame keeps `1 - dynamic_damping_factor` of 
 
 `update` takes no time, as in three.js. It takes an optional `delta` that only ages the held keys, a sixtieth of a second by default. An orthographic camera's pan measures both directions by the view's width, as three.js's does. Touch input is not ported.
 
+## DragControls
+
+`controls/drag_controls.mojo`. A press picks an object with a `Raycaster`, and a drag moves it. The objects are nodes of the scene. `DragControls(objects)` takes the nodes that can be dragged.
+
+`handle(event, camera, scene, assets, width, height)` takes one event and returns a list of `DragEvent` records. Each record has a `kind` and a `node`. The kinds are the events three.js dispatches, in the same order.
+
+| Kind | three.js | When |
+|---|---|---|
+| `HOVER_ON` | `hoveron` | The pointer comes over an object. |
+| `HOVER_OFF` | `hoveroff` | The pointer leaves an object. |
+| `DRAG_START` | `dragstart` | A press picks an object up. |
+| `DRAG_MOVE` | `drag` | A move drags the object. |
+| `DRAG_END` | `dragend` | A release lets the object go. |
+
+| Input | Change |
+|---|---|
+| Left or middle drag | Translate. The point under the pointer stays under it. |
+| Right drag | Rotate about the camera's up and right. |
+
+| Member | Default | Meaning |
+|---|---|---|
+| `objects` | | The nodes that can be dragged. |
+| `enabled` | `True` | False ignores all input. |
+| `recursive` | `True` | A hit on a node below one of `objects` counts too. |
+| `transform_group` | `False` | Drag the outermost of `objects` above the node hit. |
+| `rotate_speed` | 1 | Radians a turn, per unit of pointer movement in normalized device coordinates. |
+| `raycaster` | | Its `layers` select the nodes that can be picked. |
+| `primary_action`, `middle_action`, `secondary_action` | `DRAG_TRANSLATE`, `DRAG_TRANSLATE`, `DRAG_ROTATE` | three.js: `mouseButtons`. `NO_DRAG` picks and moves nothing. |
+
+A translation keeps the object on the plane through its origin that faces the camera. The object's new position is in its parent's frame, as in three.js. A rotation turns the object about the camera's up and right, in the frame of the object's parent.
+
+`handle` updates the scene first, so the next event sees the object where the drag put it. `selected()` and `hovered()` return the node dragged and the node under the pointer.
+
+### Differences from three.js
+
+three.js drags the outermost `Group` when `transformGroup` is set. This port has no `Group`, so it drags the outermost node of `objects` instead. Meshes, instanced meshes, batched meshes and levels of detail can be picked. Lines, points and sprites cannot, because the `Raycaster` does not test them. Touch input and the cursor style are not ported.
+
+## TransformControls
+
+`controls/transform_controls.mojo`. A gizmo moves, turns or scales one node. `attach(node)` puts the gizmo on a node, and `detach()` takes it off. `mode` sets what a drag does.
+
+| Mode | Handles |
+|---|---|
+| `TRANSLATE_MODE` | Arrows along x, y and z, squares for the planes `XY`, `YZ` and `XZ`, and a center `XYZ`. |
+| `ROTATE_MODE` | Rings about x, y and z, a ring `E` that faces the eye, and a ball `XYZE`. |
+| `SCALE_MODE` | Axes with boxes at the ends, the three plane squares, and a center box `XYZ`. |
+
+`handle(event, camera, scene, width, height)` takes one event and returns a list of `TransformEvent` records. A move over a handle sets `axis`. A left press on a handle starts a drag. The moves then change the node, and a release ends the drag.
+
+| Kind | three.js | When |
+|---|---|---|
+| `AXIS_CHANGED` | `axis-changed` | The handle under the pointer changes. |
+| `DRAGGING_CHANGED` | `dragging-changed` | A drag starts or ends. |
+| `MOUSE_DOWN` | `mouseDown` | A press on a handle starts a drag. |
+| `OBJECT_CHANGE` | `objectChange` | A move changes the node. |
+| `MOUSE_UP` | `mouseUp` | A release ends a drag. |
+
+Each record also holds the `mode`, the `axis` and `dragging` after the event. Stop an `OrbitControls` while `dragging` is `True`, as the three.js example does.
+
+| Member | Default | Meaning |
+|---|---|---|
+| `mode` | `TRANSLATE_MODE` | What a drag does. |
+| `space` | `WORLD_SPACE` | `LOCAL_SPACE` turns the handles to the node's own axes. |
+| `axis` | `NO_HANDLE` | The handle under the pointer, or dragged. |
+| `translation_snap` | none | A `Length`. A drag moves by whole steps of it. |
+| `rotation_snap` | none | An `Angle`. A drag turns by whole steps of it. |
+| `scale_snap` | none | A drag scales to whole steps of it. |
+| `size` | 1 | A factor on the gizmo's size. |
+| `show_x`, `show_y`, `show_z` | `True` | False hides the handles along that axis. |
+| `enabled` | `True` | False ignores all input. |
+
+`check()` refuses an invalid mode, space or axis, and an axis that the mode has no handle for. It also refuses a size or a snap that is not positive. `handle` and `gizmo` call it first. `reset(scene)` puts the node back where the drag started.
+
+### Picking and dragging
+
+The handles are picked with three.js's invisible picker shapes. These are cones, flat boxes, an octahedron, a box, tori and a sphere. Each handle is at the node's world position and turned to the node's axes in `LOCAL_SPACE`. Its size keeps it the same size on the screen. The picked handle is the one that the ray meets nearest.
+
+A handle that points at the eye is hidden, and so is a plane that the eye sees edge-on. A hidden handle cannot be picked. This follows three.js's thresholds of 0.99 and 0.2.
+
+A drag follows the pointer on a plane through the node. An axis drags on the plane that holds the axis and faces the eye best. A plane handle drags on its own plane. `XYZ`, `E`, `XYZE` and every ring drag on the plane that faces the camera.
+
+The arithmetic of each mode, snapping included, is three.js's. `SCALE_MODE` always works in the node's own axes. `XYZ`, `E` and `XYZE` always work in the world's axes.
+
+### Drawing the gizmo
+
+`gizmo(camera, scene)` returns the handles of the current mode as line segments in world space. Each point has a color: red for x, green for y and blue for z. The handle under the pointer is yellow. Draw the geometry with a `Line` in `SEGMENTS` mode, on a node at the origin, with `helper_material`. Call `gizmo` again after the node or the camera moves.
+
+### Differences from three.js
+
+three.js draws solid arrows and boxes with materials that ignore depth. Here each shape is drawn by its edges, and the depth test applies. The rings of `ROTATE_MODE` are drawn as half circles that face the eye, as in three.js.
+
+These parts are not ported:
+
+- The helper lines that three.js shows during a drag.
+- The limits `minX` to `maxZ` on a translation.
+- `setColors`, and touch input.
+- The `change` event, which three.js sends to ask for a render.
+
+A scale whose start point has no length along an axis keeps that axis's scale. three.js divides by zero there. The `E` picker is a flat ring, the shape of three.js's torus with two segments around its tube. The pickers are tested from both sides, which gives the same hits for closed shapes. The plane and the handles are found again at each event. In three.js a render between two events finds them.
+
 ## ArcballControls
 
 `ArcballControls` is not ported. It is about 3,500 lines of three.js, with gizmos, animations and its own touch gestures. It needs an issue of its own.
 
 ## How the ports were checked
 
-The tests hold each control to three.js r180's own numbers. The three.js controls ran headless in Node, with the same camera, view and input as each test.
+The tests hold each control to three.js r180's own numbers, `DragControls` and `TransformControls` included. The three.js controls ran headless in Node, with the same camera, view and input as each test.
 
 ## Limits
 
