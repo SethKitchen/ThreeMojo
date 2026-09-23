@@ -51,11 +51,13 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 157 features are ported and 4 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 157 features are ported and 22 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
 
+- [ ] The camera API and raycast hit data [#172](https://github.com/SethKitchen/ThreeMojo/issues/172)
+- [ ] Scene graph editing and the Object3D transform API [#165](https://github.com/SethKitchen/ThreeMojo/issues/165)
 
 <details>
 <summary>Ported: 13</summary>
@@ -78,6 +80,7 @@ The port is not at parity with three.js yet. 157 features are ported and 4 are o
 
 ### Geometry
 
+- [ ] Geometry addons, modifiers and BufferGeometryUtils [#180](https://github.com/SethKitchen/ThreeMojo/issues/180)
 
 <details>
 <summary>Ported: 18</summary>
@@ -105,6 +108,9 @@ The port is not at parity with three.js yet. 157 features are ported and 4 are o
 
 ### Objects
 
+- [ ] Skeleton, morph, batch and LOD tools [#181](https://github.com/SethKitchen/ThreeMojo/issues/181)
+- [ ] Scene objects: Reflector, Refractor, Water, Sky, Lensflare, MarchingCubes [#177](https://github.com/SethKitchen/ThreeMojo/issues/177)
+- [ ] Multi-material meshes: geometry groups with a material array [#167](https://github.com/SethKitchen/ThreeMojo/issues/167)
 
 <details>
 <summary>Ported: 10</summary>
@@ -163,6 +169,7 @@ The port is not at parity with three.js yet. 157 features are ported and 4 are o
 
 ### Lights
 
+- [ ] Shadow camera frustum, light power, CSM and room environments [#173](https://github.com/SethKitchen/ThreeMojo/issues/173)
 
 <details>
 <summary>Ported: 12</summary>
@@ -184,6 +191,7 @@ The port is not at parity with three.js yet. 157 features are ported and 4 are o
 
 ### Textures
 
+- [ ] Texture sampling, environment mapping and background parameters [#171](https://github.com/SethKitchen/ThreeMojo/issues/171)
 - [ ] KTX2: UASTC HDR, XUASTC and ETC1S video [#163](https://github.com/SethKitchen/ThreeMojo/issues/163)
 
 <details>
@@ -211,6 +219,9 @@ The port is not at parity with three.js yet. 157 features are ported and 4 are o
 
 ### Loaders and exporters
 
+- [ ] More loaders and exporters: 3MF, PCD, SVG, Draco, VRML, 3DS, BVH and others [#176](https://github.com/SethKitchen/ThreeMojo/issues/176)
+- [ ] FBX and Collada skins and animation [#175](https://github.com/SethKitchen/ThreeMojo/issues/175)
+- [ ] glTF: export lights, cameras, animations, skins, morphs and instancing; read bump, basisu and webp [#168](https://github.com/SethKitchen/ThreeMojo/issues/168)
 
 <details>
 <summary>Ported: 13</summary>
@@ -233,6 +244,10 @@ The port is not at parity with three.js yet. 157 features are ported and 4 are o
 
 ### Rendering
 
+- [ ] Helpers: ViewHelper, LightProbeHelper, OctreeHelper, TextureHelper, ShadowMapViewer [#182](https://github.com/SethKitchen/ThreeMojo/issues/182)
+- [ ] More post-processing passes and shader effects [#178](https://github.com/SethKitchen/ThreeMojo/issues/178)
+- [ ] Render-target features: MSAA, 3D, array and cube targets, texture copies [#174](https://github.com/SethKitchen/ThreeMojo/issues/174)
+- [ ] Renderer hooks and material flags [#170](https://github.com/SethKitchen/ThreeMojo/issues/170)
 - [ ] Match three.js where this port refuses or differs on purpose [#164](https://github.com/SethKitchen/ThreeMojo/issues/164)
 
 <details>
@@ -281,6 +296,7 @@ The port is not at parity with three.js yet. 157 features are ported and 4 are o
 
 ### Animation
 
+- [ ] The rest of the animation API [#169](https://github.com/SethKitchen/ThreeMojo/issues/169)
 
 <details>
 <summary>Ported: 6</summary>
@@ -296,6 +312,8 @@ The port is not at parity with three.js yet. 157 features are ported and 4 are o
 
 ### Math and foundations
 
+- [ ] Math addons: noise, OBB, Capsule, Octree, surface sampler, Lut, color spaces [#179](https://github.com/SethKitchen/ThreeMojo/issues/179)
+- [ ] The rest of the math API: vectors, quaternion, matrix, box, plane, frustum, color [#166](https://github.com/SethKitchen/ThreeMojo/issues/166)
 
 <details>
 <summary>Ported: 11</summary>
