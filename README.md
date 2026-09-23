@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 141 features are ported and 9 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 142 features are ported and 8 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -125,14 +125,13 @@ The port is not at parity with three.js yet. 141 features are ported and 9 are o
 ### Materials
 
 - [ ] Displacement map [#119](https://github.com/SethKitchen/ThreeMojo/issues/119)
-- [ ] Specular map and flat shading [#120](https://github.com/SethKitchen/ThreeMojo/issues/120)
 - [ ] Transmission, thickness, attenuation and dispersion [#121](https://github.com/SethKitchen/ThreeMojo/issues/121)
 - [ ] Sheen, iridescence and anisotropy [#122](https://github.com/SethKitchen/ThreeMojo/issues/122)
 - [ ] MeshDistanceMaterial, depth packings and Material.fog [#125](https://github.com/SethKitchen/ThreeMojo/issues/125)
 - [ ] Custom shading: ShaderMaterial and node materials [#126](https://github.com/SethKitchen/ThreeMojo/issues/126)
 
 <details>
-<summary>Ported: 21</summary>
+<summary>Ported: 22</summary>
 
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
 - [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
@@ -155,6 +154,7 @@ The port is not at parity with three.js yet. 141 features are ported and 9 are o
 - [x] [Texture transforms: repeat, offset, rotation](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#transform): a texture's own `offset`, `repeat`, `rotation` and `center`, applied to a mesh's coordinates before either rasterizer samples [#49](https://github.com/SethKitchen/ThreeMojo/issues/49)
 - [x] [Depth, color and stencil state](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#depth-color-and-stencil): depth test, write and function, color write, polygon offset, and an eight-bit stencil buffer [#124](https://github.com/SethKitchen/ThreeMojo/issues/124)
 - [x] [Ambient occlusion map and light map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#ambient-occlusion-map): baked maps that dim or add indirect light, read from a second set of texture coordinates [#118](https://github.com/SethKitchen/ThreeMojo/issues/118)
+- [x] [Specular map and flat shading](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#specular-map): a specular map scales highlight and reflection by its red; flat shading lights each face with its own normal [#120](https://github.com/SethKitchen/ThreeMojo/issues/120)
 
 </details>
 
