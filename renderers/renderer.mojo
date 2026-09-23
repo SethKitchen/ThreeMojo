@@ -586,6 +586,9 @@ struct _Draw(ImplicitlyCopyable):
     # The render order of the draw's node, three.js's `renderOrder`,
     # which sorts before the depth.
     var order: Int
+    # What the material's color is multiplied by, linear: an instance's
+    # own color, three.js's `instanceColor`, and white for the rest.
+    var tint: FloatColor
 
 
 @fieldwise_init
@@ -660,6 +663,7 @@ def _gather(
     ](0),
     skin: Int = -1,
     receive_shadow: Bool = False,
+    colors: List[Color] = List[Color](),
 ) raises:
     """Add the draws of one scene object to `draws`, each with its sort
     key alongside, unless the camera leaves it out.
@@ -709,14 +713,20 @@ def _gather(
             Only a skinned mesh has one.
         receive_shadow: Whether the lights' shadows fall on the object,
             a mesh's `receive_shadow`. Off for everything else.
+        colors: One sRGB color per draw, which multiplies the material's
+            color, or none for white.
 
     Raises:
         Error: If the node, a geometry or the material is not there, a
-            geometry has no positions, the scene is stale, or an instance
-            matrix projects or holds a value that is not finite.
+            geometry has no positions, the scene is stale, an instance
+            matrix projects or holds a value that is not finite, or there
+            are colors but not one per draw.
     """
     if not scene.shows(node, visible):
         return
+    var tinted = len(colors) > 0
+    if tinted and len(colors) != len(matrices):
+        raise Error("An instanced mesh must have one color per instance")
     var placed = scene.world_matrix(node)
     var blends = False
     var asked = False
@@ -738,6 +748,9 @@ def _gather(
         ).z
         depths.append(depth)
         clear.append(blends)
+        var tint = FloatColor(1, 1, 1, 1)
+        if tinted:
+            tint = FloatColor(srgb=colors[index])
         draws.append(
             _Draw(
                 geometries[index],
@@ -750,6 +763,7 @@ def _gather(
                 -1,
                 receive_shadow,
                 scene.render_order(node),
+                tint,
             )
         )
 
@@ -936,6 +950,7 @@ def _draws(
             slack,
             bounds,
             known,
+            colors=group.colors,
         )
     for index in range(len(scene.batched_meshes)):
         if casters_only:
@@ -943,9 +958,11 @@ def _draws(
         ref batch = scene.batched_meshes[index]
         var geometries = List[GeometryId]()
         var matrices = List[Matrix4]()
+        var colors = List[Color]()
         for slot in range(batch.count()):
             geometries.append(batch.instances[slot].geometry)
             matrices.append(batch.instances[slot].matrix)
+            colors.append(batch.instances[slot].color)
         _gather(
             draws,
             depths,
@@ -963,6 +980,7 @@ def _draws(
             slack,
             bounds,
             known,
+            colors=colors,
         )
     for index in range(len(scene.lods)):
         if casters_only:
@@ -1031,6 +1049,7 @@ def _draws(
                 index,
                 False,
                 scene.render_order(sprite.node),
+                FloatColor(1, 1, 1, 1),
             )
         )
 
@@ -2732,8 +2751,13 @@ struct Renderer(Movable):
             # folded into alpha, is what every corner carries -- times the
             # vertex's own color when the material asks for vertex colors.
             # The fragment lights whatever arrives.
+            # An instance's color multiplies the material's, three.js's
+            # `instanceColor`; white for everything else.
+            var own = FloatColor(srgb=material.color)
+            ref tint = draws[slot].tint
             var base = _with_opacity(
-                FloatColor(srgb=material.color), material.opacity
+                FloatColor(own.r * tint.r, own.g * tint.g, own.b * tint.b, 1),
+                material.opacity,
             )
             var vertex_colors = _vertex_colors(
                 geometry, material.vertex_colors, base, vertex_count

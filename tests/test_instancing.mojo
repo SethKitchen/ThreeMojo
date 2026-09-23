@@ -831,6 +831,87 @@ def test_an_lod_under_a_moved_parent_measures_from_the_camera() raises:
         assert_same_image(shown, renderer.render(mesh_scene, assets, camera))
 
 
+def rgb(color: Color) -> Int:
+    """Return a color as `0xRRGGBB`, to compare two."""
+    return (Int(color.r) << 16) | (Int(color.g) << 8) | Int(color.b)
+
+
+def test_an_instance_color_starts_white_and_is_kept() raises:
+    var group = InstancedMesh(GeometryId(0), MaterialId(0), NodeId(0), 3)
+    assert_equal(len(group.colors), 0)
+    assert_equal(rgb(group.color_at(2)), rgb(Color(255, 255, 255)))
+    group.set_color_at(1, Color(10, 20, 30))
+    # The first color gives every instance one.
+    assert_equal(len(group.colors), 3)
+    assert_equal(rgb(group.color_at(1)), rgb(Color(10, 20, 30)))
+    assert_equal(rgb(group.color_at(0)), rgb(Color(255, 255, 255)))
+    with assert_raises():
+        group.set_color_at(3, Color(0, 0, 0))
+    with assert_raises():
+        _ = group.color_at(-1)
+    var batch = BatchedMesh(MaterialId(0), NodeId(0))
+    _ = batch.add_instance(GeometryId(0))
+    assert_equal(rgb(batch.color_at(0)), rgb(Color(255, 255, 255)))
+    batch.set_color_at(0, Color(1, 2, 3))
+    assert_equal(rgb(batch.color_at(0)), rgb(Color(1, 2, 3)))
+    with assert_raises():
+        batch.set_color_at(1, Color(0, 0, 0))
+    with assert_raises():
+        _ = batch.color_at(1)
+
+
+def test_instance_colors_draw_as_mesh_colors_would() raises:
+    # A white material times an instance's color is that color: the same
+    # image as plain meshes painted in it.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var white = assets.materials.add(Material(Color(255, 255, 255)))
+    var red = assets.materials.add(Material(Color(200, 30, 20)))
+    var blue = assets.materials.add(Material(Color(40, 60, 230)))
+    var group = InstancedMesh(box, white, NodeId(0), 2)
+    group.set_matrix_at(0, translation(-1, 0, 0))
+    group.set_matrix_at(1, translation(1, 0, 0))
+    group.set_color_at(0, Color(200, 30, 20))
+    group.set_color_at(1, Color(40, 60, 230))
+    var scene = a_scene()
+    scene.add_instanced_mesh(group^)
+    var instanced = renderer.render(scene, assets, a_camera())
+    var plain = Scene()
+    var left = Object3D()
+    left.set_position(-1, 0, 0)
+    plain.add_mesh(Mesh(box, red, plain.add(left^)))
+    var right = Object3D()
+    right.set_position(1, 0, 0)
+    plain.add_mesh(Mesh(box, blue, plain.add(right^)))
+    plain.update()
+    var wanted = renderer.render(plain, assets, a_camera())
+    assert_true(count_drawn(instanced, renderer.background) > 30)
+    assert_same_image(instanced, wanted)
+    # A batch does the same.
+    var batch = BatchedMesh(white, NodeId(0))
+    _ = batch.add_instance(box, translation(-1, 0, 0))
+    _ = batch.add_instance(box, translation(1, 0, 0))
+    batch.set_color_at(0, Color(200, 30, 20))
+    batch.set_color_at(1, Color(40, 60, 230))
+    var batched = a_scene()
+    batched.add_batched_mesh(batch^)
+    assert_same_image(renderer.render(batched, assets, a_camera()), wanted)
+
+
+def test_instance_colors_must_be_one_per_instance() raises:
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(1.0, METER)))
+    var paint = assets.materials.add(Material(Color(220, 120, 40)))
+    var group = InstancedMesh(box, paint, NodeId(0), 2)
+    group.colors = [Color(1, 2, 3)]
+    var scene = a_scene()
+    scene.add_instanced_mesh(group^)
+    with assert_raises(contains="one color per instance"):
+        _ = renderer.render(scene, assets, a_camera())
+
+
 def test_a_group_with_no_instances_draws_nothing() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()

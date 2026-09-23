@@ -488,7 +488,8 @@ def clip_segment(
     if len(any_of) == 0:
         return kept^
     var pieces = List[ClipVertex]()
-    for index in range(len(any_of)):
+    # Not empty: the return above took that case.
+    for index in range(len(any_of)):  # pragma: no branch
         var piece = _cut_segment(kept, any_of[index])
         for earlier in range(index):
             piece = _cut_segment(piece, flipped(any_of[earlier]))

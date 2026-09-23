@@ -302,6 +302,37 @@ def test_lines_points_and_sprites_are_cut_too() raises:
     assert_false(_lit(image, 14, 8))
 
 
+def test_a_point_in_view_behind_every_plane_is_cut() raises:
+    # Two points half a meter either side of the middle, both in view:
+    # under `clip_intersection` with one plane, only the left is kept.
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var geometry = BufferGeometry()
+    geometry.set_attribute(
+        POSITION, BufferAttribute([Float32(-0.5), 0, 0, 0.5, 0, 0], 3)
+    )
+    var pair = assets.geometries.add(geometry^)
+    var dots = points_material(Color(255, 0, 0))
+    dots.set_clipping_planes([Plane(Vector3(-1, 0, 0), 0)], intersection=True)
+    scene.add_points(Points(pair, assets.materials.add(dots), node))
+    scene.update()
+    var renderer = Renderer(SIZE, SIZE)
+    renderer.local_clipping_enabled = True
+    var image = renderer.render(scene, assets, _camera())
+    var left = 0
+    var right = 0
+    for y in range(SIZE):
+        for x in range(SIZE):
+            if _lit(image, x, y):
+                if x < SIZE // 2:
+                    left += 1
+                else:
+                    right += 1
+    assert_true(left > 0)
+    assert_equal(right, 0)
+
+
 def test_a_materials_planes_cut_its_shadow_only_when_asked() raises:
     var assets = Assets()
     var scene = Scene()

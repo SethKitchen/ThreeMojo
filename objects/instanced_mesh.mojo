@@ -41,15 +41,21 @@ homogeneous divide would bend the positions while the normals kept the
 affine answer. The lists are open, as every field here is, so the
 renderer asks the same question again of each matrix it draws.
 
-Neither has per-instance colors yet. three.js's `instanceColor` is a
-separate attribute, and a geometry's own vertex colors already reach every
-instance; see `materials.material`.
+Both hold a color per instance, three.js's `instanceColor` and
+`BatchedMesh.setColorAt`. It multiplies the material's color, as a vertex
+color does, and a geometry's own vertex colors multiply it again. An
+instanced mesh has no colors until the first `set_color_at`, which starts
+every instance at white, as three.js does; a batch member is white until
+set.
 """
 
 from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from materials.material import MaterialId
 from math.matrix4 import Matrix4
+from render.framebuffer import Color
+
+comptime WHITE = Color(255, 255, 255)
 
 
 def check_placing(matrix: Matrix4) raises:
@@ -86,6 +92,10 @@ struct InstancedMesh(Copyable, Movable):
     # `instanceMatrix`. The identity until set, so a fresh instanced mesh
     # draws every copy on top of the node.
     var matrices: List[Matrix4]
+    # One color per instance, three.js's `instanceColor`, or none at all:
+    # empty until the first `set_color_at`. The renderer refuses any other
+    # length.
+    var colors: List[Color]
 
     def __init__(
         out self,
@@ -124,6 +134,7 @@ struct InstancedMesh(Copyable, Movable):
         self.node = node
         self.frustum_culled = frustum_culled
         self.matrices = List[Matrix4](length=count, fill=Matrix4())
+        self.colors = List[Color]()
 
     def count(self) -> Int:
         """Return how many instances there are, three.js's `count`."""
@@ -159,6 +170,40 @@ struct InstancedMesh(Copyable, Movable):
         check_placing(matrix)
         self.matrices[index] = Matrix4(copy=matrix)
 
+    def color_at(self, index: Int) raises -> Color:
+        """Return one instance's color, three.js's `getColorAt`.
+
+        Args:
+            index: Which instance, from zero.
+
+        Returns:
+            Its color, sRGB. White when no instance has a color yet.
+
+        Raises:
+            Error: If there is no such instance.
+        """
+        self._check(index)
+        if len(self.colors) == 0:
+            return WHITE
+        return self.colors[index]
+
+    def set_color_at(mut self, index: Int, color: Color) raises:
+        """Color one instance, three.js's `setColorAt`.
+
+        The first call gives every instance a color, white for the rest.
+
+        Args:
+            index: Which instance, from zero.
+            color: Its color, sRGB. It multiplies the material's color.
+
+        Raises:
+            Error: If there is no such instance.
+        """
+        self._check(index)
+        if len(self.colors) == 0:
+            self.colors = List[Color](length=len(self.matrices), fill=WHITE)
+        self.colors[index] = color
+
     def _check(self, index: Int) raises:
         """Refuse an instance index that names no instance."""
         if index < 0 or index >= len(self.matrices):
@@ -171,6 +216,8 @@ struct BatchedInstance(ImplicitlyCopyable):
 
     var geometry: GeometryId
     var matrix: Matrix4
+    # Its color, sRGB, which multiplies the material's; white until set.
+    var color: Color
 
 
 struct BatchedMesh(Copyable, Movable):
@@ -238,7 +285,9 @@ struct BatchedMesh(Copyable, Movable):
         if geometry.value < 0:
             raise Error("A batched instance must name a geometry")
         check_placing(matrix)
-        self.instances.append(BatchedInstance(geometry, Matrix4(copy=matrix)))
+        self.instances.append(
+            BatchedInstance(geometry, Matrix4(copy=matrix), WHITE)
+        )
         return len(self.instances) - 1
 
     def geometry_at(self, index: Int) raises -> GeometryId:
@@ -301,6 +350,34 @@ struct BatchedMesh(Copyable, Movable):
         self._check(index)
         check_placing(matrix)
         self.instances[index].matrix = Matrix4(copy=matrix)
+
+    def color_at(self, index: Int) raises -> Color:
+        """Return one instance's color, three.js's `getColorAt`.
+
+        Args:
+            index: Which instance, from zero.
+
+        Returns:
+            Its color, sRGB.
+
+        Raises:
+            Error: If there is no such instance.
+        """
+        self._check(index)
+        return self.instances[index].color
+
+    def set_color_at(mut self, index: Int, color: Color) raises:
+        """Color one instance, three.js's `setColorAt`.
+
+        Args:
+            index: Which instance, from zero.
+            color: Its color, sRGB. It multiplies the material's color.
+
+        Raises:
+            Error: If there is no such instance.
+        """
+        self._check(index)
+        self.instances[index].color = color
 
     def _check(self, index: Int) raises:
         """Refuse an instance index that names no instance."""

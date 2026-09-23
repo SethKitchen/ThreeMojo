@@ -52,7 +52,9 @@ scene.add_instanced_mesh(forest^)
 | `InstancedMesh(geometry, material, node, count, frustum_culled=True)` | `count` instances, each at the identity. |
 | `count() -> Int` | How many instances. |
 | `matrix_at(index) -> Matrix4`, `set_matrix_at(index, matrix)` | One instance's transform, relative to the node. |
+| `color_at(index) -> Color`, `set_color_at(index, color)` | One instance's color. three.js: `getColorAt`, `setColorAt`. |
 | `matrices` | Every transform, in order. |
+| `colors` | Every color, in order, or none. three.js: `instanceColor`. |
 
 Moving the node moves every instance. The renderer orders every instance on its own: opaque nearest first, translucent furthest first. three.js keeps an instanced mesh's instances together. That draws a translucent instance over one it is behind when the two were added the other way round. It culls each instance on its own, so an instance out of view costs nothing. three.js culls the whole group by one bound.
 
@@ -60,7 +62,11 @@ An instance matrix must be affine and finite. It moves, turns, scales, shears or
 
 An instance index is a plain number, as three.js's `instanceId` is. An index that names no instance raises.
 
-Per-instance colors are not ported. A geometry's vertex colors reach every instance.
+### Instance colors
+
+An instance's color multiplies the material's color, as a vertex color does. The two rasterizers see the same result, because the color is on each prepared corner. A geometry's own vertex colors multiply it again. The alpha is not changed.
+
+An instanced mesh has no colors until the first `set_color_at`. That call gives every other instance white, as three.js does. The `colors` list is open, so the renderer refuses a list that is not empty and does not hold one color per instance.
 
 ## BatchedMesh
 
@@ -79,8 +85,9 @@ scene.add_batched_mesh(batch^)
 | `add_instance(geometry, matrix=Matrix4()) -> Int` | Add an instance and return its index. |
 | `geometry_at(index)`, `set_geometry_at(index, geometry)` | Which geometry one instance draws. |
 | `matrix_at(index)`, `set_matrix_at(index, matrix)` | One instance's transform. Affine and finite, as an instanced mesh's. |
+| `color_at(index)`, `set_color_at(index, color)` | One instance's color, white until set. It multiplies the material's color. |
 | `count() -> Int` | How many instances. |
-| `instances` | Every `BatchedInstance`, in order: a geometry id and a matrix, held together. |
+| `instances` | Every `BatchedInstance`, in order: a geometry id, a matrix and a color, held together. |
 
 three.js copies the geometries into one shared buffer. Here every geometry is in the store already, so an instance names one by id. The renderer orders each instance on its own, as it orders an instanced mesh's.
 
