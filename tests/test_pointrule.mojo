@@ -442,6 +442,19 @@ def test_fog_veils_a_point_by_its_depth() raises:
     assert_equal(view.shown(4, 4).b, UInt8(0))
 
 
+def test_a_point_whose_material_turns_the_fog_off_is_not_fogged() raises:
+    # three.js's `fog = false` on a `PointsMaterial`.
+    var fog = FogView(
+        linear_fog(Color(0, 0, 255), Length(1.0, METER), Length(3.0, METER))
+    )
+    var point = dot(4.5, 4.5, 3, color=FloatColor(1, 0, 0), depth=2)
+    point.fog = False
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_point(point, target, fog=fog)
+    assert_equal(target.shown(4, 4).r, UInt8(255))
+    assert_equal(target.shown(4, 4).b, UInt8(0))
+
+
 def test_a_point_must_be_well_formed() raises:
     var target = RenderTarget(8, 8, Color(0, 0, 0))
     var bad_blend = dot(4.5, 4.5)
@@ -449,7 +462,7 @@ def test_a_point_must_be_well_formed() raises:
     with assert_raises(contains="blend policy"):
         check_point_state(bad_blend)
     var bad_kind = dot(4.5, 4.5)
-    bad_kind.kind = MaterialKind(10)
+    bad_kind.kind = MaterialKind(11)
     with assert_raises(contains="material kind that exists"):
         check_point_state(bad_kind)
     var lit_point = dot(4.5, 4.5)

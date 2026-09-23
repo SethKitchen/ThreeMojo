@@ -9,6 +9,7 @@ from core.layers import Layers
 from materials.material import (
     BASIC,
     DEPTH,
+    DISTANCE,
     LAMBERT,
     MATCAP,
     NORMALS,
@@ -71,6 +72,13 @@ from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from math.vector3 import Vector3
 from render.target import RenderTarget
+from render.packing import (
+    BASIC_DEPTH_PACKING,
+    RGBA_DEPTH_PACKING,
+    RGB_DEPTH_PACKING,
+    RG_DEPTH_PACKING,
+    DepthPacking,
+)
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.rasterizer import (
     DRAW_SEGMENTS,
@@ -2428,6 +2436,135 @@ def test_a_maps_alpha_cuts_a_depth_out_and_its_color_does_not() raises:
     # refused: see the next test.
 
 
+def packed_quad(
+    kind: MaterialKind,
+    packing: DepthPacking,
+    z: Float32 = 0.0,
+    reference: Vector3 = Vector3(0, 0, 0),
+    near: Float32 = 1,
+    far: Float32 = 1000,
+) -> List[RasterVertex]:
+    """Return `data_quad` with a depth packing and a distance range, every
+    corner three meters up and four back from the origin."""
+    var corners = data_quad(kind, z=z)
+    for index in range(len(corners)):
+        corners[index].depth_packing = packing
+        corners[index].world = Vector3(0, 3, 4)
+        corners[index].reference = reference
+        corners[index].near_distance = near
+        corners[index].far_distance = far
+    return corners^
+
+
+def test_a_depth_material_writes_its_depth_by_its_packing() raises:
+    # NDC zero is window depth one half: red 128 and nothing below it.
+    var rgba = data_pixel(packed_quad(DEPTH, RGBA_DEPTH_PACKING))
+    # The alpha is data and is zero, and the color survives it: a data
+    # pixel is stored straight.
+    assert_same_color(rgba.shown(4, 4), Color(128, 0, 0, 0))
+    assert_same_color(rgba.resolve().get_pixel(4, 4), Color(128, 0, 0, 0))
+    var rgb = data_pixel(packed_quad(DEPTH, RGB_DEPTH_PACKING))
+    assert_same_color(rgb.shown(4, 4), Color(128, 0, 0, 255))
+    var rg = data_pixel(packed_quad(DEPTH, RG_DEPTH_PACKING))
+    assert_same_color(rg.shown(4, 4), Color(128, 0, 0, 255))
+    # NDC -0.4 is window depth 0.3: three.js's bytes 76, 204 and 205.
+    var deeper = data_pixel(packed_quad(DEPTH, RGBA_DEPTH_PACKING, -0.4))
+    assert_same_color(deeper.shown(4, 4), Color(76, 204, 205, 0))
+    assert_true(deeper.is_data(4, 4))
+    # Read back as premultiplied light, a data pixel is scaled like any.
+    assert_equal(deeper.color_at(4, 4).a, Float32(0))
+    assert_equal(deeper.color_at(4, 4).r, Float32(0))
+
+
+def test_a_distance_material_writes_its_distance_packed() raises:
+    # Five meters from the origin, half way from zero to ten: red 128.
+    var half = data_pixel(
+        packed_quad(DISTANCE, BASIC_DEPTH_PACKING, near=0, far=10)
+    )
+    assert_same_color(half.shown(4, 4), Color(128, 0, 0, 0))
+    # From a reference of its own: three meters away, from one to five.
+    var nearer = data_pixel(
+        packed_quad(DISTANCE, BASIC_DEPTH_PACKING, 0.9, Vector3(0, 3, 1), 1, 5)
+    )
+    assert_same_color(nearer.shown(4, 4), Color(128, 0, 0, 0))
+    # The depth is not read: the same surface at another depth.
+    var moved = data_pixel(
+        packed_quad(DISTANCE, BASIC_DEPTH_PACKING, -0.9, near=0, far=10)
+    )
+    assert_same_color(moved.shown(4, 4), Color(128, 0, 0, 0))
+    # Nor in the uv debug view, which shows coordinates.
+    var uv = data_pixel(
+        packed_quad(DISTANCE, BASIC_DEPTH_PACKING, near=0, far=10),
+        mode=SHADE_UV,
+    )
+    assert_true(uv.shown(4, 4).a == 255)
+
+
+def test_a_triangle_refuses_a_packing_or_a_range_it_cannot_use() raises:
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    # A packing on a kind that shows no depth.
+    var normal = packed_quad(NORMALS, RGB_DEPTH_PACKING)
+    with assert_raises(contains="Only a depth triangle"):
+        check_triangle_state(normal[0], normal[1], normal[2])
+    # A packing that is none of the four.
+    var odd = packed_quad(DEPTH, DepthPacking(9))
+    with assert_raises(contains="none of the four"):
+        check_triangle_state(odd[0], odd[1], odd[2])
+    # Corners that disagree about the packing, second and third.
+    var split = packed_quad(DEPTH, RGB_DEPTH_PACKING)
+    split[1].depth_packing = RG_DEPTH_PACKING
+    with assert_raises(contains="depth packing"):
+        check_triangle_state(split[0], split[1], split[2])
+    split = packed_quad(DEPTH, RGB_DEPTH_PACKING)
+    split[2].depth_packing = RG_DEPTH_PACKING
+    with assert_raises(contains="depth packing"):
+        check_triangle_state(split[0], split[1], split[2])
+    # A range the distance cannot be measured by.
+    var flat = packed_quad(DISTANCE, BASIC_DEPTH_PACKING, near=5, far=5)
+    with assert_raises(contains="far distance"):
+        rasterize_all(flat, target)
+    # Corners that disagree about the range, in each of its five numbers.
+    for field in range(5):
+        var parted = packed_quad(DISTANCE, BASIC_DEPTH_PACKING, near=0, far=9)
+        var other = 1 + field % 2
+        if field == 0:
+            parted[other].reference.x = 1
+        elif field == 1:
+            parted[other].reference.y = 1
+        elif field == 2:
+            parted[other].reference.z = 1
+        elif field == 3:
+            parted[other].near_distance = 1
+        else:
+            parted[other].far_distance = 8
+        with assert_raises(contains="distance range"):
+            check_triangle_state(parted[0], parted[1], parted[2])
+    # The range is not read on any other kind.
+    var ignored = packed_quad(DEPTH, BASIC_DEPTH_PACKING, near=5, far=5)
+    check_triangle_state(ignored[0], ignored[1], ignored[2])
+
+
+def test_a_triangle_whose_material_turns_the_fog_off_is_not_fogged() raises:
+    # three.js's `fog = false`: the same white surface two meters into a
+    # gray fog, veiled with the switch on and clear with it off.
+    var fog = gray_fog()
+    var veiled = fogged_pixel(placed_quad(2, BASIC), fog)
+    assert_true(veiled.r < 255, "the fog reached nothing")
+    var corners = placed_quad(2, BASIC)
+    for index in range(len(corners)):
+        corners[index].fog = False
+    assert_same_color(fogged_pixel(corners, fog), Color(255, 255, 255))
+    # Corners that disagree about the switch, second and third.
+    var split = placed_quad(2, BASIC)
+    split[1].fog = False
+    with assert_raises(contains="fog"):
+        check_triangle_state(split[0], split[1], split[2])
+    split = placed_quad(2, BASIC)
+    split[2].fog = False
+    with assert_raises(contains="fog"):
+        check_triangle_state(split[0], split[1], split[2])
+
+
 def test_a_data_triangle_cannot_blend() raises:
     # One pixel cannot hold part of a normal and part of the scene's light.
     # Refused by both backends from the same function, on one worker and
@@ -2494,10 +2631,10 @@ def test_a_data_material_draws_the_same_on_one_worker_and_on_four() raises:
 
 
 def test_an_unknown_material_kind_is_refused_even_when_agreed() raises:
-    # `MaterialKind(10)` constructs, because a struct's fields are open, and
+    # `MaterialKind(11)` constructs, because a struct's fields are open, and
     # neither backend has a fragment path for it. Agreement is not enough.
     var target = RenderTarget(8, 8, Color(0, 0, 0))
-    var corners = data_quad(MaterialKind(10))
+    var corners = data_quad(MaterialKind(11))
     with assert_raises():
         rasterize_shaded(corners[0], corners[1], corners[2], target)
     for workers in [1, 4]:

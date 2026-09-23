@@ -4,9 +4,11 @@
 
 ![A white highlight follows the camera around a red sphere](out/phong.png)
 
-three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshStandardMaterial`, `MeshPhysicalMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `LineBasicMaterial`, `LineDashedMaterial`, `PointsMaterial`, `SpriteMaterial`.
+three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshStandardMaterial`, `MeshPhysicalMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `MeshDistanceMaterial`, `LineBasicMaterial`, `LineDashedMaterial`, `PointsMaterial`, `SpriteMaterial`.
 
-Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`, `size`, `sizeAttenuation`, `rotation`, `envMap`, `reflectivity`, `combine`.
+Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`, `size`, `sizeAttenuation`, `rotation`, `envMap`, `reflectivity`, `combine`, `fog`.
+
+Data properties: `depthPacking`, `referencePosition`, `nearDistance`, `farDistance`.
 
 Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `clearcoat`, `clearcoatRoughness`, `transmission`, `transmissionMap`, `thickness`, `thicknessMap`, `attenuationColor`, `attenuationDistance`, `dispersion`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`, `aoMap`, `aoMapIntensity`, `lightMap`, `lightMapIntensity`, `specularMap`, `displacementMap`, `displacementScale`, `displacementBias`. Shading properties: `flatShading`.
 
@@ -99,9 +101,10 @@ A `DOUBLE_SIDE` face seen from behind is lit with its normal flipped. This is th
 | `PHYSICAL` | `MeshPhysicalMaterial` | `STANDARD` with an index of refraction and a clear coat. |
 | `BASIC` | `MeshBasicMaterial`, `LineBasicMaterial`, `PointsMaterial`, `SpriteMaterial` | The color and texture show as they are. The kind a [line](Lines), a [point or a sprite](Points-and-sprites) is drawn with. |
 | `NORMALS` | `MeshNormalMaterial` | The normal the camera sees, as a color. |
-| `DEPTH` | `MeshDepthMaterial` | How far away the surface is, as a gray. |
+| `DEPTH` | `MeshDepthMaterial` | How far away the surface is, as a gray or packed. |
+| `DISTANCE` | `MeshDistanceMaterial` | How far the surface is from a reference point, packed. |
 
-`is_lit()` is true for the first four. `is_physical()` is true for `STANDARD` and `PHYSICAL`. `is_data()` is true for the last two, which show data rather than light. See [Data materials](#data-materials).
+`is_lit()` is true for the first four. `is_physical()` is true for `STANDARD` and `PHYSICAL`. `is_data()` is true for the last three, which show data rather than light. See [Data materials](#data-materials).
 
 ## Phong
 
@@ -620,21 +623,30 @@ The alpha is `opacity` times one minus `Lighting.shadow_mask`, three.js's `opaci
 
 ## Data materials
 
-A normal material and a depth material write bytes that a display must show as they are. Build one with its own function:
+A normal, a depth and a distance material write bytes that a display must show as they are. Build one with its own function:
 
 ```mojo
 var shown = assets.materials.add(normal_material())
 var seen = assets.materials.add(depth_material())
 var pane = assets.materials.add(normal_material(DOUBLE_SIDE))
 var cut = assets.materials.add(depth_material(mask))
+var packed = assets.materials.add(
+    depth_material(depth_packing=RGBA_DEPTH_PACKING)
+)
+var measured = assets.materials.add(
+    distance_material(
+        Vector3(0, 2, 0), Length(0.5, METER), Length(20.0, METER)
+    )
+)
 ```
 
 | Builder | Meaning |
 |---|---|
 | `normal_material(side=FRONT_SIDE, opacity=1.0, blending=None, alpha_test=0.0)` | The view-space normal as a color. |
-| `depth_material(map=NO_TEXTURE, side=FRONT_SIDE, opacity=1.0, blending=None, alpha_map=NO_TEXTURE, alpha_test=0.0)` | The depth as a gray. |
+| `depth_material(map=NO_TEXTURE, side=FRONT_SIDE, opacity=1.0, blending=None, alpha_map=NO_TEXTURE, alpha_test=0.0, depth_packing=BASIC_DEPTH_PACKING)` | The depth as a gray, or packed. |
+| `distance_material(reference_position=Vector3(0, 0, 0), near_distance=1 m, far_distance=1000 m, map=NO_TEXTURE, side=FRONT_SIDE, alpha_map=NO_TEXTURE, alpha_test=0.0)` | The distance from a point, packed. |
 
-Both take `side`, `opacity` and `blending`, and nothing else. A depth material also takes a `map`. Neither can blend: see [What they refuse](#what-they-refuse).
+All three take `side`. The normal and the depth material take `opacity` and `blending`. The depth and the distance material take a `map` and an `alpha_map`. None can blend: see [What they refuse](#what-they-refuse).
 
 ### Normals
 
@@ -646,19 +658,80 @@ A `DOUBLE_SIDE` face seen from behind shows its normal flipped, as it is lit fli
 
 ### Depth
 
-`DEPTH` writes one minus the window-space depth in every channel. The near plane is white and the far plane is black. This is three.js's `MeshDepthMaterial` under `BasicDepthPacking`. The other packings are not ported.
+`DEPTH` writes one minus the window-space depth in every channel. The near plane is white and the far plane is black. This is three.js's `MeshDepthMaterial` under `BasicDepthPacking`, the default. `depth_packing` selects the other three packings. See [Depth packing](#depth-packing).
 
 Set the camera's `near` and `far` close together to see anything. A range of one to a thousand meters puts almost every surface within a few levels of black.
 
 A map's alpha cuts the surface out, as three.js's does. Its color is not read. Give the material an `alpha_test` to throw the cut fragments away. Such a fragment claims no depth, so what is behind it draws. A depth material cannot blend, so blending is not the way to show the cut.
 
+### Depth packing
+
+A `DepthPacking` says how a `DEPTH` material writes its depth. A byte holds only 256 steps, so one gray keeps eight bits of the depth. The packings spread the window-space depth across two, three or four channels, eight bits each. `render/packing.mojo` holds the arithmetic, and both rasterizers call it.
+
+| Value | three.js | What the pixel holds |
+|---|---|---|
+| `BASIC_DEPTH_PACKING` | `BasicDepthPacking`, 3200 | One minus the depth in red, green and blue. The alpha is the fragment's alpha. |
+| `RGBA_DEPTH_PACKING` | `RGBADepthPacking`, 3201 | `pack_depth_to_rgba`: the depth in all four channels. |
+| `RGB_DEPTH_PACKING` | `RGBDepthPacking`, 3202 | `pack_depth_to_rgb`: the depth in red, green and blue. The alpha is one. |
+| `RG_DEPTH_PACKING` | `RGDepthPacking`, 3203 | `pack_depth_to_rg`: the depth in red and green. Blue is zero and the alpha is one. |
+
+Red holds the top eight bits. Each next channel holds the next eight bits. The last channel holds the fraction that is left. `unpack_rgba_to_depth`, `unpack_rgb_to_depth` and `unpack_rg_to_depth` read the depth back from the channels.
+
+The functions are three.js's `packing.glsl`, step for step, in `Float32`. Each step multiplies by a power of two or takes a fraction, so each step is exact. The bytes are the bytes three.js writes. For example, a window depth of 0.3 packs to the bytes (76, 204, 205, 0).
+
+A packed depth reads no opacity, as three.js's does not. So a packing other than the basic one refuses an opacity below one. A packing other than the basic one on a kind that is not `DEPTH` is refused. `DepthPacking(9)` is refused where the material or a triangle is read.
+
+A packed alpha is data, and it is often zero. A depth of one half or more leaves no fraction for the alpha. So a pixel that holds data is stored straight, not premultiplied. Otherwise an alpha of zero would erase the three other channels. See [Where a data pixel differs](#where-a-data-pixel-differs).
+
+### MeshDistanceMaterial
+
+`DISTANCE` writes how far each fragment is from `reference_position`, in world space. This is three.js's `MeshDistanceMaterial`. The distance is a fraction of the way from `near_distance` to `far_distance`, clamped to zero to one. `pack_depth_to_rgba` packs the fraction into four channels.
+
+```mojo
+var measured = distance_material(
+    Vector3(0, 2, 0), Length(0.5, METER), Length(20.0, METER)
+)
+```
+
+The defaults are three.js's uniform defaults: the origin, one meter and a thousand meters. three.js sets the three from a point light when it draws that light's shadow. Here they are the material's own fields. The renderer does not draw point-light shadows with this material. See [Shadows](Lights#shadows).
+
+A distance material reads no opacity, no color and no normal. It takes a `map` and an `alpha_map`, whose alpha cuts the surface out, and an alpha test. A near distance below zero is refused. A far distance that is not past the near distance is refused. A reference position or a distance that is not finite is refused. A reference position or a distance that is not the default is refused on any other kind.
+
+This port writes the distance as three.js r180 writes it, with `packDepthToRGBA`. three.js r186 writes the distance unpacked into red, for a float target. The targets of this port hold eight bits a channel, so the packed form keeps more of the distance.
+
 ### What they refuse
 
-Neither shader reads a color, an emissive term or the vertex colors. A material of either kind refuses all three rather than ignoring them. Pass opaque white as the color, or use the builders, which do. A normal material refuses a map and an alpha map as well. Both take an alpha test, as three.js's do.
+No data shader reads a color, an emissive term or the vertex colors. A material of any data kind refuses all three rather than ignoring them. Pass opaque white as the color, or use the builders, which do. A normal material refuses a map and an alpha map as well. All three take an alpha test, as three.js's do.
 
-Neither is lit, fogged nor tone mapped. A veil of light over a normal, or a curve that compresses it, would make the image lie about its own numbers. Both rasterizers decide this per pixel. See [Why a normal is not a color](Why-a-normal-is-not-a-color).
+None is lit, fogged nor tone mapped. A veil of light over a normal, or a curve that compresses it, would make the image lie about its own numbers. Both rasterizers decide this per pixel. See [Why a normal is not a color](Why-a-normal-is-not-a-color).
 
-Neither can blend. One pixel holds its own bytes or the scene's light. A mixture of the two is neither. So a `NORMALS` or `DEPTH` material whose blending resolves to `BLEND` is refused, stated or taken from `transparent`. Both rasterizers refuse a blended data triangle as well, from the same function. That is what lets `RenderTarget.blend` say a mixture is always light.
+None can blend. One pixel holds its own bytes or the scene's light. A mixture of the two is neither. So a `NORMALS` or `DEPTH` material whose blending resolves to `BLEND` is refused, stated or taken from `transparent`. Both rasterizers refuse a blended data triangle as well, from the same function. That is what lets `RenderTarget.blend` say a mixture is always light.
+
+### Where a data pixel differs
+
+A `RenderTarget` stores light premultiplied by its alpha. A pixel that holds data is stored straight instead: `write` keeps the channels as they are, and `resolve` shows them as they are. `RenderTarget.light_at` and `color_at` return a data pixel premultiplied, as every other pixel is. `blend` premultiplies a data pixel before it mixes light over it. The GPU kernel keeps its running color the same way.
+
+A downsample or a supersample averages every pixel as premultiplied light. A block that is data throughout is then stored straight again. The average of packed channels is not a packed depth, so do not antialias a packed image.
+
+A post-processing pass reads the frame as premultiplied light. The per-pixel functions that the CPU and GPU composers share take premultiplied light. So both composers premultiply the data pixels before such a pass and store the pixels still flagged as data straight after it. `EffectComposer.run_step` does this on the host, and `GpuComposer` does it on the device with one kernel. `reads_frame_as_light` names the passes that do not need it: a mask, a render, SSAA, TAA and the output pass.
+
+The output pass leaves a data pixel as it is, so a render pass and an output pass keep every packed byte. A data pixel of alpha zero keeps no color through any other pass.
+
+## Fog switch
+
+`fog` says whether the scene's fog veils a surface. This is three.js's `fog` property. It is on for every kind that shows light, as in three.js. Turn it off to keep one surface clear in a foggy scene:
+
+```mojo
+var sign = assets.materials.add(
+    Material(Color(255, 255, 255), kind=BASIC, fog=False)
+)
+```
+
+The switch works on a mesh, a line, a wireframe, a wide line, a point and a sprite. Both rasterizers read it per primitive, from the same field. The GPU kernel reads it from the state table of each primitive.
+
+The data kinds are never fogged. three.js's normal, depth and distance shaders read no fog. So `fog` is off for `NORMALS`, `DEPTH` and `DISTANCE`, and a data material with `fog` on is refused. The field is open, so `Material.check_data` checks it again where the renderer reads it.
+
+Object JSON writes `"fog": false` for a material with the switch off, as three.js's `Material.toJSON` does. The loader reads it back. The JSON does not carry `depthPacking` or the distance range, as three.js's does not.
 
 ## Vertex colors
 
@@ -802,7 +875,8 @@ Under `BLEND`, a fragment with an alpha of zero changes nothing. Under the other
 | `specular_light() -> FloatColor` | The specular color decoded to linear light. |
 | `has_gradient_map() -> Bool` | `gradient_map != NO_TEXTURE`. A `TOON` material without one steps through the fallback. |
 | `has_matcap() -> Bool` | `matcap != NO_TEXTURE`. A `MATCAP` material without one takes the gradient. |
-| `is_data() -> Bool` | `kind` is `NORMALS` or `DEPTH`. |
+| `is_data() -> Bool` | `kind` is `NORMALS`, `DEPTH` or `DISTANCE`. |
+| `check_data()` | Refuses a depth packing, a distance range or a fog switch that the kind cannot use. |
 | `has_alpha_map() -> Bool` | `alpha_map != NO_TEXTURE`. |
 | `is_alpha_tested() -> Bool` | `alpha_test > 0`. |
 | `is_textured() -> Bool` | `map != NO_TEXTURE`. |
@@ -907,6 +981,9 @@ The constructor raises for:
 - An index of refraction that is not the default, or a specular color that is not white, on a kind that is not `PHYSICAL`. A specular intensity that is not one, or a clear coat, on such a kind.
 - A normal map or a bump map on a `BASIC`, `DEPTH` or `NORMALS` material, which a wireframe is. Both on one material.
 - A normal scale that is not one and one with no normal map. A bump scale that is not one with no bump map. A scale that is not finite.
+- A `DepthPacking` that is none of the four. A packing other than the basic one on a kind that is not `DEPTH`, or beside an opacity below one.
+- A reference position, near distance or far distance that is not the default on a kind that is not `DISTANCE`. An opacity below one on a `DISTANCE` material. A range that `check_distance_range` refuses.
+- `fog` on on a `NORMALS`, `DEPTH` or `DISTANCE` material.
 - A roughness, metalness, normal or bump map id below zero that is not `NO_TEXTURE`.
 - An ao map or a light map id below zero that is not `NO_TEXTURE`. An intensity for either that is negative or not finite.
 - An ao map intensity that is not one with no ao map. A light map intensity that is not one with no light map.

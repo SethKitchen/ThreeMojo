@@ -32,6 +32,7 @@ from materials.material import (
     DEPTH,
     MAX_IOR,
     MIN_IOR,
+    DISTANCE,
     LAMBERT,
     MULTIPLY_OPERATION,
     NORMALS,
@@ -55,6 +56,13 @@ from render.cube_texture_store import (
 )
 from render.target import RenderTarget
 from render.raster_state import RasterState, fragment_depth, shades
+from render.packing import (
+    BASIC_DEPTH_PACKING,
+    DepthPacking,
+    check_distance_range,
+    packed_depth_fragment,
+    packed_distance_fragment,
+)
 from render.srgb import LINEAR
 from render.texture import (
     FLOAT_TYPE,
@@ -655,6 +663,21 @@ struct RasterVertex(ImplicitlyCopyable):
     var attenuation_distance: Float32
     var dispersion: Float32
     var ior: Float32
+    # Whether the scene's fog veils this primitive, three.js's `fog`.
+    # Per-primitive metadata like the blend policy: read from the first
+    # corner, checked to agree. A data triangle is never fogged, whatever
+    # this says.
+    var fog: Bool
+    # How a `DEPTH` triangle writes its depth, three.js's `depthPacking`.
+    # Per-triangle metadata like the kind; see `render.packing`.
+    var depth_packing: DepthPacking
+    # Where a `DISTANCE` triangle measures from, in world space, and the
+    # distances, in meters, that map to zero and to one: three.js's
+    # `referencePosition`, `nearDistance` and `farDistance`. Per-triangle,
+    # read from the first corner; no other kind reads them.
+    var reference: Vector3
+    var near_distance: Float32
+    var far_distance: Float32
 
     def __init__(
         out self,
@@ -715,6 +738,11 @@ struct RasterVertex(ImplicitlyCopyable):
         attenuation_distance: Float32 = inf[DType.float32](),
         dispersion: Float32 = 0,
         ior: Float32 = DEFAULT_IOR,
+        fog: Bool = True,
+        depth_packing: DepthPacking = BASIC_DEPTH_PACKING,
+        reference: Vector3 = Vector3(0, 0, 0),
+        near_distance: Float32 = 1,
+        far_distance: Float32 = 1000,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -739,7 +767,10 @@ struct RasterVertex(ImplicitlyCopyable):
         written, and no stencil test. The ambient occlusion map and the
         light map default to none, at intensities of one. The volume
         defaults to three.js's: no transmission, no thickness, white light
-        that is never dimmed, no dispersion, and an index of 1.5.
+        that is never dimmed, no dispersion, and an index of 1.5. The fog
+        reaches the corner, the depth packing is the basic one, and the
+        distance is measured from the origin between one and a thousand
+        meters, all three.js's defaults.
         """
         self.x = x
         self.y = y
@@ -798,6 +829,11 @@ struct RasterVertex(ImplicitlyCopyable):
         self.attenuation_distance = attenuation_distance
         self.dispersion = dispersion
         self.ior = ior
+        self.fog = fog
+        self.depth_packing = depth_packing
+        self.reference = reference
+        self.near_distance = near_distance
+        self.far_distance = far_distance
 
 
 @fieldwise_init
@@ -1283,6 +1319,56 @@ def interpolate_alpha(
     return first + share_b * (second - first) + share_c * (third - first)
 
 
+def check_data_state(a: RasterVertex, b: RasterVertex, c: RasterVertex) raises:
+    """Refuse a triangle's fog switch, depth packing or distance range
+    where its corners disagree or its kind cannot use it.
+
+    Part of `check_triangle_state`, and shared by both backends through it.
+
+    Args:
+        a: The triangle's first corner, whose state is the authoritative one.
+        b: Its second corner.
+        c: Its third corner.
+
+    Raises:
+        Error: If the corners disagree on their fog switch or their depth
+            packing; if the packing is none of the four, or is not
+            `BASIC_DEPTH_PACKING` on a kind that is not `DEPTH`; or, on a
+            `DISTANCE` triangle, if the range is refused by
+            `render.packing.check_distance_range` or the corners disagree
+            on it.
+    """
+    if b.fog != a.fog or c.fog != a.fog:
+        raise Error("A triangle's corners disagree about the fog")
+    if b.depth_packing != a.depth_packing or (
+        c.depth_packing != a.depth_packing
+    ):
+        raise Error("A triangle's corners disagree about their depth packing")
+    if not a.depth_packing.is_valid():
+        raise Error("A triangle's depth packing is none of the four")
+    if a.depth_packing != BASIC_DEPTH_PACKING and a.kind != DEPTH:
+        raise Error("Only a depth triangle packs its depth")
+    if a.kind == DISTANCE:
+        # Before the agreement check, because not-a-number is not equal to
+        # itself.
+        check_distance_range(a.reference, a.near_distance, a.far_distance)
+        if not _same_range(a, b) or not _same_range(a, c):
+            raise Error(
+                "A triangle's corners disagree about their distance range"
+            )
+
+
+def _same_range(a: RasterVertex, b: RasterVertex) -> Bool:
+    """Return True if two corners name one reference point and one range."""
+    return (
+        a.reference.x == b.reference.x
+        and a.reference.y == b.reference.y
+        and a.reference.z == b.reference.z
+        and a.near_distance == b.near_distance
+        and a.far_distance == b.far_distance
+    )
+
+
 def check_triangle_state(
     a: RasterVertex, b: RasterVertex, c: RasterVertex
 ) raises:
@@ -1342,8 +1428,10 @@ def check_triangle_state(
             is negative or not finite, an index outside one to 2.333,
             either volume map id that is a negative other than
             `NO_TEXTURE`, and any of them but its default on a kind that
-            is not `PHYSICAL` are refused.
+            is not `PHYSICAL` are refused. The fog switch, the depth packing and the distance
+            range are refused as `check_data_state` refuses them.
     """
+    check_data_state(a, b, c)
     if b.blend != a.blend or c.blend != a.blend:
         raise Error("A triangle's corners disagree about blending")
     if b.texture != a.texture or c.texture != a.texture:
@@ -1374,7 +1462,7 @@ def check_triangle_state(
     if not a.blend.is_valid():
         raise Error("A triangle's blend policy is not a blending mode there is")
     if not a.kind.is_valid():
-        raise Error("A triangle's material kind is none of the ten")
+        raise Error("A triangle's material kind is none of the eleven")
     if b.receives_shadow != a.receives_shadow or (
         c.receives_shadow != a.receives_shadow
     ):
@@ -2213,9 +2301,9 @@ def rasterize_shaded(
     # target keeps the tone mapping off them.
     var data = a.kind.is_data()
     # Whether the fog reaches these fragments: never in the uv debug view,
-    # which shows coordinates rather than light, and never a surface that
-    # shows data.
-    var fogged = fog.is_on() and mode != SHADE_UV and not data
+    # which shows coordinates rather than light, never a surface that
+    # shows data, and never a surface whose material turns it off.
+    var fogged = fog.is_on() and mode != SHADE_UV and not data and a.fog
     # Whether a fragment of this triangle can be thrown away for being too
     # transparent. Such a fragment must claim no depth until it survives,
     # or the hole it cuts hides what is behind it: the *late* depth write a
@@ -2369,7 +2457,10 @@ def rasterize_shaded(
             # which a reflection needs of an unlit surface too.
             var spot = Vector3(0, 0, 0)
             if (
-                ((a.kind.is_lit() or a.kind == MATCAP) and mode != SHADE_UV)
+                (
+                    (a.kind.is_lit() or a.kind == MATCAP or a.kind == DISTANCE)
+                    and mode != SHADE_UV
+                )
                 or reflects
                 or catches
             ):
@@ -2759,8 +2850,21 @@ def rasterize_shaded(
                     var packed = packed_normal(facing)
                     shaded = data_color(packed.x, packed.y, packed.z, shaded.a)
                 else:
-                    var seen = packed_depth(z)
-                    shaded = data_color(seen, seen, seen, shaded.a)
+                    # A depth, packed by the material's packing, or a
+                    # distance from the reference point, packed into four
+                    # channels. A packed alpha is data too, and is kept.
+                    var written: SIMD[DType.float32, 4]
+                    if a.kind == DISTANCE:
+                        written = packed_distance_fragment(
+                            spot, a.reference, a.near_distance, a.far_distance
+                        )
+                    else:
+                        written = packed_depth_fragment(
+                            a.depth_packing, z, shaded.a
+                        )
+                    shaded = data_color(
+                        written[0], written[1], written[2], written[3]
+                    )
             elif catches:
                 # The shadow and nothing else: the color where the lights
                 # that cast are blocked, transparent where they reach,
@@ -2968,7 +3072,9 @@ def rasterize_shaded(
                 # the alpha test, and a surface that does not blend hides
                 # everything behind it. A depth material keeps its opacity
                 # as its alpha, as three.js's `MeshDepthMaterial` writes it.
-                if a.kind != DEPTH:
+                # A distance material, and a packed depth, write their
+                # alpha as data.
+                if a.kind != DEPTH and a.kind != DISTANCE:
                     shaded.a = 1
                 target.write(
                     x,
@@ -3009,7 +3115,7 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
             dash or the gap differ between the ends, if either is
             negative or not finite, or if the ends disagree about their
             depth, color or stencil state or it is refused by
-            `RasterState.check`.
+            `RasterState.check`, or if they disagree about the fog.
     """
     if not a.blend.is_valid():
         raise Error("A line needs a blend policy that exists")
@@ -3034,6 +3140,8 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
             "A line's ends must agree about their depth, color or stencil state"
         )
     a.state.check()
+    if a.fog != b.fog:
+        raise Error("A line's ends must agree about the fog")
 
 
 def rasterize_line(
@@ -3093,7 +3201,7 @@ def rasterize_line(
     var second = Vector2(b.x, b.y)
     var steps = span_of(first, second)
     var horizontal = major_is_x(first, second)
-    var fogged = fog.is_on()
+    var fogged = fog.is_on() and a.fog
     # Whether a pixel that passes writes its depth; see `rasterize_shaded`.
     var writes_depth = a.state.writes_depth(a.blend.mixes())
     # Which steps can land on the target at all, worked out before the
@@ -3333,7 +3441,7 @@ def rasterize_point(
     # Decided by the material and carried here, as a triangle's are; see
     # `rasterize_shaded` for what each changes.
     var blended = point.blend.mixes() and mode != SHADE_UV
-    var fogged = fog.is_on() and mode != SHADE_UV
+    var fogged = fog.is_on() and mode != SHADE_UV and point.fog
     var tested = point.alpha_test > 0 and mode != SHADE_UV
     var writes_depth = point.state.writes_depth(blended)
     var sampled = mode == SHADE_TEXTURE

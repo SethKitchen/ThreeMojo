@@ -12,7 +12,7 @@ from core.object3d import Object3D
 from core.scene import Scene
 from geometries.plane import plane
 from lights.light import directional_light
-from materials.material import Material, normal_material
+from materials.material import Material, distance_material, normal_material
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -51,6 +51,7 @@ from postprocessing.composer import (
     luminosity_pass,
     output_light,
     output_pass,
+    reads_frame_as_light,
     render_pass,
     sepia_light,
     sepia_pass,
@@ -610,6 +611,48 @@ def test_the_output_pass_applies_the_curve_to_light_and_not_to_data() raises:
     plain.write(0, 0, FloatColor(3, 3, 3, 1))
     output_light(plain, NO_TONE_MAPPING, 1.0)
     assert_equal(plain.color_at(0, 0).r, Float32(3))
+
+
+def test_a_packed_distance_keeps_its_bytes_through_the_output_pass() raises:
+    # A packed distance's alpha is data and can be zero. The render and
+    # output passes do not read the frame as light, so the composer leaves
+    # the data pixels straight and shows the bytes the renderer shows.
+    assert_false(reads_frame_as_light(RENDER))
+    assert_false(reads_frame_as_light(OUTPUT))
+    assert_true(reads_frame_as_light(SEPIA))
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_tone_mapping(REINHARD_TONE_MAPPING)
+    var assets = Assets()
+    var scene = lit_sheet(assets)
+    scene.meshes[0].material = assets.materials.add(
+        distance_material(
+            Vector3(0, 0, 4), Length(3.0, METER), Length(5.0, METER)
+        )
+    )
+    var camera = a_camera()
+    var direct = renderer.render(scene, assets, camera)
+    var composer = EffectComposer()
+    composer.add_pass(render_pass())
+    composer.add_pass(output_pass())
+    var composed = composer.render(renderer, scene, assets, camera)
+    assert_equal(count_differences(direct, composed), 0)
+
+
+def test_a_data_frame_survives_a_pass_that_reads_it_as_light() raises:
+    # A copy at full opacity reads the frame as premultiplied light. The
+    # composer premultiplies the data first and stores it straight after,
+    # so the normal comes back as it was drawn.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var scene = lit_sheet(assets)
+    scene.meshes[0].material = assets.materials.add(normal_material())
+    var composer = EffectComposer()
+    composer.add_pass(render_pass())
+    composer.add_pass(copy_pass(1.0))
+    var shown = composer.render(renderer, scene, assets, a_camera())
+    assert_true(
+        same(shown.get_pixel(WIDTH // 2, HEIGHT // 2), Color(128, 128, 255))
+    )
 
 
 # --- the composer on a scene ------------------------------------------------

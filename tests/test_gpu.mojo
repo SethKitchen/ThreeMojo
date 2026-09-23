@@ -141,6 +141,13 @@ from renderers.renderer import (
     camera_up,
     toward_camera,
 )
+from render.packing import (
+    BASIC_DEPTH_PACKING,
+    RGBA_DEPTH_PACKING,
+    RGB_DEPTH_PACKING,
+    RG_DEPTH_PACKING,
+    DepthPacking,
+)
 from render.gpu import (
     FLOATS_PER_VERTEX,
     LANE_AO_INTENSITY,
@@ -150,6 +157,16 @@ from render.gpu import (
     LANE_V1,
     STATE_AO_MAP,
     STATE_LIGHT_MAP,
+    LANE_FAR_DISTANCE,
+    LANE_NEAR_DISTANCE,
+    LANE_REFERENCE_X,
+    LANE_REFERENCE_Y,
+    LANE_REFERENCE_Z,
+    LINE_STATE_FOG,
+    STATE_PER_LINE,
+    POINT_STATE_FOG,
+    STATE_DEPTH_PACKING,
+    STATE_FOG,
     LANE_CLEARCOAT,
     LANE_CLEARCOAT_ROUGHNESS,
     LANE_ENV_INTENSITY,
@@ -251,6 +268,7 @@ from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from materials.material import (
     BASIC,
     DEPTH,
+    DISTANCE,
     DOUBLE_SIDE,
     LAMBERT,
     MATCAP,
@@ -1138,7 +1156,7 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 44)
+    assert_equal(len(flat), 59)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -4359,7 +4377,7 @@ def test_the_gpu_refuses_a_material_kind_it_has_no_path_for() raises:
         return
     var renderer = GpuRenderer(8, 8)
     with assert_raises():
-        renderer.draw(data_pair(MaterialKind(10)), BACKGROUND)
+        renderer.draw(data_pair(MaterialKind(11)), BACKGROUND)
     # And corners that disagree, which is the check it shares with the CPU.
     var mixed = data_pair(NORMALS)
     mixed[1] = of_kind(mixed[1], DEPTH)
@@ -4548,7 +4566,7 @@ def test_flattening_carries_the_alpha_test_in_its_own_lane() raises:
         RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), alpha_test=0.375)
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 44)
+    assert_equal(len(flat), 59)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[20], Float32(0.375))
     # And a corner that says nothing about it carries zero, no test.
@@ -4729,7 +4747,7 @@ def test_flattening_carries_the_specular_and_the_shininess() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 44)
+    assert_equal(len(flat), 59)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[21], Float32(0.25))
     assert_equal(flat[22], Float32(0.5))
@@ -7738,6 +7756,7 @@ def test_the_physical_lanes_and_columns_ride_last() raises:
     assert_equal(flat[LANE_NORMAL_SCALE_Y], Float32(0.5))
     assert_equal(flat[LANE_BUMP_SCALE], Float32(0.3))
     assert_equal(LANE_BUMP_SCALE, LANE_U1 - 1)
+    assert_equal(LANE_FAR_DISTANCE, FLOATS_PER_VERTEX - 1)
     # A corner that says nothing carries a rough dielectric with no map.
     var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
     assert_equal(plain[LANE_ROUGHNESS], Float32(1))
@@ -9003,11 +9022,13 @@ def test_the_baked_lanes_and_columns_ride_last() raises:
     assert_equal(flat[LANE_LIGHT_MAP_INTENSITY], Float32(1.5))
     assert_equal(LANE_LOG_DEPTH, LANE_LIGHT_MAP_INTENSITY + 1)
     assert_equal(LANE_LOG_DEPTH, LANE_TRANSMISSION - 1)
+    assert_equal(LANE_REFERENCE_X, LANE_IOR + 1)
     var state = triangle_state(corners)
     assert_equal(len(state), 2 * STATE_PER_TRIANGLE)
     assert_equal(state[STATE_AO_MAP], Int32(2))
     assert_equal(state[STATE_LIGHT_MAP], Int32(3))
     assert_equal(STATE_SPECULAR_MAP, STATE_TRANSMISSION_MAP - 1)
+    assert_equal(STATE_THICKNESS_MAP, STATE_DEPTH_PACKING - 1)
     # A corner that says nothing names neither map, at intensities of one.
     var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
     assert_equal(plain[LANE_AO_INTENSITY], Float32(1))
@@ -9698,12 +9719,12 @@ def test_the_volume_lanes_and_columns_ride_last() raises:
     assert_equal(flat[LANE_DISPERSION], Float32(2))
     assert_equal(flat[LANE_IOR], Float32(1.4))
     assert_equal(LANE_TRANSMISSION, LANE_LOG_DEPTH + 1)
-    assert_equal(LANE_IOR, FLOATS_PER_VERTEX - 1)
+    assert_equal(LANE_IOR, LANE_REFERENCE_X - 1)
     var state = triangle_state(corners)
     assert_equal(state[STATE_TRANSMISSION_MAP], Int32(4))
     assert_equal(state[STATE_THICKNESS_MAP], Int32(5))
     assert_equal(STATE_TRANSMISSION_MAP, STATE_SPECULAR_MAP + 1)
-    assert_equal(STATE_THICKNESS_MAP, STATE_PER_TRIANGLE - 1)
+    assert_equal(STATE_THICKNESS_MAP, STATE_DEPTH_PACKING - 1)
 
 
 def test_a_transmission_target_crosses_as_a_header_and_its_chain() raises:
@@ -10230,3 +10251,176 @@ def test_the_gpu_composer_keeps_the_normals_the_screen_space_passes_read() raise
     steps.append(ssr_pass())
     # The render pass and the three screen-space passes run on the host.
     assert_equal(compare_post(steps), 4)
+
+
+# --- depth packing, distance and the fog switch ------------------------------
+
+
+def packed_pair(
+    kind: MaterialKind, packing: DepthPacking
+) -> List[RasterVertex]:
+    """Return `data_pair` of `kind` with a depth packing, each corner at its
+    own world position, measured from a reference between one and nine
+    meters."""
+    var corners = data_pair(kind)
+    for index in range(len(corners)):
+        corners[index].depth_packing = packing
+        corners[index].world = Vector3(
+            Float32(index), Float32(index % 3) * 1.5, -2 - Float32(index)
+        )
+        corners[index].reference = Vector3(0.5, 0.25, 1)
+        corners[index].near_distance = 1
+        corners[index].far_distance = 9
+    return corners^
+
+
+def test_the_depth_packing_the_range_and_the_fog_switch_cross() raises:
+    # Five lanes for the range, one column for the packing, and one each in
+    # the three state tables for the fog switch.
+    assert_equal(LANE_REFERENCE_X, LANE_IOR + 1)
+    assert_equal(LANE_REFERENCE_Y, LANE_REFERENCE_X + 1)
+    assert_equal(LANE_REFERENCE_Z, LANE_REFERENCE_Y + 1)
+    assert_equal(LANE_NEAR_DISTANCE, LANE_REFERENCE_Z + 1)
+    assert_equal(LANE_FAR_DISTANCE, LANE_NEAR_DISTANCE + 1)
+    var corners = packed_pair(DISTANCE, BASIC_DEPTH_PACKING)
+    var flat = flatten(corners)
+    assert_equal(flat[LANE_REFERENCE_X], Float32(0.5))
+    assert_equal(flat[LANE_REFERENCE_Y], Float32(0.25))
+    assert_equal(flat[LANE_REFERENCE_Z], Float32(1))
+    assert_equal(flat[LANE_NEAR_DISTANCE], Float32(1))
+    assert_equal(flat[LANE_FAR_DISTANCE], Float32(9))
+    var depth = packed_pair(DEPTH, RGB_DEPTH_PACKING)
+    depth[0].fog = False
+    var state = triangle_state(depth)
+    assert_equal(STATE_FOG, STATE_PER_TRIANGLE - 1)
+    assert_equal(state[STATE_DEPTH_PACKING], Int32(RGB_DEPTH_PACKING.value))
+    assert_equal(state[STATE_FOG], Int32(0))
+    assert_equal(state[STATE_PER_TRIANGLE + STATE_FOG], Int32(1))
+    var ends = a_varying_line(
+        2.5, 13.5, FloatColor(1, 1, 1), FloatColor(1, 1, 1)
+    )
+    ends[0].fog = False
+    ends[1].fog = False
+    var lined = line_state(ends)
+    assert_equal(LINE_STATE_FOG, STATE_PER_LINE - 1)
+    assert_equal(lined[LINE_STATE_FOG], Int32(0))
+    var dot = a_point(4.5, 4.5, 3, 0.5, Color(255, 255, 255))
+    var dots = point_state([dot])
+    assert_equal(POINT_STATE_FOG, STATE_PER_POINT - 1)
+    assert_equal(dots[POINT_STATE_FOG], Int32(1))
+
+
+def test_both_backends_agree_on_every_depth_packing() raises:
+    # The kernel packs by the state table's packing with the host's own
+    # function, and keeps a packed alpha, often zero, straight as the host
+    # keeps it.
+    if skipped_for_lack_of_a_gpu("both backends agree on the packings"):
+        return
+    for packing in [
+        BASIC_DEPTH_PACKING,
+        RGBA_DEPTH_PACKING,
+        RGB_DEPTH_PACKING,
+        RG_DEPTH_PACKING,
+    ]:
+        var corners = packed_pair(DEPTH, packing)
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(corners, target, SHADE_TEXTURE)
+        var cpu = target.resolve()
+        var gpu = render_triangles(corners, 36, 30, BACKGROUND, SHADE_TEXTURE)
+        assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def test_both_backends_agree_on_a_distance_material() raises:
+    # The distance comes from the same interpolated world position on both
+    # sides, measured and packed by the same function, and no fog reaches
+    # it on either.
+    if skipped_for_lack_of_a_gpu("both backends agree on a distance"):
+        return
+    var corners = packed_pair(DISTANCE, BASIC_DEPTH_PACKING)
+    var fog = FogView(
+        linear_fog(Color(255, 0, 0), Length(0.5, METER), Length(2.0, METER))
+    )
+    var target = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(
+        corners,
+        target,
+        SHADE_TEXTURE,
+        TextureStore(),
+        Lighting.uniform(),
+        1,
+        fog,
+    )
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        36,
+        30,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        TextureStore(),
+        Lighting.uniform(),
+        fog,
+    )
+    assert_equal(count_mismatches(cpu, gpu), 0)
+    # Light blended over the packed pixels mixes with them as light on
+    # both sides: a data pixel is premultiplied before it mixes.
+    var over = overlapping_pair()
+    for index in range(len(over)):
+        over[index].blend = BLEND
+        over[index].color = FloatColor(1, 1, 1, 0.5)
+    var both = packed_pair(DISTANCE, BASIC_DEPTH_PACKING)
+    for index in range(len(over)):
+        both.append(over[index])
+    var mixed = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(both, mixed, SHADE_TEXTURE)
+    var gpu_mixed = render_triangles(both, 36, 30, BACKGROUND, SHADE_TEXTURE)
+    assert_equal(count_mismatches(mixed.resolve(), gpu_mixed, tolerance=1), 0)
+
+
+def test_both_backends_leave_a_primitive_with_its_fog_off_unfogged() raises:
+    # three.js's `fog = false`, on a triangle, a line and a point, read by
+    # the kernel from the three state tables.
+    if skipped_for_lack_of_a_gpu("both backends honor the fog switch"):
+        return
+    var view = FogView(
+        linear_fog(Color(0, 0, 0), Length(1.0, METER), Length(3.0, METER))
+    )
+    var corners = data_pair(BASIC, 2.0)
+    for index in range(3):
+        corners[index].fog = False
+    var lines = a_varying_line(
+        2.5, 28.5, FloatColor(1, 1, 1), FloatColor(1, 1, 1), depth=2.0
+    )
+    lines[0].fog = False
+    lines[1].fog = False
+    var dot = a_point(30.5, 4.5, 3, 0.1, Color(255, 255, 255), depth=2)
+    dot.fog = False
+    var points: List[RasterVertex] = [dot]
+    var target = RenderTarget(36, 30, BACKGROUND)
+    rasterize_all(
+        corners,
+        target,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        1,
+        view,
+    )
+    rasterize_lines_all(lines, target, 1, view)
+    rasterize_points_all(points, target, SHADE_LIT, TextureStore(), 1, view)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        36,
+        30,
+        BACKGROUND,
+        SHADE_LIT,
+        TextureStore(),
+        Lighting.uniform(),
+        view,
+        NO_TONE_MAPPING,
+        1.0,
+        lines,
+        points=points,
+    )
+    assert_equal(count_mismatches(cpu, gpu), 0)

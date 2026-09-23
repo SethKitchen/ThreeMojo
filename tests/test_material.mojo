@@ -9,6 +9,7 @@ from materials.material import BLEND, OPAQUE, Blending, MaterialKind, Side
 from materials.material import (
     BASIC,
     DEPTH,
+    DISTANCE,
     LAMBERT,
     MATCAP,
     NORMALS,
@@ -26,6 +27,7 @@ from materials.material import (
     NO_ROTATION,
     PointSize,
     depth_material,
+    distance_material,
     line_dashed_material,
     matcap_material,
     normal_material,
@@ -74,6 +76,13 @@ from std.testing import (
 from math.vector2 import Vector2
 from std.math import inf, nan
 from units.si import Angle, DEGREE, Length, METER, RADIAN
+from math.vector3 import Vector3
+from render.packing import (
+    BASIC_DEPTH_PACKING,
+    RGBA_DEPTH_PACKING,
+    RGB_DEPTH_PACKING,
+    DepthPacking,
+)
 
 
 def a_board() raises -> Texture:
@@ -253,13 +262,13 @@ def test_a_wrong_value_in_the_right_type_is_refused() raises:
     assert_true(MATCAP.is_valid())
     assert_true(STANDARD.is_valid())
     assert_true(PHYSICAL.is_valid())
-    assert_false(MaterialKind(10).is_valid())
+    assert_false(MaterialKind(11).is_valid())
     with assert_raises():
         _ = Material(Color(0, 0, 0), NO_TEXTURE, Side(99))
     with assert_raises():
         _ = Material(Color(0, 0, 0), blending=Blending(7))
     with assert_raises():
-        _ = Material(Color(0, 0, 0), kind=MaterialKind(10))
+        _ = Material(Color(0, 0, 0), kind=MaterialKind(11))
     # Editing one after the fact is possible too; the rasterizers check.
     var changed = OPAQUE
     changed.value = 7
@@ -1650,6 +1659,99 @@ def test_flat_shading_needs_a_normal_to_replace() raises:
         _ = Material(color, kind=SHADOW, flat_shading=True)
     with assert_raises():
         _ = Material(color, kind=BASIC, wireframe=True, flat_shading=True)
+
+
+# --- depth packing, distance and fog ---------------------------------------
+
+
+def test_a_depth_material_packs_by_three_js_default() raises:
+    var shown = depth_material()
+    assert_equal(shown.depth_packing, BASIC_DEPTH_PACKING)
+    var packed = depth_material(depth_packing=RGBA_DEPTH_PACKING)
+    assert_equal(packed.depth_packing, RGBA_DEPTH_PACKING)
+    packed.check_data()
+    # A value the type holds and no packing names.
+    with assert_raises(contains="depth packing"):
+        _ = depth_material(depth_packing=DepthPacking(7))
+    # Packed on a kind that shows no depth.
+    with assert_raises(contains="Only a depth material"):
+        _ = Material(Color(1, 2, 3), depth_packing=RGB_DEPTH_PACKING)
+    # A packed depth reads no opacity.
+    with assert_raises(contains="no opacity"):
+        _ = depth_material(opacity=0.5, depth_packing=RGB_DEPTH_PACKING)
+    # The basic packing keeps it, as three.js's does.
+    assert_equal(depth_material(opacity=0.5).opacity, Float32(0.5))
+    # The field is open, and the check reads it where the renderer does.
+    var changed = depth_material()
+    changed.depth_packing = DepthPacking(-1)
+    with assert_raises(contains="depth packing"):
+        changed.check_data()
+
+
+def test_a_distance_material_is_three_js_mesh_distance_material() raises:
+    var measured = distance_material()
+    assert_equal(measured.kind, DISTANCE)
+    assert_true(measured.is_data())
+    assert_true(DISTANCE.is_data())
+    assert_true(DISTANCE.is_valid())
+    assert_false(DISTANCE.is_lit())
+    assert_false(DISTANCE.reflects())
+    assert_false(DISTANCE.has_normal())
+    assert_false(measured.fog)
+    assert_equal(measured.near_distance.to(METER), Float32(1))
+    assert_equal(measured.far_distance.to(METER), Float32(1000))
+    assert_equal(measured.reference_position.x, Float32(0))
+    var placed = distance_material(
+        Vector3(1, 2, 3), Length(0.5, METER), Length(20.0, METER)
+    )
+    assert_equal(placed.reference_position.z, Float32(3))
+    assert_equal(placed.far_distance.to(METER), Float32(20))
+    # A distance material shows data, not light, so it takes no color.
+    with assert_raises(contains="no color"):
+        _ = Material(Color(1, 2, 3), kind=DISTANCE)
+
+
+def test_a_distance_range_is_refused_where_it_cannot_measure() raises:
+    with assert_raises(contains="far distance"):
+        _ = distance_material(
+            near_distance=Length(5.0, METER), far_distance=Length(5.0, METER)
+        )
+    with assert_raises(contains="near distance"):
+        _ = distance_material(near_distance=Length(-1.0, METER))
+    with assert_raises(contains="reference"):
+        _ = distance_material(Vector3(nan[DType.float32](), 0, 0))
+    # A distance material reads no opacity.
+    with assert_raises(contains="no opacity"):
+        _ = Material(Color(255, 255, 255), kind=DISTANCE, opacity=0.5)
+    # And no other kind reads a range, whichever of the three is set.
+    with assert_raises(contains="Only a distance material"):
+        _ = Material(Color(1, 2, 3), reference_position=Vector3(0, 1, 0))
+    with assert_raises(contains="Only a distance material"):
+        _ = Material(Color(1, 2, 3), near_distance=Length(2.0, METER))
+    with assert_raises(contains="Only a distance material"):
+        _ = Material(Color(1, 2, 3), far_distance=Length(2.0, METER))
+    with assert_raises(contains="Only a distance material"):
+        _ = Material(Color(1, 2, 3), reference_position=Vector3(1, 0, 0))
+    with assert_raises(contains="Only a distance material"):
+        _ = Material(Color(1, 2, 3), reference_position=Vector3(0, 0, 1))
+
+
+def test_a_material_is_fogged_unless_it_says_otherwise() raises:
+    assert_true(Material(Color(1, 2, 3)).fog)
+    assert_true(Material(Color(1, 2, 3), kind=BASIC).fog)
+    assert_false(Material(Color(1, 2, 3), fog=False).fog)
+    assert_true(Material(Color(1, 2, 3), fog=True).fog)
+    # The data kinds are never fogged, as three.js's shaders for them read
+    # no fog, and refuse it.
+    assert_false(normal_material().fog)
+    assert_false(depth_material().fog)
+    assert_false(Material(Color(255, 255, 255), kind=NORMALS, fog=False).fog)
+    with assert_raises(contains="never fogged"):
+        _ = Material(Color(255, 255, 255), kind=DEPTH, fog=True)
+    var turned = normal_material()
+    turned.fog = True
+    with assert_raises(contains="never fogged"):
+        turned.check_data()
 
 
 def main() raises:

@@ -84,7 +84,9 @@ var device = GpuComposer(renderer.width, renderer.height)
 var image = device.render(composer, renderer, scene, assets, camera)
 ```
 
-The device frame holds four floats of premultiplied light per pixel, one data byte, the depth and the stencil. `render` puts the cleared frame on the device once and reads it back once at the end. The host resolves it through no curve, as `EffectComposer.render` does.
+The device frame holds four floats per pixel, one data byte, the depth and the stencil. The four floats are premultiplied light, or the data itself, straight, where the pixel holds data, as a host frame holds them.
+
+Before a pass that reads the frame as light, one kernel premultiplies the data pixels, and after it the same kernel stores them straight again. `EffectComposer.run_step` does the same on the host. `render` puts the cleared frame on the device once and reads it back once at the end. The host resolves it through no curve, as `EffectComposer.render` does.
 
 | Member | Meaning |
 |---|---|

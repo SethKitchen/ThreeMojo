@@ -78,6 +78,7 @@ from materials.material import (
     BASIC,
     BLEND,
     DEPTH,
+    DISTANCE,
     DOUBLE_SIDE,
     LAMBERT,
     MATCAP,
@@ -97,6 +98,7 @@ from materials.material import (
     MaterialId,
     MaterialKind,
     custom_blending,
+    distance_material,
 )
 from math.euler import XYZ, YXZ, ZYX
 from math.matrix4 import Matrix4, translation
@@ -660,6 +662,35 @@ def test_write_and_load_a_file() raises:
     var model = load_object_json(path, again, read)
     assert_equal(len(again.meshes), 1)
     assert_equal(model.node(object_uuid(2, 0)).value, 0)
+
+
+def test_the_fog_switch_and_a_distance_material_round_trip() raises:
+    """`fog: false` is written and read as three.js writes it, and a
+    `MeshDistanceMaterial` is read as a `DISTANCE` material."""
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    var geometry = assets.geometries.add(_triangle())
+    var kinds = [
+        Material(WHITE, kind=BASIC, fog=False),
+        Material(WHITE, kind=BASIC),
+        distance_material(),
+    ]
+    for at in range(len(kinds)):
+        scene.add_mesh(Mesh(geometry, assets.materials.add(kinds[at]), node))
+    var text = object_to_json(scene, assets)
+    assert_true(text.find('"fog":false') >= 0)
+    assert_true(text.find("MeshDistanceMaterial") >= 0)
+    var again = Scene()
+    var read = Assets()
+    _ = read_object_json(text, again, read)
+    assert_false(read.materials.get(MaterialId(0)).fog)
+    assert_true(read.materials.get(MaterialId(1)).fog)
+    var measured = read.materials.get(MaterialId(2))
+    assert_equal(measured.kind, DISTANCE)
+    assert_false(measured.fog)
+    # A data material has no `fog` in three.js, and none is read for one.
+    assert_false(_material('"type":"MeshDepthMaterial","fog":true').fog)
 
 
 def test_several_things_on_a_node_become_parts() raises:

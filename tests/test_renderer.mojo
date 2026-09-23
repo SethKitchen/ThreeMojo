@@ -46,6 +46,7 @@ from materials.material import (
     TOON,
     depth_material,
     line_dashed_material,
+    distance_material,
     matcap_material,
     normal_material,
     phong_material,
@@ -76,6 +77,11 @@ from lights.shadow import (
     ShadowMapType,
 )
 from core.fog import FogKind, exp2_fog, linear_fog, no_fog
+from render.packing import (
+    RGB_DEPTH_PACKING,
+    DepthPacking,
+    unpack_rgba_to_depth,
+)
 from render.tonemap import (
     LINEAR_TONE_MAPPING,
     NO_TONE_MAPPING,
@@ -3991,6 +3997,117 @@ def test_a_data_material_ignores_the_lights_and_the_fog() raises:
                 assert_equal(veiled.get_pixel(x, y).r, here.r)
                 assert_equal(veiled.get_pixel(x, y).g, here.g)
                 assert_equal(veiled.get_pixel(x, y).b, here.b)
+
+
+def unpacked(shown: Color) -> Float32:
+    """Return the number four packed bytes hold."""
+    return unpack_rgba_to_depth(
+        SIMD[DType.float32, 4](
+            Float32(shown.r) / 255,
+            Float32(shown.g) / 255,
+            Float32(shown.b) / 255,
+            Float32(shown.a) / 255,
+        )
+    )
+
+
+def test_a_distance_material_shows_the_distance_from_its_reference() raises:
+    # The sheet's middle is four meters from a reference at the camera,
+    # half way from zero to eight: 0.5, packed into four bytes. The fog does
+    # not reach it, and the lights do not.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var shown = assets.materials.add(
+        distance_material(
+            Vector3(0, 0, 4), Length(0.0, METER), Length(8.0, METER)
+        )
+    )
+    var meshes = sheet_of(assets, shown)
+    var scene = scene_with_node_at(0)
+    var plain = rendered(renderer, scene, assets, meshes, camera_at(0, 0, 4))
+    var middle = plain.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_almost_equal(unpacked(middle), Float32(0.5), atol=2e-3)
+    # A corner of the sheet is further away than its middle.
+    assert_true(
+        unpacked(plain.get_pixel(WIDTH // 2 + 4, HEIGHT // 2))
+        > unpacked(middle),
+        "the distance did not grow away from the reference",
+    )
+    var fogged = scene_with_node_at(0)
+    fogged.fog = linear_fog(
+        Color(255, 0, 0), Length(0.5, METER), Length(4.5, METER)
+    )
+    var veiled = rendered(renderer, fogged, assets, meshes, camera_at(0, 0, 4))
+    var same = veiled.get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(same.r, middle.r)
+    assert_equal(same.g, middle.g)
+    assert_equal(same.a, middle.a)
+
+
+def test_a_depth_material_packs_its_depth_through_the_renderer() raises:
+    # The basic gray's complement, spread across red, green and blue: the
+    # red byte is the top eight bits of the window-space depth.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var gray = assets.materials.add(depth_material())
+    var packed = assets.materials.add(
+        depth_material(depth_packing=RGB_DEPTH_PACKING)
+    )
+    var scene = scene_with_node_at(0)
+    var basic = rendered(
+        renderer, scene, assets, sheet_of(assets, gray), camera_at(0, 0, 4)
+    ).get_pixel(WIDTH // 2, HEIGHT // 2)
+    var spread = rendered(
+        renderer, scene, assets, sheet_of(assets, packed), camera_at(0, 0, 4)
+    ).get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(abs(Int(spread.r) - (255 - Int(basic.r))) <= 1)
+    assert_equal(spread.a, UInt8(255))
+    # A packing changed after the material is built is checked where the
+    # renderer reads it.
+    var broken = depth_material()
+    broken.depth_packing = DepthPacking(5)
+    var refused = assets.materials.add(broken)
+    with assert_raises(contains="depth packing"):
+        _ = rendered(
+            renderer,
+            scene,
+            assets,
+            sheet_of(assets, refused),
+            camera_at(0, 0, 4),
+        )
+
+
+def test_a_material_with_its_fog_off_is_not_fogged() raises:
+    # three.js's `fog = false`: the white sheet half way into a fog stays
+    # white, and one beside it with the switch on is veiled.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var clear = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC, fog=False)
+    )
+    var veiled = assets.materials.add(
+        Material(Color(255, 255, 255), kind=BASIC)
+    )
+    var camera = facing_camera()
+    var scene = scene_with_node_at(0)
+    scene.fog = linear_fog(
+        Color(40, 60, 90), Length(4.0, METER), Length(6.0, METER)
+    )
+    var kept = rendered(
+        renderer, scene, assets, sheet_of(assets, clear), camera
+    ).get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_equal(kept.r, UInt8(255))
+    assert_equal(kept.b, UInt8(255))
+    var mixed = rendered(
+        renderer, scene, assets, sheet_of(assets, veiled), camera
+    ).get_pixel(WIDTH // 2, HEIGHT // 2)
+    assert_true(mixed.r < 255, "the fog reached nothing")
+    # A data material with its fog turned on is refused where it is read.
+    var wrong = normal_material()
+    wrong.fog = True
+    var refused = assets.materials.add(wrong)
+    with assert_raises(contains="never fogged"):
+        _ = rendered(renderer, scene, assets, sheet_of(assets, refused), camera)
 
 
 def test_a_data_material_is_not_tone_mapped_by_the_renderer() raises:

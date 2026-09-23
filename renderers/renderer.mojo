@@ -191,7 +191,7 @@ from render.raster_state import (
     log_depth_factor,
 )
 from render.transmission import TransmissionTarget
-
+from render.packing import DepthPacking
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, check_tone_mapping
 from math.vector2 import Vector2
 from render.rasterizer import (
@@ -1398,6 +1398,8 @@ def _to_raster(
     physics: _Physics = _Physics(),
     receives_shadow: Bool = True,
     state: RasterState = RasterState(),
+    *,
+    shown: _Shown,
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -1474,6 +1476,48 @@ def _to_raster(
         physics.attenuation_distance,
         physics.dispersion,
         physics.ior,
+        shown.fog,
+        shown.depth_packing,
+        shown.reference,
+        shown.near_distance,
+        shown.far_distance,
+    )
+
+
+@fieldwise_init
+struct _Shown(ImplicitlyCopyable):
+    """What every corner of one draw carries for the fog switch and the
+    data kinds: whether the fog veils it, how a depth is packed, and where
+    a distance is measured from and between which two distances.
+    """
+
+    var fog: Bool
+    var depth_packing: DepthPacking
+    var reference: Vector3
+    var near_distance: Float32
+    var far_distance: Float32
+
+
+def _shown_of(material: Material) raises -> _Shown:
+    """Return what a material says about its fog, its depth packing and
+    its distance range, checked.
+
+    Args:
+        material: The draw's material.
+
+    Returns:
+        The five, as every corner of the draw carries them.
+
+    Raises:
+        Error: If `Material.check_data` refuses them.
+    """
+    material.check_data()
+    return _Shown(
+        material.fog,
+        material.depth_packing,
+        material.reference_position,
+        material.near_distance.to(METER),
+        material.far_distance.to(METER),
     )
 
 
@@ -1719,6 +1763,8 @@ struct _Paint(ImplicitlyCopyable):
     # triangles are pushed back; see `_draw_state` and `emit`.
     var state: RasterState
     var offset: PolygonOffset
+    # The fog switch, the depth packing and the distance range.
+    var shown: _Shown
 
     def raster(self, vertex: ClipVertex) -> RasterVertex:
         """Project one clipped corner into the rasterizer's input."""
@@ -1741,6 +1787,7 @@ struct _Paint(ImplicitlyCopyable):
             physics=self.physics,
             receives_shadow=self.receives_shadow,
             state=self.state,
+            shown=self.shown,
         )
 
     def emit(
@@ -2147,6 +2194,7 @@ def _emit_sprite(
         False,
         _draw_state(material, casters_only),
         _draw_offset(material, casters_only),
+        _shown_of(material),
     )
     var thirds: List[Int] = [2, 3]
     for half in range(2):  # pragma: no branch
@@ -2544,6 +2592,7 @@ def _emit_wide_line(
         False,
         _draw_state(material, False),
         _draw_offset(material, False),
+        _shown_of(material),
     )
     var no_planes = List[Plane]()
     for segment in range(segments):
@@ -3941,6 +3990,7 @@ struct Renderer(Movable):
                 draws[slot].receives_shadow,
                 _draw_state(material, casters_only),
                 _draw_offset(material, casters_only),
+                _shown_of(material),
             )
             if wireframe:
                 # The mesh's own edges, each once, clipped as segments.
@@ -3987,6 +4037,7 @@ struct Renderer(Movable):
                                 NO_TEXTURE,
                                 NO_TEXTURE,
                                 state=paint.state,
+                                shown=paint.shown,
                             )
                         )
                 _note_span(
@@ -4239,6 +4290,7 @@ struct Renderer(Movable):
             var material = assets.materials.get(line.material)
             # A line is never a caster, so its state is always its own.
             var state = _draw_state(material, False)
+            var shown = _shown_of(material)
             var cut = List[Plane]()
             var any_of = List[Plane]()
             _clip_sets(
@@ -4380,6 +4432,7 @@ struct Renderer(Movable):
                             dash,
                             gap,
                             state=state,
+                            shown=shown,
                         )
                     )
             _note_span(
@@ -4602,6 +4655,7 @@ struct Renderer(Movable):
             var material = assets.materials.get(points.material)
             # A point is never a caster, so its state is always its own.
             var state = _draw_state(material, False)
+            var shown = _shown_of(material)
             var cut = List[Plane]()
             var any_of = List[Plane]()
             _clip_sets(
@@ -4708,6 +4762,7 @@ struct Renderer(Movable):
                             self.render_scale,
                         ),
                         state=state,
+                        shown=shown,
                     )
                 )
             _note_span(

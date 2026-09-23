@@ -38,6 +38,57 @@ comptime TOLERANCE = Float64(1e-5)
 # --- the representation -----------------------------------------------------
 
 
+def test_a_data_pixel_is_stored_straight() raises:
+    # A packed depth's alpha is data, and is often zero. Premultiplied, the
+    # color would be lost; straight, it comes back.
+    var target = RenderTarget(2, 1, Color(0, 0, 0))
+    var packed = FloatColor(0.5, 0.25, 0.75, 0.0)
+    target.write(0, 0, packed, True)
+    assert_equal(target.colors[0].r, Float32(0.5))
+    assert_equal(target.shown(0, 0).a, UInt8(0))
+    assert_equal(
+        target.resolve().get_pixel(0, 0).r, FloatColor(0.5, 0, 0, 1).encode().r
+    )
+    # Read as light it is premultiplied, as every other pixel is.
+    assert_equal(target.color_at(0, 0).r, Float32(0))
+    assert_equal(target.light_at(0).b, Float32(0))
+    # A light pixel is stored premultiplied, and read as it is stored.
+    target.write(1, 0, FloatColor(1, 1, 1, 0.5))
+    assert_equal(target.light_at(1).r, Float32(0.5))
+
+
+def test_light_blended_over_a_data_pixel_mixes_with_its_light() raises:
+    # Half a data pixel of alpha one half, under half of white: the data is
+    # premultiplied before it mixes, and the result is light.
+    var target = RenderTarget(1, 1, Color(0, 0, 0))
+    target.write(0, 0, FloatColor(1, 0, 0, 0.5), True)
+    target.blend(0, 0, FloatColor(1, 1, 1, 0.5))
+    assert_false(target.is_data(0, 0))
+    assert_almost_equal(target.colors[0].r, Float32(0.75), atol=TOLERANCE)
+    assert_almost_equal(target.colors[0].g, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(target.colors[0].a, Float32(0.75), atol=TOLERANCE)
+
+
+def test_a_block_that_is_data_throughout_stays_straight() raises:
+    var target = RenderTarget(2, 2, Color(0, 0, 0))
+    for y in range(2):
+        target.write(0, y, FloatColor(1, 0, 0, 0.5), True)
+        target.write(1, y, FloatColor(0, 0, 1, 0.5), True)
+    var small = target.downsampled(2)
+    assert_true(small.is_data(0, 0))
+    assert_almost_equal(small.colors[0].r, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(small.colors[0].b, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(small.colors[0].a, Float32(0.5), atol=TOLERANCE)
+    # A block of light stays premultiplied.
+    var lit = RenderTarget(2, 2, Color(0, 0, 0))
+    for y in range(2):
+        lit.write(0, y, FloatColor(1, 0, 0, 0.5))
+        lit.write(1, y, FloatColor(0, 0, 1, 0.5))
+    var shrunk = lit.downsampled(2)
+    assert_false(shrunk.is_data(0, 0))
+    assert_almost_equal(shrunk.colors[0].r, Float32(0.25), atol=TOLERANCE)
+
+
 def test_a_target_starts_at_its_clear_color() raises:
     var target = RenderTarget(2, 2, Color(40, 50, 60))
     assert_equal(target.shown(0, 0).r, UInt8(40))

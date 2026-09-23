@@ -132,8 +132,6 @@ from materials.material import (
     Side,
     BASIC,
     LAMBERT,
-    DEPTH,
-    NORMALS,
     STANDARD,
     PHYSICAL,
 )
@@ -206,8 +204,8 @@ def material_type_names() -> List[String]:
     value.
 
     Returns:
-        Ten names: `MeshBasicMaterial` for `BASIC` at zero through
-        `ShadowMaterial` for `SHADOW` at nine.
+        Eleven names: `MeshBasicMaterial` for `BASIC` at zero through
+        `MeshDistanceMaterial` for `DISTANCE` at ten.
     """
     return [
         "MeshBasicMaterial",
@@ -220,6 +218,7 @@ def material_type_names() -> List[String]:
         "MeshStandardMaterial",
         "MeshPhysicalMaterial",
         "ShadowMaterial",
+        "MeshDistanceMaterial",
     ]
 
 
@@ -1073,14 +1072,17 @@ struct _Loader(Movable):
                 "Object JSON: a material type that is not read: " + name
             )
         var kind = MaterialKind(at)
-        var plain = kind == NORMALS or kind == DEPTH
+        var plain = kind.is_data()
         var reflects = kind == BASIC or kind == LAMBERT or kind == PHONG
         var physical = kind == STANDARD or kind == PHYSICAL
         var color = Color(255, 255, 255)
         if kind == SHADOW:
             color = Color(0, 0, 0)
+        # three.js's data materials have no `fog`, and are never fogged.
+        var fog = Optional[Bool](None)
         if not plain:
             color = self.color(item, "color", color.hex())
+            fog = self.flag(item, "fog", True)
         var specular = 0
         var shininess = Float32(0)
         if kind == PHONG:
@@ -1134,6 +1136,7 @@ struct _Loader(Movable):
             specular_intensity=self.number(item, "specularIntensity", 1),
             clearcoat=self.number(item, "clearcoat", 0),
             clearcoat_roughness=self.number(item, "clearcoatRoughness", 0),
+            fog=fog,
         )
 
     # --- objects ------------------------------------------------------------

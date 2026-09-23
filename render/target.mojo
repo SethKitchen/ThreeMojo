@@ -73,6 +73,13 @@ Straight alpha needs a divide to recover the same answer, and gets it wrong
 wherever alpha is zero, because a color that contributes no light has no
 color to recover. `resolve` unpremultiplies at the end, because PNG stores
 unassociated alpha.
+
+**A data pixel is stored straight.** Its alpha is data too: a depth packed
+into four channels puts its last eight bits there, and that alpha is often
+zero. Premultiplied, such a pixel would keep no color at all. So `write`
+stores a data fragment as it is, `resolve` shows it as it is, and `blend`
+and `light_at` premultiply it first, where they read it as light. The
+kernel keeps its running color the same way.
 """
 
 from math.vector3 import Vector3
@@ -286,13 +293,12 @@ def _encode_run(
             shown = clear_shown
         else:
             var curve = tone_mapping
+            var straight = colors[unsafe_offset=slot]
             if data[unsafe_offset=slot]:
                 curve = NO_TONE_MAPPING
-            shown = tone_map(
-                colors[unsafe_offset=slot].unpremultiplied(),
-                curve,
-                exposure,
-            ).encode()
+            else:
+                straight = straight.unpremultiplied()
+            shown = tone_map(straight, curve, exposure).encode()
         var at = slot * Framebuffer.CHANNELS
         pixels[unsafe_offset=at] = shown.r
         pixels[unsafe_offset=at + 1] = shown.g
@@ -561,7 +567,39 @@ struct RenderTarget(Movable):
 
     def color_at(self, x: Int, y: Int) raises -> FloatColor:
         """Return the premultiplied linear color at pixel (x, y)."""
-        return self.colors[self._slot(x, y)]
+        return self.light_at(self._slot(x, y))
+
+    def straight_at(self, slot: Int) -> FloatColor:
+        """Return the straight linear color in slot `slot`.
+
+        A light pixel is unpremultiplied here. A data pixel is stored
+        straight, and is returned as it is; see the module docstring.
+
+        Args:
+            slot: The pixel's index, row by row.
+
+        Returns:
+            The color, not scaled by its alpha.
+        """
+        if self.data[slot]:
+            return self.colors[slot]
+        return self.colors[slot].unpremultiplied()
+
+    def light_at(self, slot: Int) -> FloatColor:
+        """Return the premultiplied linear color in slot `slot`.
+
+        A light pixel is stored so. A data pixel is stored straight, and is
+        premultiplied here; see the module docstring.
+
+        Args:
+            slot: The pixel's index, row by row.
+
+        Returns:
+            The color, scaled by its alpha.
+        """
+        if self.data[slot]:
+            return self.colors[slot].premultiplied()
+        return self.colors[slot]
 
     def is_data(self, x: Int, y: Int) raises -> Bool:
         """Return True if pixel (x, y) holds data rather than light, and
@@ -667,7 +705,12 @@ struct RenderTarget(Movable):
         var slot = self._slot(x, y)
         if not self.scissor.contains_pixel(x, y, self.height):
             return
-        self.colors[slot] = color.premultiplied()
+        # A data pixel is stored straight: its alpha is data too, and a
+        # packed depth's is often zero. See the module docstring.
+        if data:
+            self.colors[slot] = color
+        else:
+            self.colors[slot] = color.premultiplied()
         self.data[slot] = data
         if self.has_normals():
             self.normals[slot] = normal
@@ -708,8 +751,8 @@ struct RenderTarget(Movable):
             return
         if mode == NORMAL_MODE and not color.a > 0:
             return
+        var behind = self.light_at(slot)
         self.data[slot] = False
-        var behind = self.colors[slot]
         var out = blend_pixel(
             Rgba(behind.r, behind.g, behind.b, behind.a),
             Rgba(color.r, color.g, color.b, color.a),
@@ -746,11 +789,12 @@ struct RenderTarget(Movable):
         check_tone_mapping(tone_mapping, exposure)
         var slot = self._slot(x, y)
         var curve = tone_mapping
+        var straight = self.colors[slot]
         if self.data[slot]:
             curve = NO_TONE_MAPPING
-        return tone_map(
-            self.colors[slot].unpremultiplied(), curve, exposure
-        ).encode()
+        else:
+            straight = straight.unpremultiplied()
+        return tone_map(straight, curve, exposure).encode()
 
     def downsampled(self, factor: Int) raises -> Self:
         """Return this target shrunk by `factor` each way, every pixel of
@@ -831,7 +875,7 @@ struct RenderTarget(Movable):
             var slot = (
                 source // self.width // factor
             ) * width + source % self.width // factor
-            var sampled = self.colors[source]
+            var sampled = self.light_at(source)
             var running = colors[slot]
             colors[slot] = FloatColor(
                 running.r + sampled.r,
@@ -858,6 +902,10 @@ struct RenderTarget(Movable):
                 total.a * share,
             )
             flags[slot] = counts[slot] == samples
+            # A block that is data throughout stays data, and a data
+            # pixel is stored straight.
+            if flags[slot]:
+                colors[slot] = colors[slot].unpremultiplied()
         var small = RenderTarget(
             width, height, Color(0, 0, 0, 0), self.type, self.outputs
         )
@@ -1147,7 +1195,7 @@ struct RenderTarget(Movable):
                         n.x * 0.5 + 0.5, n.y * 0.5 + 0.5, n.z * 0.5 + 0.5, 1
                     )
             else:
-                value = self.colors[slot].unpremultiplied()
+                value = self.straight_at(slot)
                 if self.data[slot]:
                     # Stored decoded so the encode gives the bytes back;
                     # the fraction is those bytes. See `data_color`.

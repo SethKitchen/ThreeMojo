@@ -168,6 +168,16 @@ bent by its index of refraction through a slab `thickness` deep, dimmed
 toward `attenuation_color` over `attenuation_distance`, and blurred by its
 roughness. The renderer draws the opaque scene first to have something to
 show; see `render.transmission`.
+
+`DISTANCE` is a third data kind: three.js's `MeshDistanceMaterial`. It
+writes how far each fragment is from `reference_position`, as a fraction of
+the way from `near_distance` to `far_distance`, packed into four channels.
+A `DEPTH` material writes its depth by its `depth_packing`: one gray, or
+packed into two, three or four channels. See `render.packing`.
+
+`fog` says whether the scene's fog veils a surface, three.js's `fog`. It is
+on for every kind that shows light and off for the three data kinds, which
+refuse it: three.js's normal, depth and distance shaders read no fog.
 """
 
 from render.cube_texture_store import (
@@ -183,6 +193,11 @@ from render.blend import (
     pack_custom,
 )
 from render.framebuffer import Color, FloatColor
+from render.packing import (
+    BASIC_DEPTH_PACKING,
+    DepthPacking,
+    check_distance_range,
+)
 from render.raster_state import (
     ALWAYS_STENCIL_FUNC,
     KEEP_STENCIL_OP,
@@ -536,7 +551,7 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the ten kinds there are."""
+        """Return True if this is one of the eleven kinds there are."""
         return (
             self == BASIC
             or self == LAMBERT
@@ -548,6 +563,7 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
             or self == STANDARD
             or self == PHYSICAL
             or self == SHADOW
+            or self == DISTANCE
         )
 
     def is_unlit(self) -> Bool:
@@ -624,14 +640,14 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_data(self) -> Bool:
         """Return True if a material of this kind shows data rather than
-        light: `NORMALS` or `DEPTH`.
+        light: `NORMALS`, `DEPTH` or `DISTANCE`.
 
         What such a surface writes is bytes the display must show as they
         are. Both rasterizers keep those fragments out of the lights, the
         emissive term, the fog and the tone mapping, as they keep the uv
         debug view out of them.
         """
-        return self == NORMALS or self == DEPTH
+        return self == NORMALS or self == DEPTH or self == DISTANCE
 
     def reflects(self) -> Bool:
         """Return True if a material of this kind can carry an environment
@@ -701,6 +717,14 @@ comptime PHYSICAL = MaterialKind(8)
 # its color by how much of the light is blocked: three.js's
 # `ShadowMaterial`, the surface that catches a shadow on nothing.
 comptime SHADOW = MaterialKind(9)
+# How far each fragment is from a reference point, as a fraction of the way
+# from a near distance to a far one, packed into four channels: three.js's
+# `MeshDistanceMaterial`, the material its point-light shadows draw with.
+comptime DISTANCE = MaterialKind(10)
+# three.js's `MeshDistanceMaterial` uniform defaults: one meter and a
+# thousand meters, measured from the origin.
+comptime DEFAULT_NEAR_DISTANCE = Length(1.0, METER)
+comptime DEFAULT_FAR_DISTANCE = Length(1000.0, METER)
 
 
 @fieldwise_init
@@ -959,6 +983,19 @@ struct Material(ImplicitlyCopyable):
     var stencil_fail: StencilOp
     var stencil_z_fail: StencilOp
     var stencil_z_pass: StencilOp
+    # How a `DEPTH` material writes its depth, three.js's `depthPacking`.
+    # `BASIC_DEPTH_PACKING` by default, as there, and on every other kind.
+    var depth_packing: DepthPacking
+    # Where a `DISTANCE` material measures from, in world space, and the
+    # distances that map to zero and to one: three.js's `referencePosition`,
+    # `nearDistance` and `farDistance`. three.js's defaults on every other
+    # kind, which reads none of them.
+    var reference_position: Vector3
+    var near_distance: Length
+    var far_distance: Length
+    # Whether the scene's fog veils this surface, three.js's `fog`. On for
+    # every kind that shows light, as there, and off for the data kinds.
+    var fog: Bool
 
     def __init__(
         out self,
@@ -1018,6 +1055,11 @@ struct Material(ImplicitlyCopyable):
         attenuation_color: Color = _WHITE,
         attenuation_distance: Length = NO_ATTENUATION,
         dispersion: Float32 = 0.0,
+        depth_packing: DepthPacking = BASIC_DEPTH_PACKING,
+        reference_position: Vector3 = Vector3(0, 0, 0),
+        near_distance: Length = DEFAULT_NEAR_DISTANCE,
+        far_distance: Length = DEFAULT_FAR_DISTANCE,
+        fog: Optional[Bool] = None,
     ) raises:
         """Describe a surface.
 
@@ -1179,6 +1221,16 @@ struct Material(ImplicitlyCopyable):
                 which dims nothing.
             dispersion: How far the three channels bend apart, three.js's
                 `dispersion`. Zero by default.
+            depth_packing: How a `DEPTH` material writes its depth,
+                three.js's `depthPacking`. `BASIC_DEPTH_PACKING` by default.
+            reference_position: Where a `DISTANCE` material measures from,
+                in world space. The origin by default.
+            near_distance: The distance a `DISTANCE` material writes as
+                zero. One meter by default.
+            far_distance: The distance it writes as one. A thousand meters
+                by default.
+            fog: Whether the scene's fog veils the surface, three.js's
+                `fog`. Left unset it is on, and off for a data kind.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -1266,7 +1318,14 @@ struct Material(ImplicitlyCopyable):
                 `dispersion` that is negative or not finite, either map id
                 a negative other than `NO_TEXTURE`, and any of the seven
                 that is not its default on a kind that is not `PHYSICAL`
-                are refused.
+                are refused. A
+                `depth_packing` that is none of the four, or one that is not
+                `BASIC_DEPTH_PACKING` on a kind that is not `DEPTH` or beside
+                an opacity below one, is refused. A `reference_position`,
+                `near_distance` or `far_distance` that is not the default on
+                a kind that is not `DISTANCE`, an opacity below one on a
+                `DISTANCE` material, and a range that `check_distance_range`
+                refuses are refused. `fog` set on a data kind is refused.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -1279,7 +1338,7 @@ struct Material(ImplicitlyCopyable):
         if not kind.is_valid():
             raise Error(
                 "A material's kind must be BASIC, LAMBERT, NORMALS, DEPTH,"
-                " PHONG, TOON, MATCAP, STANDARD, PHYSICAL or SHADOW"
+                " PHONG, TOON, MATCAP, STANDARD, PHYSICAL, SHADOW or DISTANCE"
             )
         if gradient_map.value < 0 and gradient_map != NO_TEXTURE:
             raise Error("A material's gradient map id cannot be negative")
@@ -1742,6 +1801,77 @@ struct Material(ImplicitlyCopyable):
             raise Error(
                 "A normal or depth material cannot blend: a pixel holds its"
                 " bytes or the scene's light, not a mixture of the two"
+            )
+        self.depth_packing = depth_packing
+        self.reference_position = reference_position
+        self.near_distance = near_distance
+        self.far_distance = far_distance
+        # Spelled as a Bool for the probe, as `blending` is above.
+        var fog_stated = Bool(fog)
+        if fog_stated:
+            self.fog = fog.value()
+        else:
+            self.fog = not kind.is_data()
+        self.check_data()
+
+    def check_data(self) raises:
+        """Refuse a depth packing, a distance range or a fog switch that
+        this material's kind cannot use.
+
+        The constructor asks this, and so does the renderer when it reads
+        the three: the fields are open, and can be set after the material
+        is built, as three.js sets them.
+
+        Raises:
+            Error: If `depth_packing` is none of the four, or is not
+                `BASIC_DEPTH_PACKING` on a kind that is not `DEPTH` or
+                beside an opacity below one, which three.js's packed depth
+                does not read. If `reference_position`, `near_distance` or
+                `far_distance` is not the default on a kind that is not
+                `DISTANCE`, or a `DISTANCE` material has an opacity below
+                one, which its shader does not read, or a range that
+                `check_distance_range` refuses. If `fog` is on on a data
+                kind, whose shaders read no fog.
+        """
+        if not self.depth_packing.is_valid():
+            raise Error(
+                "A material's depth packing must be BASIC_DEPTH_PACKING,"
+                " RGBA_DEPTH_PACKING, RGB_DEPTH_PACKING or RG_DEPTH_PACKING"
+            )
+        var packed = self.depth_packing != BASIC_DEPTH_PACKING
+        if packed and self.kind != DEPTH:
+            raise Error(
+                "Only a depth material packs its depth: give it kind=DEPTH,"
+                " or build it with depth_material"
+            )
+        if packed and self.opacity < 1:
+            raise Error(
+                "A packed depth has no opacity: every channel holds the"
+                " depth, so only BASIC_DEPTH_PACKING reads one"
+            )
+        var near = self.near_distance.to(METER)
+        var far = self.far_distance.to(METER)
+        var ranged = (
+            not _is_origin(self.reference_position)
+            or self.near_distance != DEFAULT_NEAR_DISTANCE
+            or self.far_distance != DEFAULT_FAR_DISTANCE
+        )
+        if ranged and self.kind != DISTANCE:
+            raise Error(
+                "Only a distance material measures from a reference point:"
+                " give it kind=DISTANCE, or build it with distance_material"
+            )
+        if self.kind == DISTANCE:
+            if self.opacity < 1:
+                raise Error(
+                    "A distance material has no opacity: every channel"
+                    " holds the distance"
+                )
+            check_distance_range(self.reference_position, near, far)
+        if self.fog and self.kind.is_data():
+            raise Error(
+                "A normal, depth or distance material is never fogged: it"
+                " shows data, not light, so its fog must be off"
             )
 
     def is_lit(self) -> Bool:
@@ -2845,6 +2975,7 @@ def depth_material(
     blending: Optional[Blending] = None,
     alpha_map: TextureId = NO_TEXTURE,
     alpha_test: Float32 = 0.0,
+    depth_packing: DepthPacking = BASIC_DEPTH_PACKING,
 ) raises -> Material:
     """Return a material that shows how far away the surface is, near white
     and far black: three.js's `MeshDepthMaterial` under `BasicDepthPacking`.
@@ -2852,7 +2983,9 @@ def depth_material(
     Every channel holds one minus the window-space depth, which runs from
     zero at the near plane to one at the far plane. A map's alpha multiplies
     the opacity, as three.js's does, so a cut-out image cuts the depth out
-    too; its color is not read. The other packings are not ported.
+    too; its color is not read. The other three packings write the
+    window-space depth itself, spread across two, three or four channels;
+    see `render.packing`.
 
     Args:
         map: Id of a texture whose alpha cuts the surface out, or
@@ -2865,6 +2998,8 @@ def depth_material(
         alpha_map: Id of a texture whose green channel thins the surface,
             or `NO_TEXTURE`. three.js's `MeshDepthMaterial` has one.
         alpha_test: The alpha a fragment must reach to be drawn.
+        depth_packing: How the depth is written, three.js's
+            `depthPacking`. `BASIC_DEPTH_PACKING` by default, as there.
 
     Returns:
         The material, of kind `DEPTH`.
@@ -2872,8 +3007,10 @@ def depth_material(
     Raises:
         Error: If `map` or `alpha_map` is a negative other than
             `NO_TEXTURE`, `opacity` or `alpha_test` is outside zero to one,
-            `side` or `blending` holds a value that is none of its named
-            constants, or the blending resolves to `BLEND`.
+            `side`, `blending` or `depth_packing` holds a value that is
+            none of its named constants, the blending resolves to `BLEND`,
+            or a packing other than the basic one is given beside an
+            opacity below one.
     """
     return Material(
         Color(255, 255, 255),
@@ -2884,7 +3021,68 @@ def depth_material(
         kind=DEPTH,
         alpha_map=alpha_map,
         alpha_test=alpha_test,
+        depth_packing=depth_packing,
     )
+
+
+def distance_material(
+    reference_position: Vector3 = Vector3(0, 0, 0),
+    near_distance: Length = DEFAULT_NEAR_DISTANCE,
+    far_distance: Length = DEFAULT_FAR_DISTANCE,
+    map: TextureId = NO_TEXTURE,
+    side: Side = FRONT_SIDE,
+    alpha_map: TextureId = NO_TEXTURE,
+    alpha_test: Float32 = 0.0,
+) raises -> Material:
+    """Return a material that shows how far each fragment is from a
+    reference point: three.js's `MeshDistanceMaterial`.
+
+    The distance is measured in world space, from `reference_position`, and
+    written as a fraction of the way from `near_distance` to `far_distance`,
+    clamped to zero to one and packed into four channels by
+    `render.packing.pack_depth_to_rgba`, as three.js r180 writes it.
+    three.js sets the three from a point light when it draws that light's
+    shadow; here they are the material's own.
+
+    Args:
+        reference_position: Where the distance is measured from, in world
+            space. The origin by default.
+        near_distance: The distance written as zero. One meter by default.
+        far_distance: The distance written as one. A thousand meters by
+            default.
+        map: Id of a texture whose alpha cuts the surface out, or
+            `NO_TEXTURE`.
+        side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
+        alpha_map: Id of a texture whose green channel thins the surface,
+            or `NO_TEXTURE`.
+        alpha_test: The alpha a fragment must reach to be drawn.
+
+    Returns:
+        The material, of kind `DISTANCE`.
+
+    Raises:
+        Error: If `map` or `alpha_map` is a negative other than
+            `NO_TEXTURE`, `alpha_test` is outside zero to one, `side` holds
+            a value that is none of its named constants, or the range is
+            refused by `render.packing.check_distance_range`.
+    """
+    return Material(
+        Color(255, 255, 255),
+        map=map,
+        side=side,
+        kind=DISTANCE,
+        alpha_map=alpha_map,
+        alpha_test=alpha_test,
+        reference_position=reference_position,
+        near_distance=near_distance,
+        far_distance=far_distance,
+    )
+
+
+def _is_origin(point: Vector3) -> Bool:
+    """Return True if `point` is the origin, three.js's default
+    `referencePosition`."""
+    return point.x == 0 and point.y == 0 and point.z == 0
 
 
 def _is_unit_fraction(value: Float32) -> Bool:

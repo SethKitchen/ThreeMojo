@@ -182,7 +182,7 @@ struct TransmissionTarget(Movable):
         """
         var data = List[Float32](capacity=target.width * target.height * 4)
         for slot in range(len(target.colors)):  # pragma: no branch
-            var straight = target.colors[slot].unpremultiplied()
+            var straight = target.straight_at(slot)
             data.append(straight.r)
             data.append(straight.g)
             data.append(straight.b)

@@ -341,6 +341,29 @@ def test_fog_veils_a_line_by_its_depth() raises:
     assert_true(far.color_at(3, 0).r < near.color_at(3, 0).r)
 
 
+def test_a_line_whose_material_turns_the_fog_off_is_not_fogged() raises:
+    # three.js's `fog = false` on a `LineBasicMaterial`.
+    var view = FogView(
+        linear_fog(Color(0, 0, 0), Length(1.0, METER), Length(10.0, METER))
+    )
+    var clear = RenderTarget(8, 8, Color(0, 0, 0))
+    var a = end(0.5, 0.5, depth=9)
+    var b = end(7.5, 0.5, depth=9)
+    rasterize_line(a, b, clear)
+    var fogged = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_line(a, b, fogged, fog=view)
+    a.fog = False
+    b.fog = False
+    var unfogged = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_line(a, b, unfogged, fog=view)
+    assert_true(fogged.color_at(3, 0).r < clear.color_at(3, 0).r)
+    assert_equal(unfogged.color_at(3, 0).r, clear.color_at(3, 0).r)
+    # Two ends that disagree about the fog are refused.
+    b.fog = True
+    with assert_raises(contains="fog"):
+        check_line_state(a, b)
+
+
 def test_an_end_that_is_not_on_a_pixel_center_is_held_in() raises:
     # A projected vertex lands wherever it lands. The last column of a line
     # ending at 6.2 is column six, whose center is 6.5 -- past the end --
@@ -482,9 +505,9 @@ def test_a_line_cannot_be_lit() raises:
     # And a kind that is not a kind at all, on both ends, so it is the
     # kind itself being refused rather than the disagreement.
     var unknown = end(0.5, 0.5)
-    unknown.kind = MaterialKind(10)
+    unknown.kind = MaterialKind(11)
     var also = end(4.5, 0.5)
-    also.kind = MaterialKind(10)
+    also.kind = MaterialKind(11)
     with assert_raises():
         check_line_state(unknown, also)
 

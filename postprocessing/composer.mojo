@@ -1217,6 +1217,33 @@ struct EffectComposer(Movable):
                 fails its `validate`.
         """
         ref step = self.passes[index]
+        # A data pixel is stored straight, and every pass that reads the
+        # frame as light reads it premultiplied. See `reads_frame_as_light`.
+        var wraps = reads_frame_as_light(step.kind)
+        if wraps:
+            _premultiply_data(frame)
+        self._dispatch(
+            index, frame, renderer, scene, assets, camera, delta_time
+        )
+        if wraps:
+            _store_data_straight(frame)
+
+    def _dispatch[
+        C: Camera
+    ](
+        mut self,
+        index: Int,
+        mut frame: RenderTarget,
+        renderer: Renderer,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        delta_time: Float32,
+    ) raises:
+        """Run one pass on the host, on a frame whose data pixels are
+        premultiplied if `reads_frame_as_light` says the pass reads light.
+        """
+        ref step = self.passes[index]
         if step.kind == MASK:
             _mask(frame, step, renderer, scene, assets, camera)
         elif step.kind == CLEAR_MASK:
@@ -1262,7 +1289,9 @@ struct EffectComposer(Movable):
                 step.unbiased,
             )
         elif step.kind == SSAO:
+            # The draw stores its data pixels straight again.
             _draw(frame, renderer, scene, assets, camera)
+            _premultiply_data(frame)
             ssao_light(frame, _depth_view(frame, camera), step.ssao)
         elif step.kind == SAO:
             # The frame's own outputs, so the drawn target carries the
@@ -1286,6 +1315,7 @@ struct EffectComposer(Movable):
             )
         elif step.kind == SSR:
             _draw(frame, renderer, scene, assets, camera)
+            _premultiply_data(frame)
             ssr_light(frame, _depth_view(frame, camera), step.ssr)
         elif step.kind == OUTLINE:
             self.passes[index].time += delta_time
@@ -1338,6 +1368,38 @@ struct EffectComposer(Movable):
             output_light(
                 frame, renderer.tone_curve(), renderer.tone_mapping_exposure
             )
+
+
+def reads_frame_as_light(kind: PassKind) -> Bool:
+    """Return True if a pass of this kind reads the frame as premultiplied
+    light, and so needs the frame's data pixels premultiplied first.
+
+    A data pixel is stored straight; see `render.target`. Every pass that
+    changes the frame's color reads it as light, and the per-pixel
+    functions both backends call take premultiplied light. So both
+    composers premultiply the data pixels before such a pass and store
+    those still flagged as data straight after it. A data pixel of alpha
+    zero keeps no color through the two.
+
+    The passes that leave the frame's color alone or draw it new do not:
+    a mask, a clear mask, a render and the SSAA and TAA passes, which
+    store their data straight themselves. Nor does the output pass, which
+    leaves every data pixel as it is.
+
+    Args:
+        kind: The pass's kind.
+
+    Returns:
+        Whether the pass reads the frame as light.
+    """
+    return not (
+        kind == MASK
+        or kind == CLEAR_MASK
+        or kind == RENDER
+        or kind == SSAA_RENDER
+        or kind == TAA_RENDER
+        or kind == OUTPUT
+    )
 
 
 def check_frame_time(delta_time: Float32) raises:
@@ -1554,7 +1616,7 @@ def supersample[
         var drawn = _jittered(renderer, scene, assets, camera, offsets[index])
         for slot in range(pixels):  # pragma: no branch
             var sum = frame.colors[slot]
-            var add = drawn.colors[slot]
+            var add = drawn.light_at(slot)
             frame.colors[slot] = FloatColor(
                 sum.r + add.r * weight,
                 sum.g + add.g * weight,
@@ -1566,7 +1628,43 @@ def supersample[
                 frame.depth_mode, drawn.depth[slot], frame.depth[slot]
             ):
                 frame.depth[slot] = drawn.depth[slot]
+    _store_data_straight(frame)
     return frame^
+
+
+def _premultiply_data(mut frame: RenderTarget):
+    """Premultiply every data pixel of a frame, for a pass that reads and
+    writes the whole frame as premultiplied light.
+
+    A data pixel is stored straight; see `render.target`. A pass that
+    `reads_frame_as_light` reads every pixel as light, so the data pixels
+    are turned into light first, and `_store_data_straight` turns those
+    still flagged as data back after the pass. A data pixel of alpha zero
+    keeps no color through the two.
+
+    Args:
+        frame: The frame, changed in place.
+    """
+    # A frame is at least one pixel, so this never runs zero times.
+    for slot in range(len(frame.colors)):  # pragma: no branch
+        if frame.data[slot]:
+            frame.colors[slot] = frame.colors[slot].premultiplied()
+
+
+def _store_data_straight(mut frame: RenderTarget):
+    """Unpremultiply every data pixel of a frame summed as light.
+
+    A data pixel is stored straight; see `render.target`. A sum of frames
+    is taken in premultiplied light, so the pixels that stayed data
+    throughout are turned back here.
+
+    Args:
+        frame: The summed frame, changed in place.
+    """
+    # A frame is at least one pixel, so this never runs zero times.
+    for slot in range(len(frame.colors)):  # pragma: no branch
+        if frame.data[slot]:
+            frame.colors[slot] = frame.colors[slot].unpremultiplied()
 
 
 def _jittered[
@@ -1634,7 +1732,9 @@ def taa_render[
         var held = supersample(
             renderer, scene, assets, camera, step.sample_level, step.unbiased
         )
-        memory.hold = held.colors.copy()
+        memory.hold = List[FloatColor](capacity=pixels)
+        for slot in range(pixels):  # pragma: no branch
+            memory.hold.append(held.light_at(slot))
         memory.hold_data = held.data.copy()
         memory.hold_depth = held.depth.copy()
         memory.sum = List[FloatColor](
@@ -1651,7 +1751,7 @@ def taa_render[
         )
         for slot in range(pixels):  # pragma: no branch
             var sum = memory.sum[slot]
-            var add = jittered.colors[slot]
+            var add = jittered.light_at(slot)
             memory.sum[slot] = FloatColor(
                 sum.r + add.r * weight,
                 sum.g + add.g * weight,
@@ -1673,6 +1773,7 @@ def taa_render[
         )
     frame.data = memory.hold_data.copy()
     frame.depth = memory.hold_depth.copy()
+    _store_data_straight(frame)
 
 
 def luminance(color: FloatColor) -> Float32:

@@ -87,9 +87,7 @@ from loaders.object_loader import (
 from materials.material import (
     BASIC,
     BLEND,
-    DEPTH,
     LAMBERT,
-    NORMALS,
     NO_TEXTURE,
     OPAQUE,
     PHONG,
@@ -209,7 +207,7 @@ def _has_emissive(kind: MaterialKind) -> Bool:
 
 def _has_color(kind: MaterialKind) -> Bool:
     """Return True for a kind whose three.js class has a color."""
-    return kind != NORMALS and kind != DEPTH
+    return not kind.is_data()
 
 
 def _reflects(kind: MaterialKind) -> Bool:
@@ -599,6 +597,12 @@ struct _Library(Movable):
         if material.wireframe:
             writer.key("wireframe")
             writer.boolean(True)
+        # three.js writes `fog` only when it is off, and its data materials
+        # have no `fog` at all.
+        var unfogged = not material.fog and not kind.is_data()
+        if unfogged:
+            writer.key("fog")
+            writer.boolean(False)
         writer.end_object()
         self.materials.append(writer.finish())
         self.material_keys.append(id.value)

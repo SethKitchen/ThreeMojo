@@ -151,12 +151,17 @@ from render.rasterizer import (
     mapped_normal,
     matcap_fallback,
     matcap_uv,
-    packed_depth,
     packed_normal,
+)
+from render.packing import (
+    DepthPacking,
+    packed_depth_fragment,
+    packed_distance_fragment,
 )
 from materials.material import (
     OPAQUE,
     DEPTH,
+    DISTANCE,
     LAMBERT,
     MATCAP,
     NORMALS,
@@ -263,6 +268,7 @@ from postprocessing.composer import (
     halved_size,
     luminosity_pixel,
     output_pixel,
+    reads_frame_as_light,
     separable_blur_pixel,
     sepia_pixel,
     vignette_pixel,
@@ -401,7 +407,15 @@ comptime LANE_ATTENUATION_B = 50
 comptime LANE_ATTENUATION_DISTANCE = 51
 comptime LANE_DISPERSION = 52
 comptime LANE_IOR = 53
-comptime FLOATS_PER_VERTEX = LANE_IOR + 1
+# Where a `DISTANCE` triangle measures from, in world space, and the
+# distances that map to zero and to one. Per triangle, from the first
+# corner's lane, and floats like the shininess.
+comptime LANE_REFERENCE_X = 54
+comptime LANE_REFERENCE_Y = 55
+comptime LANE_REFERENCE_Z = 56
+comptime LANE_NEAR_DISTANCE = 57
+comptime LANE_FAR_DISTANCE = 58
+comptime FLOATS_PER_VERTEX = LANE_FAR_DISTANCE + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -451,6 +465,10 @@ comptime STATE_SPECULAR_MAP = 18
 # texture's green multiplies its thickness, each `NO_TEXTURE` for none.
 comptime STATE_TRANSMISSION_MAP = 19
 comptime STATE_THICKNESS_MAP = 20
+# How a `DEPTH` triangle packs its depth: a `DepthPacking` value.
+comptime STATE_DEPTH_PACKING = 21
+# Whether the scene's fog veils the triangle: one or zero.
+comptime STATE_FOG = 22
 # How a segment's metadata is laid out in its state buffer: its blend
 # policy, and how many pixels across it is drawn. A line is unlit and
 # untextured, so it carries nothing else; see `line_state`. The width is
@@ -462,7 +480,9 @@ comptime LINE_STATE_WIDTH = 1
 # The segment's depth, color and stencil state, packed as a triangle's is.
 comptime LINE_STATE_OPS = 2
 comptime LINE_STATE_STENCIL = 3
-comptime STATE_PER_LINE = LINE_STATE_STENCIL + 1
+# Whether the scene's fog veils the segment: one or zero.
+comptime LINE_STATE_FOG = 4
+comptime STATE_PER_LINE = LINE_STATE_FOG + 1
 # How a point's metadata is laid out in its state buffer: its texture, its
 # blend policy and its alpha map. A point is unlit, so it has no kind to
 # carry, no emissive map, no ramp and no matcap.
@@ -472,11 +492,13 @@ comptime POINT_STATE_ALPHA_MAP = 2
 # The point's depth, color and stencil state, packed as a triangle's is.
 comptime POINT_STATE_OPS = 3
 comptime POINT_STATE_STENCIL = 4
-comptime STATE_PER_POINT = POINT_STATE_STENCIL + 1
+# Whether the scene's fog veils the point: one or zero.
+comptime POINT_STATE_FOG = 5
+comptime STATE_PER_POINT = POINT_STATE_FOG + 1
 # How a `Draw` crosses to the device: its kind, its first primitive and its
 # count, as three integers.
 comptime INTS_PER_DRAW = 3
-comptime STATE_PER_TRIANGLE = STATE_THICKNESS_MAP + 1
+comptime STATE_PER_TRIANGLE = STATE_FOG + 1
 # How the transmission target rides in the backdrop buffer, after the
 # backdrop's own pixels: a header of floats, then the chain's floats, each
 # four little-endian bytes as a float texture's texels are. The kernel has
@@ -2336,7 +2358,8 @@ def line_state(corners: List[RasterVertex], line_width: Int = 1) -> List[Int32]:
 
     Returns:
         The blend policy, the width, then the packed depth, color and
-        stencil state per segment, from its first end.
+        stencil state, then one or zero for whether the fog veils it, per
+        segment, from its first end.
     """
     var state = List[Int32]()
     for segment in range(len(corners) // 2):
@@ -2344,6 +2367,7 @@ def line_state(corners: List[RasterVertex], line_width: Int = 1) -> List[Int32]:
         state.append(Int32(line_width))
         state.append(Int32(corners[segment * 2].state.ops_word()))
         state.append(Int32(corners[segment * 2].state.stencil_word()))
+        state.append(Int32(1 if corners[segment * 2].fog else 0))
     return state^
 
 
@@ -2360,7 +2384,8 @@ def point_state(points: List[RasterVertex]) -> List[Int32]:
 
     Returns:
         Texture id, blend policy, alpha map id, then the packed depth,
-        color and stencil state, per point.
+        color and stencil state, then one or zero for whether the fog
+        veils it, per point.
     """
     var state = List[Int32]()
     for point in range(len(points)):
@@ -2369,6 +2394,7 @@ def point_state(points: List[RasterVertex]) -> List[Int32]:
         state.append(Int32(points[point].alpha_map.value))
         state.append(Int32(points[point].state.ops_word()))
         state.append(Int32(points[point].state.stencil_word()))
+        state.append(Int32(1 if points[point].fog else 0))
     return state^
 
 
@@ -2400,7 +2426,11 @@ def triangle_state(
         one or zero for whether the shadows fall on it, then the packed
         depth, color and stencil state, then the ao and light map ids,
         then the specular map id, then the transmission and thickness map
-        ids, per triangle, from its first corner.
+        ids, then the depth packing's value and one or zero for whether
+        the fog veils it, per triangle, from its first corner.
+        then the specular map id, then the depth packing's value and one
+        or zero for whether the fog veils it, per triangle, from its first
+        corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -2429,6 +2459,8 @@ def triangle_state(
         state.append(Int32(corners[triangle * 3].specular_map.value))
         state.append(Int32(corners[triangle * 3].transmission_map.value))
         state.append(Int32(corners[triangle * 3].thickness_map.value))
+        state.append(Int32(corners[triangle * 3].depth_packing.value))
+        state.append(Int32(1 if corners[triangle * 3].fog else 0))
     return state^
 
 
@@ -2805,6 +2837,21 @@ def _transmitted(
     )
 
 
+def _behind(
+    red: Float32, green: Float32, blue: Float32, alpha: Float32, data: Bool
+) -> Rgba:
+    """Return the color a pixel holds as premultiplied light, for a blend
+    to mix over.
+
+    A light pixel is held premultiplied already. A data pixel is held
+    straight, as `RenderTarget.write` holds it, and is premultiplied here,
+    as `RenderTarget.light_at` premultiplies it.
+    """
+    if data:
+        return Rgba(red * alpha, green * alpha, blue * alpha, alpha)
+    return Rgba(red, green, blue, alpha)
+
+
 def rasterize_kernel(
     pixels: MutPointer[UInt8, MutAnyOrigin],
     depth: MutPointer[Float32, MutAnyOrigin],
@@ -3055,7 +3102,12 @@ def rasterize_kernel(
                 stencil = test.stencil
                 if not test.passes:
                     continue
-                if fog_on:
+                if fog_on and (
+                    point_maps[
+                        unsafe_offset=index * STATE_PER_POINT + POINT_STATE_FOG
+                    ]
+                    != 0
+                ):
                     var veiled = fog_mix(
                         FloatColor(red, green, blue, alpha),
                         FloatColor(
@@ -3114,7 +3166,7 @@ def rasterize_kernel(
                     kept_z = 0
                 elif state.color_write:
                     var out = blend_pixel(
-                        Rgba(mixed_r, mixed_g, mixed_b, mixed_a),
+                        _behind(mixed_r, mixed_g, mixed_b, mixed_a, data),
                         Rgba(red, green, blue, share),
                         policy,
                     )
@@ -3230,7 +3282,12 @@ def rasterize_kernel(
                 # The host's line pass reads no shading mode: a line has no surface
                 # coordinates, so there is no uv view of one, and it is veiled by
                 # the fog whatever the mode. See `rasterize_line`.
-                if fog_kind != Int32(NO_FOG.value):
+                if fog_kind != Int32(NO_FOG.value) and (
+                    segment_maps[
+                        unsafe_offset=index * STATE_PER_LINE + LINE_STATE_FOG
+                    ]
+                    != 0
+                ):
                     var ad = segments[unsafe_offset=base + LANE_DEPTH]
                     var bd = segments[unsafe_offset=far_base + LANE_DEPTH]
                     var seen = ad + (bd - ad) * toward
@@ -3289,7 +3346,7 @@ def rasterize_kernel(
                     kept_z = 0
                 elif state.color_write:
                     var out = blend_pixel(
-                        Rgba(mixed_r, mixed_g, mixed_b, mixed_a),
+                        _behind(mixed_r, mixed_g, mixed_b, mixed_a, data),
                         Rgba(drawn.r, drawn.g, drawn.b, share_a),
                         policy,
                     )
@@ -3449,7 +3506,10 @@ def rasterize_kernel(
             ]
             var reflects = env_slot >= 0 and mode == Int32(SHADE_TEXTURE.value)
             var shows_normal = kind == Int32(NORMALS.value)
-            var shows_data = shows_normal or kind == Int32(DEPTH.value)
+            var measures = kind == Int32(DISTANCE.value)
+            var shows_data = (
+                shows_normal or kind == Int32(DEPTH.value) or measures
+            )
             # The interpolated normal, made a unit vector again here. That
             # renormalization is the difference between per-fragment and
             # per-vertex shading: the average of two unit vectors is shorter than
@@ -3486,7 +3546,7 @@ def rasterize_kernel(
             var wy = Float32(0)
             var wz = Float32(0)
             if mode != Int32(SHADE_UV.value) and (
-                lit or looked_up or reflects or catches
+                lit or looked_up or reflects or catches or measures
             ):
                 wx = (
                     corners[unsafe_offset=base + LANE_WX] * share_a
@@ -4282,8 +4342,47 @@ def rasterize_kernel(
                         var packed = packed_normal(Vector3(nx, ny, nz))
                         shown = _decoded(ramp, packed.x, packed.y, packed.z)
                     else:
-                        var seen = packed_depth(z)
-                        shown = _decoded(ramp, seen, seen, seen)
+                        # A depth by its packing, or a distance packed into
+                        # four channels, by the host's own functions. A
+                        # packed alpha is data too, and is kept.
+                        var written: SIMD[DType.float32, 4]
+                        if measures:
+                            written = packed_distance_fragment(
+                                Vector3(wx, wy, wz),
+                                Vector3(
+                                    corners[
+                                        unsafe_offset=base + LANE_REFERENCE_X
+                                    ],
+                                    corners[
+                                        unsafe_offset=base + LANE_REFERENCE_Y
+                                    ],
+                                    corners[
+                                        unsafe_offset=base + LANE_REFERENCE_Z
+                                    ],
+                                ),
+                                corners[
+                                    unsafe_offset=base + LANE_NEAR_DISTANCE
+                                ],
+                                corners[unsafe_offset=base + LANE_FAR_DISTANCE],
+                            )
+                        else:
+                            written = packed_depth_fragment(
+                                DepthPacking(
+                                    Int(
+                                        maps[
+                                            unsafe_offset=index
+                                            * STATE_PER_TRIANGLE
+                                            + STATE_DEPTH_PACKING
+                                        ]
+                                    )
+                                ),
+                                z,
+                                alpha,
+                            )
+                        shown = _decoded(
+                            ramp, written[0], written[1], written[2]
+                        )
+                        alpha = written[3]
                     red = shown.r
                     green = shown.g
                     blue = shown.b
@@ -4550,7 +4649,14 @@ def rasterize_kernel(
                 # Veiled by the fog last, in linear light, from the same depth
                 # lane and with the same function as `rasterize_shaded`. Alpha
                 # is coverage and is left alone.
-                if fog_on and not shows_data:
+                if (
+                    fog_on
+                    and not shows_data
+                    and maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE + STATE_FOG
+                    ]
+                    != 0
+                ):
                     var depth = (
                         corners[unsafe_offset=base + LANE_DEPTH] * share_a
                         + corners[unsafe_offset=b_base + LANE_DEPTH] * share_b
@@ -4613,13 +4719,18 @@ def rasterize_kernel(
                     continue
                 # Nothing behind contributes, and the fragment is written with
                 # an alpha of one, as three.js's `opaque_fragment` writes it
-                # and as `rasterize_shaded` writes it; only a depth material
-                # keeps its opacity as its alpha.
-                if kind != Int32(DEPTH.value):
+                # and as `rasterize_shaded` writes it; only a depth or a
+                # distance material keeps its alpha. A fragment that shows
+                # data is kept straight, as `RenderTarget.write` keeps it:
+                # a packed alpha is data, and is often zero.
+                if kind != Int32(DEPTH.value) and not measures:
                     share = 1
-                mixed_r = red * share
-                mixed_g = green * share
-                mixed_b = blue * share
+                var scale = share
+                if shows_data:
+                    scale = 1
+                mixed_r = red * scale
+                mixed_g = green * scale
+                mixed_b = blue * scale
                 mixed_a = share
                 # A write replaces the pixel, so its answer becomes this
                 # fragment's, exactly as `RenderTarget.write` decides it.
@@ -4638,7 +4749,7 @@ def rasterize_kernel(
             elif state.color_write:
                 # The mode's arithmetic, shared with `RenderTarget.blend`.
                 var out = blend_pixel(
-                    Rgba(mixed_r, mixed_g, mixed_b, mixed_a),
+                    _behind(mixed_r, mixed_g, mixed_b, mixed_a, data),
                     Rgba(red, green, blue, share),
                     policy,
                 )
@@ -4661,10 +4772,12 @@ def rasterize_kernel(
     # unpremultiplied by nothing. PNG stores unassociated alpha, and alpha
     # is coverage rather than color so it skips the transfer function. A
     # pixel that holds data skips the curve, as the host's target skips it.
-    var lit = FloatColor(mixed_r, mixed_g, mixed_b, mixed_a).unpremultiplied()
+    var lit = FloatColor(mixed_r, mixed_g, mixed_b, mixed_a)
     var curve = Int(tone)
     if data:
         curve = NO_TONE_MAPPING.value
+    else:
+        lit = lit.unpremultiplied()
     var word = pack(tone_map(lit, ToneMapping(curve), exposure).encode())
     if solid:
         nearest_depth = nearest
@@ -6300,6 +6413,30 @@ def clear_kernel(
     stencil[unsafe_offset=slot] = 0
 
 
+def data_alpha_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+    premultiply: Int32,
+):
+    """Premultiply every data pixel, or unpremultiply it: what
+    `EffectComposer.run_step` does on the host around a pass that
+    `reads_frame_as_light`. A light pixel is left alone."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    if x >= Int(width) or y >= Int(height):
+        return
+    var slot = y * Int(width) + x
+    if data[unsafe_offset=slot] == 0:
+        return
+    var color = _load(light, slot)
+    if premultiply != 0:
+        _store(light, slot, color.premultiplied())
+    else:
+        _store(light, slot, color.unpremultiplied())
+
+
 def texture_kernel(
     light: MutPointer[Float32, MutAnyOrigin],
     data: MutPointer[UInt8, MutAnyOrigin],
@@ -6453,8 +6590,9 @@ struct GpuComposer(Movable):
     var extra_room: Int
     # Every device buffer is declared before the context that owns it,
     # and `__deinit__` releases them first; see `GpuRenderer.__deinit__`.
-    # The frame: four floats of premultiplied light a pixel, a byte of
-    # whether it holds data, its depth and its stencil.
+    # The frame: four floats a pixel, premultiplied light or, where the
+    # pixel holds data, the data straight, as a host frame holds it; a
+    # byte of whether it holds data, its depth and its stencil.
     var light: DeviceBuffer[DType.float32]
     var data: DeviceBuffer[DType.uint8]
     var depth: DeviceBuffer[DType.float32]
@@ -6657,6 +6795,19 @@ struct GpuComposer(Movable):
                 src=colors.unsafe_ptr().unsafe_bitcast[Float32](),
                 count=len(colors) * 4,
             )
+
+    def _data_alpha(mut self, premultiply: Bool) raises:
+        """Premultiply the device frame's data pixels, or store them
+        straight again; see `data_alpha_kernel`."""
+        self.context.enqueue_function[data_alpha_kernel](
+            self.light.unsafe_ptr(),
+            self.data.unsafe_ptr(),
+            Int32(self.width),
+            Int32(self.height),
+            Int32(1 if premultiply else 0),
+            grid_dim=self._grid(),
+            block_dim=(TILE, TILE),
+        )
 
     def _grid(self) -> Tuple[Int, Int]:
         """Return the 2D grid that covers the frame in whole tiles."""
@@ -7135,6 +7286,12 @@ struct GpuComposer(Movable):
             if masked:
                 self._save()
             if runs_on_device(kind):
+                # The device frame keeps its data pixels straight, as the
+                # host frame does, and premultiplies them around a pass
+                # that reads light, as `EffectComposer.run_step` does.
+                var wraps = reads_frame_as_light(kind)
+                if wraps:
+                    self._data_alpha(True)
                 self._run(
                     composer,
                     index,
@@ -7145,6 +7302,8 @@ struct GpuComposer(Movable):
                     camera,
                     delta_time,
                 )
+                if wraps:
+                    self._data_alpha(False)
             else:
                 self.download(frame)
                 composer.run_step(
