@@ -318,9 +318,9 @@ The model says what went where, by the file's own indices.
 
 | glTF | ThreeMojo |
 |---|---|
-| A primitive of triangles | A `BufferGeometry` with `position`, and `normal`, `uv` and `color` when present, indexed when it is. |
-| A material | A `STANDARD` material, or a `BASIC` or `PHYSICAL` one when an [extension](#gltf-extensions) asks. It reads base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale, emissive factor and texture, `doubleSided`. `BLEND` sets `transparent`. `MASK` sets `alpha_test` to `alphaCutoff`. |
-| A texture | A `Texture` at its sampler's wrap and filters. A base color or emissive map is read as sRGB, a metallic-roughness or normal map as linear. One glTF texture read both ways is two textures. |
+| A primitive of triangles | A `BufferGeometry` with `position`, and `normal`, `uv`, `uv1` and `color` when present, indexed when it is. `TEXCOORD_1` becomes `uv1`. |
+| A material | A `STANDARD` material, or a `BASIC` or `PHYSICAL` one when an [extension](#gltf-extensions) asks. It reads base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale, the [occlusion texture](#occlusion), emissive factor and texture, `doubleSided`. `BLEND` sets `transparent`. `MASK` sets `alpha_test` to `alphaCutoff`. |
+| A texture | A `Texture` at its sampler's wrap and filters. A base color or emissive map is read as sRGB. A metallic-roughness, normal or occlusion map is read as linear, with its alpha ignored. One glTF texture read both ways is two textures. |
 | A node | An `Object3D` at its translation, rotation and scale, or at its matrix decomposed, with the node's `name`. Each primitive of its mesh is a `Mesh`. |
 | A node with a `skin` | Each primitive of its mesh is a `SkinnedMesh`. See [Skins, morph targets and animations](#skins-morph-targets-and-animations). |
 | A node with a `camera` | A `PerspectiveCamera` or an `OrthographicCamera` attached to the node. See [Cameras](#cameras). |
@@ -330,6 +330,14 @@ The model says what went where, by the file's own indices.
 A primitive without a material draws with one default `standard_material`. A primitive with `COLOR_0` draws with a copy of its material that has `vertex_colors` on, one copy per material. An accessor without a buffer view reads as zeros. A normalized integer accessor divides by its largest value, as the specification has it.
 
 glTF's texture coordinates run down from an image's top left. This renderer's `v` runs up from the bottom. Each glTF texture is given a `repeat` of `(1, -1)` and an `offset` of `(0, 1)`, which flips `v`, as three.js sets `flipY = false`. The geometry's coordinates are kept as the file has them.
+
+### Occlusion
+
+A material's `occlusionTexture` becomes its `ao_map`. Its `strength` becomes `ao_map_intensity`, or one when it is not there. This is what three.js reads into `aoMap` and `aoMapIntensity`. The red channel of the map dims the indirect light. See [Materials](Materials).
+
+The occlusion texture is the one map that can read the second set of texture coordinates. A `texCoord` of one gives a copy of the texture the channel `UV_CHANNEL_1`. The renderer then samples it at the geometry's `uv1`. A `texCoord` in the map's `KHR_texture_transform` replaces the map's own, as for every map.
+
+An unlit material reads no occlusion, as in three.js.
 
 ### Skins, morph targets and animations
 
@@ -373,6 +381,8 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 - A skin joint that the scene does not reach is refused. three.js puts a new bone in its place.
 - A morph target of colors is refused. three.js reads it.
 - A rotation key must be of unit length. A track refuses one that is not.
+- A map other than the occlusion texture must read the first set of texture coordinates. three.js reads any set. Here, only the ao map and the light map are sampled at a second set.
+- A map that reads the third set of texture coordinates or a later set is refused. A geometry here has only `uv` and `uv1`.
 
 ### glTF extensions
 
@@ -399,7 +409,7 @@ A file that lists another extension in `extensionsRequired` is refused, as three
 
 The transform is applied first, then the flip of `v`. So the copy gets an `offset` of `(x, 1 - y)`, a `repeat` of `(x, -y)`, and the `rotation` as the file gives it. The glTF coordinates then go where three.js's matrix puts them. A transform that names only `texCoord` makes no copy.
 
-The transform's `texCoord` replaces the texture's own `texCoord`, as in three.js. It must be zero.
+The transform's `texCoord` replaces the texture's own `texCoord`, as in three.js. It must be zero, or zero or one for the [occlusion texture](#occlusion).
 
 #### Punctual lights
 

@@ -20,7 +20,8 @@ the matrix is what it draws with. The meshes on one node become one glTF
 mesh with a primitive each, which `read_gltf` reads back as one `Mesh`
 each on that node. A primitive carries `POSITION`, with the `min` and
 `max` the specification asks for, and `NORMAL`, `TEXCOORD_0`, `COLOR_0`
-and `indices` when the geometry has them. `COLOR_0` is written only when
+and `indices` when the geometry has them. A geometry's `uv1` becomes
+`TEXCOORD_1`. `COLOR_0` is written only when
 the material turns `vertex_colors` on, since `read_gltf` turns it on for
 a primitive that has one. A geometry or a material used twice is written
 once.
@@ -30,11 +31,20 @@ is written with its color, opacity, metalness, roughness, emissive color,
 alpha mode, side and maps. Every other kind is written as the nearest
 metallic-roughness material, as three.js writes it: its color and opacity
 with a metalness of zero and a roughness of one, and a `BASIC` material
-also says `KHR_materials_unlit`. The emissive intensity is multiplied
-into the emissive color, since `KHR_materials_emissive_strength` is not
-written; a product brighter than one is refused. A transparent material
-is `BLEND`, an alpha-tested one is `MASK` at its `alpha_test`, and a
-`DOUBLE_SIDE` material is double-sided.
+also says `KHR_materials_unlit`. An ao map is the `occlusionTexture`, its
+intensity the `strength`, and its texture's channel the `texCoord`. An
+emissive intensity that is not one is `KHR_materials_emissive_strength`.
+A transparent material is `BLEND`, an alpha-tested one is `MASK` at its
+`alpha_test`, and a `DOUBLE_SIDE` material is double-sided.
+
+**Physical extensions.** A `PHYSICAL` material writes the extensions
+`read_gltf` reads for it: `KHR_materials_ior`, `KHR_materials_specular`,
+`KHR_materials_clearcoat`, `KHR_materials_transmission` with its map,
+`KHR_materials_volume` with its map, and `KHR_materials_dispersion`. Each
+is written when a field it holds is not at its default, so a file read and
+written again keeps them. three.js writes a volume only for a material
+that transmits, and a clear coat only when its factor is not zero; this
+also writes one whose other fields say something.
 
 **Textures are PNG images.** Each texture is written once, as a PNG from
 `render.png`, with a sampler for its wrap and filter. glTF's `v` runs down
@@ -42,22 +52,26 @@ from the image's top, where a texture here runs up from its bottom, so an
 image is written upside down, as three.js writes a `flipY` texture. A
 texture that `read_gltf` made already carries the flip in its `repeat`
 and `offset`, so its image is written as it is. A texture moved, tiled or
-turned any other way is refused, since `KHR_texture_transform` is not
-written. glTF keeps roughness and metalness in one image, green and blue:
-when a material's two maps are one texture it is written once, and when
-they differ they are combined into one image of the same size, as
-three.js's `buildMetalRoughTexture` combines them.
+turned is written with `KHR_texture_transform`, as three.js's
+`applyTextureTransform` writes it; see `GltfPlacement`. glTF keeps
+roughness and metalness in one image, green and blue: when a material's
+two maps are one texture it is written once, and when they differ they
+are combined into one image of the same size, as three.js's
+`buildMetalRoughTexture` combines them. Two maps combined must share one
+transform and one channel, since one reference carries them.
 
 **Not written.** Lights, cameras, animations, skins, morph targets,
 instanced, batched and skinned meshes, lines, points and sprites, and
-every map glTF has no place for: bump, alpha, environment, matcap and
-gradient maps. A `BACK_SIDE` material is written single-sided, as three.js
+every map glTF has no place for: bump, alpha, light, specular,
+displacement, environment, matcap and gradient maps. An ao map on a
+`BASIC` material is written, as three.js writes it, but `read_gltf` reads
+no occlusion for an unlit material. A `BACK_SIDE` material is written single-sided, as three.js
 writes it, since glTF has no back side. A geometry's groups are not split
 into primitives: a mesh here has one material.
 """
 
 from core.assets import Assets
-from core.buffer_geometry import COLOR, NORMAL, POSITION, UV
+from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, UV1
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
@@ -67,6 +81,7 @@ from loaders.gltf import (
     COMPONENT_FLOAT,
     COMPONENT_UNSIGNED_INT,
     COMPONENT_UNSIGNED_SHORT,
+    EMISSIVE_STRENGTH,
     FILTER_LINEAR,
     FILTER_LINEAR_MIPMAP_LINEAR,
     FILTER_NEAREST,
@@ -75,22 +90,39 @@ from loaders.gltf import (
     GLB_JSON_CHUNK,
     GLB_MAGIC,
     GLB_VERSION,
+    MATERIALS_CLEARCOAT,
+    MATERIALS_DISPERSION,
+    MATERIALS_IOR,
+    MATERIALS_SPECULAR,
+    MATERIALS_TRANSMISSION,
+    MATERIALS_UNLIT,
+    MATERIALS_VOLUME,
     MODE_TRIANGLES,
+    TEXTURE_TRANSFORM,
     WRAP_CLAMP,
     WRAP_MIRROR,
     WRAP_REPEAT,
 )
-from materials.material import BASIC, NO_TEXTURE, DOUBLE_SIDE, MaterialId
-from math.matrix3 import Matrix3
+from materials.material import (
+    BASIC,
+    DEFAULT_IOR,
+    DOUBLE_SIDE,
+    NO_TEXTURE,
+    PHYSICAL,
+    Material,
+    MaterialId,
+)
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from render.framebuffer import FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer
 from render.png import encode as encode_png
 from render.texture import CLAMP, FLOAT_TYPE, MIRROR, NEAREST, Texture
 from render.texture_store import TextureId
+from std.math import isfinite
 from std.pathlib import Path
+from units.si import METER, RADIAN
 
 # The two buffer view targets: vertex attributes, and indices.
 comptime ARRAY_BUFFER = 34962
@@ -98,8 +130,6 @@ comptime ELEMENT_ARRAY_BUFFER = 34963
 # The largest vertex count whose indices fit an unsigned short. glTF
 # keeps 65535 itself back, as a strip's restart.
 comptime MAX_SHORT_VERTICES = 65535
-# What a material says it needs to be drawn unlit.
-comptime UNLIT = "KHR_materials_unlit"
 comptime _BASE64 = (
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 )
@@ -248,28 +278,110 @@ def _is_at(point: Vector2, u: Float32, v: Float32) -> Bool:
     return point.x == u and point.y == v
 
 
-def _is_upright(matrix: Matrix3) -> Bool:
-    """Return True if a texture transform moves nothing."""
-    return (
-        _is_at(matrix.transform_point(Vector2(0, 0)), 0, 0)
-        and _is_at(matrix.transform_point(Vector2(1, 0)), 1, 0)
-        and _is_at(matrix.transform_point(Vector2(0, 1)), 0, 1)
-    )
+def _is_written_upside_down(texture: Texture) -> Bool:
+    """Return True if a texture's image is written upside down: one whose
+    `repeat.y` is not negative, where `read_gltf` sets it to minus one.
+
+    Either way the texture samples as it does here, since
+    `GltfPlacement.of` writes the transform that matches the image.
+    """
+    return texture.repeat.y >= 0
 
 
-def _is_flipped(matrix: Matrix3) -> Bool:
-    """Return True if a texture transform turns `v` upside down and
-    nothing else, as `read_gltf` sets it."""
-    return (
-        _is_at(matrix.transform_point(Vector2(0, 0)), 0, 1)
-        and _is_at(matrix.transform_point(Vector2(1, 0)), 1, 1)
-        and _is_at(matrix.transform_point(Vector2(0, 1)), 0, 0)
-    )
+@fieldwise_init
+struct GltfPlacement(Equatable, ImplicitlyCopyable):
+    """Where a texture reference samples its image, as glTF writes it: the
+    set of texture coordinates, and the `KHR_texture_transform` applied to
+    them.
+
+    glTF's `v` runs down from the image's top. `gltf_pixels` writes an
+    image upside down or as it is, and the transform here is the one that
+    samples that image where the texture samples its own.
+    """
+
+    # `KHR_texture_transform`'s `offset`, `scale` and `rotation`, the
+    # last in radians.
+    var offset: Vector2
+    var scale: Vector2
+    var rotation: Float32
+    # The `texCoord`: the texture's `channel`.
+    var set: Int
+
+    @staticmethod
+    def of(texture: Texture) raises -> GltfPlacement:
+        """Return where a texture samples its image, as glTF writes it.
+
+        three.js's `GLTFExporter` writes `offset`, `repeat` and `rotation`
+        as they are and drops `center`. This writes the offset the whole
+        matrix has, so a texture turned or scaled about a center samples
+        the same. Where its image is written as it is, the flip of `v` is
+        folded in: the offset's `v` is one minus the matrix's, and the
+        scale's `v` is negated.
+
+        Args:
+            texture: The texture.
+
+        Returns:
+            The placement.
+
+        Raises:
+            Error: Never, in practice: the matrix is three by three.
+        """
+        var to_uv = texture.uv_transform()
+        var u = to_uv.get(0, 2)
+        var v = to_uv.get(1, 2)
+        var turn = texture.rotation.to(RADIAN)
+        var set = texture.channel.value
+        if _is_written_upside_down(texture):
+            return GltfPlacement(
+                Vector2(u, v),
+                Vector2(texture.repeat.x, texture.repeat.y),
+                turn,
+                set,
+            )
+        return GltfPlacement(
+            Vector2(u, 1 - v),
+            Vector2(texture.repeat.x, -texture.repeat.y),
+            turn,
+            set,
+        )
+
+    def moves(self) -> Bool:
+        """Return True if the transform moves, turns or scales anything.
+
+        Returns:
+            False for glTF's identity, which is written as no transform.
+        """
+        return not (
+            _is_at(self.offset, 0, 0)
+            and _is_at(self.scale, 1, 1)
+            and self.rotation == 0
+        )
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if two placements sample at the same coordinates.
+
+        Args:
+            other: The other placement.
+
+        Returns:
+            True if every part is equal.
+        """
+        return (
+            _is_at(self.offset, other.offset.x, other.offset.y)
+            and _is_at(self.scale, other.scale.x, other.scale.y)
+            and self.rotation == other.rotation
+            and self.set == other.set
+        )
 
 
 def gltf_pixels(texture: Texture) raises -> List[UInt8]:
-    """Return a texture's full-size image as glTF lays it out: the row
-    that `v = 0` reads first.
+    """Return a texture's full-size image as glTF writes it.
+
+    The image is written upside down when its `repeat.y` is not negative,
+    as three.js writes a `flipY` texture, and as it is otherwise, as
+    `read_gltf` leaves it. `GltfPlacement.of` gives the transform that
+    samples it where the texture samples its own.
 
     Args:
         texture: The texture.
@@ -278,9 +390,8 @@ def gltf_pixels(texture: Texture) raises -> List[UInt8]:
         RGBA bytes, row by row, `width * height * 4` of them.
 
     Raises:
-        Error: If the texture is blank, holds floats, holds a mode that is
-            none of its named values, or is moved, tiled or turned by
-            anything but the flip `read_gltf` sets.
+        Error: If the texture is blank, holds floats, or holds a mode that
+            is none of its named values.
     """
     if texture.width == 0:
         raise Error("glTF: a blank texture has no image to write")
@@ -289,17 +400,7 @@ def gltf_pixels(texture: Texture) raises -> List[UInt8]:
     if texture.texel_type == FLOAT_TYPE:
         raise Error("glTF: a float texture has no eight-bit image to write")
     texture.validate()
-    var transform = texture.uv_transform()
-    var flip: Bool
-    if _is_upright(transform):
-        flip = True
-    elif _is_flipped(transform):
-        flip = False
-    else:
-        raise Error(
-            "glTF: a texture's offset, repeat, rotation and center are not"
-            " written; KHR_texture_transform is not ported"
-        )
+    var flip = _is_written_upside_down(texture)
     var row = texture.width * Texture.CHANNELS
     var out = List[UInt8](capacity=row * texture.height)
     var pixels = Span(texture.pixels)
@@ -344,10 +445,11 @@ struct _Exporter(Movable):
     var positions: List[Int]
     var normals: List[Int]
     var uvs: List[Int]
+    var uv1s: List[Int]
     var colors: List[Int]
     var indices: List[Int]
-    # Whether a material asked for `KHR_materials_unlit`.
-    var unlit: Bool
+    # The extensions written, each once, in the order first written.
+    var used: List[String]
 
     def __init__(out self, embed: Bool):
         """Start an empty document.
@@ -372,9 +474,17 @@ struct _Exporter(Movable):
         self.positions = List[Int]()
         self.normals = List[Int]()
         self.uvs = List[Int]()
+        self.uv1s = List[Int]()
         self.colors = List[Int]()
         self.indices = List[Int]()
-        self.unlit = False
+        self.used = List[String]()
+
+    def use(mut self, name: String):
+        """Add an extension to `extensionsUsed`, once."""
+        for known in self.used:
+            if known == name:
+                return
+        self.used.append(name)
 
     def pad(mut self):
         """Pad the buffer to a multiple of four bytes, where every view
@@ -502,6 +612,12 @@ struct _Exporter(Movable):
                     geometry.attribute_view(UV).packed(), 2, "VEC2", False
                 )
             self.uvs.append(uv)
+            var uv1 = -1
+            if geometry.has_attribute(UV1):
+                uv1 = self.float_accessor(
+                    geometry.attribute_view(UV1).packed(), 2, "VEC2", False
+                )
+            self.uv1s.append(uv1)
             self.colors.append(-1)
             var indices = -1
             if geometry.is_indexed():
@@ -619,13 +735,44 @@ struct _Exporter(Movable):
         first: TextureId,
         second: TextureId,
         assets: Assets,
+        amount_key: String = "",
+        amount: Float32 = 1,
     ) raises:
-        """Write `key` and a texture reference to it."""
+        """Write `key` and a texture reference to it: its index, its
+        `texCoord` when that is not the first set, `amount_key` when
+        `amount` is not one, and its `KHR_texture_transform` when that
+        moves anything, as three.js's `applyTextureTransform` writes it.
+        """
         var index = self.texture(first, second, assets)
+        var lead = first if first != NO_TEXTURE else second
+        var placed = GltfPlacement.of(assets.textures.get(lead))
         writer.key(key)
         writer.begin_object()
         writer.key("index")
         writer.integer(index)
+        if placed.set != 0:
+            writer.key("texCoord")
+            writer.integer(placed.set)
+        if amount != 1:
+            writer.key(amount_key)
+            writer.number(amount)
+        if placed.moves():
+            self.use(TEXTURE_TRANSFORM)
+            writer.key("extensions")
+            writer.begin_object()
+            writer.key(TEXTURE_TRANSFORM)
+            writer.begin_object()
+            if not _is_at(placed.offset, 0, 0):
+                writer.key("offset")
+                _write_numbers(writer, [placed.offset.x, placed.offset.y])
+            if placed.rotation != 0:
+                writer.key("rotation")
+                writer.number(placed.rotation)
+            if not _is_at(placed.scale, 1, 1):
+                writer.key("scale")
+                _write_numbers(writer, [placed.scale.x, placed.scale.y])
+            writer.end_object()
+            writer.end_object()
         writer.end_object()
 
     def material(mut self, id: MaterialId, assets: Assets) raises -> Int:
@@ -670,25 +817,27 @@ struct _Exporter(Movable):
             )
         writer.end_object()
         if material.normal_map != NO_TEXTURE:
-            var normal = self.texture(
-                material.normal_map, material.normal_map, assets
+            self.texture_info(
+                writer,
+                "normalTexture",
+                material.normal_map,
+                material.normal_map,
+                assets,
+                "scale",
+                material.normal_scale.x,
             )
-            writer.key("normalTexture")
-            writer.begin_object()
-            writer.key("index")
-            writer.integer(normal)
-            if material.normal_scale.x != 1:
-                writer.key("scale")
-                writer.number(material.normal_scale.x)
-            writer.end_object()
-        var glow = material.emissive_light()
-        var brightest = max(glow.r, max(glow.g, glow.b))
-        if brightest > 1:
-            raise Error(
-                "glTF: an emissive color times its intensity must not pass"
-                " one; KHR_materials_emissive_strength is not written"
+        if material.ao_map != NO_TEXTURE:
+            self.texture_info(
+                writer,
+                "occlusionTexture",
+                material.ao_map,
+                material.ao_map,
+                assets,
+                "strength",
+                material.ao_map_intensity,
             )
-        if brightest > 0:
+        var glow = FloatColor(srgb=material.emissive)
+        if max(glow.r, max(glow.g, glow.b)) > 0:
             writer.key("emissiveFactor")
             writer.begin_array()
             writer.number(glow.r)
@@ -714,18 +863,126 @@ struct _Exporter(Movable):
         if material.side == DOUBLE_SIDE:
             writer.key("doubleSided")
             writer.boolean(True)
-        if material.kind == BASIC:
+        var extensions = self.extensions(material, assets)
+        if extensions != "":
             writer.key("extensions")
-            writer.begin_object()
-            writer.key(UNLIT)
-            writer.begin_object()
-            writer.end_object()
-            writer.end_object()
-            self.unlit = True
+            writer.raw(extensions)
         writer.end_object()
         self.material_keys.append(id.value)
         self.materials.append(writer.finish())
         return len(self.materials) - 1
+
+    def open_extension(mut self, mut writer: JsonWriter, name: String) raises:
+        """Write an extension's key and open its object."""
+        self.use(name)
+        writer.key(name)
+        writer.begin_object()
+
+    def extensions(
+        mut self, material: Material, assets: Assets
+    ) raises -> String:
+        """Return a material's `extensions` object as JSON, or an empty
+        string when it has none.
+
+        `KHR_materials_unlit` for a `BASIC` material, and
+        `KHR_materials_emissive_strength` for an emissive intensity that
+        is not one. A `PHYSICAL` material also writes each extension that
+        `read_gltf` reads for it, when a field the extension holds is not
+        at its default.
+        """
+        var writer = JsonWriter()
+        writer.begin_object()
+        var written = 0
+        if material.kind == BASIC:
+            self.open_extension(writer, MATERIALS_UNLIT)
+            writer.end_object()
+            written += 1
+        if material.emissive_intensity != 1:
+            self.open_extension(writer, EMISSIVE_STRENGTH)
+            writer.key("emissiveStrength")
+            writer.number(material.emissive_intensity)
+            writer.end_object()
+            written += 1
+        if material.kind == PHYSICAL:
+            written += self.physical_extensions(writer, material, assets)
+        writer.end_object()
+        if written == 0:
+            return ""
+        return writer.finish()
+
+    def physical_extensions(
+        mut self, mut writer: JsonWriter, material: Material, assets: Assets
+    ) raises -> Int:
+        """Write a physical material's extensions and return how many.
+
+        Each is written as three.js's `GLTFExporter` writes it, when a
+        field it holds is not at its default. Colors are written linear,
+        as glTF holds them.
+        """
+        var written = 0
+        if material.ior != DEFAULT_IOR:
+            self.open_extension(writer, MATERIALS_IOR)
+            writer.key("ior")
+            writer.number(material.ior)
+            writer.end_object()
+            written += 1
+        if _has_specular(material):
+            self.open_extension(writer, MATERIALS_SPECULAR)
+            writer.key("specularFactor")
+            writer.number(material.specular_intensity)
+            writer.key("specularColorFactor")
+            _write_color(writer, material.specular_color)
+            writer.end_object()
+            written += 1
+        if _has_clearcoat(material):
+            self.open_extension(writer, MATERIALS_CLEARCOAT)
+            writer.key("clearcoatFactor")
+            writer.number(material.clearcoat)
+            writer.key("clearcoatRoughnessFactor")
+            writer.number(material.clearcoat_roughness)
+            writer.end_object()
+            written += 1
+        if _has_transmission(material):
+            self.open_extension(writer, MATERIALS_TRANSMISSION)
+            writer.key("transmissionFactor")
+            writer.number(material.transmission)
+            if material.transmission_map != NO_TEXTURE:
+                self.texture_info(
+                    writer,
+                    "transmissionTexture",
+                    material.transmission_map,
+                    material.transmission_map,
+                    assets,
+                )
+            writer.end_object()
+            written += 1
+        if _has_volume(material):
+            self.open_extension(writer, MATERIALS_VOLUME)
+            writer.key("thicknessFactor")
+            writer.number(material.thickness.to(METER))
+            if material.thickness_map != NO_TEXTURE:
+                self.texture_info(
+                    writer,
+                    "thicknessTexture",
+                    material.thickness_map,
+                    material.thickness_map,
+                    assets,
+                )
+            var distance = material.attenuation_distance.to(METER)
+            if isfinite(distance):
+                writer.key("attenuationDistance")
+                writer.number(distance)
+            writer.key("attenuationColor")
+            _write_color(writer, material.attenuation_color)
+            writer.end_object()
+            written += 1
+        if material.dispersion != 0:
+            self.open_extension(writer, MATERIALS_DISPERSION)
+            writer.key("dispersion")
+            writer.number(material.dispersion)
+            writer.end_object()
+            written += 1
+        return written
 
     def mesh(
         mut self, scene: Scene, drawn: List[Int], assets: Assets
@@ -756,6 +1013,9 @@ struct _Exporter(Movable):
             if self.uvs[slot] >= 0:
                 writer.key("TEXCOORD_0")
                 writer.integer(self.uvs[slot])
+            if self.uv1s[slot] >= 0:
+                writer.key("TEXCOORD_1")
+                writer.integer(self.uv1s[slot])
             if colored:
                 writer.key("COLOR_0")
                 writer.integer(self.colors[slot])
@@ -786,10 +1046,11 @@ struct _Exporter(Movable):
         writer.key("generator")
         writer.string("ThreeMojo GLTFExporter")
         writer.end_object()
-        if self.unlit:
+        if len(self.used) > 0:
             writer.key("extensionsUsed")
             writer.begin_array()
-            writer.string(UNLIT)
+            for name in self.used:  # pragma: no branch
+                writer.string(name)
             writer.end_array()
         writer.key("scene")
         writer.integer(0)
@@ -829,6 +1090,44 @@ def _is_opaque_white(color: FloatColor, opacity: Float32) -> Bool:
     return color.r == 1 and color.g == 1 and color.b == 1 and opacity == 1
 
 
+def _is_white(color: Color) -> Bool:
+    """Return True for white, the default specular and attenuation color."""
+    return color.r == 255 and color.g == 255 and color.b == 255
+
+
+def _has_specular(material: Material) -> Bool:
+    """Return True if `KHR_materials_specular` has something to say."""
+    return material.specular_intensity != 1 or not _is_white(
+        material.specular_color
+    )
+
+
+def _has_clearcoat(material: Material) -> Bool:
+    """Return True if `KHR_materials_clearcoat` has something to say."""
+    return material.clearcoat != 0 or material.clearcoat_roughness != 0
+
+
+def _has_transmission(material: Material) -> Bool:
+    """Return True if `KHR_materials_transmission` has something to say."""
+    return material.transmission != 0 or material.transmission_map != NO_TEXTURE
+
+
+def _has_volume(material: Material) -> Bool:
+    """Return True if `KHR_materials_volume` has something to say."""
+    return (
+        material.thickness.to(METER) != 0
+        or material.thickness_map != NO_TEXTURE
+        or isfinite(material.attenuation_distance.to(METER))
+        or not _is_white(material.attenuation_color)
+    )
+
+
+def _write_color(mut writer: JsonWriter, color: Color) raises:
+    """Write a color as glTF holds a factor: three linear numbers."""
+    var linear = FloatColor(srgb=color)
+    _write_numbers(writer, [linear.r, linear.g, linear.b])
+
+
 def _copy_channel(
     mut pixels: List[UInt8],
     id: TextureId,
@@ -845,6 +1144,12 @@ def _copy_channel(
         raise Error(
             "glTF: a roughness map and a metalness map must be one size to"
             " be combined"
+        )
+    # One texture reference carries one transform and one set.
+    if GltfPlacement.of(texture) != GltfPlacement.of(leader):
+        raise Error(
+            "glTF: a roughness map and a metalness map must share one"
+            " transform and one channel to be combined"
         )
     var source = gltf_pixels(texture)
     # A texture `gltf_pixels` accepts has at least one texel.
@@ -982,8 +1287,8 @@ def export_gltf(
             material or texture that is not there, a geometry is refused
             by `exporters.common.check_geometry` or has no vertices, a
             texture is refused by `gltf_pixels`, a combined roughness and
-            metalness map are not one size, an emissive term passes one,
-            or a number is not finite.
+            metalness map are not one size or do not share one transform
+            and one channel, or a number is not finite.
     """
     if not container.is_valid():
         raise Error("glTF: a container that is none of the three")

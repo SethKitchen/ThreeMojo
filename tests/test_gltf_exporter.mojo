@@ -700,18 +700,7 @@ def test_what_glTF_cannot_hold_is_refused() raises:
     var hollow = one_mesh(assets, Material(Color(1, 2, 3)), nothing^)
     with assert_raises(contains="no vertices"):
         _ = export_gltf(hollow, assets)
-    # An emissive term brighter than one.
-    var glowing = one_mesh(
-        assets,
-        standard_material(
-            Color(1, 2, 3), emissive=Color(255, 0, 0), emissive_intensity=2
-        ),
-        quad(True),
-    )
-    with assert_raises(contains="emissive"):
-        _ = export_gltf(glowing, assets)
-    # A blank texture, a tiled one, one of an unknown wrap, and two maps
-    # of two sizes.
+    # A blank texture, one of an unknown wrap, and two maps of two sizes.
     var blank = assets.textures.add(Texture())
     var blank_map = one_mesh(
         assets, Material(Color(1, 2, 3), map=blank), quad(True)
@@ -725,14 +714,6 @@ def test_what_glTF_cannot_hold_is_refused() raises:
     )
     with assert_raises(contains="float texture"):
         _ = export_gltf(bright_map, assets)
-    var tiled_texture = image(2, 2, 4)
-    tiled_texture.repeat = Vector2(2, 2)
-    var tiled = assets.textures.add(tiled_texture^)
-    var tiled_map = one_mesh(
-        assets, Material(Color(1, 2, 3), map=tiled), quad(True)
-    )
-    with assert_raises(contains="KHR_texture_transform"):
-        _ = export_gltf(tiled_map, assets)
     var odd_texture = image(2, 2, 4)
     odd_texture.wrap = Wrap(9)
     var odd = assets.textures.add(odd_texture^)

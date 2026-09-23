@@ -54,6 +54,7 @@ The meshes on one node become one glTF mesh with one primitive each. `read_gltf`
 | `POSITION` | Always. The accessor has `min` and `max`, as the specification requires. |
 | `NORMAL` | When the geometry has `normal`. |
 | `TEXCOORD_0` | When the geometry has `uv`. |
+| `TEXCOORD_1` | When the geometry has `uv1`. |
 | `COLOR_0` | When the geometry has `color` and the material has `vertex_colors` on. `read_gltf` turns `vertex_colors` on for a primitive with `COLOR_0`. |
 | `indices` | When the geometry has an index. Unsigned shorts for up to 65535 vertices, unsigned integers above that. |
 
@@ -70,12 +71,31 @@ Every material is written as a metallic-roughness material.
 | `map` | `baseColorTexture`. |
 | `roughness_map`, `metalness_map` | `metallicRoughnessTexture`. See [Textures](#textures). |
 | `normal_map`, `normal_scale.x` | `normalTexture` and its `scale`. |
-| `emissive` times `emissive_intensity` | `emissiveFactor`. |
+| `ao_map`, `ao_map_intensity` | `occlusionTexture` and its `strength`. The texture's `channel` is the `texCoord`. |
+| `emissive` | `emissiveFactor`, in linear light. |
+| `emissive_intensity` | The `KHR_materials_emissive_strength` extension, when it is not one. |
 | `emissive_map` | `emissiveTexture`. |
 | A transparent material | `alphaMode` `BLEND`. |
 | `alpha_test` above zero | `alphaMode` `MASK`, and `alphaCutoff`. |
 | `DOUBLE_SIDE` | `doubleSided`. |
-| `BASIC` | The `KHR_materials_unlit` extension, in `extensionsUsed`. |
+| `BASIC` | The `KHR_materials_unlit` extension. |
+
+Every extension that the writer uses is listed once in `extensionsUsed`. The writer lists none in `extensionsRequired`, as three.js does.
+
+### Physical extensions
+
+A `PHYSICAL` material writes the extensions that `read_gltf` reads for it. Thus a file that is read, written and read again keeps them. The writer writes an extension when a field that it holds is not at its default.
+
+| Property | Extension |
+|---|---|
+| `ior` | `KHR_materials_ior`. |
+| `specular_intensity`, `specular_color` | `KHR_materials_specular`: `specularFactor` and `specularColorFactor`, in linear light. |
+| `clearcoat`, `clearcoat_roughness` | `KHR_materials_clearcoat`: `clearcoatFactor` and `clearcoatRoughnessFactor`. |
+| `transmission`, `transmission_map` | `KHR_materials_transmission`: `transmissionFactor` and `transmissionTexture`. |
+| `thickness`, `thickness_map`, `attenuation_distance`, `attenuation_color` | `KHR_materials_volume`: `thicknessFactor` in meters, `thicknessTexture`, `attenuationDistance` in meters when it is finite, and `attenuationColor` in linear light. |
+| `dispersion` | `KHR_materials_dispersion`. |
+
+A `PHYSICAL` material with every field at its default writes no extension. `read_gltf` reads it back as a `STANDARD` material, as three.js does.
 
 ### Textures
 
@@ -83,7 +103,13 @@ Each texture becomes a PNG image and a sampler. The sampler holds the wrap, the 
 
 The `v` coordinate of glTF runs down from the top of the image. The `v` coordinate of this renderer runs up from the bottom. Thus the writer turns the image upside down, as three.js does for a `flipY` texture. A texture from `read_gltf` has this flip in its `repeat` and `offset`. The writer keeps the image of such a texture as it is.
 
-glTF keeps roughness in green and metalness in blue, in one image. When the two maps are one texture, the writer writes it once. When they are different textures, the writer combines them into one image, as three.js does. The combined image has red at zero, and white in a channel that has no map.
+A texture with an `offset`, a `repeat`, a `rotation` or a `center` is written with the `KHR_texture_transform` extension, as three.js writes it. The extension holds only what moves: `offset`, `rotation` and `scale`. `GltfPlacement.of(texture)` gives the transform and the `texCoord` that the writer writes.
+
+- A texture with a `repeat.y` of zero or more has its image turned upside down. Its transform is its own.
+- A texture with a negative `repeat.y` has its image kept as it is. A texture from `read_gltf` is of this kind. The flip of `v` goes into its transform. The `v` of the offset is one minus the matrix's, and the `v` of the scale changes sign.
+- The offset is the translation of the texture's whole matrix. Thus a texture turned or scaled about its `center` samples the same when it is read back.
+
+glTF keeps roughness in green and metalness in blue, in one image. When the two maps are one texture, the writer writes it once. When they are different textures, the writer combines them into one image, as three.js does. The combined image has red at zero, and white in a channel that has no map. The two maps must have one transform and one channel, because one texture reference holds them.
 
 ## OBJ
 
@@ -129,8 +155,10 @@ A number is written as the shortest text that reads back to the same `Float32`. 
 
 - A PLY color is rounded to the nearest byte. three.js rounds down, and then a file loses one level each time it is read and written again.
 - A PLY color is clamped to zero through one before it is encoded.
-- The emissive intensity is multiplied into `emissiveFactor`. `KHR_materials_emissive_strength` is not written, so a product above one is refused.
-- A texture with any other `offset`, `repeat`, `rotation` or `center` is refused. `KHR_texture_transform` is not written.
+- `KHR_materials_emissive_strength` is written for every kind of material. three.js writes it only for a standard or physical material.
+- A texture's `center` is folded into the `offset` of its transform. three.js drops the `center`.
+- A volume is written when any of its fields is not at its default. three.js writes it only for a material that transmits. A clear coat is written when its roughness is not zero, also when its factor is zero.
+- An ao map on a `BASIC` material is written, as three.js writes it. `read_gltf` reads no occlusion for an unlit material.
 - A combined metallic-roughness image needs two maps of one size. three.js scales them to one size.
 - A node that keeps its own matrix writes `matrix`. Every other node writes its translation, its rotation and its scale. three.js writes `matrix` unless you set `trs`.
 - An empty geometry is refused by `export_gltf`. glTF does not allow a buffer view of zero bytes.
@@ -139,7 +167,7 @@ A number is written as the shortest text that reads back to the same `Float32`. 
 
 - Lights, cameras, animations, skins and morph targets.
 - Instanced, batched and skinned meshes, lines, points and sprites.
-- Bump maps, alpha maps, environment maps, matcaps and gradient maps.
+- Bump maps, alpha maps, light maps, specular maps, displacement maps, environment maps, matcaps and gradient maps.
 - The groups of a geometry. A mesh has one material.
 - A `BACK_SIDE` material is written single-sided, as three.js writes it. glTF has no back side.
 - OBJ materials and a material library. three.js writes none.
@@ -153,7 +181,8 @@ The writers raise for:
 - A mesh that names a node, a geometry, a material or a texture that is not there.
 - A geometry without `position`, or with an attribute of the wrong size or count.
 - An index entry past the last vertex, or a geometry without an index that is not whole triangles.
-- A blank texture, or a texture with a wrap, filter or color space that is none of its named values.
+- A blank texture, or a texture with a wrap, filter, color space or channel that is none of its named values.
+- A roughness map and a metalness map that are not one size, or that do not share one transform and one channel.
 - A number that is not finite.
 - A stale scene, or a node whose world matrix flattens an axis, for OBJ, STL and PLY.
 

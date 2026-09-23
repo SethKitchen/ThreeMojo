@@ -1184,3 +1184,118 @@ def test_the_volume_maps_are_read_as_data() raises:
     )
     assert_true(assets.textures.get(glass.transmission_map).alpha == IGNORED)
     assert_true(assets.textures.get(glass.thickness_map).alpha == IGNORED)
+
+
+# --- occlusion --------------------------------------------------------------
+
+from core.buffer_geometry import UV1
+from render.texture import UV_CHANNEL_0, UV_CHANNEL_1
+
+
+def occluded(material: String, second: String = "VEC2") -> String:
+    """Return the checker quad's document with a second set of texture
+    coordinates of type `second`, and `material` as its one material."""
+    var bin = Bin()
+    _ = bin.floats([-1, 1, 0, 1, 1, 0, 1, -1, 0, -1, -1, 0], "VEC3")
+    _ = bin.floats([0, 0, 1, 0, 1, 1, 0, 1], "VEC2")
+    _ = bin.ints([0, 2, 1, 0, 3, 2], USHORT, "SCALAR")
+    if second == "VEC2":
+        _ = bin.floats([0.5, 0.5, 1, 0.5, 1, 1, 0.25, 0.75], "VEC2")
+    else:
+        _ = bin.floats([0.5, 0.5, 1, 0.5, 1, 1, 0.25, 0.75, 0, 0, 0, 0], second)
+    return bin.document(
+        ',"images":[{"uri":"data:image/png;base64,'
+        + CHECKER
+        + '"}],"samplers":[{"magFilter":9728,"minFilter":9728}]'
+        + ',"textures":[{"source":0,"sampler":0}]'
+        + ',"materials":['
+        + material
+        + "]"
+        + ',"meshes":[{"primitives":[{"attributes":{"POSITION":0,'
+        + '"TEXCOORD_0":1,"TEXCOORD_1":3},"indices":2,"material":0}]}]'
+        + ',"nodes":[{"mesh":0}],"scenes":[{"nodes":[0]}]'
+    )
+
+
+def test_an_occlusion_texture_is_the_ao_map() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        occluded(
+            '{"occlusionTexture":{"index":0,"texCoord":1,"strength":0.25}}'
+        ),
+        scene,
+        assets,
+    )
+    var material = assets.materials.get(model.materials[0])
+    assert_true(material.ao_map != NO_TEXTURE)
+    assert_almost_equal(material.ao_map_intensity, 0.25, atol=TOLERANCE)
+    ref ao = assets.textures.get(material.ao_map)
+    assert_equal(ao.channel, UV_CHANNEL_1)
+    assert_equal(ao.color_space, LINEAR)
+    assert_equal(ao.alpha, IGNORED)
+    # The data texture the file names is left on the first set.
+    assert_equal(
+        assets.textures.get(model.data_textures[0]).channel, UV_CHANNEL_0
+    )
+    ref geometry = assets.geometries.get(model.geometries[0])
+    var second = geometry.attribute_view(String(UV1)).data.copy()
+    assert_equal(len(second), 8)
+    assert_equal(second[7], 0.75)
+
+
+def test_an_occlusion_texture_on_the_first_set_is_not_copied() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        occluded('{"occlusionTexture":{"index":0}}'), scene, assets
+    )
+    var material = assets.materials.get(model.materials[0])
+    assert_equal(material.ao_map, model.data_textures[0])
+    assert_equal(material.ao_map_intensity, 1)
+    # The transform's texCoord wins, as three.js lets it.
+    var other = Assets()
+    var again = Scene()
+    var moved = loaded(
+        occluded(
+            '{"occlusionTexture":{"index":0,"extensions":'
+            + '{"KHR_texture_transform":{"texCoord":1,"offset":[0.5,0]}}}}'
+        ),
+        again,
+        other,
+    )
+    ref ao = other.textures.get(other.materials.get(moved.materials[0]).ao_map)
+    assert_equal(ao.channel, UV_CHANNEL_1)
+    assert_almost_equal(ao.offset.x, 0.5, atol=TOLERANCE)
+    # An unlit material reads no occlusion, as three.js reads it.
+    var flat = Assets()
+    var plain = Scene()
+    var unlit = loaded(
+        occluded(
+            '{"extensions":{"KHR_materials_unlit":{}},'
+            + '"occlusionTexture":{"index":0}}'
+        ),
+        plain,
+        flat,
+    )
+    assert_equal(flat.materials.get(unlit.materials[0]).ao_map, NO_TEXTURE)
+
+
+def test_a_malformed_occlusion_is_refused() raises:
+    refuses(
+        occluded('{"occlusionTexture":{"index":0,"texCoord":2}}'),
+        "first two sets",
+    )
+    refuses(
+        occluded('{"occlusionTexture":{"index":0,"texCoord":-1}}'),
+        "first two sets",
+    )
+    refuses(
+        occluded('{"normalTexture":{"index":0,"texCoord":-1}}'),
+        "only the first set",
+    )
+    refuses(
+        occluded('{"occlusionTexture":{"index":0,"strength":-1}}'),
+        "ao map intensity",
+    )
+    refuses(occluded("{}", "VEC3"), "TEXCOORD_1 must be a VEC2")
