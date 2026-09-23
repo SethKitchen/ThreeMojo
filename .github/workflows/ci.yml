@@ -29,9 +29,8 @@ jobs:
   cpu:
     name: check-cpu (standard library only)
     runs-on: ubuntu-latest
-    # The CPU suites took about 26 minutes and coverage about 16 once the
-    # library passed 150 modules, so 40 cut every run off before the
-    # coverage report. This is a hang detector, not a speed target.
+    # The CPU suites took about 35 minutes once the library passed 150
+    # modules. This is a hang detector, not a speed target.
     timeout-minutes: 90
 
     steps:
@@ -56,6 +55,30 @@ jobs:
       - name: check-cpu
         run: make -B check-cpu
 
+  # Coverage runs beside the CPU suites rather than after them: each takes
+  # half an hour or more on a hosted runner, and one after the other ran
+  # past every timeout the check job was given.
+  coverage:
+    name: coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Install the pinned Mojo toolchain
+        run: |
+          uv venv --prompt ThreeMojo
+          uv pip install "mojo==1.1.0"
+          .venv/bin/mojo --version
+
+      # The native window's suite runs under coverage too.
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
       # Line, branch, condition and MC/DC, all gating: the report exits
       # non-zero if anything is uncovered.
       #
@@ -72,8 +95,11 @@ jobs:
       # rather than the outlier. A genuine hang is minutes of no progress
       # and blows through any of these numbers, so the detector loses
       # nothing by being generous.
+      #
+      # 900 then went the same way at 149 instrumented modules: the run was
+      # stopped at fifteen minutes with every suite still progressing.
       - name: coverage
-        run: make -B coverage COV_BUDGET=900
+        run: make -B coverage COV_BUDGET=3600
 
   # The wiki is generated from docs/wiki/ so the two cannot drift. GitHub
   # creates the wiki repository when its first page is saved in the browser;
@@ -82,7 +108,7 @@ jobs:
   wiki:
     name: publish wiki
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: cpu
+    needs: [cpu, coverage]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
