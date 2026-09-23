@@ -1119,9 +1119,8 @@ def test_a_textured_quad_shows_the_images_top_at_the_top() raises:
 
 
 def test_the_edges_of_every_check_are_reached() raises:
-    # A bare file name reads from the working directory; a file too short
-    # to hold a magic reads as JSON; a name with no slash that is not
-    # there is refused.
+    # A file too short to hold a magic reads as JSON; a name with no slash
+    # that is not there is refused.
     var scene = Scene()
     var assets = Assets()
     Path("out/tiny.gltf").write_text("{}")
@@ -1142,6 +1141,16 @@ def test_the_edges_of_every_check_are_reached() raises:
     empty_bin[8] = UInt8(len(empty_bin))
     var parts = split_glb(empty_bin)
     assert_equal(len(parts[1]), 0)
+    # A data URI with nothing after its comma is a buffer of no bytes.
+    assert_true(
+        refused(
+            doc('"buffers":[{"byteLength":36,"uri":"data:x;base64,"}]')
+        ).find("shorter")
+        >= 0
+    )
+    # A scene with no nodes adds nothing.
+    var no_roots = loaded(doc('"scenes":[{"nodes":[]}]'), scene, assets)
+    assert_equal(no_roots.mesh_count, 0)
     # An empty list of required extensions, an asset that is not an
     # object, and a base64 character past the letters.
     _ = loaded(doc('"extensionsRequired":[]'), scene, assets)
