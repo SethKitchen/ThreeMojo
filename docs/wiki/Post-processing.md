@@ -64,7 +64,7 @@ The defaults are three.js's. The dot screen's angle is an `Angle`. A bare number
 | `pass_count() -> Int` | | How many passes there are. |
 | `reset()` | `reset` | Forget what every afterimage pass saw and what every TAA pass accumulated. |
 | `render(renderer, scene, assets, camera, delta_time=0) -> Framebuffer` | `render` | Run every enabled pass in order and return the image. |
-| `run_step(index, frame, renderer, scene, assets, camera, delta_time)` | | Run one pass on a frame, less the mask's bookkeeping. The GPU composer calls it for a pass with no kernel. |
+| `run_step(index, frame, renderer, scene, assets, camera, delta_time)` | | Run one pass on a frame, less the mask's bookkeeping. It fits the memories first, and refuses an index that names no pass. The GPU composer calls it for a pass with no kernel. |
 
 `delta_time` is how many seconds passed since the last frame. It advances each film pass's grain and each outline pass's pulse. Zero holds them still.
 

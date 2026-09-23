@@ -884,5 +884,24 @@ def test_a_clear_mask_step_run_alone_changes_nothing() raises:
     assert_almost_equal(straight(frame, 3, 3).g, Float32(0.4), atol=TOLERANCE)
 
 
+def test_a_step_run_alone_fits_the_memories_and_checks_its_index() raises:
+    # An afterimage appended to the open list has no memory until the
+    # step fits them, as `render` does. An index past the passes, or
+    # before them, is refused.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var scene = lit_sheet(assets)
+    var composer = EffectComposer()
+    composer.passes.append(afterimage_pass(0.5))
+    var frame = flat(WIDTH, HEIGHT, FloatColor(0.2, 0.4, 0.6, 1))
+    composer.run_step(0, frame, renderer, scene, assets, a_camera(), 0.0)
+    assert_equal(len(composer.memories), 1)
+    assert_equal(len(composer.memories[0]), WIDTH * HEIGHT)
+    with assert_raises(contains="one of its passes"):
+        composer.run_step(1, frame, renderer, scene, assets, a_camera(), 0.0)
+    with assert_raises(contains="one of its passes"):
+        composer.run_step(-1, frame, renderer, scene, assets, a_camera(), 0.0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

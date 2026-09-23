@@ -1232,10 +1232,15 @@ struct EffectComposer(Movable):
             delta_time: How many seconds since the last frame.
 
         Raises:
-            Error: Everything `Renderer.render_into` raises, or if a
-                texture or a table a pass names is not in the assets or
-                fails its `validate`.
+            Error: If `index` names no pass, everything
+                `Renderer.render_into` raises, or if a texture or a table
+                a pass names is not in the assets or fails its `validate`.
         """
+        if index < 0 or index >= len(self.passes):
+            raise Error("A composer step must name one of its passes")
+        # `passes` is open, so a pass appended since the last `render` has
+        # no memory yet. `render` fits them too; a step run alone must.
+        self.fit_memories()
         ref step = self.passes[index]
         # A data pixel is stored straight, and every pass that reads the
         # frame as light reads it premultiplied. See `reads_frame_as_light`.
