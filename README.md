@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 158 features are ported and 21 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 159 features are ported and 20 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -312,14 +312,14 @@ The port is not at parity with three.js yet. 158 features are ported and 21 are 
 
 ### Math and foundations
 
-- [ ] Math addons: noise, OBB, Capsule, Octree, surface sampler, Lut, color spaces [#179](https://github.com/SethKitchen/ThreeMojo/issues/179)
 - [ ] The rest of the math API: vectors, quaternion, matrix, box, plane, frustum, color [#166](https://github.com/SethKitchen/ThreeMojo/issues/166)
 
 <details>
-<summary>Ported: 11</summary>
+<summary>Ported: 12</summary>
 
 - [x] [Vector2, Vector3, Matrix4 and projection matrices](https://github.com/SethKitchen/ThreeMojo/wiki/Math) [#91](https://github.com/SethKitchen/ThreeMojo/issues/91)
 - [x] [Compile-time units](https://github.com/SethKitchen/ThreeMojo/wiki/Units): meters, degrees, dimension checks [#92](https://github.com/SethKitchen/ThreeMojo/issues/92)
+- [x] [Math addons](https://github.com/SethKitchen/ThreeMojo/wiki/Math-addons): Perlin and simplex noise, OBB, Capsule, Octree collisions, surface sampler, color maps and Display P3 color spaces. [#179](https://github.com/SethKitchen/ThreeMojo/issues/179)
 - [x] [Coverage tool](https://github.com/SethKitchen/ThreeMojo/wiki/Coverage-tool): line, branch, condition and MC/DC [#93](https://github.com/SethKitchen/ThreeMojo/issues/93)
 - [x] [Euler angles from a quaternion](https://github.com/SethKitchen/ThreeMojo/wiki/Rotations#euler-and-eulerorder): all six orders, gimbal lock as in three.js, `Object3D.rotation` [#94](https://github.com/SethKitchen/ThreeMojo/issues/94)
 - [x] [Matrix3 and Vector4](https://github.com/SethKitchen/ThreeMojo/wiki/Math#matrix3): the normal matrix at its own size, three.js's uv transform, and homogeneous coordinates that keep their `w` [#95](https://github.com/SethKitchen/ThreeMojo/issues/95)
