@@ -470,10 +470,11 @@ def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
         material.metalness_map,
         material.normal_map,
         material.bump_map,
+        material.specular_map,
     ]
     var chosen = Matrix3()
     var settled = False
-    # Seven maps, always, so the loop never runs zero times.
+    # Eight maps, always, so the loop never runs zero times.
     for index in range(len(named)):  # pragma: no branch
         if named[index] == NO_TEXTURE:
             continue
@@ -1381,15 +1382,16 @@ def _to_raster(
         physics.ao_map_intensity,
         physics.light_map,
         physics.light_map_intensity,
+        physics.specular_map,
     )
 
 
 @fieldwise_init
 struct _Physics(ImplicitlyCopyable):
-    """What a physical surface, a normal or bump map and the two baked maps
-    add to every corner of one draw: the numbers and the maps
-    `RasterVertex` carries for them, gathered so `_to_raster` takes one
-    more argument rather than sixteen.
+    """What a physical surface, a normal or bump map, the two baked maps
+    and a specular map add to every corner of one draw: the numbers and
+    the maps `RasterVertex` carries for them, gathered so `_to_raster`
+    takes one more argument rather than seventeen.
     """
 
     var roughness: Float32
@@ -1408,6 +1410,7 @@ struct _Physics(ImplicitlyCopyable):
     var ao_map_intensity: Float32
     var light_map: TextureId
     var light_map_intensity: Float32
+    var specular_map: TextureId
 
     def __init__(out self):
         """Describe a surface that is not physical and carries no map: the
@@ -1428,6 +1431,7 @@ struct _Physics(ImplicitlyCopyable):
         self.ao_map_intensity = 1
         self.light_map = NO_TEXTURE
         self.light_map_intensity = 1
+        self.specular_map = NO_TEXTURE
 
 
 def _plane_in_view(plane: Plane, view: Matrix4) raises -> Plane:
@@ -3413,7 +3417,7 @@ struct Renderer(Movable):
             # The environment the surface reflects, the scene's if the
             # material asked for it, checked against the store here.
             var env = _resolved_env(scene, assets, material, self.shading)
-            # The four maps that hold numbers, each checked the way the
+            # The five maps that hold numbers, each checked the way the
             # alpha map is -- there, and stored as data, whatever the
             # shading mode -- and each erased unless textures are opened.
             var physics = _Physics(
@@ -3437,6 +3441,9 @@ struct Renderer(Movable):
                 material.ao_map_intensity,
                 _checked_light_map(assets, material.light_map),
                 material.light_map_intensity,
+                _checked_data_map(
+                    assets, material.specular_map, "A specular map"
+                ),
             )
             if self.shading != SHADE_TEXTURE:
                 physics.roughness_map = NO_TEXTURE
@@ -3445,6 +3452,7 @@ struct Renderer(Movable):
                 physics.bump_map = NO_TEXTURE
                 physics.ao_map = NO_TEXTURE
                 physics.light_map = NO_TEXTURE
+                physics.specular_map = NO_TEXTURE
             # Where the maps are moved, tiled and turned on this surface,
             # asked of the material's own maps whatever the shading mode:
             # the uv view shows the coordinates the texture would be
@@ -3462,7 +3470,17 @@ struct Renderer(Movable):
             # physical material's reflectance, and black for every other
             # kind. See `Material.base_reflectance`.
             var sheen = material.base_reflectance()
-            var smooth = geometry.has_attribute(String(NORMAL))
+            # A flat-shaded draw takes the face's own normal, as a geometry
+            # with no normals does: three.js's `flatShading`, whose normal
+            # is the cross product of the view position's derivatives.
+            # Put on all three corners here, so both rasterizers light
+            # every fragment of the face with one normal and need no rule
+            # of their own. `emit` turns it with the face, and a normal
+            # or bump map perturbs it as it would any other.
+            var smooth = (
+                geometry.has_attribute(String(NORMAL))
+                and not material.flat_shading
+            )
 
             # World positions are kept as well as camera-space ones: a
             # geometric normal needs the triangle's real shape, and the view

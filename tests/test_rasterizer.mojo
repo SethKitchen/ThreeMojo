@@ -5556,5 +5556,208 @@ def test_a_baked_map_stored_the_wrong_way_is_refused() raises:
     check_light_map(textures.get(encoded))
 
 
+# --- specular maps ----------------------------------------------------------
+
+
+def with_specular_map(
+    corners: List[RasterVertex], map: TextureId
+) -> List[RasterVertex]:
+    """Return `corners` with every corner naming `map` as its specular map."""
+    var mapped = corners.copy()
+    for index in range(len(mapped)):
+        mapped[index].specular_map = map
+    return mapped^
+
+
+def strength_pixel(
+    corners: List[RasterVertex],
+    textures: TextureStore,
+    lighting: Lighting,
+    mode: ShadeMode = SHADE_TEXTURE,
+) raises -> FloatColor:
+    """Draw `corners` over the cube store and return the linear light at
+    the center of the eight-pixel target."""
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    rasterize_all(
+        corners, target, mode, textures, lighting, cubes=a_cube_store()
+    )
+    return target.color_at(4, 4)
+
+
+def test_a_corner_names_no_specular_map_unless_asked() raises:
+    var corner = RasterVertex(0, 0, 0, 1, FloatColor(1, 1, 1))
+    assert_equal(corner.specular_map, NO_TEXTURE)
+
+
+def test_a_specular_map_scales_the_highlight_by_its_red() raises:
+    # three.js's `specularmap_fragment`: the red channel is the
+    # `specularStrength` the phong highlight is multiplied by. A black
+    # base color and no ambient leave the highlight alone in the pixel.
+    var lighting = lit_along_z_from(4)
+    var textures = TextureStore()
+    var none = textures.add(a_data_texel(0, 255, 255))
+    var half = textures.add(a_data_texel(128, 0, 0))
+    var full = textures.add(a_data_texel(255, 0, 0))
+    var sheen = FloatColor(0.1, 0.1, 0.1)
+    var plain = strength_pixel(
+        black_phong_quad(sheen, 30.0), textures, lighting
+    )
+    assert_true(plain.r > 0.1, "the highlight is too dim to measure")
+    var dark = strength_pixel(
+        with_specular_map(black_phong_quad(sheen, 30.0), none),
+        textures,
+        lighting,
+    )
+    assert_equal(dark.r, Float32(0))
+    var halved = strength_pixel(
+        with_specular_map(black_phong_quad(sheen, 30.0), half),
+        textures,
+        lighting,
+    )
+    assert_almost_equal(halved.r, plain.r * 128 / 255, atol=1e-5)
+    var whole = strength_pixel(
+        with_specular_map(black_phong_quad(sheen, 30.0), full),
+        textures,
+        lighting,
+    )
+    assert_equal(whole.r, plain.r)
+    # Lit shading opens no texture, so the map changes nothing there.
+    var unopened = strength_pixel(
+        with_specular_map(black_phong_quad(sheen, 30.0), none),
+        textures,
+        lighting,
+        SHADE_LIT,
+    )
+    var lit = strength_pixel(
+        black_phong_quad(sheen, 30.0), textures, lighting, SHADE_LIT
+    )
+    assert_equal(unopened.r, lit.r)
+
+
+def test_a_specular_map_scales_the_reflectivity_by_its_red() raises:
+    # three.js's `envmap_fragment` joins the reflection by
+    # `specularStrength * reflectivity`, on a basic, lambert or phong
+    # surface alike. Red plus cyan added is white; a map of zero red
+    # leaves red, and a half map is a reflectivity of a half.
+    var lighting = lit_along_z_from(3)
+    var textures = TextureStore()
+    var none = textures.add(a_data_texel(0, 255, 255))
+    var half = textures.add(a_data_texel(128, 0, 0))
+    var red = FloatColor(1, 0, 0)
+    for kind in [BASIC, LAMBERT, PHONG]:
+        var added = mirror_quad(color=red, combine=ADD_OPERATION, kind=kind)
+        var bright = strength_pixel(added, textures, lighting)
+        assert_true(bright.g > 0.5, "the reflection was not added")
+        var kept = strength_pixel(
+            with_specular_map(added, none), textures, lighting
+        )
+        assert_equal(kept.g, Float32(0))
+        var mixed = strength_pixel(
+            with_specular_map(
+                mirror_quad(color=red, combine=MIX_OPERATION, kind=kind), half
+            ),
+            textures,
+            lighting,
+        )
+        var expected = strength_pixel(
+            mirror_quad(
+                color=red,
+                combine=MIX_OPERATION,
+                kind=kind,
+                reflectivity=Float32(128) / 255,
+            ),
+            textures,
+            lighting,
+        )
+        # Equal but for rounding: the texel and the product round apart.
+        assert_almost_equal(mixed.r, expected.r, atol=1e-4)
+        assert_almost_equal(mixed.g, expected.g, atol=1e-4)
+        assert_almost_equal(mixed.b, expected.b, atol=1e-4)
+
+
+def test_a_specular_map_is_refused_where_nothing_reads_it() raises:
+    # Corners that disagree, an id nothing can hold, and a kind three.js
+    # gives no specular map.
+    for corner in [1, 2]:
+        var split = black_phong_quad(FloatColor(0.1, 0.1, 0.1), 30.0)
+        split[corner].specular_map = TextureId(0)
+        with assert_raises(contains="disagree about their maps"):
+            check_triangle_state(split[0], split[1], split[2])
+    var held = with_specular_map(
+        black_phong_quad(FloatColor(0.1, 0.1, 0.1), 30.0), TextureId(-2)
+    )
+    with assert_raises(contains="specular map id"):
+        check_triangle_state(held[0], held[1], held[2])
+    for kind in [TOON, MATCAP, STANDARD, PHYSICAL, NORMALS, DEPTH]:
+        var corners = List[RasterVertex]()
+        for _ in range(3):
+            corners.append(
+                RasterVertex(
+                    0,
+                    0,
+                    0.5,
+                    1,
+                    FloatColor(1, 1, 1),
+                    kind=kind,
+                    specular_map=TextureId(0),
+                )
+            )
+        with assert_raises(contains="reads a specular map"):
+            check_triangle_state(corners[0], corners[1], corners[2])
+    for kind in [BASIC, LAMBERT, PHONG]:
+        assert_true(kind.has_specular_map())
+        var corners = List[RasterVertex]()
+        for _ in range(3):
+            corners.append(
+                RasterVertex(
+                    0,
+                    0,
+                    0.5,
+                    1,
+                    FloatColor(1, 1, 1),
+                    kind=kind,
+                    specular_map=TextureId(0),
+                )
+            )
+        check_triangle_state(corners[0], corners[1], corners[2])
+
+
+def test_a_specular_map_must_be_stored_as_data() raises:
+    # Asked under the mode that opens it, on one worker and on four, and
+    # not under lit shading, which opens none.
+    var textures = TextureStore()
+    var encoded = textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+            IGNORED,
+        )
+    )
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var quad = with_specular_map(
+        black_phong_quad(FloatColor(0.1, 0.1, 0.1), 30.0), encoded
+    )
+    with assert_raises(contains="A specular map holds data"):
+        rasterize_shaded(
+            quad[0], quad[1], quad[2], target, SHADE_TEXTURE, textures
+        )
+    for workers in [1, 4]:
+        with assert_raises(contains="A specular map holds data"):
+            rasterize_all(
+                quad, target, SHADE_TEXTURE, textures, workers=workers
+            )
+    rasterize_shaded(quad[0], quad[1], quad[2], target, SHADE_LIT, textures)
+    var missing = with_specular_map(
+        black_phong_quad(FloatColor(0.1, 0.1, 0.1), 30.0), TextureId(7)
+    )
+    with assert_raises():
+        rasterize_all(missing, target, SHADE_TEXTURE, textures)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

@@ -1612,5 +1612,45 @@ def test_the_physical_factories_pass_the_baked_maps_on() raises:
     assert_equal(physical.light_map, TextureId(6))
 
 
+def test_a_specular_map_belongs_to_a_basic_lambert_or_phong_material() raises:
+    var color = Color(255, 255, 255)
+    assert_equal(Material(color).specular_map, NO_TEXTURE)
+    # The three kinds three.js gives a `specularMap`.
+    for kind in [BASIC, LAMBERT, PHONG]:
+        var mapped = Material(color, kind=kind, specular_map=TextureId(3))
+        assert_equal(mapped.specular_map, TextureId(3))
+        assert_true(kind.has_specular_map())
+    # Every other kind has no highlight or reflection for it to scale.
+    for kind in [TOON, MATCAP, STANDARD, PHYSICAL, NORMALS, DEPTH]:
+        assert_false(kind.has_specular_map())
+        with assert_raises(contains="has a specular map"):
+            _ = Material(color, kind=kind, specular_map=TextureId(0))
+    with assert_raises(contains="has a specular map"):
+        _ = Material(color, kind=SHADOW, specular_map=TextureId(0))
+    # An id nothing can hold, and a wireframe, which has no surface.
+    with assert_raises(contains="specular map id cannot be negative"):
+        _ = Material(color, specular_map=TextureId(-2))
+    with assert_raises(contains="no specular map"):
+        _ = Material(
+            color, kind=BASIC, wireframe=True, specular_map=TextureId(0)
+        )
+
+
+def test_flat_shading_needs_a_normal_to_replace() raises:
+    var color = Color(255, 255, 255)
+    assert_false(Material(color).flat_shading)
+    # Every kind that reads a normal, in either frame.
+    for kind in [LAMBERT, PHONG, TOON, MATCAP, STANDARD, PHYSICAL, NORMALS]:
+        assert_true(Material(color, kind=kind, flat_shading=True).flat_shading)
+    # A basic, depth or shadow surface reads none, and a wireframe is basic.
+    for kind in [BASIC, DEPTH]:
+        with assert_raises(contains="flat shaded"):
+            _ = Material(color, kind=kind, flat_shading=True)
+    with assert_raises(contains="flat shaded"):
+        _ = Material(color, kind=SHADOW, flat_shading=True)
+    with assert_raises():
+        _ = Material(color, kind=BASIC, wireframe=True, flat_shading=True)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

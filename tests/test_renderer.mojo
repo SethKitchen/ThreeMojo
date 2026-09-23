@@ -37,9 +37,12 @@ from lights.light import point_light
 from materials.material import (
     BASIC,
     DEPTH,
+    LAMBERT,
     MATCAP,
     NORMALS,
     PHONG,
+    PHYSICAL,
+    STANDARD,
     TOON,
     depth_material,
     line_dashed_material,
@@ -5948,6 +5951,197 @@ def test_an_ao_map_darkens_a_sheet_under_the_ambient_light_alone() raises:
         camera_at(0, 0, 4),
     )
     assert_true(sum_red(baked) > sum_red(plain), "the light map added nothing")
+
+
+# --- flat shading and specular maps -----------------------------------------
+
+
+def without_normals(geometry: BufferGeometry) raises -> BufferGeometry:
+    """Return `geometry`'s positions, coordinates and index, and no normal."""
+    var bare = BufferGeometry()
+    bare.set_attribute(
+        String(POSITION), geometry.clone_attribute(String(POSITION))
+    )
+    bare.set_attribute(String(UV), geometry.clone_attribute(String(UV)))
+    bare.set_index(geometry.index.copy())
+    return bare^
+
+
+def same_direction(a: Vector3, b: Vector3) -> Bool:
+    """Return True if two vectors are equal to the bit."""
+    return a.x == b.x and a.y == b.y and a.z == b.z
+
+
+def turned_ball_scene() raises -> Scene:
+    """Return a scene with a node turned so no face is square on, lit by
+    `light_the`."""
+    var scene = Scene()
+    var turned = Object3D()
+    turned.set_euler(
+        Angle(30.0, DEGREE), Angle(40.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    _ = scene.add(turned^)
+    light_the(scene)
+    scene.update()
+    return scene^
+
+
+def test_flat_shading_puts_one_normal_on_every_corner_of_a_face() raises:
+    # three.js's `flatShading`: the face's own normal, so every fragment
+    # of a triangle is lit alike. Smooth, the corners of a sphere's
+    # triangles disagree.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var assets = Assets()
+    var ball = assets.geometries.add(sphere(Length(1.0, METER), 12, 8))
+    var scene = turned_ball_scene()
+    for flat in [True, False]:
+        var meshes = List[Mesh]()
+        meshes.append(
+            Mesh(
+                ball,
+                assets.materials.add(
+                    Material(Color(200, 200, 200), flat_shading=flat)
+                ),
+                NodeId(0),
+            )
+        )
+        var corners = prepared(renderer, scene, assets, meshes, a_camera())
+        assert_true(len(corners) > 0, "the ball prepared no triangles")
+        var shared = 0
+        for triangle in range(len(corners) // 3):  # pragma: no branch
+            var first = corners[triangle * 3].normal
+            var second = corners[triangle * 3 + 1].normal
+            var third = corners[triangle * 3 + 2].normal
+            if same_direction(first, second) and same_direction(first, third):
+                shared += 1
+        if flat:
+            assert_equal(shared, len(corners) // 3)
+        else:
+            assert_true(shared < len(corners) // 3, "a smooth ball was flat")
+
+
+def test_flat_shading_draws_as_a_geometry_without_normals_does() raises:
+    # The face normal a geometry with no normals falls back to, on every
+    # kind that reads a normal, and under a normal map: the flat ball and
+    # the bare ball draw the same pixels, and the smooth ball does not.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var assets = Assets()
+    var shape = sphere(Length(1.0, METER), 12, 8)
+    var bare = assets.geometries.add(without_normals(shape))
+    var ball = assets.geometries.add(shape^)
+    var toward_u = assets.textures.add(a_data_texel(255, 128, 128))
+    var white = Color(255, 255, 255)
+    var scene = turned_ball_scene()
+    var materials = List[Material]()
+    materials.append(Material(white, kind=LAMBERT))
+    materials.append(Material(white, kind=PHONG, specular=white))
+    materials.append(Material(white, kind=TOON))
+    materials.append(Material(white, kind=MATCAP))
+    materials.append(Material(white, kind=STANDARD, roughness=0.4))
+    materials.append(
+        Material(white, kind=PHYSICAL, roughness=0.3, normal_map=toward_u)
+    )
+    materials.append(Material(white, kind=NORMALS))
+    for index in range(len(materials)):
+        var smooth = assets.materials.add(materials[index])
+        var flat_material = materials[index]
+        flat_material.flat_shading = True
+        var flat = assets.materials.add(flat_material)
+        # The smooth ball, the flat ball, and the bare ball.
+        var images = List[Framebuffer]()
+        for which in range(3):
+            var meshes = List[Mesh]()
+            meshes.append(
+                Mesh(
+                    bare if which == 2 else ball,
+                    flat if which == 1 else smooth,
+                    NodeId(0),
+                )
+            )
+            images.append(rendered(renderer, scene, assets, meshes, a_camera()))
+        var differ = 0
+        for y in range(HEIGHT):
+            for x in range(WIDTH):
+                var one = images[1].get_pixel(x, y)
+                var two = images[2].get_pixel(x, y)
+                assert_equal(one.r, two.r)
+                assert_equal(one.g, two.g)
+                assert_equal(one.b, two.b)
+                if images[0].get_pixel(x, y).r != one.r:
+                    differ += 1
+        assert_true(differ > 0, "flat shading changed nothing")
+
+
+def test_a_specular_map_is_carried_checked_and_read_in_the_renderer() raises:
+    var assets = Assets()
+    var white = Color(255, 255, 255)
+    var dull = assets.textures.add(a_data_texel(0, 0, 0))
+    # A dark surface, so the lamp alone does not saturate the sheet.
+    var dark = Color(40, 40, 40)
+    var sheen = Color(120, 120, 120)
+    var plain = assets.materials.add(
+        Material(dark, kind=PHONG, specular=sheen, shininess=5.0)
+    )
+    var mapped = assets.materials.add(
+        Material(
+            dark, kind=PHONG, specular=sheen, shininess=5.0, specular_map=dull
+        )
+    )
+    var scene = scene_with_node_at(0)
+    light_the(scene)
+    scene.update()
+    # The corners carry the map under the mode that opens textures, and
+    # not under lit shading.
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var corners = prepared(
+        renderer, scene, assets, sheet_of(assets, mapped), camera_at(0, 0, 4)
+    )
+    assert_equal(corners[0].specular_map, dull)
+    # A map of no red takes the highlight away.
+    var shiny = rendered(
+        renderer, scene, assets, sheet_of(assets, plain), camera_at(0, 0, 4)
+    )
+    var matte = rendered(
+        renderer, scene, assets, sheet_of(assets, mapped), camera_at(0, 0, 4)
+    )
+    assert_true(sum_red(matte) < sum_red(shiny), "the map kept the highlight")
+    renderer.set_shading(SHADE_LIT)
+    var unmapped = prepared(
+        renderer, scene, assets, sheet_of(assets, mapped), camera_at(0, 0, 4)
+    )
+    assert_equal(unmapped[0].specular_map, NO_TEXTURE)
+    # A map stored as color, and one that is not there, are refused under
+    # either mode, and so is one whose transform the base map disagrees
+    # with.
+    var encoded = a_data_texel(255, 255, 255)
+    encoded.color_space = SRGB
+    var wrong = assets.textures.add(encoded^)
+    var colored = assets.materials.add(
+        Material(white, kind=PHONG, specular_map=wrong)
+    )
+    var absent = assets.materials.add(
+        Material(white, kind=PHONG, specular_map=TextureId(99))
+    )
+    var moved = a_data_texel(255, 0, 0)
+    moved.repeat = Vector2(2, 2)
+    var shifted = assets.textures.add(moved^)
+    var disagreeing = assets.materials.add(
+        Material(white, dull, kind=PHONG, specular_map=shifted)
+    )
+    for material in [colored, absent, disagreeing]:
+        for mode in [SHADE_TEXTURE, SHADE_LIT]:
+            var strict = Renderer(WIDTH, HEIGHT)
+            strict.set_shading(mode)
+            with assert_raises():
+                _ = rendered(
+                    strict,
+                    scene,
+                    assets,
+                    sheet_of(assets, material),
+                    camera_at(0, 0, 4),
+                )
 
 
 def main() raises:

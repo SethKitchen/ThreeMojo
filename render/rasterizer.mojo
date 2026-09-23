@@ -625,6 +625,10 @@ struct RasterVertex(ImplicitlyCopyable):
     var ao_map_intensity: Float32
     var light_map: TextureId
     var light_map_intensity: Float32
+    # Which texture's red channel scales the highlight and the reflection,
+    # or `NO_TEXTURE`: three.js's `specularMap`. Per-triangle like
+    # `texture`, and read by a `BASIC`, `LAMBERT` or `PHONG` triangle only.
+    var specular_map: TextureId
 
     def __init__(
         out self,
@@ -676,6 +680,7 @@ struct RasterVertex(ImplicitlyCopyable):
         ao_map_intensity: Float32 = 1,
         light_map: TextureId = NO_TEXTURE,
         light_map_intensity: Float32 = 1,
+        specular_map: TextureId = NO_TEXTURE,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -748,6 +753,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.ao_map_intensity = ao_map_intensity
         self.light_map = light_map
         self.light_map_intensity = light_map_intensity
+        self.specular_map = specular_map
 
 
 @fieldwise_init
@@ -1429,6 +1435,8 @@ def check_triangle_state(
         or c.normal_map != a.normal_map
         or b.bump_map != a.bump_map
         or c.bump_map != a.bump_map
+        or b.specular_map != a.specular_map
+        or c.specular_map != a.specular_map
     ):
         raise Error("A triangle's corners disagree about their maps")
     if (
@@ -1448,6 +1456,8 @@ def check_triangle_state(
         raise Error("A triangle names a normal map id that nothing can hold")
     if a.bump_map != NO_TEXTURE and a.bump_map.value < 0:
         raise Error("A triangle names a bump map id that nothing can hold")
+    if a.specular_map != NO_TEXTURE and a.specular_map.value < 0:
+        raise Error("A triangle names a specular map id that nothing can hold")
     if not a.kind.is_physical() and (
         a.roughness_map != NO_TEXTURE or a.metalness_map != NO_TEXTURE
     ):
@@ -1492,6 +1502,13 @@ def check_triangle_state(
         raise Error(
             "Only a basic or lit triangle has an ao map or a light map: no"
             " other shader has an indirect term for either to reach"
+        )
+    # Refused here, as the material refuses it, so a hand-built triangle
+    # cannot smuggle one past.
+    if a.specular_map != NO_TEXTURE and not a.kind.has_specular_map():
+        raise Error(
+            "Only a basic, lambert or phong triangle reads a specular map:"
+            " no other shader reads one"
         )
 
 
@@ -1845,7 +1862,7 @@ def check_triangle_maps(
     # it at the first fragment and a band with no fragment would not.
     if a.env_map != NO_CUBE_TEXTURE and mode == SHADE_TEXTURE:
         _ = cubes.get(a.env_map).size
-    # The four maps that hold numbers, each asked the alpha map's two
+    # The five maps that hold numbers, each asked the alpha map's two
     # questions, and only under the mode that opens them.
     if mode == SHADE_TEXTURE:
         if a.roughness_map != NO_TEXTURE:
@@ -1862,6 +1879,8 @@ def check_triangle_maps(
             check_data_map(textures.get(a.ao_map), "An ao map")
         if a.light_map != NO_TEXTURE:
             check_light_map(textures.get(a.light_map))
+        if a.specular_map != NO_TEXTURE:
+            check_data_map(textures.get(a.specular_map), "A specular map")
 
 
 def check_light_map(image: Texture) raises:
@@ -2404,6 +2423,9 @@ def rasterize_shaded(
             # multiplied by: its maps' green and blue, or one for none.
             var rough_factor = Float32(1)
             var metal_factor = Float32(1)
+            # What the highlight and the reflectivity are scaled by: the
+            # specular map's red, or one for none.
+            var specular_strength = Float32(1)
             # Each mode by name, as the kernel does, so there is no "else"
             # for an unrecognized one to fall into differently on each side.
             if mode == SHADE_UV or mode == SHADE_TEXTURE:
@@ -2473,6 +2495,21 @@ def rasterize_shaded(
                         metal_factor = _sample_map(
                             metal_image, u, v, a, b, c, coverage, x, y
                         ).b
+                    # The specular map's red, three.js's
+                    # `specularmap_fragment`: it scales the highlight here
+                    # and the reflectivity below, as three.js's
+                    # `specularStrength` scales both.
+                    if a.specular_map != NO_TEXTURE:
+                        ref strength_image = textures.get(a.specular_map)
+                        specular_strength = _sample_map(
+                            strength_image, u, v, a, b, c, coverage, x, y
+                        ).r
+                        highlight = FloatColor(
+                            highlight.r * specular_strength,
+                            highlight.g * specular_strength,
+                            highlight.b * specular_strength,
+                            1.0,
+                        )
             # Thrown away for being too transparent, three.js's
             # `alphatest_fragment`: no color, and no depth either, so what
             # is behind this hole is drawn instead. Asked once the maps have
@@ -2632,7 +2669,7 @@ def rasterize_shaded(
                     shaded = combine_light(
                         shaded,
                         cubes.get(a.env_map).sample(bounce),
-                        a.reflectivity,
+                        a.reflectivity * specular_strength,
                         a.combine,
                     )
             # Veiled by the fog last, after the lights and the glow, as

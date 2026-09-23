@@ -623,6 +623,18 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
             or self == PHYSICAL
         )
 
+    def has_specular_map(self) -> Bool:
+        """Return True if a material of this kind can carry a specular map:
+        `BASIC`, `LAMBERT` or `PHONG`.
+
+        The three kinds three.js gives a `specularMap`. Its red channel
+        scales the `PHONG` highlight and the reflectivity of all three.
+        A physical surface reflects by its roughness and metalness, and no
+        other kind has a highlight or a reflection to scale. Both
+        rasterizers ask this before they sample one.
+        """
+        return self == BASIC or self == LAMBERT or self == PHONG
+
 
 # Unlit: the surface's own color, and its texture, reach the pixel as they
 # are. three.js's `MeshBasicMaterial` -- a sky, a sprite, an overlay.
@@ -826,6 +838,18 @@ struct Material(ImplicitlyCopyable):
     # geometry's second set of coordinates; see `render.texture.UvChannel`.
     var light_map: TextureId
     var light_map_intensity: Float32
+    # A texture whose red channel scales how much light the surface sends
+    # toward the camera, three.js's `specularMap`: the `PHONG` highlight,
+    # and the env map's `reflectivity` on a `BASIC`, `LAMBERT` or `PHONG`
+    # surface, as three.js's `specularmap_fragment` sets its
+    # `specularStrength`. Data rather than color, so it must be `LINEAR`
+    # and `IGNORED`.
+    var specular_map: TextureId
+    # Whether every fragment of a triangle is lit with the triangle's own
+    # geometric normal, three.js's `flatShading`. The renderer puts that
+    # normal on all three corners, so both rasterizers light it as they
+    # light any other. Any kind that reads a normal can carry it.
+    var flat_shading: Bool
     # A `PHYSICAL` surface's index of refraction, three.js's `ior`, and
     # what its reflectance head on is tinted and scaled by, three.js's
     # `specularColor` and `specularIntensity`. Together they replace the
@@ -927,6 +951,8 @@ struct Material(ImplicitlyCopyable):
         ao_map_intensity: Float32 = 1.0,
         light_map: TextureId = NO_TEXTURE,
         light_map_intensity: Float32 = 1.0,
+        specular_map: TextureId = NO_TEXTURE,
+        flat_shading: Bool = False,
     ) raises:
         """Describe a surface.
 
@@ -1062,6 +1088,13 @@ struct Material(ImplicitlyCopyable):
                 `IGNORED`.
             light_map_intensity: What the light map is scaled by,
                 three.js's `lightMapIntensity`. One by default.
+            specular_map: Id of a texture whose red channel scales the
+                highlight and the reflection, three.js's `specularMap`, or
+                `NO_TEXTURE`. Data: `LINEAR`, `IGNORED`. Sampled at the
+                same coordinate as `map`, so their transforms must agree.
+            flat_shading: Whether every fragment of a triangle is lit with
+                the triangle's own geometric normal rather than with the
+                interpolated vertex normals, three.js's `flatShading`.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -1137,7 +1170,12 @@ struct Material(ImplicitlyCopyable):
                 `NO_TEXTURE`, an intensity for either that is negative or
                 not finite, an intensity that is not one with no map to
                 scale, and either map on a kind with no indirect term or
-                on a wireframe are refused.
+                on a wireframe are refused. A
+                `specular_map` that is a negative other than `NO_TEXTURE`,
+                or one on a kind that is not `BASIC`, `LAMBERT` or `PHONG`,
+                or on a wireframe, is refused. A `flat_shading` on a kind
+                that reads no normal -- `BASIC`, `DEPTH` or `SHADOW` -- is
+                refused, which refuses it on a wireframe too.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -1504,6 +1542,31 @@ struct Material(ImplicitlyCopyable):
         self.ao_map_intensity = ao_map_intensity
         self.light_map = light_map
         self.light_map_intensity = light_map_intensity
+        # The specular map, read by the three kinds three.js gives one:
+        # the phong highlight and the reflection of a basic, lambert or
+        # phong surface. A wireframe is `BASIC`, so it is refused apart.
+        if specular_map.value < 0 and specular_map != NO_TEXTURE:
+            raise Error("A material's specular map id cannot be negative")
+        if specular_map != NO_TEXTURE and not kind.has_specular_map():
+            raise Error(
+                "Only a basic, lambert or phong material has a specular"
+                " map: no other shader reads one"
+            )
+        if specular_map != NO_TEXTURE and wireframe:
+            raise Error(
+                "A wireframe material has no specular map: a line has no"
+                " surface coordinates to sample one with"
+            )
+        self.specular_map = specular_map
+        # Flat shading replaces the normal, so a kind that reads none has
+        # nothing for it to replace. A wireframe is `BASIC`, so the same
+        # rule refuses it on one, which has no face to take a normal from.
+        if flat_shading and not (kind.has_normal() or kind == NORMALS):
+            raise Error(
+                "Only a lit, matcap or normal material is flat shaded: no"
+                " other shader reads a normal"
+            )
+        self.flat_shading = flat_shading
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -1871,8 +1934,8 @@ def phong_material(
     Fresnel term still catches a dim rim at a grazing angle. See
     `has_highlight`.
 
-    three.js's `specularMap`, which would vary the highlight per texel, is
-    not ported.
+    three.js's `specularMap` varies the highlight per texel. Pass it to
+    `Material` as `specular_map`.
 
     Args:
         color: The base color, as authored in sRGB.

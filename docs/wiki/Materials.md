@@ -8,7 +8,7 @@ three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshStandardM
 
 Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`, `size`, `sizeAttenuation`, `rotation`, `envMap`, `reflectivity`, `combine`.
 
-Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `clearcoat`, `clearcoatRoughness`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`, `aoMap`, `aoMapIntensity`, `lightMap`, `lightMapIntensity`.
+Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `clearcoat`, `clearcoatRoughness`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`, `aoMap`, `aoMapIntensity`, `lightMap`, `lightMapIntensity`, `specularMap`. Shading properties: `flatShading`.
 
 ## Construct one
 
@@ -69,6 +69,8 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `ao_map_intensity` | `Float32` | `1.0` | How strongly the ao map dims. |
 | `light_map` | `TextureId` | `NO_TEXTURE` | A texture of baked light added to the indirect light. See [Light map](#light-map). |
 | `light_map_intensity` | `Float32` | `1.0` | What the light map is multiplied by. |
+| `specular_map` | `TextureId` | `NO_TEXTURE` | A texture whose red channel scales the highlight and the reflection. See [Specular map](#specular-map). |
+| `flat_shading` | `Bool` | `False` | Light each face with its own normal. See [Flat shading](#flat-shading). |
 
 ## Side
 
@@ -132,7 +134,7 @@ three.js divides both its diffuse and its specular term by pi, and so does this:
 
 The highlight can exceed one. That is what a highlight is. Set a tone mapping curve to bring it back. See [Render target](Render-target-and-framebuffer#tone-mapping).
 
-three.js's `specularMap`, which varies the highlight per texel, is not ported.
+A [specular map](#specular-map) scales the highlight per texel.
 
 ## Toon
 
@@ -434,6 +436,47 @@ Only an ao map or a light map can read the second channel. The renderer refuses 
 ### What refuses one
 
 A `MATCAP`, `NORMALS`, `DEPTH` or `SHADOW` surface has no indirect term, and refuses both maps. A wireframe, a line, a point and a sprite refuse both too. An intensity that is not one needs its map. Only `SHADE_TEXTURE` reads either map.
+## Specular map
+
+A specular map scales how much light a surface sends toward the camera, per texel: three.js's `specularMap`. Its red channel is three.js's `specularStrength`. A `BASIC`, `LAMBERT` or `PHONG` material can carry one.
+
+```mojo
+var worn = assets.materials.add(
+    Material(Color(180, 40, 40), kind=PHONG, specular=white, shininess=30, specular_map=scratches)
+)
+```
+
+The red channel scales two terms, as three.js's shaders scale them:
+
+- The `PHONG` highlight. three.js multiplies `directSpecular` by `specularStrength` in `RE_Direct_BlinnPhong`.
+- The `reflectivity` of an [environment map](#environment-map), on all three kinds. three.js's `envmap_fragment` joins the reflection by `specularStrength * reflectivity`.
+
+Red at zero removes the highlight and the reflection. Red at one leaves both as they are. Green, blue and alpha have no effect.
+
+The map is data. It must be `LINEAR` and `IGNORED`, as an alpha map must. It is sampled at the same coordinate as `map`, so their transforms must agree. Only `SHADE_TEXTURE` reads it, because the other two shading modes ignore every texture.
+
+A `TOON`, `MATCAP`, `STANDARD`, `PHYSICAL`, `NORMALS`, `DEPTH` or `SHADOW` material refuses one. three.js gives none of them a `specularMap`. A physical surface reflects by its roughness and metalness instead. A wireframe refuses one too, because a line has no surface coordinates.
+
+## Flat shading
+
+A flat-shaded surface lights every fragment of a face with the face's own normal: three.js's `flatShading`. A sphere then shows its facets.
+
+```mojo
+var gem = assets.materials.add(Material(Color(90, 200, 160), kind=PHONG, flat_shading=True))
+```
+
+three.js computes the normal in the fragment shader, from the screen-space derivatives of the view position. This port computes the same normal once per face in `Renderer.prepare`. It is the cross product of the triangle's world-space edges, the normal a geometry with no normal attribute already takes. The renderer puts it on all three corners. So both rasterizers light every fragment of the face with one normal, and need no rule of their own.
+
+The face normal follows the same rules as a supplied normal:
+
+- A mirrored mesh negates it, so it points out of the surface.
+- A face seen from behind turns it around, as it turns a supplied normal. The normal then faces the camera, as three.js's derivative normal does.
+- A `NORMALS` material shows it in the camera's frame.
+- A normal map or a bump map perturbs it, with the [tangent frame](#the-tangent-frame) built as for any other normal.
+
+Every kind that reads a normal can be flat shaded: `LAMBERT`, `PHONG`, `TOON`, `MATCAP`, `STANDARD`, `PHYSICAL` and `NORMALS`. A `BASIC`, `DEPTH` or `SHADOW` material refuses it, because its shader reads no normal. A wireframe is `BASIC`, so it refuses it too.
+
+Flat shading changes the normal and nothing else. The positions, the depth and the texture coordinates are interpolated as before.
 
 ## Shadow material
 
@@ -742,10 +785,12 @@ The constructor raises for:
 - An ao map or a light map id below zero that is not `NO_TEXTURE`. An intensity for either that is negative or not finite.
 - An ao map intensity that is not one with no ao map. A light map intensity that is not one with no light map.
 - An ao map or a light map on a `MATCAP`, `NORMALS`, `DEPTH` or `SHADOW` material, or on a wireframe.
+- A specular map id below zero that is not `NO_TEXTURE`. A specular map on a kind that is not `BASIC`, `LAMBERT` or `PHONG`, or on a wireframe.
+- Flat shading on a `BASIC`, `DEPTH` or `SHADOW` material, which a wireframe is.
 
 `Renderer.prepare` raises for a depth function, a stencil function or a stencil operation that is none of the eight. It raises for a stencil reference or mask outside 0 to 255, and for a polygon offset that is not finite. `Material.raster_state` and `Material.depth_offset` make these checks.
 
-`Renderer.prepare` raises for an emissive map that reads its alpha as coverage. It raises for an env map, or a scene environment, that is not in the assets. It raises for a roughness, metalness, normal or bump map that is not in the assets or is not stored as data. It raises for an ao map that is not in the assets or is not stored as data. It raises for a light map that is not in the assets or reads its alpha as coverage. It raises for an ao map and a light map whose transforms or channels differ, and for the second channel on any other map.
+`Renderer.prepare` raises for an emissive map that reads its alpha as coverage. It raises for an env map, or a scene environment, that is not in the assets. It raises for a roughness, metalness, normal, bump or specular map that is not in the assets or is not stored as data. It raises for an ao map that is not in the assets or is not stored as data. It raises for a light map that is not in the assets or reads its alpha as coverage. It raises for an ao map and a light map whose transforms or channels differ, and for the second channel on any other map.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.
 
 ## MaterialStore

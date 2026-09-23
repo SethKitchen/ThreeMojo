@@ -331,6 +331,9 @@ comptime STATE_STENCIL = 15
 # light to it, each `NO_TEXTURE` for none.
 comptime STATE_AO_MAP = 16
 comptime STATE_LIGHT_MAP = 17
+# Which texture's red channel scales a triangle's highlight and its
+# reflectivity, three.js's `specularMap`, or `NO_TEXTURE` for none.
+comptime STATE_SPECULAR_MAP = 18
 # How a segment's metadata is laid out in its state buffer: its blend
 # policy, and how many pixels across it is drawn. A line is unlit and
 # untextured, so it carries nothing else; see `line_state`. The width is
@@ -356,7 +359,7 @@ comptime STATE_PER_POINT = POINT_STATE_STENCIL + 1
 # How a `Draw` crosses to the device: its kind, its first primitive and its
 # count, as three integers.
 comptime INTS_PER_DRAW = 3
-comptime STATE_PER_TRIANGLE = STATE_LIGHT_MAP + 1
+comptime STATE_PER_TRIANGLE = STATE_SPECULAR_MAP + 1
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
 # density, then the fog color, linear. Six floats, whatever the kind,
@@ -2203,7 +2206,7 @@ def triangle_state(
         value, then the roughness, metalness, normal and bump map ids, then
         one or zero for whether the shadows fall on it, then the packed
         depth, color and stencil state, then the ao and light map ids,
-        per triangle, from its first corner.
+        then the specular map id, per triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -2229,6 +2232,7 @@ def triangle_state(
         state.append(Int32(corners[triangle * 3].state.stencil_word()))
         state.append(Int32(corners[triangle * 3].ao_map.value))
         state.append(Int32(corners[triangle * 3].light_map.value))
+        state.append(Int32(corners[triangle * 3].specular_map.value))
     return state^
 
 
@@ -3610,6 +3614,9 @@ def rasterize_kernel(
             # multiplied by: its maps' green and blue, or one for none.
             var rough_factor = Float32(1)
             var metal_factor = Float32(1)
+            # What the highlight and the reflectivity are scaled by: the
+            # specular map's red, or one for none.
+            var specular_strength = Float32(1)
             if mode == Int32(SHADE_UV.value):
                 # Coordinates, not light, through the same quantize and decode
                 # the host's `data_color` uses, so the two backends hold the
@@ -3821,6 +3828,41 @@ def rasterize_kernel(
                             u,
                             v,
                         ).b
+                    # The specular map's red scales the highlight here and
+                    # the reflectivity below, exactly as `rasterize_shaded`
+                    # scales them.
+                    var strength_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_SPECULAR_MAP
+                        ]
+                    )
+                    if strength_slot != NO_TEXTURE.value:
+                        specular_strength = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            strength_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).r
+                        highlight = Vector3(
+                            highlight.x * specular_strength,
+                            highlight.y * specular_strength,
+                            highlight.z * specular_strength,
+                        )
                 # Thrown away for being too transparent, three.js's
                 # `alphatest_fragment`. Leaving `nearest` alone is the late
                 # depth write the host makes with `claim_depth`: the hole
@@ -4035,7 +4077,8 @@ def rasterize_kernel(
                             _sample_cube(
                                 texels, ramp, table, Int(env_slot), bounce
                             ),
-                            corners[unsafe_offset=base + LANE_REFLECTIVITY],
+                            corners[unsafe_offset=base + LANE_REFLECTIVITY]
+                            * specular_strength,
                             Combine(
                                 Int(
                                     maps[
@@ -4639,6 +4682,7 @@ struct GpuRenderer(Movable):
                 corners[index].bump_map,
                 corners[index].ao_map,
                 corners[index].light_map,
+                corners[index].specular_map,
             ]:
                 if slot == NO_TEXTURE:
                     continue
@@ -4715,7 +4759,7 @@ struct GpuRenderer(Movable):
                             "An alpha map must ignore its own alpha; build"
                             " the texture with alpha=IGNORED"
                         )
-                # The four maps that hold numbers, asked the same two
+                # The maps that hold numbers, asked the same two
                 # questions with the same words `check_data_map` uses.
                 self._check_data_map(
                     corners[triangle * 3].roughness_map, "A roughness map"
@@ -4738,6 +4782,9 @@ struct GpuRenderer(Movable):
                         "A light map must ignore its alpha; build the"
                         " texture with alpha=IGNORED"
                     )
+                self._check_data_map(
+                    corners[triangle * 3].specular_map, "A specular map"
+                )
         # Two output representations cannot share a tone-mapped frame.
         # Asked here, before the launch, exactly where `Renderer.render`
         # asks it before it draws. The uv view is data throughout and is

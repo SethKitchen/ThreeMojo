@@ -155,6 +155,7 @@ from render.gpu import (
     LANE_ROUGHNESS,
     LANE_SPECULAR_INTENSITY,
     STATE_BUMP_MAP,
+    STATE_SPECULAR_MAP,
     STATE_COMBINE,
     STATE_ENV_MAP,
     STATE_METALNESS_MAP,
@@ -8920,7 +8921,7 @@ def test_the_baked_lanes_and_columns_ride_last() raises:
     assert_equal(len(state), 2 * STATE_PER_TRIANGLE)
     assert_equal(state[STATE_AO_MAP], Int32(2))
     assert_equal(state[STATE_LIGHT_MAP], Int32(3))
-    assert_equal(STATE_LIGHT_MAP, STATE_PER_TRIANGLE - 1)
+    assert_equal(STATE_SPECULAR_MAP, STATE_PER_TRIANGLE - 1)
     # A corner that says nothing names neither map, at intensities of one.
     var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
     assert_equal(plain[LANE_AO_INTENSITY], Float32(1))
@@ -9157,3 +9158,164 @@ def test_both_backends_light_a_probe_alike() raises:
             corners, 36, 30, BACKGROUND, SHADE_LIT, TextureStore(), lighting
         )
         assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- specular maps and flat shading ----------------------------------------
+
+
+def with_specular_map(
+    corners: List[RasterVertex], map: TextureId
+) -> List[RasterVertex]:
+    """Return `corners` with every corner naming `map` as its specular map."""
+    var mapped = corners.copy()
+    for index in range(len(mapped)):
+        mapped[index].specular_map = map
+    return mapped^
+
+
+def test_the_state_table_carries_the_specular_map() raises:
+    var corners = with_specular_map(
+        phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), TextureId(4)
+    )
+    var state = triangle_state(corners)
+    assert_equal(len(state), 2 * STATE_PER_TRIANGLE)
+    assert_equal(state[STATE_SPECULAR_MAP], Int32(4))
+    assert_equal(state[STATE_PER_TRIANGLE + STATE_SPECULAR_MAP], Int32(4))
+    var plain = triangle_state(phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0))
+    assert_equal(plain[STATE_SPECULAR_MAP], Int32(NO_TEXTURE.value))
+
+
+def test_both_backends_scale_the_highlight_and_the_reflection_alike() raises:
+    # The specular map's red scales the phong highlight and the
+    # reflectivity, three.js's `specularStrength`: the kernel samples it
+    # as the host does and must reach the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends read a specular map alike"):
+        return
+    var textures = TextureStore()
+    var map = textures.add(a_gpu_data_map())
+    var cubes = a_cube_store()
+    var lighting = phong_lighting()
+    var pairs = List[List[RasterVertex]]()
+    pairs.append(
+        with_specular_map(phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), map)
+    )
+    for combine in [MULTIPLY_OPERATION, MIX_OPERATION, ADD_OPERATION]:
+        pairs.append(
+            with_specular_map(mirror_pair(CubeTextureId(1), 0.75, combine), map)
+        )
+    for index in range(len(pairs)):
+        ref corners = pairs[index]
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(
+            corners, target, SHADE_TEXTURE, textures, lighting, 1, cubes=cubes
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            36,
+            30,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            textures,
+            lighting,
+            cubes=cubes,
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_the_gpu_refuses_a_specular_map_it_cannot_sample() raises:
+    # Encoded as color, or never uploaded: refused before the launch, as
+    # the host refuses it before the first fragment.
+    if skipped_for_lack_of_a_gpu("the gpu refuses a bad specular map"):
+        return
+    var textures = TextureStore()
+    var encoded = textures.add(
+        Texture(1, 1, [UInt8(255), 255, 255, 255], REPEAT, NEAREST, SRGB, False)
+    )
+    var renderer = GpuRenderer(36, 30)
+    renderer.set_textures(textures)
+    var sheen = FloatColor(0.3, 0.3, 0.3)
+    with assert_raises(contains="A specular map holds data"):
+        renderer.draw(
+            with_specular_map(phong_pair(sheen, 30.0), encoded),
+            BACKGROUND,
+            SHADE_TEXTURE,
+        )
+    with assert_raises():
+        renderer.draw(
+            with_specular_map(phong_pair(sheen, 30.0), TextureId(5)),
+            BACKGROUND,
+            SHADE_TEXTURE,
+        )
+
+
+def test_both_backends_agree_on_a_flat_shaded_scene() raises:
+    # Flat shading puts the face's normal on every corner in `prepare`,
+    # so the kernel lights each face as the host does: on a lambert, a
+    # phong, a physical ball under a normal map, and a normal material.
+    if skipped_for_lack_of_a_gpu("both backends agree on flat shading"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var ball = assets.geometries.add(sphere(Length(0.5, METER), 12, 8))
+    var tilt = assets.textures.add(a_gpu_data_map(False))
+    var scene = Scene()
+    var places: List[Float32] = [-1.2, -0.4, 0.4, 1.2]
+    var nodes = List[NodeId]()
+    for index in range(len(places)):
+        var holder = Object3D()
+        holder.set_position(places[index], 0, 0)
+        holder.set_euler(
+            Angle(20.0, DEGREE), Angle(30.0, DEGREE), Angle(0.0, DEGREE)
+        )
+        nodes.append(scene.add(holder^))
+    light_the(scene)
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.4, 3.0), Vector3(0, 0, 0))
+    var white = Color(255, 255, 255)
+    var materials = List[Material]()
+    materials.append(Material(white, flat_shading=True))
+    materials.append(
+        Material(white, kind=PHONG, specular=white, flat_shading=True)
+    )
+    materials.append(
+        Material(
+            white,
+            kind=PHYSICAL,
+            roughness=0.4,
+            normal_map=tilt,
+            flat_shading=True,
+        )
+    )
+    materials.append(Material(white, kind=NORMALS, flat_shading=True))
+    var meshes = List[Mesh]()
+    for index in range(len(materials)):
+        meshes.append(
+            Mesh(ball, assets.materials.add(materials[index]), nodes[index])
+        )
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    assert_true(len(corners) > 0, "the scene prepared no triangles")
+    var lighting = Lighting(scene)
+    var target = RenderTarget(48, 36, BACKGROUND)
+    rasterize_all(corners, target, SHADE_TEXTURE, assets.textures, lighting)
+    var cpu = target.resolve()
+    var gpu = render_triangles(
+        corners,
+        48,
+        36,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+    )
+    assert_true(
+        count_background(cpu, BACKGROUND) < 48 * 36, "nothing was drawn"
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)

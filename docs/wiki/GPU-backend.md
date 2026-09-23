@@ -47,7 +47,19 @@ Coverage is integer arithmetic and matches the CPU exactly. Shading is floating 
 
 The kernel calls the same functions as the CPU for the fill rule, texture wrapping and texel blending. It shares the light falloff, the spot light's rim and the Blinn-Phong highlight. It shares the fog factor, the normal and depth packing, and the tone mapping curves too. See [Why the CPU and GPU share code](Why-the-CPU-and-GPU-share-code).
 
-The state table carries seven entries per triangle. They are its texture, its blend policy, its material kind, its emissive map, its alpha map, its gradient map and its matcap. A `TOON` triangle's ramp rides the last of those. The kernel reads its top row straight out of the texel buffer, with the host's own `toon_index`.
+The state table carries `STATE_PER_TRIANGLE` entries per triangle, nineteen at present. `triangle_state` writes them from the first corner, in this order:
+
+| Column | Entry |
+|---|---|
+| 0 to 6 | The texture, the blend policy, the material kind, the emissive map, the alpha map, the gradient map and the matcap. |
+| 7 and 8 | The table row of the env map's first face, or -1 for none, and the `Combine` value. |
+| 9 to 12 | The roughness, metalness, normal and bump maps. |
+| 13 | One if the shadows fall on the triangle, zero if not. |
+| 14 and 15 | The packed depth, color and stencil state: `RasterState.ops_word` and `RasterState.stencil_word`. |
+| 16 and 17 | The ambient occlusion map and the light map. |
+| 18 | The specular map. |
+
+Each map column holds a texture id, or `NO_TEXTURE` for none. The `STATE_` constants in `render/gpu.mojo` name every column. A `TOON` triangle's ramp is the gradient map column. The kernel reads the ramp's top row straight out of the texel buffer, with the host's own `toon_index`.
 
 The depth, color and stencil state rides the triangle, segment and point tables as two integers, `RasterState.ops_word` and `RasterState.stencil_word`. The kernel unpacks them and calls `test_fragment`, the function the host's target calls. It keeps the stencil as one local number per pixel, cleared to zero at the start of the launch. See [Materials](Materials#depth-color-and-stencil).
 
