@@ -10148,6 +10148,39 @@ def test_the_gpu_composer_matches_the_host_on_an_afterimage() raises:
     assert_equal(compare_post(one_pass(afterimage_pass(0.9)), 1, 3), 1)
 
 
+def test_the_gpu_composer_fits_the_memories_to_an_open_pass_list() raises:
+    if skipped_for_lack_of_a_gpu("post memories of an open pass list"):
+        return
+    # `passes` is an open list, so a pass can arrive without `add_pass`.
+    # The GPU composer makes its memory before the frame runs, as the host
+    # composer does, rather than read past the end of the memories.
+    var assets = Assets()
+    var scene = post_scene(assets)
+    var camera = post_camera()
+    var renderer = post_renderer()
+    var host = EffectComposer()
+    var device_side = EffectComposer()
+    host.passes.append(render_pass())
+    host.passes.append(afterimage_pass(0.9))
+    device_side.passes.append(render_pass())
+    device_side.passes.append(afterimage_pass(0.9))
+    var device = GpuComposer(POST_WIDTH, POST_HEIGHT)
+    for _ in range(2):
+        var cpu = host.render(renderer, scene, assets, camera, 0.25)
+        var gpu = device.render(
+            device_side, renderer, scene, assets, camera, 0.25
+        )
+        assert_equal(count_mismatches(cpu, gpu, 1), 0)
+    assert_equal(len(device_side.memories), 2)
+    assert_equal(len(device_side.accumulations), 2)
+    assert_equal(len(device_side.memories[1]), POST_WIDTH * POST_HEIGHT)
+    # A pass popped from the list takes its memory with it.
+    _ = device_side.passes.pop()
+    _ = device.render(device_side, renderer, scene, assets, camera)
+    assert_equal(len(device_side.memories), 1)
+    assert_equal(len(device_side.accumulations), 1)
+
+
 def test_the_gpu_composer_matches_the_host_on_an_output_pass() raises:
     if skipped_for_lack_of_a_gpu("post output"):
         return

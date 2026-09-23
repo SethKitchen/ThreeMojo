@@ -8242,6 +8242,9 @@ struct GpuComposer(Movable):
         check_frame_time(delta_time)
         if renderer.width != self.width or renderer.height != self.height:
             raise Error("A GPU composer must be the renderer's size")
+        # A pass appended to or popped from the open list gets or drops
+        # its memory before an afterimage pass reads one, as on the host.
+        composer.fit_memories()
         # The frame carries the normal attachment the host composer's
         # frame carries. The normals stay on the host: only a render
         # writes them and only a screen-space pass reads them, and both
