@@ -176,6 +176,7 @@ from renderers.clip import (
     ClipVertex,
     clip_depth,
     clip_segment,
+    within_any,
     within_depth,
     within_sides,
 )
@@ -1241,6 +1242,97 @@ struct _Physics(ImplicitlyCopyable):
         self.bump_scale = 1
 
 
+def _plane_in_view(plane: Plane, view: Matrix4) raises -> Plane:
+    """Return a world-space plane carried into camera space.
+
+    Its normal goes through the normal matrix, so that a view with a
+    scale still keeps it perpendicular to the plane, and a point on it
+    goes through the view itself.
+
+    Args:
+        plane: The plane, in world space.
+        view: The world-to-camera transform.
+
+    Returns:
+        The same plane, in camera space.
+
+    Raises:
+        Error: If the view cannot be inverted.
+    """
+    var normal = view.normal_matrix().transform_direction(plane.normal)
+    return Plane.from_normal_and_point(
+        normal, view.transform_point(plane.coplanar_point())
+    )
+
+
+def _clip_sets(
+    material: Material,
+    view: Matrix4,
+    sides: List[Plane],
+    global_planes: List[Plane],
+    local: Bool,
+    casters_only: Bool,
+    mut cut: List[Plane],
+    mut any_of: List[Plane],
+) raises:
+    """Work out which planes cut one draw, in camera space.
+
+    `cut` is every plane a kept point must be in front of: the camera's
+    sides, the renderer's clipping planes, and the material's own under
+    the union rule. `any_of` is the material's own under
+    `clip_intersection`, of which a kept point needs only one. A shadow
+    pass is given no renderer planes, and the material's only under
+    `clip_shadows`, as three.js's `WebGLClipping` does.
+
+    Args:
+        material: The draw's material.
+        view: The world-to-camera transform.
+        sides: The camera's side planes, in camera space.
+        global_planes: The renderer's planes, already in camera space.
+        local: Whether the renderer lets a material's planes cut.
+        casters_only: Whether this is a light's view for a shadow map.
+        cut: Set to the planes that each cut.
+        any_of: Set to the planes of which one is enough.
+
+    Raises:
+        Error: If the view cannot be inverted.
+    """
+    cut = sides.copy()
+    any_of = List[Plane]()
+    if not casters_only:
+        cut.extend(Span(global_planes))
+    var own = local and material.clip_plane_count > 0
+    if not own or (casters_only and not material.clip_shadows):
+        return
+    var planes = material.clipping_planes()
+    # At least one: `own` above asked for a count above zero.
+    for index in range(len(planes)):  # pragma: no branch
+        var seen = _plane_in_view(planes[index], view)
+        if material.clip_intersection:
+            any_of.append(seen)
+        else:
+            cut.append(seen)
+
+
+def _planes_in_view(planes: List[Plane], view: Matrix4) raises -> List[Plane]:
+    """Return world-space planes carried into camera space.
+
+    Args:
+        planes: The planes, in world space.
+        view: The world-to-camera transform.
+
+    Returns:
+        The planes, in camera space, in order.
+
+    Raises:
+        Error: If the view cannot be inverted.
+    """
+    var seen = List[Plane]()
+    for index in range(len(planes)):
+        seen.append(_plane_in_view(planes[index], view))
+    return seen^
+
+
 def _whole_in_view(
     a: ClipVertex,
     b: ClipVertex,
@@ -1248,6 +1340,7 @@ def _whole_in_view(
     near: Float32,
     far: Float32,
     sides: List[Plane],
+    any_of: List[Plane] = List[Plane](),
 ) -> Bool:
     """Return True if no corner of the triangle needs cutting.
 
@@ -1262,11 +1355,16 @@ def _whole_in_view(
         c: The third.
         near: Distance to the near plane.
         far: Distance to the far plane.
-        sides: The camera's four side planes, in camera space.
+        sides: The camera's four side planes, in camera space, and the
+            clipping planes that each cut.
+        any_of: The clipping planes of which a kept point needs one. Any
+            at all send the triangle through the clipper.
 
     Returns:
         True if `clip_depth` would return the three corners as they are.
     """
+    if len(any_of) > 0:
+        return False
     if not within_depth(a.position.z, near, far):
         return False
     if not within_depth(b.position.z, near, far):
@@ -1523,6 +1621,7 @@ def _emit_sprite(
     sides: List[Plane],
     perspective: Bool,
     shading: ShadeMode,
+    any_of: List[Plane] = List[Plane](),
 ) raises:
     """Build a sprite's two triangles in camera space and append them.
 
@@ -1547,9 +1646,11 @@ def _emit_sprite(
         to_screen: The camera-to-pixels transform.
         near: Distance to the near plane.
         far: Distance to the far plane.
-        sides: The camera's four side planes, in camera space.
+        sides: The camera's four side planes, in camera space, and the
+            clipping planes that each cut.
         perspective: Whether the camera's rays converge.
         shading: The renderer's shading mode, for which maps to carry.
+        any_of: The clipping planes of which a kept point needs one.
 
     Raises:
         Error: If the material is not `BASIC` or is a wireframe, names a
@@ -1645,10 +1746,10 @@ def _emit_sprite(
         var a = quad[0]
         var b = quad[thirds[half] - 1]
         var c = quad[thirds[half]]
-        if _whole_in_view(a, b, c, near, far, sides):
+        if _whole_in_view(a, b, c, near, far, sides, any_of):
             paint.emit(corners, a, b, c)
             continue
-        var pieces = clip_depth(a, b, c, near, far, sides)
+        var pieces = clip_depth(a, b, c, near, far, sides, any_of)
         for piece in range(len(pieces) // 3):
             paint.emit(
                 corners,
@@ -1943,6 +2044,14 @@ struct Renderer(Movable):
     # The tables a rect area light is evaluated with, or none until
     # `set_ltc_tables`.
     var ltc: LtcTables
+    # Planes in world space that cut away what lies behind any of them,
+    # from every mesh, line, point and sprite, three.js's
+    # `clippingPlanes`. None by default. They do not cut shadows, as
+    # three.js's do not.
+    var clipping_planes: List[Plane]
+    # True to let each material's own planes cut it, three.js's
+    # `localClippingEnabled`. False by default, as there.
+    var local_clipping_enabled: Bool
 
     def __init__(out self, width: Int, height: Int, workers: Int = 1) raises:
         """Create a renderer with a dark background.
@@ -1972,6 +2081,8 @@ struct Renderer(Movable):
         self.antialias = False
         self.render_scale = 1
         self.ltc = LtcTables()
+        self.clipping_planes = List[Plane]()
+        self.local_clipping_enabled = False
 
     def set_antialias(mut self, enabled: Bool):
         """Turn supersampling on or off, three.js's `antialias`.
@@ -2295,6 +2406,8 @@ struct Renderer(Movable):
         # still on the target, and only a cut keeps it off; see
         # `renderers.clip`.
         var sides = Frustum.side_planes(camera.projection_matrix())
+        # The renderer's clipping planes, carried into camera space once.
+        var global_planes = _planes_in_view(self.clipping_planes, view)
 
         # Where the camera is, in the world: what an LOD measures its
         # distance from, and what a highlight is measured toward.
@@ -2327,6 +2440,18 @@ struct Renderer(Movable):
                 if wireframe:
                     continue
                 var begin = len(corners)
+                var sprite_cut = List[Plane]()
+                var sprite_any = List[Plane]()
+                _clip_sets(
+                    assets.materials.get(draws[slot].material),
+                    view,
+                    sides,
+                    global_planes,
+                    self.local_clipping_enabled,
+                    casters_only,
+                    sprite_cut,
+                    sprite_any,
+                )
                 _emit_sprite(
                     corners,
                     assets,
@@ -2336,9 +2461,10 @@ struct Renderer(Movable):
                     to_screen,
                     near,
                     far,
-                    sides,
+                    sprite_cut,
                     perspective,
                     self.shading,
+                    sprite_any,
                 )
                 _note_span(
                     spans,
@@ -2367,6 +2493,18 @@ struct Renderer(Movable):
             # skinned by the same code as a filled surface.
             if material.wireframe != wireframe:
                 continue
+            var cut = List[Plane]()
+            var any_of = List[Plane]()
+            _clip_sets(
+                material,
+                view,
+                sides,
+                global_planes,
+                self.local_clipping_enabled,
+                casters_only,
+                cut,
+                any_of,
+            )
             # Carried on every vertex of this mesh, so one flat triangle list
             # can hold a scene whose meshes use different images.
             var blending = material.blending
@@ -2663,7 +2801,8 @@ struct Renderer(Movable):
                         ),
                         near,
                         far,
-                        sides,
+                        cut,
+                        any_of,
                     )
                     for end in range(len(kept)):
                         corners.append(
@@ -2764,12 +2903,12 @@ struct Renderer(Movable):
                 # it is given, and a mesh in view gives it thousands that
                 # it would return as they came. See `within_depth`.
                 if _whole_in_view(
-                    corner_a, corner_b, corner_c, near, far, sides
+                    corner_a, corner_b, corner_c, near, far, cut, any_of
                 ):
                     paint.emit(corners, corner_a, corner_b, corner_c)
                     continue
                 var pieces = clip_depth(
-                    corner_a, corner_b, corner_c, near, far, sides
+                    corner_a, corner_b, corner_c, near, far, cut, any_of
                 )
                 for piece in range(len(pieces) // 3):
                     paint.emit(
@@ -2888,6 +3027,7 @@ struct Renderer(Movable):
         # still on the target, and only a cut keeps it off; see
         # `renderers.clip`.
         var sides = Frustum.side_planes(camera.projection_matrix())
+        var global_planes = _planes_in_view(self.clipping_planes, view)
         # One local bound per geometry, found the first time a line needs
         # it this frame, exactly as `_draws` keeps them for the meshes.
         var bounds = List[Sphere](
@@ -2918,6 +3058,18 @@ struct Renderer(Movable):
             var begin = len(corners)
             ref geometry = assets.geometries.get(line.geometry)
             var material = assets.materials.get(line.material)
+            var cut = List[Plane]()
+            var any_of = List[Plane]()
+            _clip_sets(
+                material,
+                view,
+                sides,
+                global_planes,
+                self.local_clipping_enabled,
+                False,
+                cut,
+                any_of,
+            )
             # A line is unlit and untextured, and these refuse the
             # alternatives rather than carrying them and drawing neither.
             # See the module docstring of `objects.line`.
@@ -3010,7 +3162,8 @@ struct Renderer(Movable):
                     ),
                     near,
                     far,
-                    sides,
+                    cut,
+                    any_of,
                 )
                 for end in range(len(kept)):
                     corners.append(
@@ -3212,6 +3365,7 @@ struct Renderer(Movable):
         clip.multiply(view)
         var frustum = Frustum.from_camera(clip, view, near, far)
         var sides = Frustum.side_planes(camera.projection_matrix())
+        var global_planes = _planes_in_view(self.clipping_planes, view)
         var perspective = not camera.projection_matrix().is_affine()
         # Half the height of the image the caller asked for: three.js's
         # `scale` uniform, which a point's size is measured against at a
@@ -3248,6 +3402,18 @@ struct Renderer(Movable):
             var begin = len(corners)
             ref geometry = assets.geometries.get(points.geometry)
             var material = assets.materials.get(points.material)
+            var cut = List[Plane]()
+            var any_of = List[Plane]()
+            _clip_sets(
+                material,
+                view,
+                sides,
+                global_planes,
+                self.local_clipping_enabled,
+                False,
+                cut,
+                any_of,
+            )
             # A point is unlit, and refuses a lit kind rather than being
             # shaded by a normal it does not have. See `objects.points`.
             if material.kind != BASIC:
@@ -3304,7 +3470,9 @@ struct Renderer(Movable):
                 # is left out, as OpenGL leaves it out.
                 if not within_depth(seen.z, near, far):
                     continue
-                if not within_sides(seen, sides):
+                if not within_sides(seen, cut):
+                    continue
+                if not within_any(seen, any_of):
                     continue
                 corners.append(
                     _to_raster(
@@ -3889,6 +4057,9 @@ struct Renderer(Movable):
         light's camera sees them, on a square of `size` pixels a side."""
         var spans = List[_Span]()
         var square = Renderer(size, size, workers=self.workers)
+        # A material's planes cut its shadow under `clip_shadows`, which
+        # this renderer's switch decides as it does for the frame.
+        square.local_clipping_enabled = self.local_clipping_enabled
         return square._prepared(scene, assets, camera, False, spans, True)
 
     def clear_color(self, scene: Scene) raises -> Color:

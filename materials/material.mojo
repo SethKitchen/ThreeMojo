@@ -167,7 +167,9 @@ from render.blend import (
 )
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
+from math.bounds import Plane
 from math.vector2 import Vector2
+from math.vector3 import Vector3
 from std.math import isfinite, min
 from units.si import Angle, Length, METER, RADIAN
 
@@ -186,6 +188,9 @@ comptime DEFAULT_IOR = Float32(1.5)
 # The narrowest and widest index three.js accepts.
 comptime MIN_IOR = Float32(1.0)
 comptime MAX_IOR = Float32(2.333)
+# How many clipping planes one material holds. three.js has no limit; the
+# planes live inline here so that a material stays a plain value.
+comptime MAX_CLIPPING_PLANES = 8
 # What a dielectric reflects head on: three.js's `vec3(0.04)`.
 comptime DIELECTRIC_REFLECTANCE = Float32(0.04)
 comptime _WHITE = Color(255, 255, 255)
@@ -728,6 +733,18 @@ struct Material(ImplicitlyCopyable):
     # `clearcoatRoughness`. Zero and zero by default, as there.
     var clearcoat: Float32
     var clearcoat_roughness: Float32
+    # The material's own clipping planes, three.js's `clippingPlanes`, at
+    # most `MAX_CLIPPING_PLANES`, each a unit normal and a constant packed
+    # four floats apart so that a material stays a plain value. Read with
+    # `clipping_planes`, set with `set_clipping_planes`.
+    var _clip_planes: SIMD[DType.float32, 4 * MAX_CLIPPING_PLANES]
+    var clip_plane_count: Int
+    # True to cut away only what lies behind every plane rather than
+    # behind any one, three.js's `clipIntersection`.
+    var clip_intersection: Bool
+    # True to cut the material's shadow with its planes too, three.js's
+    # `clipShadows`.
+    var clip_shadows: Bool
 
     def __init__(
         out self,
@@ -1222,6 +1239,10 @@ struct Material(ImplicitlyCopyable):
         self.specular_intensity = specular_intensity
         self.clearcoat = clearcoat
         self.clearcoat_roughness = clearcoat_roughness
+        self._clip_planes = SIMD[DType.float32, 4 * MAX_CLIPPING_PLANES](0)
+        self.clip_plane_count = 0
+        self.clip_intersection = False
+        self.clip_shadows = False
         # The normal and bump maps, refused where no normal is read: a
         # basic or depth shader consults none. A wireframe is `BASIC`, so
         # the same rule refuses a map on one, and the line pass never
@@ -1440,6 +1461,69 @@ struct Material(ImplicitlyCopyable):
         never passes the dash's end.
         """
         return self.gap_size > NO_DASH
+
+    def set_clipping_planes(
+        mut self,
+        planes: List[Plane],
+        intersection: Bool = False,
+        shadows: Bool = False,
+    ) raises:
+        """Give the material its own clipping planes, three.js's
+        `clippingPlanes`, `clipIntersection` and `clipShadows`.
+
+        A point behind a plane is cut away, in world space. The renderer
+        reads these only when its `local_clipping_enabled` is set, as
+        three.js reads them only under `localClippingEnabled`.
+
+        Args:
+            planes: The planes, facing the kept side. None clears them.
+            intersection: True to cut away only what is behind every
+                plane; False, the default, to cut what is behind any one.
+            shadows: True to cut the material's shadow as well.
+
+        Raises:
+            Error: If there are more than `MAX_CLIPPING_PLANES`.
+        """
+        if len(planes) > MAX_CLIPPING_PLANES:
+            raise Error(
+                "A material holds at most ",
+                MAX_CLIPPING_PLANES,
+                " clipping planes, got ",
+                len(planes),
+            )
+        self._clip_planes = SIMD[DType.float32, 4 * MAX_CLIPPING_PLANES](0)
+        for index in range(len(planes)):
+            ref plane = planes[index]
+            self._clip_planes[index * 4] = plane.normal.x
+            self._clip_planes[index * 4 + 1] = plane.normal.y
+            self._clip_planes[index * 4 + 2] = plane.normal.z
+            self._clip_planes[index * 4 + 3] = plane.constant
+        self.clip_plane_count = len(planes)
+        self.clip_intersection = intersection
+        self.clip_shadows = shadows
+
+    def clipping_planes(self) raises -> List[Plane]:
+        """Return the material's clipping planes.
+
+        Returns:
+            The planes `set_clipping_planes` was given, in order.
+
+        Raises:
+            Error: Never for planes that were set: each was a plane.
+        """
+        var planes = List[Plane]()
+        for index in range(self.clip_plane_count):
+            planes.append(
+                Plane(
+                    Vector3(
+                        self._clip_planes[index * 4],
+                        self._clip_planes[index * 4 + 1],
+                        self._clip_planes[index * 4 + 2],
+                    ),
+                    self._clip_planes[index * 4 + 3],
+                )
+            )
+        return planes^
 
     def is_transparent(self) -> Bool:
         """Return True if this surface is composited over what is behind it.

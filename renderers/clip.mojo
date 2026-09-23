@@ -298,8 +298,18 @@ def clip_depth(
     near: Float32,
     far: Float32,
     sides: List[Plane] = List[Plane](),
+    any_of: List[Plane] = List[Plane](),
 ) raises -> List[ClipVertex]:
     """Return the part of a triangle inside the camera's view volume.
+
+    `sides` are planes the triangle must be in front of, every one: the
+    camera's four sides, and the clipping planes that cut away what lies
+    behind any of them. `any_of` are planes the triangle must be in front
+    of at least one of: three.js's `clipIntersection`. What survives them
+    is a union of half-spaces, which is not convex, so it is cut into
+    pieces that are: the part in front of the first plane, the part in
+    front of the second and behind the first, and so on. The pieces do not
+    overlap, so a translucent surface is not drawn twice where they meet.
 
     Args:
         a: First corner, in camera space.
@@ -308,7 +318,10 @@ def clip_depth(
         near: Distance to the near plane; the plane sits at z = -near.
         far: Distance to the far plane, at z = -far.
         sides: The camera's side planes, from `Frustum.side_planes`, or
-            none to cut against the depth planes alone.
+            none to cut against the depth planes alone, and any clipping
+            planes that each cut on their own.
+        any_of: Clipping planes of which a kept point needs to be in front
+            of only one. None, the default, keeps everything.
 
     Returns:
         Corners three at a time: empty if nothing survives, otherwise three
@@ -342,14 +355,66 @@ def clip_depth(
     for side in range(len(sides)):
         within = _clip_side(within, sides[side])
 
-    # Three to five corners, fanned from the first into triangles. An empty
-    # or degenerate polygon gives an empty range and so no triangles.
     var triangles = List[ClipVertex]()
-    for corner in range(1, len(within) - 1):
-        triangles.append(within[0])
-        triangles.append(within[corner])
-        triangles.append(within[corner + 1])
+    if len(any_of) == 0:
+        _fan(within, triangles)
+        return triangles^
+    # Not empty: the return above took that case.
+    for index in range(len(any_of)):  # pragma: no branch
+        var piece = _clip_side(within, any_of[index])
+        for earlier in range(index):
+            piece = _clip_side(piece, flipped(any_of[earlier]))
+        _fan(piece, triangles)
     return triangles^
+
+
+def _fan(polygon: List[ClipVertex], mut triangles: List[ClipVertex]):
+    """Append a convex polygon as triangles fanned from its first corner.
+
+    An empty or degenerate polygon gives an empty range and so no
+    triangles.
+    """
+    for corner in range(1, len(polygon) - 1):
+        triangles.append(polygon[0])
+        triangles.append(polygon[corner])
+        triangles.append(polygon[corner + 1])
+
+
+def flipped(plane: Plane) -> Plane:
+    """Return a plane facing the other way.
+
+    Args:
+        plane: The plane.
+
+    Returns:
+        The same plane, its kept side the one `plane` cuts away.
+    """
+    var other = plane
+    other.negate()
+    return other
+
+
+def within_any(position: Vector3, planes: List[Plane]) -> Bool:
+    """Return True if a point is in front of at least one plane, or there
+    are no planes.
+
+    What three.js's `clipIntersection` keeps: a point is cut away only
+    when it lies behind every plane.
+
+    Args:
+        position: The point, in camera space.
+        planes: The planes, facing the kept side.
+
+    Returns:
+        Whether the point is kept.
+    """
+    if len(planes) == 0:
+        return True
+    # Not empty: the return above took that case.
+    for index in range(len(planes)):  # pragma: no branch
+        if planes[index].distance_to_point(position) >= 0:
+            return True
+    return False
 
 
 def clip_segment(
@@ -358,6 +423,7 @@ def clip_segment(
     near: Float32,
     far: Float32,
     sides: List[Plane] = List[Plane](),
+    any_of: List[Plane] = List[Plane](),
 ) raises -> List[ClipVertex]:
     """Return the part of a segment inside the camera's view volume.
 
@@ -378,10 +444,15 @@ def clip_segment(
         near: Distance to the near plane; the plane sits at z = -near.
         far: Distance to the far plane, at z = -far.
         sides: The camera's side planes, from `Frustum.side_planes`, or
-            none to cut against the depth planes alone.
+            none to cut against the depth planes alone, and any clipping
+            planes that each cut on their own.
+        any_of: Clipping planes of which a kept point needs to be in front
+            of only one, cut into pieces as `clip_depth` cuts them.
 
     Returns:
-        Two corners, or none if the segment lies wholly outside the volume.
+        Corners two at a time: none if the segment lies wholly outside the
+        volume, one pair for a segment cut by `sides` alone, and up to one
+        pair per plane of `any_of`.
 
     Raises:
         Error: If `far` does not lie beyond `near`, which would leave the
@@ -409,16 +480,44 @@ def clip_segment(
         elif not second_in:
             second = _cross_at(second, first, plane_z)
     # Then each side, the same way.
+    var kept = List[ClipVertex]()
+    kept.append(first)
+    kept.append(second)
     for side in range(len(sides)):
-        var plane = sides[side]
-        var first_in = plane.distance_to_point(first.position) >= 0
-        var second_in = plane.distance_to_point(second.position) >= 0
-        if not first_in and not second_in:
-            return List[ClipVertex]()
-        if not first_in:
-            first = _cross_side(first, second, plane)
-        elif not second_in:
-            second = _cross_side(second, first, plane)
+        kept = _cut_segment(kept, sides[side])
+    if len(any_of) == 0:
+        return kept^
+    var pieces = List[ClipVertex]()
+    for index in range(len(any_of)):
+        var piece = _cut_segment(kept, any_of[index])
+        for earlier in range(index):
+            piece = _cut_segment(piece, flipped(any_of[earlier]))
+        pieces.extend(Span(piece))
+    return pieces^
+
+
+def _cut_segment(segment: List[ClipVertex], plane: Plane) -> List[ClipVertex]:
+    """Return a segment cut down to the side of a plane it faces.
+
+    Args:
+        segment: Two ends, or none.
+        plane: The plane, facing the kept side.
+
+    Returns:
+        The two ends of what survives, or none.
+    """
+    if len(segment) == 0:
+        return List[ClipVertex]()
+    var first = segment[0]
+    var second = segment[1]
+    var first_in = plane.distance_to_point(first.position) >= 0
+    var second_in = plane.distance_to_point(second.position) >= 0
+    if not first_in and not second_in:
+        return List[ClipVertex]()
+    if not first_in:
+        first = _cross_side(first, second, plane)
+    elif not second_in:
+        second = _cross_side(second, first, plane)
     var kept = List[ClipVertex]()
     kept.append(first)
     kept.append(second)

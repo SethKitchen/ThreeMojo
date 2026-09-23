@@ -141,6 +141,32 @@ Each instance of an instanced or batched mesh is tested on its own, with the ins
 
 It resolves the scene's fog for the camera with `FogView(scene.fog, view)`. See [Fog](Fog). It clears the target to `clear_color(scene)` and paints `backdrop(scene, assets, camera)` under the scene, where the scene has an image background. Then it rasterizes the frame with `rasterize_frame`, in the frame's order, with the assets' cube textures for the surfaces that reflect one. Last, it resolves the image through the tone mapping curve.
 
+## Clipping planes
+
+A clipping plane cuts away what lies behind it. three.js: `WebGLRenderer.clippingPlanes`, `localClippingEnabled`, and `Material.clippingPlanes`, `clipIntersection` and `clipShadows`.
+
+```mojo
+renderer.clipping_planes = [Plane(Vector3(1, 0, 0), 0)]   # keep x > 0
+renderer.local_clipping_enabled = True
+material.set_clipping_planes(planes, intersection=True, shadows=True)
+```
+
+| Member | Meaning |
+|---|---|
+| `Renderer.clipping_planes` | World-space planes that cut every mesh, line, point set and sprite. None by default. |
+| `Renderer.local_clipping_enabled` | True to let each material's own planes cut it. False by default, as in three.js. |
+| `Material.set_clipping_planes(planes, intersection, shadows)` | The material's own planes, at most `MAX_CLIPPING_PLANES`, which is eight. |
+| `Material.clip_intersection` | False cuts what is behind any plane. True cuts only what is behind every plane. |
+| `Material.clip_shadows` | True to cut the material's shadow with its planes too. |
+
+A point is kept when its signed distance to each plane is zero or more. The renderer's planes always use the first rule. They never cut a shadow, as three.js's do not.
+
+The planes cut triangles before they are projected, with the same clipper that cuts at the near, far and side planes. See [Rasterization](Rasterization#clipping). A cut triangle is the same surface a per-fragment test keeps, so both rasterizers draw it without knowing about the planes.
+
+What survives `clip_intersection` is not convex, so it is cut into convex pieces that do not overlap. Piece `i` is in front of plane `i` and behind every plane before it. A line is cut the same way. A point is kept or dropped whole.
+
+A material holds its planes inline, so that it stays a plain value. three.js has no limit on the count.
+
 ## Viewport and scissor
 
 `set_viewport(rect)` puts the camera's image in a rectangle of the target, three.js's `setViewport`. `set_scissor(rect)` and `set_scissor_test(True)` keep every draw inside a rectangle, three.js's `setScissor` and `setScissorTest`. A `Rect` is a corner and a size, and the corner counts up from the bottom left, as three.js's does.
