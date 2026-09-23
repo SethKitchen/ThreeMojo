@@ -710,13 +710,23 @@ struct KeyframeTrack(Copyable, Movable):
 
     def _key_before(self, seconds: Float32) -> Int:
         """Return the last key at or before `seconds`. The caller has
-        checked that the time falls inside the track."""
-        var found = 0
-        for key in range(1, len(self.times)):  # pragma: no branch
-            if self.times[key] > seconds:
-                break
-            found = key
-        return found
+        checked that the time falls inside the track.
+
+        A binary search: the times rise, so the key is found in a number of
+        steps that grows with the logarithm of the keys rather than with
+        the keys, and a long clip read every frame does not walk its whole
+        track to find where it is. The caller's check means the first key
+        is at or before the time and the last key after it.
+        """
+        var low = 0
+        var high = len(self.times) - 1
+        while high - low > 1:
+            var middle = (low + high) // 2
+            if self.times[middle] <= seconds:
+                low = middle
+            else:
+                high = middle
+        return low
 
     def _smooth(
         self, key: Int, seconds: Float32, start: Ending, end: Ending

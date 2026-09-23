@@ -24,6 +24,7 @@ from animation.keyframe_track import (
     Interpolation,
     KeyframeTrack,
     LINEAR,
+    MeshIndex,
     POSITION,
     QUATERNION,
     SCALE,
@@ -31,6 +32,7 @@ from animation.keyframe_track import (
     TrackKind,
     WRAP_AROUND_ENDING,
     ZERO_SLOPE_ENDING,
+    morph_target,
 )
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -172,6 +174,26 @@ def test_a_linear_track_runs_evenly_between_its_keys() raises:
     assert_almost_equal(
         track.sample_vector3(at(1.5)).x, Float32(3), atol=TOLERANCE
     )
+
+
+def test_a_long_track_finds_the_key_before_every_time() raises:
+    # Eleven keys at uneven times, each holding its own number: a step
+    # track reads the key at or before the time, at a key and between
+    # two, whichever way the search for it goes.
+    var times: List[Float32] = [0, 0.5, 0.75, 2, 2.1, 3, 4.5, 5, 7, 7.25, 9]
+    var values = List[Float32]()
+    for key in range(len(times)):
+        values.append(Float32(key))
+    var track = KeyframeTrack(
+        morph_target(MeshIndex(0), 0),
+        seconds(times),
+        values^,
+        interpolation=STEP,
+    )
+    for key in range(len(times) - 1):
+        for part in [Float32(0), Float32(0.3), Float32(0.99)]:
+            var when = times[key] + (times[key + 1] - times[key]) * part
+            assert_equal(track.sample(at(when))[0], Float32(key))
 
 
 def test_a_step_track_holds_each_key_until_the_next() raises:
