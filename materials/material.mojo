@@ -211,6 +211,7 @@ from render.raster_state import (
     StencilOp,
 )
 from render.texture_store import NO_TEXTURE, TextureId
+from materials.nodes import NO_NODES, NodeProgramId
 from math.bounds import Plane
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -676,6 +677,16 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
             or self == PHYSICAL
         )
 
+    def takes_nodes(self) -> Bool:
+        """Return True if a node graph can replace parts of this kind's
+        shading: every kind that shows a surface's color, and not a data
+        kind -- `NORMALS`, `DEPTH` or `DISTANCE` -- or `SHADOW`.
+
+        Returns:
+            Whether the kind runs a node graph.
+        """
+        return not (self.is_data() or self == SHADOW)
+
     def has_specular_map(self) -> Bool:
         """Return True if a material of this kind can carry a specular map:
         `BASIC`, `LAMBERT` or `PHONG`.
@@ -980,6 +991,11 @@ struct Material(ImplicitlyCopyable):
     var anisotropy: Float32
     var anisotropy_rotation: Angle
     var anisotropy_map: TextureId
+    # A compiled node graph that replaces parts of this surface's shading,
+    # three.js's `colorNode`, `opacityNode`, `emissiveNode`, `normalNode`,
+    # `positionNode` and `outputNode`, or `NO_NODES`. A program in the
+    # store the renderer draws with; see `materials.nodes`.
+    var nodes: NodeProgramId
     # The material's own clipping planes, three.js's `clippingPlanes`, at
     # most `MAX_CLIPPING_PLANES`, each a unit normal and a constant packed
     # four floats apart so that a material stays a plain value. Read with
@@ -1110,6 +1126,7 @@ struct Material(ImplicitlyCopyable):
         anisotropy: Float32 = 0.0,
         anisotropy_rotation: Angle = NO_ROTATION,
         anisotropy_map: TextureId = NO_TEXTURE,
+        nodes: NodeProgramId = NO_NODES,
     ) raises:
         """Describe a surface.
 
@@ -1312,6 +1329,9 @@ struct Material(ImplicitlyCopyable):
                 counterclockwise, three.js's `anisotropyRotation`.
             anisotropy_map: Id of a texture whose red and green turn the
                 stretch and whose blue scales it, or `NO_TEXTURE`. Data.
+            nodes: Id of a compiled node graph that replaces parts of the
+                shading, or `NO_NODES`: a node material. See
+                `materials.nodes`.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -1416,6 +1436,9 @@ struct Material(ImplicitlyCopyable):
                 with no sheen, an iridescence map with no iridescence, an
                 anisotropy map with no anisotropy, and any of these that
                 is not the default on a kind that is not `PHYSICAL` are
+                refused. A `nodes` id that is a negative other than
+                `NO_NODES`, or one on a kind that `takes_nodes` refuses or
+                on a wireframe, is
                 refused.
         """
         if map.value < 0 and map != NO_TEXTURE:
@@ -1812,6 +1835,22 @@ struct Material(ImplicitlyCopyable):
         self.anisotropy = anisotropy
         self.anisotropy_rotation = anisotropy_rotation
         self.anisotropy_map = anisotropy_map
+        # A node graph replaces parts of a surface's shading, so a kind that
+        # shows data or a shadow has nothing for it to replace. A wireframe
+        # is drawn as lines, which run no graph.
+        if not nodes.is_valid():
+            raise Error("A material's node program id cannot be negative")
+        if nodes != NO_NODES and not kind.takes_nodes():
+            raise Error(
+                "A data or shadow material runs no node graph: it"
+                " shows data or a shadow, not a surface's color"
+            )
+        if nodes != NO_NODES and wireframe:
+            raise Error(
+                "A wireframe material runs no node graph: a line has no"
+                " surface for one to shade"
+            )
+        self.nodes = nodes
         self._clip_planes = SIMD[DType.float32, 4 * MAX_CLIPPING_PLANES](0)
         self.clip_plane_count = 0
         self.clip_intersection = False
@@ -3130,6 +3169,47 @@ def sprite_material(
         alpha_test=alpha_test,
         size_attenuation=size_attenuation,
         rotation=rotation,
+    )
+
+
+def shader_material(
+    fragment: NodeProgramId,
+    side: Side = FRONT_SIDE,
+    transparent: Bool = False,
+) raises -> Material:
+    """Return three.js's `ShaderMaterial` as this port has it: an unlit
+    surface whose color a node graph computes.
+
+    three.js compiles the GLSL source of a `fragmentShader`. This port has
+    no shader language, so the fragment program is a compiled
+    `materials.nodes.NodeGraph`: its `COLOR_NODE` is `gl_FragColor.rgb`,
+    its `OPACITY_NODE` the alpha, and its uniforms are three.js's
+    `uniforms`, set by name with `NodeProgram.set_uniform`. A GLSL string
+    cannot be compiled here. The surface is `BASIC`, which no light
+    reaches, as three.js's `lights` is off by default, and no fog reaches
+    it, as three.js's `fog` is off by default.
+
+    Args:
+        fragment: The compiled graph, in the store the renderer draws with.
+        side: `FRONT_SIDE`, `BACK_SIDE` or `DOUBLE_SIDE`.
+        transparent: Whether the surface blends by its alpha.
+
+    Returns:
+        The material.
+
+    Raises:
+        Error: If `fragment` is `NO_NODES` or negative, or `side` is none
+            of its named values.
+    """
+    if fragment.value < 0:
+        raise Error("A shader material needs a node program to run")
+    return Material(
+        _WHITE,
+        side=side,
+        kind=BASIC,
+        transparent=transparent,
+        nodes=fragment,
+        fog=False,
     )
 
 

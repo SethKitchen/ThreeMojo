@@ -10504,7 +10504,7 @@ def test_the_layer_lanes_and_columns_ride_last() raises:
     assert_equal(state[STATE_FILM_THICKNESS_MAP], Int32(4))
     assert_equal(state[STATE_ANISOTROPY_MAP], Int32(5))
     assert_equal(STATE_SHEEN_COLOR_MAP, STATE_FOG + 1)
-    assert_equal(STATE_ANISOTROPY_MAP, STATE_PER_TRIANGLE - 1)
+    assert_equal(STATE_ANISOTROPY_MAP, STATE_PER_TRIANGLE - 2)
     # A corner that says nothing carries three.js's defaults and no map.
     var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
     assert_equal(plain[LANE_SHEEN_ROUGHNESS], Float32(1))
@@ -10676,3 +10676,311 @@ def test_the_gpu_refuses_a_layer_map_it_cannot_sample() raises:
                 BACKGROUND,
                 SHADE_TEXTURE,
             )
+
+
+# --- node materials ---------------------------------------------------------
+
+from materials.nodes import (
+    COLOR_NODE as NODES_COLOR,
+    EMISSIVE_NODE as NODES_EMISSIVE,
+    NORMAL_NODE as NODES_NORMAL,
+    OPACITY_NODE as NODES_OPACITY,
+    OUTPUT_NODE as NODES_OUTPUT,
+    POSITION_NODE as NODES_POSITION,
+    NodeGraph,
+    NodeProgramId,
+    NodeProgramStore,
+)
+from materials.material import shader_material
+from render.gpu import (
+    FOG_FLOATS,
+    STATE_NODES,
+    flatten_programs,
+    program_starts,
+)
+from units.si import Duration, SECOND
+
+
+def every_node(map: TextureId) raises -> NodeGraph:
+    """Return a graph that reads every attribute and runs every operation,
+    into all five fragment outputs."""
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    var texel = graph.texture(map, graph.mul(uv, graph.float(2)))
+    var bands = graph.smoothstep(
+        graph.float(0.2),
+        graph.float(0.8),
+        graph.fract(graph.mul(graph.swizzle(uv, "x"), graph.float(3))),
+    )
+    var wave = graph.mul(graph.sin(graph.time()), graph.float(0.1))
+    var color = graph.add(
+        graph.mix(graph.vertex_color(), graph.swizzle(texel, "rgb"), bands),
+        wave,
+    )
+    graph.set_output(
+        NODES_COLOR, graph.clamp(color, graph.float(0), graph.float(1))
+    )
+    var place = graph.position_world()
+    graph.set_output(
+        NODES_NORMAL,
+        graph.mul(
+            graph.vec3(0.3, 0.1, 0),
+            graph.cos(graph.mul(graph.swizzle(place, "xyz"), graph.float(4))),
+        ),
+    )
+    graph.set_output(
+        NODES_OPACITY,
+        graph.sub(
+            graph.float(1),
+            graph.mul(graph.swizzle(texel, "a"), graph.float(0.1)),
+        ),
+    )
+    var seen = graph.normalize(graph.position_view())
+    var rim = graph.sub(graph.float(1), graph.dot(seen, graph.normal_view()))
+    graph.set_output(
+        NODES_EMISSIVE, graph.mul(graph.uniform("rim", Color(40, 80, 160)), rim)
+    )
+    var bright = graph.step(
+        graph.float(0.3), graph.length(graph.normal_world())
+    )
+    graph.set_output(
+        NODES_OUTPUT,
+        graph.mul(graph.pow(graph.lit(), graph.float(1.1)), bright),
+    )
+    return graph^
+
+
+def with_nodes(var corners: List[RasterVertex], id: Int) -> List[RasterVertex]:
+    """Return the corners naming a node program."""
+    for index in range(len(corners)):
+        corners[index].nodes = NodeProgramId(id)
+    return corners^
+
+
+def test_the_node_column_rides_last_and_programs_follow_the_fog() raises:
+    var store = NodeProgramStore()
+    var first = NodeGraph()
+    first.set_output(NODES_COLOR, first.vec3(1, 0, 0))
+    _ = store.add(first.compile())
+    var second = NodeGraph()
+    second.set_output(NODES_OPACITY, second.float(0.5))
+    _ = store.add(second.compile())
+    var starts = program_starts(store)
+    assert_equal(starts[0], FOG_FLOATS)
+    assert_equal(starts[1], FOG_FLOATS + len(store.programs[0].code))
+    var flat = flatten_programs(store)
+    assert_equal(
+        len(flat), len(store.programs[0].code) + len(store.programs[1].code)
+    )
+    assert_equal(flat[starts[1] - FOG_FLOATS], store.programs[1].code[0])
+    assert_equal(len(program_starts(NodeProgramStore())), 0)
+    var corners = with_nodes(overlapping_pair(), 1)
+    corners[0].nodes = NodeProgramId(-1)
+    corners[1].nodes = NodeProgramId(-1)
+    corners[2].nodes = NodeProgramId(-1)
+    var state = triangle_state(corners, 0, starts)
+    assert_equal(STATE_NODES, STATE_PER_TRIANGLE - 1)
+    assert_equal(STATE_NODES, STATE_ANISOTROPY_MAP + 1)
+    assert_equal(state[STATE_NODES], Int32(-1))
+    assert_equal(state[STATE_PER_TRIANGLE + STATE_NODES], Int32(starts[1]))
+    # A program past the layout, which a draw refuses first, reads none.
+    assert_equal(
+        triangle_state(with_nodes(overlapping_pair(), 5), 0, starts)[
+            STATE_NODES
+        ],
+        Int32(-1),
+    )
+
+
+def test_both_backends_run_a_node_graph_alike() raises:
+    # The kernel reads the program out of the fog buffer and runs the
+    # host's own interpreter over it: every attribute, every operation and
+    # all five fragment outputs must reach the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends run a node graph alike"):
+        return
+    var textures = TextureStore()
+    var map = textures.add(a_gpu_data_map())
+    var store = NodeProgramStore()
+    var id = store.add(every_node(map).compile())
+    var view = Matrix4()
+    view.elements[14] = -3
+    store.set_frame(Duration(0.7, SECOND), view)
+    var lighting = phong_lighting()
+    var fog = FogView(
+        linear_fog(Color(90, 100, 120), Length(0.0, METER), Length(2.0, METER))
+    )
+    var pairs = List[List[RasterVertex]]()
+    pairs.append(
+        with_nodes(phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value)
+    )
+    pairs.append(with_nodes(physical_pair(PHYSICAL, 0.35, 0.4), id.value))
+    # A sheen, a film and a stretch over the graph's color, normal and
+    # emissive: the layers read what the graph wrote.
+    var layered = LayerFactors()
+    layered.sheen_color = Vector3(0.8, 0.3, 0.1)
+    layered.sheen_roughness = 0.4
+    layered.iridescence = 1
+    layered.iridescence_ior = 1.8
+    layered.anisotropy = Vector2(0.3, 0.6)
+    pairs.append(
+        with_nodes(
+            with_gpu_layers(physical_pair(PHYSICAL, 0.35, 0.4), layered),
+            id.value,
+        )
+    )
+    for mode in [SHADE_TEXTURE, SHADE_LIT]:
+        for index in range(len(pairs)):
+            ref corners = pairs[index]
+            var target = RenderTarget(36, 30, BACKGROUND)
+            rasterize_all(
+                corners,
+                target,
+                mode,
+                textures,
+                lighting,
+                1,
+                fog,
+                programs=store,
+            )
+            var cpu = target.resolve()
+            var gpu = render_triangles(
+                corners,
+                36,
+                30,
+                BACKGROUND,
+                mode,
+                textures,
+                lighting,
+                fog,
+                programs=store,
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+            # And the graph really did something.
+            var plain = render_triangles(
+                with_nodes(corners.copy(), -1),
+                36,
+                30,
+                BACKGROUND,
+                mode,
+                textures,
+                lighting,
+                fog,
+            )
+            assert_true(count_mismatches(gpu, plain) > 50)
+
+
+def test_both_backends_draw_a_node_material_scene_alike() raises:
+    # A shader material and a lit node material with a position node, in
+    # a prepared frame: the host moves the vertices, and both backends
+    # shade them with the frame's time and view.
+    if skipped_for_lack_of_a_gpu("both backends draw a node scene alike"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    renderer.time = Duration(1.25, SECOND)
+    var assets = Assets()
+    var map = assets.textures.add(a_gpu_data_map())
+    var waves = NodeGraph()
+    waves.set_output(
+        NODES_POSITION,
+        waves.mul(
+            waves.normal_local(),
+            waves.mul(
+                waves.sin(
+                    waves.add(
+                        waves.time(), waves.swizzle(waves.position_local(), "x")
+                    )
+                ),
+                waves.float(0.1),
+            ),
+        ),
+    )
+    waves.set_output(NODES_COLOR, waves.uniform("tint", Color(200, 120, 60)))
+    var lit = assets.programs.add(waves.compile())
+    var flat = assets.programs.add(every_node(map).compile())
+    var box = assets.geometries.add(sphere(Length(0.6, METER), 16, 12))
+    var scene = Scene()
+    var left = Object3D()
+    left.set_position(-0.6, 0, 0)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.7, 0, 0)
+    var right_node = scene.add(right^)
+    light_the(scene)
+    scene.update()
+    scene.add_mesh(
+        Mesh(
+            box,
+            assets.materials.add(
+                Material(
+                    Color(255, 255, 255),
+                    kind=PHONG,
+                    shininess=20,
+                    specular=Color(60, 60, 60),
+                    nodes=lit,
+                )
+            ),
+            left_node,
+        )
+    )
+    scene.add_mesh(
+        Mesh(box, assets.materials.add(shader_material(flat)), right_node)
+    )
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0.2, 0.4, 3.0), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_the_gpu_refuses_a_program_it_cannot_run() raises:
+    # A program that is not there, or one that reads a texture that is not
+    # uploaded: refused before the launch, as the host refuses them before
+    # a fragment.
+    if skipped_for_lack_of_a_gpu("the gpu refuses a program it cannot run"):
+        return
+    var store = NodeProgramStore()
+    _ = store.add(every_node(TextureId(3)).compile())
+    var renderer = GpuRenderer(36, 30)
+    with assert_raises(contains="No node program has that id"):
+        renderer.draw(
+            with_nodes(overlapping_pair(), 1),
+            BACKGROUND,
+            SHADE_LIT,
+            programs=store,
+        )
+    with assert_raises(contains="reads a texture that has not been uploaded"):
+        renderer.draw(
+            with_nodes(overlapping_pair(), 0),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    # The uv view runs no program, and `SHADE_LIT` opens no texture.
+    renderer.draw(
+        with_nodes(overlapping_pair(), 1), BACKGROUND, SHADE_UV, programs=store
+    )
+    renderer.draw(
+        with_nodes(overlapping_pair(), 0), BACKGROUND, SHADE_LIT, programs=store
+    )
+    # A second draw reuses the room the first made after the fog.
+    renderer.draw(
+        with_nodes(overlapping_pair(), 0), BACKGROUND, SHADE_LIT, programs=store
+    )

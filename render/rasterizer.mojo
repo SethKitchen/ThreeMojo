@@ -75,6 +75,22 @@ from render.texture import (
     mix_straight,
 )
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
+from materials.nodes import (
+    COLOR_NODE,
+    EMISSIVE_NODE,
+    NORMAL_NODE,
+    NO_NODES,
+    OPACITY_NODE,
+    OUTPUT_NODE,
+    NodeInputs,
+    NodeProgram,
+    NodeProgramId,
+    NodeProgramStore,
+    NodeSource,
+    offset_normal,
+    has_output,
+    run_nodes,
+)
 from render.transmission import (
     TransmissionTarget,
     host_refraction,
@@ -842,6 +858,11 @@ struct RasterVertex(ImplicitlyCopyable):
     # A `PHYSICAL` triangle's sheen, iridescence and anisotropy, and their
     # maps. Per-triangle, read from the first corner.
     var layers: LayerFactors
+    # Which compiled node graph replaces parts of this triangle's shading,
+    # or `NO_NODES`: a node material's program, in the store the
+    # rasterizer is handed. Per-triangle like `texture`, read from the
+    # first corner. See `materials.nodes`.
+    var nodes: NodeProgramId
 
     def __init__(
         out self,
@@ -908,6 +929,7 @@ struct RasterVertex(ImplicitlyCopyable):
         near_distance: Float32 = 1,
         far_distance: Float32 = 1000,
         layers: LayerFactors = LayerFactors(),
+        nodes: NodeProgramId = NO_NODES,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -935,8 +957,8 @@ struct RasterVertex(ImplicitlyCopyable):
         that is never dimmed, no dispersion, and an index of 1.5. The fog
         reaches the corner, the depth packing is the basic one, and the
         distance is measured from the origin between one and a thousand
-        meters, all three.js's defaults.
-        The sheen, the film and the stretch default to none.
+        meters, all three.js's defaults. The sheen, the film and the
+        stretch default to none. No node graph replaces any of the shading.
         """
         self.x = x
         self.y = y
@@ -1001,6 +1023,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.near_distance = near_distance
         self.far_distance = far_distance
         self.layers = layers
+        self.nodes = nodes
 
 
 @fieldwise_init
@@ -1635,8 +1658,12 @@ def check_triangle_state(
             is negative or not finite, an index outside one to 2.333,
             either volume map id that is a negative other than
             `NO_TEXTURE`, and any of them but its default on a kind that
-            is not `PHYSICAL` are refused. The fog switch, the depth packing and the distance
-            range are refused as `check_data_state` refuses them.
+            is not `PHYSICAL` are refused. The fog switch, the depth
+            packing and the distance range are refused as
+            `check_data_state` refuses them. The corners must agree on
+            their node program; an id that is a negative other than `NO_NODES`,
+            or one on a kind that `MaterialKind.takes_nodes` refuses, is
+            refused.
     """
     check_data_state(a, b, c)
     if b.blend != a.blend or c.blend != a.blend:
@@ -1912,6 +1939,16 @@ def check_triangle_state(
     if a.kind != PHYSICAL and _has_volume(a):
         raise Error(
             "Only a physical triangle transmits: no other shader reads a volume"
+        )
+    # The node program, asked as the material asks it.
+    if b.nodes != a.nodes or c.nodes != a.nodes:
+        raise Error("A triangle's corners disagree about their node program")
+    if not a.nodes.is_valid():
+        raise Error("A triangle names a node program id that nothing can hold")
+    if a.nodes != NO_NODES and not a.kind.takes_nodes():
+        raise Error(
+            "A data or shadow triangle runs no node graph: it shows"
+            " data or a shadow, not a surface's color"
         )
 
 
@@ -2276,6 +2313,7 @@ def check_triangle_maps(
     mode: ShadeMode,
     textures: TextureStore,
     cubes: CubeTextureStore = CubeTextureStore(),
+    programs: NodeProgramStore = NodeProgramStore(),
 ) raises:
     """Refuse a triangle whose maps are not stored the way its shader reads
     them, under the mode that would read them.
@@ -2297,6 +2335,8 @@ def check_triangle_maps(
         cubes: Where the env map lives. Only `SHADE_TEXTURE` opens it: a
             reflection is a texture, and the other two modes ignore every
             texture.
+        programs: Where the node program lives. Every mode but the uv view
+            runs it, and only `SHADE_TEXTURE` opens the textures it reads.
 
     Raises:
         Error: If a map the mode would open is not in the store; an
@@ -2307,8 +2347,10 @@ def check_triangle_maps(
             is not in the cube store; an ao map is not stored as data; a
             light map does not ignore its alpha; a sheen color map does not
             ignore its alpha; a sheen roughness map is not linear or
-            ignores its alpha; or an iridescence, thickness or anisotropy
-            map is not stored as data.
+            ignores its alpha; an iridescence, thickness or anisotropy map
+            is not stored as data; or a node program a mode would run is
+            not in its store, or names a texture `SHADE_TEXTURE` would open
+            that is not in the store.
     """
     # An emissive map's alpha means nothing, and only a texture built to
     # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
@@ -2391,6 +2433,13 @@ def check_triangle_maps(
             check_data_map(
                 textures.get(layers.anisotropy_map), "An anisotropy map"
             )
+    # The node program, and every texture it reads: the kernel asks the
+    # same before a launch.
+    if a.nodes != NO_NODES and mode != SHADE_UV:
+        ref program = programs.get(a.nodes)
+        if mode == SHADE_TEXTURE:
+            for index in range(len(program.textures)):
+                _ = textures.get(program.textures[index]).width
 
 
 def check_color_map(image: Texture, name: String) raises:
@@ -2478,6 +2527,7 @@ def rasterize_shaded(
     fog: FogView = FogView.none(),
     cubes: CubeTextureStore = CubeTextureStore(),
     transmission: TransmissionTarget = TransmissionTarget(),
+    programs: NodeProgramStore = NodeProgramStore(),
 ) raises:
     """Fill a triangle whose corners each carry their own color.
 
@@ -2548,6 +2598,11 @@ def rasterize_shaded(
         transmission: The opaque scene a transmissive triangle shows
             through itself under `SHADE_TEXTURE`, or an empty target for
             a frame with nothing transmissive; see `render.transmission`.
+        programs: Where a node material's program lives. Every mode but
+            the uv view runs it: its normal node before the lights, its
+            color, opacity and emissive nodes once the maps have had their
+            say, and its output node after the fog. See
+            `materials.nodes`.
 
     Raises:
         Error: If the mode is none of the three, the fog view holds a kind
@@ -2571,7 +2626,7 @@ def rasterize_shaded(
     fog.validate()
     # The maps, asked before the first fragment as the GPU asks before the
     # launch, and only under the mode that would open each.
-    check_triangle_maps(a, mode, textures, cubes)
+    check_triangle_maps(a, mode, textures, cubes, programs)
     check_transmission(a, mode, transmission.is_ready())
     # The ramp a `TOON` surface steps through, read once here. Its top row
     # is the whole lookup table, and it is the same for every fragment, so
@@ -2646,11 +2701,27 @@ def rasterize_shaded(
     # a G-buffer's second attachment. Every triangle interpolates its
     # normal then, whatever it is shaded by; see `RenderTarget.write`.
     var keeps_normals = target.has_normals()
+    # Whether a node graph replaces parts of the shading: under every mode
+    # but the uv view, which shades nothing. It reads the normal, the
+    # position and the coordinates whatever the kind, so it opens all three.
+    var noded = a.nodes != NO_NODES and mode != SHADE_UV
 
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
     if coverage.is_degenerate():
         return
+    # The program, and this triangle's own footprint for the textures it
+    # reads, moved to each fragment below.
+    var nodes = _HostNodes(
+        Pointer(to=programs).unsafe_origin_cast[ImmutAnyOrigin](),
+        a.nodes.value,
+        Pointer(to=textures).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=a).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=b).unsafe_origin_cast[ImmutAnyOrigin](),
+        Pointer(to=c).unsafe_origin_cast[ImmutAnyOrigin](),
+        coverage,
+    )
+    var textured = mode == SHADE_TEXTURE
 
     var box = _bounds(flat, target.width, target.height, first_row, last_row)
     # The edge functions are evaluated once, at the box's top-left pixel,
@@ -2731,6 +2802,7 @@ def rasterize_shaded(
                 or reflects
                 or catches
                 or keeps_normals
+                or noded
             ):
                 # The normal is interpolated like every other varying and
                 # made a unit vector again here. That renormalization is the
@@ -2762,6 +2834,7 @@ def rasterize_shaded(
                 )
                 or reflects
                 or catches
+                or noded
             ):
                 spot = Vector3(
                     a.world.x * share_a
@@ -2774,10 +2847,11 @@ def rasterize_shaded(
                     + b.world.z * share_b
                     + c.world.z * share_c,
                 )
-            # Texture coordinates, for the two modes that read them.
+            # Texture coordinates, for the two modes that read them and for
+            # a node graph.
             var u = Float32(0)
             var v = Float32(0)
-            if mode != SHADE_LIT:
+            if mode != SHADE_LIT or noded:
                 u = a.u * share_a + b.u * share_b + c.u * share_c
                 v = a.v * share_a + b.v * share_b + c.v * share_c
             # The normal before any map perturbs it: what a clear coat lies
@@ -2854,6 +2928,27 @@ def rasterize_shaded(
                     facing = bumped_normal(
                         facing, along_x, along_y, rise_x, rise_y
                     )
+            # The node graph's normal offset, after any map and before the
+            # lights read the normal, as three.js's `normalNode` is.
+            nodes.x = x
+            nodes.y = y
+            if noded and has_output(nodes, NORMAL_NODE):
+                facing = offset_normal(
+                    facing,
+                    run_nodes(
+                        nodes,
+                        NORMAL_NODE,
+                        NodeInputs(
+                            u,
+                            v,
+                            spot,
+                            facing,
+                            Vector3(base.r, base.g, base.b),
+                            Vector3(0, 0, 0),
+                            textured,
+                        ),
+                    ),
+                )
             if (a.kind.is_lit() or a.kind == MATCAP) and mode != SHADE_UV:
                 if a.kind == MATCAP:
                     # Looked up by which way the surface is turned in the
@@ -3207,6 +3302,36 @@ def rasterize_shaded(
                             x,
                             y,
                         ).g
+            # The node graph's color, opacity and emissive, once the maps
+            # have had their say, which the graph replaces: three.js's
+            # `colorNode` is the diffuse color the lights multiply, its
+            # `opacityNode` the alpha the test reads, and its
+            # `emissiveNode` the glow. The kernel does the same, here.
+            if noded:
+                var given = NodeInputs(
+                    u,
+                    v,
+                    spot,
+                    facing,
+                    Vector3(base.r, base.g, base.b),
+                    Vector3(0, 0, 0),
+                    textured,
+                )
+                if has_output(nodes, COLOR_NODE):
+                    var diffuse = run_nodes(nodes, COLOR_NODE, given)
+                    shaded = FloatColor(
+                        diffuse[0] * arriving.r,
+                        diffuse[1] * arriving.g,
+                        diffuse[2] * arriving.b,
+                        shaded.a,
+                    )
+                if has_output(nodes, OPACITY_NODE):
+                    shaded.a = run_nodes(nodes, OPACITY_NODE, given)[0]
+                if has_output(nodes, EMISSIVE_NODE):
+                    var given_off = run_nodes(nodes, EMISSIVE_NODE, given)
+                    glow = FloatColor(
+                        given_off[0], given_off[1], given_off[2], 1.0
+                    )
             # Thrown away for being too transparent, three.js's
             # `alphatest_fragment`: no color, and no depth either, so what
             # is behind this hole is drawn instead. Asked once the maps have
@@ -3483,6 +3608,26 @@ def rasterize_shaded(
                     + c.view_depth * share_c
                 )
                 shaded = fog_mix(shaded, fog.color, fog.factor_at(depth))
+            # The node graph's output last, reading the finished light,
+            # fog and all, as three.js's `outputNode` reads `output`.
+            # Alpha is coverage and stays what the fragment said.
+            if noded and has_output(nodes, OUTPUT_NODE):
+                var finished = run_nodes(
+                    nodes,
+                    OUTPUT_NODE,
+                    NodeInputs(
+                        u,
+                        v,
+                        spot,
+                        facing,
+                        Vector3(base.r, base.g, base.b),
+                        Vector3(shaded.r, shaded.g, shaded.b),
+                        textured,
+                    ),
+                )
+                shaded = FloatColor(
+                    finished[0], finished[1], finished[2], shaded.a
+                )
             # The stencil and the depth the tests asked for, written now
             # that the fragment has survived. One that failed its tests
             # was shaded only to learn that, and is drawn no further.
@@ -3516,6 +3661,62 @@ def rasterize_shaded(
         row = row + down
 
 
+struct _HostNodes[origin: Origin[mut=False]](NodeSource):
+    """The host's `NodeSource`: a program in its store, and one triangle's
+    own footprint for the textures it reads, as `_sample_map` reads the
+    material's map. `x` and `y` move with the fragment."""
+
+    var programs: Pointer[NodeProgramStore, Self.origin]
+    var program: Int
+    var textures: Pointer[TextureStore, Self.origin]
+    var a: Pointer[RasterVertex, Self.origin]
+    var b: Pointer[RasterVertex, Self.origin]
+    var c: Pointer[RasterVertex, Self.origin]
+    var coverage: _Coverage
+    var x: Int
+    var y: Int
+
+    def __init__(
+        out self,
+        programs: Pointer[NodeProgramStore, Self.origin],
+        program: Int,
+        textures: Pointer[TextureStore, Self.origin],
+        a: Pointer[RasterVertex, Self.origin],
+        b: Pointer[RasterVertex, Self.origin],
+        c: Pointer[RasterVertex, Self.origin],
+        coverage: _Coverage,
+    ):
+        """Borrow a program and a triangle, at the pixel (0, 0)."""
+        self.programs = programs
+        self.program = program
+        self.textures = textures
+        self.a = a
+        self.b = b
+        self.c = c
+        self.coverage = coverage
+        self.x = 0
+        self.y = 0
+
+    def word(self, at: Int) -> Float32:
+        """Return one float of the program."""
+        return self.programs[].programs[self.program].code[at]
+
+    def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
+        """Return a texture read at (u, v) for this fragment, as
+        `_sample_map` reads the material's map."""
+        return _sample_map(
+            self.textures[].textures[slot],
+            u,
+            v,
+            self.a[],
+            self.b[],
+            self.c[],
+            self.coverage,
+            self.x,
+            self.y,
+        )
+
+
 # --- lines ------------------------------------------------------------------
 
 
@@ -3545,7 +3746,8 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
             dash or the gap differ between the ends, if either is
             negative or not finite, or if the ends disagree about their
             depth, color or stencil state or it is refused by
-            `RasterState.check`, or if they disagree about the fog.
+            `RasterState.check`, or if they disagree about the fog, or if
+            either end names a node program.
     """
     if not a.blend.is_valid():
         raise Error("A line needs a blend policy that exists")
@@ -3557,6 +3759,10 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
         raise Error("A line's ends must agree about the material")
     if not a.kind.is_unlit():
         raise Error("A line's material must be unlit")
+    if a.nodes != NO_NODES or b.nodes != NO_NODES:
+        raise Error(
+            "A line runs no node graph: it has no surface for one to shade"
+        )
     # The first end is checked before the two are compared: a dash that
     # is not a number agrees with nothing, itself included.
     if not isfinite(a.dash_size) or a.dash_size < 0:
@@ -3764,7 +3970,7 @@ def check_point_state(point: RasterVertex) raises:
             zero, the alpha test is outside zero to one or not finite, or
             a texture id is a negative other than `NO_TEXTURE`, or the
             depth, color and stencil state is refused by
-            `RasterState.check`.
+            `RasterState.check`, or the point names a node program.
     """
     if not point.blend.is_valid():
         raise Error("A point needs a blend policy that exists")
@@ -3772,6 +3978,10 @@ def check_point_state(point: RasterVertex) raises:
         raise Error("A point needs a material kind that exists")
     if not point.kind.is_unlit():
         raise Error("A point's material must be unlit")
+    if point.nodes != NO_NODES:
+        raise Error(
+            "A point runs no node graph: it has no surface for one to shade"
+        )
     if not isfinite(point.point_size) or point.point_size <= 0:
         raise Error("A point needs a size above zero")
     if (
@@ -4151,6 +4361,7 @@ async def _frame_band(
     fog: FogView,
     cubes: Pointer[CubeTextureStore, ImmutAnyOrigin],
     transmission: Pointer[TransmissionTarget, ImmutAnyOrigin],
+    programs: Pointer[NodeProgramStore, ImmutAnyOrigin],
     line_width: Int = 1,
 ):
     """Draw a frame into one horizontal band of the target.
@@ -4199,6 +4410,7 @@ async def _frame_band(
                         fog,
                         cubes[],
                         transmission[],
+                        programs[],
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -4251,6 +4463,7 @@ def rasterize_frame(
     cubes: CubeTextureStore = CubeTextureStore(),
     line_width: Int = 1,
     transmission: TransmissionTarget = TransmissionTarget(),
+    programs: NodeProgramStore = NodeProgramStore(),
 ) raises:
     """Draw a frame -- triangles, segments and points, in one order --
     into `target`, on `workers` threads.
@@ -4301,6 +4514,8 @@ def rasterize_frame(
         transmission: The opaque scene the transmissive triangles show
             through themselves, or an empty target when none transmits;
             see `render.transmission`.
+        programs: Where the node materials' programs live; see
+            `rasterize_shaded`.
 
     Raises:
         Error: If the corner count is not a multiple of three, the segment
@@ -4338,7 +4553,9 @@ def rasterize_frame(
         # rows miss before `rasterize_shaded` can open them, so without
         # this a bad map on a triangle above the image was refused on one
         # worker and drawn around on four.
-        check_triangle_maps(corners[triangle * 3], mode, textures, cubes)
+        check_triangle_maps(
+            corners[triangle * 3], mode, textures, cubes, programs
+        )
     for segment in range(lines):
         check_line_state(segments[segment * 2], segments[segment * 2 + 1])
     for point in range(len(points)):
@@ -4375,6 +4592,7 @@ def rasterize_frame(
                         fog=fog,
                         cubes=cubes,
                         transmission=transmission,
+                        programs=programs,
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -4424,6 +4642,7 @@ def rasterize_frame(
                 fog,
                 Pointer(to=cubes).unsafe_origin_cast[ImmutAnyOrigin](),
                 Pointer(to=transmission).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=programs).unsafe_origin_cast[ImmutAnyOrigin](),
                 line_width,
             )
         )
@@ -4449,6 +4668,7 @@ def rasterize_all(
     fog: FogView = FogView.none(),
     cubes: CubeTextureStore = CubeTextureStore(),
     transmission: TransmissionTarget = TransmissionTarget(),
+    programs: NodeProgramStore = NodeProgramStore(),
 ) raises:
     """Draw every triangle in `corners` into `target`, on `workers` threads.
 
@@ -4467,6 +4687,7 @@ def rasterize_all(
         cubes: Where `SHADE_TEXTURE` looks the triangles' env maps up.
         transmission: The opaque scene the transmissive triangles show
             through themselves, or an empty target when none transmits.
+        programs: Where the node materials' programs live.
 
     Raises:
         Error: Everything `rasterize_frame` raises of the triangles: a
@@ -4489,6 +4710,7 @@ def rasterize_all(
         fog,
         cubes=cubes,
         transmission=transmission,
+        programs=programs,
     )
 
 

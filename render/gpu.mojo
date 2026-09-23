@@ -206,6 +206,20 @@ from render.tonemap import (
     check_tone_mapping,
     tone_map,
 )
+from materials.nodes import (
+    COLOR_NODE,
+    EMISSIVE_NODE,
+    NORMAL_NODE,
+    NO_NODES,
+    OPACITY_NODE,
+    OUTPUT_NODE,
+    NodeInputs,
+    NodeProgramStore,
+    NodeSource,
+    offset_normal,
+    has_output,
+    run_nodes,
+)
 from render.transmission import (
     VIEW_FLOATS,
     TransmissionSource,
@@ -529,7 +543,10 @@ comptime STATE_PER_POINT = POINT_STATE_FOG + 1
 # How a `Draw` crosses to the device: its kind, its first primitive and its
 # count, as three integers.
 comptime INTS_PER_DRAW = 3
-comptime STATE_PER_TRIANGLE = STATE_ANISOTROPY_MAP + 1
+# Where a node material's program starts in the fog buffer, or -1 for
+# none; see `program_starts`.
+comptime STATE_NODES = STATE_ANISOTROPY_MAP + 1
+comptime STATE_PER_TRIANGLE = STATE_NODES + 1
 # How the transmission target rides in the backdrop buffer, after the
 # backdrop's own pixels: a header of floats, then the chain's floats, each
 # four little-endian bytes as a float texture's texels are. The kernel has
@@ -1298,6 +1315,44 @@ def flatten_fog(fog: FogView) -> List[Float32]:
     flat.append(fog.color.r)
     flat.append(fog.color.g)
     flat.append(fog.color.b)
+    return flat^
+
+
+def program_starts(programs: NodeProgramStore) -> List[Int]:
+    """Return where each node program starts in the fog buffer.
+
+    The programs ride after the fog's `FOG_FLOATS`, end to end, rather than
+    in a buffer of their own: the kernel has no argument left, and the fog
+    buffer already holds floats. A program's offsets are its own, so the
+    kernel reads one from wherever it starts.
+
+    Args:
+        programs: The store to lay out.
+
+    Returns:
+        One offset per program, in id order.
+    """
+    var starts = List[Int]()
+    var at = FOG_FLOATS
+    for index in range(programs.count()):
+        starts.append(at)
+        at += len(programs.programs[index].code)
+    return starts^
+
+
+def flatten_programs(programs: NodeProgramStore) -> List[Float32]:
+    """Return every node program's floats end to end, as they follow the
+    fog in the fog buffer.
+
+    Args:
+        programs: The store to flatten.
+
+    Returns:
+        The floats, in id order.
+    """
+    var flat = List[Float32]()
+    for index in range(programs.count()):
+        flat.extend(programs.programs[index].code.copy())
     return flat^
 
 
@@ -2452,7 +2507,9 @@ def point_state(points: List[RasterVertex]) -> List[Int32]:
 
 
 def triangle_state(
-    corners: List[RasterVertex], cube_base: Int = 0
+    corners: List[RasterVertex],
+    cube_base: Int = 0,
+    starts: List[Int] = List[Int](),
 ) -> List[Int32]:
     """Return each triangle's texture, blend policy, material kind and
     emissive map, `STATE_PER_TRIANGLE` entries each.
@@ -2470,6 +2527,9 @@ def triangle_state(
         corners: Raster vertices, three per triangle.
         cube_base: The table row the first cube texture's first face is
             on: how many flat textures were uploaded before the cubes.
+        starts: Where each node program starts in the fog buffer, as
+            `program_starts` lays them out. A triangle naming a program
+            past it, as `GpuRenderer.draw` refuses, gets -1.
 
     Returns:
         Texture id, blend policy, the material kind's value, the emissive
@@ -2481,9 +2541,8 @@ def triangle_state(
         then the specular map id, then the transmission and thickness map
         ids, then the depth packing's value and one or zero for whether
         the fog veils it, then the sheen color, sheen roughness,
-        iridescence, film thickness and anisotropy map ids, per triangle,
-        from its first
-        corner.
+        iridescence, film thickness and anisotropy map ids, then where its
+        node program starts or -1, per triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -2520,6 +2579,11 @@ def triangle_state(
         state.append(Int32(layers.iridescence_map.value))
         state.append(Int32(layers.thickness_map.value))
         state.append(Int32(layers.anisotropy_map.value))
+        var program = corners[triangle * 3].nodes.value
+        state.append(
+            Int32(starts[program]) if program >= 0
+            and program < len(starts) else Int32(-1)
+        )
     return state^
 
 
@@ -2842,6 +2906,97 @@ struct _DeviceSource[origin: Origin[mut=True]](TransmissionSource):
             u,
             v,
             level,
+        )
+
+
+struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
+    """The kernel's `NodeSource`: a program in the fog buffer, and one
+    triangle's own footprint for the textures it reads, as `_sample_slot`
+    reads the material's map for the pixel."""
+
+    var fog: MutPointer[Float32, Self.origin]
+    var start: Int
+    var texels: MutPointer[UInt8, Self.origin]
+    var ramp: MutPointer[Float32, Self.origin]
+    var table: MutPointer[Int32, Self.origin]
+    var corners: MutPointer[Float32, Self.origin]
+    var base: Int
+    var ax: Int
+    var ay: Int
+    var bx: Int
+    var by: Int
+    var cx: Int
+    var cy: Int
+    var span_inv: Float32
+    var swapped: Bool
+    var px: Int
+    var py: Int
+
+    def __init__(
+        out self,
+        fog: MutPointer[Float32, Self.origin],
+        start: Int,
+        texels: MutPointer[UInt8, Self.origin],
+        ramp: MutPointer[Float32, Self.origin],
+        table: MutPointer[Int32, Self.origin],
+        corners: MutPointer[Float32, Self.origin],
+        base: Int,
+        ax: Int,
+        ay: Int,
+        bx: Int,
+        by: Int,
+        cx: Int,
+        cy: Int,
+        span_inv: Float32,
+        swapped: Bool,
+        px: Int,
+        py: Int,
+    ):
+        """Read the program that starts `start` floats into `fog`."""
+        self.fog = fog
+        self.start = start
+        self.texels = texels
+        self.ramp = ramp
+        self.table = table
+        self.corners = corners
+        self.base = base
+        self.ax = ax
+        self.ay = ay
+        self.bx = bx
+        self.by = by
+        self.cx = cx
+        self.cy = cy
+        self.span_inv = span_inv
+        self.swapped = swapped
+        self.px = px
+        self.py = py
+
+    def word(self, at: Int) -> Float32:
+        """Return one float of the program."""
+        return self.fog[unsafe_offset=self.start + at]
+
+    def sample(self, slot: Int, u: Float32, v: Float32) -> FloatColor:
+        """Return a texture read at (u, v) for this pixel, as `_sample_slot`
+        reads the material's map."""
+        return _sample_slot(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            self.table.unsafe_origin_cast[MutAnyOrigin](),
+            slot,
+            self.corners.unsafe_origin_cast[MutAnyOrigin](),
+            self.base,
+            self.ax,
+            self.ay,
+            self.bx,
+            self.by,
+            self.cx,
+            self.cy,
+            self.span_inv,
+            self.swapped,
+            self.px,
+            self.py,
+            u,
+            v,
         )
 
 
@@ -3569,6 +3724,33 @@ def rasterize_kernel(
             var shows_data = (
                 shows_normal or kind == Int32(DEPTH.value) or measures
             )
+            # Whether a node graph replaces parts of the shading, as
+            # `rasterize_shaded` decides it, and the program it runs,
+            # read out of the fog buffer where it starts.
+            var program = Int(
+                maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_NODES]
+            )
+            var noded = program >= 0 and mode != Int32(SHADE_UV.value)
+            var textured = mode == Int32(SHADE_TEXTURE.value)
+            var nodes = _DeviceNodes(
+                fog,
+                program,
+                texels,
+                ramp,
+                table,
+                corners,
+                base,
+                sax,
+                say,
+                sbx,
+                sby,
+                scx,
+                scy,
+                span_inv,
+                swapped,
+                px,
+                py,
+            )
             # The interpolated normal, made a unit vector again here. That
             # renormalization is the difference between per-fragment and
             # per-vertex shading: the average of two unit vectors is shorter than
@@ -3605,7 +3787,7 @@ def rasterize_kernel(
             var wy = Float32(0)
             var wz = Float32(0)
             if mode != Int32(SHADE_UV.value) and (
-                lit or looked_up or reflects or catches or measures
+                lit or looked_up or reflects or catches or measures or noded
             ):
                 wx = (
                     corners[unsafe_offset=base + LANE_WX] * share_a
@@ -3622,10 +3804,11 @@ def rasterize_kernel(
                     + corners[unsafe_offset=b_base + LANE_WZ] * share_b
                     + corners[unsafe_offset=c_base + LANE_WZ] * share_c
                 )
-            # Texture coordinates, for the two modes that read them.
+            # Texture coordinates, for the two modes that read them and for
+            # a node graph.
             var u = Float32(0)
             var v = Float32(0)
-            if mode != Int32(SHADE_LIT.value):
+            if mode != Int32(SHADE_LIT.value) or noded:
                 u = (
                     corners[unsafe_offset=base + LANE_U] * share_a
                     + corners[unsafe_offset=b_base + LANE_U] * share_b
@@ -3834,6 +4017,43 @@ def rasterize_kernel(
                 nx = facing.x
                 ny = facing.y
                 nz = facing.z
+            # The corner color, interpolated here as well as below, for
+            # the node graph's vertex color node.
+            var tint = Vector3(0, 0, 0)
+            if noded:
+                tint = Vector3(
+                    corners[unsafe_offset=base + LANE_R] * share_a
+                    + corners[unsafe_offset=b_base + LANE_R] * share_b
+                    + corners[unsafe_offset=c_base + LANE_R] * share_c,
+                    corners[unsafe_offset=base + LANE_G] * share_a
+                    + corners[unsafe_offset=b_base + LANE_G] * share_b
+                    + corners[unsafe_offset=c_base + LANE_G] * share_c,
+                    corners[unsafe_offset=base + LANE_B] * share_a
+                    + corners[unsafe_offset=b_base + LANE_B] * share_b
+                    + corners[unsafe_offset=c_base + LANE_B] * share_c,
+                )
+            # The node graph's normal offset, after any map and before the
+            # lights, by the host's own function; see `rasterize_shaded`.
+            if noded and has_output(nodes, NORMAL_NODE):
+                var bent = offset_normal(
+                    Vector3(nx, ny, nz),
+                    run_nodes(
+                        nodes,
+                        NORMAL_NODE,
+                        NodeInputs(
+                            u,
+                            v,
+                            Vector3(wx, wy, wz),
+                            Vector3(nx, ny, nz),
+                            tint,
+                            Vector3(0, 0, 0),
+                            textured,
+                        ),
+                    ),
+                )
+                nx = bent.x
+                ny = bent.y
+                nz = bent.z
             if mode != Int32(SHADE_UV.value) and (lit or looked_up):
                 if looked_up:
                     # Which way the surface is turned in the camera's frame,
@@ -4533,6 +4753,31 @@ def rasterize_kernel(
                             u,
                             v,
                         ).g
+                # The node graph's color, opacity and emissive, once the
+                # maps have had their say, exactly as `rasterize_shaded`
+                # replaces them.
+                if noded:
+                    var given = NodeInputs(
+                        u,
+                        v,
+                        Vector3(wx, wy, wz),
+                        Vector3(nx, ny, nz),
+                        tint,
+                        Vector3(0, 0, 0),
+                        textured,
+                    )
+                    if has_output(nodes, COLOR_NODE):
+                        var diffuse = run_nodes(nodes, COLOR_NODE, given)
+                        red = diffuse[0] * arriving.x
+                        green = diffuse[1] * arriving.y
+                        blue = diffuse[2] * arriving.z
+                    if has_output(nodes, OPACITY_NODE):
+                        alpha = run_nodes(nodes, OPACITY_NODE, given)[0]
+                    if has_output(nodes, EMISSIVE_NODE):
+                        var given_off = run_nodes(nodes, EMISSIVE_NODE, given)
+                        glow_r = given_off[0]
+                        glow_g = given_off[1]
+                        glow_b = given_off[2]
                 # Thrown away for being too transparent, three.js's
                 # `alphatest_fragment`. Leaving `nearest` alone is the late
                 # depth write the host makes with `claim_depth`: the hole
@@ -5020,6 +5265,25 @@ def rasterize_kernel(
                     red = veiled.r
                     green = veiled.g
                     blue = veiled.b
+                # The node graph's output last, reading the finished light,
+                # exactly as `rasterize_shaded` runs it.
+                if noded and has_output(nodes, OUTPUT_NODE):
+                    var finished = run_nodes(
+                        nodes,
+                        OUTPUT_NODE,
+                        NodeInputs(
+                            u,
+                            v,
+                            Vector3(wx, wy, wz),
+                            Vector3(nx, ny, nz),
+                            tint,
+                            Vector3(red, green, blue),
+                            textured,
+                        ),
+                    )
+                    red = finished[0]
+                    green = finished[1]
+                    blue = finished[2]
 
             # The stencil and the depth the tests asked for, settled now that
             # the fragment has survived its alpha test. One that failed its
@@ -5198,6 +5462,10 @@ struct GpuRenderer(Movable):
     # The scene's fog as the rasterizers take it, `FOG_FLOATS` floats,
     # rewritten every draw. Its kind crosses as a kernel argument.
     var fog: DeviceBuffer[DType.float32]
+    # How many floats the fog buffer has room for: the fog's own, then the
+    # node programs a draw passes, which ride after it; see
+    # `program_starts`. Grown to fit.
+    var fog_room: Int
     # One texture id per triangle, beside the vertex buffer rather than in it.
     var maps: DeviceBuffer[DType.int32]
     # The segments, and how many the two line buffers have room for. Their
@@ -5334,6 +5602,7 @@ struct GpuRenderer(Movable):
             self.light_room
         )
         self.fog = self.context.enqueue_create_buffer[DType.float32](FOG_FLOATS)
+        self.fog_room = FOG_FLOATS
         # One triangle to start with; `draw` grows it as needed. Never zero,
         # because a zero-length device buffer is not worth the special case.
         self.capacity = 1
@@ -5456,16 +5725,27 @@ struct GpuRenderer(Movable):
                 count=len(flat),
             )
 
-    def _upload_fog(mut self, fog: FogView) raises:
-        """Put `fog` on the device.
+    def _upload_fog(mut self, fog: FogView, programs: NodeProgramStore) raises:
+        """Put `fog` on the device, and the node programs after it.
 
         Args:
             fog: The scene's fog, as the rasterizers take it.
+            programs: The node programs, laid out as `program_starts`
+                says.
 
         Raises:
-            Error: If the device buffer cannot be written.
+            Error: If the device buffer cannot be made or written.
         """
         var flat = flatten_fog(fog)
+        flat.extend(flatten_programs(programs))
+        if len(flat) > self.fog_room:
+            # A draw still in flight may be reading the old buffer; see
+            # `set_textures`, which waits for the same reason.
+            self.context.synchronize()
+            self.fog = self.context.enqueue_create_buffer[DType.float32](
+                len(flat)
+            )
+            self.fog_room = len(flat)
         with self.fog.map_to_host() as host:
             unsafe_memcpy(
                 dest=host.unsafe_ptr(),
@@ -5490,6 +5770,7 @@ struct GpuRenderer(Movable):
         line_width: Int = 1,
         depth_mode: DepthMode = STANDARD_DEPTH,
         transmission: TransmissionTarget = TransmissionTarget(),
+        programs: NodeProgramStore = NodeProgramStore(),
     ) raises:
         """Rasterize prepared triangles, lines and points into the device
         target.
@@ -5549,6 +5830,9 @@ struct GpuRenderer(Movable):
                 show through themselves, as `Renderer.transmission_target`
                 draws it on the host, or an empty target when none
                 transmits. Uploaded with the draw, after the backdrop.
+            programs: The node materials' programs, as
+                `Renderer.prepare_frame` gives them with the frame's time
+                and view. Uploaded with the draw, after the fog.
 
         Raises:
             Error: If the corner count is not a multiple of three, the
@@ -5569,8 +5853,10 @@ struct GpuRenderer(Movable):
                 alpha map it would open is not linear or does not ignore
                 its alpha, a vertex names a cube texture that is not
                 uploaded, a spot light's map names a texture that is not
-                uploaded, the backdrop is not the target's size, or the
-                depth mode is none of the three.
+                uploaded, the backdrop is not the target's size, the
+                depth mode is none of the three, or a triangle names a
+                node program that is not in `programs` or one that reads
+                a texture that is not uploaded under `SHADE_TEXTURE`.
         """
         if not depth_mode.is_valid():
             raise Error("A depth mode that is none of the three")
@@ -5651,6 +5937,24 @@ struct GpuRenderer(Movable):
                 continue
             for triangle in range(run.first, run.first + run.count):
                 check_transmission(corners[triangle * 3], mode, ready)
+        # Every node program a triangle names, and every texture it reads,
+        # asked here for the reason a texture id is: the kernel reads the
+        # buffers at whatever offset the state hands it. The uv view runs
+        # no program, as `check_triangle_maps` asks nothing of one there.
+        if mode != SHADE_UV:
+            for triangle in range(triangles):
+                var named = corners[triangle * 3].nodes
+                if named == NO_NODES:
+                    continue
+                ref program = programs.get(named)
+                if mode != SHADE_TEXTURE:
+                    continue
+                for slot in range(len(program.textures)):
+                    if program.textures[slot].value >= self.uploaded:
+                        raise Error(
+                            "A node program reads a texture that has not"
+                            " been uploaded; call set_textures() first"
+                        )
 
         # Every texture reference is checked here because it cannot be checked
         # on the device: the kernel reads the descriptor table at whatever
@@ -5898,7 +6202,9 @@ struct GpuRenderer(Movable):
                     src=flat.unsafe_ptr(),
                     count=len(flat),
                 )
-            var state = triangle_state(corners, self.uploaded)
+            var state = triangle_state(
+                corners, self.uploaded, program_starts(programs)
+            )
             with self.maps.map_to_host() as host:
                 unsafe_memcpy(
                     dest=host.unsafe_ptr(),
@@ -5980,7 +6286,7 @@ struct GpuRenderer(Movable):
             )
 
         self._upload_lights(lighting)
-        self._upload_fog(fog)
+        self._upload_fog(fog, programs)
         # The transmission target, flattened, and room for it made after
         # the backdrop before the backdrop is written: a new buffer holds
         # nothing, so it is cleared below as a painted one would be.
@@ -6309,6 +6615,7 @@ def render_triangles(
     cubes: CubeTextureStore = CubeTextureStore(),
     backdrop: Optional[Framebuffer] = None,
     transmission: TransmissionTarget = TransmissionTarget(),
+    programs: NodeProgramStore = NodeProgramStore(),
 ) raises -> Framebuffer:
     """Draw prepared triangles, lines and points on the GPU and read the
     image back.
@@ -6341,6 +6648,7 @@ def render_triangles(
             `GpuRenderer.draw`.
         transmission: The opaque scene the transmissive triangles show
             through themselves; see `GpuRenderer.draw`.
+        programs: The node materials' programs; see `GpuRenderer.draw`.
 
     Returns:
         The rendered image.
@@ -6366,6 +6674,7 @@ def render_triangles(
         points,
         backdrop,
         transmission=transmission,
+        programs=programs,
     )
     return renderer.read_back()
 

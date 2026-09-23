@@ -4,7 +4,7 @@
 
 ![A white highlight follows the camera around a red sphere](out/phong.png)
 
-three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshStandardMaterial`, `MeshPhysicalMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `MeshDistanceMaterial`, `LineBasicMaterial`, `LineDashedMaterial`, `PointsMaterial`, `SpriteMaterial`.
+three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshStandardMaterial`, `MeshPhysicalMaterial`, `MeshToonMaterial`, `MeshMatcapMaterial`, `MeshBasicMaterial`, `MeshNormalMaterial`, `MeshDepthMaterial`, `MeshDistanceMaterial`, `LineBasicMaterial`, `LineDashedMaterial`, `PointsMaterial`, `SpriteMaterial`. The node materials and `ShaderMaterial` are on their own page: see [Node materials](Node-materials).
 
 Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`, `size`, `sizeAttenuation`, `rotation`, `envMap`, `reflectivity`, `combine`, `fog`.
 
@@ -80,6 +80,7 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `attenuation_color` | `Color` | white | The color white light becomes inside the volume. |
 | `attenuation_distance` | `Length` | `NO_ATTENUATION` | How far the light travels to become it. Infinite by default. |
 | `dispersion` | `Float32` | `0.0` | How far the three channels bend apart. |
+| `nodes` | `NodeProgramId` | `NO_NODES` | A compiled node graph that replaces parts of the shading. See [Node materials](#node-materials). |
 
 ## Side
 
@@ -722,6 +723,19 @@ A surface transmits under `SHADE_TEXTURE` alone, because the scene behind it is 
 - A read past the chain's last level reads the last level. WebGL leaves `textureSize` of a missing level undefined.
 - A ray of no length is not dimmed. three.js divides zero by zero there for a black attenuation color.
 - The GPU does not draw the pass itself. The host draws it and uploads the target with the frame.
+
+## Node materials
+
+A node material replaces parts of the shading with a compiled node graph: three.js's `colorNode`, `opacityNode`, `emissiveNode`, `normalNode`, `positionNode` and `outputNode`. Give the program's id as `nodes`. The kind keeps its own lighting for every part that the graph does not set.
+
+```mojo
+var graph = NodeGraph()
+graph.set_output(COLOR_NODE, graph.uniform("tint", Color(255, 120, 40)))
+var program = assets.programs.add(graph.compile())
+var paint = assets.materials.add(Material(Color(255, 255, 255), kind=PHONG, nodes=program))
+```
+
+`shader_material(program)` is three.js's `ShaderMaterial`: an unlit surface whose color the graph computes. A `NORMALS`, `DEPTH`, `DISTANCE` or `SHADOW` material and a wireframe refuse a node program. See [Node materials](Node-materials) for the nodes, the outputs, and what three.js offers that is not ported.
 
 ## Shadow material
 

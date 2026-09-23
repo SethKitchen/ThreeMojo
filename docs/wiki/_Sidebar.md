@@ -27,6 +27,7 @@
 - [Animation](Animation)
 - [Skinning](Skinning)
 - [Materials](Materials)
+- [Node materials](Node-materials)
 - [Lights](Lights)
 - [Fog](Fog)
 - [Textures](Textures)

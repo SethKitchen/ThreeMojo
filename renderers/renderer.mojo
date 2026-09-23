@@ -170,7 +170,23 @@ from render.cube_texture_store import (
     SCENE_ENVIRONMENT,
     CubeTextureId,
 )
-from units.si import Angle, DEGREE, Length, METER, NANOMETER, RADIAN
+from units.si import (
+    Angle,
+    DEGREE,
+    Duration,
+    Length,
+    METER,
+    NANOMETER,
+    RADIAN,
+    SECOND,
+)
+from materials.nodes import (
+    NO_NODES,
+    POSITION_NODE,
+    NodeProgramId,
+    NodeProgramStore,
+    moved_position,
+)
 from render.pointrule import attenuated_size
 from render.texture import (
     IGNORED,
@@ -272,14 +288,22 @@ def _displaces(assets: Assets, material: MaterialId) raises -> Bool:
         material: The draw's material.
 
     Returns:
-        Whether the material names a displacement map.
+        Whether the material names a displacement map, or a node program
+        with a position node, which moves the vertices too.
 
     Raises:
         Error: Never for an id in range; the store raises for nothing else.
     """
     if material.value < 0 or material.value >= assets.materials.count():
         return False
-    return assets.materials.get(material).has_displacement_map()
+    ref named = assets.materials.get(material)
+    # A program id that names nothing answers False too, for the same
+    # reason: the draw raises when it is drawn.
+    return named.has_displacement_map() or (
+        named.nodes.value >= 0
+        and named.nodes.value < assets.programs.count()
+        and assets.programs.get(named.nodes).has(POSITION_NODE)
+    )
 
 
 def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
@@ -1495,6 +1519,7 @@ def _to_raster(
         shown.near_distance,
         shown.far_distance,
         physics.layers,
+        physics.nodes,
     )
 
 
@@ -1572,6 +1597,8 @@ struct _Physics(ImplicitlyCopyable):
     var dispersion: Float32
     var ior: Float32
     var layers: LayerFactors
+    # The node material's program, or `NO_NODES`.
+    var nodes: NodeProgramId
 
     def __init__(out self):
         """Describe a surface that is not physical and carries no map: the
@@ -1602,6 +1629,7 @@ struct _Physics(ImplicitlyCopyable):
         self.dispersion = 0
         self.ior = DEFAULT_IOR
         self.layers = LayerFactors()
+        self.nodes = NO_NODES
 
 
 def _plane_in_view(plane: Plane, view: Matrix4) raises -> Plane:
@@ -2061,6 +2089,61 @@ def _layer_factors(
     return factors
 
 
+def _checked_nodes(
+    assets: Assets, nodes: NodeProgramId
+) raises -> NodeProgramId:
+    """Return a node material's program once it is known to be in the
+    store, with every texture it reads, or `NO_NODES` as it was.
+
+    Asked whatever the shading mode, as a map is: a program that names
+    nothing is a wrong asset, not a wrong frame.
+
+    Args:
+        assets: Where the programs and the textures live.
+        nodes: The id the material names, or `NO_NODES`.
+
+    Returns:
+        `nodes`, unchanged.
+
+    Raises:
+        Error: If the id names nothing in the store, or the program reads
+            a texture that is not in the store.
+    """
+    if nodes == NO_NODES:
+        return nodes
+    if nodes.value >= assets.programs.count():
+        raise Error("A material names a node program that is not there")
+    ref program = assets.programs.get(nodes)
+    for index in range(len(program.textures)):
+        if program.textures[index].value >= assets.textures.count():
+            raise Error("A node program reads a texture that is not there")
+    return nodes
+
+
+def _moves(assets: Assets, material: Material) raises -> Bool:
+    """Return True if a material's node program moves its vertices: it has
+    a position node. `_checked_nodes` has found the program.
+
+    Raises:
+        Error: Never for a program `_checked_nodes` has passed.
+    """
+    if material.nodes == NO_NODES:
+        return False
+    return assets.programs.get(material.nodes).has(POSITION_NODE)
+
+
+def _refuse_nodes(material: Material, what: String) raises:
+    """Refuse a node material on a primitive that runs no graph.
+
+    Raises:
+        Error: If the material names a node program.
+    """
+    if material.nodes != NO_NODES:
+        raise Error(
+            what + " runs no node graph: it has no surface for one to shade"
+        )
+
+
 def _checked_light_map(assets: Assets, map: TextureId) raises -> TextureId:
     """Return a light map once it is known to be in the store and to
     ignore its alpha, or `NO_TEXTURE` as it was.
@@ -2222,6 +2305,7 @@ def _emit_sprite(
             "A sprite material must be BASIC: a sprite is a picture facing"
             " the camera, and no light reaches it"
         )
+    _refuse_nodes(material, "A sprite")
     if material.wireframe:
         raise Error(
             "A sprite cannot be a wireframe: it is a picture, and its"
@@ -2627,6 +2711,7 @@ def _emit_wide_line(
             material's depth, color, stencil or offset state is refused.
     """
     var material = assets.materials.get(draw.material)
+    _refuse_nodes(material, "A wide line")
     if material.kind != BASIC:
         raise Error(
             "A wide line material must be BASIC: a line has no surface, so"
@@ -3065,6 +3150,9 @@ struct Frame(Movable):
     # The order to draw in, as runs of one list or another; see
     # `render.rasterizer.Draw`.
     var draws: List[Draw]
+    # The node materials' programs, with this frame's time and view
+    # written in; see `materials.nodes`.
+    var programs: NodeProgramStore
 
     def __init__(
         out self,
@@ -3072,6 +3160,7 @@ struct Frame(Movable):
         var segments: List[RasterVertex],
         var draws: List[Draw],
         var points: List[RasterVertex] = List[RasterVertex](),
+        var programs: NodeProgramStore = NodeProgramStore(),
     ):
         """Hold a prepared frame.
 
@@ -3080,11 +3169,14 @@ struct Frame(Movable):
             segments: The segments' corners, two each.
             draws: The order to draw them in.
             points: The points, one corner each. None by default.
+            programs: The node programs the corners name, for this frame.
+                None by default.
         """
         self.corners = corners^
         self.segments = segments^
         self.draws = draws^
         self.points = points^
+        self.programs = programs^
 
 
 struct Renderer(Movable):
@@ -3169,6 +3261,10 @@ struct Renderer(Movable):
     # `logarithmicDepthBuffer` and `reversedDepthBuffer`, as one value.
     # `STANDARD_DEPTH` by default, as there. See `set_depth_mode`.
     var depth_mode: DepthMode
+    # How long the animation has run, what a node graph's `time` node reads
+    # and a position node's offset can follow: three.js's `NodeFrame.time`.
+    # Zero by default. The caller moves it on between frames.
+    var time: Duration
 
     def __init__(out self, width: Int, height: Int, workers: Int = 1) raises:
         """Create a renderer with a dark background.
@@ -3202,6 +3298,7 @@ struct Renderer(Movable):
         self.local_clipping_enabled = False
         self.shadow_map_type = PCF_SHADOW_MAP
         self.depth_mode = STANDARD_DEPTH
+        self.time = Duration(0.0, SECOND)
 
     def set_antialias(mut self, enabled: Bool):
         """Turn supersampling on or off, three.js's `antialias`.
@@ -3262,6 +3359,7 @@ struct Renderer(Movable):
         big.local_clipping_enabled = self.local_clipping_enabled
         big.shadow_map_type = self.shadow_map_type
         big.depth_mode = self.depth_mode
+        big.time = self.time
         # What makes the larger renderer draw a frame that *averages down*
         # to this one rather than merely one that is bigger: a point's
         # size and a line's thickness are given in the output pixels this
@@ -3894,6 +3992,7 @@ struct Renderer(Movable):
                 material.dispersion,
                 material.ior,
                 _layer_factors(assets, material, self.shading),
+                _checked_nodes(assets, material.nodes),
             )
             if self.shading != SHADE_TEXTURE:
                 physics.roughness_map = NO_TEXTURE
@@ -3978,10 +4077,25 @@ struct Renderer(Movable):
                 carry_here = False
             else:
                 worn = morphed_positions(geometry, draws[slot].morph_influences)
+            # A node material's position node moves them after that, in the
+            # model's own space: three.js's `positionNode` follows the
+            # skinning and the displacement map. Each vertex reads the
+            # geometry's own normal, or zero where it has none.
+            var moves = _moves(assets, material)
+            var has_normals = geometry.has_attribute(String(NORMAL))
             for vertex in range(vertex_count):
                 var local = worn[vertex]
                 if carry_here:
                     local = carriers[vertex].transform_point(local)
+                if moves:
+                    var normal = Vector3(0, 0, 0)
+                    if has_normals:
+                        normal = geometry.attribute_view(
+                            String(NORMAL)
+                        ).vector3(vertex)
+                    local = moved_position(
+                        assets.programs.get(material.nodes), local, normal
+                    )
                 var point = world.transform_point(local)
                 world_points.append(point)
                 view_points.append(view.transform_point(point))
@@ -4400,6 +4514,7 @@ struct Renderer(Movable):
             var begin = len(corners)
             ref geometry = assets.geometries.get(line.geometry)
             var material = assets.materials.get(line.material)
+            _refuse_nodes(material, "A line")
             # A line is never a caster, so its state is always its own.
             var state = _draw_state(material, False)
             var shown = _shown_of(material)
@@ -4765,6 +4880,7 @@ struct Renderer(Movable):
             var begin = len(corners)
             ref geometry = assets.geometries.get(points.geometry)
             var material = assets.materials.get(points.material)
+            _refuse_nodes(material, "A point")
             # A point is never a caster, so its state is always its own.
             var state = _draw_state(material, False)
             var shown = _shown_of(material)
@@ -4960,7 +5076,8 @@ struct Renderer(Movable):
 
         Raises:
             Error: Everything `prepare`, `prepare_lines` and
-                `prepare_points` raise.
+                `prepare_points` raise, and anything `camera` raises for
+                its view.
         """
         var corner_spans = List[_Span]()
         var corners = self._prepared(scene, assets, camera, False, corner_spans)
@@ -5030,7 +5147,11 @@ struct Renderer(Movable):
         for position in range(len(order)):
             ref run = mixed[order[position]]
             draws.append(Draw(run.kind, run.first, run.count))
-        return Frame(corners^, segments^, draws^, points^)
+        # The node programs, with this frame's time and view written in, as
+        # three.js updates its `time` and camera nodes before a frame.
+        var programs = assets.programs.copy()
+        programs.set_frame(self.time, camera.view_matrix_in(scene))
+        return Frame(corners^, segments^, draws^, points^, programs^)
 
     def render[
         C: Camera
@@ -5318,6 +5439,7 @@ struct Renderer(Movable):
             assets.cube_textures,
             self.render_scale,
             seen,
+            frame.programs,
         )
 
     def _lighting[
@@ -5474,6 +5596,7 @@ struct Renderer(Movable):
             frame.points,
             assets.cube_textures,
             self.render_scale,
+            programs=frame.programs,
         )
         var view = self.to_target(scene, camera)
         var seen = TransmissionTarget(drawn, view)
@@ -5503,6 +5626,7 @@ struct Renderer(Movable):
             assets.cube_textures,
             self.render_scale,
             seen,
+            frame.programs,
         )
         return TransmissionTarget(drawn, view)
 

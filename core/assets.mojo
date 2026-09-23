@@ -25,6 +25,7 @@ directly and ownership never has to be stated. Here it does.
 
 from core.geometry_store import GeometryStore
 from materials.material import MaterialStore
+from materials.nodes import NodeProgramStore
 from render.cube_texture_store import CubeTextureStore
 from render.texture_store import TextureStore
 from render.volume_texture_store import (
@@ -34,8 +35,8 @@ from render.volume_texture_store import (
 
 
 struct Assets(Movable):
-    """The geometry, materials, textures, cube textures, 3D textures and
-    array textures a scene draws with."""
+    """The geometry, materials, textures, cube textures, 3D textures, array
+    textures and node programs a scene draws with."""
 
     var geometries: GeometryStore
     var materials: MaterialStore
@@ -49,6 +50,9 @@ struct Assets(Movable):
     # stacks of images sampled by a layer; see `render.volume_texture`.
     var data_3d_textures: Data3DTextureStore
     var data_array_textures: DataArrayTextureStore
+    # The compiled node graphs a node material names by id; see
+    # `materials.nodes`.
+    var programs: NodeProgramStore
 
     def __init__(out self):
         """Create empty stores."""
@@ -58,3 +62,4 @@ struct Assets(Movable):
         self.cube_textures = CubeTextureStore()
         self.data_3d_textures = Data3DTextureStore()
         self.data_array_textures = DataArrayTextureStore()
+        self.programs = NodeProgramStore()
