@@ -78,7 +78,9 @@ The defaults are three.js's. The dot screen's angle is an `Angle`. A bare number
 
 ## What each pass works on
 
-A blur, a bloom, a copy and an afterimage work on the premultiplied light, where a sum is a sum. A color transform works on the straight color of each pixel and premultiplies it back, as a shader sees a straight texel. The sepia, the gray, the dot screen, the vignette, the grain and the curve are color transforms. Every pass keeps alpha but the copy, which scales it as three.js's `CopyShader` scales the whole texel. The exceptions in [More passes](#more-passes) follow their shaders: the bokeh and the halftone are opaque, the glitch adds to alpha, and the texture is drawn over the frame, alpha included.
+A blur, a bloom, a copy and an afterimage work on the premultiplied light, where a sum is a sum. A color transform works on the straight color of each pixel and premultiplies it back, as a shader sees a straight texel. The sepia, the gray, the dot screen, the vignette, the grain and the curve are color transforms. Every pass keeps alpha but the copy, which scales it as three.js's `CopyShader` scales the whole texel.
+
+The exceptions in [More passes](#more-passes) follow their shaders. The bokeh and the halftone are opaque. The glitch adds to alpha, and the texture is drawn over the alpha too.
 
 A tap past the edge of the frame reads the edge pixel, as a clamped texture does. A pixel that holds data rather than light, a normal or a depth, is not tone mapped by the output pass. The other passes treat it as light.
 

@@ -77,7 +77,9 @@ three.js: `SpotLight(color, intensity, distance, angle, penumbra, decay)` and `S
 
 ## Rect area
 
-`lights/ltc.mojo`. A rectangle that glows: three.js's `RectAreaLight`. The node is the rectangle's center. The rectangle shines along the node's -z, as a camera looks. Its width runs along the node's x and its height along its y. The node's scale does not change the size: `width` and `height` set it. three.js also takes only the rotation of the node.
+`lights/ltc.mojo`. A rectangle that glows: three.js's `RectAreaLight`. The node is the rectangle's center. The rectangle shines along the node's -z, as a camera looks. Its width runs along the node's x and its height along its y.
+
+Only `width` and `height` set the size. The node's scale does not change it, as three.js takes only the node's rotation.
 
 ```mojo
 var panel = Object3D()
