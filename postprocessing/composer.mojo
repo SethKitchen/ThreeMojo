@@ -14,7 +14,9 @@ an opacity, the tone mapping curve, or an anti-aliasing: FXAA, SMAA, or
 jittered samples averaged at once (SSAA) or over frames (TAA); see
 `postprocessing.antialiasing`. Four more read the depth beside the light:
 ambient occlusion (SSAO and SAO), reflections (SSR) and an outline around
-chosen objects; see `postprocessing.screen_space`. The composer runs its passes in
+chosen objects; see `postprocessing.screen_space`. Seven more blur by depth,
+glitch, halftone, mask, clear and lay a texture over the frame; see
+`postprocessing.effects`. The composer runs its passes in
 order on one target and resolves it once at the end. three.js ping-pongs
 between two targets because a shader cannot read the texture it writes;
 a pass here reads the whole target before it writes, so one target serves.
@@ -51,6 +53,25 @@ from postprocessing.antialiasing import (
     jitter_offsets,
     smaa_light,
 )
+from postprocessing.effects import (
+    BokehSettings,
+    FrameCopy,
+    GlitchSettings,
+    HalftoneSettings,
+    MaskSettings,
+    bokeh_light,
+    check_bokeh,
+    check_glitch,
+    check_halftone,
+    clear_light,
+    glitch_heightmap,
+    glitch_light,
+    glitch_uniforms,
+    halftone_light,
+    keep_outside_mask,
+    mask_stencil,
+    texture_light,
+)
 from postprocessing.sampling import clamped_tap, mix, sample, u_of, v_of
 from postprocessing.screen_space import (
     DepthView,
@@ -68,8 +89,9 @@ from postprocessing.screen_space import (
     ssr_light,
 )
 from render.antialias import SUPERSAMPLE
-from render.framebuffer import FloatColor, Framebuffer
+from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
+from render.texture_store import NO_TEXTURE, TextureId
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
 from renderers.renderer import Renderer
 from std.math import cos, exp, floor, isfinite, sin
@@ -82,14 +104,14 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
 
     three.js has a class per pass and this has a tag, for the reason
     `Material` has one: a composer holds one list of one type. The type
-    stops a bare integer at compile time; it does not stop `PassKind(19)`,
+    stops a bare integer at compile time; it does not stop `PassKind(26)`,
     which `check_pass` refuses.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the nineteen kinds there are."""
+        """Return True if this is one of the twenty-six kinds there are."""
         return (
             self == RENDER
             or self == COPY
@@ -110,6 +132,13 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
             or self == SAO
             or self == SSR
             or self == OUTLINE
+            or self == BOKEH
+            or self == GLITCH
+            or self == HALFTONE
+            or self == MASK
+            or self == CLEAR_MASK
+            or self == CLEAR
+            or self == TEXTURE
         )
 
 
@@ -152,6 +181,20 @@ comptime SAO = PassKind(16)
 comptime SSR = PassKind(17)
 # A glowing edge around chosen objects: `OutlinePass`.
 comptime OUTLINE = PassKind(18)
+# Blur by distance from the focus: `BokehPass`.
+comptime BOKEH = PassKind(19)
+# Shift, tear and snow at random moments: `GlitchPass`.
+comptime GLITCH = PassKind(20)
+# Each channel as a grid of dots: `HalftonePass`.
+comptime HALFTONE = PassKind(21)
+# Let the passes after it change only what some objects cover: `MaskPass`.
+comptime MASK = PassKind(22)
+# Let every pass change every pixel again: `ClearMaskPass`.
+comptime CLEAR_MASK = PassKind(23)
+# Clear the frame to a color: `ClearPass`.
+comptime CLEAR = PassKind(24)
+# Add a texture over the frame: `TexturePass`.
+comptime TEXTURE = PassKind(25)
 
 # three.js's `LuminosityHighPassShader` fades a pixel in over this much
 # luminance above the threshold.
@@ -185,7 +228,9 @@ struct Pass(Copyable, Movable):
     `bloom_pass`, `film_pass`, `dot_screen_pass`, `sepia_pass`,
     `vignette_pass`, `luminosity_pass`, `afterimage_pass`, `output_pass`,
     `fxaa_pass`, `smaa_pass`, `ssaa_render_pass`, `taa_render_pass`,
-    `ssao_pass`, `sao_pass`, `ssr_pass` or `outline_pass`, and change a
+    `ssao_pass`, `sao_pass`, `ssr_pass`, `outline_pass`, `bokeh_pass`,
+    `glitch_pass`, `halftone_pass`, `mask_pass`, `clear_mask_pass`,
+    `clear_pass` or `texture_pass`, and change a
     setting afterward as three.js changes a
     pass's uniforms; `EffectComposer.render` checks each again.
     """
@@ -230,6 +275,18 @@ struct Pass(Copyable, Movable):
     var sao: SaoSettings
     var ssr: SsrSettings
     var outline: OutlineSettings
+    # What a bokeh, a glitch, a halftone or a mask pass reads; see
+    # `postprocessing.effects`.
+    var bokeh: BokehSettings
+    var glitch: GlitchSettings
+    var halftone: HalftoneSettings
+    var mask: MaskSettings
+    # The clear pass's color and alpha, in sRGB: three.js's `clearColor`
+    # and `clearAlpha`.
+    var clear_color: Color
+    # The texture pass's image, in the assets `render` is given; its
+    # opacity is `strength`.
+    var texture: TextureId
 
     def __init__(out self, kind: PassKind):
         """Start a pass of `kind` with every setting at its default.
@@ -256,6 +313,12 @@ struct Pass(Copyable, Movable):
         self.sao = SaoSettings()
         self.ssr = SsrSettings()
         self.outline = OutlineSettings()
+        self.bokeh = BokehSettings()
+        self.glitch = GlitchSettings()
+        self.halftone = HalftoneSettings()
+        self.mask = MaskSettings()
+        self.clear_color = Color(0, 0, 0, 0)
+        self.texture = NO_TEXTURE
 
 
 def check_pass(step: Pass) raises:
@@ -265,16 +328,18 @@ def check_pass(step: Pass) raises:
         step: The pass.
 
     Raises:
-        Error: If the kind is none of the nineteen; a strength, radius,
+        Error: If the kind is none of the twenty-six; a strength, radius,
             threshold, offset, scale, angle or time is not finite; a
             strength, radius, threshold, offset or scale is negative; a
             bloom's radius or an afterimage's damp is above one; the sample
             level is outside zero through five; or the accumulate index is
-            outside minus one through 32. Everything `check_ssao`,
-            `check_sao`, `check_ssr` and `check_outline` raise.
+            outside minus one through 32; or a texture pass names no
+            texture. Everything `check_ssao`, `check_sao`, `check_ssr`,
+            `check_outline`, `check_bokeh`, `check_glitch` and
+            `check_halftone` raise.
     """
     if not step.kind.is_valid():
-        raise Error("A pass kind must be one of the nineteen named kinds")
+        raise Error("A pass kind must be one of the twenty-six named kinds")
     if not (
         isfinite(step.strength)
         and isfinite(step.radius)
@@ -307,6 +372,11 @@ def check_pass(step: Pass) raises:
     check_sao(step.sao)
     check_ssr(step.ssr)
     check_outline(step.outline)
+    check_bokeh(step.bokeh)
+    check_glitch(step.glitch)
+    check_halftone(step.halftone)
+    if step.kind == TEXTURE and step.texture.value < 0:
+        raise Error("A texture pass must name a texture")
 
 
 def render_pass() -> Pass:
@@ -733,6 +803,150 @@ def outline_pass(
     return step^
 
 
+def bokeh_pass(
+    focus: Length = Length(1.0, METER),
+    aperture: Float32 = 0.025,
+    max_blur: Float32 = 1.0,
+) raises -> Pass:
+    """Return a pass that blurs the frame by each pixel's distance from the
+    focus: three.js's `BokehPass`.
+
+    Put it after a `render_pass`. It draws the scene's depth itself and
+    blurs the frame it is given.
+
+    Args:
+        focus: The distance in focus.
+        aperture: How fast the blur grows away from the focus.
+        max_blur: The most blur, in texture widths.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_bokeh` raises.
+    """
+    var step = Pass(BOKEH)
+    step.bokeh.focus = focus
+    step.bokeh.aperture = aperture
+    step.bokeh.max_blur = max_blur
+    check_pass(step)
+    return step^
+
+
+def glitch_pass(size: Int = 64, seed: Int = 0) raises -> Pass:
+    """Return a pass that shifts the channels apart, tears the frame and
+    adds snow at random moments: three.js's `GlitchPass`.
+
+    Every frame `render` draws advances it. Set `glitch.go_wild` to glitch
+    every frame hard.
+
+    Args:
+        size: How many texels a side the displacement map has: three.js's
+            `dt_size`.
+        seed: The seed of the map and of every frame's draw.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_glitch` raises.
+    """
+    var step = Pass(GLITCH)
+    step.glitch = GlitchSettings(size, seed)
+    check_pass(step)
+    return step^
+
+
+def halftone_pass(radius: Float32 = 4.0) raises -> Pass:
+    """Return a pass that redraws each channel as a grid of dots:
+    three.js's `HalftonePass`.
+
+    The shape, the angles, the scatter and the blending are the fields of
+    `halftone`.
+
+    Args:
+        radius: How many pixels apart the dots are.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_halftone` raises.
+    """
+    var step = Pass(HALFTONE)
+    step.halftone.radius = radius
+    check_pass(step)
+    return step^
+
+
+def mask_pass(selection: Layers, inverse: Bool = False) -> Pass:
+    """Return a pass after which the passes change only what the objects
+    on some layers cover: three.js's `MaskPass`.
+
+    three.js takes a scene. This takes the layers its objects are on, as
+    `outline_pass` does. A `clear_mask_pass` ends the mask.
+
+    Args:
+        selection: The layers whose objects make the mask.
+        inverse: Whether the passes change what the objects do not cover.
+
+    Returns:
+        The pass.
+    """
+    var step = Pass(MASK)
+    step.mask.selection = selection
+    step.mask.inverse = inverse
+    return step^
+
+
+def clear_mask_pass() -> Pass:
+    """Return a pass after which the passes change every pixel again:
+    three.js's `ClearMaskPass`.
+
+    Returns:
+        The pass.
+    """
+    return Pass(CLEAR_MASK)
+
+
+def clear_pass(color: Color = Color(0, 0, 0, 0)) -> Pass:
+    """Return a pass that clears the frame to a color: three.js's
+    `ClearPass`.
+
+    Args:
+        color: The color and its alpha, in sRGB. Transparent black, as
+            three.js's defaults are.
+
+    Returns:
+        The pass.
+    """
+    var step = Pass(CLEAR)
+    step.clear_color = color
+    return step^
+
+
+def texture_pass(texture: TextureId, opacity: Float32 = 1.0) raises -> Pass:
+    """Return a pass that adds a texture over the frame: three.js's
+    `TexturePass`.
+
+    Args:
+        texture: The image, in the assets `render` is given.
+        opacity: What the texture is scaled by.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the texture is `NO_TEXTURE`, or the opacity is negative
+            or not finite.
+    """
+    var step = Pass(TEXTURE)
+    step.texture = texture
+    step.strength = opacity
+    check_pass(step)
+    return step^
+
+
 struct TaaMemory(Copyable, Movable):
     """What a TAA pass keeps between frames: three.js's `_holdRenderTarget`
     and `_sampleRenderTarget`.
@@ -884,11 +1098,24 @@ struct EffectComposer(Movable):
         var frame = RenderTarget(
             renderer.width, renderer.height, renderer.background
         )
+        # Whether a mask pass has run with no clear mask pass after it:
+        # three.js's `maskActive`.
+        var mask_active = False
         for index in range(len(self.passes)):
             check_pass(self.passes[index])
             ref step = self.passes[index]
             if not step.enabled:
                 continue
+            if step.kind == MASK:
+                _mask(frame, step, renderer, scene, assets, camera)
+                mask_active = True
+                continue
+            if step.kind == CLEAR_MASK:
+                mask_active = False
+                continue
+            var saved = FrameCopy()
+            if mask_active:
+                saved = FrameCopy(frame)
             if step.kind == RENDER:
                 _draw(frame, renderer, scene, assets, camera)
             elif step.kind == COPY:
@@ -969,12 +1196,37 @@ struct EffectComposer(Movable):
                     assets,
                     camera,
                 )
+            elif step.kind == BOKEH:
+                var depth = RenderTarget(
+                    renderer.width, renderer.height, renderer.background
+                )
+                _draw(depth, renderer, scene, assets, camera)
+                bokeh_light(frame, _depth_view(depth, camera), step.bokeh)
+            elif step.kind == GLITCH:
+                var uniforms = glitch_uniforms(self.passes[index].glitch)
+                ref glitch = self.passes[index].glitch
+                glitch_light(
+                    frame,
+                    glitch_heightmap(glitch.size, glitch.seed),
+                    glitch.size,
+                    uniforms,
+                )
+            elif step.kind == HALFTONE:
+                halftone_light(frame, step.halftone)
+            elif step.kind == CLEAR:
+                clear_light(frame, step.clear_color)
+            elif step.kind == TEXTURE:
+                texture_light(
+                    frame, assets.textures.get(step.texture), step.strength
+                )
             else:
                 # `OUTPUT`: the only kind left once `check_pass` has had
                 # its say.
                 output_light(
                     frame, renderer.tone_curve(), renderer.tone_mapping_exposure
                 )
+            if mask_active:
+                keep_outside_mask(frame, saved)
         return frame.resolve(renderer.workers, NO_TONE_MAPPING, 1.0)
 
 
@@ -1047,6 +1299,31 @@ def _outline[
         step.outline,
         Duration(step.time, SECOND),
     )
+
+
+def _mask[
+    C: Camera
+](
+    mut frame: RenderTarget,
+    step: Pass,
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+) raises:
+    """Run a mask pass: draw the selected layers alone through the same
+    camera and write where they cover into the frame's stencil. The
+    frame's light and depth are left alone, as three.js's `MaskPass`
+    turns off the color and the depth writes."""
+    var chosen = JitteredCamera(
+        camera, scene, 0, 0, renderer.width, renderer.height
+    )
+    chosen.layers = step.mask.selection
+    var picked = RenderTarget(
+        renderer.width, renderer.height, renderer.background
+    )
+    _draw(picked, renderer, scene, assets, chosen)
+    mask_stencil(frame, picked.depth, step.mask.inverse)
 
 
 def supersample[

@@ -152,7 +152,7 @@ def same(a: Color, b: Color) -> Bool:
 # --- the kinds and the builders ---------------------------------------------
 
 
-def test_the_first_eleven_kinds_are_valid_and_a_twentieth_is_not() raises:
+def test_the_first_eleven_kinds_are_valid_and_a_twenty_seventh_is_not() raises:
     assert_true(RENDER.is_valid())
     assert_true(COPY.is_valid())
     assert_true(BLUR.is_valid())
@@ -164,7 +164,7 @@ def test_the_first_eleven_kinds_are_valid_and_a_twentieth_is_not() raises:
     assert_true(LUMINOSITY.is_valid())
     assert_true(AFTERIMAGE.is_valid())
     assert_true(OUTPUT.is_valid())
-    assert_false(PassKind(19).is_valid())
+    assert_false(PassKind(26).is_valid())
 
 
 def test_each_builder_sets_its_kind_and_three_js_defaults() raises:
@@ -226,7 +226,7 @@ def test_each_builder_sets_its_kind_and_three_js_defaults() raises:
 
 def test_a_pass_no_kind_could_run_is_refused() raises:
     with assert_raises():
-        check_pass(Pass(PassKind(19)))
+        check_pass(Pass(PassKind(26)))
     with assert_raises():
         _ = copy_pass(-1)
     with assert_raises():
@@ -309,9 +309,9 @@ def test_passes_are_added_inserted_and_removed_in_order() raises:
     with assert_raises():
         composer.insert_pass(copy_pass(), -1)
     with assert_raises():
-        composer.add_pass(Pass(PassKind(19)))
+        composer.add_pass(Pass(PassKind(26)))
     with assert_raises():
-        composer.insert_pass(Pass(PassKind(19)), 0)
+        composer.insert_pass(Pass(PassKind(26)), 0)
     assert_equal(composer.pass_count(), 3)
 
 
@@ -685,7 +685,7 @@ def test_a_disabled_pass_is_skipped_and_a_changed_one_is_checked() raises:
     with assert_raises():
         _ = composer.render(renderer, scene, assets, camera)
     composer.passes[1].strength = 0.5
-    composer.passes[1].kind = PassKind(19)
+    composer.passes[1].kind = PassKind(26)
     with assert_raises():
         _ = composer.render(renderer, scene, assets, camera)
     with assert_raises():

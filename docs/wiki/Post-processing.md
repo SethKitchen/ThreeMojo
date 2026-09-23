@@ -35,8 +35,17 @@ The frame starts cleared to the renderer's background. A render pass draws the s
 | `sao_pass(intensity=0.18, scale=1, kernel_radius=100, blur=True)` | `SAOPass` | Darken the frame by scalable ambient occlusion. |
 | `ssr_pass(opacity=0.5, max_distance=180 m, thickness=0.018 m)` | `SSRPass` | Draw the scene, and lay what each surface reflects over it. |
 | `outline_pass(selection, edge_strength=3, edge_thickness=1)` | `OutlinePass` | Draw a glowing edge around the objects on the selected layers. |
+| `bokeh_pass(focus=1 m, aperture=0.025, max_blur=1)` | `BokehPass` | Blur each pixel by its distance from the focus. |
+| `glitch_pass(size=64, seed=0)` | `GlitchPass` | Shift the channels, tear the frame and add snow, at random moments. |
+| `halftone_pass(radius=4)` | `HalftonePass` | Redraw each channel as a grid of dots. |
+| `mask_pass(selection, inverse=False)` | `MaskPass` | Let the passes after it change only the pixels that the selected objects cover. |
+| `clear_mask_pass()` | `ClearMaskPass` | Let the passes after it change every pixel again. |
+| `clear_pass(color=transparent black)` | `ClearPass` | Clear the light, the depth and the stencil. |
+| `texture_pass(texture, opacity=1)` | `TexturePass` | Add a texture over the frame. |
 
 Each builder returns a `Pass`. A `Pass` has a `kind`, an `enabled` flag and every setting any kind reads. The effect passes read `strength`, `radius`, `threshold`, `offset`, `scale`, `angle`, `center`, `grayscale` and `time`. The SSAA and TAA passes read `sample_level`, `unbiased`, `accumulate` and `accumulate_index`. The screen-space passes read `ssao`, `sao`, `ssr` and `outline`. See [Screen-space passes](#screen-space-passes).
+
+The bokeh, glitch, halftone and mask passes read `bokeh`, `glitch`, `halftone` and `mask`. The clear pass reads `clear_color`. The texture pass reads `texture` and `strength`. See [More passes](#more-passes).
 
 Change a setting after the pass is added, as three.js changes a uniform. A pass that is not enabled is skipped.
 
@@ -57,7 +66,7 @@ The defaults are three.js's. The dot screen's angle is an `Angle`. A bare number
 
 ## Validation
 
-`PassKind` is a type. `is_valid` names the nineteen kinds. `check_pass` refuses any other kind. It refuses a setting that is not finite. It refuses a strength, radius, threshold, offset or scale that is negative. It refuses a bloom radius above one and an afterimage damp above one.
+`PassKind` is a type. `is_valid` names the twenty-six kinds. `check_pass` refuses any other kind. It refuses a setting that is not finite. It refuses a strength, radius, threshold, offset or scale that is negative. It refuses a bloom radius above one and an afterimage damp above one.
 
 `check_pass` also refuses a sample level outside zero through five. three.js clamps the level; this port refuses it. It refuses an accumulate index outside minus one through 32. `jitter_offsets` refuses a level outside zero through five. `JitteredCamera` refuses an offset that is not finite and an image size that is not positive.
 
@@ -65,7 +74,7 @@ The defaults are three.js's. The dot screen's angle is an `Angle`. A bare number
 
 ## What each pass works on
 
-A blur, a bloom, a copy and an afterimage work on the premultiplied light, where a sum is a sum. A color transform works on the straight color of each pixel and premultiplies it back, as a shader sees a straight texel. The sepia, the gray, the dot screen, the vignette, the grain and the curve are color transforms. Every pass keeps alpha but the copy, which scales it as three.js's `CopyShader` scales the whole texel.
+A blur, a bloom, a copy and an afterimage work on the premultiplied light, where a sum is a sum. A color transform works on the straight color of each pixel and premultiplies it back, as a shader sees a straight texel. The sepia, the gray, the dot screen, the vignette, the grain and the curve are color transforms. Every pass keeps alpha but the copy, which scales it as three.js's `CopyShader` scales the whole texel. The exceptions in [More passes](#more-passes) follow their shaders: the bokeh and the halftone are opaque, and the glitch and the texture add to alpha.
 
 A tap past the edge of the frame reads the edge pixel, as a clamped texture does. A pixel that holds data rather than light, a normal or a depth, is not tone mapped by the output pass. The other passes treat it as light.
 
@@ -230,8 +239,99 @@ With a `pulse_period` above zero, the edge colors pulse. three.js reads the cloc
 - A pass that the renderer's viewport or scissor narrows. The passes take the camera to fill the whole frame.
 - `GTAOPass`.
 
+## More passes
+
+`postprocessing/effects.mojo`. Seven more passes blur by depth, glitch, draw a halftone, mask, clear and add a texture. Each is a builder in `postprocessing/composer.mojo`, and each has three.js's defaults.
+
+```mojo
+var composer = EffectComposer()
+composer.add_pass(clear_pass())
+composer.add_pass(mask_pass(Layers(UInt32(2))))
+composer.add_pass(texture_pass(texture))
+composer.add_pass(clear_mask_pass())
+var image = composer.render(renderer, scene, assets, camera)
+```
+
+That is three.js's masking example. The texture fills only the pixels that the objects on layer one cover.
+
+### Bokeh
+
+`bokeh_pass` is three.js's `BokehPass`. Put it after a `render_pass`. It draws the scene's depth itself and blurs the frame that it is given.
+
+- `bokeh_blur` is the shader's `dofblur`. The focus plus the view-space z, times `aperture`, is the reach. The reach is clamped to `max_blur` in each direction.
+- `bokeh_light` is `BokehShader`. Each pixel is the average of 41 taps. They are the pixel, 16 taps at the full reach, and 8 taps each at 0.9, 0.7 and 0.4 of it. `bokeh_taps` returns their offsets.
+- The vertical offsets are scaled by the frame's aspect. The result is opaque, as the shader sets alpha to one.
+
+`focus` is a `Length`. `aperture` is in texture widths per meter. `max_blur` is in texture widths.
+
+### Glitch
+
+`glitch_pass(size, seed)` is three.js's `GlitchPass`. Each frame that `render` draws advances it. The draws come from `SeededRandom`, in three.js's order.
+
+1. `GlitchSettings(size, seed)` is the constructor. It draws the displacement map, then the first trigger from 120 to 240.
+2. `glitch_uniforms` is the start of `render`. A frame whose count is a multiple of the trigger is wild: a large shift, a wide tear and a new trigger. With `go_wild` on, every frame is wild.
+3. The frames in the first fifth after a wild frame glitch a little. The other frames are not changed.
+4. `glitch_light` is `DigitalGlitch`. It tears a row band and a column band, and pushes the frame by the map. It moves red and blue apart and adds snow.
+
+`glitch_heightmap(size, seed)` returns the displacement map. It is read with the nearest texel, held at the edges.
+
+### Halftone
+
+`halftone_pass(radius)` is three.js's `HalftonePass`. Its other settings are the fields of `halftone`, with three.js's names and defaults.
+
+- Each channel has a grid at its own angle: `rotate_r`, `rotate_g` and `rotate_b`. The grid points are `radius` pixels apart.
+- `reference_cell` finds the four grid points around a pixel. `scatter` moves each point by a random amount, up to a quarter of the spacing.
+- `halftone_sample` averages nine taps around a grid point. That average sizes the dot at the point.
+- `dot_radius_distance` measures a pixel against a dot. The shape is `HALFTONE_DOT`, `HALFTONE_ELLIPSE`, `HALFTONE_LINE` or `HALFTONE_SQUARE`.
+- `halftone_blend` mixes the halftone with the frame by `blending`. The mode is `HALFTONE_LINEAR`, `HALFTONE_MULTIPLY`, `HALFTONE_ADD`, `HALFTONE_LIGHTER` or `HALFTONE_DARKER`.
+
+With `grayscale` on, the three channels are averaged. With `disable` on, the frame is not changed. The result is opaque.
+
+### Mask and clear mask
+
+`mask_pass(selection, inverse)` is three.js's `MaskPass`. `clear_mask_pass()` is `ClearMaskPass`. Between the two, a pass changes only the pixels inside the mask.
+
+1. The mask pass draws the objects on the selected layers alone, through the same camera.
+2. `mask_stencil` writes the render target's stencil buffer. It writes one where an object covers the pixel, and zero at the other pixels. With `inverse` on, it writes zero and one.
+3. After each pass, `keep_outside_mask` puts back each pixel whose stencil is not one. `inside_mask` is the test that three.js's mask leaves on: equal to one.
+4. The clear mask pass stops the test. A disabled mask pass or clear mask pass does nothing, as in three.js.
+
+The mask pass does not change the light or the depth, as three.js turns off those writes.
+
+### Clear and texture
+
+`clear_pass(color)` is three.js's `ClearPass`. `clear_light` sets the light to the color, the depth to far, and the stencil to zero. The color is in sRGB, and its alpha is three.js's `clearAlpha`.
+
+`texture_pass(texture, opacity)` is three.js's `TexturePass`. The texture is a `TextureId` in the assets that `render` is given. `texture_light` adds the texture times `opacity` to every channel, alpha included. That is `CopyShader` with three.js's additive blending.
+
+### Validation of the more passes
+
+`check_bokeh`, `check_glitch` and `check_halftone` refuse settings that no pass can use. `check_pass` calls all three.
+
+- `check_bokeh` refuses a focus, aperture or largest blur that is negative or not finite.
+- `check_glitch` refuses a map size outside one through 4096, and a generator state that does not fit 32 bits. It refuses a negative frame count and a trigger that is not positive.
+- `check_halftone` refuses a shape or a blending mode that is not named. It refuses a setting that is not finite, and a radius that is not positive. It refuses a negative scatter and a blending outside zero to one.
+- `check_pass` refuses a texture pass with `NO_TEXTURE`. `render` refuses a texture id that is not in the assets.
+
+`HalftoneShape` and `HalftoneBlending` are types. A bare number does not compile. `tests/compile_fail/` proves it.
+
+### How the more passes differ from three.js
+
+- **The mask selection.** three.js's `MaskPass` takes a scene and a camera. This port takes a set of layers, as the outline pass does, and the composer's camera.
+- **The mask coverage.** A pixel is in the mask where a selected object writes its depth. A surface that blends, or that writes no depth, does not add to the mask.
+- **Every pass obeys the mask.** In three.js, a clear ignores the stencil test. So a clear pass, and a render pass that clears, clear the whole frame inside a mask. This port keeps the pixels outside the mask for every pass.
+- **The bokeh depth.** three.js draws the depth again with a `MeshDepthMaterial`. This port draws the scene as a render pass does, so a surface that blends is not in the depth.
+- **The bokeh aspect.** three.js reads the camera's aspect. This port reads the frame's width over its height.
+- **The randomness.** three.js uses `Math.random`. This port uses `SeededRandom`, so the same seed gives the same frames.
+- **The texel.** The bokeh, glitch and halftone read the light as stored, premultiplied. For an opaque pixel that is the straight color.
+
+### Not ported in the more passes
+
+- A mask pass with its own scene, and the `clear` flag of a mask pass or a texture pass.
+- `HalftonePass.setSize`. The halftone always uses the frame's size.
+
 ## Not ported
 
-The passes run on the host. The GPU backend draws bytes rather than light and has no target a pass could read. `MaskPass`, `ClearPass`, `GlitchPass`, `GTAOPass`, `BokehPass` and the other passes are not ported.
+The passes run on the host. The GPU backend draws bytes rather than light and has no target a pass could read. `GTAOPass`, `LUTPass`, `RenderPixelatedPass` and the other passes are not ported.
 
 The SSAA and TAA passes use the renderer's background as their clear color. three.js's passes have their own `clearColor` and `clearAlpha`, and these are not ported. An SSAA pass jitters the camera with no view offset of its own, because the cameras here have none.
