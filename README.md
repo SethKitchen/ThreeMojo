@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 109 features are ported and 40 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 111 features are ported and 38 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -81,10 +81,9 @@ The port is not at parity with three.js yet. 109 features are ported and 40 are 
 - [ ] Interleaved buffers and InstancedBufferGeometry [#111](https://github.com/SethKitchen/ThreeMojo/issues/111)
 - [ ] Extrude a shape along a path [#113](https://github.com/SethKitchen/ThreeMojo/issues/113)
 - [ ] TextGeometry and FontLoader [#114](https://github.com/SethKitchen/ThreeMojo/issues/114)
-- [ ] Parametric, convex, decal and rounded-box geometries [#115](https://github.com/SethKitchen/ThreeMojo/issues/115)
 
 <details>
-<summary>Ported: 14</summary>
+<summary>Ported: 15</summary>
 
 - [x] [BufferGeometry and BufferAttribute](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry) [#12](https://github.com/SethKitchen/ThreeMojo/issues/12)
 - [x] [BoxGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#box) [#13](https://github.com/SethKitchen/ThreeMojo/issues/13)
@@ -97,6 +96,7 @@ The port is not at parity with three.js yet. 109 features are ported and 40 are 
 - [x] [CapsuleGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#capsule): a cylinder with hemisphere caps and exact normals [#20](https://github.com/SethKitchen/ThreeMojo/issues/20)
 - [x] [LatheGeometry and TubeGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#lathe): a profile revolved, and a tube swept along a path of points with three.js's frames [#21](https://github.com/SethKitchen/ThreeMojo/issues/21)
 - [x] [ShapeGeometry and ExtrudeGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#shape): a drawn outline with holes cut into triangles by ear clipping, and given thickness with a bevel [#22](https://github.com/SethKitchen/ThreeMojo/issues/22)
+- [x] [Parametric, convex, decal and rounded-box geometries](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#parametric): parametric surfaces, quickhull convex hulls, decals clipped to a projector box, and rounded boxes [#115](https://github.com/SethKitchen/ThreeMojo/issues/115)
 - [x] [EdgesGeometry and WireframeGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#edges-and-wireframes): a surface read back as the lines of its edges, welded by position first [#23](https://github.com/SethKitchen/ThreeMojo/issues/23)
 - [x] [computeVertexNormals and bounding volumes](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#buffergeometry): area-weighted normals, a bounding box and a bounding sphere on any geometry [#24](https://github.com/SethKitchen/ThreeMojo/issues/24)
 - [x] [BufferGeometryUtils: merge, non-indexed, merge vertices, tangents, center](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#merge-weld-and-tangents): merge geometries, weld vertices, creased normals, non-indexed copies, centering and tangents with handedness [#110](https://github.com/SethKitchen/ThreeMojo/issues/110)
@@ -207,17 +207,17 @@ The port is not at parity with three.js yet. 109 features are ported and 40 are 
 
 - [ ] glTF skins, animations, morph targets, cameras and sparse accessors [#134](https://github.com/SethKitchen/ThreeMojo/issues/134)
 - [ ] glTF extensions [#135](https://github.com/SethKitchen/ThreeMojo/issues/135)
-- [ ] OBJ material libraries [#136](https://github.com/SethKitchen/ThreeMojo/issues/136)
 - [ ] FBX and Collada loaders [#138](https://github.com/SethKitchen/ThreeMojo/issues/138)
 - [ ] Exporters: glTF, OBJ, STL and PLY [#139](https://github.com/SethKitchen/ThreeMojo/issues/139)
 - [ ] JSON scene format: ObjectLoader and toJSON [#140](https://github.com/SethKitchen/ThreeMojo/issues/140)
 
 <details>
-<summary>Ported: 3</summary>
+<summary>Ported: 4</summary>
 
 - [x] [GLTF loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf): `.gltf` and `.glb` into geometries, standard materials, textures and a node hierarchy, with a JSON reader of its own [#70](https://github.com/SethKitchen/ThreeMojo/issues/70)
 - [x] [OBJ loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files): positions, texture coordinates, normals and polygon faces, split by object and material [#71](https://github.com/SethKitchen/ThreeMojo/issues/71)
 - [x] [STL and PLY loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#stl): ASCII and binary STL with face colors, and PLY in all three encodings and every scalar type [#137](https://github.com/SethKitchen/ThreeMojo/issues/137)
+- [x] [OBJ material libraries](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#material-libraries): an MTL reader building Phong materials and their textures, mapped to each OBJ object [#136](https://github.com/SethKitchen/ThreeMojo/issues/136)
 
 </details>
 
