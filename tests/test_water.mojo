@@ -672,6 +672,45 @@ def test_texture_filter() raises:
         0.1,
         0.1,
     )
+    # A straight-down ray aimed at one dark speck. The tint needs hash > 0.992.
+    var ix = Float32(0.0)
+    var iz = Float32(0.0)
+    var ox = Float32(0.0)
+    var oz = Float32(0.0)
+    var found = False
+    for cell_z in range(-30, 30):
+        for cell_x in range(-30, 30):
+            var cx = Float32(cell_x)
+            var cz = Float32(cell_z)
+            if hash12(cx, cz) > 0.992:
+                ix = cx
+                iz = cz
+                ox = hash12(cx + 3.1, cz) - 0.5
+                oz = hash12(cx, cz + 7.7) - 0.5
+                found = True
+                break
+        if found:
+            break
+    assert_true(found)
+    var qx = ix + 0.5 + ox * 0.6
+    var qz = iz + 0.5 + oz * 0.6
+    var hit_x = (qx - clock.value * 0.05) / 48.0
+    var hit_z = (qz - clock.value * 0.02) / 48.0
+    var speck = CameraLook(
+        0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, hit_x, 1.55, hit_z
+    )
+    var shaded = water_radiance(
+        speck,
+        0.0,
+        0.0,
+        1.0,
+        _filled(0.0, 0.0, 0.0),
+        calm,
+        caustics,
+        stones,
+        clock,
+    )
+    assert_true(shaded.x == shaded.x)
 
 
 def _stones() raises -> PebbleBed:
