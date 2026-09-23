@@ -12,6 +12,13 @@ that leaves from where the last one stopped. `line_to`, `quadratic_to`,
 `close_path` adds the straight run back to the start. So a path is a list
 of curves that meet end to end, which is exactly three.js's `CurvePath`.
 
+`abs_arc` and `abs_ellipse` add an arc about a center given in the plane,
+and `arc` and `ellipse` about one given from where the pen is. An arc need
+not start where the pen is: as three.js's `absellipse` does, a straight
+run is drawn to the arc's start first. On a path with nothing on it there
+is nothing to join, so the path starts where the arc does, and the pen
+need not be down.
+
 A `Shape` is a closed path with holes in it: three.js's `Shape`, and what
 `ShapeGeometry` and `ExtrudeGeometry` are built from. The holes are paths
 too, and nothing about them says they are holes except where they are
@@ -36,6 +43,7 @@ shape with no area.
 """
 
 from math.curve import (
+    ELLIPSE,
     LINE,
     SPLINE,
     Curve,
@@ -45,15 +53,15 @@ from math.curve import (
     spline,
 )
 from math.vector2 import Vector2
-from units.si import Length, METER
+from units.si import Angle, Length, METER, RADIAN
 
 
 def resolution_of(curve: Curve, divisions: Int) -> Int:
     """Return how many runs `Path.sample` cuts one curve into.
 
     three.js's rule in `CurvePath.getPoints`, curve kind by curve kind:
-    one for a line, `divisions` for each point of a spline, and
-    `divisions` for anything else.
+    one for a line, `divisions` for each point of a spline, twice
+    `divisions` for an ellipse, and `divisions` for anything else.
 
     Args:
         curve: The curve.
@@ -66,6 +74,8 @@ def resolution_of(curve: Curve, divisions: Int) -> Int:
         return 1
     if curve.kind == SPLINE:
         return divisions * len(curve.points)
+    if curve.kind == ELLIPSE:
+        return divisions * 2
     return divisions
 
 
@@ -203,6 +213,150 @@ struct Path(Copyable, Movable):
         self.last = points[len(points) - 1]
         self.curves.append(spline(through^))
 
+    def _add_ellipse(mut self, var curve: Curve) raises:
+        """Add an ellipse to the path, joined to it by a straight run when
+        it does not start where the pen is, three.js's `absellipse`.
+
+        Raises:
+            Error: If the joining run cannot be drawn, which cannot happen:
+                it is drawn only between two points that differ.
+        """
+        var begin = curve.point(0)
+        if len(self.curves) > 0:
+            var gap = begin - self.last
+            if gap.x != 0 or gap.y != 0:
+                self.curves.append(line(self.last, begin))
+        else:
+            self.first = begin
+        self.last = curve.point(1)
+        self.down = True
+        self.curves.append(curve^)
+
+    def abs_ellipse(
+        mut self,
+        center: Vector2,
+        x_radius: Length,
+        y_radius: Length,
+        start: Angle,
+        end: Angle,
+        clockwise: Bool = False,
+        rotation: Angle = Angle(0, RADIAN),
+    ) raises:
+        """Draw an arc of an ellipse about `center`, three.js's
+        `absellipse`.
+
+        Args:
+            center: The middle of the ellipse, in meters.
+            x_radius: The radius along the ellipse's own x axis.
+            y_radius: The radius along its own y axis.
+            start: The angle the arc starts at, from the ellipse's own +x
+                axis.
+            end: The angle the arc ends at.
+            clockwise: True to run clockwise from `start` to `end`.
+            rotation: How far the ellipse's axes are turned, anticlockwise.
+
+        Raises:
+            Error: If either radius is not positive, or the two angles are
+                the same.
+        """
+        self._add_ellipse(
+            Curve(
+                center=center,
+                x_radius=x_radius,
+                y_radius=y_radius,
+                start=start,
+                end=end,
+                clockwise=clockwise,
+                rotation=rotation,
+            )
+        )
+
+    def abs_arc(
+        mut self,
+        center: Vector2,
+        radius: Length,
+        start: Angle,
+        end: Angle,
+        clockwise: Bool = False,
+    ) raises:
+        """Draw an arc of a circle about `center`, three.js's `absarc`.
+
+        Args:
+            center: The middle of the circle, in meters.
+            radius: The circle's radius.
+            start: The angle the arc starts at, from the +x axis.
+            end: The angle the arc ends at.
+            clockwise: True to run clockwise from `start` to `end`.
+
+        Raises:
+            Error: If the radius is not positive, or the two angles are the
+                same.
+        """
+        self.abs_ellipse(center, radius, radius, start, end, clockwise)
+
+    def ellipse(
+        mut self,
+        offset: Vector2,
+        x_radius: Length,
+        y_radius: Length,
+        start: Angle,
+        end: Angle,
+        clockwise: Bool = False,
+        rotation: Angle = Angle(0, RADIAN),
+    ) raises:
+        """Draw an arc of an ellipse whose center is `offset` from where
+        the pen is, three.js's `ellipse`.
+
+        Args:
+            offset: The center, from where the pen is, in meters.
+            x_radius: The radius along the ellipse's own x axis.
+            y_radius: The radius along its own y axis.
+            start: The angle the arc starts at, from the ellipse's own +x
+                axis.
+            end: The angle the arc ends at.
+            clockwise: True to run clockwise from `start` to `end`.
+            rotation: How far the ellipse's axes are turned, anticlockwise.
+
+        Raises:
+            Error: If either radius is not positive, or the two angles are
+                the same.
+        """
+        self.abs_ellipse(
+            self.last + offset,
+            x_radius,
+            y_radius,
+            start,
+            end,
+            clockwise,
+            rotation,
+        )
+
+    def arc(
+        mut self,
+        offset: Vector2,
+        radius: Length,
+        start: Angle,
+        end: Angle,
+        clockwise: Bool = False,
+    ) raises:
+        """Draw an arc of a circle whose center is `offset` from where the
+        pen is, three.js's `arc`.
+
+        Args:
+            offset: The center, from where the pen is, in meters.
+            radius: The circle's radius.
+            start: The angle the arc starts at, from the +x axis.
+            end: The angle the arc ends at.
+            clockwise: True to run clockwise from `start` to `end`.
+
+        Raises:
+            Error: If the radius is not positive, or the two angles are the
+                same.
+        """
+        self.abs_ellipse(
+            self.last + offset, radius, radius, start, end, clockwise
+        )
+
     def close_path(mut self) raises:
         """Draw the straight run from where the pen is back to the start.
 
@@ -229,10 +383,11 @@ struct Path(Copyable, Movable):
         whatever `divisions` says, since more points along it would all be
         collinear; a spline is `divisions` runs for each point it passes
         through, since one curve of it may wind through dozens; and a
-        Bezier is `divisions` runs. Cutting every curve into `divisions`
-        runs instead, as this once did, gave a twenty-point spline twelve
-        runs for the whole of it and missed most of its own points, and
-        gave every straight edge eleven points it did not need.
+        Bezier is `divisions` runs, and an ellipse twice that. Cutting
+        every curve into `divisions` runs instead, as this once did, gave
+        a twenty-point spline twelve runs for the whole of it and missed
+        most of its own points, and gave every straight edge eleven points
+        it did not need.
 
         A curve's first point is where the one before it ended, so it is
         left out: the run is continuous, and a repeated point would be a

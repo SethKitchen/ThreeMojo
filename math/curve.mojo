@@ -13,17 +13,19 @@ in which function. So here there is one struct and a kind, for the reason
 `Material` is one struct and a kind: a `Path` has to hold a list of one
 type, and Mojo gives no cheap list of a trait.
 
-The four kinds are the four three.js draws with:
+The five kinds are the five three.js draws with:
 
     LINE       two points, and the straight run between them
     QUADRATIC  a start, one control point and an end
     CUBIC      a start, two control points and an end
     SPLINE     any number of points, and a curve through every one
+    ELLIPSE    a center, two radii and the angles the arc runs between
 
 The first three are Bezier curves, written as the weighted sums they are.
 The fourth is three.js's `SplineCurve`: a Catmull-Rom spline, which passes
 *through* its points rather than being pulled toward them, with the ends
-handled by repeating the first and last point.
+handled by repeating the first and last point. The fifth is three.js's
+`EllipseCurve`, and `ArcCurve` is the same curve with its two radii equal.
 
 ## Two parameters, not one
 
@@ -57,18 +59,34 @@ So the count is `ARC_DIVISIONS` or `SEGMENT_SAMPLES` per segment,
 whichever is larger. That is still an approximation, and the docstrings
 say so rather than promising a figure.
 
+## An ellipse, and the way it goes round
+
+An ellipse is not a set of points, so it keeps its own numbers: its radii,
+the angle it starts at, the signed angle it sweeps, and how far it is
+turned. The sweep is worked out once, when the curve is made, by
+three.js's `EllipseCurve.getPoint` rule: bring the difference between the
+two angles into zero through a whole turn, call a difference of nothing
+there a whole turn, and take a whole turn off it for a clockwise arc.
+
+A whole turn ends where it starts. In double precision three.js lands a
+few parts in 10^16 away; in single precision the gap is near a part in
+10^7, and a circle drawn as a shape's outline would not close. So at the
+end of a whole turn the point is the starting point again, exactly.
+
 ## What is refused
 
 A curve whose control points do not match its kind: a line needs two, a
 quadratic three, a cubic four, a spline at least two. A curve whose points
-are all the same point, which is not a curve and has no direction. A `t`
+are all the same point, which is not a curve and has no direction. An
+ellipse with a radius that is not positive, or whose two angles are the
+same, which three.js draws as a single point. A `t`
 or a `u` outside zero through one, which three.js clamps silently and
 which here says the caller has computed something wrong.
 """
 
 from math.vector2 import Vector2
-from std.math import floor
-from units.si import Length, METER
+from std.math import cos, floor, pi, sin
+from units.si import Angle, Length, METER, RADIAN
 
 # The fewest straight runs that stand in for a curve when its length is
 # measured. three.js's `ARC_LENGTH_DIVISIONS`, and enough for a curve with
@@ -79,6 +97,13 @@ comptime ARC_DIVISIONS = 200
 # A spline has an arc per segment, and a table with fewer samples than the
 # curve has segments does not measure it at all.
 comptime SEGMENT_SAMPLES = 8
+
+# One whole turn, in radians.
+comptime WHOLE_TURN = Float32(2 * pi)
+
+# Below this two angles are the same angle. three.js compares against
+# `Number.EPSILON`, a double's last bit; this is the same bit of a `Float32`.
+comptime SAME_ANGLE = Float32(1.1920929e-7)
 
 
 @fieldwise_init
@@ -97,7 +122,11 @@ struct CurveKind(Equatable, ImplicitlyCopyable, Writable):
     def is_valid(self) -> Bool:
         """Return True if this is one of the four kinds there are."""
         return (
-            self == LINE or self == QUADRATIC or self == CUBIC or self == SPLINE
+            self == LINE
+            or self == QUADRATIC
+            or self == CUBIC
+            or self == SPLINE
+            or self == ELLIPSE
         )
 
     def control_count(self) -> Int:
@@ -105,8 +134,9 @@ struct CurveKind(Equatable, ImplicitlyCopyable, Writable):
         `SPLINE`, which takes any number from two up.
 
         Returns:
-            Two for `LINE`, three for `QUADRATIC`, four for `CUBIC`, zero
-            for `SPLINE`. Zero for a kind that is not valid, which
+            Two for `LINE`, three for `QUADRATIC`, four for `CUBIC`, one
+            for `ELLIPSE`, which keeps its center there, and zero for
+            `SPLINE`. Zero for a kind that is not valid, which
             `Curve.__init__` has already refused.
         """
         if self == LINE:
@@ -115,6 +145,8 @@ struct CurveKind(Equatable, ImplicitlyCopyable, Writable):
             return 3
         if self == CUBIC:
             return 4
+        if self == ELLIPSE:
+            return 1
         return 0
 
 
@@ -126,6 +158,48 @@ comptime QUADRATIC = CurveKind(1)
 comptime CUBIC = CurveKind(2)
 # A Catmull-Rom spline through every point: three.js's `SplineCurve`.
 comptime SPLINE = CurveKind(3)
+# An arc of an ellipse about a center: three.js's `EllipseCurve`, and its
+# `ArcCurve` when the two radii are equal.
+comptime ELLIPSE = CurveKind(4)
+
+
+def ellipse_sweep(start: Angle, end: Angle, clockwise: Bool) raises -> Float32:
+    """Return the signed angle an ellipse runs through from `start` to
+    `end`, in radians, by three.js's `EllipseCurve.getPoint` rule.
+
+    The difference is brought into zero through a whole turn. A difference
+    of nothing there, from two angles that were not the same, is a whole
+    turn. A clockwise arc then has a whole turn taken off it, so it runs
+    the other way round.
+
+    Args:
+        start: The angle the arc starts at, from the +x axis.
+        end: The angle the arc ends at.
+        clockwise: True to run clockwise, the way the angle falls.
+
+    Returns:
+        The sweep: from zero up to a whole turn anticlockwise, and from
+        zero down to minus a whole turn clockwise. Never zero.
+
+    Raises:
+        Error: If the two angles are the same, which three.js draws as a
+            single point.
+    """
+    var delta = end.to(RADIAN) - start.to(RADIAN)
+    if abs(delta) < SAME_ANGLE:
+        raise Error("An ellipse needs two different angles")
+    while delta < 0:
+        delta += WHOLE_TURN
+    while delta > WHOLE_TURN:
+        delta -= WHOLE_TURN
+    if delta < SAME_ANGLE:
+        delta = WHOLE_TURN
+    if clockwise:
+        if delta == WHOLE_TURN:
+            delta = -WHOLE_TURN
+        else:
+            delta = delta - WHOLE_TURN
+    return delta
 
 
 def _catmull_rom(
@@ -219,10 +293,24 @@ def u_to_t(table: List[Float32], u: Float32) -> Float32:
 
 
 struct Curve(Copyable, Movable):
-    """One curve in the plane: a kind, and the points that kind reads."""
+    """One curve in the plane: a kind, and the points that kind reads.
+
+    An `ELLIPSE` keeps its center as its one point, and its other numbers
+    in the four fields below. Every other kind leaves those at zero.
+    """
 
     var kind: CurveKind
     var points: List[Vector2]
+    # An ellipse's radius along its own x and y axes, in meters.
+    var radii: Vector2
+    # The angle an ellipse starts at, in radians from its own +x axis.
+    var start: Float32
+    # The signed angle an ellipse runs through, in radians; see
+    # `ellipse_sweep`.
+    var sweep: Float32
+    # How far an ellipse's own axes are turned from the plane's, in
+    # radians, anticlockwise.
+    var rotation: Float32
 
     def __init__(out self, kind: CurveKind, var points: List[Vector2]) raises:
         """Create a curve of `kind` through or around `points`.
@@ -232,12 +320,15 @@ struct Curve(Copyable, Movable):
             points: Its control points, in meters, in order.
 
         Raises:
-            Error: If the kind is not one of the four, if the number of
-                points does not match the kind, or if every point is the
-                same point, which has no direction anywhere.
+            Error: If the kind is not one of the five, if it is `ELLIPSE`,
+                which takes radii and angles rather than points, if the
+                number of points does not match the kind, or if every point
+                is the same point, which has no direction anywhere.
         """
         if not kind.is_valid():
             raise Error("A curve needs a kind that exists")
+        if kind == ELLIPSE:
+            raise Error("An ellipse is made with its radii and angles")
         var wanted = kind.control_count()
         if wanted == 0:
             if len(points) < 2:
@@ -253,11 +344,94 @@ struct Curve(Copyable, Movable):
             raise Error("A curve needs two points that differ")
         self.kind = kind
         self.points = points^
+        self.radii = Vector2(0, 0)
+        self.start = 0
+        self.sweep = 0
+        self.rotation = 0
+
+    def __init__(
+        out self,
+        *,
+        center: Vector2,
+        x_radius: Length,
+        y_radius: Length,
+        start: Angle,
+        end: Angle,
+        clockwise: Bool,
+        rotation: Angle,
+    ) raises:
+        """Create an arc of an ellipse, three.js's `EllipseCurve`.
+
+        Args:
+            center: The middle of the ellipse, in meters.
+            x_radius: The radius along the ellipse's own x axis.
+            y_radius: The radius along its own y axis.
+            start: The angle the arc starts at, from the ellipse's own +x
+                axis.
+            end: The angle the arc ends at.
+            clockwise: True to run clockwise from `start` to `end`.
+            rotation: How far the ellipse's axes are turned from the
+                plane's, anticlockwise.
+
+        Raises:
+            Error: If either radius is not positive, or if the two angles
+                are the same.
+        """
+        if x_radius.value <= 0 or y_radius.value <= 0:
+            raise Error("An ellipse needs two positive radii")
+        self.kind = ELLIPSE
+        self.points = [center]
+        self.radii = Vector2(x_radius.to(METER), y_radius.to(METER))
+        self.start = start.to(RADIAN)
+        self.sweep = ellipse_sweep(start, end, clockwise)
+        self.rotation = rotation.to(RADIAN)
 
     def __init__(out self, *, copy: Self):
         """Copy another curve."""
         self.kind = copy.kind
         self.points = copy.points.copy()
+        self.radii = copy.radii
+        self.start = copy.start
+        self.sweep = copy.sweep
+        self.rotation = copy.rotation
+
+    def _ellipse_angle(self, t: Float32) -> Float32:
+        """Return the angle an ellipse has reached at `t`.
+
+        At the end of a whole turn it is the start again, so a full circle
+        ends exactly where it began rather than a rounding error away.
+        """
+        var turn = t * self.sweep
+        if t == 1 and abs(self.sweep) == WHOLE_TURN:
+            turn = 0
+        return self.start + turn
+
+    def _ellipse_point(self, t: Float32) -> Vector2:
+        """Return the point at `t` on an ellipse, three.js's
+        `EllipseCurve.getPoint`: round the ellipse's own axes, then turned
+        about its center when it is turned at all."""
+        var center = self.points[0]
+        var angle = self._ellipse_angle(t)
+        var x = center.x + self.radii.x * cos(angle)
+        var y = center.y + self.radii.y * sin(angle)
+        if self.rotation != 0:
+            var c = cos(self.rotation)
+            var s = sin(self.rotation)
+            var tx = x - center.x
+            var ty = y - center.y
+            x = tx * c - ty * s + center.x
+            y = tx * s + ty * c + center.y
+        return Vector2(x, y)
+
+    def _ellipse_slope(self, t: Float32) -> Vector2:
+        """Return the derivative of `_ellipse_point` at `t`: the sweep times
+        the direction round the ellipse, turned with it."""
+        var angle = self._ellipse_angle(t)
+        var dx = -self.radii.x * sin(angle) * self.sweep
+        var dy = self.radii.y * cos(angle) * self.sweep
+        var c = cos(self.rotation)
+        var s = sin(self.rotation)
+        return Vector2(dx * c - dy * s, dx * s + dy * c)
 
     def point(self, t: Float32) raises -> Vector2:
         """Return the point at `t` along this curve's own parameter.
@@ -290,6 +464,8 @@ struct Curve(Copyable, Movable):
                 + self.points[2] * (3 * rest * t * t)
                 + self.points[3] * (t * t * t)
             )
+        if self.kind == ELLIPSE:
+            return self._ellipse_point(t)
         return self._spline_point(t)
 
     def _spline_segment(self, t: Float32) -> Int:
@@ -357,13 +533,16 @@ struct Curve(Copyable, Movable):
                 + (self.points[2] - self.points[1]) * (6 * rest * t)
                 + (self.points[3] - self.points[2]) * (3 * t * t)
             )
+        if self.kind == ELLIPSE:
+            return self._ellipse_slope(t)
         return self._spline_slope(t)
 
     def tangent(self, t: Float32) raises -> Vector2:
         """Return the unit direction the curve runs in at `t`.
 
-        Every kind here is a polynomial, so its derivative is another
-        polynomial and the direction is exact. three.js measures the same
+        Every kind here but the ellipse is a polynomial, so its derivative
+        is another polynomial and the direction is exact. The ellipse's
+        derivative is its sine and cosine swapped, which is exact too. three.js measures the same
         thing across two samples a short step apart, which it can afford
         because its numbers are double precision. In single precision that
         subtraction cancels most of the digits it has, and the answer is
@@ -483,6 +662,24 @@ struct Curve(Copyable, Movable):
             raise Error("A curve's u must lie from zero through one")
         return self.point(u_to_t(self.lengths(self.arc_divisions()), u))
 
+    def tangent_at(self, u: Float32) raises -> Vector2:
+        """Return the unit direction `u` of the way along the curve by
+        distance, three.js's `getTangentAt`.
+
+        Args:
+            u: How far along by length, from zero through one.
+
+        Returns:
+            The direction, of unit length.
+
+        Raises:
+            Error: If `u` falls outside zero through one, or if the curve
+                turns back on itself there.
+        """
+        if u < 0 or u > 1:
+            raise Error("A curve's u must lie from zero through one")
+        return self.tangent(u_to_t(self.lengths(self.arc_divisions()), u))
+
     def spaced_points(self, divisions: Int) raises -> List[Vector2]:
         """Return `divisions + 1` points at equal distances along the curve.
 
@@ -579,3 +776,68 @@ def spline(var points: List[Vector2]) raises -> Curve:
             same point.
     """
     return Curve(SPLINE, points^)
+
+
+def ellipse(
+    center: Vector2,
+    x_radius: Length,
+    y_radius: Length,
+    start: Angle,
+    end: Angle,
+    clockwise: Bool = False,
+    rotation: Angle = Angle(0, RADIAN),
+) raises -> Curve:
+    """Return an arc of an ellipse, three.js's `EllipseCurve`.
+
+    Args:
+        center: The middle of the ellipse, in meters.
+        x_radius: The radius along the ellipse's own x axis.
+        y_radius: The radius along its own y axis.
+        start: The angle the arc starts at, from the ellipse's own +x axis.
+        end: The angle the arc ends at.
+        clockwise: True to run clockwise from `start` to `end`.
+        rotation: How far the ellipse's axes are turned, anticlockwise.
+
+    Returns:
+        An `ELLIPSE` curve.
+
+    Raises:
+        Error: If either radius is not positive, or the two angles are the
+            same.
+    """
+    return Curve(
+        center=center,
+        x_radius=x_radius,
+        y_radius=y_radius,
+        start=start,
+        end=end,
+        clockwise=clockwise,
+        rotation=rotation,
+    )
+
+
+def arc(
+    center: Vector2,
+    radius: Length,
+    start: Angle,
+    end: Angle,
+    clockwise: Bool = False,
+) raises -> Curve:
+    """Return an arc of a circle, three.js's `ArcCurve`: an ellipse with
+    its two radii equal and no turn.
+
+    Args:
+        center: The middle of the circle, in meters.
+        radius: The circle's radius.
+        start: The angle the arc starts at, from the +x axis.
+        end: The angle the arc ends at.
+        clockwise: True to run clockwise from `start` to `end`.
+
+    Returns:
+        An `ELLIPSE` curve.
+
+    Raises:
+        Error: If the radius is not positive, or the two angles are the
+            same.
+    """
+    return ellipse(center, radius, radius, start, end, clockwise)

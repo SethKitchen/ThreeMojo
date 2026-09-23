@@ -17,12 +17,16 @@ spreads whatever twist has built up by the end evenly back along the
 path, so the last ring meets the first. This is that construction, applied
 to a path given as points.
 
-three.js samples its path from a curve. There are no curve types here yet,
-so the path *is* the points: one ring per point, and the tangent at each
-point runs from the point before to the point after. A closed path is
+There are two ways in. Given a `math.curve3.Curve3`, the tube is
+three.js's `TubeGeometry` exactly: `tubular_segments` rings at equal
+distances along the curve, framed by the curve's own `frenet_frames`, and
+for a closed tube a last ring that repeats the first. Given a list of
+points, the path *is* the points: one ring per point, and the tangent at
+each point runs from the point before to the point after. A closed path is
 given without repeating its first point, and its last ring repeats its
-first. `u` runs along the path by distance, so a long segment gets a long
-stretch of the texture, as three.js's arc-length parameter gives it.
+first. Either way `u` runs along the path by distance, so a long segment
+gets a long stretch of the texture, as three.js's arc-length parameter
+gives it.
 
 Two paths have no frame and are refused. One returns to the point before
 the last, so the tangent between them is zero and points nowhere. One
@@ -35,28 +39,10 @@ transport made. three.js checks neither; here both raise.
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, NORMAL, POSITION, UV
 from geometries.grid import grid_index
-from math.quaternion import Quaternion
+from math.curve3 import Curve3, FrenetFrames, transport_frames
 from math.vector3 import Vector3
-from std.math import acos, cos, pi, sin
-from units.si import Angle, Length, RADIAN
-
-# Below this the two tangents are parallel and there is no axis to turn
-# the frame about. three.js compares the cross product against
-# `Number.EPSILON`, a double's last bit; a `Float32` axis this short has
-# no direction worth turning about, and a path sampled finely enough for
-# the turn between two rings to fall under it is not one anything here
-# draws.
-comptime STRAIGHT = Float32(1e-4)
-
-
-def _clamp_unit(value: Float32) -> Float32:
-    """Return `value` held to minus one through one, for `acos`."""
-    return max(Float32(-1), min(Float32(1), value))
-
-
-def _turned(v: Vector3, axis: Vector3, angle: Float32) -> Vector3:
-    """Return `v` turned about the unit `axis` by `angle` radians."""
-    return Quaternion.from_axis_angle(axis, Angle(angle, RADIAN)).rotate(v)
+from std.math import cos, pi, sin
+from units.si import Length
 
 
 def _tangents(path: List[Vector3], closed: Bool) raises -> List[Vector3]:
@@ -105,24 +91,6 @@ def _distances(path: List[Vector3], rings: Int) -> List[Float32]:
     return along^
 
 
-def _first_normal(tangent: Vector3) -> Vector3:
-    """Return a direction at right angles to the first tangent, three.js's
-    choice: the axis the tangent leans least along, turned against it."""
-    var smallest = abs(tangent.x)
-    var axis = Vector3(1, 0, 0)
-    if abs(tangent.y) <= smallest:
-        smallest = abs(tangent.y)
-        axis = Vector3(0, 1, 0)
-    if abs(tangent.z) <= smallest:
-        axis = Vector3(0, 0, 1)
-    var across = tangent
-    across.cross(axis)
-    across.normalize()
-    var normal = tangent
-    normal.cross(across)
-    return normal
-
-
 def tube(
     path: List[Vector3],
     radius: Length,
@@ -169,69 +137,96 @@ def tube(
     var rings = count
     if not closed:
         rings = count - 1
-    var tangents = _tangents(path, closed)
-
-    # The frames, by parallel transport: each normal is the last one turned
-    # about the axis between the last tangent and this one, by the angle
-    # between them, and the binormal follows.
-    var normals = List[Vector3]()
-    var binormals = List[Vector3]()
-    normals.append(_first_normal(tangents[0]))
-    var first_binormal = tangents[0]
-    first_binormal.cross(normals[0])
-    binormals.append(first_binormal)
-    for ring in range(1, rings + 1):  # pragma: no branch
-        var normal = normals[ring - 1]
-        var axis = tangents[ring - 1]
-        axis.cross(tangents[ring])
-        if axis.length() > STRAIGHT:
-            axis.normalize()
-            var angle = acos(
-                _clamp_unit(tangents[ring - 1].dot(tangents[ring]))
-            )
-            normal = _turned(normal, axis, angle)
-        elif tangents[ring - 1].dot(tangents[ring]) < 0:
-            # Parallel but opposite: no axis, and a half turn to account
-            # for that no rule here decides.
-            raise Error("A tube's path cannot fold straight back")
-        var binormal = tangents[ring]
-        binormal.cross(normal)
-        normals.append(normal)
-        binormals.append(binormal)
-
-    if closed:
-        # Whatever twist the transport built up between the first frame and
-        # the last, spread evenly back along the path, turning each frame
-        # about its own tangent, so the last ring meets the first.
-        var twist = acos(_clamp_unit(normals[0].dot(normals[rings])))
-        twist /= Float32(rings)
-        var handed = normals[0]
-        handed.cross(normals[rings])
-        if tangents[0].dot(handed) > 0:
-            twist = -twist
-        for ring in range(1, rings + 1):  # pragma: no branch
-            normals[ring] = _turned(
-                normals[ring], tangents[ring], twist * Float32(ring)
-            )
-            var binormal = tangents[ring]
-            binormal.cross(normals[ring])
-            binormals[ring] = binormal
-
-    var thickness = radius.value
+    var frames = transport_frames(_tangents(path, closed), closed)
     var along = _distances(path, rings)
+    var centers = List[Vector3]()
+    var us = List[Float32]()
+    for ring in range(rings + 1):  # pragma: no branch
+        centers.append(path[ring % count])
+        us.append(along[ring] / along[rings])
+    return _sweep(centers, frames, us, radius.value, radial_segments)
+
+
+def tube(
+    curve: Curve3,
+    radius: Length,
+    tubular_segments: Int = 64,
+    radial_segments: Int = 8,
+    closed: Bool = False,
+) raises -> BufferGeometry:
+    """Return a tube of `radius` swept along `curve`, three.js's
+    `TubeGeometry`.
+
+    Args:
+        curve: The curve the tube follows.
+        radius: The tube's radius.
+        tubular_segments: How many cells along the tube; at least one.
+        radial_segments: How many cells around the tube; at least three.
+        closed: True to spread the frames' twist so the last ring meets the
+            first, and to put the last ring on the first.
+
+    Returns:
+        A geometry with `position`, `normal` and `uv` attributes and an
+        index buffer, wound counter-clockwise seen from outside. Vertices
+        run in `tubular_segments + 1` rings at equal distances along the
+        curve, `radial_segments + 1` to a ring. `u` runs along the curve
+        and `v` around the tube.
+
+    Raises:
+        Error: If there are fewer than one segment along or three around,
+            the radius is not positive, or the curve's frames cannot be
+            built: it stops at a ring, or two rings point straight
+            opposite ways.
+    """
+    if tubular_segments < 1:
+        raise Error("A tube needs at least one segment along it")
+    if radius.value <= 0:
+        raise Error("A tube needs a positive radius")
+    if radial_segments < 3:
+        raise Error("A tube needs at least three segments around")
+    var frames = curve.frenet_frames(tubular_segments, closed)
+    var centers = curve.spaced_points(tubular_segments)
+    if closed:
+        # three.js builds the closing ring from the first ring's point and
+        # frame, so the two meet exactly.
+        centers[tubular_segments] = centers[0]
+        frames.normals[tubular_segments] = frames.normals[0]
+        frames.binormals[tubular_segments] = frames.binormals[0]
+    var us = List[Float32]()
+    for ring in range(tubular_segments + 1):  # pragma: no branch
+        # At least one segment, so this runs.
+        us.append(Float32(ring) / Float32(tubular_segments))
+    return _sweep(centers, frames, us, radius.value, radial_segments)
+
+
+def _sweep(
+    centers: List[Vector3],
+    frames: FrenetFrames,
+    us: List[Float32],
+    thickness: Float32,
+    radial_segments: Int,
+) raises -> BufferGeometry:
+    """Return the rings of a tube: one about each center, in its frame,
+    `thickness` meters out, with `u` from `us` and `v` around.
+
+    Raises:
+        Error: If the geometry cannot take its attributes, which cannot
+            happen for rings built here.
+    """
+    var rings = len(centers) - 1
     var data = List[Float32]()
     var normal_data = List[Float32]()
     var uvs = List[Float32]()
     for ring in range(rings + 1):  # pragma: no branch
-        var center = path[ring % count]
-        var u = along[ring] / along[rings]
+        var center = centers[ring]
+        var u = us[ring]
         for step in range(radial_segments + 1):  # pragma: no branch
             var v = Float32(step) / Float32(radial_segments)
             var around = v * 2 * Float32(pi)
             # three.js's placement: minus the cosine along the normal, the
             # sine along the binormal, as the torus knot has it.
-            var along_normal = normals[ring] * (-cos(around))
-            var along_binormal = binormals[ring] * sin(around)
+            var along_normal = frames.normals[ring] * (-cos(around))
+            var along_binormal = frames.binormals[ring] * sin(around)
             var outward = along_normal + along_binormal
             var vertex = center + outward * thickness
             data.append(vertex.x)

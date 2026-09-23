@@ -8,12 +8,17 @@
 from math.curve import (
     ARC_DIVISIONS,
     CUBIC,
+    ELLIPSE,
     Curve,
     CurveKind,
     LINE,
     QUADRATIC,
     SPLINE,
+    WHOLE_TURN,
+    arc,
     cubic_bezier,
+    ellipse,
+    ellipse_sweep,
     line,
     quadratic_bezier,
     spline,
@@ -29,7 +34,8 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import METER
+from std.math import pi
+from units.si import Angle, Length, METER, RADIAN
 
 comptime TOLERANCE = Float64(1e-5)
 
@@ -503,6 +509,210 @@ def test_shape_copies() raises:
     outer.add_hole(hole^)
     assert_equal(twin.hole_count(), 0)
     assert_equal(outer.hole_count(), 1)
+
+
+# --- ellipses, against three.js ---------------------------------------------
+# The expected numbers come from three.js 0.180's `EllipseCurve`, run under
+# Node with the same arguments.
+
+
+def radians(value: Float64) -> Angle:
+    """Return `value` radians as an `Angle`."""
+    return Angle(Float32(value), RADIAN)
+
+
+def meters(value: Float32) -> Length:
+    """Return `value` meters as a `Length`."""
+    return Length(value, METER)
+
+
+def test_ellipse_kind_is_valid_and_keeps_its_center() raises:
+    assert_true(ELLIPSE.is_valid())
+    assert_equal(ELLIPSE.control_count(), 1)
+    # An ellipse takes radii and angles, not a list of points.
+    with assert_raises():
+        _ = Curve(ELLIPSE, [Vector2(0, 0)])
+
+
+def test_a_turned_ellipse_matches_three_js() raises:
+    var oval = ellipse(
+        Vector2(1, 2),
+        meters(3),
+        meters(1.5),
+        radians(0.25),
+        radians(2.0),
+        False,
+        radians(0.5),
+    )
+    assert_point(oval.point(0), 3.3729843, 3.7192402)
+    assert_point(oval.point(0.3), 2.3776977, 3.9486230)
+    assert_point(oval.point(1), -0.7495202, 2.5984411)
+    assert_almost_equal(
+        oval.length().to(METER), Float32(4.505331), atol=Float64(1e-4)
+    )
+
+
+def test_a_clockwise_ellipse_matches_three_js() raises:
+    var oval = ellipse(
+        Vector2(0, 0), meters(2), meters(1), radians(0.25), radians(2.0), True
+    )
+    assert_point(oval.point(0.5), -0.8623530, -0.9022676)
+    assert_almost_equal(
+        oval.length().to(METER), Float32(6.684718), atol=Float64(1e-3)
+    )
+
+
+def test_ellipse_sweep_follows_three_js_rule() raises:
+    # Brought up from below zero, and down from above a whole turn.
+    assert_point(
+        arc(Vector2(0, 0), meters(1), radians(1), radians(-1)).point(0.5),
+        -1,
+        0,
+    )
+    assert_point(
+        arc(Vector2(0, 0), meters(1), radians(0), radians(7)).point(0.5),
+        0.9364567,
+        0.3507832,
+    )
+    # Two angles a whole turn apart, either way: a whole circle.
+    var round = arc(Vector2(0, 0), meters(1), radians(0), radians(-2 * pi))
+    assert_equal(round.sweep, WHOLE_TURN)
+    assert_point(round.point(0.25), 0, 1)
+    var back = arc(Vector2(0, 0), meters(1), radians(0), radians(2 * pi), True)
+    assert_equal(back.sweep, -WHOLE_TURN)
+    assert_point(back.point(0.25), 0, -1)
+    # Two angles the same are a single point, and refused.
+    with assert_raises():
+        _ = ellipse_sweep(radians(1), radians(1), False)
+
+
+def test_a_whole_circle_ends_exactly_where_it_starts() raises:
+    var round = arc(
+        Vector2(1, 1), meters(2), radians(0.3), radians(0.3 - 2 * pi)
+    )
+    var start = round.point(0)
+    var end = round.point(1)
+    assert_equal(start.x, end.x)
+    assert_equal(start.y, end.y)
+    # A part of a turn ends where its own angle says.
+    var half = arc(Vector2(0, 0), meters(1), radians(0), radians(pi))
+    assert_point(half.point(1), -1, 0)
+
+
+def test_an_ellipse_needs_two_positive_radii() raises:
+    with assert_raises():
+        _ = arc(Vector2(0, 0), meters(0), radians(0), radians(1))
+    with assert_raises():
+        _ = ellipse(
+            Vector2(0, 0), meters(1), meters(-1), radians(0), radians(1)
+        )
+
+
+def test_ellipse_tangent_is_exact() raises:
+    var half = arc(Vector2(0, 0), meters(1), radians(0), radians(pi))
+    assert_point(half.tangent(0), 0, 1)
+    assert_point(half.tangent(0.5), -1, 0)
+    var backward = arc(Vector2(0, 0), meters(1), radians(0), radians(pi), True)
+    assert_point(backward.tangent(0), 0, -1)
+    # A turned ellipse turns its tangent with it.
+    var tilted = ellipse(
+        Vector2(0, 0),
+        meters(2),
+        meters(1),
+        radians(0),
+        radians(1),
+        False,
+        radians(pi / 2),
+    )
+    assert_point(tilted.tangent(0), -1, 0)
+
+
+def test_tangent_at_runs_by_distance() raises:
+    var half = arc(Vector2(0, 0), meters(1), radians(0), radians(pi))
+    assert_point(half.tangent_at(0.5), -1, 0)
+    with assert_raises():
+        _ = half.tangent_at(-0.001)
+    with assert_raises():
+        _ = half.tangent_at(1.001)
+
+
+def test_ellipse_copies() raises:
+    var oval = ellipse(
+        Vector2(1, 2),
+        meters(3),
+        meters(1.5),
+        radians(0.25),
+        radians(2.0),
+        False,
+        radians(0.5),
+    )
+    var copied = Curve(copy=oval)
+    assert_true(copied.kind == ELLIPSE)
+    assert_point(copied.point(0.3), 2.3776977, 3.9486230)
+
+
+# --- arcs on a path ---------------------------------------------------------
+
+
+def test_path_arcs_match_three_js() raises:
+    # three.js: moveTo(0, 0), lineTo(2, 0), absarc(2, 1, 1, -pi/2, pi/2),
+    # arc(-2, -1, 1, pi/2, pi). The relative arc does not start where the
+    # pen is, so a straight run joins it: four curves, nineteen points.
+    var pen = Path(Vector2(0, 0))
+    pen.line_to(Vector2(2, 0))
+    pen.abs_arc(Vector2(2, 1), meters(1), radians(-pi / 2), radians(pi / 2))
+    pen.arc(Vector2(-2, -1), meters(1), radians(pi / 2), radians(pi))
+    assert_equal(pen.curve_count(), 4)
+    assert_point(pen.current(), -1, 1)
+    assert_equal(len(pen.sample(4)), 19)
+    assert_equal(resolution_of(pen.curves[1], 4), 8)
+
+
+def test_an_arc_on_an_empty_path_starts_it() raises:
+    # No pen needed: the path starts where the arc does, and a whole
+    # circle is a closed outline.
+    var disc = Path()
+    disc.abs_arc(Vector2(0, 0), meters(1), radians(0), radians(2 * pi))
+    assert_true(disc.is_closed())
+    assert_equal(disc.curve_count(), 1)
+    var plate = Shape(disc^)
+    assert_equal(len(plate.outline_points(4)), 9)
+    # With the pen down and nothing drawn, three.js drops the pen's point.
+    var pen = Path(Vector2(5, 5))
+    pen.ellipse(Vector2(1, 0), meters(2), meters(1), radians(0), radians(pi))
+    assert_equal(pen.curve_count(), 1)
+    assert_point(pen.first, 8, 5)
+    assert_point(pen.current(), 4, 5)
+
+
+def test_an_arc_is_joined_only_where_it_leaves_a_gap() raises:
+    # Starts where the pen is: nothing joins it.
+    var pen = Path(Vector2(0, 0))
+    pen.line_to(Vector2(2, 0))
+    pen.abs_arc(Vector2(2, 1), meters(1), radians(-pi / 2), radians(0))
+    assert_equal(pen.curve_count(), 2)
+    # Starts above the pen, the same x: a run joins it.
+    var above = Path(Vector2(0, 0))
+    above.line_to(Vector2(2, 0))
+    above.abs_ellipse(
+        Vector2(2, 1.5), meters(1), meters(1), radians(-pi / 2), radians(0)
+    )
+    assert_equal(above.curve_count(), 3)
+    # Starts beside the pen: a run joins it.
+    var beside = Path(Vector2(0, 0))
+    beside.line_to(Vector2(2, 0))
+    beside.abs_ellipse(
+        Vector2(4, 0),
+        meters(1),
+        meters(1),
+        radians(pi),
+        radians(0),
+        True,
+        radians(0.5),
+    )
+    assert_equal(beside.curve_count(), 3)
+    with assert_raises():
+        beside.arc(Vector2(0, 0), meters(1), radians(0), radians(0))
 
 
 def main() raises:
