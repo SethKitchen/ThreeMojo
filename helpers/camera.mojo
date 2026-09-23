@@ -19,10 +19,10 @@ rectangle is at `z = -near`, the far one at `z = -far`. The helper
 belongs on the node the camera rides, as three.js's takes the camera's
 `matrixWorld` for its own.
 
-The cone's apex, `p`, is clip space's own origin carried back, which is
-not the camera's position. Under a perspective projection it is a point
-between the two planes, and the cone reaches it from the near corners:
-that is what three.js draws, and it is kept.
+The cone's apex, `p`, is not a clip-space point. three.js never sets it,
+so it stays at the origin of the camera's own frame, the eye, and the
+cone runs from the eye to the near corners. Carried back through the
+projection, clip space's origin would be a point between the two planes.
 """
 
 from cameras.camera import Camera
@@ -43,6 +43,9 @@ comptime DEFAULT_CROSS_COLOR = Color(0x33, 0x33, 0x33)
 # convention, which `math.projection` follows.
 comptime NEAR_Z = Float32(-1)
 comptime FAR_Z = Float32(1)
+# Marks the apex, `p`, in the list below: a depth no clip-space point of
+# the helper has. The apex is the camera's own origin, not carried back.
+comptime APEX_Z = Float32(0)
 
 
 def _push(
@@ -54,8 +57,11 @@ def _push(
     z: Float32,
     color: FloatColor,
 ):
-    """Append one clip-space point, carried back to the camera's frame."""
-    var point = unproject.transform_point(Vector3(x, y, z))
+    """Append one clip-space point, carried back to the camera's frame, or
+    the camera's origin for the apex."""
+    var point = Vector3(0, 0, 0)
+    if z != APEX_Z:
+        point = unproject.transform_point(Vector3(x, y, z))
     positions.append(point.x)
     positions.append(point.y)
     positions.append(point.z)
@@ -187,25 +193,25 @@ def camera_helper[
         # cone: p n1, p n2, p n3, p n4
         0,
         0,
-        0,
+        APEX_Z,
         -1,
         -1,
         NEAR_Z,
         0,
         0,
-        0,
+        APEX_Z,
         1,
         -1,
         NEAR_Z,
         0,
         0,
-        0,
+        APEX_Z,
         -1,
         1,
         NEAR_Z,
         0,
         0,
-        0,
+        APEX_Z,
         1,
         1,
         NEAR_Z,
@@ -237,7 +243,7 @@ def camera_helper[
         FAR_Z,
         0,
         0,
-        0,
+        APEX_Z,
         0,
         0,
         NEAR_Z,

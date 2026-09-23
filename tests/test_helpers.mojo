@@ -320,9 +320,9 @@ def test_the_camera_helper_outlines_a_perspective_frustum() raises:
     # sides: n1 f1
     assert_vector(point_of(outline, 16), -1, -1, -1)
     assert_vector(point_of(outline, 17), -10, -10, -10)
-    # cone: p n1. The apex is clip space's origin carried back, which
-    # under perspective is between the planes: -2nf / (f + n).
-    assert_vector(point_of(outline, 24), 0, 0, -20.0 / 11.0)
+    # cone: p n1. The apex is the camera's own origin: three.js never sets
+    # `p`, so it stays where the helper's node is.
+    assert_vector(point_of(outline, 24), 0, 0, 0)
     assert_vector(point_of(outline, 25), -1, -1, -1)
     # up: u1 u2, u2 u3
     assert_vector(point_of(outline, 32), 0.7, 1.1, -1)
@@ -331,6 +331,9 @@ def test_the_camera_helper_outlines_a_perspective_frustum() raises:
     # target: c t
     assert_vector(point_of(outline, 38), 0, 0, -1)
     assert_vector(point_of(outline, 39), 0, 0, -10)
+    # target: p c, from the apex to the near plane's center
+    assert_vector(point_of(outline, 40), 0, 0, 0)
+    assert_vector(point_of(outline, 41), 0, 0, -1)
     # cross: cn1 cn2, and the last, cf3 cf4
     assert_vector(point_of(outline, 42), -1, 0, -1)
     assert_vector(point_of(outline, 43), 1, 0, -1)
@@ -340,14 +343,14 @@ def test_the_camera_helper_outlines_a_perspective_frustum() raises:
 
 def test_the_camera_helper_outlines_an_orthographic_volume() raises:
     # Parallel rays: the near and far rectangles are the same size, and
-    # the apex is halfway between the planes.
+    # the apex is the camera's origin, as for a perspective camera.
     var camera = centered(
         Length(2.0, METER), 2.0, Length(1.0, METER), Length(5.0, METER)
     )
     var outline = camera_helper(camera)
     assert_vector(point_of(outline, 0), -2, -1, -1)
     assert_vector(point_of(outline, 8), -2, -1, -5)
-    assert_vector(point_of(outline, 24), 0, 0, -3)
+    assert_vector(point_of(outline, 24), 0, 0, 0)
 
 
 def test_the_camera_helper_paints_each_part_its_own_color() raises:
