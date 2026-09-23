@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 115 features are ported and 34 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 116 features are ported and 33 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -254,16 +254,16 @@ The port is not at parity with three.js yet. 115 features are ported and 34 are 
 
 ### Windowing and controls
 
-- [ ] A native window [#108](https://github.com/SethKitchen/ThreeMojo/issues/108)
 - [ ] Trackball, Fly, FirstPerson, Map and PointerLock controls [#106](https://github.com/SethKitchen/ThreeMojo/issues/106)
 - [ ] TransformControls and DragControls [#107](https://github.com/SethKitchen/ThreeMojo/issues/107)
 
 <details>
-<summary>Ported: 3</summary>
+<summary>Ported: 4</summary>
 
 - [x] [Windowing and interactive controls](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls): a `TerminalWindow` that shows frames and reads the mouse, and `OrbitControls` that orbit a camera [#87](https://github.com/SethKitchen/ThreeMojo/issues/87)
 - [x] [TerminalWindow: the terminal's size, and resize](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#terminalwindow): the terminal asked its size, the answer a resize event [#109](https://github.com/SethKitchen/ThreeMojo/issues/109)
 - [x] [OrbitControls: orthographic zoom, zoom to cursor, and any camera up](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#orthographic-cameras): orthographic zoom, zoom toward the pointer, and any up [#105](https://github.com/SethKitchen/ThreeMojo/issues/105)
+- [x] [A native X11 window](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls#x11window): an `X11Window` from libX11 that shows frames and reads keys, buttons, resizes and the close button [#108](https://github.com/SethKitchen/ThreeMojo/issues/108)
 
 </details>
 

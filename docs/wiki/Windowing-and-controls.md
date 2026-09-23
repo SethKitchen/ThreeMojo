@@ -71,6 +71,35 @@ The window never reads `struct termios`, whose layout differs by platform. It as
 
 The terminal is put back before a failure is raised.
 
+## X11Window
+
+`window/x11.mojo` opens a native window on an X server. It loads `libX11.so.6` when the window opens. Nothing else in the project needs the library.
+
+| Member | Meaning |
+|---|---|
+| `X11Window(width, height, title="ThreeMojo", display="")` | Open the window. An empty `display` uses the `DISPLAY` variable. |
+| `present(frame)` | Draw a `Framebuffer` of the window's size. |
+| `poll(timeout) -> List[InputEvent]` | Wait up to a `Duration` for input, and return the events. |
+| `resize(width, height)` | Take frames of a new size. |
+| `close()` | Close the window. A second call does nothing. |
+| `close_requested` | True after the window manager asks the window to close. |
+
+The window gives the same `InputEvent` values as `TerminalWindow`. The same loop drives both. A key press is `KEY_DOWN`, and Ctrl with a letter is its control code, as a terminal sends it. A change of size is a `RESIZE` event. The program must call `resize` to follow it.
+
+The window manager's close button does not close the window. It sets `close_requested`, and the program must end its loop on it.
+
+### What is refused
+
+- A size that is not positive.
+- A display that cannot be opened.
+- A display whose visual is not 24-bit TrueColor with red in the high byte.
+- A frame of another size.
+- A `present`, a `poll` or a `resize` after `close`.
+
+### Tests
+
+`tests/test_x11.mojo` starts an `Xvfb` server for each test. You must install it first, for example with `apt-get install xvfb`.
+
 ## Input events
 
 `controls/input.mojo`. An `InputEvent` is one of the five kinds the browser has, or a resize.

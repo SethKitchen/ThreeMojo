@@ -43,6 +43,11 @@ jobs:
           uv pip install "mojo==1.1.0"
           .venv/bin/mojo --version
 
+      # The native window's suite starts its own X server. Xvfb draws in
+      # memory, so the runner needs no display.
+      - name: Install Xvfb
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
       # Formatting, linting, the CPU suites, and the compile-fail cases. No
       # MAX, which is what proves the no-dependencies claim still holds.
       - name: check-cpu
