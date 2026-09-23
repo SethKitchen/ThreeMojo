@@ -29,6 +29,8 @@ What is read is what three.js's loader reads and this renderer can draw:
   as three.js keeps it in `materialLibraries`. The rest of the line is one
   file name, as three.js reads it. `loaders.mtl` reads the library and
   gives each object its material.
+- A line that ends in a backslash goes on into the next, as three.js
+  joins it, so a long face can be written over several lines.
 - `s`, and anything else, are skipped. Lines and points, `l` and
   `p`, are skipped too: nothing here draws them yet.
 
@@ -509,11 +511,30 @@ def parse_obj(text: String) raises -> ObjModel:
     # Whether an `o` or `g` line has been read yet; see below.
     var declared = False
     var line = 0
-    # A split yields at least one piece, even of an empty file: the loop
-    # always runs.
+    var lines = List[String]()
+    # A split yields at least one piece, even of an empty file: the loops
+    # always run.
     for raw in text.split("\n"):  # pragma: no branch
+        lines.append(String(raw))
+    # A line that ends in a backslash goes on into the next, three.js's
+    # `replace( /\\\n/g, '' )`, so a statement is read, and named in an
+    # error, on the line it ends on. A backslash on the last line goes on
+    # into nothing.
+    var pending = String()
+    for index in range(len(lines)):  # pragma: no branch
         line += 1
-        var stripped = String(String(raw).strip())
+        var physical = lines[index]
+        if physical.endswith("\r"):
+            var trimmed = String(physical[byte = : physical.byte_length() - 1])
+            physical = trimmed^
+        if physical.endswith("\\"):
+            pending += physical[byte = : physical.byte_length() - 1]
+            if index < len(lines) - 1:
+                continue
+            physical = String()
+        var joined = pending + physical
+        pending = String()
+        var stripped = String(joined.strip())
         # A comment runs from `#` to the end of the line, wherever it
         # starts; the format allows one after the data, and three.js reads
         # a trailing one as a corner.

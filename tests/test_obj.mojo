@@ -121,6 +121,25 @@ def test_a_polygon_is_cut_into_a_fan() raises:
     assert_point(shape.corner(1, 2), 0, 1, 0)
 
 
+def test_a_backslash_at_the_end_of_a_line_continues_it() raises:
+    # three.js joins a line that ends in a backslash to the next, as
+    # exporters write a long face over several lines. Windows line ends
+    # join too, and an error names the line the statement ends on.
+    var model = parse_obj(
+        String("v 0 0 0\nv 1 0 0\nv 1 1 0\\\r\n\nv 0 1 0\nf 1 2 \\\n3 \\\n4\n")
+    )
+    ref shape = model.objects[0].geometry
+    assert_equal(shape.triangle_count(), 2)
+    assert_point(shape.corner(1, 2), 0, 1, 0)
+    with assert_raises(contains="OBJ line 4"):
+        _ = parse_obj(String("v 0 0 0\nf 1 \\\n9 \\\n9\n"))
+
+
+def test_a_backslash_on_the_last_line_continues_into_nothing() raises:
+    var model = parse_obj(String("v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3 \\"))
+    assert_equal(model.objects[0].geometry.triangle_count(), 1)
+
+
 def test_objects_and_groups_split_the_file_and_keep_their_names() raises:
     var model = parse_obj(
         String(
