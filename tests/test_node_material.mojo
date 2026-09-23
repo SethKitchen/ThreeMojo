@@ -41,8 +41,11 @@ from materials.material import (
     sprite_material,
 )
 from materials.nodes import (
+    AO_NODE,
     COLOR_NODE,
+    DEPTH_NODE,
     EMISSIVE_NODE,
+    MASK_NODE,
     NORMAL_NODE,
     NO_NODES,
     OPACITY_NODE,
@@ -445,6 +448,145 @@ def test_a_line_or_a_point_runs_no_graph() raises:
     point.nodes = NodeProgramId(0)
     with assert_raises(contains="A point runs no node graph"):
         check_point_state(point)
+
+
+# --- the mask, the ambient occlusion and the depth ----------------------------
+
+
+def test_a_mask_and_a_discard_throw_fragments_away() raises:
+    # Kept right of a quarter of the way across, and not below half way.
+    var graph = NodeGraph()
+    var u = graph.swizzle(graph.uv(), "x")
+    graph.set_output(MASK_NODE, graph.greater_than(u, graph.float(0.25)))
+    graph.set_output(COLOR_NODE, graph.vec3(1, 1, 1))
+    graph.If(
+        graph.greater_than(graph.swizzle(graph.uv(), "y"), graph.float(0.5))
+    )
+    graph.Discard()
+    graph.End()
+    var programs = one_program(graph^)
+    var cut = draw(big_triangle(NodeProgramId(0), BASIC), programs)
+    assert_color(cut.color_at(2, 2), 0, 0, 0)
+    assert_color(cut.color_at(6, 2), 1, 1, 1)
+    assert_color(cut.color_at(6, 10), 0, 0, 0)
+    # A thrown-away fragment claims no depth: what is behind shows through.
+    var behind = big_triangle(NO_NODES, BASIC)
+    for index in range(3):
+        behind[index].z = 0.9
+        behind[index].color = FloatColor(0.0, 1.0, 0.0, 1.0)
+    var both = big_triangle(NodeProgramId(0), BASIC)
+    both.extend(behind^)
+    var layered = draw(both, programs)
+    assert_color(layered.color_at(2, 2), 0, 1, 0)
+    assert_color(layered.color_at(6, 2), 1, 1, 1)
+
+
+def test_an_ao_node_dims_the_indirect_light() raises:
+    var graph = NodeGraph()
+    graph.set_output(AO_NODE, graph.float(0.5))
+    var programs = one_program(graph^)
+    # All the light here is indirect, so half of it is left.
+    var dim = draw(big_triangle(NodeProgramId(0)), programs)
+    assert_color(dim.color_at(2, 2), 0.25, 0.25, 0.25)
+    var basic = draw(big_triangle(NodeProgramId(0), BASIC), programs)
+    assert_color(basic.color_at(2, 2), 0.25, 0.25, 0.25)
+    # A physical surface takes it with its indirect light too.
+    var plain = draw(big_triangle(NO_NODES, PHYSICAL), programs)
+    var metal = draw(big_triangle(NodeProgramId(0), PHYSICAL), programs)
+    assert_true(metal.color_at(2, 2).r < plain.color_at(2, 2).r)
+    # The node replaces an ao map where both are.
+    var textures = TextureStore()
+    var map = textures.add(
+        Texture(
+            2,
+            1,
+            [UInt8(255), 0, 0, 255, 0, 0, 255, 255],
+            REPEAT,
+            NEAREST,
+            LINEAR,
+            False,
+            IGNORED,
+        )
+    )
+    var mapped = big_triangle(NodeProgramId(0))
+    for index in range(3):
+        mapped[index].ao_map = map
+    var replaced = draw(mapped, programs, SHADE_TEXTURE, textures)
+    assert_color(replaced.color_at(2, 2), 0.25, 0.25, 0.25)
+
+
+def test_a_depth_node_replaces_the_depth_the_tests_read() raises:
+    # A gray triangle at a depth of 0.2, then the node's triangle in front,
+    # at 0.5, which the node puts at a window depth of 0.9: behind.
+    var graph = NodeGraph()
+    graph.set_output(DEPTH_NODE, graph.float(0.9))
+    graph.set_output(COLOR_NODE, graph.vec3(1, 0, 0))
+    var programs = one_program(graph^)
+    var near = big_triangle(NO_NODES, BASIC)
+    for index in range(3):
+        near[index].z = 0.2
+    var corners = near.copy()
+    corners.extend(big_triangle(NodeProgramId(0), BASIC))
+    var hidden = draw(corners, programs)
+    assert_color(hidden.color_at(2, 2), 0.5, 0.5, 0.5)
+    # At a window depth of 0.1 it is in front.
+    var front = NodeGraph()
+    front.set_output(DEPTH_NODE, front.float(0.1))
+    front.set_output(COLOR_NODE, front.vec3(1, 0, 0))
+    var shown = draw(corners, one_program(front^))
+    assert_color(shown.color_at(2, 2), 1, 0, 0)
+
+
+def test_derivatives_and_varyings_read_the_triangles_plane() raises:
+    # The coordinates grow a sixteenth a pixel right and down: dFdy looks
+    # up, so it reads minus a sixteenth.
+    var graph = NodeGraph()
+    var slope = graph.join(
+        [
+            graph.mul(
+                graph.swizzle(graph.dfdx(graph.uv()), "x"), graph.float(16)
+            ),
+            graph.mul(
+                graph.swizzle(graph.dfdy(graph.uv()), "y"), graph.float(-16)
+            ),
+            graph.float(0),
+        ]
+    )
+    graph.set_output(COLOR_NODE, slope)
+    var steep = draw(big_triangle(NodeProgramId(0), BASIC), one_program(graph^))
+    assert_color(steep.color_at(3, 5), 1, 1, 0)
+    # A varying of u squared is the corners' squares mixed: 0, 4 and 0,
+    # weighed by the second corner's share, (x + 0.5) / 32.
+    var curve = NodeGraph()
+    var u = curve.swizzle(curve.uv(), "x")
+    var mixed = curve.varying(curve.mul(u, u))
+    curve.set_output(
+        COLOR_NODE, curve.join([mixed, curve.mul(u, u), curve.float(0)])
+    )
+    var bent = draw(big_triangle(NodeProgramId(0), BASIC), one_program(curve^))
+    var here = bent.color_at(2, 2)
+    assert_almost_equal(here.r, 4 * 2.5 / 32, atol=1e-5)
+    assert_almost_equal(here.g, (2.5 / 16) * (2.5 / 16), atol=1e-5)
+
+
+def test_a_texture_uniform_must_name_a_texture_to_draw() raises:
+    var graph = NodeGraph()
+    var map = graph.texture_uniform("map")
+    graph.set_output(
+        COLOR_NODE, graph.swizzle(graph.texture(map, graph.uv()), "rgb")
+    )
+    var programs = one_program(graph^)
+    with assert_raises(contains="names no texture; call set_texture() first"):
+        _ = draw(big_triangle(NodeProgramId(0), BASIC), programs, SHADE_TEXTURE)
+    # A mode that opens no texture needs none.
+    _ = draw(big_triangle(NodeProgramId(0), BASIC), programs, SHADE_LIT)
+    var textures = TextureStore()
+    var red = textures.add(a_texture())
+    programs.get(NodeProgramId(0)).set_texture("map", red)
+    var read = draw(
+        big_triangle(NodeProgramId(0), BASIC), programs, SHADE_TEXTURE, textures
+    )
+    assert_color(read.color_at(2, 2), 1, 0, 0)
 
 
 # --- the renderer -------------------------------------------------------------

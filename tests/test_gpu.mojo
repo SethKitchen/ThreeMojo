@@ -11021,6 +11021,297 @@ def test_the_gpu_refuses_a_program_it_cannot_run() raises:
     )
 
 
+from materials.glsl import compile_shader_material
+from math.matrix3 import Matrix3
+from materials.nodes import (
+    AO_NODE as NODES_AO,
+    DEPTH_NODE as NODES_DEPTH,
+    MASK_NODE as NODES_MASK,
+)
+
+
+def the_node_library(map: TextureId) raises -> NodeGraph:
+    """Return a graph that runs the rest of the node library on both
+    backends: the new math, a loop and a branch, a discard, a varying, the
+    derivatives, a texture uniform, the matrices, the noise, and the mask,
+    ambient occlusion and depth outputs."""
+    var graph = NodeGraph()
+    var uv = graph.uv()
+    var place = graph.position_world()
+    var u = graph.swizzle(uv, "x")
+    var v = graph.swizzle(uv, "y")
+    # A texture uniform read at a coordinate the graph bends.
+    var sampler = graph.texture_uniform("map", map)
+    var texel = graph.texture(
+        sampler, graph.fract(graph.mul(uv, graph.float(3)))
+    )
+    # A loop of octaves and a branch in it.
+    var sum = graph.Var(graph.float(0))
+    var index = graph.Loop(3, 1, 1)
+    var octave = graph.perlin_noise(graph.mul(uv, index))
+    graph.If(graph.greater_than(octave, graph.float(0)))
+    graph.assign(sum, graph.add(graph.get(sum), graph.abs(octave)))
+    graph.Else()
+    graph.assign(
+        sum,
+        graph.sub(graph.get(sum), graph.mul(octave, graph.float(0.5))),
+    )
+    graph.End()
+    graph.End()
+    var solid = graph.mx_fractal_noise_float(place, 2)
+    # The arc functions, the rounding and the logic.
+    var angle = graph.atan2(
+        graph.sub(v, graph.float(0.5)), graph.sub(u, graph.float(0.5))
+    )
+    var arcs = graph.add(
+        graph.asin(graph.saturate(u)), graph.acos(graph.saturate(v))
+    )
+    var bands = graph.select(
+        graph.logical_and(
+            graph.less_than(
+                graph.fract(graph.mul(angle, graph.float(2))), graph.float(0.5)
+            ),
+            graph.not_equal(
+                graph.round(graph.mul(u, graph.float(7))), graph.float(3)
+            ),
+        ),
+        graph.float(1),
+        graph.float(0.25),
+    )
+    # The derivatives, and a varying of what the plane does not carry.
+    var slope = graph.fwidth(graph.mul(uv, graph.float(40)))
+    var bent = graph.varying(graph.mul(place, place))
+    var turn = graph.uniform("turn", Matrix3())
+    var turned = graph.mul(
+        turn, graph.normalize(graph.add(bent, graph.vec3(0.1, 0.2, 0.3)))
+    )
+    var seen = graph.swizzle(
+        graph.mul(
+            graph.camera_view_matrix(), graph.join([place, graph.float(1)])
+        ),
+        "z",
+    )
+    var color = graph.join(
+        [
+            graph.mix(graph.swizzle(texel, "r"), bands, graph.float(0.5)),
+            graph.saturate(
+                graph.add(graph.get(sum), graph.swizzle(slope, "x"))
+            ),
+            graph.saturate(
+                graph.add(
+                    graph.mul(arcs, graph.float(0.2)),
+                    graph.mul(graph.abs(solid), graph.swizzle(turned, "z")),
+                )
+            ),
+        ]
+    )
+    graph.set_output(
+        NODES_COLOR, graph.clamp(color, graph.float(0), graph.float(1))
+    )
+    graph.set_output(
+        NODES_EMISSIVE,
+        graph.mul(
+            graph.vec3(0.1, 0.05, 0),
+            graph.add(
+                graph.sign(seen),
+                graph.trunc(
+                    graph.mod(graph.mul(v, graph.float(9)), graph.float(2))
+                ),
+            ),
+        ),
+    )
+    graph.set_output(
+        NODES_AO,
+        graph.smoothstep(graph.float(0), graph.float(1), graph.length(uv)),
+    )
+    graph.set_output(
+        NODES_DEPTH,
+        graph.add(
+            graph.float(0.3),
+            graph.mul(graph.swizzle(slope, "y"), graph.float(0.01)),
+        ),
+    )
+    # A hole where the coordinates' step lands on a band.
+    graph.If(
+        graph.greater_than(
+            graph.fract(graph.mul(graph.add(u, v), graph.float(5))),
+            graph.float(0.9),
+        )
+    )
+    graph.Discard()
+    graph.End()
+    graph.set_output(
+        NODES_MASK,
+        graph.greater_than(
+            graph.distance(uv, graph.vec2(0.5, 0.5)), graph.float(0.05)
+        ),
+    )
+    return graph^
+
+
+def test_both_backends_run_the_node_library_alike() raises:
+    # The kernel runs the host's interpreter over the program in the fog
+    # buffer: the new math, the control flow, the derivatives by the
+    # triangle's plane, a varying's corners, and the three new outputs must
+    # reach the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends run the node library alike"):
+        return
+    var textures = TextureStore()
+    var map = textures.add(a_gpu_data_map())
+    var store = NodeProgramStore()
+    var id = store.add(the_node_library(map).compile())
+    var turn = Matrix3()
+    turn.elements[1] = 0.5
+    store.get(id).set_uniform("turn", turn)
+    var view = Matrix4()
+    view.elements[14] = -3
+    store.set_frame(Duration(0.4, SECOND), view)
+    var lighting = phong_lighting()
+    var pairs = List[List[RasterVertex]]()
+    pairs.append(
+        with_nodes(phong_pair(FloatColor(0.3, 0.3, 0.3), 30.0), id.value)
+    )
+    pairs.append(with_nodes(physical_pair(PHYSICAL, 0.35, 0.4), id.value))
+    for mode in [SHADE_TEXTURE, SHADE_LIT]:
+        for index in range(len(pairs)):
+            ref corners = pairs[index]
+            var target = RenderTarget(36, 30, BACKGROUND)
+            rasterize_all(
+                corners,
+                target,
+                mode,
+                textures,
+                lighting,
+                1,
+                programs=store,
+            )
+            var cpu = target.resolve()
+            var gpu = render_triangles(
+                corners,
+                36,
+                30,
+                BACKGROUND,
+                mode,
+                textures,
+                lighting,
+                programs=store,
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+            var plain = render_triangles(
+                with_nodes(corners.copy(), -1),
+                36,
+                30,
+                BACKGROUND,
+                mode,
+                textures,
+                lighting,
+            )
+            assert_true(count_mismatches(gpu, plain) > 50)
+
+
+def test_both_backends_draw_a_glsl_shader_material_alike() raises:
+    # GLSL compiled to the node program: a vertex shader that lifts the
+    # sphere and hands its coordinates and world position on, and a
+    # fragment shader with a loop, a branch, a discard, a texture and a
+    # derivative.
+    if skipped_for_lack_of_a_gpu("both backends draw a glsl material alike"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var map = assets.textures.add(a_gpu_data_map())
+    var program = compile_shader_material(
+        """
+        uniform float lift;
+        varying vec2 vUv;
+        varying vec3 vWorld;
+        void main() {
+            vUv = uv;
+            vec3 moved = position + normal * lift * sin(position.x * 6.0);
+            vec4 world = modelMatrix * vec4(moved, 1.0);
+            vWorld = world.xyz;
+            gl_Position = projectionMatrix * viewMatrix * world;
+        }
+        """,
+        """
+        uniform sampler2D map;
+        uniform vec3 tint;
+        varying vec2 vUv;
+        varying vec3 vWorld;
+        float bands(float x) {
+            float sum = 0.0;
+            for (int i = 1; i <= 3; i++) {
+                sum += abs(sin(x * float(i) * 4.0)) / float(i);
+            }
+            return sum;
+        }
+        void main() {
+            if (fract(vUv.x * 12.0) < 0.15) discard;
+            vec4 texel = texture2D(map, vUv * 2.0);
+            float edge = fwidth(vUv.y) * 30.0;
+            vec3 base = mix(tint, texel.rgb, 0.5) * (0.5 + 0.25 * bands(vWorld.y));
+            gl_FragColor = vec4(base + vec3(edge), 1.0);
+        }
+        """,
+    )
+    program.set_uniform("lift", Float32(0.05))
+    program.set_uniform("tint", Vector3(0.9, 0.4, 0.2))
+    program.set_texture("map", map)
+    var id = assets.programs.add(program^)
+    var ball = assets.geometries.add(sphere(Length(0.8, METER), 18, 12))
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    scene.add_mesh(Mesh(ball, assets.materials.add(shader_material(id)), node))
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0.2, 0.4, 3.0), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        programs=frame.programs,
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_the_gpu_refuses_a_texture_uniform_that_names_none() raises:
+    # A texture uniform never set reads nothing the kernel can index.
+    if skipped_for_lack_of_a_gpu("the gpu refuses an unset texture uniform"):
+        return
+    var graph = NodeGraph()
+    var map = graph.texture_uniform("map")
+    graph.set_output(
+        NODES_COLOR, graph.swizzle(graph.texture(map, graph.uv()), "rgb")
+    )
+    var store = NodeProgramStore()
+    _ = store.add(graph.compile())
+    var renderer = GpuRenderer(36, 30)
+    renderer.set_textures(TextureStore())
+    with assert_raises(contains="names no texture; call set_texture() first"):
+        renderer.draw(
+            with_nodes(overlapping_pair(), 0),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            programs=store,
+        )
+    renderer.draw(
+        with_nodes(overlapping_pair(), 0), BACKGROUND, SHADE_LIT, programs=store
+    )
+
+
 # --- specular and clearcoat maps --------------------------------------------
 
 from render.gpu import (

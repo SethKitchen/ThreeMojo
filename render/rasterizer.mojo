@@ -57,7 +57,12 @@ from render.cube_texture_store import (
     CubeTextureStore,
 )
 from render.target import RenderTarget
-from render.raster_state import RasterState, fragment_depth, shades
+from render.raster_state import (
+    REVERSED_DEPTH,
+    RasterState,
+    fragment_depth,
+    shades,
+)
 from render.packing import (
     BASIC_DEPTH_PACKING,
     DepthPacking,
@@ -76,19 +81,30 @@ from render.texture import (
 )
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from materials.nodes import (
+    AO_NODE,
+    AT_RIGHT,
+    AT_UP,
     COLOR_NODE,
+    CORNER_A,
+    CORNER_B,
+    DEPTH_NODE,
     EMISSIVE_NODE,
+    MASK_NODE,
     NORMAL_NODE,
     NO_NODES,
     OPACITY_NODE,
     OUTPUT_NODE,
+    NodeContext,
     NodeInputs,
     NodeProgram,
     NodeProgramId,
     NodeProgramStore,
     NodeSource,
+    here_inputs,
+    node_depth,
     offset_normal,
     has_output,
+    perspective_shares,
     run_nodes,
 )
 from render.transmission import (
@@ -2542,6 +2558,11 @@ def check_triangle_maps(
         ref program = programs.get(a.nodes)
         if mode == SHADE_TEXTURE:
             for index in range(len(program.textures)):
+                if program.textures[index].value < 0:
+                    raise Error(
+                        "A node program reads a texture uniform that names"
+                        " no texture; call set_texture() first"
+                    )
                 _ = textures.get(program.textures[index]).width
 
 
@@ -2825,6 +2846,12 @@ def rasterize_shaded(
         coverage,
     )
     var textured = mode == SHADE_TEXTURE
+    # Whether the graph can throw a fragment away, as an alpha test can:
+    # its mask, which every `Discard` joins. And whether it sets the depth
+    # itself, before the tests read it.
+    var masked = noded and has_output(nodes, MASK_NODE)
+    var deep = noded and has_output(nodes, DEPTH_NODE)
+    var reversed = a.state.depth_mode == REVERSED_DEPTH
 
     var box = _bounds(flat, target.width, target.height, first_row, last_row)
     # The edge functions are evaluated once, at the box's top-left pixel,
@@ -2854,6 +2881,18 @@ def rasterize_shaded(
             # `render.raster_state.fragment_depth`. A `DEPTH` material
             # still shows `z`.
             var stored_z = fragment_depth(a.state, z, inv_w)
+            # The node graph's depth replaces it, three.js's `depthNode`,
+            # from the fragment's own interpolated attributes: the shading
+            # that makes the rest has not run yet.
+            nodes.x = x
+            nodes.y = y
+            if deep:
+                stored_z = node_depth(
+                    run_nodes(nodes, DEPTH_NODE, here_inputs(nodes, textured))[
+                        0
+                    ],
+                    reversed,
+                )
             # The stencil and the depth tests, asked without changing
             # anything: the depth and the stencil are written once the
             # fragment survives its alpha test, the *late* write a GPU
@@ -2861,7 +2900,7 @@ def rasterize_shaded(
             # settles here unless an alpha test could still discard it;
             # see `render.raster_state.shades`.
             var test = target.test_fragment(x, y, stored_z, a.state)
-            if not shades(test, tested):
+            if not shades(test, tested or masked):
                 target.keep_stencil(x, y, test)
                 continue
             # Nothing in the renderer produces a zero here: clipping removes
@@ -3033,8 +3072,6 @@ def rasterize_shaded(
                     )
             # The node graph's normal offset, after any map and before the
             # lights read the normal, as three.js's `normalNode` is.
-            nodes.x = x
-            nodes.y = y
             if noded and has_output(nodes, NORMAL_NODE):
                 facing = offset_normal(
                     facing,
@@ -3164,20 +3201,35 @@ def rasterize_shaded(
                     )
                     if not lit:
                         arriving = FloatColor(0.0, 0.0, 0.0, 1.0)
-                if not physical:
-                    var indirect = Vector3(arriving.r, arriving.g, arriving.b)
-                    if lit:
-                        var around = lighting.indirect_at(facing)
-                        indirect = Vector3(around.r, around.g, around.b)
-                    var occluded = occluded_light(
-                        Vector3(arriving.r, arriving.g, arriving.b),
-                        indirect,
-                        baked,
-                        occlusion,
-                    )
-                    arriving = FloatColor(
-                        occluded.x, occluded.y, occluded.z, 1.0
-                    )
+            # The node graph's ambient occlusion replaces the map's,
+            # three.js's `aoNode`, under every mode that shades.
+            var occludes = noded and has_output(nodes, AO_NODE)
+            if occludes:
+                occlusion = run_nodes(
+                    nodes,
+                    AO_NODE,
+                    NodeInputs(
+                        u,
+                        v,
+                        spot,
+                        facing,
+                        Vector3(base.r, base.g, base.b),
+                        Vector3(0, 0, 0),
+                        textured,
+                    ),
+                )[0]
+            if (bakes or occludes) and not physical:
+                var indirect = Vector3(arriving.r, arriving.g, arriving.b)
+                if a.kind.is_lit():
+                    var around = lighting.indirect_at(facing)
+                    indirect = Vector3(around.r, around.g, around.b)
+                var occluded = occluded_light(
+                    Vector3(arriving.r, arriving.g, arriving.b),
+                    indirect,
+                    baked,
+                    occlusion,
+                )
+                arriving = FloatColor(occluded.x, occluded.y, occluded.z, 1.0)
             var shaded = FloatColor(
                 base.r * arriving.r,
                 base.g * arriving.g,
@@ -3512,6 +3564,11 @@ def rasterize_shaded(
                     glow = FloatColor(
                         given_off[0], given_off[1], given_off[2], 1.0
                     )
+                # Thrown away where the mask is zero, three.js's `maskNode`
+                # and every `Discard`: before the alpha test, as three.js
+                # discards it in `setupDiffuseColor`.
+                if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
+                    continue
             # Thrown away for being too transparent, three.js's
             # `alphatest_fragment`: no color, and no depth either, so what
             # is behind this hole is drawn instead. Asked once the maps have
@@ -3931,6 +3988,38 @@ struct _HostNodes[origin: Origin[mut=False]](NodeSource):
             self.coverage,
             self.x,
             self.y,
+        )
+
+    def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return each corner's perspective-correct weight at this pixel,
+        or at the pixel to its right or above it, from the triangle's own
+        edge functions, as `_sample_map` measures a footprint."""
+        var x = self.x + (1 if context == AT_RIGHT else 0)
+        var y = self.y - (1 if context == AT_UP else 0)
+        var weights = _weights(self.coverage, x, y)
+        return perspective_shares(
+            weights.wa,
+            weights.wb,
+            weights.wc,
+            self.a[].inv_w,
+            self.b[].inv_w,
+            self.c[].inv_w,
+        )
+
+    def corner(self, context: NodeContext) -> NodeInputs:
+        """Return one corner's coordinates, world position, normal and
+        color."""
+        ref at = self.a[] if context == CORNER_A else (
+            self.b[] if context == CORNER_B else self.c[]
+        )
+        return NodeInputs(
+            at.u,
+            at.v,
+            at.world,
+            at.normal,
+            Vector3(at.color.r, at.color.g, at.color.b),
+            Vector3(0, 0, 0),
+            False,
         )
 
 

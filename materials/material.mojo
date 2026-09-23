@@ -3292,14 +3292,15 @@ def shader_material(
     """Return three.js's `ShaderMaterial` as this port has it: an unlit
     surface whose color a node graph computes.
 
-    three.js compiles the GLSL source of a `fragmentShader`. This port has
-    no shader language, so the fragment program is a compiled
-    `materials.nodes.NodeGraph`: its `COLOR_NODE` is `gl_FragColor.rgb`,
+    three.js hands the GLSL source of a `vertexShader` and a
+    `fragmentShader` to WebGL. Here the program is a compiled
+    `materials.nodes.NodeGraph`: built by hand, or compiled from a subset
+    of GLSL by `materials.glsl.compile_shader_material` or
+    `compile_raw_shader_material`. Its `COLOR_NODE` is `gl_FragColor.rgb`,
     its `OPACITY_NODE` the alpha, and its uniforms are three.js's
-    `uniforms`, set by name with `NodeProgram.set_uniform`. A GLSL string
-    cannot be compiled here. The surface is `BASIC`, which no light
-    reaches, as three.js's `lights` is off by default, and no fog reaches
-    it, as three.js's `fog` is off by default.
+    `uniforms`, set by name with `NodeProgram.set_uniform`. The surface is
+    `BASIC`, which no light reaches, as three.js's `lights` is off by
+    default, and no fog reaches it, as three.js's `fog` is off by default.
 
     Args:
         fragment: The compiled graph, in the store the renderer draws with.

@@ -210,17 +210,28 @@ from render.tonemap import (
     tone_map,
 )
 from materials.nodes import (
+    AO_NODE,
+    AT_RIGHT,
+    AT_UP,
     COLOR_NODE,
+    CORNER_A,
+    CORNER_B,
+    DEPTH_NODE,
     EMISSIVE_NODE,
+    MASK_NODE,
     NORMAL_NODE,
     NO_NODES,
     OPACITY_NODE,
     OUTPUT_NODE,
+    NodeContext,
     NodeInputs,
     NodeProgramStore,
     NodeSource,
+    here_inputs,
+    node_depth,
     offset_normal,
     has_output,
+    perspective_shares,
     run_nodes,
 )
 from render.transmission import (
@@ -3030,6 +3041,67 @@ struct _DeviceNodes[origin: Origin[mut=True]](NodeSource):
             v,
         )
 
+    def shares(self, context: NodeContext) -> SIMD[DType.float32, 4]:
+        """Return each corner's perspective-correct weight at this pixel,
+        or at the pixel to its right or above it, from the triangle's own
+        edge functions, as `_uv_at` reads the pixels either side."""
+        var px = self.px + (SUBPIXEL if context == AT_RIGHT else 0)
+        var py = self.py - (SUBPIXEL if context == AT_UP else 0)
+        var e_ab = edge_at(self.ax, self.ay, self.bx, self.by, px, py)
+        var e_bc = edge_at(self.bx, self.by, self.cx, self.cy, px, py)
+        var e_ca = edge_at(self.cx, self.cy, self.ax, self.ay, px, py)
+        var wa = Float32(e_bc) * self.span_inv
+        var wb = Float32(e_ca) * self.span_inv
+        var wc = Float32(e_ab) * self.span_inv
+        if self.swapped:
+            var held = wb
+            wb = wc
+            wc = held
+        return perspective_shares(
+            wa,
+            wb,
+            wc,
+            self.corners[unsafe_offset=self.base + LANE_INV_W],
+            self.corners[
+                unsafe_offset=self.base + FLOATS_PER_VERTEX + LANE_INV_W
+            ],
+            self.corners[
+                unsafe_offset=self.base + 2 * FLOATS_PER_VERTEX + LANE_INV_W
+            ],
+        )
+
+    def corner(self, context: NodeContext) -> NodeInputs:
+        """Return one corner's coordinates, world position, normal and
+        color, from its lanes."""
+        var at = self.base + (
+            0 if context
+            == CORNER_A else (
+                FLOATS_PER_VERTEX if context
+                == CORNER_B else 2 * FLOATS_PER_VERTEX
+            )
+        )
+        return NodeInputs(
+            self.corners[unsafe_offset=at + LANE_U],
+            self.corners[unsafe_offset=at + LANE_V],
+            Vector3(
+                self.corners[unsafe_offset=at + LANE_WX],
+                self.corners[unsafe_offset=at + LANE_WY],
+                self.corners[unsafe_offset=at + LANE_WZ],
+            ),
+            Vector3(
+                self.corners[unsafe_offset=at + LANE_NX],
+                self.corners[unsafe_offset=at + LANE_NY],
+                self.corners[unsafe_offset=at + LANE_NZ],
+            ),
+            Vector3(
+                self.corners[unsafe_offset=at + LANE_R],
+                self.corners[unsafe_offset=at + LANE_G],
+                self.corners[unsafe_offset=at + LANE_B],
+            ),
+            Vector3(0, 0, 0),
+            False,
+        )
+
 
 def _transmitted(
     backdrop: MutPointer[UInt8, MutAnyOrigin],
@@ -3698,11 +3770,48 @@ def rasterize_kernel(
             # material still shows `z`.
             state.log_depth_scale = corners[unsafe_offset=base + LANE_LOG_DEPTH]
             var stored_z = fragment_depth(state, z, inv_w)
+            # Whether a node graph replaces parts of the shading, as
+            # `rasterize_shaded` decides it, and the program it runs,
+            # read out of the fog buffer where it starts.
+            var program = Int(
+                maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_NODES]
+            )
+            var noded = program >= 0 and mode != Int32(SHADE_UV.value)
+            var textured = mode == Int32(SHADE_TEXTURE.value)
+            var nodes = _DeviceNodes(
+                fog,
+                program,
+                texels,
+                ramp,
+                table,
+                corners,
+                base,
+                sax,
+                say,
+                sbx,
+                sby,
+                scx,
+                scy,
+                span_inv,
+                swapped,
+                px,
+                py,
+            )
+            # Whether the graph can throw the fragment away, and its depth
+            # in place of the plane's, as `rasterize_shaded` asks both.
+            var masked = noded and has_output(nodes, MASK_NODE)
+            if noded and has_output(nodes, DEPTH_NODE):
+                stored_z = node_depth(
+                    run_nodes(nodes, DEPTH_NODE, here_inputs(nodes, textured))[
+                        0
+                    ],
+                    state.depth_mode == REVERSED_DEPTH,
+                )
             var held = nearest
             if not solid:
                 held = cleared_depth(state.depth_mode)
             var test = test_fragment(state, stored_z, held, stencil)
-            if not shades(test, tested):
+            if not shades(test, tested or masked):
                 stencil = test.stencil
                 continue
             var share_a = wa
@@ -3754,33 +3863,6 @@ def rasterize_kernel(
             var measures = kind == Int32(DISTANCE.value)
             var shows_data = (
                 shows_normal or kind == Int32(DEPTH.value) or measures
-            )
-            # Whether a node graph replaces parts of the shading, as
-            # `rasterize_shaded` decides it, and the program it runs,
-            # read out of the fog buffer where it starts.
-            var program = Int(
-                maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_NODES]
-            )
-            var noded = program >= 0 and mode != Int32(SHADE_UV.value)
-            var textured = mode == Int32(SHADE_TEXTURE.value)
-            var nodes = _DeviceNodes(
-                fog,
-                program,
-                texels,
-                ramp,
-                table,
-                corners,
-                base,
-                sax,
-                say,
-                sbx,
-                sby,
-                scx,
-                scy,
-                span_inv,
-                swapped,
-                px,
-                py,
             )
             # The interpolated normal, made a unit vector again here. That
             # renormalization is the difference between per-fragment and
@@ -4306,21 +4388,40 @@ def rasterize_kernel(
                     )
                     if not lit:
                         arriving = Vector3(0, 0, 0)
-                if not physical:
-                    var indirect = arriving
-                    if lit:
-                        indirect = _indirect(
-                            lights,
-                            Int(light_count),
-                            Int(point_count),
-                            Int(hemisphere_count),
-                            nx,
-                            ny,
-                            nz,
-                        )
-                    arriving = occluded_light(
-                        arriving, indirect, baked, occlusion
+            # The node graph's ambient occlusion, as the host replaces the
+            # map's with it.
+            var occludes = noded and has_output(nodes, AO_NODE)
+            if occludes:
+                occlusion = run_nodes(
+                    nodes,
+                    AO_NODE,
+                    NodeInputs(
+                        u,
+                        v,
+                        Vector3(wx, wy, wz),
+                        Vector3(nx, ny, nz),
+                        tint,
+                        Vector3(0, 0, 0),
+                        textured,
+                    ),
+                )[0]
+            if (
+                (mode == Int32(SHADE_TEXTURE.value))
+                and (ao_slot >= 0 or light_slot >= 0)
+                or occludes
+            ) and not physical:
+                var indirect = arriving
+                if lit:
+                    indirect = _indirect(
+                        lights,
+                        Int(light_count),
+                        Int(point_count),
+                        Int(hemisphere_count),
+                        nx,
+                        ny,
+                        nz,
                     )
+                arriving = occluded_light(arriving, indirect, baked, occlusion)
             # What a physical surface's roughness and metalness are
             # multiplied by: its maps' green and blue, or one for none.
             var rough_factor = Float32(1)
@@ -4958,6 +5059,9 @@ def rasterize_kernel(
                         glow_r = given_off[0]
                         glow_g = given_off[1]
                         glow_b = given_off[2]
+                    # The mask, before the alpha test, as the host asks it.
+                    if masked and run_nodes(nodes, MASK_NODE, given)[0] == 0:
+                        continue
                 # Thrown away for being too transparent, three.js's
                 # `alphatest_fragment`. Leaving `nearest` alone is the late
                 # depth write the host makes with `claim_depth`: the hole
@@ -6245,6 +6349,11 @@ struct GpuRenderer(Movable):
                 if mode != SHADE_TEXTURE:
                     continue
                 for slot in range(len(program.textures)):
+                    if program.textures[slot].value < 0:
+                        raise Error(
+                            "A node program reads a texture uniform that"
+                            " names no texture; call set_texture() first"
+                        )
                     if program.textures[slot].value >= self.uploaded:
                         raise Error(
                             "A node program reads a texture that has not"
