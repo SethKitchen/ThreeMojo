@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 149 features are ported and 4 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 150 features are ported and 3 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -124,11 +124,10 @@ The port is not at parity with three.js yet. 149 features are ported and 4 are o
 
 ### Materials
 
-- [ ] Sheen, iridescence and anisotropy [#122](https://github.com/SethKitchen/ThreeMojo/issues/122)
 - [ ] Custom shading: ShaderMaterial and node materials [#126](https://github.com/SethKitchen/ThreeMojo/issues/126)
 
 <details>
-<summary>Ported: 25</summary>
+<summary>Ported: 26</summary>
 
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
 - [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
@@ -154,6 +153,7 @@ The port is not at parity with three.js yet. 149 features are ported and 4 are o
 - [x] [Specular map and flat shading](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#specular-map): highlights and reflections scaled by a map, and faces lit by their own normals [#120](https://github.com/SethKitchen/ThreeMojo/issues/120)
 - [x] [Displacement map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#displacement-map): vertices moved along their normals by a map, and drawn, shadowed and picked where they moved [#119](https://github.com/SethKitchen/ThreeMojo/issues/119)
 - [x] [Transmission, thickness, attenuation and dispersion](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#transmission): the opaque scene drawn first, then refracted, blurred and tinted through physical surfaces on both backends [#121](https://github.com/SethKitchen/ThreeMojo/issues/121)
+- [x] [Sheen, iridescence and anisotropy](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#sheen): Charlie sheen, thin-film Fresnel and stretched GGX on physical materials, with their maps and glTF extensions. [#122](https://github.com/SethKitchen/ThreeMojo/issues/122)
 - [x] [MeshDistanceMaterial, depth packings and Material.fog](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#meshdistancematerial): distance from a point, the four depth packings, and a per-material fog switch [#125](https://github.com/SethKitchen/ThreeMojo/issues/125)
 
 </details>
