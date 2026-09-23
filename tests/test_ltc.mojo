@@ -500,20 +500,22 @@ def test_a_rect_area_light_is_resolved_through_its_nodes_world_matrix() raises:
     assert_almost_equal(lighting.rect_half_widths[0].y, Float32(0), atol=1e-6)
     assert_almost_equal(lighting.rect_half_heights[0].y, Float32(1), atol=1e-6)
     assert_almost_equal(lighting.rect_radiances[0].r, Float32(0.5), atol=1e-6)
-    # A scaled and turned node scales and turns the rectangle.
+    # A turned node turns the rectangle, and its scale does not grow it:
+    # three.js takes only the rotation of the world matrix, by
+    # `extractRotation`, to the half width and half height.
     var scene = Scene()
     var lamp = Object3D()
     lamp.set_position(0, 0, 1)
-    lamp.set_scale(3, 1, 1)
+    lamp.set_scale(3, 4, 1)
     lamp.rotate_z(Angle(90.0, DEGREE))
     var node = scene.add(lamp^)
     scene.add_light(rect_area_light(WHITE, node, 1, Length(2.0, METER)))
     scene.update()
     var turned = lit_rect(scene)
-    # The width now runs along y, three meters long each way, and the
-    # default ten-meter height along -x.
+    # The width now runs along y, one meter each way as the light says,
+    # and the default ten-meter height along -x.
     assert_almost_equal(turned.rect_half_widths[0].x, Float32(0), atol=1e-5)
-    assert_almost_equal(turned.rect_half_widths[0].y, Float32(3), atol=1e-5)
+    assert_almost_equal(turned.rect_half_widths[0].y, Float32(1), atol=1e-5)
     assert_almost_equal(turned.rect_half_heights[0].x, Float32(-5), atol=1e-5)
     assert_almost_equal(turned.rect_half_heights[0].y, Float32(0), atol=1e-5)
 

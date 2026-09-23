@@ -1335,9 +1335,12 @@ struct Lighting(Movable):
                 )
             elif light.kind == RECT_AREA:
                 # The rectangle's center, and its half width and half
-                # height turned and scaled by its node's world matrix, as
-                # three.js applies `matrixWorld` to `halfWidth` and
-                # `halfHeight`: a scaled node makes a larger rectangle.
+                # height turned by its node's world matrix. three.js takes
+                # only the rotation, by `extractRotation`, so the node's
+                # scale does not change the rectangle: `width` and `height`
+                # are its size. Each axis is the matrix's axis column made
+                # unit length, which is what `extractRotation` makes it; an
+                # axis scaled to zero stays zero, a rectangle with no area.
                 if not self.ltc.is_loaded():
                     raise Error(
                         "A rect area light needs the LTC tables: load them"
@@ -1346,15 +1349,15 @@ struct Lighting(Movable):
                     )
                 var placed = scene.world_matrix(light.node)
                 self.rect_positions.append(scene.world_position(light.node))
+                var across = placed.transform_direction(Vector3(1, 0, 0))
+                across.normalize()
+                var along = placed.transform_direction(Vector3(0, 1, 0))
+                along.normalize()
                 self.rect_half_widths.append(
-                    placed.transform_direction(
-                        Vector3(light.width.to(METER) * 0.5, 0, 0)
-                    )
+                    across * (light.width.to(METER) * 0.5)
                 )
                 self.rect_half_heights.append(
-                    placed.transform_direction(
-                        Vector3(0, light.height.to(METER) * 0.5, 0)
-                    )
+                    along * (light.height.to(METER) * 0.5)
                 )
                 self.rect_radiances.append(light.radiance())
             else:

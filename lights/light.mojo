@@ -589,8 +589,9 @@ def rect_area_light(
 
     The node is where the rectangle's center is and which way it faces:
     it shines along the node's -z, its width along the node's x and its
-    height along its y, turned and scaled by the node's world matrix as
-    three.js turns `halfWidth` and `halfHeight`. Aim it as a camera is
+    height along its y, turned by the node's world matrix as three.js
+    turns `halfWidth` and `halfHeight`. The node's scale does not change
+    its size, as three.js takes only the rotation. Aim it as a camera is
     aimed, by turning its node. It has no target, no falloff of its own
     beyond the geometry of a rectangle seen from further away, and no
     shadow, as three.js's has none.
