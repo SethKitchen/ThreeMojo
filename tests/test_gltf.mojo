@@ -467,7 +467,19 @@ def test_an_image_is_told_by_its_first_bytes() raises:
     assert_equal(png.pixels[0], UInt8(255))
     var jpeg = decode_image(Path("assets/jpeg/gradient420.jpg").read_bytes())
     assert_true(jpeg.width > 0)
-    with assert_raises():
+    # A TGA has no signature: one true-color pixel, blue, green and red.
+    var tga = List[UInt8](length=18, fill=0)
+    tga[2] = 2
+    tga[12] = 1
+    tga[14] = 1
+    tga[16] = 24
+    tga.append(10)
+    tga.append(20)
+    tga.append(30)
+    var pixel = decode_image(tga).get_pixel(0, 0)
+    assert_equal(pixel.r, UInt8(30))
+    assert_equal(pixel.b, UInt8(10))
+    with assert_raises(contains="not a TGA"):
         _ = decode_image(Path("assets/cube.obj").read_bytes())
     with assert_raises():
         _ = decode_image(List[UInt8]())

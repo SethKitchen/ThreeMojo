@@ -74,6 +74,7 @@ from render.framebuffer import Color, FloatColor
 from render.jpeg import decode as decode_jpeg
 from render.png import DecodedImage, decode as decode_png
 from render.srgb import LINEAR, SRGB, ColorSpace
+from render.tga import decode as decode_tga
 from render.texture import (
     BILINEAR,
     CLAMP,
@@ -1105,20 +1106,32 @@ def _wrap_of(mode: Int) raises -> Wrap:
 def decode_image(bytes: List[UInt8]) raises -> DecodedImage:
     """Return an image decoded by what its first bytes say it is.
 
+    A PNG and a JPEG each begin with a signature. A TGA has none, so bytes
+    that begin as neither are read as a TGA, whose header check refuses
+    most other files. glTF itself names only PNG and JPEG; the TGA
+    fallback is this port's, for a model that points at a TGA texture.
+
     Args:
-        bytes: A PNG or a JPEG file.
+        bytes: A PNG, a JPEG or a TGA file.
 
     Returns:
         The image.
 
     Raises:
-        Error: If the bytes begin as neither, or the decoder refuses them.
+        Error: If the bytes begin as neither PNG nor JPEG and are not a
+            TGA either, or the decoder refuses them.
     """
     if len(bytes) >= 8 and bytes[0] == 0x89 and bytes[1] == 0x50:
         return decode_png(bytes)
     if len(bytes) >= 2 and bytes[0] == 0xFF and bytes[1] == 0xD8:
         return decode_jpeg(bytes)
-    raise Error("glTF: an image that is neither PNG nor JPEG")
+    try:
+        return decode_tga(bytes)
+    except error:
+        raise Error(
+            "glTF: an image that is neither PNG nor JPEG, and not a TGA: "
+            + String(error)
+        )
 
 
 def _apply_matrix(mut node: Object3D, matrix: List[Float32]) raises:

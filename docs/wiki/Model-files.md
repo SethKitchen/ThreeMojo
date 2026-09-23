@@ -187,7 +187,7 @@ A `.glb` is told by its magic. Anything else is read as JSON. A buffer or an ima
 | `load_gltf(text, bin, directory, scene, assets) -> GltfModel` | Read the JSON of one, with a `.glb`'s binary chunk or none. |
 | `split_glb(bytes) -> (String, List[UInt8])` | A `.glb`'s JSON and its binary chunk. |
 | `decode_base64(text) -> List[UInt8]` | The bytes of a base64 text. |
-| `decode_image(bytes) -> DecodedImage` | A PNG or a JPEG, told by its first bytes. |
+| `decode_image(bytes) -> DecodedImage` | A PNG or a JPEG, told by its first bytes. Other bytes are read as a TGA, which has no signature. |
 
 ### GltfModel
 
@@ -227,7 +227,7 @@ The loader raises for:
 - A file it cannot read. A document that is not JSON or not glTF 2. A required extension.
 - A buffer shorter than its length. A buffer view or accessor that runs past its buffer.
 - An unknown accessor type or component type. An attribute of the wrong width. Indices that are not unsigned integers.
-- An image that is neither PNG nor JPEG. A texture or material that names something the file does not have.
+- An image that is not PNG, JPEG or TGA. A texture or material that names something the file does not have.
 - An unknown wrap mode or alpha mode.
 - A node reached twice. A node matrix that flattens an axis.
 

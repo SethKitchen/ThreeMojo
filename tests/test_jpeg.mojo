@@ -289,22 +289,27 @@ def test_upsampling_reads_full_resolution_as_it_is_and_halves_by_thirds() raises
     # own; read at twice the width, the pixel nearer a sample takes three
     # quarters of it, and the edge repeats.
     var plane: List[UInt8] = [0, 100, 200, 40, 10, 110, 210, 50]
-    assert_equal(upsampled(plane, 4, 2, 2, 1, 1, 1), UInt8(210))
-    assert_equal(upsampled(plane, 4, 2, 0, 0, 2, 1), UInt8(0))
-    assert_equal(upsampled(plane, 4, 2, 1, 0, 2, 1), UInt8(25))
-    assert_equal(upsampled(plane, 4, 2, 2, 0, 2, 1), UInt8(75))
-    assert_equal(upsampled(plane, 4, 2, 3, 0, 2, 1), UInt8(125))
+    assert_equal(upsampled(plane, 4, 4, 2, 2, 1, 1, 1), UInt8(210))
+    assert_equal(upsampled(plane, 4, 4, 2, 0, 0, 2, 1), UInt8(0))
+    assert_equal(upsampled(plane, 4, 4, 2, 1, 0, 2, 1), UInt8(25))
+    assert_equal(upsampled(plane, 4, 4, 2, 2, 0, 2, 1), UInt8(75))
+    assert_equal(upsampled(plane, 4, 4, 2, 3, 0, 2, 1), UInt8(125))
     # Down as well: the top edge repeats, and the second row leans down.
-    assert_equal(upsampled(plane, 4, 2, 0, 0, 1, 2), UInt8(0))
-    assert_equal(upsampled(plane, 4, 2, 1, 1, 1, 2), UInt8(103))
-    assert_equal(upsampled(plane, 4, 2, 1, 2, 1, 2), UInt8(108))
+    assert_equal(upsampled(plane, 4, 4, 2, 0, 0, 1, 2), UInt8(0))
+    assert_equal(upsampled(plane, 4, 4, 2, 1, 1, 1, 2), UInt8(103))
+    assert_equal(upsampled(plane, 4, 4, 2, 1, 2, 1, 2), UInt8(108))
     # Both ways at once.
-    assert_equal(upsampled(plane, 4, 2, 0, 0, 2, 2), UInt8(0))
-    assert_equal(upsampled(plane, 4, 2, 1, 1, 2, 2), UInt8(28))
+    assert_equal(upsampled(plane, 4, 4, 2, 0, 0, 2, 2), UInt8(0))
+    assert_equal(upsampled(plane, 4, 4, 2, 1, 1, 2, 2), UInt8(28))
     # The far corner of an image that is whole units across and down
     # leans past the plane's last sample, and reads the edge again.
-    assert_equal(upsampled(plane, 4, 2, 7, 3, 2, 2), UInt8(50))
-    assert_equal(upsampled(plane, 4, 2, 7, 0, 2, 1), UInt8(40))
+    assert_equal(upsampled(plane, 4, 4, 2, 7, 3, 2, 2), UInt8(50))
+    assert_equal(upsampled(plane, 4, 4, 2, 7, 0, 2, 1), UInt8(40))
+    # A component three samples wide in a plane of four: the fourth is
+    # padding, and the edge repeats the third rather than read it. The
+    # same holds for a component one row tall in a plane of two.
+    assert_equal(upsampled(plane, 4, 3, 2, 5, 0, 2, 1), UInt8(200))
+    assert_equal(upsampled(plane, 4, 4, 1, 0, 1, 1, 2), UInt8(0))
 
 
 def test_a_huffman_table_is_checked_as_it_is_built() raises:
@@ -399,11 +404,45 @@ def test_a_decoded_file_becomes_a_texture() raises:
     assert_equal(skin.color_space, SRGB)
 
 
-def test_progressive_and_cmyk_files_are_refused_by_name() raises:
-    with assert_raises(contains="baseline"):
-        _ = decode(fixture("progressive.jpg"))
+def test_a_cmyk_file_is_refused_by_name() raises:
     with assert_raises(contains="CMYK"):
         _ = decode(fixture("cmyk.jpg"))
+
+
+# --- progressive files libjpeg wrote ----------------------------------------
+
+
+def test_a_progressive_file_decodes_to_what_its_baseline_twin_does() raises:
+    # PIL saved each picture twice at one quality, once baseline and once
+    # progressive. The quantized coefficients are the same, sent in one
+    # scan or in ten, so the two decode to the very same samples.
+    for name in ["prog420", "prog444", "prog422", "proggray", "progrestart"]:
+        var progressive = decode(fixture(name + ".jpg"))
+        var baseline = decode(fixture(name + "_baseline.jpg"))
+        assert_equal(worst_difference(progressive, baseline), 0)
+        assert_equal(progressive.color_space, SRGB)
+    var odd = decode(fixture("prog420.jpg"))
+    assert_equal(odd.width, 21)
+    assert_equal(odd.height, 13)
+
+
+def test_a_progressive_file_matches_libjpeg_to_two_levels() raises:
+    # Spectral selection, successive approximation and end-of-band runs.
+    for name in ["prog420", "proggray", "progressive"]:
+        var image = decode(fixture(name + ".jpg"))
+        var reference = decode_png(fixture(name + "_ref.png"))
+        assert_true(
+            worst_difference(image, reference) <= 2, "further than two levels"
+        )
+    # A restart marker after every unit of every scan, in a checkered
+    # picture whose sharp chroma edges put one pixel of the upsampled
+    # result at three levels: libjpeg rounds its integer filter where
+    # this one rounds once, at the end.
+    var restarted = decode(fixture("progrestart.jpg"))
+    var reference = decode_png(fixture("progrestart_ref.png"))
+    assert_true(
+        worst_difference(restarted, reference) <= 3, "further than three"
+    )
 
 
 # --- files assembled by hand ------------------------------------------------
@@ -658,6 +697,433 @@ def test_a_file_the_macos_encoder_wrote_decodes_to_two_levels() raises:
     assert_true(
         worst_difference(image, reference) <= 2, "further than two levels"
     )
+
+
+# --- progressive files assembled by hand ------------------------------------
+
+
+struct Bits(Movable):
+    """Entropy-coded bits written by hand: most significant first, a
+    stuffed zero after every 0xFF, and one bits to pad the last byte."""
+
+    var bytes: List[UInt8]
+    var held: Int
+    var count: Int
+
+    def __init__(out self):
+        self.bytes = List[UInt8]()
+        self.held = 0
+        self.count = 0
+
+    def put(mut self, value: Int, size: Int):
+        """Append the low `size` bits of `value`."""
+        for index in range(size):
+            self.held = (self.held << 1) | ((value >> (size - 1 - index)) & 1)
+            self.count += 1
+            if self.count == 8:
+                self.bytes.append(UInt8(self.held))
+                if self.held == 0xFF:
+                    self.bytes.append(0)
+                self.held = 0
+                self.count = 0
+
+    def dc(mut self, size: Int):
+        """Append the DC code for a size of zero, one, two or five."""
+        var sizes: List[Int] = [0, 1, 2, 5]
+        for index in range(len(sizes)):
+            if sizes[index] == size:
+                self.put(index, 3)
+
+    def ac(mut self, symbol: Int):
+        """Append the AC code for `symbol`, one of `AC_SYMBOLS`."""
+        var symbols = ac_symbols()
+        for index in range(len(symbols)):
+            if symbols[index] == symbol:
+                self.put(index, 4)
+
+    def finish(self) -> List[UInt8]:
+        """Return every byte, the last padded with one bits."""
+        var out = self.bytes.copy()
+        if self.count > 0:
+            var pad = 8 - self.count
+            var byte = (self.held << pad) | ((1 << pad) - 1)
+            out.append(UInt8(byte))
+            if byte == 0xFF:
+                out.append(0)
+        return out^
+
+
+def ac_symbols() -> List[Int]:
+    """Return the AC symbols the hand-made files code, at four-bit codes:
+    end of band, a one-bit value, a run of two end-of-bands, a run of one
+    and a two-bit value, sixteen zeros, a run of one and a one-bit value,
+    a run of five and a one-bit value, a two-bit value, a run of three and
+    a one-bit value."""
+    return [0x00, 0x01, 0x10, 0x12, 0xF0, 0x11, 0x51, 0x02, 0x31]
+
+
+def hand_head(
+    ids: List[Int], width: Int, height: Int, marker: Int = 0xC2
+) -> List[UInt8]:
+    """Return a file's start up to its first scan: every quantization
+    step one, every component sampled once, the DC table coding sizes
+    zero, one, two and five at three bits, and the AC table coding
+    `ac_symbols` at four."""
+    var out = List[UInt8]()
+    out.append(0xFF)
+    out.append(0xD8)
+    var quant = List[Int]()
+    quant.append(0)
+    for _ in range(BLOCK_SAMPLES):
+        quant.append(1)
+    push_segment(out, 0xDB, quant)
+    var frame: List[Int] = [8, height >> 8, height & 0xFF, width >> 8, width]
+    frame[4] = width & 0xFF
+    frame.append(len(ids))
+    for id in ids:
+        frame.append(id)
+        frame.append(0x11)
+        frame.append(0)
+    push_segment(out, marker, frame)
+    push_segment(out, 0xC4, huffman_payload(0, [0, 0, 4], [0, 1, 2, 5]))
+    push_segment(
+        out,
+        0xC4,
+        huffman_payload(1, [0, 0, 0, len(ac_symbols())], ac_symbols()),
+    )
+    return out^
+
+
+def add_scan(
+    mut out: List[UInt8],
+    ids: List[Int],
+    first: Int,
+    last: Int,
+    high: Int,
+    low: Int,
+    bits: Bits,
+    tables: Int = 0x00,
+):
+    """Append a scan header and its coded bits."""
+    var header = List[Int]()
+    header.append(len(ids))
+    for id in ids:
+        header.append(id)
+        header.append(tables)
+    header.append(first)
+    header.append(last)
+    header.append((high << 4) | low)
+    push_segment(out, 0xDA, header)
+    for byte in bits.finish():
+        out.append(byte)
+
+
+def closed(bytes: List[UInt8]) -> List[UInt8]:
+    """Return `bytes` with the end marker after them."""
+    var out = bytes.copy()
+    out.append(0xFF)
+    out.append(0xD9)
+    return out^
+
+
+def expect_block(
+    image: DecodedImage, block_x: Int, zigzag_values: List[Int]
+) raises:
+    """Assert a gray block is what its coefficients, given as zigzag
+    index and value pairs one after the other, transform to."""
+    var order = zigzag_order()
+    var coefficients = List[Float32](length=BLOCK_SAMPLES, fill=0)
+    for index in range(0, len(zigzag_values), 2):
+        coefficients[order[zigzag_values[index]]] = Float32(
+            zigzag_values[index + 1]
+        )
+    var samples = inverse_dct(coefficients, cosine_table())
+    for y in range(8):
+        for x in range(8):
+            assert_equal(
+                image.get_pixel(block_x * 8 + x, y).r,
+                clamp_sample(samples[y * 8 + x]),
+            )
+
+
+def dc_first(ids: List[Int]) -> List[UInt8]:
+    """Return the start of an eight-by-eight file and one DC scan, down to
+    bit one, that gives each component's block a difference of zero."""
+    var out = hand_head(ids, 8, 8)
+    var bits = Bits()
+    for _ in range(len(ids)):
+        bits.dc(0)
+    add_scan(out, ids, 0, 0, 0, 1, bits)
+    return out^
+
+
+def test_every_kind_of_progressive_scan_builds_one_block() raises:
+    var out = hand_head([1], 8, 8)
+    # A DC scan down to bit one: a difference of three, so six.
+    var dc = Bits()
+    dc.dc(2)
+    dc.put(3, 2)
+    add_scan(out, [1], 0, 0, 0, 1, dc)
+    # The band one to five down to bit one: one zero, then two, which is
+    # four; then the end of the band.
+    var low = Bits()
+    low.ac(0x12)
+    low.put(2, 2)
+    low.ac(0x00)
+    add_scan(out, [1], 1, 5, 0, 1, low)
+    # The band six on down to bit one: sixteen zeros, then minus one at
+    # twenty-two, which is minus two; then an end-of-band run of two
+    # whose extra bit is one, so this block and two more are done.
+    var high = Bits()
+    high.ac(0xF0)
+    high.ac(0x01)
+    high.put(0, 1)
+    high.ac(0x10)
+    high.put(1, 1)
+    add_scan(out, [1], 6, 63, 0, 1, high)
+    # The DC coefficient's last bit: six becomes seven.
+    var dc_bit = Bits()
+    dc_bit.put(1, 1)
+    add_scan(out, [1], 0, 0, 1, 0, dc_bit)
+    # The first band's last bit: a new minus one at the first zero,
+    # then the end of the band, which corrects four to five.
+    var low_bit = Bits()
+    low_bit.ac(0x01)
+    low_bit.put(0, 1)
+    low_bit.ac(0x00)
+    low_bit.put(1, 1)
+    add_scan(out, [1], 1, 5, 1, 0, low_bit)
+    # The second band's last bit: sixteen zeros pass; then a run of one
+    # and a new plus one, which corrects minus two to minus three on
+    # the way and lands at twenty-four; then the end of the band.
+    var high_bit = Bits()
+    high_bit.ac(0xF0)
+    high_bit.ac(0x11)
+    high_bit.put(1, 1)
+    high_bit.put(1, 1)
+    high_bit.ac(0x00)
+    add_scan(out, [1], 6, 63, 1, 0, high_bit)
+    var image = decode(closed(out))
+    expect_block(image, 0, [0, 7, 1, -1, 2, 5, 22, -3, 24, 1])
+
+
+def test_end_of_band_runs_carry_across_blocks() raises:
+    var out = hand_head([1], 16, 8)
+    # Two blocks, the second predicted from the first: both two. The
+    # scan names an AC table never defined, which a DC scan never reads.
+    var dc = Bits()
+    dc.dc(1)
+    dc.put(1, 1)
+    dc.dc(0)
+    add_scan(out, [1], 0, 0, 0, 1, dc, tables=0x01)
+    # The first block's first coefficient is two, and an end-of-band run
+    # of two with an extra bit of zero closes it and the next block.
+    var band = Bits()
+    band.ac(0x01)
+    band.put(1, 1)
+    band.ac(0x10)
+    band.put(0, 1)
+    add_scan(out, [1], 1, 63, 0, 1, band, tables=0x10)
+    # The DC bits: zero for the first, one for the second. A DC
+    # refinement reads no table, so an undefined one is no matter.
+    var dc_bit = Bits()
+    dc_bit.put(0, 1)
+    dc_bit.put(1, 1)
+    add_scan(out, [1], 0, 0, 1, 0, dc_bit, tables=0x10)
+    # An end-of-band run of two covers both blocks: the first's one
+    # nonzero coefficient takes a correction bit of zero.
+    var band_bit = Bits()
+    band_bit.ac(0x10)
+    band_bit.put(0, 1)
+    band_bit.put(0, 1)
+    add_scan(out, [1], 1, 63, 1, 0, band_bit)
+    var image = decode(closed(out))
+    expect_block(image, 0, [0, 2, 1, 2])
+    expect_block(image, 1, [0, 3])
+
+
+def test_a_band_that_fills_up_ends_its_block_without_a_code() raises:
+    var out = hand_head([1], 8, 8)
+    var dc = Bits()
+    dc.dc(0)
+    add_scan(out, [1], 0, 0, 0, 0, dc)
+    # The band one to one: its one coefficient placed, two at bit one,
+    # which ends the band with no end-of-band code. Its refinement is
+    # sixteen zeros asked for, which passes the coefficient with a
+    # correction bit of one, making three, and runs off the band.
+    var first = Bits()
+    first.ac(0x01)
+    first.put(1, 1)
+    add_scan(out, [1], 1, 1, 0, 1, first)
+    var first_bit = Bits()
+    first_bit.ac(0xF0)
+    first_bit.put(1, 1)
+    add_scan(out, [1], 1, 1, 1, 0, first_bit)
+    # The band two to two, empty at first; its refinement places a new
+    # minus one at the band's end.
+    var second = Bits()
+    second.ac(0x00)
+    add_scan(out, [1], 2, 2, 0, 1, second)
+    var second_bit = Bits()
+    second_bit.ac(0x01)
+    second_bit.put(0, 1)
+    add_scan(out, [1], 2, 2, 1, 0, second_bit)
+    var image = decode(closed(out))
+    expect_block(image, 0, [1, 3, 2, -1])
+
+
+def test_a_progressive_scan_is_refused_where_its_bits_break_the_rules() raises:
+    # A value past the band in a first scan: a run of five from one.
+    var past = dc_first([1])
+    var run = Bits()
+    run.ac(0x51)
+    run.put(1, 1)
+    add_scan(past, [1], 1, 5, 0, 0, run)
+    refused(closed(past))
+    # A refinement's new coefficient of two bits.
+    var wide = dc_first([1])
+    var empty = Bits()
+    empty.ac(0x00)
+    add_scan(wide, [1], 1, 5, 0, 1, empty)
+    var two = Bits()
+    two.ac(0x02)
+    two.put(3, 2)
+    add_scan(wide, [1], 1, 5, 1, 0, two)
+    with assert_raises(contains="one bit"):
+        _ = decode(closed(wide))
+    # A refinement's new coefficient past the band: three zeros asked
+    # for in a band of two.
+    var over = dc_first([1])
+    var none = Bits()
+    none.ac(0x00)
+    add_scan(over, [1], 1, 2, 0, 1, none)
+    var three = Bits()
+    three.ac(0x31)
+    three.put(1, 1)
+    add_scan(over, [1], 1, 2, 1, 0, three)
+    refused(closed(over))
+
+
+def test_a_progressive_scan_header_is_checked_field_by_field() raises:
+    # An AC scan before the DC scan.
+    var early = hand_head([1], 8, 8)
+    var nothing = Bits()
+    nothing.ac(0x00)
+    add_scan(early, [1], 1, 5, 0, 0, nothing)
+    with assert_raises(contains="before its component's DC"):
+        _ = decode(closed(early))
+    # The DC coefficient sent twice, and refined from the wrong bit.
+    var twice = dc_first([1])
+    var again = Bits()
+    again.dc(0)
+    add_scan(twice, [1], 0, 0, 0, 1, again)
+    with assert_raises(contains="out of order or twice"):
+        _ = decode(closed(twice))
+    var skipped = dc_first([1])
+    add_scan(skipped, [1], 0, 0, 2, 1, Bits())
+    refused(closed(skipped))
+    # A refinement of more than one bit; a stop past bit thirteen.
+    var leap = dc_first([1])
+    add_scan(leap, [1], 0, 0, 2, 0, Bits())
+    with assert_raises(contains="one bit"):
+        _ = decode(closed(leap))
+    var deep = hand_head([1], 8, 8)
+    add_scan(deep, [1], 0, 0, 0, 14, Bits())
+    refused(closed(deep))
+    # A DC scan holding AC coefficients; a band that runs backward, and
+    # one past the sixty-third.
+    var mixed = hand_head([1], 8, 8)
+    add_scan(mixed, [1], 0, 5, 0, 0, Bits())
+    refused(closed(mixed))
+    var backward = dc_first([1])
+    add_scan(backward, [1], 5, 4, 0, 0, Bits())
+    refused(closed(backward))
+    var beyond = dc_first([1])
+    add_scan(beyond, [1], 1, 64, 0, 0, Bits())
+    refused(closed(beyond))
+    # An AC scan of three components.
+    var three = dc_first([1, 2, 3])
+    add_scan(three, [1, 2, 3], 1, 5, 0, 0, Bits())
+    with assert_raises(contains="one component"):
+        _ = decode(closed(three))
+    # A table the scan needs and nobody defined: the AC table of an AC
+    # scan, and the DC table of a first DC scan.
+    var no_ac = dc_first([1])
+    add_scan(no_ac, [1], 1, 5, 0, 0, Bits(), tables=0x01)
+    refused(closed(no_ac))
+    var no_dc = hand_head([1], 8, 8)
+    add_scan(no_dc, [1], 0, 0, 0, 0, Bits(), tables=0x10)
+    refused(closed(no_dc))
+
+
+def test_every_component_must_be_in_some_scan() raises:
+    # A DC scan of the luma alone, and then the end.
+    var out = hand_head([1, 2, 3], 8, 8)
+    var dc = Bits()
+    dc.dc(0)
+    add_scan(out, [1], 0, 0, 0, 0, dc)
+    with assert_raises(contains="no scan"):
+        _ = decode(closed(out))
+    # A file with a frame and no scan at all.
+    with assert_raises(contains="before its scan"):
+        _ = decode(closed(hand_head([1], 8, 8)))
+
+
+def test_a_sequential_file_can_hold_a_scan_per_component() raises:
+    # The luma lifted by two levels, each chroma flat: gray at 130.
+    var out = hand_head([1, 2, 3], 8, 8, marker=0xC0)
+    var luma = Bits()
+    luma.dc(5)
+    luma.put(16, 5)
+    luma.ac(0x00)
+    add_scan(out, [1], 0, 63, 0, 0, luma)
+    for id in [3, 2]:
+        var chroma = Bits()
+        chroma.dc(0)
+        chroma.ac(0x00)
+        add_scan(out, [id], 0, 63, 0, 0, chroma)
+    var image = decode(closed(out))
+    var seen = image.get_pixel(5, 5)
+    assert_equal(seen.r, UInt8(130))
+    assert_equal(seen.g, UInt8(130))
+    assert_equal(seen.b, UInt8(130))
+    # A component in two sequential scans is refused.
+    var twice = hand_head([1], 8, 8, marker=0xC0)
+    for _ in range(2):
+        var block = Bits()
+        block.dc(0)
+        block.ac(0x00)
+        add_scan(twice, [1], 0, 63, 0, 0, block)
+    refused(closed(twice))
+
+
+def test_a_component_keeps_the_quantization_table_of_its_first_scan() raises:
+    # A DC coefficient of sixteen at a step of one is two levels. The
+    # table is then redefined at a step of two, which would make four
+    # levels, but the component took its table when its first scan began.
+    var out = hand_head([1], 8, 8)
+    var dc = Bits()
+    dc.dc(5)
+    dc.put(16, 5)
+    add_scan(out, [1], 0, 0, 0, 0, dc)
+    var doubled = List[Int]()
+    doubled.append(0)
+    for _ in range(BLOCK_SAMPLES):
+        doubled.append(2)
+    push_segment(out, 0xDB, doubled)
+    var band = Bits()
+    band.ac(0x00)
+    add_scan(out, [1], 1, 63, 0, 0, band)
+    assert_equal(decode(closed(out)).get_pixel(3, 3).r, UInt8(130))
+
+
+def test_a_scan_names_one_to_all_of_the_components() raises:
+    var whole = fixture("gradient444.jpg")
+    refused(patched(whole, segment(whole, 0xDA) + 4, 0))
+    var gray = fixture("gray.jpg")
+    refused(patched(gray, segment(gray, 0xDA) + 4, 2))
+    # A sequential scan's refinement bit alone is refused as well.
+    refused(patched(whole, segment(whole, 0xDA) + 13, 0x10))
 
 
 def main() raises:
