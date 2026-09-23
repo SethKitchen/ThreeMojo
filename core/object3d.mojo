@@ -147,22 +147,50 @@ struct Object3D(ImplicitlyCopyable):
     # zero alone by default, so a scene that never mentions layers renders
     # as it always did.
     var layers: Layers
+    # False hides this node and everything under it, three.js's
+    # `Object3D.visible`. A hidden node still has a world matrix.
+    var visible: Bool
+    # A name to find the node by, three.js's `Object3D.name`. Empty by
+    # default; two nodes can share one.
+    var name: String
+    # Where the node's objects go in the draw order, three.js's
+    # `renderOrder`. Lower draws first. Within one order, opaque draws go
+    # nearest first and blended ones furthest first, as before.
+    var render_order: Int
+    # True, the default, to rebuild `matrix` from the position, rotation
+    # and scale at every `Scene.update`. False keeps `matrix` as the
+    # caller set it, three.js's `matrixAutoUpdate`.
+    var matrix_auto_update: Bool
+    # The transform relative to the parent, as the last update built it
+    # or as the caller set it. three.js's `Object3D.matrix`.
+    var matrix: Matrix4
 
     def __init__(out self):
-        """Create an untransformed node with no parent, on layer zero."""
+        """Create an untransformed node with no parent, on layer zero,
+        visible, unnamed and at render order zero."""
         self.position = Vector3(0, 0, 0)
         self.scale = Vector3(1, 1, 1)
         self.quaternion = Quaternion.identity()
         self.parent = NO_PARENT
         self.layers = Layers()
+        self.visible = True
+        self.name = String()
+        self.render_order = 0
+        self.matrix_auto_update = True
+        self.matrix = Matrix4()
 
     def __init__(out self, *, copy: Self):
-        """Copy another node, parent link and layers included."""
+        """Copy another node, every field included."""
         self.position = copy.position
         self.scale = copy.scale
         self.quaternion = copy.quaternion
         self.parent = copy.parent
         self.layers = copy.layers
+        self.visible = copy.visible
+        self.name = copy.name
+        self.render_order = copy.render_order
+        self.matrix_auto_update = copy.matrix_auto_update
+        self.matrix = Matrix4(copy=copy.matrix)
 
     def set_position(mut self, x: Float32, y: Float32, z: Float32):
         """Move this node, relative to its parent."""

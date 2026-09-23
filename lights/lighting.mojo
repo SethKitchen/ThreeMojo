@@ -955,6 +955,8 @@ struct Lighting(Movable):
             light.validate()
             if not light.layers.test(visible):
                 continue
+            if not scene.light_shown(light):
+                continue
             if light.kind == AMBIENT:
                 var fill = light.radiance()
                 self.ambient = FloatColor(

@@ -57,6 +57,7 @@ first, because a mutable reference to a node is also a way past it.
 
 from core.background import Background, no_background
 from core.fog import Fog, no_fog
+from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId, Object3D, facing
 from lights.light import Light
 from math.matrix4 import Matrix4
@@ -78,6 +79,9 @@ struct Scene(Movable):
 
     var _nodes: List[Object3D]
     var _world: List[Matrix4]
+    # Whether each node is shown: visible, and every ancestor visible.
+    # Derived by `update`, as the world matrices are.
+    var _shown: List[Bool]
     # What lights the scene. Public because it is read-only content rather
     # than a derived cache: a light is scene content in three.js too, where
     # `scene.add` takes one. Kept here rather than on the renderer so a scene
@@ -137,6 +141,7 @@ struct Scene(Movable):
         """Create an empty scene."""
         self._nodes = List[Object3D]()
         self._world = List[Matrix4]()
+        self._shown = List[Bool]()
         self.lights = List[Light]()
         self.meshes = List[Mesh]()
         self.instanced_meshes = List[InstancedMesh]()
@@ -504,16 +509,149 @@ struct Scene(Movable):
                 node, or a node's local matrix cannot be built.
         """
         self.validate()
+        self._shown = List[Bool](length=len(self._nodes), fill=True)
         for index in range(len(self._nodes)):
-            var local = self._nodes[index].local_matrix()
-            var parent = self._nodes[index].parent
+            ref node = self._nodes[index]
+            if node.matrix_auto_update:
+                node.matrix = node.local_matrix()
+            var parent = node.parent
             if parent == NO_PARENT:
-                self._world[index] = local^
+                self._world[index] = Matrix4(copy=node.matrix)
+                self._shown[index] = node.visible
             else:
                 var combined = Matrix4(copy=self._world[parent.value])
-                combined.multiply(local)
+                combined.multiply(node.matrix)
                 self._world[index] = combined^
+                self._shown[index] = node.visible and self._shown[parent.value]
         self._stale = False
+
+    def is_shown(self, index: NodeId) raises -> Bool:
+        """Return True if a node and every node above it are visible.
+
+        Args:
+            index: Which node to ask about.
+
+        Returns:
+            Whether the renderer draws what the node carries.
+
+        Raises:
+            Error: If the index is out of range, or the scene is stale.
+        """
+        self._check_current(index)
+        return self._shown[index.value]
+
+    def shows(self, index: NodeId, visible: Layers) raises -> Bool:
+        """Return True if a node is shown and shares a layer with a camera.
+
+        The question the renderer asks of every object before it draws it.
+        three.js asks `visible` and `layers.test` in `projectObject`.
+
+        Args:
+            index: The object's node.
+            visible: The camera's layers.
+
+        Returns:
+            Whether the camera draws what the node carries.
+
+        Raises:
+            Error: If the index is out of range, or the scene is stale.
+        """
+        if not self.is_shown(index):
+            return False
+        return self._nodes[index.value].layers.test(visible)
+
+    def render_order(self, index: NodeId) raises -> Int:
+        """Return a node's render order, without copying the node.
+
+        Args:
+            index: The node.
+
+        Returns:
+            Its `render_order`.
+
+        Raises:
+            Error: If the index is out of range.
+        """
+        if index.value < 0 or index.value >= len(self._nodes):
+            raise Error("Scene node index out of range")
+        return self._nodes[index.value].render_order
+
+    def light_shown(self, light: Light) raises -> Bool:
+        """Return True if a light shines: on no node, or on a shown one.
+
+        Args:
+            light: The light.
+
+        Returns:
+            Whether the light's node, if it has one, is shown.
+
+        Raises:
+            Error: If the light names a node that is not there, or the
+                scene is stale.
+        """
+        if light.node == NO_PARENT:
+            return True
+        return self.is_shown(light.node)
+
+    def find(self, name: String) -> Optional[NodeId]:
+        """Return the first node with a name, three.js's `getObjectByName`.
+
+        Args:
+            name: The name.
+
+        Returns:
+            The earliest node so named, or None.
+        """
+        for index in range(len(self._nodes)):
+            if self._nodes[index].name == name:
+                return NodeId(index)
+        return None
+
+    def children(self, index: NodeId) raises -> List[NodeId]:
+        """Return a node's direct children, three.js's `children`.
+
+        Args:
+            index: The parent.
+
+        Returns:
+            The nodes whose parent it is, in the order they were added.
+
+        Raises:
+            Error: If the index is out of range.
+        """
+        _ = self.get(index)
+        var found = List[NodeId]()
+        for later in range(index.value + 1, len(self._nodes)):
+            if self._nodes[later].parent == index:
+                found.append(NodeId(later))
+        return found^
+
+    def descendants(self, index: NodeId) raises -> List[NodeId]:
+        """Return a node and every node under it, three.js's `traverse`.
+
+        Each node comes after its parent. A parent always sits earlier in
+        the array, so one pass forward finds them all.
+
+        Args:
+            index: Where to start.
+
+        Returns:
+            The node, then its descendants, in array order.
+
+        Raises:
+            Error: If the index is out of range.
+        """
+        _ = self.get(index)
+        var inside = List[Bool](length=len(self._nodes), fill=False)
+        inside[index.value] = True
+        var found = List[NodeId]()
+        found.append(index)
+        for later in range(index.value + 1, len(self._nodes)):
+            var parent = self._nodes[later].parent
+            if parent != NO_PARENT and inside[parent.value]:
+                inside[later] = True
+                found.append(NodeId(later))
+        return found^
 
     def update_lods(mut self, eye: Vector3) raises:
         """Choose every LOD's level for a camera at `eye`, and remember the
@@ -570,6 +708,12 @@ struct Scene(Movable):
             Error: If the index is out of range, or the scene has changed
                 since `update` was last called — see the module docstring.
         """
+        self._check_current(index)
+        return Matrix4(copy=self._world[index.value])
+
+    def _check_current(self, index: NodeId) raises:
+        """Refuse an index out of range, or a question asked of a stale
+        scene."""
         if index.value < 0 or index.value >= len(self._world):
             raise Error("Scene node index out of range")
         if self._stale:
@@ -577,7 +721,6 @@ struct Scene(Movable):
                 "The scene has changed since update(); call scene.update()"
                 " before reading a world matrix"
             )
-        return Matrix4(copy=self._world[index.value])
 
     def world_position(self, index: NodeId) raises -> Vector3:
         """Return where `index` sits in world space.

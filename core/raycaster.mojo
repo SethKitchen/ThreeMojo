@@ -511,7 +511,7 @@ struct Raycaster(ImplicitlyCopyable):
                 ray through.
         """
         var hits = List[Hit]()
-        if not scene.get(mesh.node).layers.test(self.layers):
+        if not scene.shows(mesh.node, self.layers):
             return hits^
         ref geometry = assets.geometries.get(mesh.geometry)
         var material = assets.materials.get(mesh.material)

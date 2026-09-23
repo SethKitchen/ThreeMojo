@@ -582,6 +582,9 @@ struct _Draw(ImplicitlyCopyable):
     # Whether the lights' shadows fall on this draw: its mesh's
     # `receive_shadow`, and false for everything that is not a mesh.
     var receives_shadow: Bool
+    # The render order of the draw's node, three.js's `renderOrder`,
+    # which sorts before the depth.
+    var order: Int
 
 
 @fieldwise_init
@@ -599,6 +602,8 @@ struct _Span(ImplicitlyCopyable):
     var count: Int
     var depth: Float32
     var blends: Bool
+    # The draw's node's render order, which sorts before the depth.
+    var order: Int
 
 
 def _note_span(
@@ -608,6 +613,7 @@ def _note_span(
     end: Int,
     depth: Float32,
     blends: Bool,
+    order: Int,
 ):
     """Record the primitives one draw emitted between two corner counts.
 
@@ -623,11 +629,12 @@ def _note_span(
         end: How many it holds after.
         depth: The draw's camera-space depth.
         blends: Whether its material blends.
+        order: Its node's render order.
     """
     var stride = kind.stride()
     var count = (end - begin) // stride
     if count > 0:
-        spans.append(_Span(kind, begin // stride, count, depth, blends))
+        spans.append(_Span(kind, begin // stride, count, depth, blends, order))
 
 
 def _gather(
@@ -707,7 +714,7 @@ def _gather(
             geometry has no positions, the scene is stale, or an instance
             matrix projects or holds a value that is not finite.
     """
-    if not scene.get(node).layers.test(visible):
+    if not scene.shows(node, visible):
         return
     var placed = scene.world_matrix(node)
     var blends = False
@@ -741,6 +748,7 @@ def _gather(
                 blends,
                 -1,
                 receive_shadow,
+                scene.render_order(node),
             )
         )
 
@@ -995,7 +1003,7 @@ def _draws(
         if casters_only:
             continue
         ref sprite = scene.sprites[index]
-        if not scene.get(sprite.node).layers.test(visible):
+        if not scene.shows(sprite.node, visible):
             continue
         var world = scene.world_matrix(sprite.node)
         if sprite.frustum_culled:
@@ -1021,24 +1029,29 @@ def _draws(
                 blends,
                 index,
                 False,
+                scene.render_order(sprite.node),
             )
         )
 
     var solid = List[Int]()
     var solid_depths = List[Float32]()
+    var solid_orders = List[Int]()
     var see_through = List[Int]()
     var see_through_depths = List[Float32]()
+    var see_through_orders = List[Int]()
     for index in range(len(draws)):
         if clear[index]:
             see_through.append(index)
             see_through_depths.append(depths[index])
+            see_through_orders.append(draws[index].order)
         else:
             solid.append(index)
             # Negated, so one ascending sort serves both lists: the nearest
             # opaque draw has the largest z and must come first.
             solid_depths.append(-depths[index])
-    _sort_by(solid, solid_depths)
-    _sort_by(see_through, see_through_depths)
+            solid_orders.append(draws[index].order)
+    _sort_by(solid, solid_depths, solid_orders)
+    _sort_by(see_through, see_through_depths, see_through_orders)
     var ordered = List[_Draw]()
     for position in range(len(solid)):
         ordered.append(draws[solid[position]])
@@ -1047,23 +1060,37 @@ def _draws(
     return ordered^
 
 
-def _sort_by(mut items: List[Int], mut keys: List[Float32]):
-    """Sort `items` by `keys`, ascending, in place and stably.
+def _sort_by(
+    mut items: List[Int], mut keys: List[Float32], mut orders: List[Int]
+):
+    """Sort `items` by render order, then by `keys`, ascending, in place
+    and stably.
 
     Insertion sort: the lists are one entry per draw, hundreds in a busy
     scene rather than millions, and a stable order keeps draws at equal
-    depth in the order the caller gave them.
+    order and depth in the order the caller gave them.
     """
     for position in range(len(items)):
         var item = items[position]
         var key = keys[position]
+        var order = orders[position]
         var slot = position
-        while slot > 0 and keys[slot - 1] > key:
+        while slot > 0 and _after(orders[slot - 1], keys[slot - 1], order, key):
             items[slot] = items[slot - 1]
             keys[slot] = keys[slot - 1]
+            orders[slot] = orders[slot - 1]
             slot -= 1
         items[slot] = item
         keys[slot] = key
+        orders[slot] = order
+
+
+def _after(
+    order: Int, key: Float32, other_order: Int, other_key: Float32
+) -> Bool:
+    """Return True if an entry sorts after another: a higher render order,
+    or the same order and a larger key."""
+    return order > other_order or (order == other_order and key > other_key)
 
 
 def _turned_around(corner: RasterVertex) -> RasterVertex:
@@ -2320,6 +2347,7 @@ struct Renderer(Movable):
                     len(corners),
                     draws[slot].depth,
                     draws[slot].blends,
+                    draws[slot].order,
                 )
                 continue
             var world = draws[slot].world
@@ -2661,6 +2689,7 @@ struct Renderer(Movable):
                     len(corners),
                     draws[slot].depth,
                     draws[slot].blends,
+                    draws[slot].order,
                 )
                 continue
             for triangle in range(triangles):
@@ -2756,6 +2785,7 @@ struct Renderer(Movable):
                 len(corners),
                 draws[slot].depth,
                 draws[slot].blends,
+                draws[slot].order,
             )
 
         return corners^
@@ -2873,7 +2903,7 @@ struct Renderer(Movable):
         var corners = List[RasterVertex]()
         for index in range(len(scene.lines)):
             ref line = scene.lines[index]
-            if not scene.get(line.node).layers.test(camera.visible_layers()):
+            if not scene.shows(line.node, camera.visible_layers()):
                 continue
             var world = scene.world_matrix(line.node)
             if line.frustum_culled and not _in_view(
@@ -3009,6 +3039,7 @@ struct Renderer(Movable):
                 len(corners),
                 depth,
                 material.is_transparent(),
+                scene.render_order(line.node),
             )
 
         # And the meshes drawn as the lines of their own triangles.
@@ -3041,6 +3072,7 @@ struct Renderer(Movable):
                             run.count,
                             run.depth,
                             run.blends,
+                            run.order,
                         )
                     )
                 break
@@ -3050,19 +3082,23 @@ struct Renderer(Movable):
         # rules `_draws` applies to the meshes, for the same reasons.
         var solid = List[Int]()
         var solid_depths = List[Float32]()
+        var solid_orders = List[Int]()
         var see_through = List[Int]()
         var see_through_depths = List[Float32]()
+        var see_through_orders = List[Int]()
         for position in range(len(unsorted)):
             if unsorted[position].blends:
                 see_through.append(position)
                 see_through_depths.append(unsorted[position].depth)
+                see_through_orders.append(unsorted[position].order)
             else:
                 solid.append(position)
+                solid_orders.append(unsorted[position].order)
                 # Negated so one ascending sort serves both lists, as in
                 # `_draws`: the nearest opaque line has the largest z.
                 solid_depths.append(-unsorted[position].depth)
-        _sort_by(solid, solid_depths)
-        _sort_by(see_through, see_through_depths)
+        _sort_by(solid, solid_depths, solid_orders)
+        _sort_by(see_through, see_through_depths, see_through_orders)
         var order = List[Int]()
         for position in range(len(solid)):
             order.append(solid[position])
@@ -3079,6 +3115,7 @@ struct Renderer(Movable):
                     run.count,
                     run.depth,
                     run.blends,
+                    run.order,
                 )
             )
             ordered.extend(
@@ -3196,7 +3233,7 @@ struct Renderer(Movable):
         var corners = List[RasterVertex]()
         for index in range(len(scene.points)):
             ref points = scene.points[index]
-            if not scene.get(points.node).layers.test(camera.visible_layers()):
+            if not scene.shows(points.node, camera.visible_layers()):
                 continue
             var world = scene.world_matrix(points.node)
             if points.frustum_culled and not _in_view(
@@ -3306,22 +3343,27 @@ struct Renderer(Movable):
                 len(corners),
                 depth,
                 material.is_transparent(),
+                scene.render_order(points.node),
             )
 
         # Into draw order, as `_prepared_lines` puts the lines.
         var solid = List[Int]()
         var solid_depths = List[Float32]()
+        var solid_orders = List[Int]()
         var see_through = List[Int]()
         var see_through_depths = List[Float32]()
+        var see_through_orders = List[Int]()
         for position in range(len(unsorted)):
             if unsorted[position].blends:
                 see_through.append(position)
                 see_through_depths.append(unsorted[position].depth)
+                see_through_orders.append(unsorted[position].order)
             else:
                 solid.append(position)
+                solid_orders.append(unsorted[position].order)
                 solid_depths.append(-unsorted[position].depth)
-        _sort_by(solid, solid_depths)
-        _sort_by(see_through, see_through_depths)
+        _sort_by(solid, solid_depths, solid_orders)
+        _sort_by(see_through, see_through_depths, see_through_orders)
         var order = List[Int]()
         for position in range(len(solid)):
             order.append(solid[position])
@@ -3333,7 +3375,12 @@ struct Renderer(Movable):
             ref run = unsorted[order[position]]
             spans.append(
                 _Span(
-                    DRAW_POINTS, len(ordered), run.count, run.depth, run.blends
+                    DRAW_POINTS,
+                    len(ordered),
+                    run.count,
+                    run.depth,
+                    run.blends,
+                    run.order,
                 )
             )
             ordered.extend(Span(corners)[run.first : run.first + run.count])
@@ -3400,22 +3447,26 @@ struct Renderer(Movable):
         var mixed = List[_Span]()
         var order = List[Int]()
         var depths = List[Float32]()
+        var orders = List[Int]()
         for span in range(len(corner_spans)):
             if corner_spans[span].blends:
                 order.append(len(mixed))
                 depths.append(corner_spans[span].depth)
+                orders.append(corner_spans[span].order)
                 mixed.append(corner_spans[span])
         for span in range(len(segment_spans)):
             if segment_spans[span].blends:
                 order.append(len(mixed))
                 depths.append(segment_spans[span].depth)
+                orders.append(segment_spans[span].order)
                 mixed.append(segment_spans[span])
         for span in range(len(point_spans)):
             if point_spans[span].blends:
                 order.append(len(mixed))
                 depths.append(point_spans[span].depth)
+                orders.append(point_spans[span].order)
                 mixed.append(point_spans[span])
-        _sort_by(order, depths)
+        _sort_by(order, depths, orders)
         for position in range(len(order)):
             ref run = mixed[order[position]]
             draws.append(Draw(run.kind, run.first, run.count))
@@ -3763,6 +3814,8 @@ struct Renderer(Movable):
             ref light = scene.lights[index]
             light.validate()
             if not light.cast_shadow or not light.layers.test(visible):
+                continue
+            if not scene.light_shown(light):
                 continue
             var at = scene.world_position(light.node)
             var aimed = Vector3(0, 0, 0)

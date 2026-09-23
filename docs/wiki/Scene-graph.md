@@ -101,6 +101,33 @@ camera.layers.enable(1)              # the camera sees layer one as well
 | `count() -> Int` | The number of nodes. |
 | `meshes`, `instanced_meshes`, `batched_meshes`, `lods`, `lights` | The scene content, as public lists. |
 
+## Visibility, names and render order
+
+`Object3D` carries four more fields, as three.js's `Object3D` does.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `visible` | `True` | False hides the node and everything under it. |
+| `name` | empty | A name to find the node by. Two nodes can share one. |
+| `render_order` | `0` | Where the node's objects go in the draw order. Lower draws first. |
+| `matrix_auto_update` | `True` | False keeps `matrix` as the caller set it. |
+
+`matrix` is the node's transform relative to its parent. `update` rebuilds it from the position, rotation and scale when `matrix_auto_update` is set. Otherwise it keeps what the caller wrote.
+
+A hidden node still has a world matrix. The renderer skips every mesh, line, point set, sprite and light on it. The raycaster skips its meshes too. `update` works out which nodes are shown.
+
+| Scene member | Meaning |
+|---|---|
+| `is_shown(node) -> Bool` | True if the node and every node above it are visible. |
+| `shows(node, layers) -> Bool` | True if the node is shown and shares a layer with `layers`. The renderer asks this of every object. |
+| `light_shown(light) -> Bool` | True if the light has no node, or its node is shown. |
+| `find(name) -> Optional[NodeId]` | The earliest node with the name. three.js: `getObjectByName`. |
+| `children(node) -> List[NodeId]` | The node's direct children. |
+| `descendants(node) -> List[NodeId]` | The node, then every node under it, each after its parent. three.js: `traverse`. |
+| `render_order(node) -> Int` | The node's render order. |
+
+The renderer sorts each list of draws by render order first. Within one order, opaque draws go nearest first and blended draws furthest first, as before. Give a translucent surface a higher order to draw it over another whatever their depths.
+
 ## Rules
 
 - A parent is always added before its children. `add` and `set` refuse anything else.

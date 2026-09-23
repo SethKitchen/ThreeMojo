@@ -51,16 +51,15 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 100 features are ported and 49 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 101 features are ported and 48 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
 
-- [ ] Object3D visibility, names, traversal and render order [#103](https://github.com/SethKitchen/ThreeMojo/issues/103)
 - [ ] Clipping planes [#104](https://github.com/SethKitchen/ThreeMojo/issues/104)
 
 <details>
-<summary>Ported: 11</summary>
+<summary>Ported: 12</summary>
 
 - [x] [Scene graph](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph): `Object3D`, `Scene`, parent and child transforms [#1](https://github.com/SethKitchen/ThreeMojo/issues/1)
 - [x] [Quaternion and Euler rotations](https://github.com/SethKitchen/ThreeMojo/wiki/Rotations): six Euler orders, `rotate_x`, `rotate_y`, `rotate_z`, `look_at`, `slerp` [#2](https://github.com/SethKitchen/ThreeMojo/issues/2)
@@ -73,6 +72,7 @@ The port is not at parity with three.js yet. 100 features are ported and 49 are 
 - [x] [Scene background and environment](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph#background-and-environment): a color, a texture or a cube texture behind everything, and a cube texture materials reflect as `SCENE_ENVIRONMENT` [#9](https://github.com/SethKitchen/ThreeMojo/issues/9)
 - [x] [Layers](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph#layers): a bit mask on nodes and cameras that the renderer filters meshes by [#10](https://github.com/SethKitchen/ThreeMojo/issues/10)
 - [x] [Clock](https://github.com/SethKitchen/ThreeMojo/wiki/Units#clock): elapsed and delta time as Durations, from a monotonic counter [#11](https://github.com/SethKitchen/ThreeMojo/issues/11)
+- [x] [Object3D visibility, names, traversal and render order](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph#visibility-names-and-render-order): a hidden node hides its subtree, and render order sorts before depth [#103](https://github.com/SethKitchen/ThreeMojo/issues/103)
 
 </details>
 
