@@ -139,6 +139,13 @@ from render.gpu import (
     POINT_STATE_BLEND,
     POINT_STATE_TEXTURE,
     point_state,
+    LINE_STATE_OPS,
+    LINE_STATE_STENCIL,
+    POINT_STATE_OPS,
+    POINT_STATE_STENCIL,
+    STATE_OPS,
+    STATE_STENCIL,
+    line_state,
     FOG_FLOATS,
     LIGHTS_AMBIENT,
     LIGHTS_EYE,
@@ -163,6 +170,14 @@ from render.gpu import (
     triangle_state,
 )
 from render.srgb import LINEAR, SRGB, ColorSpace
+from render.raster_state import (
+    EQUAL_STENCIL_FUNC,
+    GREATER_DEPTH,
+    INCREMENT_STENCIL_OP,
+    NOT_EQUAL_STENCIL_FUNC,
+    RasterState,
+    REPLACE_STENCIL_OP,
+)
 from render.texture import Alpha
 from render.cube_texture import CubeTexture, face_forward
 from render.cube_texture_store import (
@@ -8128,6 +8143,251 @@ def test_both_backends_agree_on_a_rectangle_of_light() raises:
     assert_true(
         count_mismatches(glowing, dim) > 50, "the rectangles changed nothing"
     )
+
+
+# --- depth, color and stencil state ------------------------------------------
+
+
+def _stencil_mask(reference: Int) -> RasterState:
+    """Return a state that writes `reference` wherever it is drawn, and
+    no color and no depth: a mask pass."""
+    return RasterState(
+        depth_write=False,
+        color_write=False,
+        stencil_write=True,
+        stencil_ref=reference,
+        stencil_z_pass=REPLACE_STENCIL_OP,
+    )
+
+
+def _stenciled(
+    x: Float32,
+    y: Float32,
+    z: Float32,
+    color: Color,
+    state: RasterState,
+    blend: Blending = OPAQUE,
+    alpha_test: Float32 = 0,
+    size: Float32 = 0,
+) -> RasterVertex:
+    """Return an unlit corner, end or point under a depth, color and
+    stencil state."""
+    return RasterVertex(
+        x,
+        y,
+        z,
+        1,
+        FloatColor(of=color),
+        blend=blend,
+        kind=BASIC,
+        alpha_test=alpha_test,
+        point_size=size,
+        state=state,
+    )
+
+
+def test_the_state_tables_carry_the_depth_color_and_stencil_state() raises:
+    var state = RasterState(
+        depth_func=GREATER_DEPTH,
+        stencil_write=True,
+        stencil_func=NOT_EQUAL_STENCIL_FUNC,
+        stencil_ref=7,
+        stencil_z_pass=INCREMENT_STENCIL_OP,
+    )
+    var corners = List[RasterVertex]()
+    for _ in range(3):
+        corners.append(_stenciled(0, 0, 0.5, Color(255, 0, 0), state))
+    var table = triangle_state(corners)
+    assert_equal(table[STATE_OPS], Int32(state.ops_word()))
+    assert_equal(table[STATE_STENCIL], Int32(state.stencil_word()))
+    var ends = List[RasterVertex]()
+    ends.append(_stenciled(0, 0, 0.5, Color(255, 0, 0), state))
+    ends.append(_stenciled(4, 0, 0.5, Color(255, 0, 0), state))
+    var lined = line_state(ends)
+    assert_equal(lined[LINE_STATE_OPS], Int32(state.ops_word()))
+    assert_equal(lined[LINE_STATE_STENCIL], Int32(state.stencil_word()))
+    var dots = point_state(
+        [_stenciled(0, 0, 0.5, Color(255, 0, 0), state, size=2)]
+    )
+    assert_equal(dots[POINT_STATE_OPS], Int32(state.ops_word()))
+    assert_equal(dots[POINT_STATE_STENCIL], Int32(state.stencil_word()))
+    # And each unpacks to the state it came from.
+    assert_true(
+        RasterState.unpacked(Int(table[STATE_OPS]), Int(table[STATE_STENCIL]))
+        == state
+    )
+
+
+def test_both_backends_agree_on_depth_color_and_stencil_state() raises:
+    # A mask pass over the left half, a surface drawn only inside it, one
+    # drawn only behind it, one that writes no color, an alpha-tested
+    # counter behind, then a line and a point under their own states: every
+    # rule of `render.raster_state`, walked by both backends.
+    if skipped_for_lack_of_a_gpu("both backends agree on stencil state"):
+        return
+    var corners = List[RasterVertex]()
+
+    def add(
+        mut corners: List[RasterVertex],
+        right: Float32,
+        z: Float32,
+        color: Color,
+        state: RasterState,
+        alpha_test: Float32 = 0,
+    ):
+        corners.append(
+            _stenciled(-1, -1, z, color, state, alpha_test=alpha_test)
+        )
+        corners.append(
+            _stenciled(right, -1, z, color, state, alpha_test=alpha_test)
+        )
+        corners.append(
+            _stenciled(-1, 40, z, color, state, alpha_test=alpha_test)
+        )
+
+    add(corners, 18, 0.5, Color(255, 255, 255), _stencil_mask(1))
+    add(
+        corners,
+        40,
+        0.5,
+        Color(255, 0, 0),
+        RasterState(
+            stencil_write=True, stencil_func=EQUAL_STENCIL_FUNC, stencil_ref=1
+        ),
+    )
+    add(
+        corners,
+        40,
+        0.75,
+        Color(0, 0, 255),
+        RasterState(depth_func=GREATER_DEPTH),
+    )
+    add(corners, 12, 0.25, Color(0, 255, 0), RasterState(color_write=False))
+    add(
+        corners,
+        40,
+        0.9,
+        Color(0, 255, 0, 100),
+        RasterState(stencil_write=True, stencil_z_fail=INCREMENT_STENCIL_OP),
+        alpha_test=0.5,
+    )
+    add(
+        corners,
+        40,
+        0.1,
+        Color(255, 255, 0),
+        RasterState(
+            stencil_write=True, stencil_func=EQUAL_STENCIL_FUNC, stencil_ref=2
+        ),
+    )
+    var lines = List[RasterVertex]()
+    var hidden = RasterState(depth_test=False)
+    lines.append(_stenciled(0, 5.5, 0.95, Color(255, 0, 255), hidden))
+    lines.append(_stenciled(16, 5.5, 0.95, Color(255, 0, 255), hidden))
+    var points = List[RasterVertex]()
+    points.append(
+        _stenciled(
+            8,
+            10,
+            0.95,
+            Color(0, 255, 255),
+            RasterState(
+                depth_test=False,
+                stencil_write=True,
+                stencil_func=EQUAL_STENCIL_FUNC,
+                stencil_ref=1,
+            ),
+            size=6,
+        )
+    )
+    var gpu = render_triangles(
+        corners, 16, 16, BACKGROUND, lines=lines, points=points
+    )
+    var target = RenderTarget(16, 16, BACKGROUND)
+    rasterize_all(corners, target)
+    rasterize_lines_all(lines, target)
+    rasterize_points_all(points, target)
+    var cpu = target.resolve()
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the depth each left: none where only the mask, the color-less
+    # surface's own where it hid what was behind.
+    for y in range(16):
+        for x in range(16):
+            var left = cpu.depth_at(x, y)
+            var right = gpu.depth_at(x, y)
+            if left == inf[DType.float32]():
+                assert_equal(right, left)
+            else:
+                assert_almost_equal(right, left, atol=Float64(1e-5))
+
+
+def test_both_backends_agree_on_a_stencil_mask_and_a_polygon_offset() raises:
+    # Through the renderer: a mask quad, a larger quad drawn only inside
+    # it, and two coplanar quads the polygon offset settles.
+    if skipped_for_lack_of_a_gpu("both backends agree on a stencil mask"):
+        return
+    var assets = Assets()
+    var scene = Scene()
+    var small = assets.geometries.add(
+        plane(Length(1.0, METER), Length(1.0, METER))
+    )
+    var large = assets.geometries.add(
+        plane(Length(2.0, METER), Length(2.0, METER))
+    )
+    var mask = Material(Color(255, 255, 255), kind=BASIC)
+    mask.color_write = False
+    mask.depth_write = False
+    mask.stencil_write = True
+    mask.stencil_ref = 1
+    mask.stencil_z_pass = REPLACE_STENCIL_OP
+    var shown = Material(Color(255, 0, 0), kind=BASIC)
+    shown.stencil_write = True
+    shown.stencil_func = EQUAL_STENCIL_FUNC
+    shown.stencil_ref = 1
+    var pulled = Material(Color(0, 0, 255), kind=BASIC)
+    pulled.polygon_offset = True
+    pulled.polygon_offset_factor = -1
+    pulled.polygon_offset_units = -4
+    var first = scene.add(Object3D())
+    var second = scene.add(Object3D())
+    scene.node(second).set_position(0, 0, -0.5)
+    scene.node(second).render_order = 1
+    var third = scene.add(Object3D())
+    scene.node(third).set_position(0.75, 0.75, 0.25)
+    scene.add_mesh(Mesh(small, assets.materials.add(mask), first))
+    scene.add_mesh(Mesh(large, assets.materials.add(shown), second))
+    scene.add_mesh(
+        Mesh(
+            small,
+            assets.materials.add(Material(Color(0, 255, 0), kind=BASIC)),
+            third,
+        )
+    )
+    scene.add_mesh(Mesh(small, assets.materials.add(pulled), third))
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE), 1.0, Length(0.1, METER), Length(100.0, METER)
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var renderer = Renderer(32, 32)
+    renderer.set_background(BACKGROUND)
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(32, 32)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene),
+        FogView(scene.fog),
+        NO_TONE_MAPPING,
+        1.0,
+        frame.segments,
+        frame.draws,
+    )
+    var gpu = device.read_back()
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    assert_equal(cpu.get_pixel(16, 16).r, 255)
 
 
 def main() raises:

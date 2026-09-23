@@ -51,6 +51,7 @@ from render.cube_texture_store import (
     CubeTextureStore,
 )
 from render.target import RenderTarget
+from render.raster_state import RasterState, shades
 from render.srgb import LINEAR
 from render.texture import (
     IGNORED,
@@ -601,6 +602,11 @@ struct RasterVertex(ImplicitlyCopyable):
     # default here, where a mesh's is off: a hand-built corner asks for
     # every shadow the lighting holds, and the renderer says otherwise.
     var receives_shadow: Bool
+    # The depth, color and stencil state, three.js's `depthTest`,
+    # `colorWrite`, `stencilFunc` and the rest; see `render.raster_state`.
+    # Per-primitive metadata like the blend policy: read from the first
+    # corner, checked to agree. Any polygon offset is already in `z`.
+    var state: RasterState
 
     def __init__(
         out self,
@@ -645,6 +651,7 @@ struct RasterVertex(ImplicitlyCopyable):
         bump_map: TextureId = NO_TEXTURE,
         bump_scale: Float32 = 1,
         receives_shadow: Bool = True,
+        state: RasterState = RasterState(),
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -664,7 +671,9 @@ struct RasterVertex(ImplicitlyCopyable):
         point size defaults to zero, which no point may carry: a corner
         that says nothing about it is not a point. The env map defaults
         to none, which reflects nothing, at three.js's reflectivity of one
-        and its `MultiplyOperation`.
+        and its `MultiplyOperation`. The depth, color and stencil state
+        defaults to three.js's: the depth tested and written, the color
+        written, and no stencil test.
         """
         self.x = x
         self.y = y
@@ -707,6 +716,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.bump_map = bump_map
         self.bump_scale = bump_scale
         self.receives_shadow = receives_shadow
+        self.state = state
 
 
 @fieldwise_init
@@ -1212,6 +1222,8 @@ def check_triangle_state(
             and an env map id that is a negative other than
             `NO_CUBE_TEXTURE` is refused, `SCENE_ENVIRONMENT` included,
             which `Renderer.prepare` resolves before a corner is built.
+            The corners must agree on their depth, color and stencil
+            state, and it must be one `RasterState.check` accepts.
     """
     if b.blend != a.blend or c.blend != a.blend:
         raise Error("A triangle's corners disagree about blending")
@@ -1248,6 +1260,12 @@ def check_triangle_state(
         c.receives_shadow != a.receives_shadow
     ):
         raise Error("A triangle's corners disagree about receiving shadows")
+    if b.state != a.state or c.state != a.state:
+        raise Error(
+            "A triangle's corners disagree about their depth, color or"
+            " stencil state"
+        )
+    a.state.check()
     # A shadow material is transparent wherever no shadow falls, and reads
     # no map: refused here as the material refuses it, so a hand-built
     # triangle cannot smuggle either past.
@@ -1898,6 +1916,10 @@ def rasterize_shaded(
     # nearest surface's coordinates and cuts nothing out, as it samples no
     # texture.
     var tested = a.alpha_test > 0 and mode != SHADE_UV
+    # Whether a fragment that passes writes its depth: an opaque one with
+    # the depth test and the depth write on. A blending fragment never
+    # does; see `render.raster_state.RasterState.writes_depth`.
+    var writes_depth = a.state.writes_depth(blended)
     # Whether these fragments reflect an environment: only when they name
     # one and the mode opens textures, since a reflection is one. A
     # reflecting surface needs its normal and its world position whether
@@ -1948,12 +1970,15 @@ def rasterize_shaded(
             var wb = fragment.wb
             var wc = fragment.wc
             var z = wa * a.z + wb * b.z + wc * c.z
-            if blended or tested:
-                # Hidden by what is in front, but hiding nothing behind --
-                # a translucent surface never, an alpha-tested one not yet.
-                if not target.depth_passes(x, y, z):
-                    continue
-            elif not target.test_depth(x, y, z):
+            # The stencil and the depth tests, asked without changing
+            # anything: the depth and the stencil are written once the
+            # fragment survives its alpha test, the *late* write a GPU
+            # makes for a shader that can discard. A failing fragment
+            # settles here unless an alpha test could still discard it;
+            # see `render.raster_state.shades`.
+            var test = target.test_fragment(x, y, z, a.state)
+            if not shades(test, tested):
+                target.keep_stencil(x, y, test)
                 continue
 
             # The denominator of the perspective correction, and the
@@ -2210,8 +2235,12 @@ def rasterize_shaded(
                     # Coordinates, not light: written as data, which
                     # bypasses the transfer function and the tone mapping
                     # -- see `data_color`. Opaque, which is why the alpha
-                    # is one.
-                    target.write(x, y, data_color(u, v, 0.0, 1.0), True)
+                    # is one. Never alpha tested, so the fragment passed.
+                    target.keep_stencil(x, y, test)
+                    if writes_depth:
+                        target.claim_depth(x, y, z)
+                    if a.state.color_write:
+                        target.write(x, y, data_color(u, v, 0.0, 1.0), True)
                     continue
                 else:
                     # Modulate rather than replace: the texture says what
@@ -2439,13 +2468,19 @@ def rasterize_shaded(
                     + c.view_depth * share_c
                 )
                 shaded = fog_mix(shaded, fog.color, fog.factor_at(depth))
+            # The stencil and the depth the tests asked for, written now
+            # that the fragment has survived. One that failed its tests
+            # was shaded only to learn that, and is drawn no further.
+            target.keep_stencil(x, y, test)
+            if not test.passes:
+                continue
+            if writes_depth:
+                target.claim_depth(x, y, z)
+            if not a.state.color_write:
+                continue
             if blended:
                 target.blend(x, y, shaded, a.blend.value)
             else:
-                # The depth an alpha-tested fragment did not claim before it
-                # was shaded, claimed now that it has survived.
-                if tested:
-                    target.claim_depth(x, y, z)
                 # An opaque fragment is written with an alpha of one, as
                 # three.js's `opaque_fragment` writes it: the material's
                 # opacity and its maps' alpha have had their say through
@@ -2484,8 +2519,10 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
     Raises:
         Error: If the blend policies differ, if either is not a named
             policy, if the kinds differ, if the kind is not unlit, if the
-            dash or the gap differ between the ends, or if either is
-            negative or not finite.
+            dash or the gap differ between the ends, if either is
+            negative or not finite, or if the ends disagree about their
+            depth, color or stencil state or it is refused by
+            `RasterState.check`.
     """
     if not a.blend.is_valid():
         raise Error("A line needs a blend policy that exists")
@@ -2505,6 +2542,11 @@ def check_line_state(a: RasterVertex, b: RasterVertex) raises:
         raise Error("A gap size cannot be negative")
     if a.dash_size != b.dash_size or a.gap_size != b.gap_size:
         raise Error("A line's ends must agree about the dashes")
+    if a.state != b.state:
+        raise Error(
+            "A line's ends must agree about their depth, color or stencil state"
+        )
+    a.state.check()
 
 
 def rasterize_line(
@@ -2565,6 +2607,8 @@ def rasterize_line(
     var steps = span_of(first, second)
     var horizontal = major_is_x(first, second)
     var fogged = fog.is_on()
+    # Whether a pixel that passes writes its depth; see `rasterize_shaded`.
+    var writes_depth = a.state.writes_depth(a.blend.mixes())
     # Which steps can land on the target at all, worked out before the
     # walk rather than discovered inside it. A projection can put an
     # endpoint a very long way off the image -- a segment from x = -1e6 to
@@ -2646,19 +2690,25 @@ def rasterize_line(
                 continue
             if x < 0 or x >= target.width:
                 continue
+            # The stencil and the depth tests, settled at once: a line
+            # has no alpha test to discard it later.
+            var test = target.test_fragment(x, y, z, a.state)
+            target.keep_stencil(x, y, test)
+            if not test.passes:
+                continue
             # A blended segment is hidden by what is in front of it and
             # hides nothing behind it, exactly as a blended triangle: it
             # tests the depth without claiming it. Claiming it, as this
             # once did, dropped every later blended segment at a shared
             # pixel, so a translucent wireframe lost the second edge at
             # every corner, while the kernel kept it.
+            if writes_depth:
+                target.claim_depth(x, y, z)
+            if not a.state.color_write:
+                continue
             if a.blend.mixes():
-                if not target.depth_passes(x, y, z):
-                    continue
                 target.blend(x, y, color, a.blend.value)
             else:
-                if not target.test_depth(x, y, z):
-                    continue
                 # Opaque, so written with an alpha of one, as a triangle
                 # is.
                 var opaque = color
@@ -2685,7 +2735,9 @@ def check_point_state(point: RasterVertex) raises:
         Error: If the blend policy is not a named one, the kind is not a
             named one or is not unlit, the size is not finite or not above
             zero, the alpha test is outside zero to one or not finite, or
-            a texture id is a negative other than `NO_TEXTURE`.
+            a texture id is a negative other than `NO_TEXTURE`, or the
+            depth, color and stencil state is refused by
+            `RasterState.check`.
     """
     if not point.blend.is_valid():
         raise Error("A point needs a blend policy that exists")
@@ -2705,6 +2757,7 @@ def check_point_state(point: RasterVertex) raises:
         raise Error("A point names a texture id that nothing can hold")
     if point.alpha_map != NO_TEXTURE and point.alpha_map.value < 0:
         raise Error("A point names an alpha map id that nothing can hold")
+    point.state.check()
 
 
 def check_point_maps(
@@ -2793,6 +2846,7 @@ def rasterize_point(
     var blended = point.blend.mixes() and mode != SHADE_UV
     var fogged = fog.is_on() and mode != SHADE_UV
     var tested = point.alpha_test > 0 and mode != SHADE_UV
+    var writes_depth = point.state.writes_depth(blended)
     var sampled = mode == SHADE_TEXTURE
     var center = Vector2(point.x, point.y)
     var size = point.point_size
@@ -2825,20 +2879,26 @@ def rasterize_point(
             if not point_covers(center, size, x, y):
                 continue
             var z = point.z
-            if blended or tested:
-                if not target.depth_passes(x, y, z):
-                    continue
-            elif not target.test_depth(x, y, z):
+            # Tested and settled as a triangle's fragment is; see
+            # `rasterize_shaded`.
+            var test = target.test_fragment(x, y, z, point.state)
+            if not shades(test, tested):
+                target.keep_stencil(x, y, test)
                 continue
             var shaded = point.color
             if mode != SHADE_LIT:
                 var place = point_coord(center, size, x, y)
                 if mode == SHADE_UV:
                     # Coordinates, not light, as the uv view of a triangle
-                    # writes them; see `data_color`.
-                    target.write(
-                        x, y, data_color(place.x, place.y, 0.0, 1.0), True
-                    )
+                    # writes them; see `data_color`. Never alpha tested,
+                    # so the point passed.
+                    target.keep_stencil(x, y, test)
+                    if writes_depth:
+                        target.claim_depth(x, y, z)
+                    if point.state.color_write:
+                        target.write(
+                            x, y, data_color(place.x, place.y, 0.0, 1.0), True
+                        )
                     continue
                 if point.texture != NO_TEXTURE:
                     var texel = _sample_point_map(
@@ -2867,11 +2927,16 @@ def rasterize_point(
                 shaded = fog_mix(
                     shaded, fog.color, fog.factor_at(point.view_depth)
                 )
+            target.keep_stencil(x, y, test)
+            if not test.passes:
+                continue
+            if writes_depth:
+                target.claim_depth(x, y, z)
+            if not point.state.color_write:
+                continue
             if blended:
                 target.blend(x, y, shaded, point.blend.value)
             else:
-                if tested:
-                    target.claim_depth(x, y, z)
                 # Opaque, so written with an alpha of one, as a triangle is.
                 shaded.a = 1
                 target.write(x, y, shaded, False)

@@ -570,6 +570,67 @@ Under `BLEND`, a fragment with an alpha of zero changes nothing. Under the other
 | `is_emissive() -> Bool` | Whether the emissive color at its intensity adds any light. |
 | `emissive_light() -> FloatColor` | The emissive color decoded to linear light, times the intensity. |
 
+## Depth, color and stencil
+
+A material decides how its fragments meet the depth, color and stencil buffers. The fields are three.js's, with three.js's defaults. Set them after you build the material, as you set them in three.js. `render/raster_state.mojo` holds the arithmetic, and both rasterizers call it.
+
+```mojo
+var mask = Material(Color(255, 255, 255), kind=BASIC)
+mask.color_write = False
+mask.depth_write = False
+mask.stencil_write = True
+mask.stencil_ref = 1
+mask.stencil_z_pass = REPLACE_STENCIL_OP
+var shown = Material(Color(255, 0, 0), kind=BASIC)
+shown.stencil_write = True
+shown.stencil_func = EQUAL_STENCIL_FUNC
+shown.stencil_ref = 1
+```
+
+Draw the mask first, with a lower render order. The second material then draws only inside the shape of the first.
+
+| Field | Type | Default | Meaning |
+|---|---|---|---|
+| `depth_test` | `Bool` | `True` | Compare the depth. Off, every fragment passes and writes no depth. |
+| `depth_write` | `Bool` | `True` | A fragment that passes writes its depth. |
+| `depth_func` | `DepthFunc` | `LESS_EQUAL_DEPTH` | How the depth is compared. |
+| `color_write` | `Bool` | `True` | A fragment that passes writes its color. Off, it still writes depth and stencil. |
+| `polygon_offset` | `Bool` | `False` | Push the filled triangles back. |
+| `polygon_offset_factor` | `Float32` | `0` | What the depth slope is multiplied by. |
+| `polygon_offset_units` | `Float32` | `0` | What the smallest depth step is multiplied by. |
+| `stencil_write` | `Bool` | `False` | Run the stencil test and write the stencil. |
+| `stencil_write_mask` | `Int` | `255` | The bits an operation can change. |
+| `stencil_func` | `StencilFunc` | `ALWAYS_STENCIL_FUNC` | How the reference is compared. |
+| `stencil_ref` | `Int` | `0` | The reference value. |
+| `stencil_func_mask` | `Int` | `255` | The bits the test compares. |
+| `stencil_fail` | `StencilOp` | `KEEP_STENCIL_OP` | The operation when the stencil test fails. |
+| `stencil_z_fail` | `StencilOp` | `KEEP_STENCIL_OP` | The operation when the depth test fails. |
+| `stencil_z_pass` | `StencilOp` | `KEEP_STENCIL_OP` | The operation when both tests pass. |
+
+The depth functions are `NEVER_DEPTH`, `ALWAYS_DEPTH`, `LESS_DEPTH`, `LESS_EQUAL_DEPTH`, `EQUAL_DEPTH`, `GREATER_EQUAL_DEPTH`, `GREATER_DEPTH` and `NOT_EQUAL_DEPTH`. They keep three.js's numbers, zero to seven. The stencil functions are `NEVER_STENCIL_FUNC` to `ALWAYS_STENCIL_FUNC`, in WebGL's order. The operations are `ZERO_STENCIL_OP`, `KEEP_STENCIL_OP`, `REPLACE_STENCIL_OP`, `INCREMENT_STENCIL_OP`, `DECREMENT_STENCIL_OP`, `INCREMENT_WRAP_STENCIL_OP`, `DECREMENT_WRAP_STENCIL_OP` and `INVERT_STENCIL_OP`. The stencil functions and the operations count from zero, not from three.js's WebGL values.
+
+### The order of the tests
+
+The order is OpenGL's. The stencil test runs first, and a fragment that fails it takes `stencil_fail` and is discarded. The depth test runs next, and a fragment that fails it takes `stencil_z_fail` and is discarded. A fragment that passes both takes `stencil_z_pass` and is drawn.
+
+`stencil_write` turns the whole stencil test on, as three.js's `stencilWrite` does. Off, the stencil buffer is neither read nor written. The test compares `stencil_ref & stencil_func_mask` with the stored value under the same mask, the reference on the left. An operation changes only the bits `stencil_write_mask` sets. The increment and the decrement stop at 255 and at zero.
+
+An alpha test runs before the stencil and the depth are written. A fragment that the alpha test discards changes no stencil value, as a GPU's `discard` changes none.
+
+### Where this port differs
+
+A blending surface never writes depth, whatever `depth_write` says. The renderer sorts blending surfaces and draws them last; see [Why transparency is sorted](Why-transparency-is-sorted). An opaque surface writes depth when `depth_test` and `depth_write` are both on.
+
+The reference and the masks must be from 0 to 255, because the stencil buffer is eight bits deep. WebGL masks a larger value, and this port refuses it.
+
+A light's view of the casters ignores these fields. three.js draws a shadow with its own depth material, so a mask that writes no color still casts its shadow.
+
+### Polygon offset
+
+`polygon_offset` pushes a filled triangle back by `factor * m + r * units`, as OpenGL defines it. `m` is the larger of the depth's slopes across x and across y, per pixel. `r` is the smallest depth step. This port stores depth as a `Float32` NDC depth, so `r` is one unit in the last place of the deepest corner. A positive offset pushes the triangle away, and a negative one pulls it nearer.
+
+The renderer adds the offset to the corners before either rasterizer sees them. So both backends receive the same depths. Lines and points are not pushed, as OpenGL's `POLYGON_OFFSET_FILL` pushes neither.
+
 ## Errors
 
 The constructor raises for:
@@ -606,6 +667,8 @@ The constructor raises for:
 - A normal map or a bump map on a `BASIC`, `DEPTH` or `NORMALS` material, which a wireframe is. Both on one material.
 - A normal scale that is not one and one with no normal map. A bump scale that is not one with no bump map. A scale that is not finite.
 - A roughness, metalness, normal or bump map id below zero that is not `NO_TEXTURE`.
+
+`Renderer.prepare` raises for a depth function, a stencil function or a stencil operation that is none of the eight. It raises for a stencil reference or mask outside 0 to 255, and for a polygon offset that is not finite. `Material.raster_state` and `Material.depth_offset` make these checks.
 
 `Renderer.prepare` raises for an emissive map that reads its alpha as coverage. It raises for an env map, or a scene environment, that is not in the assets. It raises for a roughness, metalness, normal or bump map that is not in the assets or is not stored as data.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.

@@ -68,9 +68,9 @@ Vertices snap to a 1/16 pixel grid. The edge function is then exact integer arit
 
 ## Depth
 
-Depth is interpolated linearly in screen space. A fragment is kept when it is nearer than what is there. An opaque fragment writes its depth. A blended fragment tests depth and does not write it.
+Depth is interpolated linearly in screen space. By default a fragment is kept when it is as near as what is there, or nearer: three.js's `LessEqualDepth`. An opaque fragment writes its depth. A blended fragment tests depth and does not write it. Each corner carries a `state`, a `RasterState`, that changes these rules and adds the stencil test. See [Materials](Materials#depth-color-and-stencil).
 
-An alpha-tested fragment writes its depth *late*. It tests without claiming, and claims with `claim_depth` once it survives the test. A fragment the test throws away leaves the depth alone, so the hole shows what is behind it. A GPU does the same for a shader that can discard.
+An alpha-tested fragment writes its depth and its stencil *late*. It tests without claiming, and claims with `claim_depth` once it survives the test. A fragment the test throws away leaves the depth alone, so the hole shows what is behind it. A GPU does the same for a shader that can discard.
 
 ## Clipping
 

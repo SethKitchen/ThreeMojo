@@ -151,6 +151,7 @@ from render.texture import IGNORED
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
+from render.raster_state import NO_OFFSET, PolygonOffset, RasterState
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, check_tone_mapping
 from math.vector2 import Vector2
 from render.rasterizer import (
@@ -1161,6 +1162,7 @@ def _to_raster(
     combine: Combine = MULTIPLY_OPERATION,
     physics: _Physics = _Physics(),
     receives_shadow: Bool = True,
+    state: RasterState = RasterState(),
 ) -> RasterVertex:
     """Project a clipped camera-space vertex into the rasterizer's input.
 
@@ -1221,6 +1223,7 @@ def _to_raster(
         physics.bump_map,
         physics.bump_scale,
         receives_shadow,
+        state,
     )
 
 
@@ -1432,6 +1435,10 @@ struct _Paint(ImplicitlyCopyable):
     var physics: _Physics
     # Whether the lights' shadows fall on the draw.
     var receives_shadow: Bool
+    # The draw's depth, color and stencil state, and how far its
+    # triangles are pushed back; see `_draw_state` and `emit`.
+    var state: RasterState
+    var offset: PolygonOffset
 
     def raster(self, vertex: ClipVertex) -> RasterVertex:
         """Project one clipped corner into the rasterizer's input."""
@@ -1453,6 +1460,7 @@ struct _Paint(ImplicitlyCopyable):
             combine=self.combine,
             physics=self.physics,
             receives_shadow=self.receives_shadow,
+            state=self.state,
         )
 
     def emit(
@@ -1478,6 +1486,19 @@ struct _Paint(ImplicitlyCopyable):
         var one = self.raster(a)
         var two = self.raster(b)
         var three = self.raster(c)
+        # The polygon offset, added to the screen depths here, where the
+        # triangle is first on the screen, so both backends receive the
+        # moved depths and agree without a rule of their own. `NO_OFFSET`
+        # adds zero. Measured on the piece the clipper kept, whose depth
+        # slope is the whole triangle's.
+        var shift = self.offset.shift(
+            Vector3(one.x, one.y, one.z),
+            Vector3(two.x, two.y, two.z),
+            Vector3(three.x, three.y, three.z),
+        )
+        one.z += shift
+        two.z += shift
+        three.z += shift
         var away = _faces_away(one, two, three, self.mirrored)
         if self.side == FRONT_SIDE and away:
             return
@@ -1505,6 +1526,56 @@ struct _Paint(ImplicitlyCopyable):
         corners.append(one)
         corners.append(two)
         corners.append(three)
+
+
+def _draw_state(material: Material, casters_only: Bool) raises -> RasterState:
+    """Return the depth, color and stencil state a draw is made under.
+
+    The material's, checked, for a frame. A light's view of the casters
+    draws depth alone, under three.js's own depth material rather than the
+    mesh's, so it takes the default state: a mask pass that writes no
+    color still casts its shadow.
+
+    Args:
+        material: The draw's material.
+        casters_only: Whether this is a light's view of the casters.
+
+    Returns:
+        The state.
+
+    Raises:
+        Error: If the material's state is refused by
+            `RasterState.check`, whichever view this is.
+    """
+    var state = material.raster_state()
+    if casters_only:
+        return RasterState()
+    return state
+
+
+def _draw_offset(
+    material: Material, casters_only: Bool
+) raises -> PolygonOffset:
+    """Return how far a draw's filled triangles are pushed back.
+
+    The material's for a frame, and none for a light's view of the
+    casters, for the reason `_draw_state` gives.
+
+    Args:
+        material: The draw's material.
+        casters_only: Whether this is a light's view of the casters.
+
+    Returns:
+        The offset.
+
+    Raises:
+        Error: If the material's offset is refused by
+            `Material.depth_offset`, whichever view this is.
+    """
+    var offset = material.depth_offset()
+    if casters_only:
+        return NO_OFFSET
+    return offset
 
 
 def _column_length(matrix: Matrix4, axis: Int) -> Float32:
@@ -1641,6 +1712,7 @@ def _emit_sprite(
     perspective: Bool,
     shading: ShadeMode,
     any_of: List[Plane] = List[Plane](),
+    casters_only: Bool = False,
 ) raises:
     """Build a sprite's two triangles in camera space and append them.
 
@@ -1670,11 +1742,14 @@ def _emit_sprite(
         perspective: Whether the camera's rays converge.
         shading: The renderer's shading mode, for which maps to carry.
         any_of: The clipping planes of which a kept point needs one.
+        casters_only: Whether this is a light's view of the casters, which
+            takes no depth, color or stencil state; see `_draw_state`.
 
     Raises:
         Error: If the material is not `BASIC` or is a wireframe, names a
-            map or an alpha map that is not there, or names an alpha map
-            that is not stored as data.
+            map or an alpha map that is not there, names an alpha map
+            that is not stored as data, or holds a depth, color, stencil
+            or offset state that is refused.
     """
     var material = assets.materials.get(draw.material)
     # Refused for the reason a line refuses a lit kind: a sprite is unlit,
@@ -1759,6 +1834,8 @@ def _emit_sprite(
         MULTIPLY_OPERATION,
         _Physics(),
         False,
+        _draw_state(material, casters_only),
+        _draw_offset(material, casters_only),
     )
     var thirds: List[Int] = [2, 3]
     for half in range(2):  # pragma: no branch
@@ -2484,6 +2561,7 @@ struct Renderer(Movable):
                     perspective,
                     self.shading,
                     sprite_any,
+                    casters_only,
                 )
                 _note_span(
                     spans,
@@ -2798,6 +2876,8 @@ struct Renderer(Movable):
                 material.combine,
                 physics,
                 draws[slot].receives_shadow,
+                _draw_state(material, casters_only),
+                _draw_offset(material, casters_only),
             )
             if wireframe:
                 # The mesh's own edges, each once, clipped as segments.
@@ -2843,6 +2923,7 @@ struct Renderer(Movable):
                                 0,
                                 NO_TEXTURE,
                                 NO_TEXTURE,
+                                state=paint.state,
                             )
                         )
                 _note_span(
@@ -3082,6 +3163,8 @@ struct Renderer(Movable):
             var begin = len(corners)
             ref geometry = assets.geometries.get(line.geometry)
             var material = assets.materials.get(line.material)
+            # A line is never a caster, so its state is always its own.
+            var state = _draw_state(material, False)
             var cut = List[Plane]()
             var any_of = List[Plane]()
             _clip_sets(
@@ -3207,6 +3290,7 @@ struct Renderer(Movable):
                             NO_TEXTURE,
                             dash,
                             gap,
+                            state=state,
                         )
                     )
             _note_span(
@@ -3426,6 +3510,8 @@ struct Renderer(Movable):
             var begin = len(corners)
             ref geometry = assets.geometries.get(points.geometry)
             var material = assets.materials.get(points.material)
+            # A point is never a caster, so its state is always its own.
+            var state = _draw_state(material, False)
             var cut = List[Plane]()
             var any_of = List[Plane]()
             _clip_sets(
@@ -3526,6 +3612,7 @@ struct Renderer(Movable):
                             perspective and material.size_attenuation,
                             self.render_scale,
                         ),
+                        state=state,
                     )
                 )
             _note_span(

@@ -49,6 +49,8 @@ The kernel calls the same functions as the CPU for the fill rule, texture wrappi
 
 The state table carries seven entries per triangle. They are its texture, its blend policy, its material kind, its emissive map, its alpha map, its gradient map and its matcap. A `TOON` triangle's ramp rides the last of those. The kernel reads its top row straight out of the texel buffer, with the host's own `toon_index`.
 
+The depth, color and stencil state rides the triangle, segment and point tables as two integers, `RasterState.ops_word` and `RasterState.stencil_word`. The kernel unpacks them and calls `test_fragment`, the function the host's target calls. It keeps the stencil as one local number per pixel, cleared to zero at the start of the launch. See [Materials](Materials#depth-color-and-stencil).
+
 The kernel tracks whether each pixel holds data rather than light, as the host's target does. It keeps the fog and the curve off those pixels.
 
 The light buffer begins with three floats of camera position at `LIGHTS_EYE`, then three at `LIGHTS_TOWARD`. Those three hold the zero vector for a converging projection, and one unit direction for a parallel one. The kernel passes both to `toward_eye_at`, the host's own function. The camera's own up axis follows at `LIGHTS_UP`, for the frame a `MATCAP` surface is looked up in.

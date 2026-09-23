@@ -42,6 +42,7 @@ is size-dependent. `bench/raster_bench.mojo` measures where the crossover is.
 from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.blend import NORMAL_MODE, Rgba, blend_pixel
+from render.raster_state import RasterState, shades, test_fragment
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.linerule import covers, dash_covers, major_is_x, share_at
 from render.pointrule import (
@@ -282,6 +283,11 @@ comptime STATE_NORMAL_MAP = 11
 comptime STATE_BUMP_MAP = 12
 # Whether the lights' shadows fall on the triangle: one or zero.
 comptime STATE_RECEIVES_SHADOW = 13
+# The depth, color and stencil state, as `RasterState.ops_word` and
+# `RasterState.stencil_word` pack it: two integers that ride the table the
+# way a custom blending mode rides `STATE_BLEND`.
+comptime STATE_OPS = 14
+comptime STATE_STENCIL = 15
 # How a segment's metadata is laid out in its state buffer: its blend
 # policy, and how many pixels across it is drawn. A line is unlit and
 # untextured, so it carries nothing else; see `line_state`. The width is
@@ -290,18 +296,24 @@ comptime STATE_RECEIVES_SHADOW = 13
 # and this one has thirty-one.
 comptime LINE_STATE_BLEND = 0
 comptime LINE_STATE_WIDTH = 1
-comptime STATE_PER_LINE = LINE_STATE_WIDTH + 1
+# The segment's depth, color and stencil state, packed as a triangle's is.
+comptime LINE_STATE_OPS = 2
+comptime LINE_STATE_STENCIL = 3
+comptime STATE_PER_LINE = LINE_STATE_STENCIL + 1
 # How a point's metadata is laid out in its state buffer: its texture, its
 # blend policy and its alpha map. A point is unlit, so it has no kind to
 # carry, no emissive map, no ramp and no matcap.
 comptime POINT_STATE_TEXTURE = 0
 comptime POINT_STATE_BLEND = 1
 comptime POINT_STATE_ALPHA_MAP = 2
-comptime STATE_PER_POINT = POINT_STATE_ALPHA_MAP + 1
+# The point's depth, color and stencil state, packed as a triangle's is.
+comptime POINT_STATE_OPS = 3
+comptime POINT_STATE_STENCIL = 4
+comptime STATE_PER_POINT = POINT_STATE_STENCIL + 1
 # How a `Draw` crosses to the device: its kind, its first primitive and its
 # count, as three integers.
 comptime INTS_PER_DRAW = 3
-comptime STATE_PER_TRIANGLE = STATE_RECEIVES_SHADOW + 1
+comptime STATE_PER_TRIANGLE = STATE_STENCIL + 1
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
 # density, then the fog color, linear. Six floats, whatever the kind,
@@ -1719,12 +1731,15 @@ def line_state(corners: List[RasterVertex], line_width: Int = 1) -> List[Int32]:
             below one.
 
     Returns:
-        The blend policy and the width per segment, from its first end.
+        The blend policy, the width, then the packed depth, color and
+        stencil state per segment, from its first end.
     """
     var state = List[Int32]()
     for segment in range(len(corners) // 2):
         state.append(Int32(corners[segment * 2].blend.value))
         state.append(Int32(line_width))
+        state.append(Int32(corners[segment * 2].state.ops_word()))
+        state.append(Int32(corners[segment * 2].state.stencil_word()))
     return state^
 
 
@@ -1740,13 +1755,16 @@ def point_state(points: List[RasterVertex]) -> List[Int32]:
         points: Raster vertices, one per point.
 
     Returns:
-        Texture id, blend policy, then alpha map id, per point.
+        Texture id, blend policy, alpha map id, then the packed depth,
+        color and stencil state, per point.
     """
     var state = List[Int32]()
     for point in range(len(points)):
         state.append(Int32(points[point].texture.value))
         state.append(Int32(points[point].blend.value))
         state.append(Int32(points[point].alpha_map.value))
+        state.append(Int32(points[point].state.ops_word()))
+        state.append(Int32(points[point].state.stencil_word()))
     return state^
 
 
@@ -1775,8 +1793,9 @@ def triangle_state(
         map id, the alpha map id, the gradient map id, the matcap id, the
         row of the env map's first face or -1 for none, then the combine's
         value, then the roughness, metalness, normal and bump map ids, then
-        one or zero for whether the shadows fall on it, per triangle, from
-        its first corner.
+        one or zero for whether the shadows fall on it, then the packed
+        depth, color and stencil state, per triangle, from its first
+        corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -1798,6 +1817,8 @@ def triangle_state(
         state.append(Int32(corners[triangle * 3].normal_map.value))
         state.append(Int32(corners[triangle * 3].bump_map.value))
         state.append(Int32(1 if corners[triangle * 3].receives_shadow else 0))
+        state.append(Int32(corners[triangle * 3].state.ops_word()))
+        state.append(Int32(corners[triangle * 3].state.stencil_word()))
     return state^
 
 
@@ -2135,6 +2156,10 @@ def rasterize_kernel(
     # Resolved by the material, not guessed at from an alpha. A debug view of
     # texture coordinates is always opaque: it shows the nearest surface's
     # coordinates, and averaging several surfaces' would mean nothing.
+    # The depth the pixel holds: the nearest solid surface's under the
+    # default depth function, and whatever the last depth write left under
+    # another. Compared by `render.raster_state.test_fragment`, as the
+    # host's target is.
     var nearest = FURTHEST
     var found = False
     # True once an *opaque* fragment has claimed this pixel's depth. A
@@ -2171,6 +2196,11 @@ def rasterize_kernel(
     # fragment into it exactly as `RenderTarget.write` and `blend` decide
     # it: a normal or a depth, which the tone mapping must leave alone.
     var data = False
+    # The pixel's stencil value, cleared to zero with the frame as
+    # `RenderTarget.clear_inside` clears it, and changed only by a
+    # primitive whose state has `stencil_write` on. A local and not a
+    # buffer: one launch draws the whole frame, so nothing outlives it.
+    var stencil = 0
     # Whether the fog can reach any fragment: never in the uv debug view,
     # exactly as `rasterize_shaded` decides it. A fragment that shows data
     # is left out below, per triangle.
@@ -2199,10 +2229,29 @@ def rasterize_kernel(
                 if not point_covers(center, size, x, y):
                     continue
                 var z = points[unsafe_offset=base + LANE_Z]
-                if z >= nearest:
-                    continue
                 var threshold = points[unsafe_offset=base + LANE_ALPHA_TEST]
                 var tested = threshold > 0 and mode != Int32(SHADE_UV.value)
+                # The stencil and the depth tests, by the function the host
+                # asks, and settled at once unless an alpha test could
+                # still discard the point; see `rasterize_shaded`.
+                var state = RasterState.unpacked(
+                    Int(
+                        point_maps[
+                            unsafe_offset=index * STATE_PER_POINT
+                            + POINT_STATE_OPS
+                        ]
+                    ),
+                    Int(
+                        point_maps[
+                            unsafe_offset=index * STATE_PER_POINT
+                            + POINT_STATE_STENCIL
+                        ]
+                    ),
+                )
+                var test = test_fragment(state, z, nearest, stencil)
+                if not shades(test, tested):
+                    stencil = test.stencil
+                    continue
                 red = points[unsafe_offset=base + LANE_R]
                 green = points[unsafe_offset=base + LANE_G]
                 blue = points[unsafe_offset=base + LANE_B]
@@ -2260,6 +2309,9 @@ def rasterize_kernel(
                             alpha *= thinning.g
                 if tested and alpha < threshold:
                     continue
+                stencil = test.stencil
+                if not test.passes:
+                    continue
                 if fog_on:
                     var veiled = fog_mix(
                         FloatColor(red, green, blue, alpha),
@@ -2300,17 +2352,20 @@ def rasterize_kernel(
                     continue
                 found = True
                 if not mixes:
+                    if state.writes_depth(mixes):
+                        nearest = z
+                        solid = True
+                    if not state.color_write:
+                        continue
                     share = 1
                     mixed_r = red * share
                     mixed_g = green * share
                     mixed_b = blue * share
                     mixed_a = share
-                    nearest = z
-                    solid = True
                     # A point is light, never data, except in the uv view,
                     # which shows coordinates.
                     data = mode == Int32(SHADE_UV.value)
-                else:
+                elif state.color_write:
                     var out = blend_pixel(
                         Rgba(mixed_r, mixed_g, mixed_b, mixed_a),
                         Rgba(red, green, blue, share),
@@ -2378,7 +2433,25 @@ def rasterize_kernel(
                     segments[unsafe_offset=base + LANE_GAP],
                 ):
                     continue
-                if z >= nearest:
+                # The stencil and the depth tests, settled at once: a line
+                # has no alpha test to discard it later.
+                var state = RasterState.unpacked(
+                    Int(
+                        segment_maps[
+                            unsafe_offset=index * STATE_PER_LINE
+                            + LINE_STATE_OPS
+                        ]
+                    ),
+                    Int(
+                        segment_maps[
+                            unsafe_offset=index * STATE_PER_LINE
+                            + LINE_STATE_STENCIL
+                        ]
+                    ),
+                )
+                var test = test_fragment(state, z, nearest, stencil)
+                stencil = test.stencil
+                if not test.passes:
                     continue
                 # Straight, through the function the host calls, so the one
                 # convention for a line's color lives in one place.
@@ -2439,19 +2512,22 @@ def rasterize_kernel(
                     continue
                 found = True
                 if not mixes:
+                    if state.writes_depth(mixes):
+                        nearest = z
+                        solid = True
+                    if not state.color_write:
+                        continue
                     # Opaque, so written with an alpha of one, as on the host.
                     share_a = 1
                     mixed_r = drawn.r * share_a
                     mixed_g = drawn.g * share_a
                     mixed_b = drawn.b * share_a
                     mixed_a = share_a
-                    nearest = z
-                    solid = True
                     # A line is light, never data: it has no normal to show and no
                     # depth material to show one. `check_line_state` refuses any
                     # kind but an unlit one.
                     data = False
-                else:
+                elif state.color_write:
                     var out = blend_pixel(
                         Rgba(mixed_r, mixed_g, mixed_b, mixed_a),
                         Rgba(drawn.r, drawn.g, drawn.b, share_a),
@@ -2535,7 +2611,25 @@ def rasterize_kernel(
 
             # Depth interpolates affinely; see `RasterVertex.z`.
             var z = wa * az + wb * bz + wc * cz
-            if z >= nearest:
+            # The alpha a fragment must reach to be drawn, from the first
+            # corner's lane, and whether there is a test at all. The uv debug
+            # view cuts nothing out, as it samples no texture.
+            var threshold = corners[unsafe_offset=base + LANE_ALPHA_TEST]
+            var tested = threshold > 0 and mode != Int32(SHADE_UV.value)
+            # The stencil and the depth tests, by the function the host
+            # asks, and settled at once unless an alpha test could still
+            # discard the fragment; see `rasterize_shaded`.
+            var state = RasterState.unpacked(
+                Int(maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_OPS]),
+                Int(
+                    maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE + STATE_STENCIL
+                    ]
+                ),
+            )
+            var test = test_fragment(state, z, nearest, stencil)
+            if not shades(test, tested):
+                stencil = test.stencil
                 continue
 
             # Color does not: weight by inv_w and divide by the interpolated
@@ -2552,11 +2646,6 @@ def rasterize_kernel(
 
             # What kind of surface this is, per triangle from the state table:
             # lit, unlit, or showing its normal or its depth as data.
-            # The alpha a fragment must reach to be drawn, from the first
-            # corner's lane, and whether there is a test at all. The uv debug
-            # view cuts nothing out, as it samples no texture.
-            var threshold = corners[unsafe_offset=base + LANE_ALPHA_TEST]
-            var tested = threshold > 0 and mode != Int32(SHADE_UV.value)
             var kind = maps[
                 unsafe_offset=index * STATE_PER_TRIANGLE + STATE_KIND
             ]
@@ -3459,6 +3548,12 @@ def rasterize_kernel(
                     green = veiled.g
                     blue = veiled.b
 
+            # The stencil and the depth the tests asked for, settled now that
+            # the fragment has survived its alpha test. One that failed its
+            # tests was shaded only to learn that, and is drawn no further.
+            stencil = test.stencil
+            if not test.passes:
+                continue
             # Opaque replaces what is there; translucent mixes into it. One pass
             # is enough only because every opaque triangle is submitted before any
             # translucent one, so `nearest` is already final when the first
@@ -3483,6 +3578,11 @@ def rasterize_kernel(
                 continue
             found = True
             if not mixes:
+                if state.writes_depth(mixes):
+                    nearest = z
+                    solid = True
+                if not state.color_write:
+                    continue
                 # Nothing behind contributes, and the fragment is written with
                 # an alpha of one, as three.js's `opaque_fragment` writes it
                 # and as `rasterize_shaded` writes it; only a depth material
@@ -3493,14 +3593,12 @@ def rasterize_kernel(
                 mixed_g = green * share
                 mixed_b = blue * share
                 mixed_a = share
-                nearest = z
-                solid = True
                 # A write replaces the pixel, so its answer becomes this
                 # fragment's, exactly as `RenderTarget.write` decides it.
                 # The uv view shows coordinates, which the tone mapping has
                 # to leave alone exactly as it leaves a normal alone.
                 data = shows_data or mode == Int32(SHADE_UV.value)
-            else:
+            elif state.color_write:
                 # The mode's arithmetic, shared with `RenderTarget.blend`.
                 var out = blend_pixel(
                     Rgba(mixed_r, mixed_g, mixed_b, mixed_a),

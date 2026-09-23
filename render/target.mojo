@@ -64,6 +64,7 @@ unassociated alpha.
 """
 
 from render.blend import NORMAL_MODE, Rgba, blend_pixel
+from render.raster_state import FragmentTest, RasterState, test_fragment
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rect import Rect
 from render.texture import (
@@ -189,6 +190,10 @@ struct RenderTarget(Movable):
     # every write asks it, so a fragment outside is neither tested nor
     # written, as a GPU's scissor test discards it before the depth test.
     var scissor: Rect
+    # The stencil buffer, eight bits a pixel, cleared to zero with the
+    # frame as three.js clears it. Read and written only by a primitive
+    # whose state has `stencil_write` on; see `render.raster_state`.
+    var stencil: List[UInt8]
 
     def __init__(out self, width: Int, height: Int, clear: Color) raises:
         """Create a target cleared to `clear`.
@@ -214,6 +219,7 @@ struct RenderTarget(Movable):
         )
         self.data = List[Bool](length=width * height, fill=False)
         self.scissor = Rect.whole(width, height)
+        self.stencil = List[UInt8](length=width * height, fill=0)
 
     def set_scissor(mut self, rect: Rect) raises:
         """Draw only inside `rect` from now on, three.js's `setScissor`
@@ -236,7 +242,8 @@ struct RenderTarget(Movable):
 
     def clear_inside(mut self, rect: Rect, clear: Color) raises:
         """Reset every pixel inside `rect` to `clear`, its depth to the
-        far distance and its flag to light, leaving the rest alone.
+        far distance, its stencil to zero and its flag to light, leaving the
+        rest alone.
 
         What clearing under a scissor does on a GPU, and what lets two
         viewports share one target: each clears its own rectangle and
@@ -260,6 +267,7 @@ struct RenderTarget(Movable):
                 self.colors[slot] = self.clear
                 self.depth[slot] = inf[DType.float32]()
                 self.data[slot] = False
+                self.stencil[slot] = 0
 
     def _slot(self, x: Int, y: Int) raises -> Int:
         """Return the index of pixel (x, y), checking it is inside."""
@@ -270,6 +278,71 @@ struct RenderTarget(Movable):
     def depth_at(self, x: Int, y: Int) raises -> Float32:
         """Return the depth recorded at pixel (x, y)."""
         return self.depth[self._slot(x, y)]
+
+    def stencil_at(self, x: Int, y: Int) raises -> Int:
+        """Return the stencil value recorded at pixel (x, y).
+
+        Args:
+            x: Column.
+            y: Row.
+
+        Returns:
+            The value, from 0 to 255.
+
+        Raises:
+            Error: If the coordinate is out of bounds.
+        """
+        return Int(self.stencil[self._slot(x, y)])
+
+    def test_fragment(
+        self, x: Int, y: Int, z: Float32, state: RasterState
+    ) raises -> FragmentTest:
+        """Return what the stencil and the depth tests say about a
+        fragment at pixel (x, y), changing nothing.
+
+        `render.raster_state.test_fragment` against this pixel, the
+        function the kernel calls against its own. A pixel outside the
+        scissor fails and changes nothing, as a GPU's scissor test
+        discards a fragment before the stencil test.
+
+        Args:
+            x: Column.
+            y: Row.
+            z: The fragment's NDC depth.
+            state: The primitive's depth, color and stencil state.
+
+        Returns:
+            Whether the fragment passes and the stencil value it leaves.
+
+        Raises:
+            Error: If the coordinate is out of bounds.
+        """
+        var slot = self._slot(x, y)
+        var stored = Int(self.stencil[slot])
+        if not self.scissor.contains_pixel(x, y, self.height):
+            return FragmentTest(False, stored, False)
+        return test_fragment(state, z, self.depth[slot], stored)
+
+    def keep_stencil(mut self, x: Int, y: Int, test: FragmentTest) raises:
+        """Record the stencil value a fragment leaves, testing nothing.
+
+        The stencil half of settling a fragment, called with what
+        `test_fragment` returned once the fragment survives its alpha
+        test, or at once when it fails and cannot be discarded. A test
+        that changes nothing writes nothing.
+
+        Args:
+            x: Column.
+            y: Row.
+            test: What `test_fragment` returned for this pixel.
+
+        Raises:
+            Error: If the coordinate is out of bounds.
+        """
+        var slot = self._slot(x, y)
+        if not test.changes:
+            return
+        self.stencil[slot] = UInt8(test.stencil)
 
     def color_at(self, x: Int, y: Int) raises -> FloatColor:
         """Return the premultiplied linear color at pixel (x, y)."""

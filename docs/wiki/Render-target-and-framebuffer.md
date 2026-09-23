@@ -44,8 +44,10 @@ three.js: `WebGLRenderTarget` and the canvas. A render target can be read back a
 | `depth_passes(x, y, z) -> Bool` | Compare without recording. |
 | `claim_depth(x, y, z)` | Record without comparing, for a late depth write. |
 | `set_scissor(rect)` | Draw only inside `rect` from now on. Every test and write outside it does nothing. |
-| `clear_inside(rect, clear)` | Reset the pixels inside `rect` and leave the rest. |
-| `depth_at(x, y)`, `color_at(x, y)` | Read a pixel. |
+| `clear_inside(rect, clear)` | Reset the pixels inside `rect`, stencil included, and leave the rest. |
+| `test_fragment(x, y, z, state) -> FragmentTest` | Run the stencil and the depth tests without writing. |
+| `keep_stencil(x, y, test)` | Write the stencil value a test returned. |
+| `depth_at(x, y)`, `color_at(x, y)`, `stencil_at(x, y)` | Read a pixel. |
 | `shown(x, y, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Color` | One pixel as it will resolve. |
 | `resolve(workers=1, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Framebuffer` | Unpremultiply, tone map and encode every pixel. |
 | `texture(wrap=CLAMP, filter=BILINEAR, mipmapped=True, alpha=COVERAGE, workers=1, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Texture` | `resolve`, then the image as a texture a later draw can sample. three.js's `WebGLRenderTarget.texture`. |
@@ -54,6 +56,10 @@ three.js: `WebGLRenderTarget` and the canvas. A render target can be read back a
 Nothing is clamped before `resolve`. Overexposed light survives every step.
 
 `set_scissor` is three.js's scissor with the test on. A fragment outside it is neither depth tested nor written, as a GPU discards it before the depth test. `clear_inside` is what a clear under that scissor does. The two are what let several viewports share one target; see [Renderer](Renderer#viewport-and-scissor). The rectangle's corner counts up from the bottom left, as three.js's does.
+
+The target holds an eight-bit stencil buffer beside the depth. It starts at zero, and `clear_inside` clears it to zero with the frame, as three.js clears it. Only a primitive whose state has `stencil_write` on reads it or writes it. `test_fragment` runs the stencil and the depth tests in OpenGL's order and writes nothing. The rasterizer writes the stencil, the depth and the color once the fragment survives its alpha test.
+
+The kernel keeps the stencil as one local number per pixel, because one launch draws the whole frame. See [Materials](Materials#depth-color-and-stencil).
 
 `claim_depth` is the other half of a late depth write. A fragment an alpha test can throw away tests with `depth_passes` and claims only once it survives. See [Rasterization](Rasterization#depth).
 

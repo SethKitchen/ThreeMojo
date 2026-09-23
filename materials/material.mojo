@@ -166,6 +166,18 @@ from render.blend import (
     pack_custom,
 )
 from render.framebuffer import Color, FloatColor
+from render.raster_state import (
+    ALWAYS_STENCIL_FUNC,
+    KEEP_STENCIL_OP,
+    LESS_EQUAL_DEPTH,
+    NO_OFFSET,
+    STENCIL_MAX,
+    DepthFunc,
+    PolygonOffset,
+    RasterState,
+    StencilFunc,
+    StencilOp,
+)
 from render.texture_store import NO_TEXTURE, TextureId
 from math.bounds import Plane
 from math.vector2 import Vector2
@@ -745,6 +757,33 @@ struct Material(ImplicitlyCopyable):
     # True to cut the material's shadow with its planes too, three.js's
     # `clipShadows`.
     var clip_shadows: Bool
+    # The depth, color and stencil state, three.js's fields of the same
+    # names, with its defaults. Set them after the material is built, as
+    # three.js sets them; `raster_state` and `depth_offset` check them
+    # when the renderer reads them. See `render.raster_state`.
+    var depth_test: Bool
+    var depth_write: Bool
+    var depth_func: DepthFunc
+    var color_write: Bool
+    # Whether a filled triangle's depth is pushed back, and by how much:
+    # three.js's `polygonOffset`, `polygonOffsetFactor` and
+    # `polygonOffsetUnits`. Lines and points are not pushed, as OpenGL's
+    # `POLYGON_OFFSET_FILL` pushes neither.
+    var polygon_offset: Bool
+    var polygon_offset_factor: Float32
+    var polygon_offset_units: Float32
+    # Whether the stencil test runs and the stencil is written, three.js's
+    # `stencilWrite`, and the rest of three.js's stencil fields. The
+    # reference and the masks are from 0 to 255: the stencil buffer is
+    # eight bits deep.
+    var stencil_write: Bool
+    var stencil_write_mask: Int
+    var stencil_func: StencilFunc
+    var stencil_ref: Int
+    var stencil_func_mask: Int
+    var stencil_fail: StencilOp
+    var stencil_z_fail: StencilOp
+    var stencil_z_pass: StencilOp
 
     def __init__(
         out self,
@@ -1243,6 +1282,21 @@ struct Material(ImplicitlyCopyable):
         self.clip_plane_count = 0
         self.clip_intersection = False
         self.clip_shadows = False
+        self.depth_test = True
+        self.depth_write = True
+        self.depth_func = LESS_EQUAL_DEPTH
+        self.color_write = True
+        self.polygon_offset = False
+        self.polygon_offset_factor = 0
+        self.polygon_offset_units = 0
+        self.stencil_write = False
+        self.stencil_write_mask = STENCIL_MAX
+        self.stencil_func = ALWAYS_STENCIL_FUNC
+        self.stencil_ref = 0
+        self.stencil_func_mask = STENCIL_MAX
+        self.stencil_fail = KEEP_STENCIL_OP
+        self.stencil_z_fail = KEEP_STENCIL_OP
+        self.stencil_z_pass = KEEP_STENCIL_OP
         # The normal and bump maps, refused where no normal is read: a
         # basic or depth shader consults none. A wireframe is `BASIC`, so
         # the same rule refuses a map on one, and the line pass never
@@ -1501,6 +1555,58 @@ struct Material(ImplicitlyCopyable):
         self.clip_plane_count = len(planes)
         self.clip_intersection = intersection
         self.clip_shadows = shadows
+
+    def raster_state(self) raises -> RasterState:
+        """Return the material's depth, color and stencil state, checked.
+
+        What `Renderer.prepare` reads and every corner carries. The fields
+        are open, so they are checked here, where the renderer reads them.
+
+        Returns:
+            The state.
+
+        Raises:
+            Error: If the depth function, the stencil function or a stencil
+                operation is none of the eight, or the stencil reference or
+                a mask is outside 0 to 255.
+        """
+        var state = RasterState(
+            self.depth_test,
+            self.depth_write,
+            self.depth_func,
+            self.color_write,
+            self.stencil_write,
+            self.stencil_func,
+            self.stencil_ref,
+            self.stencil_func_mask,
+            self.stencil_write_mask,
+            self.stencil_fail,
+            self.stencil_z_fail,
+            self.stencil_z_pass,
+        )
+        state.check()
+        return state
+
+    def depth_offset(self) raises -> PolygonOffset:
+        """Return how far the material's filled triangles are pushed back.
+
+        Returns:
+            The factor and the units when `polygon_offset` is on, and
+            `NO_OFFSET` when it is off, as three.js reads the two only
+            under `polygonOffset`.
+
+        Raises:
+            Error: If `polygon_offset` is on and the factor or the units
+                are not finite.
+        """
+        if not self.polygon_offset:
+            return NO_OFFSET
+        var offset = PolygonOffset(
+            self.polygon_offset_factor, self.polygon_offset_units
+        )
+        if not offset.is_valid():
+            raise Error("A polygon offset factor and units must be finite")
+        return offset
 
     def clipping_planes(self) raises -> List[Plane]:
         """Return the material's clipping planes.
