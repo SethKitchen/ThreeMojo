@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 127 features are ported and 23 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 129 features are ported and 21 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -205,11 +205,10 @@ The port is not at parity with three.js yet. 127 features are ported and 23 are 
 
 ### Loaders and exporters
 
-- [ ] glTF extensions [#135](https://github.com/SethKitchen/ThreeMojo/issues/135)
 - [ ] FBX and Collada loaders [#138](https://github.com/SethKitchen/ThreeMojo/issues/138)
 
 <details>
-<summary>Ported: 7</summary>
+<summary>Ported: 8</summary>
 
 - [x] [GLTF loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf): `.gltf` and `.glb` into geometries, standard materials, textures and a node hierarchy, with a JSON reader of its own [#70](https://github.com/SethKitchen/ThreeMojo/issues/70)
 - [x] [OBJ loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files): positions, texture coordinates, normals and polygon faces, split by object and material [#71](https://github.com/SethKitchen/ThreeMojo/issues/71)
@@ -218,19 +217,19 @@ The port is not at parity with three.js yet. 127 features are ported and 23 are 
 - [x] [Exporters: glTF, OBJ, STL and PLY](https://github.com/SethKitchen/ThreeMojo/wiki/Exporters): glTF (.gltf/.glb), OBJ, STL and PLY writers that read back through the project's own loaders [#139](https://github.com/SethKitchen/ThreeMojo/issues/139)
 - [x] [glTF skins, animations, morph targets, cameras and sparse accessors](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#skins-morph-targets-and-animations): joints, morph weights, cubic-spline clips, both camera kinds and sparse data [#134](https://github.com/SethKitchen/ThreeMojo/issues/134)
 - [x] [Scene JSON: ObjectLoader and toJSON](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-JSON): three.js's JSON object format written and read: nodes, meshes, lights, cameras, materials and textures [#140](https://github.com/SethKitchen/ThreeMojo/issues/140)
+- [x] [glTF extensions](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf-extensions): unlit, emissive strength, IOR, specular, clearcoat, texture transform, punctual lights, quantization and GPU instancing [#135](https://github.com/SethKitchen/ThreeMojo/issues/135)
 
 </details>
 
 ### Rendering
 
-- [ ] Screen-space passes: SSAO, SAO, SSR and outline [#142](https://github.com/SethKitchen/ThreeMojo/issues/142)
 - [ ] Bokeh, glitch, halftone, mask, clear and texture passes [#143](https://github.com/SethKitchen/ThreeMojo/issues/143)
 - [ ] Post-processing on the GPU backend [#144](https://github.com/SethKitchen/ThreeMojo/issues/144)
 - [ ] Logarithmic and reversed depth buffers [#145](https://github.com/SethKitchen/ThreeMojo/issues/145)
 - [ ] Multiple render targets and float render targets [#146](https://github.com/SethKitchen/ThreeMojo/issues/146)
 
 <details>
-<summary>Ported: 17</summary>
+<summary>Ported: 18</summary>
 
 - [x] [Depth buffer](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#depth) [#72](https://github.com/SethKitchen/ThreeMojo/issues/72)
 - [x] [Backface culling](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#culling) [#73](https://github.com/SethKitchen/ThreeMojo/issues/73)
@@ -249,6 +248,7 @@ The port is not at parity with three.js yet. 127 features are ported and 23 are 
 - [x] [Helpers: axes, grid, box, camera](https://github.com/SethKitchen/ThreeMojo/wiki/Helpers): line geometries for the axes, a ground grid, the box around a mesh and a camera's frustum [#86](https://github.com/SethKitchen/ThreeMojo/issues/86)
 - [x] [Light, arrow, plane, skeleton and normals helpers](https://github.com/SethKitchen/ThreeMojo/wiki/Helpers#arrowhelper): arrow, polar grid, plane, skeleton, light, and vertex normal and tangent helpers as line geometries [#150](https://github.com/SethKitchen/ThreeMojo/issues/150)
 - [x] [Anti-aliasing passes: FXAA, SMAA, SSAA and TAA](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#anti-aliasing): FXAA and SMAA, and SSAA and TAA averaging jittered samples at once or over frames [#141](https://github.com/SethKitchen/ThreeMojo/issues/141)
+- [x] [Screen-space passes: SSAO, SAO, SSR and outline](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#screen-space-passes): ambient occlusion, reflections and outlines read from the depth buffer, with seeded sampling [#142](https://github.com/SethKitchen/ThreeMojo/issues/142)
 
 </details>
 
