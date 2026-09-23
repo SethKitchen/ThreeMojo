@@ -29,6 +29,8 @@ from animation.keyframe_track import (
     SCALE,
     STEP,
     TrackKind,
+    WRAP_AROUND_ENDING,
+    ZERO_SLOPE_ENDING,
 )
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
@@ -495,16 +497,54 @@ def test_ping_pong_does_not_depend_on_the_frame_rate() raises:
 
 
 def test_a_ping_pong_action_folds_below_zero_too() raises:
-    # Run backward from the start and the phase wraps to the far end of the
-    # there-and-back, which is the return leg half a second from home.
+    # Run backward from the start and the clip plays backward from its
+    # end, as three.js's does: the first pass through zero wraps, as it
+    # does for `REPEAT`, rather than turning round. A turn there played
+    # the clip forward under a negative time scale.
     var action = sliding_action(PING_PONG)
     action.time_scale = -1
     action.play()
     action.advance(0.5)
+    assert_almost_equal(action.at().to(SECOND), Float32(1.5), atol=TOLERANCE)
+    assert_equal(action.loop_delta, -1)
+    # On down to the start, where it turns round and climbs.
+    action.advance(1)
     assert_almost_equal(action.at().to(SECOND), Float32(0.5), atol=TOLERANCE)
-    # One more step back climbs the return leg rather than bouncing.
+    action.advance(1)
+    assert_almost_equal(action.at().to(SECOND), Float32(0.5), atol=TOLERANCE)
+    assert_equal(action.loop_delta, -1)
+    action.advance(1)
+    assert_almost_equal(action.at().to(SECOND), Float32(1.5), atol=TOLERANCE)
+    # One long step lands where the short ones do.
+    var whole = sliding_action(PING_PONG)
+    whole.time_scale = -1
+    whole.play()
+    whole.advance(3.5)
+    assert_almost_equal(whole.at().to(SECOND), Float32(1.5), atol=TOLERANCE)
+    assert_equal(whole.loop_delta, -2)
+
+
+def test_an_action_counts_as_started_only_once_it_wraps() raises:
+    # three.js keeps `_loopCount` at -1 until the first wrap, whichever
+    # way the clip ran before it. A ping-pong run forward and then back
+    # past its start wraps to the end, as one started backward does.
+    var action = sliding_action(PING_PONG)
+    action.play()
     action.advance(0.5)
-    assert_almost_equal(action.at().to(SECOND), Float32(1), atol=TOLERANCE)
+    assert_false(action.started)
+    action.time_scale = -1
+    action.advance(1)
+    assert_almost_equal(action.at().to(SECOND), Float32(1.5), atol=TOLERANCE)
+    assert_true(action.started)
+    # And a repeating clip that turns back before it wraps reads its
+    # ends as one started backward does.
+    var turned = sliding_action(REPEAT)
+    turned.play()
+    turned.advance(0.5)
+    turned.time_scale = -1
+    turned.advance(0.25)
+    assert_equal(turned.ending_start, WRAP_AROUND_ENDING)
+    assert_equal(turned.ending_end, ZERO_SLOPE_ENDING)
 
 
 # --- AnimationMixer ---------------------------------------------------------

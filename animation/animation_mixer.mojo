@@ -1090,8 +1090,9 @@ struct AnimationAction(Copyable, Movable):
     # `_interpolantSettings`. Set by `_move` from the loop mode.
     var ending_start: Ending
     var ending_end: Ending
-    # Whether the clock has moved since the action was built or stopped,
-    # three.js's `_loopCount` being other than -1.
+    # Whether the action has been counted since it was built or stopped,
+    # three.js's `_loopCount` being other than -1: a `ONCE` action once it
+    # moves, a repeating one once it first wraps.
     var started: Bool
 
     def __init__(
@@ -1512,12 +1513,17 @@ struct AnimationAction(Copyable, Movable):
                 self._finish(moved_by)
             self.phase = moved
             return
+        # three.js leaves a clip uncounted, its `_loopCount` at -1, until
+        # it first wraps, whichever way it ran before that. A pass backward
+        # through zero then wraps to the end, for `PING_PONG` as for
+        # `REPEAT`, so a clip run backward plays backward. Here that is a
+        # leg's worth of phase: without it the pass turned round, and the
+        # clip ran forward under a negative time scale.
+        var wraps_first = ping_pong and not self.started and moved_by < 0
         if not self.started:
             # A clip that repeats without end runs on past the end it is
-            # heading for. three.js counts a start backward as not started
-            # until it passes the end, and so does this.
+            # heading for, and is flat at the end it left.
             if moved_by > 0:
-                self.started = True
                 self._set_endings(True, False, ping_pong)
             else:
                 self._set_endings(False, True, ping_pong)
@@ -1530,6 +1536,8 @@ struct AnimationAction(Copyable, Movable):
         if self.loop_delta != 0:
             self.started = True
             self._set_endings(False, False, ping_pong)
+            if wraps_first:
+                moved += length
         self.direction = -1 if moved_by < 0 else 1
         var period = length
         if ping_pong:
