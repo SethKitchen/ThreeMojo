@@ -14,8 +14,14 @@ A decision contributes two outcomes, True and False. Exercising only one of
 them is the partial case that line coverage alone would score as complete.
 """
 
-from coverage.mcdc import DecisionTrace, find_trace, is_mcdc_covered
+from coverage.mcdc import (
+    DecisionTrace,
+    TraceParser,
+    find_trace,
+    is_mcdc_covered,
+)
 from coverage.runtime import BRANCH_PREFIX, LINE_PREFIX
+from std.collections import Set
 
 
 @fieldwise_init
@@ -59,23 +65,27 @@ struct Entry(Copyable, Movable):
 struct Hits(Movable):
     """The distinct probe payloads observed during a run."""
 
+    # In the order first seen, for a stable report.
     var ids: List[String]
+    # The same payloads, for membership in constant time: a capture holds
+    # millions of records, and a scan of the list for each was quadratic.
+    var seen: Set[String]
 
     def __init__(out self):
         """Start with nothing observed."""
         self.ids = List[String]()
+        self.seen = Set[String]()
 
     def add(mut self, var id: String):
         """Record `id` if it has not been seen already."""
-        if not self.contains(id):
-            self.ids.append(id^)
+        if id in self.seen:
+            return
+        self.seen.add(id)
+        self.ids.append(id^)
 
     def contains(self, id: String) -> Bool:
         """Return True if `id` was observed."""
-        for seen in self.ids:
-            if seen == id:
-                return True
-        return False
+        return id in self.seen
 
     def absorb(mut self, other: Hits):
         """Record everything `other` observed that this has not.
@@ -167,12 +177,76 @@ def parse_hits(text: String) raises -> Hits:
     """
     var hits = Hits()
     for raw in text.splitlines():
-        var line = String(raw.strip())
-        if line.startswith(LINE_PREFIX):
-            hits.add(String(line.removeprefix(LINE_PREFIX)))
-        elif line.startswith(BRANCH_PREFIX):
-            hits.add(String(line.removeprefix(BRANCH_PREFIX)))
+        record_hit(hits, String(raw))
     return hits^
+
+
+def record_hit(mut hits: Hits, raw: String):
+    """Record one line of captured stderr, if it is a probe record.
+
+    The line-at-a-time form of `parse_hits`, so that a capture can be read
+    in pieces rather than whole: one suite's capture can pass the memory
+    the machine has.
+
+    Args:
+        hits: The payloads observed so far, extended in place.
+        raw: One line, with or without surrounding space.
+    """
+    var line = String(raw.strip())
+    if line.startswith(LINE_PREFIX):
+        hits.add(String(line.removeprefix(LINE_PREFIX)))
+    elif line.startswith(BRANCH_PREFIX):
+        hits.add(String(line.removeprefix(BRANCH_PREFIX)))
+
+
+def absorb_capture(
+    path: String,
+    mut hits: Hits,
+    mut parser: TraceParser,
+    chunk: Int = 1 << 24,
+) raises:
+    """Read one suite's captured stderr in pieces, line by line.
+
+    A capture is read `chunk` bytes at a time and cut at its last newline,
+    so memory stays at one piece however large the file: a suite that runs
+    instrumented code in a loop a million times writes gigabytes, and
+    reading that whole once asked for more memory than the machine had.
+
+    Args:
+        path: The capture.
+        hits: The payloads observed so far, extended in place.
+        parser: The traces so far, fed each line in order.
+        chunk: How many bytes to read at a time; at least one.
+
+    Raises:
+        Error: If the file cannot be read, the chunk is not positive, or a
+            branch record is malformed.
+    """
+    if chunk < 1:
+        raise Error("A capture is read at least one byte at a time")
+    # The unfinished last line of the piece before, carried to the next.
+    var carried = List[UInt8]()
+    with open(path, "r") as file:
+        while True:
+            var piece = file.read_bytes(chunk)
+            if len(piece) == 0:
+                break
+            carried.extend(Span(piece))
+            var end = len(carried)
+            while end > 0 and carried[end - 1] != UInt8(ord("\n")):
+                end -= 1
+            if end == 0:
+                continue
+            var text = String(unsafe_from_utf8=Span(carried)[:end])
+            for raw in text.splitlines():
+                var line = String(raw)
+                record_hit(hits, line)
+                parser.feed(line)
+            carried = List[UInt8](Span(carried)[end:])
+    if len(carried) > 0:
+        var line = String(unsafe_from_utf8=carried)
+        record_hit(hits, line)
+        parser.feed(line)
 
 
 def _percent(covered: Int, total: Int) -> Int:

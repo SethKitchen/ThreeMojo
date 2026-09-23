@@ -5,15 +5,23 @@
 
 """Tests for `coverage.report`."""
 
-from coverage.mcdc import parse_traces
+from coverage.mcdc import TraceParser, parse_traces
 from coverage.report import (
     Entry,
     Hits,
+    absorb_capture,
     build_report,
     parse_hits,
     parse_manifest,
 )
-from std.testing import TestSuite, assert_equal, assert_false, assert_true
+from std.pathlib import Path
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 
 
 def report_for(manifest: String, stderr: String) raises -> String:
@@ -85,6 +93,49 @@ def test_branch_outcomes_are_tracked_separately() raises:
     var hits = parse_hits(String("COVBRANCH:m:4:T\nCOVBRANCH:m:4:F\n"))
     assert_true(hits.contains(String("m:4:T")))
     assert_true(hits.contains(String("m:4:F")))
+
+
+comptime CAPTURE = (
+    "COVBRANCH:m:4.0:T\nCOVBRANCH:m:4.1:F\nCOVBRANCH:m:4:F\nCOVLINE:m:1\n"
+    "Failed to initialize Crashpad, a line longer than any piece\n"
+    "COVBRANCH:m:4.0:F\nCOVBRANCH:m:4:F\nCOVLINE:m:1\nCOVLINE:m:2"
+)
+
+
+def test_a_capture_read_in_pieces_reads_as_a_whole() raises:
+    # Pieces of three bytes cut records apart, one piece holds no newline
+    # at all, and the last line has none after it: the hits and the traces
+    # must still be those of the whole text.
+    var path = String("/tmp/threemojo-test-report-capture.txt")
+    Path(path).write_text(String(CAPTURE))
+    var whole_hits = parse_hits(String(CAPTURE))
+    var whole_traces = parse_traces(String(CAPTURE))
+    for chunk in [3, 1 << 24]:
+        var hits = Hits()
+        var parser = TraceParser()
+        absorb_capture(path, hits, parser, chunk)
+        assert_equal(len(hits.ids), len(whole_hits.ids))
+        for index in range(len(whole_hits.ids)):
+            assert_equal(hits.ids[index], whole_hits.ids[index])
+        var traces = parser^.finish()
+        assert_equal(len(traces), len(whole_traces))
+        assert_equal(traces[0].id, whole_traces[0].id)
+        assert_equal(
+            len(traces[0].evaluations), len(whole_traces[0].evaluations)
+        )
+    # An empty capture adds nothing.
+    Path(path).write_text(String(""))
+    var none = Hits()
+    var idle = TraceParser()
+    absorb_capture(path, none, idle)
+    assert_equal(len(none.ids), 0)
+
+
+def test_a_capture_is_read_at_least_a_byte_at_a_time() raises:
+    var hits = Hits()
+    var parser = TraceParser()
+    with assert_raises(contains="at least one byte"):
+        absorb_capture(String("/nonexistent"), hits, parser, 0)
 
 
 def test_fully_covered_run_reports_complete() raises:

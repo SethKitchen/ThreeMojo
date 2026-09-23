@@ -23,6 +23,7 @@ other conditions held still.
 """
 
 from coverage.runtime import BRANCH_PREFIX
+from std.collections import Dict
 
 comptime MASKED = -1
 comptime FALSE = 0
@@ -164,15 +165,50 @@ def parse_traces(text: String) raises -> List[DecisionTrace]:
     Raises:
         Error: If a probe payload is malformed.
     """
-    var traces = List[DecisionTrace]()
-    var pending_ids = List[String]()
-    var pending_values = List[List[Int]]()
-
+    var parser = TraceParser()
     for raw in text.splitlines():
+        parser.feed(String(raw))
+    return parser^.finish()
+
+
+struct TraceParser(Movable):
+    """`parse_traces` a line at a time, so a capture can be read in pieces.
+
+    One suite's capture can pass the memory the machine has: a decision in
+    a loop run a million times writes a million records. The parser keeps
+    only what the report needs, each decision's distinct evaluations and
+    the conditions of the evaluations still open, so it holds as much after
+    a billion records as after a thousand.
+    """
+
+    var traces: List[DecisionTrace]
+    # Where each decision's trace is in `traces`, and where each open
+    # evaluation's conditions are in `pending`, by the decision's id. Maps
+    # rather than scans: a scan per record was quadratic in the records.
+    var trace_slots: Dict[String, Int]
+    var pending_slots: Dict[String, Int]
+    var pending: List[List[Int]]
+
+    def __init__(out self):
+        """Start with nothing read."""
+        self.traces = List[DecisionTrace]()
+        self.trace_slots = Dict[String, Int]()
+        self.pending_slots = Dict[String, Int]()
+        self.pending = List[List[Int]]()
+
+    def feed(mut self, raw: String) raises:
+        """Read one line of captured stderr.
+
+        Args:
+            raw: The line, with or without surrounding space. A line that
+                is not a branch record is skipped.
+
+        Raises:
+            Error: If a branch record is malformed.
+        """
         var line = String(raw.strip())
         if not line.startswith(BRANCH_PREFIX):
-            continue
-
+            return
         var payload = String(line.removeprefix(BRANCH_PREFIX))
         var halves = split_last(payload, String(":"))
         if len(halves) != 2:
@@ -181,39 +217,38 @@ def parse_traces(text: String) raises -> List[DecisionTrace]:
         var parts = split_last(halves[0], String("."))
         var base = parts[0].copy()
 
-        var slot = -1
-        for index in range(len(pending_ids)):
-            if pending_ids[index] == base:
-                slot = index
-                break
+        var slot = self.pending_slots.get(base, -1)
         if slot < 0:
-            pending_ids.append(base.copy())
-            pending_values.append(List[Int]())
-            slot = len(pending_ids) - 1
+            slot = len(self.pending)
+            self.pending_slots[base.copy()] = slot
+            self.pending.append(List[Int]())
 
         if len(parts) == 2:
             # A condition: remember its state until the decision closes.
             var position = Int(parts[1])
-            while len(pending_values[slot]) <= position:
-                pending_values[slot].append(MASKED)
-            pending_values[slot][position] = state
-            continue
+            while len(self.pending[slot]) <= position:
+                self.pending[slot].append(MASKED)
+            self.pending[slot][position] = state
+            return
 
         # The decision itself: close and file this evaluation.
-        var trace_slot = -1
-        for index in range(len(traces)):
-            if traces[index].id == base:
-                trace_slot = index
-                break
+        var trace_slot = self.trace_slots.get(base, -1)
         if trace_slot < 0:
-            traces.append(DecisionTrace(base.copy()))
-            trace_slot = len(traces) - 1
-        traces[trace_slot].add(
-            Evaluation(pending_values[slot].copy(), state == TRUE)
+            trace_slot = len(self.traces)
+            self.trace_slots[base.copy()] = trace_slot
+            self.traces.append(DecisionTrace(base.copy()))
+        self.traces[trace_slot].add(
+            Evaluation(self.pending[slot].copy(), state == TRUE)
         )
-        pending_values[slot].clear()
+        self.pending[slot].clear()
 
-    return traces^
+    def finish(deinit self) -> List[DecisionTrace]:
+        """Return every decision's trace, in the order first closed.
+
+        Returns:
+            One trace per decision that recorded at least one evaluation.
+        """
+        return self.traces^
 
 
 def merge_traces(mut into: List[DecisionTrace], more: List[DecisionTrace]):

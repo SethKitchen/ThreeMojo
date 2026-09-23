@@ -7,17 +7,24 @@
 
     mojo run -I . coverage/report_cli.mojo <manifest.txt> <hits.txt>...
 
-Each hits file is one suite's captured stderr, read and parsed on its own:
-the captures together pass two gigabytes, and a single read of that much
-fails on macOS with "Invalid argument". The MC-DC traces keep each suite's
-order, joined suite after suite, exactly as a concatenation would hold them.
+Each hits file is one suite's captured stderr, read and parsed on its own
+and in pieces: the captures together pass two gigabytes, a single read of
+that much fails on macOS with "Invalid argument", and one suite's capture
+alone can pass the memory the machine has. The MC-DC traces keep each
+suite's order, joined suite after suite, exactly as a concatenation would
+hold them.
 
 Exits non-zero when anything measurable went uncovered, so `make coverage` can
 act as a gate rather than just a readout.
 """
 
-from coverage.mcdc import DecisionTrace, merge_traces, parse_traces
-from coverage.report import Hits, build_report, parse_hits, parse_manifest
+from coverage.mcdc import DecisionTrace, TraceParser, merge_traces
+from coverage.report import (
+    Hits,
+    absorb_capture,
+    build_report,
+    parse_manifest,
+)
 from std.pathlib import Path
 from std.sys import argv
 
@@ -32,9 +39,11 @@ def main() raises:
     # MC-DC needs the ordered stream, not the deduplicated set.
     var traces = List[DecisionTrace]()
     for index in range(2, len(args)):
-        var captured = Path(String(args[index])).read_text()
-        hits.absorb(parse_hits(captured))
-        merge_traces(traces, parse_traces(captured))
+        # A parser per suite, so that an evaluation left open at the end of
+        # one capture is not closed by the next suite's records.
+        var parser = TraceParser()
+        absorb_capture(String(args[index]), hits, parser)
+        merge_traces(traces, parser^.finish())
     var report = build_report(entries, hits, traces)
 
     print(report.text, end="")
