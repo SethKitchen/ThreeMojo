@@ -28,6 +28,7 @@ from controls.input import (
     ARROW_UP,
     InputEvent,
     KEY_DOWN,
+    KEY_UP,
     Key,
     MIDDLE,
     NO_BUTTON,
@@ -146,14 +147,15 @@ def event_of(bytes: List[UInt8], symbol: Int) -> Optional[InputEvent]:
 
     Returns:
         A key, pointer, wheel or resize event, or None for an event this
-        port has no kind for: a key release, a button beyond the wheel,
-        and every other type.
+        port has no kind for: a button beyond the wheel, and every other
+        type.
     """
     var kind = _int32(bytes, 0)
     if kind == CONFIGURE_NOTIFY:
         return InputEvent(RESIZE, x=_int32(bytes, 56), y=_int32(bytes, 60))
     var pointer = (
         kind == KEY_PRESS
+        or kind == KEY_RELEASE
         or kind == BUTTON_PRESS
         or kind == BUTTON_RELEASE
         or kind == MOTION_NOTIFY
@@ -167,11 +169,12 @@ def event_of(bytes: List[UInt8], symbol: Int) -> Optional[InputEvent]:
     var shift = (state & SHIFT_MASK) != 0
     var control = (state & CONTROL_MASK) != 0
     var alt = (state & ALT_MASK) != 0
-    if kind == KEY_PRESS:
+    if kind == KEY_PRESS or kind == KEY_RELEASE:
         var key = key_of(symbol, control)
         if key == Key(-1):
             return None
-        return InputEvent(KEY_DOWN, key=key, shift=shift, alt=alt, ctrl=control)
+        var what = KEY_DOWN if kind == KEY_PRESS else KEY_UP
+        return InputEvent(what, key=key, shift=shift, alt=alt, ctrl=control)
     if kind == MOTION_NOTIFY:
         return InputEvent(
             POINTER_MOVE,
@@ -480,7 +483,7 @@ struct X11Window(Movable):
                     self.close_requested = True
                 continue
             var symbol = 0
-            if kind == KEY_PRESS:
+            if kind == KEY_PRESS or kind == KEY_RELEASE:
                 symbol = self._lib.call["XLookupKeysym", Int](
                     Int(self._event.unsafe_ptr()), c_int(0)
                 )

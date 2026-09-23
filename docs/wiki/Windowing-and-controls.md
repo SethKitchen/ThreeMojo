@@ -93,7 +93,7 @@ The terminal is put back before a failure is raised.
 | `close()` | Close the window. A second call does nothing. |
 | `close_requested` | True after the window manager asks the window to close. |
 
-The window gives the same `InputEvent` values as `TerminalWindow`. The same loop drives both. A key press is `KEY_DOWN`, and Ctrl with a letter is its control code, as a terminal sends it. A change of size is a `RESIZE` event. The program must call `resize` to follow it.
+The window gives the same `InputEvent` values as `TerminalWindow`. The same loop drives both. A key press is `KEY_DOWN`, and a key release is `KEY_UP`. Ctrl with a letter is its control code, as a terminal sends it. A change of size is a `RESIZE` event. The program must call `resize` to follow it.
 
 The window manager's close button does not close the window. It sets `close_requested`, and the program must end its loop on it.
 

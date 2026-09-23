@@ -17,6 +17,7 @@ from controls.input import (
     ARROW_RIGHT,
     ARROW_UP,
     KEY_DOWN,
+    KEY_UP,
     Key,
     MIDDLE,
     NO_BUTTON,
@@ -116,8 +117,10 @@ def test_x_events_become_input_events() raises:
     assert_true(size.kind == RESIZE)
     assert_equal(size.x, 320)
     assert_equal(size.y, 200)
-    # A key release, and an expose, have no kind here.
-    assert_false(Bool(event_of(_event(3, 0, 0, 0, 0), 0x71)))
+    # A key release is a KEY_UP; an expose has no kind here.
+    var release = event_of(_event(3, 0, 0, 0, 0), 0x71).value()
+    assert_true(release.kind == KEY_UP)
+    assert_true(release.key == Key(113))
     assert_false(Bool(event_of(_event(12, 0, 0, 0, 0), 0)))
     # A negative position survives the sign.
     assert_equal(event_of(_event(6, -2, 0, 0, 0), 0).value().x, -2)
@@ -260,12 +263,15 @@ def test_a_window_reads_keys_buttons_resizes_and_a_close() raises:
     _send(window, _event(4, 5, 6, 0, 1))
     _send(window, _event(6, 7, 8, 1 << 8, 0))
     _send(window, _event(5, 7, 8, 0, 1))
+    _send(window, _event(3, 0, 0, 0, code))
     var events = window.poll(Duration(500.0, MILLISECOND))
-    assert_equal(len(events), 4)
+    assert_equal(len(events), 5)
     assert_true(events[0].key == Key(113))
     assert_true(events[1].kind == POINTER_DOWN)
     assert_true(events[2].kind == POINTER_MOVE)
     assert_true(events[3].kind == POINTER_UP)
+    assert_true(events[4].kind == KEY_UP)
+    assert_true(events[4].key == Key(113))
     # A resize by the server reaches the window as a RESIZE.
     _ = lib.call["XResizeWindow", c_int](
         window._display, window._window, UInt32(64), UInt32(48)
