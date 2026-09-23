@@ -51,8 +51,16 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
+The port is not at parity with three.js yet. 99 features are ported and 50 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+
 <!-- features -->
 ### Scene
+
+- [ ] Object3D visibility, names, traversal and render order [#103](https://github.com/SethKitchen/ThreeMojo/issues/103)
+- [ ] Clipping planes [#104](https://github.com/SethKitchen/ThreeMojo/issues/104)
+
+<details>
+<summary>Ported: 11</summary>
 
 - [x] [Scene graph](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph): `Object3D`, `Scene`, parent and child transforms [#1](https://github.com/SethKitchen/ThreeMojo/issues/1)
 - [x] [Quaternion and Euler rotations](https://github.com/SethKitchen/ThreeMojo/wiki/Rotations): six Euler orders, `rotate_x`, `rotate_y`, `rotate_z`, `look_at`, `slerp` [#2](https://github.com/SethKitchen/ThreeMojo/issues/2)
@@ -66,7 +74,18 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Layers](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph#layers): a bit mask on nodes and cameras that the renderer filters meshes by [#10](https://github.com/SethKitchen/ThreeMojo/issues/10)
 - [x] [Clock](https://github.com/SethKitchen/ThreeMojo/wiki/Units#clock): elapsed and delta time as Durations, from a monotonic counter [#11](https://github.com/SethKitchen/ThreeMojo/issues/11)
 
+</details>
+
 ### Geometry
+
+- [ ] BufferGeometryUtils: merge, non-indexed, merge vertices, tangents, center [#110](https://github.com/SethKitchen/ThreeMojo/issues/110)
+- [ ] Interleaved buffers and InstancedBufferGeometry [#111](https://github.com/SethKitchen/ThreeMojo/issues/111)
+- [ ] Extrude a shape along a path [#113](https://github.com/SethKitchen/ThreeMojo/issues/113)
+- [ ] TextGeometry and FontLoader [#114](https://github.com/SethKitchen/ThreeMojo/issues/114)
+- [ ] Parametric, convex, decal and rounded-box geometries [#115](https://github.com/SethKitchen/ThreeMojo/issues/115)
+
+<details>
+<summary>Ported: 13</summary>
 
 - [x] [BufferGeometry and BufferAttribute](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry) [#12](https://github.com/SethKitchen/ThreeMojo/issues/12)
 - [x] [BoxGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#box) [#13](https://github.com/SethKitchen/ThreeMojo/issues/13)
@@ -82,7 +101,16 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [EdgesGeometry and WireframeGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#edges-and-wireframes): a surface read back as the lines of its edges, welded by position first [#23](https://github.com/SethKitchen/ThreeMojo/issues/23)
 - [x] [computeVertexNormals and bounding volumes](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#buffergeometry): area-weighted normals, a bounding box and a bounding sphere on any geometry [#24](https://github.com/SethKitchen/ThreeMojo/issues/24)
 
+</details>
+
 ### Objects
+
+- [ ] Per-instance colors [#112](https://github.com/SethKitchen/ThreeMojo/issues/112)
+- [ ] Wide lines: Line2, LineSegments2 and LineMaterial [#116](https://github.com/SethKitchen/ThreeMojo/issues/116)
+- [ ] Raycasting lines, points, sprites and skinned meshes [#117](https://github.com/SethKitchen/ThreeMojo/issues/117)
+
+<details>
+<summary>Ported: 7</summary>
 
 - [x] [Mesh, with geometry, material and texture stores](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets) [#25](https://github.com/SethKitchen/ThreeMojo/issues/25)
 - [x] [Line, LineLoop and LineSegments](https://github.com/SethKitchen/ThreeMojo/wiki/Lines): points joined by one-pixel strokes, walked by one rule both backends read [#26](https://github.com/SethKitchen/ThreeMojo/issues/26)
@@ -92,7 +120,22 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [SkinnedMesh, Bone and Skeleton](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning): bones that are scene nodes, and a skeleton saying how far each has moved since the bind [#30](https://github.com/SethKitchen/ThreeMojo/issues/30)
 - [x] [LOD](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#lod): one of several geometries at a node, picked by the camera's distance each frame, with hysteresis [#31](https://github.com/SethKitchen/ThreeMojo/issues/31)
 
+</details>
+
 ### Materials
+
+- [ ] Ambient occlusion map and light map [#118](https://github.com/SethKitchen/ThreeMojo/issues/118)
+- [ ] Displacement map [#119](https://github.com/SethKitchen/ThreeMojo/issues/119)
+- [ ] Specular map and flat shading [#120](https://github.com/SethKitchen/ThreeMojo/issues/120)
+- [ ] Transmission, thickness, attenuation and dispersion [#121](https://github.com/SethKitchen/ThreeMojo/issues/121)
+- [ ] Sheen, iridescence and anisotropy [#122](https://github.com/SethKitchen/ThreeMojo/issues/122)
+- [ ] Additive, subtractive, multiply and custom blending [#123](https://github.com/SethKitchen/ThreeMojo/issues/123)
+- [ ] Depth, color and stencil state [#124](https://github.com/SethKitchen/ThreeMojo/issues/124)
+- [ ] MeshDistanceMaterial, depth packings and Material.fog [#125](https://github.com/SethKitchen/ThreeMojo/issues/125)
+- [ ] Custom shading: ShaderMaterial and node materials [#126](https://github.com/SethKitchen/ThreeMojo/issues/126)
+
+<details>
+<summary>Ported: 18</summary>
 
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
 - [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
@@ -113,7 +156,16 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Wireframe rendering](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#wireframe): a material flag that sends a mesh through the whole pipeline and cuts its triangles into segments at the end [#48](https://github.com/SethKitchen/ThreeMojo/issues/48)
 - [x] [Texture transforms: repeat, offset, rotation](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#transform): a texture's own `offset`, `repeat`, `rotation` and `center`, applied to a mesh's coordinates before either rasterizer samples [#49](https://github.com/SethKitchen/ThreeMojo/issues/49)
 
+</details>
+
 ### Lights
+
+- [ ] Point light shadows and spot light maps [#127](https://github.com/SethKitchen/ThreeMojo/issues/127)
+- [ ] Soft shadows: PCFSoft and VSM [#128](https://github.com/SethKitchen/ThreeMojo/issues/128)
+- [ ] Image-based lighting: PMREM and LightProbe [#129](https://github.com/SethKitchen/ThreeMojo/issues/129)
+
+<details>
+<summary>Ported: 8</summary>
 
 - [x] [AmbientLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#ambient) [#50](https://github.com/SethKitchen/ThreeMojo/issues/50)
 - [x] [DirectionalLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#directional) [#51](https://github.com/SethKitchen/ThreeMojo/issues/51)
@@ -124,7 +176,17 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [RectAreaLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#rect-area): a glowing rectangle integrated with linearly transformed cosines from three.js's own tables, on both rasterizers [#56](https://github.com/SethKitchen/ThreeMojo/issues/56)
 - [x] [Shadow maps](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#shadows): directional and spot lights draw the scene's depth and every lit sum compares nine taps against it [#57](https://github.com/SethKitchen/ThreeMojo/issues/57)
 
+</details>
+
 ### Textures
+
+- [ ] HDR images: RGBE and OpenEXR loaders, and float textures [#130](https://github.com/SethKitchen/ThreeMojo/issues/130)
+- [ ] KTX2 and more compressed formats [#131](https://github.com/SethKitchen/ThreeMojo/issues/131)
+- [ ] Data3DTexture and DataArrayTexture [#132](https://github.com/SethKitchen/ThreeMojo/issues/132)
+- [ ] Progressive JPEG and TGA [#133](https://github.com/SethKitchen/ThreeMojo/issues/133)
+
+<details>
+<summary>Ported: 12</summary>
 
 - [x] [Texture with repeat, clamp and mirror wrapping](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#wrap) [#58](https://github.com/SethKitchen/ThreeMojo/issues/58)
 - [x] [Nearest and bilinear filters](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#filter) [#59](https://github.com/SethKitchen/ThreeMojo/issues/59)
@@ -138,10 +200,39 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Anisotropic filtering](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#anisotropy): `texture.anisotropy`, several taps along the long axis of a footprint at the short axis's level, on both rasterizers [#67](https://github.com/SethKitchen/ThreeMojo/issues/67)
 - [x] [Render target as a texture](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#from-a-render): `texture_of` and `RenderTarget.texture`, a render sampled by the next one [#68](https://github.com/SethKitchen/ThreeMojo/issues/68)
 - [x] [JPEG loader](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files#read-a-jpeg): baseline Huffman coding, gray and YCbCr, any subsampling, restart intervals, held to two levels of libjpeg [#69](https://github.com/SethKitchen/ThreeMojo/issues/69)
+
+</details>
+
+### Loaders and exporters
+
+- [ ] glTF skins, animations, morph targets, cameras and sparse accessors [#134](https://github.com/SethKitchen/ThreeMojo/issues/134)
+- [ ] glTF extensions [#135](https://github.com/SethKitchen/ThreeMojo/issues/135)
+- [ ] OBJ material libraries [#136](https://github.com/SethKitchen/ThreeMojo/issues/136)
+- [ ] STL and PLY loaders [#137](https://github.com/SethKitchen/ThreeMojo/issues/137)
+- [ ] FBX and Collada loaders [#138](https://github.com/SethKitchen/ThreeMojo/issues/138)
+- [ ] Exporters: glTF, OBJ, STL and PLY [#139](https://github.com/SethKitchen/ThreeMojo/issues/139)
+- [ ] JSON scene format: ObjectLoader and toJSON [#140](https://github.com/SethKitchen/ThreeMojo/issues/140)
+
+<details>
+<summary>Ported: 2</summary>
+
 - [x] [GLTF loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf): `.gltf` and `.glb` into geometries, standard materials, textures and a node hierarchy, with a JSON reader of its own [#70](https://github.com/SethKitchen/ThreeMojo/issues/70)
 - [x] [OBJ loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files): positions, texture coordinates, normals and polygon faces, split by object and material [#71](https://github.com/SethKitchen/ThreeMojo/issues/71)
 
+</details>
+
 ### Rendering
+
+- [ ] Anti-aliasing passes: FXAA, SMAA and TAA [#141](https://github.com/SethKitchen/ThreeMojo/issues/141)
+- [ ] Screen-space passes: SSAO, SAO, SSR and outline [#142](https://github.com/SethKitchen/ThreeMojo/issues/142)
+- [ ] Bokeh, glitch, halftone, mask, clear and texture passes [#143](https://github.com/SethKitchen/ThreeMojo/issues/143)
+- [ ] Post-processing on the GPU backend [#144](https://github.com/SethKitchen/ThreeMojo/issues/144)
+- [ ] Logarithmic and reversed depth buffers [#145](https://github.com/SethKitchen/ThreeMojo/issues/145)
+- [ ] Multiple render targets and float render targets [#146](https://github.com/SethKitchen/ThreeMojo/issues/146)
+- [ ] Light, arrow, plane, skeleton and normals helpers [#150](https://github.com/SethKitchen/ThreeMojo/issues/150)
+
+<details>
+<summary>Ported: 15</summary>
 
 - [x] [Depth buffer](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#depth) [#72](https://github.com/SethKitchen/ThreeMojo/issues/72)
 - [x] [Backface culling](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#culling) [#73](https://github.com/SethKitchen/ThreeMojo/issues/73)
@@ -158,15 +249,46 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Scissor and viewport](https://github.com/SethKitchen/ThreeMojo/wiki/Renderer#viewport-and-scissor): `set_viewport`, `set_scissor` and `set_scissor_test`, enforced by both backends, and `render_into` for a split screen in one target [#84](https://github.com/SethKitchen/ThreeMojo/issues/84)
 - [x] [Post-processing](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing): an `EffectComposer` with render, copy, blur, bloom, film, dot screen, sepia, vignette, luminosity, afterimage and output passes over the frame's light [#85](https://github.com/SethKitchen/ThreeMojo/issues/85)
 - [x] [Helpers: axes, grid, box, camera](https://github.com/SethKitchen/ThreeMojo/wiki/Helpers): line geometries for the axes, a ground grid, the box around a mesh and a camera's frustum [#86](https://github.com/SethKitchen/ThreeMojo/issues/86)
+
+</details>
+
+### Windowing and controls
+
+- [ ] A native window [#108](https://github.com/SethKitchen/ThreeMojo/issues/108)
+- [ ] TerminalWindow: the terminal's size, and resize [#109](https://github.com/SethKitchen/ThreeMojo/issues/109)
+- [ ] OrbitControls: orthographic zoom, zoom to cursor, and any camera up [#105](https://github.com/SethKitchen/ThreeMojo/issues/105)
+- [ ] Trackball, Fly, FirstPerson, Map and PointerLock controls [#106](https://github.com/SethKitchen/ThreeMojo/issues/106)
+- [ ] TransformControls and DragControls [#107](https://github.com/SethKitchen/ThreeMojo/issues/107)
+
+<details>
+<summary>Ported: 1</summary>
+
 - [x] [Windowing and interactive controls](https://github.com/SethKitchen/ThreeMojo/wiki/Windowing-and-controls): a `TerminalWindow` that shows frames and reads the mouse, and `OrbitControls` that orbit a camera [#87](https://github.com/SethKitchen/ThreeMojo/issues/87)
 
+</details>
+
 ### Animation
+
+- [ ] Animation fades, cross-fades, warps and events [#147](https://github.com/SethKitchen/ThreeMojo/issues/147)
+- [ ] Property tracks, bindings and AnimationUtils [#148](https://github.com/SethKitchen/ThreeMojo/issues/148)
+- [ ] Smooth and cubic-spline keyframe interpolation [#149](https://github.com/SethKitchen/ThreeMojo/issues/149)
+
+<details>
+<summary>Ported: 3</summary>
 
 - [x] [AnimationMixer, AnimationClip and KeyframeTrack](https://github.com/SethKitchen/ThreeMojo/wiki/Animation): keyframes on a node's position, scale and rotation, blended by weight across the actions playing [#88](https://github.com/SethKitchen/ThreeMojo/issues/88)
 - [x] [Morph targets](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#morph-targets): a second set of positions per geometry and a weight per mesh, blended into the vertex before it is projected [#89](https://github.com/SethKitchen/ThreeMojo/issues/89)
 - [x] [Skinning](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning#the-arithmetic): four bones a vertex, blended into one matrix and applied in `prepare`, so both backends draw it without knowing [#90](https://github.com/SethKitchen/ThreeMojo/issues/90)
 
+</details>
+
 ### Math and foundations
+
+- [ ] Triangle, Line3, Spherical, Cylindrical, Matrix2 and MathUtils [#151](https://github.com/SethKitchen/ThreeMojo/issues/151)
+- [ ] Ellipse and arc curves, and 3D curves [#152](https://github.com/SethKitchen/ThreeMojo/issues/152)
+
+<details>
+<summary>Ported: 9</summary>
 
 - [x] [Vector2, Vector3, Matrix4 and projection matrices](https://github.com/SethKitchen/ThreeMojo/wiki/Math) [#91](https://github.com/SethKitchen/ThreeMojo/issues/91)
 - [x] [Compile-time units](https://github.com/SethKitchen/ThreeMojo/wiki/Units): meters, degrees, dimension checks [#92](https://github.com/SethKitchen/ThreeMojo/issues/92)
@@ -177,6 +299,9 @@ A ticked item is ported, tested with full coverage, and documented on the linked
 - [x] [Ray and Raycaster](https://github.com/SethKitchen/ThreeMojo/wiki/Raycasting): a ray against spheres, boxes, planes and triangles. A pick through a camera's pixel onto the meshes, instances, batches and LODs [#97](https://github.com/SethKitchen/ThreeMojo/issues/97)
 - [x] [Curves and paths](https://github.com/SethKitchen/ThreeMojo/wiki/Curves): line, quadratic and cubic Bezier, and Catmull-Rom curves, joined into a path and closed into a shape with holes [#98](https://github.com/SethKitchen/ThreeMojo/issues/98)
 - [x] [Color as floats](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer#color-and-floatcolor): three.js's hex and HSL setters and getters, lerp, offset and arithmetic on the linear float color [#99](https://github.com/SethKitchen/ThreeMojo/issues/99)
+
+</details>
+
 <!-- /features -->
 
 ### Out of scope
