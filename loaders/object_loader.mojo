@@ -74,6 +74,22 @@ materials with their width, dashes, size, attenuation and turn; a
 builds one. A texture is read from its image's `data:` URL, or from a
 file beside the document, as PNG, JPEG or TGA, with its `channel`.
 
+**Cube textures and environments.** A texture whose image's `url` is an
+array of six is a `CubeTexture`, as `ObjectLoader.parseTextures` decides.
+Its images are in the OpenGL layout three.js keeps them in, so they are
+read `SEEN_FROM_OUTSIDE`. It can be the scene's `background` or
+`environment`, or a material's `envMap`. A standard or physical material
+without an `envMap` reflects the scene's `environment`, as three.js's
+renderer has it, and every other class reflects only its own. The
+environment, and each cube a standard or physical material names, gets
+its PMREM, since three.js's renderer prefilters what those surfaces
+reflect. A mesh reads its `morphTargetInfluences`. A material reads its
+`clippingPlanes`, `clipIntersection`, `clipShadows` and `dashOffset`, and
+a `MeshDistanceMaterial` its `referencePosition`, `nearDistance` and
+`farDistance`, which three.js's loader ignores. A skeleton without
+`boneInverses` gets the inverse of each bone's world matrix, as
+`Skeleton.calculateInverses` works them out.
+
 **A texture's alpha comes from its use.** three.js has no alpha mode. Here
 a texture is built with its alpha as `COVERAGE` when a material's `map`
 or the background names it, and as `IGNORED` when a data map names it --
@@ -88,14 +104,18 @@ type this port has no counterpart for, an attribute that is not a
 uuid named twice or named and not there, a `CustomBlending` material, a
 depth function, stencil function or stencil operation that is none of
 three.js's, a texture whose two wraps differ, whose mapping is not
-`UVMapping`, or whose `channel` is neither of two, an LOD level that is
-not a bare mesh child, a skeleton without its inverse binds, a batch
+`UVMapping`, or whose `channel` is neither of two, a cube texture that is
+not six images or not `CubeReflectionMapping`, an `envMap` or
+`environment` that names a flat texture, more than eight clipping planes
+or morph influences, an LOD level that is
+not a bare mesh child, a skeleton whose `boneInverses` do not pair with its bones, a batch
 whose info names what is not there, and every number the builders
 refuse.
 
 **What is read without effect.** `up`, `userData`, `matrixWorldAutoUpdate`
-and `animations`; a scene's `environment` and the background's
-blurriness and intensity; a material's `envMap`, `clearcoatMap`,
+and `animations`; the background's blurriness and intensity, and the
+rotations of the background and the environment; a cube texture's wrap; an `envMap` on a class
+whose shader reads none; a material's `clearcoatMap`,
 `specularColorMap` and the other keys this port has no field for; a
 camera's `focus` and `filmGauge`; a texture's `format`, `type`,
 `premultiplyAlpha` and `unpackAlignment`; an LOD's `autoUpdate`; and a
@@ -104,9 +124,17 @@ batch's sorting, reserved ranges and bounds.
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, MaterialIndex
+from core.buffer_geometry import (
+    MAX_MORPH_TARGETS,
+    BufferGeometry,
+    MaterialIndex,
+)
 from core.interleaved_buffer import InterleavedBuffer
-from core.background import color_background, texture_background
+from core.background import (
+    color_background,
+    cube_background,
+    texture_background,
+)
 from core.fog import exp2_fog, linear_fog
 from core.geometry_store import GeometryId
 from core.layers import Layers
@@ -163,6 +191,9 @@ from materials.material import (
     BASIC,
     DEFAULT_LINE_WIDTH,
     DEFAULT_POINT_SIZE,
+    DISTANCE,
+    DEFAULT_FAR_DISTANCE,
+    DEFAULT_NEAR_DISTANCE,
     LAMBERT,
     NO_DASH,
     NO_ROTATION,
@@ -172,6 +203,7 @@ from materials.material import (
     PointSize,
 )
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
+from math.bounds import Plane
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.spherical_harmonics3 import (
@@ -180,16 +212,25 @@ from math.spherical_harmonics3 import (
     sh_from_array,
 )
 from math.vector2 import Vector2
+from math.vector3 import Vector3
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
 from objects.line import Line, LineMode
 from objects.lod import Lod
 from objects.mesh import Mesh
 from objects.points import Points
-from objects.skeleton import Bone, Skeleton
+from objects.skeleton import Bone, Skeleton, bind_skeleton
 from objects.skinned_mesh import ATTACHED, DETACHED, BindMode, SkinnedMesh
 from objects.sprite import Sprite
+from render.cube_texture import SEEN_FROM_OUTSIDE, cube_texture_from
+from render.cube_texture_store import (
+    NO_CUBE_TEXTURE,
+    SCENE_ENVIRONMENT,
+    CubeTextureId,
+)
 from render.framebuffer import Color, FloatColor
 from render.packing import BASIC_DEPTH_PACKING, DepthPacking
+from render.pmrem import pmrem_from_cube
+from render.png import DecodedImage
 from render.raster_state import (
     ALWAYS_STENCIL_FUNC,
     KEEP_STENCIL_OP,
@@ -229,6 +270,7 @@ comptime FORMAT_MAJOR = 4
 
 # three.js's texture constants, by their numbers in `constants.js`.
 comptime UV_MAPPING = 300
+comptime CUBE_REFLECTION_MAPPING = 301
 comptime REPEAT_WRAPPING = 1000
 comptime CLAMP_TO_EDGE_WRAPPING = 1001
 comptime MIRRORED_REPEAT_WRAPPING = 1002
@@ -718,6 +760,8 @@ struct _Loader(Movable):
     # or `NO_TEXTURE` until a use asks for it.
     var covered: List[TextureId]
     var ignored: List[TextureId]
+    # The cube texture each cube texture entry was built into, by uuid.
+    var cubes: Dict[String, Int]
     # The lights that name a target, and the uuid each names.
     var aimed: List[Int]
     var targets: List[String]
@@ -738,6 +782,7 @@ struct _Loader(Movable):
         self.materials = Dict[String, Int]()
         self.covered = List[TextureId]()
         self.ignored = List[TextureId]()
+        self.cubes = Dict[String, Int]()
         self.aimed = List[Int]()
         self.targets = List[String]()
         self.seen = Dict[String, Int]()
@@ -1145,15 +1190,37 @@ struct _Loader(Movable):
 
     # --- textures -----------------------------------------------------------
 
-    def image_bytes(self, uuid: String) raises -> List[UInt8]:
-        """Return an image's file bytes, from its `data:` URL or a file."""
+    def image_url(self, uuid: String) raises -> Int:
+        """Return an image's `url`, a string or the array of a cube's six,
+        which must be there."""
         if uuid not in self.images:
             raise Error("Object JSON: a texture names no image: " + uuid)
         var item = self.document.at(self.library("images"), self.images[uuid])
         var url = self.document.get(item, "url")
-        if url == NO_NODE or self.document.kind(url) != STRING:
+        if url == NO_NODE:
+            raise Error("Object JSON: an image has no URL")
+        return url
+
+    def is_cube(self, uuid: String) raises -> Bool:
+        """Return True if a texture's image is six images, which makes it
+        a `CubeTexture`, as `ObjectLoader.parseTextures` decides."""
+        if uuid not in self.textures:
+            raise Error("Object JSON: names no texture: " + uuid)
+        var item = self.document.at(
+            self.library("textures"), self.textures[uuid]
+        )
+        var url = self.image_url(self.text(item, "image", ""))
+        return self.document.kind(url) == ARRAY
+
+    def image_bytes(self, uuid: String) raises -> List[UInt8]:
+        """Return an image's file bytes, from its `data:` URL or a file."""
+        var url = self.image_url(uuid)
+        if self.document.kind(url) != STRING:
             raise Error("Object JSON: an image is read only from one URL")
-        var text = self.document.string(url)
+        return self.url_bytes(self.document.string(url))
+
+    def url_bytes(self, text: String) raises -> List[UInt8]:
+        """Return the file bytes a URL names: a `data:` URL or a file."""
         if text.startswith("data:"):
             var comma = text.find(",")
             if not String(text[byte = 0 : max(comma, 0)]).endswith(";base64"):
@@ -1184,17 +1251,9 @@ struct _Loader(Movable):
             if wraps[0] != wraps[1]:
                 raise Error("Object JSON: a texture's two wraps must agree")
             wrap = wrap_of(Int(wraps[0]))
-        var magnify = self.integer(item, "magFilter", LINEAR_FILTER)
-        if magnify != NEAREST_FILTER and magnify != LINEAR_FILTER:
-            raise Error("Object JSON: a magFilter that is none of the two")
-        var minify = self.integer(
-            item, "minFilter", LINEAR_MIPMAP_LINEAR_FILTER
-        )
-        if not _is_filter(minify):
-            raise Error("Object JSON: a minFilter that is none of the six")
-        var mipmapped = is_mipmap_filter(minify) and self.flag(
-            item, "generateMipmaps", True
-        )
+        var sampling = self.sampling(item)
+        var mipmapped = sampling[0]
+        var magnify = sampling[1]
         var image = decode_image(self.image_bytes(self.text(item, "image", "")))
         if not self.flag(item, "flipY", True):
             _flip_rows(image.pixels, image.width, image.height)
@@ -1225,6 +1284,80 @@ struct _Loader(Movable):
         else:
             self.ignored[at] = id
         return id
+
+    def cube(
+        mut self, uuid: String, prefilter: Bool, mut assets: Assets
+    ) raises -> CubeTextureId:
+        """Return the cube texture an entry of six images makes, building
+        it the first time it is named.
+
+        Its images are read in the OpenGL layout of three.js's
+        `CubeTextureLoader`, `SEEN_FROM_OUTSIDE`, and a `flipY` of true, which
+        a three.js cube does not have, turns each upside down. Its wrap is
+        not read: a face is always clamped here. With `prefilter`, the cube
+        gets its PMREM, as three.js's renderer prefilters a cube that a
+        standard or physical surface reflects; the faces stay as they are.
+        """
+        if not self.is_cube(uuid):
+            raise Error(
+                "Object JSON: an envMap or environment names a texture that"
+                " is not a cube: "
+                + uuid
+            )
+        var at = self.textures[uuid]
+        if uuid not in self.cubes:
+            var item = self.document.at(self.library("textures"), at)
+            var mapping = self.integer(item, "mapping", CUBE_REFLECTION_MAPPING)
+            if mapping != CUBE_REFLECTION_MAPPING:
+                raise Error(
+                    "Object JSON: only a CubeReflectionMapping cube is read"
+                )
+            var urls = self.image_url(self.text(item, "image", ""))
+            if self.document.length(urls) != 6:
+                raise Error("Object JSON: a cube texture has six images")
+            var flip = self.flag(item, "flipY", False)
+            var images = List[DecodedImage]()
+            for face in range(6):  # pragma: no branch
+                var image = decode_image(
+                    self.url_bytes(
+                        self.document.string(self.document.at(urls, face))
+                    )
+                )
+                if flip:
+                    _flip_rows(image.pixels, image.width, image.height)
+                images.append(image^)
+            var sampling = self.sampling(item)
+            var built = cube_texture_from(
+                images,
+                SEEN_FROM_OUTSIDE,
+                NEAREST if sampling[1] == NEAREST_FILTER else BILINEAR,
+                color_space_of(self.text(item, "colorSpace", "")),
+                sampling[0],
+            )
+            self.cubes[uuid] = assets.cube_textures.add(built^).value
+        var id = CubeTextureId(self.cubes[uuid])
+        var bare = not assets.cube_textures.get(id).is_prefiltered()
+        if prefilter and bare:
+            assets.cube_textures.textures[id.value] = pmrem_from_cube(
+                assets.cube_textures.get(id)
+            )
+        return id
+
+    def sampling(self, item: Int) raises -> Tuple[Bool, Int]:
+        """Return whether a texture entry has a mip chain, and its
+        magnification filter, each checked."""
+        var magnify = self.integer(item, "magFilter", LINEAR_FILTER)
+        if magnify != NEAREST_FILTER and magnify != LINEAR_FILTER:
+            raise Error("Object JSON: a magFilter that is none of the two")
+        var minify = self.integer(
+            item, "minFilter", LINEAR_MIPMAP_LINEAR_FILTER
+        )
+        if not _is_filter(minify):
+            raise Error("Object JSON: a minFilter that is none of the six")
+        var mipmapped = is_mipmap_filter(minify) and self.flag(
+            item, "generateMipmaps", True
+        )
+        return (mipmapped, magnify)
 
     def map(
         mut self, item: Int, key: String, alpha: Alpha, mut assets: Assets
@@ -1273,6 +1406,15 @@ struct _Loader(Movable):
         var env_map_intensity = Float32(1)
         if physical:
             env_map_intensity = self.number(item, "envMapIntensity", 1)
+        # three.js reads the scene's `environment` where a standard or
+        # physical surface has no `envMap` of its own, and prefilters what
+        # either reflects. Only a mesh class that reflects reads an
+        # `envMap`: the others and the line, points and sprite classes
+        # have no shader that reads one.
+        var env_map = SCENE_ENVIRONMENT if physical else NO_CUBE_TEXTURE
+        var named = self.document.get(item, "envMap")
+        if named != NO_NODE and kind.reflects() and shape < 0:
+            env_map = self.cube(self.document.string(named), physical, assets)
         var normal_scale = self.numbers(item, "normalScale", 2)
         if len(normal_scale) == 0:
             normal_scale = [1, 1]
@@ -1286,6 +1428,9 @@ struct _Loader(Movable):
         var size_attenuation = True
         var rotation = NO_ROTATION
         var transparent = False
+        var dash_offset = NO_DASH
+        if kind == BASIC:
+            dash_offset = Length(self.number(item, "dashOffset", 0), METER)
         if shape == _LINE_BASIC or shape == _LINE_DASHED:
             line_width = LineWidth(pixels=self.number(item, "linewidth", 1))
         if shape == _LINE_DASHED:
@@ -1339,6 +1484,7 @@ struct _Loader(Movable):
             point_size=point_size,
             size_attenuation=size_attenuation,
             rotation=rotation,
+            env_map=env_map,
             reflectivity=reflectivity,
             combine=Combine(combine),
             roughness=self.number(item, "roughness", 1),
@@ -1356,6 +1502,7 @@ struct _Loader(Movable):
             clearcoat=self.number(item, "clearcoat", 0),
             clearcoat_roughness=self.number(item, "clearcoatRoughness", 0),
             line_width=line_width,
+            dash_offset=dash_offset,
             ao_map=ao_map,
             ao_map_intensity=ao_map_intensity,
             light_map=light_map,
@@ -1405,8 +1552,49 @@ struct _Loader(Movable):
                 Length(self.number(item, "displacementScale", 1), METER),
                 Length(self.number(item, "displacementBias", 0), METER),
             )
+        if kind == DISTANCE:
+            var point = self.numbers(item, "referencePosition", 3)
+            if len(point) == 3:
+                built.reference_position = Vector3(point[0], point[1], point[2])
+            built.near_distance = Length(
+                self.number(item, "nearDistance", 1), METER
+            )
+            built.far_distance = Length(
+                self.number(item, "farDistance", 1000), METER
+            )
+            built.check_data()
         self.raster(item, built)
+        self.clipping(item, built)
         return built^
+
+    def clipping(self, item: Int, mut material: Material) raises:
+        """Set a material's own clipping planes, `clipIntersection` and
+        `clipShadows`, which three.js's `Material.toJSON` does not write.
+
+        Each plane is an object with a `normal` of three numbers and a
+        `constant`, as `JSON.stringify` writes a three.js `Plane`.
+        """
+        var planes = List[Plane]()
+        var list = self.array(item, "clippingPlanes")
+        if list != NO_NODE:
+            for at in range(self.document.length(list)):
+                var entry = self.document.at(list, at)
+                if self.document.kind(entry) != OBJECT:
+                    raise Error("Object JSON: a clipping plane is an object")
+                var normal = self.numbers(entry, "normal", 3)
+                if len(normal) == 0:
+                    raise Error("Object JSON: a clipping plane has no normal")
+                planes.append(
+                    Plane(
+                        Vector3(normal[0], normal[1], normal[2]),
+                        self.number(entry, "constant", 0),
+                    )
+                )
+        material.set_clipping_planes(
+            planes,
+            self.flag(item, "clipIntersection", False),
+            self.flag(item, "clipShadows", False),
+        )
 
     def raster(self, item: Int, mut material: Material) raises:
         """Set a material's depth, stencil and polygon offset state from
@@ -1485,15 +1673,24 @@ struct _Loader(Movable):
         var background = self.document.get(item, "background")
         if background != NO_NODE:
             if self.document.kind(background) == STRING:
-                scene.background = texture_background(
-                    self.texture(
-                        self.document.string(background), COVERAGE, assets
+                var uuid = self.document.string(background)
+                if self.is_cube(uuid):
+                    scene.background = cube_background(
+                        self.cube(uuid, False, assets)
                     )
-                )
+                else:
+                    scene.background = texture_background(
+                        self.texture(uuid, COVERAGE, assets)
+                    )
             else:
                 scene.background = color_background(
                     Color(hex=self.document.integer(background))
                 )
+        var environment = self.document.get(item, "environment")
+        if environment != NO_NODE:
+            scene.environment = self.cube(
+                self.document.string(environment), True, assets
+            )
         self.children(item, NO_PARENT, scene, assets)
 
     def children(
@@ -1601,16 +1798,16 @@ struct _Loader(Movable):
         var culled = self.flag(item, "frustumCulled", True)
         var levels = List[String]()
         if kind == "Mesh":
-            scene.add_mesh(
-                Mesh(
-                    self.geometry_named(item),
-                    self.material_named(item),
-                    id,
-                    frustum_culled=culled,
-                    cast_shadow=self.flag(item, "castShadow", False),
-                    receive_shadow=self.flag(item, "receiveShadow", False),
-                )
+            var mesh = Mesh(
+                self.geometry_named(item),
+                self.material_named(item),
+                id,
+                frustum_culled=culled,
+                cast_shadow=self.flag(item, "castShadow", False),
+                receive_shadow=self.flag(item, "receiveShadow", False),
             )
+            mesh.morph_influences = self.influences(item)
+            scene.add_mesh(mesh)
         elif kind == "InstancedMesh":
             scene.add_instanced_mesh(self.instanced(item, id))
         elif light >= 0:
@@ -1666,6 +1863,22 @@ struct _Loader(Movable):
         elif kind != "Object3D" and kind != "Group" and kind != "Bone":
             raise Error("Object JSON: an object type that is not read: " + kind)
         self.children(item, id, scene, assets, levels)
+
+    def influences(
+        self, item: Int
+    ) raises -> SIMD[DType.float32, MAX_MORPH_TARGETS]:
+        """Return a mesh's `morphTargetInfluences`, zero past the ones
+        the object names."""
+        var out = SIMD[DType.float32, MAX_MORPH_TARGETS](0)
+        var list = self.array(item, "morphTargetInfluences")
+        if list == NO_NODE:
+            return out
+        var weights = self.numbers_of(list)
+        if len(weights) > MAX_MORPH_TARGETS:
+            raise Error("Object JSON: a mesh has eight morph influences")
+        for target in range(len(weights)):
+            out[target] = weights[target]
+        return out
 
     def lod(
         mut self, item: Int, id: NodeId, culled: Bool, mut scene: Scene
@@ -2066,11 +2279,15 @@ struct _Loader(Movable):
         `bindSkeletons` binds it once every bone is read.
 
         A skeleton's bones are the objects its `bones` name, and their
-        inverse binds are its `boneInverses`, which must be there: this
-        does not work them out from where the bones stand.
+        inverse binds are its `boneInverses`. A skeleton that leaves them
+        out, or gives none, gets the inverse of each bone's world matrix,
+        as three.js's `Skeleton.calculateInverses` works them out.
         """
         var skeletons = self.index_library("skeletons")
         var list = self.library("skeletons")
+        if len(self.rigged) > 0:
+            # The bones' world matrices, for a skeleton without inverses.
+            scene.update()
         for at in range(len(self.rigged)):
             var item = self.rigged[at]
             var uuid = self.text(item, "skeleton", "")
@@ -2078,51 +2295,55 @@ struct _Loader(Movable):
                 raise Error("Object JSON: a SkinnedMesh names no skeleton")
             var entry = self.document.at(list, skeletons[uuid])
             var bones = self.array(entry, "bones")
+            if bones == NO_NODE:
+                raise Error("Object JSON: a skeleton has no bones")
             var inverses = self.array(entry, "boneInverses")
-            var paired = (
-                bones != NO_NODE
-                and inverses != NO_NODE
-                and self.document.length(bones)
-                == self.document.length(inverses)
-            )
-            if not paired:
+            var count = self.document.length(bones)
+            var given = 0
+            if inverses != NO_NODE:
+                given = self.document.length(inverses)
+            if given != 0 and given != count:
                 raise Error(
                     "Object JSON: a skeleton needs one of boneInverses for"
-                    " each of its bones"
+                    " each of its bones, or none"
                 )
+            var nodes = List[NodeId]()
+            var placed = List[Matrix4]()
             var built = List[Bone]()
-            for bone in range(self.document.length(bones)):
-                var inverse = self.document.at(inverses, bone)
-                if self.document.kind(inverse) != ARRAY:
-                    raise Error("Object JSON: a bone inverse must be an array")
-                var numbers = self.numbers_of(inverse)
-                if len(numbers) != 16:
-                    raise Error("Object JSON: a bone inverse is 16 numbers")
-                built.append(
-                    Bone(
-                        self.model.node(
-                            self.document.string(self.document.at(bones, bone))
-                        ),
-                        _matrix_of(numbers),
-                    )
+            for bone in range(count):
+                var node = self.model.node(
+                    self.document.string(self.document.at(bones, bone))
                 )
+                nodes.append(node)
+                placed.append(scene.world_matrix(node))
+                if given > 0:
+                    var inverse = self.document.at(inverses, bone)
+                    if self.document.kind(inverse) != ARRAY:
+                        raise Error(
+                            "Object JSON: a bone inverse must be an array"
+                        )
+                    var numbers = self.numbers_of(inverse)
+                    if len(numbers) != 16:
+                        raise Error("Object JSON: a bone inverse is 16 numbers")
+                    built.append(Bone(node, _matrix_of(numbers)))
+            var skeleton = bind_skeleton(
+                nodes, placed
+            ) if given == 0 else Skeleton(built^)
             var bind = Matrix4()
             var elements = self.numbers(item, "bindMatrix", 16)
             if len(elements) == 16:
                 bind = _matrix_of(elements)
-            scene.add_skinned_mesh(
-                SkinnedMesh(
-                    self.geometry_named(item),
-                    self.material_named(item),
-                    self.rigged_nodes[at],
-                    Skeleton(built^),
-                    bind^,
-                    bind_mode=bind_mode_of(
-                        self.text(item, "bindMode", "attached")
-                    ),
-                    frustum_culled=self.flag(item, "frustumCulled", True),
-                )
+            var mesh = SkinnedMesh(
+                self.geometry_named(item),
+                self.material_named(item),
+                self.rigged_nodes[at],
+                skeleton^,
+                bind^,
+                bind_mode=bind_mode_of(self.text(item, "bindMode", "attached")),
+                frustum_culled=self.flag(item, "frustumCulled", True),
             )
+            mesh.morph_influences = self.influences(item)
+            scene.add_skinned_mesh(mesh^)
 
 
 def _matrix_of(elements: List[Float32]) -> Matrix4:

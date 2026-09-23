@@ -59,13 +59,29 @@ image, written as a PNG `data:` URL of its full-size level. A texture here
 runs up from its bottom row as a three.js texture with `flipY` does, so
 the image is written as it is and `flipY` is true.
 
+**A cube texture** is a `CubeTexture` entry whose image's `url` is an
+array of six PNG `data:` URLs, as `Source.toJSON` writes six images, with
+`CubeReflectionMapping` and a `flipY` of false. Each face is mirrored on
+the way out, into the OpenGL layout three.js keeps a cube's images in. It
+is the scene's `background` or `environment`, or a material's `envMap`.
+A basic, lambert or phong material that reflects the scene's environment
+names that cube, since three.js reads the environment only where a
+standard or physical material has no `envMap`. A mesh writes its
+`morphTargetInfluences`. A material writes its own `clippingPlanes`,
+`clipIntersection` and `clipShadows`, a distance material its
+`referencePosition`, `nearDistance` and `farDistance`, and a material its
+`dashOffset`: three.js's `Material.toJSON` writes none of these, and its
+loader ignores them.
+
 **Not written.** Wide lines, which are an addon of three.js with no class
-`ObjectLoader` reads; cube textures, so a cube background, the scene's
-environment and a material's `envMap`; a mesh's morph influences; a
-material's clipping planes, a distance material's reference point and
-range, and a wide line's `dashOffset`; and a texture's alpha mode, which
-three.js has no field for: `loaders.object_loader` gives it back from the
-texture's use. A material with custom blending, a material that blends
+`ObjectLoader` reads; a cube's PMREM, which the reader builds again where
+three.js's renderer would; and a texture's alpha mode, which three.js has
+no field for: `loaders.object_loader` gives it back from the texture's
+use. A cube of float faces, or of faces that differ in their sampling, is
+refused. So is a cube that a standard or physical material or the
+environment reflects without its PMREM, and a standard or physical
+material that reflects nothing in a scene with an environment: three.js
+would draw either another way. A material with custom blending, a material that blends
 but is not transparent, a line width in world units, a perspective camera
 with a view shift and a camera that rides no node are refused, since the
 format has no place for them. So is a batch whose geometries do not share
@@ -76,9 +92,13 @@ their attributes and index, or carry morph targets, which three.js's
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.background import COLOR_BACKGROUND, TEXTURE_BACKGROUND
+from core.background import (
+    COLOR_BACKGROUND,
+    CUBE_BACKGROUND,
+    TEXTURE_BACKGROUND,
+)
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry
+from core.buffer_geometry import MAX_MORPH_TARGETS, BufferGeometry
 from core.fog import EXP2_FOG, LINEAR_FOG
 from core.geometry_store import GeometryId
 from core.layers import Layers
@@ -97,6 +117,7 @@ from lights.light import (
 )
 from loaders.object_loader import (
     CLAMP_TO_EDGE_WRAPPING,
+    CUBE_REFLECTION_MAPPING,
     CUSTOM_BLENDING,
     FLOAT_TYPE,
     FORMAT_VERSION,
@@ -126,7 +147,9 @@ from materials.material import (
     BLEND,
     DEFAULT_LINE_WIDTH,
     DEPTH,
+    DISTANCE,
     LAMBERT,
+    NO_DASH,
     NO_TEXTURE,
     OPAQUE,
     PHONG,
@@ -141,6 +164,11 @@ from materials.material import (
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from objects.skeleton import Skeleton
+from render.cube_texture_store import (
+    NO_CUBE_TEXTURE,
+    SCENE_ENVIRONMENT,
+    CubeTextureId,
+)
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.png import encode as encode_png
 from render.raster_state import (
@@ -150,6 +178,7 @@ from render.raster_state import (
     STENCIL_MAX,
 )
 from render.srgb import SRGB
+from render.texture import FLOAT_TYPE as FLOAT_TEXELS
 from render.texture import NEAREST, Texture
 from render.texture_store import TextureId
 from std.math import ceil, isfinite, sqrt
@@ -172,6 +201,9 @@ comptime _HEX = "0123456789abcdef"
 # matrix texture, as three.js's `_initMatricesTexture` has it.
 comptime _WHITE_HEX = 0xFFFFFF
 comptime _MATRICES_SIDE = 4
+# What a texture key is for a cube texture: this, less its store id, so
+# that it never meets a texture's id or a data texture's -1.
+comptime _CUBE_KEY = -2
 
 
 def object_uuid(kind: Int, index: Int) -> String:
@@ -245,6 +277,32 @@ def index_type(vertices: Int) -> String:
         otherwise, as `BufferGeometry.setIndex` chooses.
     """
     return "Uint32Array" if vertices > _MAX_SHORT_INDEX else "Uint16Array"
+
+
+def _filters(texture: Texture) -> Tuple[Int, Int]:
+    """Return three.js's minification and magnification filters for a
+    texture's filter and mip chain."""
+    var nearest = texture.filter == NEAREST
+    var magnify = NEAREST_FILTER if nearest else LINEAR_FILTER
+    var minify = magnify
+    if texture.levels > 1:
+        minify = (
+            NEAREST_MIPMAP_NEAREST_FILTER if nearest else LINEAR_MIPMAP_LINEAR_FILTER
+        )
+    return (minify, magnify)
+
+
+def _mirrored(face: Texture) -> List[UInt8]:
+    """Return a face's full-size image flipped left for right, row by
+    row."""
+    var out = List[UInt8](capacity=face.width * face.height * Texture.CHANNELS)
+    # A cube's faces hold texels, so neither loop runs zero times.
+    for y in range(face.height):  # pragma: no branch
+        for x in range(face.width):  # pragma: no branch
+            var at = (y * face.width + face.width - 1 - x) * Texture.CHANNELS
+            for channel in range(Texture.CHANNELS):  # pragma: no branch
+                out.append(face.pixels[at + channel])
+    return out^
 
 
 def _has_emissive(kind: MaterialKind) -> Bool:
@@ -362,9 +420,13 @@ struct _Library(Movable):
     var texture_keys: List[Int]
     var skeletons: List[String]
     var parts: Int
+    # The scene's environment, which a material without an `envMap` can
+    # reflect.
+    var environment: CubeTextureId
 
     def __init__(out self):
         """Start with empty libraries."""
+        self.environment = NO_CUBE_TEXTURE
         self.geometries = List[String]()
         self.geometry_keys = List[Int]()
         self.materials = List[String]()
@@ -488,13 +550,9 @@ struct _Library(Movable):
             image.string("data:image/png;base64," + encode_base64(png))
             image.end_object()
             self.images.append(image.finish())
-            var nearest = texture.filter == NEAREST
-            var magnify = NEAREST_FILTER if nearest else LINEAR_FILTER
-            var minify = magnify
-            if texture.levels > 1:
-                minify = (
-                    NEAREST_MIPMAP_NEAREST_FILTER if nearest else LINEAR_MIPMAP_LINEAR_FILTER
-                )
+            var filters = _filters(texture)
+            var minify = filters[0]
+            var magnify = filters[1]
             var writer = JsonWriter()
             writer.begin_object()
             writer.key("uuid")
@@ -543,6 +601,143 @@ struct _Library(Movable):
             self.textures.append(writer.finish())
             self.texture_keys.append(id.value)
         return object_uuid(_TEXTURE_UUID, at)
+
+    def cube(mut self, id: CubeTextureId, assets: Assets) raises -> String:
+        """Write a cube texture and its six images once, as three.js
+        writes a `CubeTexture`, and return its uuid.
+
+        The image entry's `url` is an array of six PNG `data:` URLs, as
+        `Source.toJSON` writes the six images of a cube. Each face is
+        mirrored left for right on the way out: three.js keeps a cube's
+        images in the OpenGL layout that `SEEN_FROM_OUTSIDE` reads, and
+        its `flipY` is false.
+        """
+        # Refuses an id that names no cube before it becomes a key.
+        ref cube = assets.cube_textures.get(id)
+        var key = _CUBE_KEY - id.value
+        var at = _find(self.texture_keys, key)
+        if at >= 0:
+            return object_uuid(_TEXTURE_UUID, at)
+        at = len(self.texture_keys)
+        cube.validate()
+        ref first = cube.faces[0]
+        var image = JsonWriter()
+        image.begin_object()
+        image.key("uuid")
+        image.string(object_uuid(_IMAGE_UUID, at))
+        image.key("url")
+        image.begin_array()
+        # A valid cube holds six faces, so this never runs zero times.
+        for index in range(len(cube.faces)):  # pragma: no branch
+            ref face = cube.faces[index]
+            if face.texel_type == FLOAT_TEXELS:
+                raise Error(
+                    "Object JSON: a cube of float faces is not written, as a"
+                    " PNG holds bytes"
+                )
+            var same = (
+                face.filter == first.filter
+                and face.color_space == first.color_space
+                and face.levels == first.levels
+            )
+            if not same:
+                raise Error(
+                    "Object JSON: a cube's faces must share their filter,"
+                    " color space and mip chain, as three.js's CubeTexture"
+                    " has one of each"
+                )
+            var png = encode_png(
+                Framebuffer(face.width, face.height, _mirrored(face))
+            )
+            image.string("data:image/png;base64," + encode_base64(png))
+        image.end_array()
+        image.end_object()
+        self.images.append(image.finish())
+        var filters = _filters(first)
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("uuid")
+        writer.string(object_uuid(_TEXTURE_UUID, at))
+        writer.key("name")
+        writer.string("")
+        writer.key("image")
+        writer.string(object_uuid(_IMAGE_UUID, at))
+        writer.key("mapping")
+        writer.integer(CUBE_REFLECTION_MAPPING)
+        writer.key("channel")
+        writer.integer(0)
+        writer.key("repeat")
+        _numbers(writer, [1, 1])
+        writer.key("offset")
+        _numbers(writer, [0, 0])
+        writer.key("center")
+        _numbers(writer, [0, 0])
+        writer.key("rotation")
+        writer.integer(0)
+        writer.key("wrap")
+        writer.begin_array()
+        writer.integer(CLAMP_TO_EDGE_WRAPPING)
+        writer.integer(CLAMP_TO_EDGE_WRAPPING)
+        writer.end_array()
+        writer.key("format")
+        writer.integer(RGBA_FORMAT)
+        writer.key("type")
+        writer.integer(UNSIGNED_BYTE_TYPE)
+        writer.key("colorSpace")
+        writer.string(SRGB_COLOR_SPACE if first.color_space == SRGB else "")
+        writer.key("minFilter")
+        writer.integer(filters[0])
+        writer.key("magFilter")
+        writer.integer(filters[1])
+        writer.key("anisotropy")
+        writer.integer(1)
+        writer.key("flipY")
+        writer.boolean(False)
+        writer.key("generateMipmaps")
+        writer.boolean(first.levels > 1)
+        writer.end_object()
+        self.textures.append(writer.finish())
+        self.texture_keys.append(key)
+        return object_uuid(_TEXTURE_UUID, at)
+
+    def env_map(
+        mut self, mut writer: JsonWriter, material: Material, assets: Assets
+    ) raises:
+        """Write a reflecting material's `envMap` so that it reads back to
+        the same reflection.
+
+        three.js reads the scene's `environment` where a standard or
+        physical material has no `envMap`, and nowhere else. So a basic,
+        lambert or phong material that reflects the scene's environment
+        names that cube itself, and a physical one that reflects nothing
+        in a scene with an environment has no form. Each cube a physical
+        material reflects must hold its PMREM, as three.js's renderer
+        prefilters it.
+        """
+        var env = material.env_map
+        var physical = material.kind.is_physical()
+        if physical and env == SCENE_ENVIRONMENT:
+            return
+        if env == SCENE_ENVIRONMENT:
+            env = self.environment
+        if env == NO_CUBE_TEXTURE:
+            if physical and self.environment != NO_CUBE_TEXTURE:
+                raise Error(
+                    "Object JSON: a standard or physical material that"
+                    " reflects nothing in a scene with an environment has no"
+                    " three.js form, as three.js reflects the environment"
+                    " there"
+                )
+            return
+        var uuid = self.cube(env, assets)
+        if physical and not assets.cube_textures.get(env).is_prefiltered():
+            raise Error(
+                "Object JSON: a standard or physical material reflects a"
+                " cube through its PMREM in three.js; build it with"
+                " pmrem_from_cube"
+            )
+        writer.key("envMap")
+        writer.string(uuid)
 
     def data_texture(
         mut self,
@@ -773,6 +968,10 @@ struct _Library(Movable):
             writer.key("wireframe")
             writer.boolean(True)
         _raster(writer, material)
+        _clipping(writer, material)
+        if material.dash_offset != NO_DASH:
+            writer.key("dashOffset")
+            writer.number(material.dash_offset.to(METER))
         # three.js writes `fog` only when it is off, and its data materials
         # have no `fog` at all.
         var unfogged = not material.fog and not kind.is_data()
@@ -811,6 +1010,8 @@ struct _Library(Movable):
             writer.integer(material.emissive.hex())
             writer.key("emissiveIntensity")
             writer.number(material.emissive_intensity)
+        if kind.reflects():
+            self.env_map(writer, material, assets)
         if _reflects(kind):
             writer.key("reflectivity")
             writer.number(material.reflectivity)
@@ -854,6 +1055,17 @@ struct _Library(Movable):
         if kind == DEPTH:
             writer.key("depthPacking")
             writer.integer(material.depth_packing.value)
+        if kind == DISTANCE:
+            # The fields three.js's `MeshDistanceMaterial` once had, which
+            # its `toJSON` never wrote: this port keeps them on the
+            # material, so it writes them under their old names.
+            ref point = material.reference_position
+            writer.key("referencePosition")
+            _numbers(writer, [point.x, point.y, point.z])
+            writer.key("nearDistance")
+            writer.number(material.near_distance.to(METER))
+            writer.key("farDistance")
+            writer.number(material.far_distance.to(METER))
 
     def physical(
         mut self, mut writer: JsonWriter, material: Material, assets: Assets
@@ -989,6 +1201,49 @@ def _raster(mut writer: JsonWriter, material: Material) raises:
     if material.polygon_offset_units != 0:
         writer.key("polygonOffsetUnits")
         writer.number(material.polygon_offset_units)
+
+
+def _clipping(mut writer: JsonWriter, material: Material) raises:
+    """Write a material's own clipping planes and how they cut.
+
+    three.js's `Material.toJSON` writes none of the three. Each plane is
+    written as `JSON.stringify` writes a three.js `Plane`, a `normal` and a
+    `constant`, with the normal as an array.
+    """
+    var planes = material.clipping_planes()
+    if len(planes) > 0:
+        writer.key("clippingPlanes")
+        writer.begin_array()
+        for plane in planes:  # pragma: no branch
+            writer.begin_object()
+            writer.key("normal")
+            _numbers(writer, [plane.normal.x, plane.normal.y, plane.normal.z])
+            writer.key("constant")
+            writer.number(plane.constant)
+            writer.end_object()
+        writer.end_array()
+    if material.clip_intersection:
+        writer.key("clipIntersection")
+        writer.boolean(True)
+    if material.clip_shadows:
+        writer.key("clipShadows")
+        writer.boolean(True)
+
+
+def _influences(
+    mut writer: JsonWriter,
+    influences: SIMD[DType.float32, MAX_MORPH_TARGETS],
+    count: Int,
+) raises:
+    """Write a mesh's `morphTargetInfluences`, one for each of its
+    geometry's morph targets, as three.js writes them."""
+    if count == 0:
+        return
+    writer.key("morphTargetInfluences")
+    writer.begin_array()
+    for target in range(count):  # pragma: no branch
+        writer.number(influences[target])
+    writer.end_array()
 
 
 def _find(keys: List[Int], key: Int) -> Int:
@@ -1241,6 +1496,11 @@ struct _Writer(Movable):
         writer.string(
             self.library.material(mesh.material, assets, _SURFACE_USE)
         )
+        _influences(
+            writer,
+            mesh.morph_influences,
+            assets.geometries.get(mesh.geometry).morph_count(),
+        )
 
     def instanced(
         mut self,
@@ -1434,6 +1694,11 @@ struct _Writer(Movable):
         writer.key("material")
         writer.string(
             self.library.material(mesh.material, assets, _SURFACE_USE)
+        )
+        _influences(
+            writer,
+            mesh.morph_influences,
+            assets.geometries.get(mesh.geometry).morph_count(),
         )
         writer.key("bindMode")
         writer.string(mode)
@@ -1868,6 +2133,20 @@ def object_to_json(
     elif scene.background.kind == TEXTURE_BACKGROUND:
         var uuid = out.library.texture(scene.background.texture, assets)
         tree.key("background")
+        tree.string(uuid)
+    elif scene.background.kind == CUBE_BACKGROUND:
+        var uuid = out.library.cube(scene.background.cube, assets)
+        tree.key("background")
+        tree.string(uuid)
+    out.library.environment = scene.environment
+    if scene.environment != NO_CUBE_TEXTURE:
+        var uuid = out.library.cube(scene.environment, assets)
+        if not assets.cube_textures.get(scene.environment).is_prefiltered():
+            raise Error(
+                "Object JSON: three.js's renderer prefilters the scene's"
+                " environment; build it with pmrem_from_cube"
+            )
+        tree.key("environment")
         tree.string(uuid)
     ref fog = scene.fog
     if fog.kind == LINEAR_FOG:

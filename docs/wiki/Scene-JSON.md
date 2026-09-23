@@ -62,7 +62,9 @@ The type of the object tells what the node carries:
 | `AmbientLight`, `DirectionalLight`, `PointLight`, `HemisphereLight`, `SpotLight`, `RectAreaLight`, `LightProbe` | A `Light` of that kind, on the layers of the object. A `LightProbe` reads its 27 `sh` numbers. |
 | `PerspectiveCamera`, `OrthographicCamera` | A camera that rides the node, in `ObjectModel.cameras`. |
 
-A `Scene` root is not a node. Its `fog` becomes the fog of the scene. A number in `background` becomes a color background. A string in `background` names a texture background.
+A `Scene` root is not a node. Its `fog` becomes the fog of the scene. A number in `background` becomes a color background. A string in `background` names a texture or a cube texture. A string in `environment` names the cube texture of the scene's `environment`. See [Cube textures](#cube-textures).
+
+A `Mesh` and a `SkinnedMesh` carry their `morphTargetInfluences`, one number for each morph target of the geometry. The reader reads eight at most, because a mesh here holds eight.
 
 A light's `target` names an object by its uuid. When no object has that uuid, the target is the origin. This is the default target of three.js. A light's `shadow` gives `bias`, `normalBias`, `radius`, `mapSize` and the planes of its camera. A directional light's shadow camera must be square about its axis, because `LightShadow` holds one `extent`.
 
@@ -83,6 +85,8 @@ An LOD, a skinned mesh and a batched mesh have more parts than a mesh. The write
 | `BatchedMesh` | One joined `geometry`, `geometryInfo`, `instanceInfo`, `perObjectFrustumCulled` and three data textures. |
 
 A skeleton entry has the uuids of its `bones` and their `boneInverses`. The bones are objects in the same document. The reader binds each skinned mesh after it reads all the objects, because a bone can come after its mesh.
+
+A skeleton entry can leave out `boneInverses`, or give an empty list. Then the reader calculates each inverse from the world matrix of its bone, as three.js's `Skeleton.calculateInverses` does. Thus the mesh is bound in the pose that the document gives.
 
 A batched mesh joins its geometries into one `BufferGeometry`, as three.js's `BatchedMesh` holds them. Each `geometryInfo` entry gives the `vertexStart`, `vertexCount`, `indexStart` and `indexCount` of one geometry. Each `instanceInfo` entry gives the `geometryIndex` of one instance. The instance matrices are in `matricesTexture`, and the instance colors are in `colorsTexture`. Both are `DataTexture` entries with a `Float32Array` image. The colors are linear, as three.js keeps them.
 
@@ -146,6 +150,12 @@ These fields use three.js's keys and three.js's defaults:
 | Stretch | `anisotropy`, `anisotropyRotation` in radians, `anisotropyMap` |
 | Depth and stencil | `depthFunc`, `depthTest`, `depthWrite`, `colorWrite`, `stencilWrite`, `stencilWriteMask`, `stencilFunc`, `stencilRef`, `stencilFuncMask`, `stencilFail`, `stencilZFail`, `stencilZPass` |
 | Polygon offset | `polygonOffset`, `polygonOffsetFactor`, `polygonOffsetUnits` |
+| Environment | `envMap`, the uuid of a cube texture. See [Cube textures](#cube-textures). |
+| Clipping | `clippingPlanes`, `clipIntersection`, `clipShadows` |
+| Distance | `referencePosition`, `nearDistance` and `farDistance` on a `MeshDistanceMaterial` |
+| Wide line | `dashOffset` |
+
+Each clipping plane is an object with a `normal` of three numbers and a `constant`. This is the shape that `JSON.stringify` gives a three.js `Plane`. three.js's `Material.toJSON` does not write the clipping, distance and `dashOffset` keys, and its loader ignores them. This port writes them, so that a scene that it reads back renders the same.
 
 The writer writes a map intensity, a displacement scale and a displacement bias only with their map, as `Material.toJSON` does. The reader reads them only with their map. The writer does not write an infinite `attenuationDistance`, because that is the default. The stencil functions and operations use three.js's numbers: `stencilFunc` 519 is `ALWAYS_STENCIL_FUNC`, and `stencilFail` 7680 is `KEEP_STENCIL_OP`.
 
@@ -161,6 +171,24 @@ A `channel` of 1 reads the second set of texture coordinates, `uv1`.
 
 three.js has no alpha mode, so the reader finds it from the use of the texture. A `map`, a background or a `sheenRoughnessMap` gets `COVERAGE`. All other maps are data maps, and get `IGNORED`. A sheen roughness map keeps its alpha, because the renderer reads the roughness from the alpha. When a texture has the two uses, the reader builds it two times.
 
+## Cube textures
+
+A cube texture is a texture entry whose image has six URLs. This is how three.js's `Source.toJSON` writes a `CubeTexture`, and how its `ObjectLoader` finds one. The writer writes six PNG `data:` URLs, `CubeReflectionMapping` (301) and `flipY` false.
+
+three.js keeps the six images of a cube in the OpenGL layout. Each image is the view from the center, mirrored left for right. Thus the writer mirrors each face, and the reader reads the images `SEEN_FROM_OUTSIDE`. See [Textures](Textures). A `flipY` of true turns each image upside down.
+
+A cube texture is one of these:
+
+| Key | Meaning |
+|---|---|
+| `background` on the scene | A cube background. |
+| `environment` on the scene | The scene's `environment`. |
+| `envMap` on a material | The cube texture that the surface reflects. |
+
+three.js reads the scene's `environment` only on a standard or physical material without an `envMap`. The reader does the same. A standard or physical material without an `envMap` gets `SCENE_ENVIRONMENT`. Every other class without an `envMap` reflects nothing. A basic, lambert or phong material that reflects the environment here gets the uuid of that cube in its `envMap`.
+
+three.js's renderer prefilters the environment, and each cube that a standard or physical material reflects. Thus the reader builds the PMREM of each of these cubes with `pmrem_from_cube`. The writer does not write the PMREM, because three.js has no key for it. For the same reason, the writer refuses a cube that these surfaces reflect without its PMREM.
+
 ## Differences from three.js
 
 - A camera is kept beside the scene, in `ObjectCameras`, because a camera is not a node here.
@@ -171,7 +199,10 @@ three.js has no alpha mode, so the reader finds it from the use of the texture. 
 - The writer writes `transparent` false on a `SpriteMaterial`. three.js leaves it out, and then its loader reads a transparent sprite.
 - The writer writes a sprite's `center` when it is not the middle. three.js does not write it, and ignores it.
 - An LOD level must be a child `Mesh` at the identity, because an `Lod` draws its levels at its own node.
-- A skeleton must have its `boneInverses`. three.js can calculate them from the bones, but this reader cannot.
+- A skeleton with a `boneInverses` list of the wrong length is refused. three.js replaces it with identity matrices.
+- The writer writes a material's clipping planes, a distance material's range and a `dashOffset`. three.js does not write them.
+- The writer refuses a standard or physical material that reflects nothing in a scene with an environment. three.js would reflect the environment on it.
+- A face of a cube texture is always clamped. The reader does not read the `wrap` of a cube texture.
 - The joined geometry of a batched mesh stays in the assets after the reader splits it.
 
 ## Not ported
@@ -183,18 +214,19 @@ The writer does not write these things, and the reader refuses them:
 - A batched mesh with geometries that do not have the same attributes and index, or that have morph targets.
 - A mesh with more than one material, and an attribute or an interleaved buffer that is not a `Float32Array`.
 - A texture with two different wraps, a mapping that is not `UVMapping`, or a `channel` that is not 0 or 1.
+- A cube texture that does not have six images, or a mapping that is not `CubeReflectionMapping`. A cube texture with float faces.
+- More than eight clipping planes on a material, or more than eight morph influences on a mesh.
 - A depth function, a stencil function or a stencil operation that is not one of three.js's.
 - A perspective camera with `zoom`, `filmOffset` or `view`, and an orthographic camera with `view`.
 
 The writer does not write these things, and the reader ignores them:
 
-- Cube textures: a cube background, the scene's `environment` and a material's `envMap`.
+- A background's `backgroundBlurriness`, `backgroundIntensity` and `backgroundRotation`, and the scene's `environmentIntensity` and `environmentRotation`.
+- An `envMap` on a class that does not reflect, for example a `MeshToonMaterial` or a `LineBasicMaterial`.
 - `animations`, `shapes`, `skeletons`, `up` and `userData`.
 - `clearcoatMap`, `specularColorMap` and the other material keys that have no field here.
 - An LOD's `autoUpdate`, and a batched mesh's sorting, reserved ranges and bounds.
 - A camera's `focus` and `filmGauge`, and a texture's `format`, `type` and `premultiplyAlpha`.
-
-The writer also does not write a mesh's morph influences or a material's clipping planes. It does not write a distance material's reference point and range, or a wide line's `dashOffset`.
 
 ## Errors
 
@@ -208,6 +240,9 @@ The writer raises for:
 - A line mode or a bind mode that is not one of its values.
 - A batched mesh with geometries that it cannot join.
 - A perspective camera with a view shift.
+- A cube texture with float faces, or with faces that do not have the same filter, color space and mip chain.
+- A cube without its PMREM that the environment or a standard or physical material reflects.
+- A standard or physical material that reflects nothing in a scene with an environment.
 
 The reader raises for a document that is not JSON, for each refusal in [Not ported](#not-ported), and for:
 
@@ -215,7 +250,9 @@ The reader raises for a document that is not JSON, for each refusal in [Not port
 - An object, geometry, material or fog type that has no counterpart here.
 - A shadow map that is not square, or a shadow camera that is not square about its axis.
 - An LOD level that is not a child `Mesh` at the identity without children.
-- A skeleton without one `boneInverses` entry for each bone, or a bone uuid that no object has.
+- A bone uuid that no object has.
+- A skeleton with a `boneInverses` list that is not empty and not one entry for each bone.
+- An `envMap` or an `environment` that names a texture that is not a cube.
 - A `geometryInfo` or an instance that names data that is not there.
 - Each value that the builders refuse, for example a negative intensity.
 
@@ -224,3 +261,5 @@ The reader raises for a document that is not JSON, for each refusal in [Not port
 `tests/test_object_json.mojo` writes a scene with each kind of thing and reads it back. It also reads a document in the shape of three.js's own `scene.toJSON()` output.
 
 `tests/test_object_json_objects.mojo` renders a scene with each newer material field and each other object. It writes the scene, reads it back and renders it again. The two images are the same.
+
+`tests/test_object_json_environment.mojo` does the same for cube textures, environment maps, clipping planes, a distance range and morph influences.

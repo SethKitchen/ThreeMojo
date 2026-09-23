@@ -1090,10 +1090,9 @@ def test_a_skinned_mesh_as_three_js_writes_it() raises:
         _skin(bone).replace('"skeleton":"s"', '"skeleton":"t"'),
         "names no skeleton",
     )
-    _refuses(_skin('{"uuid":"s","bones":["b"]}'), "one of boneInverses")
-    _refuses(_skin('{"uuid":"s","boneInverses":[]}'), "one of boneInverses")
+    _refuses(_skin('{"uuid":"s","boneInverses":[]}'), "has no bones")
     _refuses(
-        _skin('{"uuid":"s","bones":["b"],"boneInverses":[]}'),
+        _skin('{"uuid":"s","bones":["b"],"boneInverses":[[1],[2]]}'),
         "one of boneInverses",
     )
     _refuses(
