@@ -84,7 +84,7 @@ An LOD, a skinned mesh and a batched mesh have more parts than a mesh. The write
 | `SkinnedMesh` | `bindMode` (`attached` or `detached`), `bindMatrix` and `skeleton`. The `skeleton` names an entry of the `skeletons` library. |
 | `BatchedMesh` | One joined `geometry`, `geometryInfo`, `instanceInfo`, `perObjectFrustumCulled` and three data textures. |
 
-A skeleton entry has the uuids of its `bones` and their `boneInverses`. The bones are objects in the same document. The reader binds each skinned mesh after it reads all the objects, because a bone can come after its mesh.
+A skeleton entry has the uuids of its `bones` and their `boneInverses`. The bones are objects in the same document. The reader reads one inverse for each bone and ignores the rest, as three.js's `Skeleton.fromJSON` does. The reader binds each skinned mesh after it reads all the objects, because a bone can come after its mesh.
 
 A skeleton entry can leave out `boneInverses`, or give an empty list. Then the reader calculates each inverse from the world matrix of its bone, as three.js's `Skeleton.calculateInverses` does. Thus the mesh is bound in the pose that the document gives.
 
@@ -200,7 +200,7 @@ three.js's renderer prefilters the environment, and each cube that a standard or
 - The writer writes `transparent` false on a `SpriteMaterial`. three.js leaves it out, and then its loader reads a transparent sprite.
 - The writer writes a sprite's `center` when it is not the middle. three.js does not write it, and ignores it.
 - An LOD level must be a child `Mesh` at the identity, because an `Lod` draws its levels at its own node.
-- A skeleton with a `boneInverses` list of the wrong length is refused. three.js replaces it with identity matrices.
+- A skeleton can leave out `boneInverses`, or give an empty list. Then the reader calculates the inverses. three.js's `Skeleton.fromJSON` reads one entry for each bone and fails without them.
 - The writer writes a material's clipping planes, a distance material's range and a `dashOffset`. three.js does not write them.
 - The writer refuses a standard or physical material that reflects nothing in a scene with an environment. three.js would reflect the environment on it.
 - A face of a cube texture is always clamped. The reader does not read the `wrap` of a cube texture.
@@ -252,7 +252,7 @@ The reader raises for a document that is not JSON, for each refusal in [Not port
 - A shadow map that is not square, or a shadow camera that is not square about its axis.
 - An LOD level that is not a child `Mesh` at the identity without children.
 - A bone uuid that no object has.
-- A skeleton with a `boneInverses` list that is not empty and not one entry for each bone.
+- A skeleton with a `boneInverses` list that is not empty and has fewer entries than bones. three.js's `Skeleton.fromJSON` fails on it too.
 - An `envMap` or an `environment` that names a texture that is not a cube.
 - A `geometryInfo` or an instance that names data that is not there.
 - Each value that the builders refuse, for example a negative intensity.

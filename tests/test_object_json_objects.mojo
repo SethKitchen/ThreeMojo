@@ -1113,8 +1113,23 @@ def test_a_skinned_mesh_as_three_js_writes_it() raises:
         "names no skeleton",
     )
     _refuses(_skin('{"uuid":"s","boneInverses":[]}'), "has no bones")
+    # One inverse for each bone, as three.js's `Skeleton.fromJSON` reads
+    # them: a longer list leaves the rest unread, and a shorter one is
+    # refused.
+    var longer = _read(
+        _wrap(_skin(bone.replace("1]]}", "1],[2]]}").replace("[[1,", "[[2,")))
+    )
+    assert_equal(
+        longer[0].skinned_meshes[0].skeleton.bones[0].inverse_bind.elements[0],
+        2,
+    )
     _refuses(
-        _skin('{"uuid":"s","bones":["b"],"boneInverses":[[1],[2]]}'),
+        _skin(bone)
+        .replace('"bones":["b"]', '"bones":["b","b2"]')
+        .replace(
+            '"children":[{"uuid":"b","type":"Bone"}]',
+            '"children":[{"uuid":"b","type":"Bone"},{"uuid":"b2","type":"Bone"}]',
+        ),
         "one of boneInverses",
     )
     _refuses(

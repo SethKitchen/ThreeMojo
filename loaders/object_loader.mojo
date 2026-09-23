@@ -109,7 +109,7 @@ three.js's, a texture whose two wraps differ, whose mapping is not
 not six images or not `CubeReflectionMapping`, an `envMap` or
 `environment` that names a flat texture, more than eight clipping planes
 or morph influences, an LOD level that is
-not a bare mesh child, a skeleton whose `boneInverses` do not pair with its bones, a batch
+not a bare mesh child, a skeleton with fewer `boneInverses` than bones, a batch
 whose info names what is not there, and every number the builders
 refuse.
 
@@ -2321,7 +2321,10 @@ struct _Loader(Movable):
             var given = 0
             if inverses != NO_NODE:
                 given = self.document.length(inverses)
-            if given != 0 and given != count:
+            # three.js's `Skeleton.fromJSON` reads one inverse for each
+            # bone and ignores the rest. A short list fails there, reading
+            # a matrix from nothing; here it is refused.
+            if given != 0 and given < count:
                 raise Error(
                     "Object JSON: a skeleton needs one of boneInverses for"
                     " each of its bones, or none"
