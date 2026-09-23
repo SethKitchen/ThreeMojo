@@ -32,6 +32,11 @@ from units.si import Angle
 comptime SLERP_EPSILON = Float32(1e-6)
 
 
+# How near to opposite two directions are before `from_unit_vectors`
+# picks a half turn. three.js: `Number.EPSILON`, scaled to Float32.
+comptime HALF_TURN_EPSILON = Float32(1e-6)
+
+
 @fieldwise_init
 struct Quaternion(ImplicitlyCopyable):
     """A rotation as (x, y, z, w), the identity being (0, 0, 0, 1)."""
@@ -61,6 +66,36 @@ struct Quaternion(ImplicitlyCopyable):
         var half = angle.value / 2
         var s = sin(half)
         return Quaternion(axis.x * s, axis.y * s, axis.z * s, cos(half))
+
+    @staticmethod
+    def from_unit_vectors(v_from: Vector3, v_to: Vector3) -> Quaternion:
+        """Return the shortest rotation that turns one direction onto
+        another. three.js: `setFromUnitVectors`.
+
+        Opposite directions have no one shortest rotation; the half turn
+        is taken about an axis perpendicular to `v_from`, as three.js
+        takes it.
+
+        Args:
+            v_from: The direction to turn, unit length.
+            v_to: Where it ends up, unit length.
+
+        Returns:
+            The rotation, normalized.
+        """
+        var r = v_from.dot(v_to) + 1
+        var turn: Quaternion
+        if r < HALF_TURN_EPSILON:
+            if abs(v_from.x) > abs(v_from.z):
+                turn = Quaternion(-v_from.y, v_from.x, 0, 0)
+            else:
+                turn = Quaternion(0, -v_from.z, v_from.y, 0)
+        else:
+            var axis = v_from
+            axis.cross(v_to)
+            turn = Quaternion(axis.x, axis.y, axis.z, r)
+        turn.normalize()
+        return turn
 
     @staticmethod
     def from_matrix(matrix: Matrix4) -> Quaternion:

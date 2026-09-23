@@ -128,6 +128,8 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 | `key_pan_speed` | 7 | Pixels an arrow pans by. |
 | `auto_rotate`, `auto_rotate_speed` | `False`, 2 | Turns a minute while no button is held. |
 | `primary_action`, `middle_action`, `secondary_action` | `ROTATE`, `DOLLY`, `PAN` | What each button does. three.js: `mouseButtons`. |
+| `min_zoom`, `max_zoom` | 0, infinity | How far an orthographic camera can zoom. |
+| `zoom_to_cursor` | `False` | Dolly or zoom toward the point under the pointer. |
 
 `rotate_left`, `rotate_up`, `dolly_in`, `dolly_out` and `pan` make the same changes from code. `update(camera, delta)` returns True when the camera moved. The `delta` is a `Duration`, for the automatic rotation.
 
@@ -139,11 +141,21 @@ The polar angle stays a millionth of a radian away from each pole. At a pole, th
 
 With damping, `damping_factor` of each pending rotation and pan applies each frame. The rest waits. A dolly is not damped, as in three.js.
 
+### Orthographic cameras
+
+`handle(event, camera, width, height)`, `update(camera, delta)` and `pan(dx, dy, camera, width, height)` take an `OrthographicCamera` too. A dolly changes the camera's `zoom` rather than its distance, kept between `min_zoom` and `max_zoom`. A pan moves by the extent the volume covers at that zoom, over the view's size, as three.js's `pan` measures it.
+
+### Zoom to the cursor
+
+With `zoom_to_cursor` set, a wheel notch or a dolly drag goes toward the point under the pointer. A perspective camera moves down the ray through the pointer by what the dolly takes off the distance. An orthographic camera moves so that the point under the pointer stays under it as the zoom changes. The target then sits straight ahead of the camera at the new distance, as in three.js.
+
+### The camera's up
+
+The offset is turned into a frame whose y is the camera's `up` before it is read as angles, as three.js turns it. So the polar angle is measured from the camera's up, and a camera with +z up orbits about z.
+
 ### Differences from three.js
 
-- The camera's up must be +y, its default.
-- Only a `PerspectiveCamera` is driven. An orthographic camera zooms rather than dollies, and that is not ported.
-- Touch input, zoom to the cursor and a limit on the target's radius are not ported.
+- Touch input and a limit on the target's radius are not ported.
 - Panning is always in screen space, three.js's default.
 
 ## Limits

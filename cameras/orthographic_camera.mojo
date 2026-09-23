@@ -29,6 +29,7 @@ one. A backend that special-cased it would be two code paths where the math
 already gives one.
 """
 
+from std.math import isfinite
 from cameras.camera import Camera, node_view_matrix
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
@@ -56,6 +57,10 @@ struct OrthographicCamera(Camera):
     var node: NodeId
     # Which layers this camera draws; see `PerspectiveCamera.layers`.
     var layers: Layers
+    # How far the view is magnified, three.js's `zoom`: the volume's
+    # width and height are divided by it about their center. One by
+    # default. OrbitControls zooms an orthographic camera by changing it.
+    var zoom: Float32
 
     def __init__(
         out self,
@@ -100,6 +105,7 @@ struct OrthographicCamera(Camera):
         self.up = Vector3(0, 1, 0)
         self.node = NO_PARENT
         self.layers = Layers()
+        self.zoom = 1
 
     def visible_layers(self) -> Layers:
         """Return which layers this camera draws; see `core.layers`."""
@@ -130,13 +136,35 @@ struct OrthographicCamera(Camera):
             The projection matrix.
 
         Raises:
-            Error: If the view volume works out degenerate.
+            Error: If the view volume works out degenerate, or the zoom is
+                not positive and finite.
         """
+        if not (self.zoom > 0 and isfinite(self.zoom)):
+            raise Error(
+                "An orthographic zoom must be positive, got ", self.zoom
+            )
+        if self.zoom == 1:
+            # The edges as given, not rebuilt from a center and a half
+            # width, which can round a last bit away.
+            return orthographic(
+                self.left.value,
+                self.right.value,
+                self.top.value,
+                self.bottom.value,
+                self.near.value,
+                self.far.value,
+            )
+        # three.js's `updateProjectionMatrix`: the half extents divided by
+        # the zoom, about the volume's center.
+        var half_x = (self.right.value - self.left.value) / (2 * self.zoom)
+        var half_y = (self.top.value - self.bottom.value) / (2 * self.zoom)
+        var mid_x = (self.right.value + self.left.value) / 2
+        var mid_y = (self.top.value + self.bottom.value) / 2
         return orthographic(
-            self.left.value,
-            self.right.value,
-            self.top.value,
-            self.bottom.value,
+            mid_x - half_x,
+            mid_x + half_x,
+            mid_y + half_y,
+            mid_y - half_y,
             self.near.value,
             self.far.value,
         )

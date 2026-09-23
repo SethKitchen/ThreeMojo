@@ -55,6 +55,9 @@ var flat = centered(
 
 An orthographic projection leaves `w` at one. The perspective correction then divides by one, so no code path is special.
 
+
+`zoom` magnifies the view, three.js's `zoom`. The volume's width and height are divided by it about their center. It is one by default and must be positive. [OrbitControls](Windowing-and-controls#orthographic-cameras) zooms an orthographic camera by changing it.
+
 ## ArrayCamera
 
 `ArrayCamera` is a list of perspective cameras, each with the rectangle of the image it draws into: three.js's `ArrayCamera` and its sub cameras' `viewport`. `Renderer.render_array` draws the scene once per camera, into that camera's rectangle, and resolves the image once.
