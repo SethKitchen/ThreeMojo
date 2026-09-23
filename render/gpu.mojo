@@ -56,8 +56,16 @@ from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.shadow import (
     PCF_TAPS,
     SHADOW_HEADER,
+    SPOT_MAP_FLOATS,
     biased_position,
+    cube_tap,
+    cube_texel,
+    inside_point_shadow,
     inside_shadow_map,
+    inside_spot_map,
+    point_shadow_depth,
+    point_shadow_spread,
+    point_shadow_tap,
     shadow_coordinate,
     shadow_tap,
     shadow_texel,
@@ -348,15 +356,17 @@ comptime LIGHTS_SCALE = 12
 comptime LIGHTS_RECT_COUNT = 13
 comptime LIGHTS_FIRST = 14
 # How many floats each kind of light takes in the buffer. A directional
-# light's seventh and a spot light's fourteenth is where its shadow map
-# begins in the same buffer, or -1 for none: the maps ride after the
-# lights, each `SHADOW_HEADER` floats and then its depths, rather than
-# in a buffer of their own, because Metal binds at most thirty-one
-# arguments to a kernel and this one has thirty-one.
+# light's seventh, a point light's ninth and a spot light's fourteenth is
+# where its shadow map begins in the same buffer, or -1 for none: the maps
+# ride after the lights, each `SHADOW_HEADER` floats and then its depths,
+# rather than in a buffer of their own, because Metal binds at most
+# thirty-one arguments to a kernel and this one has thirty-one. A spot
+# light's fifteenth is where its map's `SPOT_MAP_FLOATS` begin, after the
+# shadow maps, or -1 for none.
 comptime DIRECTIONAL_FLOATS = 7
-comptime POINT_FLOATS = 8
+comptime POINT_FLOATS = 9
 comptime HEMISPHERE_FLOATS = 9
-comptime SPOT_FLOATS = 14
+comptime SPOT_FLOATS = 15
 # A rect area light: its center, its half width and its half height in
 # world space, and its radiance. When there is at least one, the two LTC
 # tables follow the last, `LTC_FLOATS` each; see `lights.ltc`.
@@ -554,12 +564,13 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     under a parallel projection, three of the camera's own up axis, then
     three of ambient, one of `Lighting.scale`, then six per
     directional light -- a unit
-    direction and the light it carries -- then eight per point light: where
-    it is, the light it carries, its decay and its cutoff. Then nine per
+    direction and the light it carries -- then nine per point light: where
+    it is, the light it carries, its decay, its cutoff and its shadow. Then
+    nine per
     hemisphere light: which way the sky is, what the sky carries and what
-    the ground carries. Then thirteen per spot light: where it is, which way
-    it points, what it carries, its decay, its cutoff, and the cosines of
-    its cone and of its penumbra. Already decoded and scaled by `Lighting`,
+    the ground carries. Then fifteen per spot light: where it is, which way
+    it points, what it carries, its decay, its cutoff, the cosines of its
+    cone and of its penumbra, its shadow and its map. Already decoded and scaled by `Lighting`,
     so the device does no color-space work and both backends sum exactly
     the same numbers.
 
@@ -573,16 +584,23 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     Args:
         lighting: The scene's lights, resolved to world space.
 
-    Each directional light carries a seventh float and each spot light a
-    fourteenth: where its shadow map begins in this same buffer, or
-    `NO_SHADOW`. The maps follow the lights, each its size, its bias, its
-    normal bias, its radius, its sixteen-float frame and then its depths,
-    row-major from the top; see `lights.shadow.ShadowMap`.
+    Each directional light carries a seventh float, each point light a
+    ninth and each spot light a fourteenth: where its shadow map begins in
+    this same buffer, or `NO_SHADOW`. The maps follow the lights, each its
+    size, its bias, its normal bias, its radius, its sixteen-float frame
+    and then its depths, row-major from the top; see
+    `lights.shadow.ShadowMap`. A point light's cube holds its bulb's
+    position, its near plane and its far plane where the frame would be,
+    and six faces of depths. Each spot light carries a fifteenth float:
+    where its map begins, or `NO_SHADOW`. The maps follow the shadow maps,
+    each the texture's slot in the texture table, the normal bias and the
+    sixteen-float frame; see `lights.shadow.SpotLightMap`.
 
     Returns:
-        `LIGHTS_FIRST + 7 * count + 8 * point_count + 9 * hemisphere_count
-        + 14 * spot_count + 12 * rect_count` floats, then the two LTC
-        tables when `rect_count` is not zero, then the shadow maps.
+        `LIGHTS_FIRST + 7 * count + 9 * point_count + 9 * hemisphere_count
+        + 15 * spot_count + 12 * rect_count` floats, then the two LTC
+        tables when `rect_count` is not zero, then the shadow maps, then
+        the spot light maps.
     """
     var flat = List[Float32]()
     # Where each shadow map will begin, worked out before the lights that
@@ -601,6 +619,10 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     for slot in range(len(lighting.shadows)):
         starts.append(next)
         next += SHADOW_HEADER + len(lighting.shadows[slot].depths)
+    var map_starts = List[Int]()
+    for _ in range(len(lighting.spot_maps)):
+        map_starts.append(next)
+        next += SPOT_MAP_FLOATS
     flat.append(lighting.eye.x)
     flat.append(lighting.eye.y)
     flat.append(lighting.eye.z)
@@ -636,6 +658,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(radiance.b)
         flat.append(lighting.decays[index])
         flat.append(lighting.cutoffs[index])
+        flat.append(_shadow_start(starts, lighting.point_shadows[index]))
     for index in range(lighting.hemisphere_count()):
         ref up = lighting.sky_directions[index]
         flat.append(up.x)
@@ -667,6 +690,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(lighting.cone_cosines[index])
         flat.append(lighting.penumbra_cosines[index])
         flat.append(_shadow_start(starts, lighting.spot_shadows[index]))
+        flat.append(_shadow_start(map_starts, lighting.spot_map_slots[index]))
     for index in range(lighting.rect_count()):
         ref center = lighting.rect_positions[index]
         flat.append(center.x)
@@ -695,10 +719,23 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
         flat.append(map.bias)
         flat.append(map.normal_bias)
         flat.append(map.radius)
+        var frame = map.frame
+        if map.cube:
+            frame[0] = map.origin.x
+            frame[1] = map.origin.y
+            frame[2] = map.origin.z
+            frame[3] = map.near
+            frame[4] = map.far
         for element in range(16):  # pragma: no branch
-            flat.append(map.frame[element])
+            flat.append(frame[element])
         for texel in range(len(map.depths)):
             flat.append(map.depths[texel])
+    for slot in range(len(lighting.spot_maps)):
+        ref picture = lighting.spot_maps[slot]
+        flat.append(Float32(picture.texture.value))
+        flat.append(picture.normal_bias)
+        for element in range(16):  # pragma: no branch
+            flat.append(picture.frame[element])
     return flat^
 
 
@@ -744,6 +781,101 @@ def _shadow_at(
     return total / Float32(PCF_TAPS)
 
 
+def _cube_shadow_at(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    block: Int,
+    position: Vector3,
+    normal: Vector3,
+) -> Float32:
+    """Return how much of a point light reaches a surface past its cube:
+    the device counterpart of `ShadowMap.lit` on a cube, from the same
+    functions in the same order.
+
+    `block` is where the cube begins in the light buffer, as
+    `flatten_lights` laid it out.
+    """
+    var size = Int(lights[unsafe_offset=block])
+    var bias = lights[unsafe_offset=block + 1]
+    var normal_bias = lights[unsafe_offset=block + 2]
+    var radius = lights[unsafe_offset=block + 3]
+    var near = lights[unsafe_offset=block + 7]
+    var far = lights[unsafe_offset=block + 8]
+    var away = biased_position(position, normal, normal_bias)
+    var toward = Vector3(
+        away.x - lights[unsafe_offset=block + 4],
+        away.y - lights[unsafe_offset=block + 5],
+        away.z - lights[unsafe_offset=block + 6],
+    )
+    var distance = toward.length()
+    if not inside_point_shadow(distance, near, far):
+        return 1
+    var depth = point_shadow_depth(distance, near, far) + (bias)
+    var way = Vector3(
+        toward.x / distance, toward.y / distance, toward.z / distance
+    )
+    var spread = point_shadow_spread(radius, size)
+    var total = Float32(0)
+    for tap in range(PCF_TAPS):
+        var texel = cube_texel(point_shadow_tap(way, tap, spread), size)
+        total += cube_tap(
+            lights[unsafe_offset=block + SHADOW_HEADER + texel], depth
+        )
+    return total / Float32(PCF_TAPS)
+
+
+def _point_through(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    at: Int,
+    receives: Bool,
+    position: Vector3,
+    normal: Vector3,
+) -> Float32:
+    """Return what a point light's cube lets through to a surface: the
+    device counterpart of `Lighting.shadow_at` for a point light, reading
+    the cube's start from the light's own record at `at`."""
+    var block = lights[unsafe_offset=at]
+    if block < 0 or not receives:
+        return 1
+    return _cube_shadow_at(lights, Int(block), position, normal)
+
+
+def _spot_tint(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
+    at: Int,
+    position: Vector3,
+    normal: Vector3,
+) -> Vector3:
+    """Return what a spot light's color is multiplied by at a surface:
+    the device counterpart of `Lighting.spot_tint`, reading the map's
+    start from the light's own record at `at` and the picture from the
+    texture buffer, at its full size, as `SpotLightMap.tint` reads it."""
+    var block = lights[unsafe_offset=at]
+    if block < 0:
+        return Vector3(1, 1, 1)
+    var start = Int(block)
+    var frame = SIMD[DType.float32, 16](0)
+    for element in range(16):
+        frame[element] = lights[unsafe_offset=start + 2 + element]
+    var place = shadow_coordinate(
+        frame,
+        biased_position(position, normal, lights[unsafe_offset=start + 1]),
+    )
+    if not inside_spot_map(place):
+        return Vector3(1, 1, 1)
+    var color = _sample_at(
+        texels,
+        ramp,
+        _describe(table, Int(lights[unsafe_offset=start])),
+        place.x,
+        1 - place.y,
+        0,
+    )
+    return Vector3(color.r, color.g, color.b)
+
+
 def _through(
     lights: MutPointer[Float32, MutAnyOrigin],
     at: Int,
@@ -784,6 +916,11 @@ def _shadow_mask(
     for index in range(spots):
         var at = first_spot + index * SPOT_FLOATS
         mask *= _through(lights, at + 13, True, position, normal)
+    for index in range(points):
+        var at = (
+            LIGHTS_FIRST + count * DIRECTIONAL_FLOATS + index * POINT_FLOATS
+        )
+        mask *= _point_through(lights, at + 8, True, position, normal)
     return mask
 
 
@@ -809,6 +946,9 @@ def flatten_fog(fog: FogView) -> List[Float32]:
 
 def _arriving(
     lights: MutPointer[Float32, MutAnyOrigin],
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
     count: Int,
     points: Int,
     hemispheres: Int,
@@ -858,8 +998,20 @@ def _arriving(
         var lambert = (nx * dx + ny * dy + nz * dz) / distance
         if lambert <= 0:
             continue
-        var reach = lambert * falloff(
-            distance, lights[unsafe_offset=at + 6], lights[unsafe_offset=at + 7]
+        var reach = (
+            lambert
+            * falloff(
+                distance,
+                lights[unsafe_offset=at + 6],
+                lights[unsafe_offset=at + 7],
+            )
+            * _point_through(
+                lights,
+                at + 8,
+                receives,
+                Vector3(px, py, pz),
+                Vector3(nx, ny, nz),
+            )
         )
         red += lights[unsafe_offset=at + 3] * reach
         green += lights[unsafe_offset=at + 4] * reach
@@ -938,9 +1090,18 @@ def _arriving(
                 Vector3(nx, ny, nz),
             )
         )
-        red += lights[unsafe_offset=at + 6] * reach
-        green += lights[unsafe_offset=at + 7] * reach
-        blue += lights[unsafe_offset=at + 8] * reach
+        var tint = _spot_tint(
+            lights,
+            texels,
+            ramp,
+            table,
+            at + 14,
+            Vector3(px, py, pz),
+            Vector3(nx, ny, nz),
+        )
+        red += lights[unsafe_offset=at + 6] * tint.x * reach
+        green += lights[unsafe_offset=at + 7] * tint.y * reach
+        blue += lights[unsafe_offset=at + 8] * tint.z * reach
     var scale = lights[unsafe_offset=LIGHTS_SCALE]
     return Vector3(red * scale, green * scale, blue * scale)
 
@@ -984,6 +1145,8 @@ def _toon_arriving(
     hemispheres: Int,
     spots: Int,
     texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
     start: Int,
     tones: Int,
     nx: Float32,
@@ -1034,8 +1197,20 @@ def _toon_arriving(
         var tone = _toon_tone(
             texels, start, tones, (nx * dx + ny * dy + nz * dz) / distance
         )
-        var reach = tone * falloff(
-            distance, lights[unsafe_offset=at + 6], lights[unsafe_offset=at + 7]
+        var reach = (
+            tone
+            * falloff(
+                distance,
+                lights[unsafe_offset=at + 6],
+                lights[unsafe_offset=at + 7],
+            )
+            * _point_through(
+                lights,
+                at + 8,
+                receives,
+                Vector3(px, py, pz),
+                Vector3(nx, ny, nz),
+            )
         )
         red += lights[unsafe_offset=at + 3] * reach
         green += lights[unsafe_offset=at + 4] * reach
@@ -1111,15 +1286,27 @@ def _toon_arriving(
                 Vector3(nx, ny, nz),
             )
         )
-        red += lights[unsafe_offset=at + 6] * reach
-        green += lights[unsafe_offset=at + 7] * reach
-        blue += lights[unsafe_offset=at + 8] * reach
+        var tint = _spot_tint(
+            lights,
+            texels,
+            ramp,
+            table,
+            at + 14,
+            Vector3(px, py, pz),
+            Vector3(nx, ny, nz),
+        )
+        red += lights[unsafe_offset=at + 6] * tint.x * reach
+        green += lights[unsafe_offset=at + 7] * tint.y * reach
+        blue += lights[unsafe_offset=at + 8] * tint.z * reach
     var scale = lights[unsafe_offset=LIGHTS_SCALE]
     return Vector3(red * scale, green * scale, blue * scale)
 
 
 def _highlight(
     lights: MutPointer[Float32, MutAnyOrigin],
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
     count: Int,
     points: Int,
     hemispheres: Int,
@@ -1193,8 +1380,16 @@ def _highlight(
         var lambert = normal.dot(toward) / distance
         if lambert <= 0:
             continue
-        var reach = lambert * falloff(
-            distance, lights[unsafe_offset=at + 6], lights[unsafe_offset=at + 7]
+        var reach = (
+            lambert
+            * falloff(
+                distance,
+                lights[unsafe_offset=at + 6],
+                lights[unsafe_offset=at + 7],
+            )
+            * _point_through(
+                lights, at + 8, receives, Vector3(px, py, pz), normal
+            )
         )
         toward.normalize()
         var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
@@ -1241,9 +1436,12 @@ def _highlight(
         )
         toward.normalize()
         var sent = blinn_phong(toward, toward_eye, normal, specular, shininess)
-        red += lights[unsafe_offset=at + 6] * reach * sent.x
-        green += lights[unsafe_offset=at + 7] * reach * sent.y
-        blue += lights[unsafe_offset=at + 8] * reach * sent.z
+        var tint = _spot_tint(
+            lights, texels, ramp, table, at + 14, Vector3(px, py, pz), normal
+        )
+        red += lights[unsafe_offset=at + 6] * tint.x * reach * sent.x
+        green += lights[unsafe_offset=at + 7] * tint.y * reach * sent.y
+        blue += lights[unsafe_offset=at + 8] * tint.z * reach * sent.z
     var scale = lights[unsafe_offset=LIGHTS_SCALE]
     return Vector3(red * scale, green * scale, blue * scale)
 
@@ -1373,6 +1571,9 @@ def _indirect(
 
 def _physical(
     lights: MutPointer[Float32, MutAnyOrigin],
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
     count: Int,
     points: Int,
     hemispheres: Int,
@@ -1458,7 +1659,7 @@ def _physical(
             continue
         var reach = falloff(
             distance, lights[unsafe_offset=at + 6], lights[unsafe_offset=at + 7]
-        )
+        ) * _point_through(lights, at + 8, receives, position, normal)
         toward.normalize()
         sum = physical_light(
             sum,
@@ -1518,12 +1719,15 @@ def _physical(
             * _through(lights, at + 13, receives, position, normal)
         )
         toward.normalize()
+        var tint = _spot_tint(
+            lights, texels, ramp, table, at + 14, position, normal
+        )
         sum = physical_light(
             sum,
             Vector3(
-                lights[unsafe_offset=at + 6] * reach,
-                lights[unsafe_offset=at + 7] * reach,
-                lights[unsafe_offset=at + 8] * reach,
+                lights[unsafe_offset=at + 6] * tint.x * reach,
+                lights[unsafe_offset=at + 7] * tint.y * reach,
+                lights[unsafe_offset=at + 8] * tint.z * reach,
             ),
             lambert,
             coat_lambert,
@@ -3061,6 +3265,8 @@ def rasterize_kernel(
                         Int(hemisphere_count),
                         Int(spot_count),
                         texels,
+                        ramp,
+                        table,
                         start,
                         tones,
                         nx,
@@ -3076,6 +3282,9 @@ def rasterize_kernel(
                     # had their say, exactly as `rasterize_shaded` defers it.
                     arriving = _arriving(
                         lights,
+                        texels,
+                        ramp,
+                        table,
                         Int(light_count),
                         Int(point_count),
                         Int(hemisphere_count),
@@ -3110,6 +3319,9 @@ def rasterize_kernel(
                     )
                     highlight = _highlight(
                         lights,
+                        texels,
+                        ramp,
+                        table,
                         Int(light_count),
                         Int(point_count),
                         Int(hemisphere_count),
@@ -3405,6 +3617,9 @@ def rasterize_kernel(
                     var spot = Vector3(wx, wy, wz)
                     var direct = _physical(
                         lights,
+                        texels,
+                        ramp,
+                        table,
                         Int(light_count),
                         Int(point_count),
                         Int(hemisphere_count),
@@ -4065,6 +4280,7 @@ struct GpuRenderer(Movable):
                 `SHADE_TEXTURE` would open does not ignore its alpha, an
                 alpha map it would open is not linear or does not ignore
                 its alpha, a vertex names a cube texture that is not
+                uploaded, a spot light's map names a texture that is not
                 uploaded, or the backdrop is not the target's size.
         """
         if len(corners) % 3 != 0:
@@ -4167,6 +4383,15 @@ struct GpuRenderer(Movable):
             if cube != NO_CUBE_TEXTURE and cube.value >= self.uploaded_cubes:
                 raise Error(
                     "A vertex names a cube texture that has not been"
+                    " uploaded; call set_textures() first"
+                )
+        # A spot light's map, checked the same way: the kernel samples it
+        # through the same table.
+        for slot in range(len(lighting.spot_maps)):
+            var named = lighting.spot_maps[slot].texture
+            if named.value < 0 or named.value >= self.uploaded:
+                raise Error(
+                    "A spot light's map names a texture that has not been"
                     " uploaded; call set_textures() first"
                 )
         # A point's two maps, checked the same way and for the same

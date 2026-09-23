@@ -34,7 +34,7 @@ scale, so the highlight and the diffuse term move together.
 from core.layers import Layers
 from core.object3d import NO_PARENT
 from core.scene import Scene
-from lights.shadow import ShadowMap
+from lights.shadow import ShadowMap, SpotLightMap
 from lights.light import (
     AMBIENT,
     DIRECTIONAL,
@@ -825,11 +825,16 @@ struct Lighting(Movable):
     var cone_cosines: List[Float32]
     var penumbra_cosines: List[Float32]
     # The shadow maps the lights that cast drew this frame, and which of
-    # them each directional and each spot light compares against, or -1
-    # for a light that casts none. See `lights.shadow`.
+    # them each directional, each point and each spot light compares
+    # against, or -1 for a light that casts none. See `lights.shadow`.
     var shadows: List[ShadowMap]
     var direction_shadows: List[Int]
+    var point_shadows: List[Int]
     var spot_shadows: List[Int]
+    # The pictures the spot lights project this frame, and which of them
+    # each spot light carries, or -1 for none. See `lights.shadow`.
+    var spot_maps: List[SpotLightMap]
+    var spot_map_slots: List[Int]
     # One entry per rect area light, parallel lists: where its center is,
     # from the center to the middle of a side and of the other side, in
     # world space, and what it carries. Read only by a physical surface;
@@ -851,6 +856,7 @@ struct Lighting(Movable):
         up: Vector3 = Vector3(0, 1, 0),
         var shadows: List[ShadowMap] = List[ShadowMap](),
         var ltc: LtcTables = LtcTables(),
+        var spot_maps: List[SpotLightMap] = List[SpotLightMap](),
     ) raises:
         """Resolve a scene's lights against the world transforms it holds.
 
@@ -885,6 +891,10 @@ struct Lighting(Movable):
             ltc: The tables a rect area light is evaluated with,
                 `lights.ltc.load_ltc_tables`. None by default, which is
                 refused only when the scene holds such a light.
+            spot_maps: The pictures the spot lights project this frame,
+                each naming its light; `Renderer.spot_light_maps` builds
+                them. None by default, which leaves every light's color
+                as it is.
 
         Raises:
             Error: If a light's numbers are refused by `Light.validate`,
@@ -894,9 +904,11 @@ struct Lighting(Movable):
                 where it points from — the origin, or its target — which
                 is a mistake rather than a dark light; a light's kind
                 is none of the six; a shadow map names a light that
-                is not there, or one that is not directional or spot; or
-                the scene holds a rect area light and no LTC tables were
-                given.
+                is not there, or one that is not directional, point or
+                spot, or a point light's map is not a cube or another
+                light's is; a spot light map names a light that is not
+                there or is not a spot light; or the scene holds a rect
+                area light and no LTC tables were given.
         """
         self.eye = eye
         # Normalized here rather than at every fragment, and left alone when
@@ -930,7 +942,10 @@ struct Lighting(Movable):
         self.penumbra_cosines = List[Float32]()
         self.shadows = shadows^
         self.direction_shadows = List[Int]()
+        self.point_shadows = List[Int]()
         self.spot_shadows = List[Int]()
+        self.spot_maps = spot_maps^
+        self.spot_map_slots = List[Int]()
         self.rect_positions = List[Vector3]()
         self.rect_half_widths = List[Vector3]()
         self.rect_half_heights = List[Vector3]()
@@ -941,11 +956,22 @@ struct Lighting(Movable):
             if owner < 0 or owner >= len(scene.lights):
                 raise Error("A shadow map names a light that is not there")
             var kind = scene.lights[owner].kind
-            if kind != DIRECTIONAL and kind != SPOT:
+            if kind != DIRECTIONAL and kind != POINT and kind != SPOT:
                 raise Error(
                     "A shadow map names a light that cannot cast: only a"
-                    " directional or a spot light draws one"
+                    " directional, a point or a spot light draws one"
                 )
+            if self.shadows[slot].cube != (kind == POINT):
+                raise Error(
+                    "A point light's shadow must be a cube, and only a point"
+                    " light's can be"
+                )
+        for slot in range(len(self.spot_maps)):
+            var owner = self.spot_maps[slot].light
+            if owner < 0 or owner >= len(scene.lights):
+                raise Error("A spot light map names a light that is not there")
+            if scene.lights[owner].kind != SPOT:
+                raise Error("A spot light map names a light that is not a spot")
         for index in range(len(scene.lights)):
             ref light = scene.lights[index]
             # Asked of every light, on the camera's layers or not: the
@@ -984,6 +1010,7 @@ struct Lighting(Movable):
                 self.point_radiances.append(light.radiance())
                 self.decays.append(light.decay)
                 self.cutoffs.append(light.distance)
+                self.point_shadows.append(self._shadow_of(index))
             elif light.kind == HEMISPHERE:
                 # Which way the sky is: the node's position seen from the
                 # origin, as three.js reads it off the light's world matrix.
@@ -1015,6 +1042,7 @@ struct Lighting(Movable):
                 # rim, and where the rim starts to soften, as cosines so
                 # the fragment compares a dot product and takes no arc.
                 self.spot_shadows.append(self._shadow_of(index))
+                self.spot_map_slots.append(self._map_of(index))
                 self.cone_cosines.append(cos(light.angle.value))
                 self.penumbra_cosines.append(
                     cos(light.angle.value * (1 - light.penumbra))
@@ -1078,7 +1106,10 @@ struct Lighting(Movable):
         self.penumbra_cosines = List[Float32]()
         self.shadows = List[ShadowMap]()
         self.direction_shadows = List[Int]()
+        self.point_shadows = List[Int]()
         self.spot_shadows = List[Int]()
+        self.spot_maps = List[SpotLightMap]()
+        self.spot_map_slots = List[Int]()
         self.rect_positions = List[Vector3]()
         self.rect_half_widths = List[Vector3]()
         self.rect_half_heights = List[Vector3]()
@@ -1095,6 +1126,33 @@ struct Lighting(Movable):
             if self.shadows[slot].light == light:
                 return slot
         return -1
+
+    def _map_of(self, light: Int) -> Int:
+        """Return which of the spot light maps `light` projects, or -1."""
+        for slot in range(len(self.spot_maps)):
+            if self.spot_maps[slot].light == light:
+                return slot
+        return -1
+
+    def spot_tint(
+        self, index: Int, position: Vector3, normal: Vector3
+    ) -> Vector3:
+        """Return what one spot light's color is multiplied by at a
+        surface: its map's color there, three.js's `spotColor`, or one
+        for a light that projects none.
+
+        Args:
+            index: Which spot light, in the order they were resolved.
+            position: Where the surface is, in world space.
+            normal: Its unit normal, for the map's normal bias.
+
+        Returns:
+            The red, green and blue multipliers, linear.
+        """
+        var slot = self.spot_map_slots[index]
+        if slot < 0:
+            return Vector3(1, 1, 1)
+        return self.spot_maps[slot].tint(position, normal)
 
     def shadow_at(
         self, slot: Int, position: Vector3, normal: Vector3, receives: Bool
@@ -1138,6 +1196,10 @@ struct Lighting(Movable):
         for index in range(len(self.spot_shadows)):
             mask *= self.shadow_at(
                 self.spot_shadows[index], position, normal, True
+            )
+        for index in range(len(self.point_shadows)):
+            mask *= self.shadow_at(
+                self.point_shadows[index], position, normal, True
             )
         return mask
 
@@ -1240,8 +1302,12 @@ struct Lighting(Movable):
             var lambert = normal.dot(toward) / distance
             if lambert <= 0:
                 continue
-            var reach = lambert * falloff(
-                distance, self.decays[index], self.cutoffs[index]
+            var reach = (
+                lambert
+                * falloff(distance, self.decays[index], self.cutoffs[index])
+                * self.shadow_at(
+                    self.point_shadows[index], position, normal, receives
+                )
             )
             ref bulb = self.point_radiances[index]
             total = FloatColor(
@@ -1296,10 +1362,11 @@ struct Lighting(Movable):
                 )
             )
             ref bulb = self.spot_radiances[index]
+            var tint = self.spot_tint(index, position, normal)
             total = FloatColor(
-                total.r + bulb.r * reach,
-                total.g + bulb.g * reach,
-                total.b + bulb.b * reach,
+                total.r + bulb.r * tint.x * reach,
+                total.g + bulb.g * tint.y * reach,
+                total.b + bulb.b * tint.z * reach,
                 1.0,
             )
         return total.scaled(self.scale)
@@ -1365,8 +1432,12 @@ struct Lighting(Movable):
             if distance == 0:
                 continue
             var tone = toon_tone(normal.dot(toward) / distance, ramp)
-            var reach = tone * falloff(
-                distance, self.decays[index], self.cutoffs[index]
+            var reach = (
+                tone
+                * falloff(distance, self.decays[index], self.cutoffs[index])
+                * self.shadow_at(
+                    self.point_shadows[index], position, normal, receives
+                )
             )
             ref bulb = self.point_radiances[index]
             total = FloatColor(
@@ -1414,10 +1485,11 @@ struct Lighting(Movable):
                 )
             )
             ref bulb = self.spot_radiances[index]
+            var tint = self.spot_tint(index, position, normal)
             total = FloatColor(
-                total.r + bulb.r * reach,
-                total.g + bulb.g * reach,
-                total.b + bulb.b * reach,
+                total.r + bulb.r * tint.x * reach,
+                total.g + bulb.g * tint.y * reach,
+                total.b + bulb.b * tint.z * reach,
                 1.0,
             )
         return total.scaled(self.scale)
@@ -1495,8 +1567,12 @@ struct Lighting(Movable):
             var lambert = normal.dot(toward) / distance
             if lambert <= 0:
                 continue
-            var reach = lambert * falloff(
-                distance, self.decays[index], self.cutoffs[index]
+            var reach = (
+                lambert
+                * falloff(distance, self.decays[index], self.cutoffs[index])
+                * self.shadow_at(
+                    self.point_shadows[index], position, normal, receives
+                )
             )
             toward.normalize()
             var sent = blinn_phong(
@@ -1537,9 +1613,10 @@ struct Lighting(Movable):
                 toward, toward_eye, normal, specular, shininess
             )
             ref bulb = self.spot_radiances[index]
-            red += bulb.r * reach * sent.x
-            green += bulb.g * reach * sent.y
-            blue += bulb.b * reach * sent.z
+            var tint = self.spot_tint(index, position, normal)
+            red += bulb.r * tint.x * reach * sent.x
+            green += bulb.g * tint.y * reach * sent.y
+            blue += bulb.b * tint.z * reach * sent.z
         return FloatColor(red, green, blue, 1.0).scaled(self.scale)
 
     def indirect_at(self, normal: Vector3) -> FloatColor:
@@ -1663,6 +1740,8 @@ struct Lighting(Movable):
                 continue
             var reach = falloff(
                 distance, self.decays[index], self.cutoffs[index]
+            ) * self.shadow_at(
+                self.point_shadows[index], position, normal, receives
             )
             toward.normalize()
             ref bulb = self.point_radiances[index]
@@ -1711,9 +1790,14 @@ struct Lighting(Movable):
             )
             toward.normalize()
             ref bulb = self.spot_radiances[index]
+            var tint = self.spot_tint(index, position, normal)
             sum = physical_light(
                 sum,
-                Vector3(bulb.r * reach, bulb.g * reach, bulb.b * reach),
+                Vector3(
+                    bulb.r * tint.x * reach,
+                    bulb.g * tint.y * reach,
+                    bulb.b * tint.z * reach,
+                ),
                 lambert,
                 coat_lambert,
                 toward,

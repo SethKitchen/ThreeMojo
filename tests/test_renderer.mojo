@@ -88,6 +88,7 @@ from render.texture import (
     REPEAT,
     Texture,
     checkerboard,
+    texture_of,
 )
 from render.texture_store import NO_TEXTURE, TextureId
 from renderers.renderer import (
@@ -5255,7 +5256,9 @@ def shadow_scene(
 ) raises -> Scene:
     """Return a scene with a floor at the origin and a block a meter above
     it under one white light straight above: a `"sun"`, a `"beam"`, a
-    `"dark sun"` that casts nothing, or `"none"`. The block casts or not,
+    `"dark sun"` that casts nothing, a point light `"bulb"` that casts, a
+    `"slide"` spot light that projects a red map and casts nothing, or
+    `"none"`. The block casts or not,
     the floor receives or not, and is drawn with a shadow material when
     `catcher`."""
     var scene = Scene()
@@ -5281,14 +5284,24 @@ def shadow_scene(
         var lamp = Object3D()
         lamp.set_position(-3, 4, 0)
         var node = scene.add(lamp^)
-        if light == "beam":
+        if light == "beam" or light == "slide":
             var beam = spot_light(
                 Color(255, 255, 255), node, 16 * FULL, angle=Angle(50.0, DEGREE)
             )
-            beam.cast_shadow = True
+            beam.cast_shadow = light == "beam"
             beam.shadow.map_size = 64
             beam.shadow.bias = bias
+            if light == "slide":
+                beam.map = assets.textures.add(
+                    texture_of(Framebuffer(2, 2, Color(255, 0, 0)))
+                )
             scene.add_light(beam)
+        elif light == "bulb":
+            var bulb = point_light(Color(255, 255, 255), node, 25 * FULL)
+            bulb.cast_shadow = True
+            bulb.shadow.map_size = 64
+            bulb.shadow.bias = bias
+            scene.add_light(bulb)
         else:
             var sun = directional_light(Color(255, 255, 255), node, FULL)
             sun.cast_shadow = light == "sun"
@@ -5355,6 +5368,90 @@ def test_a_spot_light_casts_a_shadow_through_its_own_camera() raises:
     )
     assert_true(seen[1] > 100, "the floor beside the block was dark")
     assert_true(Int(seen[0]) + 60 < Int(seen[1]), "no shadow fell")
+
+
+def test_a_point_light_casts_a_shadow_through_six_faces() raises:
+    # The bulb sits where the sun did, and the block's shadow falls on the
+    # floor on its far side, drawn into the cube's six faces.
+    var assets = Assets()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var scene = shadow_scene(assets, True, True, "bulb")
+    var seen = floor_under_and_beside(
+        renderer.render(scene, assets, camera_at(0, 6, 3))
+    )
+    assert_true(seen[1] > 100, "the floor beside the block was dark")
+    assert_true(Int(seen[0]) + 60 < Int(seen[1]), "no shadow fell")
+    var maps = renderer.shadow_maps(scene, assets)
+    assert_equal(len(maps), 1)
+    assert_true(maps[0].cube)
+    assert_equal(len(maps[0].depths), 6 * 64 * 64)
+    assert_equal(maps[0].origin.y, Float32(4))
+    assert_equal(maps[0].far, Float32(500))
+    # A distance moves the far plane there; the block casts nothing
+    # without casting, and a bulb on its node's origin needs no target.
+    scene.lights[0].distance = 30
+    assert_equal(renderer.shadow_maps(scene, assets)[0].far, Float32(30))
+    var no_cast = shadow_scene(assets, False, True, "bulb")
+    var plain = floor_under_and_beside(
+        renderer.render(no_cast, assets, camera_at(0, 6, 3))
+    )
+    assert_true(Int(seen[0]) + 60 < Int(plain[0]), "the shadow did not lift")
+
+
+def test_a_spot_light_projects_its_map_on_what_it_lights() raises:
+    # A red picture turns the white beam red where it lands: the floor
+    # keeps its red and loses its green.
+    var assets = Assets()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var scene = shadow_scene(assets, True, True, "slide")
+    var image = renderer.render(scene, assets, camera_at(0, 6, 3))
+    var floor = image.get_pixel(WIDTH // 8, HEIGHT * 3 // 4)
+    assert_true(floor.r > 100, "the red beam lit nothing")
+    assert_equal(floor.g, UInt8(0))
+    var maps = renderer.spot_light_maps(scene, assets)
+    assert_equal(len(maps), 1)
+    assert_equal(maps[0].light, 0)
+    assert_equal(maps[0].normal_bias, Float32(0))
+    # When the light casts as well, its normal bias moves the surface
+    # before it is projected, as it does for the shadow.
+    scene.lights[0].cast_shadow = True
+    scene.lights[0].shadow.normal_bias = 0.25
+    assert_equal(
+        renderer.spot_light_maps(scene, assets)[0].normal_bias, Float32(0.25)
+    )
+    # Without its map the beam is white.
+    scene.lights[0].map = NO_TEXTURE
+    var white = renderer.render(scene, assets, camera_at(0, 6, 3))
+    assert_true(white.get_pixel(WIDTH // 8, HEIGHT * 3 // 4).g > 100)
+    assert_equal(len(renderer.spot_light_maps(scene, assets)), 0)
+
+
+def test_a_spot_light_map_follows_the_layers_and_is_checked() raises:
+    var assets = Assets()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var scene = shadow_scene(assets, True, True, "slide")
+    var aside = Layers()
+    aside.set(3)
+    scene.lights[0].layers = aside
+    assert_equal(len(renderer.spot_light_maps(scene, assets, Layers())), 0)
+    scene.lights[0].layers = Layers()
+    # A hidden light projects nothing.
+    scene.node(NodeId(2)).visible = False
+    scene.update()
+    assert_equal(len(renderer.spot_light_maps(scene, assets)), 0)
+    scene.node(NodeId(2)).visible = True
+    scene.update()
+    # A map that is not in the store, or a light on its own target, is
+    # refused.
+    scene.lights[0].map = TextureId(9)
+    with assert_raises():
+        _ = renderer.spot_light_maps(scene, assets)
+    scene.lights[0].map = TextureId(0)
+    scene.lights[0].target = NodeId(2)
+    with assert_raises():
+        _ = renderer.spot_light_maps(scene, assets)
 
 
 def test_a_rectangle_of_light_lights_a_standard_sheet_through_the_tables() raises:

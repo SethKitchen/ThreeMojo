@@ -393,9 +393,13 @@ def _scene(mut assets: Assets) raises -> Tuple[Scene, ObjectCameras]:
     sun.shadow.extent = Length(8, METER)
     scene.add_light(sun)
     scene.add_light(ambient_light(Color(20, 20, 20), 0.5))
-    scene.add_light(
-        point_light(Color(255, 0, 0), scene.attach(Object3D(), top), 3, 1, 9)
+    var red = point_light(
+        Color(255, 0, 0), scene.attach(Object3D(), top), 3, 1, 9
     )
+    red.cast_shadow = True
+    red.shadow.map_size = 256
+    red.shadow.bias = -0.005
+    scene.add_light(red)
     scene.add_light(
         hemisphere_light(
             Color(0, 0, 255), Color(0, 255, 0), scene.attach(Object3D(), top)
@@ -595,6 +599,10 @@ def test_round_trip() raises:
     assert_equal(bulb.kind, POINT)
     assert_equal(bulb.decay, 1)
     assert_equal(bulb.distance, 9)
+    # A point light's shadow travels as the others' do.
+    assert_true(bulb.cast_shadow)
+    assert_equal(bulb.shadow.map_size, 256)
+    assert_almost_equal(Float64(bulb.shadow.bias), -0.005, atol=TOLERANCE)
     ref sky = scene.lights[2]
     assert_equal(sky.kind, HEMISPHERE)
     assert_equal(sky.ground.hex(), 0x00FF00)
@@ -1443,7 +1451,7 @@ def test_light_refusals() raises:
         '"object":{"uuid":"a","type":"DirectionalLight","shadow":'
         + '{"camera":{"left":-4,"right":5,"top":4,"bottom":-4}}}'
     )
-    _refuses('"object":{"uuid":"a","type":"PointLight","castShadow":true}')
+    _refuses('"object":{"uuid":"a","type":"HemisphereLight","castShadow":true}')
     _refuses('"object":{"uuid":"a","type":"AmbientLight","intensity":-1}')
 
 

@@ -72,6 +72,7 @@ from core.object3d import NO_PARENT, NodeId
 from lights.shadow import LightShadow
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
+from render.texture_store import NO_TEXTURE, TextureId
 from std.math import cos, isfinite
 from units.si import Angle, DEGREE, Length, METER, RADIAN
 
@@ -194,16 +195,21 @@ struct Light(ImplicitlyCopyable):
     var target: NodeId
     # Whether this light draws a shadow map and the surfaces it lights
     # compare against it, three.js's `castShadow`, and how it draws it,
-    # three.js's `shadow`. Off by default, as there. Only a directional
-    # or a spot light can cast: a point light's six-faced shadow is not
-    # ported, and an ambient or hemisphere light has no direction to
-    # draw from. See `lights.shadow`.
+    # three.js's `shadow`. Off by default, as there. A directional, a
+    # point or a spot light can cast; a point light draws six faces of a
+    # cube. An ambient, hemisphere or rect area light cannot. See
+    # `lights.shadow`.
     var cast_shadow: Bool
     var shadow: LightShadow
     # How wide and how tall a rectangle of light is, in meters, three.js's
     # `width` and `height`. Read only by a rect area light; zero elsewhere.
     var width: Length
     var height: Length
+    # The picture a spot light projects, three.js's `SpotLight.map`: its
+    # color multiplies the light's where a surface lands on it, seen
+    # through the light's shadow camera. `NO_TEXTURE`, the default, for
+    # none. Only a spot light can carry one. See `lights.shadow`.
+    var map: TextureId
 
     def radiance(self) -> FloatColor:
         """Return the light this contributes, decoded and scaled.
@@ -238,9 +244,12 @@ struct Light(ImplicitlyCopyable):
                 past a quarter turn, its cosine rounds to one, or its
                 penumbra is not finite or outside zero to one; a rect
                 area light's width or height is not a positive finite
-                length; or the light casts a shadow and is not directional
-                or spot, or its `shadow` is refused by
-                `LightShadow.validate`.
+                length; the light casts a shadow and is not directional,
+                point or spot; a light that is not a spot light names a
+                map; the light casts or names a map and its `shadow` is
+                refused by `LightShadow.validate`; or such a point or spot
+                light has a distance that does not lie beyond its shadow's
+                near plane, where three.js puts the far plane.
         """
         if not isfinite(self.intensity) or self.intensity < 0:
             raise Error("A light's intensity must be finite and not negative")
@@ -257,15 +266,29 @@ struct Light(ImplicitlyCopyable):
                     "A rect area light's width and height must be positive"
                     " lengths"
                 )
+        var mapped = self.map != NO_TEXTURE
+        if mapped and self.kind != SPOT:
+            raise Error("Only a spot light projects a map")
         if self.cast_shadow:
-            if self.kind != DIRECTIONAL and self.kind != SPOT:
+            if (
+                self.kind != DIRECTIONAL
+                and self.kind != POINT
+                and self.kind != SPOT
+            ):
                 raise Error(
-                    "Only a directional or a spot light casts a shadow: a"
-                    " point light's six-faced shadow is not ported, and an"
-                    " ambient or hemisphere light has no direction to draw"
-                    " from"
+                    "Only a directional, a point or a spot light casts a"
+                    " shadow: an ambient, hemisphere or rect area light has"
+                    " no one place to draw from"
                 )
+        if self.cast_shadow or mapped:
             self.shadow.validate()
+            if self.distance > 0 and self.distance <= self.shadow.near.to(
+                METER
+            ):
+                raise Error(
+                    "A light's distance must lie beyond its shadow's near"
+                    " plane: it is where the shadow camera's far plane goes"
+                )
         if self.kind == POINT or self.kind == SPOT:
             if not isfinite(self.decay) or self.decay < 0:
                 raise Error("A light's decay must be finite and not negative")
@@ -297,6 +320,18 @@ struct Light(ImplicitlyCopyable):
                 raise Error(
                     "A spot light's penumbra must be between zero and one"
                 )
+
+    def shadow_far(self) -> Length:
+        """Return where this light's shadow camera puts its far plane:
+        three.js's `light.distance || camera.far`, the light's distance
+        when it has one and its shadow's far plane when not.
+
+        Returns:
+            The far plane.
+        """
+        if self.distance > 0:
+            return Length(self.distance, METER)
+        return self.shadow.far
 
     def ground_radiance(self) -> FloatColor:
         """Return the light a hemisphere light's ground contributes, decoded
@@ -338,6 +373,7 @@ def _bare(
         LightShadow(),
         _NO_LENGTH,
         _NO_LENGTH,
+        NO_TEXTURE,
     )
 
 

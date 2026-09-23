@@ -104,9 +104,16 @@ from core.buffer_geometry import (
 from core.assets import Assets
 from core.geometry_store import GeometryId
 from core.fog import FogView
-from lights.light import DIRECTIONAL, SPOT
+from lights.light import DIRECTIONAL, POINT, SPOT, Light
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
-from lights.shadow import ShadowMap
+from lights.shadow import (
+    CUBE_FACES,
+    ShadowMap,
+    SpotLightMap,
+    cube_direction,
+    cube_stored,
+    cube_up,
+)
 from lights.ltc import LtcTables
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
@@ -153,9 +160,9 @@ from render.cube_texture_store import (
     SCENE_ENVIRONMENT,
     CubeTextureId,
 )
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Angle, DEGREE, Length, METER, RADIAN
 from render.pointrule import attenuated_size
-from render.texture import IGNORED
+from render.texture import IGNORED, Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
@@ -2350,6 +2357,46 @@ def _set_backdrop(
     image.set_pixel(x, y, Color(shown.r, shown.g, shown.b, 255))
 
 
+def _light_aim(scene: Scene, light: Light) raises -> Vector3:
+    """Return where a directional or spot light points, in world space:
+    its target's position, or the origin when it names none.
+
+    Raises:
+        Error: If the light's node or target is not in the scene, or the
+            node sits on the target, which leaves the light's camera no
+            direction to look along.
+    """
+    var aimed = Vector3(0, 0, 0)
+    if light.target != NO_PARENT:
+        aimed = scene.world_position(light.target)
+    if (scene.world_position(light.node) - aimed).length() == 0:
+        raise Error(
+            "A light that casts a shadow or projects a map needs a direction:"
+            " its node sits on its target"
+        )
+    return aimed
+
+
+def _spot_camera(
+    light: Light, at: Vector3, aimed: Vector3
+) raises -> PerspectiveCamera:
+    """Return a spot light's shadow camera, three.js's `SpotLightShadow`:
+    twice the cone's angle wide, square, from the shadow's near plane to
+    `Light.shadow_far`, at `at` looking at `aimed`.
+
+    Raises:
+        Error: If `PerspectiveCamera` refuses the planes or the angle.
+    """
+    var camera = PerspectiveCamera(
+        Angle(light.angle.value * 2, RADIAN),
+        1.0,
+        light.shadow.near,
+        light.shadow_far(),
+    )
+    camera.place(at, aimed)
+    return camera^
+
+
 def _paint_backdrop(
     mut target: RenderTarget, kept: Rect, image: Framebuffer
 ) raises:
@@ -4383,6 +4430,7 @@ struct Renderer(Movable):
             up=camera_up(scene, camera),
             shadows=self.shadow_maps(scene, assets, camera.visible_layers()),
             ltc=self.ltc_tables(),
+            spot_maps=self._projected(scene, assets, camera.visible_layers()),
         )
         # The scene's fog as the rasterizer takes it. Each corner already
         # carries the depth `prepare` measured for it along this view.
@@ -4455,14 +4503,19 @@ struct Renderer(Movable):
         """Draw the scene's depth from every light that casts a shadow,
         and return the maps for `Lighting` to compare against.
 
-        One map per directional or spot light on the camera's layers
-        whose `cast_shadow` is set, drawn through the camera the light's
-        `shadow` describes: an orthographic one `extent` meters to each
-        side for a directional light, three.js's `DirectionalLightShadow`,
-        and a perspective one twice the cone's angle wide for a spot
-        light, three.js's `SpotLightShadow`, each at the light's node
-        looking at its target, between the shadow's near and far planes.
-        Only the meshes that cast are drawn, under lit shading with no
+        One map per directional, point or spot light on the camera's
+        layers whose `cast_shadow` is set, drawn through the camera the
+        light's `shadow` describes: an orthographic one `extent` meters to
+        each side for a directional light, three.js's
+        `DirectionalLightShadow`, and a perspective one twice the cone's
+        angle wide for a spot light, three.js's `SpotLightShadow`, each at
+        the light's node looking at its target, between the shadow's near
+        and far planes. A point light draws six square ninety-degree
+        views from its node, one along each of `cube_direction`'s six
+        directions with `cube_up` up, three.js's `PointLightShadow`, and
+        keeps the distance from the bulb in each texel; see
+        `lights.shadow.cube_stored`. A point or spot light with a distance
+        puts its far plane there; see `Light.shadow_far`. Only the meshes that cast are drawn, under lit shading with no
         lights, so a cut-out map cuts nothing out of a shadow and a
         translucent surface, which claims no depth, casts none; see
         `_draws`. What is kept is the target's depth, and the transform
@@ -4482,8 +4535,9 @@ struct Renderer(Movable):
 
         Raises:
             Error: If a light is refused by `Light.validate`, a casting
-                light names a node or a target the scene lacks or sits on
-                its target, or anything `prepare` raises for the casters.
+                light names a node or a target the scene lacks, a casting
+                directional or spot light sits on its target, or anything
+                `prepare` raises for the casters.
         """
         var maps = List[ShadowMap]()
         for index in range(len(scene.lights)):
@@ -4493,15 +4547,11 @@ struct Renderer(Movable):
                 continue
             if not scene.light_shown(light):
                 continue
+            if light.kind == POINT:
+                maps.append(self._cube_shadow(scene, assets, light, index))
+                continue
             var at = scene.world_position(light.node)
-            var aimed = Vector3(0, 0, 0)
-            if light.target != NO_PARENT:
-                aimed = scene.world_position(light.target)
-            if (at - aimed).length() == 0:
-                raise Error(
-                    "A light that casts a shadow needs a direction: its node"
-                    " sits on its target"
-                )
+            var aimed = _light_aim(scene, light)
             ref shadow = light.shadow
             var corners: List[RasterVertex]
             var frame: Matrix4
@@ -4519,13 +4569,7 @@ struct Renderer(Movable):
                 frame = camera.projection_matrix()
                 frame.multiply(camera.view_matrix_in(scene))
             else:
-                var camera = PerspectiveCamera(
-                    Angle(light.angle.value * 2, RADIAN),
-                    1.0,
-                    shadow.near,
-                    shadow.far,
-                )
-                camera.place(at, aimed)
+                var camera = _spot_camera(light, at, aimed)
                 corners = self._casters(scene, assets, camera, shadow.map_size)
                 frame = camera.projection_matrix()
                 frame.multiply(camera.view_matrix_in(scene))
@@ -4552,6 +4596,128 @@ struct Renderer(Movable):
                     shadow.bias,
                     shadow.normal_bias,
                     shadow.radius,
+                )
+            )
+        return maps^
+
+    def _cube_shadow(
+        self, scene: Scene, assets: Assets, light: Light, index: Int
+    ) raises -> ShadowMap:
+        """Draw a point light's six faces and return them as its cube."""
+        ref shadow = light.shadow
+        var size = shadow.map_size
+        var at = scene.world_position(light.node)
+        var near = shadow.near.to(METER)
+        var far = light.shadow_far().to(METER)
+        var depths = List[Float32](capacity=CUBE_FACES * size * size)
+        for face in range(CUBE_FACES):  # pragma: no branch
+            var camera = PerspectiveCamera(
+                Angle(90.0, DEGREE), 1.0, shadow.near, light.shadow_far()
+            )
+            camera.up = cube_up(face)
+            camera.place(at, at + cube_direction(face))
+            var corners = self._casters(scene, assets, camera, size)
+            var target = RenderTarget(size, size, Color(0, 0, 0))
+            rasterize_all(
+                corners,
+                target,
+                SHADE_LIT,
+                TextureStore(),
+                Lighting.uniform(),
+                self.workers,
+            )
+            for row in range(size):  # pragma: no branch
+                for column in range(size):  # pragma: no branch
+                    depths.append(
+                        cube_stored(
+                            target.depth[row * size + column],
+                            column,
+                            row,
+                            size,
+                            near,
+                            far,
+                        )
+                    )
+        return ShadowMap(
+            cube_of=index,
+            size=size,
+            origin=at,
+            near=near,
+            far=far,
+            depths=depths^,
+            bias=shadow.bias,
+            normal_bias=shadow.normal_bias,
+            radius=shadow.radius,
+        )
+
+    def _projected(
+        self, scene: Scene, assets: Assets, visible: Layers
+    ) raises -> List[SpotLightMap]:
+        """Return the spot light maps a frame draws with: every one under
+        `SHADE_TEXTURE`, and none under the other two modes, which ignore
+        every texture, as they ignore an image background."""
+        if self.shading != SHADE_TEXTURE:
+            return List[SpotLightMap]()
+        return self.spot_light_maps(scene, assets, visible)
+
+    def spot_light_maps(
+        self, scene: Scene, assets: Assets, visible: Layers = Layers.all()
+    ) raises -> List[SpotLightMap]:
+        """Return the picture every spot light projects, with the
+        transform onto it, for `Lighting` to tint the lights with.
+
+        One per spot light on the camera's layers whose `map` names a
+        texture, three.js's `SpotLight.map`, seen through the camera its
+        shadow would be drawn through: a perspective one at the light's
+        node looking at its target, twice the cone's angle wide, between
+        the shadow's near plane and `Light.shadow_far`. The surface is
+        moved along its normal by the shadow's normal bias first when the
+        light casts, as three.js moves it only under a shadow.
+
+        `render_into` builds these itself under `SHADE_TEXTURE`; the other
+        two modes ignore every texture, and a map is one. Call this to
+        hand the same maps to `GpuRenderer.draw`, through `Lighting`.
+
+        Args:
+            scene: The transform hierarchy, updated, with its lights.
+            assets: The textures the maps name.
+            visible: The camera's layers; a light on none of them projects
+                nothing, as `Lighting` leaves it out.
+
+        Returns:
+            The maps, each naming its light by index.
+
+        Raises:
+            Error: If a light is refused by `Light.validate`; a spot light
+                with a map names a node or a target the scene lacks, sits
+                on its target, or names a texture that is not there or is
+                blank.
+        """
+        var maps = List[SpotLightMap]()
+        for index in range(len(scene.lights)):
+            ref light = scene.lights[index]
+            light.validate()
+            if light.map == NO_TEXTURE or not light.layers.test(visible):
+                continue
+            if not scene.light_shown(light):
+                continue
+            var at = scene.world_position(light.node)
+            var camera = _spot_camera(light, at, _light_aim(scene, light))
+            var frame = camera.projection_matrix()
+            frame.multiply(camera.view_matrix_in(scene))
+            var held = SIMD[DType.float32, 16](0)
+            for element in range(16):  # pragma: no branch
+                held[element] = frame.elements[element]
+            var bias = Float32(0)
+            if light.cast_shadow:
+                bias = light.shadow.normal_bias
+            maps.append(
+                SpotLightMap(
+                    index,
+                    light.map,
+                    Texture(copy=assets.textures.get(light.map)),
+                    held,
+                    bias,
                 )
             )
         return maps^

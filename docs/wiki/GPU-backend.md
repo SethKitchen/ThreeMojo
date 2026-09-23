@@ -17,7 +17,7 @@ MAX 26.6.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-G
 | `available() -> Bool` | Whether a GPU is present. |
 | `render_triangles(corners, width, height, background, mode, textures, lighting, fog, tone_mapping, exposure, lines, draws, scissor, points, cubes, backdrop) -> Framebuffer` | One-shot: draw and read back. |
 | `flatten(corners) -> List[Float32]` | The corner buffer the kernel reads, one lane per varying. |
-| `flatten_lights(lighting) -> List[Float32]` | The light buffer: the camera's position, the one direction toward it, its up axis, the ambient term, then each directional, point, hemisphere, spot and rect area light, then the LTC tables when there is a rect area light, then the shadow maps. |
+| `flatten_lights(lighting) -> List[Float32]` | The light buffer: the camera's position, the one direction toward it, its up axis, the ambient term, then each directional, point, hemisphere, spot and rect area light, then the LTC tables when there is a rect area light, then the shadow maps, then the spot light maps. |
 | `flatten_fog(fog) -> List[Float32]` | The fog buffer, six floats. The kind crosses as a kernel argument. |
 | `flatten_textures(store)` | Every texture in one buffer, with a descriptor table. |
 | `triangle_state(corners) -> List[Int32]` | Texture, blend, material kind, emissive map and alpha map per triangle. |
@@ -55,7 +55,7 @@ The kernel tracks whether each pixel holds data rather than light, as the host's
 
 The light buffer begins with three floats of camera position at `LIGHTS_EYE`, then three at `LIGHTS_TOWARD`. Those three hold the zero vector for a converging projection, and one unit direction for a parallel one. The kernel passes both to `toward_eye_at`, the host's own function. The camera's own up axis follows at `LIGHTS_UP`, for the frame a `MATCAP` surface is looked up in.
 
-The scale every lit sum takes is at `LIGHTS_SCALE` and the count of rect area lights at `LIGHTS_RECT_COUNT`. The lights follow at `LIGHTS_FIRST`. The rect area lights come last among them, then the LTC tables when there is one, then the shadow maps. See [Lights](Lights#rect-area) and [Lights](Lights#shadows).
+The scale every lit sum takes is at `LIGHTS_SCALE` and the count of rect area lights at `LIGHTS_RECT_COUNT`. The lights follow at `LIGHTS_FIRST`. The rect area lights come last among them, then the LTC tables when there is one, then the shadow maps, then the spot light maps. See [Lights](Lights#rect-area), [Lights](Lights#shadows) and [Lights](Lights#spot-light-maps).
 
 ## Teardown
 

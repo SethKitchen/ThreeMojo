@@ -44,7 +44,7 @@ from core.object3d import Object3D
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from lights.light import ambient_light, directional_light, point_light
-from lights.shadow import SHADOW_HEADER
+from lights.shadow import SHADOW_HEADER, SPOT_MAP_FLOATS
 from geometries.box import cube
 from geometries.sphere import sphere
 from math.matrix4 import translation
@@ -169,6 +169,8 @@ from render.gpu import (
     STATE_PER_TRIANGLE,
     STATE_RECEIVES_SHADOW,
     NO_SHADOW,
+    POINT_FLOATS,
+    SPOT_FLOATS,
     TABLE_COLUMNS,
     GpuRenderer,
     available,
@@ -1546,7 +1548,7 @@ def test_flattening_lights_lays_out_the_sky_and_the_cone() raises:
     )
     var lighting = Lighting(scene)
     var flat = flatten_lights(lighting)
-    assert_equal(len(flat), LIGHTS_FIRST + 9 + 14)
+    assert_equal(len(flat), LIGHTS_FIRST + 9 + 15)
     assert_almost_equal(flat[LIGHTS_AMBIENT], Float32(0.5), atol=Float64(1e-6))
     # The sky is straight up, white at a quarter, over a black ground.
     var sky = LIGHTS_FIRST
@@ -8111,7 +8113,7 @@ def test_the_light_buffer_carries_the_shadow_maps_after_the_lights() raises:
     assert_equal(len(maps), 2)
     var lighting = Lighting(scene, shadows=maps^)
     var flat = flatten_lights(lighting)
-    var lights_end = LIGHTS_FIRST + 7 + 14
+    var lights_end = LIGHTS_FIRST + 7 + 15
     var first_map = lights_end
     var second_map = first_map + SHADOW_HEADER + 48 * 48
     assert_equal(len(flat), second_map + SHADOW_HEADER + 32 * 32)
@@ -8193,6 +8195,199 @@ def test_both_backends_agree_on_a_shadowed_scene() raises:
         assert_true(count_mismatches(cpu, unshadowed) > 20, "no shadow fell")
 
 
+def a_bulb_and_slide_scene(mut assets: Assets) raises -> Scene:
+    """Return a floor under a phong block and a standard and a toon ball,
+    all casting, with a bulb off to one side casting through its six
+    faces, and a spot light from the other side projecting a checkerboard
+    and casting too."""
+    var scene = Scene()
+    var ground = Object3D()
+    ground.set_euler(
+        Angle(-90.0, DEGREE), Angle(0.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var ground_node = scene.add(ground^)
+    var lift = Object3D()
+    lift.set_position(0, 1.0, 0)
+    var lift_node = scene.add(lift^)
+    var left = Object3D()
+    left.set_position(-1.5, 0.6, 1)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(1.4, 0.5, -1)
+    var right_node = scene.add(right^)
+    var floor = assets.geometries.add(
+        plane(Length(6.0, METER), Length(6.0, METER), 2, 2)
+    )
+    var block = assets.geometries.add(cube(Length(1.0, METER)))
+    var ball = assets.geometries.add(sphere(Length(0.5, METER), 12, 8))
+    var paint = assets.materials.add(Material(Color(200, 200, 200)))
+    var red = assets.materials.add(
+        phong_material(Color(200, 60, 60), specular=Color(80, 80, 80))
+    )
+    var metal = assets.materials.add(
+        standard_material(Color(180, 200, 220), roughness=0.4, metalness=0.3)
+    )
+    var cartoon = assets.materials.add(toon_material(Color(90, 200, 120)))
+    scene.add_mesh(Mesh(floor, paint, ground_node, receive_shadow=True))
+    scene.add_mesh(
+        Mesh(block, red, lift_node, cast_shadow=True, receive_shadow=True)
+    )
+    scene.add_mesh(
+        Mesh(ball, metal, left_node, cast_shadow=True, receive_shadow=True)
+    )
+    scene.add_mesh(
+        Mesh(ball, cartoon, right_node, cast_shadow=True, receive_shadow=True)
+    )
+    var lamp = Object3D()
+    lamp.set_position(-2, 3, 1)
+    var lamp_node = scene.add(lamp^)
+    var bulb = point_light(Color(255, 240, 220), lamp_node, 40.0)
+    bulb.cast_shadow = True
+    bulb.shadow.map_size = 16
+    bulb.shadow.bias = -0.005
+    bulb.shadow.normal_bias = 0.01
+    bulb.shadow.radius = 1.5
+    scene.add_light(bulb)
+    var beam_at = Object3D()
+    beam_at.set_position(2.5, 4, 1)
+    var beam_node = scene.add(beam_at^)
+    var spot = spot_light(
+        Color(255, 255, 255), beam_node, 40.0, angle=Angle(45.0, DEGREE)
+    )
+    spot.map = assets.textures.add(
+        checkerboard(
+            16,
+            4,
+            Color(250, 220, 120),
+            Color(40, 80, 200),
+            REPEAT,
+            BILINEAR,
+            mipmapped=True,
+        )
+    )
+    spot.cast_shadow = True
+    spot.shadow.map_size = 8
+    spot.shadow.normal_bias = 0.02
+    scene.add_light(spot)
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.15))
+    scene.update()
+    return scene^
+
+
+def test_the_light_buffer_carries_a_cube_and_a_spot_lights_map() raises:
+    # A point light's ninth float says where its cube begins, and the cube
+    # holds the bulb and its planes where a frame would be, then six faces;
+    # a spot light's fifteenth says where its map begins, after the shadow
+    # maps: the texture's slot, the normal bias and the frame.
+    var assets = Assets()
+    var scene = a_bulb_and_slide_scene(assets)
+    var renderer = Renderer(24, 18)
+    var shadows = renderer.shadow_maps(scene, assets)
+    var slides = renderer.spot_light_maps(scene, assets)
+    assert_equal(len(shadows), 2)
+    assert_equal(len(slides), 1)
+    var lighting = Lighting(scene, shadows=shadows^, spot_maps=slides^)
+    var flat = flatten_lights(lighting)
+    assert_equal(POINT_FLOATS, 9)
+    assert_equal(SPOT_FLOATS, 15)
+    var first_map = LIGHTS_FIRST + POINT_FLOATS + SPOT_FLOATS
+    var second_map = first_map + SHADOW_HEADER + 6 * 16 * 16
+    var slide_at = second_map + SHADOW_HEADER + 8 * 8
+    assert_equal(len(flat), slide_at + SPOT_MAP_FLOATS)
+    assert_equal(flat[LIGHTS_FIRST + 8], Float32(first_map))
+    assert_equal(flat[LIGHTS_FIRST + POINT_FLOATS + 13], Float32(second_map))
+    assert_equal(flat[LIGHTS_FIRST + POINT_FLOATS + 14], Float32(slide_at))
+    assert_equal(flat[first_map], Float32(16))
+    assert_equal(flat[first_map + 1], Float32(-0.005))
+    assert_equal(flat[first_map + 3], Float32(1.5))
+    assert_equal(flat[first_map + 4], Float32(-2))
+    assert_equal(flat[first_map + 5], Float32(3))
+    assert_equal(flat[first_map + 6], Float32(1))
+    assert_equal(flat[first_map + 7], Float32(0.5))
+    assert_equal(flat[first_map + 8], Float32(500))
+    assert_equal(flat[first_map + 9], Float32(0))
+    assert_equal(flat[first_map + SHADOW_HEADER], lighting.shadows[0].depths[0])
+    assert_equal(flat[slide_at], Float32(0))
+    assert_equal(flat[slide_at + 1], Float32(0.02))
+    assert_equal(flat[slide_at + 2], lighting.spot_maps[0].frame[0])
+    assert_equal(flat[slide_at + 17], lighting.spot_maps[0].frame[15])
+    # Without them, the lights carry `NO_SHADOW` in both places.
+    var bare = flatten_lights(Lighting(scene))
+    assert_equal(len(bare), first_map)
+    assert_equal(bare[LIGHTS_FIRST + 8], NO_SHADOW)
+    assert_equal(bare[LIGHTS_FIRST + POINT_FLOATS + 14], NO_SHADOW)
+
+
+def test_both_backends_agree_on_a_cube_shadow_and_a_spot_lights_map() raises:
+    # Six faces read by nine taps along directions near a seam, and a
+    # checkerboard projected through a casting spot light, on a lambert
+    # floor, a phong block, a standard ball and a toon ball: the kernel
+    # calls the host's own functions and must reach the same pixels.
+    if skipped_for_lack_of_a_gpu(
+        "both backends agree on a cube shadow and a spot light's map"
+    ):
+        return
+    var assets = Assets()
+    var scene = a_bulb_and_slide_scene(assets)
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(50.0, METER),
+    )
+    camera.place(Vector3(1, 5, 5), Vector3(0, 0, 0))
+    var corners = renderer.prepare(scene, assets, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        shadows=renderer.shadow_maps(scene, assets),
+        spot_maps=renderer.spot_light_maps(scene, assets),
+    )
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_TEXTURE, assets.textures, lighting
+    )
+    assert_true(
+        count_background(cpu, BACKGROUND) < 48 * 36,
+        "the scene drew nothing",
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And both are there: without the cube, or without the map, the
+    # picture changes.
+    scene.lights[0].cast_shadow = False
+    assert_true(
+        count_mismatches(cpu, renderer.render(scene, assets, camera)) > 20,
+        "no cube shadow fell",
+    )
+    scene.lights[0].cast_shadow = True
+    scene.lights[1].map = NO_TEXTURE
+    assert_true(
+        count_mismatches(cpu, renderer.render(scene, assets, camera)) > 20,
+        "no map was projected",
+    )
+
+
+def test_a_spot_lights_map_must_be_uploaded() raises:
+    # The kernel samples the map through the texture table, so a map past
+    # what was uploaded is refused before the launch.
+    if skipped_for_lack_of_a_gpu("a spot light's map must be uploaded"):
+        return
+    var assets = Assets()
+    var scene = a_bulb_and_slide_scene(assets)
+    var renderer = Renderer(24, 18)
+    var lighting = Lighting(
+        scene, spot_maps=renderer.spot_light_maps(scene, assets)
+    )
+    var device = GpuRenderer(24, 18)
+    with assert_raises():
+        device.draw(data_pair(LAMBERT), BACKGROUND, SHADE_LIT, lighting)
+
+
 def with_a_rectangle(
     mut scene: Scene, x: Float32, y: Float32, z: Float32
 ) raises:
@@ -8227,7 +8422,7 @@ def test_the_light_buffer_carries_the_rectangles_and_the_tables() raises:
     assert_equal(flat[LIGHTS_RECT_COUNT], Float32(1))
     assert_equal(LIGHTS_FIRST, LIGHTS_RECT_COUNT + 1)
     assert_equal(RECT_FLOATS, 12)
-    var first_rect = LIGHTS_FIRST + 7 + 14
+    var first_rect = LIGHTS_FIRST + 7 + 15
     var first_table = first_rect + RECT_FLOATS
     var first_map = first_table + 2 * LTC_FLOATS
     assert_equal(flat[first_rect + 1], Float32(3))

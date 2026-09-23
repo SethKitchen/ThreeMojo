@@ -742,6 +742,8 @@ struct _Writer(Movable):
             writer.number(light.width.to(METER))
             writer.key("height")
             writer.number(light.height.to(METER))
+        if kind == POINT:
+            _shadow(writer, light)
         if kind == DIRECTIONAL or kind == SPOT:
             _shadow(writer, light)
             if light.target != NO_PARENT:
@@ -929,8 +931,9 @@ struct _Writer(Movable):
 
 
 def _shadow(mut writer: JsonWriter, light: Light) raises:
-    """Write a directional or spot light's shadow, as `LightShadow.toJSON`
-    writes it."""
+    """Write a directional, point or spot light's shadow, as
+    `LightShadow.toJSON` writes it: a point light's camera is ninety
+    degrees wide, as `PointLightShadow` builds it."""
     ref shadow = light.shadow
     writer.key("shadow")
     writer.begin_object()
@@ -960,10 +963,13 @@ def _shadow(mut writer: JsonWriter, light: Light) raises:
         writer.key("bottom")
         writer.number(-extent)
     else:
+        var fov = Float32(90)
+        if light.kind == SPOT:
+            fov = 2 * light.angle.to(DEGREE)
         writer.key("type")
         writer.string("PerspectiveCamera")
         writer.key("fov")
-        writer.number(2 * light.angle.to(DEGREE))
+        writer.number(fov)
         writer.key("aspect")
         writer.integer(1)
     writer.key("near")

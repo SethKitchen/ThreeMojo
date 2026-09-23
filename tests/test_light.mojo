@@ -60,6 +60,7 @@ from lights.lighting import (
 from math.vector3 import Vector3
 from units.si import Angle, DEGREE, Length, METER, RADIAN
 from render.framebuffer import Color, FloatColor
+from render.texture_store import NO_TEXTURE
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -523,6 +524,7 @@ def test_a_light_of_an_unknown_kind_is_refused() raises:
             LightShadow(),
             Length(0.0, METER),
             Length(0.0, METER),
+            NO_TEXTURE,
         )
     )
     with assert_raises():

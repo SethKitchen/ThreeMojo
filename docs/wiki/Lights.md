@@ -140,11 +140,13 @@ The kinds are summed in one fixed order: ambient, directional, point, hemisphere
 
 `Light.validate()` refuses the numbers a kind cannot use. An intensity, decay or distance that is negative or not finite raises. A spot angle that is not finite, not above zero, past ninety degrees, or too narrow to resolve raises. A penumbra outside zero to one raises. A number the kind never reads is not checked.
 
+A shadow on an ambient, hemisphere or rect area light raises. A map on a light that is not a spot light raises.
+
 Every builder calls `validate`. `Lighting(scene)` calls it again on every light, because the fields are open and a light in a persistent scene is there to be edited.
 
 ## Shadows
 
-`lights/shadow.mojo`. A directional or a spot light can cast shadows: three.js's `castShadow` and `LightShadow`, with `DirectionalLightShadow` and `SpotLightShadow`. A point light's six-faced shadow is not ported.
+`lights/shadow.mojo`. A directional, a point or a spot light can cast shadows: three.js's `castShadow` and `LightShadow`, with `DirectionalLightShadow`, `PointLightShadow` and `SpotLightShadow`. A spot light can also project a picture. See [Point light shadows](#point-light-shadows) and [Spot light maps](#spot-light-maps).
 
 ```mojo
 var sun = directional_light(Color(255, 255, 255), lamp_node, 3.0)
@@ -165,7 +167,7 @@ A shadow needs three things to be said, as in three.js. The light must cast. The
 | `shadow.bias` | `shadow.bias` | `0.0` | Added to a fragment's depth, from zero to one across the planes, before it is compared. Negative moves it toward the light. |
 | `shadow.normal_bias` | `shadow.normalBias` | `0.0` | How far a fragment is moved along its normal before it is projected, in meters. |
 | `shadow.radius` | `shadow.radius` | `1.0` | How many texels the nine taps spread over. |
-| `shadow.near`, `shadow.far` | `shadow.camera.near`, `far` | `0.5 m`, `500 m` | The shadow camera's planes. |
+| `shadow.near`, `shadow.far` | `shadow.camera.near`, `far` | `0.5 m`, `500 m` | The shadow camera's planes. A point or spot light with a `distance` puts the far plane at that distance, as three.js does. |
 | `shadow.extent` | `shadow.camera.left` through `top` | `5 m` | How far to each side a directional light's camera sees. A spot light's camera is as wide as its cone. |
 
 ### How a shadow is drawn
@@ -180,9 +182,52 @@ Every lit sum reads the map: the diffuse term, the toon ramp, the highlight and 
 
 A surface compared against its own depth is half in shadow, because the map's depth is quantized: the stripes called shadow acne. `bias` moves the fragment toward the light in the map's depth. `normal_bias` moves it along its normal before it is projected. Both are zero by default, as three.js's are. A scene that shows stripes is the scene to raise them in, by a few thousandths and a few centimeters.
 
+### Point light shadows
+
+A point light draws six shadow maps, one for each face of a cube around the bulb. This is three.js's `PointLightShadow`.
+
+```mojo
+var bulb = point_light(Color(255, 240, 220), bulb_node, 40.0)
+bulb.cast_shadow = True
+bulb.shadow.map_size = 256
+bulb.shadow.bias = -0.005
+scene.add_light(bulb)
+```
+
+`Renderer.shadow_maps` draws six square views of ninety degrees from the bulb. The views look along +x, -x, +z, -z, +y and -y, with three.js's `_cubeDirections` and `_cubeUps`. Each texel keeps the distance from the bulb, from zero at the near plane to one at the far plane. A texel where nothing was drawn keeps one. `ShadowMap.cube` is true for this map.
+
+A fragment is compared along the direction from the bulb to the fragment. `cube_face` finds the face: the largest component wins, and on a tie z wins before x, and x before y. `cube_texel` finds the texel on that face. Nine taps move the direction by `radius` texels of three.js's atlas, in the order of three.js's `getPointShadow`. A fragment nearer than the near plane or farther than the far plane is lit.
+
+`bias` is added to the fragment's distance, in the same zero-to-one measure. `normal_bias` moves the fragment along its normal first, in meters. A light with a `distance` puts the far plane at that distance. That distance must be beyond the near plane.
+
+This port differs from three.js in two places:
+
+- three.js puts the six faces on one texture four faces wide and two faces high, and `cubeToUV` keeps a small border from each seam. This port keeps six separate squares, so a tap near a seam reads the next face directly.
+- three.js writes the distance of each fragment with `MeshDistanceMaterial`. The rasterizer here keeps depth, so `cube_stored` calculates the distance from the depth at each texel's center.
+
+### Spot light maps
+
+A spot light can project a picture, as a slide projector does. This is three.js's `SpotLight.map`.
+
+```mojo
+var beam = spot_light(Color(255, 255, 255), beam_node, 40.0, angle=Angle(30.0, DEGREE))
+beam.map = assets.textures.add(slide)
+scene.add_light(beam)
+```
+
+The picture is seen through the spot light's shadow camera: twice the cone's angle wide, from the shadow's near plane to its far plane. The light's color is multiplied by the picture's color where a fragment lands on it. Outside the picture, the light keeps its color. The light does not need to cast a shadow. When it casts, `normal_bias` moves the fragment before it is projected, as three.js does.
+
+`Renderer.spot_light_maps` builds the maps, one `SpotLightMap` for each spot light that names a texture. `Lighting` takes them in its `spot_maps` argument. Only `SHADE_TEXTURE` projects a map, because the other shading modes ignore every texture. A map is not a shadow: a `SHADOW` material does not show it.
+
+Only a spot light can carry a map. `Light.validate` refuses a map on any other kind. The renderer refuses a map that is not in the texture store or is blank.
+
+This port reads the picture at its full size, with its filter and its wrap mode. three.js can choose a smaller mip level of the picture. This port does not, because a light has no footprint to measure.
+
 ### The GPU
 
-The maps ride in the light buffer after the lights, each its header and its depths. Each directional and spot light carries where its map begins. Nothing is added to the kernel's arguments. See [GPU backend](GPU-backend).
+The maps ride in the light buffer after the lights, each its header and its depths. Each directional, point and spot light carries where its map begins. A point light's cube holds the bulb's position and its two planes where a frame would be, then six faces. The spot light maps follow the shadow maps: the texture's slot, the normal bias and the frame.
+
+The kernel reads the picture from the texture buffer it already has. Nothing is added to the kernel's arguments. See [GPU backend](GPU-backend).
 
 ## Highlights
 
