@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 148 features are ported and 2 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 148 features are ported and 5 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -180,6 +180,7 @@ The port is not at parity with three.js yet. 148 features are ported and 2 are o
 
 ### Textures
 
+- [ ] KTX2: Zstandard supercompression and Basis Universal [#156](https://github.com/SethKitchen/ThreeMojo/issues/156)
 
 <details>
 <summary>Ported: 16</summary>
@@ -205,6 +206,8 @@ The port is not at parity with three.js yet. 148 features are ported and 2 are o
 
 ### Loaders and exporters
 
+- [ ] glTF: occlusion maps, and export of the newer material features [#154](https://github.com/SethKitchen/ThreeMojo/issues/154)
+- [ ] Scene JSON: the newer material and object fields [#155](https://github.com/SethKitchen/ThreeMojo/issues/155)
 
 <details>
 <summary>Ported: 9</summary>
