@@ -7,13 +7,14 @@
 | `OrbitControls` | `controls/orbit_controls.mojo` | Orbits a target, with poles. |
 | `MapControls` | `controls/map_controls.mojo` | Pans over the ground, and orbits. |
 | `TrackballControls` | `controls/trackball_controls.mojo` | Turns about a target with no poles, and can roll over the top. |
+| `ArcballControls` | `controls/arcball_controls.mojo` | Turns on a virtual trackball, pans, zooms, and moves to a double click. |
 | `FlyControls` | `controls/fly_controls.mojo` | Flies and rolls on its own axes. |
 | `FirstPersonControls` | `controls/first_person_controls.mojo` | Walks, and turns toward the pointer. |
 | `PointerLockControls` | `controls/pointer_lock_controls.mojo` | Turns by the pointer's movement, and walks. |
 
 Two more controls move objects, not the camera. [DragControls](#dragcontrols) drags an object across the view. [TransformControls](#transformcontrols) moves, turns and scales one object with a gizmo.
 
-three.js: a `WebGLRenderer` canvas, and the controls of the same names in `examples/jsm/controls/`. `ArcballControls` is not ported.
+three.js: a `WebGLRenderer` canvas, and the controls of the same names in `examples/jsm/controls/`.
 
 Run the example in a terminal:
 
@@ -438,11 +439,76 @@ A scale whose start point has no length along an axis keeps that axis's scale. t
 
 ## ArcballControls
 
-`ArcballControls` is not ported. It is about 3,500 lines of three.js, with gizmos, animations and its own touch gestures. It needs an issue of its own.
+`controls/arcball_controls.mojo`. The camera turns on a virtual trackball about a center. A drag that comes back to its start puts the camera back too. `ArcballControls(camera, target)` turns the camera to `target` and puts the trackball there.
+
+`handle(event, camera, scene, assets, width, height)` applies one event to the camera at once, as three.js does. A double click picks in `scene`. `update(camera, delta)` moves the clock and runs the animations. Then it does what three.js's `update` does. Call it once a frame. It returns `True` when three.js would send `change`.
+
+| Input | Change |
+|---|---|
+| Left drag | Turn about the center. |
+| Right drag, or Ctrl and a left drag | Pan. The center moves with the camera. |
+| Middle drag, or the wheel | Zoom toward the center. |
+| Shift and a middle drag, or Shift and the wheel | Change the field of view, and keep the center the same size. |
+| Double click on a mesh | Move the center to the point, and zoom in by `scale_factor`. |
+
+`set_mouse_action(operation, mouse, key)` changes the table. The operations are `PAN_OPERATION`, `ROTATE_OPERATION`, `ZOOM_OPERATION` and `FOV_OPERATION`. The inputs are `MOUSE_PRIMARY`, `MOUSE_MIDDLE`, `MOUSE_SECONDARY` and `MOUSE_WHEEL`. The keys are `NO_MODIFIER`, `CTRL_MODIFIER` and `SHIFT_MODIFIER`. The wheel can only zoom or change the field of view. `unset_mouse_action(mouse, key)` removes an action, and `operation_of(mouse, key)` reads one.
+
+| Member | Default | Meaning |
+|---|---|---|
+| `target` | the origin | Set it and call `update` to move the trackball there. A pan does not change it. |
+| `radius_factor` | 0.67 | The trackball's size, as a part of the smaller side of the view. Set it with `set_tb_radius`. |
+| `scale_factor` | 1.1 | The zoom of one wheel notch, and of a focus. |
+| `rotate_speed` | 1 | A factor on the turn. |
+| `enable_animations` | `True` | A turn let go goes on, and a focus takes time. |
+| `damping_factor` | 25 rad/s² | How fast a turn let go slows down, as an `AngularAcceleration`. |
+| `w_max` | 20 rad/s | The fastest a turn let go can start, as an `AngularVelocity`. |
+| `focus_animation_time` | 500 ms | How long a focus takes, as a `Duration`. |
+| `cursor_zoom` | `False` | Zoom toward the pointer. It needs `enable_pan`. |
+| `enable_pan`, `enable_rotate`, `enable_zoom`, `enable_focus` | `True` | Turn an operation off. |
+| `enable_grid` | `False` | Show a grid during a pan. |
+| `enable_gizmos` | `True` | Show the gizmo. |
+| `adjust_near_far` | `False` | Move the near and far planes with a zoom. |
+| `min_distance`, `max_distance` | 0, infinity | For a perspective camera, as a `Length`. |
+| `min_zoom`, `max_zoom` | 0, infinity | For an orthographic camera. |
+| `min_fov`, `max_fov` | 5°, 90° | As an `Angle`. |
+| `raycaster` | | Its `layers` select what a double click can pick. |
+
+### The trackball
+
+The pointer is read on a sphere about the center. Farther out, it is read on a hyperboloid, which joins the sphere smoothly. The turn is about the axis at right angles to the start and the point now. Its angle is the larger of the angle between them and their distance over the radius. A turn let go less than 120 ms after the last move goes on at the mean speed of the last two moves. It then slows by `damping_factor`.
+
+A focus moves the center to the point that a double click hits on a mesh. A line, points and a sprite have no face, so a double click passes over them, as in three.js. Two clicks count when each is shorter than 250 ms, and when they are less than 300 ms and 24 pixels apart.
+
+### State
+
+`copy_state(camera)` returns an `ArcballSnapshot`. It holds the fields that three.js writes to the clipboard as JSON. These are the camera's matrix, up, near, far, zoom and field of view, the gizmo's matrix, and `target`. `paste_state(camera, snapshot)` puts them back. It refuses a snapshot that no camera can take:
+
+- A field of view outside a half turn.
+- A near plane behind the camera.
+- A far plane that is not beyond the near plane.
+- A zoom that is not positive.
+
+`save_state(camera)` records the camera and the trackball. `reset(camera)` puts them back. Before a `save_state`, `reset` goes to where the controls began.
+
+### Drawing the gizmo and the grid
+
+`gizmo()` returns the trackball as three circles in world space: red about x, green about y and blue about z. Draw them with a `Line` in `SEGMENTS` mode on a node at the origin. Use `helper_material(controls.gizmo_opacity(), transparent=True)`. The opacity is 1 during a turn and 0.6 at other times. `set_gizmos_visible(False)` hides the gizmo.
+
+`grid()` returns the grid that three.js shows during a pan with `enable_grid`. It faces the camera through the center where the pan began. It is three times the view, with 60 cells each way. Both return an empty geometry when there is nothing to draw. Call them again each frame.
+
+### Differences from three.js
+
+The camera is read at each call and written back. Its `up` is always its own y axis. After a turn, three.js sets `up` to the first `up` turned by the camera. That is the same for a first `up` of +y. For another first `up`, three.js's `up` can point along the view.
+
+The controls read time from `update`. An event happens at the time of the last `update`. A pointer is read at the center of its pixel. A camera that rides a scene node is refused, as three.js requires.
+
+`enable_gizmos` hides the gizmo, as three.js documents. three.js has the member but does not read it. three.js works out the grid's cells in floating point, and here they are 60.
+
+Touch input is not ported. So there is no turn about the view axis, which only touch starts in three.js. The `start` and `end` events are not ported either.
 
 ## How the ports were checked
 
-The tests hold each control to three.js r180's own numbers, `DragControls` and `TransformControls` included. The three.js controls ran headless in Node, with the same camera, view and input as each test.
+The tests hold each control to three.js r180's own numbers, `DragControls`, `TransformControls` and `ArcballControls` included. The three.js controls ran headless in Node, with the same camera, view and input as each test.
 
 ## Limits
 
