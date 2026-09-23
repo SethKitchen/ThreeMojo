@@ -148,7 +148,7 @@ struct Server(Movable):
             "f=$(mktemp); Xvfb -displayfd 3 -screen 0 320x240x"
             + String(depth)
             + ' -nolisten tcp 3>"$f" >/dev/null 2>&1 & p=$!;'
-            + ' for i in $(seq 50); do [ -s "$f" ] && break; sleep 0.1;'
+            + ' for i in $(seq 600); do [ -s "$f" ] && break; sleep 0.1;'
             + ' done; echo $p; cat "$f"; rm -f "$f"'
         ).split("\n")
         if len(lines) < 2:
@@ -164,7 +164,18 @@ struct Server(Movable):
         Raises:
             Error: If the shell cannot run.
         """
-        _ = run("kill " + self.pid + "; sleep 0.2")
+        # Wait for the socket and the lock to go, so that the next server
+        # cannot take this display number while this one is still leaving.
+        var number = self.display[byte=1:]
+        _ = run(
+            "kill "
+            + self.pid
+            + "; for i in $(seq 600); do [ -e /tmp/.X11-unix/X"
+            + number
+            + " ] || [ -e /tmp/.X"
+            + number
+            + "-lock ] || break; sleep 0.05; done"
+        )
 
 
 def _pixel(window: X11Window, x: Int, y: Int) raises -> Int:
@@ -223,7 +234,24 @@ def _send(window: X11Window, bytes: List[UInt8]) raises:
     )
     # The address alone does not keep the bytes alive through the call.
     _ = event^
-    _ = lib.call["XFlush", c_int](window._display)
+    _sync(window)
+
+
+def _sync(window: X11Window) raises:
+    """Wait until the server has handled every request sent so far.
+
+    Once the server answers, every event it sent before the answer is in
+    the window's queue, so the next poll sees it however loaded the
+    machine is.
+
+    Args:
+        window: The window.
+
+    Raises:
+        Error: Never.
+    """
+    var lib = OwnedDLHandle("libX11.so.6")
+    _ = lib.call["XSync", c_int](window._display, c_int(0))
 
 
 def test_a_window_shows_a_frame() raises:
@@ -276,7 +304,7 @@ def test_a_window_reads_keys_buttons_resizes_and_a_close() raises:
     _ = lib.call["XResizeWindow", c_int](
         window._display, window._window, UInt32(64), UInt32(48)
     )
-    _ = lib.call["XFlush", c_int](window._display)
+    _sync(window)
     var sized = window.poll(Duration(500.0, MILLISECOND))
     assert_true(len(sized) >= 1)
     assert_true(sized[len(sized) - 1].kind == RESIZE)
