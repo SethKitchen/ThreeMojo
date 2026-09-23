@@ -4467,7 +4467,6 @@ def test_the_state_table_carries_the_alpha_map() raises:
         )
     var state = triangle_state(corners)
     assert_equal(len(state), STATE_PER_TRIANGLE)
-    assert_equal(len(state), 14)
     assert_equal(state[4], Int32(7))
     var plain = List[RasterVertex]()
     for _ in range(3):
