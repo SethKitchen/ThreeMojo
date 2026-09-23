@@ -39,12 +39,15 @@ A transparent material is `BLEND`, an alpha-tested one is `MASK` at its
 
 **Physical extensions.** A `PHYSICAL` material writes the extensions
 `read_gltf` reads for it: `KHR_materials_ior`, `KHR_materials_specular`,
-`KHR_materials_clearcoat`, `KHR_materials_transmission` with its map,
+`KHR_materials_clearcoat`, each with its maps,
+`KHR_materials_transmission` with its map,
 `KHR_materials_volume` with its map, and `KHR_materials_dispersion`. Each
 is written when a field it holds is not at its default, so a file read and
 written again keeps them. three.js writes a volume only for a material
 that transmits, and a clear coat only when its factor is not zero; this
-also writes one whose other fields say something.
+also writes one whose other fields say something. The specular intensity
+is in its texture's alpha, and the image keeps the alpha. A clear coat's
+normal texture carries the scale's x, as three.js writes it.
 
 **Sheen, film and stretch.** `KHR_materials_sheen`,
 `KHR_materials_iridescence` and `KHR_materials_anisotropy` are written
@@ -73,10 +76,7 @@ transform and one channel, since one reference carries them.
 **Not written.** Lights, cameras, animations, skins, morph targets,
 instanced, batched and skinned meshes, lines, points and sprites, and
 every map glTF has no place for: bump, alpha, light, specular,
-displacement, environment, matcap and gradient maps. The maps inside
-`KHR_materials_specular` and `KHR_materials_clearcoat` are not written,
-since a material here has none: the renderer draws a specular and a clear
-coat from their factors alone, and `read_gltf` reads only the factors. An ao map on a
+displacement, environment, matcap and gradient maps. An ao map on a
 `BASIC` material is written, as three.js writes it, but `read_gltf` reads
 no occlusion for an unlit material. A `BACK_SIDE` material is written single-sided, as three.js
 writes it, since glTF has no back side. A geometry's groups are not split
@@ -948,6 +948,20 @@ struct _Exporter(Movable):
             writer.number(material.specular_intensity)
             writer.key("specularColorFactor")
             _write_color(writer, material.specular_color)
+            # The intensity is in the texture's alpha, which the image
+            # keeps; `read_gltf` reads it back with `keep_alpha`.
+            self.optional_map(
+                writer,
+                "specularTexture",
+                material.specular_intensity_map,
+                assets,
+            )
+            self.optional_map(
+                writer,
+                "specularColorTexture",
+                material.specular_color_map,
+                assets,
+            )
             writer.end_object()
             written += 1
         if _has_clearcoat(material):
@@ -956,6 +970,26 @@ struct _Exporter(Movable):
             writer.number(material.clearcoat)
             writer.key("clearcoatRoughnessFactor")
             writer.number(material.clearcoat_roughness)
+            self.optional_map(
+                writer, "clearcoatTexture", material.clearcoat_map, assets
+            )
+            self.optional_map(
+                writer,
+                "clearcoatRoughnessTexture",
+                material.clearcoat_roughness_map,
+                assets,
+            )
+            # The scale's x alone, as three.js writes it: glTF has one.
+            if material.clearcoat_normal_map != NO_TEXTURE:
+                self.texture_info(
+                    writer,
+                    "clearcoatNormalTexture",
+                    material.clearcoat_normal_map,
+                    material.clearcoat_normal_map,
+                    assets,
+                    "scale",
+                    material.clearcoat_normal_scale.x,
+                )
             writer.end_object()
             written += 1
         if _has_transmission(material):
@@ -1194,8 +1228,11 @@ def _is_white(color: Color) -> Bool:
 
 def _has_specular(material: Material) -> Bool:
     """Return True if `KHR_materials_specular` has something to say."""
-    return material.specular_intensity != 1 or not _is_white(
-        material.specular_color
+    return (
+        material.specular_intensity != 1
+        or not _is_white(material.specular_color)
+        or material.specular_intensity_map != NO_TEXTURE
+        or material.specular_color_map != NO_TEXTURE
     )
 
 

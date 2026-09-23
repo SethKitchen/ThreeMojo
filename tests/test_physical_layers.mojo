@@ -25,6 +25,8 @@ from lights.physical_layers import (
     layers_of,
     sheen_roughness_of,
     sheen_scaling,
+    clearcoat_of,
+    specular_reflectance,
 )
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -288,3 +290,30 @@ def test_a_stretch_map_turns_and_scales_the_vector() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+def test_a_specular_map_scales_the_reflectance_in_three_js_order() raises:
+    # ((1.5 - 1) / 2.5)^2 = 0.04, times the tint times the texel, capped,
+    # then times the intensity.
+    var plain = specular_reflectance(1.5, Vector3(1, 1, 1), 1, Vector3(1, 1, 1))
+    assert_almost_equal(plain.x, Float32(0.04), atol=1e-6)
+    var tinted = specular_reflectance(
+        1.5, Vector3(0.5, 1, 1), 0.5, Vector3(1, 0.25, 1)
+    )
+    assert_almost_equal(tinted.x, Float32(0.01), atol=1e-6)
+    assert_almost_equal(tinted.y, Float32(0.005), atol=1e-6)
+    assert_almost_equal(tinted.z, Float32(0.02), atol=1e-6)
+    # The cap comes before the intensity: a dense index with a bright
+    # tint reflects one, and a half intensity halves that one.
+    var capped = specular_reflectance(
+        2.333, Vector3(100, 1, 1), 0.5, Vector3(1, 1, 1)
+    )
+    assert_equal(capped.x, Float32(0.5))
+    assert_true(capped.y < 0.1)
+
+
+def test_a_clearcoat_map_multiplies_and_saturates_the_coat() raises:
+    assert_equal(clearcoat_of(0.5, 1), Float32(0.5))
+    assert_equal(clearcoat_of(0.5, 0.5), Float32(0.25))
+    assert_equal(clearcoat_of(1, 3), Float32(1))
+    assert_equal(clearcoat_of(1, -1), Float32(0))

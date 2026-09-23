@@ -4,7 +4,8 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """The three layers a `PHYSICAL` surface adds to its GGX lobe: sheen,
-iridescence and anisotropy, from three.js
+iridescence and anisotropy, and what its specular and clearcoat maps do
+to its reflectance and its coat, from three.js
 `src/renderers/shaders/ShaderChunk/lights_physical_pars_fragment.glsl.js`,
 `iridescence_fragment.glsl.js` and `lights_physical_fragment.glsl.js`.
 
@@ -23,6 +24,13 @@ and not on the light, so it is worked out once per fragment.
 Kulla and Conty's anisotropic distribution and visibility, along a
 tangent turned by the material's rotation and a map. The environment is
 read along a normal bent toward that direction, as Filament bends it.
+
+**The specular and clearcoat maps** scale numbers the surface already
+has. `specular_reflectance` recomputes the reflectance head on with the
+specular color map's texel and the specular intensity map's alpha, and
+`clearcoat_of` multiplies the coat by its map's red. The coat's roughness
+map and normal map go through `floored_roughness` and `mapped_normal`,
+as the surface's own do.
 
 `layers_of` resolves all three for one fragment into a `PhysicalLayers`, and
 `lights.lighting` reads it in `ggx`, `physical_light` and
@@ -209,6 +217,54 @@ def sheen_scaling(color: Vector3) -> Float32:
         The factor the layer under the sheen is multiplied by.
     """
     return 1 - SHEEN_ALBEDO_LOSS * max(max(color.x, color.y), color.z)
+
+
+def specular_reflectance(
+    ior: Float32, tint: Vector3, intensity: Float32, color_texel: Vector3
+) -> Vector3:
+    """Return what a `PHYSICAL` surface reflects head on before its
+    metalness mixes the base color in: the first half of three.js's
+    `material.specularColor` in `lights_physical_fragment`.
+
+    `((ior - 1) / (ior + 1))^2`, times the specular color times the
+    specular color map's texel, capped at one per channel and then scaled
+    by the intensity. The texel multiplies the color before the cap, and
+    the intensity scales after it, in three.js's order. A texel of one
+    gives `Material.base_reflectance` exactly.
+
+    Args:
+        ior: The index of refraction.
+        tint: The specular color, linear.
+        intensity: The specular intensity, already times the specular
+            intensity map's alpha.
+        color_texel: The specular color map's texel, linear, or one for
+            none.
+
+    Returns:
+        The reflectance head on, per channel.
+    """
+    var ratio = (ior - 1) / (ior + 1)
+    var head_on = ratio * ratio
+    return Vector3(
+        min(head_on * (tint.x * color_texel.x), Float32(1)) * intensity,
+        min(head_on * (tint.y * color_texel.y), Float32(1)) * intensity,
+        min(head_on * (tint.z * color_texel.z), Float32(1)) * intensity,
+    )
+
+
+def clearcoat_of(authored: Float32, texel: Float32) -> Float32:
+    """Return how much clear coat a fragment has: the material's, times
+    its clearcoat map's red, saturated, as `lights_physical_fragment`
+    works it out.
+
+    Args:
+        authored: The material's clear coat.
+        texel: The clearcoat map's red, or one for none.
+
+    Returns:
+        The clear coat, from zero to one.
+    """
+    return _saturated(authored * texel)
 
 
 def sheen_roughness_of(authored: Float32, texel: Float32) -> Float32:

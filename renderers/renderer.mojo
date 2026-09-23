@@ -544,10 +544,15 @@ def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
         material.iridescence_map,
         material.iridescence_thickness_map,
         material.anisotropy_map,
+        material.specular_intensity_map,
+        material.specular_color_map,
+        material.clearcoat_map,
+        material.clearcoat_roughness_map,
+        material.clearcoat_normal_map,
     ]
     var chosen = Matrix3()
     var settled = False
-    # Fifteen maps, always, so the loop never runs zero times.
+    # Twenty maps, always, so the loop never runs zero times.
     for index in range(len(named)):  # pragma: no branch
         if named[index] == NO_TEXTURE:
             continue
@@ -1399,7 +1404,8 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
     and the bitangent under `DOUBLE_SIDED` by `faceDirection`, and a bump
     map's slope by the same sign. Negating the scales does exactly that;
     see `render.rasterizer.mapped_normal`. An anisotropic lobe is
-    stretched along the same frame, so its vector turns the same way.
+    stretched along the same frame, so its vector turns the same way, and
+    a clear coat's normal map perturbs along it, so its scale does too.
     """
     var turned = corner
     turned.normal = -corner.normal
@@ -1410,6 +1416,13 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
     turned.layers.anisotropy = Vector2(
         -corner.layers.anisotropy.x, -corner.layers.anisotropy.y
     )
+    # Only with a map to scale: a scale of minus one with none would make
+    # a corner of any kind look as if it named a clearcoat map.
+    if corner.layers.clearcoat_normal_map != NO_TEXTURE:
+        turned.layers.clearcoat_normal_scale = Vector2(
+            -corner.layers.clearcoat_normal_scale.x,
+            -corner.layers.clearcoat_normal_scale.y,
+        )
     return turned
 
 
@@ -2019,7 +2032,9 @@ def _layer_factors(
     sheen, as three.js's `refreshUniformsPhysical` fills `sheenColor`. The
     film's range is read in nanometers. The anisotropy becomes a vector
     of its strength along its rotation, three.js's `anisotropyVector`.
-    Each map is checked the way `check_triangle_maps` checks it, whatever
+    The specular color is decoded to linear light, for a fragment that
+    works its reflectance out again under a specular map, and the
+    clearcoat normal scale is carried as it is. Each map is checked the way `check_triangle_maps` checks it, whatever
     the shading mode, and erased unless the mode opens textures. A kind
     that is not `PHYSICAL` carries none of this, and `Material` has
     refused any on one.
@@ -2079,13 +2094,47 @@ def _layer_factors(
     factors.anisotropy_map = _checked_data_map(
         assets, material.anisotropy_map, "An anisotropy map"
     )
+    # The specular and coat maps, checked as `check_triangle_maps` checks
+    # them: the intensity is read from the alpha, the color map holds
+    # color, and the coat's three hold data.
+    var reflected = FloatColor(srgb=material.specular_color)
+    factors.specular_color = Vector3(reflected.r, reflected.g, reflected.b)
+    factors.clearcoat_normal_scale = material.clearcoat_normal_scale
+    if material.specular_intensity_map != NO_TEXTURE:
+        _stored_map(
+            assets, material.specular_intensity_map, "A specular intensity map"
+        )
+        check_alpha_data_map(
+            assets.textures.get(material.specular_intensity_map),
+            "A specular intensity map",
+        )
+    if material.specular_color_map != NO_TEXTURE:
+        _stored_map(assets, material.specular_color_map, "A specular color map")
+        check_color_map(
+            assets.textures.get(material.specular_color_map),
+            "A specular color map",
+        )
+    factors.clearcoat_map = _checked_data_map(
+        assets, material.clearcoat_map, "A clearcoat map"
+    )
+    factors.clearcoat_roughness_map = _checked_data_map(
+        assets, material.clearcoat_roughness_map, "A clearcoat roughness map"
+    )
+    factors.clearcoat_normal_map = _checked_data_map(
+        assets, material.clearcoat_normal_map, "A clearcoat normal map"
+    )
     if shading == SHADE_TEXTURE:
         factors.sheen_color_map = material.sheen_color_map
         factors.sheen_roughness_map = material.sheen_roughness_map
+        factors.specular_intensity_map = material.specular_intensity_map
+        factors.specular_color_map = material.specular_color_map
     else:
         factors.iridescence_map = NO_TEXTURE
         factors.thickness_map = NO_TEXTURE
         factors.anisotropy_map = NO_TEXTURE
+        factors.clearcoat_map = NO_TEXTURE
+        factors.clearcoat_roughness_map = NO_TEXTURE
+        factors.clearcoat_normal_map = NO_TEXTURE
     return factors
 
 

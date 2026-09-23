@@ -1468,3 +1468,86 @@ def test_a_malformed_occlusion_is_refused() raises:
         "ao map intensity",
     )
     refuses(occluded("{}", "VEC3"), "TEXCOORD_1 must be a VEC2")
+
+
+# --- specular and clearcoat maps --------------------------------------------
+
+
+def test_the_specular_and_clearcoat_extensions_read_their_maps() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        textured(
+            '[{"extensions":{"KHR_materials_specular":{'
+            + '"specularTexture":{"index":1},'
+            + '"specularColorTexture":{"index":0}},'
+            + '"KHR_materials_clearcoat":{"clearcoatFactor":1,'
+            + '"clearcoatTexture":{"index":1},'
+            + '"clearcoatRoughnessTexture":{"index":1},'
+            + '"clearcoatNormalTexture":{"index":1,"scale":0.5}}}},'
+            + '{"extensions":{"KHR_materials_clearcoat":{"clearcoatFactor":1,'
+            + '"clearcoatNormalTexture":{"index":1}}}}]'
+        ),
+        scene,
+        assets,
+    )
+    var material = assets.materials.get(model.materials[0])
+    # The specular intensity is a number held in the alpha, which is kept,
+    # and the specular color a color whose alpha means nothing.
+    ref strength = assets.textures.get(material.specular_intensity_map)
+    assert_equal(strength.color_space, LINEAR)
+    assert_equal(strength.alpha, COVERAGE)
+    ref tint = assets.textures.get(material.specular_color_map)
+    assert_equal(tint.color_space, SRGB)
+    assert_equal(tint.alpha, IGNORED)
+    # The coat's three are data, as every linear texture is.
+    for map in [
+        material.clearcoat_map,
+        material.clearcoat_roughness_map,
+        material.clearcoat_normal_map,
+    ]:
+        assert_equal(assets.textures.get(map).color_space, LINEAR)
+        assert_equal(assets.textures.get(map).alpha, IGNORED)
+    # The normal texture's scale is three.js's, on both axes.
+    assert_equal(material.clearcoat_normal_scale.x, Float32(0.5))
+    assert_equal(material.clearcoat_normal_scale.y, Float32(0.5))
+    # With no scale, the scale is one.
+    var second = assets.materials.get(model.materials[1])
+    assert_true(second.clearcoat_normal_map != NO_TEXTURE)
+    assert_equal(second.clearcoat_normal_scale.x, Float32(1))
+    assert_equal(second.clearcoat_map, NO_TEXTURE)
+    # And the renderer draws every one of the maps as it is stored.
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, 3))
+    assert_true(lit_pixels(scene, assets) > 0, "the coated quad drew nothing")
+    # With no coat, three.js draws none of its maps, and the loader leaves
+    # them out, the normal texture's scale with them.
+    var bare_scene = Scene()
+    var bare = loaded(
+        textured(
+            '[{"extensions":{"KHR_materials_clearcoat":{'
+            + '"clearcoatTexture":{"index":1},'
+            + '"clearcoatRoughnessTexture":{"index":1},'
+            + '"clearcoatNormalTexture":{"index":1,"scale":0.5}}}}]'
+        ),
+        bare_scene,
+        assets,
+    )
+    var unmapped = assets.materials.get(bare.materials[0])
+    assert_equal(unmapped.clearcoat_map, NO_TEXTURE)
+    assert_equal(unmapped.clearcoat_roughness_map, NO_TEXTURE)
+    assert_equal(unmapped.clearcoat_normal_map, NO_TEXTURE)
+    assert_equal(unmapped.clearcoat_normal_scale.x, Float32(1))
+    # A coat map moved apart from the base map is refused.
+    refuses(
+        textured(
+            '[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0}},'
+            + '"extensions":{"KHR_materials_clearcoat":{"clearcoatFactor":1,'
+            + '"clearcoatNormalTexture":'
+            + '{"index":1,"extensions":{"KHR_texture_transform":'
+            + '{"offset":[0.5,0]}}}}}}]'
+        ),
+        "share one KHR_texture_transform",
+    )

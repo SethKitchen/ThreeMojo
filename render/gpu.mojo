@@ -110,9 +110,11 @@ from lights.physical_layers import (
     NO_ANISOTROPY_TEXEL,
     PhysicalLayers,
     bent_normal,
+    clearcoat_of,
     iridescence_thickness,
     layers_of,
     sheen_roughness_of,
+    specular_reflectance,
 )
 from lights.lighting import (
     PERSPECTIVE_VIEW,
@@ -453,7 +455,15 @@ comptime LANE_THICKNESS_MINIMUM = 65
 comptime LANE_THICKNESS_MAXIMUM = 66
 comptime LANE_ANISOTROPY_X = 67
 comptime LANE_ANISOTROPY_Y = 68
-comptime FLOATS_PER_VERTEX = LANE_ANISOTROPY_Y + 1
+# A physical triangle's specular color, linear, which a fragment reads only
+# under a specular map, and what its coat's normal map's x and y are
+# scaled by. Per triangle, from the first corner. See `LayerFactors`.
+comptime LANE_SPECULAR_COLOR_R = 69
+comptime LANE_SPECULAR_COLOR_G = 70
+comptime LANE_SPECULAR_COLOR_B = 71
+comptime LANE_CLEARCOAT_NORMAL_SCALE_X = 72
+comptime LANE_CLEARCOAT_NORMAL_SCALE_Y = 73
+comptime FLOATS_PER_VERTEX = LANE_CLEARCOAT_NORMAL_SCALE_Y + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -546,7 +556,15 @@ comptime INTS_PER_DRAW = 3
 # Where a node material's program starts in the fog buffer, or -1 for
 # none; see `program_starts`.
 comptime STATE_NODES = STATE_ANISOTROPY_MAP + 1
-comptime STATE_PER_TRIANGLE = STATE_NODES + 1
+# Which textures a physical triangle's specular intensity (the alpha),
+# specular color, clear coat (the red), coat roughness (the green) and coat
+# normals read, each `NO_TEXTURE` for none.
+comptime STATE_SPECULAR_INTENSITY_MAP = STATE_NODES + 1
+comptime STATE_SPECULAR_COLOR_MAP = STATE_NODES + 2
+comptime STATE_CLEARCOAT_MAP = STATE_NODES + 3
+comptime STATE_CLEARCOAT_ROUGHNESS_MAP = STATE_NODES + 4
+comptime STATE_CLEARCOAT_NORMAL_MAP = STATE_NODES + 5
+comptime STATE_PER_TRIANGLE = STATE_CLEARCOAT_NORMAL_MAP + 1
 # How the transmission target rides in the backdrop buffer, after the
 # backdrop's own pixels: a header of floats, then the chain's floats, each
 # four little-endian bytes as a float texture's texels are. The kernel has
@@ -843,6 +861,11 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.layers.thickness_maximum)
         flat.append(corner.layers.anisotropy.x)
         flat.append(corner.layers.anisotropy.y)
+        flat.append(corner.layers.specular_color.x)
+        flat.append(corner.layers.specular_color.y)
+        flat.append(corner.layers.specular_color.z)
+        flat.append(corner.layers.clearcoat_normal_scale.x)
+        flat.append(corner.layers.clearcoat_normal_scale.y)
     return flat^
 
 
@@ -2542,7 +2565,9 @@ def triangle_state(
         ids, then the depth packing's value and one or zero for whether
         the fog veils it, then the sheen color, sheen roughness,
         iridescence, film thickness and anisotropy map ids, then where its
-        node program starts or -1, per triangle, from its first corner.
+        node program starts or -1, then the specular intensity, specular
+        color, clearcoat, clearcoat roughness and clearcoat normal map
+        ids, per triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -2584,6 +2609,11 @@ def triangle_state(
             Int32(starts[program]) if program >= 0
             and program < len(starts) else Int32(-1)
         )
+        state.append(Int32(layers.specular_intensity_map.value))
+        state.append(Int32(layers.specular_color_map.value))
+        state.append(Int32(layers.clearcoat_map.value))
+        state.append(Int32(layers.clearcoat_roughness_map.value))
+        state.append(Int32(layers.clearcoat_normal_map.value))
     return state^
 
 
@@ -4310,6 +4340,15 @@ def rasterize_kernel(
             var thickness_texel = Float32(0)
             var thickness_mapped = False
             var stretch_texel = NO_ANISOTROPY_TEXEL
+            # What a physical surface's specular color and intensity, its
+            # coat and its coat's roughness are multiplied by, and the
+            # coat's normal map's texel: one for none, and no texel.
+            var specular_texel = Vector3(1, 1, 1)
+            var specular_alpha = Float32(1)
+            var coat_factor = Float32(1)
+            var coat_rough_factor = Float32(1)
+            var coat_texel = FloatColor(0.5, 0.5, 1.0, 1.0)
+            var coat_mapped = False
             if mode == Int32(SHADE_UV.value):
                 # Coordinates, not light, through the same quantize and decode
                 # the host's `data_color` uses, so the two backends hold the
@@ -4697,6 +4736,146 @@ def rasterize_kernel(
                             v,
                         )
                         stretch_texel = Vector3(turn.r, turn.g, turn.b)
+                    # The specular and coat maps, exactly as
+                    # `rasterize_shaded` reads them: a color, an alpha, a
+                    # red, a green, and a whole texel.
+                    var specular_tint_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_SPECULAR_COLOR_MAP
+                        ]
+                    )
+                    if specular_tint_slot != NO_TEXTURE.value:
+                        var tint = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            specular_tint_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        )
+                        specular_texel = Vector3(tint.r, tint.g, tint.b)
+                    var specular_alpha_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_SPECULAR_INTENSITY_MAP
+                        ]
+                    )
+                    if specular_alpha_slot != NO_TEXTURE.value:
+                        specular_alpha = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            specular_alpha_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).a
+                    var coat_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_CLEARCOAT_MAP
+                        ]
+                    )
+                    if coat_slot != NO_TEXTURE.value:
+                        coat_factor = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            coat_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).r
+                    var coat_rough_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_CLEARCOAT_ROUGHNESS_MAP
+                        ]
+                    )
+                    if coat_rough_slot != NO_TEXTURE.value:
+                        coat_rough_factor = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            coat_rough_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).g
+                    var coat_normal_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_CLEARCOAT_NORMAL_MAP
+                        ]
+                    )
+                    if coat_normal_slot != NO_TEXTURE.value:
+                        coat_texel = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            coat_normal_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        )
+                        coat_mapped = True
                     # The transmission map's red and the thickness map's
                     # green, sampled where the host samples them.
                     var through_slot = Int(
@@ -4857,29 +5036,144 @@ def rasterize_kernel(
                     # Lit here, once the map has multiplied the color, by
                     # the host's own functions in the host's own order;
                     # see `rasterize_shaded`. The reflectance head on
-                    # rides in the specular lanes, from the first corner.
+                    # rides in the specular lanes, from the first corner,
+                    # unless a specular map changes it.
+                    var head_on = Vector3(
+                        corners[unsafe_offset=base + LANE_SPECULAR_R],
+                        corners[unsafe_offset=base + LANE_SPECULAR_G],
+                        corners[unsafe_offset=base + LANE_SPECULAR_B],
+                    )
+                    var intensity = corners[
+                        unsafe_offset=base + LANE_SPECULAR_INTENSITY
+                    ]
+                    var specular_mapped = maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE
+                        + STATE_SPECULAR_INTENSITY_MAP
+                    ] != Int32(NO_TEXTURE.value) or maps[
+                        unsafe_offset=index * STATE_PER_TRIANGLE
+                        + STATE_SPECULAR_COLOR_MAP
+                    ] != Int32(
+                        NO_TEXTURE.value
+                    )
+                    if specular_mapped:
+                        intensity = intensity * specular_alpha
+                        head_on = specular_reflectance(
+                            corners[unsafe_offset=base + LANE_IOR],
+                            Vector3(
+                                corners[
+                                    unsafe_offset=base + LANE_SPECULAR_COLOR_R
+                                ],
+                                corners[
+                                    unsafe_offset=base + LANE_SPECULAR_COLOR_G
+                                ],
+                                corners[
+                                    unsafe_offset=base + LANE_SPECULAR_COLOR_B
+                                ],
+                            ),
+                            intensity,
+                            specular_texel,
+                        )
                     var surface = physical_surface(
                         Vector3(red, green, blue),
-                        Vector3(
-                            corners[unsafe_offset=base + LANE_SPECULAR_R],
-                            corners[unsafe_offset=base + LANE_SPECULAR_G],
-                            corners[unsafe_offset=base + LANE_SPECULAR_B],
-                        ),
+                        head_on,
                         corners[unsafe_offset=base + LANE_METALNESS]
                         * metal_factor,
-                        corners[unsafe_offset=base + LANE_SPECULAR_INTENSITY],
+                        intensity,
                     )
                     var rough = floored_roughness(
                         corners[unsafe_offset=base + LANE_ROUGHNESS]
                         * rough_factor
                     )
-                    var coat = corners[unsafe_offset=base + LANE_CLEARCOAT]
+                    var coat_amount = corners[
+                        unsafe_offset=base + LANE_CLEARCOAT
+                    ]
+                    var coat = clearcoat_of(coat_amount, coat_factor)
                     var coat_rough = floored_roughness(
                         corners[unsafe_offset=base + LANE_CLEARCOAT_ROUGHNESS]
+                        * coat_rough_factor
                     )
                     var facing = Vector3(nx, ny, nz)
                     var coat_facing = Vector3(cnx, cny, cnz)
                     var spot = Vector3(wx, wy, wz)
+                    # The coat's own normal, by the host's `mapped_normal`
+                    # along the frame measured as `rasterize_shaded`
+                    # measures it.
+                    var coat_normal = coat_facing
+                    if coat_amount > 0 and coat_mapped:
+                        var uv_right = _uv_at(
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px + SUBPIXEL,
+                            py,
+                        )
+                        var uv_up = _uv_at(
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py - SUBPIXEL,
+                        )
+                        coat_normal = mapped_normal(
+                            coat_facing,
+                            _world_at(
+                                corners,
+                                base,
+                                sax,
+                                say,
+                                sbx,
+                                sby,
+                                scx,
+                                scy,
+                                span_inv,
+                                swapped,
+                                px + SUBPIXEL,
+                                py,
+                            )
+                            - spot,
+                            _world_at(
+                                corners,
+                                base,
+                                sax,
+                                say,
+                                sbx,
+                                sby,
+                                scx,
+                                scy,
+                                span_inv,
+                                swapped,
+                                px,
+                                py - SUBPIXEL,
+                            )
+                            - spot,
+                            Vector2(uv_right.x - u, uv_right.y - v),
+                            Vector2(uv_up.x - u, uv_up.y - v),
+                            coat_texel,
+                            Vector2(
+                                corners[
+                                    unsafe_offset=base
+                                    + LANE_CLEARCOAT_NORMAL_SCALE_X
+                                ],
+                                corners[
+                                    unsafe_offset=base
+                                    + LANE_CLEARCOAT_NORMAL_SCALE_Y
+                                ],
+                            ),
+                        )
                     var toward_eye = toward_eye_at(
                         Vector3(
                             lights[unsafe_offset=LIGHTS_EYE],
@@ -5028,7 +5322,7 @@ def rasterize_kernel(
                         Int(hemisphere_count),
                         Int(spot_count),
                         facing,
-                        coat_facing,
+                        coat_normal,
                         spot,
                         surface,
                         rough,
@@ -5056,7 +5350,7 @@ def rasterize_kernel(
                     )
                     var dot_nv_coat = max(
                         Float32(0),
-                        min(Float32(1), coat_facing.dot(toward_eye)),
+                        min(Float32(1), coat_normal.dot(toward_eye)),
                     )
                     var radiance = Vector3(0, 0, 0)
                     var irradiance = Vector3(0, 0, 0)
@@ -5090,14 +5384,14 @@ def rasterize_kernel(
                             around.g * strength,
                             around.b * strength,
                         )
-                        if coat > 0:
+                        if coat_amount > 0:
                             var gloss = _sample_cube_rough(
                                 texels,
                                 ramp,
                                 table,
                                 Int(env_slot),
                                 rough_reflection(
-                                    toward_eye, coat_facing, coat_rough
+                                    toward_eye, coat_normal, coat_rough
                                 ),
                                 coat_rough,
                             )
@@ -5983,6 +6277,11 @@ struct GpuRenderer(Movable):
                 corners[index].layers.iridescence_map,
                 corners[index].layers.thickness_map,
                 corners[index].layers.anisotropy_map,
+                corners[index].layers.specular_intensity_map,
+                corners[index].layers.specular_color_map,
+                corners[index].layers.clearcoat_map,
+                corners[index].layers.clearcoat_roughness_map,
+                corners[index].layers.clearcoat_normal_map,
             ]:
                 if slot == NO_TEXTURE:
                     continue

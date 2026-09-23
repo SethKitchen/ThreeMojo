@@ -86,7 +86,10 @@ skin.
 **Extensions.** Fifteen are read, the ones three.js's `GLTFLoader` reads
 that map onto something this renderer has. `KHR_materials_unlit` makes a
 `BASIC` material. `KHR_materials_ior`, `KHR_materials_specular` and
-`KHR_materials_clearcoat` make a `PHYSICAL` one and set its factors;
+`KHR_materials_clearcoat` make a `PHYSICAL` one and set its factors and
+maps: the specular texture's alpha, the specular color texture, and the
+clear coat's red, roughness green and normal textures. A clear coat of
+zero leaves its maps out, since three.js draws none of them then.
 `KHR_materials_emissive_strength` sets `emissive_intensity`.
 `KHR_materials_transmission`, `KHR_materials_volume` and
 `KHR_materials_dispersion` make a `PHYSICAL` one that transmits, with the
@@ -104,9 +107,8 @@ component type already.
 
 **Not ported.** Every other extension: a file whose `extensionsRequired`
 names one is refused, as three.js refuses it, and one that only uses an
-extension is read without it. The maps inside the specular and clear
-coat extensions are not read either, only their factors. Only triangles
-are read; a primitive of points, lines or strips is refused.
+extension is read without it. Only triangles are read; a primitive of
+points, lines or strips is refused.
 """
 
 from animation.animation_clip import AnimationClip
@@ -1500,6 +1502,8 @@ struct _Loader(Movable):
             ior = self.number(refraction, "ior", DEFAULT_IOR)
         var specular_color = Color(255, 255, 255)
         var specular_intensity = Float32(1)
+        var specular_intensity_map = NO_TEXTURE
+        var specular_color_map = NO_TEXTURE
         var specular = self.extension(material, MATERIALS_SPECULAR)
         if specular != NO_NODE:
             kind = PHYSICAL
@@ -1507,8 +1511,25 @@ struct _Loader(Movable):
             var tint = self.numbers(specular, "specularColorFactor", 3)
             if len(tint) == 3:
                 specular_color = _unit_color(tint, "specularColorFactor")
+            # A number held in the alpha, and a color whose alpha means
+            # nothing, each read as the renderer reads it, as the sheen's
+            # two maps are.
+            specular_intensity_map = self.map_of(
+                specular, "specularTexture", LINEAR, assets, keep_alpha=True
+            )
+            specular_color_map = self.map_of(
+                specular, "specularColorTexture", SRGB, assets
+            )
+            if specular_color_map != NO_TEXTURE:
+                specular_color_map = assets.textures.add(
+                    assets.textures.get(specular_color_map).ignoring_alpha()
+                )
         var clearcoat = Float32(0)
         var clearcoat_roughness = Float32(0)
+        var clearcoat_map = NO_TEXTURE
+        var clearcoat_roughness_map = NO_TEXTURE
+        var clearcoat_normal_map = NO_TEXTURE
+        var clearcoat_normal_scale = Float32(1)
         var coat = self.extension(material, MATERIALS_CLEARCOAT)
         if coat != NO_NODE:
             kind = PHYSICAL
@@ -1516,6 +1537,24 @@ struct _Loader(Movable):
             clearcoat_roughness = self.number(
                 coat, "clearcoatRoughnessFactor", 0
             )
+            # three.js's `GLTFMaterialsClearcoatExtension`: three maps of
+            # data, and the normal texture's `scale` on both axes.
+            if clearcoat > 0:
+                clearcoat_map = self.data_map_of(
+                    coat, "clearcoatTexture", assets
+                )
+                clearcoat_roughness_map = self.data_map_of(
+                    coat, "clearcoatRoughnessTexture", assets
+                )
+                clearcoat_normal_map = self.data_map_of(
+                    coat, "clearcoatNormalTexture", assets
+                )
+            if clearcoat_normal_map != NO_TEXTURE:
+                clearcoat_normal_scale = self.number(
+                    self.document.get(coat, "clearcoatNormalTexture"),
+                    "scale",
+                    1,
+                )
         var transmission = Float32(0)
         var transmission_map = NO_TEXTURE
         var through = self.extension(material, MATERIALS_TRANSMISSION)
@@ -1663,6 +1702,14 @@ struct _Loader(Movable):
             anisotropy=anisotropy,
             anisotropy_rotation=anisotropy_rotation,
             anisotropy_map=anisotropy_map,
+            specular_intensity_map=specular_intensity_map,
+            specular_color_map=specular_color_map,
+            clearcoat_map=clearcoat_map,
+            clearcoat_roughness_map=clearcoat_roughness_map,
+            clearcoat_normal_map=clearcoat_normal_map,
+            clearcoat_normal_scale=Vector2(
+                clearcoat_normal_scale, clearcoat_normal_scale
+            ),
         )
 
     def material_for(
@@ -2492,10 +2539,15 @@ def _check_one_transform(assets: Assets, material: Material) raises:
         material.iridescence_map,
         material.iridescence_thickness_map,
         material.anisotropy_map,
+        material.specular_intensity_map,
+        material.specular_color_map,
+        material.clearcoat_map,
+        material.clearcoat_roughness_map,
+        material.clearcoat_normal_map,
     ]
     var chosen = Matrix3()
     var settled = False
-    # Eleven maps, always, so the loop never runs zero times.
+    # Sixteen maps, always, so the loop never runs zero times.
     for slot in range(len(named)):  # pragma: no branch
         if named[slot] == NO_TEXTURE:
             continue

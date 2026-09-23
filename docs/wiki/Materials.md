@@ -10,7 +10,7 @@ Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntens
 
 Data properties: `depthPacking`, `referencePosition`, `nearDistance`, `farDistance`.
 
-Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `clearcoat`, `clearcoatRoughness`, `transmission`, `transmissionMap`, `thickness`, `thicknessMap`, `attenuationColor`, `attenuationDistance`, `dispersion`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`, `aoMap`, `aoMapIntensity`, `lightMap`, `lightMapIntensity`, `specularMap`, `displacementMap`, `displacementScale`, `displacementBias`. Shading properties: `flatShading`.
+Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `specularIntensityMap`, `specularColorMap`, `clearcoat`, `clearcoatRoughness`, `clearcoatMap`, `clearcoatRoughnessMap`, `clearcoatNormalMap`, `clearcoatNormalScale`, `transmission`, `transmissionMap`, `thickness`, `thicknessMap`, `attenuationColor`, `attenuationDistance`, `dispersion`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`, `aoMap`, `aoMapIntensity`, `lightMap`, `lightMapIntensity`, `specularMap`, `displacementMap`, `displacementScale`, `displacementBias`. Shading properties: `flatShading`.
 
 ## Construct one
 
@@ -296,7 +296,7 @@ var lacquer = assets.materials.add(
 
 `standard_material(color, map=NO_TEXTURE, roughness=1.0, metalness=0.0, side=FRONT_SIDE, opacity=1.0, blending=None, transparent=False, env_map=NO_CUBE_TEXTURE, env_map_intensity=1.0, roughness_map=NO_TEXTURE, metalness_map=NO_TEXTURE, normal_map=NO_TEXTURE, normal_scale=Vector2(1, 1), bump_map=NO_TEXTURE, bump_scale=1.0, emissive=black, emissive_intensity=1.0, emissive_map=NO_TEXTURE)`.
 
-`physical_material(color, map=NO_TEXTURE, roughness=1.0, metalness=0.0, ior=1.5, specular_color=white, specular_intensity=1.0, clearcoat=0.0, clearcoat_roughness=0.0, ...)` takes the same arguments after those. It also takes the sheen, iridescence and anisotropy arguments below.
+`physical_material(color, map=NO_TEXTURE, roughness=1.0, metalness=0.0, ior=1.5, specular_color=white, specular_intensity=1.0, clearcoat=0.0, clearcoat_roughness=0.0, ...)` takes the same arguments after those. It also takes the sheen, iridescence and anisotropy arguments below, and the [specular and clearcoat maps](#specular-and-clearcoat-maps).
 
 The defaults are three.js's own: a roughness of one and a metalness of zero, a chalky dielectric. `Material(color, kind=STANDARD)` is the same surface.
 
@@ -336,7 +336,7 @@ A cube without a PMREM gives two approximations. The roughness picks a level of 
 
 ### The clear coat
 
-A clear coat is a second, colorless GGX lobe over the surface. It lies on the surface's own normal, before any normal map perturbs it, as three.js's `nonPerturbedNormal` does. It dims everything under it by its own Fresnel and adds its own reflection on top: a red car under a white gloss. `clearcoat=0`, the default, is no coat.
+A clear coat is a second, colorless GGX lobe over the surface. It lies on the surface's own normal, before any normal map perturbs it, as three.js's `nonPerturbedNormal` does. A [clearcoat normal map](#specular-and-clearcoat-maps) gives the coat a normal of its own. It dims everything under it by its own Fresnel and adds its own reflection on top: a red car under a white gloss. `clearcoat=0`, the default, is no coat.
 
 ### What is not ported
 
@@ -457,6 +457,52 @@ A face seen from behind turns its stretch with its frame. The renderer negates t
 - Where three.js normalizes a zero vector, this port keeps the zero. That happens for an anisotropy texel whose red and green are both one half, and for an eye that looks straight along the stretch.
 
 Only `SHADE_TEXTURE` reads the five layer maps, because the other two shading modes ignore every texture. The numbers are read in every lit mode. The maps are sampled at the same coordinate as `map`, so their transforms must agree.
+
+## Specular and clearcoat maps
+
+Five maps vary a `PHYSICAL` surface's reflectance and its clear coat per texel, as three.js's `MeshPhysicalMaterial` varies them.
+
+```mojo
+var lacquer = assets.materials.add(
+    physical_material(
+        Color(180, 30, 30),
+        clearcoat=1.0,
+        clearcoat_map=flakes,
+        clearcoat_normal_map=orange_peel,
+        clearcoat_normal_scale=Vector2(0.5, 0.5),
+        specular_color_map=tint,
+    )
+)
+```
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `specular_intensity_map` | `specularIntensityMap` | `NO_TEXTURE` | Its *alpha* multiplies `specular_intensity`. It must be `LINEAR` and `COVERAGE`. |
+| `specular_color_map` | `specularColorMap` | `NO_TEXTURE` | Its color multiplies `specular_color`. Its alpha must be `IGNORED`. It can be `SRGB`. |
+| `clearcoat_map` | `clearcoatMap` | `NO_TEXTURE` | Its red channel multiplies `clearcoat`. Data: `LINEAR` and `IGNORED`. |
+| `clearcoat_roughness_map` | `clearcoatRoughnessMap` | `NO_TEXTURE` | Its green channel multiplies `clearcoat_roughness`. Data: `LINEAR` and `IGNORED`. |
+| `clearcoat_normal_map` | `clearcoatNormalMap` | `NO_TEXTURE` | Tangent-space normals for the coat alone. Data: `LINEAR` and `IGNORED`. |
+| `clearcoat_normal_scale` | `clearcoatNormalScale` | `Vector2(1, 1)` | What the coat's normal map's x and y are multiplied by. |
+
+### What the maps do
+
+The two specular maps change what the surface reflects head on. `specular_reflectance` in `lights/physical_layers.mojo` calculates it again for each fragment, in three.js's order. The texel color multiplies the specular color. The product multiplies `((ior - 1) / (ior + 1))^2`, and the result is capped at one. Then the intensity, times the map's alpha, scales it. The same intensity is the reflectance at a grazing angle, before the metalness mixes it toward one.
+
+The clearcoat map's red multiplies the coat, and `clearcoat_of` clamps the product to zero through one. The roughness map's green multiplies the coat's roughness before `floored_roughness` floors it.
+
+The coat's normal map follows three.js's `clearcoat_normal_fragment_maps` in its order of operations. The texel is unpacked from zero to one into minus one to one. Its x and y are multiplied by the scale. Then the three are summed along the [tangent frame](#the-tangent-frame) and normalized. `mapped_normal` does all three steps, as it does for `normal_map`.
+
+The frame is measured on the normal before any normal map, as three.js's `tbn2` is. So the coat and the surface under it can have different normals.
+
+A face seen from behind turns the coat's frame too. The renderer negates `clearcoat_normal_scale` on a corner it turns around, as it negates `normal_scale`. See [The far side](#the-far-side).
+
+### Where these maps differ from three.js
+
+- A clearcoat map, a clearcoat roughness map or a clearcoat normal map with no `clearcoat` is refused. three.js ignores such a map.
+- A `clearcoat_normal_scale` that is not one with no clearcoat normal map is refused, as a `normal_scale` without a normal map is.
+- The five maps share the one coordinate every map shares, through the material's transform. three.js gives each map a transform of its own.
+
+Only `SHADE_TEXTURE` reads the five maps. Under the other two modes, the surface keeps its own numbers.
 
 ## Normal maps and bump maps
 

@@ -46,8 +46,9 @@ written with its own numbers, not as a view of a shared buffer: three.js
 does the same when an attribute is written on its own. **A material** has the type
 of its kind -- `MeshStandardMaterial` for `STANDARD` -- and the fields that
 type has in three.js: the maps, the baked light, the displacement, the
-flat shading, the depth packing, the volume, the sheen, the film and the
-stretch of a physical surface, and the depth, stencil and polygon offset
+flat shading, the depth packing, the volume, the specular and clearcoat
+maps, the sheen, the film and the stretch of a physical surface, and the
+depth, stencil and polygon offset
 state of every class, each under three.js's key and left out where
 `Material.toJSON` leaves it out. A line, points or a sprite writes its
 `BASIC` material as three.js's class for it: `LineBasicMaterial`,
@@ -1077,10 +1078,42 @@ struct _Library(Movable):
         writer.integer(material.specular_color.hex())
         writer.key("specularIntensity")
         writer.number(material.specular_intensity)
+        self.map(
+            writer,
+            "specularIntensityMap",
+            material.specular_intensity_map,
+            assets,
+        )
+        self.map(
+            writer, "specularColorMap", material.specular_color_map, assets
+        )
         writer.key("clearcoat")
         writer.number(material.clearcoat)
         writer.key("clearcoatRoughness")
         writer.number(material.clearcoat_roughness)
+        self.map(writer, "clearcoatMap", material.clearcoat_map, assets)
+        self.map(
+            writer,
+            "clearcoatRoughnessMap",
+            material.clearcoat_roughness_map,
+            assets,
+        )
+        # The scale beside its map, as `Material.toJSON` writes it.
+        if material.clearcoat_normal_map != NO_TEXTURE:
+            self.map(
+                writer,
+                "clearcoatNormalMap",
+                material.clearcoat_normal_map,
+                assets,
+            )
+            writer.key("clearcoatNormalScale")
+            _numbers(
+                writer,
+                [
+                    material.clearcoat_normal_scale.x,
+                    material.clearcoat_normal_scale.y,
+                ],
+            )
         writer.key("sheen")
         writer.number(material.sheen)
         writer.key("sheenColor")

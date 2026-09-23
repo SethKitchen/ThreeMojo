@@ -145,6 +145,7 @@ These fields use three.js's keys and three.js's defaults:
 | Displacement | `displacementMap`, `displacementScale`, `displacementBias` |
 | Other surface fields | `specularMap`, `flatShading`, and `depthPacking` on a `MeshDepthMaterial` |
 | Volume | `transmission`, `transmissionMap`, `thickness`, `thicknessMap`, `attenuationColor`, `attenuationDistance`, `dispersion` |
+| Specular and clear coat maps | `specularIntensityMap`, `specularColorMap`, `clearcoatMap`, `clearcoatRoughnessMap`, `clearcoatNormalMap`, `clearcoatNormalScale` |
 | Sheen | `sheen`, `sheenColor`, `sheenColorMap`, `sheenRoughness`, `sheenRoughnessMap` |
 | Thin film | `iridescence`, `iridescenceIOR`, `iridescenceThicknessRange` in nanometers, `iridescenceMap`, `iridescenceThicknessMap` |
 | Stretch | `anisotropy`, `anisotropyRotation` in radians, `anisotropyMap` |
@@ -157,7 +158,7 @@ These fields use three.js's keys and three.js's defaults:
 
 Each clipping plane is an object with a `normal` of three numbers and a `constant`. This is the shape that `JSON.stringify` gives a three.js `Plane`. three.js's `Material.toJSON` does not write the clipping, distance and `dashOffset` keys, and its loader ignores them. This port writes them, so that a scene that it reads back renders the same.
 
-The writer writes a map intensity, a displacement scale and a displacement bias only with their map, as `Material.toJSON` does. The reader reads them only with their map. The writer does not write an infinite `attenuationDistance`, because that is the default. The stencil functions and operations use three.js's numbers: `stencilFunc` 519 is `ALWAYS_STENCIL_FUNC`, and `stencilFail` 7680 is `KEEP_STENCIL_OP`.
+The writer writes a map intensity, a displacement scale and a displacement bias only with their map, as `Material.toJSON` does. The reader reads them only with their map. The writer writes `normalScale` and `clearcoatNormalScale` only with their map too, but the reader always reads them. The writer does not write an infinite `attenuationDistance`, because that is the default. The stencil functions and operations use three.js's numbers: `stencilFunc` 519 is `ALWAYS_STENCIL_FUNC`, and `stencilFail` 7680 is `KEEP_STENCIL_OP`.
 
 three.js's `blending` is a number. `NormalBlending`, the default, follows `transparent`. `NoBlending` is `OPAQUE`. `AdditiveBlending`, `SubtractiveBlending` and `MultiplyBlending` are `ADDITIVE`, `SUBTRACTIVE` and `MULTIPLY`.
 
@@ -169,7 +170,7 @@ The reader decodes a PNG, a JPEG or a TGA image from a `data:` URL or from a fil
 
 A `channel` of 1 reads the second set of texture coordinates, `uv1`.
 
-three.js has no alpha mode, so the reader finds it from the use of the texture. A `map`, a background or a `sheenRoughnessMap` gets `COVERAGE`. All other maps are data maps, and get `IGNORED`. A sheen roughness map keeps its alpha, because the renderer reads the roughness from the alpha. When a texture has the two uses, the reader builds it two times.
+three.js has no alpha mode, so the reader finds it from the use of the texture. A `map`, a background, a `sheenRoughnessMap` or a `specularIntensityMap` gets `COVERAGE`. All other maps get `IGNORED`. A sheen roughness map and a specular intensity map keep their alpha, because the renderer reads the number from the alpha. When a texture has the two uses, the reader builds it two times.
 
 ## Cube textures
 
@@ -224,7 +225,7 @@ The writer does not write these things, and the reader ignores them:
 - A background's `backgroundBlurriness`, `backgroundIntensity` and `backgroundRotation`, and the scene's `environmentIntensity` and `environmentRotation`.
 - An `envMap` on a class that does not reflect, for example a `MeshToonMaterial` or a `LineBasicMaterial`.
 - `animations`, `shapes`, `skeletons`, `up` and `userData`.
-- `clearcoatMap`, `specularColorMap` and the other material keys that have no field here.
+- The material keys that have no field here.
 - An LOD's `autoUpdate`, and a batched mesh's sorting, reserved ranges and bounds.
 - A camera's `focus` and `filmGauge`, and a texture's `format`, `type` and `premultiplyAlpha`.
 

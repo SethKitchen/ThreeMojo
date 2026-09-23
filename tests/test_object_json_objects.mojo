@@ -245,6 +245,12 @@ def _scene(mut assets: Assets) raises -> Scene:
         attenuation_distance=Length(2, METER),
         thickness=Length(0.5, METER),
         thickness_map=data,
+        specular_intensity_map=alpha,
+        specular_color_map=data,
+        clearcoat_map=data,
+        clearcoat_roughness_map=data,
+        clearcoat_normal_map=data,
+        clearcoat_normal_scale=Vector2(0.5, -0.25),
     )
     scene.add_mesh(
         Mesh(cube, assets.materials.add(physical), _placed(scene, -3.5, 3))
@@ -430,6 +436,19 @@ def test_the_newer_material_fields_round_trip() raises:
     assert_equal(physical.attenuation_distance.to(METER), 2)
     assert_equal(physical.thickness.to(METER), 0.5)
     assert_true(physical.thickness_map != NO_TEXTURE)
+    # The specular intensity keeps its alpha, and the other four ignore it.
+    assert_equal(
+        read[1].textures.get(physical.specular_intensity_map).alpha, COVERAGE
+    )
+    for map in [
+        physical.specular_color_map,
+        physical.clearcoat_map,
+        physical.clearcoat_roughness_map,
+        physical.clearcoat_normal_map,
+    ]:
+        assert_equal(read[1].textures.get(map).alpha, IGNORED)
+    assert_equal(physical.clearcoat_normal_scale.x, 0.5)
+    assert_equal(physical.clearcoat_normal_scale.y, -0.25)
     var standard = materials.get(meshes[1].material)
     assert_equal(standard.ao_map_intensity, 0.5)
     assert_equal(standard.light_map_intensity, 2)
@@ -452,6 +471,9 @@ def test_the_newer_material_fields_round_trip() raises:
     plain_mesh(plain, holder, Material(WHITE, kind=PHYSICAL))
     var text = object_to_json(holder, plain)
     assert_equal(text.find("attenuationDistance"), -1)
+    # And a scale with no map to scale is left out.
+    assert_equal(text.find("clearcoatNormalScale"), -1)
+    assert_equal(text.find("clearcoatNormalMap"), -1)
     assert_true(text.find('"iridescenceThicknessRange":[') >= 0)
     var again = _read(text)
     assert_equal(

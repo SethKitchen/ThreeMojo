@@ -93,7 +93,8 @@ a `MeshDistanceMaterial` its `referencePosition`, `nearDistance` and
 **A texture's alpha comes from its use.** three.js has no alpha mode. Here
 a texture is built with its alpha as `COVERAGE` when a material's `map`
 or the background names it, and as `IGNORED` when a data map names it --
-any other map but a sheen roughness map, whose alpha is its data --
+any other map but a sheen roughness map or a specular intensity map,
+whose alpha is its data --
 since the renderer reads a data map's alpha as nothing. A texture named
 both ways is built twice.
 
@@ -114,9 +115,9 @@ refuse.
 
 **What is read without effect.** `up`, `userData`, `matrixWorldAutoUpdate`
 and `animations`; the background's blurriness and intensity, and the
-rotations of the background and the environment; a cube texture's wrap; an `envMap` on a class
-whose shader reads none; a material's `clearcoatMap`,
-`specularColorMap` and the other keys this port has no field for; a
+rotations of the background and the environment; a cube texture's wrap; an
+`envMap` on a class whose shader reads none; the material keys this port
+has no field for; a
 camera's `focus` and `filmGauge`; a texture's `format`, `type`,
 `premultiplyAlpha` and `unpackAlignment`; an LOD's `autoUpdate`; and a
 batch's sorting, reserved ranges and bounds.
@@ -1418,6 +1419,9 @@ struct _Loader(Movable):
         var normal_scale = self.numbers(item, "normalScale", 2)
         if len(normal_scale) == 0:
             normal_scale = [1, 1]
+        var coat_scale = self.numbers(item, "clearcoatNormalScale", 2)
+        if len(coat_scale) == 0:
+            coat_scale = [1, 1]
         # What three.js's line, points and sprite classes add, with their
         # defaults: a `SpriteMaterial` is built transparent.
         var line_width = DEFAULT_LINE_WIDTH
@@ -1543,6 +1547,20 @@ struct _Loader(Movable):
                 self.number(item, "anisotropyRotation", 0), RADIAN
             ),
             anisotropy_map=self.map(item, "anisotropyMap", IGNORED, assets),
+            specular_intensity_map=self.map(
+                item, "specularIntensityMap", COVERAGE, assets
+            ),
+            specular_color_map=self.map(
+                item, "specularColorMap", IGNORED, assets
+            ),
+            clearcoat_map=self.map(item, "clearcoatMap", IGNORED, assets),
+            clearcoat_roughness_map=self.map(
+                item, "clearcoatRoughnessMap", IGNORED, assets
+            ),
+            clearcoat_normal_map=self.map(
+                item, "clearcoatNormalMap", IGNORED, assets
+            ),
+            clearcoat_normal_scale=Vector2(coat_scale[0], coat_scale[1]),
         )
         # The displacement's numbers too are read beside its map.
         var displacement = self.map(item, "displacementMap", IGNORED, assets)

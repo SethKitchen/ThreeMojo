@@ -10495,7 +10495,7 @@ def test_the_layer_lanes_and_columns_ride_last() raises:
     assert_equal(flat[LANE_ANISOTROPY_X], Float32(0.25))
     assert_equal(flat[LANE_ANISOTROPY_Y], Float32(-0.5))
     assert_equal(LANE_SHEEN_R, LANE_FAR_DISTANCE + 1)
-    assert_equal(LANE_ANISOTROPY_Y, FLOATS_PER_VERTEX - 1)
+    assert_equal(LANE_ANISOTROPY_Y, LANE_SPECULAR_COLOR_R - 1)
     var state = triangle_state(corners)
     assert_equal(len(state), 2 * STATE_PER_TRIANGLE)
     assert_equal(state[STATE_SHEEN_COLOR_MAP], Int32(1))
@@ -10504,7 +10504,7 @@ def test_the_layer_lanes_and_columns_ride_last() raises:
     assert_equal(state[STATE_FILM_THICKNESS_MAP], Int32(4))
     assert_equal(state[STATE_ANISOTROPY_MAP], Int32(5))
     assert_equal(STATE_SHEEN_COLOR_MAP, STATE_FOG + 1)
-    assert_equal(STATE_ANISOTROPY_MAP, STATE_PER_TRIANGLE - 2)
+    assert_equal(STATE_ANISOTROPY_MAP, STATE_NODES - 1)
     # A corner that says nothing carries three.js's defaults and no map.
     var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
     assert_equal(plain[LANE_SHEEN_ROUGHNESS], Float32(1))
@@ -10779,7 +10779,7 @@ def test_the_node_column_rides_last_and_programs_follow_the_fog() raises:
     corners[1].nodes = NodeProgramId(-1)
     corners[2].nodes = NodeProgramId(-1)
     var state = triangle_state(corners, 0, starts)
-    assert_equal(STATE_NODES, STATE_PER_TRIANGLE - 1)
+    assert_equal(STATE_NODES, STATE_SPECULAR_INTENSITY_MAP - 1)
     assert_equal(STATE_NODES, STATE_ANISOTROPY_MAP + 1)
     assert_equal(state[STATE_NODES], Int32(-1))
     assert_equal(state[STATE_PER_TRIANGLE + STATE_NODES], Int32(starts[1]))
@@ -10984,3 +10984,238 @@ def test_the_gpu_refuses_a_program_it_cannot_run() raises:
     renderer.draw(
         with_nodes(overlapping_pair(), 0), BACKGROUND, SHADE_LIT, programs=store
     )
+
+
+# --- specular and clearcoat maps --------------------------------------------
+
+from render.gpu import (
+    LANE_CLEARCOAT_NORMAL_SCALE_X,
+    LANE_CLEARCOAT_NORMAL_SCALE_Y,
+    LANE_SPECULAR_COLOR_B,
+    LANE_SPECULAR_COLOR_G,
+    LANE_SPECULAR_COLOR_R,
+    STATE_CLEARCOAT_MAP,
+    STATE_CLEARCOAT_NORMAL_MAP,
+    STATE_CLEARCOAT_ROUGHNESS_MAP,
+    STATE_SPECULAR_COLOR_MAP,
+    STATE_SPECULAR_INTENSITY_MAP,
+)
+
+
+def test_the_specular_and_coat_lanes_and_columns_ride_last() raises:
+    var layers = LayerFactors()
+    layers.specular_color = Vector3(0.9, 0.5, 0.25)
+    layers.clearcoat_normal_scale = Vector2(1.5, -0.75)
+    layers.specular_intensity_map = TextureId(1)
+    layers.specular_color_map = TextureId(2)
+    layers.clearcoat_map = TextureId(3)
+    layers.clearcoat_roughness_map = TextureId(4)
+    layers.clearcoat_normal_map = TextureId(5)
+    var corners = with_gpu_layers(physical_pair(PHYSICAL, 0.5, 0.5), layers)
+    var flat = flatten(corners)
+    assert_equal(len(flat), FLOATS_PER_VERTEX * 6)
+    assert_equal(flat[LANE_SPECULAR_COLOR_R], Float32(0.9))
+    assert_equal(flat[LANE_SPECULAR_COLOR_G], Float32(0.5))
+    assert_equal(flat[LANE_SPECULAR_COLOR_B], Float32(0.25))
+    assert_equal(flat[LANE_CLEARCOAT_NORMAL_SCALE_X], Float32(1.5))
+    assert_equal(flat[LANE_CLEARCOAT_NORMAL_SCALE_Y], Float32(-0.75))
+    assert_equal(LANE_SPECULAR_COLOR_R, LANE_ANISOTROPY_Y + 1)
+    assert_equal(LANE_CLEARCOAT_NORMAL_SCALE_Y, FLOATS_PER_VERTEX - 1)
+    var state = triangle_state(corners)
+    assert_equal(len(state), 2 * STATE_PER_TRIANGLE)
+    assert_equal(state[STATE_SPECULAR_INTENSITY_MAP], Int32(1))
+    assert_equal(state[STATE_SPECULAR_COLOR_MAP], Int32(2))
+    assert_equal(state[STATE_CLEARCOAT_MAP], Int32(3))
+    assert_equal(state[STATE_CLEARCOAT_ROUGHNESS_MAP], Int32(4))
+    assert_equal(state[STATE_CLEARCOAT_NORMAL_MAP], Int32(5))
+    assert_equal(
+        state[STATE_PER_TRIANGLE + STATE_CLEARCOAT_NORMAL_MAP], Int32(5)
+    )
+    assert_equal(STATE_SPECULAR_INTENSITY_MAP, STATE_NODES + 1)
+    assert_equal(STATE_CLEARCOAT_NORMAL_MAP, STATE_PER_TRIANGLE - 1)
+    # A corner that says nothing carries a white tint, a scale of one and
+    # no map.
+    var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
+    assert_equal(plain[LANE_SPECULAR_COLOR_G], Float32(1))
+    assert_equal(plain[LANE_CLEARCOAT_NORMAL_SCALE_X], Float32(1))
+    var none = triangle_state(physical_pair(PHYSICAL, 0.5, 0.5))
+    assert_equal(none[STATE_SPECULAR_COLOR_MAP], Int32(NO_TEXTURE.value))
+    assert_equal(none[STATE_CLEARCOAT_NORMAL_MAP], Int32(NO_TEXTURE.value))
+
+
+def a_gpu_tint_map() raises -> Texture:
+    """Return a 2x2 sRGB map of four colors whose alpha is ignored, as a
+    specular color map is stored."""
+    var pixels = List[UInt8]()
+    for texel in [
+        Color(255, 200, 100),
+        Color(40, 255, 180),
+        Color(128, 64, 255),
+        Color(255, 255, 255),
+    ]:
+        pixels.append(texel.r)
+        pixels.append(texel.g)
+        pixels.append(texel.b)
+        pixels.append(90)
+    return Texture(2, 2, pixels^, REPEAT, BILINEAR, SRGB, True, IGNORED)
+
+
+def gpu_coat_cases(
+    data: TextureId, tint: TextureId, alpha: TextureId, env: CubeTextureId
+) -> List[List[RasterVertex]]:
+    """Return specular maps and clearcoat maps, each alone and together,
+    over a coated rough dielectric and a coated smooth metal, and one
+    uncoated surface that names a coat normal map."""
+    var cases = List[List[RasterVertex]]()
+    var specular = LayerFactors()
+    specular.specular_color = Vector3(0.9, 0.5, 0.2)
+    specular.specular_color_map = tint
+    specular.specular_intensity_map = alpha
+    var intensity = LayerFactors()
+    intensity.specular_intensity_map = alpha
+    var coat = LayerFactors()
+    coat.clearcoat_map = data
+    coat.clearcoat_roughness_map = data
+    var normals = LayerFactors()
+    normals.clearcoat_normal_map = data
+    normals.clearcoat_normal_scale = Vector2(1.5, -0.7)
+    var every = specular
+    every.clearcoat_map = data
+    every.clearcoat_roughness_map = data
+    every.clearcoat_normal_map = data
+    every.clearcoat_normal_scale = Vector2(-1, -1)
+    for layers in [specular, intensity, coat, normals, every]:
+        cases.append(
+            with_gpu_layers(
+                physical_pair(PHYSICAL, 0.6, 0.0, 0.9, 0.2, env=env), layers
+            )
+        )
+        cases.append(
+            with_gpu_layers(
+                physical_pair(PHYSICAL, 0.2, 1.0, 0.7, 0.6, env=env), layers
+            )
+        )
+    cases.append(
+        with_gpu_layers(physical_pair(PHYSICAL, 0.4, 0.3, env=env), normals)
+    )
+    return cases^
+
+
+def test_both_backends_agree_on_specular_and_clearcoat_maps() raises:
+    # The specular color map's color and the specular intensity map's
+    # alpha, the clearcoat map's red and the clearcoat roughness map's
+    # green, and the coat's own normal map, from the host's own functions,
+    # lit by every light and reflecting an environment on the coat.
+    if skipped_for_lack_of_a_gpu("both backends agree on the coat maps"):
+        return
+    var lighting = phong_lighting()
+    var textures = TextureStore()
+    var data = textures.add(a_gpu_data_map())
+    var tint = textures.add(a_gpu_tint_map())
+    var alpha = textures.add(a_gpu_alpha_map())
+    var cubes = a_cube_store()
+    for env in [NO_CUBE_TEXTURE, CubeTextureId(1)]:
+        var cases = gpu_coat_cases(data, tint, alpha, env)
+        for index in range(len(cases)):
+            ref corners = cases[index]
+            for mode in [SHADE_LIT, SHADE_TEXTURE]:
+                var target = RenderTarget(36, 30, BACKGROUND)
+                rasterize_all(
+                    corners,
+                    target,
+                    mode,
+                    textures,
+                    lighting,
+                    cubes=cubes,
+                )
+                var cpu = target.resolve()
+                var gpu = render_triangles(
+                    corners,
+                    36,
+                    30,
+                    BACKGROUND,
+                    mode,
+                    textures,
+                    lighting,
+                    cubes=cubes,
+                )
+                assert_true(
+                    count_background(cpu, BACKGROUND) < 36 * 30,
+                    "the triangles drew nothing",
+                )
+                assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the maps change the picture.
+    var plain = render_triangles(
+        physical_pair(PHYSICAL, 0.6, 0.0, 0.9, 0.2),
+        36,
+        30,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+    )
+    var mapped = render_triangles(
+        gpu_coat_cases(data, tint, alpha, NO_CUBE_TEXTURE)[6],
+        36,
+        30,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        textures,
+        lighting,
+    )
+    assert_true(
+        count_mismatches(plain, mapped) > 50, "the coat's normals did nothing"
+    )
+
+
+def test_the_gpu_refuses_a_coat_map_it_cannot_sample() raises:
+    # Each map stored the wrong way, or never uploaded: refused before the
+    # launch, as the host refuses it before the first fragment.
+    if skipped_for_lack_of_a_gpu("the gpu refuses a bad coat map"):
+        return
+    var textures = TextureStore()
+    var covered_color = textures.add(
+        Texture(1, 1, [UInt8(255), 255, 255, 255], REPEAT, NEAREST, SRGB, False)
+    )
+    var data = textures.add(a_gpu_data_map())
+    var covered_srgb = textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+            COVERAGE,
+        )
+    )
+    var renderer = GpuRenderer(36, 30)
+    renderer.set_textures(textures)
+    var wrongs = List[LayerFactors]()
+    var tint = LayerFactors()
+    tint.specular_color_map = covered_color
+    wrongs.append(tint)
+    for map in [covered_srgb, data, TextureId(9)]:
+        var intensity = LayerFactors()
+        intensity.specular_intensity_map = map
+        wrongs.append(intensity)
+    for map in [covered_srgb, TextureId(9)]:
+        var coat = LayerFactors()
+        coat.clearcoat_map = map
+        wrongs.append(coat)
+        var rough = LayerFactors()
+        rough.clearcoat_roughness_map = map
+        wrongs.append(rough)
+        var normals = LayerFactors()
+        normals.clearcoat_normal_map = map
+        wrongs.append(normals)
+    for index in range(len(wrongs)):
+        with assert_raises():
+            renderer.draw(
+                with_gpu_layers(
+                    physical_pair(PHYSICAL, 0.5, 0.5, 0.8), wrongs[index]
+                ),
+                BACKGROUND,
+                SHADE_TEXTURE,
+            )

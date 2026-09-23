@@ -393,8 +393,8 @@ The loader reads fifteen extensions. They are the ones three.js's `GLTFLoader` r
 | `KHR_materials_unlit` | A `BASIC` material: the base color, its texture, `doubleSided` and the alpha mode. The loader ignores the emissive, normal and metallic-roughness terms and every other material extension, as three.js does. |
 | `KHR_materials_emissive_strength` | `emissiveStrength` sets `emissive_intensity`. |
 | `KHR_materials_ior` | A `PHYSICAL` material. `ior` sets `ior`, or 1.5 when it is not there. |
-| `KHR_materials_specular` | A `PHYSICAL` material. `specularFactor` sets `specular_intensity`. `specularColorFactor` sets `specular_color`, converted from linear to sRGB. |
-| `KHR_materials_clearcoat` | A `PHYSICAL` material. `clearcoatFactor` and `clearcoatRoughnessFactor` set `clearcoat` and `clearcoat_roughness`. |
+| `KHR_materials_specular` | A `PHYSICAL` material. `specularFactor` sets `specular_intensity`. `specularColorFactor` sets `specular_color`, converted from linear to sRGB. `specularTexture` sets `specular_intensity_map`, linear with its alpha kept. `specularColorTexture` sets `specular_color_map`, sRGB with its alpha ignored. |
+| `KHR_materials_clearcoat` | A `PHYSICAL` material. `clearcoatFactor` and `clearcoatRoughnessFactor` set `clearcoat` and `clearcoat_roughness`. `clearcoatTexture`, `clearcoatRoughnessTexture` and `clearcoatNormalTexture` set the three coat maps, as data. The normal texture's `scale` sets `clearcoat_normal_scale` on both axes, as three.js sets it. |
 | `KHR_materials_transmission` | A `PHYSICAL` material. `transmissionFactor` sets `transmission`, and `transmissionTexture` sets `transmission_map`, read as data. See [Materials](Materials#transmission). |
 | `KHR_materials_volume` | A `PHYSICAL` material. `thicknessFactor` sets `thickness`, and `thicknessTexture` sets `thickness_map`, read as data. `attenuationDistance` sets `attenuation_distance`, and a distance of zero or none is infinite, as three.js reads it. `attenuationColor` sets `attenuation_color`, converted from linear to sRGB. |
 | `KHR_materials_dispersion` | A `PHYSICAL` material. `dispersion` sets `dispersion`. |
@@ -432,12 +432,12 @@ Each instance matrix is `TRANSLATION`, `ROTATION` and `SCALE` composed. An attri
 
 - `KHR_materials_variants`.
 - `KHR_draco_mesh_compression`, `EXT_meshopt_compression`, `KHR_texture_basisu`, `EXT_texture_webp` and `EXT_texture_avif`.
-- The textures in `KHR_materials_specular` and `KHR_materials_clearcoat`. Only their factors are read.
 
 #### Differences from three.js
 
 - A `specularColorFactor` outside zero to one is refused. A `Color` cannot hold it. three.js keeps it.
 - An `ior` outside 1 to 2.333 is refused, because `Material` refuses it.
+- A clear coat texture with a `clearcoatFactor` of zero is left out, with the normal texture's `scale`. three.js keeps them, but draws none.
 - An `iridescenceTexture` or `iridescenceThicknessTexture` with an `iridescenceFactor` of zero is left out. So is an `anisotropyTexture` with an `anisotropyStrength` of zero. three.js keeps them, but draws neither.
 - A `sheenColorFactor` outside zero to one is refused, as a `specularColorFactor` is.
 - A material whose maps have different transforms is refused. A fragment samples every map at one coordinate here. three.js keeps a transform for each map.

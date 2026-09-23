@@ -112,9 +112,11 @@ from lights.lighting import (
 from lights.physical_layers import (
     NO_ANISOTROPY_TEXEL,
     bent_normal,
+    clearcoat_of,
     iridescence_thickness,
     layers_of,
     sheen_roughness_of,
+    specular_reflectance,
 )
 from core.fog import FogView, fog_mix
 from render.linerule import (
@@ -500,12 +502,13 @@ comptime MAX_ANISOTROPY_LENGTH = Float32(1.0001)
 
 struct LayerFactors(ImplicitlyCopyable):
     """What a `PHYSICAL` triangle's sheen, iridescence and anisotropy are,
-    as the material says them: its numbers and its maps, per triangle.
+    and its specular and clearcoat maps, as the material says them: its
+    numbers and its maps, per triangle.
 
     One value on every corner, read from the first and checked to agree,
     as the rest of a triangle's metadata is. `LayerFactors()` has no sheen,
-    no film and no stretch, which is what every other kind carries. The
-    fragment's own layers are worked out from these by
+    no film, no stretch and no map, which is what every other kind
+    carries. The fragment's own layers are worked out from these by
     `lights.physical_layers.layers_of`.
     """
 
@@ -531,10 +534,26 @@ struct LayerFactors(ImplicitlyCopyable):
     var iridescence_map: TextureId
     var thickness_map: TextureId
     var anisotropy_map: TextureId
+    # The specular color, linear, three.js's `specularColor` uniform. Read
+    # only with a specular map, when the reflectance head on is worked out
+    # again per fragment; without one it rides in the corner's `specular`.
+    var specular_color: Vector3
+    # What the coat's normal map's x and y are scaled by, three.js's
+    # `clearcoatNormalScale`. The renderer negates it when it turns a
+    # corner around, as it negates the normal scale.
+    var clearcoat_normal_scale: Vector2
+    # The specular and coat maps: the specular intensity's (its alpha),
+    # the specular color's (its color), the coat's (its red), the coat
+    # roughness's (its green) and the coat's normals.
+    var specular_intensity_map: TextureId
+    var specular_color_map: TextureId
+    var clearcoat_map: TextureId
+    var clearcoat_roughness_map: TextureId
+    var clearcoat_normal_map: TextureId
 
     def __init__(out self):
-        """Describe a triangle with no sheen, no film and no stretch, at
-        three.js's defaults for each."""
+        """Describe a triangle with no sheen, no film, no stretch and no
+        specular or clearcoat map, at three.js's defaults for each."""
         self.sheen_color = Vector3(0, 0, 0)
         self.sheen_roughness = 1
         self.iridescence = 0
@@ -547,6 +566,13 @@ struct LayerFactors(ImplicitlyCopyable):
         self.iridescence_map = NO_TEXTURE
         self.thickness_map = NO_TEXTURE
         self.anisotropy_map = NO_TEXTURE
+        self.specular_color = Vector3(1, 1, 1)
+        self.clearcoat_normal_scale = Vector2(1, 1)
+        self.specular_intensity_map = NO_TEXTURE
+        self.specular_color_map = NO_TEXTURE
+        self.clearcoat_map = NO_TEXTURE
+        self.clearcoat_roughness_map = NO_TEXTURE
+        self.clearcoat_normal_map = NO_TEXTURE
 
     def agrees(self, other: Self) -> Bool:
         """Return True if `other` holds the same numbers and maps.
@@ -573,13 +599,24 @@ struct LayerFactors(ImplicitlyCopyable):
             and self.iridescence_map == other.iridescence_map
             and self.thickness_map == other.thickness_map
             and self.anisotropy_map == other.anisotropy_map
+            and self.specular_color.x == other.specular_color.x
+            and self.specular_color.y == other.specular_color.y
+            and self.specular_color.z == other.specular_color.z
+            and self.clearcoat_normal_scale.x == other.clearcoat_normal_scale.x
+            and self.clearcoat_normal_scale.y == other.clearcoat_normal_scale.y
+            and self.specular_intensity_map == other.specular_intensity_map
+            and self.specular_color_map == other.specular_color_map
+            and self.clearcoat_map == other.clearcoat_map
+            and self.clearcoat_roughness_map == other.clearcoat_roughness_map
+            and self.clearcoat_normal_map == other.clearcoat_normal_map
         )
 
     def is_layered(self) -> Bool:
         """Return True if any number or map differs from `LayerFactors()`.
 
         Returns:
-            Whether the triangle has a sheen, a film or a stretch to say.
+            Whether the triangle has a sheen, a film, a stretch, a
+            specular color or a specular or clearcoat map to say.
         """
         return not self.agrees(LayerFactors())
 
@@ -592,16 +629,29 @@ struct LayerFactors(ImplicitlyCopyable):
         """
         return self.anisotropy.x != 0 or self.anisotropy.y != 0
 
+    def is_specular_mapped(self) -> Bool:
+        """Return True if a specular map changes the reflectance head on,
+        so a fragment works it out again from `specular_color`.
+
+        Returns:
+            Whether the triangle names a specular intensity or color map.
+        """
+        return (
+            self.specular_intensity_map != NO_TEXTURE
+            or self.specular_color_map != NO_TEXTURE
+        )
+
     def check(self) raises:
         """Refuse numbers no material can hold.
 
         Raises:
-            Error: If any color channel of the sheen is negative or not
-                finite, the sheen roughness or the iridescence is outside
-                zero to one, the film's index is outside one to 2.333, a
-                thickness is negative or not finite, the anisotropy is not
-                finite or longer than one, or a map id is a negative other
-                than `NO_TEXTURE`.
+            Error: If any color channel of the sheen or the specular color
+                is negative or not finite, the sheen roughness or the
+                iridescence is outside zero to one, the film's index is
+                outside one to 2.333, a thickness is negative or not
+                finite, the anisotropy is not finite or longer than one,
+                the clearcoat normal scale is not finite, or a map id is a
+                negative other than `NO_TEXTURE`.
         """
         var color = self.sheen_color
         var darkest = min(min(color.x, color.y), color.z)
@@ -635,6 +685,30 @@ struct LayerFactors(ImplicitlyCopyable):
         )
         if lowest < NO_TEXTURE.value:
             raise Error("A triangle names a layer map id that nothing can hold")
+        var tint = self.specular_color
+        var faintest = min(min(tint.x, tint.y), tint.z)
+        if not isfinite(tint.dot(tint)) or faintest < 0:
+            raise Error("A triangle's specular color cannot be negative")
+        var scale = self.clearcoat_normal_scale
+        if not isfinite(scale.x) or not isfinite(scale.y):
+            raise Error("A triangle's clearcoat normal scale must be finite")
+        var coat_lowest = min(
+            min(
+                self.specular_intensity_map.value,
+                self.specular_color_map.value,
+            ),
+            min(
+                min(
+                    self.clearcoat_map.value, self.clearcoat_roughness_map.value
+                ),
+                self.clearcoat_normal_map.value,
+            ),
+        )
+        if coat_lowest < NO_TEXTURE.value:
+            raise Error(
+                "A triangle names a specular or clearcoat map id that nothing"
+                " can hold"
+            )
 
 
 struct RasterVertex(ImplicitlyCopyable):
@@ -1903,13 +1977,14 @@ def check_triangle_state(
     a.layers.check()
     if not b.layers.agrees(a.layers) or not c.layers.agrees(a.layers):
         raise Error(
-            "A triangle's corners disagree about their sheen, iridescence"
-            " or anisotropy"
+            "A triangle's corners disagree about their sheen, iridescence,"
+            " anisotropy or specular or clearcoat maps"
         )
     if a.kind != PHYSICAL and a.layers.is_layered():
         raise Error(
-            "Only a physical triangle has a sheen, an iridescence or an"
-            " anisotropy: no other shader reads one"
+            "Only a physical triangle has a sheen, an iridescence, an"
+            " anisotropy or a specular or clearcoat map: no other shader"
+            " reads one"
         )
     # The volume, asked as the material asks it: the numbers first, since a
     # NaN never agrees, then the agreement, the ids and the kind.
@@ -2348,6 +2423,9 @@ def check_triangle_maps(
             light map does not ignore its alpha; a sheen color map does not
             ignore its alpha; a sheen roughness map is not linear or
             ignores its alpha; an iridescence, thickness or anisotropy map
+            is not stored as data; a specular intensity map is not linear
+            or ignores its alpha; a specular color map does not ignore its
+            alpha; a clearcoat, clearcoat roughness or clearcoat normal map
             is not stored as data; or a node program a mode would run is
             not in its store, or names a texture `SHADE_TEXTURE` would open
             that is not in the store.
@@ -2432,6 +2510,31 @@ def check_triangle_maps(
         if layers.anisotropy_map != NO_TEXTURE:
             check_data_map(
                 textures.get(layers.anisotropy_map), "An anisotropy map"
+            )
+        # The specular and coat maps: a number read from the alpha, a
+        # color whose alpha means nothing, and three maps of data.
+        if layers.specular_intensity_map != NO_TEXTURE:
+            check_alpha_data_map(
+                textures.get(layers.specular_intensity_map),
+                "A specular intensity map",
+            )
+        if layers.specular_color_map != NO_TEXTURE:
+            check_color_map(
+                textures.get(layers.specular_color_map), "A specular color map"
+            )
+        if layers.clearcoat_map != NO_TEXTURE:
+            check_data_map(
+                textures.get(layers.clearcoat_map), "A clearcoat map"
+            )
+        if layers.clearcoat_roughness_map != NO_TEXTURE:
+            check_data_map(
+                textures.get(layers.clearcoat_roughness_map),
+                "A clearcoat roughness map",
+            )
+        if layers.clearcoat_normal_map != NO_TEXTURE:
+            check_data_map(
+                textures.get(layers.clearcoat_normal_map),
+                "A clearcoat normal map",
             )
     # The node program, and every texture it reads: the kernel asks the
     # same before a launch.
@@ -3116,6 +3219,15 @@ def rasterize_shaded(
             var thickness_texel = Float32(0)
             var thickness_mapped = False
             var stretch_texel = NO_ANISOTROPY_TEXEL
+            # What a physical surface's specular color and intensity, its
+            # coat and its coat's roughness are multiplied by, and the
+            # coat's normal map's texel: one for none, and no texel.
+            var specular_texel = Vector3(1, 1, 1)
+            var specular_alpha = Float32(1)
+            var coat_factor = Float32(1)
+            var coat_rough_factor = Float32(1)
+            var coat_texel = FloatColor(0.5, 0.5, 1.0, 1.0)
+            var coat_mapped = False
             # Each mode by name, as the kernel does, so there is no "else"
             # for an unrecognized one to fall into differently on each side.
             if mode == SHADE_UV or mode == SHADE_TEXTURE:
@@ -3276,6 +3388,74 @@ def rasterize_shaded(
                             y,
                         )
                         stretch_texel = Vector3(turn.r, turn.g, turn.b)
+                    # The specular and coat maps, three.js's
+                    # `lights_physical_fragment` and
+                    # `clearcoat_normal_fragment_maps`: the specular
+                    # color map's color, the specular intensity map's
+                    # *alpha*, the clearcoat map's red, the clearcoat
+                    # roughness map's green, and the coat's normal texel.
+                    if layered.specular_color_map != NO_TEXTURE:
+                        var tint = _sample_map(
+                            textures.get(layered.specular_color_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        )
+                        specular_texel = Vector3(tint.r, tint.g, tint.b)
+                    if layered.specular_intensity_map != NO_TEXTURE:
+                        specular_alpha = _sample_map(
+                            textures.get(layered.specular_intensity_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).a
+                    if layered.clearcoat_map != NO_TEXTURE:
+                        coat_factor = _sample_map(
+                            textures.get(layered.clearcoat_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).r
+                    if layered.clearcoat_roughness_map != NO_TEXTURE:
+                        coat_rough_factor = _sample_map(
+                            textures.get(layered.clearcoat_roughness_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).g
+                    if layered.clearcoat_normal_map != NO_TEXTURE:
+                        coat_texel = _sample_map(
+                            textures.get(layered.clearcoat_normal_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        )
+                        coat_mapped = True
                     # The transmission map's red and the thickness map's
                     # green, three.js's `transmission_fragment`.
                     if a.transmission_map != NO_TEXTURE:
@@ -3383,18 +3563,55 @@ def rasterize_shaded(
                 # summed before the texel is known. `shaded` is the base
                 # color times the map, three.js's `diffuseColor`, since a
                 # physical surface's `arriving` is one. The reflectance
-                # head on rides in `specular`, read from the first corner.
+                # head on rides in `specular`, read from the first corner,
+                # unless a specular map changes it: then it is worked out
+                # again from the texels, as three.js works it out.
+                var head_on = Vector3(a.specular.r, a.specular.g, a.specular.b)
+                var intensity = a.specular_intensity
+                if a.layers.is_specular_mapped():
+                    intensity = a.specular_intensity * specular_alpha
+                    head_on = specular_reflectance(
+                        a.ior,
+                        a.layers.specular_color,
+                        intensity,
+                        specular_texel,
+                    )
                 var surface = physical_surface(
                     Vector3(shaded.r, shaded.g, shaded.b),
-                    Vector3(a.specular.r, a.specular.g, a.specular.b),
+                    head_on,
                     a.metalness * metal_factor,
-                    a.specular_intensity,
+                    intensity,
                 )
                 var rough = floored_roughness(a.roughness * rough_factor)
-                var coat_rough = floored_roughness(a.clearcoat_roughness)
+                # The coat times its map's red, and its roughness times its
+                # map's green, before the floor, in three.js's order.
+                var coat = clearcoat_of(a.clearcoat, coat_factor)
+                var coat_rough = floored_roughness(
+                    a.clearcoat_roughness * coat_rough_factor
+                )
                 var toward_eye = toward_eye_at(
                     lighting.eye, lighting.toward_eye, spot
                 )
+                # The coat's own normal, three.js's `clearcoatNormal`: the
+                # normal before any map, perturbed by the coat's normal
+                # map along the frame three.js's `tbn2` builds from that
+                # same normal. Its texel is unpacked, its x and y scaled,
+                # and the sum normalized, in that order, by `mapped_normal`.
+                var coat_normal = coat_facing
+                if coated and coat_mapped:
+                    var right = _weights(coverage, x + 1, y)
+                    var up = _weights(coverage, x, y - 1)
+                    var uv_right = _coordinates_at(a, b, c, right)
+                    var uv_up = _coordinates_at(a, b, c, up)
+                    coat_normal = mapped_normal(
+                        coat_facing,
+                        _world_at(a, b, c, right) - spot,
+                        _world_at(a, b, c, up) - spot,
+                        Vector2(uv_right.x - u, uv_right.y - v),
+                        Vector2(uv_up.x - u, uv_up.y - v),
+                        coat_texel,
+                        a.layers.clearcoat_normal_scale,
+                    )
                 # The tangent frame an anisotropic lobe is stretched along,
                 # three.js's `tbn`, from the normal before any map and the
                 # changes one pixel right and one pixel up, as a normal map
@@ -3443,11 +3660,11 @@ def rasterize_shaded(
                 )
                 var direct = lighting.physical_at(
                     facing,
-                    coat_facing,
+                    coat_normal,
                     spot,
                     surface,
                     rough,
-                    a.clearcoat,
+                    coat,
                     coat_rough,
                     a.receives_shadow,
                     layers,
@@ -3462,7 +3679,7 @@ def rasterize_shaded(
                     Float32(0), min(Float32(1), facing.dot(toward_eye))
                 )
                 var dot_nv_coat = max(
-                    Float32(0), min(Float32(1), coat_facing.dot(toward_eye))
+                    Float32(0), min(Float32(1), coat_normal.dot(toward_eye))
                 )
                 # The environment along the rough reflection and around
                 # the normal, three.js's `getIBLRadiance` and
@@ -3498,7 +3715,7 @@ def rasterize_shaded(
                     if coated:
                         var gloss = cube.sample_rough(
                             rough_reflection(
-                                toward_eye, coat_facing, coat_rough
+                                toward_eye, coat_normal, coat_rough
                             ),
                             coat_rough,
                         )
@@ -3547,7 +3764,7 @@ def rasterize_shaded(
                     radiance,
                     irradiance,
                     Vector3(glow.r, glow.g, glow.b),
-                    a.clearcoat,
+                    coat,
                     coat_rough,
                     Vector3(dot_nv_coat, 0, 0),
                     coat_radiance,

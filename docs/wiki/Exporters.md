@@ -89,8 +89,8 @@ A `PHYSICAL` material writes the extensions that `read_gltf` reads for it. Thus 
 | Property | Extension |
 |---|---|
 | `ior` | `KHR_materials_ior`. |
-| `specular_intensity`, `specular_color` | `KHR_materials_specular`: `specularFactor` and `specularColorFactor`, in linear light. |
-| `clearcoat`, `clearcoat_roughness` | `KHR_materials_clearcoat`: `clearcoatFactor` and `clearcoatRoughnessFactor`. |
+| `specular_intensity`, `specular_color`, `specular_intensity_map`, `specular_color_map` | `KHR_materials_specular`: `specularFactor` and `specularColorFactor`, in linear light, `specularTexture` and `specularColorTexture`. The intensity is in the alpha, and the image keeps it. |
+| `clearcoat`, `clearcoat_roughness`, the three coat maps | `KHR_materials_clearcoat`: `clearcoatFactor`, `clearcoatRoughnessFactor`, `clearcoatTexture`, `clearcoatRoughnessTexture` and `clearcoatNormalTexture`. The normal texture's `scale` is the x of `clearcoat_normal_scale`, as three.js writes it. |
 | `transmission`, `transmission_map` | `KHR_materials_transmission`: `transmissionFactor` and `transmissionTexture`. |
 | `thickness`, `thickness_map`, `attenuation_distance`, `attenuation_color` | `KHR_materials_volume`: `thicknessFactor` in meters, `thicknessTexture`, `attenuationDistance` in meters when it is finite, and `attenuationColor` in linear light. |
 | `dispersion` | `KHR_materials_dispersion`. |
@@ -183,7 +183,6 @@ A number is written as the shortest text that reads back to the same `Float32`. 
 - Lights, cameras, animations, skins and morph targets.
 - Instanced, batched and skinned meshes, lines, points and sprites.
 - Bump maps, alpha maps, light maps, specular maps, displacement maps, environment maps, matcaps and gradient maps.
-- The maps in `KHR_materials_specular` and `KHR_materials_clearcoat`. A material in this port has no such maps: the renderer draws a specular and a clear coat from their factors. three.js writes these maps.
 - The groups of a geometry. A mesh has one material.
 - A `BACK_SIDE` material is written single-sided, as three.js writes it. glTF has no back side.
 - OBJ materials and a material library. three.js writes none.

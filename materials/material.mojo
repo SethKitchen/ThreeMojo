@@ -212,6 +212,7 @@ from render.raster_state import (
 )
 from render.texture_store import NO_TEXTURE, TextureId
 from materials.nodes import NO_NODES, NodeProgramId
+from lights.physical_layers import specular_reflectance
 from math.bounds import Plane
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -945,6 +946,20 @@ struct Material(ImplicitlyCopyable):
     # `clearcoatRoughness`. Zero and zero by default, as there.
     var clearcoat: Float32
     var clearcoat_roughness: Float32
+    # The maps over a `PHYSICAL` surface's reflectance and its coat, as
+    # three.js reads them: `specularIntensityMap`, whose *alpha* multiplies
+    # the specular intensity; `specularColorMap`, whose color multiplies
+    # the specular color; `clearcoatMap`, whose red multiplies the clear
+    # coat; `clearcoatRoughnessMap`, whose green multiplies the coat's
+    # roughness; and `clearcoatNormalMap`, the coat's own tangent-space
+    # normals, whose x and y are scaled by `clearcoatNormalScale`. The
+    # color map holds color; the other four hold data.
+    var specular_intensity_map: TextureId
+    var specular_color_map: TextureId
+    var clearcoat_map: TextureId
+    var clearcoat_roughness_map: TextureId
+    var clearcoat_normal_map: TextureId
+    var clearcoat_normal_scale: Vector2
     # How much of a `PHYSICAL` surface's diffuse light is the opaque scene
     # behind it seen through it instead, from zero to one, three.js's
     # `transmission`, and a map whose red channel multiplies it, three.js's
@@ -1126,6 +1141,12 @@ struct Material(ImplicitlyCopyable):
         anisotropy: Float32 = 0.0,
         anisotropy_rotation: Angle = NO_ROTATION,
         anisotropy_map: TextureId = NO_TEXTURE,
+        specular_intensity_map: TextureId = NO_TEXTURE,
+        specular_color_map: TextureId = NO_TEXTURE,
+        clearcoat_map: TextureId = NO_TEXTURE,
+        clearcoat_roughness_map: TextureId = NO_TEXTURE,
+        clearcoat_normal_map: TextureId = NO_TEXTURE,
+        clearcoat_normal_scale: Vector2 = UNIT_NORMAL_SCALE,
         nodes: NodeProgramId = NO_NODES,
     ) raises:
         """Describe a surface.
@@ -1329,6 +1350,25 @@ struct Material(ImplicitlyCopyable):
                 counterclockwise, three.js's `anisotropyRotation`.
             anisotropy_map: Id of a texture whose red and green turn the
                 stretch and whose blue scales it, or `NO_TEXTURE`. Data.
+            specular_intensity_map: Id of a texture whose *alpha*
+                multiplies the specular intensity, three.js's
+                `specularIntensityMap`, or `NO_TEXTURE`. `LINEAR`, and its
+                alpha read: `COVERAGE`.
+            specular_color_map: Id of a texture whose color multiplies the
+                specular color, three.js's `specularColorMap`, or
+                `NO_TEXTURE`. Its alpha must be `IGNORED`.
+            clearcoat_map: Id of a texture whose red channel multiplies
+                the clear coat, three.js's `clearcoatMap`, or
+                `NO_TEXTURE`. Data: `LINEAR`, `IGNORED`.
+            clearcoat_roughness_map: Id of a texture whose green channel
+                multiplies the coat's roughness, three.js's
+                `clearcoatRoughnessMap`, or `NO_TEXTURE`. Data.
+            clearcoat_normal_map: Id of a texture of tangent-space normals
+                the coat lies on, three.js's `clearcoatNormalMap`, or
+                `NO_TEXTURE`. Data.
+            clearcoat_normal_scale: What the coat's normal map's x and y
+                are scaled by, three.js's `clearcoatNormalScale`. One and
+                one by default.
             nodes: Id of a compiled node graph that replaces parts of the
                 shading, or `NO_NODES`: a node material. See
                 `materials.nodes`.
@@ -1436,7 +1476,11 @@ struct Material(ImplicitlyCopyable):
                 with no sheen, an iridescence map with no iridescence, an
                 anisotropy map with no anisotropy, and any of these that
                 is not the default on a kind that is not `PHYSICAL` are
-                refused. A `nodes` id that is a negative other than
+                refused. A specular or clearcoat map id that is a negative
+                other than `NO_TEXTURE`, a `clearcoat_normal_scale` that is
+                not finite, or that is not one with no clearcoat normal
+                map, a clearcoat map with no clear coat, and a specular map
+                on a kind that is not `PHYSICAL` are refused. A `nodes` id that is a negative other than
                 `NO_NODES`, or one on a kind that `takes_nodes` refuses or
                 on a wireframe, is
                 refused.
@@ -1835,6 +1879,52 @@ struct Material(ImplicitlyCopyable):
         self.anisotropy = anisotropy
         self.anisotropy_rotation = anisotropy_rotation
         self.anisotropy_map = anisotropy_map
+        # The specular and coat maps, refused where nothing reads them:
+        # only the physical shader has them, and a coat map with no coat
+        # to multiply does nothing, as three.js reads none without
+        # `USE_CLEARCOAT`. A clear coat above zero is physical already.
+        var mapped_lowest = min(
+            min(specular_intensity_map.value, specular_color_map.value),
+            min(
+                min(clearcoat_map.value, clearcoat_roughness_map.value),
+                clearcoat_normal_map.value,
+            ),
+        )
+        if mapped_lowest < NO_TEXTURE.value:
+            raise Error(
+                "A material's specular or clearcoat map id cannot be negative"
+            )
+        var coat_scale = clearcoat_normal_scale
+        if not isfinite(coat_scale.x) or not isfinite(coat_scale.y):
+            raise Error("A clearcoat normal scale must be finite")
+        var coat_scaled = coat_scale.x != 1 or coat_scale.y != 1
+        if clearcoat_normal_map == NO_TEXTURE and coat_scaled:
+            raise Error(
+                "A clearcoat normal scale needs a clearcoat normal map to scale"
+            )
+        var coat_mapped = (
+            clearcoat_map != NO_TEXTURE
+            or clearcoat_roughness_map != NO_TEXTURE
+            or clearcoat_normal_map != NO_TEXTURE
+        )
+        if clearcoat == 0 and coat_mapped:
+            raise Error("A clearcoat map needs a clearcoat to multiply")
+        var specular_mapped = (
+            specular_intensity_map != NO_TEXTURE
+            or specular_color_map != NO_TEXTURE
+        )
+        if kind != PHYSICAL and specular_mapped:
+            raise Error(
+                "Only a physical material has a specular intensity map or a"
+                " specular color map: give it kind=PHYSICAL, or build it"
+                " with physical_material"
+            )
+        self.specular_intensity_map = specular_intensity_map
+        self.specular_color_map = specular_color_map
+        self.clearcoat_map = clearcoat_map
+        self.clearcoat_roughness_map = clearcoat_roughness_map
+        self.clearcoat_normal_map = clearcoat_normal_map
+        self.clearcoat_normal_scale = clearcoat_normal_scale
         # A node graph replaces parts of a surface's shading, so a kind that
         # shows data or a shadow has nothing for it to replace. A wireframe
         # is drawn as lines, which run no graph.
@@ -2282,15 +2372,14 @@ struct Material(ImplicitlyCopyable):
                 1.0,
             )
         if self.kind == PHYSICAL:
-            var ratio = (self.ior - 1) / (self.ior + 1)
-            var head_on = ratio * ratio
             var tint = FloatColor(srgb=self.specular_color)
-            return FloatColor(
-                min(head_on * tint.r, Float32(1)) * self.specular_intensity,
-                min(head_on * tint.g, Float32(1)) * self.specular_intensity,
-                min(head_on * tint.b, Float32(1)) * self.specular_intensity,
-                1.0,
+            var head_on = specular_reflectance(
+                self.ior,
+                Vector3(tint.r, tint.g, tint.b),
+                self.specular_intensity,
+                Vector3(1, 1, 1),
             )
+            return FloatColor(head_on.x, head_on.y, head_on.z, 1.0)
         return FloatColor(0.0, 0.0, 0.0, 1.0)
 
     def is_textured(self) -> Bool:
@@ -2661,6 +2750,12 @@ def physical_material(
     anisotropy: Float32 = 0.0,
     anisotropy_rotation: Angle = NO_ROTATION,
     anisotropy_map: TextureId = NO_TEXTURE,
+    specular_intensity_map: TextureId = NO_TEXTURE,
+    specular_color_map: TextureId = NO_TEXTURE,
+    clearcoat_map: TextureId = NO_TEXTURE,
+    clearcoat_roughness_map: TextureId = NO_TEXTURE,
+    clearcoat_normal_map: TextureId = NO_TEXTURE,
+    clearcoat_normal_scale: Vector2 = UNIT_NORMAL_SCALE,
 ) raises -> Material:
     """Return a physically shaded material with an index of refraction, a
     clear coat, transmission, a sheen, a thin film and a stretched lobe,
@@ -2744,6 +2839,17 @@ def physical_material(
         anisotropy_rotation: Which way, from the tangent.
         anisotropy_map: Id of a texture that turns and scales the stretch,
             or `NO_TEXTURE`.
+        specular_intensity_map: Id of a texture whose alpha multiplies
+            the specular intensity, or `NO_TEXTURE`.
+        specular_color_map: Id of a texture whose color multiplies the
+            specular color, or `NO_TEXTURE`.
+        clearcoat_map: Id of a texture whose red multiplies the clear
+            coat, or `NO_TEXTURE`.
+        clearcoat_roughness_map: Id of a texture whose green multiplies
+            the coat's roughness, or `NO_TEXTURE`.
+        clearcoat_normal_map: Id of a texture of the coat's own
+            tangent-space normals, or `NO_TEXTURE`.
+        clearcoat_normal_scale: What that map's x and y are scaled by.
 
     Returns:
         The material, of kind `PHYSICAL`.
@@ -2802,6 +2908,12 @@ def physical_material(
         anisotropy=anisotropy,
         anisotropy_rotation=anisotropy_rotation,
         anisotropy_map=anisotropy_map,
+        specular_intensity_map=specular_intensity_map,
+        specular_color_map=specular_color_map,
+        clearcoat_map=clearcoat_map,
+        clearcoat_roughness_map=clearcoat_roughness_map,
+        clearcoat_normal_map=clearcoat_normal_map,
+        clearcoat_normal_scale=clearcoat_normal_scale,
     )
 
 

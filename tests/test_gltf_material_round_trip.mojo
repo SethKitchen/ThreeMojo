@@ -6,8 +6,9 @@
 """Tests for the newer material features `exporters.gltf` writes: the
 occlusion texture and the second set of texture coordinates,
 `KHR_texture_transform`, `KHR_materials_emissive_strength`, the
-physical material extensions `loaders.gltf` reads, and the sheen, thin
-film and stretched lobe with their maps.
+physical material extensions `loaders.gltf` reads with the maps of the
+specular and clear coat ones, and the sheen, thin film and stretched lobe
+with their maps.
 
 Each test writes a scene, reads it back, writes what was read and reads
 that again. The material must survive both trips.
@@ -868,3 +869,146 @@ def test_a_layer_is_written_only_when_its_amount_is_not_zero() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+# --- specular and clearcoat maps --------------------------------------------
+
+
+def check_coat_maps(trip: Trip) raises:
+    """Assert every specular and clearcoat field came back as
+    `test_the_specular_and_clearcoat_maps_survive_two_trips` sets it."""
+    var material = trip.material()
+    assert_equal(material.kind, PHYSICAL)
+    assert_almost_equal(material.specular_intensity, 0.5, atol=TOLERANCE)
+    assert_almost_equal(material.clearcoat, 0.75, atol=TOLERANCE)
+    assert_almost_equal(material.clearcoat_roughness, 0.25, atol=TOLERANCE)
+    assert_equal(material.clearcoat_normal_scale.x, Float32(0.5))
+    assert_equal(material.clearcoat_normal_scale.y, Float32(0.5))
+    for id in [
+        material.specular_intensity_map,
+        material.specular_color_map,
+        material.clearcoat_map,
+        material.clearcoat_roughness_map,
+        material.clearcoat_normal_map,
+    ]:
+        assert_true(id != NO_TEXTURE)
+    ref strength = trip.assets.textures.get(material.specular_intensity_map)
+    assert_equal(strength.color_space, LINEAR)
+    assert_equal(strength.alpha, COVERAGE)
+    ref tint = trip.assets.textures.get(material.specular_color_map)
+    assert_equal(tint.color_space, SRGB)
+    assert_equal(tint.alpha, IGNORED)
+    for id in [
+        material.clearcoat_map,
+        material.clearcoat_roughness_map,
+        material.clearcoat_normal_map,
+    ]:
+        ref data = trip.assets.textures.get(id)
+        assert_equal(data.color_space, LINEAR)
+        assert_equal(data.alpha, IGNORED)
+
+
+def test_the_specular_and_clearcoat_maps_survive_two_trips() raises:
+    var assets = Assets()
+    var strength = alpha_image(9)
+    var original_strength = Texture(copy=strength)
+    var scene = one_mesh(
+        assets,
+        physical_material(
+            Color(9, 9, 9),
+            specular_intensity=0.5,
+            clearcoat=0.75,
+            clearcoat_roughness=0.25,
+            specular_intensity_map=assets.textures.add(strength^),
+            specular_color_map=assets.textures.add(image(10, SRGB, True)),
+            clearcoat_map=assets.textures.add(data_image(11)),
+            clearcoat_roughness_map=assets.textures.add(data_image(12)),
+            clearcoat_normal_map=assets.textures.add(data_image(13)),
+            clearcoat_normal_scale=Vector2(0.5, 0.5),
+        ),
+    )
+    var first = Trip(scene, assets)
+    var document = first.document()
+    var specular = extension_of(
+        document, first.first_material(), "KHR_materials_specular"
+    )
+    assert_true(document.has(specular, "specularTexture"))
+    assert_true(document.has(specular, "specularColorTexture"))
+    var coat = extension_of(
+        document, first.first_material(), "KHR_materials_clearcoat"
+    )
+    assert_true(document.has(coat, "clearcoatTexture"))
+    assert_true(document.has(coat, "clearcoatRoughnessTexture"))
+    var normals = document.get(coat, "clearcoatNormalTexture")
+    assert_equal(document.number(document.get(normals, "scale")), 0.5)
+    check_coat_maps(first)
+    # The intensity in the alpha comes back, upside down as written.
+    check_same_sampling(
+        first.assets.textures.get(first.material().specular_intensity_map),
+        original_strength,
+    )
+    var second = first.again()
+    check_coat_maps(second)
+    same_pixels(
+        second,
+        second.material().specular_intensity_map,
+        first.assets.textures.get(first.material().specular_intensity_map),
+    )
+    same_pixels(
+        second,
+        second.material().clearcoat_normal_map,
+        first.assets.textures.get(first.material().clearcoat_normal_map),
+    )
+
+
+def test_a_clearcoat_normal_map_at_a_scale_of_one_writes_none() raises:
+    var assets = Assets()
+    var scene = one_mesh(
+        assets,
+        physical_material(
+            Color(9, 9, 9),
+            clearcoat=1,
+            clearcoat_normal_map=assets.textures.add(data_image(3)),
+        ),
+    )
+    var first = Trip(scene, assets)
+    var document = first.document()
+    var coat = extension_of(
+        document, first.first_material(), "KHR_materials_clearcoat"
+    )
+    var normals = document.get(coat, "clearcoatNormalTexture")
+    assert_false(document.has(normals, "scale"))
+    assert_false(document.has(coat, "clearcoatTexture"))
+    var material = first.again().material()
+    assert_equal(material.clearcoat_normal_scale.x, Float32(1))
+    assert_equal(material.clearcoat_map, NO_TEXTURE)
+
+
+def test_a_specular_map_alone_writes_the_specular_extension() raises:
+    for which in range(2):
+        var assets = Assets()
+        var strength = NO_TEXTURE
+        var tint = NO_TEXTURE
+        if which == 0:
+            strength = assets.textures.add(alpha_image(2))
+        else:
+            tint = assets.textures.add(image(2, SRGB, True))
+        var scene = one_mesh(
+            assets,
+            physical_material(
+                Color(9, 9, 9),
+                specular_intensity_map=strength,
+                specular_color_map=tint,
+            ),
+        )
+        var trip = Trip(scene, assets)
+        var document = trip.document()
+        var specular = extension_of(
+            document, trip.first_material(), "KHR_materials_specular"
+        )
+        assert_true(specular != NO_NODE)
+        assert_equal(document.has(specular, "specularTexture"), which == 0)
+        assert_equal(document.has(specular, "specularColorTexture"), which == 1)
+        var material = trip.again().material()
+        assert_equal(material.specular_intensity_map != NO_TEXTURE, which == 0)
+        assert_equal(material.specular_color_map != NO_TEXTURE, which == 1)

@@ -6448,3 +6448,185 @@ def test_a_layer_map_must_be_there_and_stored_as_read_in_the_renderer() raises:
                     sheet_of(assets, wrongs[index]),
                     camera_at(0, 0, 4),
                 )
+
+
+# --- specular and clearcoat maps --------------------------------------------
+
+
+def test_the_specular_and_coat_maps_are_carried_and_turned() raises:
+    var assets = Assets()
+    var white = Color(255, 255, 255)
+    var tint = assets.textures.add(a_data_texel(255, 255, 255))
+    var strength = assets.textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 128],
+            REPEAT,
+            NEAREST,
+            LINEAR,
+            False,
+            COVERAGE,
+        )
+    )
+    var data = assets.textures.add(a_data_texel(255, 128, 255))
+    var lacquer = physical_material(
+        white,
+        side=DOUBLE_SIDE,
+        specular_color=Color(255, 0, 255),
+        clearcoat=0.5,
+        specular_intensity_map=strength,
+        specular_color_map=tint,
+        clearcoat_map=data,
+        clearcoat_roughness_map=data,
+        clearcoat_normal_map=data,
+        clearcoat_normal_scale=Vector2(2, 0.5),
+    )
+    var skin = assets.materials.add(lacquer)
+    var scene = scene_with_node_at(0)
+    light_the(scene)
+    scene.update()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var corners = prepared(
+        renderer, scene, assets, sheet_of(assets, skin), camera_at(0, 0, 4)
+    )
+    ref layers = corners[0].layers
+    # The specular color decoded to linear.
+    assert_equal(layers.specular_color.x, Float32(1))
+    assert_equal(layers.specular_color.y, Float32(0))
+    assert_equal(layers.clearcoat_normal_scale.x, Float32(2))
+    assert_equal(layers.clearcoat_normal_scale.y, Float32(0.5))
+    assert_equal(layers.specular_intensity_map, strength)
+    assert_equal(layers.specular_color_map, tint)
+    assert_equal(layers.clearcoat_map, data)
+    assert_equal(layers.clearcoat_roughness_map, data)
+    assert_equal(layers.clearcoat_normal_map, data)
+    # Seen from behind, the coat's normal scale turns with the frame.
+    var behind = prepared(
+        renderer, scene, assets, sheet_of(assets, skin), camera_at(0, 0, -4)
+    )
+    assert_equal(behind[0].layers.clearcoat_normal_scale.x, Float32(-2))
+    assert_equal(behind[0].layers.clearcoat_normal_scale.y, Float32(-0.5))
+    # Under lit shading the maps are erased and the numbers kept; the
+    # scale has no map to turn with then.
+    renderer.set_shading(SHADE_LIT)
+    var lit = prepared(
+        renderer, scene, assets, sheet_of(assets, skin), camera_at(0, 0, 4)
+    )
+    ref unmapped = lit[0].layers
+    assert_equal(unmapped.specular_intensity_map, NO_TEXTURE)
+    assert_equal(unmapped.specular_color_map, NO_TEXTURE)
+    assert_equal(unmapped.clearcoat_map, NO_TEXTURE)
+    assert_equal(unmapped.clearcoat_roughness_map, NO_TEXTURE)
+    assert_equal(unmapped.clearcoat_normal_map, NO_TEXTURE)
+    assert_equal(unmapped.specular_color.z, Float32(1))
+    var lit_behind = prepared(
+        renderer, scene, assets, sheet_of(assets, skin), camera_at(0, 0, -4)
+    )
+    assert_equal(lit_behind[0].layers.clearcoat_normal_scale.x, Float32(2))
+
+
+def test_a_clearcoat_normal_map_changes_the_picture_in_the_renderer() raises:
+    var assets = Assets()
+    var dark = Color(20, 20, 20)
+    var toward_x = assets.textures.add(a_data_texel(255, 128, 128))
+    var plain = assets.materials.add(
+        physical_material(dark, clearcoat=1, clearcoat_roughness=0.3)
+    )
+    var turned = assets.materials.add(
+        physical_material(
+            dark,
+            clearcoat=1,
+            clearcoat_roughness=0.3,
+            clearcoat_normal_map=toward_x,
+        )
+    )
+    var scene = scene_with_node_at(0)
+    light_the(scene)
+    scene.update()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var glossy = rendered(
+        renderer, scene, assets, sheet_of(assets, plain), camera_at(0, 0, 4)
+    )
+    var tilted = rendered(
+        renderer, scene, assets, sheet_of(assets, turned), camera_at(0, 0, 4)
+    )
+    assert_true(sum_red(glossy) != sum_red(tilted), "the map changed nothing")
+
+
+def test_a_specular_or_coat_map_must_be_there_and_stored_as_read() raises:
+    var assets = Assets()
+    var white = Color(255, 255, 255)
+    var covered_color = assets.textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+            COVERAGE,
+        )
+    )
+    var data = assets.textures.add(a_data_texel(255, 255, 255))
+    var encoded = a_data_texel(255, 255, 255)
+    encoded.color_space = SRGB
+    var colored = assets.textures.add(encoded^)
+    var missing = TextureId(99)
+    var wrongs = List[MaterialId]()
+    for map in [covered_color, missing]:
+        wrongs.append(
+            assets.materials.add(
+                physical_material(white, specular_color_map=map)
+            )
+        )
+    for map in [covered_color, data, missing]:
+        wrongs.append(
+            assets.materials.add(
+                physical_material(white, specular_intensity_map=map)
+            )
+        )
+    for map in [colored, missing]:
+        wrongs.append(
+            assets.materials.add(
+                physical_material(white, clearcoat=1, clearcoat_map=map)
+            )
+        )
+        wrongs.append(
+            assets.materials.add(
+                physical_material(
+                    white, clearcoat=1, clearcoat_roughness_map=map
+                )
+            )
+        )
+        wrongs.append(
+            assets.materials.add(
+                physical_material(white, clearcoat=1, clearcoat_normal_map=map)
+            )
+        )
+    # And a coat map whose transform the base map disagrees with.
+    var moved = a_data_texel(255, 0, 0)
+    moved.repeat = Vector2(2, 2)
+    var shifted = assets.textures.add(moved^)
+    wrongs.append(
+        assets.materials.add(
+            physical_material(
+                white, data, clearcoat=1, clearcoat_normal_map=shifted
+            )
+        )
+    )
+    var scene = scene_with_node_at(0)
+    for index in range(len(wrongs)):
+        for mode in [SHADE_TEXTURE, SHADE_LIT]:
+            var strict = Renderer(WIDTH, HEIGHT)
+            strict.set_shading(mode)
+            with assert_raises():
+                _ = rendered(
+                    strict,
+                    scene,
+                    assets,
+                    sheet_of(assets, wrongs[index]),
+                    camera_at(0, 0, 4),
+                )

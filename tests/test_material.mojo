@@ -2015,3 +2015,98 @@ def test_only_a_physical_material_has_a_sheen_a_film_or_a_stretch() raises:
             )
     # An alpha on a black sheen color is still black.
     _ = Material(white, kind=LAMBERT, sheen_color=Color(0, 0, 0, 128))
+
+
+# --- specular and clearcoat maps --------------------------------------------
+
+
+def test_a_physical_material_carries_its_specular_and_coat_maps() raises:
+    var white = Color(255, 255, 255)
+    var built = physical_material(
+        white,
+        clearcoat=0.5,
+        specular_intensity_map=TextureId(1),
+        specular_color_map=TextureId(2),
+        clearcoat_map=TextureId(3),
+        clearcoat_roughness_map=TextureId(4),
+        clearcoat_normal_map=TextureId(5),
+        clearcoat_normal_scale=Vector2(2, -1),
+    )
+    assert_equal(built.specular_intensity_map, TextureId(1))
+    assert_equal(built.specular_color_map, TextureId(2))
+    assert_equal(built.clearcoat_map, TextureId(3))
+    assert_equal(built.clearcoat_roughness_map, TextureId(4))
+    assert_equal(built.clearcoat_normal_map, TextureId(5))
+    assert_equal(built.clearcoat_normal_scale.x, Float32(2))
+    assert_equal(built.clearcoat_normal_scale.y, Float32(-1))
+    # three.js's defaults: no map, and a scale of one.
+    var plain = physical_material(white)
+    assert_equal(plain.specular_intensity_map, NO_TEXTURE)
+    assert_equal(plain.clearcoat_normal_map, NO_TEXTURE)
+    assert_equal(plain.clearcoat_normal_scale.x, Float32(1))
+    # A coat normal map at a scale of one is fine, as is a specular map
+    # with no clear coat.
+    _ = physical_material(white, clearcoat=1, clearcoat_normal_map=TextureId(0))
+    _ = physical_material(white, specular_color_map=TextureId(0))
+
+
+def test_a_negative_specular_or_coat_map_id_is_refused() raises:
+    var white = Color(255, 255, 255)
+    var bad = TextureId(-2)
+    with assert_raises(contains="specular or clearcoat map id"):
+        _ = physical_material(white, specular_intensity_map=bad)
+    with assert_raises(contains="specular or clearcoat map id"):
+        _ = physical_material(white, specular_color_map=bad)
+    with assert_raises(contains="specular or clearcoat map id"):
+        _ = physical_material(white, clearcoat=1, clearcoat_map=bad)
+    with assert_raises(contains="specular or clearcoat map id"):
+        _ = physical_material(white, clearcoat=1, clearcoat_roughness_map=bad)
+    with assert_raises(contains="specular or clearcoat map id"):
+        _ = physical_material(white, clearcoat=1, clearcoat_normal_map=bad)
+
+
+def test_a_clearcoat_normal_scale_is_checked() raises:
+    var white = Color(255, 255, 255)
+    var map = TextureId(0)
+    with assert_raises(contains="clearcoat normal scale must be finite"):
+        _ = physical_material(
+            white,
+            clearcoat=1,
+            clearcoat_normal_map=map,
+            clearcoat_normal_scale=Vector2(inf[DType.float32](), 1),
+        )
+    with assert_raises(contains="clearcoat normal scale must be finite"):
+        _ = physical_material(
+            white,
+            clearcoat=1,
+            clearcoat_normal_map=map,
+            clearcoat_normal_scale=Vector2(1, nan[DType.float32]()),
+        )
+    with assert_raises(contains="needs a clearcoat normal map"):
+        _ = physical_material(white, clearcoat_normal_scale=Vector2(1, 2))
+    with assert_raises(contains="needs a clearcoat normal map"):
+        _ = physical_material(white, clearcoat_normal_scale=Vector2(3, 1))
+
+
+def test_a_clearcoat_map_with_no_coat_is_refused() raises:
+    var white = Color(255, 255, 255)
+    var map = TextureId(0)
+    with assert_raises(contains="needs a clearcoat to multiply"):
+        _ = physical_material(white, clearcoat_map=map)
+    with assert_raises(contains="needs a clearcoat to multiply"):
+        _ = physical_material(white, clearcoat_roughness_map=map)
+    with assert_raises(contains="needs a clearcoat to multiply"):
+        _ = physical_material(white, clearcoat_normal_map=map)
+    # A coat on any other kind is refused before its maps are asked about.
+    with assert_raises(contains="Only a physical material has an index"):
+        _ = Material(white, kind=STANDARD, clearcoat=1, clearcoat_map=map)
+
+
+def test_only_a_physical_material_has_a_specular_map_of_its_own() raises:
+    var white = Color(255, 255, 255)
+    var map = TextureId(0)
+    for kind in [BASIC, LAMBERT, PHONG, TOON, MATCAP, STANDARD]:
+        with assert_raises(contains="specular intensity map or a specular"):
+            _ = Material(white, kind=kind, specular_intensity_map=map)
+        with assert_raises(contains="specular intensity map or a specular"):
+            _ = Material(white, kind=kind, specular_color_map=map)

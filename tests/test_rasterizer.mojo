@@ -6550,3 +6550,287 @@ def test_a_layer_map_must_be_stored_as_it_is_read() raises:
             SHADE_TEXTURE,
             textures,
         )
+
+
+# --- specular and clearcoat maps --------------------------------------------
+
+
+def with_reflectance(
+    corners: List[RasterVertex], specular: FloatColor, intensity: Float32
+) -> List[RasterVertex]:
+    """Return `corners` with every corner reflecting `specular` head on,
+    scaled at a grazing angle by `intensity`."""
+    var changed = corners.copy()
+    for index in range(len(changed)):
+        changed[index].specular = specular
+        changed[index].specular_intensity = intensity
+    return changed^
+
+
+def test_layer_factors_carry_the_specular_and_coat_maps() raises:
+    var plain = LayerFactors()
+    assert_equal(plain.specular_color.x, Float32(1))
+    assert_equal(plain.clearcoat_normal_scale.y, Float32(1))
+    assert_false(plain.is_specular_mapped())
+    for field in range(7):
+        var other = LayerFactors()
+        if field == 0:
+            other.specular_color = Vector3(1, 0.5, 1)
+        elif field == 1:
+            other.clearcoat_normal_scale = Vector2(1, -1)
+        elif field == 2:
+            other.specular_intensity_map = TextureId(0)
+        elif field == 3:
+            other.specular_color_map = TextureId(0)
+        elif field == 4:
+            other.clearcoat_map = TextureId(0)
+        elif field == 5:
+            other.clearcoat_roughness_map = TextureId(0)
+        else:
+            other.clearcoat_normal_map = TextureId(0)
+        assert_false(plain.agrees(other))
+        assert_true(other.is_layered())
+    var intensity = LayerFactors()
+    intensity.specular_intensity_map = TextureId(0)
+    assert_true(intensity.is_specular_mapped())
+    var tint = LayerFactors()
+    tint.specular_color_map = TextureId(0)
+    assert_true(tint.is_specular_mapped())
+
+
+def test_specular_and_coat_factors_no_material_can_hold_are_refused() raises:
+    var nan32 = nan[DType.float32]()
+    var cases = List[LayerFactors]()
+    for bad in [Float32(-0.1), nan32]:
+        var tint = LayerFactors()
+        tint.specular_color = Vector3(1, bad, 1)
+        cases.append(tint)
+    var wide = LayerFactors()
+    wide.clearcoat_normal_scale = Vector2(inf[DType.float32](), 1)
+    cases.append(wide)
+    var tall = LayerFactors()
+    tall.clearcoat_normal_scale = Vector2(1, nan32)
+    cases.append(tall)
+    for field in range(5):
+        var mapped = LayerFactors()
+        if field == 0:
+            mapped.specular_intensity_map = TextureId(-2)
+        elif field == 1:
+            mapped.specular_color_map = TextureId(-2)
+        elif field == 2:
+            mapped.clearcoat_map = TextureId(-2)
+        elif field == 3:
+            mapped.clearcoat_roughness_map = TextureId(-2)
+        else:
+            mapped.clearcoat_normal_map = TextureId(-2)
+        cases.append(mapped)
+    for index in range(len(cases)):
+        with assert_raises():
+            cases[index].check()
+    with assert_raises(contains="specular or clearcoat map id"):
+        cases[len(cases) - 1].check()
+    # A standard triangle names none of them.
+    var coat = LayerFactors()
+    coat.clearcoat_map = TextureId(0)
+    var standard = with_layers(physical_quad(kind=STANDARD), coat)
+    with assert_raises(contains="or a specular or clearcoat map"):
+        check_triangle_state(standard[0], standard[1], standard[2])
+
+
+def test_the_specular_maps_set_the_reflectance_head_on() raises:
+    var lighting = lit_along_z_from(400)
+    var textures = TextureStore()
+    var black = textures.add(
+        Texture(
+            1, 1, [UInt8(0), 0, 0, 255], REPEAT, NEAREST, SRGB, False, IGNORED
+        )
+    )
+    var white = textures.add(a_data_texel(255, 255, 255))
+    var clear = textures.add(a_layer_texel(255, 255, 255, 0))
+    var opaque = textures.add(a_layer_texel(255, 255, 255, 255))
+    var quad = physical_quad(kind=PHYSICAL, roughness=0.4, env=CubeTextureId(0))
+    var plain = physical_pixel(quad, lighting, textures)
+    # A black specular color map: nothing is reflected head on, though
+    # the grazing reflectance stays the intensity, one.
+    var tinted = LayerFactors()
+    tinted.specular_color_map = black
+    var dark = physical_pixel(with_layers(quad, tinted), lighting, textures)
+    var none = physical_pixel(
+        with_reflectance(quad, FloatColor(0, 0, 0), 1), lighting, textures
+    )
+    assert_equal(dark.r, none.r)
+    assert_true(dark.r < plain.r, "the black specular color map did nothing")
+    # An intensity map's alpha of zero: nothing is reflected at all.
+    var faded = LayerFactors()
+    faded.specular_intensity_map = clear
+    var dull = physical_pixel(with_layers(quad, faded), lighting, textures)
+    var nothing = physical_pixel(
+        with_reflectance(quad, FloatColor(0, 0, 0), 0), lighting, textures
+    )
+    assert_equal(dull.r, nothing.r)
+    # White maps change nothing: the reflectance is worked out again, to
+    # what the corner already carried.
+    var both = LayerFactors()
+    both.specular_color_map = white
+    both.specular_intensity_map = opaque
+    var same = physical_pixel(with_layers(quad, both), lighting, textures)
+    assert_almost_equal(same.r, plain.r, atol=1e-5)
+    # Under lit shading no map is read, and the tint is the corner's.
+    var lit = physical_pixel(
+        with_layers(quad, tinted), lighting, textures, mode=SHADE_LIT
+    )
+    var lit_plain = physical_pixel(quad, lighting, textures, mode=SHADE_LIT)
+    assert_almost_equal(lit.r, lit_plain.r, atol=1e-5)
+
+
+def test_the_clearcoat_maps_scale_the_coat_and_its_roughness() raises:
+    var lighting = lit_along_z_from(400)
+    var textures = TextureStore()
+    var none = textures.add(a_data_texel(0, 0, 0))
+    var smooth = textures.add(a_data_texel(255, 0, 0))
+    var bare = physical_pixel(
+        physical_quad(color=FloatColor(0, 0, 0), kind=PHYSICAL),
+        lighting,
+        textures,
+    )
+    var coated = physical_quad(
+        color=FloatColor(0, 0, 0),
+        kind=PHYSICAL,
+        clearcoat=1,
+        clearcoat_roughness=0.8,
+        env=CubeTextureId(0),
+    )
+    var matte = physical_pixel(coated, lighting, textures)
+    # A clearcoat map's red of zero takes the coat away.
+    var gone = LayerFactors()
+    gone.clearcoat_map = none
+    var uncoated = physical_pixel(
+        with_layers(
+            physical_quad(
+                color=FloatColor(0, 0, 0), kind=PHYSICAL, clearcoat=1
+            ),
+            gone,
+        ),
+        lighting,
+        textures,
+    )
+    assert_equal(uncoated.r, bare.r)
+    # A roughness map's green of zero makes the coat as smooth as a
+    # roughness of zero, and its red of one keeps the coat whole.
+    var polished = LayerFactors()
+    polished.clearcoat_map = smooth
+    polished.clearcoat_roughness_map = smooth
+    var glossy = physical_pixel(
+        with_layers(coated, polished), lighting, textures
+    )
+    var smooth_coat = physical_pixel(
+        physical_quad(
+            color=FloatColor(0, 0, 0),
+            kind=PHYSICAL,
+            clearcoat=1,
+            env=CubeTextureId(0),
+        ),
+        lighting,
+        textures,
+    )
+    assert_equal(glossy.r, smooth_coat.r)
+    assert_true(glossy.r > matte.r, "the roughness map did nothing")
+
+
+def test_a_clearcoat_normal_map_turns_the_coat_alone() raises:
+    # The rough black metal of the test above: a coat normal map turned
+    # well away from the lamp takes the coat's gloss off the center, and
+    # a flat one leaves it.
+    var textures = TextureStore()
+    var toward_x = textures.add(a_data_texel(255, 128, 128))
+    var flat = textures.add(a_data_texel(128, 128, 255))
+    var lighting = lit_along_z_from(400)
+    var quad = physical_quad(
+        kind=PHYSICAL,
+        color=FloatColor(0, 0, 0),
+        metalness=1,
+        roughness=1,
+        clearcoat=1,
+        clearcoat_roughness=0.5,
+    )
+    var upright = physical_pixel(quad, lighting, textures)
+    var turned = LayerFactors()
+    turned.clearcoat_normal_map = toward_x
+    var away = physical_pixel(with_layers(quad, turned), lighting, textures)
+    assert_true(away.r < upright.r * 0.5, "the coat's normal did not turn")
+    var level = LayerFactors()
+    level.clearcoat_normal_map = flat
+    var still = physical_pixel(with_layers(quad, level), lighting, textures)
+    assert_almost_equal(still.r, upright.r, rtol=0.01)
+    # The scale is applied before the frame: a scale of zero flattens it.
+    var flattened = turned
+    flattened.clearcoat_normal_scale = Vector2(0, 0)
+    var level_again = physical_pixel(
+        with_layers(quad, flattened), lighting, textures
+    )
+    assert_almost_equal(level_again.r, upright.r, atol=1e-4)
+    # Under lit shading the map is not read.
+    var lit = physical_pixel(
+        with_layers(quad, turned), lighting, textures, mode=SHADE_LIT
+    )
+    var lit_upright = physical_pixel(quad, lighting, textures, mode=SHADE_LIT)
+    assert_equal(lit.r, lit_upright.r)
+    # And without a coat, the map is read and changes nothing.
+    var uncoated = physical_quad(
+        kind=PHYSICAL, color=FloatColor(0, 0, 0), metalness=1, roughness=1
+    )
+    assert_equal(
+        physical_pixel(with_layers(uncoated, turned), lighting, textures).r,
+        physical_pixel(uncoated, lighting, textures).r,
+    )
+
+
+def test_a_specular_or_coat_map_must_be_stored_as_it_is_read() raises:
+    var textures = TextureStore()
+    var coverage_color = textures.add(
+        Texture(1, 1, [UInt8(255), 255, 255, 255], REPEAT, NEAREST, SRGB, False)
+    )
+    var ignored_linear = textures.add(a_data_texel(255, 255, 255))
+    var covered_srgb = textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+            COVERAGE,
+        )
+    )
+    var covered_linear = textures.add(a_layer_texel(255, 255, 255, 255))
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var quad = physical_quad(kind=PHYSICAL, clearcoat=1)
+    var tint = LayerFactors()
+    tint.specular_color_map = coverage_color
+    with assert_raises(contains="A specular color map must ignore its alpha"):
+        rasterize_all(with_layers(quad, tint), target, SHADE_TEXTURE, textures)
+    rasterize_all(with_layers(quad, tint), target, SHADE_LIT, textures)
+    var intensity = LayerFactors()
+    intensity.specular_intensity_map = covered_srgb
+    with assert_raises(contains="A specular intensity map holds data"):
+        rasterize_all(
+            with_layers(quad, intensity), target, SHADE_TEXTURE, textures
+        )
+    intensity.specular_intensity_map = ignored_linear
+    with assert_raises(contains="is read from its alpha"):
+        rasterize_all(
+            with_layers(quad, intensity), target, SHADE_TEXTURE, textures
+        )
+    for field in range(3):
+        var coat = LayerFactors()
+        if field == 0:
+            coat.clearcoat_map = covered_linear
+        elif field == 1:
+            coat.clearcoat_roughness_map = covered_linear
+        else:
+            coat.clearcoat_normal_map = covered_linear
+        with assert_raises(contains="must ignore"):
+            rasterize_all(
+                with_layers(quad, coat), target, SHADE_TEXTURE, textures
+            )

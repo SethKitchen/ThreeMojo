@@ -50,7 +50,7 @@ Coverage is integer arithmetic and matches the CPU exactly. Shading is floating 
 
 The kernel calls the same functions as the CPU for the fill rule, texture wrapping and texel blending. It shares the light falloff, the spot light's rim and the Blinn-Phong highlight. It shares the fog factor, the normal and depth packing, and the tone mapping curves too. See [Why the CPU and GPU share code](Why-the-CPU-and-GPU-share-code).
 
-The state table carries `STATE_PER_TRIANGLE` entries per triangle, twenty-nine at present. `triangle_state` writes them from the first corner, in this order:
+The state table carries `STATE_PER_TRIANGLE` entries per triangle, thirty-four at present. `triangle_state` writes them from the first corner, in this order:
 
 | Column | Entry |
 |---|---|
@@ -65,6 +65,7 @@ The state table carries `STATE_PER_TRIANGLE` entries per triangle, twenty-nine a
 | 21 and 22 | The depth packing's value, and one if the fog veils the triangle, zero if not. |
 | 23 to 27 | The sheen color, sheen roughness, iridescence, iridescence thickness and anisotropy maps. See [Materials](Materials#sheen). |
 | 28 | Where the triangle's node program starts in the fog buffer, or -1 for none. |
+| 29 to 33 | The specular intensity, specular color, clearcoat, clearcoat roughness and clearcoat normal maps. See [Materials](Materials#specular-and-clearcoat-maps). |
 
 Each map column holds a texture id, or `NO_TEXTURE` for none. The `STATE_` constants in `render/gpu.mojo` name every column. A `TOON` triangle's ramp is the gradient map column. The kernel reads the ramp's top row straight out of the texel buffer, with the host's own `toon_index`.
 
