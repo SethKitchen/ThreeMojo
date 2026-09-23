@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 121 features are ported and 29 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 122 features are ported and 28 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -129,12 +129,11 @@ The port is not at parity with three.js yet. 121 features are ported and 29 are 
 - [ ] Specular map and flat shading [#120](https://github.com/SethKitchen/ThreeMojo/issues/120)
 - [ ] Transmission, thickness, attenuation and dispersion [#121](https://github.com/SethKitchen/ThreeMojo/issues/121)
 - [ ] Sheen, iridescence and anisotropy [#122](https://github.com/SethKitchen/ThreeMojo/issues/122)
-- [ ] Depth, color and stencil state [#124](https://github.com/SethKitchen/ThreeMojo/issues/124)
 - [ ] MeshDistanceMaterial, depth packings and Material.fog [#125](https://github.com/SethKitchen/ThreeMojo/issues/125)
 - [ ] Custom shading: ShaderMaterial and node materials [#126](https://github.com/SethKitchen/ThreeMojo/issues/126)
 
 <details>
-<summary>Ported: 19</summary>
+<summary>Ported: 20</summary>
 
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
 - [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
@@ -155,6 +154,7 @@ The port is not at parity with three.js yet. 121 features are ported and 29 are 
 - [x] [Vertex colors](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#vertex-colors): a `color` attribute that multiplies the material color at every vertex, on both rasterizers [#47](https://github.com/SethKitchen/ThreeMojo/issues/47)
 - [x] [Wireframe rendering](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#wireframe): a material flag that sends a mesh through the whole pipeline and cuts its triangles into segments at the end [#48](https://github.com/SethKitchen/ThreeMojo/issues/48)
 - [x] [Texture transforms: repeat, offset, rotation](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#transform): a texture's own `offset`, `repeat`, `rotation` and `center`, applied to a mesh's coordinates before either rasterizer samples [#49](https://github.com/SethKitchen/ThreeMojo/issues/49)
+- [x] [Depth, color and stencil state](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#depth-color-and-stencil): depth test, write and function, color write, polygon offset, and an eight-bit stencil buffer [#124](https://github.com/SethKitchen/ThreeMojo/issues/124)
 
 </details>
 
