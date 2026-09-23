@@ -1,6 +1,6 @@
 # Image files
 
-`render/png.mojo`, `render/jpeg.mojo`, `render/tga.mojo`, `render/inflate.mojo`, `render/apng.mojo` and `render/ppm.mojo`. The project writes PNG, APNG and PPM, and reads PNG, JPEG and TGA. No compression or image library is involved.
+`render/png.mojo`, `render/jpeg.mojo`, `render/tga.mojo`, `render/rgbe.mojo`, `render/exr.mojo`, `render/inflate.mojo`, `render/apng.mojo` and `render/ppm.mojo`. The project writes PNG, APNG and PPM, and reads PNG, JPEG, TGA, Radiance HDR and OpenEXR. No compression or image library is involved.
 
 ![A triangle turns in an animated PNG](out/spin.png)
 
@@ -15,6 +15,8 @@ three.js: `TextureLoader` for reading PNG and JPEG, and `TGALoader` for TGA. thr
 | PPM | No | Yes | No | Plain text, for reading pixel values in an editor. |
 | JPEG | Yes | No | No | Baseline and progressive. See [Read a JPEG](#read-a-jpeg). |
 | TGA | Yes | No | 8-bit | See [Read a TGA](#read-a-tga). |
+| Radiance HDR | Yes | No | No | Linear floats. See [HDR images](Textures#hdr-images). |
+| OpenEXR | Yes | No | Float | Linear floats. See [HDR images](Textures#hdr-images). |
 
 ## Write a PNG
 

@@ -39,6 +39,7 @@ from render.texture import (
     Alpha,
     Texture,
     checkerboard,
+    float_texture,
 )
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.cube_texture import CubeTexture
@@ -3223,6 +3224,14 @@ def test_a_gradient_map_must_be_stored_as_data() raises:
     # fallback names no map at all, which is a different thing.
     with assert_raises():
         check_gradient_map(Texture())
+    # A float ramp is linear and can ignore its alpha, and is still refused:
+    # both backends read a ramp one byte a tone.
+    with assert_raises(contains="must hold bytes"):
+        check_gradient_map(
+            float_texture(
+                2, 1, [0, 0, 0, 1, 1, 1, 1, 1], filter=NEAREST, alpha=IGNORED
+            )
+        )
 
 
 def test_a_ramp_is_one_row_of_the_red_channel() raises:

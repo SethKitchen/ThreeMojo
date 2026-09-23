@@ -62,6 +62,7 @@ from render.texture import (
     Filter,
     Texture,
     Wrap,
+    float_texture,
 )
 from render.texture_store import TextureId
 from std.math import sqrt
@@ -717,6 +718,13 @@ def test_what_glTF_cannot_hold_is_refused() raises:
     )
     with assert_raises(contains="blank"):
         _ = export_gltf(blank_map, assets)
+    # An HDR image: no eight-bit PNG holds it.
+    var bright = assets.textures.add(float_texture(1, 1, [4, 4, 4, 1]))
+    var bright_map = one_mesh(
+        assets, Material(Color(1, 2, 3), map=bright), quad(True)
+    )
+    with assert_raises(contains="float texture"):
+        _ = export_gltf(bright_map, assets)
     var tiled_texture = image(2, 2, 4)
     tiled_texture.repeat = Vector2(2, 2)
     var tiled = assets.textures.add(tiled_texture^)

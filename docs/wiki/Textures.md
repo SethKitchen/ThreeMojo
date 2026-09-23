@@ -1,10 +1,10 @@
 # Textures
 
-`render/texture.mojo` and `render/texture_store.mojo`. A `Texture` is an RGBA image with a wrap mode, a filter, a color space, an alpha mode and an optional mip chain. A material names one by id.
+`render/texture.mojo` and `render/texture_store.mojo`. A `Texture` is an RGBA image with a wrap mode, a filter, a color space, an alpha mode and an optional mip chain. It holds bytes, or floats for an HDR image. A material names one by id.
 
 ![Two checkerboard cubes turn, nearest beside bilinear](out/textured.png)
 
-three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `CubeTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`, `anisotropy`.
+three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `CubeTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`, `anisotropy`, `type`, `RGBELoader`, `EXRLoader`.
 
 ## Make a texture
 
@@ -15,9 +15,11 @@ Texture(width, height, pixels, wrap=REPEAT, filter=BILINEAR, color_space=SRGB, m
 data_texture(width, height, numbers, channels=4, wrap=CLAMP, filter=NEAREST, mipmapped=False, alpha=COVERAGE)
 texture_of(framebuffer, wrap=CLAMP, filter=BILINEAR, mipmapped=True, alpha=COVERAGE)
 depth_texture_of(framebuffer, wrap=CLAMP)
+float_texture(width, height, floats, wrap=CLAMP, filter=BILINEAR, mipmapped=False, alpha=COVERAGE)
+float_texture_from(hdr_image, wrap=CLAMP, filter=BILINEAR, mipmapped=False, alpha=COVERAGE)
 ```
 
-`checkerboard` builds a test pattern. `texture_from` takes a `DecodedImage` from the PNG reader. `Texture` takes row-major RGBA bytes from the top. The last three are below.
+`checkerboard` builds a test pattern. `texture_from` takes a `DecodedImage` from the PNG reader. `Texture` takes row-major RGBA bytes from the top. The next three are below. The float textures are in [HDR images](#hdr-images).
 
 ## From numbers
 
@@ -81,6 +83,73 @@ var image = compressed_texture(width, height, blocks, RGBA_S3TC_DXT5_FORMAT)
 The 565 channels widen to eight bits by copying their top bits down, as the hardware widens them. The blends round to nearest. An image need not be whole blocks: the texels past the edge are decoded and dropped. `decode_s3tc` returns the RGBA bytes without building a texture.
 
 `compressed_texture` refuses a format that is none of the three, dimensions that are not positive, and a payload whose length is not the block grid's. `tests/compile_fail/` proves a bare integer is not a format.
+
+## HDR images
+
+An HDR image holds linear light with no upper limit. `render/rgbe.mojo` reads a Radiance `.hdr` file and `render/exr.mojo` reads an OpenEXR file. Each returns a `FloatImage`, and `float_texture_from` turns it into a float texture. Use the texture as a map, or turn it into a cube for a background or an environment.
+
+three.js: `RGBELoader` (now `HDRLoader`), `EXRLoader`, `DataTexture` with `FloatType`, and `WebGLCubeRenderTarget.fromEquirectangularTexture`.
+
+```mojo
+from render.exr import decode as decode_exr
+from render.rgbe import decode as decode_rgbe
+
+var sky = float_texture_from(decode_exr(Path("sky.exr").read_bytes()))
+var cube = assets.cube_textures.add(cube_from_equirectangular(sky, mipmapped=True))
+scene.background = cube_background(cube)
+scene.environment = cube
+var lamp = assets.textures.add(float_texture_from(decode_rgbe(Path("lamp.hdr").read_bytes())))
+```
+
+### Float textures
+
+`float_texture(width, height, floats)` takes row-major RGBA floats from the top. Its `texel_type` is `FLOAT_TYPE`, three.js's `FloatType`. A byte texture is `UNSIGNED_BYTE_TYPE`, three.js's `UnsignedByteType`. The floats are in `data`, and `pixels` is empty.
+
+A float is sampled as it is. There is no ramp, no clamp and no transfer function, so the texture must be `LINEAR`. The filter and the mip chain average the floats premultiplied, as they average a byte texture's decoded light. A texel of 8 beside a texel of 0 filters to 4, where a byte texture gives one half.
+
+The defaults are three.js's loader settings: `CLAMP`, `BILINEAR` and no chain. Every number must be finite: an infinity or a NaN spreads through every filter that reads it. `texel(x, y)` returns bytes, so a float texture refuses it. Use `wrapped_texel(x, y)`.
+
+Both rasterizers sample a float texture. The GPU texel buffer holds bytes, so each float crosses as four little-endian bytes. The kernel reads the bits back with `float_from_bytes`, and both backends make the color with `float_texel`. A gradient map must hold bytes, on both backends.
+
+### Read an RGBE file
+
+`render.rgbe.decode(bytes)` reads a Radiance `.hdr` file. The header must start with `#?` and a program name. It must name `FORMAT=32-bit_rle_rgbe` and a size line `-Y height +X width`. Each scanline is flat, or run-length encoded one channel after another.
+
+A channel is `byte * 2^(exponent - 128) / 255`, worked in doubles and stored as a float. This is three.js's arithmetic. Alpha is one. `GAMMA` and `EXPOSURE` are read past, as three.js reads past them.
+
+### Read an EXR file
+
+`render.exr.decode(bytes)` reads a single-part scanline OpenEXR file. The header needs `channels`, `compression` and `dataWindow`. Other attributes are read past.
+
+| Compression | Lines a block | Note |
+|---|---|---|
+| `NO_COMPRESSION` | 1 | |
+| `RLE_COMPRESSION` | 1 | Run-length bytes, then the predictor and the split undone. |
+| `ZIPS_COMPRESSION` | 1 | zlib through `render/inflate.mojo`, then the same. |
+| `ZIP_COMPRESSION` | 16 | The same, sixteen lines at a time. |
+| `PIZ_COMPRESSION` | 32 | A bitmap and a lookup table, a Huffman code, and a Haar wavelet per channel. |
+
+A channel holds halves or floats. A half widens to the float it spells, subnormals and all. `R`, `G` and `B` make RGBA, with `A` as the alpha or one where there is none. `Y` alone makes gray, with an alpha of one. Other channels are read past. Rows come out from the top line of the data window.
+
+### An equirectangular environment or background
+
+`cube_from_equirectangular(image, size=None, mipmapped=None)` turns a panorama into a `CubeTexture`. three.js does the same when a texture with `EquirectangularReflectionMapping` becomes a background or an environment. Each face texel reads the panorama at `equirect_uv` of its direction, three.js's `equirectUv`.
+
+The faces keep the panorama's texel type, color space, filter and alpha mode. A float panorama gives float faces. The face size is the panorama's height by default, as in three.js. The faces get a chain if the panorama has one, and `mipmapped=True` asks for one. A rough surface reads the chain, see [Materials](Materials#the-environment).
+
+### What is not ported
+
+- Half-float storage. three.js's loaders default to `HalfFloatType`. Here a half widens to a float, which holds every half exactly.
+- The `mapping` field. Call `cube_from_equirectangular` and name the cube. The renderer does not convert a texture on its own.
+- PMREM. A rough surface reads the cube's box-filtered chain.
+- Light above one in a background. The backdrop crosses to both backends as sRGB bytes, so a background clips at one before tone mapping. A reflection keeps the floats.
+- RGBE: XYZE pixels, the old Radiance run-length scheme, and every orientation but `-Y +X`. The first is refused, and three.js reads none of them correctly.
+- EXR: tiled, deep and multi-part files, PXR24, B44, B44A, DWAA and DWAB compression, luminance-chroma images, subsampled channels, and `UINT` color. Each is refused by name. three.js reads all but the last two.
+- `EXRLoader.setOutputFormat`. The output is always RGBA, three.js's default.
+
+### Where the HDR readers differ from three.js
+
+Each reader refuses a file that three.js reads wrongly. three.js reads every EXR color channel with the type of the last one. This reader reads each channel as its own type. three.js reads past the end of a block, a Huffman table or a file. It also leaves the rows of a short RGBE file black. Both readers here refuse each of these.
 
 ## Anisotropy
 
@@ -258,13 +327,15 @@ var id = assets.textures.add(board^)
 | `texture_of(framebuffer)`, `depth_texture_of(framebuffer)` | A texture from a render, and from its depth. See [From a render](#from-a-render). |
 | `sample(u, v) -> FloatColor` | The color at a coordinate, level zero. |
 | `sample_level(u, v, level) -> FloatColor` | Trilinear, between two mip levels. |
-| `texel(x, y) -> Color` | One stored texel. |
+| `texel(x, y) -> Color` | One stored texel. A float texture refuses it. |
+| `wrapped_texel(x, y, level=0) -> FloatColor` | One texel as light, wrapped. Floats as they are, bytes through the ramp. |
 | `is_blank() -> Bool` | The blank texture, which samples as opaque white. |
 | `ignoring_alpha() -> Texture` | A copy that ignores its alpha, with its chain rebuilt. |
 | `uv_transform() -> Matrix3` | The transform on the coordinates, from the four fields above. |
 | `sample_footprint(u, v, footprint) -> FloatColor` | One trilinear sample, or several along a footprint's long axis. See [Anisotropy](#anisotropy). |
-| `validate()` | Refuse a wrap, filter, color space or alpha mode that is none of the named values, or an anisotropy below one or above `MAX_ANISOTROPY`. |
+| `validate()` | Refuse a wrap, filter, color space, alpha mode or texel type that is none of the named values, a float texture that is not `LINEAR`, or an anisotropy below one or above `MAX_ANISOTROPY`. |
 | `levels`, `width`, `height`, `alpha`, `anisotropy` | The chain length, the base size, the alpha mode and the tap count. |
+| `texel_type`, `pixels`, `data` | `UNSIGNED_BYTE_TYPE` with bytes in `pixels`, or `FLOAT_TYPE` with floats in `data`. See [HDR images](#hdr-images). |
 | `offset`, `repeat`, `rotation`, `center` | The transform's fields. |
 
 ## TextureStore
@@ -277,6 +348,8 @@ var id = assets.textures.add(board^)
 - A wrap, filter, color space or alpha mode that is none of its named values raises. The GPU upload checks again.
 - A `checkerboard` size must divide evenly by its square count.
 - A `data_texture` with a channel count outside one through four, a length that does not match, or a number that is not finite.
+- A `float_texture` with a length that does not match, or a number that is not finite. A float texture that is not `LINEAR`, or a texel type that is none of the two, raises in `validate`.
+- The RGBE and EXR readers refuse a file cut short, a malformed header, and each feature in [What is not ported](#what-is-not-ported).
 - The renderer refuses a map and an emissive map on one material whose transforms differ.
 - An anisotropy below one, or above `MAX_ANISOTROPY`, raises in `validate`.
 - A `Footprint` with no taps, or a non-finite level or step, raises in `sample_footprint`.

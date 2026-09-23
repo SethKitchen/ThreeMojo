@@ -69,6 +69,8 @@ A background is behind everything and claims no depth. A surface at any depth co
 
 A texture background is read at its full size through its own filter. Its transform is not applied, and its alpha is not read: three.js draws the plane opaque. A cube background turns as the camera turns and holds still as the camera moves. A parallel camera sees one direction everywhere. An image background is a texture, so only `SHADE_TEXTURE` draws it. The other two shading modes clear to the color.
 
+An equirectangular panorama becomes a sky or an environment through `cube_from_equirectangular`. three.js does the same for `EquirectangularReflectionMapping`. See [HDR images](Textures#hdr-images).
+
 `Renderer.backdrop(scene, assets, camera)` returns the image background as the camera sees it, as an opaque `Framebuffer`, or none. `Renderer.render` paints it under the scene, and `GpuRenderer.draw` takes it, so both backends start a frame from the same bytes. See [Renderer](Renderer#what-render-does) and [GPU backend](GPU-backend).
 
 `environment` is the cube texture a material reflects when its `env_map` is `SCENE_ENVIRONMENT`. three.js applies `scene.environment` to every physically based material without asking. Those are not ported, and this project's materials reflect nothing unless told to, so a material asks. See [Materials](Materials#environment-map).

@@ -46,6 +46,16 @@ face, and a flat image has no next face to read. `REPEAT` would read the
 far edge of the same face and `MIRROR` would read the near edge twice, so
 a face built with either is refused: the bilinear filter's neighbors at an
 edge must hold that edge, and that is `CLAMP`.
+
+**An equirectangular image becomes a cube before it is read.** three.js
+takes a panorama, one image whose columns are longitude and whose rows are
+latitude, as a background or an environment by rendering it into a cube
+first: `WebGLCubeRenderTarget.fromEquirectangularTexture`, which every
+face texel reads at `equirectUv` of its direction. `cube_from_equirectangular`
+is that conversion, on the host, once; the cube it returns is read like
+any other, so neither rasterizer learns a second way to look a direction
+up. A float panorama gives float faces, which is how an HDR sky lights a
+mirror with light above one.
 """
 
 from math.vector2 import Vector2
@@ -57,10 +67,13 @@ from render.texture import (
     BILINEAR,
     CLAMP,
     COVERAGE,
+    FLOAT_TYPE,
     Alpha,
     Filter,
     Texture,
+    float_texture,
 )
+from std.math import asin, atan2, pi
 
 # How many faces a cube has, and the order they are held in: positive x,
 # negative x, positive y, negative y, positive z, negative z. three.js's
@@ -441,6 +454,163 @@ def reflection_level(roughness: Float32, levels: Int) -> Float32:
         The fractional level, zero for a chain of one.
     """
     return roughness * Float32(levels - 1)
+
+
+def equirect_uv(direction: Vector3) -> Vector2:
+    """Return where a direction lands on an equirectangular image:
+    three.js's `equirectUv`.
+
+    Longitude across and latitude up. `u` is the angle around the y axis,
+    measured from positive x toward positive z, a half at positive x; `v`
+    is the height above the horizon, zero straight down and one straight
+    up, counting up as every texture coordinate here does, so the top row
+    of a panorama is the sky.
+
+        u = atan2(z, x) / (2 pi) + 0.5
+        v = asin(y) / pi + 0.5
+
+    Args:
+        direction: Any vector; it is normalized first, as three.js's
+            caller normalizes it. The zero vector reads the middle.
+
+    Returns:
+        The coordinate, inside the unit square.
+    """
+    var length = direction.length()
+    if length == 0:
+        return Vector2(0.5, 0.5)
+    # Clamped as three.js clamps, with `min` and `max`: a unit vector's y
+    # is within one bar a rounding, and `asin` of a hair past one is NaN.
+    var up = max(Float32(-1), min(Float32(1), direction.y / length))
+    return Vector2(
+        atan2(direction.z / length, direction.x / length) / (2 * Float32(pi))
+        + 0.5,
+        asin(up) / Float32(pi) + 0.5,
+    )
+
+
+def face_direction(face: Int, x: Int, y: Int, size: Int) -> Vector3:
+    """Return the direction through the center of one texel of a face.
+
+    The inverse of `face_uv`: the texel's center as a coordinate, `v`
+    counting up from the bottom row, then the point that coordinate names
+    on the plane one unit out along `face_forward`.
+
+    Args:
+        face: `POSITIVE_X` through `NEGATIVE_Z`.
+        x: Column, from the left.
+        y: Row, from the top.
+        size: The face's width and height in texels.
+
+    Returns:
+        The direction, not normalized; `face_uv` of it is the texel's
+        center.
+    """
+    var forward = face_forward(face)
+    var up = face_up(face)
+    var right = forward
+    right.cross(up)
+    var across = (Float32(x) + 0.5) / Float32(size) * 2 - 1
+    var upward = 1 - (Float32(y) + 0.5) / Float32(size) * 2
+    return Vector3(
+        forward.x + right.x * across + up.x * upward,
+        forward.y + right.y * across + up.y * upward,
+        forward.z + right.z * across + up.z * upward,
+    )
+
+
+def cube_from_equirectangular(
+    image: Texture,
+    size: Optional[Int] = None,
+    mipmapped: Optional[Bool] = None,
+) raises -> CubeTexture:
+    """Return the cube texture an equirectangular image makes: three.js's
+    `WebGLCubeRenderTarget.fromEquirectangularTexture`.
+
+    What three.js does behind `texture.mapping =
+    EquirectangularReflectionMapping` when the texture becomes a
+    background or an environment, done here once and handed back: add the
+    cube to the assets and name it as `cube_background` or `env_map`, as
+    any cube is named.
+
+    Each face texel reads the panorama at `equirect_uv` of the direction
+    through its center, through the panorama's own filter at its full
+    size, as three.js reads it with the chain switched off to keep the
+    poles sharp. The faces keep the panorama's texel type, color space,
+    filter and alpha mode, as three.js's target copies them: a float
+    panorama gives float faces with its light above one intact, and a
+    byte one gives bytes encoded back in its own color space.
+
+    Args:
+        image: The panorama, twice as wide as it is tall by convention;
+            any size is read.
+        size: Each face's width and height in texels. The panorama's
+            height by default, as three.js sizes the cube.
+        mipmapped: Build each face's chain, which a rough surface reads.
+            Whether the panorama has one by default, as three.js copies
+            `generateMipmaps`.
+
+    Returns:
+        The cube texture, its faces wrapped `CLAMP`.
+
+    Raises:
+        Error: If the panorama is blank or refused by `Texture.validate`,
+            or the size is not positive.
+    """
+    image.validate()
+    if image.is_blank():
+        raise Error("An equirectangular image must hold texels")
+    var edge = size.or_else(image.height)
+    if edge <= 0:
+        raise Error("A cube's faces must be at least one texel across")
+    var chained = mipmapped.or_else(image.levels > 1)
+    var faces = List[Texture]()
+    for face in range(FACE_COUNT):  # pragma: no branch
+        var floats = List[Float32]()
+        var bytes = List[UInt8]()
+        for y in range(edge):  # pragma: no branch
+            for x in range(edge):  # pragma: no branch
+                var place = equirect_uv(face_direction(face, x, y, edge))
+                var color = image.sample(place.x, place.y)
+                if image.texel_type == FLOAT_TYPE:
+                    floats.append(color.r)
+                    floats.append(color.g)
+                    floats.append(color.b)
+                    floats.append(color.a)
+                    continue
+                var stored = color.quantize()
+                if image.color_space == SRGB:
+                    stored = color.encode()
+                bytes.append(stored.r)
+                bytes.append(stored.g)
+                bytes.append(stored.b)
+                bytes.append(stored.a)
+        if image.texel_type == FLOAT_TYPE:
+            faces.append(
+                float_texture(
+                    edge,
+                    edge,
+                    floats^,
+                    CLAMP,
+                    image.filter,
+                    chained,
+                    image.alpha,
+                )
+            )
+        else:
+            faces.append(
+                Texture(
+                    edge,
+                    edge,
+                    bytes^,
+                    CLAMP,
+                    image.filter,
+                    image.color_space,
+                    chained,
+                    image.alpha,
+                )
+            )
+    return CubeTexture(faces^)
 
 
 def _mirrored(width: Int, height: Int, pixels: List[UInt8]) -> List[UInt8]:

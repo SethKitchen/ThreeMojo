@@ -61,6 +61,15 @@ vertex shader does, so a `repeat` of two tiles the image twice across and an
 `offset` of a half slides it half a tile. The texture itself does not change:
 the transform is on the coordinates that reach it, which is why the wrap
 mode still decides what a coordinate past the edge reads.
+
+**A texture holds bytes or floats.** Bytes are what image files hold and
+what every texture held first: a fraction from zero to one, decoded through
+the color space's ramp. An HDR image holds light with no top, which no byte
+can, so a texture of `FLOAT_TYPE`, three.js's `FloatType`, keeps four floats
+a texel in `data` and reads them as they are. Everything past the fetch --
+the wrap, the filter, the chain's weighted average, the footprint -- is the
+same arithmetic on the same `FloatColor`, which is why one `_texel_at` is
+the only place the two differ. See `float_texture`.
 """
 
 from math.matrix3 import Matrix3
@@ -75,7 +84,9 @@ from render.srgb import (
     decode_ramp,
     linear_to_srgb,
 )
+from render.float_image import FloatImage
 from std.math import ceil, floor, inf, isfinite, log2, sqrt
+from std.memory import bitcast
 from units.si import Angle, RADIAN
 
 
@@ -150,6 +161,82 @@ comptime COVERAGE = Alpha(0)
 # it is and every sample is opaque. What an emissive map is, and any other
 # image whose alpha channel means nothing.
 comptime IGNORED = Alpha(1)
+
+
+@fieldwise_init
+struct TexelType(Equatable, ImplicitlyCopyable, Writable):
+    """What one channel of a texel is stored as, three.js's `Texture.type`,
+    as a type rather than a bare int.
+
+    A byte holds a fraction from zero to one, decoded through the color
+    space's ramp. A float holds linear light as it is, and light has no
+    top: a sun in an HDR image is thousands of times brighter than the
+    sky beside it, and a byte would clip both to one. `value` is what the
+    GPU's descriptor table stores. The type does not stop `TexelType(9)`,
+    so `Texture.validate` asks `is_valid`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `UNSIGNED_BYTE_TYPE` or `FLOAT_TYPE`."""
+        return self == UNSIGNED_BYTE_TYPE or self == FLOAT_TYPE
+
+
+# Eight bits a channel, in `Texture.pixels`: three.js's `UnsignedByteType`.
+# What every image file but an HDR one holds, and the default.
+comptime UNSIGNED_BYTE_TYPE = TexelType(0)
+# Thirty-two bits a channel, linear, in `Texture.data`: three.js's
+# `FloatType`. What `render.rgbe` and `render.exr` produce. three.js's
+# loaders default to `HalfFloatType`; a half here is widened to a float,
+# which holds every half exactly.
+comptime FLOAT_TYPE = TexelType(1)
+
+
+def float_from_bytes(b0: UInt8, b1: UInt8, b2: UInt8, b3: UInt8) -> Float32:
+    """Return the float four little-endian bytes hold.
+
+    How a float texel crosses to the device: the GPU's texel buffer is
+    bytes, and a float texture's numbers ride in it four bytes each.
+    Shared, so the host test that reads the flattened buffer back and the
+    kernel that samples it read the same bits the same way.
+
+    Args:
+        b0: The lowest byte.
+        b1: The next.
+        b2: The next.
+        b3: The highest byte, holding the sign.
+
+    Returns:
+        The IEEE 754 single those bits spell.
+    """
+    return bitcast[DType.float32](
+        UInt32(b0) | (UInt32(b1) << 8) | (UInt32(b2) << 16) | (UInt32(b3) << 24)
+    )
+
+
+def float_texel(
+    r: Float32, g: Float32, b: Float32, a: Float32, alpha: Alpha
+) -> FloatColor:
+    """Return a float texel as the color it samples as.
+
+    The float counterpart of the byte decode: no ramp, because a float
+    already holds linear light, and an alpha of one when the texture
+    ignores its alpha. Shared by both rasterizers.
+
+    Args:
+        r: The stored red.
+        g: The stored green.
+        b: The stored blue.
+        a: The stored alpha.
+        alpha: The texture's alpha mode.
+
+    Returns:
+        The color.
+    """
+    if alpha == IGNORED:
+        return FloatColor(r, g, b, 1.0)
+    return FloatColor(r, g, b, a)
 
 
 def mix(near: Float32, far: Float32, t: Float32) -> Float32:
@@ -408,6 +495,12 @@ struct Texture(Movable):
     # Row-major RGBA from the top, the same layout `Framebuffer` uses, so an
     # image rendered by this project can be fed straight back in as a texture.
     var pixels: List[UInt8]
+    # Whether the texels are bytes in `pixels` or floats in `data`; see
+    # `TexelType`. The other list is empty.
+    var texel_type: TexelType
+    # Row-major RGBA floats from the top, the mip chain after the image, in
+    # the same layout `pixels` has: filled for a `FLOAT_TYPE` texture only.
+    var data: List[Float32]
     var wrap: Wrap
     var filter: Filter
     var color_space: ColorSpace
@@ -454,6 +547,8 @@ struct Texture(Movable):
         self.width = 0
         self.height = 0
         self.pixels = List[UInt8]()
+        self.texel_type = UNSIGNED_BYTE_TYPE
+        self.data = List[Float32]()
         self.wrap = REPEAT
         self.filter = NEAREST
         self.color_space = LINEAR
@@ -518,6 +613,8 @@ struct Texture(Movable):
         self.width = width
         self.height = height
         self.pixels = pixels^
+        self.texel_type = UNSIGNED_BYTE_TYPE
+        self.data = List[Float32]()
         self.wrap = wrap
         self.filter = filter
         self.alpha = alpha
@@ -535,8 +632,8 @@ struct Texture(Movable):
             self._build_mipmaps()
 
     def validate(self) raises:
-        """Refuse a wrap, filter, color space or alpha mode that is none of
-        the named values.
+        """Refuse a wrap, filter, color space, alpha mode or texel type that
+        is none of the named values.
 
         The types stop a bare integer at compile time and nothing else: a
         struct's fields are open, so `Wrap(9)` constructs, and so does
@@ -547,8 +644,9 @@ struct Texture(Movable):
         the kernel.
 
         Raises:
-            Error: If the wrap mode, the filter, the color space or the
-                alpha mode is not one of its named constants.
+            Error: If the wrap mode, the filter, the color space, the
+                alpha mode or the texel type is not one of its named
+                constants, or a float texture is not `LINEAR`.
                 `UNKNOWN_SPACE` counts: it is a decoder's admission, not a
                 way to read texels.
         """
@@ -562,6 +660,16 @@ struct Texture(Movable):
             )
         if not self.alpha.is_valid():
             raise Error("A texture's alpha mode must be COVERAGE or IGNORED")
+        if not self.texel_type.is_valid():
+            raise Error(
+                "A texture's texel type must be UNSIGNED_BYTE_TYPE or"
+                " FLOAT_TYPE"
+            )
+        # A float holds linear light as it is. The sRGB curve is a way to
+        # spend 256 steps where the eye sees them, and a float has no steps
+        # to spend: three.js's HDR loaders mark their textures linear.
+        if self.texel_type == FLOAT_TYPE and self.color_space != LINEAR:
+            raise Error("A float texture holds linear light: it must be LINEAR")
         if self.anisotropy < 1:
             raise Error("A texture's anisotropy is at least one")
         if self.anisotropy > MAX_ANISOTROPY:
@@ -575,6 +683,8 @@ struct Texture(Movable):
         self.width = copy.width
         self.height = copy.height
         self.pixels = copy.pixels.copy()
+        self.texel_type = copy.texel_type
+        self.data = copy.data.copy()
         self.wrap = copy.wrap
         self.filter = copy.filter
         self.color_space = copy.color_space
@@ -613,6 +723,22 @@ struct Texture(Movable):
             # for any other copy, and samples opaque white as it would.
             copy = Texture()
             copy.alpha = IGNORED
+        elif self.texel_type == FLOAT_TYPE:
+            var base = List[Float32]()
+            # The full-size image is the first level: the loop always runs.
+            for index in range(
+                self.width * self.height * Self.CHANNELS
+            ):  # pragma: no branch
+                base.append(self.data[index])
+            copy = float_texture(
+                self.width,
+                self.height,
+                base^,
+                self.wrap,
+                self.filter,
+                self.levels > 1,
+                IGNORED,
+            )
         else:
             var base = List[UInt8]()
             # The full-size image is the first level: the loop always runs.
@@ -682,10 +808,16 @@ struct Texture(Movable):
             The color stored there.
 
         Raises:
-            Error: If the texture is blank or the coordinates are outside it.
+            Error: If the texture is blank, holds floats rather than bytes,
+                or the coordinates are outside it.
         """
         if self.is_blank():
             raise Error("The blank texture has no texels")
+        if self.texel_type == FLOAT_TYPE:
+            raise Error(
+                "A float texture's texels are not bytes; read them with"
+                " wrapped_texel"
+            )
         if x < 0 or x >= self.width or y < 0 or y >= self.height:
             raise Error("Texel coordinate out of bounds")
         var offset = (y * self.width + x) * Self.CHANNELS
@@ -774,7 +906,7 @@ struct Texture(Movable):
             var next_tall = self.level_height(level + 1)
             var base = self.level_offset(level)
             # The next level begins where this buffer currently ends.
-            self.offsets.append(len(self.pixels))
+            self.offsets.append(self._stored())
             for y in range(next_tall):  # pragma: no branch
                 # The rows this destination stands for, in source rows scaled
                 # by the destination extent so the bounds stay exact.
@@ -805,12 +937,7 @@ struct Texture(Movable):
                             # An ignored alpha reads as one, so premultiplying
                             # changes nothing and the color averages as it
                             # is; the level then stores an opaque alpha.
-                            var texel = FloatColor(
-                                self.ramp[Int(self.pixels[at])],
-                                self.ramp[Int(self.pixels[at + 1])],
-                                self.ramp[Int(self.pixels[at + 2])],
-                                self._alpha_of(self.pixels[at + 3]),
-                            ).premultiplied()
+                            var texel = self._texel_at(at).premultiplied()
                             total = FloatColor(
                                 total.r + texel.r * weight,
                                 total.g + texel.g * weight,
@@ -826,12 +953,57 @@ struct Texture(Movable):
                         total.b * share,
                         total.a * share,
                     ).unpremultiplied()
-                    self.pixels.append(_to_byte(mixed.r, self.color_space))
-                    self.pixels.append(_to_byte(mixed.g, self.color_space))
-                    self.pixels.append(_to_byte(mixed.b, self.color_space))
-                    self.pixels.append(_to_byte(mixed.a, LINEAR))
+                    self._store(mixed)
             level += 1
             self.levels = level + 1
+
+    def _stored(self) -> Int:
+        """Return how many channels the texel buffer holds, the chain
+        included: the length of `data` for a float texture, of `pixels`
+        for a byte one."""
+        if self.texel_type == FLOAT_TYPE:
+            return len(self.data)
+        return len(self.pixels)
+
+    def _store(mut self, color: FloatColor):
+        """Append one averaged texel to the chain being built.
+
+        A float texture keeps the average as it is, light above one
+        included. A byte texture encodes it back to bytes in its own color
+        space, which is what a GPU stores too; alpha is never encoded.
+        """
+        if self.texel_type == FLOAT_TYPE:
+            self.data.append(color.r)
+            self.data.append(color.g)
+            self.data.append(color.b)
+            self.data.append(color.a)
+            return
+        self.pixels.append(_to_byte(color.r, self.color_space))
+        self.pixels.append(_to_byte(color.g, self.color_space))
+        self.pixels.append(_to_byte(color.b, self.color_space))
+        self.pixels.append(_to_byte(color.a, LINEAR))
+
+    def _texel_at(self, offset: Int) -> FloatColor:
+        """Return the texel that starts at `offset` in the texel buffer, as
+        light: floats as they are, bytes through the ramp.
+
+        Color through the ramp; alpha is not color and never decoded, and
+        is not read at all when the texture ignores it.
+        """
+        if self.texel_type == FLOAT_TYPE:
+            return float_texel(
+                self.data[offset],
+                self.data[offset + 1],
+                self.data[offset + 2],
+                self.data[offset + 3],
+                self.alpha,
+            )
+        return FloatColor(
+            self.ramp[Int(self.pixels[offset])],
+            self.ramp[Int(self.pixels[offset + 1])],
+            self.ramp[Int(self.pixels[offset + 2])],
+            self._alpha_of(self.pixels[offset + 3]),
+        )
 
     def _has_level(self, level: Int) -> Bool:
         """Return True if `level` names an image this texture actually holds."""
@@ -891,14 +1063,7 @@ struct Texture(Movable):
             )
             * Self.CHANNELS
         )
-        # Color through the ramp; alpha is not color and never decoded, and
-        # is not read at all when the texture ignores it.
-        return FloatColor(
-            self.ramp[Int(self.pixels[offset])],
-            self.ramp[Int(self.pixels[offset + 1])],
-            self.ramp[Int(self.pixels[offset + 2])],
-            self._alpha_of(self.pixels[offset + 3]),
-        )
+        return self._texel_at(offset)
 
     def sample_at(
         self, u: Float32, v: Float32, level: Int
@@ -1505,6 +1670,107 @@ def data_texture(
             pixels.append(byte)
     return Texture(
         width, height, pixels^, wrap, filter, LINEAR, mipmapped, alpha
+    )
+
+
+def float_texture(
+    width: Int,
+    height: Int,
+    var data: List[Float32],
+    wrap: Wrap = CLAMP,
+    filter: Filter = BILINEAR,
+    mipmapped: Bool = False,
+    alpha: Alpha = COVERAGE,
+) raises -> Texture:
+    """Return a texture that holds linear light as floats: three.js's
+    `DataTexture` with a `type` of `FloatType`.
+
+    What an HDR image is. Every number is kept as it is, light above one
+    included, and sampled as it is: no ramp, no clamp, no transfer
+    function. Filtering and the mip chain average the floats premultiplied,
+    as they average a byte texture's decoded light.
+
+    The defaults are three.js's `RGBELoader` and `EXRLoader` settings:
+    clamped, bilinear, and no mip chain. Ask for a chain to sample a
+    minified image, or to give a rough surface a blurred environment.
+
+    Args:
+        width: Image width in texels.
+        height: Image height in texels.
+        data: Row-major RGBA floats from the top, width * height * 4.
+        wrap: How coordinates outside the unit square are resolved.
+        filter: `NEAREST` or `BILINEAR`.
+        mipmapped: Build the chain of halved copies, in floats.
+        alpha: `COVERAGE` if the alpha channel hides color, `IGNORED` if
+            it means nothing.
+
+    Returns:
+        The texture: `FLOAT_TYPE`, `LINEAR`.
+
+    Raises:
+        Error: If the dimensions are not positive, the data's length is
+            not `width * height * 4`, a number is not finite, or the
+            wrap, filter or alpha mode is none of the named values.
+    """
+    if width <= 0 or height <= 0:
+        raise Error("Texture dimensions must be positive")
+    if len(data) != width * height * Texture.CHANNELS:
+        raise Error("Float texture length does not match the dimensions")
+    # Both dimensions are positive, so the loop cannot run zero times.
+    for index in range(len(data)):  # pragma: no branch
+        # An infinity or a NaN poisons every filter that reaches it, and
+        # every level of the chain above it: refused, not sampled.
+        if not isfinite(data[index]):
+            raise Error("A float texture holds finite numbers")
+    var image = Texture()
+    image.width = width
+    image.height = height
+    image.texel_type = FLOAT_TYPE
+    image.data = data^
+    image.wrap = wrap
+    image.filter = filter
+    image.color_space = LINEAR
+    image.alpha = alpha
+    image.validate()
+    if mipmapped:
+        image._build_mipmaps()
+    return image^
+
+
+def float_texture_from(
+    image: FloatImage,
+    wrap: Wrap = CLAMP,
+    filter: Filter = BILINEAR,
+    mipmapped: Bool = False,
+    alpha: Alpha = COVERAGE,
+) raises -> Texture:
+    """Return a float texture holding an HDR image's pixels.
+
+    The join between `render.rgbe` or `render.exr` and this module, as
+    `texture_from` is the join to the PNG reader. The defaults are the
+    loaders' own in three.js: clamped, bilinear, no chain.
+
+    Args:
+        image: The decoded HDR image.
+        wrap: How coordinates outside the unit square are resolved.
+        filter: `NEAREST` or `BILINEAR`.
+        mipmapped: Build the chain of halved copies.
+        alpha: `COVERAGE` or `IGNORED`; see `Alpha`.
+
+    Returns:
+        The texture: `FLOAT_TYPE`, `LINEAR`.
+
+    Raises:
+        Error: Everything `float_texture` raises.
+    """
+    return float_texture(
+        image.width,
+        image.height,
+        image.pixels.copy(),
+        wrap,
+        filter,
+        mipmapped,
+        alpha,
     )
 
 

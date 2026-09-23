@@ -88,7 +88,7 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import FloatColor, Framebuffer
 from render.png import encode as encode_png
-from render.texture import CLAMP, MIRROR, NEAREST, Texture
+from render.texture import CLAMP, FLOAT_TYPE, MIRROR, NEAREST, Texture
 from render.texture_store import TextureId
 from std.pathlib import Path
 
@@ -278,12 +278,16 @@ def gltf_pixels(texture: Texture) raises -> List[UInt8]:
         RGBA bytes, row by row, `width * height * 4` of them.
 
     Raises:
-        Error: If the texture is blank, holds a mode that is none of its
-            named values, or is moved, tiled or turned by anything but
-            the flip `read_gltf` sets.
+        Error: If the texture is blank, holds floats, holds a mode that is
+            none of its named values, or is moved, tiled or turned by
+            anything but the flip `read_gltf` sets.
     """
     if texture.width == 0:
         raise Error("glTF: a blank texture has no image to write")
+    # A glTF image is a PNG or a JPEG, eight bits a channel: light above
+    # one has no byte to go in, and clipping it silently is not writing it.
+    if texture.texel_type == FLOAT_TYPE:
+        raise Error("glTF: a float texture has no eight-bit image to write")
     texture.validate()
     var transform = texture.uv_transform()
     var flip: Bool

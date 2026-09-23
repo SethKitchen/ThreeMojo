@@ -76,8 +76,12 @@ from render.texture import (
     CLAMP,
     MIRROR,
     REPEAT,
+    FLOAT_TYPE,
+    UNSIGNED_BYTE_TYPE,
     Texture,
     checkerboard,
+    float_from_bytes,
+    float_texture,
 )
 from lights.light import (
     ambient_light,
@@ -3460,6 +3464,59 @@ def test_both_backends_filter_a_texture_identically() raises:
             if pixel.r > 60 and pixel.b > 60:
                 between += 1
     assert_true(between > 0, "nothing was blended, so nothing was compared")
+    assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+def a_float_ramp(size: Int) raises -> Texture:
+    """Return a float texture whose red climbs from zero to three across
+    and whose green falls from two to zero down, bilinear and chained."""
+    var data = List[Float32]()
+    for y in range(size):
+        for x in range(size):
+            data.append(Float32(x) * 3 / Float32(size - 1))
+            data.append(Float32(size - 1 - y) * 2 / Float32(size - 1))
+            data.append(0.25)
+            data.append(1)
+    return float_texture(size, size, data^, REPEAT, BILINEAR, mipmapped=True)
+
+
+def test_the_table_carries_a_float_texture() raises:
+    # Host side: a float texture crosses as four little-endian bytes a
+    # number, its chain included, and says so in the table's last column.
+    var textures = TextureStore()
+    _ = textures.add(checkerboard(2, 2, Color(255, 255, 255), Color(0, 0, 0)))
+    var ramp = a_float_ramp(4)
+    var expected = ramp.data.copy()
+    _ = textures.add(ramp^)
+    var flattened = flatten_textures(textures)
+    ref table = flattened[1]
+    ref texels = flattened[0]
+    assert_equal(table[9], Int32(UNSIGNED_BYTE_TYPE.value))
+    assert_equal(table[TABLE_COLUMNS + 9], Int32(FLOAT_TYPE.value))
+    var start = Int(table[TABLE_COLUMNS])
+    assert_equal(len(texels), start + len(expected) * 4)
+    for index in range(len(expected)):
+        var at = start + index * 4
+        assert_equal(
+            float_from_bytes(
+                texels[at], texels[at + 1], texels[at + 2], texels[at + 3]
+            ),
+            expected[index],
+        )
+
+
+def test_both_backends_sample_a_float_texture_identically() raises:
+    # Light above one, filtered and read down a chain: the floats cross as
+    # bytes and are read back to the bit, and the filter is the shared one.
+    if skipped_for_lack_of_a_gpu("both backends sample a float texture"):
+        return
+    var textures = TextureStore()
+    var ramp = textures.add(a_float_ramp(16))
+    var corners = mapped_quad(24, ramp)
+    var gpu = render_triangles(
+        corners, 24, 24, BACKGROUND, SHADE_TEXTURE, textures
+    )
+    var cpu = cpu_textured(corners, 24, textures)
     assert_equal(count_mismatches(cpu, gpu), 0)
 
 

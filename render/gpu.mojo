@@ -151,22 +151,27 @@ from render.tonemap import (
 from render.texture import (
     BILINEAR,
     COVERAGE,
+    FLOAT_TYPE,
     IGNORED,
     NEAREST,
+    UNSIGNED_BYTE_TYPE,
     Alpha,
     Filter,
     Footprint,
+    TexelType,
     Texture,
     Wrap,
     anisotropic_footprint,
     blend_texels,
+    float_from_bytes,
+    float_texel,
     mix_color,
     mix_straight,
     wrap_index,
 )
 from max.gpu import global_idx
 from std.math import ceildiv, floor, inf, log2, sqrt
-from std.memory import unsafe_memcpy
+from std.memory import bitcast, unsafe_memcpy
 from std.sys import has_accelerator
 
 # 16x16 threads is a conventional starting point for a 2D grid: a multiple of
@@ -366,7 +371,7 @@ comptime FURTHEST = Float32(1.0e30)
 # One row per texture in the store: where its bytes start, how big it is, and
 # how to sample it. A device cannot hold a `List` of `List`s, so every image
 # goes into one buffer end to end and this says where each one begins.
-comptime TABLE_COLUMNS = 9
+comptime TABLE_COLUMNS = 10
 
 
 def flatten_textures(
@@ -387,7 +392,9 @@ def flatten_textures(
     Returns:
         The concatenated texels, and `TABLE_COLUMNS` entries per texture:
         byte offset, width, height, wrap mode, filter mode, color space,
-        how many mip levels follow, the alpha mode, and the anisotropy.
+        how many mip levels follow, the alpha mode, the anisotropy, and
+        the texel type. A float texture's numbers cross as four
+        little-endian bytes each, so every texture shares one buffer.
 
     Raises:
         Error: If a texture cannot be read, or its wrap, filter, color
@@ -443,6 +450,7 @@ def _flatten_one(
         table.append(1)
         table.append(Int32(COVERAGE.value))
         table.append(1)
+        table.append(Int32(UNSIGNED_BYTE_TYPE.value))
         for _ in range(4):
             texels.append(255)
         return
@@ -454,6 +462,17 @@ def _flatten_one(
     table.append(Int32(image.levels))
     table.append(Int32(image.alpha.value))
     table.append(Int32(image.anisotropy))
+    table.append(Int32(image.texel_type.value))
+    if image.texel_type == FLOAT_TYPE:
+        # Four bytes a number, least significant first: what
+        # `float_from_bytes` reads back on the device.
+        for index in range(len(image.data)):
+            var bits = bitcast[DType.uint32](image.data[index])
+            texels.append(UInt8(bits & 0xFF))
+            texels.append(UInt8((bits >> 8) & 0xFF))
+            texels.append(UInt8((bits >> 16) & 0xFF))
+            texels.append(UInt8(bits >> 24))
+        return
     # One bulk copy rather than an append per byte.
     texels.extend(image.pixels.copy())
 
@@ -1645,6 +1664,7 @@ struct _Descriptor(ImplicitlyCopyable):
     var levels: Int
     var alpha: Alpha
     var anisotropy: Int
+    var texel_type: TexelType
 
 
 def _describe(table: MutPointer[Int32, MutAnyOrigin], slot: Int) -> _Descriptor:
@@ -1661,6 +1681,7 @@ def _describe(table: MutPointer[Int32, MutAnyOrigin], slot: Int) -> _Descriptor:
         Int(table[unsafe_offset=entry + 6]),
         Alpha(Int(table[unsafe_offset=entry + 7])),
         Int(table[unsafe_offset=entry + 8]),
+        TexelType(Int(table[unsafe_offset=entry + 9])),
     )
 
 
@@ -1680,18 +1701,32 @@ def _fetch(
     blend on top of them is `blend`, also shared. Alpha is not color and is
     never decoded, and is not read at all when the texture ignores it, as
     `Texture._alpha_of` does not read it on the host.
+
+    A float texture's channel is four bytes rather than one, so every
+    position is four times as far into its image; the texel is then the
+    four floats, read by `float_from_bytes` and made a color by
+    `float_texel`, both shared with the host.
     """
     var wide = _extent(image.width, level)
     var tall = _extent(image.height, level)
-    var offset = (
-        image.start
-        + _level_start(image.width, image.height, level)
+    var channel = (
+        _level_start(image.width, image.height, level)
         + (
             wrap_index(y, tall, image.wrap) * wide
             + wrap_index(x, wide, image.wrap)
         )
         * 4
     )
+    if image.texel_type == FLOAT_TYPE:
+        var at = image.start + channel * 4
+        return float_texel(
+            _float_at(texels, at),
+            _float_at(texels, at + 4),
+            _float_at(texels, at + 8),
+            _float_at(texels, at + 12),
+            image.alpha,
+        )
+    var offset = image.start + channel
     var alpha = Float32(texels[unsafe_offset=offset + 3]) / 255
     if image.alpha == IGNORED:
         alpha = 1
@@ -1710,6 +1745,16 @@ def _fetch(
         Float32(texels[unsafe_offset=offset + 1]) / 255,
         Float32(texels[unsafe_offset=offset + 2]) / 255,
         alpha,
+    )
+
+
+def _float_at(texels: MutPointer[UInt8, MutAnyOrigin], at: Int) -> Float32:
+    """Return the float whose four little-endian bytes start at `at`."""
+    return float_from_bytes(
+        texels[unsafe_offset=at],
+        texels[unsafe_offset=at + 1],
+        texels[unsafe_offset=at + 2],
+        texels[unsafe_offset=at + 3],
     )
 
 
@@ -3727,6 +3772,9 @@ struct GpuRenderer(Movable):
     # exactly one: the kernel reads the row the host reads, and a taller
     # image has no unambiguous one. See `check_gradient_map`.
     var heights: List[Int]
+    # Per uploaded texture, whether it holds floats. A gradient map must
+    # not: the kernel reads its ramp one byte a tone, as the host does.
+    var holds_floats: List[Bool]
     # How many cube textures the last upload laid out after the flat
     # textures, six rows each. A triangle's env map id is checked against
     # it before the launch, as its texture id is against `uploaded`.
@@ -3858,6 +3906,7 @@ struct GpuRenderer(Movable):
         self.is_linear = List[Bool]()
         self.has_texels = List[Bool]()
         self.heights = List[Int]()
+        self.holds_floats = List[Bool]()
         self.backdrop = self.context.enqueue_create_buffer[DType.uint8](
             width * height * Framebuffer.CHANNELS
         )
@@ -4225,6 +4274,11 @@ struct GpuRenderer(Movable):
                         "A gradient map must ignore its own alpha; build"
                         " the texture with alpha=IGNORED"
                     )
+                if self.holds_floats[tones.value]:
+                    raise Error(
+                        "A gradient map must hold bytes: its tones are read"
+                        " one byte each"
+                    )
             # A matcap's own alpha means nothing either, and only a
             # texture built to ignore it filters correctly. Its own loop,
             # because a triangle with a matcap rarely has a ramp as well.
@@ -4481,12 +4535,14 @@ struct GpuRenderer(Movable):
         self.is_linear = List[Bool]()
         self.has_texels = List[Bool]()
         self.heights = List[Int]()
+        self.holds_floats = List[Bool]()
         for id in range(textures.count()):
             ref image = textures.get(TextureId(id))
             self.ignores_alpha.append(image.alpha == IGNORED)
             self.is_linear.append(image.color_space == LINEAR)
             self.has_texels.append(not image.is_blank())
             self.heights.append(image.height)
+            self.holds_floats.append(image.texel_type == FLOAT_TYPE)
 
     def _check_data_map(self, map: TextureId, name: String) raises:
         """Refuse a map that holds data and was not uploaded as data: the

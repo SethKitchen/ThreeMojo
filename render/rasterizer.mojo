@@ -54,6 +54,7 @@ from render.target import RenderTarget
 from render.raster_state import RasterState, shades
 from render.srgb import LINEAR
 from render.texture import (
+    FLOAT_TYPE,
     IGNORED,
     Texture,
     anisotropic_footprint,
@@ -1647,7 +1648,8 @@ def check_gradient_map(image: Texture) raises:
 
     Raises:
         Error: If the texture is blank, it is more than one row high, its
-            color space is not `LINEAR`, or it reads its alpha as coverage.
+            color space is not `LINEAR`, it reads its alpha as coverage, or
+            it holds floats.
     """
     if image.is_blank():
         raise Error(
@@ -1667,6 +1669,10 @@ def check_gradient_map(image: Texture) raises:
         raise Error(
             "A gradient map must ignore its own alpha; build the texture"
             " with alpha=IGNORED"
+        )
+    if image.texel_type == FLOAT_TYPE:
+        raise Error(
+            "A gradient map must hold bytes: its tones are read one byte each"
         )
 
 
