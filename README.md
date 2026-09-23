@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 157 features are ported and 22 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 158 features are ported and 21 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -192,10 +192,9 @@ The port is not at parity with three.js yet. 157 features are ported and 22 are 
 ### Textures
 
 - [ ] Texture sampling, environment mapping and background parameters [#171](https://github.com/SethKitchen/ThreeMojo/issues/171)
-- [ ] KTX2: UASTC HDR, XUASTC and ETC1S video [#163](https://github.com/SethKitchen/ThreeMojo/issues/163)
 
 <details>
-<summary>Ported: 17</summary>
+<summary>Ported: 18</summary>
 
 - [x] [Texture with repeat, clamp and mirror wrapping](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#wrap) [#58](https://github.com/SethKitchen/ThreeMojo/issues/58)
 - [x] [Nearest and bilinear filters](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#filter) [#59](https://github.com/SethKitchen/ThreeMojo/issues/59)
@@ -213,6 +212,7 @@ The port is not at parity with three.js yet. 157 features are ported and 22 are 
 - [x] [HDR images: RGBE and OpenEXR, and float textures](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#hdr-images): Radiance HDR and OpenEXR loaders, float textures, and panoramas as backgrounds and environments [#130](https://github.com/SethKitchen/ThreeMojo/issues/130)
 - [x] [KTX2 and more compressed formats](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#ktx2-and-compressed-formats): KTX2, KTX and DDS files, with BC2 to BC7, ETC and EAC blocks decoded into textures [#131](https://github.com/SethKitchen/ThreeMojo/issues/131)
 - [x] [KTX2 Zstandard and Basis Universal](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#basis-universal): Zstandard supercompression, and UASTC and ETC1S decoded to RGBA as three.js transcodes them. [#156](https://github.com/SethKitchen/ThreeMojo/issues/156)
+- [x] [KTX2 UASTC HDR and ETC1S video](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#basis-universal): UASTC HDR 4x4 decoded to floats, and ETC1S video with P-frames, as three.js's transcoder decodes them. [#163](https://github.com/SethKitchen/ThreeMojo/issues/163)
 - [x] [Data3DTexture and DataArrayTexture](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#3d-textures): volume and layered textures with GLSL sampling, a LUT pass and a .cube loader [#132](https://github.com/SethKitchen/ThreeMojo/issues/132)
 
 </details>
