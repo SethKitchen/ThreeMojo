@@ -10,7 +10,9 @@ passes and shaders beside it.
 **What a pass is.** A render leaves linear light in a `RenderTarget`. A
 pass reads every pixel of it and writes every pixel back: a blur, a bloom,
 a film grain, a dot screen, a sepia, a vignette, a gray, a trail, a copy at
-an opacity, or the tone mapping curve. The composer runs its passes in
+an opacity, the tone mapping curve, or an anti-aliasing: FXAA, SMAA, or
+jittered samples averaged at once (SSAA) or over frames (TAA); see
+`postprocessing.antialiasing`. The composer runs its passes in
 order on one target and resolves it once at the end. three.js ping-pongs
 between two targets because a shader cannot read the texture it writes;
 a pass here reads the whole target before it writes, so one target serves.
@@ -38,6 +40,14 @@ from core.assets import Assets
 from core.scene import Scene
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
+from postprocessing.antialiasing import (
+    JITTER_LEVELS,
+    JitteredCamera,
+    fxaa_light,
+    jitter_offsets,
+    smaa_light,
+)
+from postprocessing.sampling import clamped_tap, mix, sample, u_of, v_of
 from render.antialias import SUPERSAMPLE
 from render.framebuffer import FloatColor, Framebuffer
 from render.target import RenderTarget
@@ -53,14 +63,14 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
 
     three.js has a class per pass and this has a tag, for the reason
     `Material` has one: a composer holds one list of one type. The type
-    stops a bare integer at compile time; it does not stop `PassKind(11)`,
+    stops a bare integer at compile time; it does not stop `PassKind(15)`,
     which `check_pass` refuses.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the eleven kinds there are."""
+        """Return True if this is one of the fifteen kinds there are."""
         return (
             self == RENDER
             or self == COPY
@@ -73,6 +83,10 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
             or self == LUMINOSITY
             or self == AFTERIMAGE
             or self == OUTPUT
+            or self == FXAA
+            or self == SMAA
+            or self == SSAA_RENDER
+            or self == TAA_RENDER
         )
 
 
@@ -99,6 +113,14 @@ comptime LUMINOSITY = PassKind(8)
 comptime AFTERIMAGE = PassKind(9)
 # The renderer's tone mapping curve: `OutputPass`.
 comptime OUTPUT = PassKind(10)
+# Smooth the edges by their luminance: `FXAAPass`.
+comptime FXAA = PassKind(11)
+# Smooth the edges by their shape: `SMAAPass`.
+comptime SMAA = PassKind(12)
+# Draw the scene several times, each jittered, and average: `SSAARenderPass`.
+comptime SSAA_RENDER = PassKind(13)
+# The same, or over many frames, a few samples a frame: `TAARenderPass`.
+comptime TAA_RENDER = PassKind(14)
 
 # three.js's `LuminosityHighPassShader` fades a pixel in over this much
 # luminance above the threshold.
@@ -116,6 +138,11 @@ comptime BLUR_WEIGHTS = SIMD[DType.float32, 8](
     0.051, 0.0918, 0.12245, 0.1531, 0.1633, 0.1531, 0.12245, 0.0918
 )
 comptime BLUR_LAST_WEIGHT = Float32(0.051)
+# How many jittered samples `TAARenderPass` accumulates over frames: its
+# sixth and largest pattern.
+comptime TAA_SAMPLES = 32
+# `SSAARenderPass`'s `roundingRange`: how far its unbiased weights spread.
+comptime SSAA_ROUNDING_RANGE = Float32(1.0 / 32.0)
 
 
 struct Pass(Copyable, Movable):
@@ -125,8 +152,9 @@ struct Pass(Copyable, Movable):
     Each kind reads the settings its builder takes and leaves the rest at
     their defaults. Build one with `render_pass`, `copy_pass`, `blur_pass`,
     `bloom_pass`, `film_pass`, `dot_screen_pass`, `sepia_pass`,
-    `vignette_pass`, `luminosity_pass`, `afterimage_pass` or
-    `output_pass`, and change a setting afterward as three.js changes a
+    `vignette_pass`, `luminosity_pass`, `afterimage_pass`, `output_pass`,
+    `fxaa_pass`, `smaa_pass`, `ssaa_render_pass` or `taa_render_pass`, and
+    change a setting afterward as three.js changes a
     pass's uniforms; `EffectComposer.render` checks each again.
     """
 
@@ -153,6 +181,17 @@ struct Pass(Copyable, Movable):
     var grayscale: Bool
     # The film pass's noise seed, advanced by `EffectComposer.render`.
     var time: Float32
+    # The supersampled passes' `sampleLevel`: two to this many samples,
+    # zero through five.
+    var sample_level: Int
+    # Whether the supersampled passes vary each sample's weight so their
+    # rounding cancels: `SSAARenderPass.unbiased`.
+    var unbiased: Bool
+    # Whether a TAA pass accumulates over frames: `TAARenderPass.accumulate`.
+    var accumulate: Bool
+    # How many of the TAA pass's samples are in, or minus one to start
+    # over on the next frame: `TAARenderPass.accumulateIndex`.
+    var accumulate_index: Int
 
     def __init__(out self, kind: PassKind):
         """Start a pass of `kind` with every setting at its default.
@@ -171,6 +210,10 @@ struct Pass(Copyable, Movable):
         self.center = Vector2(0.5, 0.5)
         self.grayscale = False
         self.time = 0.0
+        self.sample_level = 0
+        self.unbiased = True
+        self.accumulate = False
+        self.accumulate_index = -1
 
 
 def check_pass(step: Pass) raises:
@@ -180,13 +223,15 @@ def check_pass(step: Pass) raises:
         step: The pass.
 
     Raises:
-        Error: If the kind is none of the eleven; a strength, radius,
+        Error: If the kind is none of the fifteen; a strength, radius,
             threshold, offset, scale, angle or time is not finite; a
             strength, radius, threshold, offset or scale is negative; a
-            bloom's radius or an afterimage's damp is above one.
+            bloom's radius or an afterimage's damp is above one; the sample
+            level is outside zero through five; or the accumulate index is
+            outside minus one through 32.
     """
     if not step.kind.is_valid():
-        raise Error("A pass kind must be one of the eleven named kinds")
+        raise Error("A pass kind must be one of the fifteen named kinds")
     if not (
         isfinite(step.strength)
         and isfinite(step.radius)
@@ -211,6 +256,10 @@ def check_pass(step: Pass) raises:
         raise Error("A bloom's radius runs from zero to one")
     if step.kind == AFTERIMAGE and step.strength > 1:
         raise Error("An afterimage's damp runs from zero to one")
+    if step.sample_level < 0 or step.sample_level >= JITTER_LEVELS:
+        raise Error("A sample level runs from zero to five")
+    if step.accumulate_index < -1 or step.accumulate_index > TAA_SAMPLES:
+        raise Error("An accumulate index runs from minus one to 32")
 
 
 def render_pass() -> Pass:
@@ -426,6 +475,108 @@ def output_pass() -> Pass:
     return Pass(OUTPUT)
 
 
+def fxaa_pass() -> Pass:
+    """Return a pass that smooths jagged edges by their luminance:
+    three.js's `FXAAPass`.
+
+    Put it after the `output_pass`, as three.js's examples do, so it sees
+    the light the curve leaves rather than the light the render leaves.
+
+    Returns:
+        The pass.
+    """
+    return Pass(FXAA)
+
+
+def smaa_pass() -> Pass:
+    """Return a pass that smooths jagged edges by their shape: three.js's
+    `SMAAPass`.
+
+    Put it after the `output_pass`, as three.js's examples do.
+
+    Returns:
+        The pass.
+    """
+    return Pass(SMAA)
+
+
+def ssaa_render_pass(
+    sample_level: Int = 4, unbiased: Bool = True
+) raises -> Pass:
+    """Return a pass that draws the scene once per jittered sample and
+    averages the samples: three.js's `SSAARenderPass`.
+
+    Args:
+        sample_level: Zero through five, for 1, 2, 4, 8, 16 or 32 samples.
+        unbiased: Whether to vary each sample's weight a little about the
+            mean, as three.js does, so rounding cancels.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the sample level is outside zero through five.
+    """
+    var step = Pass(SSAA_RENDER)
+    step.sample_level = sample_level
+    step.unbiased = unbiased
+    check_pass(step)
+    return step^
+
+
+def taa_render_pass(
+    sample_level: Int = 0, accumulate: Bool = False
+) raises -> Pass:
+    """Return a pass that draws jittered samples and, once asked to,
+    accumulates 32 of them over many frames: three.js's `TAARenderPass`.
+
+    While `accumulate` is off it is an `ssaa_render_pass` of its sample
+    level. Turned on, it draws two to the sample level of the 32 samples
+    each frame, shows their running sum over the frame it drew when it
+    started, and keeps the sum once all 32 are in. Set `accumulate_index`
+    to minus one, or turn `accumulate` off, when the scene or the camera
+    moves.
+
+    Args:
+        sample_level: Zero through five: how many samples a frame draws.
+        accumulate: Whether to accumulate over frames.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the sample level is outside zero through five.
+    """
+    var step = Pass(TAA_RENDER)
+    step.sample_level = sample_level
+    step.accumulate = accumulate
+    check_pass(step)
+    return step^
+
+
+struct TaaMemory(Copyable, Movable):
+    """What a TAA pass keeps between frames: three.js's `_holdRenderTarget`
+    and `_sampleRenderTarget`.
+    """
+
+    # The frame drawn when accumulation started, which fills in for the
+    # samples not in yet.
+    var hold: List[FloatColor]
+    # Which of its pixels held data.
+    var hold_data: List[Bool]
+    # Its depths.
+    var hold_depth: List[Float32]
+    # The samples drawn so far, each weighted by one in 32.
+    var sum: List[FloatColor]
+
+    def __init__(out self):
+        """Start with nothing held."""
+        self.hold = List[FloatColor]()
+        self.hold_data = List[Bool]()
+        self.hold_depth = List[Float32]()
+        self.sum = List[FloatColor]()
+
+
 struct EffectComposer(Movable):
     """The passes a frame goes through, in order: three.js's
     `EffectComposer`.
@@ -443,11 +594,15 @@ struct EffectComposer(Movable):
     # What an afterimage pass saw last, one entry per pass and empty for
     # every other kind and before the first frame.
     var memories: List[List[FloatColor]]
+    # What a TAA pass has accumulated, one entry per pass and empty for
+    # every other kind and before the first frame.
+    var accumulations: List[TaaMemory]
 
     def __init__(out self):
         """Start with no passes."""
         self.passes = List[Pass]()
         self.memories = List[List[FloatColor]]()
+        self.accumulations = List[TaaMemory]()
 
     def add_pass(mut self, var step: Pass) raises:
         """Append a pass: three.js's `addPass`.
@@ -461,6 +616,7 @@ struct EffectComposer(Movable):
         check_pass(step)
         self.passes.append(step^)
         self.memories.append(List[FloatColor]())
+        self.accumulations.append(TaaMemory())
 
     def insert_pass(mut self, var step: Pass, index: Int) raises:
         """Put a pass before the one at `index`: three.js's `insertPass`.
@@ -478,6 +634,7 @@ struct EffectComposer(Movable):
             raise Error("A pass is inserted at zero through the count")
         self.passes.insert(index, step^)
         self.memories.insert(index, List[FloatColor]())
+        self.accumulations.insert(index, TaaMemory())
 
     def remove_pass(mut self, index: Int) raises:
         """Take a pass out: three.js's `removePass`.
@@ -492,6 +649,7 @@ struct EffectComposer(Movable):
             raise Error("There is no pass at that index")
         _ = self.passes.pop(index)
         _ = self.memories.pop(index)
+        _ = self.accumulations.pop(index)
 
     def pass_count(self) -> Int:
         """Return how many passes there are."""
@@ -499,10 +657,12 @@ struct EffectComposer(Movable):
 
     def reset(mut self):
         """Forget what every afterimage pass saw, so the next frame
-        starts a fresh trail: three.js's `reset`.
+        starts a fresh trail: three.js's `reset`. Every TAA pass forgets
+        its samples too, and starts accumulating again.
         """
         for index in range(len(self.memories)):
             self.memories[index] = List[FloatColor]()
+            self.accumulations[index] = TaaMemory()
 
     def render[
         C: Camera
@@ -576,6 +736,29 @@ struct EffectComposer(Movable):
                 luminosity_light(frame)
             elif step.kind == AFTERIMAGE:
                 afterimage_light(frame, self.memories[index], step.strength)
+            elif step.kind == FXAA:
+                fxaa_light(frame)
+            elif step.kind == SMAA:
+                smaa_light(frame)
+            elif step.kind == SSAA_RENDER:
+                frame = supersample(
+                    renderer,
+                    scene,
+                    assets,
+                    camera,
+                    step.sample_level,
+                    step.unbiased,
+                )
+            elif step.kind == TAA_RENDER:
+                taa_render(
+                    frame,
+                    self.passes[index],
+                    self.accumulations[index],
+                    renderer,
+                    scene,
+                    assets,
+                    camera,
+                )
             else:
                 # `OUTPUT`: the only kind left once `check_pass` has had
                 # its say.
@@ -606,6 +789,176 @@ def _draw[
     renderer.render_into(frame, scene, assets, camera)
 
 
+def supersample[
+    C: Camera
+](
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+    sample_level: Int,
+    unbiased: Bool,
+) raises -> RenderTarget:
+    """Draw the scene once per jittered sample of a level and return the
+    weighted sum: three.js's `SSAARenderPass.render`.
+
+    Each sample is drawn as a render pass draws, cleared to the renderer's
+    background, through `JitteredCamera`, and added in by its weight. The
+    weights are one over the count. Unbiased, they are spread evenly over
+    a thirty-second about that, as three.js spreads them, and still sum to
+    one. A pixel is data only if it is data in every sample, and its depth
+    is the nearest.
+
+    Args:
+        renderer: What to draw with, and whose size and background to take.
+        scene: The transform hierarchy, and the meshes and lights in it.
+        assets: The geometry, materials and textures the meshes name.
+        camera: The camera to jitter.
+        sample_level: Zero through five, for 1, 2, 4, 8, 16 or 32 samples.
+        unbiased: Whether to spread the weights.
+
+    Returns:
+        The averaged frame.
+
+    Raises:
+        Error: Everything `jitter_offsets` and `Renderer.render_into` raise.
+    """
+    var offsets = jitter_offsets(sample_level)
+    var count = len(offsets)
+    var frame = RenderTarget(
+        renderer.width, renderer.height, renderer.background
+    )
+    var pixels = len(frame.colors)
+    for slot in range(pixels):  # pragma: no branch
+        frame.colors[slot] = FloatColor(0, 0, 0, 0)
+        frame.data[slot] = True
+    for index in range(count):  # pragma: no branch
+        var weight = 1 / Float32(count)
+        if unbiased:
+            weight += SSAA_ROUNDING_RANGE * (
+                -0.5 + (Float32(index) + 0.5) / Float32(count)
+            )
+        var drawn = _jittered(renderer, scene, assets, camera, offsets[index])
+        for slot in range(pixels):  # pragma: no branch
+            var sum = frame.colors[slot]
+            var add = drawn.colors[slot]
+            frame.colors[slot] = FloatColor(
+                sum.r + add.r * weight,
+                sum.g + add.g * weight,
+                sum.b + add.b * weight,
+                sum.a + add.a * weight,
+            )
+            frame.data[slot] = frame.data[slot] and drawn.data[slot]
+            frame.depth[slot] = min(frame.depth[slot], drawn.depth[slot])
+    return frame^
+
+
+def _jittered[
+    C: Camera
+](
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+    offset: Vector2,
+) raises -> RenderTarget:
+    """Return the scene drawn as a render pass draws it, the camera's view
+    moved by `offset` pixels."""
+    var frame = RenderTarget(
+        renderer.width, renderer.height, renderer.background
+    )
+    var moved = JitteredCamera(
+        camera, scene, offset.x, offset.y, renderer.width, renderer.height
+    )
+    _draw(frame, renderer, scene, assets, moved)
+    return frame^
+
+
+def taa_render[
+    C: Camera
+](
+    mut frame: RenderTarget,
+    mut step: Pass,
+    mut memory: TaaMemory,
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+) raises:
+    """Run one frame of a TAA pass: three.js's `TAARenderPass.render`.
+
+    Not accumulating, the frame is `supersample` at the pass's level and
+    the index goes back to minus one. Accumulating, a first frame, or one
+    of another size, is supersampled and held, and the index starts at
+    zero. Then, while fewer than 32 samples are in, up to two to the level
+    of them are drawn, each weighted one in 32. The frame is their sum
+    plus the held frame weighted by what is still missing. The held frame's
+    data flags and depths are kept.
+
+    Args:
+        frame: The frame, replaced.
+        step: The pass, whose index advances.
+        memory: What the pass holds between frames.
+        renderer: What to draw with.
+        scene: The transform hierarchy, and the meshes and lights in it.
+        assets: The geometry, materials and textures the meshes name.
+        camera: The camera to jitter.
+
+    Raises:
+        Error: Everything `supersample` raises.
+    """
+    if not step.accumulate:
+        frame = supersample(
+            renderer, scene, assets, camera, step.sample_level, step.unbiased
+        )
+        step.accumulate_index = -1
+        return
+    var pixels = renderer.width * renderer.height
+    if step.accumulate_index == -1 or len(memory.hold) != pixels:
+        var held = supersample(
+            renderer, scene, assets, camera, step.sample_level, step.unbiased
+        )
+        memory.hold = held.colors.copy()
+        memory.hold_data = held.data.copy()
+        memory.hold_depth = held.depth.copy()
+        memory.sum = List[FloatColor](
+            length=pixels, fill=FloatColor(0, 0, 0, 0)
+        )
+        step.accumulate_index = 0
+    var weight = 1 / Float32(TAA_SAMPLES)
+    var offsets = jitter_offsets(JITTER_LEVELS - 1)
+    var per_frame = 1 << step.sample_level
+    var drawn = 0
+    while drawn < per_frame and step.accumulate_index < TAA_SAMPLES:
+        var jittered = _jittered(
+            renderer, scene, assets, camera, offsets[step.accumulate_index]
+        )
+        for slot in range(pixels):  # pragma: no branch
+            var sum = memory.sum[slot]
+            var add = jittered.colors[slot]
+            memory.sum[slot] = FloatColor(
+                sum.r + add.r * weight,
+                sum.g + add.g * weight,
+                sum.b + add.b * weight,
+                sum.a + add.a * weight,
+            )
+        step.accumulate_index += 1
+        drawn += 1
+    var missing = 1 - Float32(step.accumulate_index) * weight
+    frame = RenderTarget(renderer.width, renderer.height, renderer.background)
+    for slot in range(pixels):  # pragma: no branch
+        var sum = memory.sum[slot]
+        var held = memory.hold[slot]
+        frame.colors[slot] = FloatColor(
+            sum.r + held.r * missing,
+            sum.g + held.g * missing,
+            sum.b + held.b * missing,
+            sum.a + held.a * missing,
+        )
+    frame.data = memory.hold_data.copy()
+    frame.depth = memory.hold_depth.copy()
+
+
 def luminance(color: FloatColor) -> Float32:
     """Return a color's luminance: three.js's `luminance`, rec. 709's
     weights on the linear channels.
@@ -617,71 +970,6 @@ def luminance(color: FloatColor) -> Float32:
         The weighted sum of red, green and blue.
     """
     return 0.2126729 * color.r + 0.7151522 * color.g + 0.0721750 * color.b
-
-
-def _clamped_tap(
-    colors: List[FloatColor], width: Int, height: Int, x: Float32, y: Float32
-) -> FloatColor:
-    """Return the light at a point in pixel coordinates, pixel centers on
-    the integers, blended from the four pixels around it and held at the
-    edges: a bilinear clamped texture read of the frame."""
-    var px = x
-    var py = y
-    if px < 0:
-        px = 0
-    if py < 0:
-        py = 0
-    if px > Float32(width - 1):
-        px = Float32(width - 1)
-    if py > Float32(height - 1):
-        py = Float32(height - 1)
-    var x0 = Int(px)
-    var y0 = Int(py)
-    var fx = px - Float32(x0)
-    var fy = py - Float32(y0)
-    var x1 = x0 + 1
-    var y1 = y0 + 1
-    if x1 >= width:
-        x1 = width - 1
-    if y1 >= height:
-        y1 = height - 1
-    var top = _mix(colors[y0 * width + x0], colors[y0 * width + x1], fx)
-    var bottom = _mix(colors[y1 * width + x0], colors[y1 * width + x1], fx)
-    return _mix(top, bottom, fy)
-
-
-def _sample(
-    colors: List[FloatColor], width: Int, height: Int, u: Float32, v: Float32
-) -> FloatColor:
-    """Return the light at a texture coordinate, `v` up from the bottom
-    as a shader's `vUv` runs, through `_clamped_tap`."""
-    return _clamped_tap(
-        colors,
-        width,
-        height,
-        u * Float32(width) - 0.5,
-        (1 - v) * Float32(height) - 0.5,
-    )
-
-
-def _mix(a: FloatColor, b: FloatColor, t: Float32) -> FloatColor:
-    """Return `a` moved toward `b` by `t`, every channel."""
-    return FloatColor(
-        a.r + (b.r - a.r) * t,
-        a.g + (b.g - a.g) * t,
-        a.b + (b.b - a.b) * t,
-        a.a + (b.a - a.a) * t,
-    )
-
-
-def _u_of(x: Int, width: Int) -> Float32:
-    """Return a column's texture coordinate, its center."""
-    return (Float32(x) + 0.5) / Float32(width)
-
-
-def _v_of(y: Int, height: Int) -> Float32:
-    """Return a row's texture coordinate, its center, up from the bottom."""
-    return 1 - (Float32(y) + 0.5) / Float32(height)
 
 
 def copy_light(mut frame: RenderTarget, opacity: Float32):
@@ -727,7 +1015,7 @@ def _blur_along(mut frame: RenderTarget, spread: Float32, across: Bool):
                     tx += step
                 else:
                     ty += step
-                var here = _clamped_tap(source, width, height, tx, ty)
+                var here = clamped_tap(source, width, height, tx, ty)
                 sum = FloatColor(
                     sum.r + here.r * weight,
                     sum.g + here.g * weight,
@@ -783,24 +1071,24 @@ def _separable_blur(
     while y < height:
         var x = 0
         while x < width:
-            var u = _u_of(x, width)
-            var v = _v_of(y, height)
+            var u = u_of(x, width)
+            var v = v_of(y, height)
             var weight = _gaussian(0, sigma)
-            var center = _sample(source, source_width, source_height, u, v)
+            var center = sample(source, source_width, source_height, u, v)
             var sum = center.scaled(weight)
             var total = weight
             var tap = 1
             while tap < kernel:
                 var offset = Float32(tap)
                 var w = _gaussian(offset, sigma)
-                var ahead = _sample(
+                var ahead = sample(
                     source,
                     source_width,
                     source_height,
                     u + step_u * offset,
                     v + step_v * offset,
                 )
-                var behind = _sample(
+                var behind = sample(
                     source,
                     source_width,
                     source_height,
@@ -914,13 +1202,13 @@ def bloom_light(
     while y < height:
         var x = 0
         while x < width:
-            var u = _u_of(x, width)
-            var v = _v_of(y, height)
+            var u = u_of(x, width)
+            var v = v_of(y, height)
             var glow = FloatColor(0, 0, 0, 0)
             var level = 0
             while level < BLOOM_LEVELS:
                 var weight = _bloom_factor(level, radius) * strength
-                var here = _sample(
+                var here = sample(
                     levels[level],
                     level_widths[level],
                     level_heights[level],
@@ -978,7 +1266,7 @@ def film_light(
         while x < width:
             var index = y * width + x
             var base = frame.colors[index].unpremultiplied()
-            var noise = _rand(_u_of(x, width) + time, _v_of(y, height) + time)
+            var noise = _rand(u_of(x, width) + time, v_of(y, height) + time)
             var grain = noise + 0.1
             if grain > 1:
                 grain = 1
@@ -988,7 +1276,7 @@ def film_light(
                 base.b + base.b * grain,
                 base.a,
             )
-            color = _mix(base, color, intensity)
+            color = mix(base, color, intensity)
             if grayscale:
                 var gray = luminance(color)
                 color = FloatColor(gray, gray, gray, base.a)
@@ -1025,8 +1313,8 @@ def dot_screen_light(
         while x < width:
             var index = y * width + x
             var base = frame.colors[index].unpremultiplied()
-            var tx = _u_of(x, width) * DOT_SCREEN_SIZE - center.x
-            var ty = _v_of(y, height) * DOT_SCREEN_SIZE - center.y
+            var tx = u_of(x, width) * DOT_SCREEN_SIZE - center.x
+            var ty = v_of(y, height) * DOT_SCREEN_SIZE - center.y
             var px = (c * tx - s * ty) * scale
             var py = (s * tx + c * ty) * scale
             var pattern = sin(px) * sin(py) * 4
@@ -1093,9 +1381,9 @@ def vignette_light(mut frame: RenderTarget, offset: Float32, darkness: Float32):
         while x < width:
             var index = y * width + x
             var base = frame.colors[index].unpremultiplied()
-            var u = (_u_of(x, width) - 0.5) * offset
-            var v = (_v_of(y, height) - 0.5) * offset
-            var mixed = _mix(base, edge, u * u + v * v)
+            var u = (u_of(x, width) - 0.5) * offset
+            var v = (v_of(y, height) - 0.5) * offset
+            var mixed = mix(base, edge, u * u + v * v)
             frame.colors[index] = FloatColor(
                 mixed.r, mixed.g, mixed.b, base.a
             ).premultiplied()
