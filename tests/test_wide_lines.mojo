@@ -584,7 +584,7 @@ def test_a_one_pixel_line_refuses_a_width_or_an_offset() raises:
 
 def test_a_wide_line_hit_kind_is_valid() raises:
     assert_true(WIDE_LINE_HIT.is_valid())
-    assert_false(HitKind(5).is_valid())
+    assert_false(HitKind(9).is_valid())
 
 
 def picked(
