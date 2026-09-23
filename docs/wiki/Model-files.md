@@ -1,10 +1,10 @@
 # Model files
 
-`loaders/obj.mojo` and `loaders/gltf.mojo`. `read_obj` reads a Wavefront OBJ file into named objects, each with a `BufferGeometry`. `parse_obj` reads the text of one. `read_gltf` reads a glTF 2.0 file, `.gltf` or `.glb`, into a scene and its assets.
+`loaders/obj.mojo`, `loaders/stl.mojo`, `loaders/ply.mojo` and `loaders/gltf.mojo`. `read_obj` reads a Wavefront OBJ file into named objects, each with a `BufferGeometry`. `parse_obj` reads the text of one. `read_stl` and `read_ply` read an STL or a PLY file into one `BufferGeometry`. `read_gltf` reads a glTF 2.0 file, `.gltf` or `.glb`, into a scene and its assets.
 
 ![A cube loaded from an OBJ file turns under a lamp](out/model.png)
 
-three.js: `OBJLoader`.
+three.js: `OBJLoader`, `STLLoader` and `PLYLoader`.
 
 ## Read a file
 
@@ -63,6 +63,111 @@ The parser raises, naming the line, for:
 ## Example
 
 `assets/cube.obj` is a unit cube with normals and texture coordinates. `tests/test_obj.mojo` reads it and draws it.
+
+## STL
+
+`loaders/stl.mojo`. `read_stl(path)` reads an STL file, binary or ASCII, into an `StlModel`. three.js: `STLLoader`.
+
+```mojo
+var model = read_stl("assets/tetrahedron.stl")
+print(model.geometry.triangle_count(), model.has_colors(), model.alpha)
+var shape = assets.geometries.add(model.take_geometry())
+```
+
+| Function | Meaning |
+|---|---|
+| `read_stl(path) -> StlModel` | Read a file. |
+| `parse_stl(bytes) -> StlModel` | Read the bytes of one, binary or ASCII. |
+| `parse_stl_text(text) -> StlModel` | Read the text of an ASCII file. |
+| `is_binary_stl(bytes) -> Bool` | Tell the two encodings apart, as three.js does. |
+
+A file exactly as long as its face count says is binary. Otherwise, a file with `solid` in its first ten bytes is ASCII. Any other file is binary.
+
+### StlModel
+
+| Field | Meaning |
+|---|---|
+| `geometry` | A non-indexed `BufferGeometry`. It has `position` and `normal`, and `color` when the binary header has `COLOR=`. Each corner gets the normal of its face. |
+| `solids` | One `StlSolid` for each solid, in file order: `name`, `start` and `count`. `start` and `count` count corners. A binary file has one solid with no name. These are the groups of three.js. |
+| `alpha` | The alpha of `COLOR=`, from zero to one. It is one when the file has no header color. |
+
+`has_colors()` is true when the geometry has a `color` attribute. `take_geometry()` swaps the geometry out for an empty one.
+
+### Binary colors
+
+The binary format has no standard color. This loader reads the convention that three.js reads:
+
+- A header with `COLOR=` and four bytes gives a default color and an alpha. The last `COLOR=` in the header wins.
+- Each face then has a 16-bit color. Red is in bits 0 to 4, green in bits 5 to 9, and blue in bits 10 to 14.
+- A face with bit 15 set uses the default color.
+
+The colors are sRGB. The loader decodes them to linear light, as three.js does. A header without `COLOR=` gives no `color` attribute. Most writers put zeros in the 16 bits, and zero is black.
+
+### Errors
+
+The loader raises for:
+
+- A binary file shorter than 84 bytes, or shorter than its face count needs. The loader reads a binary file with bytes after its faces.
+- A coordinate or a normal that is not a number, or is not finite as a `Float32`.
+- An ASCII file with no solid, or a solid without `endsolid`. A solid in a solid.
+- A keyword in the wrong place, such as `vertex` outside a facet.
+- A facet without `normal`, or with other than three vertices. `outer` without `loop`.
+- A word that STL does not have. Text that is not UTF-8.
+
+## PLY
+
+`loaders/ply.mojo`. `read_ply(path)` reads a PLY file into one indexed `BufferGeometry`. three.js: `PLYLoader`.
+
+```mojo
+var shape = assets.geometries.add(read_ply("assets/cube.ply"))
+```
+
+| Function | Meaning |
+|---|---|
+| `read_ply(path) -> BufferGeometry` | Read a file. |
+| `parse_ply(bytes) -> BufferGeometry` | Read the bytes of one. |
+| `ply_format(name) -> PlyFormat` | The format a `format` line names. |
+| `ply_scalar(name) -> PlyScalar` | The type a `property` line names. |
+| `decode_ply_scalar(bytes, at, scalar, format) -> Float64` | One binary value. |
+
+The loader reads the three formats: `ascii`, `binary_little_endian` and `binary_big_endian`. It reads every scalar type: `char`, `uchar`, `short`, `ushort`, `int`, `uint`, `float` and `double`. It also reads the names `int8` to `float64`.
+
+`PlyFormat` and `PlyScalar` are types. A bare integer does not compile. `PlyScalar.size()` and `decode_ply_scalar` refuse a value that is not valid.
+
+### What is read
+
+| Element and property | Attribute |
+|---|---|
+| `vertex`: `x`, `y`, `z` | `position`. A file must have them. |
+| `vertex`: `nx`, `ny`, `nz` | `normal`. |
+| `vertex`: `s`, `t`, or `u`, `v`, or `texture_u`, `texture_v`, or `tx`, `ty` | `uv`. |
+| `vertex`: `red`, `green`, `blue`, or `r`, `g`, `b`, or `diffuse_red` and so on | `color`, divided by 255 and decoded from sRGB. |
+| `vertex`: `alpha` or `a` | The fourth channel of `color`, divided by 255. three.js does not read it. |
+| `face`: `vertex_indices` or `vertex_index` | The index. |
+
+A face of more than three corners becomes a fan of triangles from its first corner. Thus the face must be convex, as an OBJ face must be. three.js cuts a quad on the other diagonal, and it does not read a face of five or more corners.
+
+The loader reads past all other elements and properties. A file without a `face` element is a point cloud, and its geometry has no index.
+
+### Errors
+
+The loader raises, and names the element and the row, for:
+
+- A file that does not start with `ply`, or has no `end_header`. A header with no `format` line.
+- A format or a type that is not known. An `element` or `property` line with the wrong fields.
+- A property before any element. An element named twice. A list length that is not an integer type.
+- A header line that is not `format`, `element`, `property`, `comment` or `obj_info`.
+- No `vertex` element, or a vertex without `x`, `y` and `z`. A vertex property that is a list.
+- Only some channels of a normal, a texture coordinate or a color. An alpha without a color.
+- A face without a list of integer vertex indices.
+- An ASCII row with too few or too many values. A value that is not a number of its type, or is out of its range.
+- A file that ends before its last row. A list with a negative length.
+- A value of a vertex that is not finite as a `Float32`.
+- A face with fewer than three corners, or one that names a vertex the file does not have. A face that is not convex, or has no area.
+
+### Example
+
+`assets/cube.ply` is a unit cube in ASCII, with a color at each corner and six quads. `assets/tetrahedron.stl` is a binary tetrahedron with a header color. `tests/test_ply.mojo` and `tests/test_stl.mojo` read them and draw them.
 
 ## glTF
 

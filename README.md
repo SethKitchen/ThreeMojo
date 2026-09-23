@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 102 features are ported and 47 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 103 features are ported and 46 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -208,16 +208,16 @@ The port is not at parity with three.js yet. 102 features are ported and 47 are 
 - [ ] glTF skins, animations, morph targets, cameras and sparse accessors [#134](https://github.com/SethKitchen/ThreeMojo/issues/134)
 - [ ] glTF extensions [#135](https://github.com/SethKitchen/ThreeMojo/issues/135)
 - [ ] OBJ material libraries [#136](https://github.com/SethKitchen/ThreeMojo/issues/136)
-- [ ] STL and PLY loaders [#137](https://github.com/SethKitchen/ThreeMojo/issues/137)
 - [ ] FBX and Collada loaders [#138](https://github.com/SethKitchen/ThreeMojo/issues/138)
 - [ ] Exporters: glTF, OBJ, STL and PLY [#139](https://github.com/SethKitchen/ThreeMojo/issues/139)
 - [ ] JSON scene format: ObjectLoader and toJSON [#140](https://github.com/SethKitchen/ThreeMojo/issues/140)
 
 <details>
-<summary>Ported: 2</summary>
+<summary>Ported: 3</summary>
 
 - [x] [GLTF loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf): `.gltf` and `.glb` into geometries, standard materials, textures and a node hierarchy, with a JSON reader of its own [#70](https://github.com/SethKitchen/ThreeMojo/issues/70)
 - [x] [OBJ loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files): positions, texture coordinates, normals and polygon faces, split by object and material [#71](https://github.com/SethKitchen/ThreeMojo/issues/71)
+- [x] [STL and PLY loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#stl): ASCII and binary STL with face colors, and PLY in all three encodings and every scalar type [#137](https://github.com/SethKitchen/ThreeMojo/issues/137)
 
 </details>
 
