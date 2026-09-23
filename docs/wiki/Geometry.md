@@ -117,7 +117,7 @@ A flat ring in the xy plane, facing +z, centered on the origin. The first radius
 
 The texture coordinates map the square around the outer edge onto the image, as the circle's do.
 
-A ring with no hole is a disk. Use `circle` for it.
+An inner radius of zero makes a disk, as in three.js. The inner row is then every vertex at the center.
 
 ## Cylinder
 
@@ -673,7 +673,7 @@ A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. Th
 - A sphere with too few segments or rings raises.
 - A plane with fewer than one segment raises.
 - A circle needs a positive radius and at least three segments.
-- A ring needs a positive inner radius, a larger outer radius, three segments around and one across.
+- A ring needs an inner radius of zero or more, a larger outer radius, three segments around and one across.
 - A cylinder needs a positive height, radii that are not negative and not both zero, three segments around and one down the side.
 - A cone needs a positive radius and a positive height.
 - A torus needs positive radii and three segments each way.

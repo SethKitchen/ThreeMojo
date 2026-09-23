@@ -1031,9 +1031,21 @@ def test_a_ring_can_be_measured_in_feet() raises:
     )
 
 
-def test_a_ring_needs_a_hole_inside_its_rim() raises:
-    with assert_raises():
-        _ = ring(Length(0.0, METER), Length(1.0, METER))
+def test_a_ring_with_no_hole_is_a_disk() raises:
+    # three.js's `RingGeometry` takes an inner radius of zero. The inner
+    # row sits at the center, and the area is the whole fan's:
+    # 4 * 4 * sin(45 degrees) for eight cells of radius two.
+    var disk = ring(Length(0.0, METER), Length(2.0, METER), 8, 2)
+    ref positions = disk.attribute_view(String(POSITION))
+    for column in range(9):  # pragma: no branch
+        assert_xy(positions.vector3(column), 0, 0)
+    assert_almost_equal(
+        signed_area(disk), Float32(16 * 0.70710678), atol=Float64(1e-4)
+    )
+    assert_texture_coordinates_in_range(disk)
+
+
+def test_a_ring_needs_a_rim_outside_its_hole() raises:
     with assert_raises():
         _ = ring(Length(-1.0, METER), Length(1.0, METER))
     with assert_raises():

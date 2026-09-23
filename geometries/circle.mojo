@@ -27,9 +27,10 @@ image: the center is (0.5, 0.5) and the rim of a full circle touches the four
 edges. A pie slice or an arc shows only its part of the image, which is what
 three.js does and what keeps a texture still when the sweep animates.
 
-A ring with no inner radius is not a ring. Its inner row would be a fan of
-degenerate triangles with two corners each at the center; `circle` builds
-that shape properly, so `ring` refuses it.
+A ring with an inner radius of zero is a disk, as three.js's `RingGeometry`
+accepts it. Its inner row is then every vertex at the center, and the first
+triangle of each inner cell has two corners there and no area. A rasterizer
+draws nothing for such a triangle, so the disk looks as `circle` draws it.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -158,7 +159,8 @@ def ring(
     """Return a flat ring in the xy plane, facing +z, centered on the origin.
 
     Args:
-        inner_radius: Where the hole ends; positive.
+        inner_radius: Where the hole ends; zero or more. Zero makes a
+            disk, as in three.js.
         outer_radius: Where the ring ends; more than the inner radius.
         theta_segments: How many cells around; at least three.
         phi_segments: How many cells from the inner edge to the outer; at
@@ -173,12 +175,12 @@ def ring(
         rows from the inner edge outwards, `theta_segments + 1` to a row.
 
     Raises:
-        Error: If the inner radius is not positive, the outer radius is not
+        Error: If the inner radius is negative, the outer radius is not
             more than it, either segment count is too small, or the sweep
             is not positive or is more than a turn.
     """
-    if inner_radius.value <= 0:
-        raise Error("A ring needs a positive inner radius; a disk is a circle")
+    if inner_radius.value < 0:
+        raise Error("A ring's inner radius cannot be negative")
     if outer_radius.value <= inner_radius.value:
         raise Error("A ring's outer radius must be more than its inner radius")
     if theta_segments < 3:
