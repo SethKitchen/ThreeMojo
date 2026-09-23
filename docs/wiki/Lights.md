@@ -45,7 +45,9 @@ A constant term added to every surface. A scene with no lights renders black. A 
 
 ## Directional
 
-Only the direction matters. Moving the node twice as far changes nothing. The light shines from the node's world position toward its `target`. The target is the world origin by default, as in three.js. Pass a node id as `target` to aim the light at that node. The node must not sit on its target.
+Only the direction matters. Moving the node twice as far changes nothing. The light shines from the node's world position toward its `target`. The target is the world origin by default, as in three.js. Pass a node id as `target` to aim the light at that node.
+
+A node on its target gives a zero direction, as in three.js. Every surface then meets the light edge-on, so the light adds nothing, and a toon ramp is read at its middle. Its shadow camera then looks down -z, as three.js's `Matrix4.lookAt` does.
 
 Parent the node to a moving object, and the light moves with it.
 
@@ -59,7 +61,7 @@ A surface facing away from the bulb gets nothing from it. A surface on top of th
 
 Two colors, blended by how far a surface is turned toward the sky. A surface that faces the sky gets the sky color. A surface that faces the ground gets the ground color. A surface edge-on gets half of each. There is no Lambert cutoff: a surface facing straight down is lit by the ground, not by nothing.
 
-The node's world position, seen from the origin, is the direction of the sky. A node straight above the origin puts the sky up. The node must not sit at the origin. One `intensity` scales both colors.
+The node's world position, seen from the origin, is the direction of the sky. A node straight above the origin puts the sky up. A node at the origin gives a zero direction, as in three.js. Every surface then takes half the sky color and half the ground color. One `intensity` scales both colors.
 
 three.js: `HemisphereLight(skyColor, groundColor, intensity)`.
 
@@ -69,7 +71,7 @@ A point light with a cone. The light shines from the node's world position towar
 
 `penumbra` is how much of the cone is a soft rim, from zero to one. At zero the rim is hard. At one the light fades from the axis to the rim. Inside `angle * (1 - penumbra)` of the axis the surface gets the full light. Beyond `angle` it gets nothing. Between the two it gets a smooth step.
 
-`decay` and `distance` work as they do for a point light. The node must not sit on its target.
+`decay` and `distance` work as they do for a point light. A node on its target gives a zero axis, as in three.js. Every surface is then at a right angle to the axis, so only a cone of ninety degrees can reach it.
 
 The cone must be wide enough to resolve. The fragment compares cosines, and the cosine of a half-angle below about 0.014 degrees rounds to one in `Float32`. Such a light lit nothing on its own axis. `spot_light` and `Lighting` refuse it.
 
@@ -176,11 +178,10 @@ Pass `toward_eye` with it, the one direction toward a camera whose rays run para
 | `shade(base, normal, position) -> FloatColor` | `base` decoded from sRGB and multiplied by `intensity_at`. |
 | `Lighting.uniform()` | Light of one everywhere. The identity for a hand-built triangle. |
 
-`Lighting(scene)` raises in four cases:
+`Lighting(scene)` raises in three cases:
 
 - A light's numbers are refused by `validate`, on the camera's layers or not.
 - A light names a node or a target the scene does not have.
-- A directional, hemisphere or spot light has no direction. Its node sits at the origin, or on its target.
 - A light's kind is none of the seven.
 
 The kinds are summed in one fixed order: ambient and light probes, directional, point, hemisphere, spot. Both rasterizers use that order, so their sums round alike.

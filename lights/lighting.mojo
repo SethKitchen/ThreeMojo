@@ -1172,10 +1172,7 @@ struct Lighting(Movable):
         Raises:
             Error: If a light's numbers are refused by `Light.validate`,
                 whatever layer it is on; a light names a node or a target
-                the scene does not have; a directional, hemisphere or spot
-                light has no direction, because its node sits exactly
-                where it points from — the origin, or its target — which
-                is a mistake rather than a dark light; a light's kind
+                the scene does not have; a light's kind
                 is none of the seven; a shadow map's type is none of the
                 four; a shadow map names a light that
                 is not there, or one that is not directional, point or
@@ -1283,8 +1280,9 @@ struct Lighting(Movable):
                 var pointing = scene.world_position(light.node) - _aimed_at(
                     scene, light
                 )
-                if pointing.length() == 0:
-                    raise Error("A directional light needs a direction")
+                # A node on its target leaves a zero direction, as three.js's
+                # `normalize` leaves it. Every surface then meets the light
+                # edge-on: a dot product of zero, as three.js's shader gets.
                 pointing.normalize()
                 self.directions.append(pointing)
                 self.radiances.append(light.radiance())
@@ -1300,11 +1298,10 @@ struct Lighting(Movable):
             elif light.kind == HEMISPHERE:
                 # Which way the sky is: the node's position seen from the
                 # origin, as three.js reads it off the light's world matrix.
+                # A node at the origin leaves a zero direction, as in
+                # three.js, and every surface then takes half sky and half
+                # ground.
                 var up = scene.world_position(light.node)
-                if up.length() == 0:
-                    raise Error(
-                        "A hemisphere light needs a direction for its sky"
-                    )
                 up.normalize()
                 self.sky_directions.append(up)
                 self.skies.append(light.radiance())
@@ -1312,12 +1309,9 @@ struct Lighting(Movable):
             elif light.kind == SPOT:
                 var at = scene.world_position(light.node)
                 # From the target toward the bulb, as three.js holds it.
+                # A node on its target leaves a zero axis, as in three.js:
+                # every surface is then at a right angle to it.
                 var axis = at - _aimed_at(scene, light)
-                if axis.length() == 0:
-                    raise Error(
-                        "A spot light needs a direction: its node sits on"
-                        " its target"
-                    )
                 axis.normalize()
                 self.spot_positions.append(at)
                 self.spot_directions.append(axis)

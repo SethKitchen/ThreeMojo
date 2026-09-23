@@ -5649,15 +5649,15 @@ def test_a_spot_light_map_follows_the_layers_and_is_checked() raises:
     assert_equal(len(renderer.spot_light_maps(scene, assets)), 0)
     scene.node(NodeId(2)).visible = True
     scene.update()
-    # A map that is not in the store, or a light on its own target, is
-    # refused.
+    # A map that is not in the store is refused.
     scene.lights[0].map = TextureId(9)
     with assert_raises():
         _ = renderer.spot_light_maps(scene, assets)
+    # A light on its own target projects down -z, as three.js's
+    # `Matrix4.lookAt` looks.
     scene.lights[0].map = TextureId(0)
     scene.lights[0].target = NodeId(2)
-    with assert_raises():
-        _ = renderer.spot_light_maps(scene, assets)
+    assert_equal(len(renderer.spot_light_maps(scene, assets)), 1)
 
 
 def test_a_rectangle_of_light_lights_a_standard_sheet_through_the_tables() raises:
@@ -5752,7 +5752,10 @@ def test_a_shadow_is_drawn_under_lit_shading_and_follows_the_layers() raises:
     assert_equal(len(renderer.shadow_maps(scene, assets)), 1)
 
 
-def test_a_casting_light_on_its_target_is_refused() raises:
+def test_a_casting_light_on_its_target_looks_down_minus_z() raises:
+    # three.js's `Matrix4.lookAt` looks down -z when the eye is on the
+    # target, so its shadow camera draws a map, and so does this one. The
+    # map is the one a light aimed a meter down -z draws.
     var assets = Assets()
     var scene = shadow_scene(assets, True, True, "none")
     var sun = directional_light(Color(255, 255, 255), NodeId(0), FULL)
@@ -5760,17 +5763,23 @@ def test_a_casting_light_on_its_target_is_refused() raises:
     scene.add_light(sun)
     scene.update()
     var renderer = Renderer(WIDTH, HEIGHT)
-    with assert_raises():
-        _ = renderer.shadow_maps(scene, assets)
-    with assert_raises():
-        _ = renderer.render(scene, assets, camera_at(0, 6, 3))
+    assert_equal(len(renderer.shadow_maps(scene, assets)), 1)
+    _ = renderer.render(scene, assets, camera_at(0, 6, 3))
     # Aimed at a target node it sits on, the same.
     scene.lights[0] = directional_light(
         Color(255, 255, 255), NodeId(1), FULL, target=NodeId(1)
     )
     scene.lights[0].cast_shadow = True
-    with assert_raises():
-        _ = renderer.shadow_maps(scene, assets)
+    var on = renderer.shadow_maps(scene, assets)
+    var below = Object3D()
+    below.set_position(0, 1.0, -1.0)
+    var below_node = scene.add(below^)
+    scene.update()
+    scene.lights[0].target = below_node
+    var aimed = renderer.shadow_maps(scene, assets)
+    for element in range(16):  # pragma: no branch
+        assert_equal(on[0].frame[element], aimed[0].frame[element])
+    assert_true(on[0].depths == aimed[0].depths)
     # Aimed at a target node it does not sit on, a map is drawn, from the
     # block's node down at the floor's.
     scene.lights[0] = directional_light(

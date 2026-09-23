@@ -3069,22 +3069,22 @@ def _set_backdrop(
 
 
 def _light_aim(scene: Scene, light: Light) raises -> Vector3:
-    """Return where a directional or spot light points, in world space:
-    its target's position, or the origin when it names none.
+    """Return where a directional or spot light's camera looks, in world
+    space: its target's position, or the origin when it names none.
+
+    A node on its target gives the camera no direction. three.js's
+    `Matrix4.lookAt` then looks down -z, and so does this: the point one
+    meter down -z from the node.
 
     Raises:
-        Error: If the light's node or target is not in the scene, or the
-            node sits on the target, which leaves the light's camera no
-            direction to look along.
+        Error: If the light's node or target is not in the scene.
     """
     var aimed = Vector3(0, 0, 0)
     if light.target != NO_PARENT:
         aimed = scene.world_position(light.target)
-    if (scene.world_position(light.node) - aimed).length() == 0:
-        raise Error(
-            "A light that casts a shadow or projects a map needs a direction:"
-            " its node sits on its target"
-        )
+    var at = scene.world_position(light.node)
+    if (at - aimed).length() == 0:
+        return Vector3(at.x, at.y, at.z - 1)
     return aimed
 
 
@@ -5742,8 +5742,7 @@ struct Renderer(Movable):
         Raises:
             Error: If the renderer's `shadow_map_type` is none of the four,
                 a light is refused by `Light.validate`, a casting light
-                names a node or a target the scene lacks, a casting
-                directional or spot light sits on its target, or anything
+                names a node or a target the scene lacks, or anything
                 `prepare` raises for the casters.
         """
         if not self.shadow_map_type.is_valid():
@@ -5919,9 +5918,8 @@ struct Renderer(Movable):
 
         Raises:
             Error: If a light is refused by `Light.validate`; a spot light
-                with a map names a node or a target the scene lacks, sits
-                on its target, or names a texture that is not there or is
-                blank.
+                with a map names a node or a target the scene lacks, or
+                names a texture that is not there or is blank.
         """
         var maps = List[SpotLightMap]()
         for index in range(len(scene.lights)):

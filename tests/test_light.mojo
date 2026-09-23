@@ -185,12 +185,25 @@ def test_a_directional_light_points_from_its_node_to_the_origin() raises:
     assert_almost_equal(lighting.directions[0].y, Float32(1), atol=TOLERANCE)
 
 
-def test_a_directional_light_at_the_origin_is_rejected() raises:
-    # No direction to shine from. A mistake rather than a dark light.
+def test_a_directional_light_at_the_origin_meets_every_surface_edge_on() raises:
+    # three.js normalizes the zero vector to itself, so its shader takes a
+    # dot product of zero with every normal: no diffuse light, no
+    # highlight, and a toon ramp read at its middle.
     var scene = scene_with_lamp_at(0, 0, 0)
     scene.add_light(directional_light(WHITE, NodeId(0)))
-    with assert_raises():
-        _ = Lighting(scene)
+    var lighting = Lighting(scene)
+    assert_equal(lighting.directions[0].length(), 0)
+    assert_equal(lighting.intensity_at(Vector3(0, 1, 0), ORIGIN).r, 0)
+    # The toon surface reads the same as under a lamp at a right angle.
+    var aside = scene_with_lamp_at(1, 0, 0)
+    aside.add_light(directional_light(WHITE, NodeId(0)))
+    var edge_on = Lighting(aside)
+    var ramp: List[Float32] = [0.25, 0.5, 0.75, 1.0]
+    for tones in [List[Float32](), ramp.copy()]:
+        assert_equal(
+            lighting.toon_at(Vector3(0, 1, 0), ORIGIN, tones).r,
+            edge_on.toon_at(Vector3(0, 1, 0), ORIGIN, tones).r,
+        )
 
 
 def test_a_light_naming_a_node_that_is_not_there_is_rejected() raises:
@@ -686,12 +699,18 @@ def test_a_hemisphere_lights_sky_is_where_its_node_is() raises:
     assert_almost_equal(away.r, Float32(0), atol=TOLERANCE)
 
 
-def test_a_hemisphere_light_at_the_origin_is_rejected() raises:
-    # No direction for the sky. A mistake rather than a dark light.
+def test_a_hemisphere_light_at_the_origin_mixes_sky_and_ground_evenly() raises:
+    # three.js's zero direction gives every normal a weight of one half.
     var scene = scene_with_lamp_at(0, 0, 0)
-    scene.add_light(hemisphere_light(WHITE, WHITE, NodeId(0)))
-    with assert_raises():
-        _ = Lighting(scene)
+    scene.add_light(
+        hemisphere_light(Color(255, 255, 255), Color(0, 0, 0), NodeId(0))
+    )
+    var lighting = Lighting(scene)
+    assert_equal(lighting.sky_directions[0].length(), 0)
+    var up = lighting.intensity_at(Vector3(0, 1, 0), ORIGIN)
+    var down = lighting.intensity_at(Vector3(0, -1, 0), ORIGIN)
+    assert_almost_equal(up.r, Float32(0.5 / pi), atol=TOLERANCE)
+    assert_equal(up.r, down.r)
     var missing = Scene()
     missing.add_light(hemisphere_light(WHITE, WHITE, NodeId(4)))
     with assert_raises():
@@ -876,21 +895,22 @@ def test_a_spot_light_points_at_its_target_node() raises:
     assert_almost_equal(behind.r, Float32(0), atol=TOLERANCE)
 
 
-def test_a_spot_light_needs_a_direction() raises:
-    # On its target there is no way to point: at the origin aimed at the
-    # origin, or on the node it is aimed at.
+def test_a_spot_light_on_its_target_has_a_zero_axis() raises:
+    # As in three.js: at the origin aimed at the origin, or on the node it
+    # is aimed at, the axis is zero and every surface lies outside a cone
+    # narrower than a hemisphere.
     var scene = scene_with_lamp_at(0, 0, 0)
     scene.add_light(spot_light(WHITE, NodeId(0)))
-    with assert_raises():
-        _ = Lighting(scene)
+    assert_equal(Lighting(scene).spot_directions[0].length(), 0)
     var stacked = scene_with_lamp_at(1, 2, 3)
     var same = Object3D()
     same.set_position(1, 2, 3)
     var target = stacked.add(same^)
     stacked.update()
     stacked.add_light(spot_light(WHITE, NodeId(0), target=target))
-    with assert_raises():
-        _ = Lighting(stacked)
+    var lighting = Lighting(stacked)
+    assert_equal(lighting.spot_directions[0].length(), 0)
+    assert_equal(lighting.intensity_at(Vector3(0, 1, 0), ORIGIN).r, 0)
 
 
 def test_a_spot_light_naming_a_missing_node_or_target_is_rejected() raises:
@@ -946,15 +966,14 @@ def test_a_directional_light_points_at_its_target_node() raises:
     assert_equal(directional_light(WHITE, NodeId(0)).target, NO_PARENT)
 
 
-def test_a_directional_light_on_its_target_is_rejected() raises:
+def test_a_directional_light_on_its_target_has_a_zero_direction() raises:
     var scene = scene_with_lamp_at(0, 5, 0)
     var same = Object3D()
     same.set_position(0, 5, 0)
     var target = scene.add(same^)
     scene.update()
     scene.add_light(directional_light(WHITE, NodeId(0), target=target))
-    with assert_raises():
-        _ = Lighting(scene)
+    assert_equal(Lighting(scene).directions[0].length(), 0)
     var missing = scene_with_lamp_at(0, 5, 0)
     missing.add_light(directional_light(WHITE, NodeId(0), target=NodeId(9)))
     with assert_raises():
