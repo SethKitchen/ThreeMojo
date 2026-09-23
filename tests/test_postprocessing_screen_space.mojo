@@ -231,7 +231,7 @@ def test_the_four_new_kinds_and_their_builders() raises:
     assert_true(SAO.is_valid())
     assert_true(SSR.is_valid())
     assert_true(OUTLINE.is_valid())
-    assert_false(PassKind(26).is_valid())
+    assert_false(PassKind(27).is_valid())
     var ssao = ssao_pass()
     assert_equal(ssao.kind, SSAO)
     assert_equal(ssao.ssao.kernel_radius.value, Float32(8))

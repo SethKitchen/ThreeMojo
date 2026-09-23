@@ -15,8 +15,8 @@ jittered samples averaged at once (SSAA) or over frames (TAA); see
 `postprocessing.antialiasing`. Four more read the depth beside the light:
 ambient occlusion (SSAO and SAO), reflections (SSR) and an outline around
 chosen objects; see `postprocessing.screen_space`. Seven more blur by depth,
-glitch, halftone, mask, clear and lay a texture over the frame; see
-`postprocessing.effects`. The composer runs its passes in
+glitch, halftone, mask, clear, lay a texture over the frame and grade it
+through a color lookup table; see `postprocessing.effects`. The composer runs its passes in
 order on one target and resolves it once at the end. three.js ping-pongs
 between two targets because a shader cannot read the texture it writes;
 a pass here reads the whole target before it writes, so one target serves.
@@ -69,6 +69,7 @@ from postprocessing.effects import (
     glitch_uniforms,
     halftone_light,
     keep_outside_mask,
+    lut_light,
     mask_stencil,
     texture_light,
 )
@@ -93,6 +94,7 @@ from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
 from render.texture_store import NO_TEXTURE, TextureId
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
+from render.volume_texture_store import NO_DATA_3D_TEXTURE, Data3DTextureId
 from renderers.renderer import Renderer
 from std.math import cos, exp, floor, isfinite, sin
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
@@ -104,14 +106,14 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
 
     three.js has a class per pass and this has a tag, for the reason
     `Material` has one: a composer holds one list of one type. The type
-    stops a bare integer at compile time; it does not stop `PassKind(26)`,
+    stops a bare integer at compile time; it does not stop `PassKind(27)`,
     which `check_pass` refuses.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the twenty-six kinds there are."""
+        """Return True if this is one of the twenty-seven kinds there are."""
         return (
             self == RENDER
             or self == COPY
@@ -139,6 +141,7 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
             or self == CLEAR_MASK
             or self == CLEAR
             or self == TEXTURE
+            or self == LUT
         )
 
 
@@ -195,6 +198,8 @@ comptime CLEAR_MASK = PassKind(23)
 comptime CLEAR = PassKind(24)
 # Add a texture over the frame: `TexturePass`.
 comptime TEXTURE = PassKind(25)
+# Grade the frame through a color lookup table: `LUTPass`.
+comptime LUT = PassKind(26)
 
 # three.js's `LuminosityHighPassShader` fades a pixel in over this much
 # luminance above the threshold.
@@ -230,7 +235,7 @@ struct Pass(Copyable, Movable):
     `fxaa_pass`, `smaa_pass`, `ssaa_render_pass`, `taa_render_pass`,
     `ssao_pass`, `sao_pass`, `ssr_pass`, `outline_pass`, `bokeh_pass`,
     `glitch_pass`, `halftone_pass`, `mask_pass`, `clear_mask_pass`,
-    `clear_pass` or `texture_pass`, and change a
+    `clear_pass`, `texture_pass` or `lut_pass`, and change a
     setting afterward as three.js changes a
     pass's uniforms; `EffectComposer.render` checks each again.
     """
@@ -287,6 +292,9 @@ struct Pass(Copyable, Movable):
     # The texture pass's image, in the assets `render` is given; its
     # opacity is `strength`.
     var texture: TextureId
+    # The LUT pass's table, in the assets `render` is given; its
+    # intensity is `strength`.
+    var lut: Data3DTextureId
 
     def __init__(out self, kind: PassKind):
         """Start a pass of `kind` with every setting at its default.
@@ -319,6 +327,7 @@ struct Pass(Copyable, Movable):
         self.mask = MaskSettings()
         self.clear_color = Color(0, 0, 0, 0)
         self.texture = NO_TEXTURE
+        self.lut = NO_DATA_3D_TEXTURE
 
 
 def check_pass(step: Pass) raises:
@@ -328,18 +337,18 @@ def check_pass(step: Pass) raises:
         step: The pass.
 
     Raises:
-        Error: If the kind is none of the twenty-six; a strength, radius,
+        Error: If the kind is none of the twenty-seven; a strength, radius,
             threshold, offset, scale, angle or time is not finite; a
             strength, radius, threshold, offset or scale is negative; a
             bloom's radius or an afterimage's damp is above one; the sample
             level is outside zero through five; or the accumulate index is
             outside minus one through 32; or a texture pass names no
-            texture. Everything `check_ssao`, `check_sao`, `check_ssr`,
+            texture, or a LUT pass no table. Everything `check_ssao`, `check_sao`, `check_ssr`,
             `check_outline`, `check_bokeh`, `check_glitch` and
             `check_halftone` raise.
     """
     if not step.kind.is_valid():
-        raise Error("A pass kind must be one of the twenty-six named kinds")
+        raise Error("A pass kind must be one of the twenty-seven named kinds")
     if not (
         isfinite(step.strength)
         and isfinite(step.radius)
@@ -377,6 +386,8 @@ def check_pass(step: Pass) raises:
     check_halftone(step.halftone)
     if step.kind == TEXTURE and step.texture.value < 0:
         raise Error("A texture pass must name a texture")
+    if step.kind == LUT and step.lut.value < 0:
+        raise Error("A LUT pass must name a 3D texture")
 
 
 def render_pass() -> Pass:
@@ -947,6 +958,34 @@ def texture_pass(texture: TextureId, opacity: Float32 = 1.0) raises -> Pass:
     return step^
 
 
+def lut_pass(lut: Data3DTextureId, intensity: Float32 = 1.0) raises -> Pass:
+    """Return a pass that grades the frame through a color lookup table:
+    three.js's `LUTPass`.
+
+    Put it after the `output_pass`, as three.js's examples do: a `.cube`
+    table maps the colors a display shows. See
+    `postprocessing.effects.lut_light`.
+
+    Args:
+        lut: The table, in the assets' `data_3d_textures`; three.js's
+            `lut`. `loaders.lut_cube.read_lut_cube` reads one.
+        intensity: How far toward the lookup, one replacing the color:
+            three.js's `intensity`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the table is `NO_DATA_3D_TEXTURE`, or the intensity is
+            negative or not finite.
+    """
+    var step = Pass(LUT)
+    step.lut = lut
+    step.strength = intensity
+    check_pass(step)
+    return step^
+
+
 struct TaaMemory(Copyable, Movable):
     """What a TAA pass keeps between frames: three.js's `_holdRenderTarget`
     and `_sampleRenderTarget`.
@@ -1090,8 +1129,10 @@ struct EffectComposer(Movable):
 
         Raises:
             Error: Everything `check_pass` raises for a pass changed since
-                it was added, everything `Renderer.render_into` raises, or
-                if the frame time is negative or not finite.
+                it was added, everything `Renderer.render_into` raises,
+                if a texture or a table a pass names is not in the assets
+                or fails its `validate`, or if the frame time is negative
+                or not finite.
         """
         if not isfinite(delta_time) or delta_time < 0:
             raise Error("A frame time is a non-negative number of seconds")
@@ -1218,6 +1259,10 @@ struct EffectComposer(Movable):
             elif step.kind == TEXTURE:
                 texture_light(
                     frame, assets.textures.get(step.texture), step.strength
+                )
+            elif step.kind == LUT:
+                lut_light(
+                    frame, assets.data_3d_textures.get(step.lut), step.strength
                 )
             else:
                 # `OUTPUT`: the only kind left once `check_pass` has had

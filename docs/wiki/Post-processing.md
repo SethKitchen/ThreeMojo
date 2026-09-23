@@ -42,10 +42,11 @@ The frame starts cleared to the renderer's background. A render pass draws the s
 | `clear_mask_pass()` | `ClearMaskPass` | Let the passes after it change every pixel again. |
 | `clear_pass(color=transparent black)` | `ClearPass` | Clear the light, the depth and the stencil. |
 | `texture_pass(texture, opacity=1)` | `TexturePass` | Add a texture over the frame. |
+| `lut_pass(lut, intensity=1)` | `LUTPass` | Grade the frame through a color lookup table. |
 
 Each builder returns a `Pass`. A `Pass` has a `kind`, an `enabled` flag and every setting any kind reads. The effect passes read `strength`, `radius`, `threshold`, `offset`, `scale`, `angle`, `center`, `grayscale` and `time`. The SSAA and TAA passes read `sample_level`, `unbiased`, `accumulate` and `accumulate_index`. The screen-space passes read `ssao`, `sao`, `ssr` and `outline`. See [Screen-space passes](#screen-space-passes).
 
-The bokeh, glitch, halftone and mask passes read `bokeh`, `glitch`, `halftone` and `mask`. The clear pass reads `clear_color`. The texture pass reads `texture` and `strength`. See [More passes](#more-passes).
+The bokeh, glitch, halftone and mask passes read `bokeh`, `glitch`, `halftone` and `mask`. The clear pass reads `clear_color`. The texture pass reads `texture` and `strength`. The LUT pass reads `lut` and `strength`. See [More passes](#more-passes).
 
 Change a setting after the pass is added, as three.js changes a uniform. A pass that is not enabled is skipped.
 
@@ -66,7 +67,7 @@ The defaults are three.js's. The dot screen's angle is an `Angle`. A bare number
 
 ## Validation
 
-`PassKind` is a type. `is_valid` names the twenty-six kinds. `check_pass` refuses any other kind. It refuses a setting that is not finite. It refuses a strength, radius, threshold, offset or scale that is negative. It refuses a bloom radius above one and an afterimage damp above one.
+`PassKind` is a type. `is_valid` names the twenty-seven kinds. `check_pass` refuses any other kind. It refuses a setting that is not finite. It refuses a strength, radius, threshold, offset or scale that is negative. It refuses a bloom radius above one and an afterimage damp above one.
 
 `check_pass` also refuses a sample level outside zero through five. three.js clamps the level; this port refuses it. It refuses an accumulate index outside minus one through 32. `jitter_offsets` refuses a level outside zero through five. `JitteredCamera` refuses an offset that is not finite and an image size that is not positive.
 
@@ -241,7 +242,7 @@ With a `pulse_period` above zero, the edge colors pulse. three.js reads the cloc
 
 ## More passes
 
-`postprocessing/effects.mojo`. Seven more passes blur by depth, glitch, draw a halftone, mask, clear and add a texture. Each is a builder in `postprocessing/composer.mojo`, and each has three.js's defaults.
+`postprocessing/effects.mojo`. Eight more passes blur by depth, glitch, draw a halftone, mask, clear, add a texture and grade through a lookup table. Each is a builder in `postprocessing/composer.mojo`, and each has three.js's defaults.
 
 ```mojo
 var composer = EffectComposer()
@@ -304,6 +305,34 @@ The mask pass does not change the light or the depth, as three.js turns off thos
 
 `texture_pass(texture, opacity)` is three.js's `TexturePass`. The texture is a `TextureId` in the assets that `render` is given. `texture_light` adds the texture times `opacity` to every channel, alpha included. That is `CopyShader` with three.js's additive blending.
 
+### LUT
+
+`lut_pass(lut, intensity)` is three.js's `LUTPass`. It grades the frame through a color lookup table, a [3D texture](Textures#3d-textures) in the assets. `read_lut_cube` in `loaders/lut_cube.mojo` reads the table from a `.cube` file, as three.js's `LUTCubeLoader` does.
+
+```mojo
+var table = read_lut_cube("grade.cube")
+var lut = assets.data_3d_textures.add(table.texture^)
+composer.add_pass(render_pass())
+composer.add_pass(output_pass())
+composer.add_pass(lut_pass(lut, intensity=1.0))
+```
+
+Put the LUT pass after the output pass, as three.js's example does. Then the table reads the colors that a display shows.
+
+1. `lut_light` encodes the straight color of each pixel through the sRGB curve. three.js's shader reads the target that `OutputPass` encoded.
+2. `lut_color` is `LUTShader`. It pulls the color in by half a texel, so that zero and one land on the centers of the edge texels. It reads the table at that coordinate: red across, green up and blue deep. The table's size is its width, as `lutSize` is.
+3. The looked-up color replaces the color by `intensity`, as the shader's `mix` does. Alpha is kept.
+4. `lut_light` decodes the result. The encode at the end of the frame gives the numbers that three.js's shader wrote.
+
+`parse_lut_cube(text, texel_type=UNSIGNED_BYTE_TYPE)` reads the text of a `.cube` file. It returns a `LutCube` with `title`, `size`, `domain_min`, `domain_max` and `texture`. These are three.js's `title`, `size`, `domainMin`, `domainMax` and `texture3D`.
+
+- `TITLE "name"` sets the title. `LUT_3D_SIZE n` sets the size, two through 256.
+- `DOMAIN_MIN` and `DOMAIN_MAX` are kept. They are not applied, because three.js's `LUTPass` does not apply them.
+- Each line of three numbers is one entry. Red changes fastest, then green, then blue. There must be `size` cubed entries.
+- A line that starts with `#` is a comment. Another keyword, such as `LUT_3D_INPUT_RANGE`, is skipped, as three.js skips it.
+- With `UNSIGNED_BYTE_TYPE`, each number times 255 is cut to a whole byte, as a `Uint8Array` cuts it. With `FLOAT_TYPE`, the numbers are kept as they are.
+- The texture is clamped on every axis, `BILINEAR` and `LINEAR`, as three.js sets it.
+
 ### Validation of the more passes
 
 `check_bokeh`, `check_glitch` and `check_halftone` refuse settings that no pass can use. `check_pass` calls all three.
@@ -312,6 +341,10 @@ The mask pass does not change the light or the depth, as three.js turns off thos
 - `check_glitch` refuses a map size outside one through 4096, and a generator state that does not fit 32 bits. It refuses a negative frame count and a trigger that is not positive.
 - `check_halftone` refuses a shape or a blending mode that is not named. It refuses a setting that is not finite, and a radius that is not positive. It refuses a negative scatter and a blending outside zero to one.
 - `check_pass` refuses a texture pass with `NO_TEXTURE`. `render` refuses a texture id that is not in the assets.
+- `check_pass` refuses a LUT pass with `NO_DATA_3D_TEXTURE`, and a negative intensity. `render` refuses a table that is not in the assets. `lut_light` calls the table's `validate`.
+- `parse_lut_cube` refuses a texel type that is not named, a file with no `LUT_3D_SIZE`, and a `LUT_1D_SIZE`. It refuses a size outside two through 256.
+- `parse_lut_cube` refuses a line that does not hold three finite numbers, and a count of entries that is not `size` cubed. It refuses a domain minimum above its maximum.
+- For bytes, `parse_lut_cube` refuses a number outside zero to one. A `Uint8Array` wraps such a number, and three.js does not check it.
 
 `HalftoneShape` and `HalftoneBlending` are types. A bare number does not compile. `tests/compile_fail/` proves it.
 
@@ -324,14 +357,18 @@ The mask pass does not change the light or the depth, as three.js turns off thos
 - **The bokeh aspect.** three.js reads the camera's aspect. This port reads the frame's width over its height.
 - **The randomness.** three.js uses `Math.random`. This port uses `SeededRandom`, so the same seed gives the same frames.
 - **The texel.** The bokeh, glitch and halftone read the light as stored, premultiplied. For an opaque pixel that is the straight color.
+- **The LUT's input.** three.js's LUT pass reads whatever the target holds. This frame holds linear light, so the LUT pass encodes it to sRGB first. Before the output pass, three.js's table reads linear light, and this port's table reads encoded color.
+- **The `.cube` reader is stricter.** three.js reads each line that matches its pattern and ignores the others. This port refuses a malformed line and a wrong count of entries.
 
 ### Not ported in the more passes
 
 - A mask pass with its own scene, and the `clear` flag of a mask pass or a texture pass.
 - `HalftonePass.setSize`. The halftone always uses the frame's size.
+- The LUT pass's 2D table, which three.js once used for WebGL 1.
+- `LUT3dlLoader` and `LUTImageLoader`, which read `.3dl` files and image strips.
 
 ## Not ported
 
-The passes run on the host. The GPU backend draws bytes rather than light and has no target a pass could read. `GTAOPass`, `LUTPass`, `RenderPixelatedPass` and the other passes are not ported.
+The passes run on the host. The GPU backend draws bytes rather than light and has no target a pass could read. `GTAOPass`, `RenderPixelatedPass` and the other passes are not ported.
 
 The SSAA and TAA passes use the renderer's background as their clear color. three.js's passes have their own `clearColor` and `clearAlpha`, and these are not ported. An SSAA pass jitters the camera with no view offset of its own, because the cameras here have none.

@@ -194,7 +194,7 @@ def test_the_seven_new_kinds_and_their_builders() raises:
     assert_true(CLEAR_MASK.is_valid())
     assert_true(CLEAR.is_valid())
     assert_true(TEXTURE.is_valid())
-    assert_false(PassKind(26).is_valid())
+    assert_false(PassKind(27).is_valid())
     var bokeh = bokeh_pass()
     assert_equal(bokeh.kind, BOKEH)
     assert_equal(bokeh.bokeh.focus.value, Float32(1))

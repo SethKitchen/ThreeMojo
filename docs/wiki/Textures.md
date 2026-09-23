@@ -4,7 +4,7 @@
 
 ![Two checkerboard cubes turn, nearest beside bilinear](out/textured.png)
 
-three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CubeTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`, `anisotropy`, `type`, `RGBELoader`, `EXRLoader`.
+three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CubeTexture`, `Data3DTexture`, `DataArrayTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`, `anisotropy`, `type`, `RGBELoader`, `EXRLoader`.
 
 ## Make a texture
 
@@ -386,6 +386,94 @@ Each blur is two passes. The first turns about a pole and the second turns towar
 - `pmrem_from_cube` refuses a cube that `CubeTexture.validate` refuses.
 - `pmrem_from_equirectangular` refuses a blank panorama.
 - `validate_cube_uv` refuses a layout image that is not float, `CLAMP` and `BILINEAR` with no chain. It refuses a size that is not three.js's layout. `CubeTexture.validate` calls it, and so does the GPU upload.
+
+## 3D textures
+
+`render/volume_texture.mojo`. A `Data3DTexture` is a volume of texels, `width` by `height` by `depth`, sampled by three coordinates. It is three.js's `Data3DTexture`, read as a GLSL `sampler3D` reads it. A color lookup table is one: see [Post-processing](Post-processing#lut).
+
+three.js: `Data3DTexture`, `wrapR`, `texture` and `texelFetch` on a `sampler3D`.
+
+```mojo
+var image = VolumeImage.of_floats(16, 16, 16, densities, channels=1)
+var volume = Data3DTexture(image^, wrap=CLAMP, filter=BILINEAR)
+var id = assets.data_3d_textures.add(volume^)
+var color = assets.data_3d_textures.get(id).sample(0.5, 0.5, 0.25)
+```
+
+### The image
+
+A `VolumeImage` holds the texels. It is three.js's `texture.image`, `{ data, width, height, depth }`. The first coordinate changes fastest, then the second, then the third.
+
+| Builder | three.js | Meaning |
+|---|---|---|
+| `VolumeImage.of_bytes(width, height, depth, bytes, channels=4)` | `UnsignedByteType` | One through four bytes a texel. |
+| `VolumeImage.of_floats(width, height, depth, floats, channels=4)` | `FloatType` | One through four finite floats a texel. |
+
+A texel with fewer than four channels fills red first. A color channel that it does not reach is zero. A missing alpha is one. That is how WebGL samples a `RedFormat` or an `RGFormat` texture. The image is stored as RGBA.
+
+### The texture
+
+`Data3DTexture(image, wrap=CLAMP, filter=NEAREST, color_space=LINEAR)` takes three.js's defaults. The fields are `image`, `wrap_s`, `wrap_t`, `wrap_r`, `filter` and `color_space`. The constructor sets all three wrap modes to `wrap`. Set one field afterward to make the axes differ.
+
+| Member | GLSL | Meaning |
+|---|---|---|
+| `sample(s, t, r) -> FloatColor` | `texture(sampler3D, vec3)` | The color at a coordinate. |
+| `texel_fetch(x, y, z) -> FloatColor` | `texelFetch(sampler3D, ivec3, 0)` | The texel at an index. |
+| `validate()` | | Refuse a field edited into nonsense. |
+
+Under `NEAREST`, `sample` returns the texel that the coordinate lands in. Under `BILINEAR`, three.js's `LinearFilter`, it blends the eight texels around the coordinate. Texel centers are at half-integers. Each index is wrapped on its own axis by `wrap_s`, `wrap_t` or `wrap_r`.
+
+A byte is read as a fraction of 255. With `SRGB`, the three color channels are decoded through the sRGB curve, and alpha is not. A float is read as it is.
+
+### Where the 3D textures differ from the 2D texture
+
+- **The rows run up.** three.js sets `flipY` to false for both kinds, and WebGL does not flip a 3D upload. Texel `(0, 0, 0)` is at the coordinate origin. A 2D `Texture` reads its first row at the top.
+- **The filter is straight.** GLSL blends each stored channel on its own, and so does this port. A 2D `Texture` blends premultiplied, because its alpha is coverage. The fourth channel of a volume is often density or data.
+- **There is no mip chain.** three.js turns `generateMipmaps` off for both kinds. One filter serves both magnification and minification.
+
+## Array textures
+
+`render/volume_texture.mojo`. A `DataArrayTexture` is a stack of images of one size, sampled by two coordinates and a layer number. It is three.js's `DataArrayTexture`, read as a GLSL `sampler2DArray` reads it.
+
+three.js: `DataArrayTexture`, `texture` and `texelFetch` on a `sampler2DArray`.
+
+```mojo
+var image = VolumeImage.of_bytes(64, 64, 8, frames)
+var stack = DataArrayTexture(image^, wrap=REPEAT, filter=BILINEAR, color_space=SRGB)
+var id = assets.data_array_textures.add(stack^)
+var color = assets.data_array_textures.get(id).sample(0.5, 0.5, 3)
+```
+
+The image is a `VolumeImage`. Its `depth` is the number of layers. `DataArrayTexture(image, wrap=CLAMP, filter=NEAREST, color_space=LINEAR)` takes three.js's defaults. The fields are `image`, `wrap_s`, `wrap_t`, `filter` and `color_space`.
+
+| Member | GLSL | Meaning |
+|---|---|---|
+| `sample(u, v, layer) -> FloatColor` | `texture(sampler2DArray, vec3)` | The color at a coordinate in one layer. |
+| `texel_fetch(x, y, layer) -> FloatColor` | `texelFetch(sampler2DArray, ivec3, 0)` | The texel at an index. |
+| `layers() -> Int` | `image.depth` | How many layers there are. |
+| `validate()` | | Refuse a field edited into nonsense. |
+
+`array_layer(layer, depth)` finds the layer that `sample` reads. It rounds the coordinate to the nearest whole number, and a half rounds up. Then it holds the result inside the stack. That is the OpenGL rule. A sample never blends two layers. Within the layer, the filter and the wrap modes work as they do for a [3D texture](#3d-textures).
+
+### The stores
+
+`assets.data_3d_textures.add(texture)` returns a `Data3DTextureId`. `assets.data_array_textures.add(texture)` returns a `DataArrayTextureId`. `get(id)` borrows the texture. `NO_DATA_3D_TEXTURE` and `NO_DATA_ARRAY_TEXTURE` are the ids of no texture.
+
+The two ids are types. A bare number does not compile. `tests/compile_fail/` proves it.
+
+### Errors of the 3D and array textures
+
+- `of_bytes` and `of_floats` refuse a dimension that is not positive. They refuse a channel count outside one through four, and a length that does not match.
+- `of_floats` refuses a number that is not finite.
+- `validate` refuses a wrap mode, a filter, a color space or a texel type that is not named. It refuses `UNKNOWN_SPACE`, and a float image that is not `LINEAR`. It refuses an image whose length does not match its dimensions.
+- `texel_fetch` refuses an index outside the image. GLSL leaves that result undefined.
+- The stores refuse the "no texture" ids and any id that they do not hold.
+
+### Not ported in the 3D and array textures
+
+- The GPU backend samples neither kind. three.js reads them only from a custom shader or from `LUTPass`, and this port has no custom shaders.
+- `layerUpdates`, `addLayerUpdate` and `unpackAlignment` control the upload to WebGL. They have no counterpart here.
+- Mip chains, separate `magFilter` and `minFilter`, and the formats other than red, RG, RGB and RGBA.
 
 ## Wrap
 

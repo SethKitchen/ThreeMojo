@@ -4,13 +4,14 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """More passes: three.js's `BokehPass`, `GlitchPass`, `HalftonePass`,
-`MaskPass`, `ClearMaskPass`, `ClearPass` and `TexturePass`.
+`MaskPass`, `ClearMaskPass`, `ClearPass`, `TexturePass` and `LUTPass`.
 
 **Bokeh** blurs each pixel by how far its depth is from the focus, with
 the 41 taps of three.js's `BokehShader`. **Glitch** shifts the channels
 apart, tears rows and columns and adds snow, at random moments, as
 `DigitalGlitch` does. **Halftone** redraws each channel as a grid of dots,
-lines or squares, as `HalftoneShader` does.
+lines or squares, as `HalftoneShader` does. **LUT** looks each pixel's
+color up in a `Data3DTexture`, as `LUTPass` does.
 
 **The mask.** three.js's `MaskPass` draws a scene into the stencil buffer
 and turns the stencil test on, so the passes after it change only the
@@ -40,8 +41,10 @@ from render.raster_state import (
     stencil_apply,
     stencil_compare,
 )
+from render.srgb import linear_to_srgb, srgb_to_linear
 from render.target import RenderTarget
 from render.texture import Texture
+from render.volume_texture import Data3DTexture
 from std.math import atan2, cos, floor, inf, isfinite, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
 
@@ -1202,3 +1205,89 @@ def texture_light(mut frame: RenderTarget, texture: Texture, opacity: Float32):
             frame.data[slot] = False
             x += 1
         y += 1
+
+
+# --- lut --------------------------------------------------------------------
+
+
+def _encoded(color: FloatColor) -> FloatColor:
+    """Return a straight color with its three channels sRGB-encoded."""
+    return FloatColor(
+        linear_to_srgb(color.r),
+        linear_to_srgb(color.g),
+        linear_to_srgb(color.b),
+        color.a,
+    )
+
+
+def _decoded(color: FloatColor) -> FloatColor:
+    """Return a straight color with its three channels sRGB-decoded."""
+    return FloatColor(
+        srgb_to_linear(color.r),
+        srgb_to_linear(color.g),
+        srgb_to_linear(color.b),
+        color.a,
+    )
+
+
+def lut_color(
+    color: FloatColor, lut: Data3DTexture, intensity: Float32
+) -> FloatColor:
+    """Return one straight, sRGB-encoded color looked up in a table:
+    three.js's `LUTShader`.
+
+    The color is pulled in by half a texel, so zero and one land on the
+    centers of the edge texels, and read from the table as a coordinate:
+    red across, green up, blue deep. The lookup's color replaces the
+    color by `intensity`, and alpha is kept.
+
+    Args:
+        color: The color, encoded as the table expects it.
+        lut: The table. Its size is its `width`, as three.js's `lutSize`
+            is.
+        intensity: How far toward the lookup, one replacing the color.
+
+    Returns:
+        The graded color, still encoded.
+    """
+    var size = Float32(lut.image.width)
+    var pixel_width = 1 / size
+    var half_pixel_width = Float32(0.5) / size
+    var looked = lut.sample(
+        half_pixel_width + color.r * (1 - pixel_width),
+        half_pixel_width + color.g * (1 - pixel_width),
+        half_pixel_width + color.b * (1 - pixel_width),
+    )
+    return FloatColor(
+        color.r + (looked.r - color.r) * intensity,
+        color.g + (looked.g - color.g) * intensity,
+        color.b + (looked.b - color.b) * intensity,
+        color.a,
+    )
+
+
+def lut_light(
+    mut frame: RenderTarget, lut: Data3DTexture, intensity: Float32
+) raises:
+    """Grade the frame through a color lookup table: three.js's `LUTPass`.
+
+    three.js's examples put the `LUTPass` after the `OutputPass`, so the
+    shader reads sRGB-encoded color, and a `.cube` table is built for it.
+    This frame holds linear light until `resolve` encodes it. So each
+    pixel is encoded, looked up by `lut_color`, and decoded again, and the
+    encode at the end gives the numbers three.js's shader wrote.
+
+    Args:
+        frame: The frame, changed in place.
+        lut: The table.
+        intensity: How far toward the lookup, one replacing the color.
+
+    Raises:
+        Error: Everything `Data3DTexture.validate` raises.
+    """
+    lut.validate()
+    for index in range(len(frame.colors)):  # pragma: no branch
+        var base = _encoded(frame.colors[index].unpremultiplied())
+        frame.colors[index] = _decoded(
+            lut_color(base, lut, intensity)
+        ).premultiplied()
