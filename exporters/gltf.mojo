@@ -60,7 +60,9 @@ as `read_gltf` reads them. glTF's sheen has no amount, so the sheen color
 is written times the amount; see `layer_extensions`.
 
 **Textures are PNG images.** Each texture is written once, as a PNG from
-`render.png`, with a sampler for its wrap and filter. glTF's `v` runs down
+`render.png`, with a sampler for its wrap and filter. Each distinct image
+is written once, as three.js's `cache.images` keeps it: two textures of
+the same pixels share one image. glTF's `v` runs down
 from the image's top, where a texture here runs up from its bottom, so an
 image is written upside down, as three.js writes a `flipY` texture. A
 texture that `read_gltf` made already carries the flip in its `repeat`
@@ -427,6 +429,14 @@ def gltf_pixels(texture: Texture) raises -> List[UInt8]:
     return out^
 
 
+def _same_image(
+    written: List[UInt8], written_width: Int, pixels: List[UInt8], width: Int
+) -> Bool:
+    """Return True if two images are one: the same width and the same bytes,
+    which fix the height too."""
+    return written_width == width and written == pixels
+
+
 def _wrap_code(texture: Texture) -> Int:
     """Return a texture's wrap as glTF's constant; the texture is valid."""
     if texture.wrap == CLAMP:
@@ -446,6 +456,10 @@ struct _Exporter(Movable):
     var views: List[String]
     var accessors: List[String]
     var images: List[String]
+    # The pixels and size of each image written, so that two textures of
+    # one image write it once, as three.js's `cache.images` does.
+    var image_pixels: List[List[UInt8]]
+    var image_sizes: List[Int]
     var samplers: List[String]
     var sampler_keys: List[Int]
     # A texture per pair of texture ids: one id twice for a plain
@@ -478,6 +492,8 @@ struct _Exporter(Movable):
         self.views = List[String]()
         self.accessors = List[String]()
         self.images = List[String]()
+        self.image_pixels = List[List[UInt8]]()
+        self.image_sizes = List[Int]()
         self.samplers = List[String]()
         self.sampler_keys = List[Int]()
         self.textures = List[String]()
@@ -687,7 +703,20 @@ struct _Exporter(Movable):
     def image(
         mut self, var pixels: List[UInt8], width: Int, height: Int
     ) raises -> Int:
-        """Write an image as a PNG and return its index."""
+        """Write an image as a PNG once and return its index.
+
+        three.js's `processImage` caches each image by its source, so
+        several textures of one image write one image. A texture here
+        holds its own pixels, so the same pixels at the same size are the
+        same image.
+        """
+        for at in range(len(self.images)):
+            if _same_image(
+                self.image_pixels[at], self.image_sizes[at], pixels, width
+            ):
+                return at
+        self.image_pixels.append(pixels.copy())
+        self.image_sizes.append(width)
         var png = encode_png(Framebuffer(width, height, pixels^))
         var writer = JsonWriter()
         writer.begin_object()

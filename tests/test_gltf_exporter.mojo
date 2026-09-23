@@ -616,6 +616,41 @@ def test_two_maps_are_combined_into_one_image() raises:
     assert_equal(document.length(document.get(document.root(), "textures")), 3)
 
 
+def test_textures_of_one_image_write_it_once() raises:
+    # three.js's `processImage` caches by source: two textures of one
+    # image, tiled and clamped, are two textures and two samplers over one
+    # image. A third image of the same size is its own.
+    var assets = Assets()
+    var tiled = assets.textures.add(image(2, 2, 3, REPEAT))
+    var clamped = assets.textures.add(image(2, 2, 3, CLAMP))
+    var other = assets.textures.add(image(2, 2, 8))
+    var paint = assets.materials.add(
+        standard_material(
+            Color(255, 255, 255),
+            map=tiled,
+            emissive_map=clamped,
+            ao_map=other,
+        )
+    )
+    var scene = Scene()
+    scene.add_mesh(
+        Mesh(assets.geometries.add(quad(True)), paint, scene.add(Object3D()))
+    )
+    var files = export_gltf(scene, assets, GLB)
+    var document = parse_json(split_glb(files.document)[0])
+    var root = document.root()
+    assert_equal(document.length(document.get(root, "textures")), 3)
+    assert_equal(document.length(document.get(root, "samplers")), 2)
+    assert_equal(document.length(document.get(root, "images")), 2)
+    var back = read_back(files.document, List[UInt8](), GLB)
+    var color_map = back[1].materials.get(back[0].meshes[0].material).map
+    var glow_map = (
+        back[1].materials.get(back[0].meshes[0].material).emissive_map
+    )
+    var color_pixels = back[1].textures.get(color_map).pixels.copy()
+    assert_true(color_pixels == back[1].textures.get(glow_map).pixels)
+
+
 def test_a_single_vertex_and_a_plain_normal_map_are_written() raises:
     # One vertex, its bounds its own; and a normal map at scale one, which
     # writes no scale.

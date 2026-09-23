@@ -113,7 +113,7 @@ glTF has no sheen amount. `read_gltf` reads a sheen of one, as three.js does. Th
 
 ### Textures
 
-Each texture becomes a PNG image and a sampler. The sampler holds the wrap, the filter and whether the texture has a mip chain.
+Each texture becomes a PNG image and a sampler. The sampler holds the wrap, the filter and whether the texture has a mip chain. Each distinct image is written once, as three.js's `processImage` caches it. Two textures with the same pixels and size share one image, and each keeps its own sampler.
 
 The `v` coordinate of glTF runs down from the top of the image. The `v` coordinate of this renderer runs up from the bottom. Thus the writer turns the image upside down, as three.js does for a `flipY` texture. A texture from `read_gltf` has this flip in its `repeat` and `offset`. The writer keeps the image of such a texture as it is.
 
