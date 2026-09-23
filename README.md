@@ -51,18 +51,18 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 162 features are ported and 17 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 164 features are ported and 15 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
 
 - [ ] The camera API and raycast hit data [#172](https://github.com/SethKitchen/ThreeMojo/issues/172)
-- [ ] Scene graph editing and the Object3D transform API [#165](https://github.com/SethKitchen/ThreeMojo/issues/165)
 
 <details>
-<summary>Ported: 13</summary>
+<summary>Ported: 14</summary>
 
 - [x] [Scene graph](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph): `Object3D`, `Scene`, parent and child transforms [#1](https://github.com/SethKitchen/ThreeMojo/issues/1)
+- [x] [Edit the scene graph](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-graph#edit-the-graph): reparent, attach, remove, clone and traverse nodes; world-space queries; Group and userData in scene JSON. [#165](https://github.com/SethKitchen/ThreeMojo/issues/165)
 - [x] [Quaternion and Euler rotations](https://github.com/SethKitchen/ThreeMojo/wiki/Rotations): six Euler orders, `rotate_x`, `rotate_y`, `rotate_z`, `look_at`, `slerp` [#2](https://github.com/SethKitchen/ThreeMojo/issues/2)
 - [x] [PerspectiveCamera](https://github.com/SethKitchen/ThreeMojo/wiki/Cameras#perspectivecamera) [#3](https://github.com/SethKitchen/ThreeMojo/issues/3)
 - [x] [OrthographicCamera](https://github.com/SethKitchen/ThreeMojo/wiki/Cameras#orthographiccamera) [#4](https://github.com/SethKitchen/ThreeMojo/issues/4)
@@ -80,12 +80,12 @@ The port is not at parity with three.js yet. 162 features are ported and 17 are 
 
 ### Geometry
 
-- [ ] Geometry addons, modifiers and BufferGeometryUtils [#180](https://github.com/SethKitchen/ThreeMojo/issues/180)
 
 <details>
-<summary>Ported: 18</summary>
+<summary>Ported: 19</summary>
 
 - [x] [BufferGeometry and BufferAttribute](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry) [#12](https://github.com/SethKitchen/ThreeMojo/issues/12)
+- [x] [Geometry addons](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry-addons): teapot, box lines, modifiers, BufferGeometryUtils, MikkTSpace tangents, SceneUtils, NURBS and named curves. [#180](https://github.com/SethKitchen/ThreeMojo/issues/180)
 - [x] [BoxGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#box) [#13](https://github.com/SethKitchen/ThreeMojo/issues/13)
 - [x] [SphereGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#sphere) [#14](https://github.com/SethKitchen/ThreeMojo/issues/14)
 - [x] [PlaneGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#plane) [#15](https://github.com/SethKitchen/ThreeMojo/issues/15)
