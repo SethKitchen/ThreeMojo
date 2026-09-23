@@ -164,12 +164,21 @@ struct Server(Movable):
         Raises:
             Error: If the shell cannot run.
         """
-        # Wait for the socket and the lock to go, so that the next server
-        # cannot take this display number while this one is still leaving.
+        # Wait for the process itself to end, then for its socket and lock
+        # to go. A server still leaving holds its abstract socket after
+        # its socket file is gone, and the next server can take the same
+        # display number: its clients then reach the one leaving and are
+        # refused. A process that has ended but not been reaped shows as
+        # state Z, which counts as gone.
         var number = self.display[byte=1:]
         _ = run(
             "kill "
             + self.pid
+            + "; for i in $(seq 600); do [ -e /proc/"
+            + self.pid
+            + " ] && ! grep -q ') Z' /proc/"
+            + self.pid
+            + "/stat 2>/dev/null || break; sleep 0.05; done"
             + "; for i in $(seq 600); do [ -e /tmp/.X11-unix/X"
             + number
             + " ] || [ -e /tmp/.X"
