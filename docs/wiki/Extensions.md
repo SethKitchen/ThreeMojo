@@ -44,6 +44,8 @@ extensions/
     ripple.mojo    local wave equation
     caustics.mojo  refracted-grid caustics
     frame.mojo     one shaded picture
+    pebbles.mojo   the pebble photograph
+    filter.mojo    mipmaps and anisotropy
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.

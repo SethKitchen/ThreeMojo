@@ -8,6 +8,6 @@
 Clearwater is Aurélien Gimazane's real-time shallow-water model (MIT,
 Lumaris, 2026). This package is the same spectrum, ripple equation,
 refracted-grid caustics, water optics and lens-diffraction glare, written
-for the software renderer. The original lives at
-https://github.com/Aureliengmz/clearwater.
+for the software renderer. The pebble photograph is included. The
+original lives at https://github.com/Aureliengmz/clearwater.
 """

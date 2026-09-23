@@ -12,6 +12,7 @@ from extensions.water.caustics import (
     render_caustics,
 )
 from extensions.water.field import ComplexField, complex_mul, fft2
+from extensions.water.filter import anisotropic_step
 from extensions.water.frame import (
     CameraLook,
     camera_look,
@@ -21,6 +22,12 @@ from extensions.water.frame import (
     water_radiance,
 )
 from extensions.water.glare import aperture_open, apply_glare, glare_kernels
+from extensions.water.pebbles import (
+    PebbleBed,
+    pebble_bed,
+    sample_pebble,
+    sample_pebble_grad,
+)
 from extensions.water.optics import (
     aces_channel,
     bed_color,
@@ -64,6 +71,8 @@ from extensions.water.surface import (
     SurfaceSample,
     clearwater_surface,
     sample_surface,
+    sample_surface_filtered,
+    sample_surface_smooth,
     shader_time,
     slope_variance,
     water_surface,
@@ -77,6 +86,7 @@ from extensions.water.view import (
     require_view,
 )
 from math.vector3 import Vector3
+from render.png import SRGB, DecodedImage
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -84,7 +94,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import SECOND, Duration, Length
+from units.si import RADIAN, SECOND, Angle, Duration, Length
 
 
 def test_resolution_and_view() raises:
@@ -170,6 +180,9 @@ def test_spectrum_and_surface() raises:
     assert_almost_equal(scaled.value, 9.0)
     var page = clearwater_surface(Duration(0.0, SECOND))
     var center = sample_surface(page, 0.0, 0.0)
+    var smooth = sample_surface_smooth(page, 0.2, -0.4)
+    assert_true(smooth.height < 5.0)
+    assert_true(smooth.height > -5.0)
     _ = center.height
     with assert_raises():
         _ = build_spectrum(resolution, Length(-1.0), 0.078)
@@ -256,9 +269,33 @@ def test_optics() raises:
     assert_true(shallow > 0.0)
     assert_true(near > 0.0)
     assert_true(far > shallow)
-    var bed = bed_color(0.4, -1.2)
+    var stones = _stones()
+    var bed = bed_color(stones, 0.4, -1.2)
     assert_true(bed.r > 0.0)
-    _ = bed_color(-3.0, 2.5)
+    _ = bed_color(stones, -3.0, 2.5)
+    var sample = sample_pebble(stones, -0.2, 1.4)
+    assert_true(sample.r > 0.0)
+    var bytes = List[UInt8](length=4, fill=128)
+    bytes[3] = 255
+    var photo = pebble_bed(DecodedImage(1, 1, bytes^, SRGB))
+    assert_true(photo.pixels[0] > 0.1)
+    assert_true(photo.pixels[0] < 0.3)
+    with assert_raises():
+        _ = PebbleBed(0, 1, List[Float32]())
+    with assert_raises():
+        _ = PebbleBed(1, 0, List[Float32]())
+    with assert_raises():
+        var short = List[Float32](length=1, fill=0.0)
+        _ = PebbleBed(1, 1, short^)
+    with assert_raises():
+        var empty = List[UInt8]()
+        _ = pebble_bed(DecodedImage(0, 1, empty^, SRGB))
+    with assert_raises():
+        var thin = List[UInt8](length=4, fill=0)
+        _ = pebble_bed(DecodedImage(1, 0, thin^, SRGB))
+    with assert_raises():
+        var short_rgba = List[UInt8](length=4, fill=0)
+        _ = pebble_bed(DecodedImage(2, 2, short_rgba^, SRGB))
 
 
 def test_caustics() raises:
@@ -344,8 +381,9 @@ def test_glare() raises:
 
 
 def test_grade_and_camera() raises:
-    var still = camera_look(Duration(5.0, SECOND), False)
-    var sway = camera_look(Duration(5.0, SECOND), True)
+    var page_pitch = Angle(-0.72, RADIAN)
+    var still = camera_look(Duration(5.0, SECOND), False, page_pitch)
+    var sway = camera_look(Duration(5.0, SECOND), True, page_pitch)
     assert_true(sway.px != still.px or sway.py != still.py)
     assert_almost_equal(floor_f(1.8), 1.0)
     assert_almost_equal(floor_f(-1.2), -2.0)
@@ -386,26 +424,89 @@ def test_frame_pictures() raises:
     var ocean = SpectrumResolution(4)
     var glare = SpectrumResolution(4)
     var clock = Duration(5.0, SECOND)
-    with assert_raises():
-        _ = render_water(0, 2, clock, FRAME, False, ocean, 2, 4, glare, False)
-    with assert_raises():
-        _ = render_water(2, 0, clock, FRAME, False, ocean, 2, 4, glare, False)
+    var stones = _stones()
+    var page_pitch = Angle(-0.72, RADIAN)
     with assert_raises():
         _ = render_water(
-            2, 2, clock, WaterView(8), False, ocean, 2, 4, glare, False
+            0,
+            2,
+            clock,
+            FRAME,
+            False,
+            ocean,
+            2,
+            4,
+            glare,
+            False,
+            stones,
+            page_pitch,
+        )
+    with assert_raises():
+        _ = render_water(
+            2,
+            0,
+            clock,
+            FRAME,
+            False,
+            ocean,
+            2,
+            4,
+            glare,
+            False,
+            stones,
+            page_pitch,
+        )
+    with assert_raises():
+        _ = render_water(
+            2,
+            2,
+            clock,
+            WaterView(8),
+            False,
+            ocean,
+            2,
+            4,
+            glare,
+            False,
+            stones,
+            page_pitch,
         )
     var caustics = render_water(
-        2, 2, clock, CAUSTICS, False, ocean, 2, 4, glare, False
+        2,
+        2,
+        clock,
+        CAUSTICS,
+        False,
+        ocean,
+        2,
+        4,
+        glare,
+        False,
+        stones,
+        page_pitch,
     )
     var linear = render_water(
-        2, 2, clock, LINEAR, False, ocean, 2, 4, glare, True
+        2, 2, clock, LINEAR, False, ocean, 2, 4, glare, True, stones, page_pitch
     )
-    var frame = render_water(3, 3, clock, FRAME, True, ocean, 2, 4, glare, True)
+    var frame = render_water(
+        3, 3, clock, FRAME, True, ocean, 2, 4, glare, True, stones, page_pitch
+    )
     var spikes = render_water(
-        2, 1, clock, GLARE, False, ocean, 2, 4, glare, False
+        2, 1, clock, GLARE, False, ocean, 2, 4, glare, False, stones, page_pitch
     )
     var glint = render_water(
-        32, 18, clock, LINEAR, False, SpectrumResolution(16), 2, 4, glare, False
+        32,
+        18,
+        clock,
+        LINEAR,
+        False,
+        SpectrumResolution(16),
+        2,
+        4,
+        glare,
+        False,
+        stones,
+        page_pitch,
     )
     assert_equal(caustics.width, 2)
     assert_equal(linear.height, 2)
@@ -442,36 +543,147 @@ def test_view_rays() raises:
         0.0, -0.02, -1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.3, 0.0
     )
     var clock = Duration(1.0, SECOND)
-    _ = water_radiance(down, 0.0, 0.0, 1.0, flat, calm, caustics, clock)
-    _ = water_radiance(down, 0.0, 0.0, 1.0, deep, calm, caustics, clock)
-    _ = water_radiance(down, 0.0, 0.0, 1.0, flat, sharp, caustics, clock)
-    _ = water_radiance(down, 0.0, 0.0, 1.0, flat, spread, caustics, clock)
-    _ = water_radiance(down, 0.0, 0.0, 1.0, steep, calm, caustics, clock)
-    _ = water_radiance(down, 0.0, 0.0, 1.0, away, calm, caustics, clock)
-    _ = water_radiance(up, 0.0, 0.0, 1.0, flat, calm, caustics, clock)
-    _ = water_radiance(ahead, 0.2, -0.4, 1.2, flat, calm, caustics, clock)
+    var stones = _stones()
+    _ = water_radiance(down, 0.0, 0.0, 1.0, flat, calm, caustics, stones, clock)
+    _ = water_radiance(down, 0.0, 0.0, 1.0, deep, calm, caustics, stones, clock)
     _ = water_radiance(
-        graze, 0.0, 0.0, 1.6, steep, calm, caustics, sun_clock(0.0)
+        down, 0.0, 0.0, 1.0, flat, sharp, caustics, stones, clock
     )
     _ = water_radiance(
-        _down(0.84, 0.66), 0.0, 0.0, 1.0, flat, calm, caustics, clock
+        down, 0.0, 0.0, 1.0, flat, spread, caustics, stones, clock
     )
     _ = water_radiance(
-        _down(0.72, 0.93), 0.0, 0.0, 1.0, flat, calm, caustics, clock
+        down, 0.0, 0.0, 1.0, steep, calm, caustics, stones, clock
+    )
+    _ = water_radiance(down, 0.0, 0.0, 1.0, away, calm, caustics, stones, clock)
+    _ = water_radiance(up, 0.0, 0.0, 1.0, flat, calm, caustics, stones, clock)
+    _ = water_radiance(
+        ahead, 0.2, -0.4, 1.2, flat, calm, caustics, stones, clock
     )
     _ = water_radiance(
-        _down(0.0, 1.53), 0.0, 0.0, 1.0, flat, calm, caustics, clock
+        graze, 0.0, 0.0, 1.6, steep, calm, caustics, stones, sun_clock(0.0)
     )
     _ = water_radiance(
-        _down(0.2, 0.2), 0.0, 0.0, 1.0, flat, calm, caustics, clock
+        _down(0.84, 0.66), 0.0, 0.0, 1.0, flat, calm, caustics, stones, clock
+    )
+    _ = water_radiance(
+        _down(0.72, 0.93), 0.0, 0.0, 1.0, flat, calm, caustics, stones, clock
+    )
+    _ = water_radiance(
+        _down(0.0, 1.53), 0.0, 0.0, 1.0, flat, calm, caustics, stones, clock
+    )
+    _ = water_radiance(
+        _down(0.2, 0.2), 0.0, 0.0, 1.0, flat, calm, caustics, stones, clock
     )
     var shallow = _filled(-0.9, 0.0, 0.0)
     _ = water_radiance(
-        _down(0.72, 0.93), 0.0, 0.0, 1.0, shallow, calm, caustics, clock
+        _down(0.72, 0.93), 0.0, 0.0, 1.0, shallow, calm, caustics, stones, clock
     )
     _ = water_radiance(
-        _down(0.84, 0.66), 0.0, 0.0, 1.0, shallow, calm, caustics, clock
+        _down(0.84, 0.66), 0.0, 0.0, 1.0, shallow, calm, caustics, stones, clock
     )
+
+
+def test_texture_filter() raises:
+    var zero = anisotropic_step(0.0, 0.0, 0.0, 0.0, 8.0, 8.0, 8.0, 0.0, 2.0)
+    assert_equal(zero.taps, 1)
+    assert_almost_equal(zero.lod, 0.0)
+    var tall = anisotropic_step(0.0, 0.01, 0.0, 1.0, 16.0, 16.0, 8.0, 0.0, 4.0)
+    assert_true(tall.taps > 1)
+    var wide = anisotropic_step(
+        1.0, 0.0, 0.0, 0.0001, 64.0, 64.0, 8.0, 1.0, 2.0
+    )
+    assert_equal(wide.taps, 8)
+    assert_almost_equal(wide.lod, 2.0)
+    var mid = anisotropic_step(
+        4.0 / 64.0, 0.0, 4.0 / 64.0, 0.0, 64.0, 64.0, 8.0, 0.0, 6.0
+    )
+    assert_equal(mid.taps, 1)
+    assert_almost_equal(mid.lod, 2.0, atol=1e-4)
+    var stones = _stones()
+    var sharp = sample_pebble_grad(stones, 0.25, 0.25, 0.0, 0.0, 0.0, 0.0)
+    var plain = sample_pebble(stones, 0.25, 0.25)
+    assert_almost_equal(sharp.r, plain.r, atol=1e-5)
+    var blur = sample_pebble_grad(stones, 0.25, 0.25, 0.5, 0.0, 0.0, 0.5)
+    assert_true(blur.r > 0.0)
+    var row = List[Float32](length=6, fill=0.2)
+    var thin = PebbleBed(1, 2, row^)
+    assert_equal(thin.mip_w[0], 1)
+    var col = List[Float32](length=6, fill=0.4)
+    var flat_bed = PebbleBed(2, 1, col^)
+    assert_equal(flat_bed.mip_h[0], 1)
+    _ = bed_color(stones, 0.2, 0.4, 0.3, 0.0, 0.0, 0.3)
+    var grid = ComplexField(SpectrumResolution(8))
+    grid.put(1, 2, 0, 1.0)
+    grid.put(1, 2, 1, 0.2)
+    var ocean = SurfaceField(Length(4.6), grid^)
+    assert_true(len(ocean.mips) > 0)
+    var cubic = sample_surface_filtered(
+        ocean, 0.4, 0.5, 0.0, 0.0, 0.0, 0.0, True
+    )
+    assert_true(cubic.height < 5.0)
+    var soft = sample_surface_filtered(
+        ocean, 0.4, 0.5, 0.2, 0.0, 0.2, 0.0, True
+    )
+    var fine = sample_surface_filtered(
+        ocean, 0.4, 0.5, 0.02, 0.0, 0.0, 0.02, False
+    )
+    var broad = sample_surface_filtered(
+        ocean, 0.4, 0.5, 0.4, 0.0, 0.01, 0.0, False
+    )
+    assert_true(soft.height < 5.0)
+    assert_true(fine.height < 5.0)
+    assert_true(broad.height < 5.0)
+    var clock = Duration(5.0, SECOND)
+    var calm = _ripples(0.0)
+    var caustics = render_caustics(
+        _filled(0.0, 0.0, 0.0), sun_direction(), Length(1.6), 2, 4
+    )
+    assert_true(len(caustics.mip_n) > 0)
+    var near = CameraLook(
+        0.0, -1.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.02, 0.0
+    )
+    _ = water_radiance(
+        near,
+        0.0,
+        0.0,
+        1.0,
+        _filled(0.0, 0.0, 0.0),
+        calm,
+        caustics,
+        stones,
+        clock,
+        0.25,
+        0.25,
+    )
+    var up = CameraLook(
+        0.0, 0.2, -1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 1.55, 0.0
+    )
+    _ = water_radiance(
+        up,
+        0.0,
+        0.2,
+        1.0,
+        _filled(0.0, 0.0, 0.0),
+        calm,
+        caustics,
+        stones,
+        clock,
+        0.1,
+        0.1,
+    )
+
+
+def _stones() raises -> PebbleBed:
+    var pixels = List[Float32](length=12, fill=0.35)
+    pixels[0] = 0.15
+    pixels[1] = 0.2
+    pixels[2] = 0.1
+    pixels[3] = 0.55
+    pixels[4] = 0.5
+    pixels[5] = 0.4
+    pixels[9] = 0.7
+    return PebbleBed(2, 2, pixels^)
 
 
 def _filled(

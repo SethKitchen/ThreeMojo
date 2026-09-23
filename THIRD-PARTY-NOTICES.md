@@ -451,9 +451,9 @@ SOFTWARE.
 
 `extensions/water/` ports Clearwater's shallow-water spectrum, ripple
 equation, refracted-grid caustics, water optics and lens-diffraction glare.
-The embedded pebble photograph is not included. Clearwater is Copyright
-(c) 2026 Lumaris and is distributed under the MIT License, reproduced in
-full below.
+`assets/pebbles.jpg` is Clearwater's pebble photograph. Clearwater is
+Copyright (c) 2026 Lumaris and is distributed under the MIT License,
+reproduced in full below.
 
 Anyone may obtain Clearwater directly from its authors under the MIT License.
 The noncommercial restriction in ThreeMojo's own license applies only to

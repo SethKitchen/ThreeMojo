@@ -6,11 +6,11 @@
 """The water optics in Clearwater's main shader.
 
 Fresnel, refraction, Beckmann glints, absorption and the sky are the
-page's formulae. The pebble photograph is not in this port. `bed_color`
-keeps the same sand, cobble and weed mix and paints the stones from the
-same hash the shader uses to hide a repeated tile.
+page's formulae. `bed_color` repeats the pebble photograph the way the
+shader does, then mixes sand, cobble and weed on top.
 """
 
+from extensions.water.pebbles import PebbleBed, PebbleSample, sample_pebble_grad
 from math.vector3 import Vector3
 from std.math import cos, exp, floor, log, pow, sin, sqrt
 from units.si import DEGREE, Angle
@@ -432,22 +432,44 @@ struct BedColor(ImplicitlyCopyable):
     var height: Float32
 
 
-def bed_color(x: Float32, z: Float32) -> BedColor:
+def bed_color(
+    bed: PebbleBed,
+    x: Float32,
+    z: Float32,
+    dx_x: Float32 = 0.0,
+    dx_z: Float32 = 0.0,
+    dy_x: Float32 = 0.0,
+    dy_z: Float32 = 0.0,
+) -> BedColor:
     """Return the seabed color at one point.
 
-    The original page samples an embedded pebble photograph. This keeps the
-    zone mix: fine stone, coarse cobble, sand in the gaps, and a weed tint.
-    Stone color comes from `hash12`.
+    Fine pebbles and coarse cobbles are two samplings of the photograph.
+    Sand fills the gaps. A weed tint darkens the hollows. A non-zero
+    footprint reads the photograph through its mipmaps.
 
     Args:
+        bed: The pebble photograph, in linear light.
         x: World x, in meters.
         z: World z, in meters.
+        dx_x: Change in x, in meters, for one pixel to the right.
+        dx_z: Change in z, in meters, for one pixel to the right.
+        dy_x: Change in x, in meters, for one pixel up.
+        dy_z: Change in z, in meters, for one pixel up.
 
     Returns:
         Linear albedo and a height in about 0 to 1.
     """
-    var fine = _stone(x, z, 1.0)
-    var coarse = _stone(-z + 5.3, x, 1.7)
+    var fine = _pebbles(bed, x, z, 1.0, dx_x, dx_z, dy_x, dy_z)
+    var coarse = _pebbles(
+        bed,
+        -z + 5.3,
+        x + 5.3,
+        1.7,
+        -dx_z,
+        dx_x,
+        -dy_z,
+        dy_x,
+    )
     var mix_c = smoothstep(0.45, 0.62, fbm2(x * 0.21 + 40.0, z * 0.21 + 40.0))
     var r = fine.r + (coarse.r - fine.r) * mix_c
     var g = fine.g + (coarse.g - fine.g) * mix_c
@@ -499,16 +521,73 @@ def bed_color(x: Float32, z: Float32) -> BedColor:
     return BedColor(r, g, b, h)
 
 
-def _stone(x: Float32, z: Float32, scale: Float32) -> BedColor:
-    var cell_x = floor(x / (0.78 * scale))
-    var cell_z = floor(z / (0.78 * scale))
-    var n = hash12(cell_x, cell_z)
-    var m = hash12(cell_x + 3.1, cell_z + 7.7)
-    var r = 0.35 + 0.40 * n
-    var g = 0.32 + 0.38 * m
-    var b = 0.28 + 0.30 * hash12(cell_z, cell_x)
-    var h = 0.25 + 0.6 * n
-    return BedColor(r, g, b, h)
+def _pebbles(
+    bed: PebbleBed,
+    x: Float32,
+    z: Float32,
+    scale: Float32,
+    dx_x: Float32,
+    dx_z: Float32,
+    dy_x: Float32,
+    dy_z: Float32,
+) -> BedColor:
+    var meters = 0.78 * scale
+    var uv_x = x / meters
+    var uv_z = z / meters
+    var du_dx = dx_x / meters
+    var dv_dx = dx_z / meters
+    var du_dy = dy_x / meters
+    var dv_dy = dy_z / meters
+    var level = value_noise(x * 0.85, z * 0.85) * 8.0
+    var band = floor(level)
+    var blend = level - band
+    var shift_u = sin(3.0 * band)
+    var shift_v = sin(7.0 * band)
+    var first = sample_pebble_grad(
+        bed, uv_x + shift_u, uv_z + shift_v, du_dx, dv_dx, du_dy, dv_dy
+    )
+    var next_band = band + 1.0
+    var second = sample_pebble_grad(
+        bed,
+        uv_x + sin(3.0 * next_band),
+        uv_z + sin(7.0 * next_band),
+        du_dx,
+        dv_dx,
+        du_dy,
+        dv_dy,
+    )
+    var delta = (
+        (first.r - second.r) + (first.g - second.g) + (first.b - second.b)
+    )
+    var mix = smoothstep(0.2, 0.8, blend - 0.1 * delta)
+    var color = _blend_pebble(first, second, mix)
+    # The page blurs the height lookup by six times the color footprint.
+    var wide_a = sample_pebble_grad(
+        bed,
+        uv_x + shift_u,
+        uv_z + shift_v,
+        du_dx * 6.0,
+        dv_dx * 6.0,
+        du_dy * 6.0,
+        dv_dy * 6.0,
+    )
+    var wide_b = sample_pebble_grad(
+        bed,
+        uv_x + sin(3.0 * next_band),
+        uv_z + sin(7.0 * next_band),
+        du_dx * 6.0,
+        dv_dx * 6.0,
+        du_dy * 6.0,
+        dv_dy * 6.0,
+    )
+    var wide = _blend_pebble(wide_a, wide_b, mix)
+    var height = wide.r * 0.3 + wide.g * 0.55 + wide.b * 0.15
+    return BedColor(color.r, color.g, color.b, height)
+
+
+def _blend_pebble(a: PebbleSample, b: PebbleSample, t: Float32) -> PebbleSample:
+    var s = 1.0 - t
+    return PebbleSample(a.r * s + b.r * t, a.g * s + b.g * t, a.b * s + b.b * t)
 
 
 def max(a: Float32, b: Float32) -> Float32:
