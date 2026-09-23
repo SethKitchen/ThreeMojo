@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 156 features are ported and 1 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 157 features are ported and 0 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -124,10 +124,9 @@ The port is not at parity with three.js yet. 156 features are ported and 1 are o
 
 ### Materials
 
-- [ ] Specular and clearcoat maps on physical materials [#159](https://github.com/SethKitchen/ThreeMojo/issues/159)
 
 <details>
-<summary>Ported: 27</summary>
+<summary>Ported: 28</summary>
 
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
 - [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
@@ -155,6 +154,7 @@ The port is not at parity with three.js yet. 156 features are ported and 1 are o
 - [x] [Transmission, thickness, attenuation and dispersion](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#transmission): the opaque scene drawn first, then refracted, blurred and tinted through physical surfaces on both backends [#121](https://github.com/SethKitchen/ThreeMojo/issues/121)
 - [x] [Sheen, iridescence and anisotropy](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#sheen): Charlie sheen, thin-film Fresnel and stretched GGX on physical materials, with their maps and glTF extensions. [#122](https://github.com/SethKitchen/ThreeMojo/issues/122)
 - [x] [Node materials and ShaderMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Node-materials): expression graphs compiled to bytecode, run by both rasterizers. [#126](https://github.com/SethKitchen/ThreeMojo/issues/126)
+- [x] [Specular and clearcoat maps](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#specular-and-clearcoat-maps): specular intensity and color, clear coat, roughness and normal maps on both rasterizers, in glTF and in scene JSON. [#159](https://github.com/SethKitchen/ThreeMojo/issues/159)
 - [x] [MeshDistanceMaterial, depth packings and Material.fog](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#meshdistancematerial): distance from a point, the four depth packings, and a per-material fog switch [#125](https://github.com/SethKitchen/ThreeMojo/issues/125)
 
 </details>
