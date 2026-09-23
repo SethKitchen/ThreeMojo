@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 145 features are ported and 5 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 146 features are ported and 4 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -224,10 +224,9 @@ The port is not at parity with three.js yet. 145 features are ported and 5 are o
 ### Rendering
 
 - [ ] Post-processing on the GPU backend [#144](https://github.com/SethKitchen/ThreeMojo/issues/144)
-- [ ] Multiple render targets and float render targets [#146](https://github.com/SethKitchen/ThreeMojo/issues/146)
 
 <details>
-<summary>Ported: 20</summary>
+<summary>Ported: 21</summary>
 
 - [x] [Depth buffer](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#depth) [#72](https://github.com/SethKitchen/ThreeMojo/issues/72)
 - [x] [Backface culling](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#culling) [#73](https://github.com/SethKitchen/ThreeMojo/issues/73)
@@ -249,6 +248,7 @@ The port is not at parity with three.js yet. 145 features are ported and 5 are o
 - [x] [Screen-space passes: SSAO, SAO, SSR and outline](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#screen-space-passes): ambient occlusion, reflections and outlines read from the depth buffer, with seeded sampling [#142](https://github.com/SethKitchen/ThreeMojo/issues/142)
 - [x] [Bokeh, glitch, halftone, mask, clear and texture passes](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#more-passes): bokeh, glitch, halftone, clear and texture passes, and masks on the stencil buffer [#143](https://github.com/SethKitchen/ThreeMojo/issues/143)
 - [x] [Logarithmic and reversed depth buffers](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#logarithmic-depth): logarithmic and reversed depth on both backends, with depth readers and passes kept correct [#145](https://github.com/SethKitchen/ThreeMojo/issues/145)
+- [x] [Multiple render targets and float render targets](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer#float-render-targets): float targets, float depth textures and a normal attachment, filled in one pass [#146](https://github.com/SethKitchen/ThreeMojo/issues/146)
 
 </details>
 
