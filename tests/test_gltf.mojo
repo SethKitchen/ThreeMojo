@@ -33,7 +33,15 @@ from materials.material import DOUBLE_SIDE, FRONT_SIDE, NO_TEXTURE, STANDARD
 from math.vector3 import Vector3
 from render.framebuffer import Color
 from render.srgb import LINEAR, SRGB
-from render.texture import BILINEAR, CLAMP, MIRROR, NEAREST, REPEAT
+from render.texture import (
+    BILINEAR,
+    CLAMP,
+    COVERAGE,
+    IGNORED,
+    MIRROR,
+    NEAREST,
+    REPEAT,
+)
 from renderers.renderer import Renderer
 from std.math import pi
 from std.pathlib import Path
@@ -1128,6 +1136,52 @@ def test_a_textured_quad_shows_the_images_top_at_the_top() raises:
     assert_true(
         top_right.g > 150 and top_right.r < 60, "the top right is not green"
     )
+
+
+def test_a_metallic_roughness_map_is_data_that_can_be_drawn() raises:
+    # A linear texture holds numbers, so its alpha is ignored: the renderer
+    # refuses a data map that reads its alpha as coverage, and a model
+    # with a metallic-roughness texture could not be drawn at all.
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        doc(
+            buffer(QUAD, 92)
+            + ',"bufferViews":[{"buffer":0,"byteLength":48},{"buffer":0,"byteOffset":48,"byteLength":32},{"buffer":0,"byteOffset":80,"byteLength":12}]'
+            + ',"accessors":[{"bufferView":0,"componentType":5126,"count":4,"type":"VEC3"},'
+            + '{"bufferView":1,"componentType":5126,"count":4,"type":"VEC2"},'
+            + '{"bufferView":2,"componentType":5123,"count":6,"type":"SCALAR"}]'
+            + ',"images":[{"uri":"data:image/png;base64,'
+            + CHECKER
+            + '"}],"textures":[{"source":0}]'
+            + ',"materials":[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0},"metallicRoughnessTexture":{"index":0}}}]'
+            + ',"meshes":[{"primitives":[{"attributes":{"POSITION":0,"TEXCOORD_0":1},"indices":2,"material":0}]}]'
+            + ',"nodes":[{"mesh":0}],"scenes":[{"nodes":[0]}]'
+        ),
+        scene,
+        assets,
+    )
+    assert_true(
+        assets.textures.get(model.data_textures[0]).alpha == IGNORED,
+        "a data texture reads its alpha as coverage",
+    )
+    assert_true(assets.textures.get(model.color_textures[0]).alpha == COVERAGE)
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(
+        directional_light(Color(255, 255, 255), lamp_node, Float32(pi))
+    )
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE), 1.0, Length(0.1, METER), Length(100.0, METER)
+    )
+    camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
+    var renderer = Renderer(24, 24)
+    renderer.set_background(Color(0, 0, 0))
+    var image = renderer.render(scene, assets, camera)
+    var middle = image.get_pixel(12, 12)
+    assert_true(middle.r + middle.g + middle.b > 0, "the quad was not drawn")
 
 
 def test_the_edges_of_every_check_are_reached() raises:

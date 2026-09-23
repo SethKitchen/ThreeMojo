@@ -165,6 +165,8 @@ from render.tga import decode as decode_tga
 from render.texture import (
     BILINEAR,
     CLAMP,
+    COVERAGE,
+    IGNORED,
     MIRROR,
     NEAREST,
     REPEAT,
@@ -1159,12 +1161,17 @@ struct _Loader(Movable):
             return self.model.data_textures[index]
         var bytes = self.image_bytes(self.texture_images[index])
         var image = decode_image(bytes)
+        # A linear texture holds numbers -- metalness and roughness, a
+        # normal, occlusion -- and its alpha is not coverage: the renderer
+        # refuses a data map that reads alpha as coverage, so one built
+        # with the default could not be drawn.
         var built = texture_from(
             image,
             self.texture_wraps[index],
             self.texture_filters[index],
             space,
             self.texture_mipmapped[index],
+            alpha=IGNORED if space == LINEAR else COVERAGE,
         )
         # glTF's `v` runs down from the top: flipped here, as three.js
         # flips it with `flipY = false`.
