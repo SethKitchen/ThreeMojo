@@ -12,7 +12,9 @@ pass reads every pixel of it and writes every pixel back: a blur, a bloom,
 a film grain, a dot screen, a sepia, a vignette, a gray, a trail, a copy at
 an opacity, the tone mapping curve, or an anti-aliasing: FXAA, SMAA, or
 jittered samples averaged at once (SSAA) or over frames (TAA); see
-`postprocessing.antialiasing`. The composer runs its passes in
+`postprocessing.antialiasing`. Four more read the depth beside the light:
+ambient occlusion (SSAO and SAO), reflections (SSR) and an outline around
+chosen objects; see `postprocessing.screen_space`. The composer runs its passes in
 order on one target and resolves it once at the end. three.js ping-pongs
 between two targets because a shader cannot read the texture it writes;
 a pass here reads the whole target before it writes, so one target serves.
@@ -37,8 +39,10 @@ has no target a pass could read; see `docs/wiki/Post-processing.md`.
 
 from cameras.camera import Camera
 from core.assets import Assets
+from core.layers import Layers
 from core.scene import Scene
 from math.smoothstep import smoothstep
+from math.utils import SeededRandom
 from math.vector2 import Vector2
 from postprocessing.antialiasing import (
     JITTER_LEVELS,
@@ -48,13 +52,28 @@ from postprocessing.antialiasing import (
     smaa_light,
 )
 from postprocessing.sampling import clamped_tap, mix, sample, u_of, v_of
+from postprocessing.screen_space import (
+    DepthView,
+    OutlineSettings,
+    SaoSettings,
+    SsaoSettings,
+    SsrSettings,
+    check_outline,
+    check_sao,
+    check_ssao,
+    check_ssr,
+    outline_light,
+    sao_light,
+    ssao_light,
+    ssr_light,
+)
 from render.antialias import SUPERSAMPLE
 from render.framebuffer import FloatColor, Framebuffer
 from render.target import RenderTarget
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
 from renderers.renderer import Renderer
 from std.math import cos, exp, floor, isfinite, sin
-from units.si import Angle, RADIAN
+from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
 
 
 @fieldwise_init
@@ -63,14 +82,14 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
 
     three.js has a class per pass and this has a tag, for the reason
     `Material` has one: a composer holds one list of one type. The type
-    stops a bare integer at compile time; it does not stop `PassKind(15)`,
+    stops a bare integer at compile time; it does not stop `PassKind(19)`,
     which `check_pass` refuses.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the fifteen kinds there are."""
+        """Return True if this is one of the nineteen kinds there are."""
         return (
             self == RENDER
             or self == COPY
@@ -87,6 +106,10 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
             or self == SMAA
             or self == SSAA_RENDER
             or self == TAA_RENDER
+            or self == SSAO
+            or self == SAO
+            or self == SSR
+            or self == OUTLINE
         )
 
 
@@ -121,6 +144,14 @@ comptime SMAA = PassKind(12)
 comptime SSAA_RENDER = PassKind(13)
 # The same, or over many frames, a few samples a frame: `TAARenderPass`.
 comptime TAA_RENDER = PassKind(14)
+# Draw the scene and darken where surfaces are hemmed in: `SSAOPass`.
+comptime SSAO = PassKind(15)
+# Darken by scalable ambient occlusion: `SAOPass`.
+comptime SAO = PassKind(16)
+# Draw the scene and lay reflections over it: `SSRPass`.
+comptime SSR = PassKind(17)
+# A glowing edge around chosen objects: `OutlinePass`.
+comptime OUTLINE = PassKind(18)
 
 # three.js's `LuminosityHighPassShader` fades a pixel in over this much
 # luminance above the threshold.
@@ -153,8 +184,9 @@ struct Pass(Copyable, Movable):
     their defaults. Build one with `render_pass`, `copy_pass`, `blur_pass`,
     `bloom_pass`, `film_pass`, `dot_screen_pass`, `sepia_pass`,
     `vignette_pass`, `luminosity_pass`, `afterimage_pass`, `output_pass`,
-    `fxaa_pass`, `smaa_pass`, `ssaa_render_pass` or `taa_render_pass`, and
-    change a setting afterward as three.js changes a
+    `fxaa_pass`, `smaa_pass`, `ssaa_render_pass`, `taa_render_pass`,
+    `ssao_pass`, `sao_pass`, `ssr_pass` or `outline_pass`, and change a
+    setting afterward as three.js changes a
     pass's uniforms; `EffectComposer.render` checks each again.
     """
 
@@ -192,6 +224,12 @@ struct Pass(Copyable, Movable):
     # How many of the TAA pass's samples are in, or minus one to start
     # over on the next frame: `TAARenderPass.accumulateIndex`.
     var accumulate_index: Int
+    # What an SSAO, an SAO, an SSR or an outline pass reads; see
+    # `postprocessing.screen_space`.
+    var ssao: SsaoSettings
+    var sao: SaoSettings
+    var ssr: SsrSettings
+    var outline: OutlineSettings
 
     def __init__(out self, kind: PassKind):
         """Start a pass of `kind` with every setting at its default.
@@ -214,6 +252,10 @@ struct Pass(Copyable, Movable):
         self.unbiased = True
         self.accumulate = False
         self.accumulate_index = -1
+        self.ssao = SsaoSettings()
+        self.sao = SaoSettings()
+        self.ssr = SsrSettings()
+        self.outline = OutlineSettings()
 
 
 def check_pass(step: Pass) raises:
@@ -223,15 +265,16 @@ def check_pass(step: Pass) raises:
         step: The pass.
 
     Raises:
-        Error: If the kind is none of the fifteen; a strength, radius,
+        Error: If the kind is none of the nineteen; a strength, radius,
             threshold, offset, scale, angle or time is not finite; a
             strength, radius, threshold, offset or scale is negative; a
             bloom's radius or an afterimage's damp is above one; the sample
             level is outside zero through five; or the accumulate index is
-            outside minus one through 32.
+            outside minus one through 32. Everything `check_ssao`,
+            `check_sao`, `check_ssr` and `check_outline` raise.
     """
     if not step.kind.is_valid():
-        raise Error("A pass kind must be one of the fifteen named kinds")
+        raise Error("A pass kind must be one of the nineteen named kinds")
     if not (
         isfinite(step.strength)
         and isfinite(step.radius)
@@ -260,6 +303,10 @@ def check_pass(step: Pass) raises:
         raise Error("A sample level runs from zero to five")
     if step.accumulate_index < -1 or step.accumulate_index > TAA_SAMPLES:
         raise Error("An accumulate index runs from minus one to 32")
+    check_ssao(step.ssao)
+    check_sao(step.sao)
+    check_ssr(step.ssr)
+    check_outline(step.outline)
 
 
 def render_pass() -> Pass:
@@ -554,6 +601,138 @@ def taa_render_pass(
     return step^
 
 
+def ssao_pass(
+    kernel_radius: Length = Length(8.0, METER),
+    min_distance: Float32 = 0.005,
+    max_distance: Float32 = 0.1,
+) raises -> Pass:
+    """Return a pass that draws the scene and darkens it where its surfaces
+    are hemmed in: three.js's `SSAOPass`.
+
+    Put it where a `render_pass` goes: it draws the frame itself, as
+    three.js's does. Change `ssao.kernel_size`, `ssao.seed` or
+    `ssao.output` afterward.
+
+    Args:
+        kernel_radius: How far from the surface the samples reach.
+        min_distance: The least a sample must be hidden by to occlude, as
+            a fraction of the camera's near-to-far range.
+        max_distance: The most.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_ssao` raises.
+    """
+    var step = Pass(SSAO)
+    step.ssao.kernel_radius = kernel_radius
+    step.ssao.min_distance = min_distance
+    step.ssao.max_distance = max_distance
+    check_pass(step)
+    return step^
+
+
+def sao_pass(
+    intensity: Float32 = 0.18,
+    scale: Float32 = 1.0,
+    kernel_radius: Float32 = 100.0,
+    blur: Bool = True,
+) raises -> Pass:
+    """Return a pass that darkens the frame by scalable ambient occlusion:
+    three.js's `SAOPass`.
+
+    Put it after a `render_pass`. It draws the scene's depth itself and
+    darkens the frame it is given. Its other `params` are the fields of
+    `sao`.
+
+    Args:
+        intensity: What the occlusion is scaled by: `saoIntensity`.
+        scale: How fast it falls off with distance: `saoScale`.
+        kernel_radius: How far the samples reach, in pixels:
+            `saoKernelRadius`.
+        blur: Whether the occlusion is blurred: `saoBlur`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_sao` raises.
+    """
+    var step = Pass(SAO)
+    step.sao.intensity = intensity
+    step.sao.scale = scale
+    step.sao.kernel_radius = kernel_radius
+    step.sao.blur = blur
+    check_pass(step)
+    return step^
+
+
+def ssr_pass(
+    opacity: Float32 = 0.5,
+    max_distance: Length = Length(180.0, METER),
+    thickness: Length = Length(0.018, METER),
+) raises -> Pass:
+    """Return a pass that draws the scene and lays what each surface
+    reflects over it: three.js's `SSRPass`.
+
+    Put it where a `render_pass` goes: it draws the frame itself, as
+    three.js's does. Every surface reflects. The other settings are the
+    fields of `ssr`.
+
+    Args:
+        opacity: How much of a reflection shows, at most.
+        max_distance: How far from a surface a reflection is looked for.
+        thickness: How thick each surface is taken to be.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_ssr` raises.
+    """
+    var step = Pass(SSR)
+    step.ssr.opacity = opacity
+    step.ssr.max_distance = max_distance
+    step.ssr.thickness = thickness
+    check_pass(step)
+    return step^
+
+
+def outline_pass(
+    selection: Layers,
+    edge_strength: Float32 = 3.0,
+    edge_thickness: Float32 = 1.0,
+) raises -> Pass:
+    """Return a pass that draws a glowing edge around the objects on some
+    layers: three.js's `OutlinePass`.
+
+    three.js takes a list of objects. This takes the layers they are on:
+    the pass draws through a camera that sees those layers alone. Put it
+    after a `render_pass`. The edge colors, the glow and the pulse are the
+    fields of `outline`. The pulse follows the frame time `render` is
+    given.
+
+    Args:
+        selection: The layers whose objects are outlined. An empty set
+            outlines nothing.
+        edge_strength: What the edge is scaled by.
+        edge_thickness: How far the edge's narrow blur reaches.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_outline` raises.
+    """
+    var step = Pass(OUTLINE)
+    step.outline.selection = selection
+    step.outline.edge_strength = edge_strength
+    step.outline.edge_thickness = edge_thickness
+    check_pass(step)
+    return step^
+
+
 struct TaaMemory(Copyable, Movable):
     """What a TAA pass keeps between frames: three.js's `_holdRenderTarget`
     and `_sampleRenderTarget`.
@@ -749,6 +928,37 @@ struct EffectComposer(Movable):
                     step.sample_level,
                     step.unbiased,
                 )
+            elif step.kind == SSAO:
+                _draw(frame, renderer, scene, assets, camera)
+                ssao_light(frame, _depth_view(frame, camera), step.ssao)
+            elif step.kind == SAO:
+                var drawn = RenderTarget(
+                    renderer.width, renderer.height, renderer.background
+                )
+                _draw(drawn, renderer, scene, assets, camera)
+                # three.js draws a fresh `randomSeed` every frame.
+                var random = SeededRandom(step.sao.seed)
+                var random_seed = Float32(random.next())
+                self.passes[index].sao.seed = Int(random.state)
+                sao_light(
+                    frame,
+                    _depth_view(drawn, camera),
+                    self.passes[index].sao,
+                    random_seed,
+                )
+            elif step.kind == SSR:
+                _draw(frame, renderer, scene, assets, camera)
+                ssr_light(frame, _depth_view(frame, camera), step.ssr)
+            elif step.kind == OUTLINE:
+                self.passes[index].time += delta_time
+                _outline(
+                    frame,
+                    self.passes[index],
+                    renderer,
+                    scene,
+                    assets,
+                    camera,
+                )
             elif step.kind == TAA_RENDER:
                 taa_render(
                     frame,
@@ -787,6 +997,56 @@ def _draw[
         frame = drawn.downsampled(SUPERSAMPLE)
         return
     renderer.render_into(frame, scene, assets, camera)
+
+
+def _depth_view[C: Camera](drawn: RenderTarget, camera: C) raises -> DepthView:
+    """Return a target's depth read through the camera that drew it."""
+    return DepthView(
+        drawn.depth,
+        drawn.width,
+        drawn.height,
+        camera.projection_matrix(),
+        Length(camera.near_distance(), METER),
+        Length(camera.far_distance(), METER),
+    )
+
+
+def _outline[
+    C: Camera
+](
+    mut frame: RenderTarget,
+    step: Pass,
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+) raises:
+    """Run an outline pass: draw the scene's depth, and the depth of the
+    selected layers alone through the same camera, and outline what the
+    second holds. A selection of no layers outlines nothing, as three.js's
+    pass does with no selected objects."""
+    var selection = step.outline.selection
+    if selection.mask == 0:
+        return
+    var everything = RenderTarget(
+        renderer.width, renderer.height, renderer.background
+    )
+    _draw(everything, renderer, scene, assets, camera)
+    var chosen = JitteredCamera(
+        camera, scene, 0, 0, renderer.width, renderer.height
+    )
+    chosen.layers = selection
+    var picked = RenderTarget(
+        renderer.width, renderer.height, renderer.background
+    )
+    _draw(picked, renderer, scene, assets, chosen)
+    outline_light(
+        frame,
+        everything.depth,
+        picked.depth,
+        step.outline,
+        Duration(step.time, SECOND),
+    )
 
 
 def supersample[

@@ -150,7 +150,7 @@ def test_the_four_new_kinds_and_their_builders() raises:
     assert_true(SMAA.is_valid())
     assert_true(SSAA_RENDER.is_valid())
     assert_true(TAA_RENDER.is_valid())
-    assert_false(PassKind(15).is_valid())
+    assert_false(PassKind(19).is_valid())
     assert_equal(fxaa_pass().kind, FXAA)
     assert_equal(smaa_pass().kind, SMAA)
     var ssaa = ssaa_render_pass()
