@@ -5,8 +5,9 @@
 
 """Tests for the newer material features `exporters.gltf` writes: the
 occlusion texture and the second set of texture coordinates,
-`KHR_texture_transform`, `KHR_materials_emissive_strength`, and the
-physical material extensions `loaders.gltf` reads.
+`KHR_texture_transform`, `KHR_materials_emissive_strength`, the
+physical material extensions `loaders.gltf` reads, and the sheen, thin
+film and stretched lobe with their maps.
 
 Each test writes a scene, reads it back, writes what was read and reads
 that again. The material must survive both trips.
@@ -32,9 +33,10 @@ from materials.material import (
 )
 from math.vector2 import Vector2
 from objects.mesh import Mesh
-from render.framebuffer import Color
+from render.framebuffer import Color, FloatColor
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import (
+    COVERAGE,
     IGNORED,
     UV_CHANNEL_0,
     UV_CHANNEL_1,
@@ -50,7 +52,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Angle, Length, METER, NANOMETER, RADIAN
 
 comptime TOLERANCE = Float64(1e-5)
 
@@ -547,6 +549,9 @@ def physical_names(material: Material) raises -> List[String]:
         "KHR_materials_transmission",
         "KHR_materials_volume",
         "KHR_materials_dispersion",
+        "KHR_materials_sheen",
+        "KHR_materials_iridescence",
+        "KHR_materials_anisotropy",
     ]:
         if document.has(extensions, name):
             names.append(name)
@@ -633,6 +638,232 @@ def test_an_extension_is_listed_once_for_many_materials() raises:
         1.75,
         atol=TOLERANCE,
     )
+
+
+# --- sheen, thin film and stretched lobe ------------------------------------
+
+
+def alpha_image(seed: Int) raises -> Texture:
+    """Return a linear texture whose alpha holds a number per texel."""
+    var pixels = List[UInt8]()
+    for texel in range(6):
+        pixels.append(UInt8((seed + texel * 17) % 256))
+        pixels.append(UInt8((seed * 3 + texel * 29) % 256))
+        pixels.append(UInt8((seed * 7 + texel * 41) % 256))
+        pixels.append(UInt8((seed * 11 + texel * 37) % 256))
+    return Texture(3, 2, pixels^, color_space=LINEAR)
+
+
+def same_pixels(trip: Trip, id: TextureId, expected: Texture) raises:
+    """Assert a texture read back holds the same bytes as another."""
+    ref got = trip.assets.textures.get(id)
+    assert_equal(len(got.pixels), len(expected.pixels))
+    for index in range(len(expected.pixels)):
+        assert_equal(got.pixels[index], expected.pixels[index])
+
+
+def check_layers(trip: Trip) raises:
+    """Assert every layer field came back as `layered` sets it."""
+    var material = trip.material()
+    assert_equal(material.kind, PHYSICAL)
+    assert_equal(material.sheen, 1)
+    assert_equal(material.sheen_color.r, 255)
+    assert_equal(material.sheen_color.g, 64)
+    assert_equal(material.sheen_color.b, 128)
+    assert_almost_equal(material.sheen_roughness, 0.25, atol=TOLERANCE)
+    assert_almost_equal(material.iridescence, 0.5, atol=TOLERANCE)
+    assert_almost_equal(material.iridescence_ior, 1.75, atol=TOLERANCE)
+    assert_almost_equal(
+        material.iridescence_thickness_minimum.to(NANOMETER),
+        150,
+        atol=1e-3,
+    )
+    assert_almost_equal(
+        material.iridescence_thickness_maximum.to(NANOMETER),
+        600,
+        atol=1e-3,
+    )
+    assert_almost_equal(material.anisotropy, 0.75, atol=TOLERANCE)
+    assert_almost_equal(
+        material.anisotropy_rotation.to(RADIAN), 0.5, atol=TOLERANCE
+    )
+    for id in [
+        material.sheen_color_map,
+        material.sheen_roughness_map,
+        material.iridescence_map,
+        material.iridescence_thickness_map,
+        material.anisotropy_map,
+    ]:
+        assert_true(id != NO_TEXTURE)
+    ref cloth = trip.assets.textures.get(material.sheen_roughness_map)
+    assert_equal(cloth.color_space, LINEAR)
+    assert_equal(cloth.alpha, COVERAGE)
+    ref tint = trip.assets.textures.get(material.sheen_color_map)
+    assert_equal(tint.color_space, SRGB)
+    assert_equal(tint.alpha, IGNORED)
+    ref film = trip.assets.textures.get(material.iridescence_map)
+    assert_equal(film.color_space, LINEAR)
+    assert_equal(film.alpha, IGNORED)
+
+
+def test_a_sheen_a_film_and_a_stretch_survive_two_trips() raises:
+    var assets = Assets()
+    var rough = alpha_image(5)
+    var original_rough = Texture(copy=rough)
+    var scene = one_mesh(
+        assets,
+        physical_material(
+            Color(9, 9, 9),
+            sheen=1,
+            sheen_color=Color(255, 64, 128),
+            sheen_color_map=assets.textures.add(image(4)),
+            sheen_roughness=0.25,
+            sheen_roughness_map=assets.textures.add(rough^),
+            iridescence=0.5,
+            iridescence_ior=1.75,
+            iridescence_thickness_minimum=Length(150.0, NANOMETER),
+            iridescence_thickness_maximum=Length(600.0, NANOMETER),
+            iridescence_map=assets.textures.add(data_image(6)),
+            iridescence_thickness_map=assets.textures.add(data_image(7)),
+            anisotropy=0.75,
+            anisotropy_rotation=Angle(0.5, RADIAN),
+            anisotropy_map=assets.textures.add(data_image(8)),
+        ),
+    )
+    var first = Trip(scene, assets)
+    var document = first.document()
+    for name in [
+        "KHR_materials_sheen",
+        "KHR_materials_iridescence",
+        "KHR_materials_anisotropy",
+    ]:
+        assert_true(uses(document, name), name)
+    var stretch = extension_of(
+        document, first.first_material(), "KHR_materials_anisotropy"
+    )
+    assert_equal(
+        document.number(document.get(stretch, "anisotropyStrength")), 0.75
+    )
+    assert_true(document.has(stretch, "anisotropyTexture"))
+    var film = extension_of(
+        document, first.first_material(), "KHR_materials_iridescence"
+    )
+    assert_equal(
+        document.number(document.get(film, "iridescenceThicknessMaximum")),
+        600,
+    )
+    check_layers(first)
+    # The roughness in the alpha comes back, upside down as written.
+    check_same_sampling(
+        first.assets.textures.get(first.material().sheen_roughness_map),
+        original_rough,
+    )
+    var second = first.again()
+    check_layers(second)
+    same_pixels(
+        second,
+        second.material().sheen_roughness_map,
+        first.assets.textures.get(first.material().sheen_roughness_map),
+    )
+    same_pixels(
+        second,
+        second.material().anisotropy_map,
+        first.assets.textures.get(first.material().anisotropy_map),
+    )
+
+
+def test_a_moved_layer_map_keeps_its_transform() raises:
+    var assets = Assets()
+    var moved = data_image(3)
+    moved.offset = Vector2(0.25, 0)
+    var original = Texture(copy=moved)
+    var scene = one_mesh(
+        assets,
+        physical_material(
+            Color(9, 9, 9),
+            anisotropy=0.5,
+            anisotropy_map=assets.textures.add(moved^),
+        ),
+    )
+    var first = Trip(scene, assets)
+    var document = first.document()
+    var stretch = extension_of(
+        document, first.first_material(), "KHR_materials_anisotropy"
+    )
+    assert_true(
+        extension_of(
+            document,
+            document.get(stretch, "anisotropyTexture"),
+            "KHR_texture_transform",
+        )
+        != NO_NODE
+    )
+    check_same_sampling(
+        first.assets.textures.get(first.material().anisotropy_map), original
+    )
+    var second = first.again()
+    assert_almost_equal(
+        second.assets.textures.get(second.material().anisotropy_map)
+        .uv_transform()
+        .get(0, 2),
+        first.assets.textures.get(first.material().anisotropy_map)
+        .uv_transform()
+        .get(0, 2),
+        atol=TOLERANCE,
+    )
+
+
+def test_a_sheen_amount_is_folded_into_its_color() raises:
+    var assets = Assets()
+    var scene = one_mesh(
+        assets,
+        physical_material(
+            Color(9, 9, 9), sheen=0.5, sheen_color=Color(255, 255, 255)
+        ),
+    )
+    var first = Trip(scene, assets)
+    var document = first.document()
+    var cloth = extension_of(
+        document, first.first_material(), "KHR_materials_sheen"
+    )
+    var factor = document.get(cloth, "sheenColorFactor")
+    assert_equal(document.number(document.at(factor, 0)), 0.5)
+    # No maps: none is named.
+    assert_false(document.has(cloth, "sheenColorTexture"))
+    assert_false(document.has(cloth, "sheenRoughnessTexture"))
+    var expected = FloatColor(0.5, 0.5, 0.5, 1).encode()
+    for trip in [first.again(), first.again().again()]:
+        var material = trip.material()
+        assert_equal(material.sheen, 1)
+        assert_equal(material.sheen_color.r, expected.r)
+        assert_equal(material.sheen_color.b, expected.b)
+        assert_equal(material.sheen_roughness, 1)
+        assert_equal(material.sheen_color_map, NO_TEXTURE)
+
+
+def test_a_layer_is_written_only_when_its_amount_is_not_zero() raises:
+    # Each amount alone writes its own extension, and nothing else.
+    var only = physical_names(physical_material(Color(9, 9, 9), sheen=0.25))
+    assert_equal(len(only), 1)
+    assert_equal(only[0], "KHR_materials_sheen")
+    only = physical_names(physical_material(Color(9, 9, 9), iridescence=0.25))
+    assert_equal(len(only), 1)
+    assert_equal(only[0], "KHR_materials_iridescence")
+    only = physical_names(physical_material(Color(9, 9, 9), anisotropy=0.25))
+    assert_equal(len(only), 1)
+    assert_equal(only[0], "KHR_materials_anisotropy")
+    # A layer of zero draws nothing, and is not written, as in three.js.
+    only = physical_names(
+        physical_material(
+            Color(9, 9, 9),
+            sheen_color=Color(255, 0, 0),
+            sheen_roughness=0.5,
+            iridescence_ior=1.75,
+            iridescence_thickness_maximum=Length(500.0, NANOMETER),
+            anisotropy_rotation=Angle(1.0, RADIAN),
+        )
+    )
+    assert_equal(len(only), 0)
 
 
 def main() raises:

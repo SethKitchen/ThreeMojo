@@ -97,6 +97,20 @@ A `PHYSICAL` material writes the extensions that `read_gltf` reads for it. Thus 
 
 A `PHYSICAL` material with every field at its default writes no extension. `read_gltf` reads it back as a `STANDARD` material, as three.js does.
 
+### Sheen, iridescence and anisotropy
+
+A `PHYSICAL` material writes its sheen, its thin film and its stretched lobe, with their maps. The writer writes each extension when its amount is not zero, as three.js does. A layer with an amount of zero draws nothing, so the writer drops its other fields.
+
+| Property | Extension |
+|---|---|
+| `sheen`, `sheen_color`, `sheen_roughness`, `sheen_color_map`, `sheen_roughness_map` | `KHR_materials_sheen`: `sheenColorFactor` in linear light, times `sheen`. `sheenRoughnessFactor`, `sheenColorTexture` and `sheenRoughnessTexture`. |
+| `iridescence`, `iridescence_ior`, the thickness range, `iridescence_map`, `iridescence_thickness_map` | `KHR_materials_iridescence`: `iridescenceFactor`, `iridescenceIor`, `iridescenceThicknessMinimum` and `iridescenceThicknessMaximum` in nanometers, `iridescenceTexture` and `iridescenceThicknessTexture`. |
+| `anisotropy`, `anisotropy_rotation`, `anisotropy_map` | `KHR_materials_anisotropy`: `anisotropyStrength`, `anisotropyRotation` in radians, and `anisotropyTexture`. |
+
+The sheen roughness is in the alpha channel of its texture. The written image keeps the alpha, and `read_gltf` reads it back. Each map writes its channel as `texCoord` and its transform as `KHR_texture_transform`, as every other map does.
+
+glTF has no sheen amount. `read_gltf` reads a sheen of one, as three.js does. The renderer multiplies the sheen color by the amount, so the writer writes the color times the amount. The material draws the same after it is read back.
+
 ### Textures
 
 Each texture becomes a PNG image and a sampler. The sampler holds the wrap, the filter and whether the texture has a mip chain.
@@ -158,6 +172,7 @@ A number is written as the shortest text that reads back to the same `Float32`. 
 - `KHR_materials_emissive_strength` is written for every kind of material. three.js writes it only for a standard or physical material.
 - A texture's `center` is folded into the `offset` of its transform. three.js drops the `center`.
 - A volume is written when any of its fields is not at its default. three.js writes it only for a material that transmits. A clear coat is written when its roughness is not zero, also when its factor is zero.
+- The sheen color is written times the `sheen` amount. three.js writes the color as it is, so an amount between zero and one is lost.
 - An ao map on a `BASIC` material is written, as three.js writes it. `read_gltf` reads no occlusion for an unlit material.
 - A combined metallic-roughness image needs two maps of one size. three.js scales them to one size.
 - A node that keeps its own matrix writes `matrix`. Every other node writes its translation, its rotation and its scale. three.js writes `matrix` unless you set `trs`.
@@ -168,6 +183,7 @@ A number is written as the shortest text that reads back to the same `Float32`. 
 - Lights, cameras, animations, skins and morph targets.
 - Instanced, batched and skinned meshes, lines, points and sprites.
 - Bump maps, alpha maps, light maps, specular maps, displacement maps, environment maps, matcaps and gradient maps.
+- The maps in `KHR_materials_specular` and `KHR_materials_clearcoat`. A material in this port has no such maps: the renderer draws a specular and a clear coat from their factors. three.js writes these maps.
 - The groups of a geometry. A mesh has one material.
 - A `BACK_SIDE` material is written single-sided, as three.js writes it. glTF has no back side.
 - OBJ materials and a material library. three.js writes none.

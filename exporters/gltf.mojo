@@ -46,6 +46,16 @@ written again keeps them. three.js writes a volume only for a material
 that transmits, and a clear coat only when its factor is not zero; this
 also writes one whose other fields say something.
 
+**Sheen, film and stretch.** `KHR_materials_sheen`,
+`KHR_materials_iridescence` and `KHR_materials_anisotropy` are written
+with their factors and maps when the sheen, the iridescence or the
+anisotropy is not zero, as three.js writes them. A layer whose amount is
+zero draws nothing, so its other fields are dropped. The sheen roughness
+is in its texture's alpha, and the image keeps the alpha. The iridescence
+thickness range is in nanometers and the anisotropy rotation in radians,
+as `read_gltf` reads them. glTF's sheen has no amount, so the sheen color
+is written times the amount; see `layer_extensions`.
+
 **Textures are PNG images.** Each texture is written once, as a PNG from
 `render.png`, with a sampler for its wrap and filter. glTF's `v` runs down
 from the image's top, where a texture here runs up from its bottom, so an
@@ -63,7 +73,10 @@ transform and one channel, since one reference carries them.
 **Not written.** Lights, cameras, animations, skins, morph targets,
 instanced, batched and skinned meshes, lines, points and sprites, and
 every map glTF has no place for: bump, alpha, light, specular,
-displacement, environment, matcap and gradient maps. An ao map on a
+displacement, environment, matcap and gradient maps. The maps inside
+`KHR_materials_specular` and `KHR_materials_clearcoat` are not written,
+since a material here has none: the renderer draws a specular and a clear
+coat from their factors alone, and `read_gltf` reads only the factors. An ao map on a
 `BASIC` material is written, as three.js writes it, but `read_gltf` reads
 no occlusion for an unlit material. A `BACK_SIDE` material is written single-sided, as three.js
 writes it, since glTF has no back side. A geometry's groups are not split
@@ -90,9 +103,12 @@ from loaders.gltf import (
     GLB_JSON_CHUNK,
     GLB_MAGIC,
     GLB_VERSION,
+    MATERIALS_ANISOTROPY,
     MATERIALS_CLEARCOAT,
     MATERIALS_DISPERSION,
     MATERIALS_IOR,
+    MATERIALS_IRIDESCENCE,
+    MATERIALS_SHEEN,
     MATERIALS_SPECULAR,
     MATERIALS_TRANSMISSION,
     MATERIALS_UNLIT,
@@ -122,7 +138,7 @@ from render.texture import CLAMP, FLOAT_TYPE, MIRROR, NEAREST, Texture
 from render.texture_store import TextureId
 from std.math import isfinite
 from std.pathlib import Path
-from units.si import METER, RADIAN
+from units.si import METER, NANOMETER, RADIAN
 
 # The two buffer view targets: vertex attributes, and indices.
 comptime ARRAY_BUFFER = 34962
@@ -946,28 +962,21 @@ struct _Exporter(Movable):
             self.open_extension(writer, MATERIALS_TRANSMISSION)
             writer.key("transmissionFactor")
             writer.number(material.transmission)
-            if material.transmission_map != NO_TEXTURE:
-                self.texture_info(
-                    writer,
-                    "transmissionTexture",
-                    material.transmission_map,
-                    material.transmission_map,
-                    assets,
-                )
+            self.optional_map(
+                writer,
+                "transmissionTexture",
+                material.transmission_map,
+                assets,
+            )
             writer.end_object()
             written += 1
         if _has_volume(material):
             self.open_extension(writer, MATERIALS_VOLUME)
             writer.key("thicknessFactor")
             writer.number(material.thickness.to(METER))
-            if material.thickness_map != NO_TEXTURE:
-                self.texture_info(
-                    writer,
-                    "thicknessTexture",
-                    material.thickness_map,
-                    material.thickness_map,
-                    assets,
-                )
+            self.optional_map(
+                writer, "thicknessTexture", material.thickness_map, assets
+            )
             var distance = material.attenuation_distance.to(METER)
             if isfinite(distance):
                 writer.key("attenuationDistance")
@@ -980,6 +989,94 @@ struct _Exporter(Movable):
             self.open_extension(writer, MATERIALS_DISPERSION)
             writer.key("dispersion")
             writer.number(material.dispersion)
+            writer.end_object()
+            written += 1
+        return written + self.layer_extensions(writer, material, assets)
+
+    def optional_map(
+        mut self,
+        mut writer: JsonWriter,
+        key: String,
+        id: TextureId,
+        assets: Assets,
+    ) raises:
+        """Write `key` and a reference to one texture, when `id` names
+        one; see `texture_info`."""
+        if id != NO_TEXTURE:
+            self.texture_info(writer, key, id, id, assets)
+
+    def layer_extensions(
+        mut self, mut writer: JsonWriter, material: Material, assets: Assets
+    ) raises -> Int:
+        """Write a physical material's sheen, thin film and stretched lobe
+        and return how many of the three were written.
+
+        Each is written when its amount is not zero, as three.js's
+        `GLTFExporter` writes it, with every factor and its maps. glTF's
+        sheen has no amount: `read_gltf` reads a sheen of one, as three.js
+        reads it. The renderer multiplies the sheen color by the amount,
+        as three.js's `sheenColor` uniform does, so the color is written
+        times the amount and draws the same. three.js writes the color as
+        it is and loses the amount.
+        """
+        var written = 0
+        if material.sheen != 0:
+            self.open_extension(writer, MATERIALS_SHEEN)
+            var tint = FloatColor(srgb=material.sheen_color)
+            writer.key("sheenColorFactor")
+            _write_numbers(
+                writer,
+                [
+                    tint.r * material.sheen,
+                    tint.g * material.sheen,
+                    tint.b * material.sheen,
+                ],
+            )
+            writer.key("sheenRoughnessFactor")
+            writer.number(material.sheen_roughness)
+            # The roughness is in the texture's alpha, which the image
+            # keeps; `read_gltf` reads it back with `keep_alpha`.
+            self.optional_map(
+                writer, "sheenColorTexture", material.sheen_color_map, assets
+            )
+            self.optional_map(
+                writer,
+                "sheenRoughnessTexture",
+                material.sheen_roughness_map,
+                assets,
+            )
+            writer.end_object()
+            written += 1
+        if material.iridescence != 0:
+            self.open_extension(writer, MATERIALS_IRIDESCENCE)
+            writer.key("iridescenceFactor")
+            writer.number(material.iridescence)
+            writer.key("iridescenceIor")
+            writer.number(material.iridescence_ior)
+            writer.key("iridescenceThicknessMinimum")
+            writer.number(material.iridescence_thickness_minimum.to(NANOMETER))
+            writer.key("iridescenceThicknessMaximum")
+            writer.number(material.iridescence_thickness_maximum.to(NANOMETER))
+            self.optional_map(
+                writer, "iridescenceTexture", material.iridescence_map, assets
+            )
+            self.optional_map(
+                writer,
+                "iridescenceThicknessTexture",
+                material.iridescence_thickness_map,
+                assets,
+            )
+            writer.end_object()
+            written += 1
+        if material.anisotropy != 0:
+            self.open_extension(writer, MATERIALS_ANISOTROPY)
+            writer.key("anisotropyStrength")
+            writer.number(material.anisotropy)
+            writer.key("anisotropyRotation")
+            writer.number(material.anisotropy_rotation.to(RADIAN))
+            self.optional_map(
+                writer, "anisotropyTexture", material.anisotropy_map, assets
+            )
             writer.end_object()
             written += 1
         return written
