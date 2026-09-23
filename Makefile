@@ -27,7 +27,7 @@ endef
 # Library modules have no main(), so they are checked with `mojo doc`.
 LIB_SOURCES  := $(shell find math render units cameras core geometries helpers \
                   objects renderers materials lights loaders animation \
-                  postprocessing controls window \
+                  postprocessing controls window exporters \
                   -name '*.mojo' \
                   -not -name '__init__.mojo')
 # The coverage tool splits the same way: importable modules, plus two CLIs.

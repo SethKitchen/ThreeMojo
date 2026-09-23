@@ -6,6 +6,8 @@
 
 three.js: `OBJLoader`, `MTLLoader`, `STLLoader` and `PLYLoader`.
 
+To write these files, see [Exporters](Exporters).
+
 ## Read a file
 
 ```mojo
