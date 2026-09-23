@@ -1,6 +1,6 @@
 # Lines
 
-`objects/line.mojo`, `render/linerule.mojo` and the line pass in both rasterizers. A line joins points with one-pixel strokes. It is the second kind of primitive the renderer draws, beside the triangle.
+`objects/line.mojo`, `render/linerule.mojo` and the line pass in both rasterizers. A line joins points with one-pixel strokes. It is the second kind of primitive the renderer draws, beside the triangle. A line wider than one pixel is a [wide line](#wide-lines), drawn as triangles.
 
 ![A gold loop and a white path turn with a box](out/lines.png)
 
@@ -124,7 +124,7 @@ A distance test is the natural way to ask "is this pixel on the line" per pixel.
 
 ### Why one pixel only
 
-three.js is the same. WebGL ignores `linewidth`, which is why three.js ships `Line2` as geometry rather than as a line. When thickness arrives here it will be quads, and quads are triangles, which `render/fillrule.mojo` already covers.
+three.js is the same. WebGL ignores `linewidth`, which is why three.js ships `Line2` as geometry rather than as a line. A thicker line here is a [wide line](#wide-lines): quads, and quads are triangles, which `render/fillrule.mojo` already covers.
 
 ## Two lists, one order
 
@@ -153,6 +153,108 @@ A line whose node shares no layer with the camera contributes nothing. Nor does 
 `renderers/clip.mojo` cuts a segment against the near and far planes with `clip_segment`.
 
 Cutting a segment leaves a segment or nothing at all. There is no polygon to fan, which is the one way it is simpler than `clip_depth`. Both ends move by the same arithmetic the triangle clipper uses. A mesh edge and a line lying on it are cut at the same place.
+
+## Wide lines
+
+A `LineSegments2` draws its segments wider than one pixel. `Line2` is the same object with a path for a geometry. Each segment becomes a quad of two triangles, with a round cap at each end. Both rasterizers fill them by the triangle rule.
+
+three.js: `LineSegments2`, `Line2`, `LineSegmentsGeometry`, `LineGeometry`, `LineMaterial`, from `examples/jsm/lines`.
+
+```mojo
+from materials.material import LineWidth, line_material
+from objects.line_segments2 import Line2, LineSegments2, line_geometry
+
+var path = assets.geometries.add(line_geometry(points, colors))
+var ink = assets.materials.add(
+    line_material(Color(255, 255, 255), LineWidth(pixels=5), vertex_colors=True)
+)
+scene.add_wide_line(Line2(path, ink, node))
+```
+
+| Member | three.js | Meaning |
+|---|---|---|
+| `LineSegments2(geometry, material, node)` | `LineSegments2` | Separate wide sticks at a scene node. |
+| `Line2(geometry, material, node)` | `Line2` | Another name for `LineSegments2`. |
+| `line_segments_geometry(points, colors)` | `LineSegmentsGeometry` | A geometry of sticks, two points each. |
+| `line_geometry(points, colors)` | `LineGeometry` | A geometry of one path. Each inner point is written twice. |
+| `scene.add_wide_line(line)` | `scene.add` | Adds a wide line to draw. |
+| `line_material(...)` | `LineMaterial` | An unlit material with a width and dashes. |
+
+### The geometry
+
+A wide-line geometry holds its points in pairs, one pair per segment. That is the layout `SEGMENTS` reads. three.js keeps the same pairs in `instanceStart` and `instanceEnd`. An edges or a wireframe geometry is therefore a wide-line geometry already.
+
+A `color` attribute of three floats per point gives the vertex colors. The colors are linear, as a mesh's are.
+
+### The width
+
+`LineWidth` says how wide the line is, and in which units. It is three.js's `linewidth` and `worldUnits` together.
+
+| Width | three.js | Meaning |
+|---|---|---|
+| `LineWidth(pixels=5)` | `linewidth = 5` | Five output pixels on the image, at any distance. |
+| `LineWidth(world=Length(0.1, METER))` | `worldUnits = true` | A tenth of a meter in the scene. It shrinks with distance. |
+
+A bare float does not compile. The default is one pixel, as in three.js.
+
+A width in pixels is in output pixels. With [anti-aliasing](Renderer#anti-aliasing) on, the renderer multiplies it by its render scale. three.js reads the viewport size from `LineMaterial.resolution`. Here the renderer supplies it, so there is nothing to set.
+
+### The material
+
+| Argument | three.js | Default | Meaning |
+|---|---|---|---|
+| `color` | `color` | white | The color, in sRGB. |
+| `line_width` | `linewidth`, `worldUnits` | one pixel | How wide the line is. |
+| `dash_size` | `dashSize` | none | How long each dash is. |
+| `gap_size` | `gapSize` | none | How long each gap is. A gap above zero turns the dashes on. |
+| `dash_scale` | `dashScale` | `1` | What the distance along the line is multiplied by first. |
+| `dash_offset` | `dashOffset` | none | How far the pattern slides along the line, after the scale. |
+| `vertex_colors` | `vertexColors` | off | Whether the `color` attribute tints the line. |
+
+three.js turns the dashes on with a `dashed` flag. Here a gap above zero turns them on, as it does for `line_dashed_material`.
+
+### How a segment becomes triangles
+
+`Renderer.prepare` builds the triangles, as three.js's `LineMaterial` vertex shader builds them.
+
+1. The segment is cut to the near and far planes.
+2. For a width in pixels, each corner is its end moved on the image, then carried back into camera space at the end's own depth. three.js moves the clip-space corner by an offset times `w`, which is the same move.
+3. For a width in the world, each corner is its end moved in camera space. It moves across the segment and square to the direction of the segment's middle, three.js's `worldUp`.
+4. A round cap is added at each end, as a fan of triangles.
+5. The triangles go through the clipper and are sorted among the meshes by the depth of the line's node.
+
+Two segments that share an end overlap in their caps. That overlap is the round join, as in three.js. A blended line is therefore twice as opaque where two caps overlap, as in three.js.
+
+### Dashes
+
+A dashed segment is cut into one quad per dash. A dashed line has no caps, because three.js throws the caps of a dashed line away.
+
+The distance along the line is worked out by the renderer, as for a [dashed line](#dashed-lines). three.js calls this `LineSegments2.computeLineDistances`. The pattern runs on from one segment to the next.
+
+### Picking
+
+`Raycaster.intersect_wide_line` is three.js's `LineSegments2.raycast`. It takes the camera and the image size, which three.js reads from `raycaster.camera` and `material.resolution`. See [Raycasting](Raycasting).
+
+A width in the world is measured in the world. A width in pixels is measured on the image, from the point one meter along the ray. A hit's `triangle` says which segment was struck.
+
+### What is not ported, and what differs
+
+- **The caps are fans, not discs.** three.js cuts a half disc out of a square for each fragment. Here the cap is a fan of triangles within an eighth of a pixel of the circle. `cap_steps` sets the count.
+- **The dashes are cut, not discarded.** three.js discards each fragment in a gap. Here the segment is cut at the dash boundaries, so both rasterizers need no rule of their own. A segment cut into more than 4096 dashes raises.
+- **A width in the world is a flat ribbon.** three.js traces a capsule for each fragment. Here the ribbon faces the camera, and its outline matches the capsule's outline. Where the ribbon passes through another surface, the two cross along a different curve.
+- **A segment with no length is a round dot.** three.js normalizes a zero vector there, and GLSL leaves the result undefined.
+- **A hit outside `near` and `far` is dropped.** three.js's `LineSegments2.raycast` keeps it. A mesh hit is dropped in both.
+- **Not ported:** `alphaToCoverage`, the raycaster's `params.Line2.threshold`, a hit's `pointOnLine`, `LineMaterial.resolution`, and a `Line2` that casts or receives a shadow.
+- **`intersect_scene` does not pick a wide line.** It has no camera for a width in pixels.
+
+### What raises
+
+- A material that is not `BASIC`, or carries a map, an alpha map or an env map, or is a wireframe.
+- A geometry with an index buffer, no positions or an odd count of points.
+- A material that asks for vertex colors when the geometry has no `color` attribute.
+- A width that is not a positive number, or a dash offset that is not finite.
+- A width or a dash offset on a material that is not `BASIC`, or on a wireframe.
+- A width or a dash offset on a one-pixel `Line`. Draw a wider line as a `LineSegments2`.
 
 ## What raises
 

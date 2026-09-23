@@ -236,6 +236,55 @@ struct PointSize(Equatable, ImplicitlyCopyable, Writable):
 comptime DEFAULT_POINT_SIZE = PointSize(1.0)
 
 
+struct LineWidth(Equatable, ImplicitlyCopyable, Writable):
+    """How wide a wide line is drawn, in pixels or in the world, as a type
+    rather than a bare float.
+
+    three.js's `LineMaterial.linewidth` and `worldUnits` together. A width
+    in pixels is measured on the image, as `PointSize` is. A width in the
+    world is a `Length`, and it is stored in meters. There is no
+    constructor that takes a bare float without saying which of the two
+    it is: `LineWidth(pixels=5)` or `LineWidth(world=Length(0.1, METER))`.
+    `Material` refuses one that is not a positive number with `is_valid`.
+
+    Only a wide line reads it, `objects.line_segments2.LineSegments2`. A
+    one-pixel `Line` refuses a width that is not the default, as a line
+    drawn by the line pass cannot be any wider.
+    """
+
+    # Pixels, or meters when `world_units` is set.
+    var size: Float32
+    # Whether `size` is in the world rather than on the image: three.js's
+    # `worldUnits`.
+    var world_units: Bool
+
+    def __init__(out self, *, pixels: Float32):
+        """Make a width measured on the image.
+
+        Args:
+            pixels: How many pixels across the line is, in output pixels.
+        """
+        self.size = pixels
+        self.world_units = False
+
+    def __init__(out self, *, world: Length):
+        """Make a width measured in the world.
+
+        Args:
+            world: How wide the line is where it stands in the scene.
+        """
+        self.size = world.to(METER)
+        self.world_units = True
+
+    def is_valid(self) -> Bool:
+        """Return True if this is a finite width above zero."""
+        return isfinite(self.size) and self.size > 0
+
+
+# One pixel across, on the image: three.js's `LineMaterial` default.
+comptime DEFAULT_LINE_WIDTH = LineWidth(pixels=1.0)
+
+
 @fieldwise_init
 struct Side(Equatable, ImplicitlyCopyable, Writable):
     """Which faces of a surface are drawn, as a type rather than a bare int.
@@ -678,6 +727,14 @@ struct Material(ImplicitlyCopyable):
     # What the distance along the line is multiplied by before the dashes
     # are measured against it: three.js's `scale`. One leaves it alone.
     var dash_scale: Float32
+    # How far the dash pattern is slid along a wide line, three.js's
+    # `LineMaterial.dashOffset`, added after the scale. Zero by default.
+    # Only a wide line reads it.
+    var dash_offset: Length
+    # How wide a wide line is, three.js's `LineMaterial.linewidth` and
+    # `worldUnits`. One pixel by default. Only a wide line reads it, and
+    # only a `BASIC` material that is not a wireframe carries another.
+    var line_width: LineWidth
     # Whether the surface is composited over what is behind it: three.js's
     # `transparent`. Off, the default, an opacity below one and a texture's
     # alpha change nothing but the alpha test, and every fragment is written
@@ -828,6 +885,8 @@ struct Material(ImplicitlyCopyable):
         specular_intensity: Float32 = 1.0,
         clearcoat: Float32 = 0.0,
         clearcoat_roughness: Float32 = 0.0,
+        line_width: LineWidth = DEFAULT_LINE_WIDTH,
+        dash_offset: Length = NO_DASH,
     ) raises:
         """Describe a surface.
 
@@ -949,6 +1008,11 @@ struct Material(ImplicitlyCopyable):
                 from zero to one. Zero by default.
             clearcoat_roughness: How rough the coat is, from zero to one.
                 Zero by default.
+            line_width: How wide a wide line is, in pixels or in the
+                world, three.js's `linewidth` and `worldUnits`. One pixel
+                by default. Only a wide line reads it.
+            dash_offset: How far the dashes of a wide line are slid along
+                it, three.js's `dashOffset`. Zero by default.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -1016,7 +1080,10 @@ struct Material(ImplicitlyCopyable):
                 refuses one on a wireframe too, as are both on one
                 material, a `normal_scale` that is not one and one with no
                 normal map, and a `bump_scale` that is not one with no
-                bump map.
+                bump map. A `line_width` that is not a positive number, a
+                `dash_offset` that is not finite, and either set on a kind
+                that is not `BASIC` or on a wireframe are refused: only a
+                wide line reads them, and a wide line is unlit.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -1157,6 +1224,27 @@ struct Material(ImplicitlyCopyable):
         self.dash_size = dash_size
         self.gap_size = gap_size
         self.dash_scale = dash_scale
+        # Refused for the reason a dash is refused on a lit kind: only a
+        # wide line reads a width or an offset, and a wide line is unlit.
+        # A wireframe is drawn by the one-pixel line pass, which cannot
+        # draw any wider.
+        if not line_width.is_valid():
+            raise Error("A line width must be a positive, finite number")
+        if not isfinite(dash_offset.to(METER)):
+            raise Error("A dash offset must be finite")
+        var widened = line_width != DEFAULT_LINE_WIDTH or dash_offset != NO_DASH
+        if widened and kind != BASIC:
+            raise Error(
+                "Only a basic material draws a wide line: a line has no"
+                " surface for a light to reach, so only it reads a width"
+            )
+        if widened and wireframe:
+            raise Error(
+                "A wireframe is one pixel wide: it is drawn by the line"
+                " pass, which has no width or dash offset to read"
+            )
+        self.line_width = line_width
+        self.dash_offset = dash_offset
         # Refused for the reason a dash is refused on a lit kind: only a
         # point reads a size and only a sprite reads a turn, and both are
         # drawn unlit. The default size and attenuation are what every
@@ -2093,6 +2181,67 @@ def line_dashed_material(
         dash_size=dash_size,
         gap_size=gap_size,
         dash_scale=scale,
+    )
+
+
+def line_material(
+    color: Color = _WHITE,
+    line_width: LineWidth = DEFAULT_LINE_WIDTH,
+    dash_size: Length = NO_DASH,
+    gap_size: Length = NO_DASH,
+    dash_scale: Float32 = 1.0,
+    dash_offset: Length = NO_DASH,
+    opacity: Float32 = 1.0,
+    blending: Optional[Blending] = None,
+    transparent: Bool = False,
+    vertex_colors: Bool = False,
+) raises -> Material:
+    """Return an unlit material that draws a wide line, three.js's
+    `LineMaterial`.
+
+    three.js's defaults: white, one pixel wide, and solid. three.js turns
+    the dashes on with a `dashed` flag and a dash and a gap of one each.
+    Here a gap above zero is what turns them on, as it is for
+    `line_dashed_material`, so pass both a dash and a gap. The distance
+    the dashes are measured along is worked out by the renderer, as
+    three.js's `LineSegments2.computeLineDistances` works it out.
+
+    Args:
+        color: The line's color, as authored in sRGB.
+        line_width: How wide the line is: `LineWidth(pixels=...)` on the
+            image, or `LineWidth(world=...)` in the scene.
+        dash_size: How long each dash is, along the line.
+        gap_size: How long the gap after it is. Zero is a solid line.
+        dash_scale: What the distance along the line is multiplied by
+            first, three.js's `dashScale`.
+        dash_offset: How far the pattern is slid along the line, added
+            after the scale, three.js's `dashOffset`.
+        opacity: One for an opaque line, less to see through it.
+        blending: `OPAQUE` or `BLEND`, or unset to follow `transparent`.
+        transparent: Whether the line blends over what is behind it.
+        vertex_colors: Whether the geometry's `color` attribute tints it.
+
+    Returns:
+        The material, of kind `BASIC`.
+
+    Raises:
+        Error: For anything `Material` refuses of these: a width that is
+            not a positive number, a dash or a gap that is negative or not
+            finite, a gap with no dash, or a scale or an offset that is
+            not finite.
+    """
+    return Material(
+        color,
+        opacity=opacity,
+        blending=blending,
+        transparent=transparent,
+        kind=BASIC,
+        vertex_colors=vertex_colors,
+        dash_size=dash_size,
+        gap_size=gap_size,
+        dash_scale=dash_scale,
+        line_width=line_width,
+        dash_offset=dash_offset,
     )
 
 

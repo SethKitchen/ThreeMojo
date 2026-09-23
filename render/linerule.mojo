@@ -62,7 +62,7 @@ The width above is not coverage and does not pretend to be. It keeps a
 line the same thickness in the finished image whatever the frame was drawn
 at; it does not soften the line's own two edges, which stay as hard as a
 staircase. A material's thickness -- three.js's `Line2` -- is a separate
-feature, and when it arrives here it will be quads, and quads are
+feature: `objects.line_segments2`, drawn as quads, and quads are
 triangles, which `fillrule` already covers.
 """
 

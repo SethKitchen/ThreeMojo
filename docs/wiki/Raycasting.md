@@ -64,6 +64,7 @@ if len(hits) > 0:
 | `intersect_line(scene, assets, index) -> List[Hit]` | Every segment of `scene.lines[index]` within `line_threshold` of the ray. |
 | `intersect_points(scene, assets, index) -> List[Hit]` | Every point of `scene.points[index]` within `points_threshold` of the ray. |
 | `intersect_sprite(scene, assets, index) -> List[Hit]` | The hit on `scene.sprites[index]`, if any. |
+| `intersect_wide_line(scene, assets, index, camera, width, height) -> List[Hit]` | Every segment of `scene.wide_lines[index]` that the ray passes within half the line's width of. See [wide lines](Lines#wide-lines). |
 
 ## Hit
 
@@ -71,12 +72,12 @@ if len(hits) > 0:
 |---|---|
 | `distance` | Meters from the ray's origin. |
 | `point` | Where, in world space. |
-| `normal` | The face's front in world space, unit length. The face as wound, whichever side the ray came from. Zero for a line, points or a sprite, which have no face. |
-| `kind` | A `HitKind`: which list `index` counts in. `MESH_HIT`, `INSTANCED_HIT`, `BATCHED_HIT`, `LOD_HIT`, `SKINNED_HIT`, `LINE_HIT`, `POINTS_HIT` or `SPRITE_HIT`. |
+| `normal` | The face's front in world space, unit length. The face as wound, whichever side the ray came from. Zero for a line, points or a sprite, which have no face. For a wide line, the way back along the ray. |
+| `kind` | A `HitKind`: which list `index` counts in. `MESH_HIT`, `INSTANCED_HIT`, `BATCHED_HIT`, `LOD_HIT`, `SKINNED_HIT`, `LINE_HIT`, `POINTS_HIT`, `SPRITE_HIT` or `WIDE_LINE_HIT`. |
 | `index` | The object's position in that list. |
 | `instance` | Which instance of an instanced or batched mesh, or which level of an LOD. -1 for a plain mesh. three.js's `instanceId` and `batchId`. |
 | `mesh` | The shape struck as a `Mesh`: its node, geometry and material. For a plain mesh, the mesh itself. A sprite has no geometry, so its `geometry` is -1. |
-| `triangle` | Which of the geometry's triangles, from zero. For a line, which segment. For points, which point. For a sprite, which of its two halves. |
+| `triangle` | Which of the geometry's triangles, from zero. For a line or a wide line, which segment. For points, which point. For a sprite, which of its two halves. |
 
 A `HitKind` is a type. A bare integer does not compile.
 
@@ -109,6 +110,8 @@ The material's `side` decides which faces count. A `FRONT_SIDE` mesh is not pick
 A mirrored mesh is hit on the face the renderer draws. Its hit normal is turned back, as the renderer turns its geometric normal.
 
 A geometry of lines or points must not be indexed, as for the renderer.
+
+A wide line is picked by `intersect_wide_line` alone, because a width in pixels needs a camera and an image size. `intersect_scene` has neither.
 
 ## Errors
 

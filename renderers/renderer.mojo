@@ -121,7 +121,8 @@ from math.matrix4 import Matrix4, translation
 from math.vector3 import Vector3
 from objects.instanced_mesh import check_placing
 from geometries.edges import triangle_edges
-from objects.line import line_distances, segment_count, segment_ends
+from objects.line import SEGMENTS, line_distances, segment_count, segment_ends
+from objects.line_segments2 import cap_steps, dash_spans
 from objects.sprite import SPRITE_RADIUS, Sprite
 from objects.skinned_mesh import (
     ATTACHED,
@@ -132,9 +133,11 @@ from objects.skinned_mesh import (
 from materials.material import (
     BACK_SIDE,
     BASIC,
+    DEFAULT_LINE_WIDTH,
     DOUBLE_SIDE,
     FRONT_SIDE,
     MULTIPLY_OPERATION,
+    NO_DASH,
     NORMALS,
     Blending,
     Combine,
@@ -186,7 +189,7 @@ from renderers.clip import (
     within_depth,
     within_sides,
 )
-from std.math import cos, floor, isfinite, max, sin
+from std.math import cos, floor, isfinite, max, pi, sin
 from std.sys import num_logical_cores
 
 
@@ -483,6 +486,10 @@ struct _Draw(ImplicitlyCopyable):
     # What the material's color is multiplied by, linear: an instance's
     # own color, three.js's `instanceColor`, and white for the rest.
     var tint: FloatColor
+    # Which of the scene's wide lines this draw is, or minus one when it
+    # is not one. `_prepared` builds its triangles from its geometry's
+    # pairs of points; see `objects.line_segments2`.
+    var wide_line: Int
 
 
 @fieldwise_init
@@ -658,6 +665,7 @@ def _gather(
                 receive_shadow,
                 scene.render_order(node),
                 tint,
+                -1,
             )
         )
 
@@ -725,7 +733,8 @@ def _draws(
         casters_only: Whether this is a light's view for a shadow map,
             which holds the meshes that cast and nothing else: not a
             mesh that does not cast, and not a skinned, instanced or
-            batched mesh, an LOD or a sprite, none of which casts yet.
+            batched mesh, an LOD, a sprite or a wide line, none of which
+            casts yet.
 
     Returns:
         The draws the camera makes, in the order to make them.
@@ -922,6 +931,43 @@ def _draws(
                 False,
                 scene.render_order(sprite.node),
                 FloatColor(1, 1, 1, 1),
+                -1,
+            )
+        )
+    # The wide lines, sorted among the meshes by their own depth, as the
+    # sprites are. Culled by the bound of their points, as three.js's
+    # `LineSegments2` is: the width is not added to it. A light's view of
+    # the casters holds none, as it holds no sprite.
+    var wide_count = 0 if casters_only else len(scene.wide_lines)
+    for index in range(wide_count):
+        ref line = scene.wide_lines[index]
+        if not scene.shows(line.node, visible):
+            continue
+        var world = scene.world_matrix(line.node)
+        if line.frustum_culled and not _in_view(
+            assets, line.geometry, world, frustum, slack, bounds, known
+        ):
+            continue
+        var depth = view.transform_point(
+            Vector3(world.elements[12], world.elements[13], world.elements[14])
+        ).z
+        var blends = assets.materials.get(line.material).is_transparent()
+        depths.append(depth)
+        clear.append(blends)
+        draws.append(
+            _Draw(
+                line.geometry,
+                line.material,
+                world^,
+                SIMD[DType.float32, MAX_MORPH_TARGETS](0),
+                -1,
+                depth,
+                blends,
+                -1,
+                False,
+                scene.render_order(line.node),
+                FloatColor(1, 1, 1, 1),
+                index,
             )
         )
 
@@ -1726,6 +1772,432 @@ def _emit_sprite(
             )
 
 
+def _emit_clipped(
+    paint: _Paint,
+    mut corners: List[RasterVertex],
+    a: ClipVertex,
+    b: ClipVertex,
+    c: ClipVertex,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane],
+    any_of: List[Plane],
+) raises:
+    """Clip one camera-space triangle and append what is left of it.
+
+    Args:
+        paint: What every corner of the draw carries.
+        corners: The frame's raster vertices, appended to.
+        a: The first corner, in camera space.
+        b: The second.
+        c: The third.
+        near: Distance to the near plane.
+        far: Distance to the far plane.
+        sides: The planes that each cut.
+        any_of: The clipping planes of which a kept point needs one.
+
+    Raises:
+        Error: If the clipper does.
+    """
+    if _whole_in_view(a, b, c, near, far, sides, any_of):
+        paint.emit(corners, a, b, c)
+        return
+    var pieces = clip_depth(a, b, c, near, far, sides, any_of)
+    for piece in range(len(pieces) // 3):
+        paint.emit(
+            corners,
+            pieces[piece * 3],
+            pieces[piece * 3 + 1],
+            pieces[piece * 3 + 2],
+        )
+
+
+def _between(a: ClipVertex, b: ClipVertex, t: Float32) -> ClipVertex:
+    """Return the point a fraction `t` of the way along a wide segment.
+
+    Its position, its world position, its color and its distance along
+    the line, each mixed in camera space, where the segment is straight.
+    That is the perspective-correct mix three.js's varyings get.
+    """
+    return ClipVertex(
+        a.position + (b.position - a.position) * t,
+        FloatColor(
+            a.color.r + (b.color.r - a.color.r) * t,
+            a.color.g + (b.color.g - a.color.g) * t,
+            a.color.b + (b.color.b - a.color.b) * t,
+            a.color.a + (b.color.a - a.color.a) * t,
+        ),
+        Vector3(0, 0, 1),
+        0,
+        0,
+        a.world + (b.world - a.world) * t,
+        line_distance=a.line_distance + (b.line_distance - a.line_distance) * t,
+    )
+
+
+struct _Ribbon(ImplicitlyCopyable):
+    """Where the corners of one wide segment go, around its two ends.
+
+    three.js's `LineMaterial` vertex shader, per segment. With the width
+    in pixels, a corner is its end moved on the image, across and along
+    the segment as the image shows it, then carried back into camera space
+    at its end's own depth: three.js moves the clip-space corner by an
+    offset times `w`, which is the same move. With the width in the world,
+    a corner is its end moved in camera space, across the segment and
+    square to the direction of its middle, three.js's `worldUp`. The caps
+    lie square to that direction too; three.js traces a capsule per
+    fragment instead, whose outline this matches.
+    """
+
+    var world_units: Bool
+    # Half the width: pixels, already times the render scale, or meters.
+    var half: Float32
+    # Unit directions along and across the segment, on the image and in
+    # camera space. Only the pair the width's units ask for is read.
+    var along_screen: Vector2
+    var across_screen: Vector2
+    var along: Vector3
+    var across: Vector3
+    var to_screen: Matrix4
+    var from_screen: Matrix4
+    var to_world: Matrix4
+
+    def __init__(
+        out self,
+        a: ClipVertex,
+        b: ClipVertex,
+        world_units: Bool,
+        half: Float32,
+        to_screen: Matrix4,
+        from_screen: Matrix4,
+        to_world: Matrix4,
+    ):
+        """Work out the directions for the segment from `a` to `b`.
+
+        A segment that has no length, on the image or in the world, is
+        given one along x, so its two caps meet as a round dot. three.js
+        normalizes a zero vector there, which GLSL leaves undefined. A
+        segment in the world that points at the camera's eye is given a
+        direction across it that is square to y, and its caps then make
+        one disc facing the camera.
+
+        Args:
+            a: The start, in camera space, already cut to the view depth.
+            b: The end.
+            world_units: Whether `half` is in meters rather than pixels.
+            half: Half the width.
+            to_screen: The camera-to-pixels transform.
+            from_screen: Its inverse.
+            to_world: The camera-to-world transform.
+        """
+        self.world_units = world_units
+        self.half = half
+        self.to_screen = to_screen
+        self.from_screen = from_screen
+        self.to_world = to_world
+        var start = to_screen.transform_point(a.position)
+        var end = to_screen.transform_point(b.position)
+        var flat = Vector2(end.x - start.x, end.y - start.y)
+        if flat.length() == 0:
+            flat = Vector2(1, 0)
+        flat.normalize()
+        self.along_screen = flat
+        self.across_screen = Vector2(-flat.y, flat.x)
+        var along = b.position - a.position
+        if along.length() == 0:
+            along = Vector3(1, 0, 0)
+        along.normalize()
+        # three.js's `tmpFwd`: toward the segment's middle from the eye.
+        var forward = (a.position + b.position) * 0.5
+        forward.normalize()
+        var across = along
+        across.cross(forward)
+        if across.length() == 0:
+            across = along
+            across.cross(Vector3(0, 1, 0))
+        across.normalize()
+        # The caps bulge along the segment as the camera sees it: its
+        # direction with the part toward the eye taken out, so each half
+        # disc lies square to the view, as the silhouette of three.js's
+        # capsule does. A segment seen end on has no such part, and its
+        # two half discs make one disc.
+        var ahead = forward
+        ahead.cross(across)
+        ahead.normalize()
+        self.along = ahead
+        self.across = across
+
+    def corner(
+        self, end: ClipVertex, side: Float32, ahead: Float32
+    ) -> ClipVertex:
+        """Return `end` moved `side` half widths across the segment and
+        `ahead` half widths along it.
+
+        Args:
+            end: One end of the segment, or a point along it.
+            side: How far across, in half widths.
+            ahead: How far along, in half widths.
+
+        Returns:
+            The corner, carrying `end`'s color and distance along the line.
+        """
+        var place: Vector3
+        if self.world_units:
+            place = (
+                end.position
+                + (self.across * side + self.along * ahead) * self.half
+            )
+        else:
+            var screen = self.to_screen.transform_point(end.position)
+            var move = (
+                self.across_screen * side + self.along_screen * ahead
+            ) * self.half
+            place = self.from_screen.transform_point(
+                Vector3(screen.x + move.x, screen.y + move.y, screen.z)
+            )
+        return ClipVertex(
+            place,
+            end.color,
+            Vector3(0, 0, 1),
+            0,
+            0,
+            self.to_world.transform_point(place),
+            line_distance=end.line_distance,
+        )
+
+    def radius(self, end: ClipVertex) -> Float32:
+        """Return how many pixels across half the line is at `end`.
+
+        Args:
+            end: One end of the segment.
+
+        Returns:
+            Half the width on the image: `half` itself when it is in
+            pixels, and the projected half width when it is in meters.
+        """
+        if not self.world_units:
+            return self.half
+        var middle = self.to_screen.transform_point(end.position)
+        var edge = self.to_screen.transform_point(
+            self.corner(end, 1, 0).position
+        )
+        return Vector2(edge.x - middle.x, edge.y - middle.y).length()
+
+
+def _emit_cap(
+    ribbon: _Ribbon,
+    paint: _Paint,
+    mut corners: List[RasterVertex],
+    end: ClipVertex,
+    outward: Float32,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane],
+    any_of: List[Plane],
+) raises:
+    """Build the round cap at one end of a wide segment and append it.
+
+    three.js's `LineMaterial` cuts a half disc out of the square it puts
+    past each end, per fragment. Here the half disc is a fan of triangles
+    about the end, `cap_steps` of them, so that it is drawn by the
+    triangle rule. Two segments that share an end overlap in their caps,
+    which is the round join three.js draws too.
+
+    Args:
+        ribbon: The segment's directions.
+        paint: What every corner of the draw carries.
+        corners: The frame's raster vertices, appended to.
+        end: The end the cap is about.
+        outward: One at the segment's end, minus one at its start: which
+            way along the segment the cap bulges.
+        near: Distance to the near plane.
+        far: Distance to the far plane.
+        sides: The planes that each cut.
+        any_of: The clipping planes of which a kept point needs one.
+
+    Raises:
+        Error: If the clipper does.
+    """
+    var steps = cap_steps(ribbon.radius(end))
+    var turn = Float32(pi) / Float32(steps)
+    var last = ribbon.corner(end, 1, 0)
+    for step in range(1, steps + 1):  # pragma: no branch
+        var angle = turn * Float32(step)
+        var next = ribbon.corner(end, cos(angle), outward * sin(angle))
+        _emit_clipped(paint, corners, end, last, next, near, far, sides, any_of)
+        last = next
+
+
+def _emit_wide_line(
+    mut corners: List[RasterVertex],
+    assets: Assets,
+    draw: _Draw,
+    view: Matrix4,
+    to_screen: Matrix4,
+    near: Float32,
+    far: Float32,
+    sides: List[Plane],
+    any_of: List[Plane],
+    render_scale: Int,
+) raises:
+    """Build a wide line's triangles in camera space and append them.
+
+    three.js's `LineSegments2` drawn with `LineMaterial`: each segment is
+    a quad, and each end of it a round cap, unless the line is dashed.
+    A dashed segment is cut into a quad per dash, with no caps, as
+    three.js throws the caps of a dashed line away. The segment is first
+    cut to the near and the far planes, as three.js trims it to the near
+    plane, so that no corner is placed from a point behind the camera. The
+    triangles then go where every triangle goes: through the clipper and
+    `_Paint.emit`, two-sided. See `objects.line_segments2`.
+
+    Args:
+        corners: The frame's raster vertices, appended to.
+        assets: Where the geometry and the material live.
+        draw: Its draw, for its geometry, material and world matrix.
+        view: The world-to-camera transform.
+        to_screen: The camera-to-pixels transform.
+        near: Distance to the near plane.
+        far: Distance to the far plane.
+        sides: The camera's side planes and the clipping planes that each
+            cut, in camera space.
+        any_of: The clipping planes of which a kept point needs one.
+        render_scale: How many raster pixels stand for one output pixel,
+            which a width in pixels is multiplied by.
+
+    Raises:
+        Error: If the material is not `BASIC`, carries a map, an alpha
+            map or an env map, or is a wireframe; if the geometry is
+            indexed, has no positions or an odd count of them; if the
+            material asks for vertex colors the geometry does not have;
+            if a dash pattern is too fine for a segment; or if the
+            material's depth, color, stencil or offset state is refused.
+    """
+    var material = assets.materials.get(draw.material)
+    if material.kind != BASIC:
+        raise Error(
+            "A wide line material must be BASIC: a line has no surface, so"
+            " it has no normal for a light to reach"
+        )
+    if material.map != NO_TEXTURE or material.alpha_map != NO_TEXTURE:
+        raise Error(
+            "A wide line material has no map: three.js's LineMaterial"
+            " samples none"
+        )
+    if material.has_env_map():
+        raise Error(
+            "A wide line material has no env map: a line has no surface to"
+            " reflect from"
+        )
+    if material.wireframe:
+        raise Error(
+            "A wide line cannot be a wireframe: it is already its own lines"
+        )
+    ref geometry = assets.geometries.get(draw.geometry)
+    if geometry.is_indexed():
+        raise Error(
+            "A wide line geometry cannot be indexed: its points are paired"
+            " in the order they are given"
+        )
+    ref positions = geometry.attribute_view(String(POSITION))
+    var count = positions.count()
+    var segments = segment_count(SEGMENTS, count)
+    var base = _with_opacity(FloatColor(srgb=material.color), material.opacity)
+    var colors = _vertex_colors(geometry, material.vertex_colors, base, count)
+    var dashed = material.is_dashed()
+    var dash = material.dash_size.to(METER)
+    var gap = material.gap_size.to(METER)
+    # How far along the line each point is, scaled and then slid, three.js's
+    # `vLineDistance + dashOffset`. A solid line reads none of it.
+    var along = List[Float32](length=count, fill=0)
+    if dashed:
+        along = line_distances(SEGMENTS, positions)
+        var slide = material.dash_offset.to(METER)
+        for point in range(count):
+            along[point] = along[point] * material.dash_scale + slide
+    var width = material.line_width
+    var half = width.size * 0.5
+    if not width.world_units:
+        half *= Float32(render_scale)
+    var from_screen = Matrix4(copy=to_screen)
+    from_screen.invert()
+    var to_world = Matrix4(copy=view)
+    to_world.invert()
+    ref world = draw.world
+    var paint = _Paint(
+        to_screen,
+        NO_TEXTURE,
+        material.blending,
+        BASIC,
+        NO_TEXTURE,
+        NO_TEXTURE,
+        material.alpha_test,
+        FloatColor(0.0, 0.0, 0.0),
+        0,
+        NO_TEXTURE,
+        NO_TEXTURE,
+        False,
+        DOUBLE_SIDE,
+        NO_CUBE_TEXTURE,
+        1,
+        MULTIPLY_OPERATION,
+        _Physics(),
+        False,
+        _draw_state(material, False),
+        _draw_offset(material, False),
+    )
+    var no_planes = List[Plane]()
+    for segment in range(segments):
+        var ends = List[ClipVertex]()
+        for side in range(2):  # pragma: no branch
+            var vertex = segment * 2 + side
+            var placed = world.transform_point(positions.vector3(vertex))
+            ends.append(
+                ClipVertex(
+                    view.transform_point(placed),
+                    colors[vertex],
+                    Vector3(0, 0, 1),
+                    0,
+                    0,
+                    placed,
+                    line_distance=along[vertex],
+                )
+            )
+        # Cut to the view depth only. The sides and the clipping planes
+        # cut the triangles below, so a cap past the edge of the image is
+        # cut where the image ends rather than moved inside it.
+        var kept = clip_segment(ends[0], ends[1], near, far, no_planes)
+        if len(kept) < 2:
+            continue
+        var start = kept[0]
+        var end = kept[1]
+        var ribbon = _Ribbon(
+            start,
+            end,
+            width.world_units,
+            half,
+            to_screen,
+            from_screen,
+            to_world,
+        )
+        var spans = dash_spans(
+            start.line_distance, end.line_distance, dash, gap
+        )
+        for piece in range(len(spans) // 2):
+            var first = _between(start, end, spans[piece * 2])
+            var second = _between(start, end, spans[piece * 2 + 1])
+            var a = ribbon.corner(first, -1, 0)
+            var b = ribbon.corner(first, 1, 0)
+            var c = ribbon.corner(second, 1, 0)
+            var d = ribbon.corner(second, -1, 0)
+            _emit_clipped(paint, corners, a, b, c, near, far, sides, any_of)
+            _emit_clipped(paint, corners, a, c, d, near, far, sides, any_of)
+        if dashed:
+            continue
+        _emit_cap(ribbon, paint, corners, start, -1, near, far, sides, any_of)
+        _emit_cap(ribbon, paint, corners, end, 1, near, far, sides, any_of)
+
+
 def _line_corner(
     view_points: List[Vector3],
     world_points: List[Vector3],
@@ -2400,6 +2872,48 @@ struct Renderer(Movable):
         # size on the image; see `_emit_sprite`.
         var perspective = not camera.projection_matrix().is_affine()
         for slot in range(len(draws)):
+            if draws[slot].wide_line >= 0:
+                # A wide line is drawn as triangles, so it is a filled
+                # surface and is left out of the wireframe half. Its
+                # triangles are built from its pairs of points; see
+                # `_emit_wide_line`.
+                if wireframe:
+                    continue
+                var wide_begin = len(corners)
+                var wide_cut = List[Plane]()
+                var wide_any = List[Plane]()
+                _clip_sets(
+                    assets.materials.get(draws[slot].material),
+                    view,
+                    sides,
+                    global_planes,
+                    self.local_clipping_enabled,
+                    casters_only,
+                    wide_cut,
+                    wide_any,
+                )
+                _emit_wide_line(
+                    corners,
+                    assets,
+                    draws[slot],
+                    view,
+                    to_screen,
+                    near,
+                    far,
+                    wide_cut,
+                    wide_any,
+                    self.render_scale,
+                )
+                _note_span(
+                    spans,
+                    DRAW_TRIANGLES,
+                    wide_begin,
+                    len(corners),
+                    draws[slot].depth,
+                    draws[slot].blends,
+                    draws[slot].order,
+                )
+                continue
             if draws[slot].sprite >= 0:
                 # A sprite names no geometry, so nothing below applies to
                 # it: its two triangles are built from its node instead.
@@ -3067,6 +3581,16 @@ struct Renderer(Movable):
                 raise Error(
                     "A line material has no env map: a line has no surface"
                     " to reflect from"
+                )
+            # A `Line` is drawn by the line pass, one pixel wide, and a
+            # wide line by `prepare`, so a width here would be ignored.
+            if (
+                material.line_width != DEFAULT_LINE_WIDTH
+                or material.dash_offset != NO_DASH
+            ):
+                raise Error(
+                    "A Line is one pixel wide and has no dash offset: draw"
+                    " a wider one as a LineSegments2"
                 )
             # An index buffer here is a triangle index -- `set_index`
             # demands whole triangles -- so it cannot say which points a

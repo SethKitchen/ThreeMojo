@@ -76,6 +76,12 @@ renderer lays them, so a sprite needs the camera that `set_from_camera`
 records. None of the three has a face, so a hit's `normal` is zero, as
 three.js gives no `face`. `triangle` says which segment, point or half of
 the sprite was struck.
+
+**Wide lines.** A `LineSegments2` is picked by `intersect_wide_line`,
+three.js's `LineSegments2.raycast`: a segment is struck when the ray
+passes within half the line's width of it, measured in the world or on the
+image as the width is. A width on the image needs a camera and an image
+size, which `intersect_scene` does not have, so it leaves wide lines out.
 """
 
 from cameras.camera import Camera
@@ -88,6 +94,7 @@ from core.deform import (
     sphere_of,
 )
 from core.layers import Layers
+from core.buffer_geometry import POSITION
 from core.scene import Scene
 from math.bounds import Sphere
 from math.matrix4 import Matrix4
@@ -96,9 +103,9 @@ from math.vector2 import Vector2
 from math.vector3 import Vector3
 from core.geometry_store import GeometryId
 from materials.material import BACK_SIDE, FRONT_SIDE
-from objects.line import segment_count, segment_ends
+from objects.line import SEGMENTS, segment_count, segment_ends
 from objects.mesh import Mesh
-from std.math import cos, inf, isnan, sin
+from std.math import cos, inf, isnan, max, min, sin
 from units.si import Length, METER, RADIAN
 
 
@@ -107,8 +114,8 @@ struct HitKind(Equatable, ImplicitlyCopyable, Writable):
     """Which of the scene's lists a hit's `index` counts in, as a type
     rather than a bare int.
 
-    The same argument as `objects.line.LineMode`: eight small integers
-    that mean eight different lists must not be interchangeable, and the
+    The same argument as `objects.line.LineMode`: nine small integers
+    that mean nine different lists must not be interchangeable, and the
     type stops a bare integer at compile time. `is_valid` stops
     `HitKind(9)`.
     """
@@ -116,8 +123,10 @@ struct HitKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the eight named kinds."""
-        return self.value >= MESH_HIT.value and self.value <= SPRITE_HIT.value
+        """Return True if this is one of the nine named kinds."""
+        return (
+            self.value >= MESH_HIT.value and self.value <= WIDE_LINE_HIT.value
+        )
 
 
 # `index` counts in `scene.meshes`, and `instance` is -1.
@@ -141,6 +150,10 @@ comptime POINTS_HIT = HitKind(6)
 # `index` counts in `scene.sprites`, `instance` is -1, and `triangle` is
 # which of the two halves.
 comptime SPRITE_HIT = HitKind(7)
+# `index` counts in `scene.wide_lines`, `instance` is -1, and `triangle`
+# is which segment was struck: three.js's `faceIndex` for a
+# `LineSegments2`.
+comptime WIDE_LINE_HIT = HitKind(8)
 
 
 @fieldwise_init
@@ -952,6 +965,148 @@ struct Raycaster(ImplicitlyCopyable):
         _sort_by_distance(hits)
         return hits^
 
+    def intersect_wide_line[
+        C: Camera
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        index: Int,
+        camera: C,
+        width: Int,
+        height: Int,
+    ) raises -> List[Hit]:
+        """Return every segment of one wide line this ray passes within
+        half its width of, nearest first, three.js's `LineSegments2.raycast`.
+
+        A width in the world is measured in the world: a segment is struck
+        when the ray passes nearer to it than half the width. A width in
+        pixels is measured on the image the camera draws at `width` by
+        `height`: a segment is struck when the point one meter along the ray
+        lands nearer to it than half the width, on that image. That is why
+        three.js asks for `raycaster.camera` and the material's
+        `resolution`, and why this asks for a camera and a size. Either
+        way the hit's point is where the ray passes nearest the segment, as
+        three.js's `point` is, and its `triangle` says which segment.
+
+        A wide line has no face, so a hit's `normal` is the ray's own
+        direction, reversed. The whole line is first tested by the bound
+        of its points, grown by half the width at the bound's distance, as
+        three.js's is. A hit nearer than `near` or further than `far` is
+        dropped, which three.js's `LineSegments2` does not do; a mesh's
+        hit is dropped the same way in both.
+
+        Args:
+            scene: The scene the line is in, updated.
+            assets: The geometry and the material the line names.
+            index: Which, as its position in `scene.wide_lines`.
+            camera: The camera the image is seen through. Read only for a
+                width in pixels.
+            width: The image's width in pixels.
+            height: Its height in pixels.
+
+        Returns:
+            The hits, nearest first. None for a line on a layer this
+            raycaster does not test, or whose grown bound the ray misses.
+
+        Raises:
+            Error: If no wide line has that index, either dimension is not
+                positive, the line names a node, a geometry or a material
+                that is not there, its geometry has no positions or an odd
+                count of them, or the camera's view cannot be read.
+        """
+        if index < 0 or index >= len(scene.wide_lines):
+            raise Error("No wide line has that index")
+        if width <= 0 or height <= 0:
+            raise Error("An image has a positive width and height")
+        var hits = List[Hit]()
+        ref line = scene.wide_lines[index]
+        if not scene.shows(line.node, self.layers):
+            return hits^
+        ref geometry = assets.geometries.get(line.geometry)
+        var material = assets.materials.get(line.material)
+        ref positions = geometry.attribute_view(String(POSITION))
+        var segments = segment_count(SEGMENTS, positions.count())
+        var world = scene.world_matrix(line.node)
+        var size = material.line_width.size
+        var bound = geometry.bounding_sphere()
+        bound.apply_matrix4(world)
+        if bound.is_empty():
+            return hits^
+        var view = camera.view_matrix_in(scene)
+        var projection = camera.projection_matrix()
+        # How much to grow the bound: half the width, in the world, or
+        # at the bound's own distance, three.js's `getWorldSpaceHalfWidth`.
+        var margin = size * 0.5
+        if not material.line_width.world_units:
+            var reach = max(
+                camera.near_distance(), bound.distance_to_point(self.ray.origin)
+            )
+            var unproject = Matrix4(copy=projection)
+            unproject.invert()
+            var depth = projection.transform_point(Vector3(0, 0, -reach)).z
+            var edge = unproject.transform_point(
+                Vector3(size / Float32(width), size / Float32(height), depth)
+            )
+            margin = abs(max(edge.x, edge.y))
+        bound.radius += margin
+        if not self.ray.intersects_sphere(bound):
+            return hits^
+        var shape = Mesh(line.geometry, line.material, line.node)
+        var near = self.near.value
+        var far = self.far.value
+        # The screen-space test's origin: one meter along the ray, on the
+        # image, in pixels from its middle. One meter and not the origin,
+        # which is the eye and projects nowhere.
+        var half_x = Float32(width) / 2
+        var half_y = Float32(height) / 2
+        var aim = projection.transform_point(
+            view.transform_point(self.ray.at(1))
+        )
+        var target = Vector2(aim.x * half_x, aim.y * half_y)
+        var closest_z = -camera.near_distance()
+        # At least one: a bound that is not empty holds a point, and
+        # `segment_count` refused an odd count of them.
+        for segment in range(segments):  # pragma: no branch
+            var start = world.transform_point(positions.vector3(segment * 2))
+            var end = world.transform_point(positions.vector3(segment * 2 + 1))
+            var nearest = self.ray.distance_sq_to_segment(start, end)
+            var struck: Bool
+            if material.line_width.world_units:
+                struck = (
+                    nearest.on_ray - nearest.on_segment
+                ).length() < size * 0.5
+            else:
+                struck = _within_on_image(
+                    view.transform_point(start),
+                    view.transform_point(end),
+                    closest_z,
+                    projection,
+                    target,
+                    half_x,
+                    half_y,
+                    size * 0.5,
+                )
+            if not struck:
+                continue
+            var distance = (nearest.on_ray - self.ray.origin).length()
+            if distance < near or distance > far:
+                continue
+            hits.append(
+                Hit(
+                    distance,
+                    nearest.on_ray,
+                    -self.ray.direction,
+                    WIDE_LINE_HIT,
+                    index,
+                    -1,
+                    shape,
+                    segment,
+                )
+            )
+        _sort_by_distance(hits)
+        return hits^
+
     def intersect_scene(self, scene: Scene, assets: Assets) raises -> List[Hit]:
         """Return every place this ray meets anything of the scene it can
         pick, nearest first, three.js's `intersectObjects`: meshes,
@@ -989,6 +1144,64 @@ struct Raycaster(ImplicitlyCopyable):
                 hits.extend(self.intersect_sprite(scene, assets, index))
         _sort_by_distance(hits)
         return hits^
+
+
+def _within_on_image(
+    start: Vector3,
+    end: Vector3,
+    closest_z: Float32,
+    projection: Matrix4,
+    target: Vector2,
+    half_x: Float32,
+    half_y: Float32,
+    reach: Float32,
+) -> Bool:
+    """Return True if a segment passes within `reach` pixels of `target`
+    on the image, three.js's `raycastScreenSpace` for one segment.
+
+    The segment is trimmed where it crosses the near plane, projected, and
+    measured to on the image from its nearest point. That point must also
+    lie between the near and the far planes.
+
+    Args:
+        start: One end, in camera space.
+        end: The other end.
+        closest_z: The near plane's camera-space z, minus the near distance.
+        projection: The camera's projection.
+        target: The point on the image to measure from, in pixels from
+            the middle, y up.
+        half_x: Half the image's width, in pixels.
+        half_y: Half its height.
+        reach: Half the line's width, in pixels.
+
+    Returns:
+        Whether the segment passes that near.
+    """
+    if start.z > closest_z and end.z > closest_z:
+        return False
+    var first = start
+    var second = end
+    if first.z > closest_z:
+        first = start + (end - start) * (
+            (start.z - closest_z) / (start.z - end.z)
+        )
+    elif second.z > closest_z:
+        second = end + (start - end) * ((end.z - closest_z) / (end.z - start.z))
+    var near_end = projection.transform_point(first)
+    var far_end = projection.transform_point(second)
+    var from_point = Vector2(near_end.x * half_x, near_end.y * half_y)
+    var span = Vector2(far_end.x * half_x, far_end.y * half_y) - from_point
+    var length_sq = span.dot(span)
+    # three.js divides by the length unguarded, and a segment that is a
+    # point on the image gives it nothing to divide by. It is measured to
+    # as the point it is.
+    var share = (target - from_point).dot(
+        span
+    ) / length_sq if length_sq > 0 else Float32(0)
+    share = min(max(share, Float32(0)), Float32(1))
+    var closest = from_point + span * share
+    var depth = near_end.z + (far_end.z - near_end.z) * share
+    return depth >= -1 and depth <= 1 and (target - closest).length() < reach
 
 
 def _sort_by_distance(mut hits: List[Hit]):

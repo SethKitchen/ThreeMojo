@@ -439,5 +439,67 @@ def test_a_segment_parallel_to_the_ray_is_met_at_the_end_it_runs_to() raises:
         assert_almost_equal(met.on_ray.z, Float32(-6), atol=1e-4)
 
 
+def nearest(origin: Vector3, direction: Vector3) raises -> SegmentApproach:
+    """Return how near a ray comes to the segment from -1 to 1 along x."""
+    return Ray(origin, direction).distance_sq_to_segment(
+        Vector3(-1, 0, 0), Vector3(1, 0, 0)
+    )
+
+
+def test_a_ray_through_a_segment_meets_it_between_its_ends() raises:
+    """Region 0: both nearest points are interior, at no distance."""
+    var met = nearest(Vector3(0.5, 0, 5), Vector3(0, 0, -1))
+    assert_almost_equal(met.distance_sq, 0, atol=TOLERANCE)
+    assert_point(met.on_ray, 0.5, 0, 0)
+    assert_point(met.on_segment, 0.5, 0, 0)
+
+
+def test_a_ray_past_either_end_is_nearest_that_end() raises:
+    """Regions 1 and 5: the segment's end, then its start."""
+    var past_end = nearest(Vector3(3, 0, 5), Vector3(0, 0, -1))
+    assert_almost_equal(past_end.distance_sq, 4, atol=TOLERANCE)
+    assert_point(past_end.on_ray, 3, 0, 0)
+    assert_point(past_end.on_segment, 1, 0, 0)
+    var past_start = nearest(Vector3(-3, 0, 5), Vector3(0, 0, -1))
+    assert_almost_equal(past_start.distance_sq, 4, atol=TOLERANCE)
+    assert_point(past_start.on_segment, -1, 0, 0)
+
+
+def test_a_ray_leaving_a_segment_is_nearest_at_its_origin() raises:
+    """Regions 3, 4 and 2: the segment lies behind the origin."""
+    var above = nearest(Vector3(0.5, 1, -1), Vector3(0, 0, -1))
+    assert_almost_equal(above.distance_sq, 2, atol=TOLERANCE)
+    assert_point(above.on_ray, 0.5, 1, -1)
+    assert_point(above.on_segment, 0.5, 0, 0)
+    var beyond_start = nearest(Vector3(-3, 1, -1), Vector3(0, 0, -1))
+    assert_almost_equal(beyond_start.distance_sq, 6, atol=TOLERANCE)
+    assert_point(beyond_start.on_segment, -1, 0, 0)
+    var beyond_end = nearest(Vector3(3, 1, -1), Vector3(0, 0, -1))
+    assert_almost_equal(beyond_end.distance_sq, 6, atol=TOLERANCE)
+    assert_point(beyond_end.on_segment, 1, 0, 0)
+
+
+def test_a_ray_leaving_toward_an_end_comes_nearest_along_itself() raises:
+    """Regions 4 and 2 when the ray still closes on the far end."""
+    var toward_start = nearest(Vector3(-3, 0, 1), Vector3(1, 0, -1))
+    assert_almost_equal(toward_start.distance_sq, 0.5, atol=TOLERANCE)
+    assert_point(toward_start.on_ray, -1.5, 0, -0.5)
+    assert_point(toward_start.on_segment, -1, 0, 0)
+    var toward_end = nearest(Vector3(3, 0, 1), Vector3(-1, 0, -1))
+    assert_almost_equal(toward_end.distance_sq, 0.5, atol=TOLERANCE)
+    assert_point(toward_end.on_segment, 1, 0, 0)
+
+
+def test_a_ray_parallel_to_a_segment_takes_the_end_it_points_to() raises:
+    """A parallel ray runs along the segment, one meter off it."""
+    var forward = nearest(Vector3(-3, 1, 0), Vector3(1, 0, 0))
+    assert_almost_equal(forward.distance_sq, 1, atol=TOLERANCE)
+    assert_point(forward.on_ray, 1, 1, 0)
+    assert_point(forward.on_segment, 1, 0, 0)
+    var backward = nearest(Vector3(3, 1, 0), Vector3(-1, 0, 0))
+    assert_almost_equal(backward.distance_sq, 1, atol=TOLERANCE)
+    assert_point(backward.on_segment, -1, 0, 0)
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()

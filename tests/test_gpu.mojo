@@ -53,12 +53,20 @@ from std.math import cos, inf, pi, sin
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
 from materials.material import (
+    LineWidth,
     PointSize,
     line_dashed_material,
+    line_material,
     points_material,
     sprite_material,
 )
 from objects.line import LOOP, Line
+from objects.line_segments2 import (
+    Line2,
+    LineSegments2,
+    line_geometry,
+    line_segments_geometry,
+)
 from objects.points import Points
 from objects.sprite import Sprite
 from objects.mesh import Mesh
@@ -5865,6 +5873,113 @@ def test_both_backends_map_and_cut_and_fog_a_point_alike() raises:
         _apart(big.r, small.r) > 8 or _apart(big.b, small.b) > 8,
         "the two sizes read one level",
     )
+
+
+def test_both_backends_draw_wide_lines_in_a_scene() raises:
+    # Wide lines through the whole pipeline: a path in pixels with round
+    # caps and vertex colors, dashed sticks in world units that blend over
+    # a lit box, and a stick cut by the near plane, under a fog and a curve.
+    # Both backends fill the same triangles, so they agree by construction;
+    # this proves the triangles are ordinary ones.
+    if skipped_for_lack_of_a_gpu("both backends draw wide lines"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    renderer.set_tone_mapping(ACES_FILMIC_TONE_MAPPING, 0.9)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(0.8, METER)))
+    var path_points = List[Vector3]()
+    var path_colors = List[FloatColor]()
+    for index in range(9):
+        var share = Float32(index) / 8
+        path_points.append(
+            Vector3(1.8 * share - 0.9, 0.6 * sin(share * 7), 0.4 - share)
+        )
+        path_colors.append(FloatColor(1.0 - share, 0.4, share))
+    var path = assets.geometries.add(line_geometry(path_points, path_colors))
+    var stick_points: List[Vector3] = [
+        Vector3(-1.2, -0.7, 0.8),
+        Vector3(1.1, 0.8, -1.0),
+        Vector3(-0.8, 0.9, 0.2),
+        Vector3(0.9, -0.9, 0.5),
+        Vector3(0.2, -0.3, 3.2),
+        Vector3(0.3, 0.2, -0.5),
+    ]
+    var sticks = assets.geometries.add(line_segments_geometry(stick_points))
+    var orange = assets.materials.add(Material(Color(255, 140, 40)))
+    var ribbon = assets.materials.add(
+        line_material(
+            Color(255, 255, 255),
+            LineWidth(pixels=3.5),
+            vertex_colors=True,
+        )
+    )
+    var dashes = assets.materials.add(
+        line_material(
+            Color(120, 220, 255),
+            LineWidth(world=Length(0.08, METER)),
+            dash_size=Length(0.3, METER),
+            gap_size=Length(0.15, METER),
+            dash_offset=Length(0.05, METER),
+            opacity=0.7,
+            transparent=True,
+        )
+    )
+    var scene = Scene()
+    var block = Object3D()
+    block.set_euler(
+        Angle(25.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var block_node = scene.add(block^)
+    var line_node = scene.add(Object3D())
+    var sun = Object3D()
+    sun.set_position(0.4, 0.8, 0.5)
+    var sun_node = scene.add(sun^)
+    scene.add_light(directional_light(Color(255, 255, 255), sun_node, 0.8))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.2))
+    scene.fog = linear_fog(
+        Color(160, 170, 190), Length(2.0, METER), Length(9.0, METER)
+    )
+    scene.update()
+    scene.add_mesh(Mesh(box, orange, block_node))
+    scene.add_wide_line(Line2(path, ribbon, line_node))
+    scene.add_wide_line(LineSegments2(sticks, dashes, line_node))
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0, 0.3, 3.2), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        FogView(scene.fog),
+        ACES_FILMIC_TONE_MAPPING,
+        0.9,
+        frame.segments,
+        frame.draws,
+        None,
+        frame.points,
+    )
+    var gpu = device.read_back()
+    var drawn = 48 * 36 - count_background(cpu, BACKGROUND)
+    assert_true(drawn > 300, "the scene barely drew anything")
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    for y in range(36):
+        for x in range(48):
+            var theirs = cpu.depth_at(x, y)
+            var ours = gpu.depth_at(x, y)
+            if theirs == inf[DType.float32]():
+                assert_equal(ours, theirs)
+            else:
+                assert_almost_equal(ours, theirs, atol=Float64(1e-5))
 
 
 def test_both_backends_draw_points_and_sprites_in_a_scene() raises:

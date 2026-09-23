@@ -59,8 +59,10 @@ along that one segment runs backward.
 
 It is one pixel wide, always. three.js is the same: WebGL ignores
 `linewidth`, which is why three.js ships `Line2` as geometry rather than as
-a line. See `render.linerule` for what a width of one pixel means and what
-it would take to have another.
+a line. See `render.linerule` for what a width of one pixel means, and
+`objects.line_segments2` for `Line2`, which is drawn as triangles.
+`Renderer.prepare_lines` refuses a material with a width, rather than
+drawing it one pixel wide.
 
 A line is not morphed and not skinned. three.js allows both, and neither
 has a caller here yet. Adding one is a matter of routing `core.deform` the

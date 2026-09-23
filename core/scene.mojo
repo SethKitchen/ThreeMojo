@@ -67,6 +67,7 @@ from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from units.si import Length, METER
 from objects.instanced_mesh import BatchedMesh, InstancedMesh
 from objects.line import Line
+from objects.line_segments2 import LineSegments2
 from objects.lod import Lod
 from objects.mesh import Mesh
 from objects.points import Points
@@ -121,6 +122,11 @@ struct Scene(Movable):
     # because a sprite names no geometry: it is drawn as two triangles
     # the renderer builds for it. See `objects.sprite`.
     var sprites: List[Sprite]
+    # The lines drawn wider than a pixel, each naming a node here. Their
+    # own list because they are drawn as triangles the renderer builds
+    # for them, where a `Line` is drawn by the line pass. See
+    # `objects.line_segments2`.
+    var wide_lines: List[LineSegments2]
     # What veils the scene with distance, three.js's `scene.fog`. Public
     # and assignable, as the lights are: set it to the value `linear_fog`
     # or `exp2_fog` returns, and the renderer reads it every frame.
@@ -151,6 +157,7 @@ struct Scene(Movable):
         self.lines = List[Line]()
         self.points = List[Points]()
         self.sprites = List[Sprite]()
+        self.wide_lines = List[LineSegments2]()
         self.fog = no_fog()
         self.background = no_background()
         self.environment = NO_CUBE_TEXTURE
@@ -305,6 +312,24 @@ struct Scene(Movable):
         if sprite.node.value >= len(self._nodes):
             raise Error("A sprite must name a node that is in the scene")
         self.sprites.append(sprite)
+
+    def add_wide_line(mut self, line: LineSegments2) raises:
+        """Add a line wider than a pixel to draw, the three.js
+        `scene.add(line2)`.
+
+        Does not make the scene stale, for the reason `add_mesh` does not.
+
+        Args:
+            line: The `LineSegments2` or `Line2` to draw. Its node must
+                already be in the scene. Its geometry and material are
+                checked when it is rendered.
+
+        Raises:
+            Error: If the line names a node the scene does not have.
+        """
+        if line.node.value >= len(self._nodes):
+            raise Error("A wide line must name a node that is in the scene")
+        self.wide_lines.append(line)
 
     def node(
         mut self, index: NodeId
