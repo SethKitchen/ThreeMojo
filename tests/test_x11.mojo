@@ -137,6 +137,9 @@ struct Server(Movable):
 
         Xvfb picks the display and writes its number once it listens, so a
         server left behind by another run cannot be mistaken for this one.
+        It runs with `-noreset`: an X server otherwise resets when its last
+        client leaves, and refuses connections while it does, so a test
+        that closes its only window and opens another could be refused.
 
         Args:
             depth: The screen's color depth.
@@ -147,7 +150,7 @@ struct Server(Movable):
         var lines = run(
             "f=$(mktemp); Xvfb -displayfd 3 -screen 0 320x240x"
             + String(depth)
-            + ' -nolisten tcp 3>"$f" >/dev/null 2>&1 & p=$!;'
+            + ' -nolisten tcp -noreset 3>"$f" >/dev/null 2>&1 & p=$!;'
             + ' for i in $(seq 600); do [ -s "$f" ] && break; sleep 0.1;'
             + ' done; echo $p; cat "$f"; rm -f "$f"'
         ).split("\n")

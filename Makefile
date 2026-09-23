@@ -343,7 +343,11 @@ $(COV_STAMP):
 	      xargs -P $(JOBS) -I {} \
 	      sh -c 'name=$$(basename "$$1" .mojo); \
 	             $(MOJO) run -I $(COV_DIR) "$(COV_DIR)/tests/$$name.mojo" \
-	               2> $(COV_DIR)/hits/$$name.txt > /dev/null' _ {} \
+	               2> $(COV_DIR)/hits/$$name.txt > $(COV_DIR)/hits/$$name.out \
+	             || { echo "$$name failed under instrumentation:"; \
+	                  tail -n 30 $(COV_DIR)/hits/$$name.out; \
+	                  grep -v "^COV" $(COV_DIR)/hits/$$name.txt | tail -n 30; \
+	                  exit 1; }' _ {} \
 	  || { rc=$$?; \
 	       if [ $$rc -eq 142 ]; then \
 	         echo "Coverage exceeded its $(COV_BUDGET)s budget (one second per" \
