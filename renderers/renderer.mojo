@@ -2906,6 +2906,11 @@ struct Renderer(Movable):
         big.viewport = _scaled(self.viewport, SUPERSAMPLE)
         big.scissor = _scaled(self.scissor, SUPERSAMPLE)
         big.scissor_test = self.scissor_test
+        # The planes cut in camera space, and the shadow filter reads the
+        # light's own map, so neither changes with the frame's size.
+        big.clipping_planes = self.clipping_planes.copy()
+        big.local_clipping_enabled = self.local_clipping_enabled
+        big.shadow_map_type = self.shadow_map_type
         # What makes the larger renderer draw a frame that *averages down*
         # to this one rather than merely one that is bigger: a point's
         # size and a line's thickness are given in the output pixels this

@@ -24,6 +24,8 @@ from materials.material import (
     PointSize,
     points_material,
 )
+from lights.shadow import VSM_SHADOW_MAP
+from math.bounds import Plane
 from math.vector3 import Vector3
 from objects.line import Line
 from objects.mesh import Mesh
@@ -204,6 +206,15 @@ def test_the_viewport_and_scissor_are_scaled_with_the_frame() raises:
     )
     assert_color(cut.get_pixel(WIDTH // 2, HEIGHT // 2 - 2), CLEAR)
     assert_equal(renderer.supersampled().scissor.height, HEIGHT // 2 * 2)
+    # The clipping planes and the shadow filter carry over, so that an
+    # antialiased frame is cut and shadowed as the plain one is.
+    renderer.clipping_planes = [Plane(Vector3(1, 0, 0), 0)]
+    renderer.local_clipping_enabled = True
+    renderer.shadow_map_type = VSM_SHADOW_MAP
+    var copied = renderer.supersampled()
+    assert_equal(len(copied.clipping_planes), 1)
+    assert_true(copied.local_clipping_enabled)
+    assert_true(copied.shadow_map_type == VSM_SHADOW_MAP)
 
 
 def test_an_array_camera_and_a_cube_camera_are_antialiased_too() raises:
