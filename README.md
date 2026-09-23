@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 130 features are ported and 20 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 133 features are ported and 17 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -105,10 +105,9 @@ The port is not at parity with three.js yet. 130 features are ported and 20 are 
 
 ### Objects
 
-- [ ] Wide lines: Line2, LineSegments2 and LineMaterial [#116](https://github.com/SethKitchen/ThreeMojo/issues/116)
 
 <details>
-<summary>Ported: 9</summary>
+<summary>Ported: 10</summary>
 
 - [x] [Mesh, with geometry, material and texture stores](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets) [#25](https://github.com/SethKitchen/ThreeMojo/issues/25)
 - [x] [Line, LineLoop and LineSegments](https://github.com/SethKitchen/ThreeMojo/wiki/Lines): points joined by one-pixel strokes, walked by one rule both backends read [#26](https://github.com/SethKitchen/ThreeMojo/issues/26)
@@ -119,6 +118,7 @@ The port is not at parity with three.js yet. 130 features are ported and 20 are 
 - [x] [LOD](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#lod): one of several geometries at a node, picked by the camera's distance each frame, with hysteresis [#31](https://github.com/SethKitchen/ThreeMojo/issues/31)
 - [x] [Per-instance colors](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#instance-colors): a color per instance of an instanced or batched mesh that multiplies the material color [#112](https://github.com/SethKitchen/ThreeMojo/issues/112)
 - [x] [Raycasting lines, points, sprites and skinned meshes](https://github.com/SethKitchen/ThreeMojo/wiki/Raycasting#lines-points-and-sprites): skinned meshes picked where the bones carry them, with three.js's line and point thresholds [#117](https://github.com/SethKitchen/ThreeMojo/issues/117)
+- [x] [Wide lines: Line2, LineSegments2 and LineMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Lines#wide-lines): lines of any width in pixels or meters, with round caps, dashes, vertex colors and picking [#116](https://github.com/SethKitchen/ThreeMojo/issues/116)
 
 </details>
 
@@ -160,12 +160,11 @@ The port is not at parity with three.js yet. 130 features are ported and 20 are 
 
 ### Lights
 
-- [ ] Point light shadows and spot light maps [#127](https://github.com/SethKitchen/ThreeMojo/issues/127)
 - [ ] Soft shadows: PCFSoft and VSM [#128](https://github.com/SethKitchen/ThreeMojo/issues/128)
 - [ ] Image-based lighting: PMREM and LightProbe [#129](https://github.com/SethKitchen/ThreeMojo/issues/129)
 
 <details>
-<summary>Ported: 8</summary>
+<summary>Ported: 9</summary>
 
 - [x] [AmbientLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#ambient) [#50](https://github.com/SethKitchen/ThreeMojo/issues/50)
 - [x] [DirectionalLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#directional) [#51](https://github.com/SethKitchen/ThreeMojo/issues/51)
@@ -175,6 +174,7 @@ The port is not at parity with three.js yet. 130 features are ported and 20 are 
 - [x] [HemisphereLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#hemisphere): a sky color and a ground color, blended by how far a surface is turned toward the sky [#55](https://github.com/SethKitchen/ThreeMojo/issues/55)
 - [x] [RectAreaLight](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#rect-area): a glowing rectangle integrated with linearly transformed cosines from three.js's own tables, on both rasterizers [#56](https://github.com/SethKitchen/ThreeMojo/issues/56)
 - [x] [Shadow maps](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#shadows): directional and spot lights draw the scene's depth and every lit sum compares nine taps against it [#57](https://github.com/SethKitchen/ThreeMojo/issues/57)
+- [x] [Point light shadows and spot light maps](https://github.com/SethKitchen/ThreeMojo/wiki/Lights#point-light-shadows): point light shadows through six cube faces, and spot lights that project a texture [#127](https://github.com/SethKitchen/ThreeMojo/issues/127)
 
 </details>
 
@@ -205,10 +205,9 @@ The port is not at parity with three.js yet. 130 features are ported and 20 are 
 
 ### Loaders and exporters
 
-- [ ] FBX and Collada loaders [#138](https://github.com/SethKitchen/ThreeMojo/issues/138)
 
 <details>
-<summary>Ported: 8</summary>
+<summary>Ported: 9</summary>
 
 - [x] [GLTF loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf): `.gltf` and `.glb` into geometries, standard materials, textures and a node hierarchy, with a JSON reader of its own [#70](https://github.com/SethKitchen/ThreeMojo/issues/70)
 - [x] [OBJ loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files): positions, texture coordinates, normals and polygon faces, split by object and material [#71](https://github.com/SethKitchen/ThreeMojo/issues/71)
@@ -218,6 +217,7 @@ The port is not at parity with three.js yet. 130 features are ported and 20 are 
 - [x] [glTF skins, animations, morph targets, cameras and sparse accessors](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#skins-morph-targets-and-animations): joints, morph weights, cubic-spline clips, both camera kinds and sparse data [#134](https://github.com/SethKitchen/ThreeMojo/issues/134)
 - [x] [Scene JSON: ObjectLoader and toJSON](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-JSON): three.js's JSON object format written and read: nodes, meshes, lights, cameras, materials and textures [#140](https://github.com/SethKitchen/ThreeMojo/issues/140)
 - [x] [glTF extensions](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf-extensions): unlit, emissive strength, IOR, specular, clearcoat, texture transform, punctual lights, quantization and GPU instancing [#135](https://github.com/SethKitchen/ThreeMojo/issues/135)
+- [x] [FBX and Collada loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#collada): Collada and ASCII or binary FBX files read into meshes, materials, textures, nodes, cameras and lights [#138](https://github.com/SethKitchen/ThreeMojo/issues/138)
 
 </details>
 
