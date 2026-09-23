@@ -21,7 +21,7 @@ The modes are three.js's with `premultipliedAlpha` off, its default:
 | Mode | Color | Alpha |
 |---|---|---|
 | normal | `src * a + dst * (1 - a)` | `a + dst_a * (1 - a)` |
-| additive | `src * a + dst` | `a * a + dst_a` |
+| additive | `src * a + dst` | `a + dst_a` |
 | subtractive | `dst * (1 - src)` | `dst_a` |
 | multiply | `dst * src` | `dst_a * a` |
 
@@ -261,7 +261,7 @@ def blend_pixel(dst: Rgba, src: Rgba, mode: Int) -> Rgba:
                 SRC_ALPHA_FACTOR,
                 ONE_FACTOR,
                 ADD_EQUATION,
-                SRC_ALPHA_FACTOR,
+                ONE_FACTOR,
                 ONE_FACTOR,
                 ADD_EQUATION,
             ),

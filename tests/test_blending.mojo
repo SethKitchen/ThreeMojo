@@ -148,13 +148,23 @@ def test_the_named_modes() raises:
         1.0 * 0.8 + 0.6 * 0.2,
         0.8 + 0.5 * 0.2,
     )
-    # Additive: the color weighed by its alpha, and alpha squared.
+    # Additive: the color weighed by its alpha, and the alphas summed:
+    # three.js's `blendFuncSeparate( SRC_ALPHA, ONE, ONE, ONE )`.
     _near(
         blend_pixel(BEHIND, FRONT, ADDITIVE.value),
         0.5 * 0.8 + 0.2,
         0.25 * 0.8 + 0.4,
         1.0 * 0.8 + 0.6,
         1.0,
+    )
+    _near(
+        blend_pixel(
+            Rgba(0.2, 0.4, 0.6, 0.2), Rgba(1, 1, 1, 0.5), ADDITIVE.value
+        ),
+        0.7,
+        0.9,
+        1.1,
+        0.5 + 0.2,
     )
     # Subtractive: behind times one less the color; alpha kept.
     _near(

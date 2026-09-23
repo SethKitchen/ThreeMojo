@@ -1031,7 +1031,7 @@ Pass `blending=BLEND` or `blending=OPAQUE` to state the policy outright. A `NORM
 | Mode | Color | Alpha |
 |---|---|---|
 | `BLEND` | `src * a + dst * (1 - a)` | `a + dst_a * (1 - a)` |
-| `ADDITIVE` | `src * a + dst` | `a * a + dst_a` |
+| `ADDITIVE` | `src * a + dst` | `a + dst_a` |
 | `SUBTRACTIVE` | `dst * (1 - src)` | `dst_a` |
 | `MULTIPLY` | `dst * src` | `dst_a * a` |
 
