@@ -156,7 +156,7 @@ These fields use three.js's keys and three.js's defaults:
 | Distance | `referencePosition`, `nearDistance` and `farDistance` on a `MeshDistanceMaterial` |
 | Wide line | `dashOffset` |
 
-Each clipping plane is an object with a `normal` of three numbers and a `constant`. This is the shape that `JSON.stringify` gives a three.js `Plane`. three.js's `Material.toJSON` does not write the clipping, distance and `dashOffset` keys, and its loader ignores them. This port writes them, so that a scene that it reads back renders the same.
+Each clipping plane is an object with a `normal` of three numbers and a `constant`. This is the shape that `JSON.stringify` gives a three.js `Plane`. three.js's `Material.toJSON` does not write the clipping, distance and `dashOffset` keys, and its `MaterialLoader` ignores them. This port writes them, so that a scene that it reads back renders the same. Each key is the name of the three.js property: `Material.clippingPlanes`, `clipIntersection` and `clipShadows`, `MeshDistanceMaterial.referencePosition`, `nearDistance` and `farDistance`, and `LineMaterial.dashOffset`. three.js's `ShaderMaterial.toJSON` writes a `LineMaterial`'s `dashOffset` in its `uniforms`, but this port does not write wide lines.
 
 The writer writes a map intensity, a displacement scale and a displacement bias only with their map, as `Material.toJSON` does. The reader reads them only with their map. The writer writes `normalScale` and `clearcoatNormalScale` only with their map too, but the reader always reads them. The writer does not write an infinite `attenuationDistance`, because that is the default. The stencil functions and operations use three.js's numbers: `stencilFunc` 519 is `ALWAYS_STENCIL_FUNC`, and `stencilFail` 7680 is `KEEP_STENCIL_OP`.
 
