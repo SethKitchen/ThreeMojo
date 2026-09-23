@@ -578,6 +578,7 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/fibula.png $(OUT_DIR)/patella.png \
            $(OUT_DIR)/knee.png $(OUT_DIR)/muscles.png \
            $(OUT_DIR)/leg.png $(OUT_DIR)/legs.png \
+           $(OUT_DIR)/foot.png \
            $(OUT_DIR)/vessels.png $(OUT_DIR)/lymph.png \
            $(OUT_DIR)/nerves.png $(OUT_DIR)/integument.png \
            $(OUT_DIR)/water.png
@@ -955,6 +956,11 @@ $(OUT_DIR)/leg.png: $(LIB_SOURCES) examples/leg.mojo
 $(OUT_DIR)/legs.png: $(LIB_SOURCES) examples/legs.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/legs.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/foot.png: $(LIB_SOURCES) examples/foot.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/foot.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 $(OUT_DIR)/vessels.png: $(LIB_SOURCES) examples/vessels.mojo

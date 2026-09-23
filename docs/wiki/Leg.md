@@ -82,3 +82,7 @@ Run it with:
 ```bash
 .venv/bin/mojo run -I . examples/legs.mojo out/legs.png
 ```
+
+## Ankle
+
+`ankle_center()` returns the tibial plafond in the leg frame. That point is the origin of the foot. Pass it as `origin` to `add_foot`. See [Foot](Foot).

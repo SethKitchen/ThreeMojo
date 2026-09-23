@@ -65,6 +65,7 @@
 - [Nerves](Nerves)
 - [Integument](Integument)
 - [Leg](Leg)
+- [Foot](Foot)
 
 **Explanation**
 - [Software rasterizer](Why-a-software-rasterizer)
