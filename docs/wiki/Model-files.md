@@ -278,7 +278,7 @@ The loader raises, and names the element and the row, for:
 
 ## glTF
 
-`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. three.js: `GLTFLoader`.
+`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. It reads meshes, materials, textures, nodes, skins, morph targets, animations, cameras and sparse accessors. three.js: `GLTFLoader`.
 
 ```mojo
 var model = read_gltf("assets/gltf/box.glb", scene, assets)
@@ -308,6 +308,9 @@ The model says what went where, by the file's own indices.
 | `materials` | One `MaterialId` per glTF material. |
 | `color_textures`, `data_textures` | One `TextureId` per glTF texture, as read for a color map and as read for a data map. `NO_TEXTURE` when no material read it that way. |
 | `first_mesh`, `mesh_count` | Where the meshes this file added begin in `scene.meshes`, and how many. |
+| `first_skinned_mesh`, `skinned_mesh_count` | Where the skinned meshes this file added begin in `scene.skinned_meshes`, and how many. |
+| `cameras` | One `GltfCamera` per node that carries a camera and that the loaded scene reaches. |
+| `animations` | One `AnimationClip` per animation that drives something the loaded scene reaches, in file order. |
 
 ### What maps to what
 
@@ -316,16 +319,62 @@ The model says what went where, by the file's own indices.
 | A primitive of triangles | A `BufferGeometry` with `position`, and `normal`, `uv` and `color` when present, indexed when it is. |
 | A material | A `standard_material`: base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale, emissive factor and texture, `doubleSided`. `BLEND` sets `transparent`. `MASK` sets `alpha_test` to `alphaCutoff`. |
 | A texture | A `Texture` at its sampler's wrap and filters. A base color or emissive map is read as sRGB, a metallic-roughness or normal map as linear. One glTF texture read both ways is two textures. |
-| A node | An `Object3D` at its translation, rotation and scale, or at its matrix decomposed. Each primitive of its mesh is a `Mesh`. |
+| A node | An `Object3D` at its translation, rotation and scale, or at its matrix decomposed, with the node's `name`. Each primitive of its mesh is a `Mesh`. |
+| A node with a `skin` | Each primitive of its mesh is a `SkinnedMesh`. See [Skins, morph targets and animations](#skins-morph-targets-and-animations). |
+| A node with a `camera` | A `PerspectiveCamera` or an `OrthographicCamera` attached to the node. See [Cameras](#cameras). |
+| A sparse accessor | Its values replace the elements that its indices name. The other elements come from the buffer view, or are zero when there is none. |
 | The default scene | Its roots and everything under them, each node after its parent. `scene` picks it. |
 
 A primitive without a material draws with one default `standard_material`. A primitive with `COLOR_0` draws with a copy of its material that has `vertex_colors` on, one copy per material. An accessor without a buffer view reads as zeros. A normalized integer accessor divides by its largest value, as the specification has it.
 
 glTF's texture coordinates run down from an image's top left. This renderer's `v` runs up from the bottom. Each glTF texture is given a `repeat` of `(1, -1)` and an `offset` of `(0, 1)`, which flips `v`, as three.js sets `flipY = false`. The geometry's coordinates are kept as the file has them.
 
+### Skins, morph targets and animations
+
+The loader reads a skin into a `Skeleton`, a morph target into the geometry, and an animation into an `AnimationClip`. The names are three.js's, as in [Skinning](Skinning) and [Animation](Animation).
+
+| glTF | ThreeMojo |
+|---|---|
+| `JOINTS_0` | The `skinIndex` attribute. The components must be unsigned bytes or unsigned shorts. |
+| `WEIGHTS_0` | The `skinWeight` attribute. The loader divides each vertex's four weights by their sum, as three.js's `normalizeSkinWeights` does. Four zeros become one on the first bone. |
+| A skin | A `Skeleton` with one `Bone` per joint. The inverse bind matrices come from `inverseBindMatrices`, or are the identity. The mesh is bound at the identity, in `ATTACHED` mode. |
+| A primitive's `targets` | Morph targets of the geometry, with `morph_relative` set, because glTF holds offsets. `POSITION` and `NORMAL` are read. |
+| `weights` | The morph influences of each mesh. A node's `weights` replace its mesh's `weights`. |
+| An animation | An `AnimationClip`, named by the file or `animation_` and its index. |
+| A `translation`, `rotation` or `scale` channel | A `POSITION`, `QUATERNION` or `SCALE` track on the node. |
+| A `weights` channel | One `MORPH_INFLUENCE` track for each mesh on the node and each morph target. |
+| `STEP`, `LINEAR` | The track's `STEP` or `LINEAR` interpolation. |
+| `CUBICSPLINE` | The track's `CUBIC_SPLINE` interpolation. Each key's in-tangent, value and out-tangent go to `in_tangents`, `values` and `out_tangents`. |
+
+A skinned mesh waits until the loader has placed every node. Thus a joint can come after the mesh in the file. Each primitive gets its own copy of the skeleton, because a `SkinnedMesh` owns its skeleton.
+
+### Cameras
+
+A node with a `camera` gets a camera attached to it. The camera looks down the node's -z axis, with its +y axis up. `GltfCamera` holds the camera.
+
+| Member | Meaning |
+|---|---|
+| `kind` | `GLTF_PERSPECTIVE` or `GLTF_ORTHOGRAPHIC`, a `GltfCameraKind`. A bare integer does not compile. |
+| `index`, `name` | The camera's index in the file's `cameras`, and its `name`. |
+| `node` | The scene node that the camera rides. |
+| `perspective()` | The `PerspectiveCamera`. It raises for an orthographic camera, or a kind that is not valid. |
+| `orthographic()` | The `OrthographicCamera`. It raises for a perspective camera, or a kind that is not valid. |
+
+A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`, the aspect is one. Without `zfar`, the far plane is at two million meters. These are three.js's values. An orthographic camera spans `xmag` and `ymag` on each side of its axis. One glTF camera on two nodes is two cameras.
+
+### Differences from three.js
+
+- A morph target without `POSITION` moves no position. three.js adds the base positions to it as offsets.
+- A `weights` channel drives the meshes on its own node. three.js also drives the meshes of the node's children.
+- A `weights` channel does not drive a skinned mesh. The mixer drives morph influences on `scene.meshes` only.
+- A channel on a node that the default scene does not reach is left out. An animation left with no track is left out.
+- A skin joint that the scene does not reach is refused. three.js puts a new bone in its place.
+- A morph target of colors is refused. three.js reads it.
+- A rotation key must be of unit length. A track refuses one that is not.
+
 ### Not read
 
-Skins, animations, cameras, morph targets and sparse accessors are not read. No extension is read. A file whose `extensionsRequired` names one is refused. A file that only lists an extension under `extensionsUsed` is read without it. A primitive of points, lines or strips is refused. Only the first set of texture coordinates is read.
+No extension is read. A file whose `extensionsRequired` names one is refused. A file that only lists an extension under `extensionsUsed` is read without it. A primitive of points, lines or strips is refused. Only the first set of texture coordinates is read.
 
 ### Errors
 
@@ -337,6 +386,13 @@ The loader raises for:
 - An image that is not PNG, JPEG or TGA. A texture or material that names something the file does not have.
 - An unknown wrap mode or alpha mode.
 - A node reached twice. A node matrix that flattens an axis.
+- A sparse accessor with indices that do not rise, that are not unsigned integers, or that name an element past the accessor.
+- A skin without joints. A joint that the file does not have, or that the scene does not reach. Inverse bind matrices that are not one `MAT4` per joint.
+- A skinned primitive without `JOINTS_0` and `WEIGHTS_0`.
+- More than eight morph targets. Primitives of one mesh with different numbers of targets. `weights` that are not one number per target.
+- A camera of an unknown type, or without the values it needs. A camera that `PerspectiveCamera` or `OrthographicCamera` refuses.
+- An animation channel with an unknown path, or a sampler with an unknown interpolation. A sampler output that does not hold one value per key, or three for `CUBICSPLINE`.
+- A track or a clip that `KeyframeTrack` or `AnimationClip` refuses.
 
 ## Fonts
 

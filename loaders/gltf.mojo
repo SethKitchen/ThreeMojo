@@ -35,16 +35,73 @@ with `flipY = false` on every glTF texture; this answers with the texture's
 own `repeat` and `offset` set to flip `v`, so the geometry's coordinates
 are kept as the file has them.
 
-**Not ported.** Skins, animations, cameras, morph targets and sparse
-accessors, and every extension: a file whose `extensionsRequired` names
+**Skins, morph targets and animations.** A node with a `skin` draws each
+primitive as a `SkinnedMesh`, its skeleton made of the joints' nodes and
+the skin's inverse bind matrices, bound at the identity as three.js's
+`GLTFLoader` binds it. `JOINTS_0` and `WEIGHTS_0` become `skinIndex` and
+`skinWeight`, the weights normalized as three.js's `normalizeSkinWeights`
+does. A primitive's `targets` become the geometry's morph targets, which
+glTF holds as offsets, so `morph_relative` is set; `weights` on the node,
+or on the mesh when the node has none, become the influences. Each
+animation becomes an `AnimationClip`: a `translation`, `rotation` or
+`scale` channel a track on the node, and a `weights` channel one
+`MORPH_INFLUENCE` track per mesh and target. `STEP` and `LINEAR` samplers
+keep their names, and `CUBICSPLINE` becomes `CUBIC_SPLINE` with the
+tangents split out of the keys.
+
+**Cameras.** A node with a `camera` gets a `PerspectiveCamera` or an
+`OrthographicCamera` riding it, as three.js builds one: a perspective
+camera with no `aspectRatio` is square and one with no `zfar` ends at two
+million meters, and an orthographic one spans `xmag` and `ymag` either
+side of its axis.
+
+**Sparse accessors.** The values a sparse accessor names replace the
+elements of its buffer view, or of zeros when it has none.
+
+**Where this differs from three.js.** A morph target without a `POSITION`
+moves nothing here, where three.js adds the base positions to it as if
+they were offsets. A `weights` channel drives the meshes on its own node,
+not those of the node's children, and none of a skinned mesh's, since the
+mixer drives morph influences on `scene.meshes` alone. A channel on a node
+the default scene does not reach is left out, and so is an animation left
+with no channel. A skin joint the scene does not reach, a morph color, and
+more than `MAX_MORPH_TARGETS` targets are refused.
+
+**Not ported.** Every extension: a file whose `extensionsRequired` names
 one is refused, since it could not be drawn as meant, and one that only
 uses an extension is read without it. Only triangles are read; a primitive
 of points, lines or strips is refused.
 """
 
+from animation.animation_clip import AnimationClip
+from animation.keyframe_track import (
+    CUBIC_SPLINE,
+    LINEAR as LINEAR_KEYS,
+    QUATERNION,
+    SCALE,
+    STEP,
+    Interpolation,
+    KeyframeTrack,
+    MORPH_INFLUENCE,
+    MeshIndex,
+    TrackKind,
+    TrackTarget,
+    morph_target,
+    node_target,
+    POSITION as TRANSLATION,
+)
+from cameras.orthographic_camera import OrthographicCamera
+from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, BufferGeometry
+from core.buffer_geometry import (
+    COLOR,
+    MAX_MORPH_TARGETS,
+    NORMAL,
+    POSITION,
+    UV,
+    BufferGeometry,
+)
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
@@ -66,6 +123,8 @@ from materials.material import (
     standard_material,
 )
 from math.matrix4 import Matrix4
+from objects.skeleton import Bone, Skeleton
+from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
 from math.vector3 import Vector3
@@ -90,6 +149,7 @@ from render.texture_store import TextureId
 from std.math import isfinite, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
+from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
 
 # The binary container's header: the magic `glTF`, the version, and the
 # two chunk types, as little-endian words.
@@ -124,6 +184,127 @@ comptime FILTER_LINEAR_MIPMAP_LINEAR = 9987
 # What a material's `alphaCutoff` is when `MASK` names none.
 comptime DEFAULT_ALPHA_CUTOFF = Float32(0.5)
 
+# What three.js's `GLTFLoader` gives a perspective camera that names no
+# aspect ratio, and where it ends one that names no far plane: glTF's
+# infinite projection, which a `PerspectiveCamera` cannot hold.
+comptime DEFAULT_ASPECT = Float32(1)
+comptime DEFAULT_FAR = Float32(2e6)
+
+
+@fieldwise_init
+struct GltfCameraKind(Equatable, ImplicitlyCopyable, Writable):
+    """Which of glTF's two projections a camera has, as a type rather than a
+    bare int.
+
+    `GltfCamera.perspective` and `GltfCamera.orthographic` stop
+    `GltfCameraKind(9)` with `is_valid`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is `GLTF_PERSPECTIVE` or `GLTF_ORTHOGRAPHIC`."""
+        return self == GLTF_PERSPECTIVE or self == GLTF_ORTHOGRAPHIC
+
+
+# A camera of glTF's `perspective` type, three.js's `PerspectiveCamera`.
+comptime GLTF_PERSPECTIVE = GltfCameraKind(0)
+# A camera of glTF's `orthographic` type, three.js's `OrthographicCamera`.
+comptime GLTF_ORTHOGRAPHIC = GltfCameraKind(1)
+
+
+struct GltfCamera(Copyable, Movable):
+    """One camera a node of the file carries, already riding that node."""
+
+    var kind: GltfCameraKind
+    # The camera's index in the file's `cameras`, and its `name`.
+    var index: Int
+    var name: String
+    # The scene node the camera rides.
+    var node: NodeId
+    var _perspective: Optional[PerspectiveCamera]
+    var _orthographic: Optional[OrthographicCamera]
+
+    def __init__(
+        out self,
+        index: Int,
+        name: String,
+        node: NodeId,
+        camera: PerspectiveCamera,
+    ):
+        """Hold a perspective camera.
+
+        Args:
+            index: The camera's index in the file.
+            name: The camera's name, or empty.
+            node: The scene node it rides.
+            camera: The camera.
+        """
+        self.kind = GLTF_PERSPECTIVE
+        self.index = index
+        self.name = name
+        self.node = node
+        self._perspective = camera
+        self._orthographic = None
+
+    def __init__(
+        out self,
+        index: Int,
+        name: String,
+        node: NodeId,
+        var camera: OrthographicCamera,
+    ):
+        """Hold an orthographic camera.
+
+        Args:
+            index: The camera's index in the file.
+            name: The camera's name, or empty.
+            node: The scene node it rides.
+            camera: The camera, consumed.
+        """
+        self.kind = GLTF_ORTHOGRAPHIC
+        self.index = index
+        self.name = name
+        self.node = node
+        self._perspective = None
+        self._orthographic = camera^
+
+    def perspective(self) raises -> PerspectiveCamera:
+        """Return the camera as a perspective camera.
+
+        Returns:
+            The camera, riding its node.
+
+        Raises:
+            Error: If the kind is not one there is, or it is not
+                `GLTF_PERSPECTIVE`, or no perspective camera is held.
+        """
+        if not self.kind.is_valid():
+            raise Error("glTF: a camera kind that is not known")
+        if self.kind != GLTF_PERSPECTIVE:
+            raise Error("glTF: the camera is not a perspective camera")
+        if not Bool(self._perspective):
+            raise Error("glTF: the camera holds no perspective camera")
+        return self._perspective.value()
+
+    def orthographic(self) raises -> OrthographicCamera:
+        """Return the camera as an orthographic camera.
+
+        Returns:
+            The camera, riding its node.
+
+        Raises:
+            Error: If the kind is not one there is, or it is not
+                `GLTF_ORTHOGRAPHIC`, or no orthographic camera is held.
+        """
+        if not self.kind.is_valid():
+            raise Error("glTF: a camera kind that is not known")
+        if self.kind != GLTF_ORTHOGRAPHIC:
+            raise Error("glTF: the camera is not an orthographic camera")
+        if not Bool(self._orthographic):
+            raise Error("glTF: the camera holds no orthographic camera")
+        return self._orthographic.value().copy()
+
 
 struct GltfModel(Copyable, Movable):
     """What `read_gltf` put into the scene and the assets, by the file's
@@ -151,6 +332,16 @@ struct GltfModel(Copyable, Movable):
     # many there are.
     var first_mesh: Int
     var mesh_count: Int
+    # The same for the skinned meshes this file added to
+    # `scene.skinned_meshes`.
+    var first_skinned_mesh: Int
+    var skinned_mesh_count: Int
+    # One entry per node that carries a camera and that the loaded scene
+    # reaches, in the order the nodes were placed.
+    var cameras: List[GltfCamera]
+    # One clip per glTF animation that drives something the loaded scene
+    # reaches, in the file's order.
+    var animations: List[AnimationClip]
 
     def __init__(out self):
         """Start empty."""
@@ -164,6 +355,10 @@ struct GltfModel(Copyable, Movable):
         self.data_textures = List[TextureId]()
         self.first_mesh = 0
         self.mesh_count = 0
+        self.first_skinned_mesh = 0
+        self.skinned_mesh_count = 0
+        self.cameras = List[GltfCamera]()
+        self.animations = List[AnimationClip]()
 
     def node_count(self) -> Int:
         """Return how many nodes the file has."""
@@ -298,9 +493,11 @@ def load_gltf(
 
     Raises:
         Error: If the JSON is not JSON or not glTF 2, an extension is
-            required, a buffer, accessor, image, material, mesh or node
-            is malformed or names something the file does not have, a
-            primitive is not triangles, or an accessor is sparse.
+            required, a buffer, accessor, image, material, mesh, node,
+            skin, camera or animation is malformed or names something the
+            file does not have, a primitive is not triangles, a skin names
+            a joint the scene does not reach, or a camera, a skeleton, a
+            morph target or a track is one its type refuses.
     """
     var document = parse_json(text)
     var root = document.root()
@@ -319,6 +516,7 @@ def load_gltf(
     loader.read_materials(assets)
     loader.read_meshes(assets)
     loader.read_nodes(scene, assets)
+    loader.read_animations()
     return loader.model.copy()
 
 
@@ -442,6 +640,15 @@ struct _Loader(Movable):
     var texture_wraps: List[Wrap]
     var texture_filters: List[Filter]
     var texture_mipmapped: List[Bool]
+    # How many morph targets each glTF mesh's primitives carry.
+    var morph_counts: List[Int]
+    # Per glTF node, the indices in `scene.meshes` of the meshes drawn at
+    # it, which a `weights` channel drives.
+    var node_meshes: List[List[Int]]
+    # Each skinned node waiting for every joint to be placed: its glTF
+    # index and the scene node it became.
+    var skinned_nodes: List[Int]
+    var skinned_ids: List[NodeId]
 
     def __init__(
         out self,
@@ -462,6 +669,10 @@ struct _Loader(Movable):
         self.texture_wraps = List[Wrap]()
         self.texture_filters = List[Filter]()
         self.texture_mipmapped = List[Bool]()
+        self.morph_counts = List[Int]()
+        self.node_meshes = List[List[Int]]()
+        self.skinned_nodes = List[Int]()
+        self.skinned_ids = List[NodeId]()
 
     def list(self, key: String) raises -> Int:
         """Return the root's array under `key`, or `NO_NODE`."""
@@ -516,6 +727,44 @@ struct _Loader(Movable):
         if not isfinite(value):
             raise Error("glTF: " + key + " must be finite")
         return value
+
+    def required_number(self, node: Int, key: String) raises -> Float32:
+        """Return an object's number under `key`, which must be there."""
+        if not self.document.has(node, key):
+            raise Error("glTF: " + key + " is required")
+        return self.number(node, key, 0)
+
+    def number_list(self, node: Int, key: String) raises -> List[Float32]:
+        """Return an object's array of numbers under `key`, of any length,
+        or an empty list when the key is absent."""
+        var found = self.document.get(node, key)
+        var out = List[Float32]()
+        if found == NO_NODE:
+            return out^
+        if self.document.kind(found) != ARRAY:
+            raise Error("glTF: " + key + " must be an array of numbers")
+        for index in range(self.document.length(found)):
+            var value = Float32(
+                self.document.number(self.document.at(found, index))
+            )
+            if not isfinite(value):
+                raise Error("glTF: " + key + " must be finite")
+            out.append(value)
+        return out^
+
+    def object_at(self, array: Int, index: Int) raises -> Int:
+        """Return one entry of an array, which must be an object."""
+        var node = self.document.at(array, index)
+        if self.document.kind(node) != OBJECT:
+            raise Error("glTF: an entry that must be an object is not")
+        return node
+
+    def array_of(self, node: Int, key: String) raises -> Int:
+        """Return an object's array under `key`, which must be there."""
+        var found = self.document.get(node, key)
+        if found == NO_NODE or self.document.kind(found) != ARRAY:
+            raise Error("glTF: " + key + " must be an array")
+        return found
 
     def text(self, node: Int, key: String) raises -> String:
         """Return an object's string under `key`, or empty."""
@@ -600,10 +849,9 @@ struct _Loader(Movable):
         mut self, index: Int
     ) raises -> Tuple[List[Float32], Int]:
         """Return an accessor's numbers as floats, normalized when it says
-        so, and how many make one element."""
+        so, and how many make one element, with its sparse values put in
+        place."""
         var accessor = self.entry("accessors", index)
-        if self.document.has(accessor, "sparse"):
-            raise Error("glTF: a sparse accessor is not read")
         var component = self.required_integer(accessor, "componentType")
         var count = self.required_integer(accessor, "count")
         var kind = self.text(accessor, "type")
@@ -612,32 +860,120 @@ struct _Loader(Movable):
         var normalized = self.flag(accessor, "normalized")
         var out = List[Float32]()
         var view_index = self.integer(accessor, "bufferView", -1)
+        if count < 0:
+            raise Error("glTF: an accessor's count must not be negative")
         if view_index < 0:
             # No view: every number is zero, as the specification has it.
             for _ in range(count * width):
                 out.append(0)
-            return (out^, width)
-        var view = self.view_bytes(view_index)
-        var buffer = view[0]
-        var start = view[1] + self.integer(accessor, "byteOffset", 0)
-        var stride = view[3]
-        if stride == 0:
-            stride = size * width
-        if count < 0 or (
-            count > 0
-            and start + (count - 1) * stride + size * width > view[1] + view[2]
-        ):
-            raise Error("glTF: an accessor runs past its buffer view")
-        ref bytes = self.buffers[buffer]
-        for element in range(count):
-            var at = start + element * stride
-            for lane in range(width):  # pragma: no branch
-                out.append(
-                    _read_component(
-                        bytes, at + lane * size, component, normalized
+        else:
+            var view = self.view_bytes(view_index)
+            var start = view[1] + self.integer(accessor, "byteOffset", 0)
+            var stride = view[3]
+            if stride == 0:
+                stride = size * width
+            if (
+                count > 0
+                and start + (count - 1) * stride + size * width
+                > view[1] + view[2]
+            ):
+                raise Error("glTF: an accessor runs past its buffer view")
+            ref bytes = self.buffers[view[0]]
+            for element in range(count):
+                var at = start + element * stride
+                for lane in range(width):  # pragma: no branch
+                    out.append(
+                        _read_component(
+                            bytes, at + lane * size, component, normalized
+                        )
                     )
-                )
+        var sparse = self.document.get(accessor, "sparse")
+        if sparse != NO_NODE:
+            self.apply_sparse(sparse, out, count, width, component, normalized)
         return (out^, width)
+
+    def sparse_view(self, part: Int, length: Int) raises -> Tuple[Int, Int]:
+        """Return the buffer and the first byte of a sparse accessor's
+        `indices` or `values`, checked to hold `length` bytes."""
+        var view_index = self.required_integer(part, "bufferView")
+        var view = self.view_bytes(view_index)
+        var offset = self.integer(part, "byteOffset", 0)
+        if offset < 0 or offset + length > view[2]:
+            raise Error("glTF: a sparse accessor runs past its buffer view")
+        return (view[0], view[1] + offset)
+
+    def apply_sparse(
+        self,
+        sparse: Int,
+        mut out: List[Float32],
+        count: Int,
+        width: Int,
+        component: Int,
+        normalized: Bool,
+    ) raises:
+        """Put a sparse accessor's values over the elements its indices
+        name, as three.js's `GLTFLoader` does."""
+        if self.document.kind(sparse) != OBJECT:
+            raise Error("glTF: sparse must be an object")
+        var changed = self.required_integer(sparse, "count")
+        if changed < 1 or changed > count:
+            raise Error(
+                "glTF: a sparse count must be at least one and at most the"
+                " accessor's"
+            )
+        var indices = self.document.get(sparse, "indices")
+        var values = self.document.get(sparse, "values")
+        if (
+            indices == NO_NODE
+            or values == NO_NODE
+            or self.document.kind(indices) != OBJECT
+            or self.document.kind(values) != OBJECT
+        ):
+            raise Error("glTF: sparse needs indices and values objects")
+        var index_type = self.required_integer(indices, "componentType")
+        if (
+            index_type != COMPONENT_UNSIGNED_BYTE
+            and index_type != COMPONENT_UNSIGNED_SHORT
+            and index_type != COMPONENT_UNSIGNED_INT
+        ):
+            raise Error("glTF: sparse indices must be unsigned integers")
+        var index_size = _component_size(index_type)
+        var size = _component_size(component)
+        var found = self.sparse_view(indices, changed * index_size)
+        var what = self.sparse_view(values, changed * width * size)
+        ref index_bytes = self.buffers[found[0]]
+        ref value_bytes = self.buffers[what[0]]
+        var last = -1
+        for slot in range(changed):  # pragma: no branch
+            var element = Int(
+                _read_component(
+                    index_bytes,
+                    found[1] + slot * index_size,
+                    index_type,
+                    False,
+                )
+            )
+            # The specification has them strictly rising, which also keeps
+            # each one inside the accessor once the last is.
+            if element <= last or element >= count:
+                raise Error(
+                    "glTF: sparse indices must rise and stay inside the"
+                    " accessor"
+                )
+            last = element
+            for lane in range(width):  # pragma: no branch
+                out[element * width + lane] = _read_component(
+                    value_bytes,
+                    what[1] + (slot * width + lane) * size,
+                    component,
+                    normalized,
+                )
+
+    def component_of(self, index: Int) raises -> Int:
+        """Return an accessor's component type."""
+        return self.required_integer(
+            self.entry("accessors", index), "componentType"
+        )
 
     def accessor_indices(mut self, index: Int) raises -> List[Int]:
         """Return an accessor's numbers as whole indices."""
@@ -868,11 +1204,19 @@ struct _Loader(Movable):
             self.model.first_primitives.append(len(self.model.geometries))
             var count = self.document.length(primitives)
             self.model.primitive_counts.append(count)
+            var targets = 0
             for slot in range(count):
                 var primitive = self.document.at(primitives, slot)
-                self.model.geometries.append(
-                    assets.geometries.add(self.geometry_of(primitive))
-                )
+                var geometry = self.geometry_of(primitive)
+                if slot == 0:
+                    targets = geometry.morph_count()
+                elif geometry.morph_count() != targets:
+                    raise Error(
+                        "glTF: every primitive of a mesh must carry as many"
+                        " morph targets"
+                    )
+                self.model.geometries.append(assets.geometries.add(geometry^))
+            self.morph_counts.append(targets)
 
     def geometry_of(mut self, primitive: Int) raises -> BufferGeometry:
         """Build a primitive's geometry."""
@@ -915,25 +1259,101 @@ struct _Loader(Movable):
             geometry.set_attribute(
                 String(COLOR), BufferAttribute(colors[0].copy(), colors[1])
             )
+        var joints = self.integer(attributes, "JOINTS_0", -1)
+        if joints >= 0:
+            var component = self.component_of(joints)
+            if (
+                component != COMPONENT_UNSIGNED_BYTE
+                and component != COMPONENT_UNSIGNED_SHORT
+            ):
+                raise Error(
+                    "glTF: JOINTS_0 must be unsigned bytes or unsigned shorts"
+                )
+            var bones = self.accessor_floats(joints)
+            if bones[1] != 4:
+                raise Error("glTF: JOINTS_0 must be a VEC4")
+            geometry.set_attribute(
+                String(SKIN_INDEX), BufferAttribute(bones[0].copy(), 4)
+            )
+        var weights = self.integer(attributes, "WEIGHTS_0", -1)
+        if weights >= 0:
+            var shares = self.accessor_floats(weights)
+            if shares[1] != 4:
+                raise Error("glTF: WEIGHTS_0 must be a VEC4")
+            geometry.set_attribute(
+                String(SKIN_WEIGHT),
+                BufferAttribute(_normalize_skin_weights(shares[0]), 4),
+            )
+        self.read_targets(primitive, geometry, len(positions[0]))
         var indices = self.integer(primitive, "indices", -1)
         if indices >= 0:
             geometry.set_index(self.accessor_indices(indices))
         return geometry^
 
+    def read_targets(
+        mut self, primitive: Int, mut geometry: BufferGeometry, floats: Int
+    ) raises:
+        """Add a primitive's morph targets to its geometry, as offsets.
+
+        Every target carries normals when any one does, since a geometry
+        takes them for all or for none; a target that names no `POSITION`
+        or no `NORMAL` moves that attribute by nothing.
+        """
+        var targets = self.document.get(primitive, "targets")
+        if targets == NO_NODE:
+            return
+        if self.document.kind(targets) != ARRAY:
+            raise Error("glTF: a primitive's targets must be an array")
+        var count = self.document.length(targets)
+        var any_normals = False
+        for slot in range(count):
+            var target = self.object_at(targets, slot)
+            if self.document.has(target, "COLOR_0"):
+                raise Error("glTF: a morph target of colors is not read")
+            if self.document.has(target, "NORMAL"):
+                any_normals = True
+        geometry.morph_relative = True
+        for slot in range(count):
+            var target = self.document.at(targets, slot)
+            var moved = self.target_offsets(target, "POSITION", floats)
+            if any_normals:
+                var turned = self.target_offsets(target, "NORMAL", floats)
+                geometry.add_morph_target(
+                    BufferAttribute(moved^, 3), BufferAttribute(turned^, 3)
+                )
+            else:
+                geometry.add_morph_target(BufferAttribute(moved^, 3))
+
+    def target_offsets(
+        mut self, target: Int, key: String, floats: Int
+    ) raises -> List[Float32]:
+        """Return one morph target's offsets under `key`, or zeros when it
+        names none."""
+        var index = self.integer(target, key, -1)
+        if index < 0:
+            return List[Float32](length=floats, fill=0)
+        var offsets = self.accessor_floats(index)
+        if offsets[1] != 3:
+            raise Error("glTF: a morph target's " + key + " must be a VEC3")
+        return offsets[0].copy()
+
     # --- nodes --------------------------------------------------------------
 
     def read_nodes(mut self, mut scene: Scene, mut assets: Assets) raises:
         """Walk the default scene's roots and add every node they reach,
-        each after its parent, with its meshes."""
+        each after its parent, with its meshes and cameras, then the
+        skinned meshes, once every joint is in the scene."""
         var count = self.count("nodes")
         for _ in range(count):
             self.model.nodes.append(NO_PARENT)
             self.model.node_names.append(String())
+            self.node_meshes.append(List[Int]())
         for index in range(count):
             self.model.node_names[index] = self.text(
                 self.entry("nodes", index), "name"
             )
         self.model.first_mesh = len(scene.meshes)
+        self.model.first_skinned_mesh = len(scene.skinned_meshes)
         var scenes = self.count("scenes")
         if scenes == 0:
             return
@@ -948,6 +1368,13 @@ struct _Loader(Movable):
             var root = self.document.integer(self.document.at(roots, slot))
             self.place(root, NO_PARENT, scene, assets)
         self.model.mesh_count = len(scene.meshes) - self.model.first_mesh
+        for slot in range(len(self.skinned_nodes)):
+            var index = self.skinned_nodes[slot]
+            var id = self.skinned_ids[slot]
+            self.draw_skinned(index, id, scene, assets)
+        self.model.skinned_mesh_count = (
+            len(scene.skinned_meshes) - self.model.first_skinned_mesh
+        )
 
     def place(
         mut self,
@@ -956,8 +1383,8 @@ struct _Loader(Movable):
         mut scene: Scene,
         mut assets: Assets,
     ) raises:
-        """Add one node under its parent, then its meshes, then its
-        children."""
+        """Add one node under its parent, then its meshes and its camera,
+        then its children. A skinned node's meshes wait for its joints."""
         if index < 0 or index >= len(self.model.nodes):
             raise Error("glTF: a node index that is not there")
         # A hierarchy that loops reaches a node twice before it can go
@@ -966,6 +1393,7 @@ struct _Loader(Movable):
             raise Error("glTF: a node is reached twice")
         var node = self.entry("nodes", index)
         var placed = Object3D()
+        placed.name = self.model.node_names[index]
         var matrix = self.numbers(node, "matrix", 16)
         if len(matrix) == 16:
             _apply_matrix(placed, matrix)
@@ -993,7 +1421,14 @@ struct _Loader(Movable):
         self.model.nodes[index] = id
         var mesh = self.integer(node, "mesh", -1)
         if mesh >= 0:
-            self.draw(mesh, id, scene, assets)
+            if self.document.has(node, "skin"):
+                self.skinned_nodes.append(index)
+                self.skinned_ids.append(id)
+            else:
+                self.draw(mesh, index, id, scene, assets)
+        var camera = self.integer(node, "camera", -1)
+        if camera >= 0:
+            self.model.cameras.append(self.camera_of(camera, id))
         var children = self.document.get(node, "children")
         if children != NO_NODE:
             if self.document.kind(children) != ARRAY:
@@ -1004,13 +1439,29 @@ struct _Loader(Movable):
                 )
                 self.place(child, id, scene, assets)
 
+    def morph_weights(self, node: Int, mesh: Int) raises -> List[Float32]:
+        """Return the morph influences a node's mesh starts at: the node's
+        `weights`, or the mesh's when the node has none, or none at all."""
+        var weights = self.number_list(node, "weights")
+        if not self.document.has(node, "weights"):
+            weights = self.number_list(self.entry("meshes", mesh), "weights")
+        if len(weights) > 0 and len(weights) != self.morph_counts[mesh]:
+            raise Error("glTF: weights must hold one number per morph target")
+        return weights^
+
     def draw(
-        mut self, mesh: Int, node: NodeId, mut scene: Scene, mut assets: Assets
+        mut self,
+        mesh: Int,
+        index: Int,
+        node: NodeId,
+        mut scene: Scene,
+        mut assets: Assets,
     ) raises:
         """Add a `Mesh` per primitive of a glTF mesh at a node."""
         # `place` asks only for a mesh the node named, zero or more.
         if mesh >= len(self.model.first_primitives):
             raise Error("glTF: a node names a mesh that is not there")
+        var weights = self.morph_weights(self.entry("nodes", index), mesh)
         var entry = self.entry("meshes", mesh)
         var primitives = self.document.get(entry, "primitives")
         for slot in range(self.model.primitive_counts[mesh]):
@@ -1024,7 +1475,304 @@ struct _Loader(Movable):
             var material = self.material_for(
                 self.integer(primitive, "material", -1), tinted, assets
             )
-            scene.add_mesh(Mesh(geometry, material, node))
+            var drawn = Mesh(geometry, material, node)
+            for target in range(len(weights)):
+                drawn.set_morph_influence(target, weights[target])
+            self.node_meshes[index].append(len(scene.meshes))
+            scene.add_mesh(drawn)
+
+    # --- skins --------------------------------------------------------------
+
+    def skeleton_of(mut self, skin: Int) raises -> Skeleton:
+        """Build a skin's skeleton from its joints, which must all be in
+        the scene, and its inverse bind matrices, or the identity for each
+        joint when it names none."""
+        var entry = self.entry("skins", skin)
+        var joints = self.array_of(entry, "joints")
+        var count = self.document.length(joints)
+        var inverses = List[Float32]()
+        var accessor = self.integer(entry, "inverseBindMatrices", -1)
+        if accessor >= 0:
+            var read = self.accessor_floats(accessor)
+            if read[1] != 16 or len(read[0]) != count * 16:
+                raise Error(
+                    "glTF: inverseBindMatrices must be one MAT4 per joint"
+                )
+            inverses = read[0].copy()
+        var bones = List[Bone]()
+        for slot in range(count):
+            var joint = self.document.integer(self.document.at(joints, slot))
+            if joint < 0 or joint >= len(self.model.nodes):
+                raise Error("glTF: a skin names a joint that is not there")
+            var id = self.model.nodes[joint]
+            if id == NO_PARENT:
+                raise Error(
+                    "glTF: a skin names a joint the loaded scene does not reach"
+                )
+            var inverse = Matrix4()
+            if len(inverses) > 0:
+                for element in range(16):  # pragma: no branch
+                    inverse.elements[element] = inverses[slot * 16 + element]
+            bones.append(Bone(id, inverse^))
+        return Skeleton(bones^)
+
+    def draw_skinned(
+        mut self,
+        index: Int,
+        node: NodeId,
+        mut scene: Scene,
+        mut assets: Assets,
+    ) raises:
+        """Add a `SkinnedMesh` per primitive of a skinned node's mesh, bound
+        at the identity as three.js's `GLTFLoader` binds it."""
+        var entry = self.entry("nodes", index)
+        var mesh = self.required_integer(entry, "mesh")
+        if mesh >= len(self.model.first_primitives):
+            raise Error("glTF: a node names a mesh that is not there")
+        var skeleton = self.skeleton_of(self.required_integer(entry, "skin"))
+        var weights = self.morph_weights(entry, mesh)
+        var primitives = self.document.get(
+            self.entry("meshes", mesh), "primitives"
+        )
+        for slot in range(self.model.primitive_counts[mesh]):
+            var primitive = self.document.at(primitives, slot)
+            var geometry = self.model.geometries[
+                self.model.first_primitives[mesh] + slot
+            ]
+            ref shape = assets.geometries.get(geometry)
+            var bones = shape.has_attribute(String(SKIN_INDEX))
+            var shares = shape.has_attribute(String(SKIN_WEIGHT))
+            if not bones or not shares:
+                raise Error(
+                    "glTF: a skinned primitive needs JOINTS_0 and WEIGHTS_0"
+                )
+            var tinted = shape.has_attribute(String(COLOR))
+            var material = self.material_for(
+                self.integer(primitive, "material", -1), tinted, assets
+            )
+            var drawn = SkinnedMesh(geometry, material, node, skeleton.copy())
+            for target in range(len(weights)):
+                drawn.set_morph_influence(target, weights[target])
+            scene.add_skinned_mesh(drawn^)
+
+    # --- cameras ------------------------------------------------------------
+
+    def camera_of(self, index: Int, node: NodeId) raises -> GltfCamera:
+        """Build a glTF camera riding a scene node, as three.js's
+        `GLTFLoader.loadCamera` builds it."""
+        var entry = self.entry("cameras", index)
+        var name = self.text(entry, "name")
+        var kind = self.text(entry, "type")
+        if kind == "perspective":
+            var lens = self.document.get(entry, "perspective")
+            if lens == NO_NODE or self.document.kind(lens) != OBJECT:
+                raise Error("glTF: a perspective camera needs a perspective")
+            var camera = PerspectiveCamera(
+                Angle(self.required_number(lens, "yfov"), RADIAN),
+                self.number(lens, "aspectRatio", DEFAULT_ASPECT),
+                Length(self.required_number(lens, "znear"), METER),
+                Length(self.number(lens, "zfar", DEFAULT_FAR), METER),
+            )
+            camera.attach(node)
+            return GltfCamera(index, name, node, camera)
+        if kind == "orthographic":
+            var box = self.document.get(entry, "orthographic")
+            if box == NO_NODE or self.document.kind(box) != OBJECT:
+                raise Error(
+                    "glTF: an orthographic camera needs an orthographic"
+                )
+            var x = self.required_number(box, "xmag")
+            var y = self.required_number(box, "ymag")
+            var camera = OrthographicCamera(
+                Length(-x, METER),
+                Length(x, METER),
+                Length(y, METER),
+                Length(-y, METER),
+                Length(self.required_number(box, "znear"), METER),
+                Length(self.required_number(box, "zfar"), METER),
+            )
+            camera.attach(node)
+            return GltfCamera(index, name, node, camera^)
+        raise Error("glTF: a camera type must be perspective or orthographic")
+
+    # --- animations ---------------------------------------------------------
+
+    def read_animations(mut self) raises:
+        """Build one clip per animation that drives something the loaded
+        scene reaches."""
+        for index in range(self.count("animations")):
+            var animation = self.entry("animations", index)
+            var channels = self.array_of(animation, "channels")
+            var samplers = self.array_of(animation, "samplers")
+            var tracks = List[KeyframeTrack]()
+            for slot in range(self.document.length(channels)):
+                var channel = self.object_at(channels, slot)
+                var sampler = self.required_integer(channel, "sampler")
+                if sampler < 0 or sampler >= self.document.length(samplers):
+                    raise Error(
+                        "glTF: a channel names a sampler that is not there"
+                    )
+                var target = self.document.get(channel, "target")
+                if target == NO_NODE or self.document.kind(target) != OBJECT:
+                    raise Error("glTF: a channel needs a target object")
+                self.channel_tracks(
+                    self.object_at(samplers, sampler), target, tracks
+                )
+            if len(tracks) == 0:
+                continue
+            var name = self.text(animation, "name")
+            if name == "":
+                name = "animation_" + String(index)
+            self.model.animations.append(AnimationClip(name, tracks^))
+
+    def channel_tracks(
+        mut self, sampler: Int, target: Int, mut tracks: List[KeyframeTrack]
+    ) raises:
+        """Add the tracks one channel makes: one for a node's translation,
+        rotation or scale, and one per mesh and morph target for its
+        weights. A channel on no node, or on a node the scene does not
+        reach, adds none."""
+        var node = self.integer(target, "node", -1)
+        if node < 0:
+            # An extension's channel, which names its target elsewhere.
+            return
+        if node >= len(self.model.nodes):
+            raise Error("glTF: a channel names a node that is not there")
+        var path = self.text(target, "path")
+        var kind = _path_kind(path)
+        var id = self.model.nodes[node]
+        if id == NO_PARENT:
+            return
+        var input = self.accessor_floats(
+            self.required_integer(sampler, "input")
+        )
+        if input[1] != 1:
+            raise Error("glTF: a sampler's input must be a SCALAR")
+        var times = List[Duration]()
+        for key in range(len(input[0])):
+            times.append(Duration(input[0][key], SECOND))
+        var how = _interpolation_of(self.text(sampler, "interpolation"))
+        var output = self.accessor_floats(
+            self.required_integer(sampler, "output")
+        )
+        if path != "weights":
+            var width = kind.component_count()
+            if output[1] != width:
+                raise Error(
+                    "glTF: a " + path + " output must be a VEC" + String(width)
+                )
+            tracks.append(
+                _track(node_target(id, kind), times, output[0], how, width, 0)
+            )
+            return
+        if output[1] != 1:
+            raise Error("glTF: a weights output must be a SCALAR")
+        var drawn = self.node_meshes[node].copy()
+        if len(drawn) == 0:
+            # No plain mesh at the node: none, or a skinned one, whose
+            # influences the mixer does not drive.
+            return
+        var morphs = self.morph_counts[
+            self.required_integer(self.entry("nodes", node), "mesh")
+        ]
+        for at in range(len(drawn)):  # pragma: no branch
+            for slot in range(morphs):
+                tracks.append(
+                    _track(
+                        morph_target(MeshIndex(drawn[at]), slot),
+                        times,
+                        output[0],
+                        how,
+                        morphs,
+                        slot,
+                    )
+                )
+
+
+def _path_kind(path: String) raises -> TrackKind:
+    """Return the track kind a channel's path drives: `MORPH_INFLUENCE` for
+    `weights`, whose target is made per morph target."""
+    if path == "translation":
+        return TRANSLATION
+    if path == "rotation":
+        return QUATERNION
+    if path == "scale":
+        return SCALE
+    if path == "weights":
+        return MORPH_INFLUENCE
+    raise Error(
+        "glTF: a channel path must be translation, rotation, scale or weights"
+    )
+
+
+def _interpolation_of(name: String) raises -> Interpolation:
+    """Return a sampler's interpolation as a track's: `LINEAR` when it
+    names none."""
+    if name == "" or name == "LINEAR":
+        return LINEAR_KEYS
+    if name == "STEP":
+        return STEP
+    if name == "CUBICSPLINE":
+        return CUBIC_SPLINE
+    raise Error("glTF: an interpolation must be LINEAR, STEP or CUBICSPLINE")
+
+
+def _track(
+    target: TrackTarget,
+    times: List[Duration],
+    output: List[Float32],
+    how: Interpolation,
+    stride: Int,
+    lane: Int,
+) raises -> KeyframeTrack:
+    """Return one track read out of a sampler's output.
+
+    Each key holds `stride` numbers, of which the track takes
+    `target.kind.component_count()` from `lane` on. A cubic spline key holds
+    three such runs, in-tangent, value and out-tangent, as glTF lays them
+    out.
+    """
+    var width = target.kind.component_count()
+    var parts = 3 if how == CUBIC_SPLINE else 1
+    if len(output) != len(times) * parts * stride:
+        raise Error(
+            "glTF: a sampler's output must hold one value per key, and a"
+            " cubic spline's two tangents as well"
+        )
+    var runs = List[List[Float32]]()
+    for part in range(parts):  # pragma: no branch
+        var run = List[Float32]()
+        for key in range(len(times)):
+            var at = (key * parts + part) * stride + lane
+            for offset in range(width):  # pragma: no branch
+                run.append(output[at + offset])
+        runs.append(run^)
+    if how == CUBIC_SPLINE:
+        return KeyframeTrack(
+            target,
+            times,
+            in_tangents=runs[0].copy(),
+            values=runs[1].copy(),
+            out_tangents=runs[2].copy(),
+        )
+    return KeyframeTrack(target, times, runs[0].copy(), how)
+
+
+def _normalize_skin_weights(weights: List[Float32]) -> List[Float32]:
+    """Return each vertex's four weights scaled to sum to one, as three.js's
+    `SkinnedMesh.normalizeSkinWeights` scales them: by their Manhattan
+    length, and to the first bone alone when they are all zero."""
+    var out = List[Float32]()
+    for vertex in range(len(weights) // 4):
+        var total = Float32(0)
+        for lane in range(4):  # pragma: no branch
+            total += abs(weights[vertex * 4 + lane])
+        for lane in range(4):  # pragma: no branch
+            if total == 0:
+                out.append(Float32(1) if lane == 0 else Float32(0))
+            else:
+                out.append(weights[vertex * 4 + lane] / total)
+    return out^
 
 
 def _components_of(kind: String) raises -> Int:
