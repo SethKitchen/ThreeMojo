@@ -260,9 +260,7 @@ def float_texel(
     Returns:
         The color.
     """
-    if alpha == IGNORED:
-        return FloatColor(r, g, b, 1.0)
-    return FloatColor(r, g, b, a)
+    return FloatColor(r, g, b, 1.0 if alpha == IGNORED else a)
 
 
 def mix(near: Float32, far: Float32, t: Float32) -> Float32:
@@ -489,11 +487,9 @@ def wrap_index(coordinate: Int, extent: Int, mode: Wrap) -> Int:
         An index inside the image.
     """
     if mode == CLAMP:
-        if coordinate < 0:
-            return 0
-        if coordinate >= extent:
-            return extent - 1
-        return coordinate
+        # One statement and no decisions: every bilinear read makes four
+        # of these calls, and a coverage run writes a record per statement.
+        return min(max(coordinate, 0), extent - 1)
 
     # Mojo's `%` is floored, as Python's is, so a negative coordinate already
     # comes back inside [0, extent) and needs no correcting afterwards: -1 % 4
@@ -1155,11 +1151,25 @@ struct Texture(Movable):
         var down = (1 - v) * Float32(tall) - 0.5
         var column = Int(floor(across))
         var row = Int(floor(down))
+        # The four texels are two columns and two rows, so each is wrapped
+        # once here rather than once per texel, in texel units of four
+        # channels. The same texels `_wrapped_texel` reads, in fewer steps:
+        # this is the innermost read of every textured fragment.
+        var left = wrap_index(column, wide, self.wrap) * Self.CHANNELS
+        var right = wrap_index(column + 1, wide, self.wrap) * Self.CHANNELS
+        var near = (
+            self.offsets[level]
+            + wrap_index(row, tall, self.wrap) * wide * Self.CHANNELS
+        )
+        var far = (
+            self.offsets[level]
+            + wrap_index(row + 1, tall, self.wrap) * wide * Self.CHANNELS
+        )
         return blend_texels(
-            self._wrapped_texel(column, row, level),
-            self._wrapped_texel(column + 1, row, level),
-            self._wrapped_texel(column, row + 1, level),
-            self._wrapped_texel(column + 1, row + 1, level),
+            self._texel_at(near + left),
+            self._texel_at(near + right),
+            self._texel_at(far + left),
+            self._texel_at(far + right),
             across - Float32(column),
             down - Float32(row),
         )

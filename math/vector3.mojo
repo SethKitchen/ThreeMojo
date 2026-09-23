@@ -49,13 +49,14 @@ struct Vector3(ImplicitlyCopyable):
 
     def cross(mut self, other: Self):
         """Set `self` to the cross product of `self` and `other`."""
-        # Keep the original components until all outputs are calculated.
-        var x = self.y * other.z - self.z * other.y
-        var y = self.z * other.x - self.x * other.z
-        var z = self.x * other.y - self.y * other.x
-        self.x = x
-        self.y = y
-        self.z = z
+        # One statement, so every output is calculated from the original
+        # components, and so a coverage run writes one record per call and
+        # not six: this runs per tap of a PMREM blur.
+        self = Vector3(
+            self.y * other.z - self.z * other.y,
+            self.z * other.x - self.x * other.z,
+            self.x * other.y - self.y * other.x,
+        )
 
     def normalize(mut self):
         """Scale `self` to unit length, leaving a zero vector unchanged."""

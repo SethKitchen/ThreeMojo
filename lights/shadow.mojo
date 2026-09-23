@@ -634,17 +634,9 @@ def _mix(low: Float32, high: Float32, weight: Float32) -> Float32:
 def _texel_at(column: Int, row: Int, size: Int) -> Int:
     """Return a texel's index with its column and row held to the map, as
     a map clamped to its edge reads past them."""
-    var across = column
-    var down = row
-    if across < 0:
-        across = 0
-    if across >= size:
-        across = size - 1
-    if down < 0:
-        down = 0
-    if down >= size:
-        down = size - 1
-    return down * size + across
+    # One statement: a soft shadow reads sixteen of these per fragment,
+    # and a coverage run writes a record per statement.
+    return min(max(row, 0), size - 1) * size + min(max(column, 0), size - 1)
 
 
 def soft_texel(place: Vector3, tap: Int, size: Int) -> Int:
@@ -755,8 +747,7 @@ def bilinear_fraction(at: Float32) -> Float32:
     Returns:
         Zero up to one.
     """
-    var shifted = at - 0.5
-    return shifted - floor(shifted)
+    return (at - 0.5) - floor(at - 0.5)
 
 
 def bilinear(

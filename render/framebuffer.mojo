@@ -134,6 +134,7 @@ def _hue_to_channel(low: Float32, high: Float32, hue: Float32) -> Float32:
     return low
 
 
+@fieldwise_init
 struct FloatColor(Equatable, ImplicitlyCopyable):
     """An RGBA color with channels as floats, nominally zero to one.
 
@@ -154,14 +155,19 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
     var b: Float32
     var a: Float32
 
-    def __init__(
-        out self, r: Float32, g: Float32, b: Float32, a: Float32 = 1.0
-    ):
-        """Create a color, opaque unless an alpha is given."""
-        self.r = r
-        self.g = g
-        self.b = b
-        self.a = a
+    # `@fieldwise_init` makes the four-channel constructor. It has no body,
+    # so the coverage probes cost nothing on the hottest constructor in the
+    # renderer; a body of four statements wrote four records per color.
+
+    def __init__(out self, r: Float32, g: Float32, b: Float32):
+        """Create an opaque color.
+
+        Args:
+            r: Red, linear.
+            g: Green, linear.
+            b: Blue, linear.
+        """
+        self = Self(r, g, b, 1.0)
 
     def __init__(out self, *, srgb: Color):
         """Decode an authored eight-bit color into linear light.

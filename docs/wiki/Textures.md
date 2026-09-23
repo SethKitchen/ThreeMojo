@@ -416,6 +416,8 @@ The sharpest copy reads the source in the direction of each texel. Each copy aft
 
 Each blur is two passes. The first turns about a pole and the second turns toward it. The pole changes each time among ten axes of a dodecahedron, `pole_axis`. This is three.js's `SphericalGaussianBlur`, run on the host once.
 
+Each pass finds its weights, the sine and cosine of each tap, and the position of its copy once. Each texel then only turns its direction and reads. The sums run in three.js's order, so the image is the same to the bit. See [Benchmarks](Benchmarks#pmrem-and-the-coverage-run).
+
 ### Where it differs from three.js
 
 - The image holds 32-bit floats. three.js renders half floats.

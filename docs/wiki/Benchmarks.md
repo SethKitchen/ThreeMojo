@@ -125,6 +125,33 @@ The `gl` package did not load, so three.js did not render. The `cpu-flat` backen
 
 Mojo 1.0.0 compiles the probe, `triangle`, `spin`, `cube` and `edges`. It refuses the other examples.
 
+## PMREM and the coverage run
+
+The heaviest suites now write a quarter to a half of the coverage records they wrote before issue #157. Every image is the same to the bit.
+
+A coverage run writes one record for each statement that runs. So the cost of a suite under coverage follows the statements in its innermost loops, not its run time. `test_pmrem` takes a fifth of a second without coverage, but it wrote 14 GB under coverage. See [Coverage tool](Coverage-tool#the-capture-grows-with-every-statement-run).
+
+| Suite, every CPU module instrumented | Before | After |
+|---|---|---|
+| `test_pmrem` | 13.95 GB, 390 s | 3.63 GB, 99 s |
+| `test_renderer` | 3.22 GB, 84 s | 2.35 GB, 70 s |
+| `test_environment` | 2.34 GB, 63 s | 1.24 GB, 38 s |
+| `test_rasterizer` | 0.65 GB, 16 s | 0.49 GB, 15 s |
+
+The times come from a Linux container with four shared cores, so they are approximate. The sizes are exact.
+
+The changes:
+
+- The PMREM blur finds its weights, sines, cosines and copy position once per pass. `CubeUvCopy` holds the position, and `cube_uv_coordinate` uses it too.
+- A bilinear read wraps each of its two columns and two rows once.
+- `FloatColor` and the `CLAMP` case of `wrap_index` have no statements to probe. `Vector3.cross` and the shadow texel clamp are one statement each.
+- Spherical harmonics find only the weight they use.
+- `test_pmrem` blurs four environments, not seven. Three tests only need a valid layout, and now use one made by hand.
+
+Without coverage, a 256-texel cube prefilters in about 210 ms, from about 270 ms before.
+
+The sums keep their order, so each blur gives the same bits. The Mojo compiler fuses a multiply and an add into one instruction when it can. Thus moving a product out of a loop can change the last bit. The blur keeps the cross product per tap for that reason. A scratch program compared the images before and after, bit for bit, at face sizes 16 to 256 and from a panorama.
+
 ## Other benches
 
 | Program | Shows |

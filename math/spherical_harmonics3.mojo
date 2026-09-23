@@ -199,9 +199,11 @@ struct SphericalHarmonics3(Equatable, ImplicitlyCopyable, Writable):
         irradiance weights, summed in index order."""
         var total = Vector3(0, 0, 0)
         for index in range(SH_COUNT):  # pragma: no branch
-            var weight = sh_basis(index, normal)
-            if irradiance:
-                weight = sh_irradiance_weight(index, normal)
+            # One weight or the other, never both: this runs nine times per
+            # shaded point.
+            var weight = sh_irradiance_weight(
+                index, normal
+            ) if irradiance else sh_basis(index, normal)
             var term = self._at(index)
             total = Vector3(
                 total.x + term.x * weight,

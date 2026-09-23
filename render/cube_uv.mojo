@@ -204,21 +204,78 @@ def cube_uv_coordinate(
         `u` from the left and `v` from the bottom, both zero to one, as
         `Texture.sample` reads them.
     """
-    var face = cube_uv_face(direction)
+    return cube_uv_copy(mip, lod_max, width, height).coordinate(direction)
+
+
+@fieldwise_init
+struct CubeUvCopy(ImplicitlyCopyable):
+    """One copy of a layout image, with every number `cube_uv_coordinate`
+    needs that does not depend on the direction worked out once.
+
+    A PMREM blur reads the same copy up to forty times per texel, so it
+    keeps one of these for the pass. `cube_uv_coordinate` makes one per
+    read, so there is one arithmetic and not two.
+    """
+
+    # The copy's tile size in texels, as a float: `2^mip`, at least sixteen.
+    var face_size: Float32
+    # How far right the copy sits, in texels: forty-eight a step past mip
+    # four.
+    var shift: Float32
+    # How far up the copy sits, in texels.
+    var rise: Float32
+    # One over the layout image's width and height.
+    var inverse_width: Float32
+    var inverse_height: Float32
+
+    def coordinate(self, direction: Vector3) -> Vector2:
+        """Return where this copy holds a direction: `cube_uv_coordinate`.
+
+        Args:
+            direction: Any vector.
+
+        Returns:
+            `u` from the left and `v` from the bottom, both zero to one.
+        """
+        var face = cube_uv_face(direction)
+        var uv = cube_uv_face_uv(direction, face)
+        var x = uv.x * (self.face_size - 2) + 1
+        var y = uv.y * (self.face_size - 2) + 1
+        var column = face
+        if face > 2:
+            y += self.face_size
+            column -= 3
+        x += Float32(column) * self.face_size
+        x += self.shift
+        y += self.rise
+        return Vector2(x * self.inverse_width, y * self.inverse_height)
+
+
+def cube_uv_copy(
+    mip: Float32, lod_max: Int, width: Int, height: Int
+) -> CubeUvCopy:
+    """Return one copy of a layout image, ready to read many directions:
+    the part of three.js's `bilinearCubeUV` that depends only on the mip.
+
+    Args:
+        mip: A whole mip, from minus two to `lod_max`.
+        lod_max: The sharpest copy's mip, `cube_uv_lod_max`.
+        width: The layout image's width in texels.
+        height: The layout image's height in texels.
+
+    Returns:
+        The copy, for `CubeUvCopy.coordinate`.
+    """
     var filter_int = max(Float32(CUBE_UV_MIN_MIP) - mip, Float32(0))
     var level = max(mip, Float32(CUBE_UV_MIN_MIP))
     var face_size = exp2(level)
-    var uv = cube_uv_face_uv(direction, face)
-    var x = uv.x * (face_size - 2) + 1
-    var y = uv.y * (face_size - 2) + 1
-    var column = face
-    if face > 2:
-        y += face_size
-        column -= 3
-    x += Float32(column) * face_size
-    x += filter_int * 3 * Float32(CUBE_UV_MIN_TILE)
-    y += 4 * (exp2(Float32(lod_max)) - face_size)
-    return Vector2(x * (1 / Float32(width)), y * (1 / Float32(height)))
+    return CubeUvCopy(
+        face_size,
+        filter_int * 3 * Float32(CUBE_UV_MIN_TILE),
+        4 * (exp2(Float32(lod_max)) - face_size),
+        1 / Float32(width),
+        1 / Float32(height),
+    )
 
 
 @fieldwise_init

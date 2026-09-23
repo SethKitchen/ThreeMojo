@@ -88,6 +88,28 @@ def a_colored_cube(size: Int, bright: Int = -1) raises -> CubeTexture:
     return CubeTexture(faces^)
 
 
+def a_layout() raises -> Texture:
+    """Return a valid layout image for `lod_max` four, 336 by 64, whose
+    texels rise along the rows: a stand-in for a PMREM where only the
+    layout's shape and its reads matter, so a test need not blur one."""
+    var data = List[Float32]()
+    for texel in range(336 * 64):
+        var level = Float32(texel % 97) / 97
+        data.append(level)
+        data.append(2 * level)
+        data.append(1 - level)
+        data.append(1)
+    return float_texture(336, 64, data^, CLAMP, BILINEAR, False, IGNORED)
+
+
+def a_cube_with_a_layout() raises -> CubeTexture:
+    """Return `a_colored_cube(16)` holding `a_layout` as its PMREM."""
+    var cube = a_colored_cube(16)
+    cube.cube_uv = a_layout()
+    cube.validate()
+    return cube^
+
+
 # --- the layout ---------------------------------------------------------------
 
 
@@ -232,6 +254,7 @@ def test_roughness_zero_reads_the_source() raises:
     assert_false(cube.is_prefiltered())
     assert_equal(prefiltered.cube_uv.width, 336)
     assert_equal(prefiltered.cube_uv.height, 64)
+    validate_cube_uv(prefiltered.cube_uv)
     for face in [
         POSITIVE_X,
         NEGATIVE_X,
@@ -310,14 +333,18 @@ def test_a_cube_without_a_pmrem_reads_down_its_chain() raises:
 
 
 def test_a_sample_reads_the_layout_directly() raises:
-    var prefiltered = pmrem_from_cube(a_colored_cube(16))
+    # Any valid layout proves the dispatch; no blur is needed for it.
+    var prefiltered = a_cube_with_a_layout()
     var direct = sample_cube_uv(prefiltered.cube_uv, Vector3(0, 0, 1), 0.45)
     var through = prefiltered.sample_rough(Vector3(0, 0, 1), 0.45)
+    assert_true(direct.r > 0)
     assert_equal(direct.r, through.r)
+    assert_equal(direct.g, through.g)
+    assert_equal(direct.b, through.b)
 
 
 def test_a_copy_keeps_the_pmrem() raises:
-    var prefiltered = pmrem_from_cube(a_colored_cube(16))
+    var prefiltered = a_cube_with_a_layout()
     var copied = CubeTexture(copy=prefiltered)
     assert_true(copied.is_prefiltered())
     assert_equal(copied.cube_uv.width, prefiltered.cube_uv.width)
@@ -352,7 +379,7 @@ def test_a_source_refused_by_the_cube_is_refused() raises:
 
 
 def test_a_layout_image_is_checked() raises:
-    var prefiltered = pmrem_from_cube(a_colored_cube(16))
+    var prefiltered = a_cube_with_a_layout()
     validate_cube_uv(prefiltered.cube_uv)
     # Bytes.
     var bytes = List[UInt8](length=336 * 64 * 4, fill=0)

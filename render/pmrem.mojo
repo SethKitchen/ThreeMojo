@@ -48,7 +48,8 @@ from render.cube_texture import (
 from render.cube_uv import (
     CUBE_UV_EXTRA_COPIES,
     CUBE_UV_MIN_MIP,
-    cube_uv_coordinate,
+    CubeUvCopy,
+    cube_uv_copy,
     cube_uv_direction,
 )
 from render.texture import BILINEAR, CLAMP, IGNORED, Texture, float_texture
@@ -232,14 +233,63 @@ def blur_axis(latitudinal: Bool, pole: Vector3, direction: Vector3) -> Vector3:
     return axis
 
 
-def _turned(direction: Vector3, axis: Vector3, theta: Float32) -> Vector3:
-    """Return `direction` turned by `theta` about a unit axis: Rodrigues'
-    rotation, as the blur shader's `getSample` writes it."""
-    var cosine = cos(theta)
-    var sine = sin(theta)
+@fieldwise_init
+struct _Taps(Movable):
+    """One blur pass's taps, worked out once for every texel of the pass:
+    step `index` turns by `index` pixels' worth of angle either way."""
+
+    # Each step's weight, already divided by the sum of them all.
+    var weights: List[Float32]
+    # The cosine and sine of each step's turn, the plus side and the minus.
+    var plus_cosines: List[Float32]
+    var plus_sines: List[Float32]
+    var minus_cosines: List[Float32]
+    var minus_sines: List[Float32]
+
+
+def _taps(
+    samples: Int, sigma_pixels: Float32, radians_per_pixel: Float32
+) -> _Taps:
+    """Return a pass's taps: three.js's Gaussian weights, normalized, and
+    the turn of each step."""
+    var weights = List[Float32]()
+    var sum = Float32(0)
+    for index in range(samples):  # pragma: no branch
+        var x = Float32(index) / sigma_pixels
+        var weight = exp(-x * x / 2)
+        weights.append(weight)
+        sum += weight if index == 0 else 2 * weight
+    var taps = _Taps(
+        List[Float32](),
+        List[Float32](),
+        List[Float32](),
+        List[Float32](),
+        List[Float32](),
+    )
+    # `samples` is at least one, so this never runs zero times.
+    for index in range(samples):  # pragma: no branch
+        var theta = radians_per_pixel * Float32(index)
+        taps.weights.append(weights[index] / sum)
+        taps.plus_cosines.append(cos(theta))
+        taps.plus_sines.append(sin(theta))
+        taps.minus_cosines.append(cos(-theta))
+        taps.minus_sines.append(sin(-theta))
+    return taps^
+
+
+def _turned(
+    direction: Vector3,
+    axis: Vector3,
+    dot: Float32,
+    cosine: Float32,
+    sine: Float32,
+) -> Vector3:
+    """Return `direction` turned about a unit axis by the angle whose cosine
+    and sine are given: Rodrigues' rotation, as the blur shader's
+    `getSample` writes it. `dot` is the axis dotted with the direction."""
     var across = axis
     across.cross(direction)
-    var along = axis.dot(direction) * (1 - cosine)
+    var along = dot * (1 - cosine)
     return Vector3(
         direction.x * cosine + across.x * sine + axis.x * along,
         direction.y * cosine + across.y * sine + axis.y * along,
@@ -249,21 +299,16 @@ def _turned(direction: Vector3, axis: Vector3, theta: Float32) -> Vector3:
 
 def _tap(
     source: Texture,
+    copy: CubeUvCopy,
     direction: Vector3,
     axis: Vector3,
-    theta: Float32,
-    mip: Float32,
-    lod_max: Int,
+    dot: Float32,
+    cosine: Float32,
+    sine: Float32,
 ) -> FloatColor:
-    """Return one copy of `source` read in `direction` turned by `theta`:
-    the blur shader's `getSample`."""
-    var place = cube_uv_coordinate(
-        _turned(direction, axis, theta),
-        mip,
-        lod_max,
-        source.width,
-        source.height,
-    )
+    """Return one copy of `source` read in a turned direction: the blur
+    shader's `getSample`."""
+    var place = copy.coordinate(_turned(direction, axis, dot, cosine, sine))
     return source.sample(place.x, place.y)
 
 
@@ -279,21 +324,21 @@ def _half_blur(
     pole: Vector3,
 ):
     """Blur copy `lod_in` of `source` into copy `lod_out` of `target`, one
-    way: three.js's `_halfBlur` and its shader."""
+    way: three.js's `_halfBlur` and its shader.
+
+    What is the same for every texel is worked out once a pass: the
+    weights, each step's sine and cosine, and where the copy sits. The
+    sums run in the shader's order."""
     var pixels = ladder.sizes[lod_in] - 1
     var radians_per_pixel = Float32(pi) / Float32(2 * pixels)
     var sigma_pixels = sigma / radians_per_pixel
     var samples = min(
         1 + Int(floor(STANDARD_DEVIATIONS * sigma_pixels)), MAX_SAMPLES
     )
-    var weights = List[Float32]()
-    var sum = Float32(0)
-    for index in range(samples):  # pragma: no branch
-        var x = Float32(index) / sigma_pixels
-        var weight = exp(-x * x / 2)
-        weights.append(weight)
-        sum += weight if index == 0 else 2 * weight
-    var mip = Float32(lod_max - lod_in)
+    var taps = _taps(samples, sigma_pixels, radians_per_pixel)
+    var copy = cube_uv_copy(
+        Float32(lod_max - lod_in), lod_max, source.width, source.height
+    )
     var region = _region(lod_out, ladder.sizes[lod_out], lod_max)
     for face in range(6):  # pragma: no branch
         var left = region.x + (face % 3) * region.size
@@ -302,24 +347,44 @@ def _half_blur(
             for x in range(region.size):  # pragma: no branch
                 var direction = _texel_direction(region, face, x, y)
                 var axis = blur_axis(latitudinal, pole, direction)
-                var center = _tap(source, direction, axis, 0, mip, lod_max)
-                var weight = weights[0] / sum
+                var dot = axis.dot(direction)
+                var center = _tap(
+                    source,
+                    copy,
+                    direction,
+                    axis,
+                    dot,
+                    taps.plus_cosines[0],
+                    taps.plus_sines[0],
+                )
+                var weight = taps.weights[0]
                 var red = weight * center.r
                 var green = weight * center.g
                 var blue = weight * center.b
                 # At least four taps for every copy's sigma, so this loop
                 # never runs zero times.
                 for index in range(1, samples):  # pragma: no branch
-                    weight = weights[index] / sum
-                    var theta = radians_per_pixel * Float32(index)
+                    weight = taps.weights[index]
                     var minus = _tap(
-                        source, direction, axis, -theta, mip, lod_max
+                        source,
+                        copy,
+                        direction,
+                        axis,
+                        dot,
+                        taps.minus_cosines[index],
+                        taps.minus_sines[index],
                     )
                     red += weight * minus.r
                     green += weight * minus.g
                     blue += weight * minus.b
                     var plus = _tap(
-                        source, direction, axis, theta, mip, lod_max
+                        source,
+                        copy,
+                        direction,
+                        axis,
+                        dot,
+                        taps.plus_cosines[index],
+                        taps.plus_sines[index],
                     )
                     red += weight * plus.r
                     green += weight * plus.g

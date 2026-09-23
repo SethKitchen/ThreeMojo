@@ -53,4 +53,18 @@ MC/DC is the masking variant. Short-circuit evaluation makes unique-cause MC/DC 
 
 Two threads reporting one decision at once would interleave their records. The renderer therefore defaults to one worker, and the coverage run uses it.
 
+### The capture grows with every statement run
+
+Each statement that runs writes one record, so the capture grows with the work a suite does. A PMREM blur reads its source about half a million times, and each read ran about 150 statements. That made `test_pmrem` write 14 GB and run for six and a half minutes.
+
+Keep the innermost helpers short for this reason:
+
+- A small value type uses `@fieldwise_init`. Its constructor then has no body and writes no record. `FloatColor` and `Vector3` do this.
+- A helper that runs per texel or per tap is one statement where the code stays clear. `Vector3.cross` and the `CLAMP` case of `wrap_index` are.
+- Work that is the same for every texel is done once, outside the loop. The PMREM blur finds its weights, sines, cosines and copy position once per pass.
+
+See [Benchmarks](Benchmarks#pmrem-and-the-coverage-run) for the numbers.
+
+## Compiler hang
+
 A `Bool` loop flag read after nested loops hangs the Mojo compiler. The instrumenter emits an `Int` counter instead. See [The Mojo compiler hang](The-Mojo-compiler-hang).
