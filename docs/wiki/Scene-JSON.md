@@ -68,7 +68,9 @@ A camera is not a scene node in this port. Put the cameras in an `ObjectCameras`
 
 The writer writes each geometry as a `BufferGeometry`. Each attribute is a `Float32Array`. The index is a `Uint16Array` up to 65535 vertices, and a `Uint32Array` above that, as three.js chooses. The groups and the morph targets are written too.
 
-The reader reads a `BufferGeometry` with `Float32Array` attributes, an index, groups and morph targets. It also builds three parametric types from their parameters:
+An instanced geometry is an `InstancedBufferGeometry` with its `instanceCount`, and each per-instance attribute has its `meshPerAttribute`. An interleaved attribute is written as its own floats, as three.js writes one attribute alone. See [Geometry](Geometry#interleaved-buffers).
+
+The reader reads a `BufferGeometry` with `Float32Array` attributes, an index, groups and morph targets. An interleaved attribute reads the `interleavedBuffers` and `arrayBuffers` of the geometry, and attributes that name one buffer share it. An `InstancedBufferGeometry` keeps its `instanceCount` and the `meshPerAttribute` of each attribute. three.js's loader leaves both at their defaults. It also builds three parametric types from their parameters:
 
 | Type | Built with | Condition |
 |---|---|---|
@@ -118,7 +120,7 @@ The writer does not write these things, and the reader refuses them:
 
 - Lines, points, sprites, LODs, batched meshes and skinned meshes.
 - `CustomBlending`.
-- A mesh with more than one material, and an interleaved attribute or one that is not a `Float32Array`.
+- A mesh with more than one material, and an attribute or an interleaved buffer that is not a `Float32Array`.
 - A texture with two different wraps, a mapping that is not `UVMapping`, or a `channel` that is not zero.
 - A perspective camera with `zoom`, `filmOffset` or `view`, and an orthographic camera with `view`.
 

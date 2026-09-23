@@ -98,6 +98,7 @@ from core.buffer_geometry import (
     MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
+    TANGENT,
     UV,
     UV1,
     BufferGeometry,
@@ -300,11 +301,20 @@ def _with_opacity(color: FloatColor, opacity: Float32) -> FloatColor:
 
 
 def _vertex_colors(
-    geometry: BufferGeometry, tinted: Bool, base: FloatColor, count: Int
+    geometry: BufferGeometry,
+    tinted: Bool,
+    base: FloatColor,
+    count: Int,
+    instance: Int = -1,
 ) raises -> List[FloatColor]:
     """Return the color each vertex carries: `base` for every one, or
     `base` times the geometry's `color` attribute when the material asks,
     three.js's `vertexColors`.
+
+    A `color` attribute that is per instance gives every vertex of an
+    instance that instance's color, as three.js's attribute divisor does.
+    A draw that is not an instance reads the first color, as WebGL does
+    for a divided attribute outside an instanced draw.
 
     The attribute holds three or four floats per vertex in linear light,
     as three.js's does since its color management, and a fourth float
@@ -318,6 +328,8 @@ def _vertex_colors(
         tinted: Whether the material asks for vertex colors.
         base: The material's color, linear, with its opacity in alpha.
         count: How many vertices the geometry has.
+        instance: Which instance the draw is, or minus one for a draw that
+            is not one.
 
     Returns:
         One color per vertex.
@@ -325,7 +337,8 @@ def _vertex_colors(
     Raises:
         Error: If `tinted` and the geometry has no `color` attribute, or
             the attribute holds neither three nor four floats per vertex,
-            or holds a color count that is not the vertex count.
+            or holds a color count that is not the vertex count, or is per
+            instance and holds no color for the instance.
     """
     var colors = List[FloatColor](length=count, fill=base)
     if not tinted:
@@ -338,19 +351,87 @@ def _vertex_colors(
     var channels = tints.item_size
     if channels != 3 and channels != 4:
         raise Error("A color attribute holds three or four floats per vertex")
-    if tints.count() != count:
+    var per_instance = tints.is_instanced()
+    if not per_instance and tints.count() != count:
         raise Error("A color attribute must hold one color per vertex")
+    var item = 0
+    if per_instance:
+        item = max(instance, 0) // tints.mesh_per_attribute()
     for vertex in range(count):
+        if not per_instance:
+            item = vertex
         var alpha = Float32(1)
         if channels == 4:
-            alpha = tints.component(vertex, 3)
+            alpha = tints.component(item, 3)
         colors[vertex] = FloatColor(
-            base.r * tints.component(vertex, 0),
-            base.g * tints.component(vertex, 1),
-            base.b * tints.component(vertex, 2),
+            base.r * tints.component(item, 0),
+            base.g * tints.component(item, 1),
+            base.b * tints.component(item, 2),
             base.a * alpha,
         )
     return colors^
+
+
+def _instancing(
+    geometry: BufferGeometry,
+) raises -> Tuple[List[Matrix4], List[Int]]:
+    """Return where a mesh draws each instance of its geometry, and which
+    instance each draw is.
+
+    A geometry that is not instanced is drawn once, where the mesh is. An
+    instanced one, three.js's `InstancedBufferGeometry`, is drawn
+    `drawn_instances` times. Each instance moves by its item of a
+    per-instance `offset` attribute, if there is one. three.js has no
+    built-in `offset`: its instancing examples add one in their own vertex
+    shader, which is what this stands in for. The move comes before the
+    mesh's own transform, as the examples add the offset to `position`.
+
+    Args:
+        geometry: The geometry the mesh draws.
+
+    Returns:
+        One matrix per draw, relative to the mesh's node, and the instance
+        each draw is: minus one for a geometry that is not instanced.
+
+    Raises:
+        Error: If the instance count cannot be worked out, if `position`,
+            `normal`, `uv` or `tangent` is per instance, which the
+            renderer does not draw, or if a per-instance `offset` holds
+            fewer than three numbers an item.
+    """
+    var matrices = List[Matrix4]()
+    var instances = List[Int]()
+    if not geometry.instanced:
+        matrices.append(Matrix4())
+        instances.append(-1)
+        return (matrices^, instances^)
+    var per_vertex: List[String] = [
+        String(POSITION),
+        String(NORMAL),
+        String(UV),
+        String(TANGENT),
+    ]
+    # Four names, always, so the loop never runs zero times.
+    for slot in range(len(per_vertex)):  # pragma: no branch
+        ref name = per_vertex[slot]
+        if (
+            geometry.has_attribute(name)
+            and geometry.attribute_view(name).is_instanced()
+        ):
+            raise Error("The renderer does not draw a per-instance " + name)
+    var count = geometry.drawn_instances()
+    var moved = geometry.has_attribute(String("offset")) and (
+        geometry.attribute_view(String("offset")).is_instanced()
+    )
+    for instance in range(count):
+        var matrix = Matrix4()
+        if moved:
+            ref offsets = geometry.attribute_view(String("offset"))
+            var by = offsets.vector3(instance // offsets.mesh_per_attribute())
+            matrix = translation(by.x, by.y, by.z)
+        matrices.append(matrix^)
+        instances.append(instance)
+    return (matrices^, instances^)
 
 
 def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
@@ -615,6 +696,10 @@ struct _Draw(ImplicitlyCopyable):
     # is not one. `_prepared` builds its triangles from its geometry's
     # pairs of points; see `objects.line_segments2`.
     var wide_line: Int
+    # Which instance of an instanced geometry this draw is, or minus one
+    # when the geometry is not instanced. What a per-instance attribute is
+    # read at; see `_instancing`.
+    var instance: Int
 
 
 @fieldwise_init
@@ -690,6 +775,7 @@ def _gather(
     skin: Int = -1,
     receive_shadow: Bool = False,
     colors: List[Color] = List[Color](),
+    instances: List[Int] = List[Int](),
 ) raises:
     """Add the draws of one scene object to `draws`, each with its sort
     key alongside, unless the camera leaves it out.
@@ -741,6 +827,8 @@ def _gather(
             a mesh's `receive_shadow`. Off for everything else.
         colors: One sRGB color per draw, which multiplies the material's
             color, or none for white.
+        instances: Which instance of an instanced geometry each draw is,
+            or none when the geometry is not instanced.
 
     Raises:
         Error: If the node, a geometry or the material is not there, a
@@ -777,6 +865,9 @@ def _gather(
         var tint = FloatColor(1, 1, 1, 1)
         if tinted:
             tint = FloatColor(srgb=colors[index])
+        var instance = -1
+        if len(instances) > 0:
+            instance = instances[index]
         draws.append(
             _Draw(
                 geometries[index],
@@ -791,6 +882,7 @@ def _gather(
                 scene.render_order(node),
                 tint,
                 -1,
+                instance,
             )
         )
 
@@ -888,7 +980,16 @@ def _draws(
         var casts = mesh.cast_shadow or (receivers_cast and mesh.receive_shadow)
         if casters_only and not casts:
             continue
-        var geometry: List[GeometryId] = [mesh.geometry]
+        # Left out before its geometry is read, as `_gather` would leave
+        # it out.
+        if not scene.shows(mesh.node, visible):
+            continue
+        # An instanced geometry is drawn once per instance, each draw
+        # placed and culled on its own as an instanced mesh's are.
+        var placing = _instancing(assets.geometries.get(mesh.geometry))
+        var geometry = List[GeometryId](
+            length=len(placing[0]), fill=mesh.geometry
+        )
         # A mesh wearing a morph target is not where its geometry's bound
         # says it is, so it is not measured against the frustum. The bound
         # describes the face the mesh has stopped wearing. three.js culls
@@ -903,7 +1004,7 @@ def _draws(
             mesh.node,
             mesh.material,
             geometry,
-            one,
+            placing[0],
             mesh.frustum_culled and not mesh.is_morphed(),
             view,
             visible,
@@ -913,6 +1014,7 @@ def _draws(
             known,
             mesh.morph_influences,
             receive_shadow=mesh.receive_shadow,
+            instances=placing[1],
         )
     for index in range(len(scene.skinned_meshes)):
         if casters_only:
@@ -1062,6 +1164,7 @@ def _draws(
                 scene.render_order(sprite.node),
                 FloatColor(1, 1, 1, 1),
                 -1,
+                -1,
             )
         )
     # The wide lines, sorted among the meshes by their own depth, as the
@@ -1098,6 +1201,7 @@ def _draws(
                 scene.render_order(line.node),
                 FloatColor(1, 1, 1, 1),
                 index,
+                -1,
             )
         )
 
@@ -3460,7 +3564,11 @@ struct Renderer(Movable):
                 material.opacity,
             )
             var vertex_colors = _vertex_colors(
-                geometry, material.vertex_colors, base, vertex_count
+                geometry,
+                material.vertex_colors,
+                base,
+                vertex_count,
+                draws[slot].instance,
             )
 
             # The index buffer is read directly, checked once up front.

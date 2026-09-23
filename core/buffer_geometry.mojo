@@ -57,6 +57,7 @@ does when `morphAttributes.normal` is absent.
 """
 
 from core.buffer_attribute import BufferAttribute
+from core.interleaved_buffer import InterleavedBuffer
 from math.bounds import Box3, Sphere
 from math.vector3 import Vector3
 from std.math import isfinite
@@ -98,18 +99,60 @@ comptime COLOR = "color"
 comptime TANGENT = "tangent"
 
 
-def _shift(mut attribute: BufferAttribute, offset: Vector3):
+def _shift(mut attribute: BufferAttribute, offset: Vector3) raises:
     """Move every item of a position attribute by one offset.
+
+    An interleaved attribute moves in its shared buffer, and the other
+    attributes on the buffer keep their numbers.
 
     Args:
         attribute: Positions, three or more numbers an item.
         offset: How far to move them.
+
+    Raises:
+        Error: If the attribute holds fewer than three numbers an item.
     """
-    var size = attribute.item_size
     for vertex in range(attribute.count()):
-        attribute.data[vertex * size] += offset.x
-        attribute.data[vertex * size + 1] += offset.y
-        attribute.data[vertex * size + 2] += offset.z
+        var moved = attribute.vector3(vertex) + offset
+        attribute.set_component(vertex, 0, moved.x)
+        attribute.set_component(vertex, 1, moved.y)
+        attribute.set_component(vertex, 2, moved.z)
+
+
+def _cloned(
+    attributes: List[BufferAttribute],
+    mut originals: List[InterleavedBuffer],
+    mut clones: List[InterleavedBuffer],
+) -> List[BufferAttribute]:
+    """Return a copy of every attribute, with each interleaved buffer
+    copied once.
+
+    Args:
+        attributes: The attributes to copy.
+        originals: The buffers copied so far, appended to.
+        clones: The copy of each of `originals`, appended to.
+
+    Returns:
+        The copies. An interleaved one reads the copy of its buffer.
+    """
+    var out = List[BufferAttribute](capacity=len(attributes))
+    for slot in range(len(attributes)):
+        ref attribute = attributes[slot]
+        if not attribute.is_interleaved():
+            out.append(attribute.copy())
+            continue
+        # Interleaved, so the handle is there.
+        var buffer = attribute._buffer.value().copy()
+        var found = -1
+        for seen in range(len(originals)):
+            if originals[seen].shares_with(buffer):
+                found = seen
+        if found < 0:
+            found = len(originals)
+            originals.append(buffer.copy())
+            clones.append(buffer.clone())
+        out.append(attribute.on_buffer(clones[found]))
+    return out^
 
 
 @fieldwise_init
@@ -164,9 +207,32 @@ struct BufferGeometry(Movable):
     # Runs of triangles that wear one material each: three.js's `groups`.
     # Empty means the whole geometry is one run. See `add_group`.
     var groups: List[GeometryGroup]
+    # Whether the geometry is drawn once per instance, three.js's
+    # `InstancedBufferGeometry`. See `BufferGeometry(instanced=True)`.
+    var instanced: Bool
+    # How many instances to draw, three.js's `instanceCount`, or none for
+    # as many as the per-instance attributes hold: three.js's default of
+    # `Infinity`. Read only when `instanced` is set.
+    var instance_count: Optional[Int]
 
     def __init__(out self):
         """Create an empty geometry with no attributes and no index."""
+        self = BufferGeometry(instanced=False)
+
+    def __init__(out self, *, instanced: Bool):
+        """Create an empty geometry, instanced or not.
+
+        `BufferGeometry(instanced=True)` is three.js's
+        `InstancedBufferGeometry`. A mesh draws it once per instance, and
+        every attribute built with `mesh_per_attribute` advances once per
+        instance rather than once per vertex. The renderer reads two of
+        them: `offset`, which moves an instance, and `color`, which colors
+        one when the material asks for vertex colors. See
+        `drawn_instances`.
+
+        Args:
+            instanced: Whether the geometry is drawn once per instance.
+        """
         self.names = List[String]()
         self.values = List[BufferAttribute]()
         self.index = List[Int]()
@@ -174,26 +240,92 @@ struct BufferGeometry(Movable):
         self.morph_normals = List[BufferAttribute]()
         self.morph_relative = False
         self.groups = List[GeometryGroup]()
+        self.instanced = instanced
+        self.instance_count = None
 
     def clone(self) -> BufferGeometry:
         """Return a copy of this geometry, three.js's `clone`.
 
-        Copies every attribute, the index, the morph targets and the groups.
-        A geometry is not `Copyable`, so that a copy is always asked for by
-        name and never made by an assignment.
+        Copies every attribute, the index, the morph targets, the groups
+        and the instancing. A geometry is not `Copyable`, so that a copy is
+        always asked for by name and never made by an assignment.
+
+        Each interleaved buffer is copied once, and the copied attributes
+        that read it read the one copy, as three.js's `copy` does. So two
+        attributes that shared a buffer still share one.
 
         Returns:
             The copy, which shares nothing with this geometry.
         """
-        var copied = BufferGeometry()
+        var copied = BufferGeometry(instanced=self.instanced)
+        var originals = List[InterleavedBuffer]()
+        var clones = List[InterleavedBuffer]()
         copied.names = self.names.copy()
-        copied.values = self.values.copy()
+        copied.values = _cloned(self.values, originals, clones)
         copied.index = self.index.copy()
-        copied.morph_positions = self.morph_positions.copy()
-        copied.morph_normals = self.morph_normals.copy()
+        copied.morph_positions = _cloned(
+            self.morph_positions, originals, clones
+        )
+        copied.morph_normals = _cloned(self.morph_normals, originals, clones)
         copied.morph_relative = self.morph_relative
         copied.groups = self.groups.copy()
+        copied.instance_count = self.instance_count
         return copied^
+
+    def set_instance_count(mut self, count: Int) raises:
+        """Set how many instances to draw, three.js's `instanceCount`.
+
+        Args:
+            count: How many. Zero draws nothing.
+
+        Raises:
+            Error: If the geometry is not instanced, or `count` is negative.
+        """
+        if not self.instanced:
+            raise Error("Only an instanced geometry has an instance count")
+        if count < 0:
+            raise Error("An instance count cannot be negative")
+        self.instance_count = count
+
+    def drawn_instances(self) raises -> Int:
+        """Return how many instances a mesh draws of this geometry.
+
+        three.js draws `instanceCount` instances, capped by the instances
+        the per-instance attributes hold. The cap here is the smallest over
+        every per-instance attribute: `count() * mesh_per_attribute()`.
+        three.js takes it from the first attribute the shader reads, which
+        a port without shaders cannot ask.
+
+        Returns:
+            The number of instances. One for a geometry that is not
+            instanced.
+
+        Raises:
+            Error: If the instance count is negative, or it is left
+                unbounded and no attribute is per instance.
+        """
+        if not self.instanced:
+            return 1
+        var cap = -1
+        for slot in range(len(self.values)):
+            ref attribute = self.values[slot]
+            if attribute.is_instanced():
+                var holds = attribute.count() * attribute.mesh_per_attribute()
+                if cap < 0 or holds < cap:
+                    cap = holds
+        if Bool(self.instance_count):
+            var count = self.instance_count.value()
+            if count < 0:
+                raise Error("An instance count cannot be negative")
+            if cap < 0:
+                return count
+            return min(count, cap)
+        if cap < 0:
+            raise Error(
+                "An instanced geometry with no per-instance attribute needs"
+                " an instance count"
+            )
+        return cap
 
     def add_group(
         mut self,
@@ -393,7 +525,8 @@ struct BufferGeometry(Movable):
 
         Allocates and copies the whole array, so this is for deliberately
         duplicating vertex data — not for reading it. Use `attribute_view`
-        to read.
+        to read. An interleaved attribute comes back with an array of its
+        own, as three.js's `clone` gives it.
 
         Args:
             name: Which attribute to copy.
@@ -407,7 +540,7 @@ struct BufferGeometry(Movable):
         var slot = self._slot(name)
         if slot < 0:
             raise Error("This geometry has no attribute named " + name)
-        return BufferAttribute(copy=self.values[slot])
+        return self.values[slot].clone()
 
     def vertex_count(self) raises -> Int:
         """Return how many vertices the position attribute holds.
@@ -617,6 +750,10 @@ struct BufferGeometry(Movable):
         three.js warns and returns the geometry itself when it has no index.
         This returns a copy, because a geometry here is owned and not shared.
 
+        An instanced geometry stays instanced, and its per-instance
+        attributes are copied as they are: they are read per instance, not
+        through the index. three.js reads them through the index too.
+
         Returns:
             A geometry without an index.
 
@@ -626,11 +763,17 @@ struct BufferGeometry(Movable):
         """
         if not self.is_indexed():
             return self.clone()
-        var result = BufferGeometry()
+        var result = BufferGeometry(instanced=self.instanced)
+        result.instance_count = self.instance_count
         for slot in range(len(self.names)):
-            result.set_attribute(
-                self.names[slot], self.values[slot].gather(self.index)
-            )
+            if self.values[slot].is_instanced():
+                result.set_attribute(
+                    self.names[slot], self.values[slot].clone()
+                )
+            else:
+                result.set_attribute(
+                    self.names[slot], self.values[slot].gather(self.index)
+                )
         for target in range(len(self.morph_positions)):
             result.morph_positions.append(
                 self.morph_positions[target].gather(self.index)

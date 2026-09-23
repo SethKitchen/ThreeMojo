@@ -487,19 +487,19 @@ struct _Exporter(Movable):
             self.geometry_keys.append(id.value)
             self.positions.append(
                 self.float_accessor(
-                    geometry.attribute_view(POSITION).data, 3, "VEC3", True
+                    geometry.attribute_view(POSITION).packed(), 3, "VEC3", True
                 )
             )
             var normal = -1
             if geometry.has_attribute(NORMAL):
                 normal = self.float_accessor(
-                    geometry.attribute_view(NORMAL).data, 3, "VEC3", False
+                    geometry.attribute_view(NORMAL).packed(), 3, "VEC3", False
                 )
             self.normals.append(normal)
             var uv = -1
             if geometry.has_attribute(UV):
                 uv = self.float_accessor(
-                    geometry.attribute_view(UV).data, 2, "VEC2", False
+                    geometry.attribute_view(UV).packed(), 2, "VEC2", False
                 )
             self.uvs.append(uv)
             self.colors.append(-1)
@@ -511,7 +511,7 @@ struct _Exporter(Movable):
         if colored and self.colors[slot] < 0:
             ref color = geometry.attribute_view(COLOR)
             self.colors[slot] = self.float_accessor(
-                color.data,
+                color.packed(),
                 color.item_size,
                 "VEC3" if color.item_size == 3 else "VEC4",
                 False,

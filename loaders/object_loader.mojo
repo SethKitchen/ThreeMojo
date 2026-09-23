@@ -35,7 +35,11 @@ names another object by uuid, or an object that is not in the file, which
 is three.js's default target at the origin.
 
 A `BufferGeometry` is read with its `Float32Array` attributes, its index,
-its groups and its morph targets. A `BoxGeometry`, a `PlaneGeometry` and a
+its groups and its morph targets. An interleaved attribute reads the
+geometry's `interleavedBuffers` and `arrayBuffers`, and the attributes that
+name one buffer share it. An `InstancedBufferGeometry` is read with its
+`instanceCount` and its per-instance attributes' `meshPerAttribute`, which
+three.js's loader leaves at their defaults. A `BoxGeometry`, a `PlaneGeometry` and a
 `SphereGeometry` are built from their parameters by `geometries`, when
 the parameters are ones those builders take. A material is built with
 the `MaterialKind` its type names, three.js's defaults filling what the
@@ -53,7 +57,7 @@ texture named both ways is built twice.
 **What is refused.** A document that is not JSON, a `metadata.type` that
 is not `Object`, a version that is not 4, an object, geometry or material
 type this port has no counterpart for, an attribute that is not a
-`Float32Array` or is interleaved, a mesh with more than one material, a
+`Float32Array`, a mesh with more than one material, a
 uuid named twice or named and not there, a `CustomBlending` material, a
 texture whose two wraps differ, whose mapping is not `UVMapping`, or that
 reads a second set of coordinates, and every number the builders refuse.
@@ -71,6 +75,7 @@ sprite, skinned, batched and LOD objects are refused.
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import BufferGeometry, MaterialIndex
+from core.interleaved_buffer import InterleavedBuffer
 from core.background import color_background, texture_background
 from core.fog import exp2_fog, linear_fog
 from core.geometry_store import GeometryId
@@ -104,6 +109,7 @@ from loaders.gltf import decode_base64, decode_image
 from loaders.json import (
     ARRAY,
     NO_NODE,
+    NULL,
     NUMBER,
     OBJECT,
     STRING,
@@ -160,6 +166,7 @@ from render.texture import (
 from render.texture_store import TextureId
 from std.collections import Dict
 from std.math import isfinite, pi, sqrt
+from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, DEGREE, InverseLength, Length, METER, PER_METER
 from units.si import RADIAN
@@ -716,20 +723,119 @@ struct _Loader(Movable):
 
     # --- geometries ---------------------------------------------------------
 
-    def attribute(self, node: Int) raises -> BufferAttribute:
-        """Return one attribute: a `Float32Array` that is not interleaved."""
+    def attribute(
+        self,
+        node: Int,
+        data: Int,
+        mut shared: Dict[String, InterleavedBuffer],
+    ) raises -> BufferAttribute:
+        """Return one attribute: a `Float32Array`, per vertex or per
+        instance, or a view of an interleaved buffer.
+
+        Args:
+            node: The attribute's entry.
+            data: The geometry's `data` entry, which holds the interleaved
+                buffers, or `NO_NODE` outside a geometry.
+            shared: The interleaved buffers built so far, by uuid, so that
+                two attributes naming one share it.
+
+        Returns:
+            The attribute.
+
+        Raises:
+            Error: If the entry is not an attribute this reads.
+        """
         if self.document.kind(node) != OBJECT:
             raise Error("Object JSON: an attribute must be an object")
+        var size = self.integer(node, "itemSize", 0)
         if self.flag(node, "isInterleavedBufferAttribute", False):
-            raise Error("Object JSON: an interleaved attribute is not read")
+            return BufferAttribute(
+                self.interleaved(data, self.text(node, "data", ""), shared),
+                size,
+                self.integer(node, "offset", 0),
+            )
         if self.text(node, "type", "") != "Float32Array":
             raise Error("Object JSON: only a Float32Array attribute is read")
         var list = self.array(node, "array")
         if list == NO_NODE:
             raise Error("Object JSON: an attribute has no array")
-        return BufferAttribute(
-            self.numbers_of(list), self.integer(node, "itemSize", 0)
-        )
+        if self.flag(node, "isInstancedBufferAttribute", False):
+            return BufferAttribute(
+                self.numbers_of(list),
+                size,
+                mesh_per_attribute=self.integer(node, "meshPerAttribute", 1),
+            )
+        return BufferAttribute(self.numbers_of(list), size)
+
+    def interleaved(
+        self,
+        data: Int,
+        uuid: String,
+        mut shared: Dict[String, InterleavedBuffer],
+    ) raises -> InterleavedBuffer:
+        """Return the interleaved buffer a geometry's `data` names, built
+        the first time it is named, as three.js's `BufferGeometryLoader`
+        builds it.
+
+        Its numbers are the `arrayBuffers` entry it names, read as the
+        32-bit words of the array's bytes and taken back to floats.
+
+        Args:
+            data: The geometry's `data` entry, or `NO_NODE`.
+            uuid: The buffer's uuid.
+            shared: The buffers built so far, by uuid. The new one is
+                added.
+
+        Returns:
+            A handle on the buffer.
+
+        Raises:
+            Error: If there is no geometry, or the buffer or its array is
+                not there, is not a `Float32Array`, holds a word that is not
+                32 bits or a float that is not finite, or has a stride that
+                does not fit it.
+        """
+        if uuid in shared:
+            return shared[uuid].copy()
+        if data == NO_NODE:
+            raise Error(
+                "Object JSON: an interleaved attribute outside a geometry"
+            )
+        var buffers = self.entry(data, "interleavedBuffers")
+        var item = NO_NODE
+        if buffers != NO_NODE:
+            item = self.entry(buffers, uuid)
+        if item == NO_NODE:
+            raise Error("Object JSON: names no interleaved buffer: " + uuid)
+        if self.text(item, "type", "") != "Float32Array":
+            raise Error("Object JSON: only a Float32Array buffer is read")
+        var arrays = self.entry(data, "arrayBuffers")
+        var words = NO_NODE
+        if arrays != NO_NODE:
+            words = self.array(arrays, self.text(item, "buffer", ""))
+        if words == NO_NODE:
+            raise Error("Object JSON: an interleaved buffer has no array")
+        var numbers = List[Float32]()
+        for at in range(self.document.length(words)):
+            var word = self.document.integer(self.document.at(words, at))
+            if word < 0 or word > 0xFFFFFFFF:
+                raise Error("Object JSON: an array buffer word is 32 bits")
+            var value = bitcast[DType.float32](UInt32(word))
+            if not isfinite(value):
+                raise Error("Object JSON: an array holds a number not finite")
+            numbers.append(value)
+        var stride = self.integer(item, "stride", 0)
+        var buffer: InterleavedBuffer
+        if self.flag(item, "isInstancedInterleavedBuffer", False):
+            buffer = InterleavedBuffer(
+                numbers^,
+                stride,
+                mesh_per_attribute=self.integer(item, "meshPerAttribute", 1),
+            )
+        else:
+            buffer = InterleavedBuffer(numbers^, stride)
+        shared[uuid] = buffer.copy()
+        return buffer^
 
     def geometry(self, item: Int) raises -> BufferGeometry:
         """Build one geometry entry."""
@@ -764,20 +870,29 @@ struct _Loader(Movable):
                 self.integer(item, "widthSegments", 32),
                 self.integer(item, "heightSegments", 16),
             )
-        if kind != "BufferGeometry":
+        if kind != "BufferGeometry" and kind != "InstancedBufferGeometry":
             raise Error(
                 "Object JSON: a geometry type that is not read: " + kind
             )
         var data = self.entry(item, "data")
         if data == NO_NODE:
             raise Error("Object JSON: a BufferGeometry has no data")
-        var geometry = BufferGeometry()
+        var geometry = BufferGeometry(
+            instanced=self.flag(item, "isInstancedBufferGeometry", False)
+        )
+        var count = self.document.get(item, "instanceCount")
+        if geometry.instanced and count != NO_NODE:
+            if self.document.kind(count) != NULL:
+                geometry.set_instance_count(self.document.integer(count))
+        var shared = Dict[String, InterleavedBuffer]()
         var attributes = self.entry(data, "attributes")
         if attributes != NO_NODE:
             for at in range(self.document.length(attributes)):
                 geometry.set_attribute(
                     self.document.key(attributes, at),
-                    self.attribute(self.document.at(attributes, at)),
+                    self.attribute(
+                        self.document.at(attributes, at), data, shared
+                    ),
                 )
         var index = self.entry(data, "index")
         if index != NO_NODE:
@@ -805,7 +920,7 @@ struct _Loader(Movable):
                     self.integer(group, "count", 0),
                     MaterialIndex(self.integer(group, "materialIndex", 0)),
                 )
-        self.morph_targets(data, geometry)
+        self.morph_targets(data, geometry, shared)
         return geometry^
 
     def is_whole_sphere(self, item: Int) raises -> Bool:
@@ -821,7 +936,12 @@ struct _Loader(Movable):
             and theta_length == Float32(pi)
         )
 
-    def morph_targets(self, data: Int, mut geometry: BufferGeometry) raises:
+    def morph_targets(
+        self,
+        data: Int,
+        mut geometry: BufferGeometry,
+        mut shared: Dict[String, InterleavedBuffer],
+    ) raises:
         """Add a geometry's morph targets, positions and maybe normals."""
         var morphs = self.entry(data, "morphAttributes")
         if morphs == NO_NODE:
@@ -835,10 +955,13 @@ struct _Loader(Movable):
         if with_normals and self.document.length(normals) != count:
             raise Error("Object JSON: every morph target needs a normal")
         for at in range(count):
-            var position = self.attribute(self.document.at(positions, at))
+            var position = self.attribute(
+                self.document.at(positions, at), data, shared
+            )
             if with_normals:
                 geometry.add_morph_target(
-                    position^, self.attribute(self.document.at(normals, at))
+                    position^,
+                    self.attribute(self.document.at(normals, at), data, shared),
                 )
             else:
                 geometry.add_morph_target(position^)
@@ -1205,13 +1328,14 @@ struct _Loader(Movable):
         var matrices = self.entry(item, "instanceMatrix")
         if matrices == NO_NODE:
             raise Error("Object JSON: an InstancedMesh has no instanceMatrix")
-        var attribute = self.attribute(matrices)
+        var none = Dict[String, InterleavedBuffer]()
+        var attribute = self.attribute(matrices, NO_NODE, none)
         if attribute.item_size != 16 or attribute.count() != count:
             raise Error("Object JSON: an instanceMatrix of count matrices")
         for index in range(count):
             var matrix = Matrix4()
             for element in range(16):  # pragma: no branch
-                matrix.elements[element] = attribute.data[index * 16 + element]
+                matrix.elements[element] = attribute.component(index, element)
             mesh.set_matrix_at(index, matrix)
         return mesh^
 

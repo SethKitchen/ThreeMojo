@@ -1,6 +1,6 @@
 # Geometry
 
-`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds.
+`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/interleaved_buffer.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds.
 
 Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes. Two more fill a drawn [shape](Curves) in and give it thickness. One sets [text](#text) in a font and gives it thickness. Four [addon builders](#parametric) make parametric surfaces, convex hulls, decals and rounded boxes. Two more read a surface back as the lines of its edges, and [utilities](#merge-weld-and-tangents) merge, weld and compute tangents.
 
@@ -17,7 +17,12 @@ A flat `List[Float32]` with an item size. `BufferAttribute(data, 3)` holds vecto
 | `count() -> Int` | The number of items. |
 | `component(index, offset) -> Float32` | One float of one item. |
 | `vector3(index) -> Vector3` | One item as a vector. Item size must be three. |
+| `set_component(index, offset, value)` | Replace one float of one item. |
 | `gather(index) -> BufferAttribute` | One copy of an item for each entry of `index`. |
+| `packed() -> List[Float32]` | Every float, item after item, with no stride. |
+| `clone() -> BufferAttribute` | A copy with an array of its own. |
+| `is_interleaved() -> Bool` | Whether it reads a shared buffer. See [Interleaved buffers](#interleaved-buffers). |
+| `is_instanced() -> Bool` | Whether it advances per instance. See [Instanced buffer geometry](#instanced-buffer-geometry). |
 
 ## BufferGeometry
 
@@ -43,6 +48,8 @@ A flat `List[Float32]` with an item size. `BufferAttribute(data, 3)` holds vecto
 | `clear_groups()` | Remove every group. |
 | `stream_length() -> Int` | The index entries, or the vertices without an index. |
 | `vertex_at(slot) -> Int` | Which vertex one slot of that stream reads. |
+| `set_instance_count(count)` | Set how many instances to draw. |
+| `drawn_instances() -> Int` | How many instances a mesh draws. |
 
 Attribute names are the constants `POSITION`, `NORMAL`, `UV`, `UV1`, `COLOR` and `TANGENT`. A geometry needs `position`. It needs `normal` for smooth shading and `uv` for a texture. It needs `color`, three or four linear floats per vertex, for a material with `vertex_colors`. See [Materials](Materials#vertex-colors).
 
@@ -575,6 +582,91 @@ A mesh wearing a target is not where its geometry's bounding sphere says it is, 
 
 Eight targets is this port's ceiling, not three.js's. Older three.js had the same number, from how many attribute slots a WebGL program has. Current three.js passes its targets in a texture and is bounded by memory. Eight is here because a mesh holds its weights in a fixed row rather than a list, which is what keeps a `Mesh` copyable.
 
+## Interleaved buffers
+
+```mojo
+var buffer = InterleavedBuffer(numbers^, 8)            # 8 floats a vertex
+geometry.set_attribute(POSITION, BufferAttribute(buffer, 3, 0))
+geometry.set_attribute(NORMAL, BufferAttribute(buffer, 3, 3))
+geometry.set_attribute(UV, BufferAttribute(buffer, 2, 6))
+```
+
+An interleaved buffer holds the attributes of a vertex side by side in one array. The stride is the number of floats one vertex takes. Each attribute on the buffer gives its item size and its offset in that run. Item `i` starts at float `i * stride + offset`.
+
+three.js: `InterleavedBuffer`, `InterleavedBufferAttribute`.
+
+| Member | Meaning |
+|---|---|
+| `InterleavedBuffer(array, stride)` | A buffer that advances per vertex. |
+| `buffer.count() -> Int` | The number of runs of `stride` floats. |
+| `buffer.value(at)`, `buffer.set_value(at, value)` | Read or write one float of the array. |
+| `buffer.shares_with(other) -> Bool` | Whether two handles name one array. |
+| `buffer.clone() -> InterleavedBuffer` | A buffer with a copy of the floats. |
+| `BufferAttribute(buffer, item_size, offset)` | An attribute that reads the buffer. |
+| `attribute.interleaved_buffer()` | A handle on the buffer, three.js's `data`. |
+| `attribute.offset()`, `attribute.stride()` | Where an item starts in its run, and the run length. |
+
+An interleaved attribute is a `BufferAttribute`, not a second type. `count`, `component`, `vector3` and `set_component` use the stride. So every reader works without a change: the renderer, the raycaster, the morph and skin evaluators, the utilities and the exporters.
+
+### One array, many handles
+
+A copy of an `InterleavedBuffer` is a second handle on the same floats, as a JavaScript reference is. A write through one attribute shows through every other attribute on the buffer. `clone` copies the floats.
+
+A copy of an interleaved attribute also shares the buffer. `clone_attribute` and `attribute.clone()` give a plain attribute with its own array, as three.js's `clone()` does. `BufferGeometry.clone` copies each buffer once, so attributes that shared a buffer share the copy.
+
+`data` is empty on an interleaved attribute. Read `packed()` to get the floats in item order. `to_non_indexed`, `gather` and the merge utilities give plain attributes.
+
+### The loaders and the exporters
+
+The [JSON loader](Scene-JSON) reads `interleavedBuffers` and `arrayBuffers` as three.js writes them. Attributes that name one buffer share it. The glTF loader reads a strided buffer view into plain attributes.
+
+The exporters write an interleaved attribute as its own floats. three.js does the same when it writes one attribute alone. The file then has no shared buffer, but the values are the same.
+
+## Instanced buffer geometry
+
+```mojo
+var grass = BufferGeometry(instanced=True)             # InstancedBufferGeometry
+grass.set_attribute(POSITION, blade_positions^)
+grass.set_attribute("offset", BufferAttribute(offsets^, 3, mesh_per_attribute=1))
+grass.set_attribute(COLOR, BufferAttribute(colors^, 3, mesh_per_attribute=1))
+scene.add_mesh(Mesh(assets.geometries.add(grass^), paint, node))
+```
+
+An instanced geometry is drawn once for each instance. A per-instance attribute advances once for each instance, not once for each vertex. `mesh_per_attribute` is the number of instances in a row that read one item.
+
+three.js: `InstancedBufferGeometry`, `instanceCount`, `InstancedBufferAttribute`, `InstancedInterleavedBuffer`, `meshPerAttribute`.
+
+| Member | Meaning |
+|---|---|
+| `BufferGeometry(instanced=True)` | An instanced geometry. |
+| `geometry.set_instance_count(count)` | Draw `count` instances. |
+| `geometry.instance_count` | The count, or none for as many as the attributes hold. |
+| `geometry.drawn_instances() -> Int` | How many instances a mesh draws. |
+| `BufferAttribute(data, item_size, mesh_per_attribute=n)` | A per-instance attribute. |
+| `InterleavedBuffer(array, stride, mesh_per_attribute=n)` | A per-instance interleaved buffer. |
+
+### What each instance reads
+
+A mesh draws the instances. Each instance is a separate draw, so it is sorted and culled at its own place. The renderer reads two per-instance attributes:
+
+- `offset` moves each instance before the mesh's transform. three.js has no built-in `offset`. Its instancing examples add one in their own shader, and this port does the same work without a shader.
+- `color` colors each instance when the material has `vertex_colors`. That is three.js's behavior for a divided `color` attribute.
+
+A per-instance `position`, `normal`, `uv` or `tangent` is refused when drawn. The renderer has no shader that reads them per instance. A draw that is not an instance reads the first per-instance color, as WebGL does.
+
+### How many instances
+
+`drawn_instances` is the instance count, capped by what the per-instance attributes hold. Each attribute holds `count() * mesh_per_attribute()` instances. The cap is the smallest of these. three.js takes the cap from the first attribute its shader reads, which a port without shaders cannot ask. An unbounded count with no per-instance attribute is refused.
+
+### Where this port differs
+
+- A line and points draw an instanced geometry once, not once per instance. Only a mesh draws the instances.
+- The raycaster tests the base geometry, as three.js does. It does not test each instance.
+- `to_non_indexed` keeps the per-instance attributes as they are. three.js reads them through the index.
+- `merge_geometries` and `merge_vertices` refuse an instanced geometry.
+- The JSON loader reads `instanceCount` and `meshPerAttribute`. three.js's loader leaves both at their defaults.
+- A clone of an instanced attribute keeps its instancing.
+
 ## Errors
 
 - A negative or zero extent raises.
@@ -611,3 +703,8 @@ Eight targets is this port's ceiling, not three.js's. Older three.js had the sam
 - `compute_tangents` needs `position`, `normal` and `uv`.
 - A slot outside the triangle stream raises.
 - `compute_vertex_normals`, `bounding_box` and `bounding_sphere` raise on a geometry with no positions.
+- An interleaved buffer needs a positive stride and whole runs of it. An interleaved attribute needs a positive item size and an item inside the stride.
+- A per-instance attribute or buffer needs a `mesh_per_attribute` of one or more.
+- An instance count cannot be negative, and only an instanced geometry has one. An instanced geometry needs a count or a per-instance attribute.
+- The renderer refuses a per-instance `position`, `normal`, `uv` or `tangent`.
+- A merge and a weld refuse an instanced geometry.

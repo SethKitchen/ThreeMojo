@@ -97,12 +97,16 @@ def merge_geometries(
         The merged geometry.
 
     Raises:
-        Error: If no geometry is given, if the parts do not match as above,
-            if a part has no positions, or if an index entry points past
-            its part's last vertex.
+        Error: If no geometry is given, if a part is instanced, if the
+            parts do not match as above, if a part has no positions, or if
+            an index entry points past its part's last vertex.
     """
     if len(geometries) == 0:
         raise Error("Merging needs at least one geometry")
+    # The empty list was refused above, so this runs once at least.
+    for part in range(len(geometries)):  # pragma: no branch
+        if geometries[part].instanced:
+            raise Error("An instanced geometry is not merged")
     ref first = geometries[0]
     for part in range(1, len(geometries)):
         ref other = geometries[part]
@@ -150,19 +154,19 @@ def merge_geometries(
         ref name = first.names[slot]
         var data = List[Float32]()
         for part in range(len(geometries)):  # pragma: no branch
-            data.extend(geometries[part].attribute_view(name).data.copy())
+            data.extend(geometries[part].attribute_view(name).packed())
         merged.set_attribute(
             name, BufferAttribute(data^, first.values[slot].item_size)
         )
     for target in range(first.morph_count()):
         var data = List[Float32]()
         for part in range(len(geometries)):  # pragma: no branch
-            data.extend(geometries[part].morph_positions[target].data.copy())
+            data.extend(geometries[part].morph_positions[target].packed())
         merged.morph_positions.append(BufferAttribute(data^, 3))
     for target in range(len(first.morph_normals)):
         var data = List[Float32]()
         for part in range(len(geometries)):  # pragma: no branch
-            data.extend(geometries[part].morph_normals[target].data.copy())
+            data.extend(geometries[part].morph_normals[target].packed())
         merged.morph_normals.append(BufferAttribute(data^, 3))
     merged.morph_relative = first.morph_relative
     merged.set_index(index^)
@@ -197,11 +201,13 @@ def merge_vertices(
 
     Raises:
         Error: If the tolerance is negative or not finite, if the geometry
-            has no positions, or if an index entry points past an
+            is instanced or has no positions, or if an index entry points past an
             attribute's last item.
     """
     if not isfinite(tolerance) or tolerance < 0:
         raise Error("A weld tolerance must be a finite number, zero or more")
+    if geometry.instanced:
+        raise Error("An instanced geometry is not welded")
     var step = max(tolerance, EPSILON)
     # three.js's arithmetic, step for step, so the keys round as its do.
     var multiplier = 10.0 ** log10(1.0 / step)

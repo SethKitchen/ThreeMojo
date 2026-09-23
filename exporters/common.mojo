@@ -226,11 +226,11 @@ def world_meshes(scene: Scene, assets: Assets) raises -> List[WorldMesh]:
                 world.normals.append(direction.z)
             world.with_normals = True
         if geometry.has_attribute(UV):
-            world.uvs = geometry.attribute_view(UV).data.copy()
+            world.uvs = geometry.attribute_view(UV).packed()
             world.with_uvs = True
         if geometry.has_attribute(COLOR):
             ref color = geometry.attribute_view(COLOR)
-            world.colors = color.data.copy()
+            world.colors = color.packed()
             world.color_size = color.item_size
         if geometry.is_indexed():
             world.triangles = geometry.index.copy()

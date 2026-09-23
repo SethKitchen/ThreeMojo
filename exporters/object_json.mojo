@@ -24,7 +24,11 @@ with no node, as an ambient light usually is, is a child of the scene.
 
 **Geometry** is a `BufferGeometry` with every attribute as a
 `Float32Array`, the index as a `Uint16Array` or a `Uint32Array` as three.js
-chooses, the groups, and the morph targets. **A material** has the type
+chooses, the groups, and the morph targets. An instanced geometry is an
+`InstancedBufferGeometry` with its `instanceCount`, and a per-instance
+attribute carries its `meshPerAttribute`. An interleaved attribute is
+written with its own numbers, not as a view of a shared buffer: three.js
+does the same when an attribute is written on its own. **A material** has the type
 of its kind -- `MeshStandardMaterial` for `STANDARD` -- and the fields that
 type has in three.js. **A texture** is its sampler's settings and an
 image, written as a PNG `data:` URL of its full-size level. A texture here
@@ -155,16 +159,27 @@ def _matrix(mut writer: JsonWriter, matrix: Matrix4) raises:
 
 
 def _attribute(mut writer: JsonWriter, attribute: BufferAttribute) raises:
-    """Write an attribute as three.js's `BufferAttribute.toJSON` does."""
+    """Write an attribute as three.js's `BufferAttribute.toJSON` does.
+
+    An interleaved attribute is written with its own numbers, as three.js's
+    `InterleavedBufferAttribute.toJSON` writes one when it is given no
+    buffers to share. A per-instance attribute is marked as three.js's
+    `InstancedBufferAttribute.toJSON` marks it.
+    """
     writer.begin_object()
     writer.key("itemSize")
     writer.integer(attribute.item_size)
     writer.key("type")
     writer.string("Float32Array")
     writer.key("array")
-    _numbers(writer, attribute.data)
+    _numbers(writer, attribute.packed())
     writer.key("normalized")
     writer.boolean(False)
+    if attribute.is_instanced():
+        writer.key("meshPerAttribute")
+        writer.integer(attribute.mesh_per_attribute())
+        writer.key("isInstancedBufferAttribute")
+        writer.boolean(True)
     writer.end_object()
 
 
@@ -320,7 +335,19 @@ struct _Library(Movable):
             writer.key("uuid")
             writer.string(object_uuid(_GEOMETRY_UUID, at))
             writer.key("type")
-            writer.string("BufferGeometry")
+            if geometry.instanced:
+                # three.js's `InstancedBufferGeometry.toJSON`: `null` is
+                # what `JSON.stringify` makes of its default `Infinity`.
+                writer.string("InstancedBufferGeometry")
+                writer.key("instanceCount")
+                if Bool(geometry.instance_count):
+                    writer.integer(geometry.instance_count.value())
+                else:
+                    writer.null()
+                writer.key("isInstancedBufferGeometry")
+                writer.boolean(True)
+            else:
+                writer.string("BufferGeometry")
             writer.key("data")
             writer.begin_object()
             writer.key("attributes")
