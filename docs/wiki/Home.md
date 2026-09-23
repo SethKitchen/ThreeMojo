@@ -31,6 +31,7 @@ Look something up.
 - [Rotations](Rotations)
 - [Cameras](Cameras)
 - [Geometry](Geometry)
+- [Geometry addons](Geometry-addons)
 - [Meshes and assets](Meshes-and-assets)
 - [Lines](Lines)
 - [Points and sprites](Points-and-sprites)
