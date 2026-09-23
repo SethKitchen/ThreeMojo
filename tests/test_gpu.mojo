@@ -4192,6 +4192,8 @@ def test_both_backends_agree_on_an_instanced_scene() raises:
     group.set_matrix_at(3, translation(0, 0, 30))
     # An instance's color rides on its corners, so both see it.
     group.set_color_at(1, Color(60, 200, 90))
+    # An instance past the colors is white on both, as in three.js.
+    group.matrices.append(translation(0.6, 0.8, 0))
     scene.add_instanced_mesh(group^)
     var camera = PerspectiveCamera(
         Angle(50.0, DEGREE),

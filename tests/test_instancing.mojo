@@ -915,17 +915,36 @@ def test_instance_colors_draw_as_mesh_colors_would() raises:
     assert_same_image(renderer.render(batched, assets, a_camera()), wanted)
 
 
-def test_instance_colors_must_be_one_per_instance() raises:
+def test_an_instance_past_the_colors_draws_white() raises:
+    # three.js draws an instance with no color as white. A color list
+    # shorter than the instances is drawn so, not refused, and one longer
+    # than them has its extra colors ignored.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.0, METER)))
     var paint = assets.materials.add(Material(Color(220, 120, 40)))
-    var group = InstancedMesh(box, paint, NodeId(0), 2)
-    group.colors = [Color(1, 2, 3)]
-    var scene = a_scene()
-    scene.add_instanced_mesh(group^)
-    with assert_raises(contains="one color per instance"):
-        _ = renderer.render(scene, assets, a_camera())
+    var short = InstancedMesh(box, paint, NodeId(0), 2)
+    short.set_matrix_at(0, translation(-1, 0, 0))
+    short.set_matrix_at(1, translation(1, 0, 0))
+    var whole = InstancedMesh(box, paint, NodeId(0), 2)
+    whole.matrices = short.matrices.copy()
+    whole.set_color_at(0, Color(200, 30, 20))
+    whole.set_color_at(1, Color(255, 255, 255))
+    short.colors = [Color(200, 30, 20)]
+    var cut = a_scene()
+    cut.add_instanced_mesh(short^)
+    var wanted = a_scene()
+    wanted.add_instanced_mesh(whole^)
+    var image = renderer.render(wanted, assets, a_camera())
+    assert_true(count_drawn(image, renderer.background) > 30)
+    assert_same_image(renderer.render(cut, assets, a_camera()), image)
+    # One color too many: the extra one names no instance.
+    var long = InstancedMesh(box, paint, NodeId(0), 2)
+    long.matrices = cut.instanced_meshes[0].matrices.copy()
+    long.colors = [Color(200, 30, 20), Color(255, 255, 255), Color(0, 0, 0)]
+    var over = a_scene()
+    over.add_instanced_mesh(long^)
+    assert_same_image(renderer.render(over, assets, a_camera()), image)
 
 
 def test_a_group_with_no_instances_draws_nothing() raises:

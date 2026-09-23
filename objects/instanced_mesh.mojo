@@ -94,7 +94,7 @@ struct InstancedMesh(Copyable, Movable):
     var matrices: List[Matrix4]
     # One color per instance, three.js's `instanceColor`, or none at all:
     # empty until the first `set_color_at`. `color_at` reads an instance
-    # past its end as white; the renderer refuses any other length.
+    # past its end as white, and so does the renderer.
     var colors: List[Color]
 
     def __init__(

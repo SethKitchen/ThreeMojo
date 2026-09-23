@@ -943,22 +943,20 @@ def _gather(
             Only a skinned mesh has one.
         receive_shadow: Whether the lights' shadows fall on the object,
             a mesh's `receive_shadow`. Off for everything else.
-        colors: One sRGB color per draw, which multiplies the material's
-            color, or none for white.
+        colors: An sRGB color per draw, which multiplies the material's
+            color. A draw past the end of the list is white, as three.js
+            reads an instance with no `instanceColor`, and a color past
+            the last draw is not read.
         instances: Which instance of an instanced geometry each draw is,
             or none when the geometry is not instanced.
 
     Raises:
         Error: If the node, a geometry or the material is not there, a
-            geometry has no positions, the scene is stale, an instance
-            matrix projects or holds a value that is not finite, or there
-            are colors but not one per draw.
+            geometry has no positions, the scene is stale, or an instance
+            matrix projects or holds a value that is not finite.
     """
     if not scene.shows(node, visible):
         return
-    var tinted = len(colors) > 0
-    if tinted and len(colors) != len(matrices):
-        raise Error("An instanced mesh must have one color per instance")
     var placed = scene.world_matrix(node)
     var blends = False
     var asked = False
@@ -985,7 +983,7 @@ def _gather(
         depths.append(depth)
         clear.append(blends)
         var tint = FloatColor(1, 1, 1, 1)
-        if tinted:
+        if index < len(colors):
             tint = FloatColor(srgb=colors[index])
         var instance = -1
         if len(instances) > 0:

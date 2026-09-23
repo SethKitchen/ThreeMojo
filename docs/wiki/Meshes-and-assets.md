@@ -66,7 +66,7 @@ An instance index is a plain number, as three.js's `instanceId` is. An index tha
 
 An instance's color multiplies the material's color, as a vertex color does. The two rasterizers see the same result, because the color is on each prepared corner. A geometry's own vertex colors multiply it again. The alpha is not changed.
 
-An instanced mesh has no colors until the first `set_color_at`. That call gives every other instance white, as three.js does. An instance appended to `matrices` after the colors has no color. `color_at` reads it as white, and the next `set_color_at` gives it white. The `colors` list is open, so the renderer refuses a list that is not empty and does not hold one color per instance.
+An instanced mesh has no colors until the first `set_color_at`. That call gives every other instance white, as three.js does. An instance appended to `matrices` after the colors has no color. `color_at` reads it as white, and the next `set_color_at` gives it white. The renderer also draws an instance past the end of `colors` in white, as three.js does. It ignores a color past the last instance.
 
 ## BatchedMesh
 
