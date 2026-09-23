@@ -106,6 +106,14 @@ from lights.ltc import (
     ltc_uv,
     rect_area_light,
 )
+from lights.physical_layers import (
+    NO_ANISOTROPY_TEXEL,
+    PhysicalLayers,
+    bent_normal,
+    iridescence_thickness,
+    layers_of,
+    sheen_roughness_of,
+)
 from lights.lighting import (
     PERSPECTIVE_VIEW,
     RECIPROCAL_PI,
@@ -141,6 +149,7 @@ from render.rasterizer import (
     RasterVertex,
     ShadeMode,
     Triangle,
+    TangentFrame,
     check_alpha_map,
     check_draws,
     check_output_kinds,
@@ -152,6 +161,7 @@ from render.rasterizer import (
     matcap_fallback,
     matcap_uv,
     packed_normal,
+    tangent_frame,
 )
 from render.packing import (
     DepthPacking,
@@ -415,7 +425,21 @@ comptime LANE_REFERENCE_Y = 55
 comptime LANE_REFERENCE_Z = 56
 comptime LANE_NEAR_DISTANCE = 57
 comptime LANE_FAR_DISTANCE = 58
-comptime FLOATS_PER_VERTEX = LANE_FAR_DISTANCE + 1
+# A physical triangle's sheen, film and stretch, per triangle from the
+# first corner's lanes: the sheen color, linear and times the sheen, and
+# the sheen roughness; how much film, its index and the range of its
+# thickness in nanometers; the anisotropy vector. See `LayerFactors`.
+comptime LANE_SHEEN_R = 59
+comptime LANE_SHEEN_G = 60
+comptime LANE_SHEEN_B = 61
+comptime LANE_SHEEN_ROUGHNESS = 62
+comptime LANE_IRIDESCENCE = 63
+comptime LANE_IRIDESCENCE_IOR = 64
+comptime LANE_THICKNESS_MINIMUM = 65
+comptime LANE_THICKNESS_MAXIMUM = 66
+comptime LANE_ANISOTROPY_X = 67
+comptime LANE_ANISOTROPY_Y = 68
+comptime FLOATS_PER_VERTEX = LANE_ANISOTROPY_Y + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -469,6 +493,13 @@ comptime STATE_THICKNESS_MAP = 20
 comptime STATE_DEPTH_PACKING = 21
 # Whether the scene's fog veils the triangle: one or zero.
 comptime STATE_FOG = 22
+# Which textures a physical triangle's sheen color, sheen roughness, film,
+# film thickness and stretch read, each `NO_TEXTURE` for none.
+comptime STATE_SHEEN_COLOR_MAP = 23
+comptime STATE_SHEEN_ROUGHNESS_MAP = 24
+comptime STATE_IRIDESCENCE_MAP = 25
+comptime STATE_FILM_THICKNESS_MAP = 26
+comptime STATE_ANISOTROPY_MAP = 27
 # How a segment's metadata is laid out in its state buffer: its blend
 # policy, and how many pixels across it is drawn. A line is unlit and
 # untextured, so it carries nothing else; see `line_state`. The width is
@@ -498,7 +529,7 @@ comptime STATE_PER_POINT = POINT_STATE_FOG + 1
 # How a `Draw` crosses to the device: its kind, its first primitive and its
 # count, as three integers.
 comptime INTS_PER_DRAW = 3
-comptime STATE_PER_TRIANGLE = STATE_FOG + 1
+comptime STATE_PER_TRIANGLE = STATE_ANISOTROPY_MAP + 1
 # How the transmission target rides in the backdrop buffer, after the
 # backdrop's own pixels: a header of floats, then the chain's floats, each
 # four little-endian bytes as a float texture's texels are. The kernel has
@@ -780,6 +811,21 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.attenuation_distance)
         flat.append(corner.dispersion)
         flat.append(corner.ior)
+        flat.append(corner.reference.x)
+        flat.append(corner.reference.y)
+        flat.append(corner.reference.z)
+        flat.append(corner.near_distance)
+        flat.append(corner.far_distance)
+        flat.append(corner.layers.sheen_color.x)
+        flat.append(corner.layers.sheen_color.y)
+        flat.append(corner.layers.sheen_color.z)
+        flat.append(corner.layers.sheen_roughness)
+        flat.append(corner.layers.iridescence)
+        flat.append(corner.layers.iridescence_ior)
+        flat.append(corner.layers.thickness_minimum)
+        flat.append(corner.layers.thickness_maximum)
+        flat.append(corner.layers.anisotropy.x)
+        flat.append(corner.layers.anisotropy.y)
     return flat^
 
 
@@ -1963,6 +2009,7 @@ def _physical(
     clearcoat: Float32,
     clearcoat_roughness: Float32,
     receives: Bool = True,
+    layers: PhysicalLayers = PhysicalLayers(),
 ) -> Reflected:
     """Return what a physical surface sends toward the camera from the
     lights that have a direction: the device counterpart of
@@ -2016,6 +2063,7 @@ def _physical(
             surface,
             roughness,
             clearcoat_roughness,
+            layers,
         )
     var first_point = LIGHTS_FIRST + count * DIRECTIONAL_FLOATS
     for index in range(points):
@@ -2054,6 +2102,7 @@ def _physical(
             surface,
             roughness,
             clearcoat_roughness,
+            layers,
         )
     var first_spot = (
         first_point + points * POINT_FLOATS + hemispheres * HEMISPHERE_FLOATS
@@ -2115,10 +2164,14 @@ def _physical(
             surface,
             roughness,
             clearcoat_roughness,
+            layers,
         )
     var scale = lights[unsafe_offset=LIGHTS_SCALE]
     var scaled = Reflected(
-        sum.diffuse * scale, sum.specular * scale, sum.clearcoat * scale
+        sum.diffuse * scale,
+        sum.specular * scale,
+        sum.clearcoat * scale,
+        sum.sheen * scale,
     )
     # The rectangles after the scale, as `Lighting.physical_at` adds them:
     # one table lookup for the fragment, then every rectangle through it.
@@ -2168,7 +2221,7 @@ def _physical(
                 specular.y + added.specular.y * lights[unsafe_offset=at + 10],
                 specular.z + added.specular.z * lights[unsafe_offset=at + 11],
             )
-        scaled = Reflected(diffuse, specular, scaled.clearcoat)
+        scaled = Reflected(diffuse, specular, scaled.clearcoat, scaled.sheen)
     return scaled
 
 
@@ -2427,9 +2480,9 @@ def triangle_state(
         depth, color and stencil state, then the ao and light map ids,
         then the specular map id, then the transmission and thickness map
         ids, then the depth packing's value and one or zero for whether
-        the fog veils it, per triangle, from its first corner.
-        then the specular map id, then the depth packing's value and one
-        or zero for whether the fog veils it, per triangle, from its first
+        the fog veils it, then the sheen color, sheen roughness,
+        iridescence, film thickness and anisotropy map ids, per triangle,
+        from its first
         corner.
     """
     var state = List[Int32]()
@@ -2461,6 +2514,12 @@ def triangle_state(
         state.append(Int32(corners[triangle * 3].thickness_map.value))
         state.append(Int32(corners[triangle * 3].depth_packing.value))
         state.append(Int32(1 if corners[triangle * 3].fog else 0))
+        ref layers = corners[triangle * 3].layers
+        state.append(Int32(layers.sheen_color_map.value))
+        state.append(Int32(layers.sheen_roughness_map.value))
+        state.append(Int32(layers.iridescence_map.value))
+        state.append(Int32(layers.thickness_map.value))
+        state.append(Int32(layers.anisotropy_map.value))
     return state^
 
 
@@ -4023,6 +4082,14 @@ def rasterize_kernel(
             # one for none.
             var transmission_factor = Float32(1)
             var thickness_factor = Float32(1)
+            # What a physical surface's sheen, film and stretch read from
+            # their maps, or what leaves each number alone.
+            var sheen_tint = Vector3(1, 1, 1)
+            var sheen_alpha = Float32(1)
+            var film_factor = Float32(1)
+            var thickness_texel = Float32(0)
+            var thickness_mapped = False
+            var stretch_texel = NO_ANISOTROPY_TEXEL
             if mode == Int32(SHADE_UV.value):
                 # Coordinates, not light, through the same quantize and decode
                 # the host's `data_color` uses, so the two backends hold the
@@ -4269,6 +4336,147 @@ def rasterize_kernel(
                             highlight.y * specular_strength,
                             highlight.z * specular_strength,
                         )
+                    # The layers' maps, exactly as `rasterize_shaded`
+                    # reads them: a color, an alpha, a red, a green, and a
+                    # whole texel.
+                    var tint_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_SHEEN_COLOR_MAP
+                        ]
+                    )
+                    if tint_slot != NO_TEXTURE.value:
+                        var tint = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            tint_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        )
+                        sheen_tint = Vector3(tint.r, tint.g, tint.b)
+                    var cloth_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_SHEEN_ROUGHNESS_MAP
+                        ]
+                    )
+                    if cloth_slot != NO_TEXTURE.value:
+                        sheen_alpha = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            cloth_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).a
+                    var film_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_IRIDESCENCE_MAP
+                        ]
+                    )
+                    if film_slot != NO_TEXTURE.value:
+                        film_factor = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            film_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).r
+                    var thick_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_FILM_THICKNESS_MAP
+                        ]
+                    )
+                    if thick_slot != NO_TEXTURE.value:
+                        thickness_texel = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            thick_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).g
+                        thickness_mapped = True
+                    var turn_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_ANISOTROPY_MAP
+                        ]
+                    )
+                    if turn_slot != NO_TEXTURE.value:
+                        var turn = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            turn_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        )
+                        stretch_texel = Vector3(turn.r, turn.g, turn.b)
                     # The transmission map's red and the thickness map's
                     # green, sampled where the host samples them.
                     var through_slot = Int(
@@ -4427,6 +4635,144 @@ def rasterize_kernel(
                     var facing = Vector3(nx, ny, nz)
                     var coat_facing = Vector3(cnx, cny, cnz)
                     var spot = Vector3(wx, wy, wz)
+                    var toward_eye = toward_eye_at(
+                        Vector3(
+                            lights[unsafe_offset=LIGHTS_EYE],
+                            lights[unsafe_offset=LIGHTS_EYE + 1],
+                            lights[unsafe_offset=LIGHTS_EYE + 2],
+                        ),
+                        Vector3(
+                            lights[unsafe_offset=LIGHTS_TOWARD],
+                            lights[unsafe_offset=LIGHTS_TOWARD + 1],
+                            lights[unsafe_offset=LIGHTS_TOWARD + 2],
+                        ),
+                        spot,
+                    )
+                    # The tangent frame an anisotropic lobe is stretched
+                    # along, measured as `rasterize_shaded` measures it,
+                    # whatever the mode.
+                    var stretch = Vector2(
+                        corners[unsafe_offset=base + LANE_ANISOTROPY_X],
+                        corners[unsafe_offset=base + LANE_ANISOTROPY_Y],
+                    )
+                    var frame = TangentFrame(Vector3(0, 0, 0), Vector3(0, 0, 0))
+                    if stretch.x != 0 or stretch.y != 0:
+                        var uv_here = _uv_at(
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                        )
+                        var uv_right = _uv_at(
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px + SUBPIXEL,
+                            py,
+                        )
+                        var uv_up = _uv_at(
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py - SUBPIXEL,
+                        )
+                        frame = tangent_frame(
+                            coat_facing,
+                            _world_at(
+                                corners,
+                                base,
+                                sax,
+                                say,
+                                sbx,
+                                sby,
+                                scx,
+                                scy,
+                                span_inv,
+                                swapped,
+                                px + SUBPIXEL,
+                                py,
+                            )
+                            - spot,
+                            _world_at(
+                                corners,
+                                base,
+                                sax,
+                                say,
+                                sbx,
+                                sby,
+                                scx,
+                                scy,
+                                span_inv,
+                                swapped,
+                                px,
+                                py - SUBPIXEL,
+                            )
+                            - spot,
+                            Vector2(
+                                uv_right.x - uv_here.x, uv_right.y - uv_here.y
+                            ),
+                            Vector2(uv_up.x - uv_here.x, uv_up.y - uv_here.y),
+                        )
+                    # The sheen, the film and the stretch, by the host's
+                    # own function from the same numbers and texels.
+                    var layers = layers_of(
+                        Vector3(
+                            corners[unsafe_offset=base + LANE_SHEEN_R]
+                            * sheen_tint.x,
+                            corners[unsafe_offset=base + LANE_SHEEN_G]
+                            * sheen_tint.y,
+                            corners[unsafe_offset=base + LANE_SHEEN_B]
+                            * sheen_tint.z,
+                        ),
+                        sheen_roughness_of(
+                            corners[unsafe_offset=base + LANE_SHEEN_ROUGHNESS],
+                            sheen_alpha,
+                        ),
+                        corners[unsafe_offset=base + LANE_IRIDESCENCE]
+                        * film_factor,
+                        corners[unsafe_offset=base + LANE_IRIDESCENCE_IOR],
+                        iridescence_thickness(
+                            corners[
+                                unsafe_offset=base + LANE_THICKNESS_MINIMUM
+                            ],
+                            corners[
+                                unsafe_offset=base + LANE_THICKNESS_MAXIMUM
+                            ],
+                            thickness_texel,
+                            thickness_mapped,
+                        ),
+                        stretch,
+                        stretch_texel,
+                        frame.tangent,
+                        frame.bitangent,
+                        facing,
+                        toward_eye,
+                        surface.specular,
+                        rough,
+                    )
                     var direct = _physical(
                         lights,
                         texels,
@@ -4444,6 +4790,7 @@ def rasterize_kernel(
                         coat,
                         coat_rough,
                         receives,
+                        layers,
                     )
                     var around = _indirect(
                         lights,
@@ -4458,19 +4805,6 @@ def rasterize_kernel(
                         around.x + baked.x,
                         around.y + baked.y,
                         around.z + baked.z,
-                    )
-                    var toward_eye = toward_eye_at(
-                        Vector3(
-                            lights[unsafe_offset=LIGHTS_EYE],
-                            lights[unsafe_offset=LIGHTS_EYE + 1],
-                            lights[unsafe_offset=LIGHTS_EYE + 2],
-                        ),
-                        Vector3(
-                            lights[unsafe_offset=LIGHTS_TOWARD],
-                            lights[unsafe_offset=LIGHTS_TOWARD + 1],
-                            lights[unsafe_offset=LIGHTS_TOWARD + 2],
-                        ),
-                        spot,
                     )
                     var dot_nv = max(
                         Float32(0), min(Float32(1), facing.dot(toward_eye))
@@ -4491,7 +4825,11 @@ def rasterize_kernel(
                             ramp,
                             table,
                             Int(env_slot),
-                            rough_reflection(toward_eye, facing, rough),
+                            rough_reflection(
+                                toward_eye,
+                                bent_normal(facing, toward_eye, layers, rough),
+                                rough,
+                            ),
                             rough,
                         )
                         var around = _sample_cube_rough(
@@ -4591,6 +4929,7 @@ def rasterize_kernel(
                         occlusion,
                         through,
                         transmitted,
+                        layers=layers,
                     )
                     red = outgoing.x
                     green = outgoing.y
@@ -5335,6 +5674,11 @@ struct GpuRenderer(Movable):
                 corners[index].specular_map,
                 corners[index].transmission_map,
                 corners[index].thickness_map,
+                corners[index].layers.sheen_color_map,
+                corners[index].layers.sheen_roughness_map,
+                corners[index].layers.iridescence_map,
+                corners[index].layers.thickness_map,
+                corners[index].layers.anisotropy_map,
             ]:
                 if slot == NO_TEXTURE:
                     continue
@@ -5443,6 +5787,35 @@ struct GpuRenderer(Movable):
                 )
                 self._check_data_map(
                     corners[triangle * 3].thickness_map, "A thickness map"
+                )
+                # The layers' maps, by `check_triangle_maps`'s three rules.
+                ref layered = corners[triangle * 3].layers
+                var tint = layered.sheen_color_map
+                if tint != NO_TEXTURE and not self.ignores_alpha[tint.value]:
+                    raise Error(
+                        "A sheen color map must ignore its alpha; build the"
+                        " texture with alpha=IGNORED"
+                    )
+                var cloth = layered.sheen_roughness_map
+                if cloth != NO_TEXTURE:
+                    if not self.is_linear[cloth.value]:
+                        raise Error(
+                            "A sheen roughness map holds data, not color;"
+                            " build the texture with color_space=LINEAR"
+                        )
+                    if self.ignores_alpha[cloth.value]:
+                        raise Error(
+                            "A sheen roughness map is read from its alpha;"
+                            " build the texture with alpha=COVERAGE"
+                        )
+                self._check_data_map(
+                    layered.iridescence_map, "An iridescence map"
+                )
+                self._check_data_map(
+                    layered.thickness_map, "An iridescence thickness map"
+                )
+                self._check_data_map(
+                    layered.anisotropy_map, "An anisotropy map"
                 )
         # Two output representations cannot share a tone-mapped frame.
         # Asked here, before the launch, exactly where `Renderer.render`

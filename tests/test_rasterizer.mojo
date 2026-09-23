@@ -85,6 +85,8 @@ from render.rasterizer import (
     DRAW_TRIANGLES,
     Draw,
     DrawKind,
+    LayerFactors,
+    tangent_frame,
     check_draws,
     rasterize_frame,
     MATCAP_CEILING,
@@ -6148,3 +6150,403 @@ def test_a_volume_map_must_be_stored_as_data() raises:
     check_triangle_maps(
         glass_quad(transmission_map=encoded)[0], SHADE_LIT, textures
     )
+
+
+# --- sheen, iridescence and anisotropy ---------------------------------------
+
+
+def with_layers(
+    corners: List[RasterVertex], layers: LayerFactors
+) -> List[RasterVertex]:
+    """Return `corners` with every corner carrying `layers`."""
+    var layered = corners.copy()
+    for index in range(len(layered)):
+        layered[index].layers = layers
+    return layered^
+
+
+def lit_obliquely() raises -> Lighting:
+    """Return one white directional light from forty-five degrees off the
+    z axis, with the camera far up it."""
+    var scene = Scene()
+    var lamp = Object3D()
+    lamp.set_position(1, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, FULL))
+    scene.update()
+    return Lighting(scene, Layers.all(), Vector3(0, 0, 400))
+
+
+def a_layer_texel(r: UInt8, g: UInt8, b: UInt8, a: UInt8) raises -> Texture:
+    """Return a one-texel linear map whose alpha is read."""
+    return Texture(1, 1, [r, g, b, a], REPEAT, NEAREST, LINEAR, False, COVERAGE)
+
+
+def test_a_corner_has_no_sheen_film_or_stretch_unless_asked() raises:
+    var corner = RasterVertex(0, 0, 0, 1, FloatColor(1, 1, 1))
+    assert_false(corner.layers.is_layered())
+    assert_false(corner.layers.is_anisotropic())
+    assert_equal(corner.layers.iridescence_ior, Float32(1.3))
+    assert_equal(corner.layers.thickness_maximum, Float32(400))
+    assert_equal(corner.layers.sheen_color_map, NO_TEXTURE)
+
+
+def test_layer_factors_agree_only_when_every_field_does() raises:
+    var plain = LayerFactors()
+    assert_true(plain.agrees(LayerFactors()))
+    var other = LayerFactors()
+    other.anisotropy_map = TextureId(3)
+    assert_false(plain.agrees(other))
+    assert_true(other.is_layered())
+    var turned = LayerFactors()
+    turned.anisotropy = Vector2(0, 0.5)
+    assert_true(turned.is_anisotropic())
+    turned.anisotropy = Vector2(0.5, 0)
+    assert_true(turned.is_anisotropic())
+
+
+def test_layer_factors_no_material_can_hold_are_refused() raises:
+    var nan32 = nan[DType.float32]()
+    var cases = List[LayerFactors]()
+    for bad in [Float32(-0.1), nan32]:
+        var sheen = LayerFactors()
+        sheen.sheen_color = Vector3(0, bad, 0)
+        cases.append(sheen)
+    for bad in [Float32(-0.1), Float32(1.1), nan32]:
+        var cloth = LayerFactors()
+        cloth.sheen_roughness = bad
+        cases.append(cloth)
+        var film = LayerFactors()
+        film.iridescence = bad
+        cases.append(film)
+    for bad in [Float32(0.9), Float32(2.5), nan32]:
+        var index = LayerFactors()
+        index.iridescence_ior = bad
+        cases.append(index)
+    for bad in [Float32(-1), nan32]:
+        var thin = LayerFactors()
+        thin.thickness_minimum = bad
+        cases.append(thin)
+        var thick = LayerFactors()
+        thick.thickness_maximum = bad
+        cases.append(thick)
+    for bad in [Float32(1.5), nan32]:
+        var stretch = LayerFactors()
+        stretch.anisotropy = Vector2(bad, 0)
+        cases.append(stretch)
+    for field in range(5):
+        var mapped = LayerFactors()
+        if field == 0:
+            mapped.sheen_color_map = TextureId(-2)
+        elif field == 1:
+            mapped.sheen_roughness_map = TextureId(-2)
+        elif field == 2:
+            mapped.iridescence_map = TextureId(-2)
+        elif field == 3:
+            mapped.thickness_map = TextureId(-2)
+        else:
+            mapped.anisotropy_map = TextureId(-2)
+        cases.append(mapped)
+    for index in range(len(cases)):
+        with assert_raises():
+            cases[index].check()
+        var quad = with_layers(physical_quad(kind=PHYSICAL), cases[index])
+        with assert_raises():
+            check_triangle_state(quad[0], quad[1], quad[2])
+    LayerFactors().check()
+
+
+def test_a_layered_triangle_must_agree_and_be_physical() raises:
+    var layers = LayerFactors()
+    layers.iridescence = 0.5
+    var good = with_layers(physical_quad(kind=PHYSICAL), layers)
+    check_triangle_state(good[0], good[1], good[2])
+    var split = good.copy()
+    split[1].layers = LayerFactors()
+    with assert_raises(contains="disagree about their sheen"):
+        check_triangle_state(split[0], split[1], split[2])
+    split = good.copy()
+    split[2].layers = LayerFactors()
+    with assert_raises(contains="disagree about their sheen"):
+        check_triangle_state(split[0], split[1], split[2])
+    var standard = with_layers(physical_quad(kind=STANDARD), layers)
+    with assert_raises(contains="Only a physical triangle has a sheen"):
+        check_triangle_state(standard[0], standard[1], standard[2])
+
+
+def test_the_tangent_frame_follows_the_coordinates() raises:
+    # u grows along x and v along y: the frame is the world's own axes.
+    var frame = tangent_frame(
+        Vector3(0, 0, 1),
+        Vector3(0.5, 0, 0),
+        Vector3(0, 0.5, 0),
+        Vector2(0.25, 0),
+        Vector2(0, 0.25),
+    )
+    assert_almost_equal(frame.tangent.x, Float32(1), atol=1e-6)
+    assert_almost_equal(frame.bitangent.y, Float32(1), atol=1e-6)
+    # Coordinates that do not change make no frame at all.
+    var none = tangent_frame(
+        Vector3(0, 0, 1),
+        Vector3(0.5, 0, 0),
+        Vector3(0, 0.5, 0),
+        Vector2(0, 0),
+        Vector2(0, 0),
+    )
+    assert_equal(none.tangent.x, Float32(0))
+    assert_equal(none.bitangent.y, Float32(0))
+
+
+def test_a_sheen_dims_what_is_under_it_and_adds_its_own_lobe() raises:
+    var lighting = lit_obliquely()
+    var chalk = physical_pixel(physical_quad(kind=PHYSICAL), lighting)
+    var layers = LayerFactors()
+    layers.sheen_color = Vector3(1, 0, 0)
+    layers.sheen_roughness = 0.5
+    var cloth = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL), layers), lighting
+    )
+    # Green has no sheen: only the albedo scaling reaches it.
+    assert_almost_equal(cloth.g, chalk.g * 0.843, atol=1e-4)
+    # Red has both, so it is brighter than green.
+    assert_true(cloth.r > cloth.g, "the sheen added no light")
+    # The same under lit shading and on four workers.
+    var lit = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL), layers),
+        lighting,
+        mode=SHADE_LIT,
+    )
+    assert_equal(lit.r, cloth.r)
+    var banded = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL), layers), lighting, workers=4
+    )
+    assert_equal(banded.r, cloth.r)
+
+
+def test_the_sheen_maps_tint_it_and_roughen_it() raises:
+    var lighting = lit_obliquely()
+    var textures = TextureStore()
+    var black = textures.add(a_data_texel(0, 0, 0))
+    var smooth = textures.add(a_layer_texel(255, 255, 255, 40))
+    var chalk = physical_pixel(physical_quad(kind=PHYSICAL), lighting, textures)
+    var layers = LayerFactors()
+    layers.sheen_color = Vector3(1, 1, 1)
+    layers.sheen_roughness = 1
+    var cloth = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL), layers), lighting, textures
+    )
+    # A black sheen color map turns the sheen off altogether.
+    var tinted = layers
+    tinted.sheen_color_map = black
+    var dark = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL), tinted), lighting, textures
+    )
+    assert_equal(dark.r, chalk.r)
+    # A low alpha makes the sheen smoother, which changes its lobe.
+    var roughened = layers
+    roughened.sheen_roughness_map = smooth
+    var glossy = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL), roughened), lighting, textures
+    )
+    assert_true(abs(glossy.r - cloth.r) > 1e-4, "the alpha changed nothing")
+    # Neither is read under lit shading.
+    var ignored = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL), tinted),
+        lighting,
+        textures,
+        mode=SHADE_LIT,
+    )
+    assert_equal(ignored.r, cloth.r)
+
+
+def test_a_film_colors_the_lobe_and_its_maps_thin_it() raises:
+    var lighting = lit_along_z_from(400)
+    var textures = TextureStore()
+    var black = textures.add(a_data_texel(0, 0, 0))
+    var plain = physical_pixel(
+        physical_quad(kind=PHYSICAL, roughness=0.3), lighting, textures
+    )
+    var layers = LayerFactors()
+    layers.iridescence = 1
+    var film = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL, roughness=0.3), layers),
+        lighting,
+        textures,
+    )
+    assert_true(abs(film.b - plain.b) > 1e-3, "the film changed nothing")
+    # A black iridescence map takes the film away.
+    var faded = layers
+    faded.iridescence_map = black
+    var bare = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL, roughness=0.3), faded),
+        lighting,
+        textures,
+    )
+    assert_equal(bare.b, plain.b)
+    # So does a thickness map's green of zero over a range from zero.
+    var thinned = layers
+    thinned.thickness_map = black
+    thinned.thickness_minimum = 0
+    var thin = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL, roughness=0.3), thinned),
+        lighting,
+        textures,
+    )
+    assert_equal(thin.b, plain.b)
+
+
+def test_a_stretch_changes_the_lobe_and_its_map_can_undo_it() raises:
+    var lighting = lit_obliquely()
+    var textures = TextureStore()
+    var none = textures.add(a_data_texel(255, 128, 0))
+    var plain = physical_pixel(
+        physical_quad(kind=PHYSICAL, roughness=0.3), lighting, textures
+    )
+    var layers = LayerFactors()
+    layers.anisotropy = Vector2(1, 0)
+    var stretched = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL, roughness=0.3), layers),
+        lighting,
+        textures,
+    )
+    assert_true(
+        abs(stretched.r - plain.r) > 1e-3, "the stretch changed nothing"
+    )
+    # Read under lit shading too: the stretch is a number.
+    var lit = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL, roughness=0.3), layers),
+        lighting,
+        textures,
+        mode=SHADE_LIT,
+    )
+    assert_equal(lit.r, stretched.r)
+    # A map of no strength leaves the lobe as an even one along the
+    # frame, which here is the world's own axes.
+    var undone = layers
+    undone.anisotropy_map = none
+    var even = physical_pixel(
+        with_layers(physical_quad(kind=PHYSICAL, roughness=0.3), undone),
+        lighting,
+        textures,
+    )
+    assert_almost_equal(even.r, plain.r, atol=1e-4)
+
+
+def test_a_stretched_surface_reads_its_environment_along_a_bent_normal() raises:
+    # Seen from well off to the side, along the stretch: the bent normal
+    # leans toward the eye, and a smooth metal reads another part of the
+    # cube than the plain one does.
+    var lighting = viewed_from_z()
+    lighting.eye = Vector3(400, 0, 300)
+    var plain = physical_pixel(
+        physical_quad(
+            kind=PHYSICAL, roughness=0.2, metalness=1, env=CubeTextureId(0)
+        ),
+        lighting,
+    )
+    var layers = LayerFactors()
+    layers.anisotropy = Vector2(1, 0)
+    var bent = physical_pixel(
+        with_layers(
+            physical_quad(
+                kind=PHYSICAL, roughness=0.2, metalness=1, env=CubeTextureId(0)
+            ),
+            layers,
+        ),
+        lighting,
+    )
+    assert_true(
+        abs(bent.r - plain.r) + abs(bent.g - plain.g) + abs(bent.b - plain.b)
+        > 1e-3,
+        "the bent normal read the same environment",
+    )
+
+
+def test_a_layer_map_must_be_stored_as_it_is_read() raises:
+    var textures = TextureStore()
+    var coverage_color = textures.add(
+        Texture(1, 1, [UInt8(255), 255, 255, 255], REPEAT, NEAREST, SRGB, False)
+    )
+    var ignored_linear = textures.add(a_data_texel(255, 255, 255))
+    var covered_srgb = textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+            COVERAGE,
+        )
+    )
+    var covered_linear = textures.add(a_layer_texel(255, 255, 255, 255))
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var sheen = LayerFactors()
+    sheen.sheen_color = Vector3(1, 1, 1)
+    sheen.sheen_color_map = coverage_color
+    var quad = with_layers(physical_quad(kind=PHYSICAL), sheen)
+    with assert_raises(contains="A sheen color map must ignore its alpha"):
+        rasterize_all(quad, target, SHADE_TEXTURE, textures)
+    rasterize_all(quad, target, SHADE_LIT, textures)
+    sheen.sheen_color_map = ignored_linear
+    rasterize_all(
+        with_layers(physical_quad(kind=PHYSICAL), sheen),
+        target,
+        SHADE_TEXTURE,
+        textures,
+    )
+    var cloth = LayerFactors()
+    cloth.sheen_color = Vector3(1, 1, 1)
+    cloth.sheen_roughness_map = covered_srgb
+    with assert_raises(contains="A sheen roughness map holds data"):
+        rasterize_all(
+            with_layers(physical_quad(kind=PHYSICAL), cloth),
+            target,
+            SHADE_TEXTURE,
+            textures,
+        )
+    cloth.sheen_roughness_map = ignored_linear
+    with assert_raises(contains="is read from its alpha"):
+        rasterize_all(
+            with_layers(physical_quad(kind=PHYSICAL), cloth),
+            target,
+            SHADE_TEXTURE,
+            textures,
+        )
+    cloth.sheen_roughness_map = covered_linear
+    rasterize_all(
+        with_layers(physical_quad(kind=PHYSICAL), cloth),
+        target,
+        SHADE_TEXTURE,
+        textures,
+    )
+    var film = LayerFactors()
+    film.iridescence = 1
+    film.iridescence_map = covered_linear
+    with assert_raises(contains="An iridescence map must ignore"):
+        rasterize_all(
+            with_layers(physical_quad(kind=PHYSICAL), film),
+            target,
+            SHADE_TEXTURE,
+            textures,
+        )
+    film.iridescence_map = NO_TEXTURE
+    film.thickness_map = covered_linear
+    with assert_raises(contains="An iridescence thickness map must ignore"):
+        rasterize_all(
+            with_layers(physical_quad(kind=PHYSICAL), film),
+            target,
+            SHADE_TEXTURE,
+            textures,
+        )
+    var stretch = LayerFactors()
+    stretch.anisotropy = Vector2(1, 0)
+    stretch.anisotropy_map = covered_linear
+    with assert_raises(contains="An anisotropy map must ignore"):
+        rasterize_all(
+            with_layers(physical_quad(kind=PHYSICAL), stretch),
+            target,
+            SHADE_TEXTURE,
+            textures,
+        )

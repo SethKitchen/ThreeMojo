@@ -386,7 +386,7 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 
 ### glTF extensions
 
-The loader reads twelve extensions. They are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `is_supported_extension(name)` tells if the loader reads an extension.
+The loader reads fifteen extensions. They are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `is_supported_extension(name)` tells if the loader reads an extension.
 
 | Extension | ThreeMojo |
 |---|---|
@@ -398,6 +398,9 @@ The loader reads twelve extensions. They are the ones three.js's `GLTFLoader` re
 | `KHR_materials_transmission` | A `PHYSICAL` material. `transmissionFactor` sets `transmission`, and `transmissionTexture` sets `transmission_map`, read as data. See [Materials](Materials#transmission). |
 | `KHR_materials_volume` | A `PHYSICAL` material. `thicknessFactor` sets `thickness`, and `thicknessTexture` sets `thickness_map`, read as data. `attenuationDistance` sets `attenuation_distance`, and a distance of zero or none is infinite, as three.js reads it. `attenuationColor` sets `attenuation_color`, converted from linear to sRGB. |
 | `KHR_materials_dispersion` | A `PHYSICAL` material. `dispersion` sets `dispersion`. |
+| `KHR_materials_sheen` | A `PHYSICAL` material with a `sheen` of one, as three.js sets it. `sheenColorFactor` sets `sheen_color`, converted from linear to sRGB, and `sheenRoughnessFactor` sets `sheen_roughness`. Both are zero when they are not there. `sheenColorTexture` and `sheenRoughnessTexture` set the two maps. The roughness texture keeps its alpha, because the roughness is stored there. See [Materials](Materials#sheen). |
+| `KHR_materials_iridescence` | A `PHYSICAL` material. `iridescenceFactor`, `iridescenceIor`, `iridescenceThicknessMinimum` and `iridescenceThicknessMaximum` set the film, in nanometers. `iridescenceTexture` and `iridescenceThicknessTexture` set its maps. See [Materials](Materials#iridescence). |
+| `KHR_materials_anisotropy` | A `PHYSICAL` material. `anisotropyStrength` and `anisotropyRotation` set `anisotropy` and `anisotropy_rotation`, and `anisotropyTexture` sets its map. See [Materials](Materials#anisotropy). |
 | `KHR_texture_transform` | A copy of the texture with its `offset`, `rotation` and `repeat` set. See [Texture transforms](#texture-transforms). |
 | `KHR_lights_punctual` | A directional, point or spot `Light` on the node. See [Punctual lights](#punctual-lights). |
 | `KHR_mesh_quantization` | Nothing more. The loader reads every attribute at any component type, and a normalized one divides by its largest value. |
@@ -427,8 +430,7 @@ Each instance matrix is `TRANSLATION`, `ROTATION` and `SCALE` composed. An attri
 
 #### Not ported
 
-- `KHR_materials_sheen`. A material has no field for it.
-- `KHR_materials_iridescence`, `KHR_materials_anisotropy` and `KHR_materials_variants`.
+- `KHR_materials_variants`.
 - `KHR_draco_mesh_compression`, `EXT_meshopt_compression`, `KHR_texture_basisu`, `EXT_texture_webp` and `EXT_texture_avif`.
 - The textures in `KHR_materials_specular` and `KHR_materials_clearcoat`. Only their factors are read.
 
@@ -436,6 +438,8 @@ Each instance matrix is `TRANSLATION`, `ROTATION` and `SCALE` composed. An attri
 
 - A `specularColorFactor` outside zero to one is refused. A `Color` cannot hold it. three.js keeps it.
 - An `ior` outside 1 to 2.333 is refused, because `Material` refuses it.
+- An `iridescenceTexture` or `iridescenceThicknessTexture` with an `iridescenceFactor` of zero is left out. So is an `anisotropyTexture` with an `anisotropyStrength` of zero. three.js keeps them, but draws neither.
+- A `sheenColorFactor` outside zero to one is refused, as a `specularColorFactor` is.
 - A material whose maps have different transforms is refused. A fragment samples every map at one coordinate here. three.js keeps a transform for each map.
 - A skinned node with `EXT_mesh_gpu_instancing` is refused. An instanced skinned mesh is not ported. three.js drops the skin.
 

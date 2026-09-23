@@ -52,6 +52,8 @@ comptime METER = LengthUnit(1.0, "m")
 comptime KILOMETER = LengthUnit(1000.0, "km")
 comptime CENTIMETER = LengthUnit(0.01, "cm")
 comptime MILLIMETER = LengthUnit(0.001, "mm")
+# What a thin film is measured in: a light wave is a few hundred of them.
+comptime NANOMETER = LengthUnit(1e-9, "nm")
 # The one unit of inverse length: what a fog density is measured in.
 comptime PER_METER = InverseLengthUnit(1.0, "1/m")
 

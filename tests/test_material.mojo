@@ -39,7 +39,12 @@ from materials.material import (
     standard_material,
     toon_material,
 )
-from materials.material import MaterialId
+from materials.material import (
+    DEFAULT_IRIDESCENCE_IOR,
+    DEFAULT_THICKNESS_MAXIMUM,
+    DEFAULT_THICKNESS_MINIMUM,
+    MaterialId,
+)
 from core.assets import Assets
 from geometries.box import cube
 from materials.material import (
@@ -75,7 +80,7 @@ from std.testing import (
 )
 from math.vector2 import Vector2
 from std.math import inf, nan
-from units.si import Angle, DEGREE, Length, METER, RADIAN
+from units.si import Angle, DEGREE, Length, METER, NANOMETER, RADIAN
 from math.vector3 import Vector3
 from render.packing import (
     BASIC_DEPTH_PACKING,
@@ -1838,3 +1843,175 @@ def test_only_a_physical_material_transmits() raises:
             _ = Material(white, kind=kind, dispersion=1)
         materials.append(Material(white, kind=kind))
     assert_equal(len(materials), 5)
+
+
+# --- sheen, iridescence and anisotropy ---------------------------------------
+
+
+def test_a_physical_material_starts_with_no_sheen_film_or_stretch() raises:
+    var plain = physical_material(Color(255, 255, 255))
+    assert_equal(plain.sheen, Float32(0))
+    assert_equal(plain.sheen_color.r, UInt8(0))
+    assert_equal(plain.sheen_roughness, Float32(1))
+    assert_equal(plain.iridescence, Float32(0))
+    assert_equal(plain.iridescence_ior, DEFAULT_IRIDESCENCE_IOR)
+    assert_true(
+        plain.iridescence_thickness_minimum == DEFAULT_THICKNESS_MINIMUM
+    )
+    assert_true(
+        plain.iridescence_thickness_maximum == DEFAULT_THICKNESS_MAXIMUM
+    )
+    assert_almost_equal(
+        plain.iridescence_thickness_maximum.to(NANOMETER),
+        Float32(400),
+        atol=1e-3,
+    )
+    assert_equal(plain.anisotropy, Float32(0))
+    assert_true(plain.anisotropy_rotation == NO_ROTATION)
+    assert_equal(plain.sheen_color_map, NO_TEXTURE)
+    assert_equal(plain.anisotropy_map, NO_TEXTURE)
+
+
+def test_a_physical_material_carries_its_three_layers() raises:
+    var velvet = physical_material(
+        Color(255, 255, 255),
+        sheen=1,
+        sheen_color=Color(200, 0, 100),
+        sheen_color_map=TextureId(1),
+        sheen_roughness=0.3,
+        sheen_roughness_map=TextureId(2),
+        iridescence=0.5,
+        iridescence_ior=1.8,
+        iridescence_thickness_minimum=Length(50.0, NANOMETER),
+        iridescence_thickness_maximum=Length(800.0, NANOMETER),
+        iridescence_map=TextureId(3),
+        iridescence_thickness_map=TextureId(4),
+        anisotropy=0.75,
+        anisotropy_rotation=Angle(90.0, DEGREE),
+        anisotropy_map=TextureId(5),
+    )
+    assert_equal(velvet.sheen, Float32(1))
+    assert_equal(velvet.sheen_color.b, UInt8(100))
+    assert_equal(velvet.sheen_color_map, TextureId(1))
+    assert_equal(velvet.sheen_roughness, Float32(0.3))
+    assert_equal(velvet.sheen_roughness_map, TextureId(2))
+    assert_equal(velvet.iridescence, Float32(0.5))
+    assert_equal(velvet.iridescence_ior, Float32(1.8))
+    assert_almost_equal(
+        velvet.iridescence_thickness_minimum.to(NANOMETER),
+        Float32(50),
+        atol=1e-3,
+    )
+    assert_equal(velvet.iridescence_map, TextureId(3))
+    assert_equal(velvet.iridescence_thickness_map, TextureId(4))
+    assert_equal(velvet.anisotropy, Float32(0.75))
+    assert_almost_equal(
+        velvet.anisotropy_rotation.to(DEGREE), Float32(90), atol=1e-4
+    )
+    assert_equal(velvet.anisotropy_map, TextureId(5))
+
+
+def test_a_layer_number_out_of_range_is_refused() raises:
+    var white = Color(255, 255, 255)
+    for bad in [Float32(-0.1), Float32(1.1), nan[DType.float32]()]:
+        with assert_raises(contains="A sheen must"):
+            _ = physical_material(white, sheen=bad)
+        with assert_raises(contains="A sheen roughness"):
+            _ = physical_material(white, sheen_roughness=bad)
+        with assert_raises(contains="An iridescence must"):
+            _ = physical_material(white, iridescence=bad)
+        with assert_raises(contains="An anisotropy must"):
+            _ = physical_material(white, anisotropy=bad)
+    for bad in [Float32(0.9), Float32(2.5), nan[DType.float32]()]:
+        with assert_raises(contains="index of refraction"):
+            _ = physical_material(white, iridescence_ior=bad)
+    with assert_raises(contains="thickness cannot be negative"):
+        _ = physical_material(
+            white, iridescence_thickness_minimum=Length(-1.0, NANOMETER)
+        )
+    with assert_raises(contains="thickness cannot be negative"):
+        _ = physical_material(
+            white, iridescence_thickness_maximum=Length(-1.0, NANOMETER)
+        )
+    with assert_raises(contains="thickness cannot be negative"):
+        _ = physical_material(
+            white,
+            iridescence_thickness_maximum=Length(inf[DType.float32](), METER),
+        )
+    with assert_raises(contains="rotation must be finite"):
+        _ = physical_material(
+            white, anisotropy_rotation=Angle(inf[DType.float32](), RADIAN)
+        )
+    # A film thicker at a texel of zero than at one is three.js's too.
+    _ = physical_material(
+        white,
+        iridescence=1,
+        iridescence_thickness_minimum=Length(500.0, NANOMETER),
+    )
+
+
+def test_a_negative_layer_map_id_is_refused() raises:
+    var white = Color(255, 255, 255)
+    var bad = TextureId(-2)
+    with assert_raises(contains="layer map id"):
+        _ = physical_material(white, sheen=1, sheen_color_map=bad)
+    with assert_raises(contains="layer map id"):
+        _ = physical_material(white, sheen=1, sheen_roughness_map=bad)
+    with assert_raises(contains="layer map id"):
+        _ = physical_material(white, iridescence=1, iridescence_map=bad)
+    with assert_raises(contains="layer map id"):
+        _ = physical_material(
+            white, iridescence=1, iridescence_thickness_map=bad
+        )
+    with assert_raises(contains="layer map id"):
+        _ = physical_material(white, anisotropy=1, anisotropy_map=bad)
+
+
+def test_a_layer_map_with_nothing_to_multiply_is_refused() raises:
+    var white = Color(255, 255, 255)
+    var map = TextureId(0)
+    with assert_raises(contains="needs a sheen"):
+        _ = physical_material(white, sheen_color_map=map)
+    with assert_raises(contains="needs a sheen"):
+        _ = physical_material(white, sheen_roughness_map=map)
+    with assert_raises(contains="needs an iridescence"):
+        _ = physical_material(white, iridescence_map=map)
+    with assert_raises(contains="needs an iridescence"):
+        _ = physical_material(white, iridescence_thickness_map=map)
+    with assert_raises(contains="needs an anisotropy"):
+        _ = physical_material(white, anisotropy_map=map)
+
+
+def test_only_a_physical_material_has_a_sheen_a_film_or_a_stretch() raises:
+    var white = Color(255, 255, 255)
+    for kind in [BASIC, LAMBERT, PHONG, TOON, MATCAP, STANDARD]:
+        with assert_raises(contains="Only a physical material has a sheen"):
+            _ = Material(white, kind=kind, sheen=0.5)
+        with assert_raises(contains="Only a physical material has a sheen"):
+            _ = Material(white, kind=kind, sheen_color=Color(0, 0, 9))
+        with assert_raises(contains="Only a physical material has a sheen"):
+            _ = Material(white, kind=kind, sheen_roughness=0.5)
+        with assert_raises(contains="Only a physical material has a sheen"):
+            _ = Material(white, kind=kind, iridescence=0.5)
+        with assert_raises(contains="Only a physical material has a sheen"):
+            _ = Material(white, kind=kind, iridescence_ior=2.0)
+        with assert_raises(contains="Only a physical material has a sheen"):
+            _ = Material(
+                white,
+                kind=kind,
+                iridescence_thickness_minimum=Length(0.0, NANOMETER),
+            )
+        with assert_raises(contains="Only a physical material has a sheen"):
+            _ = Material(
+                white,
+                kind=kind,
+                iridescence_thickness_maximum=Length(9.0, NANOMETER),
+            )
+        with assert_raises(contains="Only a physical material has a sheen"):
+            _ = Material(white, kind=kind, anisotropy=0.5)
+        with assert_raises(contains="Only a physical material has a sheen"):
+            _ = Material(
+                white, kind=kind, anisotropy_rotation=Angle(1.0, RADIAN)
+            )
+    # An alpha on a black sheen color is still black.
+    _ = Material(white, kind=LAMBERT, sheen_color=Color(0, 0, 0, 128))

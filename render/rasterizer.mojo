@@ -34,6 +34,8 @@ from materials.material import (
     MIN_IOR,
     DISTANCE,
     LAMBERT,
+    MAX_IOR,
+    MIN_IOR,
     MULTIPLY_OPERATION,
     NORMALS,
     MATCAP,
@@ -65,6 +67,7 @@ from render.packing import (
 )
 from render.srgb import LINEAR
 from render.texture import (
+    COVERAGE,
     FLOAT_TYPE,
     IGNORED,
     Texture,
@@ -89,6 +92,13 @@ from lights.lighting import (
     physical_surface,
     toward_eye_at,
     view_direction,
+)
+from lights.physical_layers import (
+    NO_ANISOTROPY_TEXEL,
+    bent_normal,
+    iridescence_thickness,
+    layers_of,
+    sheen_roughness_of,
 )
 from core.fog import FogView, fog_mix
 from render.linerule import (
@@ -460,6 +470,157 @@ def rasterize_depth(
         row = row + down
 
 
+# What a thin film is, in nanometers, when a material names no range:
+# three.js's `iridescenceThicknessRange` of `[ 100, 400 ]`.
+comptime DEFAULT_THICKNESS_MINIMUM = Float32(100)
+comptime DEFAULT_THICKNESS_MAXIMUM = Float32(400)
+# The film's index of refraction when a material names none: three.js's
+# `iridescenceIOR` of 1.3.
+comptime DEFAULT_IRIDESCENCE_IOR = Float32(1.3)
+# The longest anisotropy vector a triangle can carry: a strength of one,
+# with room for the rounding of its cosine and sine.
+comptime MAX_ANISOTROPY_LENGTH = Float32(1.0001)
+
+
+struct LayerFactors(ImplicitlyCopyable):
+    """What a `PHYSICAL` triangle's sheen, iridescence and anisotropy are,
+    as the material says them: its numbers and its maps, per triangle.
+
+    One value on every corner, read from the first and checked to agree,
+    as the rest of a triangle's metadata is. `LayerFactors()` has no sheen,
+    no film and no stretch, which is what every other kind carries. The
+    fragment's own layers are worked out from these by
+    `lights.physical_layers.layers_of`.
+    """
+
+    # The sheen color, linear, already times the sheen, three.js's
+    # `sheenColor` uniform, and the sheen roughness as authored.
+    var sheen_color: Vector3
+    var sheen_roughness: Float32
+    # How much film there is, its index of refraction, and the range its
+    # thickness map reads between, in nanometers.
+    var iridescence: Float32
+    var iridescence_ior: Float32
+    var thickness_minimum: Float32
+    var thickness_maximum: Float32
+    # The stretch's strength along its rotation, as a vector: three.js's
+    # `anisotropyVector`. The renderer negates it when it turns a corner
+    # around, as it negates the normal scale.
+    var anisotropy: Vector2
+    # The maps: the sheen color's (its color), the sheen roughness's (its
+    # alpha), the film's (its red), the thickness's (its green) and the
+    # stretch's (its red and green a direction, its blue a strength).
+    var sheen_color_map: TextureId
+    var sheen_roughness_map: TextureId
+    var iridescence_map: TextureId
+    var thickness_map: TextureId
+    var anisotropy_map: TextureId
+
+    def __init__(out self):
+        """Describe a triangle with no sheen, no film and no stretch, at
+        three.js's defaults for each."""
+        self.sheen_color = Vector3(0, 0, 0)
+        self.sheen_roughness = 1
+        self.iridescence = 0
+        self.iridescence_ior = DEFAULT_IRIDESCENCE_IOR
+        self.thickness_minimum = DEFAULT_THICKNESS_MINIMUM
+        self.thickness_maximum = DEFAULT_THICKNESS_MAXIMUM
+        self.anisotropy = Vector2(0, 0)
+        self.sheen_color_map = NO_TEXTURE
+        self.sheen_roughness_map = NO_TEXTURE
+        self.iridescence_map = NO_TEXTURE
+        self.thickness_map = NO_TEXTURE
+        self.anisotropy_map = NO_TEXTURE
+
+    def agrees(self, other: Self) -> Bool:
+        """Return True if `other` holds the same numbers and maps.
+
+        Args:
+            other: The factors on another corner.
+
+        Returns:
+            Whether every field is equal.
+        """
+        return (
+            self.sheen_color.x == other.sheen_color.x
+            and self.sheen_color.y == other.sheen_color.y
+            and self.sheen_color.z == other.sheen_color.z
+            and self.sheen_roughness == other.sheen_roughness
+            and self.iridescence == other.iridescence
+            and self.iridescence_ior == other.iridescence_ior
+            and self.thickness_minimum == other.thickness_minimum
+            and self.thickness_maximum == other.thickness_maximum
+            and self.anisotropy.x == other.anisotropy.x
+            and self.anisotropy.y == other.anisotropy.y
+            and self.sheen_color_map == other.sheen_color_map
+            and self.sheen_roughness_map == other.sheen_roughness_map
+            and self.iridescence_map == other.iridescence_map
+            and self.thickness_map == other.thickness_map
+            and self.anisotropy_map == other.anisotropy_map
+        )
+
+    def is_layered(self) -> Bool:
+        """Return True if any number or map differs from `LayerFactors()`.
+
+        Returns:
+            Whether the triangle has a sheen, a film or a stretch to say.
+        """
+        return not self.agrees(LayerFactors())
+
+    def is_anisotropic(self) -> Bool:
+        """Return True if the lobe is stretched at all: three.js's
+        `USE_ANISOTROPY`, which a strength above zero turns on.
+
+        Returns:
+            Whether the anisotropy vector is not zero.
+        """
+        return self.anisotropy.x != 0 or self.anisotropy.y != 0
+
+    def check(self) raises:
+        """Refuse numbers no material can hold.
+
+        Raises:
+            Error: If any color channel of the sheen is negative or not
+                finite, the sheen roughness or the iridescence is outside
+                zero to one, the film's index is outside one to 2.333, a
+                thickness is negative or not finite, the anisotropy is not
+                finite or longer than one, or a map id is a negative other
+                than `NO_TEXTURE`.
+        """
+        var color = self.sheen_color
+        var darkest = min(min(color.x, color.y), color.z)
+        if not isfinite(color.dot(color)) or darkest < 0:
+            raise Error("A triangle's sheen color cannot be negative")
+        if not _is_unit_fraction(self.sheen_roughness):
+            raise Error(
+                "A triangle's sheen roughness must be between zero and one"
+            )
+        if not _is_unit_fraction(self.iridescence):
+            raise Error("A triangle's iridescence must be between zero and one")
+        var ior = self.iridescence_ior
+        if not isfinite(ior) or ior < MIN_IOR or ior > MAX_IOR:
+            raise Error(
+                "A triangle's iridescence index of refraction must be"
+                " between one and 2.333"
+            )
+        var thinnest = min(self.thickness_minimum, self.thickness_maximum)
+        var span = self.thickness_minimum + self.thickness_maximum
+        if not isfinite(span) or thinnest < 0:
+            raise Error("A triangle's film thickness cannot be negative")
+        var reach = self.anisotropy.length()
+        if not isfinite(reach) or reach > MAX_ANISOTROPY_LENGTH:
+            raise Error("A triangle's anisotropy must be between zero and one")
+        var lowest = min(
+            min(self.sheen_color_map.value, self.sheen_roughness_map.value),
+            min(
+                min(self.iridescence_map.value, self.thickness_map.value),
+                self.anisotropy_map.value,
+            ),
+        )
+        if lowest < NO_TEXTURE.value:
+            raise Error("A triangle names a layer map id that nothing can hold")
+
+
 struct RasterVertex(ImplicitlyCopyable):
     """One corner as the rasterizer wants it: screen position and varyings.
 
@@ -678,6 +839,9 @@ struct RasterVertex(ImplicitlyCopyable):
     var reference: Vector3
     var near_distance: Float32
     var far_distance: Float32
+    # A `PHYSICAL` triangle's sheen, iridescence and anisotropy, and their
+    # maps. Per-triangle, read from the first corner.
+    var layers: LayerFactors
 
     def __init__(
         out self,
@@ -743,6 +907,7 @@ struct RasterVertex(ImplicitlyCopyable):
         reference: Vector3 = Vector3(0, 0, 0),
         near_distance: Float32 = 1,
         far_distance: Float32 = 1000,
+        layers: LayerFactors = LayerFactors(),
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -771,6 +936,7 @@ struct RasterVertex(ImplicitlyCopyable):
         reaches the corner, the depth packing is the basic one, and the
         distance is measured from the origin between one and a thousand
         meters, all three.js's defaults.
+        The sheen, the film and the stretch default to none.
         """
         self.x = x
         self.y = y
@@ -834,6 +1000,7 @@ struct RasterVertex(ImplicitlyCopyable):
         self.reference = reference
         self.near_distance = near_distance
         self.far_distance = far_distance
+        self.layers = layers
 
 
 @fieldwise_init
@@ -939,6 +1106,63 @@ def _cross(left: Vector3, right: Vector3) -> Vector3:
     return product
 
 
+@fieldwise_init
+struct TangentFrame(ImplicitlyCopyable):
+    """The first two columns of three.js's `getTangentFrame`: where `u`
+    grows and where `v` grows, perpendicular to the normal, both scaled by
+    one number so that the longer is a unit vector. Zero where the
+    coordinates do not change across the pixel.
+    """
+
+    var tangent: Vector3
+    var bitangent: Vector3
+
+
+def tangent_frame(
+    normal: Vector3,
+    along_x: Vector3,
+    along_y: Vector3,
+    uv_along_x: Vector2,
+    uv_along_y: Vector2,
+) -> TangentFrame:
+    """Return the tangent frame three.js's `getTangentFrame` builds from
+    the derivatives of the position and the texture coordinates.
+
+    What `mapped_normal` perturbs the normal along, and what an
+    anisotropic surface stretches its lobe along. See `mapped_normal` for
+    why the changes are measured one pixel right and one pixel up. Shared
+    by both rasterizers.
+
+    Args:
+        normal: The interpolated unit normal, before any map.
+        along_x: How the world position changes one pixel to the right.
+        along_y: How it changes one pixel up.
+        uv_along_x: How the texture coordinates change one pixel right.
+        uv_along_y: How they change one pixel up.
+
+    Returns:
+        The tangent and the bitangent, each zero when the coordinates do
+        not change at all.
+    """
+    var q1_perp = _cross(along_y, normal)
+    var q0_perp = _cross(normal, along_x)
+    var tangent = Vector3(
+        q1_perp.x * uv_along_x.x + q0_perp.x * uv_along_y.x,
+        q1_perp.y * uv_along_x.x + q0_perp.y * uv_along_y.x,
+        q1_perp.z * uv_along_x.x + q0_perp.z * uv_along_y.x,
+    )
+    var bitangent = Vector3(
+        q1_perp.x * uv_along_x.y + q0_perp.x * uv_along_y.y,
+        q1_perp.y * uv_along_x.y + q0_perp.y * uv_along_y.y,
+        q1_perp.z * uv_along_x.y + q0_perp.z * uv_along_y.y,
+    )
+    var extent = max(tangent.dot(tangent), bitangent.dot(bitangent))
+    var frame = Float32(0)
+    if extent != 0:
+        frame = 1 / sqrt(extent)
+    return TangentFrame(tangent * frame, bitangent * frame)
+
+
 def mapped_normal(
     normal: Vector3,
     along_x: Vector3,
@@ -989,35 +1213,18 @@ def mapped_normal(
     Returns:
         The perturbed unit normal.
     """
-    var q1_perp = _cross(along_y, normal)
-    var q0_perp = _cross(normal, along_x)
-    var tangent = Vector3(
-        q1_perp.x * uv_along_x.x + q0_perp.x * uv_along_y.x,
-        q1_perp.y * uv_along_x.x + q0_perp.y * uv_along_y.x,
-        q1_perp.z * uv_along_x.x + q0_perp.z * uv_along_y.x,
-    )
-    var bitangent = Vector3(
-        q1_perp.x * uv_along_x.y + q0_perp.x * uv_along_y.y,
-        q1_perp.y * uv_along_x.y + q0_perp.y * uv_along_y.y,
-        q1_perp.z * uv_along_x.y + q0_perp.z * uv_along_y.y,
-    )
-    var extent = max(tangent.dot(tangent), bitangent.dot(bitangent))
-    if extent == 0:
+    var frame = tangent_frame(normal, along_x, along_y, uv_along_x, uv_along_y)
+    var tangent = frame.tangent
+    var bitangent = frame.bitangent
+    if max(tangent.dot(tangent), bitangent.dot(bitangent)) == 0:
         return normal
-    var frame = 1 / sqrt(extent)
     var map_x = (texel.r * 2 - 1) * scale.x
     var map_y = (texel.g * 2 - 1) * scale.y
     var map_z = texel.b * 2 - 1
     var perturbed = Vector3(
-        tangent.x * frame * map_x
-        + bitangent.x * frame * map_y
-        + normal.x * map_z,
-        tangent.y * frame * map_x
-        + bitangent.y * frame * map_y
-        + normal.y * map_z,
-        tangent.z * frame * map_x
-        + bitangent.z * frame * map_y
-        + normal.z * map_z,
+        tangent.x * map_x + bitangent.x * map_y + normal.x * map_z,
+        tangent.y * map_x + bitangent.y * map_y + normal.y * map_z,
+        tangent.z * map_x + bitangent.z * map_y + normal.z * map_z,
     )
     if perturbed.length() == 0:
         return normal
@@ -1664,6 +1871,19 @@ def check_triangle_state(
             "Only a basic, lambert or phong triangle reads a specular map:"
             " no other shader reads one"
         )
+    # The sheen, the film and the stretch, asked as the physical terms
+    # are: the numbers before their agreement, then the kind.
+    a.layers.check()
+    if not b.layers.agrees(a.layers) or not c.layers.agrees(a.layers):
+        raise Error(
+            "A triangle's corners disagree about their sheen, iridescence"
+            " or anisotropy"
+        )
+    if a.kind != PHYSICAL and a.layers.is_layered():
+        raise Error(
+            "Only a physical triangle has a sheen, an iridescence or an"
+            " anisotropy: no other shader reads one"
+        )
     # The volume, asked as the material asks it: the numbers first, since a
     # NaN never agrees, then the agreement, the ids and the kind.
     if not _is_unit_fraction(a.transmission):
@@ -2084,8 +2304,11 @@ def check_triangle_maps(
             map is not stored as data; a gradient map is not a
             one-row linear table -- see `check_alpha_map` and
             `check_gradient_map`; an env map `SHADE_TEXTURE` would open
-            is not in the cube store; an ao map is not stored as data; or
-            a light map does not ignore its alpha.
+            is not in the cube store; an ao map is not stored as data; a
+            light map does not ignore its alpha; a sheen color map does not
+            ignore its alpha; a sheen roughness map is not linear or
+            ignores its alpha; or an iridescence, thickness or anisotropy
+            map is not stored as data.
     """
     # An emissive map's alpha means nothing, and only a texture built to
     # ignore it filters accordingly -- see `render.texture.Alpha`. Asked
@@ -2143,6 +2366,82 @@ def check_triangle_maps(
             )
         if a.thickness_map != NO_TEXTURE:
             check_data_map(textures.get(a.thickness_map), "A thickness map")
+        # The layers' maps: a color whose alpha means nothing, a number
+        # read from the alpha, and three numbers read from the color.
+        ref layers = a.layers
+        if layers.sheen_color_map != NO_TEXTURE:
+            check_color_map(
+                textures.get(layers.sheen_color_map), "A sheen color map"
+            )
+        if layers.sheen_roughness_map != NO_TEXTURE:
+            check_alpha_data_map(
+                textures.get(layers.sheen_roughness_map),
+                "A sheen roughness map",
+            )
+        if layers.iridescence_map != NO_TEXTURE:
+            check_data_map(
+                textures.get(layers.iridescence_map), "An iridescence map"
+            )
+        if layers.thickness_map != NO_TEXTURE:
+            check_data_map(
+                textures.get(layers.thickness_map),
+                "An iridescence thickness map",
+            )
+        if layers.anisotropy_map != NO_TEXTURE:
+            check_data_map(
+                textures.get(layers.anisotropy_map), "An anisotropy map"
+            )
+
+
+def check_color_map(image: Texture, name: String) raises:
+    """Refuse a map of color whose alpha is read as coverage.
+
+    The rule `check_light_map` states, for a map that holds a color and
+    no coverage: a sheen color map. Filtered as coverage, a texel with a
+    low alpha would darken its neighbors. Shared by both backends.
+
+    Args:
+        image: The texture named as the map.
+        name: What to call it in the error: "A sheen color map", say.
+
+    Raises:
+        Error: If the texture reads its alpha as coverage.
+    """
+    if image.alpha != IGNORED:
+        raise Error(
+            name
+            + " must ignore its alpha; build the texture with alpha=IGNORED"
+        )
+
+
+def check_alpha_data_map(image: Texture, name: String) raises:
+    """Refuse a map that holds a number in its alpha and is not stored so.
+
+    three.js reads a sheen roughness map's *alpha*, as glTF's
+    `KHR_materials_sheen` stores it. The number is data, so the texture
+    must be linear, and it is the alpha, so the alpha must be read: a
+    texture built to ignore it reads one everywhere. Shared by both
+    backends.
+
+    Args:
+        image: The texture named as the map.
+        name: What to call it in the error: "A sheen roughness map", say.
+
+    Raises:
+        Error: If the texture's color space is not `LINEAR`, or it ignores
+            its alpha.
+    """
+    if image.color_space != LINEAR:
+        raise Error(
+            name
+            + " holds data, not color; build the texture with"
+            " color_space=LINEAR"
+        )
+    if image.alpha != COVERAGE:
+        raise Error(
+            name
+            + " is read from its alpha; build the texture with alpha=COVERAGE"
+        )
 
 
 def check_light_map(image: Texture) raises:
@@ -2714,6 +3013,14 @@ def rasterize_shaded(
             # one for none.
             var transmission_factor = Float32(1)
             var thickness_factor = Float32(1)
+            # What a physical surface's sheen, film and stretch read from
+            # their maps, or what leaves each number alone.
+            var sheen_tint = Vector3(1, 1, 1)
+            var sheen_alpha = Float32(1)
+            var film_factor = Float32(1)
+            var thickness_texel = Float32(0)
+            var thickness_mapped = False
+            var stretch_texel = NO_ANISOTROPY_TEXEL
             # Each mode by name, as the kernel does, so there is no "else"
             # for an unrecognized one to fall into differently on each side.
             if mode == SHADE_UV or mode == SHADE_TEXTURE:
@@ -2806,6 +3113,74 @@ def rasterize_shaded(
                             highlight.b * specular_strength,
                             1.0,
                         )
+                    # The layers' maps, three.js's `lights_physical_fragment`:
+                    # the sheen color map's color, the sheen roughness map's
+                    # *alpha*, the iridescence map's red, the thickness
+                    # map's green, and the anisotropy map's whole texel.
+                    ref layered = a.layers
+                    if layered.sheen_color_map != NO_TEXTURE:
+                        var tint = _sample_map(
+                            textures.get(layered.sheen_color_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        )
+                        sheen_tint = Vector3(tint.r, tint.g, tint.b)
+                    if layered.sheen_roughness_map != NO_TEXTURE:
+                        sheen_alpha = _sample_map(
+                            textures.get(layered.sheen_roughness_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).a
+                    if layered.iridescence_map != NO_TEXTURE:
+                        film_factor = _sample_map(
+                            textures.get(layered.iridescence_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).r
+                    if layered.thickness_map != NO_TEXTURE:
+                        thickness_texel = _sample_map(
+                            textures.get(layered.thickness_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).g
+                        thickness_mapped = True
+                    if layered.anisotropy_map != NO_TEXTURE:
+                        var turn = _sample_map(
+                            textures.get(layered.anisotropy_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        )
+                        stretch_texel = Vector3(turn.r, turn.g, turn.b)
                     # The transmission map's red and the thickness map's
                     # green, three.js's `transmission_fragment`.
                     if a.transmission_map != NO_TEXTURE:
@@ -2892,6 +3267,55 @@ def rasterize_shaded(
                 )
                 var rough = floored_roughness(a.roughness * rough_factor)
                 var coat_rough = floored_roughness(a.clearcoat_roughness)
+                var toward_eye = toward_eye_at(
+                    lighting.eye, lighting.toward_eye, spot
+                )
+                # The tangent frame an anisotropic lobe is stretched along,
+                # three.js's `tbn`, from the normal before any map and the
+                # changes one pixel right and one pixel up, as a normal map
+                # measures them. Coordinates are read whatever the mode:
+                # the stretch is a number, not a texture.
+                var frame = TangentFrame(Vector3(0, 0, 0), Vector3(0, 0, 0))
+                if a.layers.is_anisotropic():
+                    var right = _weights(coverage, x + 1, y)
+                    var up = _weights(coverage, x, y - 1)
+                    var uv_here = _coordinates_at(a, b, c, fragment)
+                    var uv_right = _coordinates_at(a, b, c, right)
+                    var uv_up = _coordinates_at(a, b, c, up)
+                    frame = tangent_frame(
+                        coat_facing,
+                        _world_at(a, b, c, right) - spot,
+                        _world_at(a, b, c, up) - spot,
+                        Vector2(uv_right.x - uv_here.x, uv_right.y - uv_here.y),
+                        Vector2(uv_up.x - uv_here.x, uv_up.y - uv_here.y),
+                    )
+                # The sheen, the film and the stretch, from the material's
+                # numbers times their maps; see `lights.physical_layers`.
+                ref layered = a.layers
+                var layers = layers_of(
+                    Vector3(
+                        layered.sheen_color.x * sheen_tint.x,
+                        layered.sheen_color.y * sheen_tint.y,
+                        layered.sheen_color.z * sheen_tint.z,
+                    ),
+                    sheen_roughness_of(layered.sheen_roughness, sheen_alpha),
+                    layered.iridescence * film_factor,
+                    layered.iridescence_ior,
+                    iridescence_thickness(
+                        layered.thickness_minimum,
+                        layered.thickness_maximum,
+                        thickness_texel,
+                        thickness_mapped,
+                    ),
+                    layered.anisotropy,
+                    stretch_texel,
+                    frame.tangent,
+                    frame.bitangent,
+                    facing,
+                    toward_eye,
+                    surface.specular,
+                    rough,
+                )
                 var direct = lighting.physical_at(
                     facing,
                     coat_facing,
@@ -2901,15 +3325,13 @@ def rasterize_shaded(
                     a.clearcoat,
                     coat_rough,
                     a.receives_shadow,
+                    layers,
                 )
                 # The light map's light joins the indirect light here, as
                 # three.js adds it to `irradiance`; zero adds nothing.
                 var around = lighting.indirect_at(facing)
                 var indirect = Vector3(
                     around.r + baked.x, around.g + baked.y, around.b + baked.z
-                )
-                var toward_eye = toward_eye_at(
-                    lighting.eye, lighting.toward_eye, spot
                 )
                 var dot_nv = max(
                     Float32(0), min(Float32(1), facing.dot(toward_eye))
@@ -2928,8 +3350,15 @@ def rasterize_shaded(
                 var coat_radiance = Vector3(0, 0, 0)
                 if reflects:
                     ref cube = cubes.get(a.env_map)
+                    # An anisotropic surface reads along its bent normal,
+                    # three.js's `getIBLAnisotropyRadiance`.
                     var seen = cube.sample_rough(
-                        rough_reflection(toward_eye, facing, rough), rough
+                        rough_reflection(
+                            toward_eye,
+                            bent_normal(facing, toward_eye, layers, rough),
+                            rough,
+                        ),
+                        rough,
                     )
                     var around = cube.sample_rough(facing, 1)
                     var strength = a.env_map_intensity
@@ -3000,6 +3429,7 @@ def rasterize_shaded(
                     occlusion,
                     through,
                     transmitted,
+                    layers=layers,
                 )
                 shaded = FloatColor(
                     outgoing.x, outgoing.y, outgoing.z, shaded.a * thinned

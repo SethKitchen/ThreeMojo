@@ -215,7 +215,7 @@ from math.bounds import Plane
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from std.math import inf, isfinite, min
-from units.si import Angle, Length, METER, RADIAN
+from units.si import Angle, Length, METER, NANOMETER, RADIAN
 
 # No dash and no gap: a solid line, and what a material says unless asked.
 comptime NO_DASH = Length(0.0, METER)
@@ -248,6 +248,13 @@ comptime NO_THICKNESS = Length(0.0, METER)
 comptime NO_ATTENUATION = Length(inf[DType.float32](), METER)
 # What a dielectric reflects head on: three.js's `vec3(0.04)`.
 comptime DIELECTRIC_REFLECTANCE = Float32(0.04)
+# A thin film's index of refraction when a material names none: three.js's
+# `iridescenceIOR` default.
+comptime DEFAULT_IRIDESCENCE_IOR = Float32(1.3)
+# How thin and how thick a film is when a material names no range:
+# three.js's `iridescenceThicknessRange` default of `[ 100, 400 ]`.
+comptime DEFAULT_THICKNESS_MINIMUM = Length(100.0, NANOMETER)
+comptime DEFAULT_THICKNESS_MAXIMUM = Length(400.0, NANOMETER)
 comptime _WHITE = Color(255, 255, 255)
 
 
@@ -710,8 +717,8 @@ comptime MATCAP = MaterialKind(6)
 # environment reflected by the split sum: three.js's `MeshStandardMaterial`.
 comptime STANDARD = MaterialKind(7)
 # `STANDARD` with an index of refraction, a specular color and intensity,
-# a clear coat and transmission: three.js's `MeshPhysicalMaterial`, in
-# part. Its sheen, iridescence and anisotropy are not ported.
+# a clear coat, transmission, a sheen, a thin film and a stretched lobe:
+# three.js's `MeshPhysicalMaterial`.
 comptime PHYSICAL = MaterialKind(8)
 # Unlit and transparent everywhere but where a shadow falls, where it shows
 # its color by how much of the light is blocked: three.js's
@@ -944,6 +951,35 @@ struct Material(ImplicitlyCopyable):
     var attenuation_color: Color
     var attenuation_distance: Length
     var dispersion: Float32
+    # A `PHYSICAL` surface's sheen, the lobe of cloth and velvet: how much
+    # there is, from zero to one, three.js's `sheen`; its color as
+    # authored, three.js's `sheenColor`, black by default; and how rough
+    # it is, three.js's `sheenRoughness`. A map multiplies the color by
+    # its color, and one multiplies the roughness by its *alpha*, as
+    # three.js reads them. See `lights.physical_layers`.
+    var sheen: Float32
+    var sheen_color: Color
+    var sheen_color_map: TextureId
+    var sheen_roughness: Float32
+    var sheen_roughness_map: TextureId
+    # A thin film over a `PHYSICAL` surface: how much there is, three.js's
+    # `iridescence`; its index of refraction, `iridescenceIOR`; and how
+    # thin and how thick it is, `iridescenceThicknessRange`. Without a
+    # thickness map the film is the range's maximum. A map multiplies the
+    # amount by its red, and one reads the thickness from its green.
+    var iridescence: Float32
+    var iridescence_ior: Float32
+    var iridescence_thickness_minimum: Length
+    var iridescence_thickness_maximum: Length
+    var iridescence_map: TextureId
+    var iridescence_thickness_map: TextureId
+    # How far a `PHYSICAL` surface's lobe is stretched, from zero to one,
+    # three.js's `anisotropy`, and which way, turned from the tangent
+    # counterclockwise, `anisotropyRotation`. A map turns and scales both
+    # by its texel: red and green a direction, blue a strength.
+    var anisotropy: Float32
+    var anisotropy_rotation: Angle
+    var anisotropy_map: TextureId
     # The material's own clipping planes, three.js's `clippingPlanes`, at
     # most `MAX_CLIPPING_PLANES`, each a unit normal and a constant packed
     # four floats apart so that a material stays a plain value. Read with
@@ -1060,6 +1096,20 @@ struct Material(ImplicitlyCopyable):
         near_distance: Length = DEFAULT_NEAR_DISTANCE,
         far_distance: Length = DEFAULT_FAR_DISTANCE,
         fog: Optional[Bool] = None,
+        sheen: Float32 = 0.0,
+        sheen_color: Color = Color(0, 0, 0),
+        sheen_color_map: TextureId = NO_TEXTURE,
+        sheen_roughness: Float32 = 1.0,
+        sheen_roughness_map: TextureId = NO_TEXTURE,
+        iridescence: Float32 = 0.0,
+        iridescence_ior: Float32 = DEFAULT_IRIDESCENCE_IOR,
+        iridescence_thickness_minimum: Length = DEFAULT_THICKNESS_MINIMUM,
+        iridescence_thickness_maximum: Length = DEFAULT_THICKNESS_MAXIMUM,
+        iridescence_map: TextureId = NO_TEXTURE,
+        iridescence_thickness_map: TextureId = NO_TEXTURE,
+        anisotropy: Float32 = 0.0,
+        anisotropy_rotation: Angle = NO_ROTATION,
+        anisotropy_map: TextureId = NO_TEXTURE,
     ) raises:
         """Describe a surface.
 
@@ -1231,6 +1281,37 @@ struct Material(ImplicitlyCopyable):
                 by default.
             fog: Whether the scene's fog veils the surface, three.js's
                 `fog`. Left unset it is on, and off for a data kind.
+            sheen: How much sheen lies over a `PHYSICAL` surface, from zero
+                to one, three.js's `sheen`. Zero by default.
+            sheen_color: The sheen's color, as authored in sRGB, three.js's
+                `sheenColor`. Black by default.
+            sheen_color_map: Id of a texture whose color multiplies the
+                sheen color, or `NO_TEXTURE`. Its alpha must be `IGNORED`.
+            sheen_roughness: How rough the sheen is, from zero to one,
+                three.js's `sheenRoughness`. One by default.
+            sheen_roughness_map: Id of a texture whose *alpha* multiplies
+                the sheen roughness, or `NO_TEXTURE`. `LINEAR`, and its
+                alpha read: `COVERAGE`.
+            iridescence: How much thin film lies over a `PHYSICAL` surface,
+                from zero to one, three.js's `iridescence`. Zero by default.
+            iridescence_ior: The film's index of refraction, from one to
+                2.333, three.js's `iridescenceIOR`. 1.3 by default.
+            iridescence_thickness_minimum: How thin the film is at a
+                thickness texel of zero, three.js's
+                `iridescenceThicknessRange[0]`. 100 nanometers by default.
+            iridescence_thickness_maximum: How thick it is at a texel of
+                one, and everywhere without a thickness map,
+                `iridescenceThicknessRange[1]`. 400 nanometers by default.
+            iridescence_map: Id of a texture whose red channel multiplies
+                the iridescence, or `NO_TEXTURE`. Data: `LINEAR`, `IGNORED`.
+            iridescence_thickness_map: Id of a texture whose green channel
+                mixes the thickness range, or `NO_TEXTURE`. Data.
+            anisotropy: How far a `PHYSICAL` surface's lobe is stretched,
+                from zero to one, three.js's `anisotropy`. Zero by default.
+            anisotropy_rotation: Which way, from the tangent,
+                counterclockwise, three.js's `anisotropyRotation`.
+            anisotropy_map: Id of a texture whose red and green turn the
+                stretch and whose blue scales it, or `NO_TEXTURE`. Data.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -1326,6 +1407,16 @@ struct Material(ImplicitlyCopyable):
                 a kind that is not `DISTANCE`, an opacity below one on a
                 `DISTANCE` material, and a range that `check_distance_range`
                 refuses are refused. `fog` set on a data kind is refused.
+                A `sheen`,
+                `sheen_roughness`, `iridescence` or `anisotropy` outside
+                zero to one or not finite, an `iridescence_ior` outside
+                one to 2.333, a thickness that is negative or not finite,
+                an `anisotropy_rotation` that is not finite, a layer map
+                id that is a negative other than `NO_TEXTURE`, a sheen map
+                with no sheen, an iridescence map with no iridescence, an
+                anisotropy map with no anisotropy, and any of these that
+                is not the default on a kind that is not `PHYSICAL` are
+                refused.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -1644,6 +1735,83 @@ struct Material(ImplicitlyCopyable):
         self.attenuation_color = attenuation_color
         self.attenuation_distance = attenuation_distance
         self.dispersion = dispersion
+        # The three layers, refused where nothing reads them: only the
+        # physical shader has a sheen, a film or a stretch, and a map with
+        # no amount to multiply does nothing.
+        if not _is_unit_fraction(sheen):
+            raise Error("A sheen must be between zero and one")
+        if not _is_unit_fraction(sheen_roughness):
+            raise Error("A sheen roughness must be between zero and one")
+        if not _is_unit_fraction(iridescence):
+            raise Error("An iridescence must be between zero and one")
+        if (
+            not isfinite(iridescence_ior)
+            or iridescence_ior < MIN_IOR
+            or iridescence_ior > MAX_IOR
+        ):
+            raise Error(
+                "An iridescence index of refraction must be between one and"
+                " 2.333"
+            )
+        var thinnest = iridescence_thickness_minimum.to(NANOMETER)
+        var thickest = iridescence_thickness_maximum.to(NANOMETER)
+        if not isfinite(thinnest + thickest) or min(thinnest, thickest) < 0:
+            raise Error("A film thickness cannot be negative")
+        if not _is_unit_fraction(anisotropy):
+            raise Error("An anisotropy must be between zero and one")
+        if not isfinite(anisotropy_rotation.to(RADIAN)):
+            raise Error("An anisotropy rotation must be finite")
+        var lowest = min(
+            min(sheen_color_map.value, sheen_roughness_map.value),
+            min(
+                min(iridescence_map.value, iridescence_thickness_map.value),
+                anisotropy_map.value,
+            ),
+        )
+        if lowest < NO_TEXTURE.value:
+            raise Error("A material's layer map id cannot be negative")
+        if sheen == 0 and (
+            sheen_color_map != NO_TEXTURE or sheen_roughness_map != NO_TEXTURE
+        ):
+            raise Error("A sheen map needs a sheen to multiply")
+        if iridescence == 0 and (
+            iridescence_map != NO_TEXTURE
+            or iridescence_thickness_map != NO_TEXTURE
+        ):
+            raise Error("An iridescence map needs an iridescence to multiply")
+        if anisotropy == 0 and anisotropy_map != NO_TEXTURE:
+            raise Error("An anisotropy map needs an anisotropy to turn")
+        var layered = (
+            sheen != 0
+            or not _is_black(sheen_color)
+            or sheen_roughness != 1
+            or iridescence != 0
+            or iridescence_ior != DEFAULT_IRIDESCENCE_IOR
+            or iridescence_thickness_minimum != DEFAULT_THICKNESS_MINIMUM
+            or iridescence_thickness_maximum != DEFAULT_THICKNESS_MAXIMUM
+            or anisotropy != 0
+            or anisotropy_rotation != NO_ROTATION
+        )
+        if kind != PHYSICAL and layered:
+            raise Error(
+                "Only a physical material has a sheen, an iridescence or an"
+                " anisotropy: give it kind=PHYSICAL, or build it with"
+                " physical_material"
+            )
+        self.sheen = sheen
+        self.sheen_color = sheen_color
+        self.sheen_color_map = sheen_color_map
+        self.sheen_roughness = sheen_roughness
+        self.sheen_roughness_map = sheen_roughness_map
+        self.iridescence = iridescence
+        self.iridescence_ior = iridescence_ior
+        self.iridescence_thickness_minimum = iridescence_thickness_minimum
+        self.iridescence_thickness_maximum = iridescence_thickness_maximum
+        self.iridescence_map = iridescence_map
+        self.iridescence_thickness_map = iridescence_thickness_map
+        self.anisotropy = anisotropy
+        self.anisotropy_rotation = anisotropy_rotation
+        self.anisotropy_map = anisotropy_map
         self._clip_planes = SIMD[DType.float32, 4 * MAX_CLIPPING_PLANES](0)
         self.clip_plane_count = 0
         self.clip_intersection = False
@@ -2440,10 +2608,24 @@ def physical_material(
     attenuation_color: Color = _WHITE,
     attenuation_distance: Length = NO_ATTENUATION,
     dispersion: Float32 = 0.0,
+    sheen: Float32 = 0.0,
+    sheen_color: Color = Color(0, 0, 0),
+    sheen_color_map: TextureId = NO_TEXTURE,
+    sheen_roughness: Float32 = 1.0,
+    sheen_roughness_map: TextureId = NO_TEXTURE,
+    iridescence: Float32 = 0.0,
+    iridescence_ior: Float32 = DEFAULT_IRIDESCENCE_IOR,
+    iridescence_thickness_minimum: Length = DEFAULT_THICKNESS_MINIMUM,
+    iridescence_thickness_maximum: Length = DEFAULT_THICKNESS_MAXIMUM,
+    iridescence_map: TextureId = NO_TEXTURE,
+    iridescence_thickness_map: TextureId = NO_TEXTURE,
+    anisotropy: Float32 = 0.0,
+    anisotropy_rotation: Angle = NO_ROTATION,
+    anisotropy_map: TextureId = NO_TEXTURE,
 ) raises -> Material:
     """Return a physically shaded material with an index of refraction, a
-    clear coat and transmission, three.js's `MeshPhysicalMaterial` at
-    three.js's defaults.
+    clear coat, transmission, a sheen, a thin film and a stretched lobe,
+    three.js's `MeshPhysicalMaterial` at three.js's defaults.
 
     `standard_material` with three more knobs. The index of refraction,
     the specular color and the specular intensity together set what the
@@ -2452,8 +2634,8 @@ def physical_material(
     GGX lobe over the surface, on the surface's own normal, that dims
     what is under it by its own Fresnel. A transmission above zero shows
     the opaque scene behind the surface through it, refracted, dimmed and
-    blurred; see `render.transmission`. three.js's sheen, iridescence and
-    anisotropy are not ported.
+    blurred; see `render.transmission`. The sheen, the film and the
+    stretch are `lights.physical_layers`.
 
     Args:
         color: The base color, as authored in sRGB.
@@ -2502,6 +2684,27 @@ def physical_material(
             authored in sRGB.
         attenuation_distance: How far the light travels to become it.
         dispersion: How far the three channels bend apart.
+        sheen: How much sheen there is, from zero to one.
+        sheen_color: The sheen's color, as authored in sRGB.
+        sheen_color_map: Id of a texture whose color multiplies the sheen
+            color, or `NO_TEXTURE`.
+        sheen_roughness: How rough the sheen is, from zero to one.
+        sheen_roughness_map: Id of a texture whose alpha multiplies the
+            sheen roughness, or `NO_TEXTURE`.
+        iridescence: How much thin film there is, from zero to one.
+        iridescence_ior: The film's index of refraction.
+        iridescence_thickness_minimum: The film at a thickness texel of
+            zero.
+        iridescence_thickness_maximum: The film at a texel of one, and
+            everywhere without a thickness map.
+        iridescence_map: Id of a texture whose red multiplies the
+            iridescence, or `NO_TEXTURE`.
+        iridescence_thickness_map: Id of a texture whose green mixes the
+            thickness range, or `NO_TEXTURE`.
+        anisotropy: How far the lobe is stretched, from zero to one.
+        anisotropy_rotation: Which way, from the tangent.
+        anisotropy_map: Id of a texture that turns and scales the stretch,
+            or `NO_TEXTURE`.
 
     Returns:
         The material, of kind `PHYSICAL`.
@@ -2546,6 +2749,20 @@ def physical_material(
         attenuation_color=attenuation_color,
         attenuation_distance=attenuation_distance,
         dispersion=dispersion,
+        sheen=sheen,
+        sheen_color=sheen_color,
+        sheen_color_map=sheen_color_map,
+        sheen_roughness=sheen_roughness,
+        sheen_roughness_map=sheen_roughness_map,
+        iridescence=iridescence,
+        iridescence_ior=iridescence_ior,
+        iridescence_thickness_minimum=iridescence_thickness_minimum,
+        iridescence_thickness_maximum=iridescence_thickness_maximum,
+        iridescence_map=iridescence_map,
+        iridescence_thickness_map=iridescence_thickness_map,
+        anisotropy=anisotropy,
+        anisotropy_rotation=anisotropy_rotation,
+        anisotropy_map=anisotropy_map,
     )
 
 
@@ -3083,6 +3300,11 @@ def _is_origin(point: Vector3) -> Bool:
     """Return True if `point` is the origin, three.js's default
     `referencePosition`."""
     return point.x == 0 and point.y == 0 and point.z == 0
+
+
+def _is_black(color: Color) -> Bool:
+    """Return True if a color has no red, green or blue, whatever its alpha."""
+    return color.r == 0 and color.g == 0 and color.b == 0
 
 
 def _is_unit_fraction(value: Float32) -> Bool:

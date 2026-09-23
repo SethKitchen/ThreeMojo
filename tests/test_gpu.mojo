@@ -128,6 +128,7 @@ from render.rect import Rect
 from render.rasterizer import (
     DRAW_POINTS,
     DRAW_SEGMENTS,
+    LayerFactors,
     Draw,
     rasterize_all,
     rasterize_lines_all,
@@ -151,6 +152,21 @@ from render.packing import (
 from render.gpu import (
     FLOATS_PER_VERTEX,
     LANE_AO_INTENSITY,
+    LANE_ANISOTROPY_X,
+    LANE_ANISOTROPY_Y,
+    LANE_IRIDESCENCE,
+    LANE_IRIDESCENCE_IOR,
+    LANE_SHEEN_B,
+    LANE_SHEEN_G,
+    LANE_SHEEN_R,
+    LANE_SHEEN_ROUGHNESS,
+    LANE_THICKNESS_MAXIMUM,
+    LANE_THICKNESS_MINIMUM,
+    STATE_ANISOTROPY_MAP,
+    STATE_IRIDESCENCE_MAP,
+    STATE_SHEEN_COLOR_MAP,
+    STATE_SHEEN_ROUGHNESS_MAP,
+    STATE_FILM_THICKNESS_MAP,
     LANE_BUMP_SCALE,
     LANE_LIGHT_MAP_INTENSITY,
     LANE_U1,
@@ -7756,7 +7772,7 @@ def test_the_physical_lanes_and_columns_ride_last() raises:
     assert_equal(flat[LANE_NORMAL_SCALE_Y], Float32(0.5))
     assert_equal(flat[LANE_BUMP_SCALE], Float32(0.3))
     assert_equal(LANE_BUMP_SCALE, LANE_U1 - 1)
-    assert_equal(LANE_FAR_DISTANCE, FLOATS_PER_VERTEX - 1)
+    assert_equal(LANE_FAR_DISTANCE, LANE_SHEEN_R - 1)
     # A corner that says nothing carries a rough dielectric with no map.
     var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
     assert_equal(plain[LANE_ROUGHNESS], Float32(1))
@@ -10292,7 +10308,7 @@ def test_the_depth_packing_the_range_and_the_fog_switch_cross() raises:
     var depth = packed_pair(DEPTH, RGB_DEPTH_PACKING)
     depth[0].fog = False
     var state = triangle_state(depth)
-    assert_equal(STATE_FOG, STATE_PER_TRIANGLE - 1)
+    assert_equal(STATE_FOG, STATE_SHEEN_COLOR_MAP - 1)
     assert_equal(state[STATE_DEPTH_PACKING], Int32(RGB_DEPTH_PACKING.value))
     assert_equal(state[STATE_FOG], Int32(0))
     assert_equal(state[STATE_PER_TRIANGLE + STATE_FOG], Int32(1))
@@ -10424,3 +10440,239 @@ def test_both_backends_leave_a_primitive_with_its_fog_off_unfogged() raises:
         points=points,
     )
     assert_equal(count_mismatches(cpu, gpu), 0)
+
+
+# --- sheen, iridescence and anisotropy --------------------------------------
+
+
+def with_gpu_layers(
+    corners: List[RasterVertex], layers: LayerFactors
+) -> List[RasterVertex]:
+    """Return `corners` with every corner carrying `layers`."""
+    var layered = corners.copy()
+    for index in range(len(layered)):
+        layered[index].layers = layers
+    return layered^
+
+
+def a_gpu_alpha_map() raises -> Texture:
+    """Return a 2x2 linear map whose alpha is read and differs per texel,
+    as a sheen roughness map is stored."""
+    var pixels = List[UInt8]()
+    for alpha in [255, 40, 160, 90]:
+        pixels.append(200)
+        pixels.append(100)
+        pixels.append(50)
+        pixels.append(UInt8(alpha))
+    return Texture(2, 2, pixels^, REPEAT, BILINEAR, LINEAR, True, COVERAGE)
+
+
+def test_the_layer_lanes_and_columns_ride_last() raises:
+    var layers = LayerFactors()
+    layers.sheen_color = Vector3(0.1, 0.2, 0.3)
+    layers.sheen_roughness = 0.4
+    layers.iridescence = 0.5
+    layers.iridescence_ior = 1.6
+    layers.thickness_minimum = 50
+    layers.thickness_maximum = 700
+    layers.anisotropy = Vector2(0.25, -0.5)
+    layers.sheen_color_map = TextureId(1)
+    layers.sheen_roughness_map = TextureId(2)
+    layers.iridescence_map = TextureId(3)
+    layers.thickness_map = TextureId(4)
+    layers.anisotropy_map = TextureId(5)
+    var corners = with_gpu_layers(physical_pair(PHYSICAL, 0.5, 0.5), layers)
+    var flat = flatten(corners)
+    assert_equal(len(flat), FLOATS_PER_VERTEX * 6)
+    assert_equal(flat[LANE_SHEEN_R], Float32(0.1))
+    assert_equal(flat[LANE_SHEEN_G], Float32(0.2))
+    assert_equal(flat[LANE_SHEEN_B], Float32(0.3))
+    assert_equal(flat[LANE_SHEEN_ROUGHNESS], Float32(0.4))
+    assert_equal(flat[LANE_IRIDESCENCE], Float32(0.5))
+    assert_equal(flat[LANE_IRIDESCENCE_IOR], Float32(1.6))
+    assert_equal(flat[LANE_THICKNESS_MINIMUM], Float32(50))
+    assert_equal(flat[LANE_THICKNESS_MAXIMUM], Float32(700))
+    assert_equal(flat[LANE_ANISOTROPY_X], Float32(0.25))
+    assert_equal(flat[LANE_ANISOTROPY_Y], Float32(-0.5))
+    assert_equal(LANE_SHEEN_R, LANE_FAR_DISTANCE + 1)
+    assert_equal(LANE_ANISOTROPY_Y, FLOATS_PER_VERTEX - 1)
+    var state = triangle_state(corners)
+    assert_equal(len(state), 2 * STATE_PER_TRIANGLE)
+    assert_equal(state[STATE_SHEEN_COLOR_MAP], Int32(1))
+    assert_equal(state[STATE_SHEEN_ROUGHNESS_MAP], Int32(2))
+    assert_equal(state[STATE_IRIDESCENCE_MAP], Int32(3))
+    assert_equal(state[STATE_FILM_THICKNESS_MAP], Int32(4))
+    assert_equal(state[STATE_ANISOTROPY_MAP], Int32(5))
+    assert_equal(STATE_SHEEN_COLOR_MAP, STATE_FOG + 1)
+    assert_equal(STATE_ANISOTROPY_MAP, STATE_PER_TRIANGLE - 1)
+    # A corner that says nothing carries three.js's defaults and no map.
+    var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
+    assert_equal(plain[LANE_SHEEN_ROUGHNESS], Float32(1))
+    assert_equal(plain[LANE_IRIDESCENCE_IOR], Float32(1.3))
+    assert_equal(plain[LANE_THICKNESS_MAXIMUM], Float32(400))
+    assert_equal(plain[LANE_ANISOTROPY_X], Float32(0))
+    var none = triangle_state(physical_pair(PHYSICAL, 0.5, 0.5))
+    assert_equal(none[STATE_SHEEN_COLOR_MAP], Int32(NO_TEXTURE.value))
+    assert_equal(none[STATE_ANISOTROPY_MAP], Int32(NO_TEXTURE.value))
+
+
+def gpu_layer_cases(
+    map: TextureId, cloth: TextureId, env: CubeTextureId
+) -> List[List[RasterVertex]]:
+    """Return a sheen, a film and a stretch, each with and without its
+    maps, over a rough dielectric and a smooth metal."""
+    var cases = List[List[RasterVertex]]()
+    var sheen = LayerFactors()
+    sheen.sheen_color = Vector3(0.8, 0.3, 0.1)
+    sheen.sheen_roughness = 0.4
+    var film = LayerFactors()
+    film.iridescence = 1
+    film.iridescence_ior = 1.8
+    var stretch = LayerFactors()
+    stretch.anisotropy = Vector2(0.3, 0.6)
+    var mapped_sheen = sheen
+    mapped_sheen.sheen_color_map = map
+    mapped_sheen.sheen_roughness_map = cloth
+    var mapped_film = film
+    mapped_film.iridescence_map = map
+    mapped_film.thickness_map = map
+    mapped_film.thickness_minimum = 0
+    var mapped_stretch = stretch
+    mapped_stretch.anisotropy_map = map
+    for layers in [
+        sheen,
+        film,
+        stretch,
+        mapped_sheen,
+        mapped_film,
+        mapped_stretch,
+    ]:
+        cases.append(
+            with_gpu_layers(physical_pair(PHYSICAL, 0.6, 0.0, env=env), layers)
+        )
+        cases.append(
+            with_gpu_layers(physical_pair(PHYSICAL, 0.2, 1.0, env=env), layers)
+        )
+    return cases^
+
+
+def test_both_backends_agree_on_a_sheen_a_film_and_a_stretch() raises:
+    # The Charlie lobe, the thin film's Fresnel term and the stretched
+    # GGX lobe, from the host's own functions, with and without their
+    # maps, lit by every light and reflecting an environment along the
+    # bent normal.
+    if skipped_for_lack_of_a_gpu("both backends agree on the layers"):
+        return
+    var lighting = phong_lighting()
+    var textures = TextureStore()
+    var map = textures.add(a_gpu_data_map())
+    var cloth = textures.add(a_gpu_alpha_map())
+    var cubes = a_cube_store()
+    for env in [NO_CUBE_TEXTURE, CubeTextureId(1)]:
+        var cases = gpu_layer_cases(map, cloth, env)
+        for index in range(len(cases)):
+            ref corners = cases[index]
+            for mode in [SHADE_LIT, SHADE_TEXTURE]:
+                var target = RenderTarget(36, 30, BACKGROUND)
+                rasterize_all(
+                    corners,
+                    target,
+                    mode,
+                    textures,
+                    lighting,
+                    cubes=cubes,
+                )
+                var cpu = target.resolve()
+                var gpu = render_triangles(
+                    corners,
+                    36,
+                    30,
+                    BACKGROUND,
+                    mode,
+                    textures,
+                    lighting,
+                    cubes=cubes,
+                )
+                assert_true(
+                    count_background(cpu, BACKGROUND) < 36 * 30,
+                    "the triangles drew nothing",
+                )
+                assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+    # And the layers change the picture.
+    var plain = render_triangles(
+        physical_pair(PHYSICAL, 0.6, 0.0),
+        36,
+        30,
+        BACKGROUND,
+        SHADE_LIT,
+        textures,
+        lighting,
+    )
+    var layered = render_triangles(
+        gpu_layer_cases(map, cloth, NO_CUBE_TEXTURE)[0],
+        36,
+        30,
+        BACKGROUND,
+        SHADE_LIT,
+        textures,
+        lighting,
+    )
+    assert_true(count_mismatches(plain, layered) > 50, "the sheen did nothing")
+
+
+def test_the_gpu_refuses_a_layer_map_it_cannot_sample() raises:
+    # Each map stored the wrong way, or never uploaded: refused before the
+    # launch, as the host refuses it before the first fragment.
+    if skipped_for_lack_of_a_gpu("the gpu refuses a bad layer map"):
+        return
+    var textures = TextureStore()
+    var covered_color = textures.add(
+        Texture(1, 1, [UInt8(255), 255, 255, 255], REPEAT, NEAREST, SRGB, False)
+    )
+    var data = textures.add(a_gpu_data_map())
+    var covered_srgb = textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+            COVERAGE,
+        )
+    )
+    var renderer = GpuRenderer(36, 30)
+    renderer.set_textures(textures)
+    var wrongs = List[LayerFactors]()
+    var tint = LayerFactors()
+    tint.sheen_color = Vector3(1, 1, 1)
+    tint.sheen_color_map = covered_color
+    wrongs.append(tint)
+    for map in [covered_srgb, data]:
+        var cloth = LayerFactors()
+        cloth.sheen_color = Vector3(1, 1, 1)
+        cloth.sheen_roughness_map = map
+        wrongs.append(cloth)
+    for map in [covered_srgb, TextureId(9)]:
+        var film = LayerFactors()
+        film.iridescence = 1
+        film.iridescence_map = map
+        wrongs.append(film)
+        var thick = LayerFactors()
+        thick.iridescence = 1
+        thick.thickness_map = map
+        wrongs.append(thick)
+        var stretch = LayerFactors()
+        stretch.anisotropy = Vector2(1, 0)
+        stretch.anisotropy_map = map
+        wrongs.append(stretch)
+    for index in range(len(wrongs)):
+        with assert_raises():
+            renderer.draw(
+                with_gpu_layers(
+                    physical_pair(PHYSICAL, 0.5, 0.5), wrongs[index]
+                ),
+                BACKGROUND,
+                SHADE_TEXTURE,
+            )

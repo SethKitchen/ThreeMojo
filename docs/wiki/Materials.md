@@ -281,7 +281,7 @@ No other kind reflects this way. A toon surface steps through a ramp, a matcap s
 
 ![Ten spheres from chalk to mirror, dielectric above and metal below](out/physical.png)
 
-A `STANDARD` surface is shaded by a roughness and a metalness rather than by a color and a highlight: three.js's `MeshStandardMaterial`. A `PHYSICAL` surface adds an index of refraction, a specular color and intensity, and a clear coat: part of three.js's `MeshPhysicalMaterial`. Build either with its own function:
+A `STANDARD` surface is shaded by a roughness and a metalness rather than by a color and a highlight: three.js's `MeshStandardMaterial`. A `PHYSICAL` surface is part of three.js's `MeshPhysicalMaterial`. It adds an index of refraction, a specular color and intensity, and a clear coat. It also adds a [sheen](#sheen), a thin [film](#iridescence) and a stretched lobe, [anisotropy](#anisotropy). Build either with its own function:
 
 ```mojo
 var chalk = assets.materials.add(standard_material(Color(200, 200, 200)))
@@ -295,7 +295,7 @@ var lacquer = assets.materials.add(
 
 `standard_material(color, map=NO_TEXTURE, roughness=1.0, metalness=0.0, side=FRONT_SIDE, opacity=1.0, blending=None, transparent=False, env_map=NO_CUBE_TEXTURE, env_map_intensity=1.0, roughness_map=NO_TEXTURE, metalness_map=NO_TEXTURE, normal_map=NO_TEXTURE, normal_scale=Vector2(1, 1), bump_map=NO_TEXTURE, bump_scale=1.0, emissive=black, emissive_intensity=1.0, emissive_map=NO_TEXTURE)`.
 
-`physical_material(color, map=NO_TEXTURE, roughness=1.0, metalness=0.0, ior=1.5, specular_color=white, specular_intensity=1.0, clearcoat=0.0, clearcoat_roughness=0.0, ...)` takes the same arguments after those.
+`physical_material(color, map=NO_TEXTURE, roughness=1.0, metalness=0.0, ior=1.5, specular_color=white, specular_intensity=1.0, clearcoat=0.0, clearcoat_roughness=0.0, ...)` takes the same arguments after those. It also takes the sheen, iridescence and anisotropy arguments below.
 
 The defaults are three.js's own: a roughness of one and a metalness of zero, a chalky dielectric. `Material(color, kind=STANDARD)` is the same surface.
 
@@ -339,9 +339,123 @@ A clear coat is a second, colorless GGX lobe over the surface. It lies on the su
 
 ### What is not ported
 
-three.js's sheen, iridescence, anisotropy and their maps are not ported. Nor is the geometric roughness three.js adds from how fast the normal changes across a pixel, which needs neighboring pixels this project shades without. [Transmission](#transmission) is ported.
+The geometric roughness three.js adds from how fast the normal changes across a pixel is not ported. It needs neighboring pixels, and this project shades each pixel alone. [Transmission](#transmission), the [sheen](#sheen), the [iridescence](#iridescence) and the [anisotropy](#anisotropy) are ported.
 
 `examples/physical.mojo` draws the range: a row of spheres from chalk to mirror, and from dielectric to metal.
+
+## Sheen
+
+A sheen is a second lobe over a `PHYSICAL` surface, for cloth and velvet: three.js's `sheen`. It adds a soft rim of light where the surface turns away from the eye.
+
+```mojo
+var velvet = assets.materials.add(
+    physical_material(Color(60, 10, 40), sheen=1.0, sheen_color=Color(255, 120, 200), sheen_roughness=0.4)
+)
+```
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `sheen` | `sheen` | `0.0` | How much sheen there is, from zero to one. Zero is no sheen. |
+| `sheen_color` | `sheenColor` | black | The sheen's color, as authored in sRGB. Black is no sheen. |
+| `sheen_color_map` | `sheenColorMap` | `NO_TEXTURE` | Its color multiplies the sheen color. Its alpha must be `IGNORED`. |
+| `sheen_roughness` | `sheenRoughness` | `1.0` | How rough the sheen is, from zero to one. |
+| `sheen_roughness_map` | `sheenRoughnessMap` | `NO_TEXTURE` | Its *alpha* multiplies the sheen roughness. It must be `LINEAR` and `COVERAGE`. |
+
+The sheen color is decoded to linear light and multiplied by `sheen`, as three.js fills its `sheenColor` uniform. So a sheen of one with a black color adds nothing, and so does a sheen of zero with any color.
+
+### What the sheen lobe does
+
+The lobe is three.js's `BRDF_Sheen`: the Charlie distribution of Estevez and Kulla, times Neubelt's visibility term, times the sheen color. `charlie_sheen` in `lights/physical_layers.mojo` is that arithmetic. It drops three.js's reciprocal of pi, as `ggx` drops it; see [The reciprocal of pi](#the-reciprocal-of-pi).
+
+The sheen roughness is clamped to 0.07 through one, then multiplied by the map's alpha, as `lights_physical_fragment` does it. A map texel of zero alpha makes a roughness of zero. three.js divides by zero there. This port returns no sheen, which is the lobe's limit.
+
+An environment lights the sheen through `ibl_sheen`, three.js's `IBLSheenBRDF`. It is a curve fit to the Charlie lobe's integral over the hemisphere. The ambient occlusion map dims it, as it dims a clear coat's reflection.
+
+The light under the sheen is dimmed by three.js's albedo scaling: one minus 0.157 times the brightest channel of the sheen color. `sheen_scaling` is that number. The emissive term is dimmed with the rest, as in `meshphysical_frag`. A clear coat lies over the sheen.
+
+## Iridescence
+
+Iridescence is a thin film over a `PHYSICAL` surface, like soap or oil on water: three.js's `iridescence`. The film's color changes with the angle to the eye and with its thickness.
+
+```mojo
+var bubble = assets.materials.add(
+    physical_material(
+        Color(20, 20, 20),
+        roughness=0.1,
+        iridescence=1.0,
+        iridescence_ior=1.3,
+        iridescence_thickness_minimum=Length(100.0, NANOMETER),
+        iridescence_thickness_maximum=Length(400.0, NANOMETER),
+        iridescence_thickness_map=swirls,
+    )
+)
+```
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `iridescence` | `iridescence` | `0.0` | How much film there is, from zero to one. Zero is no film. |
+| `iridescence_ior` | `iridescenceIOR` | `1.3` | The film's index of refraction, from one to 2.333. |
+| `iridescence_thickness_minimum` | `iridescenceThicknessRange[0]` | 100 nm | The film's thickness at a thickness texel of zero. |
+| `iridescence_thickness_maximum` | `iridescenceThicknessRange[1]` | 400 nm | Its thickness at a texel of one, and everywhere without a thickness map. |
+| `iridescence_map` | `iridescenceMap` | `NO_TEXTURE` | Its red channel multiplies `iridescence`. Data: `LINEAR` and `IGNORED`. |
+| `iridescence_thickness_map` | `iridescenceThicknessMap` | `NO_TEXTURE` | Its green channel mixes the two thicknesses. Data: `LINEAR` and `IGNORED`. |
+
+The thicknesses are `Length` values. `NANOMETER` in `units/si.mojo` is the unit a film is measured in. A range whose minimum is above its maximum is accepted, as three.js accepts it.
+
+### What the film does
+
+The film replaces Schlick's Fresnel term with Belcour and Barla's. Light reflects off the top of the film and off the surface under it, and the two reflections interfere. `iridescence_fresnel` in `lights/physical_layers.mojo` is three.js's `evalIridescence`. It sums the first two orders of interference and converts the eye's response to linear sRGB.
+
+The term depends on the angle to the eye and not on the light. So it is calculated once per fragment, from the surface's reflectance head on after the metalness. `ggx` mixes it into each light's Fresnel term by `iridescence`. `physical_outgoing` mixes it into the split sum's reflectance the same way, as three.js's `computeMultiscatteringIridescence` does.
+
+A film of zero thickness is no film, as in three.js.
+
+three.js also calculates `iridescenceF0`, a head-on reflectance fitted to the film. Its physical shader reads no copy of it, so this port does not calculate it.
+
+## Anisotropy
+
+Anisotropy stretches a `PHYSICAL` surface's lobe along one direction of the surface: three.js's `anisotropy`. Brushed metal and hair have a highlight that is long in one direction and narrow in the other.
+
+```mojo
+var brushed = assets.materials.add(
+    physical_material(
+        Color(200, 200, 210),
+        roughness=0.3,
+        metalness=1.0,
+        anisotropy=0.8,
+        anisotropy_rotation=Angle(90.0, DEGREE),
+    )
+)
+```
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `anisotropy` | `anisotropy` | `0.0` | How far the lobe is stretched, from zero to one. Zero is no stretch. |
+| `anisotropy_rotation` | `anisotropyRotation` | `0` | Which way the stretch goes, counterclockwise from the direction along which `u` grows. |
+| `anisotropy_map` | `anisotropyMap` | `NO_TEXTURE` | Red and green turn the stretch, blue scales it. Data: `LINEAR` and `IGNORED`. |
+
+The renderer turns the strength and the rotation into three.js's `anisotropyVector`: the strength times the cosine and the sine of the rotation.
+
+### What the stretch does
+
+The lobe is three.js's anisotropic GGX: `V_GGX_SmithCorrelated_Anisotropic` times `D_GGX_Anisotropic`, from `lights_physical_pars_fragment`. `anisotropic_ggx` in `lights/physical_layers.mojo` is that arithmetic. The roughness along the stretch rises toward one with the square of the strength. The roughness across it stays the surface's own.
+
+The stretch follows the [tangent frame](#the-tangent-frame), which a normal map also uses. `tangent_frame` in `render/rasterizer.mojo` builds it from how the position and the coordinates change across one pixel. So a surface with anisotropy needs texture coordinates, even without a map. The frame is measured on the normal before a normal map perturbs it, as three.js's `tbn` is.
+
+An anisotropy map's texel turns and scales the material's vector. Red and green are unpacked from zero to one into minus one to one and normalized, as a direction. Blue scales the strength. A texel of `(1, 0.5, 1)` leaves the vector as it is.
+
+The environment is read along a bent normal, as three.js's `getIBLAnisotropyRadiance` reads it after Filament. `bent_normal` bends the normal toward the plane of the stretch and the eye. It bends less on a rough surface and less with a weak stretch.
+
+A face seen from behind turns its stretch with its frame. The renderer negates the anisotropy vector on a corner it turns around, as it negates `normal_scale`. See [The far side](#the-far-side).
+
+### Where the layers differ from three.js
+
+- A rect area light reads no sheen, no film and no stretch. three.js's `RE_Direct_RectArea_Physical` reads none of them either.
+- three.js takes the tangent frame from the base texture coordinates when there is no normal map. This port takes it from the coordinates every map shares, through the material's transform. The two agree when the material names no map, or when its maps are not turned.
+- A layer map with no layer to multiply is refused. So a sheen map needs a `sheen`, an iridescence map an `iridescence`, and an anisotropy map an `anisotropy`. three.js ignores such a map.
+- Where three.js normalizes a zero vector, this port keeps the zero. That happens for an anisotropy texel whose red and green are both one half, and for an eye that looks straight along the stretch.
+
+Only `SHADE_TEXTURE` reads the five layer maps, because the other two shading modes ignore every texture. The numbers are read in every lit mode. The maps are sampled at the same coordinate as `map`, so their transforms must agree.
 
 ## Normal maps and bump maps
 
@@ -365,7 +479,9 @@ Both are data. A texture named as either must be `LINEAR` and `IGNORED`, as an a
 
 ### The tangent frame
 
-Neither needs a tangent attribute. The frame is built from how the world position and the texture coordinates change across one pixel, as three.js's `getTangentFrame` builds it without one. The tangent is the direction along which `u` grows, the bitangent the direction along which `v` grows, both made perpendicular to the normal. Both rasterizers evaluate the change one pixel to the right and one pixel up from the triangle's own functions, as they evaluate a mip footprint. `mapped_normal` in `render/rasterizer.mojo` is the arithmetic. The GPU kernel calls the same function.
+Neither needs a tangent attribute. The frame is built from how the world position and the texture coordinates change across one pixel, as three.js's `getTangentFrame` builds it without one. The tangent is the direction along which `u` grows, the bitangent the direction along which `v` grows, both made perpendicular to the normal. Both rasterizers evaluate the change one pixel to the right and one pixel up from the triangle's own functions, as they evaluate a mip footprint. `tangent_frame` in `render/rasterizer.mojo` builds the frame, and `mapped_normal` perturbs the normal along it. The GPU kernel calls the same two functions.
+
+An [anisotropic](#anisotropy) lobe is stretched along the same frame.
 
 A bump map's slope is three.js's `perturbNormalArb`. The height one pixel over and one pixel up, less the height here, tilts the normal against the rise. `bumped_normal` is that arithmetic. The position changes are normalized first, so the bump looks the same however the texture is scaled.
 
@@ -993,6 +1109,12 @@ The constructor raises for:
 - A transmission outside zero to one, or not finite. A thickness that is negative or not finite. An attenuation distance that is not above zero. A dispersion that is negative or not finite.
 - A transmission or thickness map id below zero that is not `NO_TEXTURE`.
 - A transmission property that is not its default on a kind that is not `PHYSICAL`. The seven are the transmission, the thickness, their two maps, the attenuation color and distance, and the dispersion.
+- A sheen, sheen roughness, iridescence or anisotropy outside zero to one, or not finite. An iridescence index of refraction outside one to 2.333.
+- A film thickness that is negative or not finite. An anisotropy rotation that is not finite.
+- A sheen, iridescence or anisotropy map id below zero that is not `NO_TEXTURE`.
+- A sheen map with no sheen, an iridescence map with no iridescence, or an anisotropy map with no anisotropy.
+- A sheen, a sheen color that is not black, or a sheen roughness that is not one, on a kind that is not `PHYSICAL`.
+- An iridescence, or an iridescence index or range that is not the default, on such a kind. An anisotropy or a rotation on such a kind.
 
 `Renderer.prepare` raises for a depth function, a stencil function or a stencil operation that is none of the eight. It raises for a stencil reference or mask outside 0 to 255, and for a polygon offset that is not finite. `Material.raster_state` and `Material.depth_offset` make these checks.
 
@@ -1001,6 +1123,8 @@ The constructor raises for:
 `Material.set_displacement` and `Material.check_displacement` raise for a displacement map id below zero that is not `NO_TEXTURE`. They raise for a displacement scale or bias that is not finite. They raise for a scale that is not one meter or a bias that is not zero with no map. They raise for a map on a `BASIC` or `SHADOW` material. `Renderer.prepare` and the raycaster make the same check.
 
 `Renderer.prepare` and the raycaster also raise for a displacement map that is not in the assets or is not stored as data. They raise for a displaced geometry with too few normals.
+
+`Renderer.prepare` raises for a sheen color map that reads its alpha as coverage. It raises for a sheen roughness map that is not linear or ignores its alpha. It raises for an iridescence, thickness or anisotropy map that is not stored as data.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.
 
 ## MaterialStore

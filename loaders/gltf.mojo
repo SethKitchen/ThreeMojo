@@ -83,7 +83,7 @@ reads a third set or past it, since a geometry here has only `uv` and
 `uv1`; and a skinned node that is instanced, where three.js drops the
 skin.
 
-**Extensions.** Twelve are read, the ones three.js's `GLTFLoader` reads
+**Extensions.** Fifteen are read, the ones three.js's `GLTFLoader` reads
 that map onto something this renderer has. `KHR_materials_unlit` makes a
 `BASIC` material. `KHR_materials_ior`, `KHR_materials_specular` and
 `KHR_materials_clearcoat` make a `PHYSICAL` one and set its factors;
@@ -91,6 +91,11 @@ that map onto something this renderer has. `KHR_materials_unlit` makes a
 `KHR_materials_transmission`, `KHR_materials_volume` and
 `KHR_materials_dispersion` make a `PHYSICAL` one that transmits, with the
 transmission and thickness textures read as data.
+`KHR_materials_sheen`, `KHR_materials_iridescence` and
+`KHR_materials_anisotropy` make a `PHYSICAL` one and set its sheen, its
+thin film and its stretched lobe, maps included, as three.js's plugins
+set them. A film or a stretch of zero leaves its maps out, since three.js
+draws none of them then.
 `KHR_texture_transform` moves, turns and scales a map's coordinates.
 `KHR_lights_punctual` adds directional, point and spot lights to the scene.
 `EXT_mesh_gpu_instancing` draws a node's primitives as `InstancedMesh`es.
@@ -99,10 +104,9 @@ component type already.
 
 **Not ported.** Every other extension: a file whose `extensionsRequired`
 names one is refused, as three.js refuses it, and one that only uses an
-extension is read without it. Sheen is among them, since a material here
-has no field for it. The maps inside the specular and clear coat
-extensions are not read either, only their factors. Only triangles are
-read; a primitive of points, lines or strips is refused.
+extension is read without it. The maps inside the specular and clear
+coat extensions are not read either, only their factors. Only triangles
+are read; a primitive of points, lines or strips is refused.
 """
 
 from animation.animation_clip import AnimationClip
@@ -151,6 +155,9 @@ from loaders.json import (
 from materials.material import (
     BASIC,
     DEFAULT_IOR,
+    DEFAULT_IRIDESCENCE_IOR,
+    DEFAULT_THICKNESS_MAXIMUM,
+    DEFAULT_THICKNESS_MINIMUM,
     DOUBLE_SIDE,
     FRONT_SIDE,
     NO_TEXTURE,
@@ -193,7 +200,7 @@ from render.texture_store import TextureId
 from std.math import inf, isfinite, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
-from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
+from units.si import Angle, Duration, Length, METER, NANOMETER, RADIAN, SECOND
 
 # The binary container's header: the magic `glTF`, the version, and the
 # two chunk types, as little-endian words.
@@ -240,6 +247,9 @@ comptime EMISSIVE_STRENGTH = "KHR_materials_emissive_strength"
 comptime MATERIALS_IOR = "KHR_materials_ior"
 comptime MATERIALS_SPECULAR = "KHR_materials_specular"
 comptime MATERIALS_CLEARCOAT = "KHR_materials_clearcoat"
+comptime MATERIALS_SHEEN = "KHR_materials_sheen"
+comptime MATERIALS_IRIDESCENCE = "KHR_materials_iridescence"
+comptime MATERIALS_ANISOTROPY = "KHR_materials_anisotropy"
 comptime MATERIALS_UNLIT = "KHR_materials_unlit"
 comptime MATERIALS_TRANSMISSION = "KHR_materials_transmission"
 comptime MATERIALS_VOLUME = "KHR_materials_volume"
@@ -610,13 +620,16 @@ def is_supported_extension(name: String) -> Bool:
         name: The extension's name, as `extensionsRequired` lists it.
 
     Returns:
-        Whether it is one of the twelve this loader reads.
+        Whether it is one of the fifteen this loader reads.
     """
     return (
         name == EMISSIVE_STRENGTH
         or name == MATERIALS_IOR
         or name == MATERIALS_SPECULAR
         or name == MATERIALS_CLEARCOAT
+        or name == MATERIALS_SHEEN
+        or name == MATERIALS_IRIDESCENCE
+        or name == MATERIALS_ANISOTROPY
         or name == MATERIALS_UNLIT
         or name == MATERIALS_TRANSMISSION
         or name == MATERIALS_VOLUME
@@ -748,6 +761,9 @@ struct _Loader(Movable):
     var texture_wraps: List[Wrap]
     var texture_filters: List[Filter]
     var texture_mipmapped: List[Bool]
+    # Each glTF texture read linear with its alpha kept, as a sheen
+    # roughness texture is, or `NO_TEXTURE` until one asks for it.
+    var alpha_textures: List[TextureId]
     # How many morph targets each glTF mesh's primitives carry.
     var morph_counts: List[Int]
     # Per glTF node, the indices in `scene.meshes` of the meshes drawn at
@@ -777,6 +793,7 @@ struct _Loader(Movable):
         self.texture_wraps = List[Wrap]()
         self.texture_filters = List[Filter]()
         self.texture_mipmapped = List[Bool]()
+        self.alpha_textures = List[TextureId]()
         self.morph_counts = List[Int]()
         self.node_meshes = List[List[Int]]()
         self.skinned_nodes = List[Int]()
@@ -1143,6 +1160,7 @@ struct _Loader(Movable):
             self.texture_wraps.append(wrap)
             self.texture_filters.append(filter)
             self.texture_mipmapped.append(mipmapped)
+            self.alpha_textures.append(NO_TEXTURE)
             self.model.color_textures.append(NO_TEXTURE)
             self.model.data_textures.append(NO_TEXTURE)
 
@@ -1162,16 +1180,32 @@ struct _Loader(Movable):
         return out^
 
     def texture(
-        mut self, index: Int, space: ColorSpace, mut assets: Assets
+        mut self,
+        index: Int,
+        space: ColorSpace,
+        mut assets: Assets,
+        keep_alpha: Bool = False,
     ) raises -> TextureId:
         """Return a glTF texture as read in one color space, decoding its
-        image the first time that space asks for it."""
+        image the first time that space asks for it. `keep_alpha` reads a
+        linear texture's alpha as a number, as a sheen roughness texture
+        holds one, rather than ignoring it."""
         # Never negative: `texture_reference` refused that already.
         if index >= len(self.texture_images):
             raise Error("glTF: a material names a texture that is not there")
-        if space == SRGB and self.model.color_textures[index] != NO_TEXTURE:
+        if keep_alpha and self.alpha_textures[index] != NO_TEXTURE:
+            return self.alpha_textures[index]
+        if (
+            not keep_alpha
+            and space == SRGB
+            and self.model.color_textures[index] != NO_TEXTURE
+        ):
             return self.model.color_textures[index]
-        if space == LINEAR and self.model.data_textures[index] != NO_TEXTURE:
+        if (
+            not keep_alpha
+            and space == LINEAR
+            and self.model.data_textures[index] != NO_TEXTURE
+        ):
             return self.model.data_textures[index]
         var bytes = self.image_bytes(self.texture_images[index])
         var image = decode_image(bytes)
@@ -1185,14 +1219,16 @@ struct _Loader(Movable):
             self.texture_filters[index],
             space,
             self.texture_mipmapped[index],
-            alpha=IGNORED if space == LINEAR else COVERAGE,
+            alpha=IGNORED if space == LINEAR and not keep_alpha else COVERAGE,
         )
         # glTF's `v` runs down from the top: flipped here, as three.js
         # flips it with `flipY = false`.
         built.repeat = Vector2(1, -1)
         built.offset = Vector2(0, 1)
         var id = assets.textures.add(built^)
-        if space == SRGB:
+        if keep_alpha:
+            self.alpha_textures[index] = id
+        elif space == SRGB:
             self.model.color_textures[index] = id
         else:
             self.model.data_textures[index] = id
@@ -1250,10 +1286,12 @@ struct _Loader(Movable):
         space: ColorSpace,
         mut assets: Assets,
         baked: Bool = False,
+        keep_alpha: Bool = False,
     ) raises -> TextureId:
         """Return the texture a material's `key` object names, read in one
         color space, or `NO_TEXTURE`. `baked` lets it read the second set
-        of texture coordinates; see `texture_reference`.
+        of texture coordinates; see `texture_reference`. `keep_alpha` is
+        `texture`'s.
 
         A `KHR_texture_transform` that moves, turns or scales it makes a
         copy of the texture, as three.js's `GLTFTextureTransformExtension`
@@ -1264,7 +1302,7 @@ struct _Loader(Movable):
         var index = self.texture_reference(material, key, baked)
         if index < 0:
             return NO_TEXTURE
-        var id = self.texture(index, space, assets)
+        var id = self.texture(index, space, assets, keep_alpha)
         var transform = self.extension(
             self.document.get(material, key), TEXTURE_TRANSFORM
         )
@@ -1417,9 +1455,11 @@ struct _Loader(Movable):
         """Build a material that is not unlit: `STANDARD`, or `PHYSICAL`
         when `KHR_materials_ior`, `KHR_materials_specular`,
         `KHR_materials_clearcoat`, `KHR_materials_transmission`,
-        `KHR_materials_volume` or `KHR_materials_dispersion` is on it,
-        with the emissive scaled by `KHR_materials_emissive_strength` and
-        the occlusion texture read as its ao map; see `occlusion_of`.
+        `KHR_materials_volume`, `KHR_materials_dispersion`,
+        `KHR_materials_sheen`, `KHR_materials_iridescence` or
+        `KHR_materials_anisotropy` is on it, with the emissive scaled by
+        `KHR_materials_emissive_strength` and the occlusion texture read as
+        its ao map; see `occlusion_of`.
 
         The volume is three.js's reading of it: a thickness of zero and an
         infinite attenuation distance unless the file says otherwise, and
@@ -1507,6 +1547,78 @@ struct _Loader(Movable):
         if spread != NO_NODE:
             kind = PHYSICAL
             dispersion = self.number(spread, "dispersion", 0)
+        # three.js's `GLTFMaterialsSheenExtension`: a sheen of one, black
+        # and smooth unless the file says otherwise.
+        var sheen = Float32(0)
+        var sheen_color = Color(0, 0, 0)
+        var sheen_roughness = Float32(1)
+        var sheen_color_map = NO_TEXTURE
+        var sheen_roughness_map = NO_TEXTURE
+        var cloth = self.extension(material, MATERIALS_SHEEN)
+        if cloth != NO_NODE:
+            kind = PHYSICAL
+            sheen = 1
+            sheen_roughness = self.number(cloth, "sheenRoughnessFactor", 0)
+            var tint = self.numbers(cloth, "sheenColorFactor", 3)
+            if len(tint) == 3:
+                sheen_color = _unit_color(tint, "sheenColorFactor")
+            # A color whose alpha means nothing, and a number held in the
+            # alpha, which the linear textures above ignore: each read as
+            # the renderer reads it.
+            sheen_color_map = self.map_of(
+                cloth, "sheenColorTexture", SRGB, assets
+            )
+            if sheen_color_map != NO_TEXTURE:
+                sheen_color_map = assets.textures.add(
+                    assets.textures.get(sheen_color_map).ignoring_alpha()
+                )
+            sheen_roughness_map = self.map_of(
+                cloth, "sheenRoughnessTexture", LINEAR, assets, keep_alpha=True
+            )
+        # three.js's `GLTFMaterialsIridescenceExtension`.
+        var iridescence = Float32(0)
+        var iridescence_ior = DEFAULT_IRIDESCENCE_IOR
+        var thinnest = DEFAULT_THICKNESS_MINIMUM
+        var thickest = DEFAULT_THICKNESS_MAXIMUM
+        var iridescence_map = NO_TEXTURE
+        var film_thickness_map = NO_TEXTURE
+        var film = self.extension(material, MATERIALS_IRIDESCENCE)
+        if film != NO_NODE:
+            kind = PHYSICAL
+            iridescence = self.number(film, "iridescenceFactor", 0)
+            iridescence_ior = self.number(
+                film, "iridescenceIor", DEFAULT_IRIDESCENCE_IOR
+            )
+            thinnest = Length(
+                self.number(film, "iridescenceThicknessMinimum", 100),
+                NANOMETER,
+            )
+            thickest = Length(
+                self.number(film, "iridescenceThicknessMaximum", 400),
+                NANOMETER,
+            )
+            if iridescence > 0:
+                iridescence_map = self.data_map_of(
+                    film, "iridescenceTexture", assets
+                )
+                film_thickness_map = self.data_map_of(
+                    film, "iridescenceThicknessTexture", assets
+                )
+        # three.js's `GLTFMaterialsAnisotropyExtension`.
+        var anisotropy = Float32(0)
+        var anisotropy_rotation = Angle(0.0, RADIAN)
+        var anisotropy_map = NO_TEXTURE
+        var stretch = self.extension(material, MATERIALS_ANISOTROPY)
+        if stretch != NO_NODE:
+            kind = PHYSICAL
+            anisotropy = self.number(stretch, "anisotropyStrength", 0)
+            anisotropy_rotation = Angle(
+                self.number(stretch, "anisotropyRotation", 0), RADIAN
+            )
+            if anisotropy > 0:
+                anisotropy_map = self.data_map_of(
+                    stretch, "anisotropyTexture", assets
+                )
         return Material(
             color,
             map=map,
@@ -1537,6 +1649,20 @@ struct _Loader(Movable):
             attenuation_color=attenuation_color,
             attenuation_distance=Length(attenuation_distance, METER),
             dispersion=dispersion,
+            sheen=sheen,
+            sheen_color=sheen_color,
+            sheen_color_map=sheen_color_map,
+            sheen_roughness=sheen_roughness,
+            sheen_roughness_map=sheen_roughness_map,
+            iridescence=iridescence,
+            iridescence_ior=iridescence_ior,
+            iridescence_thickness_minimum=thinnest,
+            iridescence_thickness_maximum=thickest,
+            iridescence_map=iridescence_map,
+            iridescence_thickness_map=film_thickness_map,
+            anisotropy=anisotropy,
+            anisotropy_rotation=anisotropy_rotation,
+            anisotropy_map=anisotropy_map,
         )
 
     def material_for(
@@ -2361,10 +2487,15 @@ def _check_one_transform(assets: Assets, material: Material) raises:
         material.normal_map,
         material.transmission_map,
         material.thickness_map,
+        material.sheen_color_map,
+        material.sheen_roughness_map,
+        material.iridescence_map,
+        material.iridescence_thickness_map,
+        material.anisotropy_map,
     ]
     var chosen = Matrix3()
     var settled = False
-    # Six maps, always, so the loop never runs zero times.
+    # Eleven maps, always, so the loop never runs zero times.
     for slot in range(len(named)):  # pragma: no branch
         if named[slot] == NO_TEXTURE:
             continue

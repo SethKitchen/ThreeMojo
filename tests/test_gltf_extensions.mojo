@@ -39,7 +39,9 @@ from std.testing import (
     assert_false,
     assert_true,
 )
-from units.si import Angle, DEGREE, Length, METER, RADIAN
+from render.srgb import LINEAR, SRGB
+from render.texture import COVERAGE, IGNORED
+from units.si import Angle, DEGREE, Length, METER, NANOMETER, RADIAN
 
 comptime TOLERANCE = Float64(1e-5)
 comptime ALPHABET = (
@@ -328,6 +330,8 @@ def test_every_read_extension_can_be_required() raises:
             ',"extensionsRequired":["KHR_materials_emissive_strength",'
             + '"KHR_materials_ior","KHR_materials_specular",'
             + '"KHR_materials_clearcoat","KHR_materials_unlit",'
+            + '"KHR_materials_sheen","KHR_materials_iridescence",'
+            + '"KHR_materials_anisotropy",'
             + '"KHR_texture_transform","KHR_lights_punctual",'
             + '"KHR_mesh_quantization","EXT_mesh_gpu_instancing",'
             + '"KHR_materials_transmission","KHR_materials_volume",'
@@ -338,28 +342,30 @@ def test_every_read_extension_can_be_required() raises:
     )
     assert_equal(model.node_count(), 0)
     assert_true(is_supported_extension("KHR_lights_punctual"))
-    assert_false(is_supported_extension("KHR_materials_sheen"))
+    assert_true(is_supported_extension("KHR_materials_sheen"))
+    assert_true(is_supported_extension("KHR_materials_transmission"))
+    assert_false(is_supported_extension("KHR_materials_variants"))
 
 
 def test_a_required_extension_that_is_not_read_is_refused() raises:
     # The first entry that is not read is named, wherever it is.
     refuses(
-        doc(',"extensionsRequired":["KHR_materials_sheen"]'),
-        "KHR_materials_sheen",
+        doc(',"extensionsRequired":["KHR_materials_variants"]'),
+        "KHR_materials_variants",
     )
     refuses(
         doc(
             ',"extensionsRequired":["KHR_texture_transform",'
-            + '"KHR_materials_sheen","KHR_materials_iridescence"]'
+            + '"KHR_materials_variants","KHR_draco_mesh_compression"]'
         ),
-        "KHR_materials_sheen",
+        "KHR_materials_variants",
     )
-    # An extension only used is read without it: the sheen is not there.
+    # An extension only used is read without it: the variants are not
+    # there.
     var scene = Scene()
     var assets = Assets()
     var index = first_material(
-        '{"extensions":{"KHR_materials_sheen":{"sheenColorFactor":[1,0,0]},'
-        + '"KHR_materials_iridescence":{"iridescenceFactor":1}}}',
+        '{"extensions":{"KHR_materials_variants":{"mappings":[]}}}',
         assets,
     )
     var material = assets.materials.get(index)
@@ -529,6 +535,171 @@ def test_a_physical_factor_out_of_range_is_refused() raises:
         material_doc(
             '{"extensions":{"KHR_materials_specular":{"specularFactor":2}}}'
         )
+    )
+
+
+def test_sheen_iridescence_and_anisotropy_make_a_physical_material() raises:
+    var assets = Assets()
+    # A sheen is on at one whenever the extension is there, black and
+    # smooth by default, as three.js's plugin sets it.
+    var bare = assets.materials.get(
+        first_material('{"extensions":{"KHR_materials_sheen":{}}}', assets)
+    )
+    assert_equal(bare.kind, PHYSICAL)
+    assert_equal(bare.sheen, Float32(1))
+    assert_equal(bare.sheen_color.r, UInt8(0))
+    assert_equal(bare.sheen_roughness, Float32(0))
+    var velvet = assets.materials.get(
+        first_material(
+            '{"extensions":{"KHR_materials_sheen":{"sheenColorFactor":'
+            + '[1,0,0.2158605],"sheenRoughnessFactor":0.5}}}',
+            assets,
+        )
+    )
+    assert_equal(velvet.sheen_color.r, UInt8(255))
+    assert_equal(velvet.sheen_color.b, UInt8(128))
+    assert_almost_equal(velvet.sheen_roughness, Float32(0.5), atol=TOLERANCE)
+    # A film at three.js's defaults, then at the file's numbers.
+    var plain_film = assets.materials.get(
+        first_material(
+            '{"extensions":{"KHR_materials_iridescence":{}}}', assets
+        )
+    )
+    assert_equal(plain_film.kind, PHYSICAL)
+    assert_equal(plain_film.iridescence, Float32(0))
+    assert_almost_equal(plain_film.iridescence_ior, Float32(1.3), atol=1e-6)
+    assert_almost_equal(
+        plain_film.iridescence_thickness_minimum.to(NANOMETER),
+        Float32(100),
+        atol=1e-3,
+    )
+    var film = assets.materials.get(
+        first_material(
+            '{"extensions":{"KHR_materials_iridescence":'
+            + '{"iridescenceFactor":0.5,"iridescenceIor":1.8,'
+            + '"iridescenceThicknessMinimum":50,'
+            + '"iridescenceThicknessMaximum":900}}}',
+            assets,
+        )
+    )
+    assert_almost_equal(film.iridescence, Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(film.iridescence_ior, Float32(1.8), atol=TOLERANCE)
+    assert_almost_equal(
+        film.iridescence_thickness_minimum.to(NANOMETER),
+        Float32(50),
+        atol=1e-3,
+    )
+    assert_almost_equal(
+        film.iridescence_thickness_maximum.to(NANOMETER),
+        Float32(900),
+        atol=1e-3,
+    )
+    # A stretch, empty and then turned.
+    var even = assets.materials.get(
+        first_material('{"extensions":{"KHR_materials_anisotropy":{}}}', assets)
+    )
+    assert_equal(even.kind, PHYSICAL)
+    assert_equal(even.anisotropy, Float32(0))
+    var brushed = assets.materials.get(
+        first_material(
+            '{"extensions":{"KHR_materials_anisotropy":'
+            + '{"anisotropyStrength":0.75,"anisotropyRotation":1.5}}}',
+            assets,
+        )
+    )
+    assert_almost_equal(brushed.anisotropy, Float32(0.75), atol=TOLERANCE)
+    assert_almost_equal(
+        brushed.anisotropy_rotation.to(RADIAN), Float32(1.5), atol=TOLERANCE
+    )
+    # A factor the material refuses is refused.
+    _ = refused(
+        material_doc(
+            '{"extensions":{"KHR_materials_sheen":{"sheenColorFactor":[2,0,0]}}}'
+        )
+    )
+    _ = refused(
+        material_doc(
+            '{"extensions":{"KHR_materials_iridescence":{"iridescenceIor":3}}}'
+        )
+    )
+    _ = refused(
+        material_doc(
+            '{"extensions":{"KHR_materials_anisotropy":'
+            + '{"anisotropyStrength":2}}}'
+        )
+    )
+
+
+def test_the_layer_extensions_read_their_maps() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        textured(
+            '[{"extensions":{"KHR_materials_sheen":{"sheenColorFactor":[1,1,1],'
+            + '"sheenColorTexture":{"index":0},'
+            + '"sheenRoughnessTexture":{"index":1}},'
+            + '"KHR_materials_iridescence":{"iridescenceFactor":1,'
+            + '"iridescenceTexture":{"index":1},'
+            + '"iridescenceThicknessTexture":{"index":1}},'
+            + '"KHR_materials_anisotropy":{"anisotropyStrength":1,'
+            + '"anisotropyTexture":{"index":1}}}},'
+            + '{"extensions":{"KHR_materials_sheen":{'
+            + '"sheenRoughnessTexture":{"index":1}}}}]'
+        ),
+        scene,
+        assets,
+    )
+    var material = assets.materials.get(model.materials[0])
+    # The sheen color is a color whose alpha means nothing, and the sheen
+    # roughness a number held in the alpha, which is kept.
+    ref tint = assets.textures.get(material.sheen_color_map)
+    assert_equal(tint.color_space, SRGB)
+    assert_equal(tint.alpha, IGNORED)
+    ref cloth = assets.textures.get(material.sheen_roughness_map)
+    assert_equal(cloth.color_space, LINEAR)
+    assert_equal(cloth.alpha, COVERAGE)
+    # The other three are data, as every linear texture is.
+    for map in [
+        material.iridescence_map,
+        material.iridescence_thickness_map,
+        material.anisotropy_map,
+    ]:
+        assert_equal(assets.textures.get(map).color_space, LINEAR)
+        assert_equal(assets.textures.get(map).alpha, IGNORED)
+    # A second material reading the same roughness texture shares it.
+    var second = assets.materials.get(model.materials[1])
+    assert_equal(second.sheen_roughness_map, material.sheen_roughness_map)
+    # And the renderer draws every one of the maps as it is stored.
+    var lamp = Object3D()
+    lamp.set_position(0, 0, 1)
+    var node = scene.add(lamp^)
+    scene.add_light(directional_light(Color(255, 255, 255), node, 3))
+    assert_true(lit_pixels(scene, assets) > 0, "the layered quad drew nothing")
+    # With no film and no stretch, three.js draws neither map, and the
+    # loader leaves both out.
+    var bare_scene = Scene()
+    var bare = loaded(
+        textured(
+            '[{"extensions":{"KHR_materials_iridescence":'
+            + '{"iridescenceTexture":{"index":1}},'
+            + '"KHR_materials_anisotropy":{"anisotropyTexture":{"index":1}}}}]'
+        ),
+        bare_scene,
+        assets,
+    )
+    var unmapped = assets.materials.get(bare.materials[0])
+    assert_equal(unmapped.iridescence_map, NO_TEXTURE)
+    assert_equal(unmapped.iridescence_thickness_map, NO_TEXTURE)
+    assert_equal(unmapped.anisotropy_map, NO_TEXTURE)
+    # A layer map moved apart from the base map is refused.
+    refuses(
+        textured(
+            '[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0}},'
+            + '"extensions":{"KHR_materials_sheen":{"sheenColorTexture":'
+            + '{"index":0,"extensions":{"KHR_texture_transform":'
+            + '{"offset":[0.5,0]}}}}}}]'
+        ),
+        "share one KHR_texture_transform",
     )
 
 
@@ -1104,8 +1275,6 @@ def main() raises:
 
 # --- transmission, volume and dispersion ------------------------------------
 
-from render.texture import IGNORED
-from render.srgb import LINEAR
 from std.math import inf
 
 

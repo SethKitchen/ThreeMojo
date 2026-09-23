@@ -29,6 +29,7 @@ from units.si import (
     METER,
     MILE,
     MILLIMETER,
+    NANOMETER,
     MINUTE,
     Mass,
     POUND,
@@ -83,6 +84,9 @@ def test_metric_prefixes() raises:
     assert_equal(Length(1.0, KILOMETER).value, Float32(1000.0))
     assert_almost_equal(Length(1.0, METER).to(CENTIMETER), Float32(100.0))
     assert_almost_equal(Length(1.0, METER).to(MILLIMETER), Float32(1000.0))
+    assert_almost_equal(
+        Length(400.0, NANOMETER).to(MILLIMETER), Float32(4e-4), atol=1e-9
+    )
 
 
 def test_a_mile_in_feet() raises:

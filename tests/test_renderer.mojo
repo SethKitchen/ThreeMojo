@@ -142,7 +142,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, Length, METER
+from units.si import Angle, DEGREE, Length, METER, NANOMETER
 
 
 def rendered[
@@ -6263,3 +6263,188 @@ def test_a_specular_map_is_carried_checked_and_read_in_the_renderer() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+# --- sheen, iridescence and anisotropy ---------------------------------------
+
+
+def test_the_layers_are_carried_decoded_and_turned_in_the_renderer() raises:
+    var assets = Assets()
+    var white = Color(255, 255, 255)
+    var tint = assets.textures.add(a_data_texel(255, 255, 255))
+    var cloth = assets.textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 128],
+            REPEAT,
+            NEAREST,
+            LINEAR,
+            False,
+            COVERAGE,
+        )
+    )
+    var data = assets.textures.add(a_data_texel(255, 128, 255))
+    var velvet = physical_material(
+        white,
+        side=DOUBLE_SIDE,
+        sheen=0.5,
+        sheen_color=Color(255, 0, 0),
+        sheen_color_map=tint,
+        sheen_roughness=0.25,
+        sheen_roughness_map=cloth,
+        iridescence=0.75,
+        iridescence_ior=1.6,
+        iridescence_thickness_minimum=Length(200.0, NANOMETER),
+        iridescence_thickness_maximum=Length(600.0, NANOMETER),
+        iridescence_map=data,
+        iridescence_thickness_map=data,
+        anisotropy=0.5,
+        anisotropy_rotation=Angle(90.0, DEGREE),
+        anisotropy_map=data,
+    )
+    var skin = assets.materials.add(velvet)
+    var scene = scene_with_node_at(0)
+    light_the(scene)
+    scene.update()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var corners = prepared(
+        renderer, scene, assets, sheet_of(assets, skin), camera_at(0, 0, 4)
+    )
+    ref layers = corners[0].layers
+    # The sheen color decoded to linear and times the sheen.
+    assert_almost_equal(layers.sheen_color.x, Float32(0.5), atol=1e-6)
+    assert_equal(layers.sheen_color.y, Float32(0))
+    assert_equal(layers.sheen_roughness, Float32(0.25))
+    assert_equal(layers.iridescence, Float32(0.75))
+    assert_equal(layers.iridescence_ior, Float32(1.6))
+    assert_almost_equal(layers.thickness_minimum, Float32(200), atol=1e-3)
+    assert_almost_equal(layers.thickness_maximum, Float32(600), atol=1e-3)
+    # A quarter turn from the tangent, at a half.
+    assert_almost_equal(layers.anisotropy.x, Float32(0), atol=1e-6)
+    assert_almost_equal(layers.anisotropy.y, Float32(0.5), atol=1e-6)
+    assert_equal(layers.sheen_color_map, tint)
+    assert_equal(layers.sheen_roughness_map, cloth)
+    assert_equal(layers.iridescence_map, data)
+    assert_equal(layers.thickness_map, data)
+    assert_equal(layers.anisotropy_map, data)
+    # Seen from behind, the stretch turns with the frame.
+    var behind = prepared(
+        renderer, scene, assets, sheet_of(assets, skin), camera_at(0, 0, -4)
+    )
+    assert_almost_equal(behind[0].layers.anisotropy.y, Float32(-0.5), atol=1e-6)
+    # Under lit shading the maps are erased and the numbers kept.
+    renderer.set_shading(SHADE_LIT)
+    var lit = prepared(
+        renderer, scene, assets, sheet_of(assets, skin), camera_at(0, 0, 4)
+    )
+    ref unmapped = lit[0].layers
+    assert_equal(unmapped.sheen_color_map, NO_TEXTURE)
+    assert_equal(unmapped.sheen_roughness_map, NO_TEXTURE)
+    assert_equal(unmapped.iridescence_map, NO_TEXTURE)
+    assert_equal(unmapped.thickness_map, NO_TEXTURE)
+    assert_equal(unmapped.anisotropy_map, NO_TEXTURE)
+    assert_equal(unmapped.iridescence, Float32(0.75))
+    # A standard surface carries none of it.
+    var plain = assets.materials.add(standard_material(white))
+    var standard = prepared(
+        renderer, scene, assets, sheet_of(assets, plain), camera_at(0, 0, 4)
+    )
+    assert_false(standard[0].layers.is_layered())
+
+
+def test_a_sheen_changes_the_picture_in_the_renderer() raises:
+    var assets = Assets()
+    var white = Color(255, 255, 255)
+    var dark = Color(60, 60, 60)
+    var plain = assets.materials.add(physical_material(dark))
+    var velvet = assets.materials.add(
+        physical_material(dark, sheen=1, sheen_color=white)
+    )
+    var scene = scene_with_node_at(0)
+    light_the(scene)
+    scene.update()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    var bare = rendered(
+        renderer, scene, assets, sheet_of(assets, plain), camera_at(0, 0, 4)
+    )
+    var soft = rendered(
+        renderer, scene, assets, sheet_of(assets, velvet), camera_at(0, 0, 4)
+    )
+    assert_true(sum_red(soft) != sum_red(bare), "the sheen changed nothing")
+
+
+def test_a_layer_map_must_be_there_and_stored_as_read_in_the_renderer() raises:
+    var assets = Assets()
+    var white = Color(255, 255, 255)
+    var covered_color = assets.textures.add(
+        Texture(
+            1,
+            1,
+            [UInt8(255), 255, 255, 255],
+            REPEAT,
+            NEAREST,
+            SRGB,
+            False,
+            COVERAGE,
+        )
+    )
+    var data = assets.textures.add(a_data_texel(255, 255, 255))
+    var encoded = a_data_texel(255, 255, 255)
+    encoded.color_space = SRGB
+    var colored = assets.textures.add(encoded^)
+    var missing = TextureId(99)
+    var wrongs = List[MaterialId]()
+    for map in [covered_color, missing]:
+        wrongs.append(
+            assets.materials.add(
+                physical_material(white, sheen=1, sheen_color_map=map)
+            )
+        )
+    for map in [covered_color, data, missing]:
+        wrongs.append(
+            assets.materials.add(
+                physical_material(white, sheen=1, sheen_roughness_map=map)
+            )
+        )
+    for map in [colored, missing]:
+        wrongs.append(
+            assets.materials.add(
+                physical_material(white, iridescence=1, iridescence_map=map)
+            )
+        )
+        wrongs.append(
+            assets.materials.add(
+                physical_material(
+                    white, iridescence=1, iridescence_thickness_map=map
+                )
+            )
+        )
+        wrongs.append(
+            assets.materials.add(
+                physical_material(white, anisotropy=1, anisotropy_map=map)
+            )
+        )
+    # And a layer map whose transform the base map disagrees with.
+    var moved = a_data_texel(255, 0, 0)
+    moved.repeat = Vector2(2, 2)
+    var shifted = assets.textures.add(moved^)
+    wrongs.append(
+        assets.materials.add(
+            physical_material(white, data, anisotropy=1, anisotropy_map=shifted)
+        )
+    )
+    var scene = scene_with_node_at(0)
+    for index in range(len(wrongs)):
+        for mode in [SHADE_TEXTURE, SHADE_LIT]:
+            var strict = Renderer(WIDTH, HEIGHT)
+            strict.set_shading(mode)
+            with assert_raises():
+                _ = rendered(
+                    strict,
+                    scene,
+                    assets,
+                    sheet_of(assets, wrongs[index]),
+                    camera_at(0, 0, 4),
+                )

@@ -36,7 +36,7 @@ from lights.light import (
 )
 from math.smoothstep import smoothstep
 from math.spherical_harmonics3 import SphericalHarmonics3
-from std.math import exp2, inf, nan, pi
+from std.math import exp2, inf, nan, pi, sqrt
 from lights.lighting import (
     CLEARCOAT_F0,
     DIELECTRIC_F0,
@@ -61,6 +61,7 @@ from lights.lighting import (
     toon_step,
     toon_tone,
 )
+from lights.physical_layers import PhysicalLayers, charlie_sheen, ibl_sheen
 from math.vector3 import Vector3
 from units.si import Angle, DEGREE, Length, METER, RADIAN
 from render.framebuffer import Color, FloatColor
@@ -2237,3 +2238,167 @@ def test_a_transmission_mixes_the_diffuse_light_toward_what_is_behind() raises:
         mixed.y, 0.2 * 0.75 + 0.6 * 0.25 + 0.022, atol=TOLERANCE
     )
     assert_almost_equal(mixed.z, 1.0 * 0.25 + 0.033, atol=TOLERANCE)
+
+
+# --- sheen, iridescence and anisotropy ---------------------------------------
+
+
+def _film(weight: Float32, fresnel: Vector3) -> PhysicalLayers:
+    """Return layers with only a thin film of `weight` and `fresnel`."""
+    var layers = PhysicalLayers()
+    layers.iridescence = weight
+    layers.iridescence_fresnel = fresnel
+    return layers
+
+
+def _cloth(color: Vector3) -> PhysicalLayers:
+    """Return layers with only a sheen of `color`, half rough."""
+    var layers = PhysicalLayers()
+    layers.sheen = True
+    layers.sheen_color = color
+    layers.sheen_roughness = 0.5
+    return layers
+
+
+def test_a_reflected_light_has_no_sheen_unless_given_one() raises:
+    var plain = Reflected(UP_Z, UP_Z, UP_Z)
+    assert_equal(plain.sheen.x, Float32(0))
+    var cloth = Reflected(UP_Z, UP_Z, UP_Z, Vector3(1, 2, 3))
+    assert_equal(cloth.sheen.z, Float32(3))
+
+
+def test_a_film_mixes_its_fresnel_into_the_lobe() raises:
+    # Head on the lobe is f0 over four alpha squared; a whole film puts
+    # its own reflectance in f0's place, and half a film half of it.
+    var whole = ggx(
+        UP_Z,
+        UP_Z,
+        UP_Z,
+        Vector3(1, 1, 1),
+        1,
+        0.5,
+        _film(1, Vector3(0.5, 0, 1)),
+    )
+    assert_almost_equal(whole.x, Float32(2.0), atol=1e-2)
+    assert_almost_equal(whole.y, Float32(0.0), atol=1e-2)
+    var half = ggx(
+        UP_Z,
+        UP_Z,
+        UP_Z,
+        Vector3(1, 1, 1),
+        1,
+        0.5,
+        _film(0.5, Vector3(0, 0, 0)),
+    )
+    assert_almost_equal(half.x, Float32(2.0), atol=1e-2)
+
+
+def test_a_stretch_replaces_the_lobe_with_its_anisotropic_form() raises:
+    # Unstretched along an orthonormal frame, the anisotropic lobe is the
+    # isotropic one; stretched, it differs.
+    var layers = PhysicalLayers()
+    layers.anisotropic = True
+    layers.tangent = Vector3(1, 0, 0)
+    layers.bitangent = Vector3(0, 1, 0)
+    layers.alpha_t = 0.25
+    var light = Vector3(0.6, 0, 0.8)
+    var plain = ggx(light, UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.5)
+    var even = ggx(light, UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.5, layers)
+    assert_almost_equal(even.x, plain.x, atol=1e-4)
+    layers.alpha_t = 1
+    var stretched = ggx(light, UP_Z, UP_Z, Vector3(1, 1, 1), 1, 0.5, layers)
+    assert_true(
+        abs(stretched.x - plain.x) > plain.x / 10, "the stretch changed nothing"
+    )
+
+
+def test_a_sheen_adds_its_own_lobe_under_a_lamp() raises:
+    # One white light sixty degrees off: the Charlie lobe, lit by the
+    # irradiance the diffuse sum shows and scaled once, rides beside the
+    # diffuse and specular sums and changes neither.
+    var lamp = Vector3(Float32(sqrt(3.0) / 2), 0, 0.5)
+    var scene = lit_from(lamp.x, lamp.y, lamp.z)
+    var lighting = Lighting(scene, Layers.all(), Vector3(0, 0, 4))
+    var plain = lighting.physical_at(
+        UP_Z, UP_Z, ORIGIN, a_chalk(), 1, 0, ROUGHNESS_FLOOR
+    )
+    var cloth = lighting.physical_at(
+        UP_Z,
+        UP_Z,
+        ORIGIN,
+        a_chalk(),
+        1,
+        0,
+        ROUGHNESS_FLOOR,
+        True,
+        _cloth(Vector3(1, 0.5, 0)),
+    )
+    assert_equal(plain.sheen.x, Float32(0))
+    assert_equal(cloth.diffuse.x, plain.diffuse.x)
+    assert_equal(cloth.specular.x, plain.specular.x)
+    var lobe = charlie_sheen(lamp, UP_Z, UP_Z, Vector3(1, 0.5, 0), 0.5)
+    assert_almost_equal(cloth.sheen.x, lobe.x * plain.diffuse.x, atol=1e-5)
+    assert_almost_equal(cloth.sheen.y, lobe.y * plain.diffuse.x, atol=1e-5)
+    assert_equal(cloth.sheen.z, Float32(0))
+
+
+def _outgoing(
+    reflects: Bool,
+    layers: PhysicalLayers,
+    direct_sheen: Vector3,
+    surface: Reflected = a_chalk(),
+) -> Vector3:
+    """Return `physical_outgoing` for a surface seen head on, a white
+    dielectric by default, with or without an environment of one
+    everywhere."""
+    var direct = Reflected(
+        Vector3(0.1, 0.1, 0.1),
+        Vector3(0.01, 0.01, 0.01),
+        Vector3(0, 0, 0),
+        direct_sheen,
+    )
+    return physical_outgoing(
+        direct,
+        Vector3(0, 0, 0),
+        surface,
+        0.5,
+        1,
+        reflects,
+        Vector3(1, 1, 1),
+        Vector3(1, 1, 1),
+        Vector3(0, 0, 0),
+        0,
+        ROUGHNESS_FLOOR,
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 0),
+        1,
+        layers=layers,
+    )
+
+
+def test_a_sheen_dims_the_light_under_it_and_adds_its_own() raises:
+    # With no environment: the rest scaled by one minus 0.157 times the
+    # brightest channel, plus the direct sheen.
+    var plain = _outgoing(False, PhysicalLayers(), Vector3(0, 0, 0))
+    var cloth = _outgoing(False, _cloth(Vector3(1, 0, 0)), Vector3(0.2, 0, 0))
+    assert_almost_equal(cloth.x, plain.x * 0.843 + 0.2, atol=1e-6)
+    assert_almost_equal(cloth.y, plain.y * 0.843, atol=1e-6)
+    # Under an environment, its irradiance reflects through the fitted
+    # integral, times pi, in the sheen's color.
+    var lit = _outgoing(True, PhysicalLayers(), Vector3(0, 0, 0))
+    var glossed = _outgoing(True, _cloth(Vector3(1, 0, 0)), Vector3(0, 0, 0))
+    var added = ibl_sheen(1, 0.5) * Float32(pi)
+    assert_almost_equal(glossed.x, lit.x * 0.843 + added, atol=1e-5)
+    assert_almost_equal(glossed.y, lit.y * 0.843, atol=1e-5)
+
+
+def test_a_film_mixes_its_fresnel_into_the_split_sum() raises:
+    # On a gray metal, a whole film of no reflectance reflects less of the
+    # environment than the bare metal; one of full reflectance, more.
+    var metal = physical_surface(Vector3(0.5, 0.5, 0.5), DIELECTRIC_F0, 1, 1)
+    var none = Vector3(0, 0, 0)
+    var bare = _outgoing(True, PhysicalLayers(), none, metal)
+    var dark = _outgoing(True, _film(1, none), none, metal)
+    var bright = _outgoing(True, _film(1, Vector3(1, 1, 1)), none, metal)
+    assert_true(dark.x < bare.x, "a dark film reflected no less")
+    assert_true(bright.x > bare.x, "a bright film reflected no more")

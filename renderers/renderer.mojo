@@ -155,6 +155,7 @@ from materials.material import (
     NO_ATTENUATION,
     NO_DASH,
     NORMALS,
+    PHYSICAL,
     Blending,
     Combine,
     Material,
@@ -169,7 +170,7 @@ from render.cube_texture_store import (
     SCENE_ENVIRONMENT,
     CubeTextureId,
 )
-from units.si import Angle, DEGREE, Length, METER, RADIAN
+from units.si import Angle, DEGREE, Length, METER, NANOMETER, RADIAN
 from render.pointrule import attenuated_size
 from render.texture import (
     IGNORED,
@@ -203,9 +204,12 @@ from render.rasterizer import (
     DRAW_TRIANGLES,
     Draw,
     DrawKind,
+    LayerFactors,
     RasterVertex,
     ShadeMode,
+    check_alpha_data_map,
     check_alpha_map,
+    check_color_map,
     check_data_map,
     check_gradient_map,
     check_light_map,
@@ -511,10 +515,15 @@ def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
         material.specular_map,
         material.transmission_map,
         material.thickness_map,
+        material.sheen_color_map,
+        material.sheen_roughness_map,
+        material.iridescence_map,
+        material.iridescence_thickness_map,
+        material.anisotropy_map,
     ]
     var chosen = Matrix3()
     var settled = False
-    # Ten maps, always, so the loop never runs zero times.
+    # Fifteen maps, always, so the loop never runs zero times.
     for index in range(len(named)):  # pragma: no branch
         if named[index] == NO_TEXTURE:
             continue
@@ -1365,7 +1374,8 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
     perturbed normal is the front's negated: three.js negates the tangent
     and the bitangent under `DOUBLE_SIDED` by `faceDirection`, and a bump
     map's slope by the same sign. Negating the scales does exactly that;
-    see `render.rasterizer.mapped_normal`.
+    see `render.rasterizer.mapped_normal`. An anisotropic lobe is
+    stretched along the same frame, so its vector turns the same way.
     """
     var turned = corner
     turned.normal = -corner.normal
@@ -1373,6 +1383,9 @@ def _turned_around(corner: RasterVertex) -> RasterVertex:
         -corner.normal_scale.x, -corner.normal_scale.y
     )
     turned.bump_scale = -corner.bump_scale
+    turned.layers.anisotropy = Vector2(
+        -corner.layers.anisotropy.x, -corner.layers.anisotropy.y
+    )
     return turned
 
 
@@ -1481,6 +1494,7 @@ def _to_raster(
         shown.reference,
         shown.near_distance,
         shown.far_distance,
+        physics.layers,
     )
 
 
@@ -1557,6 +1571,7 @@ struct _Physics(ImplicitlyCopyable):
     var attenuation_distance: Float32
     var dispersion: Float32
     var ior: Float32
+    var layers: LayerFactors
 
     def __init__(out self):
         """Describe a surface that is not physical and carries no map: the
@@ -1586,6 +1601,7 @@ struct _Physics(ImplicitlyCopyable):
         self.attenuation_distance = NO_ATTENUATION.to(METER)
         self.dispersion = 0
         self.ior = DEFAULT_IOR
+        self.layers = LayerFactors()
 
 
 def _plane_in_view(plane: Plane, view: Matrix4) raises -> Plane:
@@ -1948,6 +1964,101 @@ def _checked_data_map(
         raise Error(name + " is named that is not there")
     check_data_map(assets.textures.get(map), name)
     return map
+
+
+def _stored_map(assets: Assets, map: TextureId, name: String) raises:
+    """Refuse a map id that names nothing in the store.
+
+    Args:
+        assets: Where the textures live.
+        map: The id the material names, not `NO_TEXTURE`.
+        name: What to call the map in an error: "A sheen color map", say.
+
+    Raises:
+        Error: If the id names nothing in the store.
+    """
+    if map.value >= assets.textures.count():
+        raise Error(name + " is named that is not there")
+
+
+def _layer_factors(
+    assets: Assets, material: Material, shading: ShadeMode
+) raises -> LayerFactors:
+    """Return what a draw's corners carry for its sheen, its thin film and
+    its stretched lobe: `LayerFactors` from the material's numbers.
+
+    The sheen color is decoded to linear light and multiplied by the
+    sheen, as three.js's `refreshUniformsPhysical` fills `sheenColor`. The
+    film's range is read in nanometers. The anisotropy becomes a vector
+    of its strength along its rotation, three.js's `anisotropyVector`.
+    Each map is checked the way `check_triangle_maps` checks it, whatever
+    the shading mode, and erased unless the mode opens textures. A kind
+    that is not `PHYSICAL` carries none of this, and `Material` has
+    refused any on one.
+
+    Args:
+        assets: Where the textures live.
+        material: The draw's material.
+        shading: The shading mode, which decides whether maps are opened.
+
+    Returns:
+        The factors.
+
+    Raises:
+        Error: If a map id names nothing in the store, or a map is not
+            stored the way it is read; see `check_color_map`,
+            `check_alpha_data_map` and `check_data_map`.
+    """
+    var factors = LayerFactors()
+    if material.kind != PHYSICAL:
+        return factors
+    var tint = FloatColor(srgb=material.sheen_color)
+    factors.sheen_color = Vector3(tint.r, tint.g, tint.b) * material.sheen
+    factors.sheen_roughness = material.sheen_roughness
+    factors.iridescence = material.iridescence
+    factors.iridescence_ior = material.iridescence_ior
+    factors.thickness_minimum = material.iridescence_thickness_minimum.to(
+        NANOMETER
+    )
+    factors.thickness_maximum = material.iridescence_thickness_maximum.to(
+        NANOMETER
+    )
+    var turn = material.anisotropy_rotation.to(RADIAN)
+    factors.anisotropy = Vector2(
+        material.anisotropy * cos(turn), material.anisotropy * sin(turn)
+    )
+    if material.sheen_color_map != NO_TEXTURE:
+        _stored_map(assets, material.sheen_color_map, "A sheen color map")
+        check_color_map(
+            assets.textures.get(material.sheen_color_map), "A sheen color map"
+        )
+    if material.sheen_roughness_map != NO_TEXTURE:
+        _stored_map(
+            assets, material.sheen_roughness_map, "A sheen roughness map"
+        )
+        check_alpha_data_map(
+            assets.textures.get(material.sheen_roughness_map),
+            "A sheen roughness map",
+        )
+    factors.iridescence_map = _checked_data_map(
+        assets, material.iridescence_map, "An iridescence map"
+    )
+    factors.thickness_map = _checked_data_map(
+        assets,
+        material.iridescence_thickness_map,
+        "An iridescence thickness map",
+    )
+    factors.anisotropy_map = _checked_data_map(
+        assets, material.anisotropy_map, "An anisotropy map"
+    )
+    if shading == SHADE_TEXTURE:
+        factors.sheen_color_map = material.sheen_color_map
+        factors.sheen_roughness_map = material.sheen_roughness_map
+    else:
+        factors.iridescence_map = NO_TEXTURE
+        factors.thickness_map = NO_TEXTURE
+        factors.anisotropy_map = NO_TEXTURE
+    return factors
 
 
 def _checked_light_map(assets: Assets, map: TextureId) raises -> TextureId:
@@ -3782,6 +3893,7 @@ struct Renderer(Movable):
                 material.attenuation_distance.to(METER),
                 material.dispersion,
                 material.ior,
+                _layer_factors(assets, material, self.shading),
             )
             if self.shading != SHADE_TEXTURE:
                 physics.roughness_map = NO_TEXTURE

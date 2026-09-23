@@ -34,6 +34,13 @@ scale, so the highlight and the diffuse term move together.
 from core.layers import Layers
 from core.object3d import NO_PARENT
 from core.scene import Scene
+from lights.physical_layers import (
+    PhysicalLayers,
+    anisotropic_ggx,
+    charlie_sheen,
+    ibl_sheen,
+    sheen_scaling,
+)
 from lights.shadow import ShadowMap, SpotLightMap
 from lights.light import (
     AMBIENT,
@@ -387,6 +394,7 @@ def ggx(
     f0: Vector3,
     f90: Float32,
     roughness: Float32,
+    layers: PhysicalLayers = PhysicalLayers(),
 ) -> Vector3:
     """Return the fraction of light arriving from one direction that a
     physical surface sends toward another: three.js's `BRDF_GGX`.
@@ -406,6 +414,11 @@ def ggx(
     of its lobes. Head on, the lobe is `f0 / (4 alpha^2)`, alpha being the
     roughness squared, which is what the tests hold it to.
 
+    A thin film mixes its own Fresnel term in by how much film there is,
+    and a stretch replaces the visibility and the distribution with
+    their anisotropic forms, as three.js's `BRDF_GGX` does under
+    `USE_IRIDESCENCE` and `USE_ANISOTROPY`. See `lights.physical_layers`.
+
     Args:
         toward_light: Unit vector from the surface toward the light.
         toward_eye: Unit vector from the surface toward the camera.
@@ -414,6 +427,7 @@ def ggx(
         f90: Its reflectance at a grazing angle.
         roughness: How rough the surface is, from zero to one. The
             caller floors it; see `ROUGHNESS_FLOOR`.
+        layers: The fragment's film and stretch. `PhysicalLayers()` has neither.
 
     Returns:
         The reflected fraction per channel. Above one at the center of a
@@ -431,6 +445,26 @@ def ggx(
     if dot_nl == 0 or dot_nv == 0:
         return Vector3(0, 0, 0)
     var fresnel = f_schlick(f0, f90, dot_vh)
+    if layers.iridescence > 0:
+        var film = layers.iridescence_fresnel
+        var weight = layers.iridescence
+        fresnel = Vector3(
+            fresnel.x + (film.x - fresnel.x) * weight,
+            fresnel.y + (film.y - fresnel.y) * weight,
+            fresnel.z + (film.z - fresnel.z) * weight,
+        )
+    if layers.anisotropic:
+        var stretched = anisotropic_ggx(
+            toward_light,
+            toward_eye,
+            half,
+            dot_nl,
+            dot_nv,
+            dot_nh,
+            alpha,
+            layers,
+        )
+        return fresnel * stretched
     # three.js's V_GGX_SmithCorrelated.
     var a2 = alpha * alpha
     var gv = dot_nl * sqrt(a2 + (1 - a2) * dot_nv * dot_nv)
@@ -486,7 +520,6 @@ def environment_brdf(
     )
 
 
-@fieldwise_init
 struct Reflected(ImplicitlyCopyable):
     """What a physical surface sends toward the camera, split the way
     three.js's `ReflectedLight` splits it, so the environment can join
@@ -503,6 +536,29 @@ struct Reflected(ImplicitlyCopyable):
     # Light bounced off the clear coat over the surface, on the surface's
     # unperturbed normal. Zero for a surface without one.
     var clearcoat: Vector3
+    # Light bounced off a sheen, three.js's `sheenSpecularDirect`. Zero for
+    # a surface without one. See `lights.physical_layers`.
+    var sheen: Vector3
+
+    def __init__(
+        out self,
+        diffuse: Vector3,
+        specular: Vector3,
+        clearcoat: Vector3,
+        sheen: Vector3 = Vector3(0, 0, 0),
+    ):
+        """Hold the four parts.
+
+        Args:
+            diffuse: The Lambert term.
+            specular: The GGX lobe.
+            clearcoat: The clear coat's lobe.
+            sheen: The sheen's lobe; zero by default.
+        """
+        self.diffuse = diffuse
+        self.specular = specular
+        self.clearcoat = clearcoat
+        self.sheen = sheen
 
 
 def physical_surface(
@@ -590,6 +646,7 @@ def physical_outgoing(
     occlusion: Float32 = 1,
     transmission: Float32 = 0,
     transmitted: Vector3 = Vector3(0, 0, 0),
+    layers: PhysicalLayers = PhysicalLayers(),
 ) -> Vector3:
     """Return the light a physical surface sends toward the camera, from
     its direct light, its indirect light and its environment: three.js's
@@ -654,6 +711,13 @@ def physical_outgoing(
         transmitted: The light seen through the surface, from
             `render.transmission.volume_refraction`. Read only when the
             transmission is above zero.
+        layers: The fragment's sheen, film and stretch; see
+            `lights.physical_layers`. A film mixes its Fresnel term into the split
+            sum's reflectance, three.js's `computeMultiscatteringIridescence`.
+            A sheen reflects the irradiance through `ibl_sheen`, dims the
+            light under it by `sheen_scaling` and adds its own light on
+            top, before the clear coat, as `meshphysical_frag` adds it.
+            `PhysicalLayers()` has none of them.
 
     Returns:
         The outgoing light, linear.
@@ -665,21 +729,33 @@ def physical_outgoing(
     )
     var specular = direct.specular
     var coat = direct.clearcoat
+    var sheen = direct.sheen
     var f90 = surface.clearcoat.x
     if reflects:
-        # three.js's `computeMultiscattering`.
+        # three.js's `computeMultiscattering`, with a film's Fresnel term
+        # mixed into the reflectance as `computeMultiscatteringIridescence`
+        # mixes it.
+        var fr = surface.specular
+        if layers.iridescence > 0:
+            var film = layers.iridescence_fresnel
+            var weight = layers.iridescence
+            fr = Vector3(
+                fr.x + (film.x - fr.x) * weight,
+                fr.y + (film.y - fr.y) * weight,
+                fr.z + (film.z - fr.z) * weight,
+            )
         var fab = dfg_approx(dot_nv, roughness)
         var single = Vector3(
-            surface.specular.x * fab.x + f90 * fab.y,
-            surface.specular.y * fab.x + f90 * fab.y,
-            surface.specular.z * fab.x + f90 * fab.y,
+            fr.x * fab.x + f90 * fab.y,
+            fr.y * fab.x + f90 * fab.y,
+            fr.z * fab.x + f90 * fab.y,
         )
         var ess = fab.x + fab.y
         var ems = 1 - ess
         var average = Vector3(
-            surface.specular.x + (1 - surface.specular.x) * MULTISCATTER_MEAN,
-            surface.specular.y + (1 - surface.specular.y) * MULTISCATTER_MEAN,
-            surface.specular.z + (1 - surface.specular.z) * MULTISCATTER_MEAN,
+            fr.x + (1 - fr.x) * MULTISCATTER_MEAN,
+            fr.y + (1 - fr.y) * MULTISCATTER_MEAN,
+            fr.z + (1 - fr.z) * MULTISCATTER_MEAN,
         )
         var multi = Vector3(
             single.x * average.x / (1 - ems * average.x) * ems,
@@ -710,13 +786,25 @@ def physical_outgoing(
             diffuse.z + surface.diffuse.z * kept * irradiance.z * occlusion,
         )
         if clearcoat > 0:
-            var sheen = environment_brdf(
+            var gloss = environment_brdf(
                 dot_nv_coat.x, CLEARCOAT_F0, 1, clearcoat_roughness
             )
             coat = Vector3(
-                coat.x + coat_radiance.x * sheen.x * occlusion,
-                coat.y + coat_radiance.y * sheen.y * occlusion,
-                coat.z + coat_radiance.z * sheen.z * occlusion,
+                coat.x + coat_radiance.x * gloss.x * occlusion,
+                coat.y + coat_radiance.y * gloss.y * occlusion,
+                coat.z + coat_radiance.z * gloss.z * occlusion,
+            )
+        if layers.sheen:
+            # three.js's `sheenSpecularIndirect`: its irradiance is pi
+            # times the one here, and `aomap_fragment` occludes it.
+            var cloth = ibl_sheen(dot_nv, layers.sheen_roughness) * Float32(pi)
+            sheen = Vector3(
+                sheen.x
+                + irradiance.x * layers.sheen_color.x * cloth * occlusion,
+                sheen.y
+                + irradiance.y * layers.sheen_color.y * cloth * occlusion,
+                sheen.z
+                + irradiance.z * layers.sheen_color.z * cloth * occlusion,
             )
     if transmission > 0:
         # three.js's `transmission_fragment`: the diffuse light, direct and
@@ -732,6 +820,13 @@ def physical_outgoing(
         diffuse.y + specular.y + glow.y,
         diffuse.z + specular.z + glow.z,
     )
+    if layers.sheen:
+        var kept = sheen_scaling(layers.sheen_color)
+        outgoing = Vector3(
+            outgoing.x * kept + sheen.x,
+            outgoing.y * kept + sheen.y,
+            outgoing.z * kept + sheen.z,
+        )
     if clearcoat > 0:
         var fresnel = f_schlick(CLEARCOAT_F0, 1, dot_nv_coat.x)
         outgoing = Vector3(
@@ -831,6 +926,7 @@ def physical_light(
     surface: Reflected,
     roughness: Float32,
     clearcoat_roughness: Float32,
+    layers: PhysicalLayers = PhysicalLayers(),
 ) -> Reflected:
     """Return `sum` with one light's contribution added: three.js's
     `RE_Direct_Physical` for one `IncidentLight`.
@@ -852,20 +948,42 @@ def physical_light(
         surface: The surface's three colors, from `physical_surface`.
         roughness: The floored roughness.
         clearcoat_roughness: The coat's floored roughness.
+        layers: The fragment's sheen, film and stretch; see
+            `lights.physical_layers`. `PhysicalLayers()` has none of them.
 
     Returns:
-        The three sums with this light added.
+        The four sums with this light added.
     """
     var f90 = surface.clearcoat.x
     var diffuse = sum.diffuse
     var specular = sum.specular
     var coat = sum.clearcoat
+    var sheen = sum.sheen
     if lambert > 0:
         var irradiance = Vector3(
             light.x * lambert, light.y * lambert, light.z * lambert
         )
+        if layers.sheen:
+            var cloth = charlie_sheen(
+                toward_light,
+                toward_eye,
+                normal,
+                layers.sheen_color,
+                layers.sheen_roughness,
+            )
+            sheen = Vector3(
+                sheen.x + irradiance.x * cloth.x,
+                sheen.y + irradiance.y * cloth.y,
+                sheen.z + irradiance.z * cloth.z,
+            )
         var lobe = ggx(
-            toward_light, toward_eye, normal, surface.specular, f90, roughness
+            toward_light,
+            toward_eye,
+            normal,
+            surface.specular,
+            f90,
+            roughness,
+            layers,
         )
         specular = Vector3(
             specular.x + irradiance.x * lobe.x,
@@ -891,7 +1009,7 @@ def physical_light(
             coat.y + light.y * coat_lambert * lobe.y,
             coat.z + light.z * coat_lambert * lobe.z,
         )
-    return Reflected(diffuse, specular, coat)
+    return Reflected(diffuse, specular, coat, sheen)
 
 
 def _aimed_at(scene: Scene, light: Light) raises -> Vector3:
@@ -1856,6 +1974,7 @@ struct Lighting(Movable):
         clearcoat: Float32,
         clearcoat_roughness: Float32,
         receives: Bool = True,
+        layers: PhysicalLayers = PhysicalLayers(),
     ) -> Reflected:
         """Return what a physical surface here sends to the camera from the
         lights that have a direction: three.js's `RE_Direct_Physical`,
@@ -1880,9 +1999,13 @@ struct Lighting(Movable):
             clearcoat_roughness: The coat's floored roughness.
             receives: Whether the lights' shadows fall on this surface;
                 see `shadow_at`.
+            layers: The fragment's sheen, film and stretch; see
+                `lights.physical_layers`. A rectangle of light reads none of them,
+                as three.js's `RE_Direct_RectArea_Physical` reads none.
 
         Returns:
-            The diffuse, specular and clear coat sums, linear, each scaled.
+            The diffuse, specular, clear coat and sheen sums, linear, each
+            scaled.
         """
         var none = Reflected(
             Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(0, 0, 0)
@@ -1918,6 +2041,7 @@ struct Lighting(Movable):
                 surface,
                 roughness,
                 clearcoat_roughness,
+                layers,
             )
         for index in range(len(self.positions)):
             var toward = self.positions[index] - position
@@ -1951,6 +2075,7 @@ struct Lighting(Movable):
                 surface,
                 roughness,
                 clearcoat_roughness,
+                layers,
             )
         for index in range(len(self.spot_positions)):
             var toward = self.spot_positions[index] - position
@@ -2001,11 +2126,13 @@ struct Lighting(Movable):
                 surface,
                 roughness,
                 clearcoat_roughness,
+                layers,
             )
         var scaled = Reflected(
             sum.diffuse * self.scale,
             sum.specular * self.scale,
             sum.clearcoat * self.scale,
+            sum.sheen * self.scale,
         )
         # The rectangles, after the scale: their form factor integrates
         # the cosine over the light's outline and carries no reciprocal
@@ -2045,7 +2172,9 @@ struct Lighting(Movable):
                     specular.y + added.specular.y * glow.g,
                     specular.z + added.specular.z * glow.b,
                 )
-            scaled = Reflected(diffuse, specular, scaled.clearcoat)
+            scaled = Reflected(
+                diffuse, specular, scaled.clearcoat, scaled.sheen
+            )
         return scaled
 
     def shade(
