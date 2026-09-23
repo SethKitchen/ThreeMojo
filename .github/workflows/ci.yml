@@ -29,7 +29,10 @@ jobs:
   cpu:
     name: check-cpu (standard library only)
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    # The CPU suites took about 26 minutes and coverage about 16 once the
+    # library passed 150 modules, so 40 cut every run off before the
+    # coverage report. This is a hang detector, not a speed target.
+    timeout-minutes: 90
 
     steps:
       - uses: actions/checkout@v4
