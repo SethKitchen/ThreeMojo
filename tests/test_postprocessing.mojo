@@ -815,6 +815,21 @@ def test_every_kind_runs_in_the_composer_and_the_film_keeps_time() raises:
     var none = EffectComposer()
     none.reset()
     assert_equal(none.pass_count(), 0)
+    # `passes` is an open list, so a pass can arrive without `add_pass`.
+    # Its memory is made when the frame runs, rather than read past the
+    # end of the memories.
+    var open = EffectComposer()
+    open.passes.append(render_pass())
+    open.passes.append(afterimage_pass(0.9))
+    _ = open.render(renderer, scene, assets, camera)
+    assert_equal(len(open.memories), 2)
+    assert_equal(len(open.accumulations), 2)
+    assert_equal(len(open.memories[1]), WIDTH * HEIGHT)
+    # A pass popped from the list takes its memory with it.
+    _ = open.passes.pop()
+    _ = open.render(renderer, scene, assets, camera)
+    assert_equal(len(open.memories), 1)
+    assert_equal(len(open.accumulations), 1)
     # A frame of data is not tone mapped by the output pass but is
     # grained like anything else.
     var shown = assets.materials.add(normal_material())

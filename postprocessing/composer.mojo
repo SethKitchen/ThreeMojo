@@ -1098,6 +1098,24 @@ struct EffectComposer(Movable):
         """Return how many passes there are."""
         return len(self.passes)
 
+    def fit_memories(mut self):
+        """Give every pass a memory and an accumulation, and drop the ones
+        past the last pass.
+
+        `passes` is an open list, so a pass can be appended or popped
+        without `add_pass` or `remove_pass`. Then the lists fall out of
+        step, and a pass would read a memory past their end. `render`
+        calls this first. A new memory is empty, as `add_pass` makes it.
+        """
+        while len(self.memories) < len(self.passes):
+            self.memories.append(List[FloatColor]())
+        while len(self.accumulations) < len(self.passes):
+            self.accumulations.append(TaaMemory())
+        while len(self.memories) > len(self.passes):
+            _ = self.memories.pop()
+        while len(self.accumulations) > len(self.passes):
+            _ = self.accumulations.pop()
+
     def reset(mut self):
         """Forget what every afterimage pass saw, so the next frame
         starts a fresh trail: three.js's `reset`. Every TAA pass forgets
@@ -1146,6 +1164,7 @@ struct EffectComposer(Movable):
                 or not finite.
         """
         check_frame_time(delta_time)
+        self.fit_memories()
         # A frame with a normal attachment when a screen-space pass reads
         # normals, so the render that fills it leaves them in the same
         # pass, as three.js's multiple render targets would. See
