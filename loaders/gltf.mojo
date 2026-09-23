@@ -65,12 +65,29 @@ not those of the node's children, and none of a skinned mesh's, since the
 mixer drives morph influences on `scene.meshes` alone. A channel on a node
 the default scene does not reach is left out, and so is an animation left
 with no channel. A skin joint the scene does not reach, a morph color, and
-more than `MAX_MORPH_TARGETS` targets are refused.
+more than `MAX_MORPH_TARGETS` targets are refused. So are a specular
+color factor outside zero to one, which a `Color` cannot hold; maps of one
+material that `KHR_texture_transform` moves apart, since a fragment here
+samples every map at one coordinate; and a skinned node that is instanced,
+where three.js drops the skin.
 
-**Not ported.** Every extension: a file whose `extensionsRequired` names
-one is refused, since it could not be drawn as meant, and one that only
-uses an extension is read without it. Only triangles are read; a primitive
-of points, lines or strips is refused.
+**Extensions.** Nine are read, the ones three.js's `GLTFLoader` reads
+that map onto something this renderer has. `KHR_materials_unlit` makes a
+`BASIC` material. `KHR_materials_ior`, `KHR_materials_specular` and
+`KHR_materials_clearcoat` make a `PHYSICAL` one and set its factors;
+`KHR_materials_emissive_strength` sets `emissive_intensity`.
+`KHR_texture_transform` moves, turns and scales a map's coordinates.
+`KHR_lights_punctual` adds directional, point and spot lights to the scene.
+`EXT_mesh_gpu_instancing` draws a node's primitives as `InstancedMesh`es.
+`KHR_mesh_quantization` needs nothing: every attribute is read at any
+component type already.
+
+**Not ported.** Every other extension: a file whose `extensionsRequired`
+names one is refused, as three.js refuses it, and one that only uses an
+extension is read without it. Sheen, transmission and volume are among
+them, since a material here has no field for them. The maps inside the
+ported material extensions are not read either, only their factors. Only
+triangles are read; a primitive of points, lines or strips is refused.
 """
 
 from animation.animation_clip import AnimationClip
@@ -105,6 +122,7 @@ from core.buffer_geometry import (
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from lights.light import directional_light, point_light, spot_light
 from loaders.json import (
     ARRAY,
     NO_NODE,
@@ -115,15 +133,22 @@ from loaders.json import (
     parse_json,
 )
 from materials.material import (
+    BASIC,
+    DEFAULT_IOR,
     DOUBLE_SIDE,
     FRONT_SIDE,
     NO_TEXTURE,
+    PHYSICAL,
+    STANDARD,
     Material,
     MaterialId,
+    Side,
     standard_material,
 )
+from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from objects.skeleton import Bone, Skeleton
+from objects.instanced_mesh import InstancedMesh
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
@@ -146,7 +171,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import TextureId
-from std.math import isfinite, sqrt
+from std.math import isfinite, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
@@ -189,6 +214,22 @@ comptime DEFAULT_ALPHA_CUTOFF = Float32(0.5)
 # infinite projection, which a `PerspectiveCamera` cannot hold.
 comptime DEFAULT_ASPECT = Float32(1)
 comptime DEFAULT_FAR = Float32(2e6)
+
+# The extensions this loader reads. A file that requires any other is
+# refused, as three.js's `GLTFLoader` refuses one it has no plugin for.
+comptime EMISSIVE_STRENGTH = "KHR_materials_emissive_strength"
+comptime MATERIALS_IOR = "KHR_materials_ior"
+comptime MATERIALS_SPECULAR = "KHR_materials_specular"
+comptime MATERIALS_CLEARCOAT = "KHR_materials_clearcoat"
+comptime MATERIALS_UNLIT = "KHR_materials_unlit"
+comptime TEXTURE_TRANSFORM = "KHR_texture_transform"
+comptime LIGHTS_PUNCTUAL = "KHR_lights_punctual"
+comptime MESH_QUANTIZATION = "KHR_mesh_quantization"
+comptime GPU_INSTANCING = "EXT_mesh_gpu_instancing"
+
+# A spot light's cone when `KHR_lights_punctual` names none: no inner cone,
+# and an outer one of a quarter of a half turn, the specification's.
+comptime DEFAULT_OUTER_CONE = Float32(pi / 4)
 
 
 @fieldwise_init
@@ -336,6 +377,14 @@ struct GltfModel(Copyable, Movable):
     # `scene.skinned_meshes`.
     var first_skinned_mesh: Int
     var skinned_mesh_count: Int
+    # The same for the instanced meshes `EXT_mesh_gpu_instancing` added to
+    # `scene.instanced_meshes`.
+    var first_instanced_mesh: Int
+    var instanced_mesh_count: Int
+    # The same for the lights `KHR_lights_punctual` added to
+    # `scene.lights`, one per node that carries a light.
+    var first_light: Int
+    var light_count: Int
     # One entry per node that carries a camera and that the loaded scene
     # reaches, in the order the nodes were placed.
     var cameras: List[GltfCamera]
@@ -357,6 +406,10 @@ struct GltfModel(Copyable, Movable):
         self.mesh_count = 0
         self.first_skinned_mesh = 0
         self.skinned_mesh_count = 0
+        self.first_instanced_mesh = 0
+        self.instanced_mesh_count = 0
+        self.first_light = 0
+        self.light_count = 0
         self.cameras = List[GltfCamera]()
         self.animations = List[AnimationClip]()
 
@@ -492,12 +545,16 @@ def load_gltf(
         What went where.
 
     Raises:
-        Error: If the JSON is not JSON or not glTF 2, an extension is
-            required, a buffer, accessor, image, material, mesh, node,
+        Error: If the JSON is not JSON or not glTF 2, an extension this
+            loader does not read is required, a buffer, accessor, image, material, mesh, node,
             skin, camera or animation is malformed or names something the
             file does not have, a primitive is not triangles, a skin names
             a joint the scene does not reach, or a camera, a skeleton, a
-            morph target or a track is one its type refuses.
+            morph target or a track is one its type refuses. Also if an
+            extension is malformed, a material's texture transforms
+            differ, a specular color factor is outside zero to one, a
+            skinned node is instanced, or a material, a light or an
+            instance matrix is one its type refuses.
     """
     var document = parse_json(text)
     var root = document.root()
@@ -505,11 +562,14 @@ def load_gltf(
         raise Error("glTF: the document is not an object")
     _check_asset(document, root)
     var required = document.get(root, "extensionsRequired")
-    if required != NO_NODE and document.length(required) > 0:
-        raise Error(
-            "glTF: the file requires an extension that is not read: "
-            + document.string(document.at(required, 0))
-        )
+    if required != NO_NODE:
+        for slot in range(document.length(required)):
+            var name = document.string(document.at(required, slot))
+            if not is_supported_extension(name):
+                raise Error(
+                    "glTF: the file requires an extension that is not read: "
+                    + name
+                )
     var loader = _Loader(document^, bin, directory)
     loader.read_buffers()
     loader.read_textures()
@@ -518,6 +578,29 @@ def load_gltf(
     loader.read_nodes(scene, assets)
     loader.read_animations()
     return loader.model.copy()
+
+
+def is_supported_extension(name: String) -> Bool:
+    """Return True if this loader reads an extension, so a file can
+    require it.
+
+    Args:
+        name: The extension's name, as `extensionsRequired` lists it.
+
+    Returns:
+        Whether it is one of the nine this loader reads.
+    """
+    return (
+        name == EMISSIVE_STRENGTH
+        or name == MATERIALS_IOR
+        or name == MATERIALS_SPECULAR
+        or name == MATERIALS_CLEARCOAT
+        or name == MATERIALS_UNLIT
+        or name == TEXTURE_TRANSFORM
+        or name == LIGHTS_PUNCTUAL
+        or name == MESH_QUANTIZATION
+        or name == GPU_INSTANCING
+    )
 
 
 def _check_asset(document: JsonDocument, root: Int) raises:
@@ -779,6 +862,19 @@ struct _Loader(Movable):
         if found == NO_NODE:
             return False
         return self.document.boolean(found)
+
+    def extension(self, node: Int, name: String) raises -> Int:
+        """Return the object an extension keeps under an object's
+        `extensions`, or `NO_NODE` when it keeps none there."""
+        var all = self.document.get(node, "extensions")
+        if all == NO_NODE:
+            return NO_NODE
+        if self.document.kind(all) != OBJECT:
+            raise Error("glTF: extensions must be an object")
+        var found = self.document.get(all, name)
+        if found != NO_NODE and self.document.kind(found) != OBJECT:
+            raise Error("glTF: " + name + " must be an object")
+        return found
 
     def numbers(
         self, node: Int, key: String, count: Int
@@ -1073,13 +1169,22 @@ struct _Loader(Movable):
         return id
 
     def texture_reference(self, material: Int, key: String) raises -> Int:
-        """Return the texture index a material's `key` object names, or -1."""
+        """Return the texture index a material's `key` object names, or -1.
+
+        The texture coordinates it reads must be the first set: its
+        `texCoord`, or its `KHR_texture_transform`'s when that names one,
+        as three.js lets the transform's win.
+        """
         var found = self.document.get(material, key)
         if found == NO_NODE:
             return -1
         if self.document.kind(found) != OBJECT:
             raise Error("glTF: " + key + " must be an object")
-        if self.integer(found, "texCoord", 0) != 0:
+        var set = self.integer(found, "texCoord", 0)
+        var transform = self.extension(found, TEXTURE_TRANSFORM)
+        if transform != NO_NODE:
+            set = self.integer(transform, "texCoord", set)
+        if set != 0:
             raise Error(
                 "glTF: only the first set of texture coordinates is read"
             )
@@ -1088,18 +1193,59 @@ struct _Loader(Movable):
             raise Error("glTF: a texture index must not be negative")
         return index
 
+    def map_of(
+        mut self,
+        material: Int,
+        key: String,
+        space: ColorSpace,
+        mut assets: Assets,
+    ) raises -> TextureId:
+        """Return the texture a material's `key` object names, read in one
+        color space, or `NO_TEXTURE`.
+
+        A `KHR_texture_transform` that moves, turns or scales it makes a
+        copy of the texture, as three.js's `GLTFTextureTransformExtension`
+        clones it. The copy's transform is the file's followed by the
+        flip of `v` every glTF texture has here: `offset` `(x, 1 - y)`,
+        `repeat` `(x, -y)`, and the `rotation` as it is.
+        """
+        var index = self.texture_reference(material, key)
+        if index < 0:
+            return NO_TEXTURE
+        var id = self.texture(index, space, assets)
+        var transform = self.extension(
+            self.document.get(material, key), TEXTURE_TRANSFORM
+        )
+        if transform == NO_NODE:
+            return id
+        var offset = self.numbers(transform, "offset", 2)
+        var scale = self.numbers(transform, "scale", 2)
+        var turned = self.document.has(transform, "rotation")
+        if len(offset) == 0 and len(scale) == 0 and not turned:
+            # Only a `texCoord`, which `texture_reference` settled.
+            return id
+        if len(offset) == 0:
+            offset = [0, 0]
+        if len(scale) == 0:
+            scale = [1, 1]
+        var moved = Texture(copy=assets.textures.get(id))
+        moved.offset = Vector2(offset[0], 1 - offset[1])
+        moved.repeat = Vector2(scale[0], -scale[1])
+        moved.rotation = Angle(self.number(transform, "rotation", 0), RADIAN)
+        return assets.textures.add(moved^)
+
     # --- materials ----------------------------------------------------------
 
     def read_materials(mut self, mut assets: Assets) raises:
-        """Build a standard material per glTF material."""
+        """Build a material per glTF material, of the kind three.js's
+        `GLTFLoader` picks: `BASIC` for one that is unlit, `PHYSICAL` for
+        one with an index of refraction, a specular or a clear coat, and
+        `STANDARD` for the rest."""
         for index in range(self.count("materials")):
             var material = self.entry("materials", index)
             var color = Color(255, 255, 255)
             var opacity = Float32(1)
             var map = NO_TEXTURE
-            var roughness = Float32(1)
-            var metalness = Float32(1)
-            var roughness_map = NO_TEXTURE
             var pbr = self.document.get(material, "pbrMetallicRoughness")
             if pbr != NO_NODE:
                 var factor = self.numbers(pbr, "baseColorFactor", 4)
@@ -1108,61 +1254,134 @@ struct _Loader(Movable):
                         factor[0], factor[1], factor[2], 1
                     ).encode()
                     opacity = factor[3]
-                var base = self.texture_reference(pbr, "baseColorTexture")
-                if base >= 0:
-                    map = self.texture(base, SRGB, assets)
-                roughness = self.number(pbr, "roughnessFactor", 1)
-                metalness = self.number(pbr, "metallicFactor", 1)
-                var both = self.texture_reference(
-                    pbr, "metallicRoughnessTexture"
-                )
-                if both >= 0:
-                    roughness_map = self.texture(both, LINEAR, assets)
-            var normal_map = NO_TEXTURE
-            var normal_scale = Float32(1)
-            var normal = self.texture_reference(material, "normalTexture")
-            if normal >= 0:
-                normal_map = self.texture(normal, LINEAR, assets)
-                normal_scale = self.number(
-                    self.document.get(material, "normalTexture"), "scale", 1
-                )
-            var emissive = Color(0, 0, 0)
-            var glow = self.numbers(material, "emissiveFactor", 3)
-            if len(glow) == 3:
-                emissive = FloatColor(glow[0], glow[1], glow[2], 1).encode()
-            var emissive_map = NO_TEXTURE
-            var shine = self.texture_reference(material, "emissiveTexture")
-            if shine >= 0:
-                emissive_map = self.texture(shine, SRGB, assets)
+                map = self.map_of(pbr, "baseColorTexture", SRGB, assets)
             var side = FRONT_SIDE
             if self.flag(material, "doubleSided"):
                 side = DOUBLE_SIDE
             var mode = self.text(material, "alphaMode")
             var transparent = mode == "BLEND"
-            var built = standard_material(
-                color,
-                map=map,
-                roughness=roughness,
-                metalness=metalness,
-                side=side,
-                opacity=opacity,
-                transparent=transparent,
-                roughness_map=roughness_map,
-                metalness_map=roughness_map,
-                normal_map=normal_map,
-                normal_scale=Vector2(normal_scale, normal_scale),
-                emissive=emissive,
-                emissive_map=emissive_map,
-            )
+            var built: Material
+            if self.extension(material, MATERIALS_UNLIT) != NO_NODE:
+                # three.js's `MeshBasicMaterial`: the base color alone,
+                # with no emissive, normal or metallic-roughness term and
+                # no other material extension read.
+                built = Material(
+                    color,
+                    map=map,
+                    side=side,
+                    opacity=opacity,
+                    transparent=transparent,
+                    kind=BASIC,
+                )
+            else:
+                built = self.lit_material(
+                    material,
+                    pbr,
+                    color,
+                    map,
+                    side,
+                    opacity,
+                    transparent,
+                    assets,
+                )
             if mode == "MASK":
                 built.alpha_test = self.number(
                     material, "alphaCutoff", DEFAULT_ALPHA_CUTOFF
                 )
             elif mode != "" and mode != "OPAQUE" and mode != "BLEND":
                 raise Error("glTF: alphaMode must be OPAQUE, MASK or BLEND")
+            _check_one_transform(assets, built)
             self.model.materials.append(assets.materials.add(built))
             self.tinted_materials.append(MaterialId(0))
             self.has_tinted.append(False)
+
+    def lit_material(
+        mut self,
+        material: Int,
+        pbr: Int,
+        color: Color,
+        map: TextureId,
+        side: Side,
+        opacity: Float32,
+        transparent: Bool,
+        mut assets: Assets,
+    ) raises -> Material:
+        """Build a material that is not unlit: `STANDARD`, or `PHYSICAL`
+        when `KHR_materials_ior`, `KHR_materials_specular` or
+        `KHR_materials_clearcoat` is on it, with the emissive scaled by
+        `KHR_materials_emissive_strength`."""
+        var roughness = Float32(1)
+        var metalness = Float32(1)
+        var roughness_map = NO_TEXTURE
+        if pbr != NO_NODE:
+            roughness = self.number(pbr, "roughnessFactor", 1)
+            metalness = self.number(pbr, "metallicFactor", 1)
+            roughness_map = self.map_of(
+                pbr, "metallicRoughnessTexture", LINEAR, assets
+            )
+        var normal_map = self.map_of(material, "normalTexture", LINEAR, assets)
+        var normal_scale = Float32(1)
+        if normal_map != NO_TEXTURE:
+            normal_scale = self.number(
+                self.document.get(material, "normalTexture"), "scale", 1
+            )
+        var emissive = Color(0, 0, 0)
+        var glow = self.numbers(material, "emissiveFactor", 3)
+        if len(glow) == 3:
+            emissive = FloatColor(glow[0], glow[1], glow[2], 1).encode()
+        var emissive_map = self.map_of(
+            material, "emissiveTexture", SRGB, assets
+        )
+        var strength = Float32(1)
+        var bright = self.extension(material, EMISSIVE_STRENGTH)
+        if bright != NO_NODE:
+            strength = self.number(bright, "emissiveStrength", 1)
+        var kind = STANDARD
+        var ior = DEFAULT_IOR
+        var refraction = self.extension(material, MATERIALS_IOR)
+        if refraction != NO_NODE:
+            kind = PHYSICAL
+            ior = self.number(refraction, "ior", DEFAULT_IOR)
+        var specular_color = Color(255, 255, 255)
+        var specular_intensity = Float32(1)
+        var specular = self.extension(material, MATERIALS_SPECULAR)
+        if specular != NO_NODE:
+            kind = PHYSICAL
+            specular_intensity = self.number(specular, "specularFactor", 1)
+            var tint = self.numbers(specular, "specularColorFactor", 3)
+            if len(tint) == 3:
+                specular_color = _unit_color(tint, "specularColorFactor")
+        var clearcoat = Float32(0)
+        var clearcoat_roughness = Float32(0)
+        var coat = self.extension(material, MATERIALS_CLEARCOAT)
+        if coat != NO_NODE:
+            kind = PHYSICAL
+            clearcoat = self.number(coat, "clearcoatFactor", 0)
+            clearcoat_roughness = self.number(
+                coat, "clearcoatRoughnessFactor", 0
+            )
+        return Material(
+            color,
+            map=map,
+            side=side,
+            opacity=opacity,
+            transparent=transparent,
+            kind=kind,
+            emissive=emissive,
+            emissive_intensity=strength,
+            emissive_map=emissive_map,
+            roughness=roughness,
+            metalness=metalness,
+            roughness_map=roughness_map,
+            metalness_map=roughness_map,
+            normal_map=normal_map,
+            normal_scale=Vector2(normal_scale, normal_scale),
+            ior=ior,
+            specular_color=specular_color,
+            specular_intensity=specular_intensity,
+            clearcoat=clearcoat,
+            clearcoat_roughness=clearcoat_roughness,
+        )
 
     def material_for(
         mut self, index: Int, tinted: Bool, mut assets: Assets
@@ -1354,6 +1573,8 @@ struct _Loader(Movable):
             )
         self.model.first_mesh = len(scene.meshes)
         self.model.first_skinned_mesh = len(scene.skinned_meshes)
+        self.model.first_instanced_mesh = len(scene.instanced_meshes)
+        self.model.first_light = len(scene.lights)
         var scenes = self.count("scenes")
         if scenes == 0:
             return
@@ -1368,6 +1589,10 @@ struct _Loader(Movable):
             var root = self.document.integer(self.document.at(roots, slot))
             self.place(root, NO_PARENT, scene, assets)
         self.model.mesh_count = len(scene.meshes) - self.model.first_mesh
+        self.model.instanced_mesh_count = (
+            len(scene.instanced_meshes) - self.model.first_instanced_mesh
+        )
+        self.model.light_count = len(scene.lights) - self.model.first_light
         for slot in range(len(self.skinned_nodes)):
             var index = self.skinned_nodes[slot]
             var id = self.skinned_ids[slot]
@@ -1420,15 +1645,27 @@ struct _Loader(Movable):
             id = scene.attach(placed^, parent)
         self.model.nodes[index] = id
         var mesh = self.integer(node, "mesh", -1)
+        var instancing = self.extension(node, GPU_INSTANCING)
         if mesh >= 0:
-            if self.document.has(node, "skin"):
+            var skinned = self.document.has(node, "skin")
+            if skinned and instancing != NO_NODE:
+                raise Error(
+                    "glTF: a skinned node cannot be instanced: an instanced"
+                    " skinned mesh is not ported"
+                )
+            if skinned:
                 self.skinned_nodes.append(index)
                 self.skinned_ids.append(id)
+            elif instancing != NO_NODE:
+                self.draw_instanced(mesh, index, id, instancing, scene, assets)
             else:
                 self.draw(mesh, index, id, scene, assets)
         var camera = self.integer(node, "camera", -1)
         if camera >= 0:
             self.model.cameras.append(self.camera_of(camera, id))
+        var lamp = self.extension(node, LIGHTS_PUNCTUAL)
+        if lamp != NO_NODE:
+            self.add_light(self.required_integer(lamp, "light"), id, scene)
         var children = self.document.get(node, "children")
         if children != NO_NODE:
             if self.document.kind(children) != ARRAY:
@@ -1480,6 +1717,172 @@ struct _Loader(Movable):
                 drawn.set_morph_influence(target, weights[target])
             self.node_meshes[index].append(len(scene.meshes))
             scene.add_mesh(drawn)
+
+    def draw_instanced(
+        mut self,
+        mesh: Int,
+        index: Int,
+        node: NodeId,
+        instancing: Int,
+        mut scene: Scene,
+        mut assets: Assets,
+    ) raises:
+        """Add an `InstancedMesh` per primitive of a glTF mesh at a node
+        that `EXT_mesh_gpu_instancing` places many times, as three.js's
+        `GLTFMeshGpuInstancing` builds one.
+
+        Each instance is `TRANSLATION`, `ROTATION` and `SCALE` composed,
+        each the identity's part when the file names none. `_COLOR_0`
+        colors the instances, as three.js reads it into `instanceColor`.
+        Any other attribute is for a custom shader, which this renderer
+        has not got, and is only counted. With no attribute at all the
+        node draws plain meshes, as three.js draws them.
+        """
+        var attributes = self.document.get(instancing, "attributes")
+        if attributes == NO_NODE or self.document.kind(attributes) != OBJECT:
+            raise Error("glTF: " + GPU_INSTANCING + " needs attributes")
+        var count = -1
+        var moves = List[Float32]()
+        var turns = List[Float32]()
+        var sizes = List[Float32]()
+        var tints = List[Float32]()
+        for slot in range(self.document.length(attributes)):
+            var name = self.document.key(attributes, slot)
+            var values = self.accessor_floats(
+                self.document.integer(self.document.at(attributes, slot))
+            )
+            var elements = len(values[0]) // values[1]
+            if count >= 0 and elements != count:
+                raise Error(
+                    "glTF: every instancing attribute must hold as many"
+                    " elements"
+                )
+            count = elements
+            if name == "TRANSLATION":
+                moves = _instance_attribute(values, 3, name)
+            elif name == "ROTATION":
+                turns = _instance_attribute(values, 4, name)
+            elif name == "SCALE":
+                sizes = _instance_attribute(values, 3, name)
+            elif name == "_COLOR_0":
+                tints = _instance_attribute(values, 3, name)
+        if count < 0:
+            self.draw(mesh, index, node, scene, assets)
+            return
+        var placings = List[Matrix4]()
+        for at in range(count):
+            var placed = Object3D()
+            if len(moves) > 0:
+                placed.set_position(
+                    moves[at * 3], moves[at * 3 + 1], moves[at * 3 + 2]
+                )
+            if len(turns) > 0:
+                placed.set_quaternion(
+                    Quaternion(
+                        turns[at * 4],
+                        turns[at * 4 + 1],
+                        turns[at * 4 + 2],
+                        turns[at * 4 + 3],
+                    )
+                )
+            if len(sizes) > 0:
+                placed.set_scale(
+                    sizes[at * 3], sizes[at * 3 + 1], sizes[at * 3 + 2]
+                )
+            placings.append(placed.local_matrix())
+        # `place` asks only for a mesh the node named, zero or more.
+        if mesh >= len(self.model.first_primitives):
+            raise Error("glTF: a node names a mesh that is not there")
+        var primitives = self.document.get(
+            self.entry("meshes", mesh), "primitives"
+        )
+        for slot in range(self.model.primitive_counts[mesh]):
+            var primitive = self.document.at(primitives, slot)
+            var geometry = self.model.geometries[
+                self.model.first_primitives[mesh] + slot
+            ]
+            var tinted = assets.geometries.get(geometry).has_attribute(
+                String(COLOR)
+            )
+            var material = self.material_for(
+                self.integer(primitive, "material", -1), tinted, assets
+            )
+            var drawn = InstancedMesh(geometry, material, node, count)
+            for at in range(count):
+                drawn.set_matrix_at(at, placings[at])
+                if len(tints) > 0:
+                    drawn.set_color_at(
+                        at,
+                        FloatColor(
+                            tints[at * 3],
+                            tints[at * 3 + 1],
+                            tints[at * 3 + 2],
+                            1,
+                        ).encode(),
+                    )
+            scene.add_instanced_mesh(drawn^)
+
+    # --- lights -------------------------------------------------------------
+
+    def add_light(mut self, index: Int, node: NodeId, mut scene: Scene) raises:
+        """Add a `KHR_lights_punctual` light riding a scene node, as
+        three.js's `GLTFLightsExtension` builds it.
+
+        The color is linear, as glTF writes it, and the intensity one when
+        the file names none. A point or spot light's `range` is its
+        `distance`, and it falls off at the physical decay of two. A spot
+        light's cone is its `outerConeAngle`, and its penumbra is the part
+        of that cone outside `innerConeAngle`. A directional or spot light
+        shines down the node's -z axis: toward a target node one meter down
+        it, as three.js adds its `target` to the light.
+        """
+        var root = self.extension(self.document.root(), LIGHTS_PUNCTUAL)
+        if root == NO_NODE:
+            raise Error("glTF: a node names a light and the file has none")
+        var lights = self.array_of(root, "lights")
+        if index < 0 or index >= self.document.length(lights):
+            raise Error("glTF: a node names a light that is not there")
+        var entry = self.object_at(lights, index)
+        var color = Color(255, 255, 255)
+        var hue = self.numbers(entry, "color", 3)
+        if len(hue) == 3:
+            color = FloatColor(hue[0], hue[1], hue[2], 1).encode()
+        var intensity = self.number(entry, "intensity", 1)
+        var distance = self.number(entry, "range", 0)
+        if self.document.has(entry, "range") and distance <= 0:
+            raise Error("glTF: a light's range must be above zero")
+        var kind = self.text(entry, "type")
+        if kind == "point":
+            scene.add_light(
+                point_light(color, node, intensity, distance=distance)
+            )
+            return
+        if kind != "directional" and kind != "spot":
+            raise Error(
+                "glTF: a light's type must be directional, point or spot"
+            )
+        var aim = Object3D()
+        aim.set_position(0, 0, -1)
+        var target = scene.attach(aim^, node)
+        if kind == "directional":
+            scene.add_light(directional_light(color, node, intensity, target))
+            return
+        var cone = self.document.get(entry, "spot")
+        if cone == NO_NODE or self.document.kind(cone) != OBJECT:
+            raise Error("glTF: a spot light needs a spot object")
+        var inner = self.number(cone, "innerConeAngle", 0)
+        var outer = self.number(cone, "outerConeAngle", DEFAULT_OUTER_CONE)
+        scene.add_light(
+            spot_light(
+                color,
+                node,
+                intensity,
+                distance=distance,
+                angle=Angle(outer, RADIAN),
+                penumbra=1 - inner / outer,
+                target=target,
+            )
+        )
 
     # --- skins --------------------------------------------------------------
 
@@ -1756,6 +2159,59 @@ def _track(
             out_tangents=runs[2].copy(),
         )
     return KeyframeTrack(target, times, runs[0].copy(), how)
+
+
+def _instance_attribute(
+    values: Tuple[List[Float32], Int], width: Int, name: String
+) raises -> List[Float32]:
+    """Return an instancing attribute's numbers, which must come `width`
+    to an element."""
+    if values[1] != width:
+        raise Error(
+            "glTF: an instancing " + name + " must be a VEC" + String(width)
+        )
+    return values[0].copy()
+
+
+def _unit_color(factors: List[Float32], key: String) raises -> Color:
+    """Return three linear factors as the sRGB color a material holds,
+    refusing one outside zero to one, which a `Color` cannot hold."""
+    for lane in range(3):  # pragma: no branch
+        if factors[lane] < 0 or factors[lane] > 1:
+            raise Error("glTF: " + key + " must be from zero to one")
+    return FloatColor(factors[0], factors[1], factors[2], 1).encode()
+
+
+def _check_one_transform(assets: Assets, material: Material) raises:
+    """Refuse a material whose maps `KHR_texture_transform` moved apart.
+
+    A fragment here carries one pair of texture coordinates and samples
+    every map with it, where three.js carries a pair per map, so the
+    renderer refuses such a material. The loader refuses it first, where
+    the file can be named.
+    """
+    var named: List[TextureId] = [
+        material.map,
+        material.emissive_map,
+        material.roughness_map,
+        material.normal_map,
+    ]
+    var chosen = Matrix3()
+    var settled = False
+    # Four maps, always, so the loop never runs zero times.
+    for slot in range(len(named)):  # pragma: no branch
+        if named[slot] == NO_TEXTURE:
+            continue
+        var to_uv = assets.textures.get(named[slot]).uv_transform()
+        if not settled:
+            chosen = to_uv^
+            settled = True
+        elif to_uv != chosen:
+            raise Error(
+                "glTF: a material's maps must share one"
+                " KHR_texture_transform: a fragment samples them all at one"
+                " coordinate"
+            )
 
 
 def _normalize_skin_weights(weights: List[Float32]) -> List[Float32]:

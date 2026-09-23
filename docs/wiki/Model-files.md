@@ -278,7 +278,7 @@ The loader raises, and names the element and the row, for:
 
 ## glTF
 
-`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. It reads meshes, materials, textures, nodes, skins, morph targets, animations, cameras and sparse accessors. three.js: `GLTFLoader`.
+`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. It reads meshes, materials, textures, nodes, skins, morph targets, animations, cameras, sparse accessors and nine [extensions](#gltf-extensions). three.js: `GLTFLoader`.
 
 ```mojo
 var model = read_gltf("assets/gltf/box.glb", scene, assets)
@@ -309,6 +309,8 @@ The model says what went where, by the file's own indices.
 | `color_textures`, `data_textures` | One `TextureId` per glTF texture, as read for a color map and as read for a data map. `NO_TEXTURE` when no material read it that way. |
 | `first_mesh`, `mesh_count` | Where the meshes this file added begin in `scene.meshes`, and how many. |
 | `first_skinned_mesh`, `skinned_mesh_count` | Where the skinned meshes this file added begin in `scene.skinned_meshes`, and how many. |
+| `first_instanced_mesh`, `instanced_mesh_count` | Where the instanced meshes this file added begin in `scene.instanced_meshes`, and how many. |
+| `first_light`, `light_count` | Where the lights this file added begin in `scene.lights`, and how many. |
 | `cameras` | One `GltfCamera` per node that carries a camera and that the loaded scene reaches. |
 | `animations` | One `AnimationClip` per animation that drives something the loaded scene reaches, in file order. |
 
@@ -317,7 +319,7 @@ The model says what went where, by the file's own indices.
 | glTF | ThreeMojo |
 |---|---|
 | A primitive of triangles | A `BufferGeometry` with `position`, and `normal`, `uv` and `color` when present, indexed when it is. |
-| A material | A `standard_material`: base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale, emissive factor and texture, `doubleSided`. `BLEND` sets `transparent`. `MASK` sets `alpha_test` to `alphaCutoff`. |
+| A material | A `STANDARD` material, or a `BASIC` or `PHYSICAL` one when an [extension](#gltf-extensions) asks. It reads base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale, emissive factor and texture, `doubleSided`. `BLEND` sets `transparent`. `MASK` sets `alpha_test` to `alphaCutoff`. |
 | A texture | A `Texture` at its sampler's wrap and filters. A base color or emissive map is read as sRGB, a metallic-roughness or normal map as linear. One glTF texture read both ways is two textures. |
 | A node | An `Object3D` at its translation, rotation and scale, or at its matrix decomposed, with the node's `name`. Each primitive of its mesh is a `Mesh`. |
 | A node with a `skin` | Each primitive of its mesh is a `SkinnedMesh`. See [Skins, morph targets and animations](#skins-morph-targets-and-animations). |
@@ -372,15 +374,67 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 - A morph target of colors is refused. three.js reads it.
 - A rotation key must be of unit length. A track refuses one that is not.
 
+### glTF extensions
+
+The loader reads nine extensions. They are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `is_supported_extension(name)` tells if the loader reads an extension.
+
+| Extension | ThreeMojo |
+|---|---|
+| `KHR_materials_unlit` | A `BASIC` material: the base color, its texture, `doubleSided` and the alpha mode. The loader ignores the emissive, normal and metallic-roughness terms and every other material extension, as three.js does. |
+| `KHR_materials_emissive_strength` | `emissiveStrength` sets `emissive_intensity`. |
+| `KHR_materials_ior` | A `PHYSICAL` material. `ior` sets `ior`, or 1.5 when it is not there. |
+| `KHR_materials_specular` | A `PHYSICAL` material. `specularFactor` sets `specular_intensity`. `specularColorFactor` sets `specular_color`, converted from linear to sRGB. |
+| `KHR_materials_clearcoat` | A `PHYSICAL` material. `clearcoatFactor` and `clearcoatRoughnessFactor` set `clearcoat` and `clearcoat_roughness`. |
+| `KHR_texture_transform` | A copy of the texture with its `offset`, `rotation` and `repeat` set. See [Texture transforms](#texture-transforms). |
+| `KHR_lights_punctual` | A directional, point or spot `Light` on the node. See [Punctual lights](#punctual-lights). |
+| `KHR_mesh_quantization` | Nothing more. The loader reads every attribute at any component type, and a normalized one divides by its largest value. |
+| `EXT_mesh_gpu_instancing` | One `InstancedMesh` for each primitive of the node's mesh. See [Instancing](#instancing). |
+
+A file that lists another extension in `extensionsRequired` is refused, as three.js refuses it. A file that lists an extension only in `extensionsUsed` is read without that extension.
+
+#### Texture transforms
+
+The transform is applied first, then the flip of `v`. So the copy gets an `offset` of `(x, 1 - y)`, a `repeat` of `(x, -y)`, and the `rotation` as the file gives it. The glTF coordinates then go where three.js's matrix puts them. A transform that names only `texCoord` makes no copy.
+
+The transform's `texCoord` replaces the texture's own `texCoord`, as in three.js. It must be zero.
+
+#### Punctual lights
+
+| glTF | ThreeMojo |
+|---|---|
+| `directional` | `directional_light`. Its target is a new node one meter down the node's -z axis, as three.js adds its `target`. |
+| `point` | `point_light` with `distance` set to `range`, or zero for no cutoff. |
+| `spot` | `spot_light` with `angle` set to `outerConeAngle` and `penumbra` set to `1 - innerConeAngle / outerConeAngle`. Its target is as for a directional light. |
+
+The color is linear in the file and sRGB in the `Light`. The intensity is one when the file gives none. Point and spot lights use a decay of two, as three.js does.
+
+#### Instancing
+
+Each instance matrix is `TRANSLATION`, `ROTATION` and `SCALE` composed. An attribute that is not there is the identity's part. `_COLOR_0` colors the instances, as three.js reads it into `instanceColor`. The loader counts every other attribute but does not read it, because it is for a custom shader. A node with an empty `attributes` object draws plain meshes, as in three.js.
+
+#### Not ported
+
+- `KHR_materials_sheen`, `KHR_materials_transmission` and `KHR_materials_volume`. A material has no field for them.
+- `KHR_materials_iridescence`, `KHR_materials_anisotropy`, `KHR_materials_dispersion` and `KHR_materials_variants`.
+- `KHR_draco_mesh_compression`, `EXT_meshopt_compression`, `KHR_texture_basisu`, `EXT_texture_webp` and `EXT_texture_avif`.
+- The textures in `KHR_materials_specular` and `KHR_materials_clearcoat`. Only their factors are read.
+
+#### Differences from three.js
+
+- A `specularColorFactor` outside zero to one is refused. A `Color` cannot hold it. three.js keeps it.
+- An `ior` outside 1 to 2.333 is refused, because `Material` refuses it.
+- A material whose maps have different transforms is refused. A fragment samples every map at one coordinate here. three.js keeps a transform for each map.
+- A skinned node with `EXT_mesh_gpu_instancing` is refused. An instanced skinned mesh is not ported. three.js drops the skin.
+
 ### Not read
 
-No extension is read. A file whose `extensionsRequired` names one is refused. A file that only lists an extension under `extensionsUsed` is read without it. A primitive of points, lines or strips is refused. Only the first set of texture coordinates is read.
+A primitive of points, lines or strips is refused. Only the first set of texture coordinates is read.
 
 ### Errors
 
 The loader raises for:
 
-- A file it cannot read. A document that is not JSON or not glTF 2. A required extension.
+- A file it cannot read. A document that is not JSON or not glTF 2. A required extension that the loader does not read.
 - A buffer shorter than its length. A buffer view or accessor that runs past its buffer.
 - An unknown accessor type or component type. An attribute of the wrong width. Indices that are not unsigned integers.
 - An image that is not PNG, JPEG or TGA. A texture or material that names something the file does not have.
@@ -393,6 +447,10 @@ The loader raises for:
 - A camera of an unknown type, or without the values it needs. A camera that `PerspectiveCamera` or `OrthographicCamera` refuses.
 - An animation channel with an unknown path, or a sampler with an unknown interpolation. A sampler output that does not hold one value per key, or three for `CUBICSPLINE`.
 - A track or a clip that `KeyframeTrack` or `AnimationClip` refuses.
+- An `extensions` value, or an extension, that is not an object.
+- A texture transform on a second set of coordinates. Maps of one material with different transforms. A `specularColorFactor` outside zero to one.
+- A node that names a light the file does not have. A light of an unknown type, a `range` that is not above zero, or a spot light without `spot`. A light that `Light` refuses.
+- Instancing without an `attributes` object. Instancing attributes of different counts, or of the wrong width. A skinned node that is instanced.
 
 ## Fonts
 
