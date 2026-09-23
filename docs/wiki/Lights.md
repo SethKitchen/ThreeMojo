@@ -53,7 +53,7 @@ Parent the node to a moving object, and the light moves with it.
 
 ## Point
 
-The light at a surface is the intensity divided by the distance to the power of `decay`. Two is the inverse-square law. Zero is no falloff. With a `distance`, the light fades smoothly to nothing at that range.
+The light at a surface is the intensity divided by the distance to the power of `decay`. Two is the inverse-square law. Zero is no falloff, also at the bulb itself, as `pow(0, 0)` is one in three.js. With a `distance`, the light fades smoothly to nothing at that range.
 
 A surface facing away from the bulb gets nothing from it. A surface on top of the bulb gets nothing either, because there is no direction.
 

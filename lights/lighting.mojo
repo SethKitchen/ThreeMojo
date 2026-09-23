@@ -81,19 +81,22 @@ def falloff(distance: Float32, decay: Float32, cutoff: Float32) -> Float32:
 
     Written as `exp2(decay * log2(distance))` rather than a power function so
     the kernel and the host compute it the same way from two intrinsics both
-    already have.
+    already have. A `decay` of zero makes the power one, as `pow` gives for
+    every distance, zero included: the logarithm of zero is minus infinity,
+    and zero times it is not a number.
 
     Args:
-        distance: How far the surface is from the light; must be positive.
+        distance: How far the surface is from the light; zero or more.
         decay: The power of distance to divide by.
         cutoff: Where the light stops, or zero for never.
 
     Returns:
         The factor to multiply the light's radiance by.
     """
-    var attenuation = Float32(1) / max(
-        exp2(decay * log2(distance)), FALLOFF_FLOOR
-    )
+    var power = Float32(1)
+    if decay != 0:
+        power = exp2(decay * log2(distance))
+    var attenuation = Float32(1) / max(power, FALLOFF_FLOOR)
     if cutoff > 0:
         var ratio = distance / cutoff
         var quartic = ratio * ratio * ratio * ratio

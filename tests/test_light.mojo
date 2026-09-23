@@ -47,6 +47,7 @@ from lights.lighting import (
     Reflected,
     ambient_occlusion,
     blinn_phong,
+    falloff,
     dfg_approx,
     environment_brdf,
     f_schlick,
@@ -492,6 +493,17 @@ def test_a_point_light_carries_its_kind_and_its_falloff() raises:
     var plain = point_light(WHITE, NodeId(0))
     assert_equal(plain.decay, Float32(2))
     assert_equal(plain.distance, Float32(0))
+
+
+def test_falloff_matches_get_distance_attenuation_at_zero() raises:
+    # three.js's `pow(0.0, 0.0)` is one, so no decay leaves the light
+    # whole even on the bulb. A decay floors at 0.01, a hundredfold.
+    assert_equal(falloff(0, 0, 0), 1)
+    assert_equal(falloff(3, 0, 0), 1)
+    assert_equal(falloff(0, 2, 0), 100)
+    assert_equal(falloff(2, 2, 0), 0.25)
+    # The cutoff's window is one at the bulb.
+    assert_equal(falloff(0, 0, 5), 1)
 
 
 def test_a_point_light_rejects_negative_numbers() raises:
