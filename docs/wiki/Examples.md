@@ -84,6 +84,7 @@ mkdir -p out
 | `lymph.mojo` | `lymph.png` | [Lymph](Lymph) |
 | `nerves.mojo` | `nerves.png` | [Nerves](Nerves) |
 | `integument.mojo` | `integument.png` | [Integument](Integument) |
+| `water.mojo` | `water.png` | [Water](Water) |
 
 `photo.mojo` takes the image path first: `examples/photo.mojo assets/brick.png out/photo.png`.
 

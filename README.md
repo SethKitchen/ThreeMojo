@@ -372,6 +372,7 @@ Content that is not a three.js port lives under `extensions/`. Each item is test
 - [x] [Nerves](https://github.com/SethKitchen/ThreeMojo/wiki/Nerves): stature-scaled peripheral nerves of the leg
 - [x] [Integument](https://github.com/SethKitchen/ThreeMojo/wiki/Integument): stature-scaled skin envelope and hair of the leg
 - [x] [Leg](https://github.com/SethKitchen/ThreeMojo/wiki/Leg): a connected limb from the bones, the knee tissues and the later layers
+- [x] [Water](https://github.com/SethKitchen/ThreeMojo/wiki/Water): a Clearwater shallow-water still, with spectrum, ripples, caustics and glare
 
 ### Out of scope
 

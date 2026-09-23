@@ -579,7 +579,8 @@ animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/knee.png $(OUT_DIR)/muscles.png \
            $(OUT_DIR)/leg.png $(OUT_DIR)/legs.png \
            $(OUT_DIR)/vessels.png $(OUT_DIR)/lymph.png \
-           $(OUT_DIR)/nerves.png $(OUT_DIR)/integument.png
+           $(OUT_DIR)/nerves.png $(OUT_DIR)/integument.png \
+           $(OUT_DIR)/water.png
 
 # A chrome ball under a sky, reflecting a cube camera's view of two boxes.
 $(OUT_DIR)/mirror.png: $(LIB_SOURCES) examples/mirror.mojo
@@ -974,6 +975,11 @@ $(OUT_DIR)/nerves.png: $(LIB_SOURCES) examples/nerves.mojo
 $(OUT_DIR)/integument.png: $(LIB_SOURCES) examples/integument.mojo
 	@mkdir -p $(OUT_DIR)
 	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/integument.mojo $@); \
+	[ $$rc -eq 0 ] || exit 1
+
+$(OUT_DIR)/water.png: $(LIB_SOURCES) examples/water.mojo
+	@mkdir -p $(OUT_DIR)
+	@$(call run,$(MOJO) run $(MOJOFLAGS) examples/water.mojo $@); \
 	[ $$rc -eq 0 ] || exit 1
 
 # Deliberately leaves $(OUT_DIR) alone: the rendered images are there to be

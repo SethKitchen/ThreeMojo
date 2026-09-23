@@ -4,6 +4,8 @@
 
 The first subject is the humanoid. The first bones are the femur, tibia, fibula and patella. The knee adds articular cartilage, both menisci and both collateral ligaments. The leg adds named skeletal muscles with an athleticism scale. Later layers add vessels, lymph, nerves, skin and hair. `assemble_leg` connects one limb.
 
+The water subject ports Clearwater. See [Water](Water).
+
 See [Femur](Femur), [Tibia](Tibia), [Fibula](Fibula), [Patella](Patella), [Knee](Knee), [Muscles](Muscles), [Vessels](Vessels), [Lymph](Lymph), [Nerves](Nerves), [Integument](Integument) and [Leg](Leg).
 
 ## Layout
@@ -37,6 +39,11 @@ extensions/
         nerves/    peripheral nerves
         skin/      envelope
         hair/      thigh and calf shafts
+  water/
+    spectrum.mojo  ocean spectrum and dispersion
+    ripple.mojo    local wave equation
+    caustics.mojo  refracted-grid caustics
+    frame.mojo     one shaded picture
 ```
 
 Import from the module that defines the symbol. Do not put original content in `geometries/` or `objects/`. Those packages follow three.js.
