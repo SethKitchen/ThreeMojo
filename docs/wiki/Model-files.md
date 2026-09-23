@@ -1,10 +1,10 @@
 # Model files
 
-`loaders/obj.mojo`, `loaders/stl.mojo`, `loaders/ply.mojo` and `loaders/gltf.mojo`. `read_obj` reads a Wavefront OBJ file into named objects, each with a `BufferGeometry`. `parse_obj` reads the text of one. `read_stl` and `read_ply` read an STL or a PLY file into one `BufferGeometry`. `read_gltf` reads a glTF 2.0 file, `.gltf` or `.glb`, into a scene and its assets.
+`loaders/obj.mojo`, `loaders/mtl.mojo`, `loaders/stl.mojo`, `loaders/ply.mojo` and `loaders/gltf.mojo`. `read_obj` reads a Wavefront OBJ file into named objects, each with a `BufferGeometry`. `parse_obj` reads the text of one. `read_obj_with_materials` also reads the OBJ file's material libraries and gives each object a `MaterialId`. `read_stl` and `read_ply` read an STL or a PLY file into one `BufferGeometry`. `read_gltf` reads a glTF 2.0 file, `.gltf` or `.glb`, into a scene and its assets.
 
 ![A cube loaded from an OBJ file turns under a lamp](out/model.png)
 
-three.js: `OBJLoader`, `STLLoader` and `PLYLoader`.
+three.js: `OBJLoader`, `MTLLoader`, `STLLoader` and `PLYLoader`.
 
 ## Read a file
 
@@ -22,12 +22,12 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 
 ## ObjModel and ObjObject
 
-`ObjModel.objects` holds one `ObjObject` per object, in file order. `count()` says how many.
+`ObjModel.objects` holds one `ObjObject` per object, in file order. `count()` says how many. `ObjModel.material_libraries` holds the file name of each `mtllib` line, in file order.
 
 | Field | Meaning |
 |---|---|
 | `name` | From `o` or `g`. Empty when the file has neither. Faces read before the first `o` or `g` belong to it, as three.js has it. |
-| `material` | The name from `usemtl`. Empty before one. The material library is not read. |
+| `material` | The name from `usemtl`. Empty before one. See [Material libraries](#material-libraries). |
 | `geometry` | A non-indexed `BufferGeometry` with `position`, and with `normal` and `uv` when the faces name them. |
 
 `take_geometry()` swaps the geometry out for an empty one, so it can go into a store. A `BufferGeometry` moves and does not copy.
@@ -42,9 +42,10 @@ var shape = assets.geometries.add(model.objects[0].take_geometry())
 | `f a b c ...` | A face of three or more corners, cut into a fan of triangles. A polygon must be convex. Each corner is `v`, `v/vt`, `v//vn` or `v/vt/vn`. |
 | `o name`, `g name` | A new object. One with no faces is dropped. |
 | `usemtl name` | A new object under that material, with the same name. |
+| `mtllib name` | A material library. The rest of the line is one file name. |
 | `#` | A comment, to the end of the line. |
 
-An index counts from one. A negative index counts back from the last entry so far. `mtllib`, `s`, `l`, `p` and unknown lines are skipped.
+An index counts from one. A negative index counts back from the last entry so far. `s`, `l`, `p` and unknown lines are skipped.
 
 Every face of one object must agree about normals and texture coordinates. A geometry without normals shades flat. See [Renderer](Renderer).
 
@@ -57,12 +58,114 @@ The parser raises, naming the line, for:
 - A face of four or more corners that is not convex, or has no area. A fan covers a convex polygon and only that.
 - An index that is not a whole number, is zero, or names an entry the file does not have.
 - A face that names a normal or a texture coordinate where an earlier face of the object did not, or the other way round.
+- An `mtllib` line with no file name.
 
 `read_obj` raises for a file it cannot read.
 
 ## Example
 
 `assets/cube.obj` is a unit cube with normals and texture coordinates. `tests/test_obj.mojo` reads it and draws it.
+
+## Material libraries
+
+`loaders/mtl.mojo`. `read_mtl(path, assets)` reads a Wavefront `.mtl` file into an `MtlLibrary`. It adds one `PHONG` material for each `newmtl` to `assets.materials`, and each image it names to `assets.textures`. three.js: `MTLLoader` and `OBJLoader.setMaterials`.
+
+```mojo
+var assets = Assets()
+var read = read_obj_with_materials("assets/cube.obj", assets)
+var shape = assets.geometries.add(read.model.objects[0].take_geometry())
+scene.add_mesh(Mesh(shape, read.materials[0], node))
+```
+
+| Function | Meaning |
+|---|---|
+| `read_mtl(path, assets) -> MtlLibrary` | Read a file. Texture file names are relative to its directory. |
+| `parse_mtl(text, directory, assets) -> MtlLibrary` | Read the text of one. `directory` ends in `/`, or is empty. |
+| `set_materials(model, library, assets) -> List[MaterialId]` | One `MaterialId` for each object of an `ObjModel`, in its order. |
+| `read_obj_with_materials(path, assets) -> ObjWithMaterials` | Read an OBJ file and each library its `mtllib` lines name. |
+
+`ObjWithMaterials` has `model`, the `ObjModel`, `library`, the combined `MtlLibrary`, and `materials`, one `MaterialId` for each object. The loader reads each library relative to the OBJ file. A material in a later library replaces a material of the same name in an earlier one.
+
+### MtlLibrary
+
+| Member | Meaning |
+|---|---|
+| `names`, `materials` | The name and the `MaterialId` of each material, in the order the names first appear. |
+| `count()` | How many materials the library has. |
+| `find(name) -> Int` | The index of a name, or -1. |
+| `get(name) -> MaterialId` | The material of a name. It raises for a name the library does not have. |
+| `add(name, material)` | Add a material. It replaces a material of the same name. |
+| `merge(other)` | Add each material of another library. |
+| `create(name, assets) -> MaterialId` | The material of a name. For a name the library does not have, it adds a default `PHONG` material once and keeps it. This is three.js's `MaterialCreator.create`. |
+
+An OBJ object with no `usemtl`, or with a name that no library has, gets a default material. Each such name gets its own default, as in three.js.
+
+### What is read
+
+A keyword can be in any case. Each key keeps the last value that a material gives it. The loader applies the keys in the order they first appear, as three.js does.
+
+| Key | Meaning |
+|---|---|
+| `newmtl name` | A new material. A second `newmtl` of the same name replaces the first. |
+| `Kd r g b` | The color. Three numbers from zero to one, in sRGB. |
+| `Ks r g b` | The specular color. |
+| `Ke r g b` | The emissive color. |
+| `Ns n` | The shininess. It must not be negative. |
+| `d n` | The opacity, from zero to one. Below one, it sets `opacity` and `transparent`. |
+| `Tr n` | The transparency, from zero to one. Above zero, it sets `opacity` to `1 - n` and sets `transparent`. |
+| `illum n` | The illumination model, a whole number from 0 to 10. The loader checks it and ignores it, as three.js does. |
+| `map_Kd file` | The color map, in sRGB. |
+| `map_Ke file` | The emissive map, in sRGB. |
+| `map_d file` | The alpha map, as data. It also sets `transparent`. |
+| `map_bump file`, `bump file` | The bump map, as data. The first of the two is kept. |
+| `norm file` | The normal map, as data. |
+| `#` | A comment, to the end of the line. |
+
+The defaults are those of three.js's `MeshPhongMaterial`: a white color, a specular of `0x111111`, a shininess of 30, no emissive color, and opaque. Lines before the first `newmtl` are skipped. A key with no value is skipped. `Ka`, `map_Ka` and unknown keys are skipped, as three.js skips them.
+
+A material that has a normal map and a bump map keeps the normal map. three.js ignores the bump map in that case, and `Material` refuses both.
+
+### Texture options
+
+A texture line has options, then a file name. The file name can contain spaces.
+
+| Option | Meaning |
+|---|---|
+| `-s u v w` | The texture's `repeat`. `w` is ignored. When `v` is missing, it is one. |
+| `-o u v w` | The texture's `offset`. `w` is ignored. When `v` is missing, it is zero. |
+| `-bm n` | The material's `bump_scale`, on any texture line, as three.js reads it. |
+| `-mm base gain` | Read and ignored. It scales a displacement map, which is not ported. |
+| `-clamp on`, `-clamp off` | `CLAMP` or `REPEAT` wrap. three.js always repeats. |
+
+A texture repeats by default, as in three.js. The loader decodes PNG, JPEG and TGA images, and tells them apart by their first bytes. A color map is `SRGB`, and its alpha is coverage. An emissive map is `SRGB`, and its alpha is `IGNORED`. An alpha map, a bump map and a normal map are `LINEAR`, and their alpha is `IGNORED`. One image read the same way twice gives one texture.
+
+### Differences from three.js
+
+- `map_Ks`, the specular map, is skipped. `Material` has no specular map.
+- `disp`, the displacement map, is skipped. No material moves its vertices.
+- The options of `MTLLoader` are not ported: `side`, `wrap`, `normalizeRGB`, `ignoreZeroRGBs` and `invertTrProperty`.
+- An unknown texture option is refused. three.js reads it as part of the file name, and then cannot load the file.
+- A fragment samples all maps at one coordinate. Thus the renderer refuses a material whose maps have different `-s` or `-o` values. three.js lets each map have its own transform.
+- A color above one is refused. `Color` holds eight bits for each channel.
+
+### Errors
+
+The loader raises, and names the line, for:
+
+- A `newmtl` line with no name.
+- A color that is not three numbers from zero to one.
+- An `Ns` that is not a number, is not finite, or is negative.
+- A `d` or `Tr` outside zero to one.
+- An `illum` that is not a whole number from 0 to 10.
+- A texture option that is not known, or does not have its numbers. A `-clamp` without `on` or `off`.
+- A texture line with no file name.
+- An image that the loader cannot read or decode.
+
+`read_mtl` and `read_obj_with_materials` also raise for a file that they cannot read.
+
+### Example
+
+`assets/cube.mtl` is the `Brick` material that `assets/cube.obj` names, with the texture `assets/brick.png`. `assets/mtl/` holds an OBJ file with two libraries. `tests/test_mtl.mojo` reads them and draws the cube.
 
 ## STL
 

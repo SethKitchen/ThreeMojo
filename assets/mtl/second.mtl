@@ -1,0 +1,3 @@
+# The second library of assets/mtl/pair.obj: its Shared replaces the first's.
+newmtl Shared
+Kd 0 0 1

@@ -1,0 +1,9 @@
+# The material assets/cube.obj names by usemtl: a brick-colored Phong
+# surface with a texture. Read by tests/test_mtl.mojo.
+newmtl Brick
+Ka 0 0 0
+Kd 0.8 0.5 0.3
+Ks 0.2 0.2 0.2
+Ns 50
+illum 2
+map_Kd brick.png

@@ -25,7 +25,11 @@ What is read is what three.js's loader reads and this renderer can draw:
   object under that material, keeping the name, since one geometry has one
   material here where three.js's has groups. An object with no faces is
   left out, as three.js leaves it out.
-- `mtllib`, `s`, and anything else are skipped. Lines and points, `l` and
+- `mtllib name` names a material library, kept in `material_libraries`
+  as three.js keeps it in `materialLibraries`. The rest of the line is one
+  file name, as three.js reads it. `loaders.mtl` reads the library and
+  gives each object its material.
+- `s`, and anything else, are skipped. Lines and points, `l` and
   `p`, are skipped too: nothing here draws them yet.
 
 The geometries come out non-indexed, as three.js's do: a corner per face
@@ -56,8 +60,8 @@ struct ObjObject(Movable):
     # From `o` or `g`; empty for faces before either.
     var name: String
     # From `usemtl`; empty for faces before one. A name in the file's
-    # material library, which is not read: match it to a `Material` by
-    # hand.
+    # material library: `loaders.mtl.set_materials` matches it to a
+    # `MaterialId`.
     var material: String
     var geometry: BufferGeometry
 
@@ -94,13 +98,18 @@ struct ObjObject(Movable):
 
 
 struct ObjModel(Movable):
-    """Everything an OBJ file described: its objects, in file order."""
+    """Everything an OBJ file described: its objects, in file order, and
+    the material libraries it names."""
 
     var objects: List[ObjObject]
+    # From `mtllib`, in file order, as written: relative to the OBJ file's
+    # own directory.
+    var material_libraries: List[String]
 
     def __init__(out self):
         """Start an empty model."""
         self.objects = List[ObjObject]()
+        self.material_libraries = List[String]()
 
     def count(self) -> Int:
         """Return how many objects the model has."""
@@ -489,7 +498,8 @@ def parse_obj(text: String) raises -> ObjModel:
             corner with more than three parts, or an index that is not a
             whole number, is zero, or names nothing; or a face names a
             normal or a texture coordinate where an earlier face of the
-            same object did not, or the other way round.
+            same object did not, or the other way round; or an `mtllib`
+            line names no file.
     """
     var model = ObjModel()
     var vertices = List[Float32]()
@@ -546,6 +556,11 @@ def parse_obj(text: String) raises -> ObjModel:
             if part.corners > 0:
                 model.objects.append(part.finish())
             part = _Part(_rest(fields), material^)
+        elif keyword == "mtllib":
+            var library = _rest(fields)
+            if library == "":
+                raise Error(_where(line) + "mtllib names no file")
+            model.material_libraries.append(library^)
         elif keyword == "usemtl":
             # A new material starts a new object under the same name,
             # once the current one has faces to keep.

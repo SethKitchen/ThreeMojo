@@ -1,0 +1,16 @@
+# Three triangles under two libraries, one named by a material neither
+# has. Read by tests/test_mtl.mojo.
+mtllib first.mtl
+mtllib second.mtl
+v 0 0 0
+v 1 0 0
+v 0 1 0
+o Shared
+usemtl Shared
+f 1 2 3
+o Missing
+usemtl Nowhere
+f 1 2 3
+o Only
+usemtl OnlyFirst
+f 1 2 3

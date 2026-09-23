@@ -1,0 +1,5 @@
+# The first library of assets/mtl/pair.obj. Its texture is one directory up.
+newmtl Shared
+Kd 1 0 0
+newmtl OnlyFirst
+map_Kd ../brick.png

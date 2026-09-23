@@ -213,6 +213,16 @@ def test_comments_blank_lines_and_unknown_keywords_are_skipped() raises:
     assert_equal(model.objects[0].geometry.triangle_count(), 1)
 
 
+def test_material_libraries_are_kept_in_file_order() raises:
+    var model = parse_obj(String("mtllib first.mtl\nmtllib my  second.mtl\n"))
+    assert_equal(len(model.material_libraries), 2)
+    assert_equal(model.material_libraries[0], String("first.mtl"))
+    assert_equal(model.material_libraries[1], String("my second.mtl"))
+    assert_equal(len(read_obj("assets/cube.obj").material_libraries), 1)
+    with assert_raises(contains="OBJ line 2: mtllib names no file"):
+        _ = parse_obj(String("v 0 0 0\nmtllib\n"))
+
+
 def test_a_file_with_no_faces_has_no_objects() raises:
     assert_equal(parse_obj(String("v 0 0 0\nv 1 0 0\n")).count(), 0)
     assert_equal(parse_obj(String("")).count(), 0)
