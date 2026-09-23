@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 157 features are ported and 0 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 157 features are ported and 4 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -124,6 +124,8 @@ The port is not at parity with three.js yet. 157 features are ported and 0 are o
 
 ### Materials
 
+- [ ] Node materials: the rest of the node library and GLSL shader source [#162](https://github.com/SethKitchen/ThreeMojo/issues/162)
+- [ ] Per-map texture transforms and geometric roughness [#161](https://github.com/SethKitchen/ThreeMojo/issues/161)
 
 <details>
 <summary>Ported: 28</summary>
@@ -182,6 +184,7 @@ The port is not at parity with three.js yet. 157 features are ported and 0 are o
 
 ### Textures
 
+- [ ] KTX2: UASTC HDR, XUASTC and ETC1S video [#163](https://github.com/SethKitchen/ThreeMojo/issues/163)
 
 <details>
 <summary>Ported: 17</summary>
@@ -230,6 +233,7 @@ The port is not at parity with three.js yet. 157 features are ported and 0 are o
 
 ### Rendering
 
+- [ ] Match three.js where this port refuses or differs on purpose [#164](https://github.com/SethKitchen/ThreeMojo/issues/164)
 
 <details>
 <summary>Ported: 22</summary>
