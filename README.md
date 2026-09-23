@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 148 features are ported and 5 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 149 features are ported and 4 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -206,11 +206,10 @@ The port is not at parity with three.js yet. 148 features are ported and 5 are o
 
 ### Loaders and exporters
 
-- [ ] glTF: occlusion maps, and export of the newer material features [#154](https://github.com/SethKitchen/ThreeMojo/issues/154)
 - [ ] Scene JSON: the newer material and object fields [#155](https://github.com/SethKitchen/ThreeMojo/issues/155)
 
 <details>
-<summary>Ported: 9</summary>
+<summary>Ported: 10</summary>
 
 - [x] [GLTF loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf): `.gltf` and `.glb` into geometries, standard materials, textures and a node hierarchy, with a JSON reader of its own [#70](https://github.com/SethKitchen/ThreeMojo/issues/70)
 - [x] [OBJ loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files): positions, texture coordinates, normals and polygon faces, split by object and material [#71](https://github.com/SethKitchen/ThreeMojo/issues/71)
@@ -220,6 +219,7 @@ The port is not at parity with three.js yet. 148 features are ported and 5 are o
 - [x] [glTF skins, animations, morph targets, cameras and sparse accessors](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#skins-morph-targets-and-animations): joints, morph weights, cubic-spline clips, both camera kinds and sparse data [#134](https://github.com/SethKitchen/ThreeMojo/issues/134)
 - [x] [Scene JSON: ObjectLoader and toJSON](https://github.com/SethKitchen/ThreeMojo/wiki/Scene-JSON): three.js's JSON object format written and read: nodes, meshes, lights, cameras, materials and textures [#140](https://github.com/SethKitchen/ThreeMojo/issues/140)
 - [x] [glTF extensions](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf-extensions): unlit, emissive strength, IOR, specular, clearcoat, texture transform, punctual lights, quantization and GPU instancing [#135](https://github.com/SethKitchen/ThreeMojo/issues/135)
+- [x] [glTF occlusion and material export](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#occlusion): occlusion maps and the second UV set; export of texture transforms, emissive strength and physical material extensions. [#154](https://github.com/SethKitchen/ThreeMojo/issues/154)
 - [x] [FBX and Collada loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#collada): Collada and ASCII or binary FBX files read into meshes, materials, textures, nodes, cameras and lights [#138](https://github.com/SethKitchen/ThreeMojo/issues/138)
 
 </details>
