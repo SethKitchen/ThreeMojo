@@ -176,6 +176,12 @@ when it binds and encodes the result when it writes.
 the scene. A material is in the assets, so a clip with a material track
 needs `update(scene, assets, delta)`.
 
+A node that `Scene.remove` took out of the scene is not driven, nor is a
+mesh or a light on it or under it: its values stay as they were until it
+is added back. three.js goes on writing to an object it holds after the
+object leaves the scene; this port stops, because a removed node here is
+not a separate object that something else can show.
+
 ## Additive actions
 
 An action on a clip made additive, by
@@ -254,7 +260,7 @@ from animation.keyframe_track import (
     ZERO_SLOPE_ENDING,
 )
 from core.assets import Assets
-from core.object3d import NodeId
+from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from materials.material import MAX_IOR, MIN_IOR
 from math.quaternion import Quaternion
@@ -789,6 +795,19 @@ def read_target(
     return [number, 0, 0, 0]
 
 
+def _node_of(scene: Scene, target: TrackTarget) -> NodeId:
+    """Return the node a target's property rides: its own node, a mesh's
+    node, a light's node, or `NO_PARENT` for a material, which rides
+    none."""
+    if target.kind.is_node():
+        return NodeId(target.index)
+    if target.kind.is_morph():
+        return scene.meshes[target.index].node
+    if target.kind.is_light():
+        return scene.lights[target.index].node
+    return NO_PARENT
+
+
 def write_target(
     mut scene: Scene,
     mut assets: Assets,
@@ -799,7 +818,8 @@ def write_target(
     """Write one property from the numbers of a pile.
 
     The one place a property is set, so the pose the actions make and the
-    pose a released binding goes back to cannot drift apart.
+    pose a released binding goes back to cannot drift apart. Nothing is
+    written to a node out of the scene, or to a mesh or a light on one.
 
     Args:
         scene: The scene the nodes, meshes and lights are in.
@@ -816,6 +836,8 @@ def write_target(
             accepts for it.
     """
     var kind = target.kind
+    if not scene.in_scene(_node_of(scene, target)):
+        return
     if kind.is_node():
         ref placed = scene.node(NodeId(target.index))
         if kind == POSITION:

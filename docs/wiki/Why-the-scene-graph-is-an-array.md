@@ -10,9 +10,19 @@ three.js gives every `Object3D` a `children` array. In Mojo a struct cannot hold
 
 So the tree is stored the other way round. A node knows its parent. The scene owns the array.
 
-## Parents come first
+## Ids are stable and the order is kept apart
 
-`add` refuses a parent that is not already in the array. A parent therefore always precedes its children. That makes `update` one forward pass: by the time a node is reached, its parent's world matrix is final. There is no recursion and no visited set. A cycle is impossible by construction.
+A node's id is its place in the array. The id never changes, because every mesh, light, bone and animation track names its node by id.
+
+The order of the tree is kept beside the array. The scene lists every node in the order it became a child, which is the order of three.js's `children`. `update` walks the tree from the roots in that order. A parent is therefore always final before its children, whatever the ids. So a node can move under a node that was added after it.
+
+## A loop is found
+
+`add` and `attach` refuse a parent that is the node or under it. A reference from `scene.node(id)` can still set any parent. A node on a loop cannot be reached from a root. So `update` counts the nodes it reaches, and it raises when some are missing.
+
+## Removed nodes stay in the array
+
+three.js's `remove` gives an object no parent, and something else can still hold that object. Here the scene holds every node, so a removed node stays in the array with a mark. It keeps its id, so nothing that names it goes wrong. The renderer, the raycaster, the mixer and the exporters skip it. The cost is that the array only grows.
 
 ## Stale transforms are refused
 
@@ -25,7 +35,3 @@ three.js's `scene.add` takes a mesh or a light. Here `add_mesh` and `add_light` 
 ## Nodes are edited in place
 
 `scene.node(id)` returns a mutable reference and marks the scene stale. That is what `mesh.rotation.y += 0.01` needs in three.js terms: one persistent scene, one field changed, one `update`, one render.
-
-## The limit
-
-A node cannot move under a parent that was added after it. That is a valid acyclic operation which the ordering forbids. The fix, when something needs it, is a stable node id separate from the traversal order.

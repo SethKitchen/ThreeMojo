@@ -510,8 +510,14 @@ def test_every_node_is_kept_when_asked() raises:
     scene.update()
     assert_equal(model.node_count(), 6)
     assert_equal(model.mesh_count, 5)
+    # Nodes are written in `traverse` order, so node 5 is where that
+    # order puts it.
+    var order = built.scene.traverse()
+    var at = 0
+    while order[at] != NodeId(5):
+        at += 1
     assert_same_matrix(
-        scene.world_matrix(model.nodes[5]),
+        scene.world_matrix(model.nodes[at]),
         built.scene.world_matrix(NodeId(5)),
     )
 

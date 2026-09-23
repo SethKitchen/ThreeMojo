@@ -9,12 +9,31 @@ three.js walks a tree of objects to update world matrices. Here the nodes live
 in one array and each records its parent's index, because Mojo will not let a
 struct hold a `List` of itself — see `core.object3d`.
 
-The array is kept in an order where a parent always precedes its children.
-`add` enforces it by refusing a parent that does not already exist, which is
-not a restriction in practice: you cannot attach something to an object you
-have not created. The payoff is that updating every world matrix is a single
-forward pass, with each node's parent guaranteed to be finished before the
-node is reached. No recursion, no visited set, no cycles possible.
+**A node's id is its place in the array, and it never changes.** Every
+mesh, light, bone and animation track names its node by id, so an id that
+moved would move them all. Nothing is ever taken out of the array.
+
+**The order of the tree is kept beside the array.** A node can be moved
+under any other node, an older one or a newer one, as three.js's `add`
+and `attach` move it. `_sequence` lists every node in the order it became
+a child, which is the order three.js's `children` array keeps, and
+`update` walks the tree from the roots in that order: a parent first, then
+each child's subtree in turn, three.js's `traverse`. That walk is one
+forward pass with each parent finished before its children, as before,
+and it finds a loop that a reference from `node` has made: a node on a
+loop is never reached from a root.
+
+**A removed node stays in the array, out of the scene.** `remove`,
+`remove_from_parent` and `clear` take a node off its parent, as three.js
+does, and mark it removed. It keeps its id, its children and its world
+matrix, but it is not shown: the renderer does not draw what it carries,
+the raycaster does not hit it, the lights on it do not shine, the
+animation mixer does not move it, the exporters do not write it, and
+`traverse` and `find` do not reach it. Adding it back with `add` or
+`attach` undoes all of that. `clone` makes a removed copy, as three.js's
+`clone` makes one with no parent, for the caller to add. A scene that
+removes a node every frame grows by one node every frame. Build a new
+scene when that matters.
 
 **Stale transforms are refused, not served.** World matrices are cached by
 `update` and read back by `world_matrix`. Any edit invalidates them, and
@@ -22,14 +41,9 @@ reading one before recomputing raises rather than handing back a matrix from
 before the edit. The alternative — recompute automatically on read — hides
 how much work a render costs and recomputes the whole scene for one lookup.
 The alternative it replaces, serving the stale value, is worse than both: it
-produces a plausible wrong image and no error at all.
-
-**A known limitation.** Storing parents before children restricts reparenting.
-Moving an older node underneath a newer one is a perfectly valid acyclic
-operation and this rejects it, because the array order would no longer match
-the dependency order. Nothing needs it yet. When something does, the fix is to
-separate a stable node id from the position a node occupies in traversal
-order, rather than to relax the check.
+produces a plausible wrong image and no error at all. `attach` is the one
+exception: it needs world matrices at once, as three.js's does, and works
+them out from the parents rather than asking for an `update`.
 
 **Meshes and lights are scene content.** three.js's `scene.add` takes either,
 and a renderer is handed the scene and a camera and nothing else. For a while
@@ -58,7 +72,7 @@ first, because a mutable reference to a node is also a way past it.
 from core.background import Background, no_background
 from core.fog import Fog, no_fog
 from core.layers import Layers
-from core.object3d import NO_PARENT, NodeId, Object3D, facing
+from core.object3d import NO_PARENT, NodeId, Object3D, facing, scale_of
 from lights.light import Light
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
@@ -75,14 +89,43 @@ from objects.skinned_mesh import SkinnedMesh
 from objects.sprite import Sprite
 
 
+struct _Links(Movable):
+    """Every node's children, in order, and the roots, in order: the
+    `children` arrays three.js keeps, worked out from the parent links."""
+
+    # Node `k`'s children are `kids[first[k]]` up to `kids[first[k + 1]]`.
+    var first: List[Int]
+    var kids: List[Int]
+    # The nodes with no parent, removed ones included.
+    var roots: List[Int]
+
+    def __init__(
+        out self,
+        var first: List[Int],
+        var kids: List[Int],
+        var roots: List[Int],
+    ):
+        """Keep the three lists."""
+        self.first = first^
+        self.kids = kids^
+        self.roots = roots^
+
+
 struct Scene(Movable):
-    """A scene graph held as a parent-before-child array of nodes."""
+    """A scene graph held as a flat array of nodes, each naming its parent."""
 
     var _nodes: List[Object3D]
     var _world: List[Matrix4]
-    # Whether each node is shown: visible, and every ancestor visible.
-    # Derived by `update`, as the world matrices are.
+    # Whether each node is shown: visible, in the scene, and every ancestor
+    # visible. Derived by `update`, as the world matrices are.
     var _shown: List[Bool]
+    # True for a node `remove` took off its parent. Its children stay under
+    # it, and are out of the scene with it.
+    var _removed: List[Bool]
+    # Every node, in the order it became a child: three.js's `children`
+    # order, and the order of the roots. `add` of a node already here moves
+    # it to the end, as three.js's `add` pushes it.
+    var _sequence: List[Int]
     # What lights the scene. Public because it is read-only content rather
     # than a derived cache: a light is scene content in three.js too, where
     # `scene.add` takes one. Kept here rather than on the renderer so a scene
@@ -148,6 +191,8 @@ struct Scene(Movable):
         self._nodes = List[Object3D]()
         self._world = List[Matrix4]()
         self._shown = List[Bool]()
+        self._removed = List[Bool]()
+        self._sequence = List[Int]()
         self.lights = List[Light]()
         self.meshes = List[Mesh]()
         self.instanced_meshes = List[InstancedMesh]()
@@ -165,7 +210,11 @@ struct Scene(Movable):
         self._stale = False
 
     def count(self) -> Int:
-        """Return how many nodes the scene holds."""
+        """Return how many nodes the scene holds, removed ones included.
+
+        Every id below this names a node, so this is the bound for a loop
+        over ids. Ask `in_scene` which of them are in the scene.
+        """
         return len(self._nodes)
 
     def add_mesh(mut self, mesh: Mesh) raises:
@@ -382,18 +431,22 @@ struct Scene(Movable):
             node: The node to add; its `parent` must already be in the scene.
 
         Returns:
-            The new node's index, usable as a parent for later nodes.
+            The new node's index, usable as a parent for later nodes. It is
+            one more than the last, and never changes.
 
         Raises:
-            Error: If the parent index is not an existing earlier node.
+            Error: If the parent index names no node, or the node's
+                `object_type` is neither of the two there are.
         """
-        if node.parent != NO_PARENT:
-            if node.parent.value < 0 or node.parent.value >= len(self._nodes):
-                raise Error("A node's parent must already be in the scene")
+        self._check_parent(node.parent)
+        _check_type(node)
+        var id = len(self._nodes)
         self._nodes.append(node^)
         self._world.append(Matrix4())
+        self._removed.append(False)
+        self._sequence.append(id)
         self._stale = True
-        return NodeId(len(self._nodes) - 1)
+        return NodeId(id)
 
     def attach(mut self, var node: Object3D, parent: NodeId) raises -> NodeId:
         """Add `node` as a child of `parent` and return its index.
@@ -406,10 +459,169 @@ struct Scene(Movable):
             The new node's index.
 
         Raises:
-            Error: If `parent` is not an existing earlier node.
+            Error: If `parent` names no node, or the node's `object_type`
+                is neither of the two there are.
         """
         node.parent = parent
         return self.add(node^)
+
+    def add(mut self, child: NodeId, *, parent: NodeId = NO_PARENT) raises:
+        """Move a node that is already here under `parent`, three.js's
+        `parent.add(child)`.
+
+        The node keeps its own position, rotation and scale, which now
+        count from its new parent, so it moves in the world with the
+        change, as there. It becomes the parent's last child. A removed
+        node comes back into the scene, with everything under it.
+
+        Args:
+            child: The node to move.
+            parent: Its new parent, older or newer than it, or `NO_PARENT`
+                for the scene itself, three.js's `scene.add(child)`.
+
+        Raises:
+            Error: If either names no node, or `parent` is the child or
+                under it. three.js adds a node under its own descendant
+                and makes a loop that nothing can draw; this refuses.
+        """
+        self._check(child)
+        self._check_parent(parent)
+        if child.value in self._chain(parent):
+            raise Error("A node cannot go under itself or its own descendant")
+        self._nodes[child.value].parent = parent
+        self._removed[child.value] = False
+        for at in range(len(self._sequence)):  # pragma: no branch
+            if self._sequence[at] == child.value:
+                _ = self._sequence.pop(at)
+                break
+        self._sequence.append(child.value)
+        self._stale = True
+
+    def attach(mut self, child: NodeId, *, parent: NodeId = NO_PARENT) raises:
+        """Move a node under `parent` and keep where it is in the world,
+        three.js's `parent.attach(child)`.
+
+        The node's transform is premultiplied by the inverse of the new
+        parent's world transform and the old parent's world transform, as
+        there. Those are worked out from the parents at once, so the scene
+        need not be current. As in three.js, a node under a nonuniform
+        scale can come out sheared, and a shear is not kept: see
+        `Object3D.apply_matrix4`.
+
+        Args:
+            child: The node to move.
+            parent: Its new parent, or `NO_PARENT` for the scene itself,
+                three.js's `scene.attach(child)`.
+
+        Raises:
+            Error: If either names no node, `parent` is the child or under
+                it, a parent link names no node or loops, or the result
+                flattens an axis, which a flattened new parent does. The
+                scene is left as it was.
+        """
+        self._check(child)
+        self._check_parent(parent)
+        if child.value in self._chain(parent):
+            raise Error("A node cannot go under itself or its own descendant")
+        var carry = self._world_now(parent)
+        carry.invert()
+        carry.multiply(self._world_now(self._nodes[child.value].parent))
+        var moved = self._nodes[child.value]
+        moved.apply_matrix4(carry)
+        self._nodes[child.value] = moved^
+        self.add(child, parent=parent)
+
+    def detach(mut self, child: NodeId) raises:
+        """Move a node to the top of the scene and keep where it is in the
+        world: `attach` with no parent, three.js's `scene.attach(child)`.
+
+        Args:
+            child: The node to move.
+
+        Raises:
+            Error: For anything `attach` raises for.
+        """
+        self.attach(child, parent=NO_PARENT)
+
+    def remove(mut self, child: NodeId, *, parent: NodeId = NO_PARENT) raises:
+        """Take a node off `parent`, three.js's `parent.remove(child)`.
+
+        Nothing happens when the node is not one of the parent's children,
+        as there: `remove(node)` alone takes off a node at the top of the
+        scene and leaves a deeper one where it is. See the module
+        docstring for what a removed node is.
+
+        Args:
+            child: The node to take off.
+            parent: The parent it is on, or `NO_PARENT` for the scene
+                itself.
+
+        Raises:
+            Error: If either names no node.
+        """
+        self._check(child)
+        self._check_parent(parent)
+        if self._nodes[child.value].parent != parent:
+            return
+        if self._removed[child.value]:
+            return
+        self._take_out(child.value)
+
+    def remove_from_parent(mut self, child: NodeId) raises:
+        """Take a node off whatever parent it has, three.js's
+        `removeFromParent`.
+
+        Args:
+            child: The node to take off. Nothing happens when it is
+                removed already.
+
+        Raises:
+            Error: If it names no node.
+        """
+        self._check(child)
+        if not self._removed[child.value]:
+            self._take_out(child.value)
+
+    def clear(mut self, parent: NodeId = NO_PARENT) raises:
+        """Take off every child of `parent`, three.js's `clear`.
+
+        Args:
+            parent: The node to empty, or `NO_PARENT` to take every node
+                off the top of the scene, three.js's `scene.clear()`.
+
+        Raises:
+            Error: If it names no node.
+        """
+        for child in self.children(parent):
+            self._take_out(child.value)
+
+    def _take_out(mut self, child: Int):
+        """Take a node off its parent and out of the scene."""
+        self._nodes[child].parent = NO_PARENT
+        self._removed[child] = True
+        self._stale = True
+
+    def in_scene(self, index: NodeId) raises -> Bool:
+        """Return True if neither a node nor any node above it is removed.
+
+        Needs no `update`: it walks the parents as they are now.
+
+        Args:
+            index: The node, or `NO_PARENT` for the scene itself, which
+                is always in it.
+
+        Returns:
+            Whether the node is in the scene.
+
+        Raises:
+            Error: If it names no node, or a parent link names no node or
+                loops.
+        """
+        self._check_start(index)
+        for node in self._chain(index):
+            if self._removed[node]:
+                return False
+        return True
 
     def get(self, index: NodeId) raises -> Object3D:
         """Return a copy of the node at `index`.
@@ -426,32 +638,36 @@ struct Scene(Movable):
         Raises:
             Error: If the index is out of range.
         """
-        if index.value < 0 or index.value >= len(self._nodes):
-            raise Error("Scene node index out of range")
+        self._check(index)
         return Object3D(copy=self._nodes[index.value])
 
     def set(mut self, index: NodeId, var node: Object3D) raises:
-        """Replace the node at `index`, keeping its place in the order.
+        """Replace the node at `index`, keeping its id.
+
+        A new parent makes the node that parent's last child, as `add`
+        does. A removed node stays removed; `add` brings it back.
 
         Args:
             index: Which node to replace.
             node: Its replacement.
 
         Raises:
-            Error: If the index is out of range, or the replacement's parent
-                is not earlier in the array, which would break the ordering
-                the single-pass update depends on.
+            Error: If the index is out of range, the replacement's parent
+                names no node or is the node itself or under it, or its
+                `object_type` is neither of the two there are.
         """
-        if index.value < 0 or index.value >= len(self._nodes):
-            raise Error("Scene node index out of range")
-        # Both halves matter. `>= index` keeps the parent-before-child order
-        # the single-pass update depends on; `< 0` catches a parent that is
-        # neither NO_PARENT nor a real node, which `add` already refuses.
-        # Without it a parent of -2 reached `self._world[parent]` in `update`.
-        if node.parent != NO_PARENT:
-            if node.parent.value < 0 or node.parent.value >= index.value:
-                raise Error("A node's parent must be an earlier existing node")
+        self._check(index)
+        self._check_parent(node.parent)
+        _check_type(node)
+        var parent = node.parent
+        var moved = parent != self._nodes[index.value].parent
+        if index.value in self._chain(parent):
+            raise Error("A node cannot go under itself or its own descendant")
+        var removed = self._removed[index.value]
         self._nodes[index.value] = node^
+        if moved:
+            self.add(index, parent=parent)
+            self._removed[index.value] = removed
         self._stale = True
 
     def look_at(
@@ -523,32 +739,36 @@ struct Scene(Movable):
     def update(mut self) raises:
         """Recompute every node's world matrix.
 
-        One forward pass is enough: a parent always sits earlier in the array,
-        so its world matrix is already final by the time a child is reached.
+        One pass down the tree from the roots, in `traverse` order, with
+        removed nodes as roots of their own: a parent's world matrix is
+        final by the time any child is reached, whatever the ids.
 
         Validates first. Every other mutation checks the parent links as it
         goes, but a reference from `node` can set one to anything, and the
         pass below indexes by it.
 
         Raises:
-            Error: If a node's parent link no longer points at an earlier
-                node, or a node's local matrix cannot be built.
+            Error: If a node's parent link names no node or loops back to
+                it, a node's `object_type` is neither of the two there
+                are, or a node's local matrix cannot be built.
         """
-        self.validate()
+        self._check_nodes()
+        var order = self._order()
         self._shown = List[Bool](length=len(self._nodes), fill=True)
-        for index in range(len(self._nodes)):
+        for index in order:
             ref node = self._nodes[index]
             if node.matrix_auto_update:
                 node.matrix = node.local_matrix()
             var parent = node.parent
+            var shown = node.visible and not self._removed[index]
             if parent == NO_PARENT:
                 self._world[index] = Matrix4(copy=node.matrix)
-                self._shown[index] = node.visible
             else:
                 var combined = Matrix4(copy=self._world[parent.value])
                 combined.multiply(node.matrix)
                 self._world[index] = combined^
-                self._shown[index] = node.visible and self._shown[parent.value]
+                shown = shown and self._shown[parent.value]
+            self._shown[index] = shown
         self._stale = False
 
     def is_shown(self, index: NodeId) raises -> Bool:
@@ -619,65 +839,178 @@ struct Scene(Movable):
             return True
         return self.is_shown(light.node)
 
-    def find(self, name: String) -> Optional[NodeId]:
+    def find(
+        self, name: String, root: NodeId = NO_PARENT
+    ) raises -> Optional[NodeId]:
         """Return the first node with a name, three.js's `getObjectByName`.
 
         Args:
             name: The name.
+            root: Where to look: this node and everything under it, or
+                `NO_PARENT` for the whole scene.
 
         Returns:
-            The earliest node so named, or None.
+            The first node so named in `traverse` order, or None.
+
+        Raises:
+            Error: For anything `traverse` raises for.
         """
-        for index in range(len(self._nodes)):
-            if self._nodes[index].name == name:
-                return NodeId(index)
+        for node in self.traverse(root):
+            if self._nodes[node.value].name == name:
+                return node
+        return None
+
+    def objects_by_name(
+        self, name: String, root: NodeId = NO_PARENT
+    ) raises -> List[NodeId]:
+        """Return every node with a name, three.js's
+        `getObjectsByProperty('name', name)`.
+
+        three.js looks up any property by its name as a string. A Mojo
+        struct has no such lookup, so this is the one property there is a
+        call for. Filter `traverse` for any other.
+
+        Args:
+            name: The name.
+            root: Where to look: this node and everything under it, or
+                `NO_PARENT` for the whole scene.
+
+        Returns:
+            The nodes so named, in `traverse` order.
+
+        Raises:
+            Error: For anything `traverse` raises for.
+        """
+        var found = List[NodeId]()
+        for node in self.traverse(root):
+            if self._nodes[node.value].name == name:
+                found.append(node)
+        return found^
+
+    def object_by_id(
+        self, id: NodeId, root: NodeId = NO_PARENT
+    ) raises -> Optional[NodeId]:
+        """Return a node if it is `root` or under it, three.js's
+        `getObjectById`.
+
+        Args:
+            id: The node to look for.
+            root: Where to look: this node and everything under it, or
+                `NO_PARENT` for the whole scene.
+
+        Returns:
+            `id`, or None when it is not there: a removed node is not in
+            the scene.
+
+        Raises:
+            Error: For anything `traverse` raises for.
+        """
+        for node in self.traverse(root):
+            if node == id:
+                return node
         return None
 
     def children(self, index: NodeId) raises -> List[NodeId]:
         """Return a node's direct children, three.js's `children`.
 
         Args:
-            index: The parent.
+            index: The parent, or `NO_PARENT` for the nodes at the top of
+                the scene, removed ones left out.
 
         Returns:
-            The nodes whose parent it is, in the order they were added.
+            The nodes whose parent it is, in the order they became its
+            children.
 
         Raises:
-            Error: If the index is out of range.
+            Error: If the index names no node.
         """
-        _ = self.get(index)
+        self._check_start(index)
         var found = List[NodeId]()
-        for later in range(index.value + 1, len(self._nodes)):
-            if self._nodes[later].parent == index:
-                found.append(NodeId(later))
+        for node in self._sequence:
+            if self._nodes[node].parent != index:
+                continue
+            if index == NO_PARENT and self._removed[node]:
+                continue
+            found.append(NodeId(node))
+        return found^
+
+    def traverse(self, root: NodeId = NO_PARENT) raises -> List[NodeId]:
+        """Return a node and every node under it, three.js's `traverse`.
+
+        A node comes first, then each child's subtree in turn, in the
+        order `children` gives. three.js calls a function on each; here
+        the list is the answer, for a loop to call it.
+
+        Args:
+            root: Where to start, or `NO_PARENT` for every node in the
+                scene. A removed node can be a root: its subtree is walked
+                as three.js walks an object with no parent.
+
+        Returns:
+            The nodes, each before its descendants.
+
+        Raises:
+            Error: If `root` names no node, or a parent link names no node
+                or loops.
+        """
+        return self._walk(root, False)
+
+    def traverse_visible(self, root: NodeId = NO_PARENT) raises -> List[NodeId]:
+        """Return the visible nodes from a node down, three.js's
+        `traverseVisible`.
+
+        A node that is not `visible` is left out with everything under it,
+        the root included.
+
+        Args:
+            root: Where to start, or `NO_PARENT` for every node in the
+                scene.
+
+        Returns:
+            The nodes, each before its descendants.
+
+        Raises:
+            Error: For anything `traverse` raises for.
+        """
+        return self._walk(root, True)
+
+    def traverse_ancestors(self, index: NodeId) raises -> List[NodeId]:
+        """Return the nodes above a node, three.js's `traverseAncestors`.
+
+        three.js ends with the scene, which is an object there. Here the
+        scene is not a node, so the list ends with the node at the top.
+
+        Args:
+            index: The node.
+
+        Returns:
+            Its parent, then its parent's parent, and on up.
+
+        Raises:
+            Error: If it names no node, or a parent link names no node or
+                loops.
+        """
+        self._check(index)
+        var found = List[NodeId]()
+        for node in self._chain(self._nodes[index.value].parent):
+            found.append(NodeId(node))
         return found^
 
     def descendants(self, index: NodeId) raises -> List[NodeId]:
-        """Return a node and every node under it, three.js's `traverse`.
-
-        Each node comes after its parent. A parent always sits earlier in
-        the array, so one pass forward finds them all.
+        """Return a node and every node under it: `traverse` from a node.
 
         Args:
             index: Where to start.
 
         Returns:
-            The node, then its descendants, in array order.
+            The node, then its descendants, as `traverse` orders them.
 
         Raises:
-            Error: If the index is out of range.
+            Error: If the index names no node, or for anything `traverse`
+                raises for.
         """
-        _ = self.get(index)
-        var inside = List[Bool](length=len(self._nodes), fill=False)
-        inside[index.value] = True
-        var found = List[NodeId]()
-        found.append(index)
-        for later in range(index.value + 1, len(self._nodes)):
-            var parent = self._nodes[later].parent
-            if parent != NO_PARENT and inside[parent.value]:
-                inside[later] = True
-                found.append(NodeId(later))
-        return found^
+        self._check(index)
+        return self.traverse(index)
 
     def update_lods(mut self, eye: Vector3) raises:
         """Choose every LOD's level for a camera at `eye`, and remember the
@@ -702,24 +1035,170 @@ struct Scene(Movable):
             _ = self.lods[index].update(distance)
 
     def validate(self) raises:
-        """Check the invariants the single-pass update relies on.
+        """Check the invariants the update relies on.
 
         Nothing in normal use can break these — every mutation goes through a
         method that checks — so this is for tests and for the day something
-        reaches past the underscore on `_nodes`.
+        reaches past the underscore on `_nodes`, or a reference from `node`
+        sets a parent link.
 
         Raises:
-            Error: If the two arrays have drifted apart, or any node's parent
-                is not an earlier valid node.
+            Error: If the arrays have drifted apart, a node's `object_type`
+                is neither of the two there are, or a parent link names no
+                node or loops back to its node.
         """
-        if len(self._nodes) != len(self._world):
+        self._check_nodes()
+        _ = self._order()
+
+    def _check_nodes(self) raises:
+        """Refuse arrays that have drifted apart, or a node of no type."""
+        var count = len(self._nodes)
+        if (
+            len(self._world) != count
+            or len(self._removed) != count
+            or len(self._sequence) != count
+        ):
             raise Error("Scene node and world arrays have different lengths")
-        for index in range(len(self._nodes)):
+        for node in self._nodes:
+            _check_type(node)
+
+    def _check(self, index: NodeId) raises:
+        """Refuse an index that names no node."""
+        if index.value < 0 or index.value >= len(self._nodes):
+            raise Error("Scene node index out of range")
+
+    def _check_start(self, index: NodeId) raises:
+        """Refuse a node to start from that is neither a node nor
+        `NO_PARENT`, the scene itself."""
+        if index != NO_PARENT:
+            self._check(index)
+
+    def _check_parent(self, parent: NodeId) raises:
+        """Refuse a parent that is neither a node nor `NO_PARENT`."""
+        if parent != NO_PARENT:
+            if parent.value < 0 or parent.value >= len(self._nodes):
+                raise Error("A node's parent must already be in the scene")
+
+    def _chain(self, index: NodeId) raises -> List[Int]:
+        """Return a node and every node above it, nearest first, or nothing
+        for `NO_PARENT`.
+
+        Raises:
+            Error: If a link names no node, or the links loop: a chain
+                longer than the scene has nodes has come round again.
+        """
+        var chain = List[Int]()
+        var current = index
+        while current != NO_PARENT:
+            if current.value < 0 or current.value >= len(self._nodes):
+                raise Error("A node's parent must be a node in the scene")
+            if len(chain) == len(self._nodes):
+                raise Error("A node's parents must not loop back to it")
+            chain.append(current.value)
+            current = self._nodes[current.value].parent
+        return chain^
+
+    def _links(self) raises -> _Links:
+        """Return every node's children and the roots, in `_sequence`
+        order.
+
+        Raises:
+            Error: If a parent link names no node.
+        """
+        var count = len(self._nodes)
+        var first = List[Int](length=count + 1, fill=0)
+        for node in self._nodes:
+            self._check_parent(node.parent)
+            if node.parent != NO_PARENT:
+                first[node.parent.value + 1] += 1
+        for index in range(count):
+            first[index + 1] += first[index]
+        var fill = first.copy()
+        var kids = List[Int](length=first[count], fill=0)
+        var roots = List[Int]()
+        for index in self._sequence:
             var parent = self._nodes[index].parent
             if parent == NO_PARENT:
+                roots.append(index)
+            else:
+                kids[fill[parent.value]] = index
+                fill[parent.value] += 1
+        return _Links(first^, kids^, roots^)
+
+    def _walk(self, root: NodeId, visible_only: Bool) raises -> List[NodeId]:
+        """Walk the tree from `root`, or from every root in the scene, a
+        parent before its children and the children in order.
+
+        Raises:
+            Error: If `root` names no node, or a parent link names no node
+                or loops.
+        """
+        self._check_start(root)
+        var links = self._links()
+        var starts = List[Int]()
+        if root == NO_PARENT:
+            for node in links.roots:
+                if not self._removed[node]:
+                    starts.append(node)
+        else:
+            # A start on a loop is reached again from itself; `_chain`
+            # finds that before the walk goes round for ever.
+            _ = self._chain(root)
+            starts.append(root.value)
+        var found = List[NodeId]()
+        for node in self._preorder(links, starts, visible_only):
+            found.append(NodeId(node))
+        return found^
+
+    def _preorder(
+        self, links: _Links, starts: List[Int], visible_only: Bool
+    ) -> List[Int]:
+        """Return the nodes under `starts`, each start's subtree in turn,
+        a parent before its children. A node reached from a start on no
+        loop is on no loop, so this ends."""
+        var found = List[Int]()
+        var stack = List[Int]()
+        for at in range(len(starts) - 1, -1, -1):
+            stack.append(starts[at])
+        while len(stack) > 0:
+            var node = stack.pop()
+            if visible_only and not self._nodes[node].visible:
                 continue
-            if parent.value < 0 or parent.value >= index:
-                raise Error("A node's parent must be an earlier existing node")
+            found.append(node)
+            var first = links.first[node]
+            for at in range(links.first[node + 1] - 1, first - 1, -1):
+                stack.append(links.kids[at])
+        return found^
+
+    def _order(self) raises -> List[Int]:
+        """Return every node, removed ones too, each after its parent.
+
+        Raises:
+            Error: If a parent link names no node or loops back to its
+                node, which leaves the node unreached from any root.
+        """
+        var links = self._links()
+        var order = self._preorder(links, links.roots, False)
+        if len(order) != len(self._nodes):
+            raise Error("A node's parents must not loop back to it")
+        return order^
+
+    def _world_now(self, index: NodeId) raises -> Matrix4:
+        """Return a node's world transform from the parents as they are
+        now, or the identity for `NO_PARENT`: three.js's
+        `updateWorldMatrix(true, false)`.
+
+        Raises:
+            Error: If a parent link names no node or loops.
+        """
+        var world = Matrix4()
+        for index in self._chain(index):
+            ref node = self._nodes[index]
+            if node.matrix_auto_update:
+                world.premultiply(node.local_matrix())
+            else:
+                world.premultiply(node.matrix)
+        return world^
 
     def world_matrix(self, index: NodeId) raises -> Matrix4:
         """Return the world transform computed for `index` by `update`.
@@ -761,3 +1240,265 @@ struct Scene(Movable):
             Error: If the index is out of range, or the scene is stale.
         """
         return self.world_matrix(index).transform_point(Vector3(0, 0, 0))
+
+    def local_to_world(self, index: NodeId, point: Vector3) raises -> Vector3:
+        """Carry a point from a node's own frame into the world, three.js's
+        `localToWorld`.
+
+        Args:
+            index: The node.
+            point: The point, in the node's frame.
+
+        Returns:
+            The point, in the world.
+
+        Raises:
+            Error: If the index is out of range, or the scene is stale.
+                three.js updates the node's world matrix first; here the
+                caller calls `update`, as for `world_matrix`.
+        """
+        return self.world_matrix(index).transform_point(point)
+
+    def world_to_local(self, index: NodeId, point: Vector3) raises -> Vector3:
+        """Carry a point from the world into a node's own frame, three.js's
+        `worldToLocal`.
+
+        Args:
+            index: The node.
+            point: The point, in the world.
+
+        Returns:
+            The point, in the node's frame. A node whose world transform
+            flattens an axis has no inverse, and every point comes back as
+            the origin, as three.js's zero inverse gives.
+
+        Raises:
+            Error: If the index is out of range, or the scene is stale.
+        """
+        var undo = self.world_matrix(index)
+        undo.invert()
+        return undo.transform_point(point)
+
+    def world_quaternion(self, index: NodeId) raises -> Quaternion:
+        """Return a node's rotation in the world, three.js's
+        `getWorldQuaternion`.
+
+        Args:
+            index: The node.
+
+        Returns:
+            The rotation `Matrix4.decompose` reads from its world matrix.
+
+        Raises:
+            Error: If the index is out of range, the scene is stale, or the
+                world matrix flattens an axis, which leaves no rotation.
+                three.js returns numbers that are not numbers there.
+        """
+        var parts = Object3D()
+        parts.set_from_matrix(self.world_matrix(index))
+        return parts.quaternion
+
+    def world_scale(self, index: NodeId) raises -> Vector3:
+        """Return a node's scale in the world, three.js's `getWorldScale`.
+
+        Args:
+            index: The node.
+
+        Returns:
+            The lengths of the world matrix's axes, the x one negative when
+            it mirrors, as `Matrix4.decompose` reads them.
+
+        Raises:
+            Error: If the index is out of range, or the scene is stale.
+        """
+        return scale_of(self.world_matrix(index))
+
+    def world_direction(
+        self, index: NodeId, *, camera: Bool = False
+    ) raises -> Vector3:
+        """Return the way a node faces in the world, three.js's
+        `getWorldDirection`.
+
+        An object faces along its +z axis. A camera faces along -z, as
+        three.js's `Camera.getWorldDirection` negates it. A light is an
+        object here, as there: its direction is +z, although `look_at`
+        turns its -z to the target, as three.js's `lookAt` turns a light's.
+
+        Args:
+            index: The node.
+            camera: True for a camera's direction.
+
+        Returns:
+            The world z axis, unit length, negated for a camera. A zero
+            axis stays zero.
+
+        Raises:
+            Error: If the index is out of range, or the scene is stale.
+        """
+        var world = self.world_matrix(index)
+        var direction = Vector3(
+            world.elements[8], world.elements[9], world.elements[10]
+        )
+        direction.normalize()
+        if camera:
+            direction = -direction
+        return direction
+
+    def clone(
+        mut self, source: NodeId, recursive: Bool = True
+    ) raises -> NodeId:
+        """Copy a node, and what is under it, as new removed nodes,
+        three.js's `clone`.
+
+        Every copy is a new node with a new id. The copy of `source` has no
+        parent and is removed, as three.js's clone has no parent: add it
+        with `add` or `attach`. Its children are copies of the children of
+        `source`, in their order, and so on down. What each copied node
+        carries is copied onto its copy: meshes, instanced and batched
+        meshes, LODs, skinned meshes, lines, points, sprites, wide lines
+        and lights. A light whose target is copied aims at the copy, and
+        one whose target is not keeps it. A skinned mesh keeps its
+        skeleton, as three.js's clone shares it.
+
+        Args:
+            source: The node to copy.
+            recursive: False to copy the node alone, without its children.
+
+        Returns:
+            The copy of `source`.
+
+        Raises:
+            Error: If the index is out of range, or for anything `traverse`
+                raises for.
+        """
+        self._check(source)
+        var nodes = List[NodeId]()
+        if recursive:
+            nodes = self.traverse(source)
+        else:
+            nodes.append(source)
+        var copies = List[Int](length=len(self._nodes), fill=-1)
+        # `nodes` holds `source` at least, so this runs.
+        for old in nodes:  # pragma: no branch
+            var node = Object3D(copy=self._nodes[old.value])
+            if old == source:
+                node.parent = NO_PARENT
+            else:
+                node.parent = NodeId(copies[node.parent.value])
+            copies[old.value] = self.add(node^).value
+        self._removed[copies[source.value]] = True
+        self._carry(copies)
+        return NodeId(copies[source.value])
+
+    def copy(
+        mut self, target: NodeId, source: NodeId, recursive: Bool = True
+    ) raises:
+        """Make one node like another, three.js's `target.copy(source)`.
+
+        The target takes the source's name, transform, layers, visibility,
+        render order, matrix settings and user data. It keeps its own
+        parent, its place, its `object_type`, as three.js keeps an object's
+        class, and what it carries. With `recursive`, a `clone` of each of
+        the source's children is added under it, after its own children.
+
+        Args:
+            target: The node to change.
+            source: The node to copy.
+            recursive: False to copy the node alone.
+
+        Raises:
+            Error: If either index is out of range, or for anything
+                `clone` raises for.
+        """
+        self._check(target)
+        self._check(source)
+        var kids = List[NodeId]()
+        if recursive:
+            kids = self.children(source)
+        var node = Object3D(copy=self._nodes[source.value])
+        node.parent = self._nodes[target.value].parent
+        node.object_type = self._nodes[target.value].object_type
+        self._nodes[target.value] = node^
+        self._stale = True
+        for child in kids:
+            self.add(self.clone(child), parent=target)
+
+    def _carry(mut self, copies: List[Int]):
+        """Copy what the copied nodes carry onto their copies."""
+        for index in range(len(self.meshes)):
+            var copy = _copy_of(copies, self.meshes[index].node)
+            if copy >= 0:
+                var mesh = self.meshes[index]
+                mesh.node = NodeId(copy)
+                self.meshes.append(mesh)
+        for index in range(len(self.instanced_meshes)):
+            var copy = _copy_of(copies, self.instanced_meshes[index].node)
+            if copy >= 0:
+                var mesh = self.instanced_meshes[index].copy()
+                mesh.node = NodeId(copy)
+                self.instanced_meshes.append(mesh^)
+        for index in range(len(self.batched_meshes)):
+            var copy = _copy_of(copies, self.batched_meshes[index].node)
+            if copy >= 0:
+                var mesh = self.batched_meshes[index].copy()
+                mesh.node = NodeId(copy)
+                self.batched_meshes.append(mesh^)
+        for index in range(len(self.lods)):
+            var copy = _copy_of(copies, self.lods[index].node)
+            if copy >= 0:
+                var lod = self.lods[index].copy()
+                lod.node = NodeId(copy)
+                self.lods.append(lod^)
+        for index in range(len(self.skinned_meshes)):
+            var copy = _copy_of(copies, self.skinned_meshes[index].node)
+            if copy >= 0:
+                var mesh = self.skinned_meshes[index].copy()
+                mesh.node = NodeId(copy)
+                self.skinned_meshes.append(mesh^)
+        for index in range(len(self.lines)):
+            var copy = _copy_of(copies, self.lines[index].node)
+            if copy >= 0:
+                var line = self.lines[index]
+                line.node = NodeId(copy)
+                self.lines.append(line)
+        for index in range(len(self.points)):
+            var copy = _copy_of(copies, self.points[index].node)
+            if copy >= 0:
+                var cloud = self.points[index]
+                cloud.node = NodeId(copy)
+                self.points.append(cloud)
+        for index in range(len(self.sprites)):
+            var copy = _copy_of(copies, self.sprites[index].node)
+            if copy >= 0:
+                var sprite = self.sprites[index]
+                sprite.node = NodeId(copy)
+                self.sprites.append(sprite)
+        for index in range(len(self.wide_lines)):
+            var copy = _copy_of(copies, self.wide_lines[index].node)
+            if copy >= 0:
+                var line = self.wide_lines[index]
+                line.node = NodeId(copy)
+                self.wide_lines.append(line)
+        for index in range(len(self.lights)):
+            var copy = _copy_of(copies, self.lights[index].node)
+            if copy >= 0:
+                var light = self.lights[index]
+                light.node = NodeId(copy)
+                var target = _copy_of(copies, light.target)
+                if target >= 0:
+                    light.target = NodeId(target)
+                self.lights.append(light)
+
+
+def _copy_of(copies: List[Int], node: NodeId) -> Int:
+    """Return the copy `clone` made of a node, or -1 for none, for a node
+    it did not copy and for `NO_PARENT`."""
+    if node.value < 0 or node.value >= len(copies):
+        return -1
+    return copies[node.value]
+
+
+def _check_type(node: Object3D) raises:
+    """Refuse a node whose `object_type` is neither of the two there are."""
+    if not node.object_type.is_valid():
+        raise Error("A node must be an Object3D or a Group")

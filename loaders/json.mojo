@@ -29,6 +29,53 @@ bits. `integer` refuses a number with a fraction.
 
 from std.math import isfinite
 
+comptime _HEX = "0123456789abcdef"
+
+
+def quote_json(text: String) -> String:
+    """Return a string as a JSON string: in quotes, with its escapes.
+
+    Args:
+        text: The string.
+
+    Returns:
+        The quoted text.
+    """
+    var out = List[UInt8]()
+    out.append(34)
+    for byte in text.as_bytes():
+        var value = Int(byte)
+        if value == 34 or value == 92:
+            out.append(92)
+            out.append(byte)
+        elif value == 8:
+            _append_escape(out, 98)
+        elif value == 12:
+            _append_escape(out, 102)
+        elif value == 10:
+            _append_escape(out, 110)
+        elif value == 13:
+            _append_escape(out, 114)
+        elif value == 9:
+            _append_escape(out, 116)
+        elif value < 32:
+            _append_escape(out, 117)
+            out.append(48)
+            out.append(48)
+            out.append(_HEX.as_bytes()[value >> 4])
+            out.append(_HEX.as_bytes()[value & 15])
+        else:
+            out.append(byte)
+    out.append(34)
+    return String(unsafe_from_utf8=out)
+
+
+def _append_escape(mut out: List[UInt8], letter: Int):
+    """Append a backslash and the letter after it."""
+    out.append(92)
+    out.append(UInt8(letter))
+
+
 # What a node holds.
 
 

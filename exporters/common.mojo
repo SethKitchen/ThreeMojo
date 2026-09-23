@@ -195,7 +195,7 @@ struct WorldMesh(Copyable, Movable):
 
 def world_meshes(scene: Scene, assets: Assets) raises -> List[WorldMesh]:
     """Return every mesh of a scene in world space, in `scene.meshes`
-    order.
+    order. A mesh on a removed node is left out: it is not in the scene.
 
     Args:
         scene: The scene. It must be current.
@@ -212,6 +212,8 @@ def world_meshes(scene: Scene, assets: Assets) raises -> List[WorldMesh]:
     """
     var found = List[WorldMesh]()
     for mesh in scene.meshes:
+        if not scene.in_scene(mesh.node):
+            continue
         ref geometry = assets.geometries.get(mesh.geometry)
         var count = check_geometry(geometry)
         var matrix = scene.world_matrix(mesh.node)

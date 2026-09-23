@@ -19,8 +19,9 @@ became and which cameras it held.
 **What maps to what.** Every object becomes one scene node at its
 `matrix`, decomposed as three.js decomposes it, or at its `position`,
 `quaternion` or `rotation`, and `scale`; with its `name`, `visible`,
-`layers` and `renderOrder`. A `matrixAutoUpdate` of false keeps the
-matrix as it is. Then the object's type says what the node carries:
+`layers`, `renderOrder` and `userData`. A `matrixAutoUpdate` of false
+keeps the matrix as it is. A `Group` becomes a node of `GROUP_TYPE`. Then
+the object's type says what the node carries:
 
     Object3D, Group, Bone      nothing
     Mesh                       a `Mesh`
@@ -113,7 +114,7 @@ not a bare mesh child, a skeleton with fewer `boneInverses` than bones, a batch
 whose info names what is not there, and every number the builders
 refuse.
 
-**What is read without effect.** `up`, `userData`, `matrixWorldAutoUpdate`
+**What is read without effect.** `up`, `matrixWorldAutoUpdate`
 and `animations`; the background's blurriness and intensity, and the
 rotations of the background and the environment; a cube texture's wrap; an
 `envMap` on a class whose shader reads none; the material keys this port
@@ -139,8 +140,9 @@ from core.background import (
 from core.fog import exp2_fog, linear_fog
 from core.geometry_store import GeometryId
 from core.layers import Layers
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.user_data import user_data_of
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from geometries.box import box
@@ -1807,6 +1809,11 @@ struct _Loader(Movable):
         if mask < 0 or mask > 0xFFFFFFFF:
             raise Error("Object JSON: layers must be a 32-bit mask")
         node.layers = Layers(UInt32(mask))
+        var data = self.document.get(item, "userData")
+        if data != NO_NODE:
+            node.user_data = user_data_of(self.document, data)
+        if kind == "Group":
+            node.object_type = GROUP_TYPE
         self.transform(item, node)
         node.parent = parent
         var id = scene.add(node^)

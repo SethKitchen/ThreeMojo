@@ -13,8 +13,10 @@ the images stay `data:` URIs, as three.js keeps them. `GLB` writes one
 binary container, the JSON chunk and then the binary chunk, with the
 images in the binary chunk, as three.js's `binary: true` does.
 
-**What maps to what.** Each node becomes a glTF node with its name, its
-translation, rotation and scale, and its children. A node whose
+**What maps to what.** Each node in the scene becomes a glTF node with its
+name, its translation, rotation and scale, its `userData` as `extras`, as
+three.js's `serializeUserData` writes it, and its children. A removed node
+is not written, nor is anything under it. A node whose
 `matrix_auto_update` is off is written with its `matrix` instead, since
 the matrix is what it draws with. The meshes on one node become one glTF
 mesh with a primitive each, which `read_gltf` reads back as one `Mesh`
@@ -1385,6 +1387,9 @@ def _node_json(node: Object3D, mesh: Int, children: List[Int]) raises -> String:
             elements.append(node.matrix.elements[index])
         writer.key("matrix")
         _write_numbers(writer, elements)
+    if node.user_data.count() > 0:
+        writer.key("extras")
+        writer.raw(node.user_data.to_json())
     if mesh >= 0:
         writer.key("mesh")
         writer.integer(mesh)
@@ -1428,8 +1433,8 @@ def export_gltf(
 ) raises -> GltfFiles:
     """Return a scene and the assets it draws with as a glTF 2.0 file.
 
-    Nodes are written in the scene's order, a parent before its children,
-    so node `k` of the file is the `k`th node written.
+    Nodes are written in `Scene.traverse` order, a parent before its
+    children, so node `k` of the file is the `k`th node written.
 
     Args:
         scene: The scene. It need not be current: nodes are written by
@@ -1464,8 +1469,9 @@ def export_gltf(
     var roots = List[Int]()
     var children = List[List[Int]]()
     var drawn = List[List[Int]]()
-    for index in range(count):
-        var node = scene.get(NodeId(index))
+    for id in scene.traverse():
+        var index = id.value
+        var node = scene.get(id)
         var parent = node.parent
         var shown = (not only_visible or node.visible) and (
             parent == NO_PARENT or written[parent.value] >= 0

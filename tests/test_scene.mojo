@@ -314,16 +314,20 @@ def test_attaching_to_a_negative_index_is_rejected() raises:
         _ = scene.attach(Object3D(), NodeId(-5))
 
 
-def test_a_parent_must_come_before_its_child() raises:
-    # This ordering is what makes one forward pass correct, so breaking it
-    # has to be refused rather than silently producing a stale matrix.
+def test_a_node_cannot_be_set_under_its_own_descendant() raises:
+    # A later parent is fine now; a loop is not, since no pass can finish
+    # a node that is its own ancestor.
     var scene = Scene()
     var a = scene.add(Object3D())
-    var b = scene.add(Object3D())
+    var b = scene.attach(Object3D(), a)
     var cyclic = scene.get(a)
     cyclic.parent = b
-    with assert_raises():
+    with assert_raises(contains="descendant"):
         scene.set(a, cyclic^)
+    var own = scene.get(a)
+    own.parent = a
+    with assert_raises(contains="descendant"):
+        scene.set(a, own^)
 
 
 def test_replacing_a_node_with_a_negative_parent_is_rejected() raises:
@@ -460,15 +464,17 @@ def test_a_well_formed_scene_validates() raises:
     scene.validate()
 
 
-def test_validate_catches_a_parent_that_is_not_earlier() raises:
+def test_validate_catches_a_loop() raises:
     # Reaching past the underscore is exactly what `validate` is for: Mojo
-    # does not enforce private fields, so the convention can be broken and
-    # the single-pass update would then read a matrix that is not ready.
+    # does not enforce private fields, so a loop can be made, and no pass
+    # can finish a node that is its own ancestor.
     var scene = Scene()
     _ = scene.add(Object3D())
     _ = scene.add(Object3D())
     scene._nodes[0].parent = NodeId(1)
-    with assert_raises():
+    scene.validate()
+    scene._nodes[1].parent = NodeId(0)
+    with assert_raises(contains="loop"):
         scene.validate()
 
 
@@ -901,7 +907,12 @@ def test_update_refuses_a_parent_link_broken_through_a_reference() raises:
     var first = scene.add(Object3D())
     var second = scene.add(Object3D())
     scene.node(first).parent = second
-    with assert_raises():
+    scene.update()
+    scene.node(second).parent = first
+    with assert_raises(contains="loop"):
+        scene.update()
+    scene.node(second).parent = NodeId(7)
+    with assert_raises(contains="parent"):
         scene.update()
 
 

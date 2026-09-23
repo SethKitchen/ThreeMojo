@@ -14,9 +14,11 @@ root nodes. three.js makes a random uuid for each thing; this writes one
 from the thing's kind and its position, so the same scene gives the same
 text every time.
 
-**Nodes.** Every node becomes an object with its name, its `visible`, its
-`layers`, its `renderOrder` and its local `matrix`, as three.js writes an
-`Object3D`. A node that carries one thing becomes that thing: a `Mesh`,
+**Nodes.** Every node in the scene becomes an object with its name, its
+`visible`, its `layers`, its `renderOrder`, its `userData` and its local
+`matrix`, as three.js writes an `Object3D`, or a `Group` for a node of
+`GROUP_TYPE`. A removed node is not written, nor is anything under it or
+on it. A node that carries one thing becomes that thing: a `Mesh`,
 an `InstancedMesh`, a `BatchedMesh`, a `SkinnedMesh`, a `Line`, a
 `LineLoop` or a `LineSegments`, a `Points`, a `Sprite`, an `LOD`, a light
 of its kind or a camera. A node that carries more than one, or a light or
@@ -103,7 +105,7 @@ from core.buffer_geometry import MAX_MORPH_TARGETS, BufferGeometry
 from core.fog import EXP2_FOG, LINEAR_FOG
 from core.geometry_store import GeometryId
 from core.layers import Layers
-from core.object3d import NO_PARENT, NodeId, Object3D
+from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from exporters.gltf import encode_base64
 from exporters.json_writer import JsonWriter
@@ -327,20 +329,28 @@ struct _Header(Copyable, Movable):
     var visible: Bool
     var frustum_culled: Bool
     var render_order: Int
+    # The node's `userData` as JSON text, or empty for none.
+    var user_data: String
     var layers: Layers
     var matrix: Matrix4
     var auto: Bool
 
     def __init__(out self, uuid: String, node: Object3D) raises:
-        """Start from a node: its name, visibility, layers and matrix."""
+        """Start from a node: its type, name, visibility, user data,
+        layers and matrix. Refuse a node of neither type."""
+        if not node.object_type.is_valid():
+            raise Error("Object JSON: a node must be an Object3D or a Group")
         self.uuid = uuid
-        self.type = "Object3D"
+        self.type = "Group" if node.object_type == GROUP_TYPE else "Object3D"
         self.name = node.name
         self.cast_shadow = False
         self.receive_shadow = False
         self.visible = node.visible
         self.frustum_culled = True
         self.render_order = node.render_order
+        self.user_data = String()
+        if node.user_data.count() > 0:
+            self.user_data = node.user_data.to_json()
         self.layers = node.layers
         self.auto = node.matrix_auto_update
         self.matrix = node.local_matrix() if self.auto else node.matrix
@@ -355,6 +365,7 @@ struct _Header(Copyable, Movable):
         self.visible = True
         self.frustum_culled = True
         self.render_order = 0
+        self.user_data = String()
         self.layers = layers
         self.matrix = Matrix4()
         self.auto = True
@@ -383,6 +394,9 @@ struct _Header(Copyable, Movable):
         if self.render_order != 0:
             writer.key("renderOrder")
             writer.integer(self.render_order)
+        if self.user_data != "":
+            writer.key("userData")
+            writer.raw(self.user_data)
         writer.key("layers")
         writer.integer(Int(self.layers.mask))
         writer.key("matrix")
@@ -2205,9 +2219,8 @@ def object_to_json(
         tree.end_object()
     tree.key("children")
     tree.begin_array()
-    for index in range(scene.count()):
-        if scene.get(NodeId(index)).parent == NO_PARENT:
-            out.node(tree, scene, index, carried, cameras, assets)
+    for root in scene.children(NO_PARENT):
+        out.node(tree, scene, root.value, carried, cameras, assets)
     for which in carried.loose:
         out.part(
             tree,

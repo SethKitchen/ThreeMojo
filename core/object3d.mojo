@@ -9,13 +9,13 @@ three.js gives every object a `children` array and a `parent` pointer, so the
 graph is a tree of objects holding each other. Mojo cannot express that: a
 struct may not contain a `List` of itself, which the compiler rejects with
 "field 'children' has non-'Deinitable' type". So the tree is stored the other
-way round — each node records only its parent's index, and `core.scene` owns
-the flat array they all live in.
+way round -- each node records only its parent's index, and `core.scene` owns
+the flat array they all live in, and the order of each node's children.
 
-That is a real deviation from three.js, and on balance a good one. Traversal
-becomes a single forward pass instead of recursion, the nodes sit contiguously
-in memory, and the invariant that a parent is always added before its children
-is checkable rather than assumed.
+That is a real deviation from three.js, and on balance a good one. The nodes
+sit contiguously in memory, a node's id is its place in the array and never
+changes, and the graph can be checked for a loop, which three.js cannot do
+for a child added under its own descendant.
 
 A node's local transform composes as translation * rotation * scale, matching
 three.js: a point is scaled first, then rotated, then moved.
@@ -30,14 +30,28 @@ general. From `XYZ` angles of (0, 0, 90) a turn of 90 about the local y
 sends +x to -z, while raising the Euler y to 90 sends it to +y. `look_at`
 orients a node towards a point in its parent's frame; `Scene.look_at` does
 it in world space.
+
+The rest of three.js's own-frame edits are here too: `translate_x`,
+`translate_y`, `translate_z` and `translate_on_axis` move the node along its
+own axes, `apply_matrix4` and `apply_quaternion` transform it in its
+parent's frame, and the four `set_rotation_from_*` set the rotation from an
+axis and an angle, an `Euler`, a matrix or a quaternion. What needs the
+world -- `localToWorld`, `getWorldPosition` and the rest -- needs the
+parents too, and is on `Scene`.
+
+A node carries nothing to draw. A mesh, a light or a line names a node, so
+a node is an `Object3D` or a `Group` in three.js's terms, and `object_type`
+says which. The two act the same; the type is kept so a scene written to
+JSON reads back as it was. See `objects.group`.
 """
 
 from core.layers import Layers
+from core.user_data import UserData
 from math.euler import XYZ, Euler, EulerOrder
 from math.matrix4 import Matrix4, scaling, translation
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from units.si import Angle
+from units.si import METER, Angle, Length
 
 
 @fieldwise_init
@@ -57,8 +71,49 @@ struct NodeId(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
 
-# A node with no parent. Roots carry this instead of an index.
+# A node with no parent. Roots carry this instead of an index. Where a
+# `Scene` method takes a node to start from, this names the scene itself.
 comptime NO_PARENT = NodeId(-1)
+
+
+@fieldwise_init
+struct ObjectType(Equatable, ImplicitlyCopyable, Writable):
+    """What a node is when it carries nothing, three.js's `type` of an
+    `Object3D` or a `Group`.
+
+    Both act the same. The type is kept so a scene written to JSON reads
+    back as it was.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the two types there are."""
+        return self == OBJECT3D_TYPE or self == GROUP_TYPE
+
+
+comptime OBJECT3D_TYPE = ObjectType(0)
+comptime GROUP_TYPE = ObjectType(1)
+
+
+def scale_of(matrix: Matrix4) -> Vector3:
+    """Return the scale a transform holds, as three.js's `Matrix4.decompose`
+    finds it.
+
+    Args:
+        matrix: A translation times a rotation times a scale.
+
+    Returns:
+        The lengths of the first three columns. The x length is negative
+        when the matrix mirrors, as in three.js.
+    """
+    ref e = matrix.elements
+    var sx = Vector3(e[0], e[1], e[2]).length()
+    var sy = Vector3(e[4], e[5], e[6]).length()
+    var sz = Vector3(e[8], e[9], e[10]).length()
+    if matrix.determinant() < 0:
+        sx = -sx
+    return Vector3(sx, sy, sz)
 
 
 def facing(
@@ -164,10 +219,15 @@ struct Object3D(ImplicitlyCopyable):
     # The transform relative to the parent, as the last update built it
     # or as the caller set it. three.js's `Object3D.matrix`.
     var matrix: Matrix4
+    # `OBJECT3D_TYPE`, or `GROUP_TYPE` for a node built by `group()`.
+    var object_type: ObjectType
+    # What the caller keeps on the node, three.js's `userData`. Written to
+    # and read from scene JSON. See `core.user_data`.
+    var user_data: UserData
 
     def __init__(out self):
         """Create an untransformed node with no parent, on layer zero,
-        visible, unnamed and at render order zero."""
+        visible, unnamed, at render order zero, with no user data."""
         self.position = Vector3(0, 0, 0)
         self.scale = Vector3(1, 1, 1)
         self.quaternion = Quaternion.identity()
@@ -178,6 +238,8 @@ struct Object3D(ImplicitlyCopyable):
         self.render_order = 0
         self.matrix_auto_update = True
         self.matrix = Matrix4()
+        self.object_type = OBJECT3D_TYPE
+        self.user_data = UserData()
 
     def __init__(out self, *, copy: Self):
         """Copy another node, every field included."""
@@ -191,6 +253,8 @@ struct Object3D(ImplicitlyCopyable):
         self.render_order = copy.render_order
         self.matrix_auto_update = copy.matrix_auto_update
         self.matrix = Matrix4(copy=copy.matrix)
+        self.object_type = copy.object_type
+        self.user_data = UserData(copy=copy.user_data)
 
     def set_position(mut self, x: Float32, y: Float32, z: Float32):
         """Move this node, relative to its parent."""
@@ -304,6 +368,87 @@ struct Object3D(ImplicitlyCopyable):
         """Turn about the node's own z axis: three.js's `rotateZ`."""
         self.rotate_on_axis(Vector3(0, 0, 1), angle)
 
+    def translate_on_axis(mut self, axis: Vector3, distance: Length):
+        """Move this node along one of its *own* axes.
+
+        three.js's `translateOnAxis`: the axis is turned by the node's
+        rotation, scaled by the distance, and added to the position. The
+        node's scale does not stretch the step.
+
+        Args:
+            axis: The axis, unit length, in the node's own frame.
+            distance: How far to move.
+        """
+        self.position.add(self.quaternion.rotate(axis) * distance.to(METER))
+
+    def translate_x(mut self, distance: Length):
+        """Move along the node's own x axis: three.js's `translateX`."""
+        self.translate_on_axis(Vector3(1, 0, 0), distance)
+
+    def translate_y(mut self, distance: Length):
+        """Move along the node's own y axis: three.js's `translateY`."""
+        self.translate_on_axis(Vector3(0, 1, 0), distance)
+
+    def translate_z(mut self, distance: Length):
+        """Move along the node's own z axis: three.js's `translateZ`."""
+        self.translate_on_axis(Vector3(0, 0, 1), distance)
+
+    def apply_quaternion(mut self, quaternion: Quaternion):
+        """Turn this node in its parent's frame, three.js's
+        `applyQuaternion`.
+
+        The rotation is premultiplied, as `rotate_on_world_axis` does. The
+        position does not move.
+
+        Args:
+            quaternion: The turn, unit length.
+        """
+        self.quaternion.premultiply(quaternion)
+
+    def set_rotation_from_axis_angle(mut self, axis: Vector3, angle: Angle):
+        """Set the rotation to a turn about one axis, three.js's
+        `setRotationFromAxisAngle`.
+
+        Args:
+            axis: The axis, unit length.
+            angle: How far to turn.
+        """
+        self.quaternion = Quaternion.from_axis_angle(axis, angle)
+
+    def set_rotation_from_euler(mut self, euler: Euler) raises:
+        """Set the rotation from an `Euler`, three.js's
+        `setRotationFromEuler`. The same as `set_rotation`.
+
+        Args:
+            euler: The angles and their order.
+
+        Raises:
+            Error: If the order does not name three different axes. The
+                rotation is left as it was.
+        """
+        self.set_rotation(euler)
+
+    def set_rotation_from_matrix(mut self, matrix: Matrix4):
+        """Set the rotation from the upper 3x3 of a matrix, three.js's
+        `setRotationFromMatrix`.
+
+        As there, the 3x3 must be a pure rotation. A scale in it gives a
+        wrong rotation rather than an error; see `Quaternion.from_matrix`.
+
+        Args:
+            matrix: A rotation matrix.
+        """
+        self.quaternion = Quaternion.from_matrix(matrix)
+
+    def set_rotation_from_quaternion(mut self, quaternion: Quaternion):
+        """Set the rotation directly, three.js's
+        `setRotationFromQuaternion`. The same as `set_quaternion`.
+
+        Args:
+            quaternion: The rotation, unit length.
+        """
+        self.quaternion = quaternion
+
     def look_at(mut self, target: Vector3, *, camera: Bool = False) raises:
         """Turn this node to face `target`, given in the parent's frame.
 
@@ -349,3 +494,57 @@ struct Object3D(ImplicitlyCopyable):
         matrix.multiply(self.quaternion.to_matrix())
         matrix.multiply(scaling(self.scale.x, self.scale.y, self.scale.z))
         return matrix^
+
+    def set_from_matrix(mut self, matrix: Matrix4) raises:
+        """Set the position, rotation and scale from a transform, three.js's
+        `matrix.decompose(position, quaternion, scale)`.
+
+        The arithmetic is three.js's: the scale is the length of each of
+        the first three columns, the x scale is negated when the matrix
+        mirrors, and the rotation is read from the columns divided by
+        their scales. `matrix` is left as it was.
+
+        Args:
+            matrix: A translation times a rotation times a scale.
+
+        Raises:
+            Error: If the matrix flattens an axis. three.js divides by the
+                zero and leaves a rotation that is not a number; this
+                refuses and leaves the node as it was.
+        """
+        var scale = scale_of(matrix)
+        if scale.x * scale.y * scale.z == 0:
+            raise Error("A transform that flattens an axis has no rotation")
+        ref e = matrix.elements
+        var rotation = Matrix4()
+        for row in range(3):  # pragma: no branch
+            rotation.elements[row] = e[row] / scale.x
+            rotation.elements[4 + row] = e[4 + row] / scale.y
+            rotation.elements[8 + row] = e[8 + row] / scale.z
+        self.position = Vector3(e[12], e[13], e[14])
+        self.quaternion = Quaternion.from_matrix(rotation)
+        self.scale = scale
+
+    def apply_matrix4(mut self, matrix: Matrix4) raises:
+        """Transform this node in its parent's frame, three.js's
+        `applyMatrix4`.
+
+        The node's matrix -- rebuilt from its parts first when
+        `matrix_auto_update` is set -- is premultiplied by `matrix`, and
+        the position, rotation and scale are read back out of the result.
+        As in three.js, a transform that shears the node is not kept: the
+        parts cannot hold a shear.
+
+        Args:
+            matrix: The transform, in the parent's frame.
+
+        Raises:
+            Error: If the result flattens an axis. The node is left as it
+                was; see `set_from_matrix`.
+        """
+        var combined = self.local_matrix() if self.matrix_auto_update else (
+            Matrix4(copy=self.matrix)
+        )
+        combined.premultiply(matrix)
+        self.set_from_matrix(combined)
+        self.matrix = combined^
