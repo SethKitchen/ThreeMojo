@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 113 features are ported and 36 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 114 features are ported and 35 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -79,11 +79,10 @@ The port is not at parity with three.js yet. 113 features are ported and 36 are 
 ### Geometry
 
 - [ ] Interleaved buffers and InstancedBufferGeometry [#111](https://github.com/SethKitchen/ThreeMojo/issues/111)
-- [ ] Extrude a shape along a path [#113](https://github.com/SethKitchen/ThreeMojo/issues/113)
 - [ ] TextGeometry and FontLoader [#114](https://github.com/SethKitchen/ThreeMojo/issues/114)
 
 <details>
-<summary>Ported: 15</summary>
+<summary>Ported: 16</summary>
 
 - [x] [BufferGeometry and BufferAttribute](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry) [#12](https://github.com/SethKitchen/ThreeMojo/issues/12)
 - [x] [BoxGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#box) [#13](https://github.com/SethKitchen/ThreeMojo/issues/13)
@@ -97,6 +96,7 @@ The port is not at parity with three.js yet. 113 features are ported and 36 are 
 - [x] [LatheGeometry and TubeGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#lathe): a profile revolved, and a tube swept along a path of points with three.js's frames [#21](https://github.com/SethKitchen/ThreeMojo/issues/21)
 - [x] [ShapeGeometry and ExtrudeGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#shape): a drawn outline with holes cut into triangles by ear clipping, and given thickness with a bevel [#22](https://github.com/SethKitchen/ThreeMojo/issues/22)
 - [x] [Parametric, convex, decal and rounded-box geometries](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#parametric): parametric surfaces, quickhull convex hulls, decals clipped to a projector box, and rounded boxes [#115](https://github.com/SethKitchen/ThreeMojo/issues/115)
+- [x] [Extrude a shape along a path](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#along-a-path): a shape swept along a 3D curve or curve path in its Frenet frames, as three.js's extrudePath [#113](https://github.com/SethKitchen/ThreeMojo/issues/113)
 - [x] [EdgesGeometry and WireframeGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#edges-and-wireframes): a surface read back as the lines of its edges, welded by position first [#23](https://github.com/SethKitchen/ThreeMojo/issues/23)
 - [x] [computeVertexNormals and bounding volumes](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#buffergeometry): area-weighted normals, a bounding box and a bounding sphere on any geometry [#24](https://github.com/SethKitchen/ThreeMojo/issues/24)
 - [x] [BufferGeometryUtils: merge, non-indexed, merge vertices, tangents, center](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#merge-weld-and-tangents): merge geometries, weld vertices, creased normals, non-indexed copies, centering and tangents with handedness [#110](https://github.com/SethKitchen/ThreeMojo/issues/110)
