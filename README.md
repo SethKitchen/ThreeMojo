@@ -154,7 +154,7 @@ The port is not at parity with three.js yet. 142 features are ported and 8 are o
 - [x] [Texture transforms: repeat, offset, rotation](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#transform): a texture's own `offset`, `repeat`, `rotation` and `center`, applied to a mesh's coordinates before either rasterizer samples [#49](https://github.com/SethKitchen/ThreeMojo/issues/49)
 - [x] [Depth, color and stencil state](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#depth-color-and-stencil): depth test, write and function, color write, polygon offset, and an eight-bit stencil buffer [#124](https://github.com/SethKitchen/ThreeMojo/issues/124)
 - [x] [Ambient occlusion map and light map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#ambient-occlusion-map): baked maps that dim or add indirect light, read from a second set of texture coordinates [#118](https://github.com/SethKitchen/ThreeMojo/issues/118)
-- [x] [Specular map and flat shading](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#specular-map): a specular map scales highlight and reflection by its red; flat shading lights each face with its own normal [#120](https://github.com/SethKitchen/ThreeMojo/issues/120)
+- [x] [Specular map and flat shading](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#specular-map): highlights and reflections scaled by a map, and faces lit by their own normals [#120](https://github.com/SethKitchen/ThreeMojo/issues/120)
 
 </details>
 
