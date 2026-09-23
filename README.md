@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 138 features are ported and 12 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 139 features are ported and 11 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -180,10 +180,9 @@ The port is not at parity with three.js yet. 138 features are ported and 12 are 
 
 ### Textures
 
-- [ ] Data3DTexture and DataArrayTexture [#132](https://github.com/SethKitchen/ThreeMojo/issues/132)
 
 <details>
-<summary>Ported: 15</summary>
+<summary>Ported: 16</summary>
 
 - [x] [Texture with repeat, clamp and mirror wrapping](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#wrap) [#58](https://github.com/SethKitchen/ThreeMojo/issues/58)
 - [x] [Nearest and bilinear filters](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#filter) [#59](https://github.com/SethKitchen/ThreeMojo/issues/59)
@@ -200,6 +199,7 @@ The port is not at parity with three.js yet. 138 features are ported and 12 are 
 - [x] [Progressive JPEG and TGA](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files#progressive-files): spectral selection and successive approximation, and TGA in color-mapped, true color and gray, plain or run-length [#133](https://github.com/SethKitchen/ThreeMojo/issues/133)
 - [x] [HDR images: RGBE and OpenEXR, and float textures](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#hdr-images): Radiance HDR and OpenEXR loaders, float textures, and panoramas as backgrounds and environments [#130](https://github.com/SethKitchen/ThreeMojo/issues/130)
 - [x] [KTX2 and more compressed formats](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#ktx2-and-compressed-formats): KTX2, KTX and DDS files, with BC2 to BC7, ETC and EAC blocks decoded into textures [#131](https://github.com/SethKitchen/ThreeMojo/issues/131)
+- [x] [Data3DTexture and DataArrayTexture](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#3d-textures): volume and layered textures with GLSL sampling, a LUT pass and a .cube loader [#132](https://github.com/SethKitchen/ThreeMojo/issues/132)
 
 </details>
 
