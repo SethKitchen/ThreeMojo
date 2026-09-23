@@ -992,7 +992,7 @@ def test_a_malformed_material_or_texture_is_refused() raises:
         doc(
             image
             + texture
-            + ',"materials":[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0,"texCoord":1}}}]'
+            + ',"materials":[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0,"texCoord":2}}}]'
         )
     )
     _ = refused(

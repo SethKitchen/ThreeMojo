@@ -94,11 +94,14 @@ from render.texture import (
     REPEAT,
     FLOAT_TYPE,
     UNSIGNED_BYTE_TYPE,
+    UV_CHANNEL_0,
+    UV_CHANNEL_1,
     Texture,
     checkerboard,
     float_from_bytes,
     float_texture,
 )
+from std.memory import bitcast
 from lights.light import (
     ambient_light,
     directional_light,
@@ -232,6 +235,7 @@ from render.gpu import (
     POINT_FLOATS,
     SPOT_FLOATS,
     TABLE_COLUMNS,
+    TABLE_PLACEMENT,
     PLANE_COLOR,
     PLANE_DATA,
     PLANE_FLOATS,
@@ -277,7 +281,7 @@ from materials.material import (
 )
 from geometries.plane import plane
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, COLOR, POSITION
+from core.buffer_geometry import BufferGeometry, COLOR, POSITION, UV, UV1
 from math.matrix4 import Matrix4
 from objects.skeleton import bind_skeleton
 from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
@@ -6702,6 +6706,7 @@ def test_both_backends_agree_on_a_prepared_matcap_scene() raises:
         camera_position(scene, camera),
         toward_camera(scene, camera),
         camera_up(scene, camera),
+        back=camera_back(scene, camera),
     )
     var view = FogView(scene.fog)
     var target = RenderTarget(48, 36, BACKGROUND)
@@ -7485,6 +7490,7 @@ def test_both_backends_agree_on_a_mirror_ball_under_a_sky() raises:
         camera_position(scene, camera),
         toward_camera(scene, camera),
         camera_up(scene, camera),
+        back=camera_back(scene, camera),
     )
     var backdrop = renderer.backdrop(scene, assets, camera)
     assert_true(Bool(backdrop), "the sky painted no backdrop")
@@ -7634,6 +7640,7 @@ def test_both_backends_supersample_to_the_same_image() raises:
         camera_position(scene, camera),
         toward_camera(scene, camera),
         camera_up(scene, camera),
+        back=camera_back(scene, camera),
     )
     var gpu = downsample(
         render_triangles(
@@ -8071,6 +8078,7 @@ def test_both_backends_agree_on_a_prepared_physical_scene() raises:
         camera_position(scene, camera),
         toward_camera(scene, camera),
         camera_up(scene, camera),
+        back=camera_back(scene, camera),
     )
     var cpu = renderer.render(scene, assets, camera)
     var gpu = render_triangles(
@@ -8321,6 +8329,7 @@ def test_both_backends_agree_on_a_shadowed_scene() raises:
             camera_position(scene, camera),
             toward_camera(scene, camera),
             camera_up(scene, camera),
+            back=camera_back(scene, camera),
             shadows=renderer.shadow_maps(scene, assets),
         )
         var cpu = renderer.render(scene, assets, camera)
@@ -8525,6 +8534,7 @@ def test_both_backends_agree_on_a_cube_shadow_and_a_spot_lights_map() raises:
         camera_position(scene, camera),
         toward_camera(scene, camera),
         camera_up(scene, camera),
+        back=camera_back(scene, camera),
         shadows=renderer.shadow_maps(scene, assets),
         spot_maps=renderer.spot_light_maps(scene, assets),
     )
@@ -8621,6 +8631,7 @@ def test_both_backends_agree_under_every_shadow_map_type() raises:
                 camera_position(scene, camera),
                 toward_camera(scene, camera),
                 camera_up(scene, camera),
+                back=camera_back(scene, camera),
                 shadows=renderer.shadow_maps(scene, assets),
                 spot_maps=renderer.spot_light_maps(scene, assets),
             )
@@ -11580,3 +11591,186 @@ def test_the_gpu_refuses_a_coat_map_it_cannot_sample() raises:
                 BACKGROUND,
                 SHADE_TEXTURE,
             )
+
+
+# --- per-map placement and geometric roughness -------------------------------
+
+
+def test_the_texture_table_carries_each_placement() raises:
+    # The last seven columns of a texture's row are its placement: the six
+    # numbers of the matrix, bit for bit, then the channel.
+    var textures = TextureStore()
+    _ = textures.add(a_gpu_data_map())
+    var moved = a_gpu_data_map()
+    moved.repeat = Vector2(2, -3)
+    moved.offset = Vector2(0.25, 0.5)
+    moved.rotation = Angle(30.0, DEGREE)
+    moved.center = Vector2(0.5, 0.5)
+    moved.channel = UV_CHANNEL_1
+    var expected = moved.placement()
+    _ = textures.add(moved^)
+    var table = flatten_textures(textures)[1].copy()
+    assert_equal(len(table), 2 * TABLE_COLUMNS)
+    assert_equal(TABLE_COLUMNS, TABLE_PLACEMENT + 7)
+    var row = TABLE_COLUMNS + TABLE_PLACEMENT
+    assert_equal(bitcast[DType.float32](table[row]), expected.xx)
+    assert_equal(bitcast[DType.float32](table[row + 1]), expected.xy)
+    assert_equal(bitcast[DType.float32](table[row + 2]), expected.x0)
+    assert_equal(bitcast[DType.float32](table[row + 3]), expected.yx)
+    assert_equal(bitcast[DType.float32](table[row + 4]), expected.yy)
+    assert_equal(bitcast[DType.float32](table[row + 5]), expected.y0)
+    assert_equal(table[row + 6], Int32(UV_CHANNEL_1.value))
+    # A texture that says nothing is the identity on the first set.
+    assert_equal(bitcast[DType.float32](table[TABLE_PLACEMENT]), Float32(1))
+    assert_equal(bitcast[DType.float32](table[TABLE_PLACEMENT + 1]), Float32(0))
+    assert_equal(bitcast[DType.float32](table[TABLE_PLACEMENT + 4]), Float32(1))
+    assert_equal(table[TABLE_PLACEMENT + 6], Int32(UV_CHANNEL_0.value))
+
+
+def a_two_set_sheet() raises -> BufferGeometry:
+    """Return a two-meter sheet whose `uv1` is its `uv` turned a quarter
+    and scaled, so a map on the second set lands elsewhere."""
+    var sheet = plane(Length(2.0, METER), Length(2.0, METER))
+    ref first = sheet.attribute_view(String(UV))
+    var second = List[Float32]()
+    for vertex in range(first.count()):
+        second.append(1.5 * first.component(vertex, 1))
+        second.append(0.5 * first.component(vertex, 0))
+    sheet.set_attribute(String(UV1), BufferAttribute(second^, 2))
+    return sheet^
+
+
+def test_both_backends_agree_on_maps_placed_apart() raises:
+    # A map, an emissive map on the second set and an alpha map, each
+    # moved, tiled or turned its own way: both backends place each at its
+    # own coordinate from one texture table.
+    if skipped_for_lack_of_a_gpu("both backends agree on maps placed apart"):
+        return
+    var renderer = Renderer(32, 32)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var sheet = assets.geometries.add(a_two_set_sheet())
+    var board = checkerboard(
+        8, 4, Color(240, 60, 20), Color(20, 40, 200), REPEAT, NEAREST
+    )
+    board.repeat = Vector2(2, 1.5)
+    board.rotation = Angle(30.0, DEGREE)
+    board.center = Vector2(0.5, 0.5)
+    var glow = checkerboard(
+        4,
+        2,
+        Color(255, 255, 255),
+        Color(0, 0, 0),
+        REPEAT,
+        NEAREST,
+        alpha=IGNORED,
+    )
+    glow.offset = Vector2(0.25, 0)
+    glow.channel = UV_CHANNEL_1
+    var cut = a_gpu_data_map(False)
+    cut.repeat = Vector2(3, 3)
+    var skin = assets.materials.add(
+        Material(
+            Color(255, 255, 255),
+            assets.textures.add(board^),
+            kind=BASIC,
+            alpha_map=assets.textures.add(cut^),
+            alpha_test=0.6,
+        )
+    )
+    var lit = assets.materials.add(
+        Material(
+            Color(40, 40, 40),
+            emissive=Color(255, 255, 255),
+            emissive_map=assets.textures.add(glow^),
+        )
+    )
+    var scene = Scene()
+    var left = Object3D()
+    left.set_position(-0.6, 0, 0)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.6, 0, -0.1)
+    var right_node = scene.add(right^)
+    scene.update()
+    var camera = centered(
+        Length(2.0, METER), 1.0, Length(0.1, METER), Length(10.0, METER)
+    )
+    camera.place(Vector3(0, 0, 3), Vector3(0, 0, 0))
+    var meshes = List[Mesh]()
+    meshes.append(Mesh(sheet, skin, left_node))
+    meshes.append(Mesh(sheet, lit, right_node))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    var cpu = cpu_textured(corners, 32, assets.textures)
+    var gpu = render_triangles(
+        corners, 32, 32, BACKGROUND, SHADE_TEXTURE, assets.textures
+    )
+    assert_true(
+        count_background(cpu, BACKGROUND) < 32 * 32, "the scene drew nothing"
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_agree_on_geometric_roughness() raises:
+    # A coarse, coated, anisotropic ball with a turned coat normal map,
+    # nearly mirror smooth: its roughness is mostly the curve's, worked
+    # out from the normal one pixel over on both backends.
+    if skipped_for_lack_of_a_gpu("both backends agree on geometric roughness"):
+        return
+    var renderer = Renderer(40, 40)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var ball = assets.geometries.add(sphere(Length(0.9, METER), 10, 8))
+    var bumps = a_gpu_data_map()
+    bumps.repeat = Vector2(3, 2)
+    bumps.rotation = Angle(40.0, DEGREE)
+    var map = assets.textures.add(bumps^)
+    var scene = Scene()
+    _ = scene.add(Object3D())
+    light_the(scene)
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(
+                physical_material(
+                    Color(200, 160, 90),
+                    roughness=0.0,
+                    metalness=0.5,
+                    clearcoat=1.0,
+                    clearcoat_roughness=0.0,
+                    clearcoat_normal_map=map,
+                    anisotropy=0.6,
+                )
+            ),
+            NodeId(0),
+        )
+    )
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE), 1.0, Length(0.5, METER), Length(12.0, METER)
+    )
+    camera.place(Vector3(0.3, 0.4, 3.0), Vector3(0, 0, 0))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        back=camera_back(scene, camera),
+    )
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners,
+        40,
+        40,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        assets.textures,
+        lighting,
+    )
+    assert_true(
+        count_background(cpu, BACKGROUND) < 40 * 40, "the ball drew nothing"
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)

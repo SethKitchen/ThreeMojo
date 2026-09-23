@@ -596,7 +596,7 @@ An alpha map must ignore its alpha too, and must be `LINEAR`. Its green channel 
 
 `u` runs from left to right and `v` from bottom to top. Rows in memory run from the top. Sampling flips once, as three.js's `flipY` does.
 
-`channel`, three.js's `Texture.channel`, says which set of the geometry's coordinates a texture reads. `UV_CHANNEL_0`, the default, reads `uv`. `UV_CHANNEL_1` reads `uv1`. Only an ambient occlusion map or a light map can read the second set. See [Light map](Materials#light-map).
+`channel`, three.js's `Texture.channel`, says which set of the geometry's coordinates a texture reads. `UV_CHANNEL_0`, the default, reads `uv`. `UV_CHANNEL_1` reads `uv1`. Any map can read either set. See [Light map](Materials#light-map).
 
 ## Transform
 
@@ -611,9 +611,17 @@ A texture can move, tile and turn on a surface. three.js: `offset`, `repeat`, `r
 
 Set the fields after construction, as in three.js. `uv_transform()` returns the matrix they make. See [Math](Math#matrix3) for its order.
 
-The renderer carries every coordinate of a mesh through its map's matrix before the fragment samples with it. The texture itself does not change. The wrap mode still decides what a coordinate past the edge reads. Both rasterizers get the same coordinates.
+Each map is sampled at its own coordinate, as in three.js. The texture's channel picks the raw pair, and its matrix moves that pair. The texture itself does not change. The wrap mode still decides what a coordinate past the edge reads. `ignoring_alpha()` copies the transform and the channel.
 
-A fragment samples the map, the emissive map and the alpha map at one coordinate. A material that names more than one must give them all the same transform. The renderer refuses them otherwise. `ignoring_alpha()` copies the transform, so two maps from one image agree.
+`placement()` returns a `UvPlacement`: the channel and the top two rows of the matrix. `place(uv, uv1)` gives the coordinate where the map is sampled.
+
+### How the rasterizers place a map
+
+The corners carry the geometry's two raw pairs, `uv` and `uv1`. A geometry with no `uv1` carries its `uv` twice. Each fragment interpolates both pairs, and each map moves its own pair by its own matrix. The matrix is linear, so this is the same as moving each corner and then interpolating, to the rounding. three.js moves each corner in the vertex shader, one varying for each map.
+
+The CPU rasterizer builds the placements once for each triangle. The GPU reads them from the texture table. The last seven columns of a texture's row are its six matrix numbers, bit for bit, and its channel. A triangle carries only its map ids, so no lane and no state column changes. See [GPU backend](GPU-backend#texture-table).
+
+A map's mip level and a normal map's tangent frame come from that map's own coordinates, one pixel right and one pixel up. The anisotropy frame uses the normal map's coordinates, or the clear coat normal map's, or the raw `uv`, as three.js does.
 
 ```mojo
 var board = checkerboard(64, 8, white, blue)
@@ -636,6 +644,7 @@ var id = assets.textures.add(board^)
 | `is_blank() -> Bool` | The blank texture, which samples as opaque white. |
 | `ignoring_alpha() -> Texture` | A copy that ignores its alpha, with its chain rebuilt. |
 | `uv_transform() -> Matrix3` | The transform on the coordinates, from the four fields above. |
+| `placement() -> UvPlacement` | The channel and the matrix, as the rasterizers read them. |
 | `sample_footprint(u, v, footprint) -> FloatColor` | One trilinear sample, or several along a footprint's long axis. See [Anisotropy](#anisotropy). |
 | `validate()` | Refuse a wrap, filter, color space, alpha mode, texel type or channel that is none of the named values, a float texture that is not `LINEAR`, or an anisotropy below one or above `MAX_ANISOTROPY`. |
 | `levels`, `width`, `height`, `alpha`, `anisotropy` | The chain length, the base size, the alpha mode and the tap count. |
@@ -655,7 +664,6 @@ var id = assets.textures.add(board^)
 - A `data_texture` with a channel count outside one through four, a length that does not match, or a number that is not finite.
 - A `float_texture` with a length that does not match, or a number that is not finite. A float texture that is not `LINEAR`, or a texel type that is none of the two, raises in `validate`.
 - The RGBE and EXR readers refuse a file cut short, a malformed header, and each feature in [What is not ported](#what-is-not-ported).
-- The renderer refuses a map and an emissive map on one material whose transforms differ.
 - An anisotropy below one, or above `MAX_ANISOTROPY`, raises in `validate`.
 - A `Footprint` with no taps, or a non-finite level or step, raises in `sample_footprint`.
 - See [Cube textures](#cube-textures) for what a cube refuses, and [KTX2 and compressed formats](#ktx2-and-compressed-formats) for what a compressed payload or container refuses.

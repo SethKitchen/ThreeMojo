@@ -188,13 +188,7 @@ from materials.nodes import (
     moved_position,
 )
 from render.pointrule import attenuated_size
-from render.texture import (
-    IGNORED,
-    UV_CHANNEL_0,
-    UV_CHANNEL_1,
-    Texture,
-    UvChannel,
-)
+from render.texture import IGNORED, Texture
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
@@ -225,6 +219,7 @@ from render.rasterizer import (
     ShadeMode,
     check_alpha_data_map,
     check_alpha_map,
+    check_channel,
     check_color_map,
     check_data_map,
     check_gradient_map,
@@ -500,35 +495,11 @@ def _instancing(
     return (matrices^, instances^)
 
 
-def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
-    """Return the transform a mesh's texture coordinates go through before
-    its maps are sampled with them: its map's `uv_transform`, three.js's
-    `mapTransform`.
-
-    A fragment carries one coordinate pair and samples every map with it,
-    where three.js carries a pair per map. So the first map the material
-    names decides the transform, and the others must agree with it, which
-    is asked here rather than left to sample a map somewhere the author did
-    not say. Two maps from one image agree by construction:
-    `Texture.ignoring_alpha` copies the transform.
-
-    Args:
-        assets: Where the textures live. The ids are already checked.
-        material: The material, for which maps it names.
-
-    The ambient occlusion map and the light map are not among them: they
-    are sampled at a second coordinate pair with a transform of their own;
-    see `_baked_transform`. So only those two can read the second channel,
-    and a map here whose texture names another is refused.
-
-    Returns:
-        The matrix. The identity for a material with no map at all.
-
-    Raises:
-        Error: If the material names two maps whose transforms differ, or
-            a map whose texture's channel is not `UV_CHANNEL_0`.
-    """
-    var named: List[TextureId] = [
+def _named_maps(material: Material) -> List[TextureId]:
+    """Return every map a material names that is sampled at a surface
+    coordinate, the ones three.js gives a varying of its own: `vMapUv`,
+    `vNormalMapUv` and the rest. `NO_TEXTURE` where it names none."""
+    return [
         material.map,
         material.emissive_map,
         material.alpha_map,
@@ -549,99 +520,76 @@ def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
         material.clearcoat_map,
         material.clearcoat_roughness_map,
         material.clearcoat_normal_map,
+        material.ao_map,
+        material.light_map,
     ]
-    var chosen = Matrix3()
-    var settled = False
-    # Twenty maps, always, so the loop never runs zero times.
+
+
+def _check_map_channels(assets: Assets, material: Material) raises:
+    """Refuse a material that names a map whose channel is neither set.
+
+    Each map is sampled at its own coordinate: its texture's channel picks
+    the geometry's `uv` or `uv1`, and its texture's transform moves it, at
+    the fragment, as three.js's `WebGLProgram` gives each map its own
+    `*_UV` define and its own transform. Nothing else is asked of the maps
+    here, so two maps of one material can be moved, tiled and turned apart.
+    Asked whatever the shading mode: a wrong asset, not a wrong frame.
+
+    Args:
+        assets: Where the textures live. The ids are already checked.
+        material: The material, for which maps it names.
+
+    Raises:
+        Error: If a map's texture names a channel that is not
+            `UV_CHANNEL_0` or `UV_CHANNEL_1`.
+    """
+    var named = _named_maps(material)
+    # Twenty-two maps, always, so the loop never runs zero times.
     for index in range(len(named)):  # pragma: no branch
         if named[index] == NO_TEXTURE:
             continue
-        ref image = assets.textures.get(named[index])
-        if image.channel != UV_CHANNEL_0:
-            raise Error(
-                "Only an ao map or a light map reads the second texture"
-                " coordinates: give this texture UV_CHANNEL_0"
-            )
-        var to_uv = image.uv_transform()
-        if not settled:
-            chosen = to_uv^
-            settled = True
-        elif to_uv != chosen:
-            raise Error(
-                "A material's maps must share one transform: a fragment"
-                " samples them all at one coordinate"
-            )
-    return chosen^
+        check_channel(assets.textures.get(named[index]))
 
 
-def _baked_transform(
-    assets: Assets, material: Material
-) raises -> Tuple[Matrix3, UvChannel]:
-    """Return the transform and the channel an ambient occlusion map and a
-    light map are sampled with: three.js's `aoMapTransform` and
-    `aoMap.channel`, or the light map's.
-
-    A fragment carries a second coordinate pair for these two maps, apart
-    from the pair every other map shares, so a baked map can be laid out
-    on its own. The two share that pair, so they must agree on both, which
-    is asked here as `_uv_transform` asks it of the others.
+def _moves_a_map(assets: Assets, material: Material) raises -> Bool:
+    """Return True if any map the material names has a transform that is
+    not the identity.
 
     Args:
         assets: Where the textures live. The ids are already checked.
         material: The material, for which maps it names.
 
     Returns:
-        The matrix and the channel: the identity and `UV_CHANNEL_0` for a
-        material with neither map.
+        Whether a named map is moved, tiled or turned.
 
     Raises:
-        Error: If a texture names a channel that is none of the two, or
-            the two maps disagree about their transform or their channel.
+        Error: If a named texture is not in the store.
     """
-    var named: List[TextureId] = [material.ao_map, material.light_map]
-    var chosen = Matrix3()
-    var channel = UV_CHANNEL_0
-    var settled = False
-    # Two maps, always, so the loop never runs zero times.
+    var named = _named_maps(material)
+    # Twenty-two maps, always, so the loop never runs zero times.
     for index in range(len(named)):  # pragma: no branch
         if named[index] == NO_TEXTURE:
             continue
-        ref image = assets.textures.get(named[index])
-        if not image.channel.is_valid():
-            raise Error(
-                "A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1"
-            )
-        var to_uv = image.uv_transform()
-        if not settled:
-            chosen = to_uv^
-            channel = image.channel
-            settled = True
-        elif to_uv != chosen or image.channel != channel:
-            raise Error(
-                "A material's ao map and light map must share one transform"
-                " and one channel: a fragment samples both at one coordinate"
-            )
-    return (chosen^, channel)
+        if assets.textures.get(named[index]).uv_transform() != Matrix3():
+            return True
+    return False
 
 
-def _placed_coordinates(
-    geometry: BufferGeometry, name: String, to_uv: Matrix3, count: Int
+def _coordinates(
+    geometry: BufferGeometry, name: String, count: Int
 ) raises -> Tuple[List[Float32], List[Float32]]:
-    """Return every vertex's texture coordinates from one attribute, moved
-    by a texture's transform.
+    """Return every vertex's texture coordinates from one attribute, raw.
 
     Texture coordinates do not go through the world transform: they name
-    a place in an image, not a place in the world. They go through the
-    texture's own transform instead, once per vertex as three.js's vertex
-    shader does it, so a repeat tiles the image and an offset slides it.
-    A geometry without the attribute gets zeroes, through the transform
-    too, so a geometry without coordinates and one whose coordinates are
-    all zero name the same place in the image.
+    a place in an image, not a place in the world. Nor do they go through
+    a texture's transform here: each map moves them at the fragment by its
+    own, as three.js's `uv_vertex` makes a varying per map. A geometry
+    without the attribute gets zeroes, so a geometry without coordinates
+    and one whose coordinates are all zero name the same place.
 
     Args:
         geometry: The geometry, for the attribute.
         name: Which attribute: `UV` or `UV1`.
-        to_uv: The transform.
         count: How many vertices the geometry has.
 
     Returns:
@@ -655,16 +603,12 @@ def _placed_coordinates(
     if geometry.has_attribute(name):
         ref uvs = geometry.attribute_view(name)
         for vertex in range(count):
-            var placed = to_uv.transform_point(
-                Vector2(uvs.component(vertex, 0), uvs.component(vertex, 1))
-            )
-            us.append(placed.x)
-            vs.append(placed.y)
+            us.append(uvs.component(vertex, 0))
+            vs.append(uvs.component(vertex, 1))
     else:
-        var fallback = to_uv.transform_point(Vector2(0, 0))
         for _ in range(count):
-            us.append(fallback.x)
-            vs.append(fallback.y)
+            us.append(0)
+            vs.append(0)
     return (us^, vs^)
 
 
@@ -2373,7 +2317,7 @@ def _emit_sprite(
             " indirect light for either to reach"
         )
     var maps = _checked_maps(assets, material, shading)
-    var to_uv = _uv_transform(assets, material)
+    _check_map_channels(assets, material)
     ref world = draw.world
     var origin = Vector3(
         world.elements[12], world.elements[13], world.elements[14]
@@ -2396,9 +2340,10 @@ def _emit_sprite(
     for corner in range(4):  # pragma: no branch
         var aligned_x = (xs[corner] - (sprite.center.x - 0.5)) * scale_x
         var aligned_y = (ys[corner] - (sprite.center.y - 0.5)) * scale_y
-        var placed = to_uv.transform_point(
-            Vector2(xs[corner] + 0.5, ys[corner] + 0.5)
-        )
+        # Raw, on both pairs: each map places them for itself, and a
+        # sprite has no `uv1`, so the second pair falls back to the first
+        # as a mesh's does.
+        var raw = Vector2(xs[corner] + 0.5, ys[corner] + 0.5)
         quad.append(
             ClipVertex(
                 Vector3(
@@ -2408,9 +2353,11 @@ def _emit_sprite(
                 ),
                 base,
                 Vector3(0, 0, 1),
-                placed.x,
-                placed.y,
+                raw.x,
+                raw.y,
                 origin,
+                u1=raw.x,
+                v1=raw.y,
             )
         )
     # Two-sided and unmirrored: a negative scale turns the square inside
@@ -4051,15 +3998,12 @@ struct Renderer(Movable):
                 physics.specular_map = NO_TEXTURE
                 physics.transmission_map = NO_TEXTURE
                 physics.thickness_map = NO_TEXTURE
-            # Where the maps are moved, tiled and turned on this surface,
-            # asked of the material's own maps whatever the shading mode:
-            # the uv view shows the coordinates the texture would be
-            # sampled with, and a pair of maps that disagree is a wrong
-            # asset under any mode.
-            var to_uv = _uv_transform(assets, material)
-            # And where the two baked maps are, which have a pair of their
-            # own; asked the same way, whatever the shading mode.
-            var baked = _baked_transform(assets, material)
+            # Which set of coordinates each map reads, asked of the
+            # material's own maps whatever the shading mode: a channel that
+            # is neither set is a wrong asset under any mode. Where each
+            # map is moved, tiled and turned is its own texture's business,
+            # applied at the fragment.
+            _check_map_channels(assets, material)
             # Light the surface gives off, decoded to linear once and carried
             # on every corner like the base color below.
             var glow = material.emissive_light()
@@ -4148,27 +4092,21 @@ struct Renderer(Movable):
                 view_points.append(view.transform_point(point))
 
             # Texture coordinates do not go through the world transform:
-            # they name a place in an image, not a place in the world. They
-            # go through the texture's own transform instead, once per
-            # vertex as three.js's vertex shader does it, so a repeat tiles
-            # the image and an offset slides it. A geometry without them
-            # gets zeroes, which map everything to one corner -- harmless
-            # until something is actually sampled with them.
-            var first_set = _placed_coordinates(
-                geometry, String(UV), to_uv, vertex_count
-            )
+            # they name a place in an image, not a place in the world. Nor
+            # through any texture's transform: each map moves them at the
+            # fragment by its own, as three.js's `uv_vertex` makes a
+            # varying per map. A geometry without them gets zeroes, which
+            # map everything to one place -- harmless until something is
+            # actually sampled with them.
+            var first_set = _coordinates(geometry, String(UV), vertex_count)
             ref vertex_u = first_set[0]
             ref vertex_v = first_set[1]
-            # The second pair, where the ambient occlusion map and the
-            # light map are sampled: the geometry's `uv1` when their
-            # texture's channel names it and the geometry has one, and its
-            # `uv` otherwise, through their own transform.
+            # The second pair, which a map on `UV_CHANNEL_1` reads: the
+            # geometry's `uv1` when it has one, and its `uv` otherwise.
             var second_name = String(UV)
-            if baked[1] == UV_CHANNEL_1 and geometry.has_attribute(String(UV1)):
+            if geometry.has_attribute(String(UV1)):
                 second_name = String(UV1)
-            var second_set = _placed_coordinates(
-                geometry, second_name, baked[0], vertex_count
-            )
+            var second_set = _coordinates(geometry, second_name, vertex_count)
             ref vertex_u1 = second_set[0]
             ref vertex_v1 = second_set[1]
 
@@ -4971,7 +4909,8 @@ struct Renderer(Movable):
             # would be sampled somewhere its author did not say, so it is
             # refused rather than sampled untransformed, whatever the
             # shading mode: it is a wrong asset, not a wrong frame.
-            if _uv_transform(assets, material) != Matrix3():
+            _check_map_channels(assets, material)
+            if _moves_a_map(assets, material):
                 raise Error(
                     "A point samples its map at its own coordinate, as"
                     " stored: a map whose transform is not the identity is"

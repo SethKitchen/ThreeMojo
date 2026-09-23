@@ -32,10 +32,13 @@ blue.
 
 **Occlusion.** A material's `occlusionTexture` becomes its `ao_map`, and
 its `strength` the `ao_map_intensity`, as three.js reads them. Its red
-channel dims the indirect light. It is the one map that can read the
-second set of texture coordinates: a `texCoord` of one gives the texture
-the channel `UV_CHANNEL_1`, so the renderer samples it at `uv1`. An unlit
-material reads no occlusion, as in three.js.
+channel dims the indirect light. An unlit material reads no occlusion,
+as in three.js.
+
+**Each map is placed on its own.** A `texCoord` of one gives the texture
+the channel `UV_CHANNEL_1`, so the renderer samples it at `uv1`, and a
+`KHR_texture_transform` gives it a transform of its own, whatever the
+other maps of the material say, as three.js's `assignTexture` does.
 
 **Texture coordinates run down in glTF.** `(0, 0)` is an image's top
 left, where this renderer's `v` runs up from the bottom. three.js answers
@@ -74,14 +77,10 @@ mixer drives morph influences on `scene.meshes` alone. A channel on a node
 the default scene does not reach is left out, and so is an animation left
 with no channel. A skin joint the scene does not reach, a morph color, and
 more than `MAX_MORPH_TARGETS` targets are refused. So are a specular
-color factor outside zero to one, which a `Color` cannot hold; maps of one
-material that `KHR_texture_transform` moves apart, since a fragment here
-samples every map at one coordinate; a map other than the occlusion
-texture that reads a second set of texture coordinates, since only the ao
-map and the light map are sampled at a second pair here; any map that
-reads a third set or past it, since a geometry here has only `uv` and
-`uv1`; and a skinned node that is instanced, where three.js drops the
-skin.
+color factor outside zero to one, which a `Color` cannot hold; any map
+that reads a third set of texture coordinates or past it, since a
+geometry here has only `uv` and `uv1`; and a skinned node that is
+instanced, where three.js drops the skin.
 
 **Extensions.** Fifteen are read, the ones three.js's `GLTFLoader` reads
 that map onto something this renderer has. `KHR_materials_unlit` makes a
@@ -170,7 +169,6 @@ from materials.material import (
     Side,
     standard_material,
 )
-from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
 from objects.skeleton import Bone, Skeleton
 from objects.instanced_mesh import InstancedMesh
@@ -1261,14 +1259,12 @@ struct _Loader(Movable):
             set = self.integer(transform, "texCoord", set)
         return set
 
-    def texture_reference(
-        self, material: Int, key: String, baked: Bool = False
-    ) raises -> Int:
+    def texture_reference(self, material: Int, key: String) raises -> Int:
         """Return the texture index a material's `key` object names, or -1.
 
-        The texture coordinates it reads must be the first set, or for a
-        baked map, the occlusion texture, the first or the second: only
-        that map is sampled at a second pair here. See `texture_set`.
+        The texture coordinates it reads must be the first set or the
+        second, `uv` or `uv1`: a geometry here has no third. See
+        `texture_set`.
         """
         var found = self.document.get(material, key)
         if found == NO_NODE:
@@ -1276,10 +1272,10 @@ struct _Loader(Movable):
         if self.document.kind(found) != OBJECT:
             raise Error("glTF: " + key + " must be an object")
         var set = self.texture_set(found)
-        var sets = 2 if baked else 1
-        if set < 0 or set >= sets:
+        if set < 0 or set > 1:
             raise Error(
-                "glTF: an occlusion texture reads only the first two sets of texture coordinates" if baked else "glTF: only the first set of texture coordinates is read"
+                "glTF: a texture reads only the first two sets of texture"
+                " coordinates"
             )
         var index = self.required_integer(found, "index")
         if index < 0:
@@ -1292,34 +1288,37 @@ struct _Loader(Movable):
         key: String,
         space: ColorSpace,
         mut assets: Assets,
-        baked: Bool = False,
         keep_alpha: Bool = False,
     ) raises -> TextureId:
         """Return the texture a material's `key` object names, read in one
-        color space, or `NO_TEXTURE`. `baked` lets it read the second set
-        of texture coordinates; see `texture_reference`. `keep_alpha` is
-        `texture`'s.
+        color space, or `NO_TEXTURE`. `keep_alpha` is `texture`'s.
 
         A `KHR_texture_transform` that moves, turns or scales it makes a
         copy of the texture, as three.js's `GLTFTextureTransformExtension`
         clones it. The copy's transform is the file's followed by the
         flip of `v` every glTF texture has here: `offset` `(x, 1 - y)`,
-        `repeat` `(x, -y)`, and the `rotation` as it is.
+        `repeat` `(x, -y)`, and the `rotation` as it is. A reference that
+        reads the second set of coordinates makes a copy whose `channel`
+        is `UV_CHANNEL_1`, as three.js's `assignTexture` clones one. Each
+        map keeps its own transform and channel, as in three.js.
         """
-        var index = self.texture_reference(material, key, baked)
+        var index = self.texture_reference(material, key)
         if index < 0:
             return NO_TEXTURE
         var id = self.texture(index, space, assets, keep_alpha)
-        var transform = self.extension(
-            self.document.get(material, key), TEXTURE_TRANSFORM
-        )
+        var found = self.document.get(material, key)
+        if self.texture_set(found) == 1:
+            var second = Texture(copy=assets.textures.get(id))
+            second.channel = UV_CHANNEL_1
+            id = assets.textures.add(second^)
+        var transform = self.extension(found, TEXTURE_TRANSFORM)
         if transform == NO_NODE:
             return id
         var offset = self.numbers(transform, "offset", 2)
         var scale = self.numbers(transform, "scale", 2)
         var turned = self.document.has(transform, "rotation")
         if len(offset) == 0 and len(scale) == 0 and not turned:
-            # Only a `texCoord`, which `texture_reference` settled.
+            # Only a `texCoord`, which the channel above settled.
             return id
         if len(offset) == 0:
             offset = [0, 0]
@@ -1359,8 +1358,8 @@ struct _Loader(Movable):
     ) raises -> Tuple[TextureId, Float32]:
         """Return a material's `occlusionTexture` as an ao map and its
         intensity, as three.js's `GLTFLoader` reads it: the texture as
-        data, `strength` as `aoMapIntensity`, and a copy whose `channel`
-        is `UV_CHANNEL_1` when it reads the second set of coordinates.
+        data and `strength` as `aoMapIntensity`. Its channel is what
+        `map_of` gives every map.
 
         Args:
             material: The glTF material object.
@@ -1371,21 +1370,13 @@ struct _Loader(Movable):
             a material with no occlusion texture.
 
         Raises:
-            Error: Everything `map_of` raises, and a set of coordinates
-                past the second.
+            Error: Everything `map_of` raises.
         """
-        var id = self.map_of(
-            material, "occlusionTexture", LINEAR, assets, baked=True
-        )
+        var id = self.map_of(material, "occlusionTexture", LINEAR, assets)
         if id == NO_TEXTURE:
             return (id, Float32(1))
         var found = self.document.get(material, "occlusionTexture")
-        var strength = self.number(found, "strength", 1)
-        if self.texture_set(found) == 1:
-            var second = Texture(copy=assets.textures.get(id))
-            second.channel = UV_CHANNEL_1
-            id = assets.textures.add(second^)
-        return (id, strength)
+        return (id, self.number(found, "strength", 1))
 
     # --- materials ----------------------------------------------------------
 
@@ -1443,7 +1434,6 @@ struct _Loader(Movable):
                 )
             elif mode != "" and mode != "OPAQUE" and mode != "BLEND":
                 raise Error("glTF: alphaMode must be OPAQUE, MASK or BLEND")
-            _check_one_transform(assets, built)
             self.model.materials.append(assets.materials.add(built))
             self.tinted_materials.append(MaterialId(0))
             self.has_tinted.append(False)
@@ -2522,50 +2512,6 @@ def _unit_color(factors: List[Float32], key: String) raises -> Color:
         if factors[lane] < 0 or factors[lane] > 1:
             raise Error("glTF: " + key + " must be from zero to one")
     return FloatColor(factors[0], factors[1], factors[2], 1).encode()
-
-
-def _check_one_transform(assets: Assets, material: Material) raises:
-    """Refuse a material whose maps `KHR_texture_transform` moved apart.
-
-    A fragment here carries one pair of texture coordinates and samples
-    every map with it, where three.js carries a pair per map, so the
-    renderer refuses such a material. The loader refuses it first, where
-    the file can be named.
-    """
-    var named: List[TextureId] = [
-        material.map,
-        material.emissive_map,
-        material.roughness_map,
-        material.normal_map,
-        material.transmission_map,
-        material.thickness_map,
-        material.sheen_color_map,
-        material.sheen_roughness_map,
-        material.iridescence_map,
-        material.iridescence_thickness_map,
-        material.anisotropy_map,
-        material.specular_intensity_map,
-        material.specular_color_map,
-        material.clearcoat_map,
-        material.clearcoat_roughness_map,
-        material.clearcoat_normal_map,
-    ]
-    var chosen = Matrix3()
-    var settled = False
-    # Sixteen maps, always, so the loop never runs zero times.
-    for slot in range(len(named)):  # pragma: no branch
-        if named[slot] == NO_TEXTURE:
-            continue
-        var to_uv = assets.textures.get(named[slot]).uv_transform()
-        if not settled:
-            chosen = to_uv^
-            settled = True
-        elif to_uv != chosen:
-            raise Error(
-                "glTF: a material's maps must share one"
-                " KHR_texture_transform: a fragment samples them all at one"
-                " coordinate"
-            )
 
 
 def _normalize_skin_weights(weights: List[Float32]) -> List[Float32]:

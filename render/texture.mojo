@@ -56,9 +56,10 @@ plain trilinear read.
 **A texture can move, tile and turn on its surface.** three.js's `offset`,
 `repeat`, `rotation` and `center` are fields here as there, and
 `uv_transform` is the 2D affine matrix they come to, three.js's
-`Texture.matrix`. The renderer carries every coordinate of a mesh through
-its texture's matrix before the fragment samples with it, as three.js's
-vertex shader does, so a `repeat` of two tiles the image twice across and an
+`Texture.matrix`. Each map moves the fragment's coordinates by its own
+texture's matrix before it samples, as three.js gives each map a varying
+of its own; see `UvPlacement`. So a `repeat` of two tiles the image twice
+across and an
 `offset` of a half slides it half a tile. The texture itself does not change:
 the transform is on the coordinates that reach it, which is why the wrap
 mode still decides what a coordinate past the edge reads.
@@ -201,8 +202,7 @@ struct UvChannel(Equatable, ImplicitlyCopyable, Writable):
     type: three.js's `Texture.channel`.
 
     `UV_CHANNEL_0` reads the geometry's `uv` and `UV_CHANNEL_1` its `uv1`.
-    Only an ambient occlusion map or a light map can read the second set;
-    the renderer refuses it on any other map. The type does not stop
+    Any map can read either set, as in three.js. The type does not stop
     `UvChannel(9)`, so `Texture.validate` asks `is_valid`.
     """
 
@@ -213,11 +213,82 @@ struct UvChannel(Equatable, ImplicitlyCopyable, Writable):
         return self == UV_CHANNEL_0 or self == UV_CHANNEL_1
 
 
-# The geometry's `uv`: three.js's default channel, and every map's here.
+# The geometry's `uv`: three.js's default channel.
 comptime UV_CHANNEL_0 = UvChannel(0)
 # The geometry's `uv1`, or its `uv` when it has no `uv1`. What a baked
 # ambient occlusion map or light map usually reads.
 comptime UV_CHANNEL_1 = UvChannel(1)
+
+
+@fieldwise_init
+struct UvPlacement(Equatable, ImplicitlyCopyable, Writable):
+    """Where one map is sampled: the channel it reads and the 3x2 matrix
+    it moves that channel's coordinates by, three.js's `mapTransform` and
+    `MAP_UV`, and the same for every other map.
+
+    Each map carries its own, because each texture does: three.js gives
+    each map its own varying, `vMapUv`, `vNormalMapUv` and so on. The
+    rasterizers carry the geometry's two raw pairs to every fragment and
+    place them here, per map. The matrix is linear, so placing the
+    interpolated pair is placing each corner and interpolating, to the
+    rounding. `Texture.placement` builds one, and the GPU reads the same
+    six numbers from its texture table.
+
+    `xx`, `xy` and `x0` are the matrix's first row and `yx`, `yy` and `y0`
+    its second, as `Matrix3.uv_transform` lays them out.
+    """
+
+    var xx: Float32
+    var xy: Float32
+    var x0: Float32
+    var yx: Float32
+    var yy: Float32
+    var y0: Float32
+    var channel: UvChannel
+
+    def __init__(out self):
+        """Create the identity placement on `UV_CHANNEL_0`: the geometry's
+        `uv` as it is."""
+        self.xx = 1
+        self.xy = 0
+        self.x0 = 0
+        self.yx = 0
+        self.yy = 1
+        self.y0 = 0
+        self.channel = UV_CHANNEL_0
+
+    def place(self, first: Vector2, second: Vector2) -> Vector2:
+        """Return where this map is sampled, from both raw pairs.
+
+        The same sums `Matrix3.transform_point` makes, in the same order,
+        so the identity returns the pair unchanged, bit for bit.
+
+        Args:
+            first: The raw `uv` pair at the sample point.
+            second: The raw `uv1` pair at the sample point.
+
+        Returns:
+            The placed pair: `second` moved when the channel is
+            `UV_CHANNEL_1`, and `first` moved otherwise.
+        """
+        var raw = first
+        if self.channel == UV_CHANNEL_1:
+            raw = second
+        return self.moved(raw)
+
+    def moved(self, raw: Vector2) -> Vector2:
+        """Return one raw pair moved by the matrix alone.
+
+        Args:
+            raw: The pair, of whichever channel.
+
+        Returns:
+            The moved pair.
+        """
+        return Vector2(
+            self.xx * raw.x + self.xy * raw.y + self.x0,
+            self.yx * raw.x + self.yy * raw.y + self.y0,
+        )
 
 
 def float_from_bytes(b0: UInt8, b1: UInt8, b2: UInt8, b3: UInt8) -> Float32:
@@ -817,8 +888,8 @@ struct Texture(Movable):
         The identity until a field is set, so a texture that says nothing
         about it is sampled where the geometry says. Built each time it is
         asked for rather than cached, because the fields are open and a
-        cached matrix could not know when it had gone stale; the renderer
-        asks once per mesh.
+        cached matrix could not know when it had gone stale; see
+        `placement`.
 
         Returns:
             The matrix. See `Matrix3.uv_transform` for its order.
@@ -826,6 +897,20 @@ struct Texture(Movable):
         return Matrix3.uv_transform(
             self.offset, self.repeat, self.rotation, self.center
         )
+
+    def placement(self) -> UvPlacement:
+        """Return where this texture is sampled as a map: its channel and
+        the first two rows of `uv_transform`.
+
+        Built each time it is asked for, as `uv_transform` is. The GPU
+        texture table holds the same seven numbers, from this call.
+
+        Returns:
+            The placement.
+        """
+        var to_uv = self.uv_transform()
+        ref e = to_uv.elements
+        return UvPlacement(e[0], e[3], e[6], e[1], e[4], e[7], self.channel)
 
     def _alpha_of(self, byte: UInt8) -> Float32:
         """Return what an alpha byte means: its fraction, or one if alpha is

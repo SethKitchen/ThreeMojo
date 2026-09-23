@@ -52,6 +52,7 @@ from lights.lighting import (
     environment_brdf,
     f_schlick,
     floored_roughness,
+    geometry_roughness,
     ggx,
     occluded_light,
     physical_outgoing,
@@ -1639,6 +1640,33 @@ def test_a_roughness_is_floored_and_capped() raises:
     assert_equal(floored_roughness(0.5), Float32(0.5))
     assert_equal(floored_roughness(2), Float32(1))
     assert_equal(floored_roughness(1), Float32(1))
+
+
+def test_a_geometric_roughness_is_added_after_the_floor() raises:
+    # three.js: max(roughness, 0.0525), plus the geometric roughness, then
+    # at most one.
+    assert_equal(floored_roughness(0, 0.25), ROUGHNESS_FLOOR + 0.25)
+    assert_equal(floored_roughness(0.5, 0.25), Float32(0.75))
+    assert_equal(floored_roughness(0.9, 0.25), Float32(1))
+
+
+def test_the_geometric_roughness_is_the_largest_change_of_the_normal() raises:
+    # max(abs(dFdx(n)), abs(dFdy(n))), then the largest of the three.
+    assert_equal(
+        geometry_roughness(Vector3(0, 0, 0), Vector3(0, 0, 0)), Float32(0)
+    )
+    assert_equal(
+        geometry_roughness(Vector3(-0.3, 0.1, 0), Vector3(0.2, -0.05, 0)),
+        Float32(0.3),
+    )
+    assert_equal(
+        geometry_roughness(Vector3(0.1, 0.2, 0), Vector3(0, -0.4, 0.05)),
+        Float32(0.4),
+    )
+    assert_equal(
+        geometry_roughness(Vector3(0.01, 0, -0.6), Vector3(0, 0, 0.5)),
+        Float32(0.6),
+    )
 
 
 def test_the_outgoing_light_sums_the_three_parts_and_the_glow() raises:

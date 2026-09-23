@@ -604,7 +604,7 @@ def physical_surface(
     )
 
 
-def floored_roughness(roughness: Float32) -> Float32:
+def floored_roughness(roughness: Float32, geometry: Float32 = 0) -> Float32:
     """Return a roughness never below `ROUGHNESS_FLOOR` and never above one,
     as three.js's `lights_physical_fragment` clamps it.
 
@@ -619,17 +619,43 @@ def floored_roughness(roughness: Float32) -> Float32:
     *environment* roughness, is the BRDF roughness read as a mip level by
     `render.cube_texture.reflection_level`, an approximation of its own.
 
-    three.js adds a geometric roughness from how fast the normal changes
-    across the pixel, which needs the neighboring pixels' normals; this
-    project shades each pixel alone and adds none.
+    three.js adds a geometric roughness after the floor and before the
+    cap: how fast the normal turns across one pixel, which
+    `geometry_roughness` works out. Zero, the default, adds none.
 
     Args:
         roughness: The authored roughness, times any map.
+        geometry: The geometric roughness, from zero.
 
     Returns:
         The roughness the lobe is evaluated with.
     """
-    return min(max(roughness, ROUGHNESS_FLOOR), Float32(1))
+    return min(max(roughness, ROUGHNESS_FLOOR) + geometry, Float32(1))
+
+
+def geometry_roughness(along_x: Vector3, along_y: Vector3) -> Float32:
+    """Return how rough a surface looks for its curve alone, three.js's
+    `geometryRoughness` in `lights_physical_fragment`.
+
+    three.js takes `dxy = max(abs(dFdx(n)), abs(dFdy(n)))` of the view
+    space normal before any map, and the largest of its three parts. A
+    surface that turns fast across a pixel then has a wider lobe, which
+    keeps a highlight on a small, curved thing from aliasing. Both
+    rasterizers call this with the change from the pixel here to the
+    pixel to the right and to the pixel above, each worked out from the
+    triangle's own functions, as they measure a texture's footprint.
+
+    Args:
+        along_x: How the view space unit normal changes one pixel right.
+        along_y: How it changes one pixel up.
+
+    Returns:
+        The geometric roughness, from zero. Zero for a flat triangle.
+    """
+    var dx = max(abs(along_x.x), abs(along_y.x))
+    var dy = max(abs(along_x.y), abs(along_y.y))
+    var dz = max(abs(along_x.z), abs(along_y.z))
+    return max(max(dx, dy), dz)
 
 
 def physical_outgoing(

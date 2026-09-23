@@ -316,6 +316,52 @@ def test_a_moved_texture_is_written_with_a_transform() raises:
         assert_equal(twice.pixels[index], once.pixels[index])
 
 
+def test_maps_placed_apart_read_back_apart() raises:
+    # Each map is written with its own transform and its own set, and read
+    # back so, as three.js keeps a transform and a channel for each map.
+    var assets = Assets()
+    var moved = image(1)
+    moved.offset = Vector2(0.25, 0.5)
+    moved.repeat = Vector2(2, 3)
+    var bumps = image(2, LINEAR, True)
+    bumps.rotation = Angle(0.5, RADIAN)
+    bumps.channel = UV_CHANNEL_1
+    var glow = image(3)
+    glow.repeat = Vector2(4, 1)
+    var originals: List[Texture] = [
+        Texture(copy=moved),
+        Texture(copy=bumps),
+        Texture(copy=glow),
+    ]
+    var scene = one_mesh(
+        assets,
+        standard_material(
+            Color(9, 9, 9),
+            map=assets.textures.add(moved^),
+            normal_map=assets.textures.add(bumps^),
+            emissive=Color(255, 255, 255),
+            emissive_map=assets.textures.add(glow^),
+        ),
+        second_set=True,
+    )
+    var trip = Trip(scene, assets)
+    var material = trip.material()
+    var read: List[TextureId] = [
+        material.map,
+        material.normal_map,
+        material.emissive_map,
+    ]
+    for index in range(3):
+        ref got = trip.assets.textures.get(read[index])
+        check_same_sampling(got, originals[index])
+        assert_equal(got.channel, originals[index].channel)
+    # Written again, each reads back to the same.
+    var second = trip.again()
+    ref twice = second.assets.textures.get(second.material().normal_map)
+    assert_equal(twice.channel, UV_CHANNEL_1)
+    check_same_sampling(twice, originals[1])
+
+
 def transform_of(texture: Texture) raises -> Tuple[Bool, Bool, Bool, Bool]:
     """Write a texture as a base map and return which of `offset`,
     `rotation` and `scale` its transform names, and whether it has one."""

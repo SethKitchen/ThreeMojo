@@ -41,6 +41,7 @@ from render.texture import (
     UV_CHANNEL_0,
     UV_CHANNEL_1,
     UvChannel,
+    UvPlacement,
     anisotropic_footprint,
 )
 from std.math import inf, nan
@@ -1681,3 +1682,39 @@ def test_a_texture_refuses_an_anisotropy_above_the_cap() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+def test_a_placement_is_the_identity_until_a_field_is_set() raises:
+    # The identity on the first set, bit for bit: a pair comes back as it
+    # went in, whatever its sign.
+    var plain = UvPlacement()
+    assert_true(plain == quad().placement())
+    assert_equal(plain.channel, UV_CHANNEL_0)
+    var raw = Vector2(-0.375, 1.625)
+    var placed = plain.place(raw, Vector2(9, 9))
+    assert_equal(placed.x, raw.x)
+    assert_equal(placed.y, raw.y)
+
+
+def test_a_placement_is_the_uv_transform_on_its_own_channel() raises:
+    # The matrix's top two rows, and the channel picks the pair it moves.
+    var image = quad()
+    image.repeat = Vector2(2, 3)
+    image.offset = Vector2(0.5, 0.25)
+    image.rotation = Angle(30.0, DEGREE)
+    image.center = Vector2(0.5, 0.5)
+    var placed = image.placement()
+    var point = Vector2(0.2, 0.7)
+    var expected = image.uv_transform().transform_point(point)
+    var first = placed.place(point, Vector2(5, 5))
+    assert_almost_equal(first.x, expected.x, atol=1e-6)
+    assert_almost_equal(first.y, expected.y, atol=1e-6)
+    image.channel = UV_CHANNEL_1
+    var second = image.placement().place(Vector2(5, 5), point)
+    assert_almost_equal(second.x, expected.x, atol=1e-6)
+    assert_almost_equal(second.y, expected.y, atol=1e-6)
+    var moved = placed.moved(point)
+    assert_almost_equal(moved.x, expected.x, atol=1e-6)
+    assert_almost_equal(moved.y, expected.y, atol=1e-6)
+    # A copy keeps both.
+    assert_true(image.ignoring_alpha().placement() == image.placement())

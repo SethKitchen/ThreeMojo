@@ -400,6 +400,72 @@ def test_a_scene_read_back_renders_the_same() raises:
     assert_equal(text, object_to_json(scene, assets))
 
 
+def test_maps_placed_apart_round_trip_and_render_the_same() raises:
+    """A material whose maps each have their own transform and channel is
+    written, read back with each map's own, and renders the same."""
+    var assets = Assets()
+    var scene = Scene()
+    var tiled = _image(10)
+    tiled.repeat = Vector2(3, 2)
+    var turned = _image(90, True)
+    turned.rotation = Angle(40, DEGREE)
+    turned.center = Vector2(0.5, 0.5)
+    var baked = _image(40, True)
+    baked.offset = Vector2(0.25, 0)
+    baked.channel = UV_CHANNEL_1
+    var map = assets.textures.add(tiled^)
+    var bumps = assets.textures.add(turned^)
+    var ao = assets.textures.add(baked^)
+    var cube = assets.geometries.add(_cube(2.5))
+    scene.add_mesh(
+        Mesh(
+            cube,
+            assets.materials.add(
+                Material(
+                    Color(220, 220, 220),
+                    map,
+                    kind=STANDARD,
+                    normal_map=bumps,
+                    ao_map=ao,
+                    roughness=0.6,
+                )
+            ),
+            _placed(scene, 0, 0),
+        )
+    )
+    scene.add_light(
+        directional_light(Color(255, 250, 240), _placed(scene, 2, 4, False), 2)
+    )
+    scene.add_light(ambient_light(Color(60, 60, 60), 1))
+    var before = _render(scene, assets)
+    var text = object_to_json(scene, assets)
+    var read = _read(text)
+    var material = read[1].materials.get(read[0].meshes[0].material)
+    var wrote: List[TextureId] = [map, bumps, ao]
+    var came: List[TextureId] = [
+        material.map,
+        material.normal_map,
+        material.ao_map,
+    ]
+    for index in range(3):
+        assert_true(
+            read[1].textures.get(came[index]).placement()
+            == assets.textures.get(wrote[index]).placement()
+        )
+    var again = Scene()
+    var fresh = Assets()
+    _ = read_object_json(text, again, fresh)
+    var after = _render(again, fresh)
+    var drawn = 0
+    for at in range(len(before)):
+        assert_true(abs(Int(before[at].r) - Int(after[at].r)) <= 1)
+        assert_true(abs(Int(before[at].g) - Int(after[at].g)) <= 1)
+        assert_true(abs(Int(before[at].b) - Int(after[at].b)) <= 1)
+        if Int(before[at].r) > 0:
+            drawn += 1
+    assert_true(drawn > SIDE * SIDE // 8)
+
+
 def test_the_newer_material_fields_round_trip() raises:
     """Every newer field of a material comes back as it was written."""
     var assets = Assets()

@@ -691,15 +691,22 @@ def test_the_layer_extensions_read_their_maps() raises:
     assert_equal(unmapped.iridescence_map, NO_TEXTURE)
     assert_equal(unmapped.iridescence_thickness_map, NO_TEXTURE)
     assert_equal(unmapped.anisotropy_map, NO_TEXTURE)
-    # A layer map moved apart from the base map is refused.
-    refuses(
+    # A layer map moved apart from the base map keeps its own transform.
+    var apart_scene = Scene()
+    var apart = loaded(
         textured(
             '[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0}},'
             + '"extensions":{"KHR_materials_sheen":{"sheenColorTexture":'
             + '{"index":0,"extensions":{"KHR_texture_transform":'
             + '{"offset":[0.5,0]}}}}}}]'
         ),
-        "share one KHR_texture_transform",
+        apart_scene,
+        assets,
+    )
+    var sheened = assets.materials.get(apart.materials[0])
+    assert_true(
+        assets.textures.get(sheened.map).uv_transform()
+        != assets.textures.get(sheened.sheen_color_map).uv_transform()
     )
 
 
@@ -795,26 +802,50 @@ def test_a_texture_transform_names_the_coordinates_that_are_read() raises:
     assert_equal(
         assets.materials.get(model.materials[0]).map, model.color_textures[0]
     )
-    refuses(
+    # The second set gives the map a copy on `UV_CHANNEL_1`, any map as
+    # in three.js, and the transform's texCoord still wins.
+    var second = loaded(
         textured(
             '[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0,'
             + '"extensions":{"KHR_texture_transform":{"texCoord":1}}}}}]'
         ),
-        "only the first set",
+        scene,
+        assets,
     )
-
-
-def test_a_material_whose_maps_move_apart_is_refused() raises:
-    # A fragment samples every map at one coordinate here.
+    var moved = assets.materials.get(second.materials[0]).map
+    assert_true(moved != second.color_textures[0])
+    assert_equal(assets.textures.get(moved).channel, UV_CHANNEL_1)
     refuses(
         textured(
             '[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0,'
-            + '"extensions":{"KHR_texture_transform":{"offset":[0.5,0]}}}},'
-            + '"normalTexture":{"index":1}}]'
+            + '"extensions":{"KHR_texture_transform":{"texCoord":2}}}}}]'
         ),
-        "share one KHR_texture_transform",
+        "first two sets",
     )
-    # Moved together, they are read: every map of the material agrees.
+
+
+def test_the_maps_of_one_material_keep_their_own_transforms() raises:
+    # Each map is sampled at its own coordinate, as in three.js: a base
+    # map moved and a normal map left alone keep their own transforms.
+    var apart_scene = Scene()
+    var apart_assets = Assets()
+    var apart = loaded(
+        textured(
+            '[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0,'
+            + '"extensions":{"KHR_texture_transform":{"offset":[0.5,0]}}}},'
+            + '"normalTexture":{"index":1,"texCoord":1}}]'
+        ),
+        apart_scene,
+        apart_assets,
+    )
+    var parted = apart_assets.materials.get(apart.materials[0])
+    var base = apart_assets.textures.get(parted.map).placement()
+    var bumps = apart_assets.textures.get(parted.normal_map).placement()
+    assert_equal(base.x0, Float32(0.5))
+    assert_equal(base.channel, UV_CHANNEL_0)
+    assert_equal(bumps.x0, Float32(0))
+    assert_equal(bumps.channel, UV_CHANNEL_1)
+    # Moved together, they are read alike.
     var scene = Scene()
     var assets = Assets()
     var model = loaded(
@@ -1461,7 +1492,7 @@ def test_a_malformed_occlusion_is_refused() raises:
     )
     refuses(
         occluded('{"normalTexture":{"index":0,"texCoord":-1}}'),
-        "only the first set",
+        "first two sets",
     )
     refuses(
         occluded('{"occlusionTexture":{"index":0,"strength":-1}}'),
@@ -1540,8 +1571,9 @@ def test_the_specular_and_clearcoat_extensions_read_their_maps() raises:
     assert_equal(unmapped.clearcoat_roughness_map, NO_TEXTURE)
     assert_equal(unmapped.clearcoat_normal_map, NO_TEXTURE)
     assert_equal(unmapped.clearcoat_normal_scale.x, Float32(1))
-    # A coat map moved apart from the base map is refused.
-    refuses(
+    # A coat map moved apart from the base map keeps its own transform.
+    var apart_scene = Scene()
+    var apart = loaded(
         textured(
             '[{"pbrMetallicRoughness":{"baseColorTexture":{"index":0}},'
             + '"extensions":{"KHR_materials_clearcoat":{"clearcoatFactor":1,'
@@ -1549,5 +1581,12 @@ def test_the_specular_and_clearcoat_extensions_read_their_maps() raises:
             + '{"index":1,"extensions":{"KHR_texture_transform":'
             + '{"offset":[0.5,0]}}}}}}]'
         ),
-        "share one KHR_texture_transform",
+        apart_scene,
+        assets,
     )
+    var coated = assets.materials.get(apart.materials[0])
+    assert_equal(
+        assets.textures.get(coated.clearcoat_normal_map).placement().x0,
+        Float32(0.5),
+    )
+    assert_equal(assets.textures.get(coated.map).placement().x0, Float32(0))

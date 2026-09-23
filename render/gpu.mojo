@@ -126,6 +126,7 @@ from lights.lighting import (
     blinn_phong,
     falloff,
     floored_roughness,
+    geometry_roughness,
     occluded_light,
     physical_light,
     physical_outgoing,
@@ -249,11 +250,14 @@ from render.texture import (
     IGNORED,
     NEAREST,
     UNSIGNED_BYTE_TYPE,
+    UV_CHANNEL_1,
     Alpha,
     Filter,
     Footprint,
     TexelType,
     Texture,
+    UvChannel,
+    UvPlacement,
     Wrap,
     anisotropic_footprint,
     blend_texels,
@@ -662,8 +666,13 @@ comptime FURTHEST = Float32(1.0e30)
 
 # One row per texture in the store: where its bytes start, how big it is, and
 # how to sample it. A device cannot hold a `List` of `List`s, so every image
-# goes into one buffer end to end and this says where each one begins.
-comptime TABLE_COLUMNS = 10
+# goes into one buffer end to end and this says where each one begins. The
+# last seven columns are where the texture is sampled as a map, its
+# `UvPlacement`: six floats of the matrix, bit for bit, then the channel.
+# A texture's transform is its own, as in three.js, so a row per texture
+# holds every map's exactly, and a triangle carries no more than its ids.
+comptime TABLE_PLACEMENT = 10
+comptime TABLE_COLUMNS = TABLE_PLACEMENT + 7
 # How many table rows a cube texture takes: its six faces, then its PMREM
 # image, or one white byte texel for a cube that has none. The kernel tells
 # the two apart by the texel type, since a PMREM always holds floats.
@@ -690,9 +699,11 @@ def flatten_textures(
     Returns:
         The concatenated texels, and `TABLE_COLUMNS` entries per texture:
         byte offset, width, height, wrap mode, filter mode, color space,
-        how many mip levels follow, the alpha mode, the anisotropy, and
-        the texel type. A float texture's numbers cross as four
-        little-endian bytes each, so every texture shares one buffer.
+        how many mip levels follow, the alpha mode, the anisotropy, the
+        texel type, then from `TABLE_PLACEMENT` the six numbers of its
+        `Texture.placement` as their bits and its channel. A float
+        texture's numbers cross as four little-endian bytes each, so every
+        texture shares one buffer.
 
     Raises:
         Error: If a texture cannot be read, or its wrap, filter, color
@@ -731,6 +742,24 @@ def _flatten_one(
             none of the named values.
     """
     image.validate()
+    _flatten_row(image, texels, table)
+    # Where it is sampled as a map, after the rest of the row: a blank
+    # texture's is the identity, and a cube face's is never read.
+    var placed = image.placement()
+    table.append(bitcast[DType.int32](placed.xx))
+    table.append(bitcast[DType.int32](placed.xy))
+    table.append(bitcast[DType.int32](placed.x0))
+    table.append(bitcast[DType.int32](placed.yx))
+    table.append(bitcast[DType.int32](placed.yy))
+    table.append(bitcast[DType.int32](placed.y0))
+    table.append(Int32(placed.channel.value))
+
+
+def _flatten_row(
+    image: Texture, mut texels: List[UInt8], mut table: List[Int32]
+):
+    """Append one texture's bytes and the first `TABLE_PLACEMENT` entries
+    of its row: everything but its placement."""
     table.append(Int32(len(texels)))
     if image.is_blank():
         # A blank texture is a legitimate thing to store, and on the host
@@ -1977,6 +2006,65 @@ def _world_at(
     )
 
 
+def _normal_at(
+    corners: MutPointer[Float32, MutAnyOrigin],
+    base: Int,
+    ax: Int,
+    ay: Int,
+    bx: Int,
+    by: Int,
+    cx: Int,
+    cy: Int,
+    span_inv: Float32,
+    swapped: Bool,
+    px: Int,
+    py: Int,
+) -> Vector3:
+    """Return the perspective-correct unit normal at a sample point,
+    before any map: the device counterpart of
+    `render.rasterizer._normal_at`. A zero normal stays zero."""
+    var b_base = base + FLOATS_PER_VERTEX
+    var c_base = base + 2 * FLOATS_PER_VERTEX
+    var e_ab = edge_at(ax, ay, bx, by, px, py)
+    var e_bc = edge_at(bx, by, cx, cy, px, py)
+    var e_ca = edge_at(cx, cy, ax, ay, px, py)
+    var first = Float32(e_bc) * span_inv
+    var second = Float32(e_ca) * span_inv
+    var third = Float32(e_ab) * span_inv
+    var wa = first
+    var wb = second
+    var wc = third
+    if swapped:
+        wb = third
+        wc = second
+    var aw = corners[unsafe_offset=base + LANE_INV_W]
+    var bw = corners[unsafe_offset=b_base + LANE_INV_W]
+    var cw = corners[unsafe_offset=c_base + LANE_INV_W]
+    var inv_w = wa * aw + wb * bw + wc * cw
+    var share_a = wa
+    var share_b = wb
+    var share_c = wc
+    if inv_w != 0:
+        var rcp = Float32(1) / inv_w
+        share_a = wa * aw * rcp
+        share_b = wb * bw * rcp
+        share_c = wc * cw * rcp
+    var facing = Vector3(
+        corners[unsafe_offset=base + LANE_NX] * share_a
+        + corners[unsafe_offset=b_base + LANE_NX] * share_b
+        + corners[unsafe_offset=c_base + LANE_NX] * share_c,
+        corners[unsafe_offset=base + LANE_NY] * share_a
+        + corners[unsafe_offset=b_base + LANE_NY] * share_b
+        + corners[unsafe_offset=c_base + LANE_NY] * share_c,
+        corners[unsafe_offset=base + LANE_NZ] * share_a
+        + corners[unsafe_offset=b_base + LANE_NZ] * share_b
+        + corners[unsafe_offset=c_base + LANE_NZ] * share_c,
+    )
+    if facing.length() != 0:
+        facing.normalize()
+    return facing
+
+
 def _sample_cube_level(
     texels: MutPointer[UInt8, MutAnyOrigin],
     ramp: MutPointer[Float32, MutAnyOrigin],
@@ -2389,6 +2477,24 @@ struct _Descriptor(ImplicitlyCopyable):
     var alpha: Alpha
     var anisotropy: Int
     var texel_type: TexelType
+
+
+def _placement(
+    table: MutPointer[Int32, MutAnyOrigin], slot: Int
+) -> UvPlacement:
+    """Return where texture `slot` is sampled as a map, from its row of
+    the table: the device counterpart of `Texture.placement`, the same
+    seven numbers `flatten_textures` wrote."""
+    var entry = slot * TABLE_COLUMNS + TABLE_PLACEMENT
+    return UvPlacement(
+        bitcast[DType.float32](table[unsafe_offset=entry]),
+        bitcast[DType.float32](table[unsafe_offset=entry + 1]),
+        bitcast[DType.float32](table[unsafe_offset=entry + 2]),
+        bitcast[DType.float32](table[unsafe_offset=entry + 3]),
+        bitcast[DType.float32](table[unsafe_offset=entry + 4]),
+        bitcast[DType.float32](table[unsafe_offset=entry + 5]),
+        UvChannel(Int(table[unsafe_offset=entry + 6])),
+    )
 
 
 def _describe(table: MutPointer[Int32, MutAnyOrigin], slot: Int) -> _Descriptor:
@@ -2806,7 +2912,7 @@ def _sample_slot(
     py: Int,
     u: Float32,
     v: Float32,
-    lane: Int = LANE_U,
+    placement: UvPlacement = UvPlacement(),
 ) -> FloatColor:
     """Sample texture `slot` at (u, v) for the pixel at (px, py).
 
@@ -2816,60 +2922,71 @@ def _sample_slot(
     shortcut. Otherwise the level comes from where the coordinates land one
     pixel over and one down, evaluated from the triangle's own uv function
     rather than read from a neighboring thread -- see
-    `render.rasterizer.mip_level`. Shared by the material's map and its
-    emissive map, as `_sample_map` is on the host, so both are filtered
-    alike on both sides. `lane` says which pair the footprint is measured
-    on: `LANE_U`, or `LANE_U1` for an ambient occlusion map or a light map.
+    `render.rasterizer.mip_level`. Shared by every map, as `_sample_map` is
+    on the host, so all are filtered alike on both sides. (u, v) is
+    already placed: `placement` says which pair the footprint is measured
+    on, `LANE_U` or `LANE_U1` by its channel, and how that pair is moved.
+    The identity on the first pair, the default, is what a node graph
+    samples at.
     """
     var image = _describe(table, slot)
     if image.levels == 1 and image.anisotropy == 1:
         return _sample_at(texels, ramp, image, u, v, 0)
+    var lane = LANE_U
+    if placement.channel == UV_CHANNEL_1:
+        lane = LANE_U1
     # The center from the same function as its neighbors, as
     # `render.rasterizer._sample_map` takes it, and for the same reason.
-    var here = _uv_at(
-        corners,
-        base,
-        ax,
-        ay,
-        bx,
-        by,
-        cx,
-        cy,
-        span_inv,
-        swapped,
-        px,
-        py,
-        lane,
+    var here = placement.moved(
+        _uv_at(
+            corners,
+            base,
+            ax,
+            ay,
+            bx,
+            by,
+            cx,
+            cy,
+            span_inv,
+            swapped,
+            px,
+            py,
+            lane,
+        )
     )
-    var along_x = _uv_at(
-        corners,
-        base,
-        ax,
-        ay,
-        bx,
-        by,
-        cx,
-        cy,
-        span_inv,
-        swapped,
-        px + SUBPIXEL,
-        py,
-        lane,
+    var along_x = placement.moved(
+        _uv_at(
+            corners,
+            base,
+            ax,
+            ay,
+            bx,
+            by,
+            cx,
+            cy,
+            span_inv,
+            swapped,
+            px + SUBPIXEL,
+            py,
+            lane,
+        )
     )
-    var along_y = _uv_at(
-        corners,
-        base,
-        ax,
-        ay,
-        bx,
-        by,
-        cx,
-        cy,
-        span_inv,
-        swapped,
-        px,
-        py + SUBPIXEL,
-        lane,
+    var along_y = placement.moved(
+        _uv_at(
+            corners,
+            base,
+            ax,
+            ay,
+            bx,
+            by,
+            cx,
+            cy,
+            span_inv,
+            swapped,
+            px,
+            py + SUBPIXEL,
+            lane,
+        )
     )
     # The level and the taps, from the host's own function, and v flipped
     # and wrapped by the same routine the host uses -- see render.texture.
@@ -2905,6 +3022,117 @@ def _sample_slot(
     return FloatColor(
         total.r * share, total.g * share, total.b * share, total.a * share
     ).unpremultiplied()
+
+
+def _placed_steps(
+    corners: MutPointer[Float32, MutAnyOrigin],
+    base: Int,
+    ax: Int,
+    ay: Int,
+    bx: Int,
+    by: Int,
+    cx: Int,
+    cy: Int,
+    span_inv: Float32,
+    swapped: Bool,
+    px: Int,
+    py: Int,
+    placement: UvPlacement,
+    here: Vector2,
+) -> Tuple[Vector2, Vector2]:
+    """Return how one map's placed coordinates change one pixel right and
+    one pixel up, from `here`: the device counterpart of
+    `render.rasterizer._placed_steps`."""
+    var lane = LANE_U
+    if placement.channel == UV_CHANNEL_1:
+        lane = LANE_U1
+    var to_right = placement.moved(
+        _uv_at(
+            corners,
+            base,
+            ax,
+            ay,
+            bx,
+            by,
+            cx,
+            cy,
+            span_inv,
+            swapped,
+            px + SUBPIXEL,
+            py,
+            lane,
+        )
+    )
+    var to_up = placement.moved(
+        _uv_at(
+            corners,
+            base,
+            ax,
+            ay,
+            bx,
+            by,
+            cx,
+            cy,
+            span_inv,
+            swapped,
+            px,
+            py - SUBPIXEL,
+            lane,
+        )
+    )
+    return (
+        Vector2(to_right.x - here.x, to_right.y - here.y),
+        Vector2(to_up.x - here.x, to_up.y - here.y),
+    )
+
+
+def _sample_placed_slot(
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
+    slot: Int,
+    corners: MutPointer[Float32, MutAnyOrigin],
+    base: Int,
+    ax: Int,
+    ay: Int,
+    bx: Int,
+    by: Int,
+    cx: Int,
+    cy: Int,
+    span_inv: Float32,
+    swapped: Bool,
+    px: Int,
+    py: Int,
+    uv: Vector2,
+    uv1: Vector2,
+) -> FloatColor:
+    """Sample map `slot` where its own placement puts the pixel: the
+    device counterpart of `render.rasterizer._sample_placed`. `uv` and
+    `uv1` are the pixel's two raw pairs; the table says which one the map
+    reads and how it is moved."""
+    var placement = _placement(table, slot)
+    var at = placement.place(uv, uv1)
+    return _sample_slot(
+        texels,
+        ramp,
+        table,
+        slot,
+        corners,
+        base,
+        ax,
+        ay,
+        bx,
+        by,
+        cx,
+        cy,
+        span_inv,
+        swapped,
+        px,
+        py,
+        at.x,
+        at.y,
+        placement,
+    )
 
 
 struct _DeviceSource[origin: Origin[mut=True]](TransmissionSource):
@@ -3917,10 +4145,12 @@ def rasterize_kernel(
                     + corners[unsafe_offset=b_base + LANE_WZ] * share_b
                     + corners[unsafe_offset=c_base + LANE_WZ] * share_c
                 )
-            # Texture coordinates, for the two modes that read them and for
-            # a node graph.
+            # The raw texture coordinates, both pairs, for the two modes
+            # that read them and for a node graph. Each map places them
+            # for itself, by its row of the texture table.
             var u = Float32(0)
             var v = Float32(0)
+            var uv1 = Vector2(0, 0)
             if mode != Int32(SHADE_LIT.value) or noded:
                 u = (
                     corners[unsafe_offset=base + LANE_U] * share_a
@@ -3932,6 +4162,15 @@ def rasterize_kernel(
                     + corners[unsafe_offset=b_base + LANE_V] * share_b
                     + corners[unsafe_offset=c_base + LANE_V] * share_c
                 )
+                uv1 = Vector2(
+                    corners[unsafe_offset=base + LANE_U1] * share_a
+                    + corners[unsafe_offset=b_base + LANE_U1] * share_b
+                    + corners[unsafe_offset=c_base + LANE_U1] * share_c,
+                    corners[unsafe_offset=base + LANE_V1] * share_a
+                    + corners[unsafe_offset=b_base + LANE_V1] * share_b
+                    + corners[unsafe_offset=c_base + LANE_V1] * share_c,
+                )
+            var uv = Vector2(u, v)
             # The normal before any map perturbs it: what a clear coat
             # lies on. Then the map, by the host's own two functions, from
             # the position and the coordinates one pixel right and one
@@ -3986,21 +4225,14 @@ def rasterize_kernel(
                     )
                     - here
                 )
-                var uv_right = _uv_at(
-                    corners,
-                    base,
-                    sax,
-                    say,
-                    sbx,
-                    sby,
-                    scx,
-                    scy,
-                    span_inv,
-                    swapped,
-                    px + SUBPIXEL,
-                    py,
+                # The map's own coordinates, placed, as three.js reads
+                # `vNormalMapUv` or `vBumpMapUv`.
+                var framed = _placement(
+                    table,
+                    Int(normal_slot) if normal_slot >= 0 else Int(bump_slot),
                 )
-                var uv_up = _uv_at(
+                var at = framed.place(uv, uv1)
+                var steps = _placed_steps(
                     corners,
                     base,
                     sax,
@@ -4012,10 +4244,12 @@ def rasterize_kernel(
                     span_inv,
                     swapped,
                     px,
-                    py - SUBPIXEL,
+                    py,
+                    framed,
+                    at,
                 )
-                var uv_along_x = Vector2(uv_right.x - u, uv_right.y - v)
-                var uv_along_y = Vector2(uv_up.x - u, uv_up.y - v)
+                var uv_along_x = steps[0]
+                var uv_along_y = steps[1]
                 var facing = Vector3(nx, ny, nz)
                 if normal_slot >= 0:
                     facing = mapped_normal(
@@ -4041,8 +4275,9 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            at.x,
+                            at.y,
+                            framed,
                         ),
                         Vector2(
                             corners[unsafe_offset=base + LANE_NORMAL_SCALE_X],
@@ -4072,8 +4307,9 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            at.x,
+                            at.y,
+                            framed,
                         ).r
                     )
                     var rise_x = (
@@ -4095,8 +4331,9 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u + uv_along_x.x,
-                            v + uv_along_x.y,
+                            at.x + uv_along_x.x,
+                            at.y + uv_along_x.y,
+                            framed,
                         ).r
                         - height
                     )
@@ -4119,8 +4356,9 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u + uv_along_y.x,
-                            v + uv_along_y.y,
+                            at.x + uv_along_y.x,
+                            at.y + uv_along_y.y,
+                            framed,
                         ).r
                         - height
                     )
@@ -4303,8 +4541,9 @@ def rasterize_kernel(
                         receives,
                     )
 
-            # The baked maps, sampled at the second coordinates by the
-            # host's own functions in the host's own order; see
+            # The baked maps, each sampled where its own placement puts
+            # the pixel, by the host's own functions in the host's own
+            # order; see
             # `rasterize_shaded`. A physical surface takes both below.
             var occlusion = Float32(1)
             var baked = Vector3(0, 0, 0)
@@ -4317,19 +4556,9 @@ def rasterize_kernel(
             if mode == Int32(SHADE_TEXTURE.value) and (
                 ao_slot >= 0 or light_slot >= 0
             ):
-                var u1 = (
-                    corners[unsafe_offset=base + LANE_U1] * share_a
-                    + corners[unsafe_offset=b_base + LANE_U1] * share_b
-                    + corners[unsafe_offset=c_base + LANE_U1] * share_c
-                )
-                var v1 = (
-                    corners[unsafe_offset=base + LANE_V1] * share_a
-                    + corners[unsafe_offset=b_base + LANE_V1] * share_b
-                    + corners[unsafe_offset=c_base + LANE_V1] * share_c
-                )
                 if ao_slot >= 0:
                     occlusion = ambient_occlusion(
-                        _sample_slot(
+                        _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4346,14 +4575,13 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u1,
-                            v1,
-                            LANE_U1,
+                            uv,
+                            uv1,
                         ).r,
                         corners[unsafe_offset=base + LANE_AO_INTENSITY],
                     )
                 if light_slot >= 0:
-                    var glowed = _sample_slot(
+                    var glowed = _sample_placed_slot(
                         texels,
                         ramp,
                         table,
@@ -4370,9 +4598,8 @@ def rasterize_kernel(
                         swapped,
                         px,
                         py,
-                        u1,
-                        v1,
-                        LANE_U1,
+                        uv,
+                        uv1,
                     )
                     var strength = corners[
                         unsafe_offset=base + LANE_LIGHT_MAP_INTENSITY
@@ -4519,7 +4746,7 @@ def rasterize_kernel(
                         ]
                     )
                     if slot != NO_TEXTURE.value:
-                        var sampled = _sample_slot(
+                        var sampled = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4536,8 +4763,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         )
                         red *= sampled.r
                         green *= sampled.g
@@ -4561,7 +4788,7 @@ def rasterize_kernel(
                         ]
                     )
                     if mask_slot != NO_TEXTURE.value:
-                        var thinning = _sample_slot(
+                        var thinning = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4578,12 +4805,12 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         )
                         alpha *= thinning.g
                     if glow_slot != NO_TEXTURE.value:
-                        var glowing = _sample_slot(
+                        var glowing = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4600,8 +4827,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         )
                         glow_r *= glowing.r
                         glow_g *= glowing.g
@@ -4615,7 +4842,7 @@ def rasterize_kernel(
                         ]
                     )
                     if rough_slot != NO_TEXTURE.value:
-                        rough_factor = _sample_slot(
+                        rough_factor = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4632,8 +4859,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         ).g
                     var metal_slot = Int(
                         maps[
@@ -4642,7 +4869,7 @@ def rasterize_kernel(
                         ]
                     )
                     if metal_slot != NO_TEXTURE.value:
-                        metal_factor = _sample_slot(
+                        metal_factor = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4659,8 +4886,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         ).b
                     # The specular map's red scales the highlight here and
                     # the reflectivity below, exactly as `rasterize_shaded`
@@ -4672,7 +4899,7 @@ def rasterize_kernel(
                         ]
                     )
                     if strength_slot != NO_TEXTURE.value:
-                        specular_strength = _sample_slot(
+                        specular_strength = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4689,8 +4916,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         ).r
                         highlight = Vector3(
                             highlight.x * specular_strength,
@@ -4707,7 +4934,7 @@ def rasterize_kernel(
                         ]
                     )
                     if tint_slot != NO_TEXTURE.value:
-                        var tint = _sample_slot(
+                        var tint = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4724,8 +4951,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         )
                         sheen_tint = Vector3(tint.r, tint.g, tint.b)
                     var cloth_slot = Int(
@@ -4735,7 +4962,7 @@ def rasterize_kernel(
                         ]
                     )
                     if cloth_slot != NO_TEXTURE.value:
-                        sheen_alpha = _sample_slot(
+                        sheen_alpha = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4752,8 +4979,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         ).a
                     var film_slot = Int(
                         maps[
@@ -4762,7 +4989,7 @@ def rasterize_kernel(
                         ]
                     )
                     if film_slot != NO_TEXTURE.value:
-                        film_factor = _sample_slot(
+                        film_factor = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4779,8 +5006,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         ).r
                     var thick_slot = Int(
                         maps[
@@ -4789,7 +5016,7 @@ def rasterize_kernel(
                         ]
                     )
                     if thick_slot != NO_TEXTURE.value:
-                        thickness_texel = _sample_slot(
+                        thickness_texel = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4806,8 +5033,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         ).g
                         thickness_mapped = True
                     var turn_slot = Int(
@@ -4817,7 +5044,7 @@ def rasterize_kernel(
                         ]
                     )
                     if turn_slot != NO_TEXTURE.value:
-                        var turn = _sample_slot(
+                        var turn = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4834,8 +5061,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         )
                         stretch_texel = Vector3(turn.r, turn.g, turn.b)
                     # The specular and coat maps, exactly as
@@ -4848,7 +5075,7 @@ def rasterize_kernel(
                         ]
                     )
                     if specular_tint_slot != NO_TEXTURE.value:
-                        var tint = _sample_slot(
+                        var tint = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4865,8 +5092,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         )
                         specular_texel = Vector3(tint.r, tint.g, tint.b)
                     var specular_alpha_slot = Int(
@@ -4876,7 +5103,7 @@ def rasterize_kernel(
                         ]
                     )
                     if specular_alpha_slot != NO_TEXTURE.value:
-                        specular_alpha = _sample_slot(
+                        specular_alpha = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4893,8 +5120,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         ).a
                     var coat_slot = Int(
                         maps[
@@ -4903,7 +5130,7 @@ def rasterize_kernel(
                         ]
                     )
                     if coat_slot != NO_TEXTURE.value:
-                        coat_factor = _sample_slot(
+                        coat_factor = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4920,8 +5147,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         ).r
                     var coat_rough_slot = Int(
                         maps[
@@ -4930,7 +5157,7 @@ def rasterize_kernel(
                         ]
                     )
                     if coat_rough_slot != NO_TEXTURE.value:
-                        coat_rough_factor = _sample_slot(
+                        coat_rough_factor = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4947,8 +5174,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         ).g
                     var coat_normal_slot = Int(
                         maps[
@@ -4957,7 +5184,7 @@ def rasterize_kernel(
                         ]
                     )
                     if coat_normal_slot != NO_TEXTURE.value:
-                        coat_texel = _sample_slot(
+                        coat_texel = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -4974,8 +5201,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         )
                         coat_mapped = True
                     # The transmission map's red and the thickness map's
@@ -4987,7 +5214,7 @@ def rasterize_kernel(
                         ]
                     )
                     if through_slot != NO_TEXTURE.value:
-                        transmission_factor = _sample_slot(
+                        transmission_factor = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -5004,8 +5231,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         ).r
                     var deep_slot = Int(
                         maps[
@@ -5014,7 +5241,7 @@ def rasterize_kernel(
                         ]
                     )
                     if deep_slot != NO_TEXTURE.value:
-                        thickness_factor = _sample_slot(
+                        thickness_factor = _sample_placed_slot(
                             texels,
                             ramp,
                             table,
@@ -5031,8 +5258,8 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                            u,
-                            v,
+                            uv,
+                            uv1,
                         ).g
                 # The node graph's color, opacity and emissive, once the
                 # maps have had their say, exactly as `rasterize_shaded`
@@ -5185,9 +5412,67 @@ def rasterize_kernel(
                         * metal_factor,
                         intensity,
                     )
+                    # How fast the normal before any map turns across the
+                    # pixel, in view space, as `rasterize_shaded` measures
+                    # it: three.js's `geometryRoughness`.
+                    var bare = _normal_at(
+                        corners,
+                        base,
+                        sax,
+                        say,
+                        sbx,
+                        sby,
+                        scx,
+                        scy,
+                        span_inv,
+                        swapped,
+                        px,
+                        py,
+                    )
+                    var curve = geometry_roughness(
+                        view_direction(
+                            _normal_at(
+                                corners,
+                                base,
+                                sax,
+                                say,
+                                sbx,
+                                sby,
+                                scx,
+                                scy,
+                                span_inv,
+                                swapped,
+                                px + SUBPIXEL,
+                                py,
+                            )
+                            - bare,
+                            view_up,
+                            view_back,
+                        ),
+                        view_direction(
+                            _normal_at(
+                                corners,
+                                base,
+                                sax,
+                                say,
+                                sbx,
+                                sby,
+                                scx,
+                                scy,
+                                span_inv,
+                                swapped,
+                                px,
+                                py - SUBPIXEL,
+                            )
+                            - bare,
+                            view_up,
+                            view_back,
+                        ),
+                    )
                     var rough = floored_roughness(
                         corners[unsafe_offset=base + LANE_ROUGHNESS]
-                        * rough_factor
+                        * rough_factor,
+                        curve,
                     )
                     var coat_amount = corners[
                         unsafe_offset=base + LANE_CLEARCOAT
@@ -5195,7 +5480,16 @@ def rasterize_kernel(
                     var coat = clearcoat_of(coat_amount, coat_factor)
                     var coat_rough = floored_roughness(
                         corners[unsafe_offset=base + LANE_CLEARCOAT_ROUGHNESS]
-                        * coat_rough_factor
+                        * coat_rough_factor,
+                        curve,
+                    )
+                    # The coat's normal map, for its own frame and for the
+                    # anisotropic frame below.
+                    var coat_map = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_CLEARCOAT_NORMAL_MAP
+                        ]
                     )
                     var facing = Vector3(nx, ny, nz)
                     var coat_facing = Vector3(cnx, cny, cnz)
@@ -5205,21 +5499,8 @@ def rasterize_kernel(
                     # measures it.
                     var coat_normal = coat_facing
                     if coat_amount > 0 and coat_mapped:
-                        var uv_right = _uv_at(
-                            corners,
-                            base,
-                            sax,
-                            say,
-                            sbx,
-                            sby,
-                            scx,
-                            scy,
-                            span_inv,
-                            swapped,
-                            px + SUBPIXEL,
-                            py,
-                        )
-                        var uv_up = _uv_at(
+                        var coat_placed = _placement(table, coat_map)
+                        var coat_steps = _placed_steps(
                             corners,
                             base,
                             sax,
@@ -5231,7 +5512,9 @@ def rasterize_kernel(
                             span_inv,
                             swapped,
                             px,
-                            py - SUBPIXEL,
+                            py,
+                            coat_placed,
+                            coat_placed.place(uv, uv1),
                         )
                         coat_normal = mapped_normal(
                             coat_facing,
@@ -5265,8 +5548,8 @@ def rasterize_kernel(
                                 py - SUBPIXEL,
                             )
                             - spot,
-                            Vector2(uv_right.x - u, uv_right.y - v),
-                            Vector2(uv_up.x - u, uv_up.y - v),
+                            coat_steps[0],
+                            coat_steps[1],
                             coat_texel,
                             Vector2(
                                 corners[
@@ -5294,14 +5577,24 @@ def rasterize_kernel(
                     )
                     # The tangent frame an anisotropic lobe is stretched
                     # along, measured as `rasterize_shaded` measures it,
-                    # whatever the mode.
+                    # whatever the mode, on the normal map's coordinates,
+                    # else the coat's normal map's, else the raw first
+                    # pair.
                     var stretch = Vector2(
                         corners[unsafe_offset=base + LANE_ANISOTROPY_X],
                         corners[unsafe_offset=base + LANE_ANISOTROPY_Y],
                     )
                     var frame = TangentFrame(Vector3(0, 0, 0), Vector3(0, 0, 0))
                     if stretch.x != 0 or stretch.y != 0:
-                        var uv_here = _uv_at(
+                        var framed = UvPlacement()
+                        if textured and normal_slot >= 0:
+                            framed = _placement(table, Int(normal_slot))
+                        elif textured and coat_map >= 0:
+                            framed = _placement(table, coat_map)
+                        var here_lane = LANE_U
+                        if framed.channel == UV_CHANNEL_1:
+                            here_lane = LANE_U1
+                        var frame_steps = _placed_steps(
                             corners,
                             base,
                             sax,
@@ -5314,34 +5607,24 @@ def rasterize_kernel(
                             swapped,
                             px,
                             py,
-                        )
-                        var uv_right = _uv_at(
-                            corners,
-                            base,
-                            sax,
-                            say,
-                            sbx,
-                            sby,
-                            scx,
-                            scy,
-                            span_inv,
-                            swapped,
-                            px + SUBPIXEL,
-                            py,
-                        )
-                        var uv_up = _uv_at(
-                            corners,
-                            base,
-                            sax,
-                            say,
-                            sbx,
-                            sby,
-                            scx,
-                            scy,
-                            span_inv,
-                            swapped,
-                            px,
-                            py - SUBPIXEL,
+                            framed,
+                            framed.moved(
+                                _uv_at(
+                                    corners,
+                                    base,
+                                    sax,
+                                    say,
+                                    sbx,
+                                    sby,
+                                    scx,
+                                    scy,
+                                    span_inv,
+                                    swapped,
+                                    px,
+                                    py,
+                                    here_lane,
+                                )
+                            ),
                         )
                         frame = tangent_frame(
                             coat_facing,
@@ -5375,10 +5658,8 @@ def rasterize_kernel(
                                 py - SUBPIXEL,
                             )
                             - spot,
-                            Vector2(
-                                uv_right.x - uv_here.x, uv_right.y - uv_here.y
-                            ),
-                            Vector2(uv_up.x - uv_here.x, uv_up.y - uv_here.y),
+                            frame_steps[0],
+                            frame_steps[1],
                         )
                     # The sheen, the film and the stretch, by the host's
                     # own function from the same numbers and texels.

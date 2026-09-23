@@ -3367,10 +3367,11 @@ def assert_coordinates_span(
     assert_almost_equal(most_v, v_max, atol=1e-5)
 
 
-def test_a_textures_transform_moves_the_coordinates_a_mesh_samples_with() raises:
-    # three.js's uv transform, applied in prepare rather than in a vertex
-    # shader: a corner at (1, 1) with a repeat of (2, 3) and an offset of
-    # (0.5, 0.25) reaches the rasterizer at (2.5, 3.25).
+def test_the_corners_carry_raw_coordinates_and_each_map_places_them() raises:
+    # three.js's uv transform, applied per map at the fragment: a corner
+    # reaches the rasterizer at the geometry's own (1, 1), and the map's
+    # placement, a repeat of (2, 3) and an offset of (0.5, 0.25), moves it
+    # to (2.5, 3.25) where the map is sampled.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var sheet = assets.geometries.add(
@@ -3379,31 +3380,40 @@ def test_a_textures_transform_moves_the_coordinates_a_mesh_samples_with() raises
     var board = checkerboard(8, 4, Color(255, 255, 255), Color(20, 20, 20))
     board.repeat = Vector2(2, 3)
     board.offset = Vector2(0.5, 0.25)
+    var image = assets.textures.add(board^)
     var skin = assets.materials.add(
-        Material(Color(255, 255, 255), assets.textures.add(board^), kind=BASIC)
+        Material(Color(255, 255, 255), image, kind=BASIC)
     )
     var scene = unlit_scene_with_a_node()
     scene.add_mesh(Mesh(sheet, skin, NodeId(0)))
     var corners = renderer.prepare(scene, assets, a_camera())
     assert_equal(len(corners), 6)
-    assert_coordinates_span(corners, 0.5, 2.5, 0.25, 3.25)
-    # The uv view shows the same coordinates: the transform is the
-    # material's, whatever the shading mode.
+    assert_coordinates_span(corners, 0, 1, 0, 1)
+    var at = (
+        assets.textures.get(image)
+        .placement()
+        .place(Vector2(1, 1), Vector2(0, 0))
+    )
+    assert_almost_equal(at.x, Float32(2.5), atol=1e-6)
+    assert_almost_equal(at.y, Float32(3.25), atol=1e-6)
+    # The uv view shows the same raw coordinates: no one map's transform
+    # speaks for the others.
     renderer.set_shading(SHADE_UV)
     assert_coordinates_span(
-        renderer.prepare(scene, assets, a_camera()), 0.5, 2.5, 0.25, 3.25
+        renderer.prepare(scene, assets, a_camera()), 0, 1, 0, 1
     )
 
 
-def test_a_geometry_without_uv_takes_the_transformed_origin() raises:
-    # No uv attribute and an all-zero one name the same place: both go
-    # through the texture's transform, so an offset moves both alike.
+def test_a_geometry_without_uv_carries_the_origin() raises:
+    # No uv attribute and an all-zero one name the same place, and each
+    # map's placement moves the origin by its own offset.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var board = checkerboard(8, 4, Color(255, 255, 255), Color(20, 20, 20))
     board.offset = Vector2(0.75, 0.25)
+    var image = assets.textures.add(board^)
     var skin = assets.materials.add(
-        Material(Color(255, 255, 255), assets.textures.add(board^), kind=BASIC)
+        Material(Color(255, 255, 255), image, kind=BASIC)
     )
     var scene = unlit_scene_with_a_node()
     for with_zeros in [False, True]:
@@ -3418,92 +3428,165 @@ def test_a_geometry_without_uv_takes_the_transformed_origin() raises:
         scene.meshes = meshes.copy()
         var corners = renderer.prepare(scene, assets, a_camera())
         assert_equal(len(corners), 3)
-        assert_coordinates_span(corners, 0.75, 0.75, 0.25, 0.25)
+        assert_coordinates_span(corners, 0, 0, 0, 0)
+        var second = second_span(corners)
+        assert_equal(second[0], Float32(0))
+        assert_equal(second[1], Float32(0))
+    var at = (
+        assets.textures.get(image)
+        .placement()
+        .place(Vector2(0, 0), Vector2(0, 0))
+    )
+    assert_equal(at.x, Float32(0.75))
+    assert_equal(at.y, Float32(0.25))
 
 
-def test_an_emissive_maps_transform_applies_when_there_is_no_map() raises:
+def middle_row_edges(image: Framebuffer, kept: Bool) raises -> Int:
+    """Return how many times the middle row of `image` changes along x:
+    between bright and dark red when `kept`, and between drawn and the
+    blue background otherwise."""
+    var crossings = 0
+    for x in range(1, WIDTH):
+        var here = image.get_pixel(x, HEIGHT // 2)
+        var before = image.get_pixel(x - 1, HEIGHT // 2)
+        if kept:
+            if (here.r > 128) != (before.r > 128):
+                crossings += 1
+        elif (here.b > 128) != (before.b > 128):
+            crossings += 1
+    return crossings
+
+
+def test_each_map_is_sampled_at_its_own_transform() raises:
+    # A map tiled twice across and an alpha map slid half a period, on one
+    # material: three.js samples each at its own varying, so the color
+    # crosses three square edges along the middle row, as the tiled map
+    # alone does, and the cut crosses one, as the slid mask alone does.
+    # The kept pixels are the tiled map's own, pixel for pixel.
     var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 255))
     var assets = Assets()
     var sheet = assets.geometries.add(
-        plane(Length(1.0, METER), Length(1.0, METER))
-    )
-    var glow = checkerboard(
-        8, 4, Color(255, 255, 255), Color(0, 0, 0), alpha=IGNORED
-    )
-    glow.repeat = Vector2(2, 3)
-    var skin = assets.materials.add(
-        Material(
-            Color(0, 0, 0),
-            emissive=Color(255, 255, 255),
-            emissive_map=assets.textures.add(glow^),
-        )
+        plane(Length(4.0, METER), Length(3.0, METER))
     )
     var scene = unlit_scene_with_a_node()
-    scene.add_mesh(Mesh(sheet, skin, NodeId(0)))
-    assert_coordinates_span(
-        renderer.prepare(scene, assets, a_camera()), 0, 2, 0, 3
+    var camera = centered(
+        Length(2.0, METER),
+        Float32(WIDTH) / Float32(HEIGHT),
+        Length(0.1, METER),
+        Length(100.0, METER),
     )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    var tiled = checkerboard(
+        2, 2, Color(255, 0, 0), Color(0, 0, 0), REPEAT, NEAREST
+    )
+    tiled.repeat = Vector2(2, 2)
+    var board = assets.textures.add(tiled^)
+    var cut = Texture(
+        2,
+        2,
+        [UInt8(0), 255, 0, 255, 0, 0, 0, 255, 0, 0, 0, 255, 0, 255, 0, 255],
+        REPEAT,
+        NEAREST,
+        LINEAR,
+        False,
+        IGNORED,
+    )
+    cut.offset = Vector2(0.5, 0)
+    var mask = assets.textures.add(cut^)
+    var plain = List[Mesh]()
+    plain.append(
+        Mesh(
+            sheet,
+            assets.materials.add(
+                Material(Color(255, 255, 255), board, kind=BASIC)
+            ),
+            NodeId(0),
+        )
+    )
+    var alone = rendered(renderer, scene, assets, plain, camera)
+    var both = List[Mesh]()
+    both.append(
+        Mesh(
+            sheet,
+            assets.materials.add(
+                Material(
+                    Color(255, 255, 255),
+                    board,
+                    kind=BASIC,
+                    alpha_map=mask,
+                    alpha_test=0.5,
+                )
+            ),
+            NodeId(0),
+        )
+    )
+    var apart = rendered(renderer, scene, assets, both, camera)
+    assert_equal(middle_row_edges(alone, True), 3)
+    assert_equal(middle_row_edges(apart, False), 1)
+    var kept = 0
+    for x in range(WIDTH):
+        var pixel = apart.get_pixel(x, HEIGHT // 2)
+        if pixel.b > 128:
+            continue
+        kept += 1
+        assert_equal(pixel.r, alone.get_pixel(x, HEIGHT // 2).r)
+    assert_true(kept > WIDTH // 4, "the mask cut away too much")
+    assert_true(kept < WIDTH * 3 // 4, "the mask cut away too little")
 
 
-def test_a_map_and_an_emissive_map_must_share_one_transform() raises:
-    # A fragment samples both at one coordinate, so a pair that disagree
-    # is refused; a copy made with ignoring_alpha carries the transform and
-    # is accepted.
+def test_a_map_and_an_emissive_map_can_differ_in_transform() raises:
+    # Each is sampled at its own coordinate, so a pair that disagree draws,
+    # and draws otherwise than the pair that agree; a copy made with
+    # ignoring_alpha carries the transform.
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var box = assets.geometries.add(cube(Length(1.5, METER)))
     var board = checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0))
     board.repeat = Vector2(2, 2)
     var agreeing = assets.textures.add(board.ignoring_alpha())
+    assert_true(
+        assets.textures.get(agreeing).placement() == board.placement(),
+        "ignoring_alpha dropped the transform",
+    )
     var base = assets.textures.add(board^)
     var differing = assets.textures.add(
         checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0), alpha=IGNORED)
     )
     var scene = unlit_scene_with_a_node()
-    var fine = List[Mesh]()
-    fine.append(
-        Mesh(
-            box,
-            assets.materials.add(
-                Material(
-                    Color(255, 255, 255),
-                    base,
-                    emissive=Color(255, 255, 255),
-                    emissive_map=agreeing,
-                )
-            ),
-            NodeId(0),
+    var images = List[Framebuffer]()
+    for glow in [agreeing, differing]:
+        var meshes = List[Mesh]()
+        meshes.append(
+            Mesh(
+                box,
+                assets.materials.add(
+                    Material(
+                        Color(0, 0, 0),
+                        base,
+                        emissive=Color(255, 255, 255),
+                        emissive_map=glow,
+                    )
+                ),
+                NodeId(0),
+            )
         )
-    )
-    var image = rendered(renderer, scene, assets, fine, a_camera())
+        images.append(rendered(renderer, scene, assets, meshes, a_camera()))
     var drawn = 0
+    var changed = 0
     for y in range(HEIGHT):
         for x in range(WIDTH):
-            var pixel = image.get_pixel(x, y)
+            var pixel = images[0].get_pixel(x, y)
             if (
                 pixel.r != renderer.background.r
                 or pixel.g != renderer.background.g
                 or pixel.b != renderer.background.b
             ):
                 drawn += 1
+            if pixel.r != images[1].get_pixel(x, y).r:
+                changed += 1
     assert_true(drawn > 0, "the agreeing pair drew nothing")
-    var wrong = List[Mesh]()
-    wrong.append(
-        Mesh(
-            box,
-            assets.materials.add(
-                Material(
-                    Color(255, 255, 255),
-                    base,
-                    emissive=Color(255, 255, 255),
-                    emissive_map=differing,
-                )
-            ),
-            NodeId(0),
-        )
-    )
-    with assert_raises():
-        _ = rendered(renderer, scene, assets, wrong, a_camera())
+    assert_true(changed > 0, "the emissive map's own transform did nothing")
 
 
 def test_a_repeat_tiles_the_texture_and_an_offset_slides_it() raises:
@@ -4297,9 +4380,9 @@ def test_an_alpha_map_must_be_stored_as_data() raises:
                 )
 
 
-def test_every_map_on_one_material_must_share_one_transform() raises:
-    # A fragment carries one coordinate pair and samples all three maps
-    # with it, so the first map named decides and the others must agree.
+def test_the_maps_of_one_material_can_differ_in_transform() raises:
+    # Each map is placed on its own, so a map and an alpha map that are
+    # moved apart draw, and an alpha map alone draws too.
     var assets = Assets()
     var base = assets.textures.add(
         checkerboard(4, 2, Color(255, 255, 255), Color(0, 0, 0))
@@ -4311,29 +4394,22 @@ def test_every_map_on_one_material_must_share_one_transform() raises:
     var agreeing = assets.materials.add(
         Material(Color(255, 255, 255), base, alpha_map=mask)
     )
-    var disagreeing = assets.materials.add(
+    var apart = assets.materials.add(
         Material(Color(255, 255, 255), shifted, alpha_map=mask)
+    )
+    var alone = assets.materials.add(
+        Material(Color(255, 255, 255), alpha_map=mask)
     )
     var renderer = Renderer(WIDTH, HEIGHT)
     var scene = scene_with_node_at(0)
-    _ = rendered(
-        renderer, scene, assets, sheet_of(assets, agreeing), camera_at(0, 0, 4)
-    )
-    with assert_raises():
+    for material in [agreeing, apart, alone]:
         _ = rendered(
             renderer,
             scene,
             assets,
-            sheet_of(assets, disagreeing),
+            sheet_of(assets, material),
             camera_at(0, 0, 4),
         )
-    # An alpha map alone still supplies the transform.
-    var alone = assets.materials.add(
-        Material(Color(255, 255, 255), alpha_map=mask)
-    )
-    _ = rendered(
-        renderer, scene, assets, sheet_of(assets, alone), camera_at(0, 0, 4)
-    )
 
 
 def test_lit_shading_ignores_the_alpha_map() raises:
@@ -5366,22 +5442,21 @@ def test_a_data_map_must_be_there_and_stored_as_data_in_the_renderer() raises:
     _ = rendered(
         renderer, scene, assets, sheet_of(assets, fine), camera_at(0, 0, 4)
     )
-    # And every map on one material must share one transform, the normal
-    # map included.
+    # And a normal map whose transform differs from the base map's draws:
+    # each map is placed on its own.
     var moved = a_data_texel(128, 128, 255)
     moved.repeat = Vector2(2, 2)
     var shifted = assets.textures.add(moved^)
-    var disagreeing = assets.materials.add(
+    var apart = assets.materials.add(
         Material(Color(255, 255, 255), proper, normal_map=shifted)
     )
-    with assert_raises():
-        _ = rendered(
-            renderer,
-            scene,
-            assets,
-            sheet_of(assets, disagreeing),
-            camera_at(0, 0, 4),
-        )
+    _ = rendered(
+        renderer,
+        scene,
+        assets,
+        sheet_of(assets, apart),
+        camera_at(0, 0, 4),
+    )
 
 
 # --- shadows ----------------------------------------------------------------
@@ -5858,7 +5933,7 @@ def prepared_with(
     return renderer.prepare(scene, assets, a_camera())
 
 
-def test_the_baked_maps_ride_a_second_coordinate_pair() raises:
+def test_the_second_coordinate_pair_rides_every_corner() raises:
     var renderer = Renderer(WIDTH, HEIGHT)
     var assets = Assets()
     var both = assets.geometries.add(two_channel_triangle())
@@ -5868,15 +5943,17 @@ def test_the_baked_maps_ride_a_second_coordinate_pair() raises:
     second_map.channel = UV_CHANNEL_1
     var on_first = assets.textures.add(first_map^)
     var on_second = assets.textures.add(second_map^)
-    # The first channel reads `uv`, as three.js's default does.
+    # Both pairs ride every corner raw, whatever the maps read: the
+    # geometry's `uv1` in the second.
     var plain = prepared_with(
         renderer, assets, both, Material(Color(255, 255, 255), ao_map=on_first)
     )
     assert_equal(len(plain), 3)
     var span = second_span(plain)
-    assert_almost_equal(span[0], Float32(0), atol=1e-5)
-    assert_almost_equal(span[1], Float32(1), atol=1e-5)
-    # The second reads `uv1`, and each corner names both maps.
+    assert_almost_equal(span[0], Float32(2), atol=1e-5)
+    assert_almost_equal(span[1], Float32(3), atol=1e-5)
+    assert_coordinates_span(plain, 0, 1, 0, 1)
+    # Each corner names both baked maps and their intensities.
     var baked = prepared_with(
         renderer,
         assets,
@@ -5889,46 +5966,37 @@ def test_the_baked_maps_ride_a_second_coordinate_pair() raises:
             light_map_intensity=2,
         ),
     )
-    span = second_span(baked)
-    assert_almost_equal(span[0], Float32(2), atol=1e-5)
-    assert_almost_equal(span[1], Float32(3), atol=1e-5)
     assert_equal(baked[0].ao_map, on_second)
     assert_equal(baked[0].light_map, on_second)
     assert_equal(baked[0].ao_map_intensity, Float32(0.5))
     assert_equal(baked[0].light_map_intensity, Float32(2))
-    # A geometry with no `uv1` falls back to its `uv`.
+    # A geometry with no `uv1` carries its `uv` in the second pair.
     var fallen = prepared_with(
         renderer, assets, one, Material(Color(255, 255, 255), ao_map=on_second)
     )
     span = second_span(fallen)
+    assert_almost_equal(span[0], Float32(0), atol=1e-5)
     assert_almost_equal(span[1], Float32(1), atol=1e-5)
-    # The pair has its own transform, apart from the base map's.
-    var tiled_map = a_data_texel(128, 128, 128)
-    tiled_map.channel = UV_CHANNEL_1
-    tiled_map.repeat = Vector2(2, 2)
-    var tiled = assets.textures.add(tiled_map^)
-    var board = assets.textures.add(
-        checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0))
-    )
-    var apart = prepared_with(
+    # Any map can read the second pair, the base map among them.
+    var board = checkerboard(8, 4, Color(255, 255, 255), Color(0, 0, 0))
+    board.channel = UV_CHANNEL_1
+    var second_board = assets.textures.add(board^)
+    var based = prepared_with(
         renderer,
         assets,
         both,
-        Material(Color(255, 255, 255), board, light_map=tiled),
+        Material(Color(255, 255, 255), second_board),
     )
-    span = second_span(apart)
-    assert_almost_equal(span[0], Float32(4), atol=1e-5)
-    assert_almost_equal(span[1], Float32(6), atol=1e-5)
-    assert_coordinates_span(apart, 0, 1, 0, 1)
+    assert_equal(based[0].texture, second_board)
     # Only textured shading opens either map; the coordinates still ride.
     renderer.set_shading(SHADE_LIT)
     var unopened = prepared_with(
-        renderer, assets, both, Material(Color(255, 255, 255), ao_map=tiled)
+        renderer, assets, both, Material(Color(255, 255, 255), ao_map=on_second)
     )
     assert_equal(unopened[0].ao_map, NO_TEXTURE)
     assert_equal(unopened[0].light_map, NO_TEXTURE)
     span = second_span(unopened)
-    assert_almost_equal(span[1], Float32(6), atol=1e-5)
+    assert_almost_equal(span[1], Float32(3), atol=1e-5)
 
 
 def test_a_baked_map_is_refused_where_it_cannot_be_read() raises:
@@ -5964,17 +6032,11 @@ def test_a_baked_map_is_refused_where_it_cannot_be_read() raises:
     var white = Color(255, 255, 255)
     var wrongs = List[Material]()
     var reasons = List[String]()
-    # The two share a pair, so they share a transform and a channel.
-    wrongs.append(Material(white, ao_map=proper, light_map=moved))
-    reasons.append("share one transform and one channel")
-    wrongs.append(Material(white, ao_map=proper, light_map=second))
-    reasons.append("share one transform and one channel")
-    # A channel that is neither is refused, and so is the second channel
-    # on any other map.
+    # A channel that is neither is refused, on any map.
     wrongs.append(Material(white, ao_map=odd))
     reasons.append("channel must be")
-    wrongs.append(Material(white, second))
-    reasons.append("Only an ao map or a light map")
+    wrongs.append(Material(white, odd))
+    reasons.append("channel must be")
     # A map that is not there, or not stored the way it is read.
     wrongs.append(Material(white, ao_map=TextureId(40)))
     reasons.append("An ao map is named")
@@ -6000,6 +6062,17 @@ def test_a_baked_map_is_refused_where_it_cannot_be_read() raises:
     )
     _ = prepared_with(
         renderer, assets, sheet, Material(white, light_map=encoded)
+    )
+    # And the two can differ in transform and in channel: each is placed
+    # on its own.
+    _ = prepared_with(
+        renderer, assets, sheet, Material(white, ao_map=proper, light_map=moved)
+    )
+    _ = prepared_with(
+        renderer,
+        assets,
+        sheet,
+        Material(white, ao_map=proper, light_map=second),
     )
 
 
@@ -6239,8 +6312,8 @@ def test_a_specular_map_is_carried_checked_and_read_in_the_renderer() raises:
     )
     assert_equal(unmapped[0].specular_map, NO_TEXTURE)
     # A map stored as color, and one that is not there, are refused under
-    # either mode, and so is one whose transform the base map disagrees
-    # with.
+    # either mode. One whose transform differs from the base map's draws:
+    # each map is placed on its own.
     var encoded = a_data_texel(255, 255, 255)
     encoded.color_space = SRGB
     var wrong = assets.textures.add(encoded^)
@@ -6256,7 +6329,17 @@ def test_a_specular_map_is_carried_checked_and_read_in_the_renderer() raises:
     var disagreeing = assets.materials.add(
         Material(white, dull, kind=PHONG, specular_map=shifted)
     )
-    for material in [colored, absent, disagreeing]:
+    for mode in [SHADE_TEXTURE, SHADE_LIT]:
+        var lenient = Renderer(WIDTH, HEIGHT)
+        lenient.set_shading(mode)
+        _ = rendered(
+            lenient,
+            scene,
+            assets,
+            sheet_of(assets, disagreeing),
+            camera_at(0, 0, 4),
+        )
+    for material in [colored, absent]:
         for mode in [SHADE_TEXTURE, SHADE_LIT]:
             var strict = Renderer(WIDTH, HEIGHT)
             strict.set_shading(mode)
@@ -6435,16 +6518,22 @@ def test_a_layer_map_must_be_there_and_stored_as_read_in_the_renderer() raises:
                 physical_material(white, anisotropy=1, anisotropy_map=map)
             )
         )
-    # And a layer map whose transform the base map disagrees with.
+    # A layer map whose transform differs from the base map's draws: each
+    # map is placed on its own.
     var moved = a_data_texel(255, 0, 0)
     moved.repeat = Vector2(2, 2)
     var shifted = assets.textures.add(moved^)
-    wrongs.append(
-        assets.materials.add(
-            physical_material(white, data, anisotropy=1, anisotropy_map=shifted)
-        )
+    var apart = assets.materials.add(
+        physical_material(white, data, anisotropy=1, anisotropy_map=shifted)
     )
     var scene = scene_with_node_at(0)
+    _ = rendered(
+        Renderer(WIDTH, HEIGHT),
+        scene,
+        assets,
+        sheet_of(assets, apart),
+        camera_at(0, 0, 4),
+    )
     for index in range(len(wrongs)):
         for mode in [SHADE_TEXTURE, SHADE_LIT]:
             var strict = Renderer(WIDTH, HEIGHT)
@@ -6615,18 +6704,24 @@ def test_a_specular_or_coat_map_must_be_there_and_stored_as_read() raises:
                 physical_material(white, clearcoat=1, clearcoat_normal_map=map)
             )
         )
-    # And a coat map whose transform the base map disagrees with.
+    # A coat map whose transform differs from the base map's draws: each
+    # map is placed on its own.
     var moved = a_data_texel(255, 0, 0)
     moved.repeat = Vector2(2, 2)
     var shifted = assets.textures.add(moved^)
-    wrongs.append(
-        assets.materials.add(
-            physical_material(
-                white, data, clearcoat=1, clearcoat_normal_map=shifted
-            )
+    var apart = assets.materials.add(
+        physical_material(
+            white, data, clearcoat=1, clearcoat_normal_map=shifted
         )
     )
     var scene = scene_with_node_at(0)
+    _ = rendered(
+        Renderer(WIDTH, HEIGHT),
+        scene,
+        assets,
+        sheet_of(assets, apart),
+        camera_at(0, 0, 4),
+    )
     for index in range(len(wrongs)):
         for mode in [SHADE_TEXTURE, SHADE_LIT]:
             var strict = Renderer(WIDTH, HEIGHT)

@@ -338,9 +338,15 @@ A cube without a PMREM gives two approximations. The roughness picks a level of 
 
 A clear coat is a second, colorless GGX lobe over the surface. It lies on the surface's own normal, before any normal map perturbs it, as three.js's `nonPerturbedNormal` does. A [clearcoat normal map](#specular-and-clearcoat-maps) gives the coat a normal of its own. It dims everything under it by its own Fresnel and adds its own reflection on top: a red car under a white gloss. `clearcoat=0`, the default, is no coat.
 
-### What is not ported
+### Geometric roughness
 
-The geometric roughness three.js adds from how fast the normal changes across a pixel is not ported. It needs neighboring pixels, and this project shades each pixel alone. [Transmission](#transmission), the [sheen](#sheen), the [iridescence](#iridescence) and the [anisotropy](#anisotropy) are ported.
+A curved surface is rougher by how fast its normal turns across one pixel. three.js's `lights_physical_fragment` adds this geometric roughness to the roughness and to the clear coat roughness. It adds it after the floor of 0.0525 and before the cap at one. A small, shiny, curved thing then keeps a wide enough lobe, and its highlight does not alias.
+
+The formula is three.js's. `dxy` is the larger of `abs(dFdx(n))` and `abs(dFdy(n))`, for each part of the view space normal `n` before any map. The geometric roughness is the largest part of `dxy`. `geometry_roughness` in `lights/lighting.mojo` holds it, and `floored_roughness(roughness, geometry)` adds it.
+
+A GPU takes `dFdx` from the pixel beside it in a 2x2 quad. The two rasterizers here shade each pixel alone, so they work out the neighbor instead. They interpolate the triangle's normal at the pixel one to the right and at the pixel one up, and normalize each. This is the same measurement that picks a mip level. It is exact for the triangle, and it extrapolates past an edge where a GPU runs a helper pixel. A flat-shaded triangle has one normal, so it adds no roughness.
+
+[Transmission](#transmission), the [sheen](#sheen), the [iridescence](#iridescence) and the [anisotropy](#anisotropy) are ported.
 
 `examples/physical.mojo` draws the range: a row of spheres from chalk to mirror, and from dielectric to metal.
 
@@ -598,13 +604,11 @@ The map holds light, so its texture can be `SRGB` or `LINEAR`. Its alpha means n
 
 ### The second texture coordinates
 
-Both maps read the coordinates their texture's `channel` names: three.js's `Texture.channel`. `UV_CHANNEL_0`, the default, reads the geometry's `uv`. `UV_CHANNEL_1` reads its `uv1`, the `UV1` attribute. A baked map is usually laid out apart from the color map, which is why the second set exists.
+Every map reads the coordinates its texture's `channel` names: three.js's `Texture.channel`. `UV_CHANNEL_0`, the default, reads the geometry's `uv`. `UV_CHANNEL_1` reads its `uv1`, the `UV1` attribute. A baked map is usually laid out apart from the color map, which is why the second set exists.
 
-A fragment carries a second coordinate pair for these two maps. The pair has its own transform, from the ao map or the light map, apart from the transform every other map shares. So the ao map and the light map must agree about their transform and their channel. The renderer refuses a pair that disagrees.
+Each map has its own transform and its own channel, as in three.js. So the ao map, the light map and every other map can differ in both. See [Textures](Textures#transform).
 
-A geometry with no `uv1` falls back to its `uv`. three.js reads zero there instead, which samples one texel everywhere. This port reads the first set, because a baked map on the first set is the usual case.
-
-Only an ao map or a light map can read the second channel. The renderer refuses `UV_CHANNEL_1` on any other map.
+A geometry with no `uv1` falls back to its `uv`. three.js reads zero there instead, which samples one texel everywhere. This port reads the first set, because a map on the first set is the usual case.
 
 ### What refuses one
 

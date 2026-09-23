@@ -56,10 +56,8 @@ skipped, as is every keyword three.js ignores. `map_Ks`, three.js's
 `specularMap`, is skipped, since `Material` has no specular map. `disp` is
 skipped, since no material displaces its vertices. `MTLLoader`'s options
 (`side`, `wrap`, `normalizeRGB`, `ignoreZeroRGBs`, `invertTrProperty`)
-are not ported: this reads as three.js reads with none of them set. A
-fragment samples every map at one coordinate, so maps of one material with
-different `-s` or `-o` are refused by the renderer; see
-`renderers.renderer`.
+are not ported: this reads as three.js reads with none of them set. Each
+map keeps its own `-s` and `-o`, as in three.js.
 
 A value that is not a number, a color outside zero to one, an option that
 is not known or lacks its numbers, a texture line with no file, and an

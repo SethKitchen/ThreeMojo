@@ -21,7 +21,7 @@ MAX 26.6.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-G
 | `flatten_fog(fog) -> List[Float32]` | The fog buffer, six floats. The kind crosses as a kernel argument. |
 | `flatten_programs(programs) -> List[Float32]` | Every [node program](Node-materials), end to end, as it follows the fog in the fog buffer. |
 | `program_starts(programs) -> List[Int]` | Where each node program starts in the fog buffer. |
-| `flatten_textures(store)` | Every texture in one buffer, with a descriptor table. |
+| `flatten_textures(store)` | Every texture in one buffer, with a descriptor table. See [Texture table](#texture-table). |
 | `triangle_state(corners) -> List[Int32]` | Texture, blend, material kind, emissive map and alpha map per triangle. |
 
 ## GpuRenderer
@@ -82,6 +82,20 @@ The kernel calls `volume_refraction`, the host's own function, over a source tha
 The light buffer begins with three floats of camera position at `LIGHTS_EYE`, then three at `LIGHTS_TOWARD`. Those three hold the zero vector for a converging projection, and one unit direction for a parallel one. The kernel passes both to `toward_eye_at`, the host's own function. The camera's own up axis follows at `LIGHTS_UP`, for the frame a `MATCAP` surface is looked up in.
 
 The scale every lit sum takes is at `LIGHTS_SCALE` and the count of rect area lights at `LIGHTS_RECT_COUNT`. The light probes' 27 coefficients follow at `LIGHTS_PROBE`; see [Lights](Lights#light-probes). The lights follow at `LIGHTS_FIRST`. The rect area lights come last among them, then the LTC tables when there is one, then the shadow maps, then the spot light maps. See [Lights](Lights#rect-area), [Lights](Lights#shadows) and [Lights](Lights#spot-light-maps).
+
+### Texture table
+
+The texture table holds `TABLE_COLUMNS` entries per texture, seventeen at present. Each map has its own transform and channel, and the table carries them. The lanes and the state columns do not change: a triangle names its maps by id, and each id has one row.
+
+| Column | Entry |
+|---|---|
+| 0 to 9 | The byte offset, the width, the height, the wrap mode, the filter, the color space, the level count, the alpha mode, the anisotropy and the texel type. |
+| 10 to 15 | From `TABLE_PLACEMENT`: the six numbers of `Texture.placement`, as their `Float32` bits. |
+| 16 | The channel: `UV_CHANNEL_0` or `UV_CHANNEL_1`. |
+
+`_placement` reads a row back as a `UvPlacement`. The kernel places each map's pair with `UvPlacement.place`, the function the host calls. So both backends sample each map at the same coordinate. The table is the cheapest exact layout. It adds seven numbers per texture, where a matrix per map per triangle adds 132 per triangle.
+
+The kernel also adds the [geometric roughness](Materials#geometric-roughness) with `geometry_roughness`, the host's function. It interpolates the normal at the pixel one to the right and at the pixel one up, as the host does. `LIGHTS_UP` and `LIGHTS_BACK` turn the change into view space.
 
 ## Post-processing on the GPU
 

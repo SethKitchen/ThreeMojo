@@ -106,7 +106,7 @@ First, read the scene as draws. A mesh is one draw. An instanced or batched mesh
 Leave out every group whose node shares no layer with the camera. Then leave out every draw whose bounding sphere lies wholly outside the camera's frustum. Then sort the groups into draw order. Then, for each draw in that order:
 
 1. Transform the positions to world space and camera space.
-2. Carry the texture coordinates through the map's transform. See [Textures](Textures#transform).
+2. Carry the raw texture coordinates, `uv` and `uv1`. Each map moves them at the fragment by its own transform. See [Textures](Textures#transform).
 3. Transform the normals with the normal matrix, or compute a face normal. Carry them into view space for a `NORMALS` material.
 4. Clip each triangle against the near and far planes and the four sides of the view. See [Rasterization](Rasterization#clipping).
 5. Project each corner to pixels and keep `1 / w`.
@@ -217,7 +217,7 @@ The default is one worker. The coverage tool needs probe records in order.
 - A material names a texture, an emissive map or an alpha map that does not exist.
 - An emissive map reads its alpha as coverage.
 - An alpha map is not stored as data, which means `LINEAR` and `IGNORED`.
-- A material names two maps whose transforms differ.
+- A material names a map whose channel is neither `UV_CHANNEL_0` nor `UV_CHANNEL_1`.
 - A geometry has no positions.
 
 A mesh the camera's layers or frustum leave out is not checked.

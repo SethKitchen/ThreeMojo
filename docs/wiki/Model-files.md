@@ -149,7 +149,6 @@ A texture repeats by default, as in three.js. The loader decodes PNG, JPEG and T
 - `disp`, the displacement map, is skipped. No material moves its vertices.
 - The options of `MTLLoader` are not ported: `side`, `wrap`, `normalizeRGB`, `ignoreZeroRGBs` and `invertTrProperty`.
 - An unknown texture option is refused. three.js reads it as part of the file name, and then cannot load the file.
-- A fragment samples all maps at one coordinate. Thus the renderer refuses a material whose maps have different `-s` or `-o` values. three.js lets each map have its own transform.
 - A color above one is refused. `Color` holds eight bits for each channel.
 
 ### Errors
@@ -335,7 +334,7 @@ glTF's texture coordinates run down from an image's top left. This renderer's `v
 
 A material's `occlusionTexture` becomes its `ao_map`. Its `strength` becomes `ao_map_intensity`, or one when it is not there. This is what three.js reads into `aoMap` and `aoMapIntensity`. The red channel of the map dims the indirect light. See [Materials](Materials).
 
-The occlusion texture is the one map that can read the second set of texture coordinates. A `texCoord` of one gives a copy of the texture the channel `UV_CHANNEL_1`. The renderer then samples it at the geometry's `uv1`. A `texCoord` in the map's `KHR_texture_transform` replaces the map's own, as for every map.
+Every map can read the second set of texture coordinates, the occlusion texture among them. A `texCoord` of one gives a copy of the texture the channel `UV_CHANNEL_1`. The renderer then samples it at the geometry's `uv1`. A `texCoord` in the map's `KHR_texture_transform` replaces the map's own.
 
 An unlit material reads no occlusion, as in three.js.
 
@@ -412,7 +411,7 @@ A file that lists another extension in `extensionsRequired` is refused, as three
 
 The transform is applied first, then the flip of `v`. So the copy gets an `offset` of `(x, 1 - y)`, a `repeat` of `(x, -y)`, and the `rotation` as the file gives it. The glTF coordinates then go where three.js's matrix puts them. A transform that names only `texCoord` makes no copy.
 
-The transform's `texCoord` replaces the texture's own `texCoord`, as in three.js. It must be zero, or zero or one for the [occlusion texture](#occlusion).
+The transform's `texCoord` replaces the texture's own `texCoord`, as in three.js. It must be zero or one. Each map keeps its own transform and its own set, as in three.js.
 
 #### Punctual lights
 
@@ -440,12 +439,11 @@ Each instance matrix is `TRANSLATION`, `ROTATION` and `SCALE` composed. An attri
 - A clear coat texture with a `clearcoatFactor` of zero is left out, with the normal texture's `scale`. three.js keeps them, but draws none.
 - An `iridescenceTexture` or `iridescenceThicknessTexture` with an `iridescenceFactor` of zero is left out. So is an `anisotropyTexture` with an `anisotropyStrength` of zero. three.js keeps them, but draws neither.
 - A `sheenColorFactor` outside zero to one is refused, as a `specularColorFactor` is.
-- A material whose maps have different transforms is refused. A fragment samples every map at one coordinate here. three.js keeps a transform for each map.
 - A skinned node with `EXT_mesh_gpu_instancing` is refused. An instanced skinned mesh is not ported. three.js drops the skin.
 
 ### Not read
 
-A primitive of points, lines or strips is refused. Only the first set of texture coordinates is read.
+A primitive of points, lines or strips is refused. Only the first two sets of texture coordinates are read.
 
 ### Errors
 
@@ -465,7 +463,7 @@ The loader raises for:
 - An animation channel with an unknown path, or a sampler with an unknown interpolation. A sampler output that does not hold one value per key, or three for `CUBICSPLINE`.
 - A track or a clip that `KeyframeTrack` or `AnimationClip` refuses.
 - An `extensions` value, or an extension, that is not an object.
-- A texture transform on a second set of coordinates. Maps of one material with different transforms. A `specularColorFactor` outside zero to one.
+- A texture reference or a texture transform on a third set of coordinates or past it. A `specularColorFactor` outside zero to one.
 - A node that names a light the file does not have. A light of an unknown type, a `range` that is not above zero, or a spot light without `spot`. A light that `Light` refuses.
 - Instancing without an `attributes` object. Instancing attributes of different counts, or of the wrong width. A skinned node that is instanced.
 

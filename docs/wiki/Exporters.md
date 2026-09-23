@@ -125,6 +125,8 @@ A texture with an `offset`, a `repeat`, a `rotation` or a `center` is written wi
 
 glTF keeps roughness in green and metalness in blue, in one image. When the two maps are one texture, the writer writes it once. When they are different textures, the writer combines them into one image, as three.js does. The combined image has red at zero, and white in a channel that has no map. The two maps must have one transform and one channel, because one texture reference holds them.
 
+three.js writes the transform of the metalness map for both and only warns. This port refuses the pair, because the roughness map would then read back at the wrong place. Every other map keeps its own transform and channel.
+
 ## OBJ
 
 `export_obj` writes each mesh as one `o`, named after its node. Then it writes the positions as `v`, the texture coordinates as `vt`, the normals as `vn` and the triangles as `f`. The corner numbers count from one across the whole file, as three.js counts them. `read_obj` reads each mesh back as one object with a non-indexed geometry.

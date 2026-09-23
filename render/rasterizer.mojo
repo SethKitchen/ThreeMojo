@@ -75,7 +75,9 @@ from render.texture import (
     COVERAGE,
     FLOAT_TYPE,
     IGNORED,
+    UV_CHANNEL_1,
     Texture,
+    UvPlacement,
     anisotropic_footprint,
     mix_straight,
 )
@@ -119,6 +121,7 @@ from lights.lighting import (
     Reflected,
     ambient_occlusion,
     floored_roughness,
+    geometry_roughness,
     occluded_light,
     physical_outgoing,
     physical_surface,
@@ -763,6 +766,8 @@ struct RasterVertex(ImplicitlyCopyable):
     # Texture coordinates, interpolated the same perspective-correct way the
     # color is. They reach the fragment rather than being folded into the
     # color at the vertex, because that is what sampling a texture will need.
+    # Raw: the geometry's `uv`, not moved by any map. Each map places them
+    # at the fragment by its own `UvPlacement`.
     var u: Float32
     var v: Float32
     # `OPAQUE` or `BLEND`, resolved from the material by `Renderer.prepare`
@@ -895,10 +900,10 @@ struct RasterVertex(ImplicitlyCopyable):
     # Per-primitive metadata like the blend policy: read from the first
     # corner, checked to agree. Any polygon offset is already in `z`.
     var state: RasterState
-    # The second texture coordinates, where the ambient occlusion map and
-    # the light map are sampled: the geometry's `uv1` or `uv`, as their
-    # texture's `channel` says, through their own transform. A varying,
-    # interpolated like `u` and `v`.
+    # The second texture coordinates, raw: the geometry's `uv1`, or its
+    # `uv` when it has none. A map whose texture's `channel` is
+    # `UV_CHANNEL_1` is sampled here, placed by its own transform. A
+    # varying, interpolated like `u` and `v`.
     var u1: Float32
     var v1: Float32
     # A texture whose red channel dims the indirect light and how strongly,
@@ -1158,7 +1163,7 @@ def _coordinates_at(
     The same correction `rasterize_shaded` applies to color, factored out
     because mip selection needs it at three sample points rather than one.
     `second` reads `u1` and `v1` rather than `u` and `v`: the coordinates
-    an ambient occlusion map and a light map are sampled at.
+    a map on `UV_CHANNEL_1` is sampled at.
     """
     var inv_w = (
         weights.wa * a.inv_w + weights.wb * b.inv_w + weights.wc * c.inv_w
@@ -1413,7 +1418,7 @@ def _sample_map(
     coverage: _Coverage,
     x: Int,
     y: Int,
-    second: Bool = False,
+    placement: UvPlacement = UvPlacement(),
 ) -> FloatColor:
     """Return `image` sampled at (u, v) for the pixel at (x, y).
 
@@ -1422,10 +1427,12 @@ def _sample_map(
     from the coordinates at the pixels one over and one down -- see
     `mip_level` and `anisotropic_footprint` -- with several taps along
     the footprint's long axis when the texture's anisotropy allows them.
-    Shared by the material's map and its emissive map, so both are
-    filtered alike, and mirrored on the device by `render.gpu._sample_slot`.
-    `second` measures the footprint on the second coordinates, `u1` and
-    `v1`, which is where an ambient occlusion map and a light map are read.
+    Shared by every map, so all are filtered alike, and mirrored on the
+    device by `render.gpu._sample_slot`. (u, v) is already placed:
+    `placement` says which raw pair the footprint is measured on and how
+    that pair is moved, as the map's own varying moves in three.js. The
+    identity on the first pair, the default, measures the raw `uv`, which
+    is what a node graph samples at.
     """
     if image.levels == 1 and image.anisotropy == 1:
         return image.sample(u, v)
@@ -1437,9 +1444,16 @@ def _sample_map(
     # along an axis the footprint did not cross. That ulp turned the long
     # axis a hair, put a tap a hair past a texel's edge, and read the
     # neighboring texel. The kernel's `_sample_slot` does the same.
-    var here = _coordinates_at(a, b, c, _weights(coverage, x, y), second)
-    var right = _coordinates_at(a, b, c, _weights(coverage, x + 1, y), second)
-    var below = _coordinates_at(a, b, c, _weights(coverage, x, y + 1), second)
+    var second = placement.channel == UV_CHANNEL_1
+    var here = placement.moved(
+        _coordinates_at(a, b, c, _weights(coverage, x, y), second)
+    )
+    var right = placement.moved(
+        _coordinates_at(a, b, c, _weights(coverage, x + 1, y), second)
+    )
+    var below = placement.moved(
+        _coordinates_at(a, b, c, _weights(coverage, x, y + 1), second)
+    )
     # The level, and the taps along the long axis when the texture
     # allows them: the same function the kernel asks. With one tap the
     # level is what `mip_level` gives.
@@ -1454,6 +1468,93 @@ def _sample_map(
             image.anisotropy,
         ),
     )
+
+
+def _sample_placed(
+    image: Texture,
+    placement: UvPlacement,
+    uv: Vector2,
+    uv1: Vector2,
+    a: RasterVertex,
+    b: RasterVertex,
+    c: RasterVertex,
+    coverage: _Coverage,
+    x: Int,
+    y: Int,
+) -> FloatColor:
+    """Return a map sampled where its own placement puts the fragment:
+    three.js's `texture2D(map, vMapUv)`, for any map.
+
+    `uv` and `uv1` are the fragment's two raw pairs. The placement picks
+    one and moves it, and `_sample_map` measures the footprint on the
+    same pair, moved the same way.
+    """
+    var at = placement.place(uv, uv1)
+    return _sample_map(image, at.x, at.y, a, b, c, coverage, x, y, placement)
+
+
+def _placed_steps(
+    a: RasterVertex,
+    b: RasterVertex,
+    c: RasterVertex,
+    placement: UvPlacement,
+    here: Vector2,
+    right: _Fragment,
+    up: _Fragment,
+) -> Tuple[Vector2, Vector2]:
+    """Return how one map's placed coordinates change one pixel right and
+    one pixel up: three.js's `dFdx` and `dFdy` of that map's varying.
+
+    Args:
+        a: First corner.
+        b: Second corner.
+        c: Third corner.
+        placement: The map's placement.
+        here: The placed coordinates at the fragment.
+        right: The weights one pixel right.
+        up: The weights one pixel up.
+
+    Returns:
+        The change to the right, then the change up.
+    """
+    var second = placement.channel == UV_CHANNEL_1
+    var to_right = placement.moved(_coordinates_at(a, b, c, right, second))
+    var to_up = placement.moved(_coordinates_at(a, b, c, up, second))
+    return (
+        Vector2(to_right.x - here.x, to_right.y - here.y),
+        Vector2(to_up.x - here.x, to_up.y - here.y),
+    )
+
+
+def _normal_at(
+    a: RasterVertex, b: RasterVertex, c: RasterVertex, weights: _Fragment
+) -> Vector3:
+    """Return the perspective-correct unit normal at one sample point,
+    before any map, as the fragment loop works it out.
+
+    `_coordinates_at` for the normal, factored out because the geometric
+    roughness needs it at the pixels one right and one up. A zero normal
+    stays zero, as it does in the loop.
+    """
+    var inv_w = (
+        weights.wa * a.inv_w + weights.wb * b.inv_w + weights.wc * c.inv_w
+    )
+    var share_a = weights.wa
+    var share_b = weights.wb
+    var share_c = weights.wc
+    if inv_w != 0:
+        var rcp = Float32(1) / inv_w
+        share_a = weights.wa * a.inv_w * rcp
+        share_b = weights.wb * b.inv_w * rcp
+        share_c = weights.wc * c.inv_w * rcp
+    var facing = Vector3(
+        a.normal.x * share_a + b.normal.x * share_b + c.normal.x * share_c,
+        a.normal.y * share_a + b.normal.y * share_b + c.normal.y * share_c,
+        a.normal.z * share_a + b.normal.z * share_b + c.normal.z * share_c,
+    )
+    if facing.length() != 0:
+        facing.normalize()
+    return facing
 
 
 def mip_level(
@@ -2552,6 +2653,12 @@ def check_triangle_maps(
                 textures.get(layers.clearcoat_normal_map),
                 "A clearcoat normal map",
             )
+        # Every map reads one of the two sets of coordinates, and no
+        # other: its placement picks the pair by the channel.
+        var named = surface_maps(a)
+        for index in range(len(named)):  # pragma: no branch
+            if named[index] != NO_TEXTURE:
+                check_channel(textures.get(named[index]))
     # The node program, and every texture it reads: the kernel asks the
     # same before a launch.
     if a.nodes != NO_NODES and mode != SHADE_UV:
@@ -2564,6 +2671,121 @@ def check_triangle_maps(
                         " no texture; call set_texture() first"
                     )
                 _ = textures.get(program.textures[index]).width
+
+
+def check_channel(image: Texture) raises:
+    """Refuse a map whose channel is neither of the two sets.
+
+    A placement reads `uv1` for `UV_CHANNEL_1` and `uv` for anything
+    else, so a third value would be read as the first on both sides
+    without a word. Shared by both backends.
+
+    Args:
+        image: The texture named as a map.
+
+    Raises:
+        Error: If its channel is not `UV_CHANNEL_0` or `UV_CHANNEL_1`.
+    """
+    if not image.channel.is_valid():
+        raise Error("A texture's channel must be UV_CHANNEL_0 or UV_CHANNEL_1")
+
+
+# Where each map's placement is in `surface_maps` and `map_placements`:
+# every map three.js samples at a varying of its own, `vMapUv` and the
+# rest. The gradient map, the matcap and the env map are read at no
+# surface coordinate and have no slot.
+comptime MAP_SLOT = 0
+comptime ALPHA_MAP_SLOT = 1
+comptime EMISSIVE_MAP_SLOT = 2
+comptime ROUGHNESS_MAP_SLOT = 3
+comptime METALNESS_MAP_SLOT = 4
+comptime SPECULAR_MAP_SLOT = 5
+comptime NORMAL_MAP_SLOT = 6
+comptime BUMP_MAP_SLOT = 7
+comptime AO_MAP_SLOT = 8
+comptime LIGHT_MAP_SLOT = 9
+comptime TRANSMISSION_MAP_SLOT = 10
+comptime THICKNESS_MAP_SLOT = 11
+comptime SHEEN_COLOR_MAP_SLOT = 12
+comptime SHEEN_ROUGHNESS_MAP_SLOT = 13
+comptime IRIDESCENCE_MAP_SLOT = 14
+comptime IRIDESCENCE_THICKNESS_MAP_SLOT = 15
+comptime ANISOTROPY_MAP_SLOT = 16
+comptime SPECULAR_COLOR_MAP_SLOT = 17
+comptime SPECULAR_INTENSITY_MAP_SLOT = 18
+comptime CLEARCOAT_MAP_SLOT = 19
+comptime CLEARCOAT_ROUGHNESS_MAP_SLOT = 20
+comptime CLEARCOAT_NORMAL_MAP_SLOT = 21
+comptime MAP_SLOTS = CLEARCOAT_NORMAL_MAP_SLOT + 1
+
+
+def surface_maps(a: RasterVertex) -> List[TextureId]:
+    """Return every map a corner names that is sampled at a surface
+    coordinate, `MAP_SLOTS` of them, in slot order.
+
+    Args:
+        a: The corner.
+
+    Returns:
+        The ids, `NO_TEXTURE` where the corner names none.
+    """
+    ref layers = a.layers
+    return [
+        a.texture,
+        a.alpha_map,
+        a.emissive_map,
+        a.roughness_map,
+        a.metalness_map,
+        a.specular_map,
+        a.normal_map,
+        a.bump_map,
+        a.ao_map,
+        a.light_map,
+        a.transmission_map,
+        a.thickness_map,
+        layers.sheen_color_map,
+        layers.sheen_roughness_map,
+        layers.iridescence_map,
+        layers.thickness_map,
+        layers.anisotropy_map,
+        layers.specular_color_map,
+        layers.specular_intensity_map,
+        layers.clearcoat_map,
+        layers.clearcoat_roughness_map,
+        layers.clearcoat_normal_map,
+    ]
+
+
+def map_placements(
+    a: RasterVertex, textures: TextureStore, opened: Bool
+) raises -> List[UvPlacement]:
+    """Return where each of a triangle's maps is sampled, in slot order.
+
+    Worked out once a triangle rather than once a sample: a placement
+    turns its texture's `rotation` into a sine and a cosine. The kernel
+    reads the same numbers from its texture table instead.
+
+    Args:
+        a: The triangle's first corner.
+        textures: Where the maps live.
+        opened: Whether the mode opens the maps. When it does not, every
+            slot is the identity and no texture is read.
+
+    Returns:
+        `MAP_SLOTS` placements: each named map's own, and the identity
+        on `UV_CHANNEL_0` where the corner names none.
+
+    Raises:
+        Error: If an opened map is not in the store.
+    """
+    var named = surface_maps(a)
+    var placed = List[UvPlacement](length=MAP_SLOTS, fill=UvPlacement())
+    if not opened:
+        return placed^
+    for slot in range(MAP_SLOTS):  # pragma: no branch
+        if named[slot] != NO_TEXTURE:
+            placed[slot] = textures.get(named[slot]).placement()
+    return placed^
 
 
 def check_color_map(image: Texture, name: String) raises:
@@ -2852,6 +3074,10 @@ def rasterize_shaded(
     var masked = noded and has_output(nodes, MASK_NODE)
     var deep = noded and has_output(nodes, DEPTH_NODE)
     var reversed = a.state.depth_mode == REVERSED_DEPTH
+    # Where each map is sampled: its own channel and matrix, three.js's
+    # `vMapUv`, `vNormalMapUv` and the rest. The corners carry the two raw
+    # pairs, and each map places them for itself.
+    var placed = map_placements(a, textures, textured)
 
     var box = _bounds(flat, target.width, target.height, first_row, last_row)
     # The edge functions are evaluated once, at the box's top-left pixel,
@@ -2989,13 +3215,21 @@ def rasterize_shaded(
                     + b.world.z * share_b
                     + c.world.z * share_c,
                 )
-            # Texture coordinates, for the two modes that read them and for
-            # a node graph.
+            # The raw texture coordinates, both pairs, for the two modes
+            # that read them and for a node graph. Each map places them
+            # for itself below; the uv view and a node graph read the
+            # first pair as it is, three.js's `vUv`.
             var u = Float32(0)
             var v = Float32(0)
+            var uv1 = Vector2(0, 0)
             if mode != SHADE_LIT or noded:
                 u = a.u * share_a + b.u * share_b + c.u * share_c
                 v = a.v * share_a + b.v * share_b + c.v * share_c
+                uv1 = Vector2(
+                    a.u1 * share_a + b.u1 * share_b + c.u1 * share_c,
+                    a.v1 * share_a + b.v1 * share_b + c.v1 * share_c,
+                )
+            var uv = Vector2(u, v)
             # The normal before any map perturbs it: what a clear coat lies
             # on, three.js's `nonPerturbedNormal`.
             var coat_facing = facing
@@ -3010,45 +3244,54 @@ def rasterize_shaded(
                 # measures a footprint. Up rather than down, because the
                 # frame's handedness follows the screen's rows counting
                 # upward, as three.js's `dFdy` does; see `mapped_normal`.
+                # The coordinates are the map's own, placed, as three.js
+                # reads `vNormalMapUv` or `vBumpMapUv`.
                 var right = _weights(coverage, x + 1, y)
                 var up = _weights(coverage, x, y - 1)
                 var along_x = _world_at(a, b, c, right) - spot
                 var along_y = _world_at(a, b, c, up) - spot
-                var uv_right = _coordinates_at(a, b, c, right)
-                var uv_up = _coordinates_at(a, b, c, up)
-                var uv_along_x = Vector2(uv_right.x - u, uv_right.y - v)
-                var uv_along_y = Vector2(uv_up.x - u, uv_up.y - v)
                 if a.normal_map != NO_TEXTURE:
                     ref normals = textures.get(a.normal_map)
+                    var turned = placed[NORMAL_MAP_SLOT]
+                    var at = turned.place(uv, uv1)
+                    var steps = _placed_steps(a, b, c, turned, at, right, up)
                     facing = mapped_normal(
                         facing,
                         along_x,
                         along_y,
-                        uv_along_x,
-                        uv_along_y,
-                        _sample_map(normals, u, v, a, b, c, coverage, x, y),
+                        steps[0],
+                        steps[1],
+                        _sample_map(
+                            normals, at.x, at.y, a, b, c, coverage, x, y, turned
+                        ),
                         a.normal_scale,
                     )
                 else:
                     # The height here and one pixel over each way, scaled:
                     # three.js's `dHdxy_fwd`.
                     ref heights = textures.get(a.bump_map)
+                    var raised = placed[BUMP_MAP_SLOT]
+                    var at = raised.place(uv, uv1)
+                    var steps = _placed_steps(a, b, c, raised, at, right, up)
                     var here = (
                         a.bump_scale
-                        * _sample_map(heights, u, v, a, b, c, coverage, x, y).r
+                        * _sample_map(
+                            heights, at.x, at.y, a, b, c, coverage, x, y, raised
+                        ).r
                     )
                     var rise_x = (
                         a.bump_scale
                         * _sample_map(
                             heights,
-                            u + uv_along_x.x,
-                            v + uv_along_x.y,
+                            at.x + steps[0].x,
+                            at.y + steps[0].y,
                             a,
                             b,
                             c,
                             coverage,
                             x,
                             y,
+                            raised,
                         ).r
                         - here
                     )
@@ -3056,14 +3299,15 @@ def rasterize_shaded(
                         a.bump_scale
                         * _sample_map(
                             heights,
-                            u + uv_along_y.x,
-                            v + uv_along_y.y,
+                            at.x + steps[1].x,
+                            at.y + steps[1].y,
                             a,
                             b,
                             c,
                             coverage,
                             x,
                             y,
+                            raised,
                         ).r
                         - here
                     )
@@ -3149,7 +3393,8 @@ def rasterize_shaded(
                         a.receives_shadow,
                     )
             # The baked maps, three.js's `lights_fragment_maps` and
-            # `aomap_fragment`, sampled at the second coordinates. The
+            # `aomap_fragment`, each sampled where its own placement puts
+            # the fragment, usually on the second pair. The
             # light map's light joins the indirect diffuse light, and the
             # ao map's red dims the sum and leaves the direct lights alone.
             # A basic surface's whole color is indirect: a light map
@@ -3159,37 +3404,35 @@ def rasterize_shaded(
             var occlusion = Float32(1)
             var baked = Vector3(0, 0, 0)
             if bakes:
-                var u1 = a.u1 * share_a + b.u1 * share_b + c.u1 * share_c
-                var v1 = a.v1 * share_a + b.v1 * share_b + c.v1 * share_c
                 if a.ao_map != NO_TEXTURE:
                     occlusion = ambient_occlusion(
-                        _sample_map(
+                        _sample_placed(
                             textures.get(a.ao_map),
-                            u1,
-                            v1,
+                            placed[AO_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
                             coverage,
                             x,
                             y,
-                            True,
                         ).r,
                         a.ao_map_intensity,
                     )
                 var lit = a.kind.is_lit()
                 if a.light_map != NO_TEXTURE:
-                    var glowed = _sample_map(
+                    var glowed = _sample_placed(
                         textures.get(a.light_map),
-                        u1,
-                        v1,
+                        placed[LIGHT_MAP_SLOT],
+                        uv,
+                        uv1,
                         a,
                         b,
                         c,
                         coverage,
                         x,
                         y,
-                        True,
                     )
                     var strength = a.light_map_intensity * (
                         lighting.scale if lit else RECIPROCAL_PI
@@ -3309,8 +3552,17 @@ def rasterize_shaded(
                     var texel = FloatColor(1.0, 1.0, 1.0, 1.0)
                     if a.texture != NO_TEXTURE:
                         ref image = textures.get(a.texture)
-                        texel = _sample_map(
-                            image, u, v, a, b, c, coverage, x, y
+                        texel = _sample_placed(
+                            image,
+                            placed[MAP_SLOT],
+                            uv,
+                            uv1,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
                         )
                     shaded = FloatColor(
                         shaded.r * texel.r,
@@ -3324,8 +3576,17 @@ def rasterize_shaded(
                     # and the byte arrives as it was stored.
                     if a.alpha_map != NO_TEXTURE:
                         ref mask = textures.get(a.alpha_map)
-                        var thinning = _sample_map(
-                            mask, u, v, a, b, c, coverage, x, y
+                        var thinning = _sample_placed(
+                            mask,
+                            placed[ALPHA_MAP_SLOT],
+                            uv,
+                            uv1,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
                         )
                         shaded = FloatColor(
                             shaded.r, shaded.g, shaded.b, shaded.a * thinning.g
@@ -3334,8 +3595,17 @@ def rasterize_shaded(
                     # alpha aside: light given off has no coverage.
                     if a.emissive_map != NO_TEXTURE:
                         ref glow_image = textures.get(a.emissive_map)
-                        var glowing = _sample_map(
-                            glow_image, u, v, a, b, c, coverage, x, y
+                        var glowing = _sample_placed(
+                            glow_image,
+                            placed[EMISSIVE_MAP_SLOT],
+                            uv,
+                            uv1,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
                         )
                         glow = FloatColor(
                             glow.r * glowing.r,
@@ -3349,13 +3619,31 @@ def rasterize_shaded(
                     # so one image can carry both.
                     if a.roughness_map != NO_TEXTURE:
                         ref rough_image = textures.get(a.roughness_map)
-                        rough_factor = _sample_map(
-                            rough_image, u, v, a, b, c, coverage, x, y
+                        rough_factor = _sample_placed(
+                            rough_image,
+                            placed[ROUGHNESS_MAP_SLOT],
+                            uv,
+                            uv1,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
                         ).g
                     if a.metalness_map != NO_TEXTURE:
                         ref metal_image = textures.get(a.metalness_map)
-                        metal_factor = _sample_map(
-                            metal_image, u, v, a, b, c, coverage, x, y
+                        metal_factor = _sample_placed(
+                            metal_image,
+                            placed[METALNESS_MAP_SLOT],
+                            uv,
+                            uv1,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
                         ).b
                     # The specular map's red, three.js's
                     # `specularmap_fragment`: it scales the highlight here
@@ -3363,8 +3651,17 @@ def rasterize_shaded(
                     # `specularStrength` scales both.
                     if a.specular_map != NO_TEXTURE:
                         ref strength_image = textures.get(a.specular_map)
-                        specular_strength = _sample_map(
-                            strength_image, u, v, a, b, c, coverage, x, y
+                        specular_strength = _sample_placed(
+                            strength_image,
+                            placed[SPECULAR_MAP_SLOT],
+                            uv,
+                            uv1,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
                         ).r
                         highlight = FloatColor(
                             highlight.r * specular_strength,
@@ -3378,10 +3675,11 @@ def rasterize_shaded(
                     # map's green, and the anisotropy map's whole texel.
                     ref layered = a.layers
                     if layered.sheen_color_map != NO_TEXTURE:
-                        var tint = _sample_map(
+                        var tint = _sample_placed(
                             textures.get(layered.sheen_color_map),
-                            u,
-                            v,
+                            placed[SHEEN_COLOR_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3391,10 +3689,11 @@ def rasterize_shaded(
                         )
                         sheen_tint = Vector3(tint.r, tint.g, tint.b)
                     if layered.sheen_roughness_map != NO_TEXTURE:
-                        sheen_alpha = _sample_map(
+                        sheen_alpha = _sample_placed(
                             textures.get(layered.sheen_roughness_map),
-                            u,
-                            v,
+                            placed[SHEEN_ROUGHNESS_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3403,10 +3702,11 @@ def rasterize_shaded(
                             y,
                         ).a
                     if layered.iridescence_map != NO_TEXTURE:
-                        film_factor = _sample_map(
+                        film_factor = _sample_placed(
                             textures.get(layered.iridescence_map),
-                            u,
-                            v,
+                            placed[IRIDESCENCE_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3415,10 +3715,11 @@ def rasterize_shaded(
                             y,
                         ).r
                     if layered.thickness_map != NO_TEXTURE:
-                        thickness_texel = _sample_map(
+                        thickness_texel = _sample_placed(
                             textures.get(layered.thickness_map),
-                            u,
-                            v,
+                            placed[IRIDESCENCE_THICKNESS_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3428,10 +3729,11 @@ def rasterize_shaded(
                         ).g
                         thickness_mapped = True
                     if layered.anisotropy_map != NO_TEXTURE:
-                        var turn = _sample_map(
+                        var turn = _sample_placed(
                             textures.get(layered.anisotropy_map),
-                            u,
-                            v,
+                            placed[ANISOTROPY_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3447,10 +3749,11 @@ def rasterize_shaded(
                     # *alpha*, the clearcoat map's red, the clearcoat
                     # roughness map's green, and the coat's normal texel.
                     if layered.specular_color_map != NO_TEXTURE:
-                        var tint = _sample_map(
+                        var tint = _sample_placed(
                             textures.get(layered.specular_color_map),
-                            u,
-                            v,
+                            placed[SPECULAR_COLOR_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3460,10 +3763,11 @@ def rasterize_shaded(
                         )
                         specular_texel = Vector3(tint.r, tint.g, tint.b)
                     if layered.specular_intensity_map != NO_TEXTURE:
-                        specular_alpha = _sample_map(
+                        specular_alpha = _sample_placed(
                             textures.get(layered.specular_intensity_map),
-                            u,
-                            v,
+                            placed[SPECULAR_INTENSITY_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3472,10 +3776,11 @@ def rasterize_shaded(
                             y,
                         ).a
                     if layered.clearcoat_map != NO_TEXTURE:
-                        coat_factor = _sample_map(
+                        coat_factor = _sample_placed(
                             textures.get(layered.clearcoat_map),
-                            u,
-                            v,
+                            placed[CLEARCOAT_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3484,10 +3789,11 @@ def rasterize_shaded(
                             y,
                         ).r
                     if layered.clearcoat_roughness_map != NO_TEXTURE:
-                        coat_rough_factor = _sample_map(
+                        coat_rough_factor = _sample_placed(
                             textures.get(layered.clearcoat_roughness_map),
-                            u,
-                            v,
+                            placed[CLEARCOAT_ROUGHNESS_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3496,10 +3802,11 @@ def rasterize_shaded(
                             y,
                         ).g
                     if layered.clearcoat_normal_map != NO_TEXTURE:
-                        coat_texel = _sample_map(
+                        coat_texel = _sample_placed(
                             textures.get(layered.clearcoat_normal_map),
-                            u,
-                            v,
+                            placed[CLEARCOAT_NORMAL_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3511,10 +3818,11 @@ def rasterize_shaded(
                     # The transmission map's red and the thickness map's
                     # green, three.js's `transmission_fragment`.
                     if a.transmission_map != NO_TEXTURE:
-                        transmission_factor = _sample_map(
+                        transmission_factor = _sample_placed(
                             textures.get(a.transmission_map),
-                            u,
-                            v,
+                            placed[TRANSMISSION_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3523,10 +3831,11 @@ def rasterize_shaded(
                             y,
                         ).r
                     if a.thickness_map != NO_TEXTURE:
-                        thickness_factor = _sample_map(
+                        thickness_factor = _sample_placed(
                             textures.get(a.thickness_map),
-                            u,
-                            v,
+                            placed[THICKNESS_MAP_SLOT],
+                            uv,
+                            uv1,
                             a,
                             b,
                             c,
@@ -3639,12 +3948,32 @@ def rasterize_shaded(
                     a.metalness * metal_factor,
                     intensity,
                 )
-                var rough = floored_roughness(a.roughness * rough_factor)
+                # How fast the normal before any map turns across the
+                # pixel, in view space: three.js's `geometryRoughness`,
+                # added to both roughnesses after the floor. The normal
+                # one pixel right and one pixel up is worked out from the
+                # triangle's own functions, as a footprint is.
+                var bare = _normal_at(a, b, c, fragment)
+                var curve = geometry_roughness(
+                    view_direction(
+                        _normal_at(a, b, c, _weights(coverage, x + 1, y))
+                        - bare,
+                        lighting.up,
+                        lighting.back,
+                    ),
+                    view_direction(
+                        _normal_at(a, b, c, _weights(coverage, x, y - 1))
+                        - bare,
+                        lighting.up,
+                        lighting.back,
+                    ),
+                )
+                var rough = floored_roughness(a.roughness * rough_factor, curve)
                 # The coat times its map's red, and its roughness times its
                 # map's green, before the floor, in three.js's order.
                 var coat = clearcoat_of(a.clearcoat, coat_factor)
                 var coat_rough = floored_roughness(
-                    a.clearcoat_roughness * coat_rough_factor
+                    a.clearcoat_roughness * coat_rough_factor, curve
                 )
                 var toward_eye = toward_eye_at(
                     lighting.eye, lighting.toward_eye, spot
@@ -3658,14 +3987,22 @@ def rasterize_shaded(
                 if coated and coat_mapped:
                     var right = _weights(coverage, x + 1, y)
                     var up = _weights(coverage, x, y - 1)
-                    var uv_right = _coordinates_at(a, b, c, right)
-                    var uv_up = _coordinates_at(a, b, c, up)
+                    var coat_placed = placed[CLEARCOAT_NORMAL_MAP_SLOT]
+                    var steps = _placed_steps(
+                        a,
+                        b,
+                        c,
+                        coat_placed,
+                        coat_placed.place(uv, uv1),
+                        right,
+                        up,
+                    )
                     coat_normal = mapped_normal(
                         coat_facing,
                         _world_at(a, b, c, right) - spot,
                         _world_at(a, b, c, up) - spot,
-                        Vector2(uv_right.x - u, uv_right.y - v),
-                        Vector2(uv_up.x - u, uv_up.y - v),
+                        steps[0],
+                        steps[1],
                         coat_texel,
                         a.layers.clearcoat_normal_scale,
                     )
@@ -3673,20 +4010,43 @@ def rasterize_shaded(
                 # three.js's `tbn`, from the normal before any map and the
                 # changes one pixel right and one pixel up, as a normal map
                 # measures them. Coordinates are read whatever the mode:
-                # the stretch is a number, not a texture.
+                # the stretch is a number, not a texture. They are the
+                # normal map's, else the coat's normal map's, else the
+                # raw first pair, as three.js picks `vNormalMapUv`,
+                # `vClearcoatNormalMapUv` or `vUv`. A mode that opens no
+                # map places none of them.
                 var frame = TangentFrame(Vector3(0, 0, 0), Vector3(0, 0, 0))
                 if a.layers.is_anisotropic():
                     var right = _weights(coverage, x + 1, y)
                     var up = _weights(coverage, x, y - 1)
-                    var uv_here = _coordinates_at(a, b, c, fragment)
-                    var uv_right = _coordinates_at(a, b, c, right)
-                    var uv_up = _coordinates_at(a, b, c, up)
+                    var framed = UvPlacement()
+                    if a.normal_map != NO_TEXTURE:
+                        framed = placed[NORMAL_MAP_SLOT]
+                    elif a.layers.clearcoat_normal_map != NO_TEXTURE:
+                        framed = placed[CLEARCOAT_NORMAL_MAP_SLOT]
+                    var steps = _placed_steps(
+                        a,
+                        b,
+                        c,
+                        framed,
+                        framed.moved(
+                            _coordinates_at(
+                                a,
+                                b,
+                                c,
+                                fragment,
+                                framed.channel == UV_CHANNEL_1,
+                            )
+                        ),
+                        right,
+                        up,
+                    )
                     frame = tangent_frame(
                         coat_facing,
                         _world_at(a, b, c, right) - spot,
                         _world_at(a, b, c, up) - spot,
-                        Vector2(uv_right.x - uv_here.x, uv_right.y - uv_here.y),
-                        Vector2(uv_up.x - uv_here.x, uv_up.y - uv_here.y),
+                        steps[0],
+                        steps[1],
                     )
                 # The sheen, the film and the stretch, from the material's
                 # numbers times their maps; see `lights.physical_layers`.

@@ -343,10 +343,14 @@ def test_a_rough_metal_reads_a_pmrem_blurred() raises:
             )
     # Smooth: the same cyan face, bar the little red the multiple
     # scattering brings in from the PMREM's irradiance, which is the
-    # blurriest copy rather than the face's own average.
+    # blurriest copy rather than the face's own average. The ball is about
+    # eight pixels in radius, so its normal turns about an eighth a pixel
+    # at the middle: three.js's geometric roughness there is 0.128, and
+    # the lobe is read at 0.0525 + 0.128 = 0.18, which lets in a little
+    # more red than the floor alone.
     assert_equal(centers[0].g, 255)
     assert_true(centers[1].g >= 250)
-    assert_true(centers[1].r < 30)
+    assert_true(centers[1].r < 45)
     # Rough: the plain cube with no chain stays sharp, and the blur brings
     # in the red, yellow and magenta faces around the cyan one.
     assert_equal(centers[2].r, centers[0].r)

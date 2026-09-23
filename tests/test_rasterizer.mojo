@@ -24,7 +24,7 @@ from materials.material import (
     normal_material,
 )
 from math.vector2 import Vector2
-from std.math import inf, pi
+from std.math import inf, isfinite, pi
 
 # The intensity that lights a white surface square on to full white: three.js
 # divides every lit term by pi, and so does `Lighting`. See tests/test_light.
@@ -37,8 +37,11 @@ from render.texture import (
     IGNORED,
     NEAREST,
     REPEAT,
+    UV_CHANNEL_1,
     Alpha,
     Texture,
+    UvChannel,
+    UvPlacement,
     checkerboard,
     float_texture,
 )
@@ -67,7 +70,7 @@ from lights.shadow import ShadowMap
 from core.fog import LINEAR_FOG, FogKind, FogView, exp2_fog, linear_fog
 from render.tonemap import REINHARD_TONE_MAPPING, tone_map
 from std.math import atan2, nan, sqrt
-from units.si import InverseLength, Length, METER, PER_METER
+from units.si import Angle, DEGREE, InverseLength, Length, METER, PER_METER
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from math.vector3 import Vector3
@@ -5520,9 +5523,13 @@ def test_a_basic_surface_shows_its_light_map_and_is_occluded() raises:
 
 def test_the_baked_maps_read_the_second_coordinates() raises:
     # A map black on its left half and white on its right. The pixel sits
-    # on the left of the first coordinates, and the second say right.
+    # on the left of the first coordinates, and the second say right. A
+    # map on `UV_CHANNEL_1` reads the second.
     var textures = TextureStore()
-    var step = textures.add(a_step_map())
+    var stepped = a_step_map()
+    var first = textures.add(Texture(copy=stepped))
+    stepped.channel = UV_CHANNEL_1
+    var step = textures.add(stepped^)
     var right = physical_pixel(
         baked_quad(ao_map=step, second_u=0.9), filled(), textures
     )
@@ -5531,8 +5538,15 @@ def test_the_baked_maps_read_the_second_coordinates() raises:
         baked_quad(ao_map=step, second_u=0.1), filled(), textures
     )
     assert_almost_equal(left.r, Float32(0), atol=1e-4)
+    # On the first set, the same map reads the first pair: left.
+    var on_first = physical_pixel(
+        baked_quad(ao_map=first, second_u=0.9), filled(), textures
+    )
+    assert_almost_equal(on_first.r, Float32(0), atol=1e-4)
     # A map with a chain measures its footprint on the second pair too.
-    var chained = textures.add(a_mipmapped_gray())
+    var gray_chain = a_mipmapped_gray()
+    gray_chain.channel = UV_CHANNEL_1
+    var chained = textures.add(gray_chain^)
     var gray = physical_pixel(baked_quad(ao_map=chained), filled(), textures)
     assert_almost_equal(gray.r, 0.5 * HALF_GRAY, atol=1e-4)
     var banded = physical_pixel(
@@ -6834,3 +6848,289 @@ def test_a_specular_or_coat_map_must_be_stored_as_it_is_read() raises:
             rasterize_all(
                 with_layers(quad, coat), target, SHADE_TEXTURE, textures
             )
+
+
+# --- each map at its own placement ------------------------------------------
+
+
+def uv_quad(
+    placement: UvPlacement,
+    texture: TextureId,
+    second: Bool = False,
+    emissive_map: TextureId = NO_TEXTURE,
+) -> List[RasterVertex]:
+    """Return two unlit triangles over a sixteen-pixel target whose raw
+    coordinates run over the unit square, each corner's pair moved by
+    `placement` first. The raw pair rides the second set when `second`,
+    with a decoy in the first."""
+    var corners = List[RasterVertex]()
+    var places: List[Tuple[Float32, Float32]] = [
+        (Float32(0), Float32(0)),
+        (Float32(16), Float32(0)),
+        (Float32(16), Float32(16)),
+        (Float32(0), Float32(0)),
+        (Float32(16), Float32(16)),
+        (Float32(0), Float32(16)),
+    ]
+    for place in places:
+        var at = placement.moved(Vector2(place[0] / 16, 1 - place[1] / 16))
+        var first = at
+        var other = Vector2(0.3, 0.6)
+        if second:
+            first = Vector2(0.3, 0.6)
+            other = at
+        corners.append(
+            RasterVertex(
+                place[0],
+                place[1],
+                0.5,
+                1,
+                FloatColor(1, 1, 1),
+                first.x,
+                first.y,
+                texture,
+                kind=BASIC,
+                u1=other.x,
+                v1=other.y,
+                emissive_map=emissive_map,
+            )
+        )
+    return corners^
+
+
+def drawn_quad(
+    corners: List[RasterVertex], textures: TextureStore
+) raises -> Framebuffer:
+    """Draw `corners` textured into a sixteen-pixel target."""
+    var target = RenderTarget(16, 16, Color(0, 0, 0))
+    rasterize_all(corners, target, SHADE_TEXTURE, textures)
+    return target.resolve()
+
+
+def largest_difference(one: Framebuffer, two: Framebuffer) raises -> Int:
+    """Return the largest difference of any channel of any pixel."""
+    var most = 0
+    for y in range(one.height):
+        for x in range(one.width):
+            var p = one.get_pixel(x, y)
+            var q = two.get_pixel(x, y)
+            most = max(most, abs(Int(p.r) - Int(q.r)))
+            most = max(most, abs(Int(p.g) - Int(q.g)))
+            most = max(most, abs(Int(p.b) - Int(q.b)))
+    return most
+
+
+def test_a_map_is_placed_at_the_fragment_as_three_js_places_it() raises:
+    # Moving the raw pair at the fragment by the map's matrix draws what
+    # moving each corner's pair draws, as three.js moves it in the vertex
+    # shader: the matrix is linear. Mipmapped and filtered, so the
+    # footprint is measured on the placed pair too.
+    var textures = TextureStore()
+    var board = checkerboard(
+        8, 4, Color(240, 60, 20), Color(20, 40, 200), REPEAT
+    )
+    var still = textures.add(Texture(copy=board))
+    board.repeat = Vector2(2, 1.5)
+    board.rotation = Angle(30.0, DEGREE)
+    board.center = Vector2(0.5, 0.5)
+    board.offset = Vector2(0.1, -0.2)
+    var placement = board.placement()
+    board.channel = UV_CHANNEL_1
+    var on_second = textures.add(Texture(copy=board))
+    board.channel = UvChannel(0)
+    var moved = textures.add(board^)
+    var by_corner = drawn_quad(uv_quad(placement, still), textures)
+    var by_fragment = drawn_quad(uv_quad(UvPlacement(), moved), textures)
+    var by_second = drawn_quad(
+        uv_quad(UvPlacement(), on_second, second=True), textures
+    )
+    assert_true(largest_difference(by_corner, by_fragment) <= 1)
+    assert_true(largest_difference(by_corner, by_second) <= 1)
+    # And the pattern really moved.
+    var raw = drawn_quad(uv_quad(UvPlacement(), still), textures)
+    assert_true(largest_difference(raw, by_fragment) > 100)
+
+
+def test_two_maps_of_one_triangle_are_placed_apart() raises:
+    # A map on the first set as it is and an emissive map on the second,
+    # tiled: each reads its own pair through its own matrix, so the glow
+    # matches the glow a corner-moved pair gives.
+    var textures = TextureStore()
+    var white = textures.add(a_data_texel(255, 255, 255))
+    var glow = checkerboard(
+        4, 2, Color(255, 255, 255), Color(0, 0, 0), REPEAT, NEAREST
+    ).ignoring_alpha()
+    var still = textures.add(Texture(copy=glow))
+    glow.repeat = Vector2(3, 2)
+    var placement = glow.placement()
+    glow.channel = UV_CHANNEL_1
+    var tiled = textures.add(glow^)
+    var apart = uv_quad(UvPlacement(), white, True, tiled)
+    var together = uv_quad(placement, white, True, still)
+    for index in range(len(apart)):
+        apart[index].kind = LAMBERT
+        apart[index].emissive = FloatColor(1, 1, 1)
+        together[index].kind = LAMBERT
+        together[index].emissive = FloatColor(1, 1, 1)
+        together[index].u = together[index].u1
+        together[index].v = together[index].v1
+    var target = RenderTarget(16, 16, Color(0, 0, 0))
+    rasterize_all(apart, target, SHADE_TEXTURE, textures, Lighting.uniform())
+    var expected = RenderTarget(16, 16, Color(0, 0, 0))
+    rasterize_all(
+        together, expected, SHADE_TEXTURE, textures, Lighting.uniform()
+    )
+    assert_true(largest_difference(target.resolve(), expected.resolve()) <= 1)
+
+
+def test_a_map_with_a_channel_that_is_neither_is_refused() raises:
+    var textures = TextureStore()
+    var odd = a_data_texel(255, 255, 255)
+    odd.channel = UvChannel(4)
+    var id = textures.add(odd^)
+    var target = RenderTarget(16, 16, Color(0, 0, 0))
+    with assert_raises(contains="channel must be"):
+        rasterize_all(
+            uv_quad(UvPlacement(), id), target, SHADE_TEXTURE, textures
+        )
+    # The uv view opens no map, so it asks nothing.
+    rasterize_all(uv_quad(UvPlacement(), id), target, SHADE_UV, textures)
+
+
+def bent_quad(
+    roughness: Float32, curved: Bool, clearcoat: Float32 = 0
+) -> List[RasterVertex]:
+    """Return `physical_quad` at a roughness, its normals fanned out across
+    the eight pixels when `curved`, so the normal turns about a tenth a
+    pixel, and all facing +z otherwise."""
+    var corners = physical_quad(
+        kind=PHYSICAL,
+        roughness=roughness,
+        clearcoat=clearcoat,
+        clearcoat_roughness=roughness,
+    )
+    if not curved:
+        return corners^
+    for index in range(len(corners)):
+        var across = corners[index].x / 8 - 0.5
+        var down = corners[index].y / 8 - 0.5
+        corners[index].normal = Vector3(1.2 * across, -1.2 * down, 0.8)
+    return corners^
+
+
+def test_a_curved_surface_is_rougher_by_its_curve() raises:
+    # three.js adds the geometric roughness after the floor and caps the
+    # sum at one. On a surface whose normal turns about a tenth a pixel,
+    # an authored 0.95 and an authored one both reach one, so they draw
+    # alike; a flat surface keeps them apart, and a curved 0.5 stays
+    # below one.
+    var lighting = lit_obliquely()
+    for pixel in range(3):
+        var rough = physical_pixel(bent_quad(1, True), lighting, x=pixel + 2)
+        var nearly = physical_pixel(
+            bent_quad(0.95, True), lighting, x=pixel + 2
+        )
+        assert_equal(nearly.r, rough.r)
+        assert_equal(nearly.g, rough.g)
+        var half = physical_pixel(bent_quad(0.5, True), lighting, x=pixel + 2)
+        assert_true(abs(half.r - rough.r) > 1e-4, "a curve reached one")
+    var flat_rough = physical_pixel(bent_quad(1, False), lighting)
+    var flat_nearly = physical_pixel(bent_quad(0.95, False), lighting)
+    assert_true(
+        abs(flat_nearly.r - flat_rough.r) > 1e-5,
+        "a flat surface grew rougher",
+    )
+    # The clear coat takes the same curve.
+    var coat_rough = physical_pixel(bent_quad(1, True, 1), lighting)
+    var coat_nearly = physical_pixel(bent_quad(0.95, True, 1), lighting)
+    assert_equal(coat_nearly.r, coat_rough.r)
+
+
+def test_the_curve_is_measured_in_view_space() raises:
+    # max(abs(dFdx(n)), abs(dFdy(n))) takes the largest part, which a turn
+    # changes: the same surface seen through a camera turned about its
+    # line of sight measures another roughness, as three.js's view space
+    # normal does.
+    var lighting = lit_obliquely()
+    var turned = lit_obliquely()
+    turned.up = Vector3(0.6, 0.8, 0)
+    var square = physical_pixel(bent_quad(0.3, True), lighting)
+    var aslant = physical_pixel(bent_quad(0.3, True), turned)
+    assert_true(abs(square.r - aslant.r) > 1e-5, "the turn changed nothing")
+
+
+def anisotropic_quad(
+    normal_map: TextureId, coat_map: TextureId
+) -> List[RasterVertex]:
+    """Return a stretched physical quad with a normal map or a coat normal
+    map, whose frame the stretch follows."""
+    var layers = LayerFactors()
+    layers.anisotropy = Vector2(1, 0)
+    layers.clearcoat_normal_map = coat_map
+    var coat = Float32(0)
+    if coat_map != NO_TEXTURE:
+        coat = 1
+    return with_layers(
+        physical_quad(
+            kind=PHYSICAL,
+            roughness=0.3,
+            normal_map=normal_map,
+            clearcoat=coat,
+        ),
+        layers,
+    )
+
+
+def test_a_stretch_follows_the_normal_maps_own_coordinates() raises:
+    # three.js's `tbn` is measured on `vNormalMapUv`, else on
+    # `vClearcoatNormalMapUv`, else on `vUv`. A flat normal map turns no
+    # normal, but its placement turns the frame the lobe is stretched
+    # along; so does the coat normal map's, when there is no normal map.
+    var lighting = lit_obliquely()
+    var textures = TextureStore()
+    var flat = a_data_texel(128, 128, 255)
+    var still = textures.add(Texture(copy=flat))
+    flat.rotation = Angle(90.0, DEGREE)
+    var turned = textures.add(flat^)
+    var by_still = physical_pixel(
+        anisotropic_quad(still, NO_TEXTURE), lighting, textures
+    )
+    var by_turned = physical_pixel(
+        anisotropic_quad(turned, NO_TEXTURE), lighting, textures
+    )
+    assert_true(abs(by_turned.r - by_still.r) > 1e-3, "the frame did not turn")
+    var coat_still = physical_pixel(
+        anisotropic_quad(NO_TEXTURE, still), lighting, textures
+    )
+    var coat_turned = physical_pixel(
+        anisotropic_quad(NO_TEXTURE, turned), lighting, textures
+    )
+    assert_true(
+        abs(coat_turned.r - coat_still.r) > 1e-3,
+        "the coat's frame did not turn",
+    )
+    # A mode that opens no map measures the raw pair.
+    var unopened = physical_pixel(
+        anisotropic_quad(turned, NO_TEXTURE), lighting, textures, SHADE_LIT
+    )
+    var bare = physical_pixel(
+        anisotropic_quad(NO_TEXTURE, NO_TEXTURE), lighting, textures, SHADE_LIT
+    )
+    assert_equal(unopened.r, bare.r)
+
+
+def test_a_hand_built_physical_corner_measures_no_curve_where_it_cannot() raises:
+    # With no divisor the weights are used as they are, and a zero normal
+    # stays zero: neither turns, so the lobe is the authored one's.
+    var lighting = lit_obliquely()
+    var plain = physical_pixel(bent_quad(0.4, False), lighting)
+    var undivided = bent_quad(0.4, False)
+    for index in range(len(undivided)):
+        undivided[index].inv_w = 0
+    var drawn = physical_pixel(undivided, lighting)
+    assert_almost_equal(drawn.r, plain.r, atol=1e-4)
+    var unturned = bent_quad(0.4, False)
+    for index in range(len(unturned)):
+        unturned[index].normal = Vector3(0, 0, 0)
+    var dark = physical_pixel(unturned, lighting)
+    assert_true(isfinite(dark.r), "a zero normal drew no number")
