@@ -231,6 +231,17 @@ def test_a_geometry_is_checked_before_it_is_written() raises:
     past.set_index([0, 1, 3])
     with assert_raises(contains="past the last vertex"):
         _ = check_geometry(past)
+    # The index is an open field, so `set_index`'s checks can be skipped:
+    # a negative entry, and an index of a partial triangle, are refused
+    # here too. A negative entry read a position before the first.
+    var negative = triangle()
+    negative.index = [0, -1, 2]
+    with assert_raises(contains="negative"):
+        _ = check_geometry(negative)
+    var ragged = triangle()
+    ragged.index = [0, 1, 2, 0]
+    with assert_raises(contains="whole triangles"):
+        _ = check_geometry(ragged)
     # No index and a partial triangle.
     var partial = BufferGeometry()
     partial.set_attribute(

@@ -122,8 +122,9 @@ def check_geometry(geometry: BufferGeometry) raises -> Int:
             numbers a vertex; a `normal` of other than three, a `uv` of
             other than two, or a `color` of other than three or four, or
             any of them with a count other than the positions'; an index
-            entry past the last vertex; or no index and a vertex count
-            that is not a whole number of triangles.
+            that is not whole triangles, or an entry that is negative or
+            past the last vertex; or no index and a vertex count that is
+            not a whole number of triangles.
     """
     if not geometry.has_attribute(POSITION):
         raise Error("An exported geometry needs a position attribute")
@@ -134,7 +135,13 @@ def check_geometry(geometry: BufferGeometry) raises -> Int:
     _check_attribute(geometry, NORMAL, 3, 3, count)
     _check_attribute(geometry, UV, 2, 2, count)
     _check_attribute(geometry, COLOR, 3, 4, count)
+    # The index is an open field, so what `set_index` refuses is refused
+    # again here: a negative entry would read before the first position.
+    if len(geometry.index) % 3 != 0:
+        raise Error("An exported index must hold whole triangles")
     for slot in range(len(geometry.index)):
+        if geometry.index[slot] < 0:
+            raise Error("An index entry cannot be negative")
         if geometry.index[slot] >= count:
             raise Error("An index entry points past the last vertex")
     if not geometry.is_indexed() and count % 3 != 0:
