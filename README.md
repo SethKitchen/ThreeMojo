@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 161 features are ported and 18 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 162 features are ported and 17 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -248,12 +248,12 @@ The port is not at parity with three.js yet. 161 features are ported and 18 are 
 - [ ] More post-processing passes and shader effects [#178](https://github.com/SethKitchen/ThreeMojo/issues/178)
 - [ ] Render-target features: MSAA, 3D, array and cube targets, texture copies [#174](https://github.com/SethKitchen/ThreeMojo/issues/174)
 - [ ] Renderer hooks and material flags [#170](https://github.com/SethKitchen/ThreeMojo/issues/170)
-- [ ] Match three.js where this port refuses or differs on purpose [#164](https://github.com/SethKitchen/ThreeMojo/issues/164)
 
 <details>
-<summary>Ported: 22</summary>
+<summary>Ported: 23</summary>
 
 - [x] [Depth buffer](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#depth) [#72](https://github.com/SethKitchen/ThreeMojo/issues/72)
+- [x] [Match three.js where it accepts](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#wrap): clamp by default, lights at their target, the shadow bias order and unnormalized skin weights. [#164](https://github.com/SethKitchen/ThreeMojo/issues/164)
 - [x] [Backface culling](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#culling) [#73](https://github.com/SethKitchen/ThreeMojo/issues/73)
 - [x] [Near and far clipping](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#clipping) [#74](https://github.com/SethKitchen/ThreeMojo/issues/74)
 - [x] [Perspective-correct interpolation](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#interpolation) [#75](https://github.com/SethKitchen/ThreeMojo/issues/75)
