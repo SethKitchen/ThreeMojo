@@ -23,6 +23,11 @@ bones come from the scene, `skin_pose` reads them once per mesh, and
 `skin_carriers` turns them into one matrix per vertex. The renderer draws
 a skinned mesh where they put it, and the raycaster picks it there.
 
+A displacement map moves a vertex last, along its normal, and the same
+two callers need that too: `displaced_positions` morphs, carries and
+displaces in the order three.js's vertex shader does, and the shadow
+pass draws through the renderer's code and so gets it as well.
+
 ## Why a list and not a callback
 
 Both callers want every vertex, and both want to ask about bounds before
@@ -41,10 +46,13 @@ from core.buffer_geometry import (
     MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
+    UV,
 )
 from core.scene import Scene
+from materials.material import Material
 from math.bounds import Box3, Sphere
 from math.matrix4 import Matrix4
+from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.skeleton import blend_bones
 from objects.skinned_mesh import (
@@ -53,7 +61,10 @@ from objects.skinned_mesh import (
     SKIN_INDEX,
     SKIN_WEIGHT,
 )
+from render.rasterizer import check_data_map
+from render.texture_store import NO_TEXTURE, TextureStore
 from std.math import floor, isfinite
+from units.si import METER
 
 
 def morph_offset(
@@ -366,4 +377,86 @@ def skin_carriers(
         carry.multiply(blended)
         carry.multiply(pose.bind)
         out.append(carry^)
+    return out^
+
+
+def displaced_positions(
+    geometry: BufferGeometry,
+    influences: SIMD[DType.float32, MAX_MORPH_TARGETS],
+    carriers: List[Matrix4],
+    material: Material,
+    textures: TextureStore,
+) raises -> List[Vector3]:
+    """Return where every vertex is once its morph targets are worn, its
+    bones have carried it and its material's displacement map has moved
+    it: three.js's `morphtarget_vertex`, `skinning_vertex` and
+    `displacementmap_vertex`, in that order.
+
+    Each vertex moves along its own normal, morphed and carried the same
+    way and made unit length, by the map's red channel times the scale,
+    plus the bias. The map is sampled at the vertex's texture coordinate
+    through the map's own `uv_transform`, as three.js's
+    `vDisplacementMapUv` is, from the full-size image by the map's own
+    filter. A geometry with no `uv` samples at the origin, as a vertex
+    shader reads a missing attribute as zero.
+
+    Args:
+        geometry: The geometry, which must have positions and normals.
+        influences: How much of each of its targets the mesh wears.
+        carriers: One matrix per vertex that the bones carry it by, or
+            none for a mesh no skeleton moves; see `skin_carriers`.
+        material: The material, which must name a displacement map.
+        textures: Where the map lives.
+
+    Returns:
+        One point per vertex, in the geometry's own space, carried already:
+        the caller must not carry them again.
+
+    Raises:
+        Error: For anything `Material.check_displacement` raises for, if
+            the material names no displacement map or one that is not in
+            the store, if the map is not stored as data, if the geometry
+            has no normals or fewer normals or coordinates than vertices,
+            or for anything `morphed_positions` raises for.
+    """
+    material.check_displacement()
+    var map = material.displacement_map
+    if map == NO_TEXTURE or map.value >= textures.count():
+        raise Error("A material names a displacement map that is not there")
+    ref heights = textures.get(map)
+    check_data_map(heights, "A displacement map")
+    if not geometry.has_attribute(String(NORMAL)):
+        raise Error(
+            "A displacement map moves each vertex along its normal: the"
+            " geometry has no normals"
+        )
+    var points = morphed_positions(geometry, influences)
+    var normals = morphed_normals(geometry, influences)
+    if len(normals) < len(points):
+        raise Error("A displaced geometry needs a normal for every vertex")
+    var to_uv = heights.uv_transform()
+    var at = List[Vector2](
+        length=len(points), fill=to_uv.transform_point(Vector2(0, 0))
+    )
+    if geometry.has_attribute(String(UV)):
+        ref uvs = geometry.attribute_view(String(UV))
+        for vertex in range(len(points)):
+            at[vertex] = to_uv.transform_point(
+                Vector2(uvs.component(vertex, 0), uvs.component(vertex, 1))
+            )
+    var carried = len(carriers) > 0
+    var scale = material.displacement_scale.to(METER)
+    var bias = material.displacement_bias.to(METER)
+    var out = List[Vector3]()
+    for vertex in range(len(points)):
+        var point = points[vertex]
+        var facing = normals[vertex]
+        if carried:
+            point = carriers[vertex].transform_point(point)
+            facing = carriers[vertex].transform_direction(facing)
+        facing.normalize()
+        # `texture2D( displacementMap, uv ).x * scale + bias`, then along
+        # the normal, as three.js's shader writes it.
+        var height = heights.sample(at[vertex].x, at[vertex].y).r * scale + bias
+        out.append(point + facing * height)
     return out^

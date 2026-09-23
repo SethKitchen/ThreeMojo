@@ -88,6 +88,7 @@ from core.background import (
 )
 from core.deform import (
     SkinPose,
+    displaced_positions,
     morphed_normals,
     morphed_positions,
     skin_carriers,
@@ -246,6 +247,31 @@ def _carriers(
     if skin < 0:
         return List[Matrix4]()
     return skin_carriers(geometry, skins[skin], vertex_count)
+
+
+def _displaces(assets: Assets, material: MaterialId) raises -> Bool:
+    """Return True if a draw's material moves its vertices by a map, and
+    so leaves the bound its geometry has.
+
+    Asked only of a draw its bound would cull. Such a draw is kept, as a
+    morphed mesh is: the bound describes the surface before the map moved
+    it. An id that names nothing answers False, so a draw culled before
+    keeps being culled without a read, and one that is kept raises when it
+    is drawn.
+
+    Args:
+        assets: Where the materials live.
+        material: The draw's material.
+
+    Returns:
+        Whether the material names a displacement map.
+
+    Raises:
+        Error: Never for an id in range; the store raises for nothing else.
+    """
+    if material.value < 0 or material.value >= assets.materials.count():
+        return False
+    return assets.materials.get(material).has_displacement_map()
 
 
 def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
@@ -799,9 +825,11 @@ def _gather(
     tests an instanced mesh by one bound around every instance, and a
     test per instance is what lets the instances behind the camera cost
     nothing. Of a draw left out here only the positions are read, for the
-    bound: its material's textures and its index buffer are checked when
-    it is drawn, as three.js reads nothing of an object it culls, and the
-    material itself is looked up once the first draw survives.
+    bound, and whether its material names a displacement map, which moves
+    the surface off that bound and so keeps the draw: its material's
+    textures and its index buffer are checked when it is drawn, as
+    three.js reads nothing of an object it culls, and the material itself
+    is looked up once the first draw survives.
 
     Each draw's depth is its own placed origin's, not its node's, so that
     an instance sorts where it is. And each instance matrix is asked
@@ -857,8 +885,12 @@ def _gather(
         check_placing(matrices[index])
         var world = Matrix4(copy=placed)
         world.multiply(matrices[index])
-        if culled and not _in_view(
-            assets, geometries[index], world, frustum, slack, bounds, known
+        if (
+            culled
+            and not _in_view(
+                assets, geometries[index], world, frustum, slack, bounds, known
+            )
+            and not _displaces(assets, material)
         ):
             continue
         if not asked:
@@ -3590,10 +3622,29 @@ struct Renderer(Movable):
             # Where the targets put the vertices. The same call the
             # raycaster makes, so what is drawn and what is picked cannot
             # answer differently.
-            var worn = morphed_positions(geometry, draws[slot].morph_influences)
+            var worn: List[Vector3]
+            # A displacement map moves them last, along their normals,
+            # and the call that does it carries them first: three.js's
+            # `displacementmap_vertex` follows `skinning_vertex`. Checked
+            # for every draw, so a scale set with no map is refused here
+            # and not only by the raycaster. A light's view draws this
+            # same code, so the shadow moves with the surface.
+            material.check_displacement()
+            var carry_here = carried
+            if material.has_displacement_map():
+                worn = displaced_positions(
+                    geometry,
+                    draws[slot].morph_influences,
+                    carriers,
+                    material,
+                    assets.textures,
+                )
+                carry_here = False
+            else:
+                worn = morphed_positions(geometry, draws[slot].morph_influences)
             for vertex in range(vertex_count):
                 var local = worn[vertex]
-                if carried:
+                if carry_here:
                     local = carriers[vertex].transform_point(local)
                 var point = world.transform_point(local)
                 world_points.append(point)

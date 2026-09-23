@@ -8,7 +8,7 @@ three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshStandardM
 
 Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`, `size`, `sizeAttenuation`, `rotation`, `envMap`, `reflectivity`, `combine`.
 
-Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `clearcoat`, `clearcoatRoughness`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`, `aoMap`, `aoMapIntensity`, `lightMap`, `lightMapIntensity`, `specularMap`. Shading properties: `flatShading`.
+Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `clearcoat`, `clearcoatRoughness`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`, `aoMap`, `aoMapIntensity`, `lightMap`, `lightMapIntensity`, `specularMap`, `displacementMap`, `displacementScale`, `displacementBias`. Shading properties: `flatShading`.
 
 ## Construct one
 
@@ -478,6 +478,59 @@ Every kind that reads a normal can be flat shaded: `LAMBERT`, `PHONG`, `TOON`, `
 
 Flat shading changes the normal and nothing else. The positions, the depth and the texture coordinates are interpolated as before.
 
+## Displacement map
+
+A displacement map moves each vertex along its normal: three.js's `displacementMap`, `displacementScale` and `displacementBias`. The vertex moves by the map's red channel times the scale, plus the bias. The drawn surface, its shadow and the surface the raycaster picks all move.
+
+```mojo
+var hills = assets.textures.add(data_texture(64, 64, heights, channels=1, alpha=IGNORED))
+var ground = standard_material(Color(90, 120, 60))
+ground.set_displacement(hills, Length(2.0, METER), Length(-0.5, METER))
+var paint = assets.materials.add(ground)
+```
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `displacement_map` | `displacementMap` | `NO_TEXTURE` | Its red channel is a height. |
+| `displacement_scale` | `displacementScale` | `Length(1.0, METER)` | How far a red of one moves a vertex. |
+| `displacement_bias` | `displacementBias` | `Length(0.0, METER)` | How far every vertex moves in addition. |
+
+`set_displacement(map, scale, bias)` sets the three and checks them. The fields are also open, as three.js's are. The renderer and the raycaster call `check_displacement` when they read them. The scale and the bias are lengths in the geometry's own space, so a bare float does not compile.
+
+The map is data. It must be `LINEAR` and `IGNORED`, as a bump map must. The geometry must have normals.
+
+### Where the vertex goes
+
+`displaced_positions` in `core/deform.mojo` does the arithmetic. It follows three.js's vertex shader in this order:
+
+1. The morph targets move the vertex and its normal.
+2. The bones carry both.
+3. The map moves the vertex along that normal, made unit length.
+
+The map is sampled at the vertex's `uv` through the map's own `uv_transform`, as three.js's `vDisplacementMapUv`. So the map's transform does not have to agree with the other maps. The sample reads the full-size image with the map's own filter. A geometry with no `uv` samples at zero, as a vertex shader reads a missing attribute.
+
+The normals do not change. three.js does not compute them again, and this port does not either. Give the geometry normals that agree with the displaced shape if the lighting must follow it.
+
+### Who reads it
+
+- **The renderer.** `Renderer.prepare` moves the vertices before it clips and projects them. The CPU and the GPU rasterizers draw the same triangles. A displaced mesh draws the same image, pixel for pixel, as a geometry lifted by hand.
+- **Shadows.** A light's view uses the same vertex stage, so a displaced caster casts the shadow of its moved surface. three.js copies the three properties to its shadow depth material for the same result.
+- **The raycaster.** `Raycaster` picks the moved surface, through the same call. See [Raycasting](Raycasting).
+- **Culling.** A displaced mesh leaves the bound of its geometry. A draw that the bound culls is kept if its material names a displacement map. A morphed mesh is kept for the same reason.
+
+The shading mode does not change the shape. `SHADE_LIT` and `SHADE_UV` displace the vertices as `SHADE_TEXTURE` does, because the raycaster has no shading mode.
+
+### What refuses one
+
+A `BASIC` or `SHADOW` material refuses a displacement map, as three.js gives neither one. A wireframe is `BASIC`, so it refuses one too. Every other kind takes one: the five lit kinds, `MATCAP`, `NORMALS` and `DEPTH`. A scale that is not one meter or a bias that is not zero needs a map. A scale or a bias that is not finite is refused.
+
+### Where this port differs
+
+- three.js's raycaster picks the geometry and ignores the map. This port picks the displaced surface, so a click agrees with the image.
+- three.js culls a displaced mesh by the bound of its geometry. This port keeps it, so the culling does not change the image.
+- Points, lines and sprites do not read the map. Their materials are `BASIC`, as in three.js.
+- The loaders and the exporters do not read or write the three properties yet.
+
 ## Shadow material
 
 A `SHADOW` material shows the shadows falling on it and nothing else: three.js's `ShadowMaterial`. It is transparent wherever the lights that cast reach it and shows its color wherever they are blocked, by how much. A floor drawn with one catches a shadow on whatever is behind it.
@@ -791,6 +844,10 @@ The constructor raises for:
 `Renderer.prepare` raises for a depth function, a stencil function or a stencil operation that is none of the eight. It raises for a stencil reference or mask outside 0 to 255, and for a polygon offset that is not finite. `Material.raster_state` and `Material.depth_offset` make these checks.
 
 `Renderer.prepare` raises for an emissive map that reads its alpha as coverage. It raises for an env map, or a scene environment, that is not in the assets. It raises for a roughness, metalness, normal, bump or specular map that is not in the assets or is not stored as data. It raises for an ao map that is not in the assets or is not stored as data. It raises for a light map that is not in the assets or reads its alpha as coverage. It raises for an ao map and a light map whose transforms or channels differ, and for the second channel on any other map.
+
+`Material.set_displacement` and `Material.check_displacement` raise for a displacement map id below zero that is not `NO_TEXTURE`. They raise for a displacement scale or bias that is not finite. They raise for a scale that is not one meter or a bias that is not zero with no map. They raise for a map on a `BASIC` or `SHADOW` material. `Renderer.prepare` and the raycaster make the same check.
+
+`Renderer.prepare` and the raycaster also raise for a displacement map that is not in the assets or is not stored as data. They raise for a displaced geometry with too few normals.
 - A `Side`, `Blending` or `MaterialKind` that is none of its named values. The type stops a bare integer at compile time. `is_valid` stops `Side(99)` at run time.
 
 ## MaterialStore

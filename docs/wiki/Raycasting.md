@@ -91,6 +91,8 @@ An [instanced mesh](Meshes-and-assets#instancedmesh) is picked instance by insta
 
 A [skinned mesh](Skinning) is picked where its bones carry it, after its morph targets. The renderer and the raycaster both ask `core/deform.mojo` for the posed bones and the matrix that carries each vertex.
 
+A mesh whose material names a [displacement map](Materials#displacement-map) is picked where the map moved it, after its morph targets and its bones. three.js picks the geometry and ignores the map. This port picks what the renderer draws.
+
 ### Lines, points and sprites
 
 A line is met where the ray passes within `line_threshold` of a segment. The hit's `point` is on the segment, and its `distance` is to the ray's nearest point, as three.js reports them. A strip, a loop and a list of segments are all read as the renderer reads them.

@@ -64,6 +64,11 @@ the renderer draws it: `core.deform.skin_pose` reads the posed bones and
 `skin_carriers` moves each vertex, in both. three.js's
 `SkinnedMesh.raycast` does the same.
 
+**Displacement.** A mesh whose material names a displacement map is
+picked where the map has moved it, by `core.deform.displaced_positions`,
+the call the renderer draws it with. three.js's `Mesh.raycast` reads the
+geometry and not the map, so it picks the surface as it was modelled.
+
 **Lines, points and sprites.** A line is met where the ray passes within
 `line_threshold` of one of its segments, three.js's `params.Line.threshold`,
 and points where it passes within `points_threshold` of a point,
@@ -88,6 +93,7 @@ from cameras.camera import Camera
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry
 from core.deform import (
+    displaced_positions,
     morphed_positions,
     skin_carriers,
     skin_pose,
@@ -894,15 +900,30 @@ struct Raycaster(ImplicitlyCopyable):
         # ray misses it.
         var worn = List[Vector3]()
         var skinned = len(carriers) > 0
-        if mesh.is_morphed() or skinned:
+        # A displacement map moves the vertices last, along their normals,
+        # by the call the renderer makes, which morphs and carries them
+        # first. three.js picks the undisplaced geometry; this picks what
+        # is drawn.
+        material.check_displacement()
+        if material.has_displacement_map():
+            worn = displaced_positions(
+                geometry,
+                mesh.morph_influences,
+                carriers,
+                material,
+                assets.textures,
+            )
+        elif mesh.is_morphed() or skinned:
             worn = morphed_positions(geometry, mesh.morph_influences)
-        # Then where the bones carry them, after the targets, as three.js's
-        # `skinning_vertex` follows `morphtarget_vertex`.
-        if skinned:
-            # Not empty: there is a carrier for every vertex, and there
-            # are some.
-            for vertex in range(len(worn)):  # pragma: no branch
-                worn[vertex] = carriers[vertex].transform_point(worn[vertex])
+            # Then where the bones carry them, after the targets, as
+            # three.js's `skinning_vertex` follows `morphtarget_vertex`.
+            if skinned:
+                # Not empty: there is a carrier for every vertex, and there
+                # are some.
+                for vertex in range(len(worn)):  # pragma: no branch
+                    worn[vertex] = carriers[vertex].transform_point(
+                        worn[vertex]
+                    )
         var bound = geometry.bounding_sphere()
         if len(worn) > 0:
             bound = sphere_of(worn)

@@ -200,6 +200,11 @@ comptime DEFAULT_DASH_SIZE = Length(3.0, METER)
 comptime DEFAULT_GAP_SIZE = Length(1.0, METER)
 # A sprite drawn as its image is: three.js's `SpriteMaterial.rotation`.
 comptime NO_ROTATION = Angle(0.0, RADIAN)
+# A displacement map read as authored, and not lifted: three.js's
+# `displacementScale` and `displacementBias` defaults, in the geometry's
+# own units.
+comptime DEFAULT_DISPLACEMENT_SCALE = Length(1.0, METER)
+comptime NO_DISPLACEMENT_BIAS = Length(0.0, METER)
 # A normal map read as authored: three.js's `normalScale` default.
 comptime UNIT_NORMAL_SCALE = Vector2(1, 1)
 # What glass and most plastics refract at: three.js's `ior` default, and
@@ -592,6 +597,16 @@ struct MaterialKind(Equatable, ImplicitlyCopyable, Writable):
         """
         return self == BASIC or self.is_lit()
 
+    def displaces(self) -> Bool:
+        """Return True if a surface of this kind can carry a displacement
+        map: every kind but `BASIC` and `SHADOW`.
+
+        The kinds three.js gives a `displacementMap`: the lit five,
+        `MATCAP`, `NORMALS` and `DEPTH`. three.js's basic and shadow
+        materials have none, and a wireframe is `BASIC` here.
+        """
+        return self != BASIC and self != SHADOW
+
     def is_data(self) -> Bool:
         """Return True if a material of this kind shows data rather than
         light: `NORMALS` or `DEPTH`.
@@ -850,6 +865,17 @@ struct Material(ImplicitlyCopyable):
     # normal on all three corners, so both rasterizers light it as they
     # light any other. Any kind that reads a normal can carry it.
     var flat_shading: Bool
+    # A texture whose red channel moves each vertex along its normal,
+    # three.js's `displacementMap`, and the distance a red of one moves it
+    # and the distance every vertex moves besides, three.js's
+    # `displacementScale` and `displacementBias`. The vertex stage reads
+    # it, so the drawn, picked and shadowed surface all move. Data rather
+    # than color, so it must be `LINEAR` and `IGNORED`. Set after the
+    # material is built, as three.js sets them; `check_displacement`
+    # checks them when the renderer and the raycaster read them.
+    var displacement_map: TextureId
+    var displacement_scale: Length
+    var displacement_bias: Length
     # A `PHYSICAL` surface's index of refraction, three.js's `ior`, and
     # what its reflectance head on is tinted and scaled by, three.js's
     # `specularColor` and `specularIntensity`. Together they replace the
@@ -1567,6 +1593,9 @@ struct Material(ImplicitlyCopyable):
                 " other shader reads a normal"
             )
         self.flat_shading = flat_shading
+        self.displacement_map = NO_TEXTURE
+        self.displacement_scale = DEFAULT_DISPLACEMENT_SCALE
+        self.displacement_bias = NO_DISPLACEMENT_BIAS
         # Spelled as a Bool rather than testing the Optional directly, because
         # the coverage instrumenter wraps every condition in a probe that
         # takes a Bool, and an Optional does not convert to one implicitly.
@@ -1712,6 +1741,74 @@ struct Material(ImplicitlyCopyable):
         """Return True if this material names an ambient occlusion map or a
         light map: the two maps that act on the indirect light."""
         return self.ao_map != NO_TEXTURE or self.light_map != NO_TEXTURE
+
+    def has_displacement_map(self) -> Bool:
+        """Return True if this material names a texture that moves its
+        vertices."""
+        return self.displacement_map != NO_TEXTURE
+
+    def set_displacement(
+        mut self,
+        map: TextureId,
+        scale: Length = DEFAULT_DISPLACEMENT_SCALE,
+        bias: Length = NO_DISPLACEMENT_BIAS,
+    ) raises:
+        """Give the material a displacement map, three.js's
+        `displacementMap`, `displacementScale` and `displacementBias`.
+
+        Each vertex moves along its normal by the map's red channel at the
+        vertex's texture coordinate, times `scale`, plus `bias`. The
+        material is left as it was if the three are refused.
+
+        Args:
+            map: Id of a texture whose red channel is a height, or
+                `NO_TEXTURE` to clear it. Data: `LINEAR`, `IGNORED`.
+            scale: How far a red of one moves a vertex. One meter by
+                default, as in three.js.
+            bias: How far every vertex moves besides. Zero by default.
+
+        Raises:
+            Error: For anything `check_displacement` raises for.
+        """
+        var trial = self
+        trial.displacement_map = map
+        trial.displacement_scale = scale
+        trial.displacement_bias = bias
+        trial.check_displacement()
+        self.displacement_map = map
+        self.displacement_scale = scale
+        self.displacement_bias = bias
+
+    def check_displacement(self) raises:
+        """Refuse a displacement this material cannot carry.
+
+        The fields are open, so they are checked here, where the renderer
+        and the raycaster read them.
+
+        Raises:
+            Error: If the map id is a negative other than `NO_TEXTURE`, the
+                scale or the bias is not finite, a scale that is not one
+                meter or a bias that is not zero is given with no map, or
+                a map is given on a kind that has none (see
+                `MaterialKind.displaces`).
+        """
+        var map = self.displacement_map
+        if map.value < 0 and map != NO_TEXTURE:
+            raise Error("A material's displacement map id cannot be negative")
+        var scale = self.displacement_scale.to(METER)
+        var bias = self.displacement_bias.to(METER)
+        if not isfinite(scale) or not isfinite(bias):
+            raise Error("A displacement scale and bias must be finite")
+        if map == NO_TEXTURE and (scale != 1 or bias != 0):
+            raise Error(
+                "A displacement scale or bias needs a displacement map to"
+                " move by"
+            )
+        if map != NO_TEXTURE and not self.kind.displaces():
+            raise Error(
+                "A basic or shadow material has no displacement map, as in"
+                " three.js; a wireframe is basic"
+            )
 
     def has_clearcoat(self) -> Bool:
         """Return True if a clear coat lies over this surface at all."""
