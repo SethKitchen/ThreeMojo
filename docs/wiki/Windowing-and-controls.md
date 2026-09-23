@@ -1,8 +1,17 @@
 # Windowing and controls
 
-`window/terminal.mojo` and `controls/`. A `TerminalWindow` shows frames in the terminal and reads the keys and the mouse. `OrbitControls` turns that input into a camera that orbits a target. Both use the standard library only.
+`window/terminal.mojo` and `controls/`. A `TerminalWindow` shows frames in the terminal and reads the keys and the mouse. The controls turn that input into a camera that moves. All of them use the standard library only.
 
-three.js: a `WebGLRenderer` canvas, and `OrbitControls` from `examples/jsm/controls/`.
+| Controls | Module | The camera |
+|---|---|---|
+| `OrbitControls` | `controls/orbit_controls.mojo` | Orbits a target, with poles. |
+| `MapControls` | `controls/map_controls.mojo` | Pans over the ground, and orbits. |
+| `TrackballControls` | `controls/trackball_controls.mojo` | Turns about a target with no poles, and can roll over the top. |
+| `FlyControls` | `controls/fly_controls.mojo` | Flies and rolls on its own axes. |
+| `FirstPersonControls` | `controls/first_person_controls.mojo` | Walks, and turns toward the pointer. |
+| `PointerLockControls` | `controls/pointer_lock_controls.mojo` | Turns by the pointer's movement, and walks. |
+
+three.js: a `WebGLRenderer` canvas, and the controls of the same names in `examples/jsm/controls/`. `ArcballControls` is not ported.
 
 Run the example in a terminal:
 
@@ -102,11 +111,12 @@ The window manager's close button does not close the window. It sets `close_requ
 
 ## Input events
 
-`controls/input.mojo`. An `InputEvent` is one of the five kinds the browser has, or a resize.
+`controls/input.mojo`. An `InputEvent` is one of the six kinds the browser has, or a resize.
 
 | Kind | three.js event | Fields it sets |
 |---|---|---|
 | `KEY_DOWN` | `keydown` | `key` |
+| `KEY_UP` | `keyup` | `key`. A terminal never sends it. |
 | `POINTER_DOWN` | `pointerdown` | `button`, `x`, `y` |
 | `POINTER_MOVE` | `pointermove` | `button` held or `NO_BUTTON`, `x`, `y` |
 | `POINTER_UP` | `pointerup` | `button`, `x`, `y` |
@@ -182,10 +192,155 @@ With `zoom_to_cursor` set, a wheel notch or a dolly drag goes toward the point u
 
 The offset is turned into a frame whose y is the camera's `up` before it is read as angles, as three.js turns it. So the polar angle is measured from the camera's up, and a camera with +z up orbits about z.
 
+### Panning over the ground
+
+`screen_space_panning` is `True` by default, as in three.js. A pan up the view then moves the target up the view. Set it to `False` to move the target forward instead, in the plane at right angles to the camera's `up`. A zoom to the cursor then keeps the target on that plane. A camera within 20 degrees of level keeps its target, as in three.js.
+
 ### Differences from three.js
 
 - Touch input and a limit on the target's radius are not ported.
-- Panning is always in screen space, three.js's default.
+
+## MapControls
+
+`controls/map_controls.mojo`. `MapControls(target)` returns an `OrbitControls` with three.js's map settings. Every member and method is `OrbitControls`'s.
+
+| Setting | Value |
+|---|---|
+| `primary_action` | `PAN` |
+| `middle_action` | `DOLLY` |
+| `secondary_action` | `ROTATE` |
+| `screen_space_panning` | `False` |
+
+A drag with the left button moves over the ground. A drag with the right button orbits.
+
+## Held keys
+
+A terminal sends no key-up event. The controls that move while a key is held count the key as held until `key_timeout` goes by with no repeat. `controls/held_keys.mojo` keeps this record.
+
+- A `KEY_DOWN` holds the key, or starts its time again.
+- A `KEY_UP` lets the key go at once. A source that knows when a key goes up can send it.
+- `update` lets go of each key that did not repeat within `key_timeout`.
+- A capital letter is its small letter. `W` with Shift is `w`, as three.js's `event.code` names the key.
+
+The default `key_timeout` is 0.3 seconds, a `Duration`. A keyboard repeats a held key about 30 times a second, so a held key stays held. Most keyboards wait about half a second before the first repeat. A held key therefore moves, stops for a moment, then moves steadily. Set `key_timeout` to 0.6 seconds to remove the stop. A longer timeout makes the camera coast after the key goes up.
+
+## FlyControls
+
+`controls/fly_controls.mojo`. The camera moves along its own axes and turns about them. `handle(event, width, height)` changes what is held. `update(camera, delta)` moves and turns the camera for the time `delta`.
+
+| Input | Change |
+|---|---|
+| `W`, `S` | Forward, back. |
+| `A`, `D` | Left, right. |
+| `R`, `F` | Up, down. |
+| Up and down arrows | Pitch up, pitch down. |
+| Left and right arrows | Yaw left, yaw right. |
+| `Q`, `E` | Roll left, roll right. |
+| Left button, right button | Forward, back. |
+| Pointer | Yaw and pitch by its distance from the middle of the view. |
+
+| Member | Default | Meaning |
+|---|---|---|
+| `movement_speed` | 1 m/s | A `Velocity`. |
+| `roll_speed` | 0.01 rad/s | An `AngularVelocity`. |
+| `drag_to_look` | `False` | Turn only while a button is held. The buttons then do not move. |
+| `auto_forward` | `False` | Move forward with nothing held. |
+| `key_timeout` | 0.3 s | See [Held keys](#held-keys). |
+
+A turn is three.js's quaternion `(x, y, z, 1)`, normalized. Here `x`, `y` and `z` are the pitch, yaw and roll held, times half of `roll_speed` and the time. three.js's `rollSpeed` is that half. Its default of 0.005 is 0.01 radians a second here, the same turn.
+
+A roll changes the camera's `up`. The target stays ahead of the camera at the same distance. `update` returns `True` when the camera moved or turned past three.js's threshold.
+
+three.js sets a speed multiplier on Shift and never reads it. The port leaves it out.
+
+## FirstPersonControls
+
+`controls/first_person_controls.mojo`. The camera walks, and turns toward the pointer. `FirstPersonControls(camera)` reads where the camera looks. `handle(event, width, height)` changes what is held and where the pointer is. `update(camera, delta)` moves and turns the camera.
+
+| Input | Change |
+|---|---|
+| `W` or the up arrow | Forward. |
+| `S` or the down arrow | Back. |
+| `A` or the left arrow | Left. |
+| `D` or the right arrow | Right. |
+| `R`, `F` | Up, down. |
+| Left button, right button | Forward, back, while `active_look` is on. |
+| Pointer | Turn toward it, faster the farther it is from the middle. |
+
+| Member | Default | Meaning |
+|---|---|---|
+| `movement_speed` | 1 m/s | A `Velocity`. |
+| `look_speed` | 0.005 deg/s | An `AngularVelocity` for each pixel the pointer is from the middle. |
+| `look_vertical` | `True` | False turns only left and right. |
+| `auto_forward` | `False` | Move forward with nothing held. |
+| `active_look` | `True` | False turns not at all, and the buttons do not move. |
+| `height_speed`, `height_coef` | `False`, 1 per second | Move forward faster the higher the camera is. |
+| `height_min`, `height_max` | 0 m, 1 m | The heights `height_speed` reads between. |
+| `constrain_vertical` | `False` | Keep the angle from straight up in a range. |
+| `vertical_min`, `vertical_max` | 0, a half turn | That range, as an `Angle`. |
+| `key_timeout` | 0.3 s | See [Held keys](#held-keys). |
+
+The direction is a latitude and a longitude, as in three.js. The latitude stays within 85 degrees of level. `look_at(camera, point)` turns the camera and reads the new direction. The camera keeps its `up`.
+
+A terminal reports the pointer only while a button is held. The camera keeps turning toward where the pointer last was. A browser's camera does the same while the pointer rests.
+
+## PointerLockControls
+
+`controls/pointer_lock_controls.mojo`. While the controls are locked, a pointer move turns the camera at once. `lock()` and `unlock()` set `is_locked`. No browser asks for permission, so both always succeed.
+
+A turn is 0.002 radians a pixel, times `pointer_speed`, as in three.js. Right and left turn about the world's y. Up and down turn about the camera's right. The angle from straight up stays between `min_polar_angle` and `max_polar_angle`.
+
+A browser reports how far a locked pointer moved. A terminal reports where the pointer is, and only while a button is held. So a turn is the difference between two positions. The first position after a press or after `lock` only records where the pointer is.
+
+| Member | Default | Meaning |
+|---|---|---|
+| `is_locked` | `False` | Only a locked pointer turns the camera. |
+| `min_polar_angle`, `max_polar_angle` | 0, a half turn | As an `Angle`. |
+| `pointer_speed` | 1 | A factor on the turn. |
+| `movement_speed` | 1 m/s | How fast a held key walks. |
+| `key_timeout` | 0.3 s | See [Held keys](#held-keys). |
+
+`move_forward(camera, distance)` moves along the level ground. `move_right(camera, distance)` moves along the camera's right. The distance is a `Length`. `get_direction(camera)` returns where the camera looks.
+
+three.js leaves the keys to its example. Here `update(camera, delta)` walks by the keys held: `W`, `A`, `S`, `D` and the arrows. As in three.js, the camera's `up` must be +y.
+
+## TrackballControls
+
+`controls/trackball_controls.mojo`. The camera turns about `target` like a trackball. It has no poles, and it can roll over the top. `TrackballControls(camera, target)` records the camera for `reset`. `handle(event, width, height)` records where the pointer went. `update(camera)` applies it and places the camera.
+
+| Input | Change |
+|---|---|
+| Left drag | Rotate. The camera's `up` turns too. |
+| Middle drag, or the wheel | Zoom. |
+| Right drag | Pan. |
+| Hold `A`, `S` or `D` | Any button rotates, zooms or pans. |
+
+| Member | Default | Meaning |
+|---|---|---|
+| `target` | the origin | The point the camera turns about. |
+| `rotate_speed`, `zoom_speed`, `pan_speed` | 1, 1.2, 0.3 | |
+| `no_rotate`, `no_zoom`, `no_pan` | `False` | Turn an action off. |
+| `static_moving` | `False` | Stop a change at once. |
+| `dynamic_damping_factor` | 0.2 | How fast a change dies away. |
+| `min_distance`, `max_distance` | 0, infinity | For a perspective camera, as a `Length`. |
+| `min_zoom`, `max_zoom` | 0, infinity | For an orthographic camera. |
+| `rotate_key`, `zoom_key`, `pan_key` | `a`, `s`, `d` | three.js: `keys`. |
+| `primary_action`, `middle_action`, `secondary_action` | `ROTATE`, `DOLLY`, `PAN` | three.js: `mouseButtons`. |
+| `key_timeout` | 0.3 s | See [Held keys](#held-keys). |
+
+The arithmetic is three.js's. A position is read on a circle as wide as the view. A turn is the distance the pointer moved on that circle, times `rotate_speed`. A zoom scales the distance by one plus the part of the view the drag covered, times `zoom_speed`. A wheel notch is 0.025 of the view.
+
+Unless `static_moving` is set, each frame keeps `1 - dynamic_damping_factor` of a pan or a zoom. A turn keeps the square root of it. `reset(camera)` puts the camera and the target back. A turn that is dying away goes on after a reset, as in three.js.
+
+`update` takes no time, as in three.js. It takes an optional `delta` that only ages the held keys, a sixtieth of a second by default. An orthographic camera's pan measures both directions by the view's width, as three.js's does. Touch input is not ported.
+
+## ArcballControls
+
+`ArcballControls` is not ported. It is about 3,500 lines of three.js, with gizmos, animations and its own touch gestures. It needs an issue of its own.
+
+## How the ports were checked
+
+The tests hold each control to three.js r180's own numbers. The three.js controls ran headless in Node, with the same camera, view and input as each test.
 
 ## Limits
 

@@ -15,6 +15,7 @@ from controls.input import (
     InputEvent,
     InputKind,
     KEY_DOWN,
+    KEY_UP,
     Key,
     MIDDLE,
     NO_BUTTON,
@@ -213,7 +214,7 @@ def test_the_terminals_size_report_is_a_resize() raises:
     assert_equal(len(_decode(decoder, "\x1b[4;480;640t")), 0)
     assert_equal(len(_decode(decoder, "\x1b[8;24t")), 0)
     assert_true(RESIZE.is_valid())
-    assert_false(InputKind(6).is_valid())
+    assert_true(KEY_UP.is_valid())
 
 
 def test_an_event_holds_what_it_is_given() raises:

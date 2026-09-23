@@ -13,8 +13,9 @@ a mouse, once asked to report, sends xterm's SGR sequences:
     ESC [ < button ; column ; row M     a press, a drag or a wheel notch
     ESC [ < button ; column ; row m     a release
 
-`InputDecoder` turns those bytes into `InputEvent`s, the five kinds the
-browser has and a resize. A terminal asked `ESC [ 18 t` answers
+`InputDecoder` turns those bytes into `InputEvent`s, five of the kinds the
+browser has and a resize. The sixth browser kind, `KEY_UP`, is one a
+terminal never sends. A terminal asked `ESC [ 18 t` answers
 `ESC [ 8 ; rows ; columns t`, which is the resize. A sequence split across two reads is kept until the rest
 arrives. A sequence this decoder does not know is consumed and dropped.
 
@@ -63,12 +64,12 @@ struct InputKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the six kinds there are.
+        """Return True if this is one of the seven kinds there are.
 
         Returns:
             Whether the value names a kind.
         """
-        return self.value >= 0 and self.value <= 5
+        return self.value >= 0 and self.value <= 6
 
 
 # A key went down. three.js: `keydown`.
@@ -85,6 +86,11 @@ comptime WHEEL = InputKind(4)
 # decoder gives columns and rows; the window gives the pixels of the
 # largest frame that fits.
 comptime RESIZE = InputKind(5)
+# A key went up. three.js: `keyup`. A terminal sends no such thing, so the
+# decoder never gives one; a source that knows when a key is let go can.
+# The controls that move while a key is held also let it go by itself a
+# while after its last repeat. See `controls.held_keys`.
+comptime KEY_UP = InputKind(6)
 
 
 @fieldwise_init
@@ -154,7 +160,7 @@ struct InputEvent(ImplicitlyCopyable):
     """
 
     var kind: InputKind
-    # The key, for `KEY_DOWN`.
+    # The key, for `KEY_DOWN` and `KEY_UP`.
     var key: Key
     # The button, for `POINTER_DOWN` and `POINTER_UP`, and the button held
     # for `POINTER_MOVE`.

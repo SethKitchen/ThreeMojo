@@ -26,8 +26,12 @@ three.js turns it, so the poles are along the camera's up. A
 `zoom_to_cursor` a dolly or a zoom goes toward the point under the
 pointer, as three.js's does.
 
+With `screen_space_panning` off, a pan up the view moves the target
+forward in the plane at right angles to the camera's up, as three.js's
+does. `MapControls` in `controls.map_controls` pans that way.
+
 Differences from three.js: touch input and a target radius limit are not
-ported, and panning is always in screen space, three.js's default.
+ported.
 """
 
 from cameras.orthographic_camera import OrthographicCamera
@@ -61,6 +65,10 @@ comptime EPSILON = Float32(1e-6)
 # scales a dolly by 0.95 for each hundred.
 comptime ZOOM_BASE = Float32(0.95)
 comptime WHEEL_PIXELS = Float32(100)
+# A camera that looks more than 20 degrees away from level keeps its target
+# on the plane through it after a zoom to the cursor, when not panning in
+# screen space. three.js: `_TILT_LIMIT`, the cosine of 70 degrees.
+comptime TILT_LIMIT = Float32(0.3420201433256687)
 # three.js turns an automatic rotation at `auto_rotate_speed` turns per
 # minute, so the default of 2 is one turn in 30 seconds.
 comptime SECONDS_PER_MINUTE = Float32(60)
@@ -138,6 +146,10 @@ struct OrbitControls(Copyable, Movable):
     # True to dolly toward the point under the pointer rather than toward
     # the target, three.js's `zoomToCursor`. False by default.
     var zoom_to_cursor: Bool
+    # True to pan up the view; False to pan forward in the plane at right
+    # angles to the camera's up. three.js's `screenSpacePanning`, True by
+    # default.
+    var screen_space_panning: Bool
 
     # The action of the button held, and where the pointer last was.
     var _action: OrbitAction
@@ -194,6 +206,7 @@ struct OrbitControls(Copyable, Movable):
         self.min_zoom = 0
         self.max_zoom = inf[DType.float32]()
         self.zoom_to_cursor = False
+        self.screen_space_panning = True
         self._cursor = False
         self._cursor_x = 0
         self._cursor_y = 0
@@ -312,10 +325,16 @@ struct OrbitControls(Copyable, Movable):
             view: The camera, as the controls see it.
         """
         var axes = _camera_axes(view.offset, view.up)
+        var upward = axes[1]
+        if not self.screen_space_panning:
+            # three.js: the camera's up crossed with its right, which is
+            # forward along the plane at right angles to the up.
+            upward = view.up
+            upward.cross(axes[0])
         # The content follows the pointer, so the camera moves the other
         # way across the view and the same way up it.
         self._pan = self._pan + axes[0] * (-delta_x * view.per_x)
-        self._pan = self._pan + axes[1] * (delta_y * view.per_y)
+        self._pan = self._pan + upward * (delta_y * view.per_y)
 
     # --- input -------------------------------------------------------------
 
@@ -596,7 +615,12 @@ struct OrbitControls(Copyable, Movable):
             var forward = placed[1] - placed[0]
             forward.normalize()
             var position = placed[0] + self._dolly_direction * (before - after)
-            placed = [position, position + forward * after]
+            placed = [
+                position,
+                self._cursor_target(
+                    position, forward, after, placed[1], camera.up
+                ),
+            ]
             self._cursor = False
         self._scale = 1
         var changed = self._settle(camera.position, placed[0], placed[1])
@@ -636,12 +660,59 @@ struct OrbitControls(Copyable, Movable):
             camera.zoom = new_zoom
             var after = _unproject(camera, self._cursor_x, self._cursor_y)
             var shift = before - after
-            placed = [placed[0] + shift, placed[1] + shift]
+            var forward = placed[1] - placed[0]
+            var reach = forward.length()
+            forward.normalize()
+            var position = placed[0] + shift
+            placed = [
+                position,
+                self._cursor_target(
+                    position, forward, reach, placed[1], camera.up
+                ),
+            ]
             self._cursor = False
         camera.zoom = new_zoom
         var changed = self._settle(camera.position, placed[0], placed[1])
         camera.place(placed[0], placed[1])
         return changed or new_zoom != old_zoom
+
+    def _cursor_target(
+        self,
+        position: Vector3,
+        forward: Vector3,
+        reach: Float32,
+        target: Vector3,
+        up: Vector3,
+    ) -> Vector3:
+        """Return the target after a zoom to the cursor moved the camera.
+
+        In screen space, it is straight ahead at the new distance. Else a
+        camera that looks near level keeps its target, and one that looks
+        up or down takes the point ahead on the plane at right angles to
+        its up through the target, as three.js does.
+
+        Args:
+            position: Where the camera is now.
+            forward: Where it looks, a unit direction.
+            reach: The distance to the target after the zoom.
+            target: The target before the zoom.
+            up: The camera's up.
+
+        Returns:
+            The new target.
+        """
+        if self.screen_space_panning:
+            return position + forward * reach
+        var normal = up
+        normal.normalize()
+        var facing = normal.dot(forward)
+        if abs(facing) < TILT_LIMIT:
+            return target
+        # three.js's `Ray.intersectPlane`: nothing behind the camera.
+        var along = normal.dot(target - position) / facing
+        if along < 0:
+            return target
+        return position + forward * along
 
     def _settle(
         mut self, was: Vector3, position: Vector3, target: Vector3

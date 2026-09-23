@@ -31,6 +31,8 @@ comptime Acceleration = Quantity[1, 0, -2, 0]
 comptime AngularVelocity = Quantity[0, 0, -1, 1]
 # Per unit of length: how fast an exponential fog thickens with depth.
 comptime InverseLength = Quantity[-1, 0, 0, 0]
+# Per unit of time: how fast a controller's speed grows with height.
+comptime Frequency = Quantity[0, 0, -1, 0]
 
 comptime LengthUnit = Unit[1, 0, 0, 0]
 comptime AreaUnit = Unit[2, 0, 0, 0]
@@ -38,6 +40,9 @@ comptime MassUnit = Unit[0, 1, 0, 0]
 comptime DurationUnit = Unit[0, 0, 1, 0]
 comptime AngleUnit = Unit[0, 0, 0, 1]
 comptime InverseLengthUnit = Unit[-1, 0, 0, 0]
+comptime VelocityUnit = Unit[1, 0, -1, 0]
+comptime AngularVelocityUnit = Unit[0, 0, -1, 1]
+comptime FrequencyUnit = Unit[0, 0, -1, 0]
 
 # --- length -----------------------------------------------------------------
 comptime METER = LengthUnit(1.0, "m")
@@ -72,3 +77,9 @@ comptime HOUR = DurationUnit(3600.0, "h")
 comptime RADIAN = AngleUnit(1.0, "rad")
 comptime DEGREE = AngleUnit(0.017453292519943295, "deg")
 comptime TURN = AngleUnit(6.283185307179586, "turn")
+
+# --- speed ------------------------------------------------------------------
+comptime METER_PER_SECOND = VelocityUnit(1.0, "m/s")
+comptime RADIAN_PER_SECOND = AngularVelocityUnit(1.0, "rad/s")
+comptime DEGREE_PER_SECOND = AngularVelocityUnit(0.017453292519943295, "deg/s")
+comptime PER_SECOND = FrequencyUnit(1.0, "1/s")
