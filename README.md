@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 116 features are ported and 33 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 118 features are ported and 31 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -208,16 +208,16 @@ The port is not at parity with three.js yet. 116 features are ported and 33 are 
 - [ ] glTF skins, animations, morph targets, cameras and sparse accessors [#134](https://github.com/SethKitchen/ThreeMojo/issues/134)
 - [ ] glTF extensions [#135](https://github.com/SethKitchen/ThreeMojo/issues/135)
 - [ ] FBX and Collada loaders [#138](https://github.com/SethKitchen/ThreeMojo/issues/138)
-- [ ] Exporters: glTF, OBJ, STL and PLY [#139](https://github.com/SethKitchen/ThreeMojo/issues/139)
 - [ ] JSON scene format: ObjectLoader and toJSON [#140](https://github.com/SethKitchen/ThreeMojo/issues/140)
 
 <details>
-<summary>Ported: 4</summary>
+<summary>Ported: 5</summary>
 
 - [x] [GLTF loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#gltf): `.gltf` and `.glb` into geometries, standard materials, textures and a node hierarchy, with a JSON reader of its own [#70](https://github.com/SethKitchen/ThreeMojo/issues/70)
 - [x] [OBJ loader](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files): positions, texture coordinates, normals and polygon faces, split by object and material [#71](https://github.com/SethKitchen/ThreeMojo/issues/71)
 - [x] [STL and PLY loaders](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#stl): ASCII and binary STL with face colors, and PLY in all three encodings and every scalar type [#137](https://github.com/SethKitchen/ThreeMojo/issues/137)
 - [x] [OBJ material libraries](https://github.com/SethKitchen/ThreeMojo/wiki/Model-files#material-libraries): an MTL reader building Phong materials and their textures, mapped to each OBJ object [#136](https://github.com/SethKitchen/ThreeMojo/issues/136)
+- [x] [Exporters: glTF, OBJ, STL and PLY](https://github.com/SethKitchen/ThreeMojo/wiki/Exporters): glTF (.gltf/.glb), OBJ, STL and PLY writers that read back through the project's own loaders [#139](https://github.com/SethKitchen/ThreeMojo/issues/139)
 
 </details>
 
@@ -269,16 +269,16 @@ The port is not at parity with three.js yet. 116 features are ported and 33 are 
 
 ### Animation
 
-- [ ] Smooth and cubic-spline keyframe interpolation [#149](https://github.com/SethKitchen/ThreeMojo/issues/149)
 
 <details>
-<summary>Ported: 5</summary>
+<summary>Ported: 6</summary>
 
 - [x] [AnimationMixer, AnimationClip and KeyframeTrack](https://github.com/SethKitchen/ThreeMojo/wiki/Animation): keyframes on a node's position, scale and rotation, blended by weight across the actions playing [#88](https://github.com/SethKitchen/ThreeMojo/issues/88)
 - [x] [Animation fades, cross-fades, warps and events](https://github.com/SethKitchen/ThreeMojo/wiki/Animation#fades-warps-and-start-times): fades, cross-fades, warps, halt, start times, and loop and finished events drained from the mixer [#147](https://github.com/SethKitchen/ThreeMojo/issues/147)
 - [x] [Property tracks, bindings and AnimationUtils](https://github.com/SethKitchen/ThreeMojo/wiki/Animation#a-track-names-a-target-not-a-string): tracks on visibility, morph targets, materials and lights, typed bindings, object groups, subclips and additive clips [#148](https://github.com/SethKitchen/ThreeMojo/issues/148)
 - [x] [Morph targets](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#morph-targets): a second set of positions per geometry and a weight per mesh, blended into the vertex before it is projected [#89](https://github.com/SethKitchen/ThreeMojo/issues/89)
 - [x] [Skinning](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning#the-arithmetic): four bones a vertex, blended into one matrix and applied in `prepare`, so both backends draw it without knowing [#90](https://github.com/SethKitchen/ThreeMojo/issues/90)
+- [x] [Smooth and cubic-spline keyframe interpolation](https://github.com/SethKitchen/ThreeMojo/wiki/Animation#smooth-tracks): smooth and glTF cubic-spline interpolation, with three.js's ending modes chosen from each action's loop mode [#149](https://github.com/SethKitchen/ThreeMojo/issues/149)
 
 </details>
 
