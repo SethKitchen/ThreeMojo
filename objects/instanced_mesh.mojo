@@ -93,8 +93,8 @@ struct InstancedMesh(Copyable, Movable):
     # draws every copy on top of the node.
     var matrices: List[Matrix4]
     # One color per instance, three.js's `instanceColor`, or none at all:
-    # empty until the first `set_color_at`. The renderer refuses any other
-    # length.
+    # empty until the first `set_color_at`. `color_at` reads an instance
+    # past its end as white; the renderer refuses any other length.
     var colors: List[Color]
 
     def __init__(
@@ -177,13 +177,15 @@ struct InstancedMesh(Copyable, Movable):
             index: Which instance, from zero.
 
         Returns:
-            Its color, sRGB. White when no instance has a color yet.
+            Its color, sRGB. White when it has no color: none has one yet,
+            or it was appended to `matrices` after the colors were made.
+            three.js reads a missing `instanceColor` as white too.
 
         Raises:
             Error: If there is no such instance.
         """
         self._check(index)
-        if len(self.colors) == 0:
+        if index >= len(self.colors):
             return WHITE
         return self.colors[index]
 
@@ -191,6 +193,7 @@ struct InstancedMesh(Copyable, Movable):
         """Color one instance, three.js's `setColorAt`.
 
         The first call gives every instance a color, white for the rest.
+        A later call after `matrices` grew gives the new instances white.
 
         Args:
             index: Which instance, from zero.
@@ -200,8 +203,8 @@ struct InstancedMesh(Copyable, Movable):
             Error: If there is no such instance.
         """
         self._check(index)
-        if len(self.colors) == 0:
-            self.colors = List[Color](length=len(self.matrices), fill=WHITE)
+        while len(self.colors) < len(self.matrices):
+            self.colors.append(WHITE)
         self.colors[index] = color
 
     def _check(self, index: Int) raises:

@@ -860,6 +860,22 @@ def test_an_instance_color_starts_white_and_is_kept() raises:
         _ = batch.color_at(1)
 
 
+def test_an_instance_added_after_the_colors_is_white() raises:
+    # `matrices` is an open list, so an instance can arrive after the
+    # colors did. three.js reads an instance with no color as white, and
+    # so does this: it neither reads nor writes past the colors' end.
+    var group = InstancedMesh(GeometryId(0), MaterialId(0), NodeId(0), 1)
+    group.set_color_at(0, Color(10, 20, 30))
+    group.matrices.append(translation(1, 0, 0))
+    group.matrices.append(translation(2, 0, 0))
+    assert_equal(rgb(group.color_at(2)), rgb(Color(255, 255, 255)))
+    group.set_color_at(1, Color(4, 5, 6))
+    assert_equal(len(group.colors), 3)
+    assert_equal(rgb(group.color_at(0)), rgb(Color(10, 20, 30)))
+    assert_equal(rgb(group.color_at(1)), rgb(Color(4, 5, 6)))
+    assert_equal(rgb(group.color_at(2)), rgb(Color(255, 255, 255)))
+
+
 def test_instance_colors_draw_as_mesh_colors_would() raises:
     # A white material times an instance's color is that color: the same
     # image as plain meshes painted in it.
