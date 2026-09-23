@@ -59,6 +59,7 @@ does when `morphAttributes.normal` is absent.
 from core.buffer_attribute import BufferAttribute
 from math.bounds import Box3, Sphere
 from math.vector3 import Vector3
+from std.math import isfinite
 
 # How many morph targets one geometry may carry. This port's limit, and
 # not three.js's: older three.js had a `MAX_MORPH_TARGETS` of eight because
@@ -86,6 +87,57 @@ comptime UV = "uv"
 # multiplies the material's color by. Decode an authored sRGB color with
 # `FloatColor(srgb=...)` before storing it here.
 comptime COLOR = "color"
+# A tangent per vertex, four floats: the direction texture u grows along the
+# surface, and in `w` which way v grows from it, one or minus one. What
+# `compute_tangents` writes, and what a normal map needs to turn its texels
+# into directions.
+comptime TANGENT = "tangent"
+
+
+def _shift(mut attribute: BufferAttribute, offset: Vector3):
+    """Move every item of a position attribute by one offset.
+
+    Args:
+        attribute: Positions, three or more numbers an item.
+        offset: How far to move them.
+    """
+    var size = attribute.item_size
+    for vertex in range(attribute.count()):
+        attribute.data[vertex * size] += offset.x
+        attribute.data[vertex * size + 1] += offset.y
+        attribute.data[vertex * size + 2] += offset.z
+
+
+@fieldwise_init
+struct MaterialIndex(Equatable, ImplicitlyCopyable, Writable):
+    """Which of a mesh's materials a group of triangles wears, as a type
+    rather than a bare int: three.js's `materialIndex`.
+
+    A position in a list of materials, and not a `MaterialId`, which names a
+    material in a store. The two are both small integers and mean different
+    things, which is the reason for the type. `add_group` stops a negative
+    one with `is_valid`.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is a position in a list: zero or more."""
+        return self.value >= 0
+
+
+@fieldwise_init
+struct GeometryGroup(ImplicitlyCopyable):
+    """A run of triangles that wears one material, three.js's geometry
+    group.
+
+    `start` and `count` are counted in index entries for an indexed
+    geometry and in vertices for one without an index, as in three.js.
+    """
+
+    var start: Int
+    var count: Int
+    var material_index: MaterialIndex
 
 
 struct BufferGeometry(Movable):
@@ -105,6 +157,9 @@ struct BufferGeometry(Movable):
     # three.js's `morphTargetsRelative`. Read only when there are targets,
     # and either answer is a legitimate one, so nothing checks it.
     var morph_relative: Bool
+    # Runs of triangles that wear one material each: three.js's `groups`.
+    # Empty means the whole geometry is one run. See `add_group`.
+    var groups: List[GeometryGroup]
 
     def __init__(out self):
         """Create an empty geometry with no attributes and no index."""
@@ -114,6 +169,61 @@ struct BufferGeometry(Movable):
         self.morph_positions = List[BufferAttribute]()
         self.morph_normals = List[BufferAttribute]()
         self.morph_relative = False
+        self.groups = List[GeometryGroup]()
+
+    def clone(self) -> BufferGeometry:
+        """Return a copy of this geometry, three.js's `clone`.
+
+        Copies every attribute, the index, the morph targets and the groups.
+        A geometry is not `Copyable`, so that a copy is always asked for by
+        name and never made by an assignment.
+
+        Returns:
+            The copy, which shares nothing with this geometry.
+        """
+        var copied = BufferGeometry()
+        copied.names = self.names.copy()
+        copied.values = self.values.copy()
+        copied.index = self.index.copy()
+        copied.morph_positions = self.morph_positions.copy()
+        copied.morph_normals = self.morph_normals.copy()
+        copied.morph_relative = self.morph_relative
+        copied.groups = self.groups.copy()
+        return copied^
+
+    def add_group(
+        mut self,
+        start: Int,
+        count: Int,
+        material_index: MaterialIndex = MaterialIndex(0),
+    ) raises:
+        """Add a run of triangles that wears one material, three.js's
+        `addGroup`.
+
+        The renderer draws a whole mesh in one material and does not read
+        groups yet. They are kept so that `merge_geometries` can say where
+        each part begins, and so that `compute_tangents` visits what
+        three.js visits.
+
+        Args:
+            start: The first index entry of the run, or the first vertex
+                for a geometry without an index.
+            count: How many entries or vertices the run holds.
+            material_index: Which of the mesh's materials the run wears.
+
+        Raises:
+            Error: If `start` or `count` is negative, or the material index
+                is not valid.
+        """
+        if start < 0 or count < 0:
+            raise Error("A group cannot start or run a negative distance")
+        if not material_index.is_valid():
+            raise Error("A group's material index cannot be negative")
+        self.groups.append(GeometryGroup(start, count, material_index))
+
+    def clear_groups(mut self):
+        """Remove every group, three.js's `clearGroups`."""
+        self.groups.clear()
 
     def morph_count(self) -> Int:
         """Return how many morph targets the geometry carries."""
@@ -490,3 +600,197 @@ struct BufferGeometry(Movable):
             if reach > farthest:
                 farthest = reach
         return Sphere(center, farthest)
+
+    def to_non_indexed(self) raises -> BufferGeometry:
+        """Return this geometry with every triangle owning its corners,
+        three.js's `toNonIndexed`.
+
+        Every attribute and every morph target is read through the index,
+        so a vertex shared by four triangles becomes four vertices. The
+        groups are kept as they are: an index entry and a vertex of the
+        result are counted the same way.
+
+        three.js warns and returns the geometry itself when it has no index.
+        This returns a copy, because a geometry here is owned and not shared.
+
+        Returns:
+            A geometry without an index.
+
+        Raises:
+            Error: If an index entry points past the last item of an
+                attribute or a morph target.
+        """
+        if not self.is_indexed():
+            return self.clone()
+        var result = BufferGeometry()
+        for slot in range(len(self.names)):
+            result.set_attribute(
+                self.names[slot], self.values[slot].gather(self.index)
+            )
+        for target in range(len(self.morph_positions)):
+            result.morph_positions.append(
+                self.morph_positions[target].gather(self.index)
+            )
+        for target in range(len(self.morph_normals)):
+            result.morph_normals.append(
+                self.morph_normals[target].gather(self.index)
+            )
+        result.morph_relative = self.morph_relative
+        result.groups = self.groups.copy()
+        return result^
+
+    def center(mut self) raises:
+        """Move the vertices so that their bounding box is centered on the
+        origin, three.js's `center`.
+
+        Only positions move. A normal and a tangent are directions, and a
+        translation does not turn them. A geometry with no vertices does not
+        move.
+
+        Morph targets that hold finished positions move with the base, so a
+        worn target lands where it did relative to the shape. three.js moves
+        the base alone and leaves them behind. Targets that hold offsets do
+        not move: an offset is the same wherever the shape is.
+
+        Raises:
+            Error: If the geometry has no positions, or they hold fewer
+                than three numbers a vertex.
+        """
+        var offset = -self.bounding_box().center()
+        _shift(self.values[self._slot(String(POSITION))], offset)
+        if not self.morph_relative:
+            for target in range(len(self.morph_positions)):
+                _shift(self.morph_positions[target], offset)
+
+    def stream_length(self) raises -> Int:
+        """Return how many slots the triangle stream holds: the index
+        entries, or the vertices of a geometry without an index.
+
+        Returns:
+            The count a group's `start` and `count` are measured against.
+
+        Raises:
+            Error: If the geometry has no index and no positions.
+        """
+        if self.is_indexed():
+            return len(self.index)
+        return self.vertex_count()
+
+    def vertex_at(self, slot: Int) raises -> Int:
+        """Return the vertex one slot of the triangle stream reads.
+
+        The stream is the index for an indexed geometry, and the vertices
+        in order for one without. `corner_index` asks the same by triangle;
+        this asks by slot, which is how a group counts.
+
+        Args:
+            slot: An index entry, or a vertex for a geometry without an
+                index.
+
+        Returns:
+            The vertex.
+
+        Raises:
+            Error: If the slot is outside the stream, if the geometry has
+                no positions, or if an index entry points past the last
+                vertex.
+        """
+        if slot < 0 or slot >= self.stream_length():
+            raise Error("The triangle stream has no slot of that number")
+        if not self.is_indexed():
+            return slot
+        var vertex = self.index[slot]
+        if vertex >= self.vertex_count():
+            raise Error("An index entry points past the last vertex")
+        return vertex
+
+    def _runs(self) raises -> List[GeometryGroup]:
+        """Return the groups, or one group over every triangle if there are
+        none, as three.js's `computeTangents` does.
+
+        Returns:
+            The runs of the triangle stream to visit.
+
+        Raises:
+            Error: If the geometry has no positions.
+        """
+        if len(self.groups) > 0:
+            return self.groups.copy()
+        return [GeometryGroup(0, self.stream_length(), MaterialIndex(0))]
+
+    def compute_tangents(mut self) raises:
+        """Set the `tangent` attribute from positions, normals and texture
+        coordinates, three.js's `computeTangents`.
+
+        A tangent is the direction u grows in along the surface. Each
+        triangle gives the directions u and v grow in across it, and they
+        are summed at its three corners. At each vertex the u sum is made
+        square to the normal and unit length. The fourth number is minus one
+        where the v sum points against the normal crossed with the u sum,
+        and one otherwise: the handedness a mirrored texture needs.
+
+        A triangle whose texture coordinates have no area gives no
+        direction, and is skipped. A vertex no triangle uses gets a tangent
+        of four zeros. With groups, only the triangles in them are visited,
+        as in three.js.
+
+        three.js refuses a geometry without an index. This reads one
+        without an index three corners at a time, as the renderer does.
+
+        Raises:
+            Error: If the geometry has no `position`, `normal` or `uv`, if
+                those hold too few numbers a vertex, or if an index entry
+                points past the last vertex.
+        """
+        var count = self.vertex_count()
+        var runs = self._runs()
+        var total = self.stream_length()
+        var along_u = List[Vector3](length=count, fill=Vector3(0, 0, 0))
+        var along_v = List[Vector3](length=count, fill=Vector3(0, 0, 0))
+        ref positions = self.attribute_view(String(POSITION))
+        ref normals = self.attribute_view(String(NORMAL))
+        ref uvs = self.attribute_view(String(UV))
+        # `_runs` gives one run at least, so neither loop over the runs can
+        # run zero times.
+        for run in runs:  # pragma: no branch
+            var end = min(run.start + run.count, total)
+            for slot in range(run.start, end - 2, 3):
+                var a = self.vertex_at(slot)
+                var b = self.vertex_at(slot + 1)
+                var c = self.vertex_at(slot + 2)
+                var origin = positions.vector3(a)
+                var edge_b = positions.vector3(b) - origin
+                var edge_c = positions.vector3(c) - origin
+                var u_a = uvs.component(a, 0)
+                var v_a = uvs.component(a, 1)
+                var u_b = uvs.component(b, 0) - u_a
+                var v_b = uvs.component(b, 1) - v_a
+                var u_c = uvs.component(c, 0) - u_a
+                var v_c = uvs.component(c, 1) - v_a
+                var scale = 1 / (u_b * v_c - u_c * v_b)
+                if not isfinite(scale):
+                    continue
+                var u_way = (edge_b * v_c - edge_c * v_b) * scale
+                var v_way = (edge_c * u_b - edge_b * u_c) * scale
+                for vertex in [a, b, c]:  # pragma: no branch
+                    along_u[vertex].add(u_way)
+                    along_v[vertex].add(v_way)
+        var tangents = List[Float32](length=count * 4, fill=0.0)
+        for run in runs:  # pragma: no branch
+            var end = min(run.start + run.count, total)
+            for slot in range(run.start, end):
+                var vertex = self.vertex_at(slot)
+                var normal = normals.vector3(vertex)
+                var u_way = along_u[vertex]
+                var tangent = u_way - normal * normal.dot(u_way)
+                tangent.normalize()
+                var turned = normal
+                turned.cross(u_way)
+                var handedness = Float32(1)
+                if turned.dot(along_v[vertex]) < 0:
+                    handedness = -1
+                tangents[vertex * 4] = tangent.x
+                tangents[vertex * 4 + 1] = tangent.y
+                tangents[vertex * 4 + 2] = tangent.z
+                tangents[vertex * 4 + 3] = handedness
+        self.set_attribute(String(TANGENT), BufferAttribute(tangents^, 4))

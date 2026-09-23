@@ -1,10 +1,10 @@
 # Geometry
 
-`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes. Two more fill a drawn [shape](Curves) in, and give it thickness. Two more read a surface back as the lines of its edges.
+`core/buffer_geometry.mojo`, `core/buffer_attribute.mojo`, `core/geometry_store.mojo` and `geometries/`. A `BufferGeometry` holds named vertex attributes and an optional index. It can compute its own normals and bounds. Builders make boxes, spheres, planes, circles, rings, cylinders, cones, tori, torus knots, the four regular polyhedra, capsules, lathes and tubes. Two more fill a drawn [shape](Curves) in, and give it thickness. Two more read a surface back as the lines of its edges, and [utilities](#merge-weld-and-tangents) merge, weld and compute tangents.
 
 ![A torus knot turns under a lamp](out/geometry.png)
 
-three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`. Also `ShapeGeometry`, `ExtrudeGeometry` and `ShapeUtils.triangulateShape`.
+three.js: `BufferGeometry`, `BufferAttribute`, `computeVertexNormals`, `computeBoundingBox`, `computeBoundingSphere`, `BoxGeometry`, `SphereGeometry`, `PlaneGeometry`, `CircleGeometry`, `RingGeometry`, `CylinderGeometry`, `ConeGeometry`, `TorusGeometry`, `TorusKnotGeometry`, `PolyhedronGeometry`, `TetrahedronGeometry`, `OctahedronGeometry`, `IcosahedronGeometry`, `DodecahedronGeometry`, `CapsuleGeometry`, `LatheGeometry`, `TubeGeometry`. Also `ShapeGeometry`, `ExtrudeGeometry` and `ShapeUtils.triangulateShape`. Also `toNonIndexed`, `center`, `computeTangents`, `addGroup`, `clone`, and `BufferGeometryUtils.mergeGeometries`, `mergeVertices` and `toCreasedNormals`.
 
 ## BufferAttribute
 
@@ -15,6 +15,7 @@ A flat `List[Float32]` with an item size. `BufferAttribute(data, 3)` holds vecto
 | `count() -> Int` | The number of items. |
 | `component(index, offset) -> Float32` | One float of one item. |
 | `vector3(index) -> Vector3` | One item as a vector. Item size must be three. |
+| `gather(index) -> BufferAttribute` | One copy of an item for each entry of `index`. |
 
 ## BufferGeometry
 
@@ -32,8 +33,16 @@ A flat `List[Float32]` with an item size. `BufferAttribute(data, 3)` holds vecto
 | `compute_vertex_normals()` | Set `normal` from the triangles. |
 | `bounding_box() -> Box3` | The box around the vertices. |
 | `bounding_sphere() -> Sphere` | A sphere around the vertices, centered on that box. |
+| `clone() -> BufferGeometry` | A copy that shares nothing. |
+| `to_non_indexed() -> BufferGeometry` | A copy in which every triangle owns its corners. |
+| `center()` | Move the vertices so that their box is centered on the origin. |
+| `compute_tangents()` | Set `tangent` from positions, normals and texture coordinates. |
+| `add_group(start, count, material_index)` | Add a run of triangles that wears one material. |
+| `clear_groups()` | Remove every group. |
+| `stream_length() -> Int` | The index entries, or the vertices without an index. |
+| `vertex_at(slot) -> Int` | Which vertex one slot of that stream reads. |
 
-Attribute names are the constants `POSITION`, `NORMAL`, `UV` and `COLOR`. A geometry needs `position`. It needs `normal` for smooth shading and `uv` for a texture. It needs `color`, three or four linear floats per vertex, for a material with `vertex_colors`. See [Materials](Materials#vertex-colors).
+Attribute names are the constants `POSITION`, `NORMAL`, `UV`, `COLOR` and `TANGENT`. A geometry needs `position`. It needs `normal` for smooth shading and `uv` for a texture. It needs `color`, three or four linear floats per vertex, for a material with `vertex_colors`. See [Materials](Materials#vertex-colors).
 
 `compute_vertex_normals` averages the normals of the triangles a vertex is in, weighted by their areas. A shared vertex shades smoothly. A vertex used once shades flat. A vertex no triangle uses keeps a zero normal, as in three.js.
 
@@ -293,6 +302,87 @@ Both weld by position before they pair. Two triangles that meet along an edge of
 
 A welded cube has eighteen unique edges, not thirty-six: twelve around the shape and one diagonal in each face.
 
+## Merge, weld and tangents
+
+`geometries/utils.mojo` holds three.js's `BufferGeometryUtils`. Three more operations are methods of `BufferGeometry`, as in three.js.
+
+```mojo
+from geometries.utils import merge_geometries, merge_vertices, to_creased_normals
+
+var parts = List[BufferGeometry]()
+parts.append(cube(Length(1, METER)))
+parts.append(sphere(Length(1, METER), 24, 16))
+var both = merge_geometries(parts, use_groups=True)
+
+var welded = merge_vertices(loose)                          # tolerance 1e-4
+var creased = to_creased_normals(welded, Angle(30.0, DEGREE))
+creased.compute_tangents()
+creased.center()
+```
+
+| Function | What it does |
+|---|---|
+| `merge_geometries(geometries, use_groups)` | Joins parts into one geometry. |
+| `merge_vertices(geometry, tolerance)` | Welds vertices that agree on every attribute, and adds an index. |
+| `to_creased_normals(geometry, crease_angle)` | Smooths normals across gentle edges and keeps creases sharp. |
+| `geometry.to_non_indexed()` | Gives every triangle its own three corners. |
+| `geometry.center()` | Centers the bounding box on the origin. |
+| `geometry.compute_tangents()` | Writes a four-number `tangent` for normal maps. |
+
+### Merge
+
+`merge_geometries` joins the attributes end to end, in the first part's order. It moves each part's index entries past the vertices of the parts before it. It joins morph targets target by target. All parts must be indexed, or none. They must carry the same attributes, with the same item sizes, and the same morph targets.
+
+With `use_groups`, the result gets one group per part, and part `i` wears material index `i`. The parts' own groups are not kept, as in three.js.
+
+### Groups
+
+A group is a run of the triangle stream that wears one material: three.js's `addGroup`. `start` and `count` count index entries, or vertices for a geometry without an index. `MaterialIndex` is a position in a list of materials. It is a type, so a bare integer cannot stand in for it.
+
+The renderer draws a mesh in one material. It does not read groups yet. `merge_geometries` writes them and `compute_tangents` reads them.
+
+### Weld
+
+`merge_vertices` scales every number of every attribute by one over the tolerance, and truncates it. Two vertices whose numbers all give the same keys are one vertex. Normals and texture coordinates count, so a cube keeps its twenty-four vertices. The same cube with positions only welds into eight.
+
+The rounding is three.js's own. A number is moved by half a step and truncated toward zero, as JavaScript's `~~` does. Two numbers less than a step apart can fall either side of a boundary and stay apart, in three.js and here.
+
+The tolerance is a plain number and not a `Length`. It applies to every attribute in that attribute's own units. A tolerance of zero is raised to `EPSILON`, as in three.js. The morph targets move with the kept vertices, but they do not decide what welds.
+
+A key is clamped to `KEY_LIMIT`, nine times ten to the eighteenth. JavaScript's `~~` wraps at two to the thirty-first instead. The two differ only for a tolerance far below any real one.
+
+The result is indexed. Its index must hold whole triangles, so a geometry of loose points that is not a multiple of three raises.
+
+### Creased normals
+
+`to_creased_normals` makes the geometry non-indexed first. Many triangles can meet at the position of a corner. The corner's normal is the sum of the normals of those that turn from its own triangle by less than the crease angle. The crease angle is sixty degrees unless you give another, as in three.js.
+
+Positions are matched by key, not by distance. The key is each coordinate times one hundred, truncated, as in three.js. Points closer than about a centimeter share a key, whatever the scale of the geometry.
+
+The triangles are summed one by one, and a face of two triangles can count once or twice at a corner. So a rounded cube corner leans toward some faces more than others. three.js gives the same result.
+
+three.js changes a geometry without an index in place and returns it. This port returns a new geometry and leaves the one you give alone.
+
+### Non-indexed
+
+`to_non_indexed` reads every attribute and every morph target through the index. A vertex that four triangles share becomes four vertices. The groups do not change, because an index entry and a vertex of the result count the same. three.js returns the geometry itself when it has no index. This port returns a copy.
+
+### Center
+
+`center` moves the positions so that the bounding box is centered on the origin. Normals and tangents are directions, and a move does not turn them.
+
+Morph targets that hold finished positions move with the base, so a worn target lands in the same place on the shape. three.js moves the base and leaves those targets behind. Targets that hold offsets do not move, because an offset is the same wherever the shape is.
+
+### Tangents
+
+`compute_tangents` is three.js's `computeTangents`, step for step. Each triangle gives the directions in which `u` and `v` grow across it. They are added at its three corners. At each vertex the `u` sum is made square to the normal and unit length.
+
+The fourth number is the handedness. It is minus one where the `v` sum points against the normal crossed with the `u` sum, and one otherwise. A mirrored texture needs it.
+
+A triangle whose texture coordinates have no area gives no direction, and is skipped. A vertex that no triangle uses gets four zeros. With groups, only the triangles in the groups are visited, as in three.js.
+
+three.js refuses a geometry without an index. This port reads one three corners at a time, as the renderer does. It is three.js's `computeTangents` and not MikkTSpace: three.js's `computeMikkTSpaceTangents` needs a WebAssembly module and is not ported.
+
 ## Morph targets
 
 ```mojo
@@ -367,4 +457,9 @@ Eight targets is this port's ceiling, not three.js's. Older three.js had the sam
 - An outline that crosses itself raises, because it has no inside and runs out of ears.
 - An extrusion needs a positive depth, one step and one curve segment. A bevel needs a positive thickness, a size that is not negative, and one band.
 - An index entry beyond the last vertex raises.
+- A group needs a start and a count that are not negative, and a material index of zero or more.
+- A merge needs one geometry at least. The parts must all be indexed or none, and carry the same attributes, item sizes and morph targets.
+- A weld tolerance must be finite and not negative. A crease angle must be finite and not negative.
+- `compute_tangents` needs `position`, `normal` and `uv`.
+- A slot outside the triangle stream raises.
 - `compute_vertex_normals`, `bounding_box` and `bounding_sphere` raise on a geometry with no positions.

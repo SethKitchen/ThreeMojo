@@ -87,3 +87,25 @@ struct BufferAttribute(Copyable, Movable):
             self.component(index, 1),
             self.component(index, 2),
         )
+
+    def gather(self, index: List[Int]) raises -> BufferAttribute:
+        """Return the items an index names, one copy per entry.
+
+        What three.js's `toNonIndexed` does to each attribute, and what
+        `mergeVertices` does to keep the vertices it did not merge.
+
+        Args:
+            index: Which item each entry of the result copies.
+
+        Returns:
+            An attribute of the same item size with one item per entry.
+
+        Raises:
+            Error: If an entry points outside this attribute.
+        """
+        var data = List[Float32](capacity=len(index) * self.item_size)
+        for entry in range(len(index)):
+            # An item size is positive: the constructor refuses anything else.
+            for offset in range(self.item_size):  # pragma: no branch
+                data.append(self.component(index[entry], offset))
+        return BufferAttribute(data^, self.item_size)
