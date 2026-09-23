@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 119 features are ported and 30 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 120 features are ported and 29 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -105,12 +105,11 @@ The port is not at parity with three.js yet. 119 features are ported and 30 are 
 
 ### Objects
 
-- [ ] Per-instance colors [#112](https://github.com/SethKitchen/ThreeMojo/issues/112)
 - [ ] Wide lines: Line2, LineSegments2 and LineMaterial [#116](https://github.com/SethKitchen/ThreeMojo/issues/116)
 - [ ] Raycasting lines, points, sprites and skinned meshes [#117](https://github.com/SethKitchen/ThreeMojo/issues/117)
 
 <details>
-<summary>Ported: 7</summary>
+<summary>Ported: 8</summary>
 
 - [x] [Mesh, with geometry, material and texture stores](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets) [#25](https://github.com/SethKitchen/ThreeMojo/issues/25)
 - [x] [Line, LineLoop and LineSegments](https://github.com/SethKitchen/ThreeMojo/wiki/Lines): points joined by one-pixel strokes, walked by one rule both backends read [#26](https://github.com/SethKitchen/ThreeMojo/issues/26)
@@ -119,6 +118,7 @@ The port is not at parity with three.js yet. 119 features are ported and 30 are 
 - [x] [InstancedMesh and BatchedMesh](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#instancedmesh): one geometry, or one geometry per instance, at many transforms under one node, culled instance by instance [#29](https://github.com/SethKitchen/ThreeMojo/issues/29)
 - [x] [SkinnedMesh, Bone and Skeleton](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning): bones that are scene nodes, and a skeleton saying how far each has moved since the bind [#30](https://github.com/SethKitchen/ThreeMojo/issues/30)
 - [x] [LOD](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#lod): one of several geometries at a node, picked by the camera's distance each frame, with hysteresis [#31](https://github.com/SethKitchen/ThreeMojo/issues/31)
+- [x] [Per-instance colors](https://github.com/SethKitchen/ThreeMojo/wiki/Meshes-and-assets#instance-colors): a color per instance of an instanced or batched mesh that multiplies the material color [#112](https://github.com/SethKitchen/ThreeMojo/issues/112)
 
 </details>
 
