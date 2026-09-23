@@ -107,13 +107,16 @@ def sphere(
             var bottom_left = top_left + stride
             var bottom_right = bottom_left + 1
             # At a pole two of the quad's corners coincide, so only one of its
-            # triangles has any area.
+            # triangles has any area. The quad is cut from top left to bottom
+            # right, three.js's `(a, b, d)` and `(b, c, d)`, so the triangle
+            # kept at a pole has its tip in the column at its base's left:
+            # the one the half-column u offset above was made for.
             if ring != 0:
+                index.append(top_right)
                 index.append(top_left)
-                index.append(bottom_left)
-                index.append(top_right)
+                index.append(bottom_right)
             if ring != height_segments - 1:
-                index.append(top_right)
+                index.append(top_left)
                 index.append(bottom_left)
                 index.append(bottom_right)
 

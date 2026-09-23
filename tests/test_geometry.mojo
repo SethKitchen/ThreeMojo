@@ -653,6 +653,52 @@ def test_sphere_poles_are_offset_half_a_column_as_three_js_has_them() raises:
         )
 
 
+def test_each_pole_triangle_has_its_tip_over_the_middle_of_its_base() raises:
+    # The half-column offset is only right for the pole vertex a triangle
+    # uses. three.js keeps the triangle whose tip is the column at its
+    # base's left, so the tip's u lands on the middle of the base. A tip
+    # from the column to the right sits a whole column off, and a texture
+    # swirls into a pinwheel at each pole.
+    var segments = 4
+    var geometry = sphere(Length(1.0, METER), segments, 2)
+    ref uvs = geometry.attribute_view(String(UV))
+    var stride = segments + 1
+    for triangle in range(geometry.triangle_count()):
+        var tip = -1
+        var base = List[Int]()
+        for corner in range(3):
+            var vertex = geometry.index[triangle * 3 + corner]
+            var ring = vertex // stride
+            if ring == 1:
+                base.append(vertex)
+            else:
+                tip = vertex
+        assert_equal(len(base), 2)
+        var middle = (uvs.component(base[0], 0) + uvs.component(base[1], 0)) / 2
+        assert_almost_equal(uvs.component(tip, 0), middle, atol=TOLERANCE)
+
+
+def test_sphere_quads_split_on_three_js_diagonal() raises:
+    # three.js cuts each quad from its top-left to its bottom-right
+    # corner, as (top right, top left, bottom right) and (top left,
+    # bottom left, bottom right).
+    var geometry = sphere(Length(1.0, METER), 3, 3)
+    var stride = 4
+    # The first quad of the middle ring: both triangles.
+    var a = stride + 1
+    var b = stride
+    var c = stride * 2
+    var d = stride * 2 + 1
+    # Three pole triangles come first.
+    var first = 3 * 3
+    assert_equal(geometry.index[first], a)
+    assert_equal(geometry.index[first + 1], b)
+    assert_equal(geometry.index[first + 2], d)
+    assert_equal(geometry.index[first + 3], b)
+    assert_equal(geometry.index[first + 4], c)
+    assert_equal(geometry.index[first + 5], d)
+
+
 # --- plane -------------------------------------------------------------------
 
 
