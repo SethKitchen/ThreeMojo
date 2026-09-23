@@ -45,12 +45,11 @@ from controls.input import (
     SECONDARY,
     WHEEL,
 )
+from math.spherical import Spherical
 from math.vector3 import Vector3
-from std.math import acos, atan2, cos, inf, isfinite, pi, sin, tan
+from std.math import inf, isfinite, pi, tan
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
 
-# How close to a pole the polar angle may go. three.js: `Spherical.makeSafe`.
-comptime POLE_MARGIN = Float32(1e-6)
 # A change smaller than this, squared, is no change. three.js: `_EPS`.
 comptime EPSILON = Float32(1e-6)
 # The browser's wheel moves by about a hundred pixels a notch, and three.js
@@ -471,13 +470,10 @@ struct OrbitControls(Copyable, Movable):
         Returns:
             True if the camera moved or turned.
         """
-        var offset = camera.position - self.target
-        var radius = offset.length()
-        var theta = Float32(0)
-        var phi = Float32(0)
-        if radius > 0:
-            theta = atan2(offset.x, offset.z)
-            phi = acos(_clamp(offset.y / radius, -1, 1))
+        var spherical = Spherical.from_vector3(camera.position - self.target)
+        var radius = spherical.radius
+        var theta = spherical.theta.to(RADIAN)
+        var phi = spherical.phi.to(RADIAN)
 
         if self.auto_rotate and self._action == NO_ACTION:
             var turns = self.auto_rotate_speed * delta.to(SECOND)
@@ -496,7 +492,6 @@ struct OrbitControls(Copyable, Movable):
             self.min_polar_angle.to(RADIAN),
             self.max_polar_angle.to(RADIAN),
         )
-        phi = _clamp(phi, POLE_MARGIN, Float32(pi) - POLE_MARGIN)
         radius = _clamp(
             radius * self._scale,
             self.min_distance.to(METER),
@@ -504,11 +499,9 @@ struct OrbitControls(Copyable, Movable):
         )
         var target = self.target + self._pan * share
 
-        var along = sin(phi) * radius
-        var placed = Vector3(
-            along * sin(theta), cos(phi) * radius, along * cos(theta)
-        )
-        var position = target + placed
+        var placed = Spherical(radius, Angle(phi, RADIAN), Angle(theta, RADIAN))
+        placed.make_safe()
+        var position = target + placed.to_vector3()
 
         var keep = 1 - share
         self._delta_theta *= keep

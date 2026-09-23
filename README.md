@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 99 features are ported and 50 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 100 features are ported and 49 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -284,11 +284,10 @@ The port is not at parity with three.js yet. 99 features are ported and 50 are o
 
 ### Math and foundations
 
-- [ ] Triangle, Line3, Spherical, Cylindrical, Matrix2 and MathUtils [#151](https://github.com/SethKitchen/ThreeMojo/issues/151)
 - [ ] Ellipse and arc curves, and 3D curves [#152](https://github.com/SethKitchen/ThreeMojo/issues/152)
 
 <details>
-<summary>Ported: 9</summary>
+<summary>Ported: 10</summary>
 
 - [x] [Vector2, Vector3, Matrix4 and projection matrices](https://github.com/SethKitchen/ThreeMojo/wiki/Math) [#91](https://github.com/SethKitchen/ThreeMojo/issues/91)
 - [x] [Compile-time units](https://github.com/SethKitchen/ThreeMojo/wiki/Units): meters, degrees, dimension checks [#92](https://github.com/SethKitchen/ThreeMojo/issues/92)
@@ -299,6 +298,7 @@ The port is not at parity with three.js yet. 99 features are ported and 50 are o
 - [x] [Ray and Raycaster](https://github.com/SethKitchen/ThreeMojo/wiki/Raycasting): a ray against spheres, boxes, planes and triangles. A pick through a camera's pixel onto the meshes, instances, batches and LODs [#97](https://github.com/SethKitchen/ThreeMojo/issues/97)
 - [x] [Curves and paths](https://github.com/SethKitchen/ThreeMojo/wiki/Curves): line, quadratic and cubic Bezier, and Catmull-Rom curves, joined into a path and closed into a shape with holes [#98](https://github.com/SethKitchen/ThreeMojo/issues/98)
 - [x] [Color as floats](https://github.com/SethKitchen/ThreeMojo/wiki/Render-target-and-framebuffer#color-and-floatcolor): three.js's hex and HSL setters and getters, lerp, offset and arithmetic on the linear float color [#99](https://github.com/SethKitchen/ThreeMojo/issues/99)
+- [x] [Triangle, Line3, Spherical, Cylindrical, Matrix2, Box2 and MathUtils](https://github.com/SethKitchen/ThreeMojo/wiki/Math#triangle-and-line3): barycentric weights, nearest points, segment distances, and three.js's seeded random numbers [#151](https://github.com/SethKitchen/ThreeMojo/issues/151)
 
 </details>
 

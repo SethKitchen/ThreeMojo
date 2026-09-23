@@ -1,10 +1,10 @@
 # Math
 
-`math/vector2.mojo`, `math/vector3.mojo`, `math/vector4.mojo`, `math/matrix3.mojo`, `math/matrix4.mojo`, `math/bounds.mojo`, `math/frustum.mojo`, `math/ray.mojo` and `math/projection.mojo`. Ported from three.js with the same conventions.
+`math/vector2.mojo`, `math/vector3.mojo`, `math/vector4.mojo`, `math/matrix3.mojo`, `math/matrix4.mojo`, `math/bounds.mojo`, `math/frustum.mojo`, `math/ray.mojo`, `math/projection.mojo`, `math/triangle.mojo`, `math/spherical.mojo`, `math/matrix2.mojo` and `math/utils.mojo`. Ported from three.js with the same conventions.
 
 ![A quaternion turns a vector, and a sphere follows that point](out/math.png)
 
-three.js: `Vector2`, `Vector3`, `Vector4`, `Matrix3`, `Matrix4`, `Matrix4.makePerspective`, `makeOrthographic`, `lookAt`, `Box3`, `Sphere`, `Plane`, `Frustum`, `Ray`.
+three.js: `Vector2`, `Vector3`, `Vector4`, `Matrix3`, `Matrix4`, `Matrix4.makePerspective`, `makeOrthographic`, `lookAt`, `Box3`, `Sphere`, `Plane`, `Frustum`, `Ray`, `Triangle`, `Line3`, `Spherical`, `Cylindrical`, `Matrix2`, `Box2`, `MathUtils`.
 
 ## Vector2 and Vector3
 
@@ -199,3 +199,47 @@ An empty sphere or box is hit nowhere. A ray parallel to a plane meets it only w
 Each raises for a degenerate volume. `look_at` never raises. A camera at its own target looks down its own -z. An up vector along the view direction is nudged off it, as three.js does.
 
 Normalized device space is unitless. World space is meters and screen space is pixels. The matrices meet in the middle.
+
+## Triangle and Line3
+
+`math/triangle.mojo`. `Triangle(a, b, c)` holds three corners. They turn counterclockwise when seen from the front.
+
+| Triangle member | Meaning |
+|---|---|
+| `normal() -> Vector3` | The unit normal. three.js: `getNormal`. |
+| `area() -> Float32` | The area. |
+| `midpoint() -> Vector3` | The average of the corners. |
+| `plane() -> Plane` | The plane the triangle lies in. |
+| `barycoord(point) -> Vector3` | The weights of `a`, `b` and `c` at the point's projection onto the plane. |
+| `contains_point(point) -> Bool` | True if the projection lies inside or on an edge. |
+| `interpolate(point, at_a, at_b, at_c) -> Vector3` | Three corner values mixed by the barycentric weights. |
+| `is_front_facing(direction) -> Bool` | True if a ray along the direction meets the front. |
+| `closest_point_to_point(point) -> Vector3` | The nearest point on the face, an edge or a corner. |
+
+A degenerate triangle has its corners on one line. It has no normal, no plane and no barycentric coordinates, and those questions raise. three.js answers them with a zero vector or `null`. `closest_point_to_point` still answers: it uses the nearest point of the three edges.
+
+`Line3(start, end)` is a segment. `delta()`, `center()`, `distance()` and `at(t)` describe it. `closest_point_parameter(point, clamp)` and `closest_point(point, clamp)` find the point nearest a point. A segment of no length raises for them. `distance_to_line(other)` is the shortest distance between two segments. `apply_matrix4(matrix)` moves both ends.
+
+## Spherical and Cylindrical
+
+`math/spherical.mojo`. `Spherical(radius, phi, theta)` names a point by its distance from the origin and two `Angle`s. `phi` goes down from +y. `theta` turns about y from +z. `Cylindrical(radius, theta, y)` names a point by its distance from the y axis, the same `theta` and a height.
+
+`from_vector3(v)` and `to_vector3()` convert both ways. The origin has both spherical angles zero. `Spherical.make_safe()` keeps `phi` a millionth of a radian away from each pole. [OrbitControls](Windowing-and-controls#orbitcontrols) holds its camera's offset as a `Spherical`.
+
+## Matrix2 and Box2
+
+`math/matrix2.mojo`. `Matrix2(m00, m01, m10, m11)` is stored row by row and multiplies a column vector on its right. `identity()`, `rotation(angle)` and `scaling(x, y)` build one. `a * b` applies `b` first.
+
+`determinant()`, `transposed()`, `inverse()` and `transform(v)` are the rest. A singular matrix raises for `inverse`. three.js returns zeros.
+
+`Box2(min, max)` is `Box3` in the plane. It has the same empty box, with its corners inside out. `from_points`, `expand_by_point`, `union`, `intersect`, `center`, `size`, `contains_point`, `intersects_box`, `clamp_point` and `distance_to_point` work as the `Box3` members do.
+
+## MathUtils
+
+`math/utils.mojo`. The scalar helpers of three.js's `MathUtils`: `clamp`, `lerp`, `inverse_lerp`, `map_linear`, `damp`, `euclidean_modulo`, `pingpong`, `smootherstep`, `smooth_step`, `is_power_of_two`, `ceil_power_of_two` and `floor_power_of_two`.
+
+`damp(x, y, rate, delta)` takes the frame time as a `Duration`. `smooth_step(x, low, high)` has three.js's argument order. The shaders read `smoothstep(edge0, edge1, x)` from `math/smoothstep.mojo`, in GLSL's order.
+
+`degToRad` and `radToDeg` are not here. An `Angle` converts itself.
+
+`SeededRandom(seed)` is three.js's Mulberry32 generator. `next()` returns a number from zero up to one. `float_in(low, high)`, `float_spread(spread)` and `int_in(low, high)` are three.js's `randFloat`, `randFloatSpread` and `randInt`. The same seed gives the same numbers as three.js's `seededRandom`, on every platform.
