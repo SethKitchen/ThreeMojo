@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 105 features are ported and 44 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 108 features are ported and 41 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -78,14 +78,13 @@ The port is not at parity with three.js yet. 105 features are ported and 44 are 
 
 ### Geometry
 
-- [ ] BufferGeometryUtils: merge, non-indexed, merge vertices, tangents, center [#110](https://github.com/SethKitchen/ThreeMojo/issues/110)
 - [ ] Interleaved buffers and InstancedBufferGeometry [#111](https://github.com/SethKitchen/ThreeMojo/issues/111)
 - [ ] Extrude a shape along a path [#113](https://github.com/SethKitchen/ThreeMojo/issues/113)
 - [ ] TextGeometry and FontLoader [#114](https://github.com/SethKitchen/ThreeMojo/issues/114)
 - [ ] Parametric, convex, decal and rounded-box geometries [#115](https://github.com/SethKitchen/ThreeMojo/issues/115)
 
 <details>
-<summary>Ported: 13</summary>
+<summary>Ported: 14</summary>
 
 - [x] [BufferGeometry and BufferAttribute](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry) [#12](https://github.com/SethKitchen/ThreeMojo/issues/12)
 - [x] [BoxGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#box) [#13](https://github.com/SethKitchen/ThreeMojo/issues/13)
@@ -100,6 +99,7 @@ The port is not at parity with three.js yet. 105 features are ported and 44 are 
 - [x] [ShapeGeometry and ExtrudeGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#shape): a drawn outline with holes cut into triangles by ear clipping, and given thickness with a bevel [#22](https://github.com/SethKitchen/ThreeMojo/issues/22)
 - [x] [EdgesGeometry and WireframeGeometry](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#edges-and-wireframes): a surface read back as the lines of its edges, welded by position first [#23](https://github.com/SethKitchen/ThreeMojo/issues/23)
 - [x] [computeVertexNormals and bounding volumes](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#buffergeometry): area-weighted normals, a bounding box and a bounding sphere on any geometry [#24](https://github.com/SethKitchen/ThreeMojo/issues/24)
+- [x] [BufferGeometryUtils: merge, non-indexed, merge vertices, tangents, center](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#merge-weld-and-tangents): merge geometries, weld vertices, creased normals, non-indexed copies, centering and tangents with handedness [#110](https://github.com/SethKitchen/ThreeMojo/issues/110)
 
 </details>
 
@@ -183,10 +183,9 @@ The port is not at parity with three.js yet. 105 features are ported and 44 are 
 - [ ] HDR images: RGBE and OpenEXR loaders, and float textures [#130](https://github.com/SethKitchen/ThreeMojo/issues/130)
 - [ ] KTX2 and more compressed formats [#131](https://github.com/SethKitchen/ThreeMojo/issues/131)
 - [ ] Data3DTexture and DataArrayTexture [#132](https://github.com/SethKitchen/ThreeMojo/issues/132)
-- [ ] Progressive JPEG and TGA [#133](https://github.com/SethKitchen/ThreeMojo/issues/133)
 
 <details>
-<summary>Ported: 12</summary>
+<summary>Ported: 13</summary>
 
 - [x] [Texture with repeat, clamp and mirror wrapping](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#wrap) [#58](https://github.com/SethKitchen/ThreeMojo/issues/58)
 - [x] [Nearest and bilinear filters](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#filter) [#59](https://github.com/SethKitchen/ThreeMojo/issues/59)
@@ -200,6 +199,7 @@ The port is not at parity with three.js yet. 105 features are ported and 44 are 
 - [x] [Anisotropic filtering](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#anisotropy): `texture.anisotropy`, several taps along the long axis of a footprint at the short axis's level, on both rasterizers [#67](https://github.com/SethKitchen/ThreeMojo/issues/67)
 - [x] [Render target as a texture](https://github.com/SethKitchen/ThreeMojo/wiki/Textures#from-a-render): `texture_of` and `RenderTarget.texture`, a render sampled by the next one [#68](https://github.com/SethKitchen/ThreeMojo/issues/68)
 - [x] [JPEG loader](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files#read-a-jpeg): baseline Huffman coding, gray and YCbCr, any subsampling, restart intervals, held to two levels of libjpeg [#69](https://github.com/SethKitchen/ThreeMojo/issues/69)
+- [x] [Progressive JPEG and TGA](https://github.com/SethKitchen/ThreeMojo/wiki/Image-files#progressive-files): spectral selection and successive approximation, and TGA in color-mapped, true color and gray, plain or run-length [#133](https://github.com/SethKitchen/ThreeMojo/issues/133)
 
 </details>
 
@@ -269,14 +269,14 @@ The port is not at parity with three.js yet. 105 features are ported and 44 are 
 
 ### Animation
 
-- [ ] Animation fades, cross-fades, warps and events [#147](https://github.com/SethKitchen/ThreeMojo/issues/147)
 - [ ] Property tracks, bindings and AnimationUtils [#148](https://github.com/SethKitchen/ThreeMojo/issues/148)
 - [ ] Smooth and cubic-spline keyframe interpolation [#149](https://github.com/SethKitchen/ThreeMojo/issues/149)
 
 <details>
-<summary>Ported: 3</summary>
+<summary>Ported: 4</summary>
 
 - [x] [AnimationMixer, AnimationClip and KeyframeTrack](https://github.com/SethKitchen/ThreeMojo/wiki/Animation): keyframes on a node's position, scale and rotation, blended by weight across the actions playing [#88](https://github.com/SethKitchen/ThreeMojo/issues/88)
+- [x] [Animation fades, cross-fades, warps and events](https://github.com/SethKitchen/ThreeMojo/wiki/Animation#fades-warps-and-start-times): fades, cross-fades, warps, halt, start times, and loop and finished events drained from the mixer [#147](https://github.com/SethKitchen/ThreeMojo/issues/147)
 - [x] [Morph targets](https://github.com/SethKitchen/ThreeMojo/wiki/Geometry#morph-targets): a second set of positions per geometry and a weight per mesh, blended into the vertex before it is projected [#89](https://github.com/SethKitchen/ThreeMojo/issues/89)
 - [x] [Skinning](https://github.com/SethKitchen/ThreeMojo/wiki/Skinning#the-arithmetic): four bones a vertex, blended into one matrix and applied in `prepare`, so both backends draw it without knowing [#90](https://github.com/SethKitchen/ThreeMojo/issues/90)
 
