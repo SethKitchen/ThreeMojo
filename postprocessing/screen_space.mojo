@@ -17,11 +17,15 @@ a pixel is in view space, and how far away that is.
 
 **Normals.** three.js draws the scene a second time with a
 `MeshNormalMaterial` to learn each pixel's normal. This port reads them
-from the depth instead, with the reconstruction three.js's own
-`GTAOShader` uses: of the two neighbors on each axis, the one that
-continues the surface more smoothly gives the slope. Both rasterizers are
-left alone. The cost is that a curved surface shows its facets, because
-the depth of a triangle is flat where a normal material would interpolate.
+from the frame's own normal attachment when it has one -- a render target
+with `OUTPUT_NORMAL`, filled in the same pass as the light -- and the
+composer gives its frame one whenever a pass here runs. Where a pixel has
+no normal, or the frame has no attachment, it reads them from the depth
+instead, with the reconstruction three.js's own `GTAOShader` uses: of the
+two neighbors on each axis, the one that continues the surface more
+smoothly gives the slope. That reconstruction shows a curved surface's
+facets, because the depth of a triangle is flat where the attachment
+interpolates.
 
 **Randomness.** three.js draws its kernels and seeds from `Math.random`.
 This port draws them from `math.utils.SeededRandom`, so a pass with the
@@ -133,6 +137,10 @@ struct DepthView(Movable):
     # Whether the projection divides by distance: three.js's
     # `PERSPECTIVE_CAMERA`.
     var perspective: Bool
+    # The view-space normals the frame was drawn with, row by row from the
+    # top, zero where no surface wrote one: `RenderTarget.normals`. Empty
+    # when the frame has no normal attachment.
+    var drawn: List[Vector3]
 
     def __init__(
         out self,
@@ -143,6 +151,7 @@ struct DepthView(Movable):
         near: Length,
         far: Length,
         mode: DepthMode = STANDARD_DEPTH,
+        normals: List[Vector3] = List[Vector3](),
     ) raises:
         """Read a render target's depth through the camera that drew it.
 
@@ -163,17 +172,23 @@ struct DepthView(Movable):
             near: The camera's near distance.
             far: The camera's far distance.
             mode: How the depth is stored: `RenderTarget.depth_mode`.
+            normals: The target's normal attachment,
+                `RenderTarget.normals`, or empty, the default, to
+                reconstruct every normal from the depth.
 
         Raises:
-            Error: If a size is not positive, the depth does not have one
-                entry per pixel, the distances are not finite or the near
-                one is not in front of the far one, the projection cannot
-                be inverted, or the depth mode is none of the three.
+            Error: If a size is not positive, the depth or a non-empty
+                list of normals does not have one entry per pixel, the
+                distances are not finite or the near one is not in front
+                of the far one, the projection cannot be inverted, or the
+                depth mode is none of the three.
         """
         if width <= 0 or height <= 0:
             raise Error("A depth view's size must be positive")
         if len(ndc_depth) != width * height:
             raise Error("A depth view needs one depth per pixel")
+        if len(normals) != 0 and len(normals) != width * height:
+            raise Error("A depth view needs one normal per pixel or none")
         if not (
             isfinite(near.value)
             and isfinite(far.value)
@@ -209,6 +224,7 @@ struct DepthView(Movable):
                     var seen = projection.transform_point(Vector3(0, 0, -w))
                     window = seen.z * 0.5 + 0.5
             self.depth.append(window)
+        self.drawn = normals.copy()
 
     def slot_at(self, u: Float32, v: Float32) -> Int:
         """Return the pixel a texture coordinate falls in, held at the
@@ -346,18 +362,25 @@ struct DepthView(Movable):
         return dpdx
 
     def normals(self) -> List[Vector3]:
-        """Return the reconstructed normal of every pixel, row by row from
-        the top; see `normal_at`.
+        """Return the normal of every pixel, row by row from the top: the
+        one the frame was drawn with where it has one, and otherwise the
+        one `normal_at` reconstructs from the depth.
 
         Returns:
             One unit normal per pixel.
         """
         var out = List[Vector3](capacity=self.width * self.height)
+        var kept = len(self.drawn) != 0
         var y = 0
         while y < self.height:
             var x = 0
             while x < self.width:
-                out.append(self.normal_at(x, y))
+                var normal = Vector3(0, 0, 0)
+                if kept:
+                    normal = self.drawn[y * self.width + x]
+                if normal.length() == 0:
+                    normal = self.normal_at(x, y)
+                out.append(normal)
                 x += 1
             y += 1
         return out^

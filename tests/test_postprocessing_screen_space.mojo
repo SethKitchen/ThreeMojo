@@ -71,7 +71,12 @@ from postprocessing.screen_space import (
     ssr_reflections,
 )
 from render.framebuffer import Color, FloatColor
-from render.target import RenderTarget
+from render.target import (
+    OUTPUT_COLOR,
+    OUTPUT_NORMAL,
+    RenderTarget,
+    TargetOutput,
+)
 from renderers.renderer import Renderer
 from std.math import exp, inf, nan, pi, sqrt
 from std.testing import (
@@ -551,6 +556,61 @@ def test_normals_from_depth_face_the_camera_and_follow_the_surface() raises:
     assert_almost_equal(ridged.normal_at(2, 1).z, Float32(1), atol=TOLERANCE)
     assert_almost_equal(ridged.normal_at(2, 2).z, Float32(1), atol=TOLERANCE)
     assert_equal(len(ridged.normals()), 25)
+
+
+def test_a_normal_attachment_gives_the_normals_where_it_has_them() raises:
+    # The room drawn once with a normal attachment: the floor's normal is
+    # the one the rasterizer interpolated, not a reconstruction.
+    var camera = a_camera()
+    var renderer = a_renderer()
+    var assets = Assets()
+    var scene = room(assets)
+    var outputs: List[TargetOutput] = [OUTPUT_COLOR, OUTPUT_NORMAL]
+    var target = RenderTarget(WIDTH, HEIGHT, BLACK, outputs=outputs)
+    renderer.render_into(target, scene, assets, camera)
+    var view = DepthView(
+        target.depth,
+        WIDTH,
+        HEIGHT,
+        camera.projection_matrix(),
+        meters(camera.near_distance()),
+        meters(camera.far_distance()),
+        normals=target.normals,
+    )
+    var normals = view.normals()
+    var up = camera.view_matrix().transform_direction(Vector3(0, 1, 0))
+    var floor = normals[(HEIGHT - 2) * WIDTH + 3]
+    assert_almost_equal(floor.dot(up), Float32(1), atol=1e-4)
+    var kept = target.normal_at(3, HEIGHT - 2)
+    assert_equal(floor.x, kept.x)
+    assert_equal(floor.y, kept.y)
+    assert_equal(floor.z, kept.z)
+    # Where the attachment has no normal, the depth gives one.
+    var bare = List[Vector3](length=WIDTH * HEIGHT, fill=Vector3(0, 0, 0))
+    var rebuilt = DepthView(
+        target.depth,
+        WIDTH,
+        HEIGHT,
+        camera.projection_matrix(),
+        meters(camera.near_distance()),
+        meters(camera.far_distance()),
+        normals=bare,
+    )
+    var ours = rebuilt.normals()[5]
+    var theirs = view_of(target, camera).normals()[5]
+    assert_equal(ours.x, theirs.x)
+    assert_equal(ours.z, theirs.z)
+    # A list of the wrong length is refused.
+    with assert_raises(contains="one normal per pixel"):
+        _ = DepthView(
+            target.depth,
+            WIDTH,
+            HEIGHT,
+            camera.projection_matrix(),
+            meters(camera.near_distance()),
+            meters(camera.far_distance()),
+            normals=List[Vector3](length=3, fill=Vector3(0, 0, 1)),
+        )
 
 
 # --- SSAO --------------------------------------------------------------------
@@ -1070,6 +1130,16 @@ def test_the_four_passes_run_in_the_composer() raises:
             if occluded.get_pixel(x, y).r < base.get_pixel(x, y).r:
                 darker += 1
     assert_true(darker > 0, "SSAO darkened nothing")
+
+    # A disabled pass reads no normals, and leaves the frame as it was.
+    var idle = EffectComposer()
+    idle.add_pass(render_pass())
+    idle.add_pass(ssao_pass(meters(0.5), 0.0005, 0.1))
+    idle.passes[1].enabled = False
+    var unchanged = idle.render(renderer, scene, assets, camera)
+    for y in range(HEIGHT):
+        for x in range(WIDTH):
+            assert_true(same(unchanged.get_pixel(x, y), base.get_pixel(x, y)))
 
     var sao = EffectComposer()
     sao.add_pass(render_pass())

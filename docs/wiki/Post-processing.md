@@ -159,7 +159,9 @@ A target drawn with a [logarithmic](Rasterization#logarithmic-depth) or a [rever
 - `depth_at(u, v)` reads the nearest pixel, held at the edges, as a depth texture with `NearestFilter` reads it.
 - `normal_at(x, y)` and `normals()` return the view-space normal of a pixel.
 
-The normals come from the depth. three.js draws the scene again with a `MeshNormalMaterial` to get them. This port uses the reconstruction of three.js's own `GTAOShader` instead. On each axis, it takes the neighbor that continues the surface better, and crosses the two slopes. A neighbor past the edge of the frame reads zero, as WebGL's `texelFetch` reads it.
+The normals come from the frame's normal attachment. The composer draws its frame with one when an SSAO, SAO or SSR pass is on. See [Multiple render targets](Render-target-and-framebuffer#multiple-render-targets). Pass `RenderTarget.normals` as the last argument of `DepthView` to use them. three.js draws the scene again with a `MeshNormalMaterial` to get them.
+
+A pixel with no normal in the attachment takes one from the depth. So does every pixel of a frame without an attachment. The reconstruction is the one in three.js's own `GTAOShader`. On each axis, it takes the neighbor that continues the surface better, and crosses the two slopes. A neighbor past the edge of the frame reads zero, as WebGL's `texelFetch` reads it.
 
 ### SSAO
 
@@ -224,11 +226,11 @@ With a `pulse_period` above zero, the edge colors pulse. three.js reads the cloc
 - `check_sao` refuses a negative intensity, minimum resolution, blur radius or cutoff. It refuses a scale, kernel radius or deviation that is not positive.
 - `check_ssr` refuses an opacity outside zero to one, a negative thickness, and a reach that is not positive.
 - `check_outline` refuses a negative color channel, strength, glow or period, and a thickness that is not positive.
-- `DepthView` refuses a size that is not positive and a depth of the wrong length. It refuses a near distance that is not before the far distance, and a projection with no inverse.
+- `DepthView` refuses a size that is not positive and a depth of the wrong length. It refuses a list of normals of the wrong length. It refuses a near distance that is not before the far distance, and a projection with no inverse.
 
 ### How the screen-space passes differ from three.js
 
-- **The normals.** three.js draws a normal pass. This port reconstructs the normals from the depth, as three.js's `GTAOShader` does. A curved surface shows its triangles, because the depth of a triangle is flat. Both rasterizers are unchanged.
+- **The normals.** three.js draws a normal pass. This port reads the normals from the frame's normal attachment, filled in the same pass as the light. Where the attachment has none, it reconstructs them from the depth, as three.js's `GTAOShader` does. There a curved surface shows its triangles, because the depth of a triangle is flat.
 - **The randomness.** three.js uses `Math.random`. This port uses `SeededRandom`, so the same seed gives the same frame. The SSAO noise is a random value from minus one to one. three.js puts two random values through simplex noise first.
 - **The divisions by zero.** three.js divides zero by zero in three places. SSAO turns the kernel by a noise parallel to the normal. SAO reads a sample at the pixel's own point. SSR reflects from a surface seen edge on. This port gives no occlusion or no reflection there.
 - **SSR with no neighbors.** Where no neighbor of a pixel reflects anything, `ssr_blur` gives black. three.js divides by zero there.

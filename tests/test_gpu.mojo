@@ -57,7 +57,7 @@ from geometries.box import cube
 from geometries.sphere import sphere
 from math.matrix4 import translation
 from math.vector2 import Vector2
-from std.math import cos, inf, isinf, pi, sin
+from std.math import cos, inf, isinf, max, pi, sin
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
 from materials.material import (
@@ -135,7 +135,12 @@ from render.rasterizer import (
 )
 from units.si import InverseLength, PER_METER
 from core.layers import Layers
-from renderers.renderer import camera_position, camera_up, toward_camera
+from renderers.renderer import (
+    camera_back,
+    camera_position,
+    camera_up,
+    toward_camera,
+)
 from render.gpu import (
     FLOATS_PER_VERTEX,
     LANE_AO_INTENSITY,
@@ -180,6 +185,7 @@ from render.gpu import (
     line_state,
     FOG_FLOATS,
     LIGHTS_AMBIENT,
+    LIGHTS_BACK,
     LIGHTS_EYE,
     LIGHTS_FIRST,
     LIGHTS_PROBE,
@@ -193,6 +199,10 @@ from render.gpu import (
     POINT_FLOATS,
     SPOT_FLOATS,
     TABLE_COLUMNS,
+    PLANE_COLOR,
+    PLANE_DATA,
+    PLANE_FLOATS,
+    PLANE_NORMAL,
     GpuRenderer,
     available,
     flatten,
@@ -258,7 +268,13 @@ from materials.material import (
     standard_material,
     toon_material,
 )
-from render.target import RenderTarget
+from render.target import (
+    FLOAT_TARGET,
+    OUTPUT_COLOR,
+    OUTPUT_NORMAL,
+    RenderTarget,
+    TargetOutput,
+)
 from render.rasterizer import (
     SHADE_LIT,
     SHADE_TEXTURE,
@@ -9169,6 +9185,114 @@ def test_both_backends_agree_under_every_depth_mode() raises:
                     assert_almost_equal(right, left, atol=Float64(1e-5))
 
 
+# --- float and multiple render targets --------------------------------------
+
+
+def test_the_light_buffer_carries_the_camera_s_back_axis() raises:
+    var scene = Scene()
+    scene.update()
+    var lighting = Lighting(scene, back=Vector3(0, 0, -2))
+    var flat = flatten_lights(lighting)
+    assert_equal(flat[LIGHTS_BACK], Float32(0))
+    assert_equal(flat[LIGHTS_BACK + 1], Float32(0))
+    assert_equal(flat[LIGHTS_BACK + 2], Float32(-1))
+    # The attachments ride after the depth, each in a plane of its own.
+    assert_equal(PLANE_COLOR, 1)
+    assert_equal(PLANE_NORMAL, PLANE_COLOR + 4)
+    assert_equal(PLANE_DATA, PLANE_NORMAL + 3)
+    assert_equal(PLANE_FLOATS, PLANE_DATA + 1)
+
+
+def test_both_backends_fill_a_float_target_and_its_normals_alike() raises:
+    # A bright lit ball, a flat box and a normal material, seen by a
+    # turned camera: the light above one survives in the float target,
+    # and the normal attachment holds the same view-space normals on
+    # both sides.
+    if skipped_for_lack_of_a_gpu("both backends fill a float target alike"):
+        return
+    var renderer = Renderer(48, 36)
+    var assets = Assets()
+    var ball = assets.geometries.add(sphere(Length(0.7, METER), 16, 12))
+    var box = assets.geometries.add(cube(Length(0.8, METER)))
+    var scene = Scene()
+    var left = Object3D()
+    left.set_position(-0.8, 0, 0)
+    var left_node = scene.add(left^)
+    var right = Object3D()
+    right.set_position(0.9, 0, -0.3)
+    right.set_euler(
+        Angle(20.0, DEGREE), Angle(35.0, DEGREE), Angle(0.0, DEGREE)
+    )
+    var right_node = scene.add(right^)
+    var lamp = Object3D()
+    lamp.set_position(0.4, 0.8, 0.5)
+    var lamp_node = scene.add(lamp^)
+    scene.add_light(
+        directional_light(Color(255, 255, 255), lamp_node, 4 * FULL)
+    )
+    scene.update()
+    var meshes = List[Mesh]()
+    meshes.append(
+        Mesh(
+            ball,
+            assets.materials.add(Material(Color(255, 220, 200))),
+            left_node,
+        )
+    )
+    meshes.append(
+        Mesh(
+            box,
+            assets.materials.add(Material(Color(90, 160, 220), kind=NORMALS)),
+            right_node,
+        )
+    )
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.5, METER),
+        Length(12.0, METER),
+    )
+    camera.place(Vector3(0.6, 0.8, 3.2), Vector3(0, 0, 0))
+    var corners = prepared(renderer, scene, assets, meshes, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        back=camera_back(scene, camera),
+    )
+    var outputs: List[TargetOutput] = [OUTPUT_COLOR, OUTPUT_NORMAL]
+    var target = RenderTarget(48, 36, BACKGROUND, FLOAT_TARGET, outputs)
+    rasterize_all(corners, target, SHADE_LIT, assets.textures, lighting)
+    var gpu = GpuRenderer(48, 36)
+    gpu.set_textures(assets.textures, assets.cube_textures)
+    gpu.draw(corners, BACKGROUND, SHADE_LIT, lighting)
+    var device = gpu.read_back_target(FLOAT_TARGET, outputs)
+    var bright = 0
+    var turned = 0
+    for index in range(2):
+        var cpu_image = target.attachment(index)
+        var gpu_image = device.attachment(index)
+        for at in range(len(cpu_image.pixels)):
+            var want = cpu_image.pixels[at]
+            var got = gpu_image.pixels[at]
+            assert_true(
+                abs(want - got) <= 1e-3 * max(Float32(1), abs(want)),
+                "the backends' attachments differ",
+            )
+            if index == 0 and want > 1:
+                bright += 1
+            if index == 1 and want != 0:
+                turned += 1
+    assert_true(bright > 20, "no light above one survived")
+    assert_true(turned > 300, "the normal attachment is nearly empty")
+    for y in range(36):
+        for x in range(48):
+            assert_equal(target.is_data(x, y), device.is_data(x, y))
+            assert_equal(target.depth_at(x, y), device.depth_at(x, y))
+
+
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
 
@@ -9218,7 +9342,8 @@ def test_flattening_lays_a_pmrem_row_after_the_faces() raises:
 def test_flattening_the_lights_carries_the_probes() raises:
     var lighting = probe_lighting()
     var flat = flatten_lights(lighting)
-    assert_equal(LIGHTS_FIRST, LIGHTS_PROBE + 27)
+    assert_equal(LIGHTS_BACK, LIGHTS_PROBE + 27)
+    assert_equal(LIGHTS_FIRST, LIGHTS_BACK + 3)
     for lane in range(27):
         assert_equal(flat[LIGHTS_PROBE + lane], lighting.probe.lanes[lane])
     # Band zero is the average light, which is not black.

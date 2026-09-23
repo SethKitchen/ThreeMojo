@@ -25,6 +25,18 @@ opaque purple; the blue was invisible and should have contributed nothing.
 So color lives here as linear `FloatColor` until the image is finished, and
 `resolve` converts once.
 
+**Type and attachments.** three.js's `WebGLRenderTarget` takes a `type` and
+a `count`. Every target here accumulates in floats whatever its type, so
+the type decides what a readout holds -- `attachment` and
+`attachment_texture` -- and nothing else: `UNSIGNED_BYTE_TARGET` clamps
+and quantizes, `HALF_FLOAT_TARGET` rounds to a half, and `FLOAT_TARGET`
+keeps the light as it is, above one included, with no curve and no
+encode. The outputs say what each color attachment holds, three.js's
+`count` with the fragment shader's `layout(location = i)` outputs: the
+lit color first, then optionally the view-space normal of the nearest
+opaque surface, a G-buffer the screen-space passes read. See
+`TargetType` and `TargetOutput`.
+
 **Data.** Not every pixel holds light. A normal material writes its normal
 as bytes, a depth material its depth, the uv debug view its coordinates,
 and a display must show those bytes as they are. They are stored decoded,
@@ -63,7 +75,9 @@ color to recover. `resolve` unpremultiplies at the end, because PNG stores
 unassociated alpha.
 """
 
+from math.vector3 import Vector3
 from render.blend import NORMAL_MODE, Rgba, blend_pixel
+from render.float_image import FloatImage
 from render.raster_state import (
     STANDARD_DEPTH,
     DepthMode,
@@ -72,6 +86,7 @@ from render.raster_state import (
     cleared_depth,
     is_nearer,
     test_fragment,
+    window_depth,
 )
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rect import Rect
@@ -83,7 +98,10 @@ from render.texture import (
     Filter,
     Texture,
     Wrap,
+    NEAREST,
+    IGNORED,
     depth_texture_of_buffer,
+    float_texture,
     texture_of,
 )
 from render.tonemap import (
@@ -92,7 +110,7 @@ from render.tonemap import (
     check_tone_mapping,
     tone_map,
 )
-from std.math import inf, min
+from std.math import inf, isfinite, max, min
 
 # `TaskGroup` moved behind an underscore in Mojo 1.1: `std.runtime` keeps
 # only `parallelism_level` and `initialize_runtime` in public view, and
@@ -102,6 +120,137 @@ from std.math import inf, min
 # leading underscore. It pins the toolchain to 1.1: 1.0 has no `_asyncrt`
 # and 1.1 has no `asyncrt`, so one source cannot serve both.
 from std.runtime._asyncrt import TaskGroup
+
+
+@fieldwise_init
+struct TargetType(Equatable, ImplicitlyCopyable, Writable):
+    """What a render target's attachments store, three.js's
+    `WebGLRenderTarget` `type`, as a type rather than a bare int.
+
+    The target accumulates in floats whatever this says; the type decides
+    what `RenderTarget.attachment` reads back. The type stops a bare
+    integer at compile time; it does not stop `TargetType(3)`, which
+    `check_target` refuses.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the three types there are.
+
+        Returns:
+            True for `UNSIGNED_BYTE_TARGET`, `HALF_FLOAT_TARGET` and
+            `FLOAT_TARGET`.
+        """
+        return (
+            self == UNSIGNED_BYTE_TARGET
+            or self == HALF_FLOAT_TARGET
+            or self == FLOAT_TARGET
+        )
+
+
+# Eight bits a channel, zero to one: three.js's `UnsignedByteType`, the
+# default. A readout clamps each channel and rounds it to a 255th.
+comptime UNSIGNED_BYTE_TARGET = TargetType(0)
+# Sixteen-bit floats: three.js's `HalfFloatType`. Kept as floats, and a
+# readout rounds each channel to the nearest half, held at the largest.
+comptime HALF_FLOAT_TARGET = TargetType(1)
+# Thirty-two-bit floats: three.js's `FloatType`. A readout is the light as
+# it is, above one included.
+comptime FLOAT_TARGET = TargetType(2)
+
+# The largest finite half: what a half float target holds for anything
+# brighter, where a GPU writing one would round it to infinity. A texture
+# refuses infinity, so the port holds the largest number instead.
+comptime HALF_MAX = Float32(65504)
+
+
+@fieldwise_init
+struct TargetOutput(Equatable, ImplicitlyCopyable, Writable):
+    """What one color attachment of a render target holds, as a type
+    rather than a bare int: the meaning of three.js's
+    `layout(location = i) out` for a target with a `count` above one.
+
+    The port has no user shaders, so the outputs a fragment can write are
+    named here. The type stops a bare integer at compile time; it does not
+    stop `TargetOutput(2)`, which `check_target` refuses.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the two outputs there are.
+
+        Returns:
+            True for `OUTPUT_COLOR` and `OUTPUT_NORMAL`.
+        """
+        return self == OUTPUT_COLOR or self == OUTPUT_NORMAL
+
+
+# The lit color, what a single-attachment target holds: `pc_fragColor`.
+comptime OUTPUT_COLOR = TargetOutput(0)
+# The view-space unit normal of the nearest opaque surface, after any
+# normal or bump map: three.js's `gNormal` in its multiple render targets
+# example. Zero where no triangle wrote one.
+comptime OUTPUT_NORMAL = TargetOutput(1)
+
+
+def color_only() -> List[TargetOutput]:
+    """Return the outputs of a target with one attachment: the lit color.
+
+    Returns:
+        A list holding `OUTPUT_COLOR` alone.
+    """
+    return [OUTPUT_COLOR]
+
+
+def check_target(type: TargetType, outputs: List[TargetOutput]) raises:
+    """Refuse a type or a list of outputs no target can have.
+
+    Args:
+        type: The attachments' storage.
+        outputs: What each color attachment holds, in order.
+
+    Raises:
+        Error: If the type is none of the three, the list is empty, its
+            first output is not `OUTPUT_COLOR`, an output is none of the
+            two, or an output repeats.
+    """
+    if not type.is_valid():
+        raise Error("A render target type must be one of the three")
+    if len(outputs) == 0 or outputs[0] != OUTPUT_COLOR:
+        raise Error("A render target's first output must be the color")
+    for index in range(1, len(outputs)):
+        var output = outputs[index]
+        if not output.is_valid():
+            raise Error("A render target output must be one of the two")
+        # An output written twice is one attachment too many. `index` is
+        # at least one, so this loop always runs.
+        for earlier in range(index):  # pragma: no branch
+            if outputs[earlier] == output:
+                raise Error("A render target output must not repeat")
+
+
+def stored(value: Float32, type: TargetType) -> Float32:
+    """Return one channel as an attachment of `type` holds it.
+
+    Args:
+        value: The channel, as the target accumulated it.
+        type: The attachment's storage.
+
+    Returns:
+        The value clamped to zero through one and rounded to a 255th for
+        `UNSIGNED_BYTE_TARGET`; rounded to the nearest half and held
+        inside the halves' range for `HALF_FLOAT_TARGET`; and the value
+        itself for `FLOAT_TARGET`.
+    """
+    if type == UNSIGNED_BYTE_TARGET:
+        var held = max(Float32(0), min(Float32(1), value))
+        return Float32(Int(held * 255 + 0.5)) / 255
+    if type == HALF_FLOAT_TARGET:
+        var held = max(-HALF_MAX, min(HALF_MAX, value))
+        return held.cast[DType.float16]().cast[DType.float32]()
+    return value
 
 
 def _encode_run(
@@ -206,8 +355,24 @@ struct RenderTarget(Movable):
     # frame as three.js clears it. Read and written only by a primitive
     # whose state has `stencil_write` on; see `render.raster_state`.
     var stencil: List[UInt8]
+    # What the attachments store, three.js's `type`; see `TargetType`.
+    var type: TargetType
+    # What each color attachment holds, in order, three.js's `count` and
+    # the shader's outputs: the color first. See `TargetOutput`.
+    var outputs: List[TargetOutput]
+    # The view-space normal of each pixel's nearest opaque surface, zero
+    # where none wrote one: the `OUTPUT_NORMAL` attachment. Empty when the
+    # target has no such output, so a plain target pays nothing for it.
+    var normals: List[Vector3]
 
-    def __init__(out self, width: Int, height: Int, clear: Color) raises:
+    def __init__(
+        out self,
+        width: Int,
+        height: Int,
+        clear: Color,
+        type: TargetType = UNSIGNED_BYTE_TARGET,
+        outputs: List[TargetOutput] = color_only(),
+    ) raises:
         """Create a target cleared to `clear`.
 
         Args:
@@ -216,12 +381,27 @@ struct RenderTarget(Movable):
             clear: The color to fill with, decoded from sRGB. Its alpha is
                 kept, so clearing to something transparent gives a target that
                 stays transparent where nothing is drawn.
+            type: What the attachments store, three.js's `type`:
+                `UNSIGNED_BYTE_TARGET`, the default, `HALF_FLOAT_TARGET` or
+                `FLOAT_TARGET`. It changes what `attachment` reads back.
+            outputs: What each color attachment holds, in order: three.js's
+                `count` and the shader's outputs. The color alone by
+                default. Add `OUTPUT_NORMAL` for a normal attachment.
 
         Raises:
-            Error: If either dimension is not positive.
+            Error: If either dimension is not positive, or `check_target`
+                refuses the type or the outputs.
         """
         if width <= 0 or height <= 0:
             raise Error("Render target dimensions must be positive")
+        check_target(type, outputs)
+        self.type = type
+        self.outputs = outputs.copy()
+        self.normals = List[Vector3]()
+        if OUTPUT_NORMAL in outputs:
+            self.normals = List[Vector3](
+                length=width * height, fill=Vector3(0, 0, 0)
+            )
         self.width = width
         self.height = height
         self.clear = FloatColor(srgb=clear).premultiplied()
@@ -260,8 +440,8 @@ struct RenderTarget(Movable):
         depth_mode: DepthMode = STANDARD_DEPTH,
     ) raises:
         """Reset every pixel inside `rect` to `clear`, its depth to the
-        far distance, its stencil to zero and its flag to light, leaving the
-        rest alone.
+        far distance, its stencil to zero, its normal to none and its flag
+        to light, leaving the rest alone.
 
         The far distance is the depth mode's: infinity, or minus infinity
         under `REVERSED_DEPTH`, three.js's clear of the reversed buffer.
@@ -297,6 +477,12 @@ struct RenderTarget(Movable):
                 self.depth[slot] = far
                 self.data[slot] = False
                 self.stencil[slot] = 0
+        if self.has_normals():
+            for y in range(top, top + rect.height):  # pragma: no branch
+                for x in range(
+                    rect.x, rect.x + rect.width
+                ):  # pragma: no branch
+                    self.normals[y * self.width + x] = Vector3(0, 0, 0)
 
     def _slot(self, x: Int, y: Int) raises -> Int:
         """Return the index of pixel (x, y), checking it is inside."""
@@ -448,7 +634,12 @@ struct RenderTarget(Movable):
         return z < self.depth[slot]
 
     def write(
-        mut self, x: Int, y: Int, color: FloatColor, data: Bool = False
+        mut self,
+        x: Int,
+        y: Int,
+        color: FloatColor,
+        data: Bool = False,
+        normal: Vector3 = Vector3(0, 0, 0),
     ) raises:
         """Replace pixel (x, y) with `color`, given in straight alpha.
 
@@ -466,6 +657,9 @@ struct RenderTarget(Movable):
                 without tone mapping. See `render.rasterizer.data_color`.
                 A write replaces the pixel, so the pixel's answer becomes
                 this one.
+            normal: The surface's view-space unit normal, kept when the
+                target has an `OUTPUT_NORMAL` attachment. Zero, the
+                default, is no surface: what a line or a point leaves.
 
         Raises:
             Error: If the coordinate is out of bounds.
@@ -475,13 +669,17 @@ struct RenderTarget(Movable):
             return
         self.colors[slot] = color.premultiplied()
         self.data[slot] = data
+        if self.has_normals():
+            self.normals[slot] = normal
 
     def blend(
         mut self, x: Int, y: Int, color: FloatColor, mode: Int = NORMAL_MODE
     ) raises:
         """Mix `color` into pixel (x, y) by a blending mode.
 
-        The result is light, whatever was there before. Only light blends:
+        The normal attachment is left alone: a translucent surface claims
+        no depth, so the normal stays the one of the surface the depth
+        belongs to. The result is light, whatever was there before. Only light blends:
         a fragment that shows data is refused a blend policy, so the mix is
         light over something, and a mixture with light in it is light. See
         the module docstring.
@@ -580,6 +778,9 @@ struct RenderTarget(Movable):
         its nearest surface. Nearest is the target's depth mode's: the
         largest depth under `REVERSED_DEPTH`.
 
+        **The normal is the average of the block's, made unit length
+        again**, when the target has a normal attachment.
+
         **A pixel is data only if every sample in it is.** A block holding
         a normal beside lit smoke is not a normal any more, and the module
         docstring's rule applies to it: what comes out is light, and light
@@ -592,8 +793,8 @@ struct RenderTarget(Movable):
                 returns a copy.
 
         Returns:
-            The smaller target, its clear color and depth mode carried
-            over, the scissor widened to the whole of it.
+            The smaller target, its clear color, depth mode, type and
+            outputs carried over, the scissor widened to the whole of it.
 
         Raises:
             Error: If the factor is less than one or does not divide both
@@ -657,12 +858,27 @@ struct RenderTarget(Movable):
                 total.a * share,
             )
             flags[slot] = counts[slot] == samples
-        var small = RenderTarget(width, height, Color(0, 0, 0, 0))
+        var small = RenderTarget(
+            width, height, Color(0, 0, 0, 0), self.type, self.outputs
+        )
         small.clear = self.clear
         small.depth_mode = self.depth_mode
         small.colors = colors^
         small.depth = depths^
         small.data = flags^
+        if self.has_normals():
+            # Summed like the light and made a unit vector again, as a
+            # normal interpolated across a triangle is: the average of two
+            # unit vectors is shorter than either. A block no surface
+            # reached sums to zero and keeps no normal.
+            for source in range(self.width * self.height):  # pragma: no branch
+                var slot = (
+                    source // self.width // factor
+                ) * width + source % self.width // factor
+                small.normals[slot] = small.normals[slot] + self.normals[source]
+            for slot in range(count):  # pragma: no branch
+                if small.normals[slot].length() != 0:
+                    small.normals[slot].normalize()
         return small^
 
     def resolve(
@@ -799,25 +1015,190 @@ struct RenderTarget(Movable):
             alpha,
         )
 
-    def depth_texture(self, wrap: Wrap = CLAMP) raises -> Texture:
+    def depth_texture(
+        self, wrap: Wrap = CLAMP, type: TargetType = UNSIGNED_BYTE_TARGET
+    ) raises -> Texture:
         """Return this target's depth as a texture, three.js's
         `DepthTexture` on a render target.
 
-        `render.texture.depth_texture_of` of the depth as it stands: the
-        color is not resolved. See there for what a texel holds, and for
-        why it is a preview at eight bits and not a depth to compare. The
-        depth is read in the target's depth mode, so a reversed depth
-        shows white near and black far, as three.js's texture holds it.
+        The depth as it stands: the color is not resolved. Each texel is
+        `render.raster_state.window_depth` of the stored depth in the
+        target's depth mode, from zero to one, in red, green and blue,
+        with an alpha of one: one at the far plane and where nothing was
+        drawn, or zero under a reversed depth, which shows white near and
+        black far, as three.js's texture holds it. It is read nearest with
+        no chain: two depths averaged are the depth of nothing.
+
+        With `UNSIGNED_BYTE_TARGET`, the default, it is
+        `render.texture.depth_texture_of`: a preview at eight bits, and not
+        a depth to compare. With `FLOAT_TARGET` it is the depth itself, as
+        three.js's `DepthTexture` with a `type` of `FloatType` holds it,
+        in a float texture. `HALF_FLOAT_TARGET` rounds it to a half.
 
         Args:
             wrap: How coordinates outside the unit square are resolved.
+            type: What each texel stores.
 
         Returns:
             The texture.
 
         Raises:
-            Error: If the wrap mode is none of the named values.
+            Error: If the wrap mode is none of the named values, or the
+                type is none of the three.
         """
-        return depth_texture_of_buffer(
-            self.width, self.height, self.depth, wrap, self.depth_mode
+        if not type.is_valid():
+            raise Error("A render target type must be one of the three")
+        if type == UNSIGNED_BYTE_TARGET:
+            return depth_texture_of_buffer(
+                self.width, self.height, self.depth, wrap, self.depth_mode
+            )
+        var count = self.width * self.height
+        var data = List[Float32](capacity=count * Texture.CHANNELS)
+        # Both dimensions are positive, so the loop always runs.
+        for slot in range(count):  # pragma: no branch
+            var window = stored(
+                window_depth(self.depth_mode, self.depth[slot]), type
+            )
+            data.append(window)
+            data.append(window)
+            data.append(window)
+            data.append(1)
+        return float_texture(
+            self.width, self.height, data^, wrap, NEAREST, False, IGNORED
+        )
+
+    def count(self) -> Int:
+        """Return how many color attachments this target has, three.js's
+        `count`.
+
+        Returns:
+            The length of `outputs`, at least one.
+        """
+        return len(self.outputs)
+
+    def has_normals(self) -> Bool:
+        """Return True if this target has an `OUTPUT_NORMAL` attachment.
+
+        Returns:
+            Whether a triangle's opaque write keeps its normal here.
+        """
+        return len(self.normals) != 0
+
+    def normal_at(self, x: Int, y: Int) raises -> Vector3:
+        """Return the view-space normal kept at pixel (x, y).
+
+        Args:
+            x: Column.
+            y: Row.
+
+        Returns:
+            The unit normal of the nearest opaque surface, or zero where
+            no triangle wrote one.
+
+        Raises:
+            Error: If the coordinate is out of bounds, or the target has no
+                normal attachment.
+        """
+        var slot = self._slot(x, y)
+        if not self.has_normals():
+            raise Error("This render target has no normal attachment")
+        return self.normals[slot]
+
+    def attachment(self, index: Int) raises -> FloatImage:
+        """Return one color attachment as its type stores it, three.js's
+        `readRenderTargetPixels` on `textures[index]`.
+
+        The color attachment holds the light with straight alpha: not tone
+        mapped, not encoded, and not clamped in a float target, as three.js
+        writes into a render target. A pixel that holds data -- a normal
+        material's bytes, the uv view's coordinates -- reads as the
+        fractions its bytes show. The normal attachment holds the view-space
+        normal with an alpha of one, and zero where no surface wrote one.
+        In an `UNSIGNED_BYTE_TARGET` a normal cannot be negative, so it is
+        packed first, halved and moved up by a half, three.js's
+        `packNormalToRGB`; a pixel with no normal stays zero.
+
+        Args:
+            index: Which attachment, from zero to `count() - 1`.
+
+        Returns:
+            Four floats a pixel, row-major from the top, each passed
+            through `stored` for the target's type.
+
+        Raises:
+            Error: If the index is outside the attachments.
+        """
+        if index < 0 or index >= self.count():
+            raise Error("A render target attachment index is out of range")
+        var total = self.width * self.height
+        var pixels = List[Float32](capacity=total * FloatImage.CHANNELS)
+        var packs = self.type == UNSIGNED_BYTE_TARGET
+        var normal = self.outputs[index] == OUTPUT_NORMAL
+        # Both dimensions are positive, so the loop always runs.
+        for slot in range(total):  # pragma: no branch
+            var value: FloatColor
+            if normal:
+                var n = self.normals[slot]
+                value = FloatColor(n.x, n.y, n.z, 1)
+                if n.length() == 0:
+                    value = FloatColor(0, 0, 0, 0)
+                elif packs:
+                    value = FloatColor(
+                        n.x * 0.5 + 0.5, n.y * 0.5 + 0.5, n.z * 0.5 + 0.5, 1
+                    )
+            else:
+                value = self.colors[slot].unpremultiplied()
+                if self.data[slot]:
+                    # Stored decoded so the encode gives the bytes back;
+                    # the fraction is those bytes. See `data_color`.
+                    var shown = value.encode()
+                    value = FloatColor(
+                        Float32(shown.r) / 255,
+                        Float32(shown.g) / 255,
+                        Float32(shown.b) / 255,
+                        value.a,
+                    )
+            pixels.append(stored(value.r, self.type))
+            pixels.append(stored(value.g, self.type))
+            pixels.append(stored(value.b, self.type))
+            pixels.append(stored(value.a, self.type))
+        return FloatImage(self.width, self.height, pixels^)
+
+    def attachment_texture(
+        self,
+        index: Int,
+        wrap: Wrap = CLAMP,
+        filter: Filter = BILINEAR,
+        mipmapped: Bool = False,
+    ) raises -> Texture:
+        """Return one color attachment as a texture a later draw can
+        sample, three.js's `WebGLRenderTarget.textures[index]`.
+
+        `attachment` in a float texture, so the numbers are sampled as
+        they are stored: light above one stays above one, and a normal
+        keeps its sign. The texture's alpha hides color, as the target's
+        alpha does.
+
+        Args:
+            index: Which attachment, from zero to `count() - 1`.
+            wrap: How coordinates outside the unit square are resolved.
+            filter: `NEAREST` or `BILINEAR`.
+            mipmapped: Build the chain of halved copies.
+
+        Returns:
+            The texture: `FLOAT_TYPE`, `LINEAR`.
+
+        Raises:
+            Error: Everything `attachment` raises, or a wrap or filter mode
+                that is none of the named values.
+        """
+        var image = self.attachment(index)
+        return float_texture(
+            self.width,
+            self.height,
+            image.pixels.copy(),
+            wrap,
+            filter,
+            mipmapped,
+            COVERAGE,
         )

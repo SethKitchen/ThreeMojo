@@ -92,7 +92,13 @@ from postprocessing.screen_space import (
 from render.antialias import SUPERSAMPLE
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.raster_state import cleared_depth, is_nearer
-from render.target import RenderTarget
+from render.target import (
+    OUTPUT_COLOR,
+    OUTPUT_NORMAL,
+    RenderTarget,
+    TargetOutput,
+    color_only,
+)
 from render.texture_store import NO_TEXTURE, TextureId
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
 from render.volume_texture_store import NO_DATA_3D_TEXTURE, Data3DTextureId
@@ -1137,8 +1143,16 @@ struct EffectComposer(Movable):
         """
         if not isfinite(delta_time) or delta_time < 0:
             raise Error("A frame time is a non-negative number of seconds")
+        # A frame with a normal attachment when a screen-space pass reads
+        # normals, so the render that fills it leaves them in the same
+        # pass, as three.js's multiple render targets would. See
+        # `postprocessing.screen_space`.
+        var outputs = _frame_outputs(self.passes)
         var frame = RenderTarget(
-            renderer.width, renderer.height, renderer.background
+            renderer.width,
+            renderer.height,
+            renderer.background,
+            outputs=outputs,
         )
         # Whether a mask pass has run with no clear mask pass after it:
         # three.js's `maskActive`.
@@ -1202,7 +1216,10 @@ struct EffectComposer(Movable):
                 ssao_light(frame, _depth_view(frame, camera), step.ssao)
             elif step.kind == SAO:
                 var drawn = RenderTarget(
-                    renderer.width, renderer.height, renderer.background
+                    renderer.width,
+                    renderer.height,
+                    renderer.background,
+                    outputs=outputs,
                 )
                 _draw(drawn, renderer, scene, assets, camera)
                 # three.js draws a fresh `randomSeed` every frame.
@@ -1297,6 +1314,18 @@ def _draw[
     renderer.render_into(frame, scene, assets, camera)
 
 
+def _frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
+    """Return the outputs a composer's frame is drawn with: the color and
+    a normal attachment when an enabled SSAO, SAO or SSR pass reads
+    normals, and the color alone otherwise."""
+    for index in range(len(passes)):
+        ref step = passes[index]
+        var reads = step.kind == SSAO or step.kind == SAO or step.kind == SSR
+        if step.enabled and reads:
+            return [OUTPUT_COLOR, OUTPUT_NORMAL]
+    return color_only()
+
+
 def _depth_view[C: Camera](drawn: RenderTarget, camera: C) raises -> DepthView:
     """Return a target's depth read through the camera that drew it."""
     return DepthView(
@@ -1307,6 +1336,7 @@ def _depth_view[C: Camera](drawn: RenderTarget, camera: C) raises -> DepthView:
         Length(camera.near_distance(), METER),
         Length(camera.far_distance(), METER),
         drawn.depth_mode,
+        drawn.normals,
     )
 
 

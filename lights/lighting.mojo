@@ -102,6 +102,32 @@ def falloff(distance: Float32, decay: Float32, cutoff: Float32) -> Float32:
 comptime PERSPECTIVE_VIEW = Vector3(0, 0, 0)
 
 
+def view_direction(direction: Vector3, up: Vector3, back: Vector3) -> Vector3:
+    """Return a world-space direction as the camera sees it, in view space.
+
+    The view rotation, from the camera's own axes in world space: its
+    up and its back are `Lighting.up` and `Lighting.back`, and its right
+    is up crossed with back. A direction's view coordinates are its dots
+    with the three, which is the rotation three.js's `normalMatrix` holds
+    for a rigid view. Both rasterizers call this for a render target's
+    normal attachment, so the two turn a normal by the same arithmetic.
+
+    Args:
+        direction: The direction, in world space.
+        up: The camera's +y axis, in world space, unit length.
+        back: The camera's +z axis, in world space, unit length.
+
+    Returns:
+        The direction in view space, as long as it was.
+    """
+    var right = Vector3(
+        up.y * back.z - up.z * back.y,
+        up.z * back.x - up.x * back.z,
+        up.x * back.y - up.y * back.x,
+    )
+    return Vector3(direction.dot(right), direction.dot(up), direction.dot(back))
+
+
 def toward_eye_at(
     eye: Vector3, parallel: Vector3, position: Vector3
 ) -> Vector3:
@@ -904,6 +930,12 @@ struct Lighting(Movable):
     # the two reach the same coordinate. World up, the default, is what a
     # scene with no matcap wants and what an upright camera has anyway.
     var up: Vector3
+    # Which way is back for the camera, in world space: the view space +z
+    # axis, which the camera looks away from. With `up` it is the whole
+    # view rotation, which is what a render target's normal attachment is
+    # written in; see `view_direction`. World +z, the default, and world
+    # up make the identity.
+    var back: Vector3
     # The sum of every ambient light, already decoded and scaled.
     var ambient: FloatColor
     # The sum of every light probe's coefficients, each times its
@@ -974,6 +1006,7 @@ struct Lighting(Movable):
         var shadows: List[ShadowMap] = List[ShadowMap](),
         var ltc: LtcTables = LtcTables(),
         var spot_maps: List[SpotLightMap] = List[SpotLightMap](),
+        back: Vector3 = Vector3(0, 0, 1),
     ) raises:
         """Resolve a scene's lights against the world transforms it holds.
 
@@ -1012,6 +1045,11 @@ struct Lighting(Movable):
                 each naming its light; `Renderer.spot_light_maps` builds
                 them. None by default, which leaves every light's color
                 as it is.
+            back: Which way is back for that camera, in world space: its
+                view space +z axis. Only a render target's normal
+                attachment reads it, with `up`, to turn a normal into view
+                space. `Renderer.render_into` passes `camera_back`. World
+                +z, the default, is an unturned camera. Normalized here.
 
         Raises:
             Error: If a light's numbers are refused by `Light.validate`,
@@ -1040,6 +1078,11 @@ struct Lighting(Movable):
         self.up = up
         if self.up.length() != 0:
             self.up.normalize()
+        # Normalized as `up` is, and a zero vector left alone for the same
+        # reason: it names no frame, and turns every normal to zero.
+        self.back = back
+        if self.back.length() != 0:
+            self.back.normalize()
         self.ambient = FloatColor(0.0, 0.0, 0.0, 1.0)
         self.probe = SphericalHarmonics3()
         self.scale = RECIPROCAL_PI
@@ -1211,6 +1254,7 @@ struct Lighting(Movable):
         self.eye = Vector3(0, 0, 0)
         self.toward_eye = PERSPECTIVE_VIEW
         self.up = Vector3(0, 1, 0)
+        self.back = Vector3(0, 0, 1)
         self.ambient = ambient
         self.probe = SphericalHarmonics3()
         self.scale = 1

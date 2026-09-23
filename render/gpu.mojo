@@ -61,6 +61,13 @@ from render.pointrule import (
 )
 from render.rect import Rect
 from render.framebuffer import Color, FloatColor, Framebuffer
+from render.target import (
+    UNSIGNED_BYTE_TARGET,
+    RenderTarget,
+    TargetOutput,
+    TargetType,
+    color_only,
+)
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.shadow import (
     BASIC_SHADOW_MAP,
@@ -116,6 +123,7 @@ from lights.lighting import (
     toon_index,
     toon_step,
     toward_eye_at,
+    view_direction,
 )
 from math.smoothstep import smoothstep
 from math.vector2 import Vector2
@@ -442,7 +450,25 @@ comptime LIGHTS_RECT_COUNT = 13
 # The light probes' nine coefficients summed, `Lighting.probe`, red, green
 # and blue each. Zero when the scene has no probe.
 comptime LIGHTS_PROBE = 14
-comptime LIGHTS_FIRST = LIGHTS_PROBE + SH_COUNT * 3
+# The camera's back axis in world space, `Lighting.back`: with its up
+# axis, the view rotation a normal attachment is written in.
+comptime LIGHTS_BACK = LIGHTS_PROBE + SH_COUNT * 3
+comptime LIGHTS_FIRST = LIGHTS_BACK + 3
+# How the depth buffer is laid out: one float of depth a pixel, then the
+# attachments a `RenderTarget` holds, each a plane of its own, so the
+# kernel leaves a whole target behind with no argument more. Metal binds
+# at most thirty-one arguments and the kernel has thirty-one.
+# `GpuRenderer.read_back_target` reads them.
+#
+# The premultiplied linear color, four floats a pixel, before any curve.
+comptime PLANE_COLOR = 1
+# The view-space normal of the nearest opaque surface, three floats a
+# pixel, zero where none was written.
+comptime PLANE_NORMAL = PLANE_COLOR + 4
+# One where the pixel holds data rather than light, zero where light.
+comptime PLANE_DATA = PLANE_NORMAL + 3
+# How many floats a pixel takes across every plane.
+comptime PLANE_FLOATS = PLANE_DATA + 1
 # How many floats each kind of light takes in the buffer. A directional
 # light's seventh, a point light's ninth and a spot light's fourteenth is
 # where its shadow map begins in the same buffer, or -1 for none: the maps
@@ -705,7 +731,8 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     Three floats of camera position, three of the one direction toward it
     under a parallel projection, three of the camera's own up axis, then
     three of ambient, one of `Lighting.scale`, one of how many rect area
-    lights there are, 27 of the light probes' coefficients, then six per
+    lights there are, 27 of the light probes' coefficients, three of the
+    camera's back axis, then six per
     directional light -- a unit
     direction and the light it carries -- then nine per point light: where
     it is, the light it carries, its decay, its cutoff and its shadow. Then
@@ -783,6 +810,9 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     flat.append(Float32(lighting.rect_count()))
     for lane in range(SH_COUNT * 3):  # pragma: no branch
         flat.append(lighting.probe.lanes[lane])
+    flat.append(lighting.back.x)
+    flat.append(lighting.back.y)
+    flat.append(lighting.back.z)
     for index in range(lighting.count()):
         ref direction = lighting.directions[index]
         flat.append(direction.x)
@@ -2816,6 +2846,24 @@ def rasterize_kernel(
     # primitive whose state has `stencil_write` on. A local and not a
     # buffer: one launch draws the whole frame, so nothing outlives it.
     var stencil = 0
+    # The view-space normal the pixel keeps for a target's normal
+    # attachment: the last opaque triangle's, as `RenderTarget.write`
+    # keeps it, and none until one is written. A blend leaves it alone.
+    var kept_x = Float32(0)
+    var kept_y = Float32(0)
+    var kept_z = Float32(0)
+    # The camera's up and back axes, the view rotation the normal is
+    # turned by, read once rather than per fragment.
+    var view_up = Vector3(
+        lights[unsafe_offset=LIGHTS_UP],
+        lights[unsafe_offset=LIGHTS_UP + 1],
+        lights[unsafe_offset=LIGHTS_UP + 2],
+    )
+    var view_back = Vector3(
+        lights[unsafe_offset=LIGHTS_BACK],
+        lights[unsafe_offset=LIGHTS_BACK + 1],
+        lights[unsafe_offset=LIGHTS_BACK + 2],
+    )
     # Whether the fog can reach any fragment: never in the uv debug view,
     # exactly as `rasterize_shaded` decides it. A fragment that shows data
     # is left out below, per triangle.
@@ -2990,8 +3038,12 @@ def rasterize_kernel(
                     mixed_b = blue * share
                     mixed_a = share
                     # A point is light, never data, except in the uv view,
-                    # which shows coordinates.
+                    # which shows coordinates. It has no surface, so it
+                    # leaves no normal, as `RenderTarget.write` keeps none.
                     data = mode == Int32(SHADE_UV.value)
+                    kept_x = 0
+                    kept_y = 0
+                    kept_z = 0
                 elif state.color_write:
                     var out = blend_pixel(
                         Rgba(mixed_r, mixed_g, mixed_b, mixed_a),
@@ -3162,8 +3214,11 @@ def rasterize_kernel(
                     mixed_a = share_a
                     # A line is light, never data: it has no normal to show and no
                     # depth material to show one. `check_line_state` refuses any
-                    # kind but an unlit one.
+                    # kind but an unlit one. It leaves no normal either.
                     data = False
+                    kept_x = 0
+                    kept_y = 0
+                    kept_z = 0
                 elif state.color_write:
                     var out = blend_pixel(
                         Rgba(mixed_r, mixed_g, mixed_b, mixed_a),
@@ -3331,37 +3386,32 @@ def rasterize_kernel(
             # renormalization is the difference between per-fragment and
             # per-vertex shading: the average of two unit vectors is shorter than
             # either, so leaving it alone dims the middle of every triangle.
-            # Only the two lit modes need it, and only a surface that is lit by
-            # it or shows it: SHADE_UV writes coordinates rather than light,
-            # and a BASIC material shows its own color.
+            # Worked out for every triangle, shaded by it or not: a target's
+            # normal attachment keeps it, and the host works it out for every
+            # triangle when its target has one. Only a surface that is lit, a
+            # normal, a matcap, a reflection or a shadow reads it for a color.
             var arriving = Vector3(1, 1, 1)
             var highlight = Vector3(0, 0, 0)
-            var nx = Float32(0)
-            var ny = Float32(0)
-            var nz = Float32(1)
-            if mode != Int32(SHADE_UV.value) and (
-                lit or shows_normal or looked_up or reflects or catches
-            ):
-                nx = (
-                    corners[unsafe_offset=base + LANE_NX] * share_a
-                    + corners[unsafe_offset=b_base + LANE_NX] * share_b
-                    + corners[unsafe_offset=c_base + LANE_NX] * share_c
-                )
-                ny = (
-                    corners[unsafe_offset=base + LANE_NY] * share_a
-                    + corners[unsafe_offset=b_base + LANE_NY] * share_b
-                    + corners[unsafe_offset=c_base + LANE_NY] * share_c
-                )
-                nz = (
-                    corners[unsafe_offset=base + LANE_NZ] * share_a
-                    + corners[unsafe_offset=b_base + LANE_NZ] * share_b
-                    + corners[unsafe_offset=c_base + LANE_NZ] * share_c
-                )
-                var unit = sqrt(nx * nx + ny * ny + nz * nz)
-                if unit != 0:
-                    nx /= unit
-                    ny /= unit
-                    nz /= unit
+            var nx = (
+                corners[unsafe_offset=base + LANE_NX] * share_a
+                + corners[unsafe_offset=b_base + LANE_NX] * share_b
+                + corners[unsafe_offset=c_base + LANE_NX] * share_c
+            )
+            var ny = (
+                corners[unsafe_offset=base + LANE_NY] * share_a
+                + corners[unsafe_offset=b_base + LANE_NY] * share_b
+                + corners[unsafe_offset=c_base + LANE_NY] * share_c
+            )
+            var nz = (
+                corners[unsafe_offset=base + LANE_NZ] * share_a
+                + corners[unsafe_offset=b_base + LANE_NZ] * share_b
+                + corners[unsafe_offset=c_base + LANE_NZ] * share_c
+            )
+            var unit = sqrt(nx * nx + ny * ny + nz * nz)
+            if unit != 0:
+                nx /= unit
+                ny /= unit
+                nz /= unit
             # Where this fragment is in the world, for the lights that have
             # a position, and for the direction a reflection turns back.
             var wx = Float32(0)
@@ -4508,6 +4558,15 @@ def rasterize_kernel(
                 # The uv view shows coordinates, which the tone mapping has
                 # to leave alone exactly as it leaves a normal alone.
                 data = shows_data or mode == Int32(SHADE_UV.value)
+                # And its normal, turned into view space by the host's
+                # function, or as it is for a normal material, whose
+                # normals the renderer turned already.
+                var turned = Vector3(nx, ny, nz)
+                if not shows_normal:
+                    turned = view_direction(turned, view_up, view_back)
+                kept_x = turned.x
+                kept_y = turned.y
+                kept_z = turned.z
             elif state.color_write:
                 # The mode's arithmetic, shared with `RenderTarget.blend`.
                 var out = blend_pixel(
@@ -4550,6 +4609,23 @@ def rasterize_kernel(
     # A framebuffer that reports infinity everywhere would let a later
     # depth-tested triangle paint over a nearer surface already drawn here.
     depth[unsafe_offset=slot] = nearest_depth
+    # And the attachments, in the planes after the depth: the light before
+    # the curve, the normal and whether the pixel is data. What a host
+    # target holds after the same draw; see `read_back_target`.
+    var planes = Int(width) * Int(height)
+    var color_at = planes * PLANE_COLOR + slot * 4
+    depth[unsafe_offset=color_at] = mixed_r
+    depth[unsafe_offset=color_at + 1] = mixed_g
+    depth[unsafe_offset=color_at + 2] = mixed_b
+    depth[unsafe_offset=color_at + 3] = mixed_a
+    var normal_at = planes * PLANE_NORMAL + slot * 3
+    depth[unsafe_offset=normal_at] = kept_x
+    depth[unsafe_offset=normal_at + 1] = kept_y
+    depth[unsafe_offset=normal_at + 2] = kept_z
+    var flag = Float32(0)
+    if data:
+        flag = 1
+    depth[unsafe_offset=planes * PLANE_DATA + slot] = flag
 
     var offset = slot * 4
     pixels[unsafe_offset=offset] = UInt8((word >> 24) & 0xFF)
@@ -4585,7 +4661,12 @@ struct GpuRenderer(Movable):
     # `__deinit__` releases them in that order. The order is load-bearing;
     # see `__deinit__` for the hang it prevents.
     var pixels: DeviceBuffer[DType.uint8]
+    # The depth, then the attachments a host target holds, one plane each;
+    # see `PLANE_FLOATS`.
     var depth: DeviceBuffer[DType.float32]
+    # The color the last draw cleared to, which a target read back holds
+    # as its clear color.
+    var cleared: Color
     var corners: DeviceBuffer[DType.float32]
     # The camera's position, then the ambient term, then six floats per
     # directional light, eight per point light, nine per hemisphere light
@@ -4723,8 +4804,9 @@ struct GpuRenderer(Movable):
             width * height * Framebuffer.CHANNELS
         )
         self.depth = self.context.enqueue_create_buffer[DType.float32](
-            width * height
+            width * height * PLANE_FLOATS
         )
+        self.cleared = Color(0, 0, 0, 0)
         # Room for the camera, its direction, its up axis, the ambient term
         # and one directional light to begin with.
         self.light_room = LIGHTS_FIRST + 6
@@ -4790,6 +4872,22 @@ struct GpuRenderer(Movable):
                 dest=host.unsafe_ptr(), src=steps.unsafe_ptr(), count=256
             )
         self.transmission_room = 0
+        # The depth at the far distance and every attachment empty, so a
+        # target read back after a scissored draw holds no garbage outside
+        # the scissor: what a fresh host target holds. The far distance is
+        # the mode's clear value, infinity until a draw names another mode;
+        # the kernel writes infinity for an unclaimed pixel under every
+        # mode, and the read backs turn it into the mode's own clear.
+        var planes = width * height
+        var blank = List[Float32](length=planes * PLANE_FLOATS, fill=0)
+        for slot in range(planes):
+            blank[slot] = cleared_depth(self.depth_mode)
+        with self.depth.map_to_host() as host:
+            unsafe_memcpy(
+                dest=host.unsafe_ptr(),
+                src=blank.unsafe_ptr(),
+                count=planes * PLANE_FLOATS,
+            )
         # Transparent everywhere, so the first draw reads the clear color
         # rather than whatever the allocation held. Last, once every
         # field is set, because it is a method.
@@ -5376,6 +5474,7 @@ struct GpuRenderer(Movable):
         var curve = tone_mapping
         if mode == SHADE_UV:
             curve = NO_TONE_MAPPING
+        self.cleared = background
         self.context.enqueue_function[rasterize_kernel](
             self.pixels.unsafe_ptr(),
             self.depth.unsafe_ptr(),
@@ -5569,6 +5668,73 @@ struct GpuRenderer(Movable):
                 if depth[slot] == inf[DType.float32]():
                     depth[slot] = cleared_depth(REVERSED_DEPTH)
         return Framebuffer(self.width, self.height, pixels^, depth^)
+
+    def read_back_target(
+        self,
+        type: TargetType = UNSIGNED_BYTE_TARGET,
+        outputs: List[TargetOutput] = color_only(),
+    ) raises -> RenderTarget:
+        """Copy the device's attachments into a host render target, before
+        any curve or encode: three.js's float and multiple render targets.
+
+        The kernel leaves the premultiplied light, the view-space normal
+        and the data flag of every pixel beside its depth, so what comes
+        back is the target `rasterize_frame` fills on the host from the
+        same draw. Read its attachments with `RenderTarget.attachment`, or
+        resolve it with `RenderTarget.resolve`. A pixel outside the last
+        draw's scissor holds whatever the draw before it left.
+
+        Args:
+            type: What the target's attachments store; see
+                `render.target.TargetType`.
+            outputs: What each of its color attachments holds; see
+                `render.target.TargetOutput`.
+
+        Returns:
+            The target, cleared to the last draw's background, in the
+            last draw's depth mode.
+
+        Raises:
+            Error: If nothing has been drawn yet, or `check_target`
+                refuses the type or the outputs.
+        """
+        if not self.drawn:
+            raise Error(
+                "Nothing has been drawn yet; call draw() before"
+                " read_back_target()"
+            )
+        var target = RenderTarget(
+            self.width, self.height, self.cleared, type, outputs
+        )
+        target.depth_mode = self.depth_mode
+        var planes = self.width * self.height
+        var flat = List[Float32](length=planes * PLANE_FLOATS, fill=0)
+        with self.depth.map_to_host() as host:
+            unsafe_memcpy(
+                dest=flat.unsafe_ptr(),
+                src=host.unsafe_ptr(),
+                count=planes * PLANE_FLOATS,
+            )
+        var keeps = target.has_normals()
+        var reversed = self.depth_mode == REVERSED_DEPTH
+        for slot in range(planes):
+            # Infinity where no primitive claimed the depth, which under
+            # `REVERSED_DEPTH` is the mode's clear, as `read_back` has it.
+            var z = flat[slot]
+            if reversed and z == inf[DType.float32]():
+                z = cleared_depth(REVERSED_DEPTH)
+            target.depth[slot] = z
+            var at = planes * PLANE_COLOR + slot * 4
+            target.colors[slot] = FloatColor(
+                flat[at], flat[at + 1], flat[at + 2], flat[at + 3]
+            )
+            target.data[slot] = flat[planes * PLANE_DATA + slot] != 0
+            if keeps:
+                var normal_at = planes * PLANE_NORMAL + slot * 3
+                target.normals[slot] = Vector3(
+                    flat[normal_at], flat[normal_at + 1], flat[normal_at + 2]
+                )
+        return target^
 
 
 def render_triangles(

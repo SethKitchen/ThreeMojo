@@ -80,6 +80,7 @@ from lights.lighting import (
     physical_outgoing,
     physical_surface,
     toward_eye_at,
+    view_direction,
 )
 from core.fog import FogView, fog_mix
 from render.linerule import (
@@ -1220,6 +1221,21 @@ def packed_depth(z: Float32) -> Float32:
     return 1 - (z * 0.5 + 0.5)
 
 
+def _kept_normal(
+    facing: Vector3, kind: MaterialKind, lighting: Lighting, kept: Bool
+) -> Vector3:
+    """Return the normal a fragment leaves in a normal attachment: its
+    shading normal turned into view space, or as it is for a `NORMALS`
+    triangle, whose normals the renderer turned already. Zero, and no
+    work, when the target keeps no normals. See
+    `lights.lighting.view_direction`, which the kernel calls too."""
+    if not kept:
+        return Vector3(0, 0, 0)
+    if kind == NORMALS:
+        return facing
+    return view_direction(facing, lighting.up, lighting.back)
+
+
 def interpolate_alpha(
     first: Float32,
     second: Float32,
@@ -2239,6 +2255,10 @@ def rasterize_shaded(
     var bakes = (
         a.ao_map != NO_TEXTURE or a.light_map != NO_TEXTURE
     ) and mode == SHADE_TEXTURE
+    # Whether the target keeps each opaque fragment's view-space normal,
+    # a G-buffer's second attachment. Every triangle interpolates its
+    # normal then, whatever it is shaded by; see `RenderTarget.write`.
+    var keeps_normals = target.has_normals()
 
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
@@ -2323,6 +2343,7 @@ def rasterize_shaded(
                 or a.kind == MATCAP
                 or reflects
                 or catches
+                or keeps_normals
             ):
                 # The normal is interpolated like every other varying and
                 # made a unit vector again here. That renormalization is the
@@ -2614,7 +2635,15 @@ def rasterize_shaded(
                     if writes_depth:
                         target.claim_depth(x, y, stored_z)
                     if a.state.color_write:
-                        target.write(x, y, data_color(u, v, 0.0, 1.0), True)
+                        target.write(
+                            x,
+                            y,
+                            data_color(u, v, 0.0, 1.0),
+                            True,
+                            _kept_normal(
+                                facing, a.kind, lighting, keeps_normals
+                            ),
+                        )
                     continue
                 else:
                     # Modulate rather than replace: the texture says what
@@ -2941,7 +2970,13 @@ def rasterize_shaded(
                 # as its alpha, as three.js's `MeshDepthMaterial` writes it.
                 if a.kind != DEPTH:
                     shaded.a = 1
-                target.write(x, y, shaded, data)
+                target.write(
+                    x,
+                    y,
+                    shaded,
+                    data,
+                    _kept_normal(facing, a.kind, lighting, keeps_normals),
+                )
         row = row + down
 
 

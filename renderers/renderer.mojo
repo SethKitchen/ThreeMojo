@@ -2726,6 +2726,33 @@ def camera_up[C: Camera](scene: Scene, camera: C) raises -> Vector3:
     return up^
 
 
+def camera_back[C: Camera](scene: Scene, camera: C) raises -> Vector3:
+    """Return which way is back for `camera`, in world space: its view
+    space +z axis, the way it looks away from.
+
+    With `camera_up` it is the whole view rotation, which a render
+    target's normal attachment is written in; see
+    `lights.lighting.view_direction`. Asked once per frame, as
+    `camera_up` is.
+
+    Args:
+        scene: The scene the camera may be riding a node of, updated.
+        camera: The camera to ask.
+
+    Returns:
+        The camera's own back axis, a unit vector in world space.
+
+    Raises:
+        Error: If the camera rides a node the scene does not have, or the
+            scene is stale.
+    """
+    var to_world = camera.view_matrix_in(scene)
+    to_world.invert()
+    var back = to_world.transform_direction(Vector3(0, 0, 1))
+    back.normalize()
+    return back^
+
+
 def _scaled(rect: Rect, factor: Int) -> Rect:
     """Return `rect` with its corner and size multiplied by `factor`: where
     a rectangle of output pixels lands on a supersampled frame."""
@@ -5025,7 +5052,10 @@ struct Renderer(Movable):
 
         Args:
             target: The target to draw into. It must be the renderer's
-                size.
+                size. Its type and outputs are its own: a target with an
+                `OUTPUT_NORMAL` attachment receives every opaque
+                triangle's view-space normal in the same pass, three.js's
+                multiple render targets. See `render.target`.
             scene: The transform hierarchy, and the meshes and lights in it.
             assets: The geometry, materials and textures the meshes name.
             camera: The camera to project through.
@@ -5064,7 +5094,8 @@ struct Renderer(Movable):
         # -- or from one fixed direction, if the camera's rays are parallel
         # rather than converging. See `toward_camera`. Which way is up for
         # the camera goes with them too, for the frame a `MATCAP` surface
-        # is looked up in. See `camera_up`.
+        # is looked up in, and which way is back, for a target that keeps
+        # view-space normals. See `camera_up`.
         var lighting = self._lighting(scene, assets, camera)
         # The scene's fog as the rasterizer takes it. Each corner already
         # carries the depth `prepare` measured for it along this view.
@@ -5137,6 +5168,7 @@ struct Renderer(Movable):
             shadows=self.shadow_maps(scene, assets, camera.visible_layers()),
             ltc=self.ltc_tables(),
             spot_maps=self._projected(scene, assets, camera.visible_layers()),
+            back=camera_back(scene, camera),
         )
 
     def to_target[C: Camera](self, scene: Scene, camera: C) raises -> Matrix4:

@@ -4,7 +4,7 @@
 
 ![ACES tone mapping holds a bright sphere as exposure rises](out/exposure.png)
 
-three.js: `WebGLRenderTarget` and the canvas. A render target can be read back as a texture; see [Textures](Textures#from-a-render).
+three.js: `WebGLRenderTarget` and the canvas. A render target can be read back as a texture; see [Textures](Textures#from-a-render). A target can keep light above one; see [Float render targets](#float-render-targets). A target can also keep a normal beside the light in the same pass; see [Multiple render targets](#multiple-render-targets).
 
 ## Color and FloatColor
 
@@ -36,8 +36,8 @@ three.js: `WebGLRenderTarget` and the canvas. A render target can be read back a
 
 | Member | Meaning |
 |---|---|
-| `RenderTarget(width, height, clear)` | A target cleared to a color. |
-| `write(x, y, color, data=False)` | Replace a pixel. |
+| `RenderTarget(width, height, clear, type=UNSIGNED_BYTE_TARGET, outputs=color_only())` | A target cleared to a color. See [Float render targets](#float-render-targets) and [Multiple render targets](#multiple-render-targets). |
+| `write(x, y, color, data=False, normal=Vector3(0, 0, 0))` | Replace a pixel. The normal attachment keeps `normal`. |
 | `blend(x, y, color)` | Source-over in premultiplied linear light. |
 | `is_data(x, y) -> Bool` | Whether the pixel holds data rather than light. |
 | `test_depth(x, y, z) -> Bool` | Keep and record `z` when it is nearer. |
@@ -51,7 +51,11 @@ three.js: `WebGLRenderTarget` and the canvas. A render target can be read back a
 | `shown(x, y, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Color` | One pixel as it will resolve. |
 | `resolve(workers=1, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Framebuffer` | Unpremultiply, tone map and encode every pixel. |
 | `texture(wrap=CLAMP, filter=BILINEAR, mipmapped=True, alpha=COVERAGE, workers=1, tone_mapping=NO_TONE_MAPPING, exposure=1.0) -> Texture` | `resolve`, then the image as a texture a later draw can sample. three.js's `WebGLRenderTarget.texture`. |
-| `depth_texture(wrap=CLAMP) -> Texture` | The depth as it stands, as a gray texture. three.js's `DepthTexture`. |
+| `depth_texture(wrap=CLAMP, type=UNSIGNED_BYTE_TARGET) -> Texture` | The depth as it stands, as a gray texture. three.js's `DepthTexture`. Pass `type=FLOAT_TARGET` for the depth itself. |
+| `count() -> Int` | How many color attachments the target has. three.js's `count`. |
+| `attachment(index) -> FloatImage` | One color attachment, as the target's type stores it. |
+| `attachment_texture(index, wrap=CLAMP, filter=BILINEAR, mipmapped=False) -> Texture` | One color attachment as a float texture. three.js's `textures[index]`. |
+| `has_normals() -> Bool`, `normal_at(x, y) -> Vector3` | Whether the target has a normal attachment, and the normal at a pixel. |
 
 Nothing is clamped before `resolve`. Overexposed light survives every step.
 
@@ -68,6 +72,71 @@ Pass `data=True` to `write` when the color is not light. A normal material, a de
 A write replaces the pixel, so the pixel takes the fragment's answer about what it holds. A blend mixes into what is there, and a mixture with light in it is light. Only light blends, because the rasterizers refuse a blended data triangle. So `blend` takes no flag and always leaves the pixel holding light.
 
 A blend whose effective alpha is zero changes nothing at all. Source-over hides nothing and adds nothing there, so it adds no color, no depth and no answer about what the pixel holds. It used to take the data flag before it read the alpha. An invisible fragment could then put the tone mapping curve back onto a normal's bytes. The rule applies to `blend` alone. A `write` at alpha zero still replaces the pixel.
+
+## Float render targets
+
+A `FLOAT_TARGET` keeps light above one, with no clamp, no tone mapping and no sRGB encode. three.js: `WebGLRenderTarget` with `type: FloatType`. Pass the type to the constructor, draw into the target, and read it with `attachment` or `attachment_texture`.
+
+```mojo
+var target = RenderTarget(WIDTH, HEIGHT, Color(0, 0, 0), FLOAT_TARGET)
+renderer.render_into(target, scene, assets, camera)
+var light = target.attachment_texture(0)
+```
+
+`TargetType` is a type. `is_valid` names the three values. A bare integer does not compile. `check_target` refuses any other value.
+
+| Type | three.js | What a readout holds |
+|---|---|---|
+| `UNSIGNED_BYTE_TARGET` | `UnsignedByteType` | Each channel clamped to zero through one and rounded to a 255th. The default. |
+| `HALF_FLOAT_TARGET` | `HalfFloatType` | Each channel rounded to the nearest half float. A value past 65504 is held at 65504. |
+| `FLOAT_TARGET` | `FloatType` | Each channel as the target holds it. |
+
+`attachment(0)` gives the light with straight alpha, row-major from the top, four floats a pixel. `stored(value, type)` is the rounding each type applies. `attachment_texture(0)` gives the same numbers in a `FLOAT_TYPE`, `LINEAR` texture, so a later draw samples them as they are.
+
+A pixel that holds data, such as a normal material's bytes, reads as the fractions its bytes show. `resolve` and `texture` do not change with the type. A display always gets bytes.
+
+`depth_texture(type=FLOAT_TARGET)` gives the window depth in a float texture. Zero is the near plane and one is the far plane. A pixel where nothing was drawn holds one. three.js: a `DepthTexture` with `type: FloatType`. The default type gives the eight-bit preview.
+
+This port differs from three.js in two ways:
+
+- Every target accumulates in 32-bit floats, whatever its type. The type applies once, when you read the target. three.js rounds at each write, so a byte target that blends many layers can lose more there.
+- A half float target holds 65504 for a larger value. A GPU writes infinity. A texture refuses infinity, so the port keeps the largest finite half.
+
+## Multiple render targets
+
+A target with the `OUTPUT_NORMAL` output keeps the view-space normal of each pixel beside its light. One pass fills both. three.js: `WebGLRenderTarget` with `count: 2`, and a shader that writes `gNormal`.
+
+```mojo
+var outputs: List[TargetOutput] = [OUTPUT_COLOR, OUTPUT_NORMAL]
+var target = RenderTarget(WIDTH, HEIGHT, Color(0, 0, 0), FLOAT_TARGET, outputs)
+renderer.render_into(target, scene, assets, camera)
+var normals = target.attachment_texture(1)
+```
+
+This port has no user shaders, so `TargetOutput` names what a fragment can write. `is_valid` names the two values. A bare integer does not compile.
+
+| Output | Attachment holds |
+|---|---|
+| `OUTPUT_COLOR` | The lit color. It must be the first output. |
+| `OUTPUT_NORMAL` | The unit normal of the nearest opaque surface, in view space. It is the normal after any normal map or bump map. |
+
+`check_target` refuses an empty list and a first output that is not the color. It also refuses an output that is none of the two, and an output that repeats. `color_only()` is the default list.
+
+Every opaque triangle writes its normal where it writes its color. That includes an unlit triangle and the `SHADE_UV` view. A blended triangle keeps no depth, so it leaves the normal alone too. A line or a point has no surface, so it clears the normal. `clear_inside` clears it too. A pixel with no normal holds zero.
+
+`attachment(1)` holds the normal with an alpha of one, or zero where no surface wrote one. In a float or half float target the normal is raw, from minus one to one. A byte target cannot hold a negative number, so it packs the normal as three.js's `packNormalToRGB` does: halved and moved up by a half.
+
+The renderer turns each normal into view space with the camera's up and back axes. `Lighting.back` and `camera_back` give the back axis. `view_direction` does the turn, and both rasterizers call it.
+
+The screen-space passes read the attachment. The composer draws its frame with a normal attachment when an SSAO, SAO or SSR pass is on. See [Post-processing](Post-processing#the-depth-and-the-normals).
+
+On the GPU, `GpuRenderer.read_back_target(type, outputs)` copies the light, the normal, the depth and the data flag into a `RenderTarget`. The result is the target the CPU fills from the same draw. `tests/test_gpu.mojo` compares the two. See [GPU backend](GPU-backend#gpurenderer).
+
+This port differs from three.js in three ways:
+
+- Only two outputs exist. three.js lets a shader write anything to any attachment.
+- A blend does not touch the normal. WebGL blends every attachment with the same equation. A blended normal means nothing, so the port keeps the normal of the surface that owns the depth.
+- A clear sets the normal to zero. WebGL clears every attachment to the clear color.
 
 ## Tone mapping
 
