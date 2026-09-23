@@ -159,7 +159,11 @@ def face_up(face: Int) -> Vector3:
     on the y axis, where y itself is the view direction, the z axis: away
     from the viewer for the top face and toward the viewer for the bottom
     one. three.js's `CubeCamera` sets each of its six cameras up this way
-    under the WebGL coordinate system, and this is that table.
+    under the WebGL coordinate system, and this is that table. three.js
+    also gives the six a field of view of minus ninety degrees, which turns
+    each view a half turn, and stores it from the bottom row up. Its face
+    is thus this face with each row mirrored, and `flipEnvMap` of one reads
+    each texel in the same direction as `face_uv` reads it here.
 
     Args:
         face: `POSITIVE_X` through `NEGATIVE_Z`.

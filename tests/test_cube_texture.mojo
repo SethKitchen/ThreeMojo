@@ -395,6 +395,55 @@ def test_images_seen_from_outside_are_where_three_js_shows_them() raises:
     assert_equal(cube.face(0).filter, NEAREST)
 
 
+def _render_target_direction(face: Int, column: Int, row: Int) -> Vector3:
+    """Return the direction three.js reads one texel of a cube render
+    target in.
+
+    three.js 0.180's `CubeCamera` renders each face with a field of view of
+    minus ninety degrees, which turns the view a half turn, into a WebGL
+    framebuffer whose row zero is the bottom. `flipEnvMap` is one for a
+    render target, so the OpenGL cube map table reads it as it is:
+    `column` is `s` and `row` is `t`, both counting from zero.
+    """
+    var sc = (Float32(column) + 0.5) - 1
+    var tc = (Float32(row) + 0.5) - 1
+    if face == 0:
+        return Vector3(1, -tc, -sc)
+    if face == 1:
+        return Vector3(-1, -tc, sc)
+    if face == 2:
+        return Vector3(sc, 1, tc)
+    if face == 3:
+        return Vector3(sc, -1, -tc)
+    if face == 4:
+        return Vector3(sc, -tc, 1)
+    return Vector3(-sc, -tc, -1)
+
+
+def test_a_rendered_face_is_three_js_render_target_face_mirrored() raises:
+    # A face that `render_cube` returns holds the rows of three.js's cube
+    # render target face in the same order, and each row mirrored: this
+    # port's face is the camera's own view, and three.js's is read through
+    # a left-handed table. Each texel stands for the same direction.
+    var frames = List[Framebuffer]()
+    for face in range(FACE_COUNT):
+        var pixels = List[UInt8]()
+        for y in range(2):
+            for x in range(2):
+                var tint = _texel(face, x, y)
+                pixels.append(tint.r)
+                pixels.append(tint.g)
+                pixels.append(tint.b)
+                pixels.append(255)
+        frames.append(Framebuffer(2, 2, pixels^))
+    var cube = cube_texture_of(frames, NEAREST)
+    for face in range(FACE_COUNT):
+        for y in range(2):
+            for x in range(2):
+                var seen = cube.sample(_render_target_direction(face, 1 - x, y))
+                assert_color(seen.encode(), _texel(face, x, y))
+
+
 def test_a_cube_can_be_built_with_a_chain_and_a_space() raises:
     var cube = cube_texture_from(
         six_images(RED, GREEN),

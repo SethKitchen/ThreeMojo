@@ -19,6 +19,12 @@ table of six ups, and the sampler reads the faces back with the same two
 tables. So a cube rendered here reflects the scene it was rendered from with
 no flip in between; see `render.cube_texture`.
 
+three.js's face cameras have a field of view of minus ninety degrees, which
+turns each view a half turn, and WebGL stores a render from the bottom row
+up. A face of three.js's cube render target is thus a face here with each
+row mirrored. It samples it with `flipEnvMap` of one, through OpenGL's
+left-handed table, so each texel stands for the same direction in both.
+
 **The mirror hides itself with layers.** A cube camera at the center of a
 sphere sees the inside of the sphere and nothing else. three.js's examples
 set the sphere's `visible` off around the update; here the camera has
