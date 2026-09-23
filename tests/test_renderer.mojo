@@ -55,6 +55,13 @@ from lights.light import (
 from lights.ltc import LtcTables, load_ltc_tables
 from core.layers import Layers
 from lights.lighting import Lighting
+from lights.shadow import (
+    BASIC_SHADOW_MAP,
+    PCF_SHADOW_MAP,
+    PCF_SOFT_SHADOW_MAP,
+    VSM_SHADOW_MAP,
+    ShadowMapType,
+)
 from core.fog import FogKind, exp2_fog, linear_fog, no_fog
 from render.tonemap import (
     LINEAR_TONE_MAPPING,
@@ -5356,6 +5363,71 @@ def test_a_block_casts_a_shadow_on_the_floor_under_it() raises:
     )
     assert_equal(plain[0], plain[1])
     assert_equal(len(renderer.shadow_maps(dark_sun, assets)), 0)
+
+
+def test_every_shadow_map_type_casts_the_blocks_shadow() raises:
+    # three.js's `shadowMap.type`, from every kind of light: each draws
+    # the shadow, and each map carries the type it is read with.
+    var assets = Assets()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    renderer.set_background(Color(0, 0, 0))
+    assert_true(renderer.shadow_map_type == PCF_SHADOW_MAP)
+    for kind in [
+        BASIC_SHADOW_MAP,
+        PCF_SHADOW_MAP,
+        PCF_SOFT_SHADOW_MAP,
+        VSM_SHADOW_MAP,
+    ]:
+        renderer.shadow_map_type = kind
+        for light in ["sun", "beam", "bulb"]:
+            var scene = shadow_scene(assets, True, True, light)
+            var seen = floor_under_and_beside(
+                renderer.render(scene, assets, camera_at(0, 6, 3))
+            )
+            assert_true(seen[1] > 100, "the floor beside the block was dark")
+            assert_true(Int(seen[0]) + 60 < Int(seen[1]), "no shadow fell")
+            var maps = renderer.shadow_maps(scene, assets)
+            assert_true(maps[0].shadow_type == kind)
+    # A variance map keeps two squares; a point light's cube stays six.
+    renderer.shadow_map_type = VSM_SHADOW_MAP
+    var sun = shadow_scene(assets, True, True, "sun")
+    assert_equal(len(renderer.shadow_maps(sun, assets)[0].depths), 2 * 64 * 64)
+    var bulb = shadow_scene(assets, True, True, "bulb")
+    assert_equal(len(renderer.shadow_maps(bulb, assets)[0].depths), 6 * 64 * 64)
+    # A type that is none of the four is refused before a map is drawn.
+    renderer.shadow_map_type = ShadowMapType(4)
+    with assert_raises():
+        _ = renderer.shadow_maps(sun, assets)
+    with assert_raises():
+        _ = renderer.render(sun, assets, camera_at(0, 6, 3))
+
+
+def test_a_variance_map_draws_the_meshes_that_receive() raises:
+    # three.js draws every receiver into a variance map: the floor, which
+    # receives and does not cast, fills the map under `VSM_SHADOW_MAP`
+    # and leaves it empty under the others.
+    var assets = Assets()
+    var renderer = Renderer(WIDTH, HEIGHT)
+    var scene = shadow_scene(assets, False, True, "sun")
+    var middle = 32 * 64 + 32
+    var empty = renderer.shadow_maps(scene, assets)[0].depths.copy()
+    assert_true(empty[middle] > 1, "a receiver was drawn into a PCF map")
+    renderer.shadow_map_type = VSM_SHADOW_MAP
+    var full = renderer.shadow_maps(scene, assets)[0].depths.copy()
+    assert_true(full[middle] < 1, "the receiver was not drawn")
+    # And into a point light's cube as well.
+    var lit = shadow_scene(assets, False, True, "bulb")
+    var cube = renderer.shadow_maps(lit, assets)[0].depths.copy()
+    var drawn = 0
+    for texel in range(len(cube)):
+        if cube[texel] < 1:
+            drawn += 1
+    assert_true(drawn > 0, "the receiver was not drawn into the cube")
+    # The floor does not shadow itself.
+    var seen = floor_under_and_beside(
+        renderer.render(scene, assets, camera_at(0, 6, 3))
+    )
+    assert_equal(seen[0], seen[1])
 
 
 def test_a_spot_light_casts_a_shadow_through_its_own_camera() raises:

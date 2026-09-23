@@ -43,8 +43,20 @@ gives an edge as hard as the map's texels, which is what a shadow map
 looks like at a glance and what three.js's `BasicShadowMap` does. Its
 default is `PCFShadowMap`: nine taps in a three-by-three square of
 `radius` texels around the fragment, each compared on its own, averaged.
-That is `pcf_shadow` below, the same nine offsets in the same order on
-both backends.
+That is `ShadowMap.lit` below, the same nine offsets in the same order
+on both backends.
+
+**The renderer picks the filter.** three.js's `renderer.shadowMap.type`
+is `Renderer.shadow_map_type` here, a `ShadowMapType`, and every map it
+draws carries it. `BASIC_SHADOW_MAP` compares one texel.
+`PCF_SOFT_SHADOW_MAP` is a three-texel box: sixteen comparisons around
+the fragment, the outer ones weighed by how far the fragment lies inside
+its texel, which `soft_shadow` sums as three.js's `getShadow` does.
+`VSM_SHADOW_MAP` keeps two numbers per texel, the mean of the depth and
+its spread, blurred across `radius` texels in `blur_samples` steps by
+`vsm_moments`, and reads them with Chebyshev's bound, `vsm_shadow`. A
+point light's cube keeps its nine taps under both, and one tap under
+`BASIC_SHADOW_MAP`, as three.js's `getPointShadow` does.
 
 **Two biases, and why.** A surface compared against its own depth is
 half in shadow, because the map's depth is quantized and a fragment
@@ -64,13 +76,57 @@ compares `gl_FragCoord.z`, so a bias means the same number here as there.
 from math.vector3 import Vector3
 from render.texture import Texture
 from render.texture_store import TextureId
-from std.math import isfinite, max, min, sqrt
+from std.math import floor, isfinite, max, min, sqrt
 from units.si import Length, METER
 
+
+@fieldwise_init
+struct ShadowMapType(Equatable, ImplicitlyCopyable, Writable):
+    """Which filter a renderer reads its shadow maps with, three.js's
+    `renderer.shadowMap.type`, as a type rather than an int.
+
+    See `core.object3d.NodeId` for why. The type stops a bare integer at
+    compile time; it does not stop `ShadowMapType(7)`, which
+    `Renderer.shadow_maps`, `ShadowMap` and `Lighting` refuse.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of three.js's four shadow map types.
+
+        Returns:
+            Whether it is `BASIC_SHADOW_MAP`, `PCF_SHADOW_MAP`,
+            `PCF_SOFT_SHADOW_MAP` or `VSM_SHADOW_MAP`.
+        """
+        return (
+            self == BASIC_SHADOW_MAP
+            or self == PCF_SHADOW_MAP
+            or self == PCF_SOFT_SHADOW_MAP
+            or self == VSM_SHADOW_MAP
+        )
+
+
+# three.js's `BasicShadowMap`: one texel compared, a hard edge.
+comptime BASIC_SHADOW_MAP = ShadowMapType(0)
+# three.js's `PCFShadowMap`, its default: nine comparisons `radius` texels
+# apart, averaged.
+comptime PCF_SHADOW_MAP = ShadowMapType(1)
+# three.js's `PCFSoftShadowMap`: sixteen comparisons weighed into a box
+# three texels wide, whatever the radius.
+comptime PCF_SOFT_SHADOW_MAP = ShadowMapType(2)
+# three.js's `VSMShadowMap`: the depth's mean and spread, blurred, read
+# with Chebyshev's bound.
+comptime VSM_SHADOW_MAP = ShadowMapType(3)
+
 # three.js's `LightShadow` defaults: a map five hundred and twelve texels
-# a side, no bias, one texel of blur.
+# a side, no bias, one texel of blur, and eight blur samples for a
+# variance map.
 comptime DEFAULT_MAP_SIZE = 512
 comptime DEFAULT_SHADOW_RADIUS = Float32(1.0)
+comptime DEFAULT_BLUR_SAMPLES = 8
+# The most samples each of a variance map's two blur passes takes.
+comptime MAX_BLUR_SAMPLES = 256
 # three.js's shadow cameras: half a meter to five hundred, and a
 # directional light's five meters to each side.
 comptime DEFAULT_SHADOW_NEAR = Length(0.5, METER)
@@ -79,14 +135,25 @@ comptime DEFAULT_SHADOW_EXTENT = Length(5.0, METER)
 # The largest map this project builds: a square of this many texels a
 # side is sixty-four million depths.
 comptime MAX_MAP_SIZE = 8192
-# How many taps `pcf_shadow` averages, three by three.
+# How many taps `PCF_SHADOW_MAP` averages, three by three.
 comptime PCF_TAPS = 9
+# Which of the nine taps is the fragment's own texel, with no offset.
+comptime CENTER_TAP = 4
+# How many comparisons `soft_shadow` weighs, four by four.
+comptime SOFT_TAPS = 16
+# The two ends of three.js's `VSMShadow` ramp: a Chebyshev bound below
+# the first is dark and above the second is lit, which cuts light bleed.
+comptime VSM_DARK = Float32(0.3)
+comptime VSM_LIT = Float32(0.95)
 # How many floats a shadow map's header takes in the flat light buffer:
-# its size, its bias, its normal bias, its radius, then its sixteen-float
-# frame; the depths follow. See `render.gpu.flatten_lights`. A point
-# light's cube puts its bulb's position, its near plane and its far plane
-# in the first five of the frame's floats instead, and zeros after them.
-comptime SHADOW_HEADER = 20
+# its size, its bias, its normal bias, its radius, its sixteen-float
+# frame, then its `ShadowMapType`; the depths follow. See
+# `render.gpu.flatten_lights`. A point light's cube puts its bulb's
+# position, its near plane and its far plane in the first five of the
+# frame's floats instead, and zeros after them.
+comptime SHADOW_HEADER = 21
+# Where in the header the `ShadowMapType` is.
+comptime SHADOW_TYPE_AT = 20
 # How many faces a point light's cube has, and how many texels of one
 # face of its map the nine taps spread `radius` over: three.js lays the six
 # out on a texture four faces wide and two high and offsets a tap by the
@@ -127,6 +194,9 @@ struct LightShadow(ImplicitlyCopyable):
     # `shadow.camera.left` through `top` as one number. A spot light's
     # camera takes its width from the cone instead.
     var extent: Length
+    # How many samples each of a variance map's two blur passes takes,
+    # three.js's `blurSamples`. Read only under `VSM_SHADOW_MAP`.
+    var blur_samples: Int
 
     def __init__(out self):
         """Start at three.js's defaults."""
@@ -137,6 +207,7 @@ struct LightShadow(ImplicitlyCopyable):
         self.near = DEFAULT_SHADOW_NEAR
         self.far = DEFAULT_SHADOW_FAR
         self.extent = DEFAULT_SHADOW_EXTENT
+        self.blur_samples = DEFAULT_BLUR_SAMPLES
 
     def validate(self) raises:
         """Refuse numbers a shadow map cannot be built from.
@@ -144,7 +215,8 @@ struct LightShadow(ImplicitlyCopyable):
         Raises:
             Error: If the map size is below one or above `MAX_MAP_SIZE`;
                 the bias or the normal bias is not finite; the radius is
-                negative or not finite; the near plane is negative, the
+                negative or not finite; the blur samples are below one or
+                above `MAX_BLUR_SAMPLES`; the near plane is negative, the
                 far plane not beyond it, or either not finite; or the
                 extent is not a positive finite length.
         """
@@ -154,6 +226,8 @@ struct LightShadow(ImplicitlyCopyable):
             raise Error("A shadow bias must be finite")
         if not isfinite(self.radius) or self.radius < 0:
             raise Error("A shadow radius cannot be negative")
+        if self.blur_samples < 1 or self.blur_samples > MAX_BLUR_SAMPLES:
+            raise Error("A shadow's blur takes one to 256 samples")
         var near = self.near.to(METER)
         var far = self.far.to(METER)
         if not isfinite(near) or not isfinite(far) or near < 0 or far <= near:
@@ -182,11 +256,16 @@ struct ShadowMap(Movable):
     # major as `Matrix4` is, as sixteen floats so the kernel can hold it.
     var frame: SIMD[DType.float32, 16]
     # One normalized device depth per texel, row-major from the top,
-    # infinite where nothing was drawn.
+    # infinite where nothing was drawn. Under `VSM_SHADOW_MAP`, two
+    # squares instead: the blurred mean of the depth, from zero at the
+    # near plane to one at the far, then its blurred spread, as
+    # `vsm_moments` makes them.
     var depths: List[Float32]
     var bias: Float32
     var normal_bias: Float32
     var radius: Float32
+    # Which filter reads the map; the renderer's `shadow_map_type`.
+    var shadow_type: ShadowMapType
     # Whether this is a point light's six faces rather than one square.
     # A cube's depths are six squares, face by face in `cube_direction`
     # order, each holding the distance from the bulb from zero at the
@@ -207,6 +286,7 @@ struct ShadowMap(Movable):
         bias: Float32,
         normal_bias: Float32,
         radius: Float32,
+        shadow_type: ShadowMapType = PCF_SHADOW_MAP,
     ) raises:
         """Adopt a rendered depth square.
 
@@ -214,19 +294,28 @@ struct ShadowMap(Movable):
             light: Which of the scene's lights drew it.
             size: How many texels a side.
             frame: World space to the light's clip space, column major.
-            depths: `size * size` normalized device depths, from the top.
+            depths: `size * size` normalized device depths, from the top,
+                or under `VSM_SHADOW_MAP` the `2 * size * size` means and
+                spreads `vsm_moments` returns.
             bias: What is added to a fragment's depth before it is compared.
             normal_bias: How far a fragment is moved along its normal, in
                 meters, before it is projected.
             radius: How many texels the taps spread over.
+            shadow_type: Which filter reads the map.
 
         Raises:
-            Error: If the size is not positive or the depths do not fill
-                the square.
+            Error: If the size is not positive, the type is none of the
+                four, or the depths do not fill the square, or two squares
+                under `VSM_SHADOW_MAP`.
         """
         if size <= 0:
             raise Error("A shadow map must be at least one texel a side")
-        if len(depths) != size * size:
+        if not shadow_type.is_valid():
+            raise Error("A shadow map type that is none of the four")
+        var squares = 1
+        if shadow_type == VSM_SHADOW_MAP:
+            squares = 2
+        if len(depths) != squares * size * size:
             raise Error("A shadow map's depths must fill its square")
         self.light = light
         self.size = size
@@ -235,6 +324,7 @@ struct ShadowMap(Movable):
         self.bias = bias
         self.normal_bias = normal_bias
         self.radius = radius
+        self.shadow_type = shadow_type
         self.cube = False
         self.origin = Vector3(0, 0, 0)
         self.near = 0
@@ -252,6 +342,7 @@ struct ShadowMap(Movable):
         bias: Float32,
         normal_bias: Float32,
         radius: Float32,
+        shadow_type: ShadowMapType = PCF_SHADOW_MAP,
     ) raises:
         """Adopt a point light's six rendered faces, three.js's
         `PointLightShadow` map.
@@ -270,14 +361,18 @@ struct ShadowMap(Movable):
             normal_bias: How far a fragment is moved along its normal, in
                 meters, before it is measured.
             radius: How far the taps spread; see `point_shadow_tap`.
+            shadow_type: Which filter reads the cube: one tap under
+                `BASIC_SHADOW_MAP` and nine under the other three.
 
         Raises:
-            Error: If the size is not positive, the depths do not fill six
-                squares, or the far plane does not lie beyond the near
-                plane.
+            Error: If the size is not positive, the type is none of the
+                four, the depths do not fill six squares, or the far plane
+                does not lie beyond the near plane.
         """
         if size <= 0:
             raise Error("A shadow map must be at least one texel a side")
+        if not shadow_type.is_valid():
+            raise Error("A shadow map type that is none of the four")
         if len(depths) != CUBE_FACES * size * size:
             raise Error("A point light's shadow must fill six square faces")
         if not (far > near):
@@ -291,6 +386,7 @@ struct ShadowMap(Movable):
         self.bias = bias
         self.normal_bias = normal_bias
         self.radius = radius
+        self.shadow_type = shadow_type
         self.cube = True
         self.origin = origin
         self.near = near
@@ -306,7 +402,8 @@ struct ShadowMap(Movable):
             normal: Its unit normal, for the normal bias.
 
         Returns:
-            The fraction of the nine taps that found nothing in the way.
+            The fraction of the light that found nothing in the way, by
+            the map's `shadow_type`.
         """
         if self.cube:
             return self._cube_lit(position, normal)
@@ -315,6 +412,39 @@ struct ShadowMap(Movable):
         )
         if not inside_shadow_map(place):
             return 1
+        if self.shadow_type == BASIC_SHADOW_MAP:
+            return shadow_tap(
+                self.depths[shadow_texel(place, CENTER_TAP, 0, self.size)],
+                place.z,
+                self.bias,
+            )
+        if self.shadow_type == PCF_SOFT_SHADOW_MAP:
+            var taps = SIMD[DType.float32, SOFT_TAPS](0)
+            for tap in range(SOFT_TAPS):  # pragma: no branch
+                taps[tap] = shadow_tap(
+                    self.depths[soft_texel(place, tap, self.size)],
+                    place.z,
+                    self.bias,
+                )
+            return soft_shadow(
+                taps,
+                soft_fraction(place.x, self.size),
+                soft_fraction(place.y, self.size),
+            )
+        if self.shadow_type == VSM_SHADOW_MAP:
+            var across = place.x * Float32(self.size)
+            var down = place.y * Float32(self.size)
+            var square = self.size * self.size
+            var corners = SIMD[DType.float32, 8](0)
+            for corner in range(4):  # pragma: no branch
+                var texel = bilinear_texel(across, down, corner, self.size)
+                corners[corner] = self.depths[texel]
+                corners[corner + 4] = self.depths[square + texel]
+            return vsm_shadow(
+                bilinear(corners, 0, across, down),
+                bilinear(corners, 4, across, down),
+                place.z + self.bias,
+            )
         var total = Float32(0)
         for tap in range(PCF_TAPS):  # pragma: no branch
             var texel = shadow_texel(place, tap, self.radius, self.size)
@@ -338,6 +468,8 @@ struct ShadowMap(Movable):
         var way = Vector3(
             toward.x / distance, toward.y / distance, toward.z / distance
         )
+        if self.shadow_type == BASIC_SHADOW_MAP:
+            return cube_tap(self.depths[cube_texel(way, self.size)], depth)
         var spread = point_shadow_spread(self.radius, self.size)
         var total = Float32(0)
         for tap in range(PCF_TAPS):  # pragma: no branch
@@ -492,6 +624,306 @@ def shadow_tap(stored: Float32, depth: Float32, bias: Float32) -> Float32:
     if depth + bias <= stored * 0.5 + 0.5:
         return 1
     return 0
+
+
+def _mix(low: Float32, high: Float32, weight: Float32) -> Float32:
+    """Return GLSL's `mix`: `low` at a weight of zero, `high` at one."""
+    return low * (1 - weight) + high * weight
+
+
+def _texel_at(column: Int, row: Int, size: Int) -> Int:
+    """Return a texel's index with its column and row held to the map, as
+    a map clamped to its edge reads past them."""
+    var across = column
+    var down = row
+    if across < 0:
+        across = 0
+    if across >= size:
+        across = size - 1
+    if down < 0:
+        down = 0
+    if down >= size:
+        down = size - 1
+    return down * size + across
+
+
+def soft_texel(place: Vector3, tap: Int, size: Int) -> Int:
+    """Return which texel one of `PCF_SOFT_SHADOW_MAP`'s sixteen taps reads.
+
+    three.js's `getShadow` moves the coordinate back to the corner of the
+    texel it lies nearest, `uv -= f * texelSize`, and reads a four-by-four
+    block from one texel before that corner to two after it. The taps go
+    across then down: tap `t` is `t % 4 - 1` texels across and `t // 4 - 1`
+    down from the texel just before the corner. A tap past an edge reads
+    the edge.
+
+    Args:
+        place: What `shadow_coordinate` returned.
+        tap: Which of the sixteen, zero through fifteen.
+        size: How many texels a side the map is.
+
+    Returns:
+        The texel's index, row-major from the top.
+    """
+    var column = Int(floor(place.x * Float32(size) + 0.5)) + tap % 4 - 2
+    var row = Int(floor(place.y * Float32(size) + 0.5)) + tap // 4 - 2
+    return _texel_at(column, row, size)
+
+
+def soft_fraction(coordinate: Float32, size: Int) -> Float32:
+    """Return how far past the nearest texel corner a coordinate lies, in
+    texels: three.js's `f = fract(uv * shadowMapSize + 0.5)`.
+
+    Args:
+        coordinate: One component of what `shadow_coordinate` returned.
+        size: How many texels a side the map is.
+
+    Returns:
+        Zero up to one.
+    """
+    var texels = coordinate * Float32(size) + 0.5
+    return texels - floor(texels)
+
+
+def soft_shadow(
+    taps: SIMD[DType.float32, SOFT_TAPS], across: Float32, down: Float32
+) -> Float32:
+    """Return what `PCF_SOFT_SHADOW_MAP` lets through: three.js's sum of
+    its sixteen comparisons, divided by nine.
+
+    The four middle taps count whole. The outer ones of each row and
+    column are mixed by the fractions, and the four corners by both, so
+    the sum is a box three texels wide centered on the fragment. The
+    radius plays no part, as in three.js.
+
+    Args:
+        taps: The sixteen comparisons, one or zero, in `soft_texel` order.
+        across: `soft_fraction` of the coordinate's x.
+        down: `soft_fraction` of the coordinate's y.
+
+    Returns:
+        The fraction of the light that found nothing in the way.
+    """
+    return (
+        taps[5]
+        + taps[6]
+        + taps[9]
+        + taps[10]
+        + _mix(taps[4], taps[7], across)
+        + _mix(taps[8], taps[11], across)
+        + _mix(taps[1], taps[13], down)
+        + _mix(taps[2], taps[14], down)
+        + _mix(
+            _mix(taps[0], taps[3], across),
+            _mix(taps[12], taps[15], across),
+            down,
+        )
+    ) * (Float32(1) / 9)
+
+
+def bilinear_texel(
+    across: Float32, down: Float32, corner: Int, size: Int
+) -> Int:
+    """Return which texel one of the four corners of a linear read takes.
+
+    A linear filter reads the four texels whose centers surround a point,
+    as three.js reads a variance map. Corner zero is up and left, one up
+    and right, two down and left, three down and right. A corner past an
+    edge reads the edge, as a map clamped to its edge does.
+
+    Args:
+        across: The point's x, in texels from the left edge.
+        down: The point's y, in texels from the top edge.
+        corner: Which of the four, zero through three.
+        size: How many texels a side the map is.
+
+    Returns:
+        The texel's index, row-major from the top.
+    """
+    var column = Int(floor(across - 0.5)) + corner % 2
+    var row = Int(floor(down - 0.5)) + corner // 2
+    return _texel_at(column, row, size)
+
+
+def bilinear_fraction(at: Float32) -> Float32:
+    """Return how far a point lies past the texel center before it: the
+    weight a linear filter gives the center after it.
+
+    Args:
+        at: The point, in texels from the edge.
+
+    Returns:
+        Zero up to one.
+    """
+    var shifted = at - 0.5
+    return shifted - floor(shifted)
+
+
+def bilinear(
+    corners: SIMD[DType.float32, 8], first: Int, across: Float32, down: Float32
+) -> Float32:
+    """Return a linear read from the four values at `bilinear_texel`'s
+    corners.
+
+    Args:
+        corners: Two sets of four corner values.
+        first: Where the set to read begins, zero or four.
+        across: The point's x, in texels from the left edge.
+        down: The point's y, in texels from the top edge.
+
+    Returns:
+        The value between them.
+    """
+    var right = bilinear_fraction(across)
+    return _mix(
+        _mix(corners[first], corners[first + 1], right),
+        _mix(corners[first + 2], corners[first + 3], right),
+        bilinear_fraction(down),
+    )
+
+
+def vsm_shadow(mean: Float32, spread: Float32, depth: Float32) -> Float32:
+    """Return what `VSM_SHADOW_MAP` lets through: three.js's `VSMShadow`.
+
+    A fragment no deeper than the mean is lit. Beyond it, Chebyshev's
+    inequality bounds how much of the texel's depth lies beyond the
+    fragment: the variance over the variance plus the squared distance.
+    three.js maps that bound from `VSM_DARK` to `VSM_LIT` onto zero to
+    one, which darkens the light that leaks between two casters.
+
+    Args:
+        mean: The blurred mean of the depth, zero to one.
+        spread: The blurred standard deviation of the depth.
+        depth: The fragment's depth in the map with the bias added.
+
+    Returns:
+        Zero up to one.
+    """
+    if depth <= mean:
+        return 1
+    var distance = depth - mean
+    var variance = spread * spread
+    var bound = variance / (variance + distance * distance)
+    return min(
+        Float32(1), max(Float32(0), (bound - VSM_DARK) / (VSM_LIT - VSM_DARK))
+    )
+
+
+def vsm_depth(ndc_depth: Float32) -> Float32:
+    """Return the depth a variance map starts from at one texel: the map's
+    zero-to-one depth, three.js's `gl_FragCoord.z`, and one where nothing
+    was drawn, as three.js clears its map to white.
+
+    Args:
+        ndc_depth: The rasterizer's depth, infinite where nothing was
+            drawn.
+
+    Returns:
+        Zero to one.
+    """
+    if ndc_depth > 1:
+        return 1
+    return ndc_depth * 0.5 + 0.5
+
+
+def vsm_offset(sample: Int, samples: Int) -> Float32:
+    """Return where one blur sample lies, in steps of `radius` texels:
+    three.js's `uvStart + i * uvStride`, from minus one to one.
+
+    Args:
+        sample: Which sample, from zero.
+        samples: How many the pass takes. One takes the texel itself.
+
+    Returns:
+        The offset.
+    """
+    if samples <= 1:
+        return 0
+    return -1 + Float32(sample) * (2 / Float32(samples - 1))
+
+
+def vsm_moments(
+    depths: List[Float32], size: Int, radius: Float32, samples: Int
+) -> List[Float32]:
+    """Return a variance map's blurred mean and spread from its depths:
+    three.js's `VSMPass`.
+
+    Two passes, each `samples` linear reads `radius` texels apart at most,
+    as three.js's `vsm.glsl.js` takes them. The first reads the depth down
+    each column and keeps its mean and standard deviation. The second
+    reads those across each row, turns each back into a mean square, and
+    keeps the mean and standard deviation of the whole. The variance is
+    held at zero or above before its root is taken, where rounding could
+    leave it below.
+
+    Args:
+        depths: `size * size` normalized device depths, row-major from the
+            top, infinite where nothing was drawn.
+        size: How many texels a side.
+        radius: How many texels the samples spread over each way.
+        samples: How many reads each pass takes, one or more.
+
+    Returns:
+        `size * size` means, then `size * size` standard deviations.
+    """
+    # `LightShadow.validate` holds the size and the samples at one or
+    # more, so no loop below runs zero times.
+    var square = size * size
+    var stored = List[Float32](capacity=square)
+    for texel in range(square):  # pragma: no branch
+        stored.append(vsm_depth(depths[texel]))
+    var weight = 1 / Float32(samples)
+    var columns = List[Float32](length=2 * square, fill=0)
+    for row in range(size):  # pragma: no branch
+        for column in range(size):  # pragma: no branch
+            var mean = Float32(0)
+            var squared = Float32(0)
+            var across = Float32(column) + 0.5
+            for sample in range(samples):  # pragma: no branch
+                # three.js's y runs up the map, and this map's rows down.
+                var down = (
+                    Float32(row) + 0.5 - vsm_offset(sample, samples) * radius
+                )
+                var corners = SIMD[DType.float32, 8](0)
+                for corner in range(4):  # pragma: no branch
+                    corners[corner] = stored[
+                        bilinear_texel(across, down, corner, size)
+                    ]
+                var depth = bilinear(corners, 0, across, down)
+                mean += depth
+                squared += depth * depth
+            mean *= weight
+            squared *= weight
+            columns[row * size + column] = mean
+            columns[square + row * size + column] = sqrt(
+                max(Float32(0), squared - mean * mean)
+            )
+    var moments = List[Float32](length=2 * square, fill=0)
+    for row in range(size):  # pragma: no branch
+        for column in range(size):  # pragma: no branch
+            var mean = Float32(0)
+            var squared = Float32(0)
+            var down = Float32(row) + 0.5
+            for sample in range(samples):  # pragma: no branch
+                var across = (
+                    Float32(column) + 0.5 + vsm_offset(sample, samples) * radius
+                )
+                var corners = SIMD[DType.float32, 8](0)
+                for corner in range(4):  # pragma: no branch
+                    var texel = bilinear_texel(across, down, corner, size)
+                    corners[corner] = columns[texel]
+                    corners[corner + 4] = columns[square + texel]
+                var average = bilinear(corners, 0, across, down)
+                var spread = bilinear(corners, 4, across, down)
+                mean += average
+                squared += spread * spread + average * average
+            mean *= weight
+            squared *= weight
+            moments[row * size + column] = mean
+            moments[square + row * size + column] = sqrt(
+                max(Float32(0), squared - mean * mean)
+            )
+    return moments^
 
 
 def inside_point_shadow(distance: Float32, near: Float32, far: Float32) -> Bool:

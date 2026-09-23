@@ -108,11 +108,15 @@ from lights.light import DIRECTIONAL, POINT, SPOT, Light
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
 from lights.shadow import (
     CUBE_FACES,
+    PCF_SHADOW_MAP,
+    VSM_SHADOW_MAP,
     ShadowMap,
+    ShadowMapType,
     SpotLightMap,
     cube_direction,
     cube_stored,
     cube_up,
+    vsm_moments,
 )
 from lights.ltc import LtcTables
 from cameras.orthographic_camera import OrthographicCamera
@@ -687,6 +691,7 @@ def _draws(
     slack: Float32,
     mut skins: List[SkinPose],
     casters_only: Bool = False,
+    receivers_cast: Bool = False,
 ) raises -> List[_Draw]:
     """Return what the camera draws, in the order to draw it: opaque
     draws nearest first, then the translucent ones furthest first.
@@ -742,6 +747,9 @@ def _draws(
             mesh that does not cast, and not a skinned, instanced or
             batched mesh, an LOD, a sprite or a wide line, none of which
             casts yet.
+        receivers_cast: Whether a light's view also holds the meshes that
+            receive a shadow, as three.js draws them into a
+            `VSM_SHADOW_MAP`.
 
     Returns:
         The draws the camera makes, in the order to make them.
@@ -763,7 +771,8 @@ def _draws(
     var one: List[Matrix4] = [Matrix4()]
     for index in range(len(scene.meshes)):
         ref mesh = scene.meshes[index]
-        if casters_only and not mesh.cast_shadow:
+        var casts = mesh.cast_shadow or (receivers_cast and mesh.receive_shadow)
+        if casters_only and not casts:
             continue
         var geometry: List[GeometryId] = [mesh.geometry]
         # A mesh wearing a morph target is not where its geometry's bound
@@ -2538,6 +2547,10 @@ struct Renderer(Movable):
     # True to let each material's own planes cut it, three.js's
     # `localClippingEnabled`. False by default, as there.
     var local_clipping_enabled: Bool
+    # Which filter the shadow maps are read with, three.js's
+    # `shadowMap.type`. `PCF_SHADOW_MAP` by default, as there. See
+    # `lights.shadow`.
+    var shadow_map_type: ShadowMapType
 
     def __init__(out self, width: Int, height: Int, workers: Int = 1) raises:
         """Create a renderer with a dark background.
@@ -2569,6 +2582,7 @@ struct Renderer(Movable):
         self.ltc = LtcTables()
         self.clipping_planes = List[Plane]()
         self.local_clipping_enabled = False
+        self.shadow_map_type = PCF_SHADOW_MAP
 
     def set_antialias(mut self, enabled: Bool):
         """Turn supersampling on or off, three.js's `antialias`.
@@ -2800,6 +2814,7 @@ struct Renderer(Movable):
         wireframe: Bool,
         mut spans: List[_Span],
         casters_only: Bool = False,
+        receivers_cast: Bool = False,
     ) raises -> List[RasterVertex]:
         """Turn a scene into the triangles a rasterizer can fill.
 
@@ -2850,6 +2865,8 @@ struct Renderer(Movable):
                 order against the other kind's. Appended to.
             casters_only: Whether this is a light's view for a shadow
                 map, holding only the meshes that cast; see `_draws`.
+            receivers_cast: Whether that view also holds the meshes that
+                receive; see `_draws`.
 
         Returns:
             Raster vertices, three per triangle, in submission order, or
@@ -2914,6 +2931,7 @@ struct Renderer(Movable):
             far * CULL_SLACK,
             skins,
             casters_only,
+            receivers_cast,
         )
         # Whether the camera's rays converge, for a sprite that keeps its
         # size on the image; see `_emit_sprite`.
@@ -4521,6 +4539,14 @@ struct Renderer(Movable):
         `_draws`. What is kept is the target's depth, and the transform
         that put it there.
 
+        Each map carries the renderer's `shadow_map_type`, three.js's
+        `shadowMap.type`. Under `VSM_SHADOW_MAP` a directional or spot
+        light also draws the meshes that receive, as three.js does, and
+        keeps the blurred mean and spread of the depth that
+        `lights.shadow.vsm_moments` makes, across the shadow's `radius`
+        in its `blur_samples` steps. A point light's cube draws the
+        receiving meshes too but is not blurred, as three.js blurs none.
+
         `render_into` draws these itself. Call this to hand the same maps
         to `GpuRenderer.draw`, through `Lighting`.
 
@@ -4534,11 +4560,15 @@ struct Renderer(Movable):
             The maps, each naming its light by index.
 
         Raises:
-            Error: If a light is refused by `Light.validate`, a casting
-                light names a node or a target the scene lacks, a casting
+            Error: If the renderer's `shadow_map_type` is none of the four,
+                a light is refused by `Light.validate`, a casting light
+                names a node or a target the scene lacks, a casting
                 directional or spot light sits on its target, or anything
                 `prepare` raises for the casters.
         """
+        if not self.shadow_map_type.is_valid():
+            raise Error("A shadow map type that is none of the four")
+        var variance = self.shadow_map_type == VSM_SHADOW_MAP
         var maps = List[ShadowMap]()
         for index in range(len(scene.lights)):
             ref light = scene.lights[index]
@@ -4565,12 +4595,16 @@ struct Renderer(Movable):
                     shadow.far,
                 )
                 camera.place(at, aimed)
-                corners = self._casters(scene, assets, camera, shadow.map_size)
+                corners = self._casters(
+                    scene, assets, camera, shadow.map_size, variance
+                )
                 frame = camera.projection_matrix()
                 frame.multiply(camera.view_matrix_in(scene))
             else:
                 var camera = _spot_camera(light, at, aimed)
-                corners = self._casters(scene, assets, camera, shadow.map_size)
+                corners = self._casters(
+                    scene, assets, camera, shadow.map_size, variance
+                )
                 frame = camera.projection_matrix()
                 frame.multiply(camera.view_matrix_in(scene))
             var target = RenderTarget(
@@ -4587,15 +4621,24 @@ struct Renderer(Movable):
             var held = SIMD[DType.float32, 16](0)
             for element in range(16):  # pragma: no branch
                 held[element] = frame.elements[element]
+            var depths = target.depth.copy()
+            if variance:
+                depths = vsm_moments(
+                    target.depth,
+                    shadow.map_size,
+                    shadow.radius,
+                    shadow.blur_samples,
+                )
             maps.append(
                 ShadowMap(
                     index,
                     shadow.map_size,
                     held,
-                    target.depth.copy(),
+                    depths^,
                     shadow.bias,
                     shadow.normal_bias,
                     shadow.radius,
+                    self.shadow_map_type,
                 )
             )
         return maps^
@@ -4616,7 +4659,13 @@ struct Renderer(Movable):
             )
             camera.up = cube_up(face)
             camera.place(at, at + cube_direction(face))
-            var corners = self._casters(scene, assets, camera, size)
+            var corners = self._casters(
+                scene,
+                assets,
+                camera,
+                size,
+                self.shadow_map_type == VSM_SHADOW_MAP,
+            )
             var target = RenderTarget(size, size, Color(0, 0, 0))
             rasterize_all(
                 corners,
@@ -4648,6 +4697,7 @@ struct Renderer(Movable):
             bias=shadow.bias,
             normal_bias=shadow.normal_bias,
             radius=shadow.radius,
+            shadow_type=self.shadow_map_type,
         )
 
     def _projected(
@@ -4724,17 +4774,25 @@ struct Renderer(Movable):
 
     def _casters[
         C: Camera
-    ](self, scene: Scene, assets: Assets, camera: C, size: Int) raises -> List[
-        RasterVertex
-    ]:
-        """Return the triangles of the meshes that cast a shadow, as a
-        light's camera sees them, on a square of `size` pixels a side."""
+    ](
+        self,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        size: Int,
+        receivers_cast: Bool,
+    ) raises -> List[RasterVertex]:
+        """Return the triangles of the meshes that cast a shadow, and the
+        ones that receive when `receivers_cast`, as a light's camera sees
+        them, on a square of `size` pixels a side."""
         var spans = List[_Span]()
         var square = Renderer(size, size, workers=self.workers)
         # A material's planes cut its shadow under `clip_shadows`, which
         # this renderer's switch decides as it does for the frame.
         square.local_clipping_enabled = self.local_clipping_enabled
-        return square._prepared(scene, assets, camera, False, spans, True)
+        return square._prepared(
+            scene, assets, camera, False, spans, True, receivers_cast
+        )
 
     def clear_color(self, scene: Scene) raises -> Color:
         """Return what a frame of `scene` is cleared to: the scene's color

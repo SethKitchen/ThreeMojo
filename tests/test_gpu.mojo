@@ -44,7 +44,15 @@ from core.object3d import Object3D
 from core.object3d import NodeId, Object3D
 from core.scene import Scene
 from lights.light import ambient_light, directional_light, point_light
-from lights.shadow import SHADOW_HEADER, SPOT_MAP_FLOATS
+from lights.shadow import (
+    BASIC_SHADOW_MAP,
+    PCF_SHADOW_MAP,
+    PCF_SOFT_SHADOW_MAP,
+    SHADOW_HEADER,
+    SHADOW_TYPE_AT,
+    SPOT_MAP_FLOATS,
+    VSM_SHADOW_MAP,
+)
 from geometries.box import cube
 from geometries.sphere import sphere
 from math.matrix4 import translation
@@ -8110,7 +8118,7 @@ def a_shadowed_scene(mut assets: Assets, catcher: Bool = False) raises -> Scene:
 def test_the_light_buffer_carries_the_shadow_maps_after_the_lights() raises:
     # A directional light's seventh float and a spot light's fourteenth
     # say where their maps begin, and the maps follow with a header of
-    # twenty floats and then their depths.
+    # twenty-one floats and then their depths.
     var assets = Assets()
     var scene = a_shadowed_scene(assets)
     var renderer = Renderer(24, 18)
@@ -8130,6 +8138,9 @@ def test_the_light_buffer_carries_the_shadow_maps_after_the_lights() raises:
     assert_equal(flat[second_map], Float32(32))
     assert_equal(flat[second_map + 2], Float32(0.02))
     assert_equal(flat[first_map + 4], lighting.shadows[0].frame[0])
+    assert_equal(
+        flat[first_map + SHADOW_TYPE_AT], Float32(PCF_SHADOW_MAP.value)
+    )
     assert_equal(flat[first_map + SHADOW_HEADER], lighting.shadows[0].depths[0])
     # Without maps, the lights carry `NO_SHADOW`.
     var bare = flatten_lights(Lighting(scene))
@@ -8375,6 +8386,103 @@ def test_both_backends_agree_on_a_cube_shadow_and_a_spot_lights_map() raises:
         count_mismatches(cpu, renderer.render(scene, assets, camera)) > 20,
         "no map was projected",
     )
+
+
+def test_the_light_buffer_carries_each_maps_type_and_a_variance_maps_moments() raises:
+    # The header's last float is the map's `ShadowMapType`, and a variance
+    # map's two squares follow it: the means, then the spreads.
+    var assets = Assets()
+    var scene = a_shadowed_scene(assets)
+    var renderer = Renderer(24, 18)
+    renderer.shadow_map_type = VSM_SHADOW_MAP
+    var lighting = Lighting(scene, shadows=renderer.shadow_maps(scene, assets))
+    var flat = flatten_lights(lighting)
+    var first_map = LIGHTS_FIRST + 7 + 15
+    var second_map = first_map + SHADOW_HEADER + 2 * 48 * 48
+    assert_equal(len(flat), second_map + SHADOW_HEADER + 2 * 32 * 32)
+    assert_equal(flat[LIGHTS_FIRST + 7 + 13], Float32(second_map))
+    assert_equal(
+        flat[first_map + SHADOW_TYPE_AT], Float32(VSM_SHADOW_MAP.value)
+    )
+    assert_equal(
+        flat[first_map + SHADOW_HEADER + 48 * 48],
+        lighting.shadows[0].depths[48 * 48],
+    )
+    # A cube carries its type in the same place.
+    var bulbs = a_bulb_and_slide_scene(assets)
+    renderer.shadow_map_type = BASIC_SHADOW_MAP
+    var cube = flatten_lights(
+        Lighting(bulbs, shadows=renderer.shadow_maps(bulbs, assets))
+    )
+    var cube_at = LIGHTS_FIRST + POINT_FLOATS + SPOT_FLOATS
+    assert_equal(
+        cube[cube_at + SHADOW_TYPE_AT], Float32(BASIC_SHADOW_MAP.value)
+    )
+
+
+def test_both_backends_agree_under_every_shadow_map_type() raises:
+    # The basic tap, the sixteen soft taps and the variance map's linear
+    # read and bound, from a sun, a spot light and a bulb's cube: the
+    # kernel calls the host's own functions and must reach the same
+    # pixels under each of three.js's four types.
+    if skipped_for_lack_of_a_gpu(
+        "both backends agree under every shadow map type"
+    ):
+        return
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(50.0, METER),
+    )
+    camera.place(Vector3(1, 5, 5), Vector3(0, 0, 0))
+    for kind in [
+        BASIC_SHADOW_MAP,
+        PCF_SHADOW_MAP,
+        PCF_SOFT_SHADOW_MAP,
+        VSM_SHADOW_MAP,
+    ]:
+        for bulb in [False, True]:
+            var assets = Assets()
+            var scene = a_shadowed_scene(assets)
+            if bulb:
+                scene = a_bulb_and_slide_scene(assets)
+            var renderer = Renderer(48, 36)
+            renderer.set_background(BACKGROUND)
+            renderer.shadow_map_type = kind
+            var corners = renderer.prepare(scene, assets, camera)
+            var lighting = Lighting(
+                scene,
+                camera.visible_layers(),
+                camera_position(scene, camera),
+                toward_camera(scene, camera),
+                camera_up(scene, camera),
+                shadows=renderer.shadow_maps(scene, assets),
+                spot_maps=renderer.spot_light_maps(scene, assets),
+            )
+            var cpu = renderer.render(scene, assets, camera)
+            var gpu = render_triangles(
+                corners,
+                48,
+                36,
+                BACKGROUND,
+                SHADE_TEXTURE,
+                assets.textures,
+                lighting,
+            )
+            assert_true(
+                count_background(cpu, BACKGROUND) < 48 * 36,
+                "the scene drew nothing",
+            )
+            assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+            # And the shadow is there.
+            scene.lights[0].cast_shadow = False
+            scene.lights[1].cast_shadow = False
+            assert_true(
+                count_mismatches(cpu, renderer.render(scene, assets, camera))
+                > 20,
+                "no shadow fell",
+            )
 
 
 def test_a_spot_lights_map_must_be_uploaded() raises:

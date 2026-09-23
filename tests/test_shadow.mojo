@@ -29,11 +29,26 @@ from lights.shadow import (
     MAX_MAP_SIZE,
     PCF_TAPS,
     SHADOW_HEADER,
+    SHADOW_TYPE_AT,
+    SOFT_TAPS,
     SPOT_MAP_FLOATS,
+    BASIC_SHADOW_MAP,
+    CENTER_TAP,
+    DEFAULT_BLUR_SAMPLES,
+    MAX_BLUR_SAMPLES,
+    PCF_SHADOW_MAP,
+    PCF_SOFT_SHADOW_MAP,
+    VSM_DARK,
+    VSM_LIT,
+    VSM_SHADOW_MAP,
     LightShadow,
     ShadowMap,
+    ShadowMapType,
     SpotLightMap,
     biased_position,
+    bilinear,
+    bilinear_fraction,
+    bilinear_texel,
     cube_direction,
     cube_face,
     cube_stored,
@@ -49,12 +64,19 @@ from lights.shadow import (
     shadow_coordinate,
     shadow_tap,
     shadow_texel,
+    soft_fraction,
+    soft_shadow,
+    soft_texel,
+    vsm_depth,
+    vsm_moments,
+    vsm_offset,
+    vsm_shadow,
 )
 from math.vector3 import Vector3
 from render.framebuffer import Color, Framebuffer
 from render.texture import NEAREST, Texture, texture_of
 from render.texture_store import NO_TEXTURE, TextureId
-from std.math import inf, nan, pi
+from std.math import inf, nan, pi, sqrt
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -304,7 +326,7 @@ def test_a_tap_is_lit_when_the_fragment_is_not_beyond_the_stored_depth() raises:
     assert_equal(shadow_tap(-0.5, 0.2, 0.1), Float32(0))
     # Nothing stored is nothing in the way.
     assert_equal(shadow_tap(inf[DType.float32](), 1, 0), Float32(1))
-    assert_equal(SHADOW_HEADER, 20)
+    assert_equal(SHADOW_HEADER, 21)
 
 
 def test_a_map_lights_a_surface_by_how_many_taps_find_nothing() raises:
@@ -745,7 +767,10 @@ def test_a_cube_stores_the_distance_the_face_camera_saw() raises:
 
 
 def a_cube(
-    bias: Float32 = 0, normal_bias: Float32 = 0, radius: Float32 = 0
+    bias: Float32 = 0,
+    normal_bias: Float32 = 0,
+    radius: Float32 = 0,
+    shadow_type: ShadowMapType = PCF_SHADOW_MAP,
 ) raises -> ShadowMap:
     """Return a four-texel cube at the origin, near zero and far ten,
     with a caster two meters out along +x filling that face and nothing
@@ -767,6 +792,7 @@ def a_cube(
         bias=bias,
         normal_bias=normal_bias,
         radius=radius,
+        shadow_type=shadow_type,
     )
 
 
@@ -976,6 +1002,290 @@ def test_a_spot_map_naming_the_wrong_light_is_refused() raises:
         maps.append(SpotLightMap(owner, TextureId(0), slide(), flat_frame(), 0))
         with assert_raises():
             _ = Lighting(spot_scene(), spot_maps=maps^)
+
+
+# --- the shadow map types ---------------------------------------------------
+
+
+def test_a_shadow_map_type_is_one_of_three_js_four() raises:
+    # three.js's constants: Basic 0, PCF 1, PCF soft 2, VSM 3.
+    assert_equal(BASIC_SHADOW_MAP.value, 0)
+    assert_equal(PCF_SHADOW_MAP.value, 1)
+    assert_equal(PCF_SOFT_SHADOW_MAP.value, 2)
+    assert_equal(VSM_SHADOW_MAP.value, 3)
+    for kind in [
+        BASIC_SHADOW_MAP,
+        PCF_SHADOW_MAP,
+        PCF_SOFT_SHADOW_MAP,
+        VSM_SHADOW_MAP,
+    ]:
+        assert_true(kind.is_valid())
+    assert_false(ShadowMapType(4).is_valid())
+    assert_false(ShadowMapType(-1).is_valid())
+    # A map is PCF unless it says otherwise, as three.js's default is.
+    assert_true(half_map(2).shadow_type == PCF_SHADOW_MAP)
+    assert_equal(SHADOW_TYPE_AT, SHADOW_HEADER - 1)
+    # A type that is none of the four is refused, square or cube.
+    with assert_raises():
+        _ = ShadowMap(
+            0,
+            1,
+            flat_frame(),
+            [Float32(0)],
+            0,
+            0,
+            1,
+            ShadowMapType(4),
+        )
+    with assert_raises():
+        _ = a_cube(shadow_type=ShadowMapType(-1))
+    # A variance map holds two squares, and only a variance map does.
+    with assert_raises():
+        _ = ShadowMap(0, 1, flat_frame(), [Float32(0)], 0, 0, 1, VSM_SHADOW_MAP)
+    with assert_raises():
+        _ = ShadowMap(
+            0, 1, flat_frame(), [Float32(0), 0], 0, 0, 1, PCF_SHADOW_MAP
+        )
+    var variance = ShadowMap(
+        0, 1, flat_frame(), [Float32(0.5), 0], 0, 0, 1, VSM_SHADOW_MAP
+    )
+    assert_equal(len(variance.depths), 2)
+    # `Lighting` asks too, of a map whose type was changed after it was
+    # built.
+    var maps = List[ShadowMap]()
+    maps.append(half_map(4))
+    maps[0].shadow_type = ShadowMapType(9)
+    with assert_raises():
+        _ = Lighting(scene_with_sun(True), shadows=maps^)
+
+
+def test_a_light_shadow_blurs_with_eight_samples_by_default() raises:
+    var shadow = LightShadow()
+    assert_equal(shadow.blur_samples, DEFAULT_BLUR_SAMPLES)
+    assert_equal(shadow.blur_samples, 8)
+    for samples in [0, -1, MAX_BLUR_SAMPLES + 1]:
+        var wrong = LightShadow()
+        wrong.blur_samples = samples
+        with assert_raises():
+            wrong.validate()
+    for samples in [1, MAX_BLUR_SAMPLES]:
+        var right = LightShadow()
+        right.blur_samples = samples
+        right.validate()
+
+
+def test_a_basic_map_compares_one_texel() raises:
+    var hard = ShadowMap(
+        0, 4, flat_frame(), half_map(4).depths.copy(), 0, 0, 1, BASIC_SHADOW_MAP
+    )
+    # On the seam, where nine taps give a third, one tap gives all or
+    # nothing, by which texel the fragment lands in.
+    assert_equal(hard.lit(Vector3(-0.05, 0, 0), UP), Float32(0))
+    assert_equal(hard.lit(Vector3(0.05, 0, 0), UP), Float32(1))
+    assert_equal(hard.lit(Vector3(-0.75, 0, 0.75), UP), Float32(1))
+    assert_equal(hard.lit(Vector3(3, 0, 0), UP), Float32(1))
+    # The bias still moves the line.
+    var eased = ShadowMap(
+        0,
+        4,
+        flat_frame(),
+        half_map(4).depths.copy(),
+        -0.3,
+        0,
+        1,
+        BASIC_SHADOW_MAP,
+    )
+    assert_equal(eased.lit(Vector3(-0.05, 0, 0), UP), Float32(1))
+    assert_equal(CENTER_TAP, 4)
+
+
+def test_a_basic_cube_compares_one_texel() raises:
+    var toward = Vector3(-1, 0, 0)
+    # Near the seam, where nine taps give two ninths, the one tap along
+    # the direction itself lands on the +x face and is shadowed.
+    var hard = a_cube(radius=1, shadow_type=BASIC_SHADOW_MAP)
+    assert_equal(hard.lit(Vector3(5, 0, 4.99), toward), Float32(0))
+    assert_equal(hard.lit(Vector3(1, 0, 0), toward), Float32(1))
+    assert_equal(hard.lit(Vector3(15, 0, 0), toward), Float32(1))
+    # A soft or a variance cube keeps the nine taps, as three.js does.
+    for kind in [PCF_SOFT_SHADOW_MAP, VSM_SHADOW_MAP]:
+        var nine = a_cube(radius=1, shadow_type=kind)
+        assert_almost_equal(
+            nine.lit(Vector3(5, 0, 4.99), toward), Float32(2) / 9, atol=1e-6
+        )
+
+
+def test_the_sixteen_soft_taps_surround_the_nearest_corner() raises:
+    # At 0.6 of a four-texel map the coordinate is 2.4 texels in: the
+    # nearest corner is at 2, and the taps read columns 0 through 3.
+    var place = Vector3(0.6, 0.6, 0.5)
+    assert_equal(soft_texel(place, 0, 4), 0 * 4 + 0)
+    assert_equal(soft_texel(place, 3, 4), 0 * 4 + 3)
+    assert_equal(soft_texel(place, 5, 4), 1 * 4 + 1)
+    assert_equal(soft_texel(place, 15, 4), 3 * 4 + 3)
+    assert_almost_equal(soft_fraction(0.6, 4), Float32(0.9), atol=1e-6)
+    # At 0.4 the corner is at 2 too, and the fraction small.
+    assert_almost_equal(soft_fraction(0.4, 4), Float32(0.1), atol=1e-6)
+    # Past an edge, the edge.
+    var low = Vector3(0, 0, 0.5)
+    assert_equal(soft_texel(low, 0, 4), 0)
+    var high = Vector3(1, 1, 0.5)
+    assert_equal(soft_texel(high, 15, 4), 15)
+    assert_equal(soft_texel(high, 0, 4), 2 * 4 + 2)
+    assert_equal(SOFT_TAPS, 16)
+
+
+def test_the_soft_sum_is_a_box_three_texels_wide() raises:
+    var lit = SIMD[DType.float32, SOFT_TAPS](1)
+    var dark = SIMD[DType.float32, SOFT_TAPS](0)
+    for fraction in [Float32(0), 0.25, 0.9]:
+        assert_almost_equal(
+            soft_shadow(lit, fraction, fraction), Float32(1), atol=1e-6
+        )
+        assert_equal(soft_shadow(dark, fraction, fraction), Float32(0))
+    # One column lit: the left, at a fraction of zero, counts whole; at a
+    # fraction of one, not at all.
+    var left = SIMD[DType.float32, SOFT_TAPS](0)
+    for row in range(4):
+        left[row * 4] = 1
+    assert_almost_equal(soft_shadow(left, 0, 0.5), Float32(3) / 9, atol=1e-6)
+    assert_almost_equal(soft_shadow(left, 1, 0.5), Float32(0), atol=1e-6)
+    # One row lit, the bottom, weighed by the fraction down.
+    var bottom = SIMD[DType.float32, SOFT_TAPS](0)
+    for column in range(4):
+        bottom[12 + column] = 1
+    assert_almost_equal(
+        soft_shadow(bottom, 0.5, 0.25), Float32(0.75) / 9, atol=1e-6
+    )
+
+
+def test_a_soft_map_softens_the_edge_by_where_the_fragment_lies() raises:
+    var soft = ShadowMap(
+        0,
+        4,
+        flat_frame(),
+        half_map(4).depths.copy(),
+        0,
+        0,
+        7,
+        PCF_SOFT_SHADOW_MAP,
+    )
+    # 1.9 texels in, the box runs from 0.4 to 3.4: 1.4 of its 3 texels
+    # lie over the lit half, whatever the radius.
+    var edge = soft.lit(Vector3(-0.05, 0, 0), UP)
+    assert_almost_equal(edge, Float32(1.4) / 3, atol=1e-5)
+    # Deep under the caster and deep in the open: all or nothing.
+    assert_almost_equal(
+        soft.lit(Vector3(-0.9, 0, 0), UP), Float32(0), atol=1e-6
+    )
+    assert_almost_equal(soft.lit(Vector3(0.9, 0, 0), UP), Float32(1), atol=1e-6)
+    assert_equal(soft.lit(Vector3(3, 0, 0), UP), Float32(1))
+
+
+def test_a_linear_read_takes_the_four_nearest_centers() raises:
+    # 1.75 texels across and 2.5 down: centers 1 and 2 across, 2 and 3
+    # down, a quarter of the way across and none of the way down.
+    assert_equal(bilinear_texel(1.75, 2.5, 0, 4), 2 * 4 + 1)
+    assert_equal(bilinear_texel(1.75, 2.5, 1, 4), 2 * 4 + 2)
+    assert_equal(bilinear_texel(1.75, 2.5, 2, 4), 3 * 4 + 1)
+    assert_equal(bilinear_texel(1.75, 2.5, 3, 4), 3 * 4 + 2)
+    assert_almost_equal(bilinear_fraction(1.75), Float32(0.25), atol=1e-6)
+    assert_almost_equal(bilinear_fraction(2.5), Float32(0), atol=1e-6)
+    # Past an edge, the edge.
+    assert_equal(bilinear_texel(0.2, 0.2, 0, 4), 0)
+    assert_equal(bilinear_texel(3.9, 3.9, 3, 4), 15)
+    var corners = SIMD[DType.float32, 8](0, 1, 2, 3, 10, 10, 10, 10)
+    assert_almost_equal(
+        bilinear(corners, 0, 1.75, 2.5), Float32(0.25), atol=1e-6
+    )
+    assert_almost_equal(bilinear(corners, 0, 1.5, 3), Float32(1), atol=1e-6)
+    assert_almost_equal(bilinear(corners, 4, 1.2, 3.3), Float32(10), atol=1e-5)
+
+
+def test_chebyshevs_bound_decides_a_variance_map() raises:
+    # No deeper than the mean: lit.
+    assert_equal(vsm_shadow(0.5, 0, 0.5), Float32(1))
+    assert_equal(vsm_shadow(0.5, 0.1, 0.4), Float32(1))
+    # Beyond it with no spread: dark.
+    assert_equal(vsm_shadow(0.5, 0, 0.6), Float32(0))
+    # A spread of a tenth a tenth away bounds it at a half, which the
+    # ramp from 0.3 to 0.95 takes to 0.2 / 0.65.
+    assert_almost_equal(
+        vsm_shadow(0.5, 0.1, 0.6), Float32(0.2) / 0.65, atol=1e-5
+    )
+    # A wide spread a hair away is lit in full, not above it.
+    assert_equal(vsm_shadow(0.5, 1, 0.5001), Float32(1))
+    assert_equal(VSM_DARK, Float32(0.3))
+    assert_equal(VSM_LIT, Float32(0.95))
+
+
+def test_the_blur_reads_its_samples_from_minus_to_plus_one() raises:
+    assert_equal(vsm_offset(0, 1), Float32(0))
+    assert_equal(vsm_offset(0, 3), Float32(-1))
+    assert_equal(vsm_offset(1, 3), Float32(0))
+    assert_equal(vsm_offset(2, 3), Float32(1))
+    assert_almost_equal(vsm_offset(1, 8), Float32(-1) + Float32(2) / 7)
+    # The depth starts in the map's zero-to-one measure, one where
+    # nothing was drawn.
+    assert_equal(vsm_depth(-1), Float32(0))
+    assert_equal(vsm_depth(0), Float32(0.5))
+    assert_equal(vsm_depth(inf[DType.float32]()), Float32(1))
+
+
+def test_the_moments_are_the_blurred_mean_and_spread() raises:
+    var depths = half_map(4).depths.copy()
+    # One sample reads each texel's own center: the depth, no spread.
+    var sharp = vsm_moments(depths, 4, 3, 1)
+    assert_equal(len(sharp), 32)
+    assert_almost_equal(sharp[0], Float32(0.25), atol=1e-6)
+    assert_equal(sharp[3], Float32(1))
+    for texel in range(16):
+        assert_almost_equal(sharp[16 + texel], Float32(0), atol=1e-6)
+    # A flat map stays flat under any blur.
+    var flat = vsm_moments(List[Float32](length=9, fill=0), 3, 2, 8)
+    for texel in range(9):
+        assert_almost_equal(flat[texel], Float32(0.5), atol=1e-6)
+        assert_almost_equal(flat[9 + texel], Float32(0), atol=1e-3)
+    # Across the seam, a blur of one texel each way over three samples
+    # averages the two sides: texel 1 reads 0, 1 and 2, of which two lie
+    # under the caster at 0.25 and one in the open at 1.
+    var soft = vsm_moments(depths, 4, 1, 3)
+    var mean = Float32(1.5) / 3
+    assert_almost_equal(soft[1], mean, atol=1e-6)
+    var spread = sqrt((Float32(2) * 0.0625 + 1) / 3 - mean * mean)
+    assert_almost_equal(soft[16 + 1], spread, atol=1e-5)
+    # Down a column, nothing changes: every row is alike.
+    assert_almost_equal(soft[4 + 1], soft[1], atol=1e-6)
+
+
+def test_a_variance_map_shadows_by_the_bound() raises:
+    var moments = vsm_moments(half_map(4).depths.copy(), 4, 1, 3)
+    var variance = ShadowMap(
+        0, 4, flat_frame(), moments^, 0, 0, 1, VSM_SHADOW_MAP
+    )
+    # Under the caster, far from the seam: dark.
+    assert_equal(variance.lit(Vector3(-0.9, 0, 0), UP), Float32(0))
+    # Above the caster: lit.
+    assert_equal(variance.lit(Vector3(-0.9, 0, 0.75), UP), Float32(1))
+    # In the open: lit.
+    assert_equal(variance.lit(Vector3(0.9, 0, -0.9), UP), Float32(1))
+    # Off the map: lit.
+    assert_equal(variance.lit(Vector3(3, 0, 0), UP), Float32(1))
+    # On the seam the spread softens the edge.
+    var edge = variance.lit(Vector3(0, 0, -0.5), UP)
+    assert_true(edge > 0 and edge < 1, "the edge was not softened")
+    # The bias moves the fragment toward the light first.
+    var eased = ShadowMap(
+        0,
+        4,
+        flat_frame(),
+        vsm_moments(half_map(4).depths.copy(), 4, 1, 1),
+        -0.3,
+        0,
+        1,
+        VSM_SHADOW_MAP,
+    )
+    assert_equal(eased.lit(Vector3(-0.9, 0, 0), UP), Float32(1))
 
 
 def main() raises:

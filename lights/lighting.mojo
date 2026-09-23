@@ -909,7 +909,8 @@ struct Lighting(Movable):
                 light has no direction, because its node sits exactly
                 where it points from — the origin, or its target — which
                 is a mistake rather than a dark light; a light's kind
-                is none of the seven; a shadow map names a light that
+                is none of the seven; a shadow map's type is none of the
+                four; a shadow map names a light that
                 is not there, or one that is not directional, point or
                 spot, or a point light's map is not a cube or another
                 light's is; a spot light map names a light that is not
@@ -962,6 +963,8 @@ struct Lighting(Movable):
             var owner = self.shadows[slot].light
             if owner < 0 or owner >= len(scene.lights):
                 raise Error("A shadow map names a light that is not there")
+            if not self.shadows[slot].shadow_type.is_valid():
+                raise Error("A shadow map type that is none of the four")
             var kind = scene.lights[owner].kind
             if kind != DIRECTIONAL and kind != POINT and kind != SPOT:
                 raise Error(

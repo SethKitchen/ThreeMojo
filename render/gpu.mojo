@@ -54,10 +54,18 @@ from render.rect import Rect
 from render.framebuffer import Color, FloatColor, Framebuffer
 from core.fog import NO_FOG, FogKind, FogView, fog_factor, fog_mix
 from lights.shadow import (
+    BASIC_SHADOW_MAP,
+    CENTER_TAP,
+    PCF_SOFT_SHADOW_MAP,
     PCF_TAPS,
     SHADOW_HEADER,
+    SHADOW_TYPE_AT,
+    SOFT_TAPS,
     SPOT_MAP_FLOATS,
+    VSM_SHADOW_MAP,
     biased_position,
+    bilinear,
+    bilinear_texel,
     cube_tap,
     cube_texel,
     inside_point_shadow,
@@ -69,6 +77,10 @@ from lights.shadow import (
     shadow_coordinate,
     shadow_tap,
     shadow_texel,
+    soft_fraction,
+    soft_shadow,
+    soft_texel,
+    vsm_shadow,
 )
 from lights.ltc import (
     LTC_FLOATS,
@@ -600,8 +612,9 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     Each directional light carries a seventh float, each point light a
     ninth and each spot light a fourteenth: where its shadow map begins in
     this same buffer, or `NO_SHADOW`. The maps follow the lights, each its
-    size, its bias, its normal bias, its radius, its sixteen-float frame
-    and then its depths, row-major from the top; see
+    size, its bias, its normal bias, its radius, its sixteen-float frame,
+    its `ShadowMapType` and then its depths, row-major from the top, or
+    under `VSM_SHADOW_MAP` its means and then its spreads; see
     `lights.shadow.ShadowMap`. A point light's cube holds its bulb's
     position, its near plane and its far plane where the frame would be,
     and six faces of depths. Each spot light carries a fifteenth float:
@@ -743,6 +756,7 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
             frame[4] = map.far
         for element in range(16):  # pragma: no branch
             flat.append(frame[element])
+        flat.append(Float32(map.shadow_type.value))
         for texel in range(len(map.depths)):
             flat.append(map.depths[texel])
     for slot in range(len(lighting.spot_maps)):
@@ -769,8 +783,9 @@ def _shadow_at(
     normal: Vector3,
 ) -> Float32:
     """Return how much of one light reaches a surface past its shadow
-    map: the device counterpart of `ShadowMap.lit`, from the same five
-    functions, held to the same answer by the parity tests.
+    map: the device counterpart of `ShadowMap.lit`, from the same
+    functions under each `ShadowMapType`, held to the same answer by the
+    parity tests.
 
     `block` is where the map begins in the light buffer, as
     `flatten_lights` laid it out.
@@ -787,6 +802,42 @@ def _shadow_at(
     )
     if not inside_shadow_map(place):
         return 1
+    var depths = block + SHADOW_HEADER
+    var kind = Int(lights[unsafe_offset=block + SHADOW_TYPE_AT])
+    if kind == BASIC_SHADOW_MAP.value:
+        return shadow_tap(
+            lights[
+                unsafe_offset=depths + shadow_texel(place, CENTER_TAP, 0, size)
+            ],
+            place.z,
+            bias,
+        )
+    if kind == PCF_SOFT_SHADOW_MAP.value:
+        var taps = SIMD[DType.float32, SOFT_TAPS](0)
+        for tap in range(SOFT_TAPS):
+            taps[tap] = shadow_tap(
+                lights[unsafe_offset=depths + soft_texel(place, tap, size)],
+                place.z,
+                bias,
+            )
+        return soft_shadow(
+            taps, soft_fraction(place.x, size), soft_fraction(place.y, size)
+        )
+    if kind == VSM_SHADOW_MAP.value:
+        var across = place.x * Float32(size)
+        var down = place.y * Float32(size)
+        var corners = SIMD[DType.float32, 8](0)
+        for corner in range(4):
+            var texel = bilinear_texel(across, down, corner, size)
+            corners[corner] = lights[unsafe_offset=depths + texel]
+            corners[corner + 4] = lights[
+                unsafe_offset=depths + size * size + texel
+            ]
+        return vsm_shadow(
+            bilinear(corners, 0, across, down),
+            bilinear(corners, 4, across, down),
+            place.z + bias,
+        )
     var total = Float32(0)
     for tap in range(PCF_TAPS):
         var texel = shadow_texel(place, tap, radius, size)
@@ -828,6 +879,13 @@ def _cube_shadow_at(
     var way = Vector3(
         toward.x / distance, toward.y / distance, toward.z / distance
     )
+    if Int(lights[unsafe_offset=block + SHADOW_TYPE_AT]) == (
+        BASIC_SHADOW_MAP.value
+    ):
+        return cube_tap(
+            lights[unsafe_offset=block + SHADOW_HEADER + cube_texel(way, size)],
+            depth,
+        )
     var spread = point_shadow_spread(radius, size)
     var total = Float32(0)
     for tap in range(PCF_TAPS):
