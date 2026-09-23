@@ -90,6 +90,7 @@ Look something up.
 - [Nerves](Nerves)
 - [Integument](Integument)
 - [Leg](Leg)
+- [Foot](Foot)
 
 ## Explanation
 
