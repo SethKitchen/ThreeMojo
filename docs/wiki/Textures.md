@@ -4,7 +4,7 @@
 
 ![Two checkerboard cubes turn, nearest beside bilinear](out/textured.png)
 
-three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `CubeTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`, `anisotropy`, `type`, `RGBELoader`, `EXRLoader`.
+three.js: `Texture`, `DataTexture`, `DepthTexture`, `CompressedTexture`, `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CubeTexture`, `WebGLRenderTarget.texture`, `wrapS`, `wrapT`, `magFilter`, `minFilter`, `generateMipmaps`, `colorSpace`, `anisotropy`, `type`, `RGBELoader`, `EXRLoader`.
 
 ## Make a texture
 
@@ -72,17 +72,111 @@ It is a picture of the depth, not the depth. A byte holds 256 steps, and a persp
 var image = compressed_texture(width, height, blocks, RGBA_S3TC_DXT5_FORMAT)
 ```
 
-`compressed_texture(width, height, data, format, wrap=CLAMP, filter=BILINEAR, color_space=SRGB, mipmapped=False, alpha=COVERAGE)`. The defaults are three.js's own for the class: edges clamped and no chain, since a compressed file usually carries its own levels. Only the first level is read. Pass `mipmapped=True` to build a chain from the decoded image.
+`compressed_texture(width, height, data, format, wrap=CLAMP, filter=BILINEAR, color_space=None, mipmapped=False, alpha=COVERAGE)`. The defaults are three.js's own for the class: edges clamped and no chain, since a compressed file usually carries its own levels. Only the level you pass is read. Pass `mipmapped=True` to build a chain from the decoded image.
+
+The S3TC formats are below. See [KTX2 and compressed formats](#ktx2-and-compressed-formats) for the other fourteen formats and for the three container files.
 
 | `format` | three.js | A 4x4 block is |
 |---|---|---|
 | `RGB_S3TC_DXT1_FORMAT` | `RGB_S3TC_DXT1_Format` | Eight bytes: two RGB565 colors and a two-bit index per texel. The transparent index reads as opaque black. |
 | `RGBA_S3TC_DXT1_FORMAT` | `RGBA_S3TC_DXT1_Format` | The same, with the transparent index read as transparent black. |
+| `RGBA_S3TC_DXT3_FORMAT` | `RGBA_S3TC_DXT3_Format` | Sixteen bytes: sixteen four-bit alphas, then a color block always read in its four-color order. |
 | `RGBA_S3TC_DXT5_FORMAT` | `RGBA_S3TC_DXT5_Format` | Sixteen bytes: two alphas and a three-bit index per texel, then a color block always read in its four-color order. |
 
-The 565 channels widen to eight bits by copying their top bits down, as the hardware widens them. The blends round to nearest. An image need not be whole blocks: the texels past the edge are decoded and dropped. `decode_s3tc` returns the RGBA bytes without building a texture.
+The 565 channels widen to eight bits by copying their top bits down, as the hardware widens them. The blends round to nearest. An image need not be whole blocks: the texels past the edge are decoded and dropped. `decode_s3tc` returns the RGBA bytes of an S3TC payload without building a texture. `decode_compressed` does the same for every format.
 
-`compressed_texture` refuses a format that is none of the three, dimensions that are not positive, and a payload whose length is not the block grid's. `tests/compile_fail/` proves a bare integer is not a format.
+`compressed_texture` refuses a format that is none of the eighteen, dimensions that are not positive, and a payload whose length is not the block grid's. `tests/compile_fail/` proves a bare integer is not a format.
+
+## KTX2 and compressed formats
+
+`render/compressed_texture.mojo` decodes eighteen block formats. `render/dds.mojo`, `render/ktx.mojo` and `render/ktx2.mojo` read the three container files that three.js reads. Each container gives every level of every face, and a `texture` method decodes one of them.
+
+three.js: `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CompressedTexture` and the compressed format constants.
+
+```mojo
+from render.ktx2 import read as read_ktx2
+
+var container = read_ktx2(Path("rock.ktx2").read_bytes())
+var rock = assets.textures.add(container.texture(mipmapped=True))
+```
+
+### The formats
+
+A format that a byte cannot hold decodes to floats, and its texture is a float texture. `CompressedFormat.is_float` names these formats. A color format is `SRGB` by default. Every other format holds data, so it is `LINEAR`, and `SRGB` is refused.
+
+| `format` | Block | Decodes to |
+|---|---|---|
+| `RGB_S3TC_DXT1_FORMAT`, `RGBA_S3TC_DXT1_FORMAT` | BC1, 8 bytes | RGBA bytes |
+| `RGBA_S3TC_DXT3_FORMAT` | BC2, 16 bytes | RGBA bytes |
+| `RGBA_S3TC_DXT5_FORMAT` | BC3, 16 bytes | RGBA bytes |
+| `RED_RGTC1_FORMAT` | BC4, 8 bytes | Red bytes |
+| `SIGNED_RED_RGTC1_FORMAT` | BC4 signed, 8 bytes | Red floats, -1 to 1 |
+| `RED_GREEN_RGTC2_FORMAT` | BC5, 16 bytes | Red and green bytes |
+| `SIGNED_RED_GREEN_RGTC2_FORMAT` | BC5 signed, 16 bytes | Red and green floats, -1 to 1 |
+| `RGB_BPTC_UNSIGNED_FORMAT` | BC6H, 16 bytes | RGB half floats, widened |
+| `RGB_BPTC_SIGNED_FORMAT` | BC6H signed, 16 bytes | RGB half floats, widened |
+| `RGBA_BPTC_FORMAT` | BC7, 16 bytes | RGBA bytes |
+| `RGB_ETC1_FORMAT` | ETC1, 8 bytes | RGB bytes |
+| `RGB_ETC2_FORMAT` | ETC2, 8 bytes | RGB bytes |
+| `RGBA_ETC2_EAC_FORMAT` | EAC alpha and ETC2, 16 bytes | RGBA bytes |
+| `R11_EAC_FORMAT`, `SIGNED_R11_EAC_FORMAT` | EAC, 8 bytes | Red floats |
+| `RG11_EAC_FORMAT`, `SIGNED_RG11_EAC_FORMAT` | Two EAC blocks, 16 bytes | Red and green floats |
+
+A red or a red-green format gives a blue of zero and an alpha of one, as WebGL samples it. `render/bptc.mojo` holds the BC6H and BC7 decoders, and `render/etc.mojo` holds the ETC and EAC decoders.
+
+- **BC7** blends two endpoints with an exact integer weight. Every decoder gives the same texels. A block whose first byte is zero names no mode and decodes to transparent black.
+- **BC6H** has fourteen modes. The endpoints are unquantized to sixteen bits, blended, and read as a half. Four reserved mode numbers decode to black.
+- **ETC2** reads an ETC1 block unchanged. A difference that leaves its range selects the T, H or planar mode.
+- **EAC R11** keeps eleven bits. A texel is `(base * 8 + 4 + offset * multiplier * 8) / 2047`, or `/ 1023` for the signed form.
+
+The tests check each decoder against hand-built blocks with worked-out texels. They also check blocks of every mode against the reference decoders `bcdec` and `texture2ddecoder`.
+
+### The containers
+
+| Reader | Returns | Reads |
+|---|---|---|
+| `render.dds.read(bytes)` | `CompressedImage` | A four-character code or a DX10 header, levels and cubes. |
+| `render.ktx.read(bytes)` | `CompressedImage` | KTX 1 in both byte orders, levels and cubes. |
+| `render.ktx2.read(bytes)` | `KTX2Container` | KTX 2.0: the header, the level index, the data format descriptor, levels, cubes and arrays. |
+
+`CompressedImage.mipmaps` holds each face's levels in turn: `mipmaps[face * levels + level]`. `texture(face, level, ...)` decodes one of them. `KTX2Container.level_data` holds each level with its supercompression removed. `texture(face, layer, level, ...)` decodes one image of it.
+
+The color space comes from the file. A DDS or KTX file is `SRGB` only for a format with sRGB in its name. A KTX2 file is `SRGB` when its data format descriptor names the sRGB transfer function, as three.js reads it.
+
+A KTX2 file can also hold eight-bit, half and float texels. `R8`, `R8G8` and `R8G8B8A8` give a byte texture, in `UNORM` or `SRGB`. `R16`, `R16G16` and `R16G16B16A16` halves, and `R32` to `R32G32B32A32` floats, give a float texture. These are the uncompressed formats three.js reads.
+
+| KTX2 supercompression | Here |
+|---|---|
+| 0, none | Read. |
+| 1, BasisLZ | Refused. |
+| 2, Zstandard | Refused. |
+| 3, zlib | Read through `render/inflate.mojo`. three.js refuses it. |
+
+### What is not ported
+
+- Basis Universal. three.js transcodes ETC1S and UASTC data with a WebAssembly transcoder. That transcoder is a large codec of its own. A KTX2 file with either color model, or with BasisLZ supercompression, is refused by name.
+- Zstandard supercompression. This project has no Zstandard decoder. A KTX2 file that uses it is refused by name. zlib, the other scheme, is read.
+- ASTC, PVRTC and ETC2 with punch-through alpha. Each container refuses them by name. three.js uploads ASTC and PVRTC as they are.
+- Uncompressed DDS files, the premultiplied DXT2 and DXT4, and DDS texture arrays.
+- 1D, 3D and array textures in KTX 1, and 1D and 3D textures in KTX2.
+- The GPU upload of the blocks. Each image decodes on the host and keeps RGBA in memory.
+- A file's own smaller levels in the texture. The container gives them, but a texture builds its chain from the level it decodes.
+- `CompressedCubeTexture` and `CompressedArrayTexture`. Take each face or layer with `texture(face, layer)`.
+
+### Where the formats differ from three.js
+
+- three.js hands the blocks to the GPU. Here the decoded texels are what the hardware gives, to the last bit for BC6H, BC7, ETC and EAC. The BC1 to BC5 blends round to nearest, as the reference decoder rounds them. A GPU can differ by one step.
+- The eleven-bit EAC formats and the signed RGTC formats decode to floats. A byte cannot hold a negative value or eleven bits.
+- DDSLoader computes a level's size from `max(4, width) / 4`, which is a fraction for a width that is not a multiple of four. This reader rounds up to whole blocks.
+- A container is refused if it names more levels than its size has, or a face count other than one or six. A level that does not fit is refused too. three.js reads past such a file.
+
+### Errors
+
+- Each container refuses a wrong identifier or magic, a size that is not positive, and a file that ends early.
+- A size that decodes to more than `MAX_DECODED_BYTES` is refused before any allocation. A float format counts sixteen bytes a texel.
+- A KTX2 file refuses a descriptor or a level outside the file, and a level whose length is not its size.
+- A KTX2 half or float format with the sRGB transfer function is refused.
+- `tests/compile_fail/` proves that a bare integer is not a `VkFormat` or a `Supercompression`.
 
 ## HDR images
 
@@ -404,7 +498,7 @@ var id = assets.textures.add(board^)
 - The renderer refuses a map and an emissive map on one material whose transforms differ.
 - An anisotropy below one, or above `MAX_ANISOTROPY`, raises in `validate`.
 - A `Footprint` with no taps, or a non-finite level or step, raises in `sample_footprint`.
-- See [Cube textures](#cube-textures) for what a cube refuses, and [From a compressed file](#from-a-compressed-file) for what a compressed payload refuses.
+- See [Cube textures](#cube-textures) for what a cube refuses, and [KTX2 and compressed formats](#ktx2-and-compressed-formats) for what a compressed payload or container refuses.
 
 ## Why
 

@@ -7,18 +7,39 @@
 decoded against worked-out texels."""
 
 from render.compressed_texture import (
+    MAX_DECODED_BYTES,
+    RED_GREEN_RGTC2_FORMAT,
+    RED_RGTC1_FORMAT,
     RGB_S3TC_DXT1_FORMAT,
+    RGBA_BPTC_FORMAT,
     RGBA_S3TC_DXT1_FORMAT,
+    RGBA_S3TC_DXT3_FORMAT,
     RGBA_S3TC_DXT5_FORMAT,
+    SIGNED_RED_GREEN_RGTC2_FORMAT,
+    SIGNED_RED_RGTC1_FORMAT,
+    SIGNED_RG11_EAC_FORMAT,
     CompressedFormat,
+    CompressedImage,
+    chain_length,
+    check_decoded_size,
     compressed_texture,
+    decode_compressed,
     decode_s3tc,
+    level_bytes,
+    signed_rgtc_block,
     unpack565,
     widen5,
     widen6,
 )
-from render.srgb import LINEAR
-from render.texture import CLAMP, IGNORED, NEAREST, REPEAT
+from render.srgb import LINEAR, SRGB
+from render.texture import (
+    CLAMP,
+    FLOAT_TYPE,
+    IGNORED,
+    NEAREST,
+    REPEAT,
+    UNSIGNED_BYTE_TYPE,
+)
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -186,9 +207,16 @@ def test_a_payload_must_match_the_block_grid_and_the_format() raises:
     with assert_raises():
         _ = decode_s3tc(4, -1, data, RGB_S3TC_DXT1_FORMAT)
     with assert_raises():
-        _ = decode_s3tc(4, 4, data, CompressedFormat(9))
-    assert_false(CompressedFormat(9).is_valid())
-    assert_equal(CompressedFormat(9).block_bytes(), 8)
+        _ = decode_s3tc(4, 4, data, CompressedFormat(99))
+    with assert_raises(contains="use decode_compressed"):
+        _ = decode_s3tc(4, 4, data, RED_RGTC1_FORMAT)
+    with assert_raises(contains="CompressedFormat(18)"):
+        _ = decode_compressed(4, 4, data, CompressedFormat(18))
+    with assert_raises():
+        _ = decode_compressed(4, 4, data, CompressedFormat(-1))
+    assert_false(CompressedFormat(99).is_valid())
+    assert_false(CompressedFormat(-1).is_valid())
+    assert_equal(CompressedFormat(99).block_bytes(), 16)
     for format in [
         RGB_S3TC_DXT1_FORMAT,
         RGBA_S3TC_DXT1_FORMAT,
@@ -214,7 +242,7 @@ def test_a_compressed_texture_takes_threejs_defaults() raises:
     assert_equal(custom.levels, 3)
     assert_equal(custom.alpha, IGNORED)
     with assert_raises():
-        _ = compressed_texture(4, 4, data, CompressedFormat(4))
+        _ = compressed_texture(4, 4, data, CompressedFormat(18))
 
 
 # --- more than one block, and not square ------------------------------------
@@ -300,6 +328,156 @@ def test_dimensions_that_would_decode_to_too_much_are_refused() raises:
     # length is what refuses this one, which means the size passed.
     with assert_raises(contains="payload length"):
         _ = decode_s3tc(16384, 16384, List[UInt8](), RGBA_S3TC_DXT1_FORMAT)
+
+
+# --- BC2, the RGTC formats, and what every format is -------------------------
+
+
+def test_a_dxt3_block_carries_sixteen_explicit_alphas() raises:
+    # Texel i's alpha is the nibble i, widened to i * 17; the first texel
+    # is the low half of the first byte. The color block's two colors sort
+    # the three-color way, and BC2 reads four colors anyway.
+    var data = List[UInt8]()
+    for byte in range(8):
+        data.append(UInt8(((byte * 2 + 1) << 4) | (byte * 2)))
+    data.extend(color_block(BLUE565, RED565, same(3)))
+    var pixels = decode_s3tc(4, 4, data, RGBA_S3TC_DXT3_FORMAT)
+    for texel in range(16):
+        assert_equal(pixels[texel * 4 + 3], UInt8(texel * 17))
+        assert_equal(pixels[texel * 4], UInt8(170))
+
+
+def test_rgtc_blocks_are_red_and_green_channels() raises:
+    # BC4 is BC3's alpha block read as red: green and blue zero, alpha one.
+    var red = alpha_block(240, 30, repeated([0, 1, 2, 3, 4, 5, 6, 7], 2))
+    var one = decode_compressed(4, 4, red, RED_RGTC1_FORMAT)
+    assert_equal(one.texel_type, UNSIGNED_BYTE_TYPE)
+    var reds: List[Int] = [240, 30, 210, 180, 150, 120, 90, 60]
+    for texel in range(16):
+        assert_equal(one.pixels[texel * 4], UInt8(reds[texel % 8]))
+        assert_equal(one.pixels[texel * 4 + 1], UInt8(0))
+        assert_equal(one.pixels[texel * 4 + 2], UInt8(0))
+        assert_equal(one.pixels[texel * 4 + 3], UInt8(255))
+    # BC5 is two: red, then green.
+    var pair = red.copy()
+    pair.extend(alpha_block(50, 200, same(7)))
+    var two = decode_compressed(4, 4, pair, RED_GREEN_RGTC2_FORMAT)
+    assert_equal(two.pixels[0], UInt8(240))
+    assert_equal(two.pixels[1], UInt8(255))
+    # Data, not color: LINEAR by default, and SRGB is refused.
+    var image = compressed_texture(4, 4, pair, RED_GREEN_RGTC2_FORMAT)
+    assert_equal(image.color_space, LINEAR)
+    with assert_raises(contains="RED_GREEN_RGTC2_Format holds data"):
+        _ = compressed_texture(
+            4, 4, pair, RED_GREEN_RGTC2_FORMAT, color_space=SRGB
+        )
+
+
+def test_signed_rgtc_blocks_decode_to_floats() raises:
+    # 127 above -127: six blends from 1 down to -1, worked in floats.
+    var above = alpha_block(127, 0x81, repeated([0, 1, 2, 3, 4, 5, 6, 7], 2))
+    var falling = signed_rgtc_block(above, 0)
+    var expected: List[Float32] = [
+        1, -1, Float32(5) / 7, Float32(3) / 7, Float32(1) / 7,
+        Float32(-1) / 7, Float32(-3) / 7, Float32(-5) / 7,
+    ]  # fmt: skip
+    for texel in range(16):
+        assert_equal(falling[texel], expected[texel % 8])
+    # -128, read as -127, not above 0: four blends, then -1 and 1.
+    var below = alpha_block(0x80, 0, repeated([0, 1, 2, 3, 4, 5, 6, 7], 2))
+    var rising = signed_rgtc_block(below, 0)
+    var ends: List[Float32] = [
+        -1, 0, Float32(-4) / 5, Float32(-3) / 5, Float32(-2) / 5,
+        Float32(-1) / 5, -1, 1,
+    ]  # fmt: skip
+    for texel in range(16):
+        assert_equal(rising[texel], ends[texel % 8])
+    var one = decode_compressed(4, 4, above, SIGNED_RED_RGTC1_FORMAT)
+    assert_equal(one.texel_type, FLOAT_TYPE)
+    assert_equal(one.floats[0], Float32(1))
+    assert_equal(one.floats[1], Float32(0))
+    assert_equal(one.floats[3], Float32(1))
+    var pair = above.copy()
+    pair.extend(below^)
+    var two = compressed_texture(4, 4, pair, SIGNED_RED_GREEN_RGTC2_FORMAT)
+    assert_equal(two.texel_type, FLOAT_TYPE)
+    assert_equal(two.data[1], Float32(-1))
+
+
+def test_every_format_says_what_it_is() raises:
+    # Eighteen formats: the byte size of a block, whether they decode to
+    # floats, whether they hold color, and their three.js names.
+    var eight: List[Int] = [0, 1, 4, 5, 11, 12, 14, 15]
+    var floats: List[Int] = [5, 7, 8, 9, 14, 15, 16, 17]
+    var colors: List[Int] = [0, 1, 2, 3, 10, 11, 12, 13]
+    for value in range(18):
+        var format = CompressedFormat(value)
+        assert_true(format.is_valid())
+        assert_equal(format.block_bytes() == 8, value in eight)
+        assert_equal(format.is_float(), value in floats)
+        assert_equal(format.is_color(), value in colors)
+        assert_equal(format.is_s3tc(), value <= 3)
+    assert_false(CompressedFormat(-1).is_s3tc())
+    assert_equal(String(RGBA_BPTC_FORMAT), "RGBA_BPTC_Format")
+    assert_equal(String(SIGNED_RG11_EAC_FORMAT), "SIGNED_RG11_EAC_Format")
+    assert_equal(String(CompressedFormat(99)), "CompressedFormat(99)")
+
+
+def test_a_color_format_can_be_read_as_linear() raises:
+    var data = color_block(RED565, BLUE565, same(0))
+    assert_equal(
+        compressed_texture(4, 4, data, RGB_S3TC_DXT1_FORMAT).color_space, SRGB
+    )
+    var linear = compressed_texture(
+        4, 4, data, RGB_S3TC_DXT1_FORMAT, color_space=LINEAR
+    )
+    assert_equal(linear.color_space, LINEAR)
+
+
+def test_a_float_decode_is_bounded_more_tightly() raises:
+    # Sixteen bytes a texel instead of four.
+    check_decoded_size(16384, 16384, False)
+    with assert_raises(contains="MAX_DECODED_BYTES"):
+        check_decoded_size(16384, 16384, True)
+    check_decoded_size(8192, 8192, True)
+    assert_equal(MAX_DECODED_BYTES, 1 << 30)
+
+
+def test_chains_and_level_sizes() raises:
+    assert_equal(chain_length(1, 1), 1)
+    assert_equal(chain_length(8, 2), 4)
+    assert_equal(chain_length(5, 9), 4)
+    # Whole blocks, rounded up.
+    assert_equal(level_bytes(1, 1, RGB_S3TC_DXT1_FORMAT), 8)
+    assert_equal(level_bytes(5, 3, RGBA_BPTC_FORMAT), 32)
+
+
+def test_a_compressed_image_names_its_faces_and_levels() raises:
+    # Two levels of an 8 by 4 image: two blocks, then one.
+    var image = CompressedImage(8, 4, RGB_S3TC_DXT1_FORMAT, LINEAR, 1, 2)
+    var first = color_block(RED565, RED565, same(0))
+    first.extend(color_block(BLUE565, BLUE565, same(0)))
+    image.mipmaps.append(first^)
+    image.mipmaps.append(color_block(BLUE565, BLUE565, same(0)))
+    assert_equal(image.level_width(1), 4)
+    assert_equal(image.level_height(1), 2)
+    assert_equal(image.level_width(5), 1)
+    assert_equal(image.level_height(5), 1)
+    var top = image.texture()
+    assert_equal(top.width, 8)
+    assert_equal(top.color_space, LINEAR)
+    assert_equal(top.texel(7, 0).b, UInt8(255))
+    var small = image.texture(0, 1, REPEAT, NEAREST, True, IGNORED)
+    assert_equal(small.width, 4)
+    assert_equal(small.height, 2)
+    assert_equal(small.wrap, REPEAT)
+    assert_equal(small.levels, 3)
+    for face in [-1, 1]:
+        with assert_raises(contains="no face"):
+            _ = image.texture(face)
+    for level in [-1, 2]:
+        with assert_raises(contains="no level"):
+            _ = image.texture(0, level)
 
 
 def main() raises:
