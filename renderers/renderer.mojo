@@ -2834,7 +2834,9 @@ struct Renderer(Movable):
             var own = FloatColor(srgb=material.color)
             ref tint = draws[slot].tint
             var base = _with_opacity(
-                FloatColor(own.r * tint.r, own.g * tint.g, own.b * tint.b, 1),
+                FloatColor(
+                    own.r * tint.r, own.g * tint.g, own.b * tint.b, own.a
+                ),
                 material.opacity,
             )
             var vertex_colors = _vertex_colors(
