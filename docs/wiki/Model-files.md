@@ -8,7 +8,7 @@
 
 three.js: `OBJLoader`, `MTLLoader`, `STLLoader`, `PLYLoader` and `FontLoader`.
 
-To write these files, see [Exporters](Exporters).
+To write these files, see [Exporters](Exporters). To read a scene in three.js JSON, see [Scene JSON](Scene-JSON).
 
 ## Read a file
 

@@ -2,6 +2,8 @@
 
 `exporters/gltf.mojo`, `exporters/obj.mojo`, `exporters/stl.mojo` and `exporters/ply.mojo` write a scene and its assets to model files. Each file reads back through the matching loader in `loaders/` to the same geometry. A glTF file also reads back to the same node transforms and materials. three.js: `GLTFExporter`, `OBJExporter`, `STLExporter` and `PLYExporter`.
 
+To write a scene as three.js JSON, see [Scene JSON](Scene-JSON).
+
 ```mojo
 scene.update()
 write_gltf("out/model.glb", scene, assets, GLB)

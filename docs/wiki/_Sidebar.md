@@ -38,6 +38,7 @@
 - [Image files](Image-files)
 - [Model files](Model-files)
 - [Exporters](Exporters)
+- [Scene JSON](Scene-JSON)
 - [Windowing and controls](Windowing-and-controls)
 - [Math](Math)
 - [Units](Units)
