@@ -371,7 +371,7 @@ A translation keeps the object on the plane through its origin that faces the ca
 
 ### Differences from three.js
 
-three.js drags the outermost `Group` when `transformGroup` is set. This port has no `Group`, so it drags the outermost node of `objects` instead. Meshes, instanced meshes, batched meshes and levels of detail can be picked. Lines, points and sprites cannot, because the `Raycaster` does not test them. Touch input and the cursor style are not ported.
+three.js drags the outermost `Group` when `transformGroup` is set. This port has no `Group`, so it drags the outermost node of `objects` instead. Everything the `Raycaster` tests can be picked, lines, points and sprites included. The raycaster's line and point thresholds apply, as in three.js. See [Raycasting](Raycasting#lines-points-and-sprites). Touch input and the cursor style are not ported.
 
 ## TransformControls
 
