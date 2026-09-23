@@ -324,11 +324,10 @@ struct Object3D(ImplicitlyCopyable):
             camera: True to face the target the way a camera does.
 
         Raises:
-            Error: If the target is at the node's own position, or straight
-                along the parent's y from it, either of which leaves the
-                orientation undefined. three.js nudges the axis by a small
-                amount instead; refusing is consistent with
-                `math.projection.look_at`.
+            Error: Never. A target at the node's own position gives the
+                identity, and a target straight along the parent's y is
+                nudged off it by a ten-thousandth, as three.js does; see
+                `facing`.
         """
         self.quaternion = facing(
             self.position, target, Vector3(0, 1, 0), camera

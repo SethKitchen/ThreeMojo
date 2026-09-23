@@ -471,7 +471,7 @@ struct Scene(Movable):
         and the up direction not at all: it stays the parent's +y, so a
         parent rolled about z rolled the child's view with it, and a parent
         that swapped the axes round could make an ordinary view look like
-        one straight along up and refuse it.
+        one straight along up.
 
         The parent's world transform must be a rotation and a positive
         uniform scale. three.js normalizes the parent's axes and carries on,
@@ -492,8 +492,9 @@ struct Scene(Movable):
                 current; the parent's world transform is not a rotation and
                 a positive uniform scale -- a nonuniform scale, a shear, a
                 mirror or a flattened axis leaves no frame the facing
-                survives the trip into; or the target leaves the orientation
-                undefined.
+                survives the trip into. A target at the node or straight
+                along up is not refused: `facing` settles both, as three.js
+                does.
         """
         if index.value < 0 or index.value >= len(self._nodes):
             raise Error("Scene node index out of range")

@@ -78,7 +78,7 @@ three.js normalizes the parent's axes and carries on. Under a parent scaled `(2,
 
 An object faces the target with its +z axis. A camera faces it with its -z axis. Pass `camera=True` for a node that a camera rides.
 
-Both `look_at` methods refuse a target at the node's own position, and a target straight along the up direction.
+Both `look_at` methods accept every target, as three.js does. A target at the node's own position gives the identity rotation. A target straight along the up direction moves the line of sight off up by 0.0001 first.
 
 ## Example
 
