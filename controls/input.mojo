@@ -13,8 +13,9 @@ a mouse, once asked to report, sends xterm's SGR sequences:
     ESC [ < button ; column ; row M     a press, a drag or a wheel notch
     ESC [ < button ; column ; row m     a release
 
-`InputDecoder` turns those bytes into `InputEvent`s, the same five kinds
-the browser has. A sequence split across two reads is kept until the rest
+`InputDecoder` turns those bytes into `InputEvent`s, the five kinds the
+browser has and a resize. A terminal asked `ESC [ 18 t` answers
+`ESC [ 8 ; rows ; columns t`, which is the resize. A sequence split across two reads is kept until the rest
 arrives. A sequence this decoder does not know is consumed and dropped.
 
 A position is a terminal cell: its column and its row, from zero. The
@@ -37,6 +38,8 @@ comptime UP_BYTE = 65
 comptime DOWN_BYTE = 66
 comptime RIGHT_BYTE = 67
 comptime LEFT_BYTE = 68
+# 't' ends the terminal's report of its size.
+comptime SIZE_BYTE = 116
 # A control sequence ends at the first byte in this range.
 comptime FINAL_LOW = 64
 comptime FINAL_HIGH = 126
@@ -60,12 +63,12 @@ struct InputKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the five kinds there are.
+        """Return True if this is one of the six kinds there are.
 
         Returns:
             Whether the value names a kind.
         """
-        return self.value >= 0 and self.value <= 4
+        return self.value >= 0 and self.value <= 5
 
 
 # A key went down. three.js: `keydown`.
@@ -78,6 +81,10 @@ comptime POINTER_MOVE = InputKind(2)
 comptime POINTER_UP = InputKind(3)
 # A wheel turned by one notch. three.js: `wheel`.
 comptime WHEEL = InputKind(4)
+# The view's size, in `x` and `y`: the window's `resize` event. The
+# decoder gives columns and rows; the window gives the pixels of the
+# largest frame that fits.
+comptime RESIZE = InputKind(5)
 
 
 @fieldwise_init
@@ -320,6 +327,13 @@ def _control_sequence(
                     numbers[0], numbers[1], numbers[2], final == PRESS_BYTE
                 )
             )
+        return
+    if final == SIZE_BYTE:
+        # `ESC [ 8 ; rows ; columns t`: the terminal's answer to
+        # `ESC [ 18 t`, its text area in cells.
+        var size = _parameters(bytes, first, final_at)
+        if len(size) == 3 and size[0] == 8:
+            events.append(InputEvent(RESIZE, x=size[2], y=size[1]))
         return
     var key = _arrow(final)
     if key == NO_KEY:

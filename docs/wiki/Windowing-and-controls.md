@@ -41,6 +41,8 @@ The window is the terminal the program runs in. Mojo's standard library has no w
 | `TerminalWindow(width, height, input_fd=0, output_fd=1)` | Open the window. The size is the frame's, in pixels. |
 | `present(frame)` | Draw a `Framebuffer` of the window's size. |
 | `poll(timeout) -> List[InputEvent]` | Wait up to a `Duration` for input, and return the events. |
+| `request_size()` | Ask the terminal its size. The answer is a `RESIZE` event from a later `poll`. |
+| `resize(width, height)` | Take frames of a new size, and clear the screen. three.js: `setSize`. |
 | `close()` | Put the terminal back as it was. A second call does nothing. |
 | `encode_frame(frame) -> String` | The bytes `present` writes. |
 
@@ -71,7 +73,7 @@ The terminal is put back before a failure is raised.
 
 ## Input events
 
-`controls/input.mojo`. An `InputEvent` is one of five kinds, as the browser has them.
+`controls/input.mojo`. An `InputEvent` is one of the five kinds the browser has, or a resize.
 
 | Kind | three.js event | Fields it sets |
 |---|---|---|
@@ -80,6 +82,7 @@ The terminal is put back before a failure is raised.
 | `POINTER_MOVE` | `pointermove` | `button` held or `NO_BUTTON`, `x`, `y` |
 | `POINTER_UP` | `pointerup` | `button`, `x`, `y` |
 | `WHEEL` | `wheel` | `wheel`: 1 a notch toward the user, -1 away |
+| `RESIZE` | the window's `resize` | `x` and `y`: the size of the largest frame that fits |
 
 Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y` in the frame's pixels. The decoder gives a cell's column and row, from zero.
 
@@ -94,6 +97,7 @@ Every event also carries `shift`, `alt` and `ctrl`. The window gives `x` and `y`
 - `ESC [ A` to `ESC [ D` are the arrows. `ESC [ 1 ; m A` carries modifiers.
 - `ESC [ < b ; x ; y M` is a press, a drag or a wheel notch. The same with `m` is a release.
 - A sequence cut off before its end is kept for the next call.
+- `ESC [ 8 ; rows ; columns t` is the terminal's size, a `RESIZE` in columns and rows.
 - A sequence the decoder does not know is dropped.
 
 ## OrbitControls
@@ -144,7 +148,7 @@ With damping, `damping_factor` of each pending rotation and pan applies each fra
 
 ## Limits
 
-The window does not ask the terminal for its size. Give a size that fits. A terminal smaller than the frame wraps or cuts it.
+The window asks the terminal its size with xterm's `ESC [ 18 t`, which works on every platform, where `ioctl` does not. A terminal that does not answer sends no `RESIZE`. Give such a terminal a size that fits: a terminal smaller than the frame wraps or cuts it. `examples/viewer.mojo` asks once a second and follows the answer.
 
 The window needs a terminal that speaks xterm's sequences. The current terminals on Linux and macOS do, and so does Windows Terminal under WSL 2.
 

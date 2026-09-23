@@ -51,6 +51,11 @@ comptime READ_BYTES = 1024
 comptime ENTER = "\x1b[?1049h\x1b[?25l\x1b[?1002h\x1b[?1006h\x1b[2J"
 # The same, undone in reverse order, with the colors reset.
 comptime LEAVE = "\x1b[0m\x1b[?1006l\x1b[?1002l\x1b[?25h\x1b[?1049l"
+# Asks the terminal for its text area in cells: xterm's window operation
+# 18, answered with `ESC [ 8 ; rows ; columns t`.
+comptime SIZE_QUERY = "\x1b[18t"
+# Clears the screen, for a frame of a new size.
+comptime CLEAR = "\x1b[0m\x1b[2J"
 comptime UPPER_HALF = "▀"
 comptime RESET = "\x1b[0m"
 
@@ -295,6 +300,45 @@ struct TerminalWindow(Movable):
                 self.height,
             )
         _write_all(self.output_fd, encode_frame(frame))
+
+    def request_size(self) raises:
+        """Ask the terminal for its size. three.js reads its canvas's size
+        from the page; a terminal is asked.
+
+        The answer arrives as a `RESIZE` event from a later `poll`, in the
+        pixels of the largest frame that fits: one per column, two per
+        row. Ask again from time to time to follow a terminal the user
+        resizes. A terminal that does not answer sends nothing.
+
+        Raises:
+            Error: If the window is closed, or the terminal cannot be
+                written.
+        """
+        if not self.is_open:
+            raise Error("The window is closed")
+        _write_all(self.output_fd, SIZE_QUERY)
+
+    def resize(mut self, width: Int, height: Int) raises:
+        """Change the size of the frames the window takes, and clear the
+        screen. three.js: `WebGLRenderer.setSize`.
+
+        Args:
+            width: The new width, in pixels.
+            height: The new height, in pixels.
+
+        Raises:
+            Error: If the window is closed, the size is not positive, or
+                the terminal cannot be written.
+        """
+        if not self.is_open:
+            raise Error("The window is closed")
+        if width <= 0 or height <= 0:
+            raise Error(
+                "A window's size must be positive, got ", width, "x", height
+            )
+        self.width = width
+        self.height = height
+        _write_all(self.output_fd, CLEAR)
 
     def poll(mut self, timeout: Duration) raises -> List[InputEvent]:
         """Wait for input, and return what arrived.

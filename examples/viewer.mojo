@@ -10,13 +10,14 @@
 Drag with the left button to orbit, with the right button to pan, and turn
 the wheel to dolly. The arrows pan; with Shift they orbit. `q`, Escape or
 Ctrl+C quits. The frame is `columns` pixels wide and twice `rows` high,
-96 by 32 rows unless given. Make the terminal at least that large.
+96 by 32 rows unless given. The window then asks the terminal its size
+every second, and follows it when the terminal answers.
 
 This example needs a terminal. It is not run by `make animation`.
 """
 
 from cameras.perspective_camera import PerspectiveCamera
-from controls.input import CTRL_C, ESCAPE, KEY_DOWN, Key
+from controls.input import CTRL_C, ESCAPE, KEY_DOWN, Key, RESIZE
 from controls.orbit_controls import OrbitControls
 from core.assets import Assets
 from core.clock import Clock
@@ -43,6 +44,8 @@ comptime DEFAULT_ROWS = 32
 # frames a second when the render is quick.
 comptime FRAME_MS = 16
 comptime QUIT = Key(113)
+# How often to ask the terminal its size, in frames.
+comptime SIZE_EVERY = 60
 
 
 def main() raises:
@@ -97,12 +100,27 @@ def main() raises:
     var window = TerminalWindow(width, height)
     var clock = Clock()
     var running = True
+    var frame = 0
     try:
         while running:
+            if frame % SIZE_EVERY == 0:
+                window.request_size()
+            frame += 1
             for event in window.poll(Duration(Float32(FRAME_MS), MILLISECOND)):
                 var quit = event.key == QUIT or event.key == ESCAPE
                 if event.kind == KEY_DOWN and (quit or event.key == CTRL_C):
                     running = False
+                var grew = event.x != width or event.y != height
+                if event.kind == RESIZE and grew:
+                    width = event.x
+                    height = event.y
+                    window.resize(width, height)
+                    renderer = Renderer(
+                        width, height, workers=available_workers()
+                    )
+                    renderer.set_background(Color(16, 18, 26))
+                    camera.aspect = Float32(width) / Float32(height)
+                    continue
                 controls.handle(event, camera, height)
             _ = controls.update(camera, clock.delta())
             window.present(renderer.render(scene, assets, camera))

@@ -24,6 +24,7 @@ from controls.input import (
     POINTER_UP,
     PRIMARY,
     PointerButton,
+    RESIZE,
     SECONDARY,
     WHEEL,
 )
@@ -68,7 +69,7 @@ def test_the_types_know_their_values() raises:
     assert_true(KEY_DOWN.is_valid())
     assert_true(WHEEL.is_valid())
     assert_false(InputKind(-1).is_valid())
-    assert_false(InputKind(5).is_valid())
+    assert_false(InputKind(7).is_valid())
     assert_true(NO_BUTTON.is_valid())
     assert_true(SECONDARY.is_valid())
     assert_false(PointerButton(-2).is_valid())
@@ -200,6 +201,19 @@ def test_an_endless_sequence_is_dropped() raises:
         noise += "1"
     assert_equal(len(_decode(decoder, noise)), 0)
     assert_equal(len(decoder.pending), 0)
+
+
+def test_the_terminals_size_report_is_a_resize() raises:
+    var size = _one("\x1b[8;24;80t")
+    assert_true(size.kind == RESIZE)
+    assert_equal(size.x, 80)
+    assert_equal(size.y, 24)
+    var decoder = InputDecoder()
+    # Another report, and one of the wrong shape, are dropped.
+    assert_equal(len(_decode(decoder, "\x1b[4;480;640t")), 0)
+    assert_equal(len(_decode(decoder, "\x1b[8;24t")), 0)
+    assert_true(RESIZE.is_valid())
+    assert_false(InputKind(6).is_valid())
 
 
 def test_an_event_holds_what_it_is_given() raises:

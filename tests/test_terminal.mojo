@@ -18,6 +18,7 @@ from controls.input import (
     POINTER_DOWN,
     POINTER_MOVE,
     PRIMARY,
+    RESIZE,
     Key,
 )
 from render.framebuffer import Color, Framebuffer
@@ -252,6 +253,40 @@ def test_poll_reads_keys_and_the_mouse_in_pixels() raises:
     window.close()
     with assert_raises(contains="closed"):
         _ = window.poll(Duration(0.0, SECOND))
+    pty.close_terminal()
+    pty.close_user()
+
+
+def test_a_window_asks_its_size_and_takes_a_new_one() raises:
+    var pty = PseudoTerminal()
+    var window = TerminalWindow(
+        4, 4, input_fd=Int(pty.terminal), output_fd=Int(pty.terminal)
+    )
+    _ = pty.screen()
+    window.request_size()
+    assert_equal(pty.screen(), "\x1b[18t")
+    # The terminal's answer: 24 rows of 80 columns, 80 by 48 pixels.
+    pty.type_text("\x1b[8;24;80t")
+    var events = window.poll(Duration(100.0, MILLISECOND))
+    assert_equal(len(events), 1)
+    assert_true(events[0].kind == RESIZE)
+    assert_equal(events[0].x, 80)
+    assert_equal(events[0].y, 48)
+    window.resize(80, 48)
+    assert_equal(window.width, 80)
+    assert_equal(window.height, 48)
+    assert_true(pty.screen().endswith("\x1b[2J"))
+    window.present(Framebuffer(80, 48, Color(0, 0, 0)))
+    _ = pty.screen()
+    with assert_raises(contains="must be positive"):
+        window.resize(0, 4)
+    with assert_raises(contains="must be positive"):
+        window.resize(4, 0)
+    window.close()
+    with assert_raises(contains="closed"):
+        window.request_size()
+    with assert_raises(contains="closed"):
+        window.resize(4, 4)
     pty.close_terminal()
     pty.close_user()
 
