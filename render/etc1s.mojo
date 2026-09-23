@@ -32,6 +32,13 @@ repeat the last symbol. Each block's selector is a codebook index, an
 index into a short history of recent selectors, or part of a run of the
 most recent one.
 
+**A video predicts from its last frame.** A file that is a video keeps
+each level's frames as its layers. A P-frame's block can copy the
+endpoint and the selector of the same block in the frame before, where a
+still image copies the block above left. A frame decodes after every
+image the transcoder decodes before it at that level, in the order
+three.js asks for them: face by face, and layer by layer in each face.
+
 **Alpha is a second slice.** A file with alpha stores it as a second
 ETC1S image whose green channel is the alpha.
 
@@ -300,8 +307,8 @@ struct Etc1sGlobal(Movable):
 
         Raises:
             Error: If the data is shorter than its header says, a count or
-                a length is zero, an image is a P-frame of a video or lacks
-                a slice, or a codebook or table is malformed.
+                a length is zero, an image lacks a slice, or a codebook or
+                table is malformed.
         """
         self.endpoints = List[Int]()
         self.selectors = List[Int]()
@@ -341,8 +348,6 @@ struct Etc1sGlobal(Movable):
             var at = GLOBAL_HEADER_BYTES + image * IMAGE_DESC_BYTES
             for field in range(5):  # pragma: no branch
                 self.images.append(_u32(bytes, at + field * 4))
-            if self.images[image * 5] & P_FRAME_FLAG != 0:
-                raise Error("ETC1S: video P-frames are not ported")
             if self.images[image * 5 + 2] == 0:
                 raise Error("ETC1S: an image has no color slice")
             if has_alpha:
@@ -367,6 +372,17 @@ struct Etc1sGlobal(Movable):
             _Bits(bytes, start + endpoint_bytes, selector_bytes),
             selector_count,
         )
+
+    def has_p_frames(self) -> Bool:
+        """Return True if an image is a P-frame of a video.
+
+        Returns:
+            True if any image's flags have the P-frame bit.
+        """
+        for image in range(len(self.images) // 5):
+            if self.images[image * 5] & P_FRAME_FLAG != 0:
+                return True
+        return False
 
 
 def _any_zero(a: Int, b: Int, c: Int, d: Int, e: Int) -> Bool:
@@ -473,6 +489,8 @@ def etc1s_image(
     width: Int,
     height: Int,
     has_alpha: Bool,
+    video: Bool = False,
+    before: List[Int] = List[Int](),
 ) raises -> List[UInt8]:
     """Return one image of an ETC1S file as RGBA bytes, row-major.
 
@@ -483,6 +501,10 @@ def etc1s_image(
         width: The level's width in texels.
         height: Its height.
         has_alpha: Whether the image has an alpha slice.
+        video: Whether the file is a video, whose blocks can copy the
+            frame before.
+        before: For a video, the images of the same level the transcoder
+            decodes before this one, in its order; they are decoded first.
 
     Returns:
         `width * height * 4` bytes. Alpha is 255 when there is no alpha
@@ -491,11 +513,40 @@ def etc1s_image(
     Raises:
         Error: If a slice lies outside the level, or is malformed.
     """
-    var desc = List[Int](global_data.images[image * 5 : image * 5 + 5])
     var out = List[UInt8](length=width * height * 4, fill=255)
-    if has_alpha:
-        _slice(global_data, level, desc[3], desc[4], width, height, out, True)
-    _slice(global_data, level, desc[1], desc[2], width, height, out, False)
+    var blocks = ((width + 3) // 4) * ((height + 3) // 4)
+    # Per slice, each block's endpoint and selector in the frame before.
+    var colors = List[Int](length=blocks, fill=0)
+    var alphas = List[Int](length=blocks, fill=0)
+    var order = before.copy()
+    order.append(image)
+    for index in order:  # pragma: no branch
+        var desc = List[Int](global_data.images[index * 5 : index * 5 + 5])
+        if has_alpha:
+            _slice(
+                global_data,
+                level,
+                desc[3],
+                desc[4],
+                width,
+                height,
+                out,
+                True,
+                video,
+                alphas,
+            )
+        _slice(
+            global_data,
+            level,
+            desc[1],
+            desc[2],
+            width,
+            height,
+            out,
+            False,
+            video,
+            colors,
+        )
     return out^
 
 
@@ -508,6 +559,8 @@ def _slice(
     height: Int,
     mut out: List[UInt8],
     alpha: Bool,
+    video: Bool,
+    mut previous: List[Int],
 ) raises:
     """Decode one slice into `out`: its colors, or its green as alpha.
 
@@ -520,6 +573,10 @@ def _slice(
         height: Its height.
         out: The RGBA image; written.
         alpha: Write the green of each texel to alpha, not the colors.
+        video: Whether the file is a video: a block that would copy the
+            block above left copies the same block of the frame before.
+        previous: For a video, each block's endpoint and, sixteen bits up,
+            selector in the frame before; updated to this frame's.
 
     Raises:
         Error: If the slice lies outside the level, or a prediction, a
@@ -577,6 +634,8 @@ def _slice(
                 if by == 0:
                     raise Error("ETC1S: a block at the top edge copies above")
                 endpoint = rows[here ^ 1][bx]
+            elif predict == 2 and video:
+                endpoint = previous[by * across + bx] & 0xFFFF
             elif predict == 2:
                 if bx * by == 0:
                     raise Error("ETC1S: a block at an edge copies above left")
@@ -589,7 +648,10 @@ def _slice(
                     raise Error("ETC1S: an endpoint delta is out of range")
             rows[here][bx] = endpoint
             var selector: Int
-            if run > 0:
+            if predict == 2 and video:
+                # The frame before's selector, with no symbol read.
+                selector = previous[by * across + bx] >> 16
+            elif run > 0:
                 run -= 1
                 selector = history[0]
             else:
@@ -617,6 +679,7 @@ def _slice(
                     selector = history[index]
                     history[index] = history[index // 2]
                     history[index // 2] = selector
+            previous[by * across + bx] = endpoint | (selector << 16)
             _write_block(
                 global_data,
                 endpoint,

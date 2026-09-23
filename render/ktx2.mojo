@@ -42,8 +42,16 @@ Vulkan format. three.js transcodes its data to whatever the GPU takes
 with the Basis Universal WebAssembly transcoder. Here `texture` decodes
 it to RGBA bytes, the texels that transcoder gives for its `RGBA32`
 target: UASTC through `render.uastc`, and ETC1S, which BasisLZ always
-stores, through `render.etc1s`. UASTC HDR is not ported. The Vulkan
-formats read are in `VkFormat`.
+stores, through `render.etc1s`. An ETC1S video decodes each frame after
+the frames before it. UASTC HDR 4x4 names no Vulkan format or ASTC 4x4
+SFLOAT, and decodes to floats, the texels of the transcoder's
+`RGBA_HALF` target, through `render.uastc_hdr`. The Vulkan formats read
+are in `VkFormat`.
+
+**What three.js cannot transcode is refused.** Its transcoder is Basis
+Universal 1.50. It does not know UASTC HDR 6x6, XUASTC LDR or XUBC7, and
+three.js finds no target for UASTC HDR with alpha, so this reader
+refuses them too.
 """
 
 from render.compressed_texture import (
@@ -86,6 +94,7 @@ from render.texture import (
     float_texture,
 )
 from render.uastc import UASTC_BLOCK_BYTES, uastc_image
+from render.uastc_hdr import uastc_hdr_image
 from render.zstd import zstd_decompress
 
 # The identifier, nine header words and the index.
@@ -95,6 +104,18 @@ comptime LEVEL_ENTRY_BYTES = 24
 # The data format descriptor's color models for Basis Universal data.
 comptime KHR_DF_MODEL_ETC1S = 163
 comptime KHR_DF_MODEL_UASTC = 166
+comptime KHR_DF_MODEL_UASTC_HDR = 167
+# The color models of the Basis Universal formats three.js's transcoder
+# does not know: UASTC HDR 6x6, XUASTC LDR and XUBC7.
+comptime FIRST_UNKNOWN_BASIS_MODEL = 168
+comptime LAST_UNKNOWN_BASIS_MODEL = 170
+# The first sample's channels that mean alpha: RGBA and RRRG.
+comptime KHR_DF_CHANNEL_RGBA = 3
+comptime KHR_DF_CHANNEL_RRRG = 5
+# The transcoder keeps a video's last frame for this many levels.
+comptime MAX_VIDEO_LEVELS = 16
+# The key that says an ETC1S file is a video.
+comptime ANIMATION_KEY = "KTXanimData"
 # The size of a basic descriptor block with one sample; each more sample
 # adds sixteen bytes.
 comptime ONE_SAMPLE_BLOCK_BYTES = 40
@@ -179,6 +200,8 @@ comptime VK_R32G32_SFLOAT = VkFormat(103)
 comptime VK_R32G32B32A32_SFLOAT = VkFormat(109)
 # The number a Basis Universal file stores: no Vulkan format.
 comptime VK_FORMAT_UNDEFINED = VkFormat(0)
+# The number a UASTC HDR 4x4 file can store instead: ASTC 4x4 SFLOAT.
+comptime VK_FORMAT_ASTC_4x4_SFLOAT = VkFormat(1000066000)
 
 
 def compressed_format_of(format: VkFormat) raises -> CompressedFormat:
@@ -346,6 +369,11 @@ struct KTX2Container(Movable):
     var has_alpha: Bool
     """Whether the descriptor has more than one sample: for ETC1S, an
     alpha slice per image."""
+    var channel: Int
+    """The first sample's channel: for UASTC HDR, 3 or 5 means alpha."""
+    var video: Bool
+    """Whether an ETC1S file is a video: its key and value data names
+    `KTXanimData`, or an image of a flat array is a P-frame."""
     var level_data: List[List[UInt8]]
     """Each level's bytes, largest first, decompressed. For ETC1S, the
     BasisLZ slices of the level."""
@@ -366,6 +394,8 @@ struct KTX2Container(Movable):
         self.premultiplied = False
         self.color_space = LINEAR
         self.has_alpha = False
+        self.channel = 0
+        self.video = False
         self.level_data = List[List[UInt8]]()
         self.etc1s = Etc1sGlobal()
 
@@ -384,6 +414,14 @@ struct KTX2Container(Movable):
             True for the ETC1S color model.
         """
         return self.color_model == KHR_DF_MODEL_ETC1S
+
+    def is_uastc_hdr(self) -> Bool:
+        """Return True if the data is Basis Universal UASTC HDR 4x4.
+
+        Returns:
+            True for the UASTC HDR color model.
+        """
+        return self.color_model == KHR_DF_MODEL_UASTC_HDR
 
     def level_width(self, level: Int) -> Int:
         """Return a level's width: halved per level, never below one.
@@ -411,9 +449,11 @@ struct KTX2Container(Movable):
         """Return True if the format decodes to floats rather than bytes.
 
         Returns:
-            True for a half or float format, BC6H, the signed RGTC forms
-            and the eleven-bit EAC forms.
+            True for UASTC HDR, a half or float format, BC6H, the signed
+            RGTC forms and the eleven-bit EAC forms.
         """
+        if self.is_uastc_hdr():
+            return True
         if self.vk_format.is_uncompressed():
             return self.vk_format.channel_bytes() > 1
         # 139 to 144 are BC4 to BC6H, and 153 to 156 are EAC R11 and RG11:
@@ -433,14 +473,15 @@ struct KTX2Container(Movable):
             level: The level, zero the largest.
 
         Returns:
-            The size in bytes. For UASTC, sixteen bytes a 4x4 block.
+            The size in bytes. For UASTC and UASTC HDR, sixteen bytes a
+            4x4 block.
 
         Raises:
             Error: If the format is not one this reader decodes.
         """
         var width = self.level_width(level)
         var height = self.level_height(level)
-        if self.is_uastc():
+        if self.is_uastc() or self.is_uastc_hdr():
             return (width + 3) // 4 * ((height + 3) // 4) * UASTC_BLOCK_BYTES
         if self.vk_format.is_uncompressed():
             return (
@@ -465,7 +506,10 @@ struct KTX2Container(Movable):
         file's color space.
 
         UASTC and ETC1S data decode to a byte texture, as the Basis
-        Universal transcoder decodes them to RGBA32. A block format
+        Universal transcoder decodes them to RGBA32. UASTC HDR decodes to
+        a float texture, as the transcoder decodes it to RGBA_HALF. A
+        frame of an ETC1S video decodes after every image of its level
+        the transcoder decodes before it. A block format
         decodes through `compressed_texture`. An eight-bit
         format gives a byte texture, and a half or float format a float
         texture. A channel the format does not store is zero, and alpha
@@ -485,9 +529,10 @@ struct KTX2Container(Movable):
 
         Raises:
             Error: If there is no such face, layer or level; a half or
-                float format is not `LINEAR`, or holds an infinity or a
-                NaN; a UASTC or ETC1S image is malformed; and everything
-                `compressed_texture` raises.
+                float format or UASTC HDR is not `LINEAR`; a half or float
+                format holds an infinity or a NaN; a UASTC, UASTC HDR or
+                ETC1S image is malformed; a video has a level past the
+                sixteenth; and everything `compressed_texture` raises.
         """
         if face < 0 or face >= self.faces:
             raise Error("KTX2: this file has no face " + String(face))
@@ -499,6 +544,21 @@ struct KTX2Container(Movable):
         var height = self.level_height(level)
         if self.is_etc1s():
             var image = (level * self.layers + layer) * self.faces + face
+            var before = List[Int]()
+            if self.video:
+                if level >= MAX_VIDEO_LEVELS:
+                    raise Error(
+                        "KTX2: the transcoder decodes a video's first"
+                        " sixteen levels only"
+                    )
+                # three.js asks for the images face by face, and layer by
+                # layer in each face.
+                for index in range(face * self.layers + layer):
+                    var earlier = index % self.layers
+                    before.append(
+                        (level * self.layers + earlier) * self.faces
+                        + index // self.layers
+                    )
             return Texture(
                 width,
                 height,
@@ -509,6 +569,8 @@ struct KTX2Container(Movable):
                     width,
                     height,
                     self.has_alpha,
+                    self.video,
+                    before,
                 ),
                 wrap,
                 filter,
@@ -519,6 +581,17 @@ struct KTX2Container(Movable):
         var size = self.image_bytes(level)
         var start = (layer * self.faces + face) * size
         var bytes = List[UInt8](self.level_data[level][start : start + size])
+        if self.is_uastc_hdr():
+            self._check_linear()
+            return float_texture(
+                width,
+                height,
+                uastc_hdr_image(width, height, bytes),
+                wrap,
+                filter,
+                mipmapped,
+                alpha,
+            )
         if self.is_uastc():
             return Texture(
                 width,
@@ -562,11 +635,7 @@ struct KTX2Container(Movable):
                 mipmapped,
                 alpha,
             )
-        if self.color_space != LINEAR:
-            raise Error(
-                "KTX2: a half or float format holds linear light; its"
-                " transfer function must not be sRGB"
-            )
+        self._check_linear()
         var floats = List[Float32](length=width * height * 4, fill=0)
         for texel in range(width * height):  # pragma: no branch
             floats[texel * 4 + 3] = 1
@@ -583,6 +652,18 @@ struct KTX2Container(Movable):
         return float_texture(
             width, height, floats^, wrap, filter, mipmapped, alpha
         )
+
+    def _check_linear(self) raises:
+        """Refuse float data whose transfer function is sRGB's.
+
+        Raises:
+            Error: If the color space is not `LINEAR`.
+        """
+        if self.color_space != LINEAR:
+            raise Error(
+                "KTX2: a half or float format holds linear light; its"
+                " transfer function must not be sRGB"
+            )
 
 
 def _read_descriptor(bytes: List[UInt8], mut container: KTX2Container) raises:
@@ -614,6 +695,63 @@ def _read_descriptor(bytes: List[UInt8], mut container: KTX2Container) raises:
     container.has_alpha = (
         Int(bytes[offset + 10]) | (Int(bytes[offset + 11]) << 8)
     ) > ONE_SAMPLE_BLOCK_BYTES
+    # The first sample's channel, in the low bits of its fourth byte.
+    container.channel = Int(bytes[offset + 31]) & 15 if length >= 32 else 0
+
+
+def _key_is(bytes: List[UInt8], at: Int, length: Int, key: String) -> Bool:
+    """Return True if the `length` bytes at `at` spell `key`."""
+    return List[UInt8](bytes[at : at + length]) == List[UInt8](key.as_bytes())
+
+
+def _has_animation_key(bytes: List[UInt8]) raises -> Bool:
+    """Return True if the key and value data names `KTXanimData`.
+
+    Checked as the Basis Universal transcoder checks it: each entry is its
+    length, a key ending in a zero byte, its value, and padding to four
+    bytes.
+
+    Args:
+        bytes: The whole file.
+
+    Returns:
+        True if an entry's key is `KTXanimData`.
+
+    Raises:
+        Error: If the data has an offset but no length, lies outside the
+            file, or has an entry that is too short, runs past the end or
+            has no end to its key.
+    """
+    var offset = _u32(bytes, 56)
+    var left = _u32(bytes, 60)
+    if left == 0:
+        if offset != 0:
+            raise Error("KTX2: the key and value data has no length")
+        return False
+    if offset < HEADER_BYTES or _outside(offset, left, len(bytes)):
+        raise Error("KTX2: the key and value data lies outside the file")
+    var at = offset
+    var found = False
+    while left > 4:
+        var size = _u32(bytes, at)
+        at += 4
+        left -= 4
+        if size < 2 or left < size:
+            raise Error("KTX2: a key and value entry is cut short")
+        var key = 0
+        while key < size and bytes[at + key] != 0:
+            key += 1
+        if key == size:
+            raise Error("KTX2: a key has no zero byte to end it")
+        found = found or _key_is(bytes, at, key, ANIMATION_KEY)
+        at += size
+        left -= size
+        var padding = (4 - (at & 3)) & 3
+        if left < padding:
+            raise Error("KTX2: a key and value entry is cut short")
+        at += padding
+        left -= padding
+    return found
 
 
 def read(bytes: List[UInt8]) raises -> KTX2Container:
@@ -628,7 +766,9 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
     Raises:
         Error: If the identifier is wrong; its Vulkan format or
             supercompression scheme is one this reader does not decode;
-            Basis Universal data names a Vulkan format; ETC1S data does
+            it is UASTC HDR 6x6, XUASTC LDR, XUBC7, or UASTC HDR with
+            alpha; Basis Universal data names a Vulkan format it must not;
+            its key and value data is malformed; ETC1S data does
             not use BasisLZ, or other data does; it is 1D or 3D; it has a
             face count other than one or six, or more levels than its size
             has; its size would decode to more than `MAX_DECODED_BYTES`;
@@ -654,23 +794,54 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
     container.levels = max(1, _u32(bytes, 40))
     container.supercompression = Supercompression(_u32(bytes, 44))
     _read_descriptor(bytes, container)
+    if (
+        container.color_model >= FIRST_UNKNOWN_BASIS_MODEL
+        and container.color_model <= LAST_UNKNOWN_BASIS_MODEL
+    ):
+        var names: List[String] = ["UASTC HDR 6x6", "XUASTC LDR", "XUBC7"]
+        raise Error(
+            "KTX2: "
+            + names[container.color_model - FIRST_UNKNOWN_BASIS_MODEL]
+            + " is not ported: three.js's Basis Universal transcoder cannot"
+            " transcode it"
+        )
     var etc1s = container.is_etc1s()
     if etc1s != (container.supercompression == BASISLZ_SUPERCOMPRESSION):
         raise Error(
             "KTX2: ETC1S data must use BasisLZ supercompression, and no"
             " other data can"
         )
+    var basis = etc1s or container.is_uastc() or container.is_uastc_hdr()
     if etc1s or container.is_uastc():
         if container.vk_format != VK_FORMAT_UNDEFINED:
             raise Error("KTX2: Basis Universal data must name no Vulkan format")
+    elif container.is_uastc_hdr():
+        if (
+            container.vk_format != VK_FORMAT_UNDEFINED
+            and container.vk_format != VK_FORMAT_ASTC_4x4_SFLOAT
+        ):
+            raise Error(
+                "KTX2: UASTC HDR data must name no Vulkan format, or ASTC 4x4"
+                " SFLOAT"
+            )
+        if (
+            container.channel == KHR_DF_CHANNEL_RGBA
+            or container.channel == KHR_DF_CHANNEL_RRRG
+        ):
+            raise Error(
+                "KTX2: UASTC HDR with alpha is not ported: three.js finds no"
+                " format to transcode it to"
+            )
     elif not container.vk_format.is_valid():
         raise Error(
             "KTX2: "
             + String(container.vk_format)
             + " is not a format this reader decodes; ASTC, PVRTC, ETC2 with"
-            " punch-through alpha, UASTC HDR and the other Vulkan formats"
-            " are not ported"
+            " punch-through alpha and the other Vulkan formats are not ported"
         )
+    var animated = False
+    if basis:
+        animated = _has_animation_key(bytes)
     if not container.supercompression.is_valid():
         raise Error(
             "KTX2: "
@@ -722,5 +893,12 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
             List[UInt8](bytes[offset : offset + length]),
             images * container.levels,
             container.has_alpha,
+        )
+        # A P-frame makes a video only in a flat array, as the transcoder
+        # reads it.
+        container.video = animated or (
+            container.faces == 1
+            and container.layers > 1
+            and container.etc1s.has_p_frames()
         )
     return container^

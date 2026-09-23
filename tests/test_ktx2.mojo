@@ -8,10 +8,13 @@ uncompressed formats, stored whole and through zlib and Zstandard; Basis
 Universal files; and every file this reader refuses.
 
 The Basis Universal files under `assets/ktx2/` were written by the Basis
-Universal 2.50 encoder that ktx2-encoder 0.6.0 bundles. Each level's
-expected texels are what the Basis Universal transcoder of three.js r186,
-`examples/jsm/libs/basis/basis_transcoder.wasm`, gives for its `RGBA32`
-target; the tests compare their XXH64 hash."""
+Universal 2.50 encoder that ktx2-encoder 0.6.0 bundles, except
+`uastc_hdr_blocks.ktx2`: random ASTC 4x4 blocks that the transcoder
+accepts, chosen to use every endpoint mode, partition count, grid and
+range. Each level's expected texels are what the Basis Universal
+transcoder of three.js r186, `examples/jsm/libs/basis/basis_transcoder.wasm`,
+gives for its `RGBA32` target, or `RGBA_HALF` for UASTC HDR; the tests
+compare their XXH64 hash."""
 
 from render.compressed_texture import (
     RGB_S3TC_DXT1_FORMAT,
@@ -21,6 +24,7 @@ from render.compressed_texture import (
 from render.ktx2 import (
     BASISLZ_SUPERCOMPRESSION,
     NO_SUPERCOMPRESSION,
+    VK_FORMAT_ASTC_4x4_SFLOAT,
     VK_FORMAT_UNDEFINED,
     VK_R8G8B8A8_SRGB,
     ZLIB_SUPERCOMPRESSION,
@@ -36,6 +40,7 @@ from render.png import zlib_stream
 from render.srgb import LINEAR, SRGB
 from render.texture import FLOAT_TYPE, UNSIGNED_BYTE_TYPE
 from render.zstd import xxh64
+from std.memory import bitcast
 from std.pathlib import Path
 from std.testing import (
     TestSuite,
@@ -331,6 +336,206 @@ def test_uastc_files_decode_as_three_js_transcodes_them() raises:
     assert_equal(container.supercompression, ZSTD_SUPERCOMPRESSION)
     assert_equal(container.color_space, SRGB)
     assert_equal(container.texture().color_space, SRGB)
+
+
+def float_hash(name: String, level: Int = 0) raises -> Tuple[Int, UInt64]:
+    """Return the width of a level of a UASTC HDR fixture and the XXH64
+    hash of its floats' bytes."""
+    var container = read(Path("assets/ktx2/" + name).read_bytes())
+    var image = container.texture(level=level)
+    assert_equal(image.texel_type, FLOAT_TYPE)
+    return (image.width, hash_floats(image.data))
+
+
+def hash_floats(floats: List[Float32]) -> UInt64:
+    """Return the XXH64 hash of floats' little-endian bytes."""
+    var bytes = List[UInt8]()
+    for value in floats:
+        var bits = bitcast[DType.uint32](value)
+        for byte in range(4):
+            bytes.append(UInt8((bits >> UInt32(byte * 8)) & 0xFF))
+    return xxh64(bytes, 0, len(bytes))
+
+
+def video_hash(name: String, level: Int, layer: Int) raises -> UInt64:
+    """Return the XXH64 hash of one frame of an ETC1S video fixture."""
+    var container = read(Path("assets/ktx2/" + name).read_bytes())
+    var image = container.texture(layer=layer, level=level)
+    return xxh64(image.pixels, 0, len(image.pixels))
+
+
+def test_uastc_hdr_files_decode_as_three_js_transcodes_them() raises:
+    # 240 blocks, 16x960 texels, that use every endpoint mode.
+    var blocks = float_hash("uastc_hdr_blocks.ktx2")
+    assert_equal(blocks[1], 0xDC5C50AB9267CD0D)
+    var file = Path("assets/ktx2/uastc_hdr_blocks.ktx2").read_bytes()
+    var container = read(file)
+    assert_true(container.is_uastc_hdr())
+    assert_true(container.decodes_to_floats())
+    assert_equal(container.vk_format, VK_FORMAT_ASTC_4x4_SFLOAT)
+    assert_equal(container.image_bytes(0), len(file) - 148)
+    # The same blocks naming no Vulkan format.
+    var undefined = file.copy()
+    put(undefined, 12, 0)
+    var image = read(undefined).texture()
+    assert_equal(hash_floats(image.data), 0xDC5C50AB9267CD0D)
+    # Zstandard, and levels of 21x13 down to 1x1. The encoder scaled the
+    # values and wrote the scale as `KTXmapRange`, which three.js ignores.
+    var hashes: List[UInt64] = [
+        0x44297799341AE43E, 0x412C488599F34B46, 0xDBB35FBC772B3E96,
+        0x7355ED7542C6FEE3, 0xBD9C45478ECEC573,
+    ]  # fmt: skip
+    var widths: List[Int] = [21, 10, 5, 2, 1]
+    for level in range(5):
+        var got = float_hash("uastc_hdr_zstd_mips.ktx2", level)
+        assert_equal(got[0], widths[level])
+        assert_equal(got[1], hashes[level])
+
+
+def test_etc1s_videos_decode_as_three_js_transcodes_them() raises:
+    # Four frames with no key naming a video: its P-frames make it one.
+    var name = "etc1s_video.ktx2"
+    var container = read(Path("assets/ktx2/" + name).read_bytes())
+    assert_true(container.video)
+    var frames: List[UInt64] = [
+        0xACC11E702C012F92, 0x14F0BEB3B1965823, 0xEDD02376D83797A6,
+        0xF244E3F8D72790F6,
+    ]  # fmt: skip
+    for layer in range(4):
+        assert_equal(video_hash(name, 0, layer), frames[layer])
+    # Read as a still image, a P-frame's copies go wrong or are refused.
+    container.video = False
+    var still: UInt64 = 0
+    try:
+        var image = container.texture(layer=1)
+        still = xxh64(image.pixels, 0, len(image.pixels))
+    except:
+        pass
+    assert_true(still != frames[1])
+    # Alpha, six frames, and six levels of 40x28 down to 1x1: the last
+    # frame of each level decodes after every frame before it.
+    var alpha = "etc1s_video_alpha_mips.ktx2"
+    var last: List[UInt64] = [
+        0x5B62733D64F0C9CF, 0x4828D079D50EC59F, 0x7B625EA446A47510,
+        0xE1B03F92836ADF4E, 0xE71A897641EC443E, 0xCE8330827EF7CB31,
+    ]  # fmt: skip
+    for level in range(6):
+        assert_equal(video_hash(alpha, level, 5), last[level])
+    assert_equal(video_hash(alpha, 0, 2), 0xEF96AC3CB10A1759)
+
+
+def test_a_video_decodes_its_first_sixteen_levels_only() raises:
+    var container = KTX2Container()
+    container.color_model = 163
+    container.video = True
+    container.width = 1 << 16
+    container.height = 1
+    container.levels = 17
+    with assert_raises(contains="sixteen levels"):
+        _ = container.texture(level=16)
+
+
+def with_key_values(var file: List[UInt8], entries: List[UInt8]) -> List[UInt8]:
+    """Return a file with key and value data appended at its end, from a
+    multiple of four bytes, as padding counts from the file's start."""
+    while len(file) % 4 != 0:
+        file.append(0)
+    put(file, 56, len(file))
+    put(file, 60, len(entries))
+    file.extend(entries.copy())
+    return file^
+
+
+def entry(key: String, value: List[UInt8]) -> List[UInt8]:
+    """Return one key and value entry, padded to four bytes."""
+    var out = List[UInt8](length=4, fill=0)
+    out.extend(List[UInt8](key.as_bytes()))
+    out.append(0)
+    out.extend(value.copy())
+    put(out, 0, len(out) - 4)
+    while len(out) % 4 != 0:
+        out.append(0)
+    return out^
+
+
+def test_key_value_data_is_checked() raises:
+    # A key naming a video makes an ETC1S file one.
+    var rgb = Path("assets/ktx2/etc1s_rgb.ktx2").read_bytes()
+    var entries = entry("KTXwriter", [0x41])
+    entries.extend(entry("KTXanimData", [1, 0, 0, 0]))
+    var animated = with_key_values(rgb.copy(), entries)
+    assert_true(read(animated).video)
+    assert_false(read(rgb).video)
+    # UASTC files are checked the same way.
+    var uastc = Ktx2(0, 4, 4)
+    uastc.color_model = 166
+    uastc.level(List[UInt8](length=16, fill=0))
+    var file = uastc.bytes()
+    _ = read(with_key_values(file.copy(), entry("KTXorientation", [0x72])))
+    var no_length = file.copy()
+    put(no_length, 56, 100)
+    with assert_raises(contains="has no length"):
+        _ = read(no_length)
+    var low = with_key_values(file.copy(), entry("a", []))
+    put(low, 56, 8)
+    with assert_raises(contains="lies outside"):
+        _ = read(low)
+    var past = with_key_values(file.copy(), entry("a", []))
+    put(past, 60, 100)
+    with assert_raises(contains="lies outside"):
+        _ = read(past)
+    # An entry of one byte, one longer than the data, one whose key has
+    # no end, and one whose padding the data cuts off.
+    var tiny: List[UInt8] = [1, 0, 0, 0, 0x41, 0, 0, 0]
+    with assert_raises(contains="cut short"):
+        _ = read(with_key_values(file.copy(), tiny))
+    var long: List[UInt8] = [9, 0, 0, 0, 0x41, 0, 0, 0]
+    with assert_raises(contains="cut short"):
+        _ = read(with_key_values(file.copy(), long))
+    var endless: List[UInt8] = [4, 0, 0, 0, 0x41, 0x42, 0x43, 0x44]
+    with assert_raises(contains="no zero byte"):
+        _ = read(with_key_values(file.copy(), endless))
+    var unpadded: List[UInt8] = [3, 0, 0, 0, 0x41, 0x42, 0]
+    with assert_raises(contains="cut short"):
+        _ = read(with_key_values(file.copy(), unpadded))
+
+
+def test_basis_formats_three_js_cannot_transcode_are_refused() raises:
+    var names: List[String] = ["UASTC HDR 6x6", "XUASTC LDR", "XUBC7"]
+    for index in range(3):
+        var file = Ktx2(0, 4, 4)
+        file.color_model = 168 + index
+        file.level(List[UInt8](length=16, fill=0))
+        with assert_raises(contains=names[index] + " is not ported"):
+            _ = read(file.bytes())
+    # The models on either side are other formats.
+    for model in [100, 171]:
+        var file = Ktx2(131, 4, 4)
+        file.color_model = model
+        file.level(bc1(0))
+        _ = read(file.bytes())
+    # UASTC HDR names no Vulkan format or ASTC 4x4 SFLOAT.
+    var named = Ktx2(131, 4, 4)
+    named.color_model = 167
+    named.level(List[UInt8](length=16, fill=0))
+    with assert_raises(contains="ASTC 4x4 SFLOAT"):
+        _ = read(named.bytes())
+    # UASTC HDR with alpha: three.js finds no format to transcode it to.
+    for channel in [3, 5]:
+        var hdr = Ktx2(0, 4, 4)
+        hdr.color_model = 167
+        hdr.level(List[UInt8](length=16, fill=0))
+        var bytes = hdr.bytes()
+        bytes[80 + 24 + 31] = UInt8(channel)
+        with assert_raises(contains="UASTC HDR with alpha"):
+            _ = read(bytes)
+    # UASTC HDR holds linear light.
+    var srgb = Ktx2(0, 4, 4)
+    srgb.color_model = 167
+    srgb.transfer = 2
+    srgb.level(List[UInt8](length=16, fill=0))
+    with assert_raises(contains="linear light"):
+        _ = read(srgb.bytes()).texture()
 
 
 def test_etc1s_files_decode_as_three_js_transcodes_them() raises:

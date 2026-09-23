@@ -89,7 +89,7 @@ The 565 channels widen to eight bits by copying their top bits down, as the hard
 
 ## KTX2 and compressed formats
 
-`render/compressed_texture.mojo` decodes eighteen block formats. `render/dds.mojo`, `render/ktx.mojo` and `render/ktx2.mojo` read the three container files that three.js reads. Each container gives every level of every face, and a `texture` method decodes one of them. A KTX2 file can also hold Basis Universal data, UASTC or ETC1S, and Zstandard supercompression. This reader decodes both.
+`render/compressed_texture.mojo` decodes eighteen block formats. `render/dds.mojo`, `render/ktx.mojo` and `render/ktx2.mojo` read the three container files that three.js reads. Each container gives every level of every face, and a `texture` method decodes one of them. A KTX2 file can also hold Basis Universal data and Zstandard supercompression. This reader decodes UASTC, UASTC HDR 4x4, ETC1S and ETC1S video, and Zstandard.
 
 three.js: `KTX2Loader`, `KTXLoader`, `DDSLoader`, `CompressedTexture` and the compressed format constants.
 
@@ -154,22 +154,33 @@ A KTX2 file can also hold eight-bit, half and float texels. `R8`, `R8G8` and `R8
 
 ### Basis Universal
 
-A KTX2 file whose data format descriptor names the UASTC or the ETC1S color model holds Basis Universal data. Its Vulkan format is `VK_FORMAT_UNDEFINED`. three.js transcodes the data to a GPU format with the Basis Universal WebAssembly transcoder. Here `texture` decodes it to an RGBA byte texture. The texels are the texels that transcoder gives for its `RGBA32` target.
+A KTX2 file whose data format descriptor names the UASTC, UASTC HDR or ETC1S color model holds Basis Universal data. three.js transcodes the data to a GPU format with the Basis Universal WebAssembly transcoder. Here `texture` decodes UASTC and ETC1S to an RGBA byte texture, with the texels of that transcoder's `RGBA32` target. It decodes UASTC HDR to a float texture, with the texels of the `RGBA_HALF` target.
 
 ```mojo
 var container = read_ktx2(Path("rock_uastc.ktx2").read_bytes())
 if container.is_uastc() or container.is_etc1s():
     var rock = assets.textures.add(container.texture(level=0))
+var sky = read_ktx2(Path("sky_uastc_hdr.ktx2").read_bytes())
+if sky.is_uastc_hdr():
+    var light = assets.textures.add(sky.texture())
 ```
 
 | Data | Module | How it decodes |
 |---|---|---|
 | UASTC LDR 4x4 | `render/uastc.mojo` | One 16-byte block for each 4x4 texels. A prefix code names one of nineteen modes. The mode sets the subsets, the planes, the components and the endpoint and weight ranges. The endpoints unquantize and blend as ASTC blends them. |
+| UASTC HDR 4x4 | `render/uastc_hdr.mojo` | One ASTC 4x4 block for each 4x4 texels. The decoder reads every ASTC feature that fits a 4x4 block: void extents, weight grids of 2x2 to 4x4, dual planes, one to four partitions, and all sixteen endpoint modes. Each texel becomes four half floats. |
 | ETC1S | `render/etc1s.mojo` | The BasisLZ global data holds an endpoint codebook, a selector codebook and four Huffman tables. Each image is a slice of Huffman-coded codebook indices, with predictions from the neighbor blocks and a history of recent selectors. A file with alpha has a second slice per image, and its green is the alpha. |
+| ETC1S video | `render/etc1s.mojo` | Each frame is a layer. A block of a P-frame can copy the same block of the frame before. |
 
-The two modules port the transcoder of Binomial's Basis Universal, which is Apache-2.0. [THIRD-PARTY-NOTICES.md](https://github.com/SethKitchen/ThreeMojo/blob/main/THIRD-PARTY-NOTICES.md) holds its notice. A UASTC level can be stored whole, or supercompressed with Zstandard or zlib.
+The three modules port the transcoder of Binomial's Basis Universal, which is Apache-2.0. [THIRD-PARTY-NOTICES.md](https://github.com/SethKitchen/ThreeMojo/blob/main/THIRD-PARTY-NOTICES.md) holds its notice. A UASTC or UASTC HDR level can be stored whole, or supercompressed with Zstandard or zlib.
 
-The tests decode files that the Basis Universal 2.50 encoder wrote. Between them, the UASTC files use all nineteen modes. The ETC1S files have alpha, mipmaps, sizes that are not a multiple of four, and gray endpoints. Every level must have the same texels as the three.js r186 transcoder gives.
+**UASTC HDR.** Its Vulkan format is `VK_FORMAT_UNDEFINED` or `VK_FORMAT_ASTC_4x4_SFLOAT`, as the transcoder accepts. An HDR endpoint blends in ASTC's logarithmic encoding and becomes a half. An LDR endpoint blends in sixteen bits and is truncated to a half. The texture holds each half widened to a float, so the values are exact. The texture is `LINEAR`, as a half float texture is.
+
+**ETC1S video.** A file is a video when its key and value data holds the key `KTXanimData`. A flat array with a P-frame is a video too. The transcoder keeps the last frame of each level, and three.js asks for the images face by face, and layer by layer in each face. So `texture` decodes every image that three.js decodes before the one it returns, at the same level.
+
+The tests decode files that the Basis Universal 2.50 encoder wrote. Between them, the UASTC files use all nineteen modes. The ETC1S files have alpha, mipmaps, sizes that are not a multiple of four, and gray endpoints. The videos have P-frames, alpha and six levels. A UASTC HDR file has Zstandard, mipmaps and a size of 21x13. Every level must have the same texels as the three.js r186 transcoder gives.
+
+A second UASTC HDR file holds 240 random ASTC blocks that the transcoder accepts. They use every endpoint mode, partition count, grid and range. The transcoder and this decoder also agree on 200,000 random blocks, valid and not.
 
 ### Zstandard
 
@@ -187,11 +198,11 @@ The tests decode frames that libzstd 1.5.7 wrote at levels -5 to 19. Frames buil
 
 ### What is not ported
 
-- UASTC HDR, in its 4x4 and 6x6 forms, and XUASTC. A file with those color models is refused as a format this reader does not decode.
-- The transcode from UASTC or ETC1S to a GPU block format. Each image decodes to RGBA bytes, as the transcoder's `RGBA32` target gives them.
-- ETC1S video. A KTX2 file whose images include a P-frame is refused.
-- Zstandard dictionaries. A frame that names a dictionary is refused. A KTX2 file never names one.
-- ASTC, PVRTC and ETC2 with punch-through alpha. Each container refuses them by name. three.js uploads ASTC and PVRTC as they are.
+- UASTC HDR 6x6, XUASTC LDR and XUBC7. three.js cannot transcode them either: its transcoder is Basis Universal 1.50, which does not know these formats. `read` refuses them by name.
+- UASTC HDR with alpha. three.js has no transcoder target for it and throws, so `read` refuses it too.
+- The transcode from UASTC, UASTC HDR or ETC1S to a GPU block format. Each image decodes to the texels of the transcoder's `RGBA32` or `RGBA_HALF` target.
+- Zstandard dictionaries. A frame that names a dictionary is refused. three.js cannot read one either: its transcoder and its Zstandard decoder read no dictionary.
+- ASTC, PVRTC and ETC2 with punch-through alpha as Vulkan formats. Each container refuses them by name. three.js uploads ASTC and PVRTC as they are, to a GPU that takes them.
 - Uncompressed DDS files, the premultiplied DXT2 and DXT4, and DDS texture arrays.
 - 1D, 3D and array textures in KTX 1, and 1D and 3D textures in KTX2.
 - The GPU upload of the blocks. Each image decodes on the host and keeps RGBA in memory.
@@ -205,6 +216,9 @@ The tests decode frames that libzstd 1.5.7 wrote at levels -5 to 19. Frames buil
 - DDSLoader computes a level's size from `max(4, width) / 4`, which is a fraction for a width that is not a multiple of four. This reader rounds up to whole blocks.
 - A container is refused if it names more levels than its size has, or a face count other than one or six. A level that does not fit is refused too. three.js reads past such a file.
 - three.js transcodes Basis Universal data to a GPU format, and hands that to the GPU. Here UASTC and ETC1S decode to the `RGBA32` texels of the same transcoder. A GPU that samples the transcoded blocks can differ from them by a step.
+- three.js transcodes UASTC HDR to BC6H when the GPU takes BC6H, and to `RGBA_HALF` otherwise. Here it always decodes to the `RGBA_HALF` texels, held as floats.
+- A UASTC HDR file with the sRGB transfer function is refused, as a half or float format is. three.js makes a half float texture of it.
+- The Basis Universal encoder can scale HDR values and store the scale as the key `KTXmapRange`. three.js does not apply the scale, and this reader does not apply it either.
 - A Zstandard repeated offset of zero is refused. libzstd reads it as one.
 - An ETC1S Huffman code of one symbol matches only its own bit. Binomial's decoder reads any other bit as that symbol.
 
@@ -214,11 +228,14 @@ The tests decode frames that libzstd 1.5.7 wrote at levels -5 to 19. Frames buil
 - A size that decodes to more than `MAX_DECODED_BYTES` is refused before any allocation. A float format counts sixteen bytes a texel.
 - A KTX2 file refuses a descriptor or a level outside the file, and a level whose length is not its size.
 - A KTX2 half or float format with the sRGB transfer function is refused.
-- A KTX2 file with ETC1S data must use BasisLZ, and BasisLZ must hold ETC1S. Basis Universal data must name no Vulkan format.
+- A KTX2 file with ETC1S data must use BasisLZ, and BasisLZ must hold ETC1S. UASTC and ETC1S data must name no Vulkan format. UASTC HDR data must name no Vulkan format or ASTC 4x4 SFLOAT.
+- The key and value data of a Basis Universal file is checked as the transcoder checks it. An entry that is cut short, or a key with no zero byte to end it, is refused.
 - The BasisLZ global data must fit in the file and hold what its header states. A codebook or a table that is empty or malformed is refused.
 - `texture` refuses a UASTC block with the reserved mode or a partition its mode does not have. It refuses an ETC1S slice that predicts from outside the image or reads past its codebooks.
+- `texture` refuses a UASTC HDR block that the transcoder refuses. That is a reserved block mode, a weight grid larger than 4x4, or weights of fewer than 24 bits or more than 96. It is also dual planes with four partitions, endpoints that do not fit, or a malformed void extent.
+- `texture` refuses a level past the sixteenth of an ETC1S video, as the transcoder does.
 - `zstd_decompress` refuses a frame that is cut short, has a reserved bit or type, or does not match its size or its checksum. It refuses a malformed table or bitstream, and a stream that expands past `limit`.
-- `tests/compile_fail/` proves that a bare integer is not a `VkFormat` or a `Supercompression`.
+- `tests/compile_fail/` proves that a bare integer is not a `VkFormat`, a `Supercompression` or an ASTC `EndpointMode`.
 
 ## HDR images
 

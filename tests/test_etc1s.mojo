@@ -14,7 +14,13 @@ code `Writer.table` writes, so a test can say which symbol each code is.
 """
 
 from render.etc1s import Etc1sGlobal, etc1s_image, etc1s_intensities
-from std.testing import TestSuite, assert_equal, assert_raises
+from std.testing import (
+    TestSuite,
+    assert_equal,
+    assert_false,
+    assert_raises,
+    assert_true,
+)
 
 
 def order() -> List[Int]:
@@ -383,10 +389,14 @@ def test_malformed_global_data_is_refused() raises:
     _ = bytes.pop()
     with assert_raises(contains="shorter than it says"):
         _ = Etc1sGlobal(bytes, 1, False)
+    # A P-frame is read, and said to be one; empty data has none.
     var video = Global()
     video.images = [2, 0, 1, 0, 0]
-    with assert_raises(contains="P-frames"):
-        _ = Etc1sGlobal(video.bytes(), 1, False)
+    assert_true(Etc1sGlobal(video.bytes(), 1, False).has_p_frames())
+    var still = Global()
+    still.image(0, 1)
+    assert_false(Etc1sGlobal(still.bytes(), 1, False).has_p_frames())
+    assert_false(Etc1sGlobal().has_p_frames())
     var colorless = Global()
     colorless.image(0, 0)
     with assert_raises(contains="no color slice"):

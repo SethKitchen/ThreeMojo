@@ -38,7 +38,8 @@ where it ends, so a short stream fails that check rather than reading
 outside its bytes.
 
 **Dictionaries are refused.** A frame that names a dictionary cannot be
-decoded without that dictionary. A KTX 2.0 file never names one.
+decoded without that dictionary. A KTX 2.0 file carries no dictionary,
+and three.js's Basis Universal transcoder refuses such a frame too.
 """
 
 # A decoder that knows the size it expects passes it as the limit.

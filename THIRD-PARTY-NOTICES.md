@@ -122,9 +122,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 and the ETC1S slice, codebook and Huffman decoders of `basisu_transcoder.cpp`
 and `basisu_transcoder_internal.h`, with their tables: the UASTC mode, range,
 partition, anchor and weight tables, the ASTC endpoint unquantization
-constants, and the ETC1 intensity tables. The port is a translation to Mojo
-and changes the code: it decodes only to RGBA bytes, and it refuses malformed
-data with an error where the original returns false or reads on. Basis
+constants, and the ETC1 intensity tables. `render/uastc_hdr.mojo` ports the
+ASTC block unpacker and decoder of `basisu_astc_helpers.h`, with its trit and
+quint tables, block mode layouts and partition hash, and `render/etc1s.mojo`
+ports the video frame prediction of `basisu_transcoder.cpp`. The port is a
+translation to Mojo and changes the code: it decodes only to RGBA bytes or
+floats, and it refuses malformed data with an error where the original returns
+false or reads on. Basis
 Universal is distributed under the Apache License 2.0, reproduced in full
 below, with this notice:
 
@@ -141,7 +145,8 @@ otherwise explicitly indicated.
 ```
 
 The test files under `assets/ktx2/` were written by the Basis Universal
-encoder that the ktx2-encoder package bundles.
+encoder that the ktx2-encoder package bundles, except
+`uastc_hdr_blocks.ktx2`, which holds random ASTC blocks.
 
 ```
                                  Apache License

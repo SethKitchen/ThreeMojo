@@ -85,8 +85,13 @@ def _mode_table() -> List[Int]:
     ]  # fmt: skip
 
 
-def _bise_ranges() -> List[Int]:
-    """Return the bits, trits and quints of each of the 21 ASTC ranges."""
+def bise_ranges() -> List[Int]:
+    """Return the bits, trits and quints of each of the 21 ASTC ranges.
+
+    Returns:
+        Three numbers per range, 0 to 20: its low bits per value, one if
+        it has a trit, and one if it has a quint.
+    """
     return [
         1, 0, 0, 0, 1, 0, 2, 0, 0, 0, 0, 1, 1, 1, 0, 3, 0, 0, 1, 0, 1,
         2, 1, 0, 4, 0, 0, 2, 0, 1, 3, 1, 0, 5, 0, 0, 3, 0, 1, 4, 1, 0,
@@ -239,7 +244,7 @@ def unquantize_endpoint(value: Int, quant: Int) -> Int:
     Returns:
         The endpoint, 0 to 255.
     """
-    var table = _bise_ranges()
+    var table = bise_ranges()
     var bits = table[quant * 3]
     var low = value & ((1 << bits) - 1)
     var digit = value >> bits
@@ -285,7 +290,7 @@ struct UastcTables(Movable):
         """Build the tables."""
         self.prefix = _modes_of_prefix()
         self.modes = _mode_table()
-        self.ranges = _bise_ranges()
+        self.ranges = bise_ranges()
         self.unquantized = List[List[Int]](length=21, fill=List[Int]())
         # Only the ranges some mode uses: ASTC gives no constant `C` for
         # the ranges of a lone trit or quint.
