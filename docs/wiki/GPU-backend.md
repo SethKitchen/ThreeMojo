@@ -17,7 +17,7 @@ MAX 26.6.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-G
 | `available() -> Bool` | Whether a GPU is present. |
 | `render_triangles(corners, width, height, background, mode, textures, lighting, fog, tone_mapping, exposure, lines, draws, scissor, points, cubes, backdrop) -> Framebuffer` | One-shot: draw and read back. |
 | `flatten(corners) -> List[Float32]` | The corner buffer the kernel reads, one lane per varying. |
-| `flatten_lights(lighting) -> List[Float32]` | The light buffer: the camera's position, the one direction toward it, its up axis, the ambient term, then each directional, point, hemisphere, spot and rect area light, then the LTC tables when there is a rect area light, then the shadow maps, then the spot light maps. |
+| `flatten_lights(lighting) -> List[Float32]` | The light buffer: the camera's position, the one direction toward it, its up axis, the ambient term, the light probes, then each directional, point, hemisphere, spot and rect area light, then the LTC tables when there is a rect area light, then the shadow maps, then the spot light maps. |
 | `flatten_fog(fog) -> List[Float32]` | The fog buffer, six floats. The kind crosses as a kernel argument. |
 | `flatten_textures(store)` | Every texture in one buffer, with a descriptor table. |
 | `triangle_state(corners) -> List[Int32]` | Texture, blend, material kind, emissive map and alpha map per triangle. |
@@ -29,7 +29,7 @@ Hold one across frames. The device buffers survive between draws.
 | Member | Meaning |
 |---|---|
 | `GpuRenderer(width, height)` | Create the context and the buffers. Raises without a GPU. |
-| `set_textures(store, cubes=CubeTextureStore())` | Upload every texture, then every cube texture's six faces after them. All or nothing. |
+| `set_textures(store, cubes=CubeTextureStore())` | Upload every texture, then every cube texture's six faces and its [PMREM](Textures#pmrem) after them, seven rows a cube. All or nothing. |
 | `draw(corners, background, mode, lighting, fog, tone_mapping, exposure, lines, draws, scissor, points, backdrop)` | Rasterize into the device target. `backdrop` is what `Renderer.backdrop` returns, or none: the scene's image background, painted before anything is drawn. `scissor` is a `Rect` the draw may touch, or none for the whole target. A pixel outside it is neither cleared nor drawn, so the target keeps it between draws; see [Renderer](Renderer#viewport-and-scissor). Pass `Lighting(scene, visible=camera.visible_layers())` and `FogView(scene.fog, view)`, the values `Renderer.render` uses. `lines` are two corners a segment, `points` are one corner a [point](Points-and-sprites), and `draws` is the order, all from `Renderer.prepare_frame`. An empty order draws every triangle, then every segment, then every point. The kernel tone maps each pixel as `RenderTarget.resolve` does. |
 | `read_back() -> Framebuffer` | Copy color and depth to the host. |
 
@@ -55,7 +55,7 @@ The kernel tracks whether each pixel holds data rather than light, as the host's
 
 The light buffer begins with three floats of camera position at `LIGHTS_EYE`, then three at `LIGHTS_TOWARD`. Those three hold the zero vector for a converging projection, and one unit direction for a parallel one. The kernel passes both to `toward_eye_at`, the host's own function. The camera's own up axis follows at `LIGHTS_UP`, for the frame a `MATCAP` surface is looked up in.
 
-The scale every lit sum takes is at `LIGHTS_SCALE` and the count of rect area lights at `LIGHTS_RECT_COUNT`. The lights follow at `LIGHTS_FIRST`. The rect area lights come last among them, then the LTC tables when there is one, then the shadow maps, then the spot light maps. See [Lights](Lights#rect-area), [Lights](Lights#shadows) and [Lights](Lights#spot-light-maps).
+The scale every lit sum takes is at `LIGHTS_SCALE` and the count of rect area lights at `LIGHTS_RECT_COUNT`. The light probes' 27 coefficients follow at `LIGHTS_PROBE`; see [Lights](Lights#light-probes). The lights follow at `LIGHTS_FIRST`. The rect area lights come last among them, then the LTC tables when there is one, then the shadow maps, then the spot light maps. See [Lights](Lights#rect-area), [Lights](Lights#shadows) and [Lights](Lights#spot-light-maps).
 
 ## Teardown
 

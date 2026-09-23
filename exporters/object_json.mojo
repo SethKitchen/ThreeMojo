@@ -59,6 +59,7 @@ from lights.light import (
     HEMISPHERE,
     POINT,
     RECT_AREA,
+    LIGHT_PROBE,
     SPOT,
     Light,
 )
@@ -737,6 +738,13 @@ struct _Writer(Movable):
             writer.number(light.angle.to(RADIAN))
             writer.key("penumbra")
             writer.number(light.penumbra)
+        if kind == LIGHT_PROBE:
+            # three.js's `LightProbe.toJSON`: the 27 numbers, `sh.toArray`.
+            writer.key("sh")
+            writer.begin_array()
+            for value in light.sh.to_array():  # pragma: no branch
+                writer.number(value)
+            writer.end_array()
         if kind == RECT_AREA:
             writer.key("width")
             writer.number(light.width.to(METER))

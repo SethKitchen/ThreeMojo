@@ -141,7 +141,7 @@ The faces keep the panorama's texel type, color space, filter and alpha mode. A 
 
 - Half-float storage. three.js's loaders default to `HalfFloatType`. Here a half widens to a float, which holds every half exactly.
 - The `mapping` field. Call `cube_from_equirectangular` and name the cube. The renderer does not convert a texture on its own.
-- PMREM. A rough surface reads the cube's box-filtered chain.
+- The automatic PMREM. three.js prefilters an environment on its own. Here you call `pmrem_from_equirectangular`, see [PMREM](#pmrem).
 - Light above one in a background. The backdrop crosses to both backends as sRGB bytes, so a background clips at one before tone mapping. A reflection keeps the floats.
 - RGBE: XYZE pixels, the old Radiance run-length scheme, and every orientation but `-Y +X`. The first is refused, and three.js reads none of them correctly.
 - EXR: tiled, deep and multi-part files, PXR24, B44, B44A, DWAA and DWAB compression, luminance-chroma images, subsampled channels, and `UINT` color. Each is refused by name. three.js reads all but the last two.
@@ -241,6 +241,57 @@ A face must be wrapped `CLAMP`. A coordinate past a face's edge belongs to the n
 - The store refuses `NO_CUBE_TEXTURE`, `SCENE_ENVIRONMENT` and any id it does not hold.
 
 `examples/mirror.mojo` builds a sky from six computed faces, renders a cube camera's view every frame, and reflects it in a chrome ball.
+
+## PMREM
+
+`render/pmrem.mojo` and `render/cube_uv.mojo`. A PMREM is an environment prefiltered for every roughness. A rough `STANDARD` or `PHYSICAL` surface reads it and sees the environment blurred by its own lobe. Without one, the surface reads the cube's box-filtered chain.
+
+three.js: `PMREMGenerator.fromCubemap`, `PMREMGenerator.fromEquirectangular`, `cube_uv_reflection_fragment`.
+
+```mojo
+var sky = pmrem_from_cube(cube_texture_from(images, SEEN_FROM_OUTSIDE))
+var env = assets.cube_textures.add(sky^)
+scene.environment = env
+var hdr = assets.cube_textures.add(pmrem_from_equirectangular(panorama))
+```
+
+| Builder | Meaning |
+|---|---|
+| `pmrem_from_cube(cube)` | A copy of `cube` with its PMREM in `cube_uv`. Byte or float faces. |
+| `pmrem_from_equirectangular(image)` | The faces of `cube_from_equirectangular`, with a PMREM read straight from the panorama. |
+
+The result is an ordinary `CubeTexture`. Name it as an env map, as a scene's `environment` or as a background. `is_prefiltered()` says whether a cube holds a PMREM. three.js's `fromScene` is `Renderer.render_cube` and then `pmrem_from_cube`.
+
+### The layout
+
+The PMREM is one float image in three.js's cube UV layout. Each copy of the environment is six square tiles, three across and two up. The sharpest copy is the face size, rounded down to a power of two, at the bottom left. Each copy above it is half the size, down to sixteen texels. Six more sixteen-texel copies sit beside the last one, each blurrier than the one before.
+
+Every tile keeps a one-texel border in the directions of the next face. The bilinear filter never reads a neighbor tile, so a rough reflection has no seam.
+
+### How a roughness reads it
+
+`roughness_to_mip(roughness)` is three.js's table from a roughness to a copy. Roughness one reads the blurriest copy, and a low roughness reads the sharpest. `cube_uv_taps` finds the two copies on either side and the fraction between them. `sample_cube_uv` reads both and mixes them, as three.js's `textureCubeUV` does.
+
+A physical surface asks `CubeTexture.sample_rough(direction, roughness)`. It reads the radiance at its roughness and the irradiance around its normal at roughness one, as three.js's `getIBLRadiance` and `getIBLIrradiance` do. A cube without a PMREM answers from its chain at `reflection_level`. Both rasterizers use this arithmetic. The GPU reads the PMREM from the row after the six faces. See [GPU backend](GPU-backend).
+
+### How it is built
+
+The sharpest copy reads the source in the direction of each texel. Each copy after it is the one before, blurred by a Gaussian on the sphere. The blurs add up to each copy's own width: `1 / size` for the halving copies, and three.js's `extra_lod_sigma()` for the six others. three.js chose those widths to follow the GGX lobe at each roughness.
+
+Each blur is two passes. The first turns about a pole and the second turns toward it. The pole changes each time among ten axes of a dodecahedron, `pole_axis`. This is three.js's `SphericalGaussianBlur`, run on the host once.
+
+### Where it differs from three.js
+
+- The image holds 32-bit floats. three.js renders half floats.
+- A face smaller than sixteen texels is read at sixteen. three.js's layout does not work below sixteen.
+- A mirror read of a prefiltered cube reads its faces, not the sharpest copy. The two hold the same image.
+- A background reads the faces. three.js's `backgroundBlurriness` is not ported.
+
+### Errors
+
+- `pmrem_from_cube` refuses a cube that `CubeTexture.validate` refuses.
+- `pmrem_from_equirectangular` refuses a blank panorama.
+- `validate_cube_uv` refuses a layout image that is not float, `CLAMP` and `BILINEAR` with no chain. It refuses a size that is not three.js's layout. `CubeTexture.validate` calls it, and so does the GPU upload.
 
 ## Wrap
 

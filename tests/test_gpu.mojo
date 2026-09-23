@@ -95,10 +95,14 @@ from lights.light import (
     ambient_light,
     directional_light,
     hemisphere_light,
+    light_probe,
     point_light,
     rect_area_light,
     spot_light,
 )
+from lights.light_probe import light_probe_from_cube
+from math.spherical_harmonics3 import SphericalHarmonics3
+from render.pmrem import pmrem_from_cube
 from lights.lighting import PERSPECTIVE_VIEW, Lighting
 from lights.ltc import LTC_FLOATS, load_ltc_tables
 from core.fog import Fog, FogView, exp2_fog, linear_fog, no_fog
@@ -162,6 +166,7 @@ from render.gpu import (
     LIGHTS_AMBIENT,
     LIGHTS_EYE,
     LIGHTS_FIRST,
+    LIGHTS_PROBE,
     LIGHTS_RECT_COUNT,
     LIGHTS_TOWARD,
     LIGHTS_UP,
@@ -1169,10 +1174,10 @@ def test_the_state_table_has_an_entry_per_map_and_policy() raises:
     assert_equal(state[STATE_ENV_MAP], Int32(-1))
     assert_equal(state[STATE_COMBINE], Int32(MULTIPLY_OPERATION.value))
     # An env map crosses as the row of its first face: after the flat
-    # textures, six rows a cube.
+    # textures, seven rows a cube: six faces and the PMREM row.
     var mirrored = mirror_pair(CubeTextureId(2), 0.5, ADD_OPERATION)
-    assert_equal(triangle_state(mirrored)[STATE_ENV_MAP], Int32(12))
-    assert_equal(triangle_state(mirrored, 5)[STATE_ENV_MAP], Int32(17))
+    assert_equal(triangle_state(mirrored)[STATE_ENV_MAP], Int32(14))
+    assert_equal(triangle_state(mirrored, 5)[STATE_ENV_MAP], Int32(19))
     assert_equal(
         triangle_state(mirrored)[STATE_COMBINE], Int32(ADD_OPERATION.value)
     )
@@ -7181,8 +7186,9 @@ def test_flattening_lays_the_cube_faces_out_after_the_textures() raises:
     _ = textures.add(a_gpu_face(Color(1, 2, 3)))
     var flat = flatten_textures(textures, a_cube_store())
     ref table = flat[1]
-    # One flat texture, then two cubes of six faces: thirteen rows.
-    assert_equal(len(table), 13 * TABLE_COLUMNS)
+    # One flat texture, then two cubes of six faces and a PMREM row each:
+    # fifteen rows.
+    assert_equal(len(table), 15 * TABLE_COLUMNS)
     # The +x face of the first cube is the second row, red, 2x2, clamped.
     assert_equal(table[TABLE_COLUMNS + 1], Int32(2))
     assert_equal(table[TABLE_COLUMNS + 3], Int32(CLAMP.value))
@@ -8758,3 +8764,119 @@ def test_both_backends_agree_on_a_stencil_mask_and_a_polygon_offset() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+# --- PMREM and light probes --------------------------------------------------
+
+
+def a_pmrem_store() raises -> CubeTextureStore:
+    """Return a store holding `a_gpu_cube` prefiltered, then the same cube
+    plain."""
+    var store = CubeTextureStore()
+    _ = store.add(pmrem_from_cube(a_gpu_cube()))
+    _ = store.add(a_gpu_cube())
+    return store^
+
+
+def probe_lighting() raises -> Lighting:
+    """Return `phong_lighting`'s lights and a light probe of `a_gpu_cube`,
+    with the camera up the z axis."""
+    var scene = Scene()
+    var sun = Object3D()
+    sun.set_position(0.4, 0.8, 0.6)
+    var sun_node = scene.add(sun^)
+    scene.add_light(directional_light(Color(255, 250, 240), sun_node, 0.9))
+    scene.add_light(ambient_light(Color(255, 255, 255), 0.2))
+    scene.add_light(light_probe_from_cube(a_gpu_cube(), 0.8))
+    scene.update()
+    return Lighting(scene, Layers.all(), Vector3(0, 0, 3))
+
+
+def test_flattening_lays_a_pmrem_row_after_the_faces() raises:
+    var flat = flatten_textures(TextureStore(), a_pmrem_store())
+    ref table = flat[1]
+    # Two cubes of seven rows.
+    assert_equal(len(table), 14 * TABLE_COLUMNS)
+    # The first cube's seventh row is its PMREM: floats, 336 by 64.
+    var layout = 6 * TABLE_COLUMNS
+    assert_equal(table[layout + 1], Int32(336))
+    assert_equal(table[layout + 2], Int32(64))
+    assert_equal(table[layout + 9], Int32(FLOAT_TYPE.value))
+    # The second cube has none: one white byte texel.
+    var none = 13 * TABLE_COLUMNS
+    assert_equal(table[none + 1], Int32(1))
+    assert_equal(table[none + 9], Int32(UNSIGNED_BYTE_TYPE.value))
+
+
+def test_flattening_the_lights_carries_the_probes() raises:
+    var lighting = probe_lighting()
+    var flat = flatten_lights(lighting)
+    assert_equal(LIGHTS_FIRST, LIGHTS_PROBE + 27)
+    for lane in range(27):
+        assert_equal(flat[LIGHTS_PROBE + lane], lighting.probe.lanes[lane])
+    # Band zero is the average light, which is not black.
+    assert_true(flat[LIGHTS_PROBE] > 0)
+    # With no probe, the 27 are zero.
+    var plain = flatten_lights(phong_lighting())
+    for lane in range(27):
+        assert_equal(plain[LIGHTS_PROBE + lane], Float32(0))
+
+
+def test_both_backends_reflect_a_pmrem_alike() raises:
+    # The cube UV taps, the two copies and their mix, for the radiance at
+    # the roughness, the irradiance at one and the coat's own.
+    if skipped_for_lack_of_a_gpu("both backends reflect a PMREM alike"):
+        return
+    var lighting = phong_lighting()
+    var cubes = a_pmrem_store()
+    var pairs = List[List[RasterVertex]]()
+    pairs.append(physical_pair(STANDARD, 0.0, 1.0, env=CubeTextureId(0)))
+    pairs.append(physical_pair(STANDARD, 0.35, 1.0, env=CubeTextureId(0)))
+    pairs.append(physical_pair(STANDARD, 0.9, 0.0, env=CubeTextureId(0)))
+    pairs.append(
+        physical_pair(PHYSICAL, 0.3, 0.5, 1.0, 0.1, env=CubeTextureId(0))
+    )
+    for index in range(len(pairs)):
+        ref corners = pairs[index]
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(
+            corners,
+            target,
+            SHADE_TEXTURE,
+            TextureStore(),
+            lighting,
+            cubes=cubes,
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            36,
+            30,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            TextureStore(),
+            lighting,
+            cubes=cubes,
+        )
+        assert_true(
+            count_background(cpu, BACKGROUND) < 36 * 30,
+            "the triangles drew nothing",
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_light_a_probe_alike() raises:
+    # The nine weights and the sum in index order, added to the ambient
+    # term, on every kind that catches indirect light.
+    if skipped_for_lack_of_a_gpu("both backends light a probe alike"):
+        return
+    var lighting = probe_lighting()
+    for kind in [LAMBERT, PHONG, TOON, STANDARD]:
+        var corners = physical_pair(kind, 0.6, 0.2)
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(corners, target, SHADE_LIT, TextureStore(), lighting)
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners, 36, 30, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)

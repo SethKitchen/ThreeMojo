@@ -313,9 +313,9 @@ The number you set is the *authored* roughness, from zero to one, times any map.
 
 A physical surface reflects its environment by its roughness, not by a `combine`. Both refuse a `reflectivity` or a `combine`. The reflection is three.js's split sum: `dfg_approx` fits the lobe's integral, and `physical_outgoing` in `lights/lighting.mojo` joins the radiance and the irradiance with Fdez-Aguera's multiple scattering. The radiance is read along `rough_reflection`, the view turned back and bent toward the normal by the square of the roughness. The irradiance is read around the normal at the coarsest level.
 
-The roughness picks a level of the cube's chain: `reflection_level(roughness, levels)`, from the full size at zero to one texel a face at one. That is an approximation. Its contract is monotonic: a rising roughness moves a reflection steadily from the texel it lands on toward its face's average. three.js's PMREM holds the environment weighted by the GGX lobe at each roughness, which a mip chain's box average is not.
+A [PMREM](Textures#pmrem) gives both as three.js gives them. The radiance is the environment blurred for the roughness. The irradiance is the blurriest copy, which three.js reads for the light around a normal. Build one with `pmrem_from_cube` and name it as the env map.
 
-The irradiance is an approximation too. The coarsest level is each face's average, not the cosine-weighted integral over the hemisphere. Under a sky that is one bright patch on black it reads high. A cube built without a chain reflects sharply at every roughness. Either level can be replaced by a prefiltered cube without the material changing. See [Textures](Textures#cube-textures).
+A cube without a PMREM gives two approximations. The roughness picks a level of the cube's chain: `reflection_level(roughness, levels)`, from the full size at zero to one texel a face at one. Its contract is monotonic: a rising roughness moves a reflection steadily toward its face's average. The irradiance is the coarsest level, each face's average, not the cosine-weighted integral. Under a sky that is one bright patch on black it reads high. A cube built without a chain reflects sharply at every roughness.
 
 ### The clear coat
 

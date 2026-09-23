@@ -53,7 +53,7 @@ The type of the object tells what the node carries:
 | `Object3D`, `Group`, `Bone` | Nothing. |
 | `Mesh` | A `Mesh`, with `castShadow`, `receiveShadow` and `frustumCulled`. |
 | `InstancedMesh` | An `InstancedMesh`, with its `count` and its `instanceMatrix`. |
-| `AmbientLight`, `DirectionalLight`, `PointLight`, `HemisphereLight`, `SpotLight`, `RectAreaLight` | A `Light` of that kind, on the layers of the object. |
+| `AmbientLight`, `DirectionalLight`, `PointLight`, `HemisphereLight`, `SpotLight`, `RectAreaLight`, `LightProbe` | A `Light` of that kind, on the layers of the object. A `LightProbe` reads its 27 `sh` numbers. |
 | `PerspectiveCamera`, `OrthographicCamera` | A camera that rides the node, in `ObjectModel.cameras`. |
 
 A `Scene` root is not a node. Its `fog` becomes the fog of the scene. A number in `background` becomes a color background. A string in `background` names a texture background.

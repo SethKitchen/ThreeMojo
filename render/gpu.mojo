@@ -143,6 +143,8 @@ from render.cube_texture import (
     reflection_level,
     rough_reflection,
 )
+from render.cube_uv import cube_uv_taps
+from math.spherical_harmonics3 import SH_COUNT, sh_irradiance_weight
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     CubeTextureId,
@@ -354,7 +356,10 @@ comptime LIGHTS_SCALE = 12
 # than a kernel argument of its own, for the reason the shadow maps ride
 # in this buffer: the kernel has no argument left.
 comptime LIGHTS_RECT_COUNT = 13
-comptime LIGHTS_FIRST = 14
+# The light probes' nine coefficients summed, `Lighting.probe`, red, green
+# and blue each. Zero when the scene has no probe.
+comptime LIGHTS_PROBE = 14
+comptime LIGHTS_FIRST = LIGHTS_PROBE + SH_COUNT * 3
 # How many floats each kind of light takes in the buffer. A directional
 # light's seventh, a point light's ninth and a spot light's fourteenth is
 # where its shadow map begins in the same buffer, or -1 for none: the maps
@@ -382,6 +387,10 @@ comptime FURTHEST = Float32(1.0e30)
 # how to sample it. A device cannot hold a `List` of `List`s, so every image
 # goes into one buffer end to end and this says where each one begins.
 comptime TABLE_COLUMNS = 10
+# How many table rows a cube texture takes: its six faces, then its PMREM
+# image, or one white byte texel for a cube that has none. The kernel tells
+# the two apart by the texel type, since a PMREM always holds floats.
+comptime CUBE_ROWS = FACE_COUNT + 1
 
 
 def flatten_textures(
@@ -391,9 +400,11 @@ def flatten_textures(
     """Return every texture's bytes end to end, and the table describing them.
 
     The flat textures first, one row each in id order, then every cube
-    texture's six faces in id order, one row each: cube `c` begins at row
-    `textures.count() + c * FACE_COUNT`, which is what `triangle_state`
-    writes for a triangle that reflects it.
+    texture's six faces and its PMREM image in id order, one row each,
+    `CUBE_ROWS` in all: cube `c` begins at row
+    `textures.count() + c * CUBE_ROWS`, which is what `triangle_state`
+    writes for a triangle that reflects it. A cube with no PMREM has the
+    blank texture there, which crosses as one white byte texel.
 
     Args:
         textures: The store to upload.
@@ -422,6 +433,7 @@ def flatten_textures(
         six.validate()
         for face in range(FACE_COUNT):  # pragma: no branch
             _flatten_one(six.face(face), texels, table)
+        _flatten_one(six.cube_uv, texels, table)
     # Never empty: a zero-length device buffer is not worth the special case,
     # and a vertex naming NO_TEXTURE never reads either of these.
     if len(texels) == 0:
@@ -562,7 +574,8 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
 
     Three floats of camera position, three of the one direction toward it
     under a parallel projection, three of the camera's own up axis, then
-    three of ambient, one of `Lighting.scale`, then six per
+    three of ambient, one of `Lighting.scale`, one of how many rect area
+    lights there are, 27 of the light probes' coefficients, then six per
     directional light -- a unit
     direction and the light it carries -- then nine per point light: where
     it is, the light it carries, its decay, its cutoff and its shadow. Then
@@ -637,6 +650,8 @@ def flatten_lights(lighting: Lighting) -> List[Float32]:
     flat.append(lighting.ambient.b)
     flat.append(lighting.scale)
     flat.append(Float32(lighting.rect_count()))
+    for lane in range(SH_COUNT * 3):  # pragma: no branch
+        flat.append(lighting.probe.lanes[lane])
     for index in range(lighting.count()):
         ref direction = lighting.directions[index]
         flat.append(direction.x)
@@ -944,6 +959,32 @@ def flatten_fog(fog: FogView) -> List[Float32]:
     return flat^
 
 
+def _ambient_at(
+    lights: MutPointer[Float32, MutAnyOrigin],
+    nx: Float32,
+    ny: Float32,
+    nz: Float32,
+) -> Vector3:
+    """Return the ambient term and the light probes' irradiance at a
+    normal: the device counterpart of `Lighting.ambient_at`, summed in its
+    order, the probes' nine terms first and then the ambient color."""
+    var normal = Vector3(nx, ny, nz)
+    var red = Float32(0)
+    var green = Float32(0)
+    var blue = Float32(0)
+    for index in range(SH_COUNT):
+        var weight = sh_irradiance_weight(index, normal)
+        var at = LIGHTS_PROBE + index * 3
+        red = red + lights[unsafe_offset=at] * weight
+        green = green + lights[unsafe_offset=at + 1] * weight
+        blue = blue + lights[unsafe_offset=at + 2] * weight
+    return Vector3(
+        lights[unsafe_offset=LIGHTS_AMBIENT] + red,
+        lights[unsafe_offset=LIGHTS_AMBIENT + 1] + green,
+        lights[unsafe_offset=LIGHTS_AMBIENT + 2] + blue,
+    )
+
+
 def _arriving(
     lights: MutPointer[Float32, MutAnyOrigin],
     texels: MutPointer[UInt8, MutAnyOrigin],
@@ -967,9 +1008,10 @@ def _arriving(
     answer by the parity tests. A `Vector3` only because the kernel has no
     color type; the three components are red, green and blue.
     """
-    var red = lights[unsafe_offset=LIGHTS_AMBIENT]
-    var green = lights[unsafe_offset=LIGHTS_AMBIENT + 1]
-    var blue = lights[unsafe_offset=LIGHTS_AMBIENT + 2]
+    var base = _ambient_at(lights, nx, ny, nz)
+    var red = base.x
+    var green = base.y
+    var blue = base.z
     for index in range(count):
         var at = LIGHTS_FIRST + index * DIRECTIONAL_FLOATS
         var lambert = (
@@ -1166,9 +1208,10 @@ def _toon_arriving(
     term and the hemisphere lights are not stepped, because three.js
     reflects those through `RE_IndirectDiffuse`.
     """
-    var red = lights[unsafe_offset=LIGHTS_AMBIENT]
-    var green = lights[unsafe_offset=LIGHTS_AMBIENT + 1]
-    var blue = lights[unsafe_offset=LIGHTS_AMBIENT + 2]
+    var base = _ambient_at(lights, nx, ny, nz)
+    var red = base.x
+    var green = base.y
+    var blue = base.z
     for index in range(count):
         var at = LIGHTS_FIRST + index * DIRECTIONAL_FLOATS
         var tone = _toon_tone(
@@ -1519,6 +1562,43 @@ def _sample_cube_level(
     )
 
 
+def _sample_cube_rough(
+    texels: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    table: MutPointer[Int32, MutAnyOrigin],
+    first: Int,
+    direction: Vector3,
+    roughness: Float32,
+) -> FloatColor:
+    """Return the environment a surface of some roughness reflects: the
+    device counterpart of `CubeTexture.sample_rough`.
+
+    The row after the six faces is the cube's PMREM when it holds floats,
+    and then it is read at `cube_uv_taps`, the host's own arithmetic, and
+    mixed as the host mixes it. Otherwise the faces are read down their
+    chain at `reflection_level`."""
+    var layout = _describe(table, first + FACE_COUNT)
+    if layout.texel_type == FLOAT_TYPE:
+        var taps = cube_uv_taps(
+            direction, roughness, layout.width, layout.height
+        )
+        var near = _sample_at(texels, ramp, layout, taps.near.x, taps.near.y, 0)
+        if taps.blend == 0:
+            return FloatColor(near.r, near.g, near.b, 1.0)
+        var far = _sample_at(texels, ramp, layout, taps.far.x, taps.far.y, 0)
+        var mixed = mix_color(near, far, taps.blend)
+        return FloatColor(mixed.r, mixed.g, mixed.b, 1.0)
+    var levels = _describe(table, first).levels
+    return _sample_cube_level(
+        texels,
+        ramp,
+        table,
+        first,
+        direction,
+        reflection_level(roughness, levels),
+    )
+
+
 def _indirect(
     lights: MutPointer[Float32, MutAnyOrigin],
     count: Int,
@@ -1530,9 +1610,10 @@ def _indirect(
 ) -> Vector3:
     """Return the light with no direction reaching a surface facing
     (nx, ny, nz): the device counterpart of `Lighting.indirect_at`."""
-    var red = lights[unsafe_offset=LIGHTS_AMBIENT]
-    var green = lights[unsafe_offset=LIGHTS_AMBIENT + 1]
-    var blue = lights[unsafe_offset=LIGHTS_AMBIENT + 2]
+    var base = _ambient_at(lights, nx, ny, nz)
+    var red = base.x
+    var green = base.y
+    var blue = base.z
     var first_sky = (
         LIGHTS_FIRST + count * DIRECTIONAL_FLOATS + points * POINT_FLOATS
     )
@@ -2058,7 +2139,7 @@ def triangle_state(
         var cube = corners[triangle * 3].env_map
         var row = -1
         if cube != NO_CUBE_TEXTURE:
-            row = cube_base + cube.value * FACE_COUNT
+            row = cube_base + cube.value * CUBE_ROWS
         state.append(Int32(row))
         state.append(Int32(corners[triangle * 3].combine.value))
         state.append(Int32(corners[triangle * 3].roughness_map.value))
@@ -3666,25 +3747,19 @@ def rasterize_kernel(
                     var irradiance = Vector3(0, 0, 0)
                     var coat_radiance = Vector3(0, 0, 0)
                     if reflects:
-                        var levels = _describe(table, Int(env_slot)).levels
                         var strength = corners[
                             unsafe_offset=base + LANE_ENV_INTENSITY
                         ]
-                        var seen = _sample_cube_level(
+                        var seen = _sample_cube_rough(
                             texels,
                             ramp,
                             table,
                             Int(env_slot),
                             rough_reflection(toward_eye, facing, rough),
-                            reflection_level(rough, levels),
+                            rough,
                         )
-                        var around = _sample_cube_level(
-                            texels,
-                            ramp,
-                            table,
-                            Int(env_slot),
-                            facing,
-                            Float32(levels - 1),
+                        var around = _sample_cube_rough(
+                            texels, ramp, table, Int(env_slot), facing, 1
                         )
                         radiance = Vector3(
                             seen.r * strength,
@@ -3697,7 +3772,7 @@ def rasterize_kernel(
                             around.b * strength,
                         )
                         if coat > 0:
-                            var gloss = _sample_cube_level(
+                            var gloss = _sample_cube_rough(
                                 texels,
                                 ramp,
                                 table,
@@ -3705,7 +3780,7 @@ def rasterize_kernel(
                                 rough_reflection(
                                     toward_eye, coat_facing, coat_rough
                                 ),
-                                reflection_level(coat_rough, levels),
+                                coat_rough,
                             )
                             coat_radiance = Vector3(
                                 gloss.r * strength,

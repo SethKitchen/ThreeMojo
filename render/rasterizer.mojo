@@ -44,7 +44,7 @@ from materials.material import (
     MaterialKind,
     combine_light,
 )
-from render.cube_texture import reflected, reflection_level, rough_reflection
+from render.cube_texture import reflected, rough_reflection
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     CubeTextureId,
@@ -1945,11 +1945,6 @@ def rasterize_shaded(
     # Whether these fragments show the shadows falling on them and
     # nothing else: a `SHADOW` material, transparent wherever lit.
     var catches = a.kind == SHADOW and mode != SHADE_UV
-    # How many levels the environment's faces hold, read once: what a
-    # physical surface's roughness picks between.
-    var env_levels = 1
-    if reflects:
-        env_levels = cubes.get(a.env_map).levels()
 
     var flat = Triangle(Vector2(a.x, a.y), Vector2(b.x, b.y), Vector2(c.x, c.y))
     var coverage = _Coverage(flat)
@@ -2372,20 +2367,19 @@ def rasterize_shaded(
                 )
                 # The environment along the rough reflection and around
                 # the normal, three.js's `getIBLRadiance` and
-                # `getIBLIrradiance`, each read down the chain by the
-                # roughness; see `render.cube_texture.reflection_level`.
+                # `getIBLIrradiance`, each read at a roughness: the
+                # irradiance at one, as three.js reads it. A prefiltered
+                # cube reads its PMREM; any other reads down its chain.
+                # See `CubeTexture.sample_rough`.
                 var radiance = Vector3(0, 0, 0)
                 var irradiance = Vector3(0, 0, 0)
                 var coat_radiance = Vector3(0, 0, 0)
                 if reflects:
                     ref cube = cubes.get(a.env_map)
-                    var seen = cube.sample_level(
-                        rough_reflection(toward_eye, facing, rough),
-                        reflection_level(rough, env_levels),
+                    var seen = cube.sample_rough(
+                        rough_reflection(toward_eye, facing, rough), rough
                     )
-                    var around = cube.sample_level(
-                        facing, Float32(env_levels - 1)
-                    )
+                    var around = cube.sample_rough(facing, 1)
                     var strength = a.env_map_intensity
                     radiance = Vector3(
                         seen.r * strength, seen.g * strength, seen.b * strength
@@ -2396,11 +2390,11 @@ def rasterize_shaded(
                         around.b * strength,
                     )
                     if coated:
-                        var gloss = cube.sample_level(
+                        var gloss = cube.sample_rough(
                             rough_reflection(
                                 toward_eye, coat_facing, coat_rough
                             ),
-                            reflection_level(coat_rough, env_levels),
+                            coat_rough,
                         )
                         coat_radiance = Vector3(
                             gloss.r * strength,

@@ -65,11 +65,21 @@ a rim that is hard when `penumbra` is zero and softens toward the axis as it
 grows. It points from its node toward its `target`, which is the world
 origin unless another node is named -- and a directional light can name a
 target the same way, three.js's `DirectionalLight.target`.
+
+**A light probe is the seventh: the light around a point, as nine colors.**
+three.js's `LightProbe` holds `SphericalHarmonics3`, the irradiance of an
+environment reduced to bands zero to two. It adds like the ambient term,
+but with a direction in it: a surface facing a bright sky catches more than
+one facing the ground. It has no position and no node. Its `color` is not
+read, as three.js does not read it; its `intensity` scales every
+coefficient. `lights.light_probe.light_probe_from_cube` builds one from a
+cube texture, three.js's `LightProbeGenerator.fromCubeTexture`.
 """
 
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from lights.shadow import LightShadow
+from math.spherical_harmonics3 import SphericalHarmonics3
 from render.framebuffer import Color, FloatColor
 from render.srgb import srgb_to_linear
 from render.texture_store import NO_TEXTURE, TextureId
@@ -79,7 +89,7 @@ from units.si import Angle, DEGREE, Length, METER, RADIAN
 
 @fieldwise_init
 struct LightKind(Equatable, ImplicitlyCopyable, Writable):
-    """Which of the five kinds of light this is, as a type rather than an
+    """Which of the seven kinds of light this is, as a type rather than an
     int.
 
     See `core.object3d.NodeId` for why. The type stops a bare integer at
@@ -91,7 +101,7 @@ struct LightKind(Equatable, ImplicitlyCopyable, Writable):
 
     def is_valid(self) -> Bool:
         """Return True if this is `AMBIENT`, `DIRECTIONAL`, `POINT`,
-        `HEMISPHERE` or `SPOT`."""
+        `HEMISPHERE`, `SPOT`, `RECT_AREA` or `LIGHT_PROBE`."""
         return (
             self == AMBIENT
             or self == DIRECTIONAL
@@ -99,6 +109,7 @@ struct LightKind(Equatable, ImplicitlyCopyable, Writable):
             or self == HEMISPHERE
             or self == SPOT
             or self == RECT_AREA
+            or self == LIGHT_PROBE
         )
 
 
@@ -124,6 +135,10 @@ comptime SPOT = LightKind(4)
 # surface is lit by one, as only three.js's physical materials are, through
 # linearly transformed cosines; see `lights.ltc`.
 comptime RECT_AREA = LightKind(5)
+# The light around a point, as nine spherical harmonic coefficients:
+# three.js's `LightProbe`. It adds to every surface as the ambient term does,
+# weighted by which way the surface faces. No node.
+comptime LIGHT_PROBE = LightKind(6)
 # three.js's default `width` and `height` for a rectangle of light.
 comptime DEFAULT_RECT_SIZE = Length(10.0, METER)
 
@@ -210,6 +225,10 @@ struct Light(ImplicitlyCopyable):
     # through the light's shadow camera. `NO_TEXTURE`, the default, for
     # none. Only a spot light can carry one. See `lights.shadow`.
     var map: TextureId
+    # The light around a point, linear, three.js's `LightProbe.sh`. Read
+    # only by a light probe, and scaled by `intensity` as three.js scales
+    # it; darkness, every coefficient zero, on every other kind.
+    var sh: SphericalHarmonics3
 
     def radiance(self) -> FloatColor:
         """Return the light this contributes, decoded and scaled.
@@ -247,12 +266,15 @@ struct Light(ImplicitlyCopyable):
                 length; the light casts a shadow and is not directional,
                 point or spot; a light that is not a spot light names a
                 map; the light casts or names a map and its `shadow` is
-                refused by `LightShadow.validate`; or such a point or spot
+                refused by `LightShadow.validate`; such a point or spot
                 light has a distance that does not lie beyond its shadow's
-                near plane, where three.js puts the far plane.
+                near plane, where three.js puts the far plane; or a light
+                probe's coefficients are not all finite.
         """
         if not isfinite(self.intensity) or self.intensity < 0:
             raise Error("A light's intensity must be finite and not negative")
+        if self.kind == LIGHT_PROBE and not self.sh.is_finite():
+            raise Error("A light probe's coefficients must be finite")
         if self.kind == RECT_AREA:
             var width = self.width.to(METER)
             var height = self.height.to(METER)
@@ -374,6 +396,7 @@ def _bare(
         _NO_LENGTH,
         _NO_LENGTH,
         NO_TEXTURE,
+        SphericalHarmonics3(),
     )
 
 
@@ -594,5 +617,36 @@ def rect_area_light(
     var light = _bare(RECT_AREA, color, intensity, node)
     light.width = width
     light.height = height
+    light.validate()
+    return light
+
+
+def light_probe(
+    sh: SphericalHarmonics3, intensity: Float32 = 1.0
+) raises -> Light:
+    """Return the light around a point as nine colors, three.js's
+    `LightProbe`.
+
+    Every surface catches `sh.get_irradiance_at` of its normal, times the
+    intensity, added to the ambient term and scattered the same way: by
+    `BRDF_Lambert` into a matte surface's diffuse color, and by a physical
+    surface's diffuse term. It has no node, as an ambient light has none:
+    three.js reads no position from a probe. Its color is white and is
+    not read.
+
+    Args:
+        sh: The coefficients, linear. `light_probe_from_cube` in
+            `lights.light_probe` works them out from a cube texture.
+        intensity: What every coefficient is multiplied by.
+
+    Returns:
+        The light.
+
+    Raises:
+        Error: If the intensity is negative or not finite, or a
+            coefficient is not finite.
+    """
+    var light = _bare(LIGHT_PROBE, Color(255, 255, 255), intensity, NO_PARENT)
+    light.sh = sh
     light.validate()
     return light

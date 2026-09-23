@@ -35,6 +35,7 @@ from lights.light import (
     spot_light,
 )
 from math.smoothstep import smoothstep
+from math.spherical_harmonics3 import SphericalHarmonics3
 from std.math import exp2, inf, nan, pi
 from lights.lighting import (
     CLEARCOAT_F0,
@@ -525,6 +526,7 @@ def test_a_light_of_an_unknown_kind_is_refused() raises:
             Length(0.0, METER),
             Length(0.0, METER),
             NO_TEXTURE,
+            SphericalHarmonics3(),
         )
     )
     with assert_raises():

@@ -1,10 +1,10 @@
 # Lights
 
-`lights/light.mojo` and `lights/lighting.mojo`. A scene holds ambient, directional, point, hemisphere and spot lights. The renderer resolves them once per frame and evaluates them at every fragment.
+`lights/light.mojo` and `lights/lighting.mojo`. A scene holds ambient, directional, point, hemisphere, spot, rect area and light probe lights. The renderer resolves them once per frame and evaluates them at every fragment.
 
 ![Three colored lamps and a warm bulb light one white sphere](out/lamps.png)
 
-three.js: `AmbientLight`, `DirectionalLight`, `PointLight`, `HemisphereLight`, `SpotLight`.
+three.js: `AmbientLight`, `DirectionalLight`, `PointLight`, `HemisphereLight`, `SpotLight`, `RectAreaLight`, `LightProbe`.
 
 ## Add a light
 
@@ -23,6 +23,7 @@ scene.add_light(spot_light(Color(255, 220, 180), beam_node, 6.28, angle=Angle(30
 | `point_light(color, node, intensity=1.0, decay=2.0, distance=0.0)` | A bulb at the node's world position. |
 | `hemisphere_light(sky, ground, node, intensity=1.0)` | A sky color from the node's direction and a ground color from the other side. |
 | `spot_light(color, node, intensity=1.0, distance=0.0, angle=60°, penumbra=0.0, decay=2.0, target=NO_PARENT)` | A bulb at the node's world position that shines in a cone toward its target. |
+| `light_probe(sh, intensity=1.0)` | The light around a point, as nine spherical harmonic colors. See [Light probes](#light-probes). |
 
 Intensity multiplies the color. Values above one are allowed. A negative intensity, decay or distance raises.
 
@@ -105,6 +106,50 @@ The form factor already integrates the cosine over the rectangle. It is added af
 
 The rectangles ride in the light buffer after the spot lights, twelve floats each. Their count is in the buffer's header. When there is at least one, the two tables follow the last rectangle and the shadow maps follow the tables. Nothing is added to the kernel's arguments. See [GPU backend](GPU-backend).
 
+## Light probes
+
+`lights/light_probe.mojo` and `math/spherical_harmonics3.mojo`. A light probe is the light of an environment, reduced to nine colors. It lights every surface like the ambient term, but with a direction in it. A surface that faces a bright sky catches more than one that faces the ground.
+
+three.js: `LightProbe`, `SphericalHarmonics3`, `LightProbeGenerator.fromCubeTexture`.
+
+```mojo
+var sky = cube_texture_from(images, SEEN_FROM_OUTSIDE)
+scene.add_light(light_probe_from_cube(sky, 1.0))
+```
+
+| Builder | Meaning |
+|---|---|
+| `light_probe(sh, intensity=1.0)` | A probe that holds the coefficients `sh`. |
+| `light_probe_from_cube(cube, intensity=1.0)` | A probe of a cube texture's light. three.js's `LightProbeGenerator.fromCubeTexture`. |
+| `sh_from_cube(cube)` | The nine coefficients alone. |
+
+### What the nine colors are
+
+`SphericalHarmonics3` holds bands zero to two of the real spherical harmonics. Band zero is the average light. Band one says how the light leans along each axis. Band two says how it bunches up. Nine terms hold the blur a matte surface sees to within a few percent.
+
+`get_irradiance_at(normal)` is three.js's `getIrradianceAt`: the light a surface facing `normal` catches. `get_at(normal)` is the radiance from that direction. `add`, `add_scaled`, `scale`, `lerp`, `to_array` and `sh_from_array` are three.js's methods of the same names.
+
+### How it lights a surface
+
+`Lighting` adds every probe's coefficients, times its intensity, into `probe`. Its color is not read, as in three.js. `Lighting.ambient_at(normal)` is the ambient term plus the probes' irradiance. Every lit kind starts its sum there, and the sum is divided by pi, as three.js's `BRDF_Lambert` divides it.
+
+A probe of a uniform sky of radiance one gives an irradiance of pi. A white matte surface under it reflects one.
+
+### How a probe is measured
+
+`sh_from_cube` reads every texel of the six faces in linear light. It weights each texel by the solid angle it covers and projects it onto the nine terms. This is three.js's arithmetic. The direction of a texel is `face_direction`, this project's one cube convention. three.js walks the faces in the mirrored OpenGL layout instead.
+
+### The GPU
+
+The probes' 27 numbers ride in the light buffer's header, after the rect area count. `sh_irradiance_weight` gives each term's weight on both backends, and both sum the terms in one order. See [GPU backend](GPU-backend).
+
+### Errors
+
+- `light_probe` refuses a negative or non-finite intensity, and a coefficient that is not finite.
+- A light probe cannot cast a shadow.
+- `sh_from_cube` refuses a cube that `CubeTexture.validate` refuses.
+- `sh_from_array` refuses fewer than 27 numbers.
+
 ## Lighting
 
 `Lighting(scene)` resolves every light against the scene's world matrices. Build it after `scene.update()`. `Lighting(scene, visible=camera.visible_layers())` resolves only the lights on the camera's layers. Pass the camera's world position as `eye` as well, which a `PHONG` material measures its highlight from.
@@ -114,6 +159,8 @@ Pass `toward_eye` with it, the one direction toward a camera whose rays run para
 | Member | Meaning |
 |---|---|
 | `ambient: FloatColor` | The sum of the ambient lights, linear. |
+| `probe: SphericalHarmonics3` | The sum of the light probes, each times its intensity. |
+| `ambient_at(normal) -> FloatColor` | `ambient` plus the probes' irradiance at `normal`, before the division by pi. |
 | `count()` | The number of directional lights. |
 | `point_count()` | The number of point lights. |
 | `hemisphere_count()` | The number of hemisphere lights. |
@@ -132,9 +179,9 @@ Pass `toward_eye` with it, the one direction toward a camera whose rays run para
 - A light's numbers are refused by `validate`, on the camera's layers or not.
 - A light names a node or a target the scene does not have.
 - A directional, hemisphere or spot light has no direction. Its node sits at the origin, or on its target.
-- A light's kind is none of the five.
+- A light's kind is none of the seven.
 
-The kinds are summed in one fixed order: ambient, directional, point, hemisphere, spot. Both rasterizers use that order, so their sums round alike.
+The kinds are summed in one fixed order: ambient and light probes, directional, point, hemisphere, spot. Both rasterizers use that order, so their sums round alike.
 
 ## Validation
 

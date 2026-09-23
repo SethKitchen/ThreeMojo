@@ -52,10 +52,13 @@ from lights.light import (
     ambient_light,
     directional_light,
     hemisphere_light,
+    LIGHT_PROBE,
+    light_probe,
     point_light,
     rect_area_light,
     spot_light,
 )
+from math.spherical_harmonics3 import SphericalHarmonics3
 from loaders.json import parse_json
 from loaders.object_loader import (
     ObjectCameras,
@@ -1430,6 +1433,36 @@ def test_lights_read_with_three_js_defaults() raises:
     assert_equal(lights[1].ground.hex(), 0xFFFFFF)
     assert_equal(lights[2].width.to(METER), 10)
     assert_equal(lights[3].kind, POINT)
+
+
+def test_a_light_probe_round_trips_its_27_numbers() raises:
+    """A probe written as three.js's `LightProbe.toJSON` writes `sh` reads it back,
+    and a probe without it is darkness."""
+    var sh = SphericalHarmonics3()
+    for index in range(9):
+        sh.set_coefficient(
+            index, Vector3(Float32(index) * 0.25, -0.5, Float32(index))
+        )
+    var scene = Scene()
+    scene.add_light(light_probe(sh, 0.75))
+    scene.update()
+    var assets = Assets()
+    var text = object_to_json(scene, assets, ObjectCameras())
+    assert_true('"type":"LightProbe"' in text)
+    assert_true('"sh":[' in text)
+    var again = Scene()
+    var read = Assets()
+    _ = read_object_json(text, again, read)
+    assert_equal(len(again.lights), 1)
+    ref probe = again.lights[0]
+    assert_equal(probe.kind, LIGHT_PROBE)
+    assert_equal(probe.intensity, 0.75)
+    assert_true(probe.sh == sh)
+    var bare = _read('"object":{"uuid":"p","type":"LightProbe"}')
+    assert_equal(bare[0].lights[0].kind, LIGHT_PROBE)
+    assert_true(bare[0].lights[0].sh == SphericalHarmonics3())
+    # Anything but 27 numbers is refused.
+    _refuses('"object":{"uuid":"p","type":"LightProbe","sh":[1,2,3]}')
 
 
 def test_light_refusals() raises:

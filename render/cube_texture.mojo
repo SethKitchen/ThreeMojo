@@ -37,9 +37,14 @@ face can still hold a chain, since it is a `Texture`, and one reader asks
 for it: a physical surface reads the chain by its *roughness* rather than
 by any footprint, through `sample_level`, because a rough surface reflects
 a blurred environment and a blurred face is what a coarser level holds.
-That stands in for three.js's PMREM, which prefilters the environment per
-roughness with a Gaussian lobe; a box-filtered chain is coarser, and a
-cube built with `mipmapped=False` reflects sharply at every roughness.
+A box-filtered chain is coarser than three.js's PMREM, and a cube built
+with `mipmapped=False` reflects sharply at every roughness.
+
+**A prefiltered cube reads its PMREM instead.** `render.pmrem` builds one:
+the same six faces, and beside them `cube_uv`, the environment blurred once
+per roughness in three.js's cube UV layout. A physical surface reads that
+image through `sample_rough`, as three.js's `textureCubeUV` reads it, and
+every other reader still reads the faces. See `render.cube_uv`.
 
 **A face is clamped.** A coordinate past a face's edge belongs to the next
 face, and a flat image has no next face to read. `REPEAT` would read the
@@ -60,6 +65,13 @@ mirror with light above one.
 
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from render.cube_uv import (
+    CUBE_UV_EXTRA_COPIES,
+    CUBE_UV_MIN_MIP,
+    CUBE_UV_MIN_TILE,
+    cube_uv_lod_max,
+    sample_cube_uv,
+)
 from render.framebuffer import FloatColor, Framebuffer
 from render.png import DecodedImage
 from render.srgb import SRGB, UNKNOWN_SPACE, ColorSpace
@@ -278,6 +290,10 @@ struct CubeTexture(Movable):
     var faces: List[Texture]
     # The width and height of every face, in texels.
     var size: Int
+    # The environment prefiltered per roughness in three.js's cube UV
+    # layout, or the blank texture for a cube that has none. Only
+    # `render.pmrem` fills it; see `sample_rough`.
+    var cube_uv: Texture
 
     def __init__(out self, var faces: List[Texture]) raises:
         """Adopt six faces.
@@ -295,6 +311,7 @@ struct CubeTexture(Movable):
         """
         self.faces = faces^
         self.size = 0
+        self.cube_uv = Texture()
         self.validate()
         self.size = self.faces[0].width
 
@@ -305,6 +322,7 @@ struct CubeTexture(Movable):
         for index in range(len(copy.faces)):  # pragma: no branch
             self.faces.append(Texture(copy=copy.faces[index]))
         self.size = copy.size
+        self.cube_uv = Texture(copy=copy.cube_uv)
 
     def validate(self) raises:
         """Refuse faces that a sampler could not read as one cube.
@@ -317,7 +335,8 @@ struct CubeTexture(Movable):
             Error: If there are not six faces, any face is blank, any is not
                 square, the faces are not all one size, any is wrapped
                 other than `CLAMP`, or any face's own `Texture.validate`
-                refuses it.
+                refuses it; or the cube has a `cube_uv` image that is
+                refused by `validate_cube_uv`.
         """
         if len(self.faces) != FACE_COUNT:
             raise Error("A cube texture holds exactly six faces")
@@ -338,6 +357,12 @@ struct CubeTexture(Movable):
                     " coordinate past a face's edge belongs to the next face,"
                     " and a flat image has no next face to read"
                 )
+        if not self.cube_uv.is_blank():
+            validate_cube_uv(self.cube_uv)
+
+    def is_prefiltered(self) -> Bool:
+        """Return True if the cube holds a PMREM, a `cube_uv` image."""
+        return not self.cube_uv.is_blank()
 
     def face(self, index: Int) raises -> ref[origin_of(self.faces[0])] Texture:
         """Return one face, borrowed.
@@ -393,6 +418,31 @@ struct CubeTexture(Movable):
         var face = face_of(direction)
         var place = face_uv(face, direction)
         return self.faces[face].sample_level(place.x, place.y, level)
+
+    def sample_rough(
+        self, direction: Vector3, roughness: Float32
+    ) -> FloatColor:
+        """Return the environment a surface of some roughness reflects in a
+        direction.
+
+        A prefiltered cube reads its PMREM, `sample_cube_uv`, as three.js's
+        `textureCubeUV` does. Any other cube reads down its faces' chain at
+        `reflection_level`, the box-filtered stand-in. Both rasterizers ask
+        this question the same way; see `render.gpu._sample_cube_rough`.
+
+        Args:
+            direction: Any vector; it need not be unit length.
+            roughness: From zero to one. Roughness one is what three.js
+                reads for the irradiance around a normal.
+
+        Returns:
+            The color found there.
+        """
+        if self.is_prefiltered():
+            return sample_cube_uv(self.cube_uv, direction, roughness)
+        return self.sample_level(
+            direction, reflection_level(roughness, self.levels())
+        )
 
     def levels(self) -> Int:
         """Return how many mip levels each face holds, one for a cube built
@@ -611,6 +661,50 @@ def cube_from_equirectangular(
                 )
             )
     return CubeTexture(faces^)
+
+
+def cube_uv_width(lod_max: Int) -> Int:
+    """Return how wide a PMREM's layout image is, from its sharpest mip.
+
+    Three tiles across the sharpest copy, or across the seven sixteen-texel
+    copies side by side when those are wider: three.js's
+    `3 * max(cubeSize, 16 * 7)`.
+
+    Args:
+        lod_max: The sharpest copy's mip, at least four.
+
+    Returns:
+        The width in texels.
+    """
+    return 3 * max(1 << lod_max, CUBE_UV_MIN_TILE * (CUBE_UV_EXTRA_COPIES + 1))
+
+
+def validate_cube_uv(image: Texture) raises:
+    """Refuse an image a PMREM sampler could not read as a cube UV layout.
+
+    Asked by `CubeTexture.validate`, and so again on the way to the device.
+
+    Raises:
+        Error: If `Texture.validate` refuses the image; it does not hold
+            floats, is not `CLAMP` and `BILINEAR`, or holds a mip chain; or
+            its height is not four times a power of two of at least sixteen,
+            or its width is not `cube_uv_width` of that.
+    """
+    image.validate()
+    if image.texel_type != FLOAT_TYPE:
+        raise Error("A PMREM's cube UV image holds floats")
+    if image.wrap != CLAMP or image.filter != BILINEAR or image.levels != 1:
+        raise Error(
+            "A PMREM's cube UV image is CLAMP and BILINEAR, with no mip chain"
+        )
+    var lod_max = cube_uv_lod_max(image.height)
+    if lod_max < CUBE_UV_MIN_MIP or image.height != 4 << lod_max:
+        raise Error(
+            "A PMREM's cube UV image is four tiles of a power of two, at"
+            " least sixteen, tall"
+        )
+    if image.width != cube_uv_width(lod_max):
+        raise Error("A PMREM's cube UV image is three tiles wide")
 
 
 def _mirrored(width: Int, height: Int, pixels: List[UInt8]) -> List[UInt8]:

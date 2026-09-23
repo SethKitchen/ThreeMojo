@@ -39,6 +39,7 @@ from lights.light import (
     AMBIENT,
     DIRECTIONAL,
     HEMISPHERE,
+    LIGHT_PROBE,
     POINT,
     RECT_AREA,
     SPOT,
@@ -46,6 +47,7 @@ from lights.light import (
 )
 from lights.ltc import LtcTables, ltc_lookup, ltc_uv, rect_area_light
 from math.smoothstep import smoothstep
+from math.spherical_harmonics3 import SphericalHarmonics3
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor
@@ -577,17 +579,17 @@ def physical_outgoing(
     is red under a white gloss. Shared by both rasterizers, as
     `combine_light` is.
 
-    **Two approximations, both in what the caller hands in.** `radiance`
-    is meant to be the environment integrated over the lobe, which
-    three.js's PMREM prefilters per roughness; here it is a mip level of
-    the cube picked by the roughness, a spatial average rather than a
-    GGX-weighted one. `irradiance` is meant to be the environment
-    integrated over the hemisphere weighted by the cosine; here it is the
-    cube's coarsest level, each face's average. Under a sky that is one
+    **What the caller hands in decides how close this is to three.js.**
+    `radiance` is the environment integrated over the lobe and
+    `irradiance` the environment integrated over the hemisphere weighted
+    by the cosine. A prefiltered cube, `render.pmrem`, gives both as
+    three.js does: its PMREM read at the roughness and at roughness one.
+    Any other cube gives two approximations: a mip level of the cube
+    picked by the roughness, a spatial average rather than a lobe, and
+    the coarsest level, each face's average. Under a sky that is one
     bright patch on black, the second over-reads: the average of the face
     the patch is on, where the cosine-weighted integral is smaller. The
-    tests pin both. Either can be replaced by a prefiltered cube without
-    this function changing.
+    tests pin both. See `CubeTexture.sample_rough`.
 
     Args:
         direct: The three sums over the lights, from `Lighting.physical_at`.
@@ -793,6 +795,10 @@ struct Lighting(Movable):
     var up: Vector3
     # The sum of every ambient light, already decoded and scaled.
     var ambient: FloatColor
+    # The sum of every light probe's coefficients, each times its
+    # intensity, as three.js's `WebGLLights` sums them into `probe`.
+    # Darkness when there is no probe.
+    var probe: SphericalHarmonics3
     # What each sum of arriving light is multiplied by before it is
     # returned: `RECIPROCAL_PI` for a scene's lights, as three.js's BRDF
     # has it, and one for `uniform`, the identity. Crosses to the kernel
@@ -903,7 +909,7 @@ struct Lighting(Movable):
                 light has no direction, because its node sits exactly
                 where it points from — the origin, or its target — which
                 is a mistake rather than a dark light; a light's kind
-                is none of the six; a shadow map names a light that
+                is none of the seven; a shadow map names a light that
                 is not there, or one that is not directional, point or
                 spot, or a point light's map is not a cube or another
                 light's is; a spot light map names a light that is not
@@ -923,6 +929,7 @@ struct Lighting(Movable):
         if self.up.length() != 0:
             self.up.normalize()
         self.ambient = FloatColor(0.0, 0.0, 0.0, 1.0)
+        self.probe = SphericalHarmonics3()
         self.scale = RECIPROCAL_PI
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()
@@ -991,6 +998,10 @@ struct Lighting(Movable):
                     self.ambient.b + fill.b,
                     1.0,
                 )
+            elif light.kind == LIGHT_PROBE:
+                # Summed as three.js sums them: each coefficient times the
+                # probe's intensity, the color unread.
+                self.probe.add_scaled(light.sh, light.intensity)
             elif light.kind == DIRECTIONAL:
                 # Where the node ended up after every transform above it,
                 # seen from what it shines at.
@@ -1073,7 +1084,7 @@ struct Lighting(Movable):
                 self.rect_radiances.append(light.radiance())
             else:
                 # The type stops a bare integer; it does not stop
-                # `LightKind(7)`, and a light that is none of the five has
+                # `LightKind(7)`, and a light that is none of the seven has
                 # nothing here that knows how to evaluate it.
                 raise Error("A light of an unknown kind cannot be resolved")
 
@@ -1087,6 +1098,7 @@ struct Lighting(Movable):
         self.toward_eye = PERSPECTIVE_VIEW
         self.up = Vector3(0, 1, 0)
         self.ambient = ambient
+        self.probe = SphericalHarmonics3()
         self.scale = 1
         self.directions = List[Vector3]()
         self.radiances = List[FloatColor]()
@@ -1275,7 +1287,7 @@ struct Lighting(Movable):
         Returns:
             The arriving light, linear. Alpha is not light and stays at one.
         """
-        var total = self.ambient
+        var total = self.ambient_at(normal)
         for index in range(len(self.directions)):
             var lambert = max(Float32(0), normal.dot(self.directions[index]))
             if lambert == 0:
@@ -1411,7 +1423,7 @@ struct Lighting(Movable):
         Returns:
             The arriving light, linear. Alpha is not light and stays at one.
         """
-        var total = self.ambient
+        var total = self.ambient_at(normal)
         for index in range(len(self.directions)):
             var tone = toon_tone(
                 normal.dot(self.directions[index]), ramp
@@ -1619,16 +1631,40 @@ struct Lighting(Movable):
             blue += bulb.b * tint.z * reach * sent.z
         return FloatColor(red, green, blue, 1.0).scaled(self.scale)
 
+    def ambient_at(self, normal: Vector3) -> FloatColor:
+        """Return the ambient term and the light probes' irradiance at a
+        normal, before the scale: three.js's `getAmbientLightIrradiance`
+        plus `getLightProbeIrradiance`.
+
+        The first thing each sum here starts from, and the kernel's
+        `_ambient_at` starts from the same numbers: the probes' nine terms
+        summed in index order by `SphericalHarmonics3.get_irradiance_at`,
+        then added to the ambient color.
+
+        Args:
+            normal: The surface's unit normal, in world space.
+
+        Returns:
+            The light, linear and unscaled. Alpha is one.
+        """
+        var lift = self.probe.get_irradiance_at(normal)
+        return FloatColor(
+            self.ambient.r + lift.x,
+            self.ambient.g + lift.y,
+            self.ambient.b + lift.z,
+            1.0,
+        )
+
     def indirect_at(self, normal: Vector3) -> FloatColor:
         """Return the light with no direction reaching a surface here: the
-        ambient term and the hemisphere lights, three.js's `irradiance` in
-        `lights_fragment_begin`.
+        ambient term, the light probes and the hemisphere lights, three.js's
+        `irradiance` in `lights_fragment_begin`.
 
         The half of `intensity_at` that a physical surface scatters through
         its diffuse color alone: three.js's `RE_IndirectDiffuse_Physical`.
         The lights with a direction go through `physical_at` instead, where
         they make a lobe as well. Summed in the order `intensity_at` sums
-        the same two kinds, and scaled once, as there.
+        the same kinds, and scaled once, as there.
 
         Args:
             normal: The surface's unit normal, in world space.
@@ -1636,7 +1672,7 @@ struct Lighting(Movable):
         Returns:
             The arriving light, linear. Alpha is not light and stays at one.
         """
-        var total = self.ambient
+        var total = self.ambient_at(normal)
         for index in range(len(self.sky_directions)):
             var weight = 0.5 * normal.dot(self.sky_directions[index]) + 0.5
             ref sky = self.skies[index]

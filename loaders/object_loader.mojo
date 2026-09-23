@@ -88,6 +88,7 @@ from lights.light import (
     HEMISPHERE,
     POINT,
     RECT_AREA,
+    LIGHT_PROBE,
     SPOT,
     Light,
     LightKind,
@@ -96,6 +97,7 @@ from lights.light import (
     hemisphere_light,
     point_light,
     rect_area_light,
+    light_probe,
     spot_light,
 )
 from loaders.gltf import decode_base64, decode_image
@@ -132,6 +134,11 @@ from materials.material import (
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
+from math.spherical_harmonics3 import (
+    SH_COUNT,
+    SphericalHarmonics3,
+    sh_from_array,
+)
 from math.vector2 import Vector2
 from objects.instanced_mesh import InstancedMesh
 from objects.mesh import Mesh
@@ -213,8 +220,8 @@ def light_type_names() -> List[String]:
     """Return three.js's light class for each `LightKind`, by its value.
 
     Returns:
-        Six names: `AmbientLight` for `AMBIENT` at zero through
-        `RectAreaLight` for `RECT_AREA` at five.
+        Seven names: `AmbientLight` for `AMBIENT` at zero through
+        `LightProbe` for `LIGHT_PROBE` at six.
     """
     return [
         "AmbientLight",
@@ -223,13 +230,14 @@ def light_type_names() -> List[String]:
         "HemisphereLight",
         "SpotLight",
         "RectAreaLight",
+        "LightProbe",
     ]
 
 
 def _position_of(names: List[String], name: String) -> Int:
     """Return where a name is in a list, or -1."""
     var found = -1
-    # Every caller passes a list of six or ten names.
+    # Every caller passes a list of seven or ten names.
     for at in range(len(names)):  # pragma: no branch
         if names[at] == name:
             found = at
@@ -1232,6 +1240,15 @@ struct _Loader(Movable):
             built = hemisphere_light(
                 color, self.color(item, "groundColor", 0xFFFFFF), id, intensity
             )
+        elif kind == LIGHT_PROBE:
+            # three.js's `LightProbe.toJSON` writes its 27 numbers as `sh`;
+            # a probe without them is darkness, as a new one is.
+            var sh = SphericalHarmonics3()
+            var numbers = self.numbers(item, "sh", SH_COUNT * 3)
+            if len(numbers) > 0:
+                sh = sh_from_array(numbers)
+            built = light_probe(sh, intensity)
+            built.node = id
         elif kind == SPOT:
             built = spot_light(
                 color,

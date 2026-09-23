@@ -45,7 +45,9 @@ from materials.material import (
     line_dashed_material,
     points_material,
     sprite_material,
+    standard_material,
 )
+from render.pmrem import pmrem_from_cube
 from math.vector3 import Vector3
 from objects.line import LOOP, Line
 from objects.mesh import Mesh
@@ -313,6 +315,42 @@ def test_a_reflection_is_a_texture_and_two_modes_ignore_it() raises:
     renderer.set_shading(SHADE_UV)
     var shown = center(renderer.render(scene, assets, camera_at(0, 0, 4)))
     assert_equal(shown.b, UInt8(0))
+
+
+def test_a_rough_metal_reads_a_pmrem_blurred() raises:
+    # A mirror-smooth metal reads the PMREM's sharpest copy, which is the
+    # face it looks at, as it reads the plain cube. A rough one reads a
+    # blurred copy, where the plain cube with no chain stays sharp.
+    var renderer = a_renderer()
+    var assets = Assets()
+    var sharp = assets.cube_textures.add(a_cube())
+    var blurred = assets.cube_textures.add(pmrem_from_cube(a_cube()))
+    var centers = List[Color]()
+    for roughness in [Float32(0), 0.7]:
+        for env in [sharp, blurred]:
+            var metal = assets.materials.add(
+                standard_material(
+                    Color(255, 255, 255),
+                    roughness=roughness,
+                    metalness=1,
+                    env_map=env,
+                )
+            )
+            var scene = Scene()
+            a_ball(scene, assets, metal)
+            centers.append(
+                center(renderer.render(scene, assets, camera_at(0, 0, 4)))
+            )
+    # Smooth: the same cyan face, bar the little red the multiple
+    # scattering brings in from the PMREM's irradiance, which is the
+    # blurriest copy rather than the face's own average.
+    assert_equal(centers[0].g, 255)
+    assert_true(centers[1].g >= 250)
+    assert_true(centers[1].r < 30)
+    # Rough: the plain cube with no chain stays sharp, and the blur brings
+    # in the red, yellow and magenta faces around the cyan one.
+    assert_equal(centers[2].r, centers[0].r)
+    assert_true(centers[3].r > centers[1].r + 40)
 
 
 def test_a_material_can_reflect_the_scenes_environment() raises:
