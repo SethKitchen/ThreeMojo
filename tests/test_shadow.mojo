@@ -28,6 +28,7 @@ from lights.shadow import (
     CUBE_FACES,
     MAX_MAP_SIZE,
     PCF_TAPS,
+    POINT_SHADOW_TAPS,
     SHADOW_HEADER,
     SHADOW_TYPE_AT,
     SOFT_TAPS,
@@ -297,23 +298,40 @@ def test_a_world_position_lands_on_the_map_by_the_frame() raises:
     assert_equal(moved.x, Float32(1))
 
 
-def test_the_nine_taps_step_across_then_down_and_stop_at_the_edges() raises:
-    # At the middle of a four-texel map with a radius of one, the taps
-    # read the three-by-three block around texel (2, 2).
-    var place = Vector3(0.6, 0.6, 0.5)
-    assert_equal(shadow_texel(place, 0, 1, 4), 1 * 4 + 1)
-    assert_equal(shadow_texel(place, 1, 1, 4), 1 * 4 + 2)
-    assert_equal(shadow_texel(place, 2, 1, 4), 1 * 4 + 3)
-    assert_equal(shadow_texel(place, 3, 1, 4), 2 * 4 + 1)
-    assert_equal(shadow_texel(place, 4, 1, 4), 2 * 4 + 2)
-    assert_equal(shadow_texel(place, 8, 1, 4), 3 * 4 + 3)
-    # A radius of zero reads the one texel nine times.
+def test_the_seventeen_taps_follow_three_js_order() raises:
+    # three.js 0.180's `getShadow` under PCFShadowMap: an outer ring at
+    # the radius and an inner ring at half of it, down the rows, across
+    # each row. At the middle of an eight-texel map with a radius of two,
+    # texel (4, 4), the outer taps are two texels out and the inner one.
+    assert_equal(PCF_TAPS, 17)
+    var place = Vector3(4.5 / 8, 4.5 / 8, 0.5)
+    var across = [-2, 0, 2, -1, 0, 1, -2, -1, 0, 1, 2, -1, 0, 1, -2, 0, 2]
+    var down = [-2, -2, -2, -1, -1, -1, 0, 0, 0, 0, 0, 1, 1, 1, 2, 2, 2]
     for tap in range(PCF_TAPS):
-        assert_equal(shadow_texel(place, tap, 0, 4), 2 * 4 + 2)
+        var want = (4 + down[tap]) * 8 + 4 + across[tap]
+        assert_equal(shadow_texel(place, tap, 2, 8), want)
+    assert_equal(across[CENTER_TAP], 0)
+    assert_equal(down[CENTER_TAP], 0)
+    # A radius of zero reads the one texel seventeen times.
+    for tap in range(PCF_TAPS):
+        assert_equal(shadow_texel(place, tap, 0, 8), 4 * 8 + 4)
     # Past an edge, the edge.
     assert_equal(shadow_texel(Vector3(0, 0, 0.5), 0, 1, 4), 0)
-    assert_equal(shadow_texel(Vector3(1, 1, 0.5), 8, 1, 4), 15)
-    assert_equal(shadow_texel(Vector3(0, 1, 0.5), 6, 2, 4), 12)
+    assert_equal(shadow_texel(Vector3(1, 1, 0.5), 16, 1, 4), 15)
+    assert_equal(shadow_texel(Vector3(0, 1, 0.5), 14, 2, 4), 12)
+
+
+def test_the_inner_ring_reads_what_the_outer_ring_steps_over() raises:
+    # A ring of casters one texel around a lit texel, with a radius of
+    # two: the outer taps step over it and the inner eight read it.
+    var depths = List[Float32](length=64, fill=inf[DType.float32]())
+    for row in range(3, 6):
+        for column in range(3, 6):
+            if row != 4 or column != 4:
+                depths[row * 8 + column] = -0.5
+    var ring = ShadowMap(0, 8, flat_frame(), depths^, 0, 0, 2)
+    var place = Vector3((4.5 / 8 - 0.5) * 2, (0.5 - 4.5 / 8) * 2, 0)
+    assert_almost_equal(ring.lit(place, UP), Float32(9) / 17, atol=1e-6)
 
 
 def test_a_tap_is_lit_when_the_fragment_is_not_beyond_the_stored_depth() raises:
@@ -331,7 +349,7 @@ def test_a_tap_is_lit_when_the_fragment_is_not_beyond_the_stored_depth() raises:
 
 def test_a_map_lights_a_surface_by_how_many_taps_find_nothing() raises:
     var map = half_map(4)
-    # Under the caster, deeper than it: all nine taps shadowed.
+    # Under the caster, deeper than it: every tap shadowed.
     assert_equal(map.lit(Vector3(-0.75, 0, 0), UP), Float32(0))
     # Above the caster: lit.
     assert_equal(map.lit(Vector3(-0.75, 0, 0.75), UP), Float32(1))
@@ -339,12 +357,12 @@ def test_a_map_lights_a_surface_by_how_many_taps_find_nothing() raises:
     assert_equal(map.lit(Vector3(0.75, 0, -0.5), UP), Float32(1))
     # Off the map: lit.
     assert_equal(map.lit(Vector3(3, 0, 0), UP), Float32(1))
-    # On the seam with a radius of one, the taps straddle it: a third of
-    # them read the lit half.
+    # On the seam with a radius of one, the taps straddle it: six of the
+    # seventeen read the lit half.
     var soft = ShadowMap(0, 4, flat_frame(), map.depths.copy(), 0, 0, 1)
     var edge = soft.lit(Vector3(-0.05, 0, 0), UP)
     assert_true(edge > 0 and edge < 1, "the edge was not softened")
-    assert_almost_equal(edge, Float32(1) / 3, atol=1e-6)
+    assert_almost_equal(edge, Float32(6) / 17, atol=1e-6)
     # The normal bias lifts the surface out of its own shadow.
     var lifted = ShadowMap(0, 4, flat_frame(), map.depths.copy(), 0, 0.6, 0)
     assert_equal(lifted.lit(Vector3(-0.75, 0, 0), UP), Float32(1))
@@ -715,7 +733,8 @@ def test_the_nine_cube_taps_follow_three_js_order() raises:
         Vector3(-1, -1, -1),
         Vector3(1, -1, -1),
     ]
-    for tap in range(PCF_TAPS):
+    assert_equal(POINT_SHADOW_TAPS, 9)
+    for tap in range(POINT_SHADOW_TAPS):
         var moved = point_shadow_tap(way, tap, 0.25)
         assert_equal(moved.x, signs[tap].x * 0.25)
         assert_equal(moved.y, signs[tap].y * 0.25)
@@ -1078,7 +1097,7 @@ def test_a_basic_map_compares_one_texel() raises:
     var hard = ShadowMap(
         0, 4, flat_frame(), half_map(4).depths.copy(), 0, 0, 1, BASIC_SHADOW_MAP
     )
-    # On the seam, where nine taps give a third, one tap gives all or
+    # On the seam, where seventeen taps give six, one tap gives all or
     # nothing, by which texel the fragment lands in.
     assert_equal(hard.lit(Vector3(-0.05, 0, 0), UP), Float32(0))
     assert_equal(hard.lit(Vector3(0.05, 0, 0), UP), Float32(1))
@@ -1096,7 +1115,7 @@ def test_a_basic_map_compares_one_texel() raises:
         BASIC_SHADOW_MAP,
     )
     assert_equal(eased.lit(Vector3(-0.05, 0, 0), UP), Float32(1))
-    assert_equal(CENTER_TAP, 4)
+    assert_equal(CENTER_TAP, 8)
 
 
 def test_a_basic_cube_compares_one_texel() raises:

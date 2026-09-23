@@ -215,7 +215,7 @@ A shadow needs three things to be said, as in three.js. The light must cast. The
 | `shadow.map_size` | `shadow.mapSize` | `512` | How many texels a side the map is. |
 | `shadow.bias` | `shadow.bias` | `0.0` | Added to a fragment's depth, from zero to one across the planes, before it is compared. Negative moves it toward the light. |
 | `shadow.normal_bias` | `shadow.normalBias` | `0.0` | How far a fragment is moved along its normal before it is projected, in meters. |
-| `shadow.radius` | `shadow.radius` | `1.0` | How many texels the nine taps spread over. Under `VSM_SHADOW_MAP`, how many texels the blur spreads over. |
+| `shadow.radius` | `shadow.radius` | `1.0` | How many texels the PCF taps spread over. Under `VSM_SHADOW_MAP`, how many texels the blur spreads over. |
 | `shadow.blur_samples` | `shadow.blurSamples` | `8` | How many samples each pass of a variance map's blur takes, one to 256. |
 | `shadow.near`, `shadow.far` | `shadow.camera.near`, `far` | `0.5 m`, `500 m` | The shadow camera's planes. A point or spot light with a `distance` puts the far plane at that distance, as three.js does. |
 | `shadow.extent` | `shadow.camera.left` through `top` | `5 m` | How far to each side a directional light's camera sees. A spot light's camera is as wide as its cone. |
@@ -224,7 +224,7 @@ A shadow needs three things to be said, as in three.js. The light must cast. The
 
 The renderer draws the scene once per casting light, from the light, keeping only the depth: `Renderer.shadow_maps`. A directional light draws through an orthographic camera at its node looking at its target, `extent` meters to each side. A spot light draws through a perspective camera twice its angle wide. Only the meshes that cast are drawn, under lit shading with no lights. A skinned, instanced or batched mesh, an LOD and a sprite cast nothing yet. A cut-out map cuts nothing out of a shadow, and a translucent surface, which claims no depth, casts none.
 
-Each fragment the camera then shades is projected into each map, `shadow_coordinate`, and compared against the depth stored there. Nine taps in a three-by-three square of `radius` texels are compared on their own and averaged: three.js's `PCFShadowMap`, its default. The other filters are in [Soft shadows](#soft-shadows). A fragment off the map or past the far plane is lit. `ShadowMap.lit` is the arithmetic, from functions the GPU kernel calls too.
+Each fragment the camera then shades is projected into each map, `shadow_coordinate`, and compared against the depth stored there. Seventeen taps are compared on their own and averaged: three.js's `PCFShadowMap`, its default. Nine taps are `radius` texels apart, and eight more are at half that spread. The other filters are in [Soft shadows](#soft-shadows). A fragment off the map or past the far plane is lit. `ShadowMap.lit` is the arithmetic, from functions the GPU kernel calls too.
 
 Every lit sum reads the map: the diffuse term, the toon ramp, the highlight and the physical lobe. Each is scaled by what the light's map lets through, as three.js scales `directLight.color`. A surface that does not receive skips every map.
 
@@ -246,7 +246,7 @@ sun.shadow.blur_samples = 8
 | Type | three.js | What a fragment reads |
 |---|---|---|
 | `BASIC_SHADOW_MAP` | `BasicShadowMap` | One texel. The edge is as hard as the texels. |
-| `PCF_SHADOW_MAP` | `PCFShadowMap` | Nine taps `radius` texels apart, averaged. |
+| `PCF_SHADOW_MAP` | `PCFShadowMap` | Seventeen taps, averaged: nine `radius` texels apart and eight at half that spread. |
 | `PCF_SOFT_SHADOW_MAP` | `PCFSoftShadowMap` | Sixteen taps, weighed into a box three texels wide. The radius has no effect. |
 | `VSM_SHADOW_MAP` | `VSMShadowMap` | The blurred mean and spread of the depth, through Chebyshev's bound. |
 
@@ -260,14 +260,13 @@ sun.shadow.blur_samples = 8
 
 Under `VSM_SHADOW_MAP`, every mesh that receives a shadow is also drawn into the maps, as three.js does. A texel where nothing was drawn holds a depth of one, as three.js clears its map to white.
 
-**Point lights.** A point light's cube keeps its nine taps under `PCF_SOFT_SHADOW_MAP` and `VSM_SHADOW_MAP`, and reads one tap under `BASIC_SHADOW_MAP`. This is three.js's `getPointShadow`, which has no soft or variance filter. three.js also blurs no cube.
+**Point lights.** A point light's cube reads nine taps under `PCF_SHADOW_MAP`, `PCF_SOFT_SHADOW_MAP` and `VSM_SHADOW_MAP`, and reads one tap under `BASIC_SHADOW_MAP`. This is three.js's `getPointShadow`, which has no soft or variance filter. three.js also blurs no cube.
 
 This port differs from three.js in these places:
 
 - three.js packs each depth into eight-bit channels. This port keeps each number as a 32-bit float, so a variance map loses no precision.
 - three.js reads a variance cube with a linear filter across its atlas. This port reads the nearest texel of each face, as for the other types.
 - The blur holds the variance at zero or above before it takes the root. GLSL leaves the root of a negative number undefined.
-- `PCF_SHADOW_MAP` takes nine taps here. three.js r180 takes seventeen taps at two spreads.
 
 ### Point light shadows
 

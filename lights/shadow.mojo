@@ -31,7 +31,7 @@ its `_cubeDirections` and `_cubeUps`, and stores in each texel not the
 camera's depth but the distance from the bulb, from zero at the near
 plane to one at the far. A fragment is compared along the way from the
 bulb to it: `cube_texel` finds the face and the texel that direction
-crosses. See `point_shadow_tap` for the nine taps.
+crosses. See `point_shadow_tap` for its nine taps.
 
 **A spot light can project a picture.** three.js's `SpotLight.map` is a
 texture seen through the spot light's shadow camera, and the light's
@@ -41,10 +41,11 @@ slide projector. `SpotLightMap` holds it.
 **The comparison is softened.** One depth compared against one texel
 gives an edge as hard as the map's texels, which is what a shadow map
 looks like at a glance and what three.js's `BasicShadowMap` does. Its
-default is `PCFShadowMap`: nine taps in a three-by-three square of
-`radius` texels around the fragment, each compared on its own, averaged.
-That is `ShadowMap.lit` below, the same nine offsets in the same order
-on both backends.
+default is `PCFShadowMap`: seventeen taps around the fragment, each
+compared on its own, averaged. Nine lie on a three-by-three grid
+`radius` texels apart, and eight more around its middle, half as far
+apart, as three.js 0.180's `getShadow` has them. That is `ShadowMap.lit` below, the
+same seventeen offsets in the same order on both backends.
 
 **The renderer picks the filter.** three.js's `renderer.shadowMap.type`
 is `Renderer.shadow_map_type` here, a `ShadowMapType`, and every map it
@@ -109,8 +110,8 @@ struct ShadowMapType(Equatable, ImplicitlyCopyable, Writable):
 
 # three.js's `BasicShadowMap`: one texel compared, a hard edge.
 comptime BASIC_SHADOW_MAP = ShadowMapType(0)
-# three.js's `PCFShadowMap`, its default: nine comparisons `radius` texels
-# apart, averaged.
+# three.js's `PCFShadowMap`, its default: seventeen comparisons at `radius`
+# texels and at half that, averaged.
 comptime PCF_SHADOW_MAP = ShadowMapType(1)
 # three.js's `PCFSoftShadowMap`: sixteen comparisons weighed into a box
 # three texels wide, whatever the radius.
@@ -135,10 +136,32 @@ comptime DEFAULT_SHADOW_EXTENT = Length(5.0, METER)
 # The largest map this project builds: a square of this many texels a
 # side is sixty-four million depths.
 comptime MAX_MAP_SIZE = 8192
-# How many taps `PCF_SHADOW_MAP` averages, three by three.
-comptime PCF_TAPS = 9
-# Which of the nine taps is the fragment's own texel, with no offset.
-comptime CENTER_TAP = 4
+# How many taps `PCF_SHADOW_MAP` averages: a three-by-three square at the
+# radius and the eight around the middle of one at half the radius.
+comptime PCF_TAPS = 17
+# Which of the seventeen taps is the fragment's own texel, with no offset.
+comptime CENTER_TAP = 8
+# How many taps a point light's cube averages, under every filter but
+# `BASIC_SHADOW_MAP`: three.js's `getPointShadow`.
+comptime POINT_SHADOW_TAPS = 9
+# Each PCF tap's offset across and down, in units of the radius, in the
+# order three.js's `getShadow` sums them. Padded to a power of two.
+comptime _PCF_ACROSS = SIMD[DType.float32, 32](
+    -1, 0, 1,
+    -0.5, 0, 0.5,
+    -1, -0.5, 0, 0.5, 1,
+    -0.5, 0, 0.5,
+    -1, 0, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+)  # fmt: skip
+comptime _PCF_DOWN = SIMD[DType.float32, 32](
+    -1, -1, -1,
+    -0.5, -0.5, -0.5,
+    0, 0, 0, 0, 0,
+    0.5, 0.5, 0.5,
+    1, 1, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+)  # fmt: skip
 # How many comparisons `soft_shadow` weighs, four by four.
 comptime SOFT_TAPS = 16
 # The two ends of three.js's `VSMShadow` ramp: a Chebyshev bound below
@@ -184,7 +207,7 @@ struct LightShadow(ImplicitlyCopyable):
     # How far along its normal a fragment is moved before it is
     # projected, in meters, three.js's `normalBias`.
     var normal_bias: Float32
-    # How many texels the nine taps spread over, three.js's `radius`.
+    # How many texels the PCF taps spread over, three.js's `radius`.
     var radius: Float32
     # The shadow camera's planes, three.js's `shadow.camera.near` and
     # `far`.
@@ -472,12 +495,12 @@ struct ShadowMap(Movable):
             return cube_tap(self.depths[cube_texel(way, self.size)], depth)
         var spread = point_shadow_spread(self.radius, self.size)
         var total = Float32(0)
-        for tap in range(PCF_TAPS):  # pragma: no branch
+        for tap in range(POINT_SHADOW_TAPS):  # pragma: no branch
             var texel = cube_texel(
                 point_shadow_tap(way, tap, spread), self.size
             )
             total += cube_tap(self.depths[texel], depth)
-        return total / Float32(PCF_TAPS)
+        return total / Float32(POINT_SHADOW_TAPS)
 
 
 def biased_position(
@@ -576,25 +599,29 @@ def inside_shadow_map(place: Vector3) -> Bool:
 
 
 def shadow_texel(place: Vector3, tap: Int, radius: Float32, size: Int) -> Int:
-    """Return which texel one of the nine taps reads.
+    """Return which texel one of the seventeen taps reads.
 
-    The taps go across then down, from `radius` texels up and left of
-    the coordinate to `radius` texels down and right of it, in the order
-    three.js's `getShadow` sums them; a radius of zero reads the one
-    texel nine times. A tap past an edge reads the edge, as three.js's
-    clamped map does.
+    three.js 0.180's `getShadow` under `PCFShadowMap` reads a
+    three-by-three grid of taps `radius` texels apart and, inside it, the
+    eight taps around the middle of a grid half as far apart. The taps go down the
+    rows and across each row, from `radius` texels up and left of the
+    coordinate to `radius` texels down and right of it, in the order
+    three.js sums them: three on the top row, three at half the radius up,
+    five on the middle row, three at half the radius down and three on
+    the bottom row. A radius of zero reads the one texel seventeen times.
+    A tap past an edge reads the edge, as three.js's clamped map does.
 
     Args:
         place: What `shadow_coordinate` returned.
-        tap: Which of the nine, zero through eight.
+        tap: Which of the seventeen, zero through sixteen.
         radius: How many texels the taps spread over.
         size: How many texels a side the map is.
 
     Returns:
         The texel's index, row-major from the top.
     """
-    var across = Float32(tap % 3 - 1) * radius
-    var down = Float32(tap // 3 - 1) * radius
+    var across = _PCF_ACROSS[tap] * radius
+    var down = _PCF_DOWN[tap] * radius
     var column = Int(place.x * Float32(size) + across)
     var row = Int(place.y * Float32(size) + down)
     if column < 0:

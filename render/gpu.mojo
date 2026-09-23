@@ -74,6 +74,7 @@ from lights.shadow import (
     CENTER_TAP,
     PCF_SOFT_SHADOW_MAP,
     PCF_TAPS,
+    POINT_SHADOW_TAPS,
     SHADOW_HEADER,
     SHADOW_TYPE_AT,
     SOFT_TAPS,
@@ -1212,12 +1213,12 @@ def _cube_shadow_at(
         )
     var spread = point_shadow_spread(radius, size)
     var total = Float32(0)
-    for tap in range(PCF_TAPS):
+    for tap in range(POINT_SHADOW_TAPS):
         var texel = cube_texel(point_shadow_tap(way, tap, spread), size)
         total += cube_tap(
             lights[unsafe_offset=block + SHADOW_HEADER + texel], depth
         )
-    return total / Float32(PCF_TAPS)
+    return total / Float32(POINT_SHADOW_TAPS)
 
 
 def _point_through(
