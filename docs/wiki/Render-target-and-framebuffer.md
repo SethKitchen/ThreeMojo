@@ -17,9 +17,12 @@ three.js: `WebGLRenderTarget` and the canvas. A render target can be read back a
 | `FloatColor(srgb=color)` | Decode an sRGB color to linear. Alpha is not decoded. |
 | `FloatColor(of=color)` | Divide each byte by 255 without decoding. |
 | `FloatColor(hex=0xFF8000)` | Decode a 24-bit sRGB value. three.js's `setHex`. |
+| `FloatColor(style="rgb(255, 128, 0)", space=SRGB)` | A color from a CSS string. three.js's `setStyle`. See [CSS strings](#css-strings). |
 | `FloatColor(hue=h, saturation=s, lightness=l, space=LINEAR)` | A color from HSL in the linear working space. three.js's `setHSL`. Pass `space=SRGB` to describe an sRGB color, decoded. The hue wraps. The other two clamp. |
 | `encode() -> Color` | Encode linear light to sRGB bytes, clamped. |
 | `hex() -> Int` | The encoded color as a 24-bit value. three.js's `getHex`. |
+| `hex_string() -> String` | The same value as six lowercase hexadecimal digits. three.js's `getHexString`. |
+| `style(space=SRGB) -> String` | A CSS string: `rgb(r,g,b)`, or `color(srgb-linear r g b)` for `LINEAR`. three.js's `getStyle`. |
 | `hsl(space=LINEAR) -> HSL` | Hue, saturation and lightness of the linear channels. three.js's `getHSL`. Pass `space=SRGB` for those of the encoded color. |
 | `quantize() -> Color` | Bytes without the transfer function, for data. |
 | `premultiplied()`, `unpremultiplied()` | Convert between straight and premultiplied alpha. |
@@ -30,7 +33,27 @@ three.js: `WebGLRenderTarget` and the canvas. A render target can be read back a
 | `multiply(other)`, `add(other)` | Red, green and blue only. Alpha is kept. |
 | `a == b` | Every channel equal. three.js's `equals`. |
 
-`HSL(hue, saturation, lightness)` holds the three floats `hsl()` returns. A gray has a hue and a saturation of zero. A half-lightness gray is linear 0.5, which encodes to 188. In sRGB it is the gray that `0x808080` decodes to. CSS color names and strings are not ported.
+`HSL(hue, saturation, lightness)` holds the three floats `hsl()` returns. A gray has a hue and a saturation of zero. A half-lightness gray is linear 0.5, which encodes to 188. In sRGB it is the gray that `0x808080` decodes to.
+
+### CSS strings
+
+`render/css_color.mojo` reads and writes CSS color strings, as three.js's `Color` does. `parse_style(style, space=SRGB)` reads every form that three.js's `setStyle` reads:
+
+- `rgb(255, 0, 0)` and `rgba(255, 0, 0, 0.5)`. Each number is a whole number. A number above 255 becomes 255.
+- `rgb(100%, 0%, 0%)` and `rgba(...)`. Each share is a whole number. A share above 100 becomes 100.
+- `hsl(120, 50%, 50%)` and `hsla(...)`. Each number can have a fraction.
+- `#ff0` and `#ff0000`.
+- The 148 CSS color names, in any case. `COLOR_NAMES` and `COLOR_NAME_HEXES` hold them, in three.js's order. `color_name_hex(name)` looks one up.
+
+The function name must be lowercase and must touch its parenthesis. Text after the closing parenthesis is ignored, as in three.js. The numbers describe an sRGB color unless you pass `space=LINEAR`.
+
+This port differs from three.js in three ways:
+
+- A string that three.js cannot read makes three.js warn and keep the old color. Here it raises.
+- The alpha of `rgba` and `hsla` is read and then dropped, as in three.js. The color is opaque.
+- A space is an ASCII space, tab or line break. JavaScript also accepts the Unicode spaces.
+
+`format_style(color, space=SRGB)` and `hex_string(color)` write a color back. `format_style` does not clamp a channel above one or below zero, as three.js does not.
 
 ## RenderTarget
 

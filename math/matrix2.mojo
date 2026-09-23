@@ -154,7 +154,7 @@ struct Matrix2(Equatable, ImplicitlyCopyable):
 
 
 @fieldwise_init
-struct Box2(ImplicitlyCopyable):
+struct Box2(Equatable, ImplicitlyCopyable):
     """An axis-aligned rectangle: its smallest and largest corner."""
 
     var min: Vector2
@@ -237,8 +237,11 @@ struct Box2(ImplicitlyCopyable):
         """Return the middle.
 
         Returns:
-            Halfway between the corners.
+            Halfway between the corners, or the origin for the empty box,
+            as three.js gives.
         """
+        if self.is_empty():
+            return Vector2(0, 0)
         return (self.min + self.max) * 0.5
 
     def size(self) -> Vector2:
@@ -316,3 +319,110 @@ struct Box2(ImplicitlyCopyable):
         """
         var gap = self.clamp_point(point) - point
         return sqrt(gap.dot(gap))
+
+    @staticmethod
+    def from_center_and_size(center: Vector2, size: Vector2) -> Box2:
+        """Return the box of a size centered on a point, three.js's
+        `setFromCenterAndSize`.
+
+        Args:
+            center: The middle.
+            size: The width and height. A negative one gives an empty box.
+
+        Returns:
+            The box.
+        """
+        var half = size * 0.5
+        return Box2(center - half, center + half)
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if both corners are exactly equal, three.js's
+        `equals`.
+
+        Args:
+            other: The box to compare with.
+
+        Returns:
+            Whether the corners match.
+        """
+        return self.min == other.min and self.max == other.max
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if a corner differs.
+
+        Args:
+            other: The box to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
+
+    def expand_by_vector(mut self, amount: Vector2):
+        """Grow the box by `amount` on every side, three.js's
+        `expandByVector`. A negative amount shrinks it. An empty box stays
+        empty.
+
+        Args:
+            amount: How far to move each edge out, per axis.
+        """
+        self.min = self.min - amount
+        self.max = self.max + amount
+
+    def expand_by_scalar(mut self, amount: Float32):
+        """Grow the box by `amount` on every side, three.js's
+        `expandByScalar`.
+
+        Args:
+            amount: How far to move each edge out.
+        """
+        self.expand_by_vector(Vector2(amount, amount))
+
+    def contains_box(self, other: Box2) -> Bool:
+        """Return True if `other` lies wholly inside this box, its edges
+        included, three.js's `containsBox`. An empty box lies inside every
+        box.
+
+        Args:
+            other: The box to test.
+
+        Returns:
+            Whether this box holds all of it.
+        """
+        return (
+            self.min.x <= other.min.x
+            and other.max.x <= self.max.x
+            and self.min.y <= other.min.y
+            and other.max.y <= self.max.y
+        )
+
+    def get_parameter(self, point: Vector2) raises -> Vector2:
+        """Return where a point lies in the box as a fraction of each side,
+        three.js's `getParameter`: zero at `min`, one at `max`.
+
+        Args:
+            point: The point.
+
+        Returns:
+            The fractions.
+
+        Raises:
+            Error: If the box has no width or no height. three.js divides
+                by zero there.
+        """
+        var extent = self.max - self.min
+        if extent.x <= 0 or extent.y <= 0:
+            raise Error("A box with no extent on an axis has no fractions")
+        return Vector2(
+            (point.x - self.min.x) / extent.x,
+            (point.y - self.min.y) / extent.y,
+        )
+
+    def translate(mut self, offset: Vector2):
+        """Move the box by `offset`, three.js's `translate`.
+
+        Args:
+            offset: How far.
+        """
+        self.min = self.min + offset
+        self.max = self.max + offset

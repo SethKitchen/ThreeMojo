@@ -12,10 +12,14 @@ coordinates; three.js answers those with a zero vector or `null`, and
 here a question that has no answer is refused.
 """
 
-from math.bounds import Plane
+from math.bounds import Box3, Plane
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 from std.math import sqrt
+
+# A segment whose squared length is at most this is a point to
+# `Line3.closest_points_to_line`. three.js: `1e-8 * 1e-8`.
+comptime POINT_EPSILON = Float32(1e-16)
 
 
 def _cross(a: Vector3, b: Vector3) -> Vector3:
@@ -26,7 +30,7 @@ def _cross(a: Vector3, b: Vector3) -> Vector3:
 
 
 @fieldwise_init
-struct Triangle(ImplicitlyCopyable):
+struct Triangle(Equatable, ImplicitlyCopyable):
     """Three corners, counterclockwise when seen from the front."""
 
     var a: Vector3
@@ -211,6 +215,66 @@ struct Triangle(ImplicitlyCopyable):
             best = other
         return best
 
+    @staticmethod
+    def from_points_and_indices(
+        points: List[Vector3], a: Int, b: Int, c: Int
+    ) raises -> Triangle:
+        """Return the triangle of three points picked from a list by index,
+        three.js's `setFromPointsAndIndices`.
+
+        Args:
+            points: The points.
+            a: The index of the first corner.
+            b: The index of the second corner.
+            c: The index of the third corner.
+
+        Returns:
+            The triangle.
+
+        Raises:
+            Error: If an index is outside the list. three.js reads
+                `undefined` there and fails later.
+        """
+        var count = len(points)
+        if min(a, min(b, c)) < 0 or max(a, max(b, c)) >= count:
+            raise Error("A triangle corner index is outside the point list")
+        return Triangle(points[a], points[b], points[c])
+
+    def intersects_box(self, box: Box3) -> Bool:
+        """Return True if this triangle reaches into `box`, three.js's
+        `intersectsBox`. `Box3.intersects_triangle` makes the test.
+
+        Args:
+            box: The box.
+
+        Returns:
+            Whether they share a point.
+        """
+        return box.intersects_triangle(self)
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if the three corners are exactly equal, in order,
+        three.js's `equals`.
+
+        Args:
+            other: The triangle to compare with.
+
+        Returns:
+            Whether the corners match.
+        """
+        return self.a == other.a and self.b == other.b and self.c == other.c
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if a corner differs.
+
+        Args:
+            other: The triangle to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
+
 
 def _gap(a: Vector3, b: Vector3) -> Float32:
     """Return the squared distance between two points."""
@@ -232,7 +296,7 @@ def _nearest_on_segment(
 
 
 @fieldwise_init
-struct Line3(ImplicitlyCopyable):
+struct Line3(Equatable, ImplicitlyCopyable):
     """A segment from `start` to `end`."""
 
     var start: Vector3
@@ -328,14 +392,33 @@ struct Line3(ImplicitlyCopyable):
         """Return the shortest distance between two segments. three.js:
         `distanceSqToLine3`, square-rooted.
 
-        Ericson's closest points of two segments, 5.1.9, with each
-        degenerate case handled on its own.
-
         Args:
             other: The other segment.
 
         Returns:
             The distance.
+        """
+        var on_self = self.start
+        var on_other = other.start
+        return sqrt(self.closest_points_to_line(other, on_self, on_other))
+
+    def closest_points_to_line(
+        self, other: Line3, mut on_self: Vector3, mut on_other: Vector3
+    ) -> Float32:
+        """Find the closest points of two segments, three.js's
+        `distanceSqToLine3` with its two target points.
+
+        Ericson's closest points of two segments, 5.1.9, with each
+        degenerate case handled on its own. A segment shorter than 1e-8
+        counts as a point, as in three.js.
+
+        Args:
+            other: The other segment.
+            on_self: Receives the point of this segment.
+            on_other: Receives the point of `other`.
+
+        Returns:
+            The squared distance between the two points.
         """
         var d1 = self.delta()
         var d2 = other.delta()
@@ -345,13 +428,13 @@ struct Line3(ImplicitlyCopyable):
         var f = d2.dot(r)
         var s = Float32(0)
         var t = Float32(0)
-        if a == 0 and e == 0:
-            return r.length()
-        if a == 0:
+        if a <= POINT_EPSILON and e <= POINT_EPSILON:
+            pass
+        elif a <= POINT_EPSILON:
             t = _unit(f / e)
         else:
             var c = d1.dot(r)
-            if e == 0:
+            if e <= POINT_EPSILON:
                 s = _unit(-c / a)
             else:
                 var b = d1.dot(d2)
@@ -364,8 +447,40 @@ struct Line3(ImplicitlyCopyable):
                 elif t > 1:
                     t = 1
                     s = _unit((b - c) / a)
-        var gap = (self.start + d1 * s) - (other.start + d2 * t)
-        return sqrt(gap.dot(gap))
+        on_self = self.start + d1 * s
+        on_other = other.start + d2 * t
+        var gap = on_self - on_other
+        return gap.dot(gap)
+
+    def distance_sq(self) -> Float32:
+        """Return the squared length, three.js's `distanceSq`.
+
+        Returns:
+            The squared distance from start to end.
+        """
+        return self.delta().length_sq()
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if both ends are exactly equal, three.js's `equals`.
+
+        Args:
+            other: The segment to compare with.
+
+        Returns:
+            Whether the ends match, in order.
+        """
+        return self.start == other.start and self.end == other.end
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if an end differs.
+
+        Args:
+            other: The segment to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
 
 
 def _unit(value: Float32) -> Float32:

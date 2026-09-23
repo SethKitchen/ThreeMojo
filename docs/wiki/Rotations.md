@@ -22,7 +22,15 @@ A rotation as `(x, y, z, w)`. The identity is `(0, 0, 0, 1)`. `a * b` applies `b
 | `conjugate() -> Quaternion` | The inverse of a unit quaternion. |
 | `normalize()` | Scale to unit length. Zero becomes the identity. |
 | `slerp(other, t) -> Quaternion` | The rotation a fraction `t` along the shortest arc to `other`. |
-| `dot(other)`, `length()` | The four-component dot product and length. |
+| `dot(other)`, `length()`, `length_sq()` | The four-component dot product, length and squared length. |
+| `Quaternion.from_unit_vectors(a, b)` | The shortest turn from one unit direction to another. |
+| `Quaternion.from_euler(e)` | The rotation of three Euler angles. three.js's `setFromEuler`. |
+| `Quaternion.slerp_quaternions(a, b, t)` | `a.slerp(b, t)`. |
+| `Quaternion.random(rng)` | A rotation drawn evenly from all rotations, from a `SeededRandom`. |
+| `invert()` | Replace by the conjugate, in place. |
+| `angle_to(other) -> Angle` | The angle of the turn to `other`, the short way round. |
+| `rotate_towards(other, step)` | Turn toward `other` by at most `step`. It arrives when `other` is within the step. |
+| `a * b`, `a == b` | The product, and exact equality of the four numbers. A quaternion and its negation are not equal. |
 
 `from_matrix` expects a pure rotation. When the matrix is a rotation times a positive scale, `Matrix4.extract_rotation` removes the scale first. It does not remove a shear or a mirror, and `from_matrix` does not detect one. `Matrix4.is_rotation` tells a rotation from a frame that only has unit axes.
 

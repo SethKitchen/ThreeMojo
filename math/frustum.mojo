@@ -38,6 +38,33 @@ from math.bounds import Box3, Plane, Sphere
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
 
+
+@fieldwise_init
+struct CoordinateSystem(Equatable, ImplicitlyCopyable, Writable):
+    """Which depth range a projection maps to, three.js's
+    `coordinateSystem`, as a type rather than a bare int.
+
+    WebGL maps the near plane to a normalized depth of minus one, WebGPU
+    maps it to zero. The two differ only in the near plane a frustum reads
+    off the matrix.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this names one of the two coordinate systems.
+
+        Returns:
+            Whether it is `WEBGL_COORDINATES` or `WEBGPU_COORDINATES`.
+        """
+        return self.value == 2000 or self.value == 2001
+
+
+# three.js's `WebGLCoordinateSystem` and `WebGPUCoordinateSystem`, with
+# three.js's numbers.
+comptime WEBGL_COORDINATES = CoordinateSystem(2000)
+comptime WEBGPU_COORDINATES = CoordinateSystem(2001)
+
 # Which plane is which in `Frustum.planes`, in three.js's order.
 comptime RIGHT = 0
 comptime LEFT = 1
@@ -59,36 +86,78 @@ struct Frustum(Copyable, Movable):
     var planes: Array[Plane, 6]
 
     @staticmethod
-    def from_projection_matrix(matrix: Matrix4) raises -> Frustum:
+    def from_projection_matrix(
+        matrix: Matrix4,
+        coordinate_system: CoordinateSystem = WEBGL_COORDINATES,
+        reversed_depth: Bool = False,
+    ) raises -> Frustum:
         """Return the frustum a projection matrix sees, three.js's
-        `setFromProjectionMatrix` for the WebGL coordinate system.
+        `setFromProjectionMatrix`.
 
         Each plane is a sum or difference of the matrix's bottom row with
         one of its other rows; see the module docstring. The planes are in
         whatever space the matrix takes its input from: camera space for a
         projection, world space for a projection times a view.
 
+        A WebGPU projection and a reversed depth put the near plane at a
+        depth of zero, and read it off the depth row alone. A reversed
+        depth puts the far plane there instead, and the near plane where
+        the depth is `w`, as in three.js.
+
         Args:
             matrix: A projection, or a projection times a view.
+            coordinate_system: Which depth range the projection maps to.
+            reversed_depth: True for a projection that maps the near plane
+                to depth one and the far plane to zero.
 
         Returns:
             The frustum.
 
         Raises:
-            Error: If a plane comes out with no normal, which no projection
-                does: a matrix of zeros, or one whose bottom row cancels
-                another, describes no volume.
+            Error: If the coordinate system is neither of the two, or a
+                plane comes out with no normal, which no projection does:
+                a matrix of zeros, or one whose bottom row cancels another,
+                describes no volume.
         """
+        if not coordinate_system.is_valid():
+            raise Error("A frustum reads WEBGL or WEBGPU coordinates")
         ref e = matrix.elements
+        var far: Plane
+        var near: Plane
+        if reversed_depth:
+            far = Frustum._depth_row(e)
+            near = Frustum._plane(e, 2, -1)
+        elif coordinate_system == WEBGPU_COORDINATES:
+            far = Frustum._plane(e, 2, -1)
+            near = Frustum._depth_row(e)
+        else:
+            far = Frustum._plane(e, 2, -1)
+            near = Frustum._plane(e, 2, 1)
         var planes: Array[Plane, 6] = [
             Frustum._plane(e, 0, -1),
             Frustum._plane(e, 0, 1),
             Frustum._plane(e, 1, 1),
             Frustum._plane(e, 1, -1),
-            Frustum._plane(e, 2, -1),
-            Frustum._plane(e, 2, 1),
+            far,
+            near,
         ]
         return Frustum(planes^)
+
+    @staticmethod
+    def _depth_row(e: Array[Float32, 16]) raises -> Plane:
+        """Return the plane where the clip-space depth is zero: the depth
+        row alone.
+
+        Args:
+            e: The matrix's elements.
+
+        Returns:
+            The plane, normalized.
+
+        Raises:
+            Error: If the plane has no normal.
+        """
+        return Plane(Vector3(e[2], e[6], e[10]), e[14])
 
     @staticmethod
     def side_planes(projection: Matrix4) raises -> List[Plane]:

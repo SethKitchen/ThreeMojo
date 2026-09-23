@@ -21,10 +21,12 @@ quaternion is a rotation, and `a * b` applies `b` first and then `a`, exactly
 as the matrices `a.to_matrix() * b.to_matrix()` would.
 """
 
+from math.euler import Euler
 from math.matrix4 import Matrix4
+from math.utils import SeededRandom
 from math.vector3 import Vector3
-from std.math import atan2, cos, sin, sqrt
-from units.si import Angle
+from std.math import acos, atan2, cos, pi, sin, sqrt
+from units.si import Angle, RADIAN
 
 # Below this, two quaternions are close enough that slerp falls back to a
 # straight line: the arc's sine is too small to divide by safely, and the
@@ -38,7 +40,7 @@ comptime HALF_TURN_EPSILON = Float32(1e-6)
 
 
 @fieldwise_init
-struct Quaternion(ImplicitlyCopyable):
+struct Quaternion(Equatable, ImplicitlyCopyable):
     """A rotation as (x, y, z, w), the identity being (0, 0, 0, 1)."""
 
     var x: Float32
@@ -319,3 +321,143 @@ struct Quaternion(ImplicitlyCopyable):
             self.z * keep + target.z * take,
             self.w * keep + target.w * take,
         )
+
+    @staticmethod
+    def slerp_quaternions(start: Self, end: Self, t: Float32) -> Self:
+        """Return the rotation a fraction `t` of the way from `start` to
+        `end`, three.js's `slerpQuaternions`.
+
+        Args:
+            start: The rotation at a `t` of zero.
+            end: The rotation at a `t` of one.
+            t: How far along.
+
+        Returns:
+            `start.slerp(end, t)`.
+        """
+        return start.slerp(end, t)
+
+    @staticmethod
+    def from_euler(euler: Euler) raises -> Quaternion:
+        """Return the rotation three angles describe, three.js's
+        `setFromEuler`. `Euler.to_quaternion` does the arithmetic.
+
+        Args:
+            euler: The angles and their order.
+
+        Returns:
+            The rotation.
+
+        Raises:
+            Error: If the order does not name three different axes.
+        """
+        return euler.to_quaternion()
+
+    @staticmethod
+    def random(mut generator: SeededRandom) -> Quaternion:
+        """Return a rotation drawn evenly from all rotations, three.js's
+        `random`: Shoemake's method, with the three numbers drawn in
+        three.js's order.
+
+        Args:
+            generator: Where the numbers come from.
+
+        Returns:
+            A unit quaternion.
+        """
+        var theta1 = 2 * pi * generator.next()
+        var theta2 = 2 * pi * generator.next()
+        var x0 = generator.next()
+        var r1 = sqrt(1 - x0)
+        var r2 = sqrt(x0)
+        return Quaternion(
+            Float32(r1 * sin(theta1)),
+            Float32(r1 * cos(theta1)),
+            Float32(r2 * sin(theta2)),
+            Float32(r2 * cos(theta2)),
+        )
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if all four components are exactly equal, three.js's
+        `equals`. A quaternion and its negation are the same rotation and
+        still not equal, as there.
+
+        Args:
+            other: The quaternion to compare with.
+
+        Returns:
+            Whether the two are the same four numbers.
+        """
+        return (
+            self.x == other.x
+            and self.y == other.y
+            and self.z == other.z
+            and self.w == other.w
+        )
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if any component differs.
+
+        Args:
+            other: The quaternion to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
+
+    def __mul__(self, other: Self) -> Self:
+        """Return `self * other`, three.js's `multiplyQuaternions`: apply
+        `other`, then `self`.
+
+        Args:
+            other: The rotation applied first.
+
+        Returns:
+            The product.
+        """
+        var product = self
+        product.multiply(other)
+        return product
+
+    def length_sq(self) -> Float32:
+        """Return the squared length of the four components, three.js's
+        `lengthSq`.
+
+        Returns:
+            The dot product with itself.
+        """
+        return self.dot(self)
+
+    def invert(mut self):
+        """Replace this rotation by its inverse, three.js's `invert`. For
+        a unit quaternion that is the conjugate, and three.js takes the
+        conjugate whatever the length; so does this.
+        """
+        self = self.conjugate()
+
+    def angle_to(self, other: Self) -> Angle:
+        """Return the angle of the turn from this rotation to `other`,
+        three.js's `angleTo`.
+
+        Args:
+            other: The other rotation, unit length.
+
+        Returns:
+            From zero to a half turn: the short way round.
+        """
+        var cosine = max(Float32(-1), min(Float32(1), self.dot(other)))
+        return Angle(2 * acos(abs(cosine)), RADIAN)
+
+    def rotate_towards(mut self, other: Self, step: Angle):
+        """Turn this rotation toward `other` by at most `step`, three.js's
+        `rotateTowards`. It arrives when `other` is within the step.
+
+        Args:
+            other: The rotation to turn toward, unit length.
+            step: The most to turn.
+        """
+        var angle = self.angle_to(other).value
+        if angle == 0:
+            return
+        self = self.slerp(other, min(Float32(1), step.value / angle))

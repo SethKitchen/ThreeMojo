@@ -38,7 +38,8 @@ linear 0.5, which encodes to 188, and not the sRGB gray 128 that `0x808080`
 decodes from. `lerp`, `lerp_hsl`, `offset_hsl`, `multiply` and `add` are the
 same arithmetic on the same numbers, in the working space. What three.js's
 `Color` lacks is an alpha, which this keeps and the HSL operations leave
-alone. CSS color names and strings are not ported.
+alone. CSS strings and names are read and written by `render.css_color`,
+through `FloatColor(style=...)`, `style()` and `hex_string()`.
 
 The depth buffer holds one NDC depth per pixel, cleared to infinity so that
 the first fragment to arrive always wins. Depth is what lets geometry be drawn
@@ -46,6 +47,7 @@ in any order: without it, correctness depends on the draw order or on the
 scene happening to be convex.
 """
 
+from render.css_color import format_style, hex_string, parse_style
 from render.srgb import (
     LINEAR,
     SRGB,
@@ -251,6 +253,47 @@ struct FloatColor(Equatable, ImplicitlyCopyable):
         else:
             raise Error("An HSL color is given in LINEAR or SRGB")
         self.a = 1.0
+
+    def __init__(out self, *, style: String, space: ColorSpace = SRGB) raises:
+        """Read a CSS color string, three.js's `setStyle`. Opaque.
+
+        `render.css_color.parse_style` reads it: `rgb()`, `rgba()`,
+        `hsl()`, `hsla()`, `#rgb`, `#rrggbb` or a color name.
+
+        Args:
+            style: The string.
+            space: The space its numbers are in, sRGB by default as in
+                three.js.
+
+        Raises:
+            Error: If the string is not a CSS color three.js reads, or the
+                space is neither `LINEAR` nor `SRGB`.
+        """
+        self = parse_style(style, space)
+
+    def style(self, space: ColorSpace = SRGB) raises -> String:
+        """Return this color as a CSS string, three.js's `getStyle`.
+
+        Args:
+            space: `SRGB` for `rgb(r,g,b)`, `LINEAR` for
+                `color(srgb-linear r g b)`.
+
+        Returns:
+            The string.
+
+        Raises:
+            Error: If the space is neither `LINEAR` nor `SRGB`.
+        """
+        return format_style(self, space)
+
+    def hex_string(self) -> String:
+        """Return this color encoded to sRGB as six lowercase hexadecimal
+        digits, three.js's `getHexString`.
+
+        Returns:
+            The digits, with no `#`.
+        """
+        return hex_string(self)
 
     @staticmethod
     def _from_hsl(

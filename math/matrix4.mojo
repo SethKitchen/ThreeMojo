@@ -30,6 +30,8 @@ per-value one. Rotation *angles* are `Angle` quantities, so degrees cannot be
 passed where radians are meant.
 """
 
+from math.euler import Euler
+from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import cos, isfinite, sin, sqrt
 from units.si import Angle
@@ -41,7 +43,7 @@ from units.si import Angle
 comptime FRAME_TOLERANCE = Float32(1e-4)
 
 
-struct Matrix4(ImplicitlyCopyable):
+struct Matrix4(Equatable, ImplicitlyCopyable):
     """A 4x4 matrix in column-major order."""
 
     var elements: Array[Float32, 16]
@@ -683,6 +685,182 @@ struct Matrix4(ImplicitlyCopyable):
                 return False
         return True
 
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if every element is exactly equal, three.js's
+        `equals`.
+
+        Args:
+            other: The matrix to compare with.
+
+        Returns:
+            Whether the sixteen elements match.
+        """
+        for index in range(16):  # pragma: no branch
+            if self.elements[index] != other.elements[index]:
+                return False
+        return True
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if any element differs.
+
+        Args:
+            other: The matrix to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
+
+    def __mul__(self, other: Self) -> Self:
+        """Return `self * other`, three.js's `multiplyMatrices`.
+
+        Args:
+            other: The matrix applied to a point first.
+
+        Returns:
+            The product.
+        """
+        var product = self
+        product.multiply(other)
+        return product
+
+    def multiply_scalar(mut self, factor: Float32):
+        """Multiply every element by a number, three.js's `multiplyScalar`.
+
+        Args:
+            factor: The number.
+        """
+        for index in range(16):  # pragma: no branch
+            self.elements[index] *= factor
+
+    def scale(mut self, factors: Vector3):
+        """Scale the first three columns by the three factors, three.js's
+        `scale`: a scaling applied before this transform.
+
+        Args:
+            factors: The scale along x, y and z.
+        """
+        for row in range(4):  # pragma: no branch
+            self.elements[row] *= factors.x
+            self.elements[4 + row] *= factors.y
+            self.elements[8 + row] *= factors.z
+
+    def set_position(mut self, position: Vector3):
+        """Set the translation column, three.js's `setPosition`. Nothing
+        else changes.
+
+        Args:
+            position: The new translation.
+        """
+        self.elements[12] = position.x
+        self.elements[13] = position.y
+        self.elements[14] = position.z
+
+    def copy_position(mut self, other: Self):
+        """Copy another matrix's translation column into this one,
+        three.js's `copyPosition`.
+
+        Args:
+            other: The matrix to copy from.
+        """
+        self.set_position(Vector3.from_matrix_position(other))
+
+    def extract_basis(
+        self, mut x_axis: Vector3, mut y_axis: Vector3, mut z_axis: Vector3
+    ):
+        """Write the first three columns into three vectors, three.js's
+        `extractBasis`.
+
+        Args:
+            x_axis: Receives the first column.
+            y_axis: Receives the second column.
+            z_axis: Receives the third column.
+        """
+        ref e = self.elements
+        x_axis = Vector3(e[0], e[1], e[2])
+        y_axis = Vector3(e[4], e[5], e[6])
+        z_axis = Vector3(e[8], e[9], e[10])
+
+    def look_at(mut self, eye: Vector3, target: Vector3, up: Vector3):
+        """Set the rotation part so that +z points from `target` to `eye`,
+        three.js's `lookAt`. The translation and the bottom row are kept.
+
+        This is an object's orientation, the inverse of a view matrix's
+        turn. `math.projection.look_at` builds the view matrix.
+
+        An eye on the target looks down -z. An up vector along the view
+        direction is nudged off it by a ten-thousandth, as in three.js.
+
+        Args:
+            eye: Where the object is.
+            target: What it faces away from, along +z.
+            up: Which way is up, any length but zero.
+        """
+        var z = eye - target
+        if z.length_sq() == 0:
+            z.z = 1
+        z.normalize()
+        var x = up
+        x.cross(z)
+        if x.length_sq() == 0:
+            if abs(up.z) == 1:
+                z.x += 0.0001
+            else:
+                z.z += 0.0001
+            z.normalize()
+            x = up
+            x.cross(z)
+        x.normalize()
+        var y = z
+        y.cross(x)
+        self.elements[0] = x.x
+        self.elements[1] = x.y
+        self.elements[2] = x.z
+        self.elements[4] = y.x
+        self.elements[5] = y.y
+        self.elements[6] = y.z
+        self.elements[8] = z.x
+        self.elements[9] = z.y
+        self.elements[10] = z.z
+
+    def decompose(
+        self,
+        mut position: Vector3,
+        mut quaternion: Quaternion,
+        mut scale: Vector3,
+    ) raises:
+        """Split this transform into a translation, a rotation and a scale,
+        three.js's `decompose`.
+
+        A mirror comes out as a negative x scale, as in three.js. A shear
+        has no exact answer: the rotation is read from axes that are not at
+        right angles, as three.js reads it.
+
+        Args:
+            position: Receives the translation.
+            quaternion: Receives the rotation.
+            scale: Receives the scale along each axis.
+
+        Raises:
+            Error: If an axis has zero length. three.js divides by zero
+                and writes not-a-number into the rotation.
+        """
+        var sx = self._axis_length(0)
+        var sy = self._axis_length(1)
+        var sz = self._axis_length(2)
+        if sx == 0 or sy == 0 or sz == 0:
+            raise Error(
+                "A transform with no extent along an axis has no rotation"
+                " to decompose"
+            )
+        if self.determinant() < 0:
+            sx = -sx
+        position = Vector3.from_matrix_position(self)
+        var rotation = self
+        rotation.scale(Vector3(1 / sx, 1 / sy, 1 / sz))
+        quaternion = Quaternion.from_matrix(rotation)
+        scale = Vector3(sx, sy, sz)
+
     def _axis_length(self, axis: Int) -> Float32:
         """Return the length of one axis column: the scale along that axis."""
         ref e = self.elements
@@ -752,4 +930,186 @@ def rotation_z(angle: Angle) -> Matrix4:
     var s = sin(angle.value)
     var matrix = Matrix4()
     matrix.set(c, -s, 0, 0, s, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1)
+    return matrix^
+
+
+def rotation_axis(axis: Vector3, angle: Angle) -> Matrix4:
+    """Return a matrix rotating about `axis` by `angle`, three.js's
+    `makeRotationAxis`.
+
+    Args:
+        axis: The axis. It must be unit length, as in three.js; it is used
+            as given.
+        angle: How far to turn, counterclockwise looking down the axis.
+
+    Returns:
+        The rotation.
+    """
+    var c = cos(angle.value)
+    var s = sin(angle.value)
+    var t = 1 - c
+    var x = axis.x
+    var y = axis.y
+    var z = axis.z
+    var tx = t * x
+    var ty = t * y
+    var matrix = Matrix4()
+    matrix.set(
+        tx * x + c,
+        tx * y - s * z,
+        tx * z + s * y,
+        0,
+        tx * y + s * z,
+        ty * y + c,
+        ty * z - s * x,
+        0,
+        tx * z - s * y,
+        ty * z + s * x,
+        t * z * z + c,
+        0,
+        0,
+        0,
+        0,
+        1,
+    )
+    return matrix^
+
+
+def shear(
+    xy: Float32, xz: Float32, yx: Float32, yz: Float32, zx: Float32, zy: Float32
+) -> Matrix4:
+    """Return a shear, three.js's `makeShear`.
+
+    Args:
+        xy: How much y moves per unit of x.
+        xz: How much z moves per unit of x.
+        yx: How much x moves per unit of y.
+        yz: How much z moves per unit of y.
+        zx: How much x moves per unit of z.
+        zy: How much y moves per unit of z.
+
+    Returns:
+        The shear.
+    """
+    var matrix = Matrix4()
+    matrix.set(1, yx, zx, 0, xy, 1, zy, 0, xz, yz, 1, 0, 0, 0, 0, 1)
+    return matrix^
+
+
+def basis(x_axis: Vector3, y_axis: Vector3, z_axis: Vector3) -> Matrix4:
+    """Return the matrix whose first three columns are the three axes,
+    three.js's `makeBasis`.
+
+    Args:
+        x_axis: The first column.
+        y_axis: The second column.
+        z_axis: The third column.
+
+    Returns:
+        The matrix, with no translation.
+    """
+    var matrix = Matrix4()
+    matrix.set(
+        x_axis.x,
+        y_axis.x,
+        z_axis.x,
+        0,
+        x_axis.y,
+        y_axis.y,
+        z_axis.y,
+        0,
+        x_axis.z,
+        y_axis.z,
+        z_axis.z,
+        0,
+        0,
+        0,
+        0,
+        1,
+    )
+    return matrix^
+
+
+def rotation_from_quaternion(quaternion: Quaternion) -> Matrix4:
+    """Return the rotation a quaternion describes, three.js's
+    `makeRotationFromQuaternion`. `Quaternion.to_matrix` does the
+    arithmetic.
+
+    Args:
+        quaternion: The rotation, unit length.
+
+    Returns:
+        The matrix, with no translation.
+    """
+    return quaternion.to_matrix()
+
+
+def rotation_from_euler(euler: Euler) raises -> Matrix4:
+    """Return the rotation three angles describe, three.js's
+    `makeRotationFromEuler`. `Euler.to_matrix` does the arithmetic.
+
+    Args:
+        euler: The angles and their order.
+
+    Returns:
+        The matrix, with no translation.
+
+    Raises:
+        Error: If the order does not name three different axes.
+    """
+    return euler.to_matrix()
+
+
+def compose(
+    position: Vector3, quaternion: Quaternion, scale: Vector3
+) -> Matrix4:
+    """Return the transform that scales, then turns, then moves, three.js's
+    `compose`.
+
+    Args:
+        position: The translation.
+        quaternion: The rotation, unit length.
+        scale: The scale along each axis.
+
+    Returns:
+        The transform.
+    """
+    var x = quaternion.x
+    var y = quaternion.y
+    var z = quaternion.z
+    var w = quaternion.w
+    var x2 = x + x
+    var y2 = y + y
+    var z2 = z + z
+    var xx = x * x2
+    var xy = x * y2
+    var xz = x * z2
+    var yy = y * y2
+    var yz = y * z2
+    var zz = z * z2
+    var wx = w * x2
+    var wy = w * y2
+    var wz = w * z2
+    var sx = scale.x
+    var sy = scale.y
+    var sz = scale.z
+    var matrix = Matrix4()
+    matrix.set(
+        (1 - (yy + zz)) * sx,
+        (xy - wz) * sy,
+        (xz + wy) * sz,
+        position.x,
+        (xy + wz) * sx,
+        (1 - (xx + zz)) * sy,
+        (yz - wx) * sz,
+        position.y,
+        (xz - wy) * sx,
+        (yz + wx) * sy,
+        (1 - (xx + yy)) * sz,
+        position.z,
+        0,
+        0,
+        0,
+        1,
+    )
     return matrix^

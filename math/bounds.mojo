@@ -37,13 +37,15 @@ plane built from three points has no reason to have one. A zero normal is
 refused: it is not a plane.
 """
 
+from math.matrix3 import Matrix3
 from math.matrix4 import Matrix4
+from math.triangle import Line3, Triangle
 from math.vector3 import Vector3
 from std.math import inf, sqrt
 
 
 @fieldwise_init
-struct Box3(ImplicitlyCopyable):
+struct Box3(Equatable, ImplicitlyCopyable):
     """An axis-aligned box: its smallest and largest corner."""
 
     var min: Vector3
@@ -296,9 +298,189 @@ struct Box3(ImplicitlyCopyable):
             return Sphere.empty()
         return Sphere(self.center(), self.size().length() * 0.5)
 
+    @staticmethod
+    def from_center_and_size(center: Vector3, size: Vector3) -> Box3:
+        """Return the box of a size centered on a point, three.js's
+        `setFromCenterAndSize`.
+
+        Args:
+            center: The middle.
+            size: The extent along each axis. A negative one gives an
+                empty box.
+
+        Returns:
+            The box.
+        """
+        var half = size * 0.5
+        return Box3(center - half, center + half)
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if both corners are exactly equal, three.js's
+        `equals`.
+
+        Args:
+            other: The box to compare with.
+
+        Returns:
+            Whether the corners match.
+        """
+        return self.min == other.min and self.max == other.max
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if a corner differs.
+
+        Args:
+            other: The box to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
+
+    def expand_by_vector(mut self, amount: Vector3):
+        """Grow this box by `amount` on every side, three.js's
+        `expandByVector`. A negative amount shrinks it. The empty box stays
+        empty, because its corners are infinite.
+
+        Args:
+            amount: How far to move each face out, per axis.
+        """
+        self.min = self.min - amount
+        self.max = self.max + amount
+
+    def expand_by_scalar(mut self, amount: Float32):
+        """Grow this box by `amount` on every side, three.js's
+        `expandByScalar`.
+
+        Args:
+            amount: How far to move each face out.
+        """
+        self.expand_by_vector(Vector3(amount, amount, amount))
+
+    def translate(mut self, offset: Vector3):
+        """Move this box by `offset`, three.js's `translate`.
+
+        Args:
+            offset: How far.
+        """
+        self.min = self.min + offset
+        self.max = self.max + offset
+
+    def intersect(mut self, other: Box3):
+        """Shrink this box to what both boxes hold, three.js's `intersect`.
+        Boxes that do not overlap leave the empty box.
+
+        Args:
+            other: The other box.
+        """
+        self.min.max(other.min)
+        self.max.min(other.max)
+        if self.is_empty():
+            self = Box3.empty()
+
+    def contains_box(self, other: Box3) -> Bool:
+        """Return True if `other` lies wholly inside this box, its faces
+        included, three.js's `containsBox`. The empty box lies inside every
+        box.
+
+        Args:
+            other: The box to test.
+
+        Returns:
+            Whether this box holds all of it.
+        """
+        return (
+            self.min.x <= other.min.x
+            and other.max.x <= self.max.x
+            and self.min.y <= other.min.y
+            and other.max.y <= self.max.y
+            and self.min.z <= other.min.z
+            and other.max.z <= self.max.z
+        )
+
+    def get_parameter(self, point: Vector3) raises -> Vector3:
+        """Return where a point lies in this box as a fraction of each
+        side, three.js's `getParameter`: zero at `min`, one at `max`.
+
+        Args:
+            point: The point.
+
+        Returns:
+            The fractions.
+
+        Raises:
+            Error: If the box has no extent on an axis, or is empty.
+                three.js divides by zero there.
+        """
+        var extent = self.max - self.min
+        if extent.x <= 0 or extent.y <= 0 or extent.z <= 0:
+            raise Error("A box with no extent on an axis has no fractions")
+        return Vector3(
+            (point.x - self.min.x) / extent.x,
+            (point.y - self.min.y) / extent.y,
+            (point.z - self.min.z) / extent.z,
+        )
+
+    def intersects_plane(self, plane: Plane) -> Bool:
+        """Return True if `plane` passes through this box, three.js's
+        `intersectsPlane`. The empty box meets no plane.
+
+        Args:
+            plane: The plane.
+
+        Returns:
+            Whether they meet, a touching face included.
+        """
+        return plane.intersects_box(self)
+
+    def intersects_triangle(self, triangle: Triangle) -> Bool:
+        """Return True if `triangle` reaches into this box, three.js's
+        `intersectsTriangle`: the separating axis test over the box's
+        three face normals, the triangle's normal and the nine cross
+        products of their edges. The empty box meets no triangle.
+
+        Args:
+            triangle: The triangle.
+
+        Returns:
+            Whether they share a point.
+        """
+        if self.is_empty():
+            return False
+        var center = self.center()
+        var extents = self.max - center
+        var v0 = triangle.a - center
+        var v1 = triangle.b - center
+        var v2 = triangle.c - center
+        var f0 = v1 - v0
+        var f1 = v2 - v1
+        var f2 = v0 - v2
+        var edges: Array[Vector3, 3] = [f0, f1, f2]
+        for edge in range(3):  # pragma: no branch
+            var f = edges[edge]
+            var axes: Array[Vector3, 3] = [
+                Vector3(0, -f.z, f.y),
+                Vector3(f.z, 0, -f.x),
+                Vector3(-f.y, f.x, 0),
+            ]
+            for axis in range(3):  # pragma: no branch
+                if _separates(axes[axis], v0, v1, v2, extents):
+                    return False
+        var faces: Array[Vector3, 3] = [
+            Vector3(1, 0, 0),
+            Vector3(0, 1, 0),
+            Vector3(0, 0, 1),
+        ]
+        for face in range(3):  # pragma: no branch
+            if _separates(faces[face], v0, v1, v2, extents):
+                return False
+        var normal = f0
+        normal.cross(f1)
+        return not _separates(normal, v0, v1, v2, extents)
+
 
 @fieldwise_init
-struct Sphere(ImplicitlyCopyable):
+struct Sphere(Equatable, ImplicitlyCopyable):
     """A sphere: a center and a radius. A negative radius is the empty
     sphere, as in three.js."""
 
@@ -458,8 +640,112 @@ struct Sphere(ImplicitlyCopyable):
         var reach = Vector3(self.radius, self.radius, self.radius)
         return Box3(self.center - reach, self.center + reach)
 
+    @staticmethod
+    def from_points_around(points: List[Vector3], center: Vector3) -> Sphere:
+        """Return the sphere centered on `center` that reaches every point
+        given, three.js's `setFromPoints` with its optional center.
 
-struct Plane(ImplicitlyCopyable):
+        Args:
+            points: Any number of points, including none.
+            center: The center to use.
+
+        Returns:
+            The sphere. With no points, the radius is zero, as in three.js.
+        """
+        var farthest = Float32(0)
+        for index in range(len(points)):
+            farthest = max(farthest, center.distance_to_squared(points[index]))
+        return Sphere(center, sqrt(farthest))
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if the centers and the radii are exactly equal,
+        three.js's `equals`.
+
+        Args:
+            other: The sphere to compare with.
+
+        Returns:
+            Whether the two match.
+        """
+        return self.center == other.center and self.radius == other.radius
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if the center or the radius differs.
+
+        Args:
+            other: The sphere to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
+
+    def intersects_plane(self, plane: Plane) -> Bool:
+        """Return True if `plane` passes through this sphere, three.js's
+        `intersectsPlane`. The empty sphere meets no plane.
+
+        Args:
+            plane: The plane.
+
+        Returns:
+            Whether they meet, a touching surface included.
+        """
+        return plane.intersects_sphere(self)
+
+    def clamp_point(self, point: Vector3) raises -> Vector3:
+        """Return the point of this sphere nearest `point`, three.js's
+        `clampPoint`: the point itself inside, else the nearest point on
+        the surface.
+
+        Args:
+            point: The point to bring inside.
+
+        Returns:
+            The nearest point of the sphere.
+
+        Raises:
+            Error: If the sphere is empty. three.js takes its radius of
+                minus one as a radius of one.
+        """
+        if self.is_empty():
+            raise Error("An empty sphere has no nearest point")
+        if self.center.distance_to_squared(point) <= self.radius * self.radius:
+            return point
+        var toward = point - self.center
+        toward.normalize()
+        return toward * self.radius + self.center
+
+    def translate(mut self, offset: Vector3):
+        """Move this sphere by `offset`, three.js's `translate`.
+
+        Args:
+            offset: How far.
+        """
+        self.center.add(offset)
+
+    def union(mut self, other: Sphere):
+        """Grow this sphere to hold all of `other` as well, three.js's
+        `union`: expand by the two points of `other` farthest along the
+        line between the centers.
+
+        Args:
+            other: The sphere to take in. The empty sphere changes nothing.
+        """
+        if other.is_empty():
+            return
+        if self.is_empty():
+            self = other
+            return
+        if self.center == other.center:
+            self.radius = max(self.radius, other.radius)
+            return
+        var reach = other.center - self.center
+        reach.set_length(other.radius)
+        self.expand_by_point(other.center + reach)
+        self.expand_by_point(other.center - reach)
+
+
+struct Plane(Equatable, ImplicitlyCopyable):
     """A plane: the points where `dot(normal, point) + constant` is zero.
 
     `normal` is unit length and points to the plane's front, the side where
@@ -641,3 +927,128 @@ struct Plane(ImplicitlyCopyable):
             nearest += self.normal.z * box.max.z
             farthest += self.normal.z * box.min.z
         return nearest <= -self.constant and farthest >= -self.constant
+
+    def __eq__(self, other: Self) -> Bool:
+        """Return True if the normals and the constants are exactly equal,
+        three.js's `equals`. A plane and its negation hold the same points
+        and are not equal, as there.
+
+        Args:
+            other: The plane to compare with.
+
+        Returns:
+            Whether the two match.
+        """
+        return self.normal == other.normal and self.constant == other.constant
+
+    def __ne__(self, other: Self) -> Bool:
+        """Return True if the normal or the constant differs.
+
+        Args:
+            other: The plane to compare with.
+
+        Returns:
+            Whether the two differ.
+        """
+        return not self == other
+
+    def intersect_line(self, line: Line3) -> Optional[Vector3]:
+        """Return where a segment crosses this plane, three.js's
+        `intersectLine`.
+
+        Args:
+            line: The segment.
+
+        Returns:
+            The crossing point, or None if the segment stops short of the
+            plane or runs parallel to it. A segment in the plane gives its
+            start, as in three.js.
+        """
+        var direction = line.delta()
+        var denominator = self.normal.dot(direction)
+        if denominator == 0:
+            if self.distance_to_point(line.start) == 0:
+                return line.start
+            return None
+        var t = -(line.start.dot(self.normal) + self.constant) / denominator
+        if t < 0 or t > 1:
+            return None
+        return line.start + direction * t
+
+    def intersects_line(self, line: Line3) -> Bool:
+        """Return True if the segment's two ends lie on opposite sides of
+        this plane, three.js's `intersectsLine`. An end on the plane does
+        not count, as there.
+
+        Args:
+            line: The segment.
+
+        Returns:
+            Whether it crosses.
+        """
+        var start = self.distance_to_point(line.start)
+        var end = self.distance_to_point(line.end)
+        return (start < 0 and end > 0) or (end < 0 and start > 0)
+
+    def apply_matrix4(mut self, matrix: Matrix4) raises:
+        """Carry this plane through a transform, three.js's `applyMatrix4`.
+
+        A point of the plane goes through the matrix, and the normal goes
+        through the normal matrix, `Matrix3.normal_matrix`.
+
+        Args:
+            matrix: The transform.
+
+        Raises:
+            Error: If the transform collapses a dimension, which leaves no
+                normal matrix. three.js builds one of zeros and gives a
+                plane with no normal.
+        """
+        self.apply_matrix4(matrix, Matrix3.normal_matrix(matrix))
+
+    def apply_matrix4(mut self, matrix: Matrix4, normal_matrix: Matrix3) raises:
+        """Carry this plane through a transform whose normal matrix the
+        caller already has, three.js's `applyMatrix4` with its optional
+        second argument.
+
+        Args:
+            matrix: The transform.
+            normal_matrix: The normal matrix of `matrix`.
+
+        Raises:
+            Error: If the normal comes out with no length.
+        """
+        var point = matrix.transform_point(self.coplanar_point())
+        var normal = normal_matrix.transform(self.normal)
+        if normal.length() == 0:
+            raise Error("A plane carried through a collapse has no normal")
+        normal.normalize()
+        self.normal = normal
+        self.constant = -point.dot(normal)
+
+
+def _separates(
+    axis: Vector3, v0: Vector3, v1: Vector3, v2: Vector3, extents: Vector3
+) -> Bool:
+    """Return True if `axis` separates a triangle from a box centered on
+    the origin, the test three.js's `satForAxes` makes per axis.
+
+    Args:
+        axis: The axis to project onto. A zero axis separates nothing.
+        v0: The first corner, relative to the box's center.
+        v1: The second corner.
+        v2: The third corner.
+        extents: Half the box's size.
+
+    Returns:
+        Whether the two projections do not overlap.
+    """
+    var reach = (
+        extents.x * abs(axis.x)
+        + extents.y * abs(axis.y)
+        + extents.z * abs(axis.z)
+    )
+    var p0 = v0.dot(axis)
+    var p1 = v1.dot(axis)
+    var p2 = v2.dot(axis)
+    return max(-max(p0, max(p1, p2)), min(p0, min(p1, p2))) > reach

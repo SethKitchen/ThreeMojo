@@ -185,3 +185,50 @@ def node_view_matrix(scene: Scene, node: NodeId) raises -> Matrix4:
     inverse.elements[13] = -back.y
     inverse.elements[14] = -back.z
     return inverse^
+
+
+def project_point[
+    C: Camera
+](point: Vector3, camera: C, scene: Scene) raises -> Vector3:
+    """Return where a world-space point lands in a camera's normalized
+    device space, three.js's `Vector3.project(camera)`.
+
+    Args:
+        point: The point, in world space.
+        camera: The camera.
+        scene: The scene, updated, whose node the camera can ride.
+
+    Returns:
+        The point in normalized device space: x and y from -1 to 1 across
+        the view, z from -1 at the near plane to 1 at the far one.
+
+    Raises:
+        Error: If the camera's volume is degenerate, or it rides a node
+            the scene does not have, or the scene is stale.
+    """
+    var out = point
+    out.project(camera.view_matrix_in(scene), camera.projection_matrix())
+    return out
+
+
+def unproject_point[
+    C: Camera
+](point: Vector3, camera: C, scene: Scene) raises -> Vector3:
+    """Return the world-space point at a place in a camera's normalized
+    device space, three.js's `Vector3.unproject(camera)`.
+
+    Args:
+        point: The point in normalized device space.
+        camera: The camera.
+        scene: The scene, updated, whose node the camera can ride.
+
+    Returns:
+        The point, in world space.
+
+    Raises:
+        Error: If the camera's volume is degenerate, or it rides a node
+            the scene does not have, or the scene is stale.
+    """
+    var out = point
+    out.unproject(camera.view_matrix_in(scene), camera.projection_matrix())
+    return out

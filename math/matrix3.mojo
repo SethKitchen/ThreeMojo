@@ -352,6 +352,44 @@ struct Matrix3(Equatable, ImplicitlyCopyable):
         left.multiply(self)
         self.elements = left.elements.copy()
 
+    def __mul__(self, other: Self) -> Self:
+        """Return `self * other`, three.js's `multiplyMatrices`.
+
+        Args:
+            other: The matrix applied to a vector first.
+
+        Returns:
+            The product.
+        """
+        var product = self
+        product.multiply(other)
+        return product
+
+    def multiply_scalar(mut self, factor: Float32):
+        """Multiply every element by a number, three.js's `multiplyScalar`.
+
+        Args:
+            factor: The number.
+        """
+        for index in range(9):  # pragma: no branch
+            self.elements[index] *= factor
+
+    def extract_basis(
+        self, mut x_axis: Vector3, mut y_axis: Vector3, mut z_axis: Vector3
+    ):
+        """Write the three columns into three vectors, three.js's
+        `extractBasis`.
+
+        Args:
+            x_axis: Receives the first column.
+            y_axis: Receives the second column.
+            z_axis: Receives the third column.
+        """
+        ref e = self.elements
+        x_axis = Vector3(e[0], e[1], e[2])
+        y_axis = Vector3(e[3], e[4], e[5])
+        z_axis = Vector3(e[6], e[7], e[8])
+
     def determinant(self) -> Float32:
         """Return this matrix's determinant."""
         ref e = self.elements

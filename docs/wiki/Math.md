@@ -4,22 +4,62 @@
 
 ![A quaternion turns a vector, and a sphere follows that point](out/math.png)
 
-three.js: `Vector2`, `Vector3`, `Vector4`, `Matrix3`, `Matrix4`, `Matrix4.makePerspective`, `makeOrthographic`, `lookAt`, `Box3`, `Sphere`, `Plane`, `Frustum`, `Ray`, `Triangle`, `Line3`, `Spherical`, `Cylindrical`, `Matrix2`, `Box2`, `MathUtils`.
+three.js: `Vector2`, `Vector3`, `Vector4`, `Quaternion`, `Matrix3`, `Matrix4`, `Matrix4.makePerspective`, `makeOrthographic`, `lookAt`, `Box3`, `Sphere`, `Plane`, `Frustum`, `FrustumArray`, `Ray`, `Triangle`, `Line3`, `Spherical`, `Cylindrical`, `Matrix2`, `Box2`, `MathUtils`.
+
+## The three.js math API
+
+Each class has the members of three.js's `src/math` class of the same name. A three.js name in camel case is a Mojo name in snake case: `distanceTo` is `distance_to`. The tables below list the members. The numbers match three.js 0.180 to Float32 precision. The tests check them against three.js run in node.
+
+Some three.js members have a different form here:
+
+- A setter that builds a value from another value is a static constructor. `setFromMatrixPosition` is `Vector3.from_matrix_position(m)`. `setFromCenterAndSize` is `Box3.from_center_and_size(c, s)`.
+- A `Matrix4` builder is a free function, as `translation` is: `compose`, `rotation_axis`, `shear`, `basis`, `rotation_from_quaternion` and `rotation_from_euler`.
+- `equals` is `==`. `multiplyMatrices` and `multiplyQuaternions` are `*`. `divideScalar` is `/`.
+- A random member takes a `SeededRandom`. A seed gives the same numbers as three.js's `seededRandom`.
+- `setFromSpherical` and `setFromCylindrical` are `Spherical.to_vector3()` and `Cylindrical.to_vector3()`.
+- A member that reads a scene is in `core.object_bounds`: `Box3.setFromObject`, `expandByObject`, `Frustum.intersectsObject` and `intersectsSprite`. See [Bounds of scene content](#bounds-of-scene-content).
+- `Color` is `FloatColor`. See [Render target and framebuffer](Render-target-and-framebuffer#color-and-floatcolor).
+
+A question with no answer raises, where three.js returns `NaN`, an infinity or a zero vector. Examples are `decompose` of a flat matrix, `get_parameter` of a flat box and the nearest point of an empty sphere. Each table says where.
+
+These three.js members are not ported:
+
+- `fromArray`, `toArray` and `fromBufferAttribute` read JavaScript arrays and attributes. `BufferAttribute` has its own readers.
+- `Quaternion.slerpFlat` and `multiplyQuaternionsFlat` work on flat arrays.
+- `Vector3.setFromColor` and `Color.setFromVector3` join two packages that do not import each other.
+- `Triangle.getInterpolatedAttribute` reads an attribute.
 
 ## Vector2 and Vector3
 
 `Vector2(x, y)` and `Vector3(x, y, z)` hold `Float32` components. Both are value types. Assignment copies.
 
-`Vector2` has the same members in two dimensions, plus `cross(other) -> Float32`, which is the one component a cross product has in a plane. It is positive when `other` lies to the left of `self`. The curves asked for them; see [Curves and paths](Curves).
+`Vector2` has the same members in two dimensions, except the ones that need a third. It adds `cross(other) -> Float32`, which is the one component a cross product has in a plane. It is positive when `other` lies to the left of `self`. It also adds `angle()`, the angle from +x, and `rotate_around(center, angle)`. The curves asked for the first members; see [Curves and paths](Curves).
+
+A method that changes the vector changes `self` in place, as in three.js.
 
 | Vector3 member | Meaning |
 |---|---|
 | `dot(other) -> Float32` | The dot product. |
-| `length() -> Float32` | The Euclidean length. |
-| `add(other)`, `sub(other)` | Change `self` in place. |
+| `length()`, `length_sq()`, `manhattan_length()` | The Euclidean length, its square, and the sum of the absolute components. |
+| `distance_to(p)`, `distance_to_squared(p)`, `manhattan_distance_to(p)` | The distance to another point. |
+| `angle_to(v) -> Angle` | The angle between two vectors. A zero vector gives a right angle, as in three.js. |
+| `add(other)`, `sub(other)`, `add_scaled_vector(v, s)`, `negate()` | Change `self` in place. |
 | `cross(other)` | `self = self × other`. |
-| `normalize()` | Scale to unit length. A zero vector stays zero. |
-| `a + b`, `a - b`, `a * f`, `-a` | Return a new vector. |
+| `normalize()`, `set_length(l)` | Scale to unit length, or to `l`. A zero vector stays zero. |
+| `lerp(v, alpha)`, `lerp_vectors(a, b, alpha)` | A point on the line between two vectors. |
+| `reflect(normal)` | Reflect off a plane with a unit normal. |
+| `apply_matrix4(m)`, `apply_matrix3(m)`, `apply_normal_matrix(m)` | Multiply by a matrix. `apply_matrix4` divides by `w`, but not by a `w` of zero. `apply_normal_matrix` makes the result unit length. |
+| `apply_quaternion(q)`, `apply_euler(e)`, `apply_axis_angle(axis, angle)` | Turn the vector. |
+| `transform_direction(m)` | Turn by the rotation and scale of `m`, then make unit length. `Matrix4.transform_direction` does not normalize. |
+| `project(view, projection)`, `unproject(view, projection)` | To and from normalized device space. `cameras.camera.project_point(p, camera, scene)` and `unproject_point` take a camera. |
+| `min(v)`, `max(v)`, `clamp(low, high)`, `clamp_scalar(low, high)`, `clamp_length(low, high)` | Hold the components, or the length, in a range. |
+| `multiply(v)`, `divide(v)` | Component by component. |
+| `floor()`, `ceil()`, `round()`, `round_to_zero()` | Round each component. `round` rounds a half up, as JavaScript's `Math.round` does. |
+| `project_on_vector(v)`, `project_on_plane(normal)` | Keep the part along `v`, or remove the part along `normal`. A zero `v` gives a zero vector. |
+| `get_component(i)`, `set_component(i, value)` | One component by index. An index other than 0, 1 or 2 raises. |
+| `Vector3.from_matrix_position(m)`, `from_matrix_scale(m)`, `from_matrix_column(m, i)`, `from_matrix3_column(m, i)` | Read a matrix. A column index out of range raises. |
+| `Vector3.random(rng)`, `Vector3.random_direction(rng)` | Random vectors, from a `SeededRandom`. |
+| `a + b`, `a - b`, `a * f`, `a / f`, `-a`, `a == b` | Return a new vector, or compare exactly. |
 
 ## Vector4
 
@@ -53,6 +93,8 @@ It has two jobs, as in three.js. It is the rotation and scale part of a `Matrix4
 | `scale(x, y)`, `rotate(angle)`, `translate(x, y)` | Apply a 2D scale, turn or move after this transform, in place. |
 | `as_matrix4() -> Matrix4` | This matrix in the upper-left corner, with no translation. |
 | `a == b`, `a != b` | Whether every element is equal, exactly. three.js's `equals`. |
+| `a * b`, `multiply_scalar(f)` | The product of two matrices, or every element times a number. |
+| `extract_basis(x, y, z)` | Write the three columns into three vectors. |
 
 Builders, as static methods:
 
@@ -91,8 +133,14 @@ Column-major storage, as three.js and OpenGL. Element `(row, col)` is at `col * 
 | `transform_point(p) -> Vector3` | Apply with `w = 1` and divide by `w`. |
 | `transform_w(p) -> Float32` | The `w` that `transform_point` divides by. |
 | `transform_direction(d) -> Vector3` | Apply with `w = 0`. |
+| `a == b`, `a * b`, `multiply_scalar(f)` | Compare exactly, multiply, or multiply every element by a number. |
+| `scale(v)` | Scale the three axis columns: a scale applied first. |
+| `set_position(v)`, `copy_position(m)` | Set the translation column. |
+| `extract_basis(x, y, z)` | Write the three axis columns into three vectors. |
+| `look_at(eye, target, up)` | Set the rotation so that +z points from `target` to `eye`. The translation is kept. `math.projection.look_at` builds a view matrix instead. |
+| `decompose(position, quaternion, scale)` | Split into a translation, a rotation and a scale. A mirror gives a negative x scale. An axis of zero length raises; three.js writes `NaN`. |
 
-Builders: `translation(x, y, z)`, `scaling(x, y, z)`, `rotation_x(angle)`, `rotation_y(angle)`, `rotation_z(angle)`. A rotation takes an `Angle`, so `rotation_z(90.0)` does not compile.
+Builders: `translation(x, y, z)`, `scaling(x, y, z)`, `rotation_x(angle)`, `rotation_y(angle)`, `rotation_z(angle)`, `rotation_axis(axis, angle)`, `shear(xy, xz, yx, yz, zx, zy)`, `basis(x, y, z)`, `compose(position, quaternion, scale)`, `rotation_from_quaternion(q)` and `rotation_from_euler(e)`. A rotation takes an `Angle`, so `rotation_z(90.0)` does not compile.
 
 ```mojo
 var m = translation(10, 0, 0)
@@ -122,6 +170,13 @@ Both transforms take an affine matrix, one that keeps `w` at one. A projection r
 | `intersects_box(other)`, `intersects_sphere(s)` | Touching counts. |
 | `apply_matrix4(m)` | Transform the eight corners and bound them again, in place. |
 | `bounding_sphere() -> Sphere` | The sphere through the corners. |
+| `Box3.from_center_and_size(c, s)` | The box of size `s` centered on `c`. |
+| `expand_by_vector(v)`, `expand_by_scalar(f)`, `translate(v)` | Move each face out, or move the box. |
+| `intersect(other)` | Keep what both boxes hold. Boxes that do not overlap give the empty box. |
+| `contains_box(other)` | Whether all of `other` is inside. The empty box is inside every box. |
+| `get_parameter(p) -> Vector3` | Where `p` lies, as a fraction of each side. A box with no extent on an axis raises; three.js divides by zero. |
+| `intersects_plane(p)`, `intersects_triangle(t)` | Whether the box meets a plane or a triangle. The triangle test is three.js's separating axis test. |
+| `a == b` | Both corners equal. |
 
 | Sphere member | Meaning |
 |---|---|
@@ -132,6 +187,11 @@ Both transforms take an affine matrix, one that keeps `w` at one. A projection r
 | `expand_by_point(p)` | Grow in place, by as little as possible. |
 | `apply_matrix4(m)` | Move the center. The radius grows by `max_stretch`. |
 | `bounding_box() -> Box3` | The box around the sphere. |
+| `Sphere.from_points_around(points, center)` | three.js's `setFromPoints` with a center: the sphere at `center` that reaches every point. |
+| `union(other)`, `translate(v)` | Grow to hold another sphere, or move. |
+| `clamp_point(p)` | The nearest point of the sphere. The empty sphere raises; three.js uses a radius of one. |
+| `intersects_plane(p)` | Whether a plane passes through the sphere. |
+| `a == b` | Centers and radii equal. |
 
 | Plane member | Meaning |
 |---|---|
@@ -142,6 +202,10 @@ Both transforms take an affine matrix, one that keeps `w` at one. A projection r
 | `project_point(p)`, `coplanar_point()` | The nearest point on the plane. |
 | `negate()`, `translate(offset)` | Turn around, or move, in place. |
 | `intersects_sphere(s)`, `intersects_box(box)` | Whether the plane passes through it. |
+| `intersect_line(line) -> Optional[Vector3]` | Where a segment crosses the plane. A segment in the plane gives its start, as in three.js. |
+| `intersects_line(line)` | Whether the two ends lie on opposite sides. An end on the plane does not count. |
+| `apply_matrix4(m)`, `apply_matrix4(m, normal_matrix)` | Carry the plane through a transform. A transform that collapses a dimension raises. |
+| `a == b` | Normals and constants equal. |
 
 A plane refuses a zero normal. Three points on one line do not make a plane.
 
@@ -158,6 +222,28 @@ A plane refuses a zero normal. Three points on one line do not make a plane.
 | `contains_point(p)` | Whether `p` is in front of every plane. A point on a plane counts. |
 | `intersects_sphere(s)` | Whether any of `s` is in view. False for an empty sphere. |
 | `intersects_box(b)` | Whether any of `b` is in view. False for an empty box. |
+
+`from_projection_matrix(m, coordinate_system, reversed_depth)` takes three.js's two other arguments. `coordinate_system` is `WEBGL_COORDINATES`, the default, or `WEBGPU_COORDINATES`. It is a `CoordinateSystem`, not a bare integer, and an invalid one raises. A WebGPU projection puts the near plane at a depth of zero. With `reversed_depth`, the far plane is at a depth of zero.
+
+`cameras.frustum_array.FrustumArray` is three.js's `FrustumArray`. Its `intersects_object`, `intersects_sprite`, `intersects_sphere`, `intersects_box` and `contains_point` take an `ArrayCamera` and a scene. Each is true when any camera sees the thing. An array with no cameras sees nothing.
+
+## Bounds of scene content
+
+`core/object_bounds.mojo` holds the three.js members that read a scene. The scene must be updated first.
+
+`box_from_object(scene, assets, node, precise=False)` is three.js's `Box3.setFromObject`. It returns the world-space box around everything drawn at `node` and under it. `expand_by_object(box, scene, assets, node, precise)` is `expandByObject`: it grows a box instead.
+
+Each thing adds the bound three.js gives it:
+
+- A mesh, a line, a set of points or a wide line adds its geometry's box.
+- An instanced or a batched mesh adds the box of its instances' boxes.
+- A level of detail adds every level, because three.js's levels are children.
+- A skinned mesh adds the box of its posed vertices.
+- A sprite adds the unit square.
+
+With `precise`, each vertex goes to world space on its own. The box is tighter for a turned object. A mesh or a skinned mesh wears its morph targets there, as in three.js. The geometry's own box leaves the morph targets out. three.js's includes them.
+
+`intersects_object(frustum, scene, assets, thing)` is `Frustum.intersectsObject`, for a `Mesh`, a `Line`, a `Points` or an `InstancedMesh`. It tests the geometry's bounding sphere, carried to world space. `intersects_sprite(frustum, scene, sprite)` is `intersectsSprite`.
 
 A sphere or a box that crosses a plane is in view as far as the test knows. One that crosses two planes outside their corner is in view too. That is the usual bargain. The renderer uses `intersects_sphere` to skip meshes. See [Renderer](Renderer#frustum-culling).
 
@@ -218,7 +304,11 @@ Normalized device space is unitless. World space is meters and screen space is p
 
 A degenerate triangle has its corners on one line. It has no normal, no plane and no barycentric coordinates, and those questions raise. three.js answers them with a zero vector or `null`. `closest_point_to_point` still answers: it uses the nearest point of the three edges.
 
-`Line3(start, end)` is a segment. `delta()`, `center()`, `distance()` and `at(t)` describe it. `closest_point_parameter(point, clamp)` and `closest_point(point, clamp)` find the point nearest a point. A segment of no length raises for them. `distance_to_line(other)` is the shortest distance between two segments. `apply_matrix4(matrix)` moves both ends.
+`Triangle.from_points_and_indices(points, a, b, c)` picks three corners from a list. An index out of range raises. `intersects_box(box)` is `Box3.intersects_triangle`. `a == b` compares the corners in order.
+
+`Line3(start, end)` is a segment. `delta()`, `center()`, `distance()`, `distance_sq()` and `at(t)` describe it. `a == b` compares the ends. `closest_point_parameter(point, clamp)` and `closest_point(point, clamp)` find the point nearest a point. A segment of no length raises for them.
+
+`distance_to_line(other)` is the shortest distance between two segments. `closest_points_to_line(other, on_self, on_other)` is three.js's `distanceSqToLine3`. It writes the two nearest points and returns the squared distance. `apply_matrix4(matrix)` moves both ends.
 
 ## Spherical and Cylindrical
 
@@ -232,7 +322,7 @@ A degenerate triangle has its corners on one line. It has no normal, no plane an
 
 `determinant()`, `transposed()`, `inverse()` and `transform(v)` are the rest. A singular matrix raises for `inverse`. three.js returns zeros.
 
-`Box2(min, max)` is `Box3` in the plane. It has the same empty box, with its corners inside out. `from_points`, `expand_by_point`, `union`, `intersect`, `center`, `size`, `contains_point`, `intersects_box`, `clamp_point` and `distance_to_point` work as the `Box3` members do.
+`Box2(min, max)` is `Box3` in the plane. It has the same empty box, with its corners inside out. These members work as in `Box3`: `from_points`, `from_center_and_size`, `expand_by_point`, `expand_by_vector`, `expand_by_scalar`, `union`, `intersect`, `translate`, `center`, `size`, `contains_point`, `contains_box`, `get_parameter`, `intersects_box`, `clamp_point`, `distance_to_point` and `==`. The empty box has its center at the origin, as in three.js.
 
 ## MathUtils
 
@@ -241,5 +331,11 @@ A degenerate triangle has its corners on one line. It has no normal, no plane an
 `damp(x, y, rate, delta)` takes the frame time as a `Duration`. `smooth_step(x, low, high)` has three.js's argument order. The shaders read `smoothstep(edge0, edge1, x)` from `math/smoothstep.mojo`, in GLSL's order.
 
 `degToRad` and `radToDeg` are not here. An `Angle` converts itself.
+
+`generate_uuid(rng)` is three.js's `generateUUID`, with the numbers from a `SeededRandom`.
+
+`quaternion_from_proper_euler(a, b, c, order)` is three.js's `setQuaternionFromProperEuler`. `order` is a `ProperEulerOrder`: `PROPER_XYX`, `PROPER_YZY`, `PROPER_ZXZ`, `PROPER_XZX`, `PROPER_YXY` or `PROPER_ZYZ`. An invalid one raises; three.js warns.
+
+`normalize(value, component)` and `denormalize(value, component)` convert between a number and a stored integer. `component` is a `ComponentType`, such as `UINT8_COMPONENT`. three.js reads it from the typed array.
 
 `SeededRandom(seed)` is three.js's Mulberry32 generator. `next()` returns a number from zero up to one. `float_in(low, high)`, `float_spread(spread)` and `int_in(low, high)` are three.js's `randFloat`, `randFloatSpread` and `randInt`. The same seed gives the same numbers as three.js's `seededRandom`, on every platform.
