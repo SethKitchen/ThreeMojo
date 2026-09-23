@@ -54,9 +54,6 @@ def anisotropic_step(
 
     Returns:
         The clamped level, the tap count and the major-axis derivative.
-
-    Raises:
-        This function does not raise.
     """
     var ax = du_dx * width
     var ay = dv_dx * height
