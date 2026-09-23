@@ -17,10 +17,25 @@ text every time.
 **Nodes.** Every node becomes an object with its name, its `visible`, its
 `layers`, its `renderOrder` and its local `matrix`, as three.js writes an
 `Object3D`. A node that carries one thing becomes that thing: a `Mesh`,
-an `InstancedMesh`, a light of its kind or a camera. A node that carries
-more than one, or a light or camera on other layers than its node, is an
-`Object3D` with one child object per thing, each at the identity. A light
-with no node, as an ambient light usually is, is a child of the scene.
+an `InstancedMesh`, a `BatchedMesh`, a `SkinnedMesh`, a `Line`, a
+`LineLoop` or a `LineSegments`, a `Points`, a `Sprite`, an `LOD`, a light
+of its kind or a camera. A node that carries more than one, or a light or
+camera on other layers than its node, is an `Object3D` with one child
+object per thing, each at the identity. A light with no node, as an
+ambient light usually is, is a child of the scene. A node that carries
+nothing and is a bone of a skeleton is a `Bone`.
+
+**The other objects.** An `LOD` writes each level as a child `Mesh` at the
+identity, and names it in `levels` with its `distance` and `hysteresis`,
+as `LOD.toJSON` does. A `SkinnedMesh` writes its `bindMode`, its
+`bindMatrix` and the uuid of its skeleton; the skeleton is an entry of a
+`skeletons` library with the uuids of its bones and their `boneInverses`.
+A `BatchedMesh` is written as three.js writes one: its geometries joined
+into one `BufferGeometry`, a `geometryInfo` and an `instanceInfo` entry
+for each, and the instance matrices and colors in the `Float32Array` data
+textures `matricesTexture` and `colorsTexture`, with the
+`indirectTexture` three.js also reads. A sprite's `center` is written
+when it is not the middle; three.js writes none and reads none.
 
 **Geometry** is a `BufferGeometry` with every attribute as a
 `Float32Array`, the index as a `Uint16Array` or a `Uint32Array` as three.js
@@ -30,20 +45,32 @@ attribute carries its `meshPerAttribute`. An interleaved attribute is
 written with its own numbers, not as a view of a shared buffer: three.js
 does the same when an attribute is written on its own. **A material** has the type
 of its kind -- `MeshStandardMaterial` for `STANDARD` -- and the fields that
-type has in three.js. **A texture** is its sampler's settings and an
+type has in three.js: the maps, the baked light, the displacement, the
+flat shading, the depth packing, the volume, the sheen, the film and the
+stretch of a physical surface, and the depth, stencil and polygon offset
+state of every class, each under three.js's key and left out where
+`Material.toJSON` leaves it out. A line, points or a sprite writes its
+`BASIC` material as three.js's class for it: `LineBasicMaterial`,
+`LineDashedMaterial` for a dashed material, `PointsMaterial` and
+`SpriteMaterial`, with their width, dashes, size, attenuation and turn.
+One material that a mesh and a line share is written once for each.
+**A texture** is its sampler's settings, its `channel` and an
 image, written as a PNG `data:` URL of its full-size level. A texture here
 runs up from its bottom row as a three.js texture with `flipY` does, so
 the image is written as it is and `flipY` is true.
 
-**Not written.** Lines, points, sprites, LODs, batched and skinned meshes;
-cube textures, so a cube background, the scene's environment and a
-material's `envMap`; a mesh's morph influences; a material's clipping
-planes and the dash, point and sprite settings; and a texture's alpha
-mode, which three.js has no field for: `loaders.object_loader` gives it
-back from the texture's use. A material with custom blending, a material
-that blends but is not transparent, a perspective camera with a view
-shift and a camera that rides no node are refused, since the format has
-no place for them.
+**Not written.** Wide lines, which are an addon of three.js with no class
+`ObjectLoader` reads; cube textures, so a cube background, the scene's
+environment and a material's `envMap`; a mesh's morph influences; a
+material's clipping planes, a distance material's reference point and
+range, and a wide line's `dashOffset`; and a texture's alpha mode, which
+three.js has no field for: `loaders.object_loader` gives it back from the
+texture's use. A material with custom blending, a material that blends
+but is not transparent, a line width in world units, a perspective camera
+with a view shift and a camera that rides no node are refused, since the
+format has no place for them. So is a batch whose geometries do not share
+their attributes and index, or carry morph targets, which three.js's
+`BatchedMesh` cannot join.
 """
 
 from cameras.orthographic_camera import OrthographicCamera
@@ -51,6 +78,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.background import COLOR_BACKGROUND, TEXTURE_BACKGROUND
 from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import BufferGeometry
 from core.fog import EXP2_FOG, LINEAR_FOG
 from core.geometry_store import GeometryId
 from core.layers import Layers
@@ -68,25 +96,36 @@ from lights.light import (
     Light,
 )
 from loaders.object_loader import (
+    CLAMP_TO_EDGE_WRAPPING,
     CUSTOM_BLENDING,
+    FLOAT_TYPE,
     FORMAT_VERSION,
     LINEAR_FILTER,
     LINEAR_MIPMAP_LINEAR_FILTER,
+    LINEAR_SRGB_COLOR_SPACE,
     NEAREST_FILTER,
     NEAREST_MIPMAP_NEAREST_FILTER,
     NO_BLENDING,
+    RED_INTEGER_FORMAT,
     RGBA_FORMAT,
     SRGB_COLOR_SPACE,
+    STENCIL_FUNC_BASE,
     UNSIGNED_BYTE_TYPE,
+    UNSIGNED_INT_TYPE,
     UV_MAPPING,
     ObjectCameras,
+    bind_mode_name,
     light_type_names,
+    line_type_names,
     material_type_names,
+    stencil_op_code,
     wrap_code,
 )
 from materials.material import (
     BASIC,
     BLEND,
+    DEFAULT_LINE_WIDTH,
+    DEPTH,
     LAMBERT,
     NO_TEXTURE,
     OPAQUE,
@@ -100,13 +139,22 @@ from materials.material import (
     MaterialKind,
 )
 from math.matrix4 import Matrix4
-from render.framebuffer import Framebuffer
+from math.vector2 import Vector2
+from objects.skeleton import Skeleton
+from render.framebuffer import Color, FloatColor, Framebuffer
 from render.png import encode as encode_png
+from render.raster_state import (
+    ALWAYS_STENCIL_FUNC,
+    KEEP_STENCIL_OP,
+    LESS_EQUAL_DEPTH,
+    STENCIL_MAX,
+)
 from render.srgb import SRGB
 from render.texture import NEAREST, Texture
 from render.texture_store import TextureId
+from std.math import ceil, isfinite, sqrt
 from std.pathlib import Path
-from units.si import DEGREE, METER, PER_METER, RADIAN
+from units.si import DEGREE, METER, NANOMETER, PER_METER, RADIAN
 
 # What the leading hex digit of a uuid says it names.
 comptime _SCENE_UUID = 1
@@ -116,9 +164,14 @@ comptime _GEOMETRY_UUID = 4
 comptime _MATERIAL_UUID = 5
 comptime _TEXTURE_UUID = 6
 comptime _IMAGE_UUID = 7
+comptime _SKELETON_UUID = 8
 # The largest vertex count whose index three.js writes as a `Uint16Array`.
 comptime _MAX_SHORT_INDEX = 65535
 comptime _HEX = "0123456789abcdef"
+# An instance color that tints nothing, and the smallest side of a batch's
+# matrix texture, as three.js's `_initMatricesTexture` has it.
+comptime _WHITE_HEX = 0xFFFFFF
+comptime _MATRICES_SIDE = 4
 
 
 def object_uuid(kind: Int, index: Int) -> String:
@@ -298,12 +351,16 @@ struct _Library(Movable):
     """The libraries as JSON texts, and which store id each entry is."""
 
     var geometries: List[String]
+    # The store id of each geometry entry, or -1 for a batch's joined one.
     var geometry_keys: List[Int]
     var materials: List[String]
-    var material_keys: List[Int]
+    # Each material entry's store id and three.js class, as one text.
+    var material_keys: List[String]
     var textures: List[String]
     var images: List[String]
+    # The store id of each texture entry, or -1 for a batch's data texture.
     var texture_keys: List[Int]
+    var skeletons: List[String]
     var parts: Int
 
     def __init__(out self):
@@ -311,10 +368,11 @@ struct _Library(Movable):
         self.geometries = List[String]()
         self.geometry_keys = List[Int]()
         self.materials = List[String]()
-        self.material_keys = List[Int]()
+        self.material_keys = List[String]()
         self.textures = List[String]()
         self.images = List[String]()
         self.texture_keys = List[Int]()
+        self.skeletons = List[String]()
         self.parts = 0
 
     def part_uuid(mut self) -> String:
@@ -326,80 +384,86 @@ struct _Library(Movable):
         """Write a geometry once, and return its uuid."""
         var at = _find(self.geometry_keys, id.value)
         if at < 0:
-            at = len(self.geometry_keys)
-            ref geometry = assets.geometries.get(id)
-            var writer = JsonWriter()
-            writer.begin_object()
-            writer.key("uuid")
-            writer.string(object_uuid(_GEOMETRY_UUID, at))
-            writer.key("type")
-            if geometry.instanced:
-                # three.js's `InstancedBufferGeometry.toJSON`: `null` is
-                # what `JSON.stringify` makes of its default `Infinity`.
-                writer.string("InstancedBufferGeometry")
-                writer.key("instanceCount")
-                if Bool(geometry.instance_count):
-                    writer.integer(geometry.instance_count.value())
-                else:
-                    writer.null()
-                writer.key("isInstancedBufferGeometry")
-                writer.boolean(True)
+            at = self.add_geometry(assets.geometries.get(id), id.value)
+        return object_uuid(_GEOMETRY_UUID, at)
+
+    def add_geometry(
+        mut self, geometry: BufferGeometry, key: Int
+    ) raises -> Int:
+        """Write a geometry as a new entry, and return its position."""
+        var at = len(self.geometry_keys)
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("uuid")
+        writer.string(object_uuid(_GEOMETRY_UUID, at))
+        writer.key("type")
+        if geometry.instanced:
+            # three.js's `InstancedBufferGeometry.toJSON`: `null` is
+            # what `JSON.stringify` makes of its default `Infinity`.
+            writer.string("InstancedBufferGeometry")
+            writer.key("instanceCount")
+            if Bool(geometry.instance_count):
+                writer.integer(geometry.instance_count.value())
             else:
-                writer.string("BufferGeometry")
-            writer.key("data")
+                writer.null()
+            writer.key("isInstancedBufferGeometry")
+            writer.boolean(True)
+        else:
+            writer.string("BufferGeometry")
+        writer.key("data")
+        writer.begin_object()
+        writer.key("attributes")
+        writer.begin_object()
+        for slot in range(len(geometry.names)):
+            writer.key(geometry.names[slot])
+            _attribute(writer, geometry.values[slot])
+        writer.end_object()
+        if geometry.is_indexed():
+            writer.key("index")
             writer.begin_object()
-            writer.key("attributes")
-            writer.begin_object()
-            for slot in range(len(geometry.names)):
-                writer.key(geometry.names[slot])
-                _attribute(writer, geometry.values[slot])
+            writer.key("type")
+            writer.string(index_type(geometry.vertex_count()))
+            writer.key("array")
+            writer.begin_array()
+            for entry in geometry.index:  # pragma: no branch
+                writer.integer(entry)
+            writer.end_array()
             writer.end_object()
-            if geometry.is_indexed():
-                writer.key("index")
-                writer.begin_object()
-                writer.key("type")
-                writer.string(index_type(geometry.vertex_count()))
-                writer.key("array")
+        if geometry.morph_count() > 0:
+            writer.key("morphAttributes")
+            writer.begin_object()
+            writer.key("position")
+            writer.begin_array()
+            for target in geometry.morph_positions:  # pragma: no branch
+                _attribute(writer, target)
+            writer.end_array()
+            if geometry.has_morph_normals():
+                writer.key("normal")
                 writer.begin_array()
-                for entry in geometry.index:  # pragma: no branch
-                    writer.integer(entry)
-                writer.end_array()
-                writer.end_object()
-            if geometry.morph_count() > 0:
-                writer.key("morphAttributes")
-                writer.begin_object()
-                writer.key("position")
-                writer.begin_array()
-                for target in geometry.morph_positions:  # pragma: no branch
+                for target in geometry.morph_normals:  # pragma: no branch
                     _attribute(writer, target)
                 writer.end_array()
-                if geometry.has_morph_normals():
-                    writer.key("normal")
-                    writer.begin_array()
-                    for target in geometry.morph_normals:  # pragma: no branch
-                        _attribute(writer, target)
-                    writer.end_array()
+            writer.end_object()
+            writer.key("morphTargetsRelative")
+            writer.boolean(geometry.morph_relative)
+        if len(geometry.groups) > 0:
+            writer.key("groups")
+            writer.begin_array()
+            for group in geometry.groups:  # pragma: no branch
+                writer.begin_object()
+                writer.key("start")
+                writer.integer(group.start)
+                writer.key("count")
+                writer.integer(group.count)
+                writer.key("materialIndex")
+                writer.integer(group.material_index.value)
                 writer.end_object()
-                writer.key("morphTargetsRelative")
-                writer.boolean(geometry.morph_relative)
-            if len(geometry.groups) > 0:
-                writer.key("groups")
-                writer.begin_array()
-                for group in geometry.groups:  # pragma: no branch
-                    writer.begin_object()
-                    writer.key("start")
-                    writer.integer(group.start)
-                    writer.key("count")
-                    writer.integer(group.count)
-                    writer.key("materialIndex")
-                    writer.integer(group.material_index.value)
-                    writer.end_object()
-                writer.end_array()
-            writer.end_object()
-            writer.end_object()
-            self.geometries.append(writer.finish())
-            self.geometry_keys.append(id.value)
-        return object_uuid(_GEOMETRY_UUID, at)
+            writer.end_array()
+        writer.end_object()
+        writer.end_object()
+        self.geometries.append(writer.finish())
+        self.geometry_keys.append(key)
+        return at
 
     def texture(mut self, id: TextureId, assets: Assets) raises -> String:
         """Write a texture and its image once, and return its uuid."""
@@ -442,7 +506,7 @@ struct _Library(Movable):
             writer.key("mapping")
             writer.integer(UV_MAPPING)
             writer.key("channel")
-            writer.integer(0)
+            writer.integer(texture.channel.value)
             writer.key("repeat")
             _numbers(writer, [texture.repeat.x, texture.repeat.y])
             writer.key("offset")
@@ -480,6 +544,120 @@ struct _Library(Movable):
             self.texture_keys.append(id.value)
         return object_uuid(_TEXTURE_UUID, at)
 
+    def data_texture(
+        mut self,
+        values: List[Float32],
+        side: Int,
+        format: Int,
+        type: Int,
+        color_space: String,
+    ) raises -> String:
+        """Write a square three.js `DataTexture` and its image as new
+        entries, as `Texture.toJSON` writes one, and return the texture's
+        text: `BatchedMesh.toJSON` writes it inline as well."""
+        var at = len(self.texture_keys)
+        var image = JsonWriter()
+        image.begin_object()
+        image.key("uuid")
+        image.string(object_uuid(_IMAGE_UUID, at))
+        image.key("url")
+        image.begin_object()
+        image.key("data")
+        image.begin_array()
+        var floats = type == FLOAT_TYPE
+        for value in values:
+            if floats:
+                image.number(value)
+            else:
+                image.integer(Int(value))
+        image.end_array()
+        image.key("width")
+        image.integer(side)
+        image.key("height")
+        image.integer(side)
+        image.key("type")
+        image.string("Float32Array" if floats else "Uint32Array")
+        image.end_object()
+        image.end_object()
+        self.images.append(image.finish())
+        # What a `DataTexture` is built with: nearest, clamped, not flipped
+        # and with no mip chain.
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("uuid")
+        writer.string(object_uuid(_TEXTURE_UUID, at))
+        writer.key("name")
+        writer.string("")
+        writer.key("image")
+        writer.string(object_uuid(_IMAGE_UUID, at))
+        writer.key("mapping")
+        writer.integer(UV_MAPPING)
+        writer.key("channel")
+        writer.integer(0)
+        writer.key("repeat")
+        _numbers(writer, [1, 1])
+        writer.key("offset")
+        _numbers(writer, [0, 0])
+        writer.key("center")
+        _numbers(writer, [0, 0])
+        writer.key("rotation")
+        writer.integer(0)
+        writer.key("wrap")
+        writer.begin_array()
+        writer.integer(CLAMP_TO_EDGE_WRAPPING)
+        writer.integer(CLAMP_TO_EDGE_WRAPPING)
+        writer.end_array()
+        writer.key("format")
+        writer.integer(format)
+        writer.key("internalFormat")
+        writer.null()
+        writer.key("type")
+        writer.integer(type)
+        writer.key("colorSpace")
+        writer.string(color_space)
+        writer.key("minFilter")
+        writer.integer(NEAREST_FILTER)
+        writer.key("magFilter")
+        writer.integer(NEAREST_FILTER)
+        writer.key("anisotropy")
+        writer.integer(1)
+        writer.key("flipY")
+        writer.boolean(False)
+        writer.key("generateMipmaps")
+        writer.boolean(False)
+        writer.key("premultiplyAlpha")
+        writer.boolean(False)
+        writer.key("unpackAlignment")
+        writer.integer(1)
+        writer.end_object()
+        var text = writer.finish()
+        self.textures.append(text)
+        self.texture_keys.append(-1)
+        return text
+
+    def skeleton(mut self, skeleton: Skeleton, nodes: Int) raises -> String:
+        """Write a skeleton as `Skeleton.toJSON` does, and return its
+        uuid."""
+        var uuid = object_uuid(_SKELETON_UUID, len(self.skeletons))
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("uuid")
+        writer.string(uuid)
+        writer.key("bones")
+        writer.begin_array()
+        # A skeleton holds one bone at least; `Skeleton` refuses none.
+        for bone in skeleton.bones:  # pragma: no branch
+            writer.string(object_uuid(_NODE_UUID, _node_of(bone.node, nodes)))
+        writer.end_array()
+        writer.key("boneInverses")
+        writer.begin_array()
+        for bone in skeleton.bones:  # pragma: no branch
+            _matrix(writer, bone.inverse_bind)
+        writer.end_array()
+        writer.end_object()
+        self.skeletons.append(writer.finish())
+        return uuid
+
     def map(
         mut self,
         mut writer: JsonWriter,
@@ -494,16 +672,41 @@ struct _Library(Movable):
         writer.key(key)
         writer.string(uuid)
 
-    def material(mut self, id: MaterialId, assets: Assets) raises -> String:
-        """Write a material once, and return its uuid."""
-        var at = _find(self.material_keys, id.value)
-        if at >= 0:
-            return object_uuid(_MATERIAL_UUID, at)
-        at = len(self.material_keys)
+    def material(
+        mut self, id: MaterialId, assets: Assets, use: String
+    ) raises -> String:
+        """Write a material once as a three.js class, and return its uuid.
+
+        `use` is `_SURFACE_USE` for the class of the material's kind,
+        `_LINE_USE` for `LineBasicMaterial` or `LineDashedMaterial`, or the
+        name of the class to write, `PointsMaterial` or `SpriteMaterial`.
+        """
         var material = assets.materials.get(id)
         var kind = material.kind
         if not kind.is_valid():
-            raise Error("Object JSON: a material kind that is none of ten")
+            raise Error("Object JSON: a material kind that is none of eleven")
+        var type = material_type_names()[kind.value]
+        if use == _LINE_USE:
+            type = (
+                "LineDashedMaterial" if material.is_dashed() else "LineBasicMaterial"
+            )
+        elif use != _SURFACE_USE:
+            type = use
+        var key = String(id.value) + " " + type
+        var at = _find_text(self.material_keys, key)
+        if at >= 0:
+            return object_uuid(_MATERIAL_UUID, at)
+        at = len(self.material_keys)
+        var as_surface = use == _SURFACE_USE
+        if not as_surface and kind != BASIC:
+            raise Error(
+                "Object JSON: a line, points or sprite material must be"
+                " basic, as three.js's classes for them are unlit"
+            )
+        # The open fields, checked where they are read.
+        _ = material.raster_state()
+        _ = material.depth_offset()
+        material.check_displacement()
         # A shadow material blends whatever it says, as three.js builds
         # its own `transparent`.
         var transparent = material.transparent or kind == SHADOW
@@ -524,10 +727,69 @@ struct _Library(Movable):
         writer.key("uuid")
         writer.string(object_uuid(_MATERIAL_UUID, at))
         writer.key("type")
-        writer.string(material_type_names()[kind.value])
+        writer.string(type)
         if _has_color(kind):
             writer.key("color")
             writer.integer(material.color.hex())
+        if as_surface:
+            self.surface(writer, material, assets)
+        elif use == _LINE_USE:
+            _line_fields(writer, material)
+        else:
+            self.map(writer, "map", material.map, assets)
+            self.map(writer, "alphaMap", material.alpha_map, assets)
+            if type == "PointsMaterial":
+                writer.key("size")
+                writer.number(material.point_size.pixels)
+            elif material.rotation.to(RADIAN) != 0:
+                writer.key("rotation")
+                writer.number(material.rotation.to(RADIAN))
+            writer.key("sizeAttenuation")
+            writer.boolean(material.size_attenuation)
+        if material.side.value != 0:
+            writer.key("side")
+            writer.integer(material.side.value)
+        if material.opacity < 1:
+            writer.key("opacity")
+            writer.number(material.opacity)
+        if transparent:
+            writer.key("transparent")
+            writer.boolean(True)
+        elif type == "SpriteMaterial":
+            # A `SpriteMaterial` is built transparent, and three.js's own
+            # writer leaves a false out, which its loader reads as true.
+            writer.key("transparent")
+            writer.boolean(False)
+        if blending >= 0:
+            writer.key("blending")
+            writer.integer(blending)
+        if material.alpha_test > 0:
+            writer.key("alphaTest")
+            writer.number(material.alpha_test)
+        if material.vertex_colors:
+            writer.key("vertexColors")
+            writer.boolean(True)
+        if material.wireframe:
+            writer.key("wireframe")
+            writer.boolean(True)
+        _raster(writer, material)
+        # three.js writes `fog` only when it is off, and its data materials
+        # have no `fog` at all.
+        var unfogged = not material.fog and not kind.is_data()
+        if unfogged:
+            writer.key("fog")
+            writer.boolean(False)
+        writer.end_object()
+        self.materials.append(writer.finish())
+        self.material_keys.append(key)
+        return object_uuid(_MATERIAL_UUID, at)
+
+    def surface(
+        mut self, mut writer: JsonWriter, material: Material, assets: Assets
+    ) raises:
+        """Write what a mesh's material class has besides its color and
+        the fields every class has."""
+        var kind = material.kind
         if kind == STANDARD or kind == PHYSICAL:
             writer.key("roughness")
             writer.number(material.roughness)
@@ -538,16 +800,7 @@ struct _Library(Movable):
             self.map(writer, "roughnessMap", material.roughness_map, assets)
             self.map(writer, "metalnessMap", material.metalness_map, assets)
         if kind == PHYSICAL:
-            writer.key("ior")
-            writer.number(material.ior)
-            writer.key("specularColor")
-            writer.integer(material.specular_color.hex())
-            writer.key("specularIntensity")
-            writer.number(material.specular_intensity)
-            writer.key("clearcoat")
-            writer.number(material.clearcoat)
-            writer.key("clearcoatRoughness")
-            writer.number(material.clearcoat_roughness)
+            self.physical(writer, material, assets)
         if kind == PHONG:
             writer.key("specular")
             writer.integer(material.specular.hex())
@@ -576,37 +829,166 @@ struct _Library(Movable):
             self.map(writer, "bumpMap", material.bump_map, assets)
             writer.key("bumpScale")
             writer.number(material.bump_scale)
-        if material.side.value != 0:
-            writer.key("side")
-            writer.integer(material.side.value)
-        if material.opacity < 1:
-            writer.key("opacity")
-            writer.number(material.opacity)
-        if transparent:
-            writer.key("transparent")
+        # The baked light and the displacement, each with its numbers, as
+        # `Material.toJSON` writes them only beside their map.
+        if material.light_map != NO_TEXTURE:
+            self.map(writer, "lightMap", material.light_map, assets)
+            writer.key("lightMapIntensity")
+            writer.number(material.light_map_intensity)
+        if material.ao_map != NO_TEXTURE:
+            self.map(writer, "aoMap", material.ao_map, assets)
+            writer.key("aoMapIntensity")
+            writer.number(material.ao_map_intensity)
+        if material.displacement_map != NO_TEXTURE:
+            self.map(
+                writer, "displacementMap", material.displacement_map, assets
+            )
+            writer.key("displacementScale")
+            writer.number(material.displacement_scale.to(METER))
+            writer.key("displacementBias")
+            writer.number(material.displacement_bias.to(METER))
+        self.map(writer, "specularMap", material.specular_map, assets)
+        if material.flat_shading:
+            writer.key("flatShading")
             writer.boolean(True)
-        if blending >= 0:
-            writer.key("blending")
-            writer.integer(blending)
-        if material.alpha_test > 0:
-            writer.key("alphaTest")
-            writer.number(material.alpha_test)
-        if material.vertex_colors:
-            writer.key("vertexColors")
-            writer.boolean(True)
-        if material.wireframe:
-            writer.key("wireframe")
-            writer.boolean(True)
-        # three.js writes `fog` only when it is off, and its data materials
-        # have no `fog` at all.
-        var unfogged = not material.fog and not kind.is_data()
-        if unfogged:
-            writer.key("fog")
-            writer.boolean(False)
-        writer.end_object()
-        self.materials.append(writer.finish())
-        self.material_keys.append(id.value)
-        return object_uuid(_MATERIAL_UUID, at)
+        if kind == DEPTH:
+            writer.key("depthPacking")
+            writer.integer(material.depth_packing.value)
+
+    def physical(
+        mut self, mut writer: JsonWriter, material: Material, assets: Assets
+    ) raises:
+        """Write what a `MeshPhysicalMaterial` adds to a standard one."""
+        writer.key("ior")
+        writer.number(material.ior)
+        writer.key("specularColor")
+        writer.integer(material.specular_color.hex())
+        writer.key("specularIntensity")
+        writer.number(material.specular_intensity)
+        writer.key("clearcoat")
+        writer.number(material.clearcoat)
+        writer.key("clearcoatRoughness")
+        writer.number(material.clearcoat_roughness)
+        writer.key("sheen")
+        writer.number(material.sheen)
+        writer.key("sheenColor")
+        writer.integer(material.sheen_color.hex())
+        writer.key("sheenRoughness")
+        writer.number(material.sheen_roughness)
+        self.map(writer, "sheenColorMap", material.sheen_color_map, assets)
+        self.map(
+            writer, "sheenRoughnessMap", material.sheen_roughness_map, assets
+        )
+        writer.key("dispersion")
+        writer.number(material.dispersion)
+        writer.key("iridescence")
+        writer.number(material.iridescence)
+        writer.key("iridescenceIOR")
+        writer.number(material.iridescence_ior)
+        writer.key("iridescenceThicknessRange")
+        _numbers(
+            writer,
+            [
+                material.iridescence_thickness_minimum.to(NANOMETER),
+                material.iridescence_thickness_maximum.to(NANOMETER),
+            ],
+        )
+        self.map(writer, "iridescenceMap", material.iridescence_map, assets)
+        self.map(
+            writer,
+            "iridescenceThicknessMap",
+            material.iridescence_thickness_map,
+            assets,
+        )
+        writer.key("anisotropy")
+        writer.number(material.anisotropy)
+        writer.key("anisotropyRotation")
+        writer.number(material.anisotropy_rotation.to(RADIAN))
+        self.map(writer, "anisotropyMap", material.anisotropy_map, assets)
+        writer.key("transmission")
+        writer.number(material.transmission)
+        self.map(writer, "transmissionMap", material.transmission_map, assets)
+        writer.key("thickness")
+        writer.number(material.thickness.to(METER))
+        self.map(writer, "thicknessMap", material.thickness_map, assets)
+        # three.js leaves out its default distance, which is infinite.
+        var distance = material.attenuation_distance.to(METER)
+        if isfinite(distance):
+            writer.key("attenuationDistance")
+            writer.number(distance)
+        writer.key("attenuationColor")
+        writer.integer(material.attenuation_color.hex())
+
+
+def _line_fields(mut writer: JsonWriter, material: Material) raises:
+    """Write a `LineBasicMaterial`'s width and a `LineDashedMaterial`'s
+    dashes."""
+    var width = material.line_width
+    if width.world_units:
+        raise Error(
+            "Object JSON: a line width in world units has no three.js form"
+            " on a line"
+        )
+    if width != DEFAULT_LINE_WIDTH:
+        writer.key("linewidth")
+        writer.number(width.size)
+    if material.is_dashed():
+        writer.key("dashSize")
+        writer.number(material.dash_size.to(METER))
+        writer.key("gapSize")
+        writer.number(material.gap_size.to(METER))
+        writer.key("scale")
+        writer.number(material.dash_scale)
+
+
+def _raster(mut writer: JsonWriter, material: Material) raises:
+    """Write the depth, stencil and polygon offset state that is not
+    three.js's default, as `Material.toJSON` does."""
+    if material.depth_func != LESS_EQUAL_DEPTH:
+        writer.key("depthFunc")
+        writer.integer(material.depth_func.value)
+    if not material.depth_test:
+        writer.key("depthTest")
+        writer.boolean(False)
+    if not material.depth_write:
+        writer.key("depthWrite")
+        writer.boolean(False)
+    if not material.color_write:
+        writer.key("colorWrite")
+        writer.boolean(False)
+    if material.stencil_write_mask != STENCIL_MAX:
+        writer.key("stencilWriteMask")
+        writer.integer(material.stencil_write_mask)
+    if material.stencil_func != ALWAYS_STENCIL_FUNC:
+        writer.key("stencilFunc")
+        writer.integer(material.stencil_func.value + STENCIL_FUNC_BASE)
+    if material.stencil_ref != 0:
+        writer.key("stencilRef")
+        writer.integer(material.stencil_ref)
+    if material.stencil_func_mask != STENCIL_MAX:
+        writer.key("stencilFuncMask")
+        writer.integer(material.stencil_func_mask)
+    if material.stencil_fail != KEEP_STENCIL_OP:
+        writer.key("stencilFail")
+        writer.integer(stencil_op_code(material.stencil_fail))
+    if material.stencil_z_fail != KEEP_STENCIL_OP:
+        writer.key("stencilZFail")
+        writer.integer(stencil_op_code(material.stencil_z_fail))
+    if material.stencil_z_pass != KEEP_STENCIL_OP:
+        writer.key("stencilZPass")
+        writer.integer(stencil_op_code(material.stencil_z_pass))
+    if material.stencil_write:
+        writer.key("stencilWrite")
+        writer.boolean(True)
+    if material.polygon_offset:
+        writer.key("polygonOffset")
+        writer.boolean(True)
+    if material.polygon_offset_factor != 0:
+        writer.key("polygonOffsetFactor")
+        writer.number(material.polygon_offset_factor)
+    if material.polygon_offset_units != 0:
+        writer.key("polygonOffsetUnits")
+        writer.number(material.polygon_offset_units)
 
 
 def _find(keys: List[Int], key: Int) -> Int:
@@ -618,59 +1000,168 @@ def _find(keys: List[Int], key: Int) -> Int:
     return found
 
 
-struct _Carried(Movable):
-    """What each node carries, by position in the scene's lists."""
+def _find_text(keys: List[String], key: String) -> Int:
+    """Return where a text is in a list, or -1."""
+    var found = -1
+    for at in range(len(keys)):
+        if keys[at] == key:
+            found = at
+    return found
 
-    var meshes: List[List[Int]]
-    var instanced: List[List[Int]]
-    var lights: List[List[Int]]
-    var perspective: List[List[Int]]
-    var orthographic: List[List[Int]]
+
+struct _Joined(Movable):
+    """A batch's geometries joined into one, as three.js's `BatchedMesh`
+    holds them, and where each one starts."""
+
+    var geometry: BufferGeometry
+    var vertex_starts: List[Int]
+    var vertex_counts: List[Int]
+    var index_starts: List[Int]
+    var index_counts: List[Int]
+    var vertices: Int
+    var indices: Int
+    var indexed: Bool
+
+    def __init__(out self, geometries: List[Int], assets: Assets) raises:
+        """Join geometries, which must share their attributes and index."""
+        self.geometry = BufferGeometry()
+        self.vertex_starts = List[Int]()
+        self.vertex_counts = List[Int]()
+        self.index_starts = List[Int]()
+        self.index_counts = List[Int]()
+        self.vertices = 0
+        self.indices = 0
+        self.indexed = False
+        if len(geometries) == 0:
+            return
+        ref first = assets.geometries.get(GeometryId(geometries[0]))
+        self.indexed = first.is_indexed()
+        # Refuses a geometry with no positions, so every geometry below
+        # has one attribute at least.
+        _ = first.vertex_count()
+        var names = first.names.copy()
+        var sizes = List[Int]()
+        var data = List[List[Float32]]()
+        for slot in range(len(names)):  # pragma: no branch
+            sizes.append(first.values[slot].item_size)
+            data.append(List[Float32]())
+        var index = List[Int]()
+        for id in geometries:  # pragma: no branch
+            ref geometry = assets.geometries.get(GeometryId(id))
+            var fits = (
+                not geometry.instanced
+                and geometry.morph_count() == 0
+                and geometry.is_indexed() == self.indexed
+                and len(geometry.names) == len(names)
+            )
+            if not fits:
+                raise Error(
+                    "Object JSON: a batch's geometries must share their"
+                    " attributes and index and carry no morph targets, as"
+                    " three.js's BatchedMesh joins them"
+                )
+            var vertices = geometry.vertex_count()
+            for slot in range(len(names)):  # pragma: no branch
+                if not geometry.has_attribute(names[slot]):
+                    raise Error(
+                        "Object JSON: a batch's geometries must share their"
+                        " attributes"
+                    )
+                ref attribute = geometry.attribute_view(names[slot])
+                if attribute.item_size != sizes[slot]:
+                    raise Error(
+                        "Object JSON: a batch's attributes must share their"
+                        " item size"
+                    )
+                data[slot].extend(attribute.packed())
+            self.vertex_starts.append(self.vertices)
+            self.vertex_counts.append(vertices)
+            self.index_starts.append(self.indices if self.indexed else -1)
+            self.index_counts.append(
+                len(geometry.index) if self.indexed else -1
+            )
+            for entry in geometry.index:
+                index.append(entry + self.vertices)
+            self.vertices += vertices
+            self.indices += len(geometry.index)
+        for slot in range(len(names)):  # pragma: no branch
+            self.geometry.set_attribute(
+                names[slot], BufferAttribute(data[slot].copy(), sizes[slot])
+            )
+        self.geometry.set_index(index^)
+
+
+# What a thing a node carries is, in the order a node's parts are written.
+comptime _MESH = 0
+comptime _INSTANCED = 1
+comptime _LIGHT = 2
+comptime _PERSPECTIVE = 3
+comptime _ORTHOGRAPHIC = 4
+comptime _BATCHED = 5
+comptime _SKINNED = 6
+comptime _LINE = 7
+comptime _POINTS = 8
+comptime _SPRITE = 9
+comptime _LOD = 10
+# A thing is its category times this, plus its position in its list.
+comptime _STRIDE = 1 << 32
+# What `_Library.material` is asked to write a material as.
+comptime _SURFACE_USE = ""
+comptime _LINE_USE = "Line"
+
+
+struct _Carried(Movable):
+    """What each node carries, by category and position in the scene's
+    lists."""
+
+    # Each node's things, in the order of their categories.
+    var things: List[List[Int]]
     # The lights that ride no node.
     var loose: List[Int]
+    # Whether each node is a bone of a skinned mesh.
+    var bones: List[Bool]
 
     def __init__(out self, scene: Scene, cameras: ObjectCameras) raises:
         """Sort a scene's things onto its nodes."""
         var count = scene.count()
-        self.meshes = List[List[Int]]()
-        self.instanced = List[List[Int]]()
-        self.lights = List[List[Int]]()
-        self.perspective = List[List[Int]]()
-        self.orthographic = List[List[Int]]()
+        self.things = List[List[Int]]()
         self.loose = List[Int]()
+        self.bones = List[Bool](length=count, fill=False)
         for _ in range(count):
-            self.meshes.append(List[Int]())
-            self.instanced.append(List[Int]())
-            self.lights.append(List[Int]())
-            self.perspective.append(List[Int]())
-            self.orthographic.append(List[Int]())
+            self.things.append(List[Int]())
         for at in range(len(scene.meshes)):
-            self.meshes[_node_of(scene.meshes[at].node, count)].append(at)
+            self.add(_MESH, at, scene.meshes[at].node, count)
         for at in range(len(scene.instanced_meshes)):
-            var node = scene.instanced_meshes[at].node
-            self.instanced[_node_of(node, count)].append(at)
+            self.add(_INSTANCED, at, scene.instanced_meshes[at].node, count)
         for at in range(len(scene.lights)):
             var node = scene.lights[at].node
             if node == NO_PARENT:
                 self.loose.append(at)
             else:
-                self.lights[_node_of(node, count)].append(at)
+                self.add(_LIGHT, at, node, count)
         for at in range(len(cameras.perspective)):
-            var node = cameras.perspective[at].node
-            self.perspective[_node_of(node, count)].append(at)
+            self.add(_PERSPECTIVE, at, cameras.perspective[at].node, count)
         for at in range(len(cameras.orthographic)):
-            var node = cameras.orthographic[at].node
-            self.orthographic[_node_of(node, count)].append(at)
+            self.add(_ORTHOGRAPHIC, at, cameras.orthographic[at].node, count)
+        for at in range(len(scene.batched_meshes)):
+            self.add(_BATCHED, at, scene.batched_meshes[at].node, count)
+        for at in range(len(scene.skinned_meshes)):
+            ref mesh = scene.skinned_meshes[at]
+            self.add(_SKINNED, at, mesh.node, count)
+            for bone in mesh.skeleton.bones:  # pragma: no branch
+                self.bones[_node_of(bone.node, count)] = True
+        for at in range(len(scene.lines)):
+            self.add(_LINE, at, scene.lines[at].node, count)
+        for at in range(len(scene.points)):
+            self.add(_POINTS, at, scene.points[at].node, count)
+        for at in range(len(scene.sprites)):
+            self.add(_SPRITE, at, scene.sprites[at].node, count)
+        for at in range(len(scene.lods)):
+            self.add(_LOD, at, scene.lods[at].node, count)
 
-    def total(self, node: Int) -> Int:
-        """Return how many things a node carries."""
-        return (
-            len(self.meshes[node])
-            + len(self.instanced[node])
-            + len(self.lights[node])
-            + len(self.perspective[node])
-            + len(self.orthographic[node])
-        )
+    def add(mut self, category: Int, at: Int, node: NodeId, count: Int) raises:
+        """Put a thing on its node."""
+        self.things[_node_of(node, count)].append(category * _STRIDE + at)
 
 
 def _node_of(node: NodeId, count: Int) raises -> Int:
@@ -692,6 +1183,43 @@ struct _Writer(Movable):
         """Start with empty libraries."""
         self.library = _Library()
 
+    def thing(
+        mut self,
+        mut writer: JsonWriter,
+        var header: _Header,
+        thing: Int,
+        scene: Scene,
+        cameras: ObjectCameras,
+        assets: Assets,
+    ) raises -> List[String]:
+        """Write one thing's header and fields, and return the objects of
+        an LOD's levels, which are its children."""
+        var category = thing // _STRIDE
+        var which = thing % _STRIDE
+        if category == _LOD:
+            return self.lod(writer, header^, scene, which, assets)
+        if category == _MESH:
+            self.mesh(writer, header^, scene, which, assets)
+        elif category == _INSTANCED:
+            self.instanced(writer, header^, scene, which, assets)
+        elif category == _LIGHT:
+            self.light(writer, header^, scene, which)
+        elif category == _PERSPECTIVE:
+            self.perspective(writer, header^, cameras.perspective[which])
+        elif category == _ORTHOGRAPHIC:
+            self.orthographic(writer, header^, cameras.orthographic[which])
+        elif category == _BATCHED:
+            self.batched(writer, header^, scene, which, assets)
+        elif category == _SKINNED:
+            self.skinned(writer, header^, scene, which, assets)
+        elif category == _LINE:
+            self.line(writer, header^, scene, which, assets)
+        elif category == _POINTS:
+            self.points(writer, header^, scene, which, assets)
+        else:
+            self.sprite(writer, header^, scene, which, assets)
+        return List[String]()
+
     def mesh(
         mut self,
         mut writer: JsonWriter,
@@ -710,7 +1238,9 @@ struct _Writer(Movable):
         writer.key("geometry")
         writer.string(self.library.geometry(mesh.geometry, assets))
         writer.key("material")
-        writer.string(self.library.material(mesh.material, assets))
+        writer.string(
+            self.library.material(mesh.material, assets, _SURFACE_USE)
+        )
 
     def instanced(
         mut self,
@@ -728,7 +1258,9 @@ struct _Writer(Movable):
         writer.key("geometry")
         writer.string(self.library.geometry(mesh.geometry, assets))
         writer.key("material")
-        writer.string(self.library.material(mesh.material, assets))
+        writer.string(
+            self.library.material(mesh.material, assets, _SURFACE_USE)
+        )
         writer.key("count")
         writer.integer(mesh.count())
         var data = List[Float32]()
@@ -737,6 +1269,288 @@ struct _Writer(Movable):
                 data.append(matrix.elements[index])
         writer.key("instanceMatrix")
         _attribute(writer, BufferAttribute(data^, 16))
+
+    def batched(
+        mut self,
+        mut writer: JsonWriter,
+        var header: _Header,
+        scene: Scene,
+        which: Int,
+        assets: Assets,
+    ) raises:
+        """Write a batched mesh as `Object3D.toJSON` writes one."""
+        ref batch = scene.batched_meshes[which]
+        var count = batch.count()
+        # Each geometry once, in the order the instances first name them.
+        var geometries = List[Int]()
+        var chosen = List[Int]()
+        var tinted = False
+        for instance in batch.instances:
+            var at = _find(geometries, instance.geometry.value)
+            if at < 0:
+                at = len(geometries)
+                geometries.append(instance.geometry.value)
+            chosen.append(at)
+            if instance.color.hex() != _WHITE_HEX:
+                tinted = True
+        var joined = _Joined(geometries, assets)
+        var geometry = self.library.add_geometry(joined.geometry, -1)
+        header.type = "BatchedMesh"
+        header.write(writer)
+        writer.key("geometry")
+        writer.string(object_uuid(_GEOMETRY_UUID, geometry))
+        writer.key("material")
+        writer.string(
+            self.library.material(batch.material, assets, _SURFACE_USE)
+        )
+        writer.key("perObjectFrustumCulled")
+        writer.boolean(batch.frustum_culled)
+        writer.key("sortObjects")
+        writer.boolean(True)
+        writer.key("geometryInfo")
+        writer.begin_array()
+        for at in range(len(geometries)):
+            var first = joined.vertex_starts[at]
+            var vertices = joined.vertex_counts[at]
+            var start = joined.index_starts[at]
+            var indices = joined.index_counts[at]
+            writer.begin_object()
+            writer.key("vertexStart")
+            writer.integer(first)
+            writer.key("vertexCount")
+            writer.integer(vertices)
+            writer.key("reservedVertexCount")
+            writer.integer(vertices)
+            writer.key("indexStart")
+            writer.integer(start)
+            writer.key("indexCount")
+            writer.integer(indices)
+            writer.key("reservedIndexCount")
+            writer.integer(indices)
+            writer.key("start")
+            writer.integer(start if joined.indexed else first)
+            writer.key("count")
+            writer.integer(indices if joined.indexed else vertices)
+            writer.key("active")
+            writer.boolean(True)
+            writer.end_object()
+        writer.end_array()
+        writer.key("instanceInfo")
+        writer.begin_array()
+        for at in chosen:
+            writer.begin_object()
+            writer.key("visible")
+            writer.boolean(True)
+            writer.key("active")
+            writer.boolean(True)
+            writer.key("geometryIndex")
+            writer.integer(at)
+            writer.end_object()
+        writer.end_array()
+        writer.key("availableInstanceIds")
+        writer.begin_array()
+        writer.end_array()
+        writer.key("availableGeometryIds")
+        writer.begin_array()
+        writer.end_array()
+        writer.key("nextIndexStart")
+        writer.integer(joined.indices)
+        writer.key("nextVertexStart")
+        writer.integer(joined.vertices)
+        writer.key("geometryCount")
+        writer.integer(len(geometries))
+        writer.key("maxInstanceCount")
+        writer.integer(count)
+        writer.key("maxVertexCount")
+        writer.integer(joined.vertices)
+        writer.key("maxIndexCount")
+        writer.integer(joined.indices)
+        writer.key("geometryInitialized")
+        writer.boolean(True)
+        # three.js's `_initMatricesTexture`: four texels a matrix, in a
+        # square whose side is a multiple of four.
+        var side = max(
+            Int(ceil(sqrt(Float64(count * 4)) / 4)) * 4, _MATRICES_SIDE
+        )
+        var matrices = List[Float32](length=side * side * 4, fill=0)
+        for at in range(count):
+            ref matrix = batch.instances[at].matrix
+            for element in range(16):  # pragma: no branch
+                matrices[at * 16 + element] = matrix.elements[element]
+        writer.key("matricesTexture")
+        writer.raw(
+            self.library.data_texture(
+                matrices, side, RGBA_FORMAT, FLOAT_TYPE, ""
+            )
+        )
+        # `_initIndirectTexture` and `_initColorsTexture`: a texel an
+        # instance. The indirect texture is filled when three.js draws.
+        var square = Int(ceil(sqrt(Float64(count))))
+        writer.key("indirectTexture")
+        writer.raw(
+            self.library.data_texture(
+                List[Float32](length=square * square, fill=0),
+                square,
+                RED_INTEGER_FORMAT,
+                UNSIGNED_INT_TYPE,
+                "",
+            )
+        )
+        if tinted:
+            var colors = List[Float32](length=square * square * 4, fill=1)
+            for at in range(count):  # pragma: no branch
+                var linear = FloatColor(srgb=batch.instances[at].color)
+                colors[at * 4] = linear.r
+                colors[at * 4 + 1] = linear.g
+                colors[at * 4 + 2] = linear.b
+            writer.key("colorsTexture")
+            writer.raw(
+                self.library.data_texture(
+                    colors,
+                    square,
+                    RGBA_FORMAT,
+                    FLOAT_TYPE,
+                    LINEAR_SRGB_COLOR_SPACE,
+                )
+            )
+
+    def skinned(
+        mut self,
+        mut writer: JsonWriter,
+        var header: _Header,
+        scene: Scene,
+        which: Int,
+        assets: Assets,
+    ) raises:
+        """Write a skinned mesh and its skeleton, as `SkinnedMesh.toJSON`
+        does."""
+        ref mesh = scene.skinned_meshes[which]
+        var mode = bind_mode_name(mesh.bind_mode)
+        header.type = "SkinnedMesh"
+        header.frustum_culled = mesh.frustum_culled
+        header.write(writer)
+        writer.key("geometry")
+        writer.string(self.library.geometry(mesh.geometry, assets))
+        writer.key("material")
+        writer.string(
+            self.library.material(mesh.material, assets, _SURFACE_USE)
+        )
+        writer.key("bindMode")
+        writer.string(mode)
+        writer.key("bindMatrix")
+        _matrix(writer, mesh.bind_matrix)
+        writer.key("skeleton")
+        writer.string(self.library.skeleton(mesh.skeleton, scene.count()))
+
+    def line(
+        mut self,
+        mut writer: JsonWriter,
+        var header: _Header,
+        scene: Scene,
+        which: Int,
+        assets: Assets,
+    ) raises:
+        """Write a line as the three.js class of its mode."""
+        ref line = scene.lines[which]
+        if not line.mode.is_valid():
+            raise Error("Object JSON: a line mode that is none of the three")
+        header.type = line_type_names()[line.mode.value]
+        header.frustum_culled = line.frustum_culled
+        header.write(writer)
+        writer.key("geometry")
+        writer.string(self.library.geometry(line.geometry, assets))
+        writer.key("material")
+        writer.string(self.library.material(line.material, assets, _LINE_USE))
+
+    def points(
+        mut self,
+        mut writer: JsonWriter,
+        var header: _Header,
+        scene: Scene,
+        which: Int,
+        assets: Assets,
+    ) raises:
+        """Write points and their `PointsMaterial`."""
+        ref points = scene.points[which]
+        header.type = "Points"
+        header.frustum_culled = points.frustum_culled
+        header.write(writer)
+        writer.key("geometry")
+        writer.string(self.library.geometry(points.geometry, assets))
+        writer.key("material")
+        writer.string(
+            self.library.material(points.material, assets, "PointsMaterial")
+        )
+
+    def sprite(
+        mut self,
+        mut writer: JsonWriter,
+        var header: _Header,
+        scene: Scene,
+        which: Int,
+        assets: Assets,
+    ) raises:
+        """Write a sprite and its `SpriteMaterial`, and its center when it
+        is not the middle."""
+        ref sprite = scene.sprites[which]
+        header.type = "Sprite"
+        header.frustum_culled = sprite.frustum_culled
+        header.write(writer)
+        writer.key("material")
+        writer.string(
+            self.library.material(sprite.material, assets, "SpriteMaterial")
+        )
+        var center = sprite.center
+        var middle = center.x == 0.5 and center.y == 0.5
+        if not middle:
+            writer.key("center")
+            _numbers(writer, [center.x, center.y])
+
+    def lod(
+        mut self,
+        mut writer: JsonWriter,
+        var header: _Header,
+        scene: Scene,
+        which: Int,
+        assets: Assets,
+    ) raises -> List[String]:
+        """Write an LOD as `LOD.toJSON` does, and return its levels, each a
+        mesh object at the identity."""
+        ref lod = scene.lods[which]
+        header.type = "LOD"
+        header.frustum_culled = lod.frustum_culled
+        header.write(writer)
+        writer.key("autoUpdate")
+        writer.boolean(True)
+        writer.key("levels")
+        writer.begin_array()
+        var levels = List[String]()
+        for level in lod.levels:
+            var uuid = self.library.part_uuid()
+            var part = _Header(uuid, header.layers)
+            part.type = "Mesh"
+            part.frustum_culled = lod.frustum_culled
+            var mesh = JsonWriter()
+            mesh.begin_object()
+            part.write(mesh)
+            mesh.key("geometry")
+            mesh.string(self.library.geometry(level.geometry, assets))
+            mesh.key("material")
+            mesh.string(
+                self.library.material(level.material, assets, _SURFACE_USE)
+            )
+            mesh.end_object()
+            levels.append(mesh.finish())
+            writer.begin_object()
+            writer.key("object")
+            writer.string(uuid)
+            writer.key("distance")
+            writer.number(level.distance.to(METER))
+            writer.key("hysteresis")
+            writer.number(level.hysteresis)
+            writer.end_object()
+        writer.end_array()
+        return levels^
 
     def light(
         mut self,
@@ -845,6 +1659,21 @@ struct _Writer(Movable):
         writer.key("far")
         writer.number(camera.far.to(METER))
 
+    def on_layers(
+        self, thing: Int, layers: Layers, scene: Scene, cameras: ObjectCameras
+    ) -> Bool:
+        """Return True unless a thing is a light or a camera on other layers
+        than `layers`."""
+        var category = thing // _STRIDE
+        var which = thing % _STRIDE
+        if category == _LIGHT:
+            return scene.lights[which].layers == layers
+        if category == _PERSPECTIVE:
+            return cameras.perspective[which].layers == layers
+        if category == _ORTHOGRAPHIC:
+            return cameras.orthographic[which].layers == layers
+        return True
+
     def node(
         mut self,
         mut writer: JsonWriter,
@@ -857,115 +1686,75 @@ struct _Writer(Movable):
         """Write one node as an object, what it carries, and its children."""
         var node = scene.get(NodeId(index))
         var header = _Header(object_uuid(_NODE_UUID, index), node)
+        ref things = carried.things[index]
         # The one thing the node becomes, when it carries one thing and
         # that thing is on the node's layers.
-        var mesh = -1
-        var instanced = -1
-        var light = -1
-        var perspective = -1
-        var orthographic = -1
-        if carried.total(index) == 1:
-            if len(carried.meshes[index]) == 1:
-                mesh = carried.meshes[index][0]
-            elif len(carried.instanced[index]) == 1:
-                instanced = carried.instanced[index][0]
-            elif len(carried.lights[index]) == 1:
-                light = carried.lights[index][0]
-                if scene.lights[light].layers != node.layers:
-                    light = -1
-            elif len(carried.perspective[index]) == 1:
-                perspective = carried.perspective[index][0]
-                if cameras.perspective[perspective].layers != node.layers:
-                    perspective = -1
-            else:
-                orthographic = carried.orthographic[index][0]
-                if cameras.orthographic[orthographic].layers != node.layers:
-                    orthographic = -1
+        var chosen = -1
+        if len(things) == 1:
+            if self.on_layers(things[0], node.layers, scene, cameras):
+                chosen = things[0]
+        if chosen < 0 and carried.bones[index]:
+            header.type = "Bone"
         writer.begin_object()
-        if mesh >= 0:
-            self.mesh(writer, header^, scene, mesh, assets)
-        elif instanced >= 0:
-            self.instanced(writer, header^, scene, instanced, assets)
-        elif light >= 0:
-            self.light(writer, header^, scene, light)
-        elif perspective >= 0:
-            self.perspective(writer, header^, cameras.perspective[perspective])
-        elif orthographic >= 0:
-            self.orthographic(
-                writer, header^, cameras.orthographic[orthographic]
-            )
+        var levels = List[String]()
+        if chosen >= 0:
+            levels = self.thing(writer, header^, chosen, scene, cameras, assets)
         else:
             header.write(writer)
         var children = scene.children(NodeId(index))
-        var parts = carried.total(index)
-        if mesh >= 0 or instanced >= 0 or light >= 0:
-            parts -= 1
-        if perspective >= 0 or orthographic >= 0:
+        var parts = len(things) + len(levels)
+        if chosen >= 0:
             parts -= 1
         if len(children) + parts > 0:
             writer.key("children")
             writer.begin_array()
             for child in children:
                 self.node(writer, scene, child.value, carried, cameras, assets)
-            for which in carried.meshes[index]:
-                if which != mesh:
-                    writer.begin_object()
-                    self.mesh(
-                        writer,
-                        _Header(self.library.part_uuid(), node.layers),
-                        scene,
-                        which,
-                        assets,
+            for level in levels:
+                writer.raw(level)
+            for thing in things:
+                if thing != chosen:
+                    self.part(
+                        writer, thing, node.layers, scene, cameras, assets
                     )
-                    writer.end_object()
-            for which in carried.instanced[index]:
-                if which != instanced:
-                    writer.begin_object()
-                    self.instanced(
-                        writer,
-                        _Header(self.library.part_uuid(), node.layers),
-                        scene,
-                        which,
-                        assets,
-                    )
-                    writer.end_object()
-            for which in carried.lights[index]:
-                if which != light:
-                    self.part_light(writer, scene, which)
-            for which in carried.perspective[index]:
-                if which != perspective:
-                    ref camera = cameras.perspective[which]
-                    writer.begin_object()
-                    self.perspective(
-                        writer,
-                        _Header(self.library.part_uuid(), camera.layers),
-                        camera,
-                    )
-                    writer.end_object()
-            for which in carried.orthographic[index]:
-                if which != orthographic:
-                    ref camera = cameras.orthographic[which]
-                    writer.begin_object()
-                    self.orthographic(
-                        writer,
-                        _Header(self.library.part_uuid(), camera.layers),
-                        camera,
-                    )
-                    writer.end_object()
             writer.end_array()
         writer.end_object()
 
-    def part_light(
-        mut self, mut writer: JsonWriter, scene: Scene, which: Int
+    def part(
+        mut self,
+        mut writer: JsonWriter,
+        thing: Int,
+        layers: Layers,
+        scene: Scene,
+        cameras: ObjectCameras,
+        assets: Assets,
     ) raises:
-        """Write a light as an object of its own, at the identity."""
+        """Write a thing as an object of its own at the identity: on its
+        own layers for a light or a camera, and on `layers` otherwise."""
+        var category = thing // _STRIDE
+        var which = thing % _STRIDE
+        var own = layers
+        if category == _LIGHT:
+            own = scene.lights[which].layers
+        elif category == _PERSPECTIVE:
+            own = cameras.perspective[which].layers
+        elif category == _ORTHOGRAPHIC:
+            own = cameras.orthographic[which].layers
         writer.begin_object()
-        self.light(
+        var levels = self.thing(
             writer,
-            _Header(self.library.part_uuid(), scene.lights[which].layers),
+            _Header(self.library.part_uuid(), own),
+            thing,
             scene,
-            which,
+            cameras,
+            assets,
         )
+        if len(levels) > 0:
+            writer.key("children")
+            writer.begin_array()
+            for level in levels:  # pragma: no branch
+                writer.raw(level)
+            writer.end_array()
         writer.end_object()
 
 
@@ -1049,11 +1838,14 @@ def object_to_json(
         The document.
 
     Raises:
-        Error: If a mesh, light, target or camera names a node that is not
-            in the scene, a store id names nothing, a light is refused by
-            `Light.validate`, a texture is blank or refused by
+        Error: If a thing, a target, a bone or a camera names a node that
+            is not in the scene, a store id names nothing, a light is
+            refused by `Light.validate`, a texture is blank or refused by
             `Texture.validate`, a material is refused as the module
-            docstring says, a camera has a view shift, or a number is not
+            docstring says or by its own checks of its open fields, a line
+            material is not `BASIC`, a line's mode or a skinned mesh's bind
+            mode is none of its named values, a batch's geometries cannot
+            be joined, a camera has a view shift, or a number is not
             finite.
     """
     var carried = _Carried(scene, cameras)
@@ -1110,7 +1902,14 @@ def object_to_json(
         if scene.get(NodeId(index)).parent == NO_PARENT:
             out.node(tree, scene, index, carried, cameras, assets)
     for which in carried.loose:
-        out.part_light(tree, scene, which)
+        out.part(
+            tree,
+            _LIGHT * _STRIDE + which,
+            scene.lights[which].layers,
+            scene,
+            cameras,
+            assets,
+        )
     tree.end_array()
     tree.end_object()
     var writer = JsonWriter()
@@ -1128,6 +1927,7 @@ def object_to_json(
     _library(writer, "materials", out.library.materials)
     _library(writer, "textures", out.library.textures)
     _library(writer, "images", out.library.images)
+    _library(writer, "skeletons", out.library.skeletons)
     writer.key("object")
     writer.raw(tree.finish())
     writer.end_object()

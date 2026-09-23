@@ -25,6 +25,12 @@ matrix as it is. Then the object's type says what the node carries:
     Object3D, Group, Bone      nothing
     Mesh                       a `Mesh`
     InstancedMesh              an `InstancedMesh` and its matrices
+    BatchedMesh                a `BatchedMesh` and its geometries
+    SkinnedMesh                a `SkinnedMesh` on its skeleton
+    Line, LineLoop, LineSegments   a `Line` of that `LineMode`
+    Points                     `Points`
+    Sprite                     a `Sprite`
+    LOD                        an `Lod` of its levels
     AmbientLight ... RectAreaLight   a `Light` of that kind
     PerspectiveCamera          a `PerspectiveCamera` attached to the node
     OrthographicCamera         an `OrthographicCamera` attached to it
@@ -33,6 +39,17 @@ A root of type `Scene` is not a node: its children are the scene's roots,
 and its `fog` and `background` become the scene's. A light's `target`
 names another object by uuid, or an object that is not in the file, which
 is three.js's default target at the origin.
+
+An `LOD`'s `levels` name child objects by uuid, each a `Mesh` at the
+identity with no children, which is what `exporters.object_json` writes:
+an `Lod` draws its levels at its own node, so a level is not a node. A
+`SkinnedMesh` names an entry of the `skeletons` library, whose `bones`
+are objects of the document and whose `boneInverses` are their inverse
+binds; it is bound after the whole tree is read, as three.js binds it. A
+`BatchedMesh` splits its one geometry into the parts its `geometryInfo`
+names, and places each active, visible instance of its `instanceInfo`
+from the `Float32Array` images of its `matricesTexture` and
+`colorsTexture`. Its joined geometry stays in the assets too.
 
 A `BufferGeometry` is read with its `Float32Array` attributes, its index,
 its groups and its morph targets. An interleaved attribute reads the
@@ -44,32 +61,45 @@ three.js's loader leaves at their defaults. A `BoxGeometry`, a `PlaneGeometry` a
 the parameters are ones those builders take. A material is built with
 the `MaterialKind` its type names, three.js's defaults filling what the
 entry leaves out: a `MeshPhongMaterial` without a `specular` has
-`0x111111`, as in three.js. A texture is read from its image's `data:`
-URL, or from a file beside the document, as PNG, JPEG or TGA.
+`0x111111`, as in three.js. That covers the baked light, the
+displacement, the flat shading, the depth packing, the volume, the sheen,
+the film and the stretch of a physical surface, and the depth, stencil
+and polygon offset state, each under three.js's key. A map's numbers --
+`aoMapIntensity`, `lightMapIntensity`, `displacementScale` and
+`displacementBias` -- are read only beside their map, where
+`Material.toJSON` writes them. `LineBasicMaterial`,
+`LineDashedMaterial`, `PointsMaterial` and `SpriteMaterial` are `BASIC`
+materials with their width, dashes, size, attenuation and turn; a
+`SpriteMaterial` is transparent unless it says otherwise, as three.js
+builds one. A texture is read from its image's `data:` URL, or from a
+file beside the document, as PNG, JPEG or TGA, with its `channel`.
 
 **A texture's alpha comes from its use.** three.js has no alpha mode. Here
 a texture is built with its alpha as `COVERAGE` when a material's `map`
 or the background names it, and as `IGNORED` when a data map names it --
-an alpha, emissive, gradient, matcap, roughness, metalness, normal or
-bump map -- since the renderer reads a data map's alpha as nothing. A
-texture named both ways is built twice.
+any other map but a sheen roughness map, whose alpha is its data --
+since the renderer reads a data map's alpha as nothing. A texture named
+both ways is built twice.
 
 **What is refused.** A document that is not JSON, a `metadata.type` that
 is not `Object`, a version that is not 4, an object, geometry or material
 type this port has no counterpart for, an attribute that is not a
 `Float32Array`, a mesh with more than one material, a
 uuid named twice or named and not there, a `CustomBlending` material, a
-texture whose two wraps differ, whose mapping is not `UVMapping`, or that
-reads a second set of coordinates, and every number the builders refuse.
+depth function, stencil function or stencil operation that is none of
+three.js's, a texture whose two wraps differ, whose mapping is not
+`UVMapping`, or whose `channel` is neither of two, an LOD level that is
+not a bare mesh child, a skeleton without its inverse binds, a batch
+whose info names what is not there, and every number the builders
+refuse.
 
 **What is read without effect.** `up`, `userData`, `matrixWorldAutoUpdate`
 and `animations`; a scene's `environment` and the background's
-blurriness and intensity; a material's `envMap`, `lightMap`, `aoMap`,
-`displacementMap`, `specularMap`, `flatShading`, `depthTest`,
-`depthWrite`, the stencil settings and every key of `MeshPhysicalMaterial`
-past the clear coat; a camera's `focus` and `filmGauge`; and a texture's
-`format`, `type`, `premultiplyAlpha` and `unpackAlignment`. Line, point,
-sprite, skinned, batched and LOD objects are refused.
+blurriness and intensity; a material's `envMap`, `clearcoatMap`,
+`specularColorMap` and the other keys this port has no field for; a
+camera's `focus` and `filmGauge`; a texture's `format`, `type`,
+`premultiplyAlpha` and `unpackAlignment`; an LOD's `autoUpdate`; and a
+batch's sorting, reserved ranges and bounds.
 """
 
 from core.assets import Assets
@@ -131,9 +161,15 @@ from materials.material import (
     MaterialKind,
     Side,
     BASIC,
+    DEFAULT_LINE_WIDTH,
+    DEFAULT_POINT_SIZE,
     LAMBERT,
+    NO_DASH,
+    NO_ROTATION,
     STANDARD,
     PHYSICAL,
+    LineWidth,
+    PointSize,
 )
 from math.euler import XYZ, XZY, YXZ, YZX, ZXY, ZYX, Euler, EulerOrder
 from math.matrix4 import Matrix4
@@ -144,9 +180,25 @@ from math.spherical_harmonics3 import (
     sh_from_array,
 )
 from math.vector2 import Vector2
-from objects.instanced_mesh import InstancedMesh
+from objects.instanced_mesh import BatchedMesh, InstancedMesh
+from objects.line import Line, LineMode
+from objects.lod import Lod
 from objects.mesh import Mesh
-from render.framebuffer import Color
+from objects.points import Points
+from objects.skeleton import Bone, Skeleton
+from objects.skinned_mesh import ATTACHED, DETACHED, BindMode, SkinnedMesh
+from objects.sprite import Sprite
+from render.framebuffer import Color, FloatColor
+from render.packing import BASIC_DEPTH_PACKING, DepthPacking
+from render.raster_state import (
+    ALWAYS_STENCIL_FUNC,
+    KEEP_STENCIL_OP,
+    LESS_EQUAL_DEPTH,
+    STENCIL_MAX,
+    DepthFunc,
+    StencilFunc,
+    StencilOp,
+)
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.texture import (
     BILINEAR,
@@ -158,16 +210,17 @@ from render.texture import (
     REPEAT,
     Alpha,
     Filter,
+    UvChannel,
     Wrap,
     texture_from,
 )
 from render.texture_store import TextureId
 from std.collections import Dict
-from std.math import isfinite, pi, sqrt
+from std.math import inf, isfinite, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
-from units.si import Angle, DEGREE, InverseLength, Length, METER, PER_METER
-from units.si import RADIAN
+from units.si import Angle, DEGREE, InverseLength, Length, METER, NANOMETER
+from units.si import PER_METER, RADIAN
 
 # The format version `Object3D.toJSON` writes, and the one major version
 # this reads.
@@ -186,7 +239,13 @@ comptime LINEAR_FILTER = 1006
 comptime LINEAR_MIPMAP_NEAREST_FILTER = 1007
 comptime LINEAR_MIPMAP_LINEAR_FILTER = 1008
 comptime UNSIGNED_BYTE_TYPE = 1009
+comptime UNSIGNED_INT_TYPE = 1014
+comptime FLOAT_TYPE = 1015
 comptime RGBA_FORMAT = 1023
+comptime RED_INTEGER_FORMAT = 1029
+# three.js numbers its stencil functions from `NeverStencilFunc`, 512;
+# `StencilFunc` numbers them from zero in the same order.
+comptime STENCIL_FUNC_BASE = 512
 # three.js's blending constants that have no `Blending` of the same number.
 comptime NO_BLENDING = 0
 comptime NORMAL_BLENDING = 1
@@ -243,7 +302,7 @@ def light_type_names() -> List[String]:
 def _position_of(names: List[String], name: String) -> Int:
     """Return where a name is in a list, or -1."""
     var found = -1
-    # Every caller passes a list of seven or ten names.
+    # Every caller passes a list of four names or more.
     for at in range(len(names)):  # pragma: no branch
         if names[at] == name:
             found = at
@@ -370,6 +429,117 @@ def color_space_of(name: String) raises -> ColorSpace:
     return LINEAR
 
 
+def line_type_names() -> List[String]:
+    """Return three.js's line class for each `LineMode`, by its value.
+
+    Returns:
+        Three names: `Line` for `STRIP`, `LineLoop` for `LOOP` and
+        `LineSegments` for `SEGMENTS`.
+    """
+    return ["Line", "LineLoop", "LineSegments"]
+
+
+def _shape_type_names() -> List[String]:
+    """Return three.js's classes of a line, points or sprite material,
+    each read as a `BASIC` material."""
+    return [
+        "LineBasicMaterial",
+        "LineDashedMaterial",
+        "PointsMaterial",
+        "SpriteMaterial",
+    ]
+
+
+# Where each of those classes is in that list.
+comptime _LINE_BASIC = 0
+comptime _LINE_DASHED = 1
+comptime _POINTS_MATERIAL = 2
+comptime _SPRITE_MATERIAL = 3
+
+
+def _stencil_op_codes() -> List[Int]:
+    """Return three.js's number for each `StencilOp`, by its value: its
+    WebGL constant."""
+    return [0, 7680, 7681, 7682, 7683, 34055, 34056, 5386]
+
+
+def stencil_op_code(op: StencilOp) raises -> Int:
+    """Return the three.js stencil operation constant for a `StencilOp`.
+
+    Args:
+        op: `ZERO_STENCIL_OP` through `INVERT_STENCIL_OP`.
+
+    Returns:
+        Its number in three.js: `ZeroStencilOp` is 0, `KeepStencilOp`
+        7680, and the rest are their WebGL constants.
+
+    Raises:
+        Error: If the operation is none of the eight.
+    """
+    if not op.is_valid():
+        raise Error("Object JSON: a stencil operation that is none of eight")
+    return _stencil_op_codes()[op.value]
+
+
+def stencil_op_of(code: Int) raises -> StencilOp:
+    """Return the `StencilOp` a three.js stencil operation constant names.
+
+    Args:
+        code: `ZeroStencilOp` through `InvertStencilOp`, by number.
+
+    Returns:
+        The operation.
+
+    Raises:
+        Error: If the number is none of the eight.
+    """
+    var codes = _stencil_op_codes()
+    var found = -1
+    for at in range(len(codes)):  # pragma: no branch
+        if codes[at] == code:
+            found = at
+    if found < 0:
+        raise Error("Object JSON: a stencil operation that is none of eight")
+    return StencilOp(found)
+
+
+def bind_mode_name(mode: BindMode) raises -> String:
+    """Return three.js's name of a skinned mesh's bind mode.
+
+    Args:
+        mode: `ATTACHED` or `DETACHED`.
+
+    Returns:
+        `attached` or `detached`, three.js's `AttachedBindMode` and
+        `DetachedBindMode`.
+
+    Raises:
+        Error: If the mode is neither of the two.
+    """
+    if not mode.is_valid():
+        raise Error("Object JSON: a bind mode that is neither of the two")
+    return "attached" if mode == ATTACHED else "detached"
+
+
+def bind_mode_of(name: String) raises -> BindMode:
+    """Return the `BindMode` three.js names by a string.
+
+    Args:
+        name: `attached` or `detached`.
+
+    Returns:
+        `ATTACHED` or `DETACHED`.
+
+    Raises:
+        Error: If the name is neither of the two.
+    """
+    if name == "attached":
+        return ATTACHED
+    if name != "detached":
+        raise Error("Object JSON: no bind mode is named " + name)
+    return DETACHED
+
+
 struct ObjectCameras(Copyable, Movable):
     """The cameras a document holds, or that a caller hands the writer.
 
@@ -454,6 +624,7 @@ def read_object_json(
         raise Error("Object JSON: the document has no object")
     loader.object(top, scene, assets)
     loader.bind_targets(scene)
+    loader.bind_skeletons(scene)
     var model = ObjectModel()
     swap(model, loader.model)
     return model^
@@ -552,6 +723,10 @@ struct _Loader(Movable):
     var targets: List[String]
     # Every uuid an object has, to refuse a second.
     var seen: Dict[String, Int]
+    # The skinned mesh objects and their nodes, bound once every bone is
+    # read.
+    var rigged: List[Int]
+    var rigged_nodes: List[NodeId]
 
     def __init__(out self, var document: JsonDocument, directory: String):
         self.document = document^
@@ -566,6 +741,8 @@ struct _Loader(Movable):
         self.aimed = List[Int]()
         self.targets = List[String]()
         self.seen = Dict[String, Int]()
+        self.rigged = List[Int]()
+        self.rigged_nodes = List[NodeId]()
 
     # --- reading values -----------------------------------------------------
 
@@ -1001,10 +1178,6 @@ struct _Loader(Movable):
         var item = self.document.at(self.library("textures"), at)
         if self.integer(item, "mapping", UV_MAPPING) != UV_MAPPING:
             raise Error("Object JSON: only a UVMapping texture is read")
-        if self.integer(item, "channel", 0) != 0:
-            raise Error(
-                "Object JSON: only the first set of coordinates is read"
-            )
         var wraps = self.numbers(item, "wrap", 2)
         var wrap = REPEAT
         if len(wraps) == 2:
@@ -1044,6 +1217,7 @@ struct _Loader(Movable):
             built.center = Vector2(center[0], center[1])
         built.rotation = Angle(self.number(item, "rotation", 0), RADIAN)
         built.anisotropy = self.integer(item, "anisotropy", 1)
+        built.channel = UvChannel(self.integer(item, "channel", 0))
         built.validate()
         var id = assets.textures.add(built^)
         if alpha == COVERAGE:
@@ -1067,11 +1241,14 @@ struct _Loader(Movable):
         """Build one material entry."""
         var name = self.text(item, "type", "")
         var at = _position_of(material_type_names(), name)
-        if at < 0:
+        var shape = _position_of(_shape_type_names(), name)
+        if at < 0 and shape < 0:
             raise Error(
                 "Object JSON: a material type that is not read: " + name
             )
-        var kind = MaterialKind(at)
+        var kind = BASIC
+        if at >= 0:
+            kind = MaterialKind(at)
         var plain = kind.is_data()
         var reflects = kind == BASIC or kind == LAMBERT or kind == PHONG
         var physical = kind == STANDARD or kind == PHYSICAL
@@ -1099,7 +1276,43 @@ struct _Loader(Movable):
         var normal_scale = self.numbers(item, "normalScale", 2)
         if len(normal_scale) == 0:
             normal_scale = [1, 1]
-        return Material(
+        # What three.js's line, points and sprite classes add, with their
+        # defaults: a `SpriteMaterial` is built transparent.
+        var line_width = DEFAULT_LINE_WIDTH
+        var dash_size = NO_DASH
+        var gap_size = NO_DASH
+        var dash_scale = Float32(1)
+        var point_size = DEFAULT_POINT_SIZE
+        var size_attenuation = True
+        var rotation = NO_ROTATION
+        var transparent = False
+        if shape == _LINE_BASIC or shape == _LINE_DASHED:
+            line_width = LineWidth(pixels=self.number(item, "linewidth", 1))
+        if shape == _LINE_DASHED:
+            dash_size = Length(self.number(item, "dashSize", 3), METER)
+            gap_size = Length(self.number(item, "gapSize", 1), METER)
+            dash_scale = self.number(item, "scale", 1)
+        if shape == _POINTS_MATERIAL:
+            point_size = PointSize(self.number(item, "size", 1))
+        if shape >= _POINTS_MATERIAL:
+            size_attenuation = self.flag(item, "sizeAttenuation", True)
+        if shape == _SPRITE_MATERIAL:
+            rotation = Angle(self.number(item, "rotation", 0), RADIAN)
+            transparent = True
+        # The baked maps' numbers are read beside their map, where
+        # `Material.toJSON` writes them.
+        var ao_map = self.map(item, "aoMap", IGNORED, assets)
+        var ao_map_intensity = Float32(1)
+        if ao_map != NO_TEXTURE:
+            ao_map_intensity = self.number(item, "aoMapIntensity", 1)
+        var light_map = self.map(item, "lightMap", IGNORED, assets)
+        var light_map_intensity = Float32(1)
+        if light_map != NO_TEXTURE:
+            light_map_intensity = self.number(item, "lightMapIntensity", 1)
+        var film = self.numbers(item, "iridescenceThicknessRange", 2)
+        if len(film) == 0:
+            film = [100, 400]
+        var built = Material(
             color,
             map=self.map(item, "map", COVERAGE, assets),
             side=Side(self.integer(item, "side", 0)),
@@ -1119,7 +1332,13 @@ struct _Loader(Movable):
             gradient_map=self.map(item, "gradientMap", IGNORED, assets),
             matcap=self.map(item, "matcap", IGNORED, assets),
             wireframe=self.flag(item, "wireframe", False),
-            transparent=self.flag(item, "transparent", False),
+            transparent=self.flag(item, "transparent", transparent),
+            dash_size=dash_size,
+            gap_size=gap_size,
+            dash_scale=dash_scale,
+            point_size=point_size,
+            size_attenuation=size_attenuation,
+            rotation=rotation,
             reflectivity=reflectivity,
             combine=Combine(combine),
             roughness=self.number(item, "roughness", 1),
@@ -1136,8 +1355,102 @@ struct _Loader(Movable):
             specular_intensity=self.number(item, "specularIntensity", 1),
             clearcoat=self.number(item, "clearcoat", 0),
             clearcoat_roughness=self.number(item, "clearcoatRoughness", 0),
+            line_width=line_width,
+            ao_map=ao_map,
+            ao_map_intensity=ao_map_intensity,
+            light_map=light_map,
+            light_map_intensity=light_map_intensity,
+            specular_map=self.map(item, "specularMap", IGNORED, assets),
+            flat_shading=self.flag(item, "flatShading", False),
+            transmission=self.number(item, "transmission", 0),
+            transmission_map=self.map(item, "transmissionMap", IGNORED, assets),
+            thickness=Length(self.number(item, "thickness", 0), METER),
+            thickness_map=self.map(item, "thicknessMap", IGNORED, assets),
+            attenuation_color=self.color(item, "attenuationColor", 0xFFFFFF),
+            attenuation_distance=Length(
+                self.number(item, "attenuationDistance", inf[DType.float32]()),
+                METER,
+            ),
+            dispersion=self.number(item, "dispersion", 0),
+            depth_packing=DepthPacking(
+                self.integer(item, "depthPacking", BASIC_DEPTH_PACKING.value)
+            ),
             fog=fog,
+            sheen=self.number(item, "sheen", 0),
+            sheen_color=self.color(item, "sheenColor", 0),
+            sheen_color_map=self.map(item, "sheenColorMap", IGNORED, assets),
+            sheen_roughness=self.number(item, "sheenRoughness", 1),
+            sheen_roughness_map=self.map(
+                item, "sheenRoughnessMap", COVERAGE, assets
+            ),
+            iridescence=self.number(item, "iridescence", 0),
+            iridescence_ior=self.number(item, "iridescenceIOR", 1.3),
+            iridescence_thickness_minimum=Length(film[0], NANOMETER),
+            iridescence_thickness_maximum=Length(film[1], NANOMETER),
+            iridescence_map=self.map(item, "iridescenceMap", IGNORED, assets),
+            iridescence_thickness_map=self.map(
+                item, "iridescenceThicknessMap", IGNORED, assets
+            ),
+            anisotropy=self.number(item, "anisotropy", 0),
+            anisotropy_rotation=Angle(
+                self.number(item, "anisotropyRotation", 0), RADIAN
+            ),
+            anisotropy_map=self.map(item, "anisotropyMap", IGNORED, assets),
         )
+        # The displacement's numbers too are read beside its map.
+        var displacement = self.map(item, "displacementMap", IGNORED, assets)
+        if displacement != NO_TEXTURE:
+            built.set_displacement(
+                displacement,
+                Length(self.number(item, "displacementScale", 1), METER),
+                Length(self.number(item, "displacementBias", 0), METER),
+            )
+        self.raster(item, built)
+        return built^
+
+    def raster(self, item: Int, mut material: Material) raises:
+        """Set a material's depth, stencil and polygon offset state from
+        three.js's keys and defaults, and check it."""
+        material.depth_func = DepthFunc(
+            self.integer(item, "depthFunc", LESS_EQUAL_DEPTH.value)
+        )
+        material.depth_test = self.flag(item, "depthTest", True)
+        material.depth_write = self.flag(item, "depthWrite", True)
+        material.color_write = self.flag(item, "colorWrite", True)
+        material.stencil_write = self.flag(item, "stencilWrite", False)
+        material.stencil_write_mask = self.integer(
+            item, "stencilWriteMask", STENCIL_MAX
+        )
+        material.stencil_func = StencilFunc(
+            self.integer(
+                item,
+                "stencilFunc",
+                STENCIL_FUNC_BASE + ALWAYS_STENCIL_FUNC.value,
+            )
+            - STENCIL_FUNC_BASE
+        )
+        material.stencil_ref = self.integer(item, "stencilRef", 0)
+        material.stencil_func_mask = self.integer(
+            item, "stencilFuncMask", STENCIL_MAX
+        )
+        var keep = stencil_op_code(KEEP_STENCIL_OP)
+        material.stencil_fail = stencil_op_of(
+            self.integer(item, "stencilFail", keep)
+        )
+        material.stencil_z_fail = stencil_op_of(
+            self.integer(item, "stencilZFail", keep)
+        )
+        material.stencil_z_pass = stencil_op_of(
+            self.integer(item, "stencilZPass", keep)
+        )
+        material.polygon_offset = self.flag(item, "polygonOffset", False)
+        material.polygon_offset_factor = self.number(
+            item, "polygonOffsetFactor", 0
+        )
+        material.polygon_offset_units = self.number(
+            item, "polygonOffsetUnits", 0
+        )
+        _ = material.raster_state()
 
     # --- objects ------------------------------------------------------------
 
@@ -1189,13 +1502,23 @@ struct _Loader(Movable):
         parent: NodeId,
         mut scene: Scene,
         mut assets: Assets,
+        levels: List[String] = List[String](),
     ) raises:
-        """Read an object's children under a node."""
+        """Read an object's children under a node, leaving out the LOD
+        levels named in `levels`, which are read as its levels."""
         var list = self.array(item, "children")
         if list == NO_NODE:
             return
         for at in range(self.document.length(list)):
-            self.place(self.document.at(list, at), parent, scene, assets)
+            var child = self.document.at(list, at)
+            if not self.is_named(child, levels):
+                self.place(child, parent, scene, assets)
+
+    def is_named(self, child: Int, uuids: List[String]) raises -> Bool:
+        """Return True if an object has one of `uuids`."""
+        if len(uuids) == 0 or self.document.kind(child) != OBJECT:
+            return False
+        return _position_of(uuids, self.text(child, "uuid", "")) >= 0
 
     def transform(self, item: Int, mut node: Object3D) raises:
         """Set a node from an object's matrix, or its separate parts."""
@@ -1274,13 +1597,16 @@ struct _Loader(Movable):
         self.model.nodes.append(id)
         self.model.uuids.append(uuid)
         var light = _position_of(light_type_names(), kind)
+        var line = _position_of(line_type_names(), kind)
+        var culled = self.flag(item, "frustumCulled", True)
+        var levels = List[String]()
         if kind == "Mesh":
             scene.add_mesh(
                 Mesh(
                     self.geometry_named(item),
                     self.material_named(item),
                     id,
-                    frustum_culled=self.flag(item, "frustumCulled", True),
+                    frustum_culled=culled,
                     cast_shadow=self.flag(item, "castShadow", False),
                     receive_shadow=self.flag(item, "receiveShadow", False),
                 )
@@ -1297,9 +1623,257 @@ struct _Loader(Movable):
             self.model.cameras.orthographic.append(
                 self.orthographic(item, id, mask)
             )
+        elif kind == "BatchedMesh":
+            scene.add_batched_mesh(self.batched(item, id, assets))
+        elif kind == "SkinnedMesh":
+            # Bound once every object is read, as its bones can come after
+            # it, as three.js's `bindSkeletons` does.
+            self.rigged.append(item)
+            self.rigged_nodes.append(id)
+        elif line >= 0:
+            scene.add_line(
+                Line(
+                    self.geometry_named(item),
+                    self.material_named(item),
+                    id,
+                    mode=LineMode(line),
+                    frustum_culled=culled,
+                )
+            )
+        elif kind == "Points":
+            scene.add_points(
+                Points(
+                    self.geometry_named(item),
+                    self.material_named(item),
+                    id,
+                    frustum_culled=culled,
+                )
+            )
+        elif kind == "Sprite":
+            var center = self.numbers(item, "center", 2)
+            if len(center) == 0:
+                center = [0.5, 0.5]
+            scene.add_sprite(
+                Sprite(
+                    self.material_named(item),
+                    id,
+                    center=Vector2(center[0], center[1]),
+                    frustum_culled=culled,
+                )
+            )
+        elif kind == "LOD":
+            levels = self.lod(item, id, culled, scene)
         elif kind != "Object3D" and kind != "Group" and kind != "Bone":
             raise Error("Object JSON: an object type that is not read: " + kind)
-        self.children(item, id, scene, assets)
+        self.children(item, id, scene, assets, levels)
+
+    def lod(
+        mut self, item: Int, id: NodeId, culled: Bool, mut scene: Scene
+    ) raises -> List[String]:
+        """Build an LOD from its `levels`, and return the uuids of the
+        children they name.
+
+        Each level must name a child `Mesh` at the identity with no
+        children of its own, which is what `LOD.toJSON` writes for a
+        level here: an `Lod` draws its levels at its own node.
+        """
+        var built = Lod(id, frustum_culled=culled)
+        var named = List[String]()
+        var levels = self.array(item, "levels")
+        var children = self.array(item, "children")
+        if levels != NO_NODE:
+            for at in range(self.document.length(levels)):
+                var level = self.document.at(levels, at)
+                var uuid = self.text(level, "object", "")
+                var child = self.child_named(children, uuid)
+                if child == NO_NODE:
+                    raise Error("Object JSON: an LOD level names no child")
+                if not self.is_bare_mesh(child):
+                    raise Error(
+                        "Object JSON: an LOD level is read as a mesh at the"
+                        " LOD's node with no children"
+                    )
+                if uuid in self.seen:
+                    raise Error("Object JSON: a uuid named twice: " + uuid)
+                self.seen[uuid] = 0
+                built.add_level(
+                    self.geometry_named(child),
+                    self.material_named(child),
+                    Length(abs(self.number(level, "distance", 0)), METER),
+                    self.number(level, "hysteresis", 0),
+                )
+                named.append(uuid)
+        scene.add_lod(built^)
+        return named^
+
+    def child_named(self, children: Int, uuid: String) raises -> Int:
+        """Return the child object with a uuid, or `NO_NODE`."""
+        var found = NO_NODE
+        if children == NO_NODE:
+            return found
+        for at in range(self.document.length(children)):
+            var child = self.document.at(children, at)
+            if self.is_named(child, [uuid]):
+                found = child
+        return found
+
+    def is_bare_mesh(self, child: Int) raises -> Bool:
+        """Return True if an object is a mesh at the identity with no
+        children."""
+        var node = Object3D()
+        self.transform(child, node)
+        var matrix = (
+            node.local_matrix() if node.matrix_auto_update else node.matrix
+        )
+        var list = self.array(child, "children")
+        var bare = list == NO_NODE or self.document.length(list) == 0
+        return (
+            self.text(child, "type", "") == "Mesh"
+            and bare
+            and _is_identity(matrix)
+        )
+
+    def batched(
+        self, item: Int, id: NodeId, mut assets: Assets
+    ) raises -> BatchedMesh:
+        """Build a batched mesh as `ObjectLoader` does: split the joined
+        geometry into the geometries its `geometryInfo` names, and place
+        the instances its `instanceInfo` names from its data textures.
+
+        An instance that is not active or not visible is left out, as
+        three.js draws neither.
+        """
+        var batch = BatchedMesh(
+            self.material_named(item),
+            id,
+            frustum_culled=self.flag(item, "perObjectFrustumCulled", True),
+        )
+        var whole = assets.geometries.get(self.geometry_named(item)).clone()
+        var infos = self.array(item, "geometryInfo")
+        var instances = self.array(item, "instanceInfo")
+        if infos == NO_NODE or instances == NO_NODE:
+            raise Error(
+                "Object JSON: a BatchedMesh needs its geometryInfo and"
+                " instanceInfo"
+            )
+        # Each geometry, or -1 for one that is not active.
+        var geometries = List[Int]()
+        for at in range(self.document.length(infos)):
+            var info = self.document.at(infos, at)
+            var part = -1
+            if self.flag(info, "active", True):
+                part = assets.geometries.add(self.slice(whole, info)).value
+            geometries.append(part)
+        var count = self.document.length(instances)
+        var matrices = self.data_texture(item, "matricesTexture")
+        var colors = self.data_texture(item, "colorsTexture")
+        var tinted = len(colors) > 0
+        if len(matrices) < count * 16:
+            raise Error(
+                "Object JSON: a BatchedMesh's matricesTexture must hold every"
+                " instance"
+            )
+        if tinted and len(colors) < count * 4:
+            raise Error(
+                "Object JSON: a BatchedMesh's colorsTexture must hold every"
+                " instance"
+            )
+        for at in range(count):
+            var info = self.document.at(instances, at)
+            var shown = self.flag(info, "active", True) and self.flag(
+                info, "visible", True
+            )
+            if not shown:
+                continue
+            var which = self.integer(info, "geometryIndex", -1)
+            var named = which >= 0 and which < len(geometries)
+            if not named:
+                raise Error("Object JSON: an instance names no geometry")
+            if geometries[which] < 0:
+                raise Error("Object JSON: an instance names no active geometry")
+            var matrix = Matrix4()
+            for element in range(16):  # pragma: no branch
+                matrix.elements[element] = matrices[at * 16 + element]
+            var index = batch.add_instance(
+                GeometryId(geometries[which]), matrix
+            )
+            if tinted:
+                batch.set_color_at(
+                    index,
+                    FloatColor(
+                        colors[at * 4], colors[at * 4 + 1], colors[at * 4 + 2]
+                    ).encode(),
+                )
+        return batch^
+
+    def slice(self, whole: BufferGeometry, info: Int) raises -> BufferGeometry:
+        """Return the part of a batch's joined geometry a `geometryInfo`
+        entry names, its index counted from its own first vertex."""
+        var start = self.integer(info, "vertexStart", 0)
+        var count = self.integer(info, "vertexCount", 0)
+        var inside = (
+            start >= 0 and count >= 0 and start + count <= whole.vertex_count()
+        )
+        if not inside:
+            raise Error(
+                "Object JSON: a geometryInfo outside the joined geometry"
+            )
+        var part = BufferGeometry()
+        # `vertex_count` above refuses a geometry with no positions.
+        for slot in range(len(whole.names)):  # pragma: no branch
+            var size = whole.values[slot].item_size
+            var packed = whole.values[slot].packed()
+            var numbers = List[Float32]()
+            numbers.extend(Span(packed)[start * size : (start + count) * size])
+            part.set_attribute(
+                whole.names[slot], BufferAttribute(numbers^, size)
+            )
+        if not whole.is_indexed():
+            return part^
+        var first = self.integer(info, "indexStart", 0)
+        var entries = self.integer(info, "indexCount", 0)
+        var covered = (
+            first >= 0 and entries >= 0 and first + entries <= len(whole.index)
+        )
+        if not covered:
+            raise Error("Object JSON: a geometryInfo outside the joined index")
+        var index = List[Int]()
+        for at in range(first, first + entries):
+            var entry = whole.index[at] - start
+            var own = entry >= 0 and entry < count
+            if not own:
+                raise Error("Object JSON: a batched index outside its geometry")
+            index.append(entry)
+        part.set_index(index^)
+        return part^
+
+    def data_texture(self, item: Int, key: String) raises -> List[Float32]:
+        """Return the numbers of the `Float32Array` image of the data
+        texture an object's `key` holds, or none when the key is absent."""
+        var entry = self.entry(item, key)
+        if entry == NO_NODE:
+            return List[Float32]()
+        var uuid = self.uuid(entry)
+        if uuid not in self.textures:
+            raise Error("Object JSON: names no texture: " + uuid)
+        var texture = self.document.at(
+            self.library("textures"), self.textures[uuid]
+        )
+        var image = self.text(texture, "image", "")
+        if image not in self.images:
+            raise Error("Object JSON: a texture names no image: " + image)
+        var url = self.entry(
+            self.document.at(self.library("images"), self.images[image]),
+            "url",
+        )
+        if url == NO_NODE or self.text(url, "type", "") != "Float32Array":
+            raise Error(
+                "Object JSON: a data texture's image must hold a Float32Array"
+            )
+        var data = self.array(url, "data")
+        if data == NO_NODE:
+            raise Error("Object JSON: a data texture's image has no data")
+        return self.numbers_of(data)
 
     def geometry_named(self, item: Int) raises -> GeometryId:
         """Return the geometry an object's `geometry` uuid names."""
@@ -1486,3 +2060,83 @@ struct _Loader(Movable):
             if found >= 0:
                 target = self.model.nodes[found]
             scene.lights[self.aimed[at]].target = target
+
+    def bind_skeletons(self, mut scene: Scene) raises:
+        """Build each skinned mesh on its skeleton, as three.js's
+        `bindSkeletons` binds it once every bone is read.
+
+        A skeleton's bones are the objects its `bones` name, and their
+        inverse binds are its `boneInverses`, which must be there: this
+        does not work them out from where the bones stand.
+        """
+        var skeletons = self.index_library("skeletons")
+        var list = self.library("skeletons")
+        for at in range(len(self.rigged)):
+            var item = self.rigged[at]
+            var uuid = self.text(item, "skeleton", "")
+            if uuid not in skeletons:
+                raise Error("Object JSON: a SkinnedMesh names no skeleton")
+            var entry = self.document.at(list, skeletons[uuid])
+            var bones = self.array(entry, "bones")
+            var inverses = self.array(entry, "boneInverses")
+            var paired = (
+                bones != NO_NODE
+                and inverses != NO_NODE
+                and self.document.length(bones)
+                == self.document.length(inverses)
+            )
+            if not paired:
+                raise Error(
+                    "Object JSON: a skeleton needs one of boneInverses for"
+                    " each of its bones"
+                )
+            var built = List[Bone]()
+            for bone in range(self.document.length(bones)):
+                var inverse = self.document.at(inverses, bone)
+                if self.document.kind(inverse) != ARRAY:
+                    raise Error("Object JSON: a bone inverse must be an array")
+                var numbers = self.numbers_of(inverse)
+                if len(numbers) != 16:
+                    raise Error("Object JSON: a bone inverse is 16 numbers")
+                built.append(
+                    Bone(
+                        self.model.node(
+                            self.document.string(self.document.at(bones, bone))
+                        ),
+                        _matrix_of(numbers),
+                    )
+                )
+            var bind = Matrix4()
+            var elements = self.numbers(item, "bindMatrix", 16)
+            if len(elements) == 16:
+                bind = _matrix_of(elements)
+            scene.add_skinned_mesh(
+                SkinnedMesh(
+                    self.geometry_named(item),
+                    self.material_named(item),
+                    self.rigged_nodes[at],
+                    Skeleton(built^),
+                    bind^,
+                    bind_mode=bind_mode_of(
+                        self.text(item, "bindMode", "attached")
+                    ),
+                    frustum_culled=self.flag(item, "frustumCulled", True),
+                )
+            )
+
+
+def _matrix_of(elements: List[Float32]) -> Matrix4:
+    """Return the matrix of sixteen numbers, column by column."""
+    var matrix = Matrix4()
+    for index in range(16):  # pragma: no branch
+        matrix.elements[index] = elements[index]
+    return matrix^
+
+
+def _is_identity(matrix: Matrix4) -> Bool:
+    """Return True if a matrix is exactly the identity."""
+    var identity = Matrix4()
+    var same = True
+    for index in range(16):  # pragma: no branch
+        same = same and matrix.elements[index] == identity.elements[index]
+    return same

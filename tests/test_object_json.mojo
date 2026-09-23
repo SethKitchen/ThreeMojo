@@ -849,7 +849,8 @@ def _one_mesh(material: Material) raises -> Tuple[Scene, Assets]:
 
 def test_writer_refuses_what_has_no_three_js_form() raises:
     """The writer refuses blending three.js cannot say, a camera on no
-    node, a view shift, a blank texture and a kind that is none of ten."""
+    node, a view shift, a blank texture and a kind that is none of
+    eleven."""
     var blended = _one_mesh(Material(WHITE, kind=BASIC, blending=BLEND))
     with assert_raises(contains="blends and is not transparent"):
         _ = object_to_json(blended[0], blended[1])
@@ -863,7 +864,7 @@ def test_writer_refuses_what_has_no_three_js_form() raises:
     var odd = Material(WHITE, kind=BASIC)
     odd.kind = MaterialKind(42)
     var bad = _one_mesh(odd)
-    with assert_raises(contains="none of ten"):
+    with assert_raises(contains="none of eleven"):
         _ = object_to_json(bad[0], bad[1])
     var blank = Material(WHITE, kind=BASIC)
     var holder = _one_mesh(blank)
@@ -1228,7 +1229,7 @@ def test_an_image_file_beside_the_document() raises:
 def test_texture_refusals() raises:
     """A texture the renderer has no counterpart for is refused."""
     _refuses(_textured(',"mapping":301'))
-    _refuses(_textured(',"channel":1'))
+    _refuses(_textured(',"channel":2'))
     _refuses(_textured(',"wrap":[1000,1001]'))
     _refuses(_textured(',"wrap":[999,999]'))
     _refuses(_textured(',"magFilter":1008'))
@@ -1313,7 +1314,7 @@ def test_material_blending_and_defaults() raises:
 def test_material_refusals() raises:
     """A material type or blending this port does not read is refused."""
     _refuses(
-        '"materials":[{"uuid":"m","type":"LineBasicMaterial"}],'
+        '"materials":[{"uuid":"m","type":"RawShaderMaterial"}],'
         + '"object":{"uuid":"o","type":"Group"}'
     )
     _refuses(
