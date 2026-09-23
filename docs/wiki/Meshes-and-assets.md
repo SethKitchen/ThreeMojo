@@ -68,6 +68,8 @@ An instance's color multiplies the material's color, as a vertex color does. The
 
 An instanced mesh has no colors until the first `set_color_at`. That call gives every other instance white, as three.js does. An instance appended to `matrices` after the colors has no color. `color_at` reads it as white, and the next `set_color_at` gives it white. The renderer also draws an instance past the end of `colors` in white, as three.js does. It ignores a color past the last instance.
 
+An instanced mesh wears no morph targets. Every instance draws the geometry unmorphed. three.js applies the mesh's `morphTargetInfluences` to every instance, or each instance's own through `setMorphAt` and `morphTexture`. Neither is ported.
+
 ## BatchedMesh
 
 A `BatchedMesh` draws many geometries with one material at many transforms, each relative to one node. Each instance names its own geometry. three.js: `BatchedMesh`, `addInstance`, `setMatrixAt`, `setGeometryAt`.

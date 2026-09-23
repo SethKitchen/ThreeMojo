@@ -227,6 +227,7 @@ The writer does not write these things, and the reader ignores them:
 - `animations`, `shapes`, `skeletons`, `up` and `userData`.
 - The material keys that have no field here.
 - An LOD's `autoUpdate`, and a batched mesh's sorting, reserved ranges and bounds.
+- An instanced mesh's `morphTexture` and `morphTargetInfluences`. An `InstancedMesh` here wears no morph targets. See [Meshes and assets](Meshes-and-assets#instance-colors).
 - A camera's `focus` and `filmGauge`, and a texture's `format`, `type` and `premultiplyAlpha`.
 
 ## Errors
