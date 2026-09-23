@@ -59,6 +59,7 @@ from postprocessing.composer import (
     vignette_pass,
 )
 from postprocessing.sampling import LightView
+from postprocessing.screen_space import glsl_rand
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
 from render.tonemap import (
@@ -67,7 +68,7 @@ from render.tonemap import (
     REINHARD_TONE_MAPPING,
 )
 from renderers.renderer import Renderer
-from std.math import inf, nan, pi
+from std.math import inf, min, nan, pi
 from std.testing import (
     TestSuite,
     assert_almost_equal,
@@ -466,6 +467,25 @@ def test_film_grain_brightens_by_at_most_the_light_and_holds_at_zero() raises:
         straight(later, 0, 0).r != straight(full, 0, 0).r,
         "time changed nothing",
     )
+
+
+def test_film_grain_is_three_js_rand_of_the_wrapped_coordinate() raises:
+    # three.js reads `rand( fract( vUv + time ) )`, and its `rand` takes
+    # the dot modulo pi before the sine. So a whole second later is the
+    # same grain, and one pixel's grain is `glsl_rand` of its coordinate.
+    var now = flat(1, 1, FloatColor(0.5, 0.5, 0.5, 1))
+    var later = flat(1, 1, FloatColor(0.5, 0.5, 0.5, 1))
+    film_light(now, 1.0, False, 0.25)
+    film_light(later, 1.0, False, 3.25)
+    assert_almost_equal(
+        straight(later, 0, 0).r, straight(now, 0, 0).r, atol=1e-4
+    )
+    # The coordinate is read at run time, as the pass reads it, since a
+    # sine this steep turns a constant folded at compile time into
+    # another number.
+    var at = straight(now, 0, 0).a * 0.75
+    var grain = min(Float32(1), glsl_rand(at, at) + 0.1)
+    assert_almost_equal(straight(now, 0, 0).r, 0.5 + 0.5 * grain, atol=1e-5)
 
 
 def test_the_dot_screen_stretches_the_average_about_a_half() raises:

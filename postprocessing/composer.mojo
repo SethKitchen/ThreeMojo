@@ -87,6 +87,7 @@ from postprocessing.screen_space import (
     check_sao,
     check_ssao,
     check_ssr,
+    glsl_rand,
     outline_light,
     sao_light,
     ssao_light,
@@ -2184,12 +2185,6 @@ def _fract(value: Float32) -> Float32:
     return value - floor(value)
 
 
-def _rand(u: Float32, v: Float32) -> Float32:
-    """Return three.js's `rand`: the fractional part of a large sine of
-    the coordinate's dot with a fixed vector."""
-    return _fract(sin(u * 12.9898 + v * 78.233) * 43758.5453)
-
-
 def film_pixel(
     color: FloatColor,
     x: Int,
@@ -2216,7 +2211,12 @@ def film_pixel(
         The grained light, premultiplied.
     """
     var base = color.unpremultiplied()
-    var noise = _rand(u_of(x, width) + time, v_of(y, height) + time)
+    # three.js's `rand( fract( vUv + time ) )`: the coordinate wraps, so
+    # the grain repeats each whole second, and `rand` takes its dot modulo
+    # pi before the sine.
+    var noise = glsl_rand(
+        _fract(u_of(x, width) + time), _fract(v_of(y, height) + time)
+    )
     var grain = noise + 0.1
     if grain > 1:
         grain = 1
