@@ -4,7 +4,7 @@
 
 ![A mixer slides and turns a cube from keyframes](out/keyframes.png)
 
-three.js: `KeyframeTrack`, `VectorKeyframeTrack`, `QuaternionKeyframeTrack`, `AnimationClip`, `AnimationAction`, `AnimationMixer`.
+three.js: `KeyframeTrack`, `VectorKeyframeTrack`, `QuaternionKeyframeTrack`, `AnimationClip`, `AnimationAction`, `AnimationMixer`, and the mixer's `loop` and `finished` events.
 
 ## KeyframeTrack
 
@@ -85,6 +85,16 @@ An action is one clip being played.
 | `set_weight(weight)` | How much of it goes into the pose. |
 | `time_scale` | How fast it runs. A negative number runs it backward. |
 | `loop` | `ONCE`, `REPEAT` or `PING_PONG`. |
+| `fade_in(duration)`, `fade_out(duration)` | Ramp the weight up from zero, or down to zero. |
+| `stop_fading()` | Drop the fade and use `weight` as it is. |
+| `warp(start, end, duration)` | Ramp the time scale from `start` to `end`. |
+| `halt(duration)` | Ramp the time scale down to zero, then pause. |
+| `stop_warping()` | Drop the warp and use `time_scale` as it is. |
+| `start_at(time)` | Hold the clock until the mixer's clock reaches `time`. |
+| `get_effective_weight() -> Float32` | The weight of the last update, with the fade applied. |
+| `get_effective_time_scale() -> Float32` | The time scale of the last update, with the warp applied. |
+| `set_effective_weight(weight)` | Set the weight and stop the fade. |
+| `set_effective_time_scale(scale)` | Set the time scale and stop the warp. |
 
 `ONCE` stops at the end and stays there. `REPEAT` starts over. `PING_PONG` runs back the way it came. A negative `time_scale` runs a clip backward, and each mode handles that going the other way.
 
@@ -111,6 +121,10 @@ mixer.update(scene, clock.delta())
 | `action_count() -> Int` | How many actions the mixer holds. |
 | `time() -> Duration` | How much time the mixer has been given. |
 | `update(scene, delta)` | Move every playing action on, and set the nodes. |
+| `cross_fade_from(index, from_index, duration, warp)` | Fade one action in and another out. |
+| `cross_fade_to(index, to_index, duration, warp)` | Fade one action out and another in. |
+| `event_count() -> Int` | How many events the last update recorded. |
+| `drain_events() -> List[AnimationEvent]` | The events of the last update, oldest first. |
 
 ### Why the mixer and not each action writes
 
@@ -134,6 +148,71 @@ An action alone at a weight of one quarter therefore moves the node a quarter of
 
 That original is read once, the first time a property is driven. Reading the node each frame would read back what the mixer wrote last frame, and the pose would wander.
 
+## Fades, warps and start times
+
+A fade changes the weight along a straight line. A warp changes the time scale the same way. Both run on the mixer's clock.
+
+```mojo
+from units.si import Duration, SECOND
+
+mixer.action(walk).play()
+mixer.action(walk).fade_in(Duration(0.5, SECOND))
+mixer.cross_fade_from(run, walk, Duration(1, SECOND), warp=True)
+```
+
+A fade or a warp starts at the mixer's time now. It is read at the mixer's time after each update adds its delta. three.js reads its `_weightInterpolant` and `_timeScaleInterpolant` the same way.
+
+| Call | Weight or time scale | At the end |
+|---|---|---|
+| `fade_in(d)` | Weight times 0, rising to 1. | The action goes on. |
+| `fade_out(d)` | Weight times 1, falling to 0. | The action stops contributing. |
+| `warp(a, b, d)` | Time scale from `a` to `b`. | `time_scale` becomes `b`. |
+| `halt(d)` | Time scale from its effective value to 0. | The action pauses. |
+
+A fade or a warp ends on the first update after the mixer's clock passes its end. An update that reaches the end exactly uses the end value.
+
+A warp keeps its two values as shares of the time scale at the call. three.js does the same. So you cannot warp an action with a time scale of zero.
+
+`fade_in` does not play the action. Call `play` as well.
+
+### Cross-fades
+
+`cross_fade_from(index, from_index, d)` fades `index` in and `from_index` out over `d`. `cross_fade_to(index, to_index, d)` does the same the other way round.
+
+With `warp=True`, each action also ramps its pace toward the pace of the other clip. The pace is the ratio of the two clip lengths, as in three.js.
+
+A cross-fade is a mixer call, not an action call. It changes two actions, and one action cannot reach another in the mixer's list.
+
+### Start times
+
+`start_at(time)` holds the action's clock until the mixer's clock reaches `time`. The action contributes its pose while it waits. The update that passes `time` runs only the part after it.
+
+## Events
+
+The mixer records what happens to each action during an update. Read the events with `drain_events` after each update.
+
+```mojo
+from animation.animation_mixer import FINISHED, LOOPED
+
+mixer.update(scene, clock.delta())
+for event in mixer.drain_events():
+    if event.kind == FINISHED:
+        print("action", event.action, "finished")
+```
+
+| Kind | When | `loop_delta` | `direction` |
+|---|---|---|---|
+| `LOOPED` | A `REPEAT` or `PING_PONG` action runs past an end of its clip. | Ends passed, signed. | 1 or -1. |
+| `FINISHED` | A `ONCE` action reaches an end of its clip. | 0 | 1 or -1. |
+
+`action` is the index that `add` returned. A `PING_PONG` action counts both ends, as three.js does.
+
+Each update starts a new list. Events that you do not drain are gone after the next update.
+
+### Why a list and not a listener
+
+three.js dispatches `loop` and `finished` to listener functions. A Mojo closure that captures the caller's state does not fit in a list on the mixer. A list of typed events does, and the caller reads it when it is ready.
+
 ## What is refused
 
 | Mistake | Answer |
@@ -146,11 +225,20 @@ That original is read once, the first time a property is driven. Reading the nod
 | Reading a rotation off a position track, or the other way round. | An error. |
 | A clip with no tracks, or one that lasts no time. | An error at construction. |
 | A weight below zero, or a loop mode that is not named. | An error. |
-| A weight, a time scale, a frame time or a key that is not a number. | An error. |
+| A fade, a warp or a cross-fade that lasts less than no time. | An error. |
+| A warp on an action with a time scale of zero. | An error. |
+| A cross-fade from an action to itself. | An error. Nothing changes. |
+| A weight, a time scale, a frame time, a start time or a key that is not a number. | An error. |
 | An action index the mixer does not have. | An error. |
 | A track naming a node the scene does not have. | An error at `update`. |
 
 A clip of no length is refused where clips are built. That is what lets an action divide by the length when it loops, without asking first.
+
+## Not ported
+
+- `repetitions`: a `REPEAT` or `PING_PONG` action loops without end. So a `FINISHED` event comes only from `ONCE`.
+- The mixer's own `timeScale`.
+- `setDuration` and `syncWith`.
 
 ## See also
 
