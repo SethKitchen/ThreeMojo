@@ -1136,7 +1136,7 @@ def _shadow_at(
     var place = shadow_coordinate(
         frame, biased_position(position, normal, normal_bias)
     )
-    if not inside_shadow_map(place):
+    if not inside_shadow_map(place, bias):
         return 1
     var depths = block + SHADOW_HEADER
     var kind = Int(lights[unsafe_offset=block + SHADOW_TYPE_AT])

@@ -8340,6 +8340,41 @@ def test_both_backends_agree_on_a_shadowed_scene() raises:
         assert_true(count_mismatches(cpu, unshadowed) > 20, "no shadow fell")
 
 
+def test_both_backends_add_the_bias_before_the_far_plane() raises:
+    # The sun's far plane cuts the floor, and a large negative bias pulls
+    # a band past it back into the map, as three.js's `getShadow` adds
+    # the bias first. The kernel tests the same biased depth.
+    if skipped_for_lack_of_a_gpu("both backends add the bias first"):
+        return
+    var assets = Assets()
+    var scene = a_shadowed_scene(assets)
+    scene.lights[0].shadow.far = Length(5.5, METER)
+    scene.lights[0].shadow.bias = -0.05
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(50.0, METER),
+    )
+    camera.place(Vector3(1, 5, 5), Vector3(0, 0, 0))
+    var corners = renderer.prepare(scene, assets, camera)
+    var lighting = Lighting(
+        scene,
+        camera.visible_layers(),
+        camera_position(scene, camera),
+        toward_camera(scene, camera),
+        camera_up(scene, camera),
+        shadows=renderer.shadow_maps(scene, assets),
+    )
+    var cpu = renderer.render(scene, assets, camera)
+    var gpu = render_triangles(
+        corners, 48, 36, BACKGROUND, SHADE_LIT, TextureStore(), lighting
+    )
+    assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
 def a_bulb_and_slide_scene(mut assets: Assets) raises -> Scene:
     """Return a floor under a phong block and a standard and a toon ball,
     all casting, with a bulb off to one side casting through its six

@@ -214,7 +214,7 @@ A shadow needs three things to be said, as in three.js. The light must cast. The
 |---|---|---|---|
 | `cast_shadow` | `castShadow` | `False` | Whether the light draws a shadow map. |
 | `shadow.map_size` | `shadow.mapSize` | `512` | How many texels a side the map is. |
-| `shadow.bias` | `shadow.bias` | `0.0` | Added to a fragment's depth, from zero to one across the planes, before it is compared. Negative moves it toward the light. |
+| `shadow.bias` | `shadow.bias` | `0.0` | Added to a fragment's depth, from zero to one across the planes, before it is compared and before the far plane is tested, as in three.js. Negative moves it toward the light. |
 | `shadow.normal_bias` | `shadow.normalBias` | `0.0` | How far a fragment is moved along its normal before it is projected, in meters. |
 | `shadow.radius` | `shadow.radius` | `1.0` | How many texels the PCF taps spread over. Under `VSM_SHADOW_MAP`, how many texels the blur spreads over. |
 | `shadow.blur_samples` | `shadow.blurSamples` | `8` | How many samples each pass of a variance map's blur takes, one to 256. |

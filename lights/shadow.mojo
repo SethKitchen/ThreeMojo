@@ -433,7 +433,7 @@ struct ShadowMap(Movable):
         var place = shadow_coordinate(
             self.frame, biased_position(position, normal, self.normal_bias)
         )
-        if not inside_shadow_map(place):
+        if not inside_shadow_map(place, self.bias):
             return 1
         if self.shadow_type == BASIC_SHADOW_MAP:
             return shadow_tap(
@@ -578,13 +578,18 @@ def shadow_coordinate(
     )
 
 
-def inside_shadow_map(place: Vector3) -> Bool:
+def inside_shadow_map(place: Vector3, bias: Float32) -> Bool:
     """Return True if a map coordinate falls on the map and before its far
     plane: three.js's `frustumTest`. Outside it, a surface is lit, since
     the light drew nothing there to shadow it with.
 
+    The far plane is tested after the bias is added, as three.js's
+    `getShadow` adds `shadowBias` to `shadowCoord.z` first. A negative
+    bias thus keeps a surface just past the far plane in the map.
+
     Args:
         place: What `shadow_coordinate` returned.
+        bias: The map's depth bias, added to the depth before the test.
 
     Returns:
         Whether the map has an answer for it.
@@ -594,7 +599,7 @@ def inside_shadow_map(place: Vector3) -> Bool:
         and place.x <= 1
         and place.y >= 0
         and place.y <= 1
-        and place.z <= 1
+        and place.z + bias <= 1
     )
 
 

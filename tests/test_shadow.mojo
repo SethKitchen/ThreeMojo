@@ -278,20 +278,25 @@ def test_a_world_position_lands_on_the_map_by_the_frame() raises:
     var middle = shadow_coordinate(flat_frame(), Vector3(0, 0, 0.5))
     assert_almost_equal(middle.x, Float32(0.5), atol=1e-6)
     assert_almost_equal(middle.z, Float32(0.25), atol=1e-6)
-    assert_true(inside_shadow_map(middle))
+    assert_true(inside_shadow_map(middle, 0))
     # Off the map, or past the far plane, is not inside.
-    assert_false(inside_shadow_map(Vector3(-0.1, 0.5, 0.5)))
-    assert_false(inside_shadow_map(Vector3(1.1, 0.5, 0.5)))
-    assert_false(inside_shadow_map(Vector3(0.5, -0.1, 0.5)))
-    assert_false(inside_shadow_map(Vector3(0.5, 1.1, 0.5)))
-    assert_false(inside_shadow_map(Vector3(0.5, 0.5, 1.1)))
+    assert_false(inside_shadow_map(Vector3(-0.1, 0.5, 0.5), 0))
+    assert_false(inside_shadow_map(Vector3(1.1, 0.5, 0.5), 0))
+    assert_false(inside_shadow_map(Vector3(0.5, -0.1, 0.5), 0))
+    assert_false(inside_shadow_map(Vector3(0.5, 1.1, 0.5), 0))
+    assert_false(inside_shadow_map(Vector3(0.5, 0.5, 1.1), 0))
+    # The bias is added before the far plane is tested, as three.js's
+    # `getShadow` adds it: a negative bias keeps a depth just past the
+    # far plane in, and a positive one pushes a depth just before it out.
+    assert_true(inside_shadow_map(Vector3(0.5, 0.5, 1.001), -0.002))
+    assert_false(inside_shadow_map(Vector3(0.5, 0.5, 0.999), 0.002))
     # A position behind the light's camera is put past the far plane.
     var frame = flat_frame()
     frame[15] = 0
     frame[11] = 1
     var behind = shadow_coordinate(frame, Vector3(0, 0, -1))
     assert_equal(behind.z, Float32(2))
-    assert_false(inside_shadow_map(behind))
+    assert_false(inside_shadow_map(behind, 0))
     # The normal bias moves the position along the normal first.
     var moved = biased_position(Vector3(1, 2, 3), Vector3(0, 0, 1), 0.5)
     assert_equal(moved.z, Float32(3.5))
