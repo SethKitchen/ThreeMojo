@@ -33,14 +33,17 @@ compressed whole by the supercompression scheme.
 | Scheme | Here |
 |---|---|
 | 0, none | Read. |
-| 1, BasisLZ | Refused: Basis Universal transcoding is not ported. |
-| 2, Zstandard | Refused: there is no Zstandard decoder in this project. |
+| 1, BasisLZ | Read for ETC1S data, through `render.etc1s`. |
+| 2, Zstandard | Read, through `render.zstd`. |
 | 3, zlib | Read, through `render.inflate`. three.js refuses it. |
 
-**Basis Universal is refused.** three.js transcodes ETC1S and UASTC data
-to whatever the GPU takes, with a WebAssembly transcoder. That
-transcoder is a large codec of its own, and a file of either kind is
-refused by name here. The Vulkan formats read are in `VkFormat`.
+**Basis Universal.** A file whose color model is UASTC or ETC1S names no
+Vulkan format. three.js transcodes its data to whatever the GPU takes
+with the Basis Universal WebAssembly transcoder. Here `texture` decodes
+it to RGBA bytes, the texels that transcoder gives for its `RGBA32`
+target: UASTC through `render.uastc`, and ETC1S, which BasisLZ always
+stores, through `render.etc1s`. UASTC HDR is not ported. The Vulkan
+formats read are in `VkFormat`.
 """
 
 from render.compressed_texture import (
@@ -67,6 +70,7 @@ from render.compressed_texture import (
     compressed_texture,
     level_bytes,
 )
+from render.etc1s import Etc1sGlobal, etc1s_image
 from render.exr import half_to_float
 from render.inflate import zlib_inflate
 from render.srgb import LINEAR, SRGB, ColorSpace
@@ -81,6 +85,8 @@ from render.texture import (
     float_from_bytes,
     float_texture,
 )
+from render.uastc import UASTC_BLOCK_BYTES, uastc_image
+from render.zstd import zstd_decompress
 
 # The identifier, nine header words and the index.
 comptime HEADER_BYTES = 80
@@ -89,6 +95,9 @@ comptime LEVEL_ENTRY_BYTES = 24
 # The data format descriptor's color models for Basis Universal data.
 comptime KHR_DF_MODEL_ETC1S = 163
 comptime KHR_DF_MODEL_UASTC = 166
+# The size of a basic descriptor block with one sample; each more sample
+# adds sixteen bytes.
+comptime ONE_SAMPLE_BLOCK_BYTES = 40
 # The transfer function that means sRGB.
 comptime KHR_DF_TRANSFER_SRGB = 2
 # The flag that means the color is premultiplied by alpha.
@@ -334,8 +343,14 @@ struct KTX2Container(Movable):
     """Whether the descriptor says color is premultiplied by alpha."""
     var color_space: ColorSpace
     """`SRGB` if the transfer function is sRGB's, `LINEAR` otherwise."""
+    var has_alpha: Bool
+    """Whether the descriptor has more than one sample: for ETC1S, an
+    alpha slice per image."""
     var level_data: List[List[UInt8]]
-    """Each level's bytes, largest first, decompressed."""
+    """Each level's bytes, largest first, decompressed. For ETC1S, the
+    BasisLZ slices of the level."""
+    var etc1s: Etc1sGlobal
+    """The decoded BasisLZ global data of an ETC1S file; empty otherwise."""
 
     def __init__(out self):
         """Make an empty container, for `read` to fill."""
@@ -350,7 +365,25 @@ struct KTX2Container(Movable):
         self.transfer_function = 0
         self.premultiplied = False
         self.color_space = LINEAR
+        self.has_alpha = False
         self.level_data = List[List[UInt8]]()
+        self.etc1s = Etc1sGlobal()
+
+    def is_uastc(self) -> Bool:
+        """Return True if the data is Basis Universal UASTC.
+
+        Returns:
+            True for the UASTC color model.
+        """
+        return self.color_model == KHR_DF_MODEL_UASTC
+
+    def is_etc1s(self) -> Bool:
+        """Return True if the data is Basis Universal ETC1S.
+
+        Returns:
+            True for the ETC1S color model.
+        """
+        return self.color_model == KHR_DF_MODEL_ETC1S
 
     def level_width(self, level: Int) -> Int:
         """Return a level's width: halved per level, never below one.
@@ -400,13 +433,15 @@ struct KTX2Container(Movable):
             level: The level, zero the largest.
 
         Returns:
-            The size in bytes.
+            The size in bytes. For UASTC, sixteen bytes a 4x4 block.
 
         Raises:
             Error: If the format is not one this reader decodes.
         """
         var width = self.level_width(level)
         var height = self.level_height(level)
+        if self.is_uastc():
+            return (width + 3) // 4 * ((height + 3) // 4) * UASTC_BLOCK_BYTES
         if self.vk_format.is_uncompressed():
             return (
                 width
@@ -429,7 +464,9 @@ struct KTX2Container(Movable):
         """Return one level of one face of one layer as a texture, in the
         file's color space.
 
-        A block format decodes through `compressed_texture`. An eight-bit
+        UASTC and ETC1S data decode to a byte texture, as the Basis
+        Universal transcoder decodes them to RGBA32. A block format
+        decodes through `compressed_texture`. An eight-bit
         format gives a byte texture, and a half or float format a float
         texture. A channel the format does not store is zero, and alpha
         is one, as WebGL samples a red or a red-green texture.
@@ -449,7 +486,8 @@ struct KTX2Container(Movable):
         Raises:
             Error: If there is no such face, layer or level; a half or
                 float format is not `LINEAR`, or holds an infinity or a
-                NaN; and everything `compressed_texture` raises.
+                NaN; a UASTC or ETC1S image is malformed; and everything
+                `compressed_texture` raises.
         """
         if face < 0 or face >= self.faces:
             raise Error("KTX2: this file has no face " + String(face))
@@ -457,11 +495,41 @@ struct KTX2Container(Movable):
             raise Error("KTX2: this file has no layer " + String(layer))
         if level < 0 or level >= self.levels:
             raise Error("KTX2: this file has no level " + String(level))
+        var width = self.level_width(level)
+        var height = self.level_height(level)
+        if self.is_etc1s():
+            var image = (level * self.layers + layer) * self.faces + face
+            return Texture(
+                width,
+                height,
+                etc1s_image(
+                    self.etc1s,
+                    image,
+                    self.level_data[level],
+                    width,
+                    height,
+                    self.has_alpha,
+                ),
+                wrap,
+                filter,
+                self.color_space,
+                mipmapped,
+                alpha,
+            )
         var size = self.image_bytes(level)
         var start = (layer * self.faces + face) * size
         var bytes = List[UInt8](self.level_data[level][start : start + size])
-        var width = self.level_width(level)
-        var height = self.level_height(level)
+        if self.is_uastc():
+            return Texture(
+                width,
+                height,
+                uastc_image(width, height, bytes),
+                wrap,
+                filter,
+                self.color_space,
+                mipmapped,
+                alpha,
+            )
         if not self.vk_format.is_uncompressed():
             return compressed_texture(
                 width,
@@ -541,6 +609,11 @@ def _read_descriptor(bytes: List[UInt8], mut container: KTX2Container) raises:
     ) != 0
     if container.transfer_function == KHR_DF_TRANSFER_SRGB:
         container.color_space = SRGB
+    # The descriptor block's size, after its vendor and type word and its
+    # version.
+    container.has_alpha = (
+        Int(bytes[offset + 10]) | (Int(bytes[offset + 11]) << 8)
+    ) > ONE_SAMPLE_BLOCK_BYTES
 
 
 def read(bytes: List[UInt8]) raises -> KTX2Container:
@@ -553,13 +626,15 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
         The container; see `KTX2Container`.
 
     Raises:
-        Error: If the identifier is wrong; the file is Basis Universal, or
-            its Vulkan format or supercompression scheme is one this
-            reader does not decode; it is 1D or 3D; it has a face count
-            other than one or six, or more levels than its size has; its
-            size would decode to more than `MAX_DECODED_BYTES`; the
-            descriptor or a level does not fit in the file; or a level's
-            length is not its size.
+        Error: If the identifier is wrong; its Vulkan format or
+            supercompression scheme is one this reader does not decode;
+            Basis Universal data names a Vulkan format; ETC1S data does
+            not use BasisLZ, or other data does; it is 1D or 3D; it has a
+            face count other than one or six, or more levels than its size
+            has; its size would decode to more than `MAX_DECODED_BYTES`;
+            the descriptor, the global data or a level does not fit in the
+            file; a level's length is not its size; a Zstandard or zlib
+            stream is malformed; or the BasisLZ global data is.
     """
     if len(bytes) < HEADER_BYTES:
         raise Error("KTX2: the file is shorter than its header")
@@ -579,26 +654,22 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
     container.levels = max(1, _u32(bytes, 40))
     container.supercompression = Supercompression(_u32(bytes, 44))
     _read_descriptor(bytes, container)
-    var basis = (
-        container.color_model == KHR_DF_MODEL_ETC1S
-        or container.color_model == KHR_DF_MODEL_UASTC
-    )
-    if basis or container.supercompression == BASISLZ_SUPERCOMPRESSION:
+    var etc1s = container.is_etc1s()
+    if etc1s != (container.supercompression == BASISLZ_SUPERCOMPRESSION):
         raise Error(
-            "KTX2: Basis Universal (ETC1S or UASTC) transcoding is not ported"
+            "KTX2: ETC1S data must use BasisLZ supercompression, and no"
+            " other data can"
         )
-    if not container.vk_format.is_valid():
+    if etc1s or container.is_uastc():
+        if container.vk_format != VK_FORMAT_UNDEFINED:
+            raise Error("KTX2: Basis Universal data must name no Vulkan format")
+    elif not container.vk_format.is_valid():
         raise Error(
             "KTX2: "
             + String(container.vk_format)
             + " is not a format this reader decodes; ASTC, PVRTC, ETC2 with"
-            " punch-through alpha and the other Vulkan formats are not"
-            " ported"
-        )
-    if container.supercompression == ZSTD_SUPERCOMPRESSION:
-        raise Error(
-            "KTX2: Zstandard supercompression is not ported; there is no"
-            " Zstandard decoder in this project"
+            " punch-through alpha, UASTC HDR and the other Vulkan formats"
+            " are not ported"
         )
     if not container.supercompression.is_valid():
         raise Error(
@@ -619,6 +690,7 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
         raise Error("KTX2: the file names more levels than its size has")
     if _outside(HEADER_BYTES, container.levels * LEVEL_ENTRY_BYTES, len(bytes)):
         raise Error("KTX2: the file ends inside its level index")
+    var images = container.layers * container.faces
     for level in range(container.levels):  # pragma: no branch
         var entry = HEADER_BYTES + level * LEVEL_ENTRY_BYTES
         var offset = _u64(bytes, entry)
@@ -626,16 +698,29 @@ def read(bytes: List[UInt8]) raises -> KTX2Container:
         var full = _u64(bytes, entry + 16)
         if _outside(offset, length, len(bytes)):
             raise Error("KTX2: a level lies outside the file")
-        # Divided rather than multiplied, so a huge layer count cannot
-        # overflow the check.
-        var images = container.layers * container.faces
-        var size = container.image_bytes(level)
-        if full % images != 0 or full // images != size:
-            raise Error("KTX2: a level's length does not match its size")
         var data = List[UInt8](bytes[offset : offset + length])
-        if container.supercompression == ZLIB_SUPERCOMPRESSION:
-            data = zlib_inflate(data, full)
-        if len(data) != full:
-            raise Error("KTX2: a level's length does not match its size")
+        if not etc1s:
+            # Divided rather than multiplied, so a huge layer count cannot
+            # overflow the check.
+            var size = container.image_bytes(level)
+            if full % images != 0 or full // images != size:
+                raise Error("KTX2: a level's length does not match its size")
+            if container.supercompression == ZLIB_SUPERCOMPRESSION:
+                data = zlib_inflate(data, full)
+            elif container.supercompression == ZSTD_SUPERCOMPRESSION:
+                data = zstd_decompress(data, full)
+            if len(data) != full:
+                raise Error("KTX2: a level's length does not match its size")
         container.level_data.append(data^)
+    if etc1s:
+        # The supercompression global data: its offset and length.
+        var offset = _u64(bytes, 64)
+        var length = _u64(bytes, 72)
+        if _outside(offset, length, len(bytes)):
+            raise Error("KTX2: the supercompression global data lies outside")
+        container.etc1s = Etc1sGlobal(
+            List[UInt8](bytes[offset : offset + length]),
+            images * container.levels,
+            container.has_alpha,
+        )
     return container^

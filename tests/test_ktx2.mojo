@@ -4,8 +4,14 @@
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
 """Tests for `render.ktx2`: hand-built KTX 2.0 files of block and
-uncompressed formats, stored whole and through zlib, and every file this
-reader refuses."""
+uncompressed formats, stored whole and through zlib and Zstandard; Basis
+Universal files; and every file this reader refuses.
+
+The Basis Universal files under `assets/ktx2/` were written by the Basis
+Universal 2.50 encoder that ktx2-encoder 0.6.0 bundles. Each level's
+expected texels are what the Basis Universal transcoder of three.js r186,
+`examples/jsm/libs/basis/basis_transcoder.wasm`, gives for its `RGBA32`
+target; the tests compare their XXH64 hash."""
 
 from render.compressed_texture import (
     RGB_S3TC_DXT1_FORMAT,
@@ -29,6 +35,8 @@ from render.ktx2 import (
 from render.png import zlib_stream
 from render.srgb import LINEAR, SRGB
 from render.texture import FLOAT_TYPE, UNSIGNED_BYTE_TYPE
+from render.zstd import xxh64
+from std.pathlib import Path
 from std.testing import (
     TestSuite,
     assert_equal,
@@ -265,23 +273,133 @@ def test_a_zlib_level_is_inflated() raises:
         _ = read(short.bytes())
 
 
-def test_basis_universal_and_zstandard_are_refused_by_name() raises:
-    for model in [163, 166]:
-        var file = Ktx2(0, 4, 4)
-        file.color_model = model
-        file.level(bc1(0))
-        with assert_raises(contains="Basis Universal"):
-            _ = read(file.bytes())
-    var basislz = Ktx2(0, 4, 4)
+def zstd_frame(data: List[UInt8]) -> List[UInt8]:
+    """Return a Zstandard frame of one raw block holding `data`."""
+    var out: List[UInt8] = [0x28, 0xB5, 0x2F, 0xFD, 0x00, 0x00]
+    var header = 1 | (len(data) << 3)
+    out.extend([UInt8(header & 0xFF), UInt8(header >> 8), 0])
+    out.extend(data.copy())
+    return out^
+
+
+def test_a_zstandard_level_is_decompressed() raises:
+    var file = Ktx2(131, 4, 4)
+    file.scheme = 2
+    file.level(zstd_frame(bc1(0x001F)), 8)
+    var container = read(file.bytes())
+    assert_equal(container.supercompression, ZSTD_SUPERCOMPRESSION)
+    assert_equal(container.texture().texel(2, 2).b, UInt8(255))
+    # A frame that holds more than the level's size is refused.
+    var long = Ktx2(131, 4, 4)
+    long.scheme = 2
+    long.level(zstd_frame(List[UInt8](length=9, fill=0)), 8)
+    with assert_raises(contains="more than was expected"):
+        _ = read(long.bytes())
+
+
+def fixture_hash(name: String, level: Int = 0) raises -> Tuple[Int, UInt64]:
+    """Return the width of a level of a Basis Universal fixture and the
+    XXH64 hash of its texels."""
+    var container = read(Path("assets/ktx2/" + name).read_bytes())
+    var image = container.texture(level=level)
+    return (image.width, xxh64(image.pixels, 0, len(image.pixels)))
+
+
+def test_uastc_files_decode_as_three_js_transcodes_them() raises:
+    # Between them the four files use all nineteen UASTC modes.
+    var alpha = fixture_hash("uastc_alpha.ktx2")
+    assert_equal(alpha[1], 0x027A81AC150B2E5E)
+    assert_equal(fixture_hash("uastc_gradient.ktx2")[1], 0xD03CC6155E6F8407)
+    assert_equal(
+        fixture_hash("uastc_gradient_alpha.ktx2")[1], 0x00381657619671CD
+    )
+    # Zstandard supercompression, sRGB, and levels of 61x47 down to 1x1.
+    var hashes: List[UInt64] = [
+        0x0F3E436C03B25F5C, 0xF2801657166EBAF0, 0xE301CDA8C2B52E61,
+        0x15669C4E2269807D, 0xABF4C0440B493F17, 0x6B824CBF8A283B39,
+    ]  # fmt: skip
+    var widths: List[Int] = [61, 30, 15, 7, 3, 1]
+    for level in range(6):
+        var got = fixture_hash("uastc_rgb_zstd_mips.ktx2", level)
+        assert_equal(got[0], widths[level])
+        assert_equal(got[1], hashes[level])
+    var container = read(
+        Path("assets/ktx2/uastc_rgb_zstd_mips.ktx2").read_bytes()
+    )
+    assert_true(container.is_uastc())
+    assert_false(container.is_etc1s())
+    assert_equal(container.supercompression, ZSTD_SUPERCOMPRESSION)
+    assert_equal(container.color_space, SRGB)
+    assert_equal(container.texture().color_space, SRGB)
+
+
+def test_etc1s_files_decode_as_three_js_transcodes_them() raises:
+    assert_equal(fixture_hash("etc1s_rgb.ktx2")[1], 0xE0FB278EC3D1D4EE)
+    assert_equal(fixture_hash("etc1s_gray.ktx2")[1], 0xF6C8FABD798A1F96)
+    # An alpha slice per image, sRGB, and levels of 37x29 down to 1x1.
+    var hashes: List[UInt64] = [
+        0xB8622C967DBF6F76, 0xB5F103C9ACABAF9C, 0x7DE696D2BB60C756,
+        0x2680FB6C61E66249, 0xAB1A60011FDB3CA9, 0xD3033A9604DB6AE7,
+    ]  # fmt: skip
+    for level in range(6):
+        assert_equal(
+            fixture_hash("etc1s_alpha_mips.ktx2", level)[1], hashes[level]
+        )
+    var container = read(Path("assets/ktx2/etc1s_alpha_mips.ktx2").read_bytes())
+    assert_true(container.is_etc1s())
+    assert_true(container.has_alpha)
+    assert_equal(container.supercompression, BASISLZ_SUPERCOMPRESSION)
+    assert_equal(container.color_space, SRGB)
+
+
+def test_basis_universal_files_are_checked() raises:
+    # ETC1S must use BasisLZ, and nothing else can.
+    var etc1s = Ktx2(0, 4, 4)
+    etc1s.color_model = 163
+    etc1s.level(bc1(0))
+    with assert_raises(contains="must use BasisLZ"):
+        _ = read(etc1s.bytes())
+    var basislz = Ktx2(131, 4, 4)
     basislz.scheme = 1
     basislz.level(bc1(0))
-    with assert_raises(contains="Basis Universal"):
+    with assert_raises(contains="must use BasisLZ"):
         _ = read(basislz.bytes())
-    var zstd = Ktx2(131, 4, 4)
-    zstd.scheme = 2
-    zstd.level(bc1(0))
-    with assert_raises(contains="Zstandard"):
-        _ = read(zstd.bytes())
+    # Basis Universal data names no Vulkan format.
+    var uastc = Ktx2(131, 4, 4)
+    uastc.color_model = 166
+    uastc.level(List[UInt8](length=16, fill=0))
+    with assert_raises(contains="no Vulkan format"):
+        _ = read(uastc.bytes())
+    var named = Ktx2(131, 4, 4)
+    named.color_model = 163
+    named.scheme = 1
+    named.level(bc1(0))
+    with assert_raises(contains="no Vulkan format"):
+        _ = read(named.bytes())
+    # A UASTC level is sixteen bytes a block.
+    var short = Ktx2(0, 4, 4)
+    short.color_model = 166
+    short.level(bc1(0))
+    with assert_raises(contains="does not match its size"):
+        _ = read(short.bytes())
+    # An ETC1S file whose global data lies outside it.
+    var file = Path("assets/ktx2/etc1s_rgb.ktx2").read_bytes()
+    var outside = file.copy()
+    put(outside, 72, 100000, 8)
+    with assert_raises(contains="global data lies outside"):
+        _ = read(outside)
+    # A malformed UASTC block surfaces from the texture, not the read.
+    var reserved = Ktx2(0, 4, 4)
+    reserved.color_model = 166
+    var block = List[UInt8](length=16, fill=0)
+    block[0] = 0x45
+    reserved.level(block^)
+    var container = read(reserved.bytes())
+    with assert_raises(contains="reserved mode"):
+        _ = container.texture()
+
+
+def test_unknown_supercompression_is_refused() raises:
     var unknown = Ktx2(131, 4, 4)
     unknown.scheme = 7
     unknown.level(bc1(0))
