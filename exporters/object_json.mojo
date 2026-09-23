@@ -165,6 +165,7 @@ from materials.material import (
 from math.matrix4 import Matrix4
 from math.vector2 import Vector2
 from objects.skeleton import Skeleton
+from render.cube_texture import NEGATIVE_X
 from render.cube_texture_store import (
     NO_CUBE_TEXTURE,
     SCENE_ENVIRONMENT,
@@ -291,19 +292,6 @@ def _filters(texture: Texture) -> Tuple[Int, Int]:
             NEAREST_MIPMAP_NEAREST_FILTER if nearest else LINEAR_MIPMAP_LINEAR_FILTER
         )
     return (minify, magnify)
-
-
-def _mirrored(face: Texture) -> List[UInt8]:
-    """Return a face's full-size image flipped left for right, row by
-    row."""
-    var out = List[UInt8](capacity=face.width * face.height * Texture.CHANNELS)
-    # A cube's faces hold texels, so neither loop runs zero times.
-    for y in range(face.height):  # pragma: no branch
-        for x in range(face.width):  # pragma: no branch
-            var at = (y * face.width + face.width - 1 - x) * Texture.CHANNELS
-            for channel in range(Texture.CHANNELS):  # pragma: no branch
-                out.append(face.pixels[at + channel])
-    return out^
 
 
 def _has_emissive(kind: MaterialKind) -> Bool:
@@ -608,10 +596,10 @@ struct _Library(Movable):
         writes a `CubeTexture`, and return its uuid.
 
         The image entry's `url` is an array of six PNG `data:` URLs, as
-        `Source.toJSON` writes the six images of a cube. Each face is
-        mirrored left for right on the way out: three.js keeps a cube's
-        images in the OpenGL layout that `SEEN_FROM_OUTSIDE` reads, and
-        its `flipY` is false.
+        `Source.toJSON` writes the six images of a cube. The first two faces
+        trade places on the way out and nothing is mirrored: three.js
+        keeps a cube's images in the layout that `SEEN_FROM_OUTSIDE`
+        reads, the px image along -x, and its `flipY` is false.
         """
         # Refuses an id that names no cube before it becomes a key.
         ref cube = assets.cube_textures.get(id)
@@ -630,7 +618,12 @@ struct _Library(Movable):
         image.begin_array()
         # A valid cube holds six faces, so this never runs zero times.
         for index in range(len(cube.faces)):  # pragma: no branch
-            ref face = cube.faces[index]
+            var source = index
+            if index < NEGATIVE_X + 1:
+                # The px image is the face along -x, and the nx image the
+                # face along +x.
+                source = NEGATIVE_X - index
+            ref face = cube.faces[source]
             if face.texel_type == FLOAT_TEXELS:
                 raise Error(
                     "Object JSON: a cube of float faces is not written, as a"
@@ -647,9 +640,11 @@ struct _Library(Movable):
                     " color space and mip chain, as three.js's CubeTexture"
                     " has one of each"
                 )
-            var png = encode_png(
-                Framebuffer(face.width, face.height, _mirrored(face))
-            )
+            # The full-size image, without the chain that follows it.
+            var size = face.width * face.height * Texture.CHANNELS
+            var pixels = List[UInt8](capacity=size)
+            pixels.extend(Span(face.pixels)[0:size])
+            var png = encode_png(Framebuffer(face.width, face.height, pixels^))
             image.string("data:image/png;base64," + encode_base64(png))
         image.end_array()
         image.end_object()

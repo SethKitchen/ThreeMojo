@@ -333,16 +333,65 @@ def test_images_seen_from_inside_are_read_as_they_are() raises:
     assert_equal(cube.face(0).levels, 1)
 
 
-def test_images_seen_from_outside_are_mirrored_on_the_way_in() raises:
-    # The OpenGL layout: every face is the camera's view flipped left for
-    # right, so the same lean reads the other column.
-    var cube = cube_texture_from(
-        six_images(RED, GREEN), SEEN_FROM_OUTSIDE, NEAREST
+def _texel(face: Int, x: Int, y: Int) -> Color:
+    """Return a color unique to one texel of one face."""
+    return Color(
+        UInt8(face * 40 + 10), UInt8(x * 100 + 20), UInt8(y * 100 + 30)
     )
-    assert_color(cube.sample(Vector3(1, 0, 0.5)).encode(), RED)
-    assert_color(cube.sample(Vector3(1, 0, -0.5)).encode(), GREEN)
-    # Every face, not just the first: the -y face's right is -x.
-    assert_color(cube.sample(Vector3(-0.5, -1, 0)).encode(), RED)
+
+
+def _distinct_images() -> List[DecodedImage]:
+    """Return six 2x2 images in which every texel of every face differs."""
+    var images = List[DecodedImage]()
+    for face in range(FACE_COUNT):
+        var pixels = List[UInt8]()
+        for y in range(2):
+            for x in range(2):
+                var tint = _texel(face, x, y)
+                pixels.append(tint.r)
+                pixels.append(tint.g)
+                pixels.append(tint.b)
+                pixels.append(255)
+        images.append(DecodedImage(2, 2, pixels^, SRGB))
+    return images^
+
+
+def _three_js_direction(face: Int, x: Int, y: Int) -> Vector3:
+    """Return the direction three.js shows one texel of an image cube in.
+
+    `LightProbeGenerator.fromCubeTexture` of three.js 0.180, which walks
+    the six images of a `CubeTextureLoader` cube as `flipEnvMap` samples
+    them: `col` counts right and `row` counts up, and image `face` lies
+    along the axis this table gives. The px image lies toward -x.
+    """
+    var col = Float32(-1) + (Float32(x) + 0.5)
+    var row = Float32(1) - (Float32(y) + 0.5)
+    if face == 0:
+        return Vector3(-1, row, -col)
+    if face == 1:
+        return Vector3(1, row, col)
+    if face == 2:
+        return Vector3(-col, 1, -row)
+    if face == 3:
+        return Vector3(-col, -1, row)
+    if face == 4:
+        return Vector3(-col, row, 1)
+    return Vector3(col, row, -1)
+
+
+def test_images_seen_from_outside_are_where_three_js_shows_them() raises:
+    # three.js's layout: the px and nx images trade places, and no image
+    # is mirrored. Every texel of every image is read in the direction
+    # three.js shows it in.
+    var cube = cube_texture_from(_distinct_images(), SEEN_FROM_OUTSIDE, NEAREST)
+    for face in range(FACE_COUNT):
+        for y in range(2):
+            for x in range(2):
+                var seen = cube.sample(_three_js_direction(face, x, y))
+                assert_color(seen.encode(), _texel(face, x, y))
+    # The px image is the face that looks along -x, as it is.
+    assert_color(cube.sample(Vector3(-1, 0.5, 0.5)).encode(), _texel(0, 0, 0))
+    assert_color(cube.sample(Vector3(1, 0.5, 0.5)).encode(), _texel(1, 1, 0))
     assert_equal(cube.face(0).filter, NEAREST)
 
 
@@ -381,7 +430,7 @@ def test_an_uninterpretable_color_space_must_be_settled() raises:
     assert_equal(cube.face(0).color_space, SRGB)
 
 
-def test_an_empty_image_is_refused_before_it_is_mirrored() raises:
+def test_an_empty_image_is_refused() raises:
     var images = six_images(RED, GREEN)
     images[2] = DecodedImage(0, 0, List[UInt8](), SRGB)
     with assert_raises():

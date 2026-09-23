@@ -355,7 +355,9 @@ The faces are held in three.js's order: `POSITIVE_X`, `NEGATIVE_X`, `POSITIVE_Y`
 
 Every face is what a camera at the center of the box sees looking out along one axis. `face_forward(face)` is the axis and `face_up(face)` is the camera's up. The up is positive y for the four side faces, and the z axis for the two faces on y. These are three.js's own six ups. A `CubeCamera` renders the faces this way, and the sampler reads them this way, so a rendered cube needs no flip.
 
-The six images of an OpenGL cube map are the same views mirrored left for right. three.js flips a sign for them, `flipEnvMap`. Here `cube_texture_from` takes a `CubeLayout`. `SEEN_FROM_INSIDE`, the default, reads each image as it is. `SEEN_FROM_OUTSIDE` mirrors each face once, on the way in. Use it for a set of six image files stored the usual way.
+three.js reads six image files in a different layout. The px image is the view along -x, and the nx image is the view along +x. No image is mirrored. three.js gets this layout from an OpenGL cube map and a sign, `flipEnvMap`, that turns the x axis over.
+
+Here `cube_texture_from` takes a `CubeLayout`. `SEEN_FROM_INSIDE`, the default, reads each image as it is. `SEEN_FROM_OUTSIDE` swaps the px and nx images on the way in. Use it for six image files that three.js's `CubeTextureLoader` reads.
 
 ### Sampling
 

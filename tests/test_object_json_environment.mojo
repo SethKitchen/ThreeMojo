@@ -335,7 +335,11 @@ def test_a_scene_read_back_renders_the_same() raises:
     var sky = again.background.cube
     assert_false(stores.cube_textures.get(sky).is_prefiltered())
     assert_true(stores.cube_textures.get(again.environment).is_prefiltered())
-    # The faces come back as they were, mirrored twice.
+    # three.js's layout: the px image is the face along -x and the nx
+    # image the face along +x, each as it is.
+    var urls = '"url":["' + _data_url(1) + '","' + _data_url(0) + '","'
+    assert_true(text.find(urls + _data_url(2) + '"') >= 0)
+    # The faces come back as they were.
     ref face = stores.cube_textures.get(sky).faces[1]
     ref first = assets.cube_textures.get(CubeTextureId(0)).faces[1]
     for at in range(len(first.pixels)):
@@ -415,17 +419,24 @@ def test_a_cube_as_three_js_writes_it() raises:
     assert_equal(cube.faces[0].filter, NEAREST)
     assert_equal(cube.faces[0].color_space, LINEAR)
     assert_equal(cube.faces[0].levels, 1)
-    # The first texel of a face is the last of the file's first row.
+    # Each face is its file as it is, and the px and nx files trade
+    # places, as three.js's `flipEnvMap` reads them.
     var file = _face_pixels(2)
-    assert_equal(cube.faces[2].pixels[0], file[(FACE - 1) * 4])
-    # Turned over, the first row is the file's last.
+    assert_equal(cube.faces[2].pixels[0], file[0])
+    var px = _face_pixels(0)
+    var nx = _face_pixels(1)
+    for at in range(len(px)):
+        assert_equal(cube.faces[1].pixels[at], px[at])
+        assert_equal(cube.faces[0].pixels[at], nx[at])
+    # Turned over, the first row is the file's last, not mirrored.
     var flipped = _read(
         _cube_document(
             ',"flipY":true', ',"type":"MeshBasicMaterial","envMap":"c"'
         )
     )
     ref turned = flipped[1].cube_textures.get(CubeTextureId(0))
-    assert_equal(turned.faces[2].pixels[0], file[(FACE * FACE - 1) * 4])
+    assert_equal(turned.faces[2].pixels[0], file[FACE * (FACE - 1) * 4])
+    assert_equal(turned.faces[2].pixels[4], file[(FACE * (FACE - 1) + 1) * 4])
     assert_equal(turned.faces[2].filter, BILINEAR)
     assert_equal(turned.faces[2].color_space, LINEAR)
     # three.js's default filters give a mip chain.

@@ -19,15 +19,17 @@ the six views three.js's `CubeCamera` renders. Sampling reads them back the
 same way, so a cube texture rendered by this project reflects the scene it
 was rendered from without any flip.
 
-The six images of an OpenGL cube map are laid out the other way. That
-convention dates from a left-handed coordinate system, and its faces are
-what the same camera sees *mirrored*: every one of the six is flipped left
-for right. three.js handles that with a sign, `flipEnvMap`, that it sets one
-way for a cube texture loaded from images and the other for one rendered
-into a target. Here the difference is settled when the images arrive:
-`cube_texture_from` takes a `CubeLayout`, and `SEEN_FROM_OUTSIDE` mirrors
-each face once, on the way in, so a sampler has one convention to read. See
-`face_uv` for the arithmetic, which both rasterizers share.
+Six image files for three.js are laid out the other way. They are an
+OpenGL cube map, a convention from a left-handed coordinate system, and
+three.js reads them through a sign, `flipEnvMap`, that turns the x axis of
+the lookup over for a cube loaded from images. The two mirrors cancel
+inside each image and not between the images: each is the camera's own
+view, unmirrored, but the px image lies toward -x and the nx image toward
++x. three.js's `LightProbeGenerator.fromCubeTexture` walks the texels the
+same way. Here the difference is settled when the images arrive:
+`cube_texture_from` takes a `CubeLayout`, and `SEEN_FROM_OUTSIDE` swaps the
+px and nx images on the way in, so a sampler has one convention to read.
+See `face_uv` for the arithmetic, which both rasterizers share.
 
 **A face is read at its full size, not down a mip chain.** A reflection's
 direction changes across a surface at a rate that has nothing to do with
@@ -117,9 +119,10 @@ struct CubeLayout(Equatable, ImplicitlyCopyable, Writable):
 # Each face is what a camera at the center sees looking out: what a
 # `CubeCamera` renders, and what a sampler reads. The default.
 comptime SEEN_FROM_INSIDE = CubeLayout(0)
-# Each face is that view mirrored left for right: the OpenGL cube map
-# layout, which is how a set of six image files is usually stored. Each
-# face is mirrored once on the way in.
+# three.js's layout for six image files, the OpenGL cube map read through
+# `flipEnvMap`: each image is the camera's view, but the px image is the
+# view along -x and the nx image the view along +x. The two trade places
+# on the way in, and nothing is mirrored.
 comptime SEEN_FROM_OUTSIDE = CubeLayout(1)
 
 
@@ -707,20 +710,6 @@ def validate_cube_uv(image: Texture) raises:
         raise Error("A PMREM's cube UV image is three tiles wide")
 
 
-def _mirrored(width: Int, height: Int, pixels: List[UInt8]) -> List[UInt8]:
-    """Return an RGBA image flipped left for right, row by row."""
-    var out = List[UInt8]()
-    out.reserve(len(pixels))
-    # The caller has refused an empty image, so neither loop runs zero
-    # times.
-    for y in range(height):  # pragma: no branch
-        for x in range(width):  # pragma: no branch
-            var at = (y * width + (width - 1 - x)) * Texture.CHANNELS
-            for channel in range(Texture.CHANNELS):  # pragma: no branch
-                out.append(pixels[at + channel])
-    return out^
-
-
 def cube_texture_from(
     images: List[DecodedImage],
     layout: CubeLayout = SEEN_FROM_INSIDE,
@@ -733,10 +722,9 @@ def cube_texture_from(
     `CubeTextureLoader.load` of six files.
 
     Each image becomes one face, wrapped `CLAMP`, in `POSITIVE_X` through
-    `NEGATIVE_Z` order. Under `SEEN_FROM_OUTSIDE` each face is mirrored
-    left for right on the way in, which turns the OpenGL layout six image
-    files are usually stored in into the camera's own; see the module
-    docstring.
+    `NEGATIVE_Z` order. Under `SEEN_FROM_OUTSIDE` the first two images
+    trade places on the way in, which turns three.js's layout for six
+    image files into the camera's own; see the module docstring.
 
     The color space comes from each file unless one is given, as
     `texture_from` reads it, and a file whose space cannot be interpreted
@@ -745,8 +733,9 @@ def cube_texture_from(
     Args:
         images: Six decoded images, all square and all one size.
         layout: `SEEN_FROM_INSIDE` if each image is what a camera at the
-            center sees, `SEEN_FROM_OUTSIDE` if each is that view mirrored,
-            as the OpenGL layout stores them.
+            center sees along its own axis, `SEEN_FROM_OUTSIDE` if the px
+            image is the view along -x and the nx image the view along +x,
+            as three.js's `CubeTextureLoader` reads them.
         filter: `NEAREST` or `BILINEAR`, for every face.
         color_space: `SRGB` or `LINEAR` to override what the files declare,
             or nothing to use it.
@@ -772,25 +761,22 @@ def cube_texture_from(
         )
     var faces = List[Texture]()
     for index in range(FACE_COUNT):  # pragma: no branch
-        ref image = images[index]
-        # Refused here rather than by `Texture`, which would refuse it too,
-        # because the mirror below walks the rows first.
-        if image.width <= 0 or image.height <= 0:
-            raise Error("Texture dimensions must be positive")
+        var source = index
+        if layout == SEEN_FROM_OUTSIDE and index < NEGATIVE_X + 1:
+            # POSITIVE_X reads the nx image and NEGATIVE_X the px one.
+            source = NEGATIVE_X - index
+        ref image = images[source]
         var space = color_space.or_else(image.color_space)
         if space == UNKNOWN_SPACE:
             raise Error(
                 "This image declares a color space that cannot be interpreted;"
                 " pass SRGB or LINEAR to say how to read it"
             )
-        var pixels = image.pixels.copy()
-        if layout == SEEN_FROM_OUTSIDE:
-            pixels = _mirrored(image.width, image.height, pixels)
         faces.append(
             Texture(
                 image.width,
                 image.height,
-                pixels^,
+                image.pixels.copy(),
                 CLAMP,
                 filter,
                 space,
@@ -812,8 +798,8 @@ def cube_texture_of(
 
     What `Renderer.render_cube` returns: each image is one face, as a
     `CubeCamera` rendered it, stored `SRGB` as `texture_of` stores a render
-    and wrapped `CLAMP`. Nothing is mirrored: a render is already the
-    camera's own view.
+    and wrapped `CLAMP`. Nothing is swapped: a render is already the
+    camera's own view along each axis.
 
     Args:
         images: Six rendered images, all square and all one size, in

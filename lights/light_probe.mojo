@@ -13,8 +13,9 @@ for `fromCubeRenderTarget`: `Renderer.render_cube` returns a `CubeTexture`,
 so a probe of a rendered scene is `light_probe_from_cube` of that.
 
 **One difference, and it is the convention.** three.js walks each face with
-its own table of where the texel is, one that mirrors the faces left for
-right as the OpenGL cube map layout does. A cube texture here holds one
+its own table of where the texel is, one in which the px image lies
+toward -x and the nx image toward +x, as `flipEnvMap` reads a cube loaded
+from images. A cube texture here holds one
 convention, the camera's, settled when its images arrive; see
 `render.cube_texture`. So the direction through a texel is
 `face_direction`, the same one every sampler here inverts, and a probe of a

@@ -176,7 +176,7 @@ three.js has no alpha mode, so the reader finds it from the use of the texture. 
 
 A cube texture is a texture entry whose image has six URLs. This is how three.js's `Source.toJSON` writes a `CubeTexture`, and how its `ObjectLoader` finds one. The writer writes six PNG `data:` URLs, `CubeReflectionMapping` (301) and `flipY` false.
 
-three.js keeps the six images of a cube in the OpenGL layout. Each image is the view from the center, mirrored left for right. Thus the writer mirrors each face, and the reader reads the images `SEEN_FROM_OUTSIDE`. See [Textures](Textures). A `flipY` of true turns each image upside down.
+three.js keeps the six images of a cube in its own layout. The px image is the view along -x, and the nx image is the view along +x. Thus the writer swaps these two faces, and the reader reads the images `SEEN_FROM_OUTSIDE`. See [Textures](Textures). A `flipY` of true turns each image upside down.
 
 A cube texture is one of these:
 
