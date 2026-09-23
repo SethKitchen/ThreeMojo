@@ -5761,3 +5761,253 @@ def test_a_specular_map_must_be_stored_as_data() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+# --- transmission -----------------------------------------------------------
+
+from lights.lighting import environment_brdf
+from math.matrix4 import Matrix4
+from render.rasterizer import check_transmission, check_triangle_maps
+from render.transmission import TransmissionTarget
+
+
+def glass_quad(
+    transmission: Float32 = 1,
+    transmission_map: TextureId = NO_TEXTURE,
+    thickness: Vector3 = Vector3(0, 0, 0),
+    thickness_map: TextureId = NO_TEXTURE,
+    attenuation_color: FloatColor = FloatColor(1.0, 1.0, 1.0),
+    attenuation_distance: Float32 = inf[DType.float32](),
+    dispersion: Float32 = 0,
+    alpha: Float32 = 1,
+    blend: Blending = OPAQUE,
+) -> List[RasterVertex]:
+    """Return `physical_quad` of a white, rough `PHYSICAL` surface with a
+    volume, at an alpha."""
+    var corners = physical_quad(
+        PHYSICAL, color=FloatColor(1, 1, 1, alpha), roughness=0.5
+    )
+    for index in range(len(corners)):
+        corners[index].transmission = transmission
+        corners[index].transmission_map = transmission_map
+        corners[index].thickness = thickness
+        corners[index].thickness_map = thickness_map
+        corners[index].attenuation_color = attenuation_color
+        corners[index].attenuation_distance = attenuation_distance
+        corners[index].dispersion = dispersion
+        corners[index].blend = blend
+    return corners^
+
+
+def a_red_scene(alpha: UInt8 = 255) raises -> TransmissionTarget:
+    """Return a flat red opaque scene to look through, 8x8."""
+    return TransmissionTarget(
+        RenderTarget(8, 8, Color(255, 0, 0, alpha)), Matrix4()
+    )
+
+
+def glass_pixel(
+    corners: List[RasterVertex],
+    scene: TransmissionTarget,
+    textures: TextureStore = TextureStore(),
+    mode: ShadeMode = SHADE_TEXTURE,
+    workers: Int = 1,
+    clear: Color = Color(0, 0, 0),
+) raises -> FloatColor:
+    """Draw `corners` looking through `scene` and return one pixel's light,
+    premultiplied."""
+    var target = RenderTarget(8, 8, clear)
+    rasterize_all(
+        corners,
+        target,
+        mode,
+        textures,
+        viewed_from_z(),
+        workers,
+        transmission=scene,
+    )
+    return target.color_at(3, 3)
+
+
+def glass_reflectance() -> Vector3:
+    """Return what a white dielectric at roughness 0.5 reflects head on
+    from an environment, three.js's `EnvironmentBRDF`."""
+    return environment_brdf(
+        1, Vector3(0.04, 0.04, 0.04), 1, floored_roughness(0.5)
+    )
+
+
+def test_a_corner_holds_no_volume_unless_asked() raises:
+    var corner = RasterVertex(0, 0, 0, 1, FloatColor(1, 1, 1))
+    assert_equal(corner.transmission, Float32(0))
+    assert_equal(corner.transmission_map, NO_TEXTURE)
+    assert_equal(corner.thickness.x, Float32(0))
+    assert_equal(corner.thickness_map, NO_TEXTURE)
+    assert_equal(corner.attenuation_color.g, Float32(1))
+    assert_equal(corner.attenuation_distance, inf[DType.float32]())
+    assert_equal(corner.dispersion, Float32(0))
+    assert_equal(corner.ior, Float32(1.5))
+
+
+def test_a_transmissive_surface_shows_the_scene_behind_it() raises:
+    # No light reaches the glass, so all it shows is the red scene through
+    # it, less what it reflects: three.js's `(1 - F) * transmittance *
+    # transmitted`, the diffuse light mixed all the way toward it.
+    var scene = a_red_scene()
+    var seen = glass_pixel(glass_quad(), scene)
+    var reflected = glass_reflectance()
+    assert_almost_equal(seen.r, 1 - reflected.x, atol=1e-3)
+    assert_almost_equal(seen.g, 0, atol=1e-5)
+    assert_almost_equal(seen.a, 1, atol=1e-5)
+    # Half the transmission shows half of it, and none shows the dark
+    # diffuse surface.
+    var half = glass_pixel(glass_quad(0.5), scene)
+    assert_almost_equal(half.r, (1 - reflected.x) / 2, atol=1e-3)
+    var none = glass_pixel(glass_quad(0), scene)
+    assert_almost_equal(none.r, 0, atol=1e-5)
+    # The same on four workers, band by band.
+    var banded = glass_pixel(glass_quad(), scene, workers=4)
+    assert_equal(banded.r, seen.r)
+    # With dispersion each channel reads its own index; on a flat scene
+    # the red is where it was.
+    var spread = glass_pixel(glass_quad(dispersion=3), scene)
+    assert_almost_equal(spread.r, seen.r, atol=1e-3)
+
+
+def test_a_volume_dims_the_light_it_carries() raises:
+    # One meter of glass, looked through head on, that turns white light
+    # half red after one meter: the red is halved.
+    var scene = a_red_scene()
+    var clear = glass_pixel(glass_quad(), scene)
+    var tinted = glass_pixel(
+        glass_quad(
+            thickness=Vector3(1, 1, 1),
+            attenuation_color=FloatColor(0.5, 1.0, 1.0),
+            attenuation_distance=1,
+        ),
+        scene,
+    )
+    assert_almost_equal(tinted.r, clear.r * 0.5, atol=1e-3)
+
+
+def test_the_volume_maps_multiply_the_transmission_and_the_thickness() raises:
+    # The transmission map's red and the thickness map's green, sampled
+    # under the mode that opens textures.
+    var textures = TextureStore()
+    var half = textures.add(a_data_texel(128, 0, 0))
+    var thin = textures.add(a_data_texel(0, 0, 0))
+    var scene = a_red_scene()
+    var reflected = glass_reflectance()
+    var mapped = glass_pixel(glass_quad(transmission_map=half), scene, textures)
+    assert_almost_equal(mapped.r, (1 - reflected.x) * 128.0 / 255.0, atol=1e-3)
+    var flat = glass_pixel(
+        glass_quad(
+            thickness=Vector3(1, 1, 1),
+            thickness_map=thin,
+            attenuation_color=FloatColor(0.5, 1.0, 1.0),
+            attenuation_distance=1,
+        ),
+        scene,
+        textures,
+    )
+    assert_almost_equal(flat.r, 1 - reflected.x, atol=1e-3)
+
+
+def test_a_transmissive_surface_is_as_opaque_as_the_scene_behind() raises:
+    # A blended glass over a half-transparent scene: three.js's
+    # `1 - (1 - a) * transmittance`, the alpha mixed toward it.
+    var scene = a_red_scene(128)
+    var seen = glass_pixel(
+        glass_quad(blend=BLEND), scene, clear=Color(0, 0, 0, 0)
+    )
+    assert_almost_equal(seen.a, 128.0 / 255.0, atol=1e-3)
+
+
+def test_a_transmissive_triangle_needs_a_scene_under_the_texture_mode() raises:
+    var target = RenderTarget(8, 8, Color(0, 0, 0))
+    var quad = glass_quad()
+    with assert_raises(contains="needs the opaque scene"):
+        rasterize_shaded(quad[0], quad[1], quad[2], target, SHADE_TEXTURE)
+    for workers in [1, 4]:
+        with assert_raises(contains="needs the opaque scene"):
+            rasterize_all(quad, target, SHADE_TEXTURE, workers=workers)
+    # Lit shading opens no texture, so the glass is drawn as it is.
+    rasterize_all(quad, target, SHADE_LIT)
+    check_transmission(quad[0], SHADE_TEXTURE, True)
+    check_transmission(glass_quad(0)[0], SHADE_TEXTURE, False)
+    # A triangle no draw names is not asked, and a run of no triangles
+    # or of segments asks nothing.
+    var draws: List[Draw] = [
+        Draw(DRAW_TRIANGLES, 0, 0),
+        Draw(DRAW_SEGMENTS, 0, 0),
+    ]
+    rasterize_frame(quad, List[RasterVertex](), draws, target, SHADE_TEXTURE)
+
+
+def test_a_volume_is_checked_like_the_rest_of_a_triangle() raises:
+    var quad = glass_quad()
+    check_triangle_state(quad[0], quad[1], quad[2])
+    for wrong in [nan[DType.float32](), Float32(-0.5), Float32(2)]:
+        var bad = glass_quad(wrong)
+        with assert_raises(contains="transmission must be between"):
+            check_triangle_state(bad[0], bad[1], bad[2])
+    var deep = glass_quad(thickness=Vector3(0, -1, 0))
+    with assert_raises(contains="thickness cannot be negative"):
+        check_triangle_state(deep[0], deep[1], deep[2])
+    var tinted = glass_quad(attenuation_color=FloatColor(1, -1, 1))
+    with assert_raises(contains="attenuation color cannot be negative"):
+        check_triangle_state(tinted[0], tinted[1], tinted[2])
+    for wrong in [nan[DType.float32](), Float32(0)]:
+        var far = glass_quad(attenuation_distance=wrong)
+        with assert_raises(contains="attenuation distance must be above"):
+            check_triangle_state(far[0], far[1], far[2])
+    for wrong in [nan[DType.float32](), Float32(-1)]:
+        var spread = glass_quad(dispersion=wrong)
+        with assert_raises(contains="dispersion cannot be negative"):
+            check_triangle_state(spread[0], spread[1], spread[2])
+    for wrong in [nan[DType.float32](), Float32(0.5), Float32(3)]:
+        var bent = glass_quad()
+        bent[0].ior = wrong
+        with assert_raises(contains="index of refraction must be between"):
+            check_triangle_state(bent[0], bent[1], bent[2])
+    var second = glass_quad()
+    second[1].dispersion = 1
+    with assert_raises(contains="disagree about their volume"):
+        check_triangle_state(second[0], second[1], second[2])
+    var third = glass_quad()
+    third[2].ior = 1.4
+    with assert_raises(contains="disagree about their volume"):
+        check_triangle_state(third[0], third[1], third[2])
+    var through = glass_quad(transmission_map=TextureId(-5))
+    with assert_raises(contains="transmission map id"):
+        check_triangle_state(through[0], through[1], through[2])
+    var thick = glass_quad(thickness_map=TextureId(-5))
+    with assert_raises(contains="thickness map id"):
+        check_triangle_state(thick[0], thick[1], thick[2])
+    var mapped = glass_quad(
+        transmission_map=TextureId(1), thickness_map=TextureId(2)
+    )
+    check_triangle_state(mapped[0], mapped[1], mapped[2])
+    var standard = glass_quad()
+    for index in range(len(standard)):
+        standard[index].kind = STANDARD
+    with assert_raises(contains="Only a physical triangle transmits"):
+        check_triangle_state(standard[0], standard[1], standard[2])
+
+
+def test_a_volume_map_must_be_stored_as_data() raises:
+    var textures = TextureStore()
+    var encoded = textures.add(
+        Texture(1, 1, [UInt8(255), 255, 255, 255], REPEAT, NEAREST, SRGB, False)
+    )
+    with assert_raises(contains="A transmission map holds data"):
+        check_triangle_maps(
+            glass_quad(transmission_map=encoded)[0], SHADE_TEXTURE, textures
+        )
+    with assert_raises(contains="A thickness map holds data"):
+        check_triangle_maps(
+            glass_quad(thickness_map=encoded)[0], SHADE_TEXTURE, textures
+        )
+    check_triangle_maps(
+        glass_quad(transmission_map=encoded)[0], SHADE_LIT, textures
+    )

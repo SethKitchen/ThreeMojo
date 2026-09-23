@@ -150,7 +150,9 @@ from materials.material import (
     DEFAULT_LINE_WIDTH,
     DOUBLE_SIDE,
     FRONT_SIDE,
+    DEFAULT_IOR,
     MULTIPLY_OPERATION,
+    NO_ATTENUATION,
     NO_DASH,
     NORMALS,
     Blending,
@@ -188,6 +190,8 @@ from render.raster_state import (
     RasterState,
     log_depth_factor,
 )
+from render.transmission import TransmissionTarget
+
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, check_tone_mapping
 from math.vector2 import Vector2
 from render.rasterizer import (
@@ -505,10 +509,12 @@ def _uv_transform(assets: Assets, material: Material) raises -> Matrix3:
         material.normal_map,
         material.bump_map,
         material.specular_map,
+        material.transmission_map,
+        material.thickness_map,
     ]
     var chosen = Matrix3()
     var settled = False
-    # Eight maps, always, so the loop never runs zero times.
+    # Ten maps, always, so the loop never runs zero times.
     for index in range(len(named)):  # pragma: no branch
         if named[index] == NO_TEXTURE:
             continue
@@ -737,13 +743,13 @@ struct _Draw(ImplicitlyCopyable):
     var instance: Int
 
 
-@fieldwise_init
 struct _Span(ImplicitlyCopyable):
     """One draw's run of primitives in a prepared list, with its sort key.
 
     What `_prepared` and `_prepared_lines` record beside the corners they
     emit, and what `prepare_frame` turns into `Draw` records: the run,
-    which list it is in, how deep the draw was, and whether it blends.
+    which list it is in, how deep the draw was, whether it blends, and
+    whether it transmits.
     """
 
     var kind: DrawKind
@@ -754,6 +760,39 @@ struct _Span(ImplicitlyCopyable):
     var blends: Bool
     # The draw's node's render order, which sorts before the depth.
     var order: Int
+    # Whether the draw's material transmits, three.js's `transmissive`
+    # list: drawn after every opaque run and before every blended one.
+    var transmits: Bool
+
+    def __init__(
+        out self,
+        kind: DrawKind,
+        first: Int,
+        count: Int,
+        depth: Float32,
+        blends: Bool,
+        order: Int,
+        transmits: Bool = False,
+    ):
+        """Record one run.
+
+        Args:
+            kind: Which list the run is in.
+            first: Its first primitive.
+            count: How many primitives it holds.
+            depth: The draw's camera-space depth.
+            blends: Whether its material blends.
+            order: Its node's render order.
+            transmits: Whether its material transmits. Only a filled
+                surface can.
+        """
+        self.kind = kind
+        self.first = first
+        self.count = count
+        self.depth = depth
+        self.blends = blends
+        self.order = order
+        self.transmits = transmits
 
 
 def _note_span(
@@ -764,6 +803,7 @@ def _note_span(
     depth: Float32,
     blends: Bool,
     order: Int,
+    transmits: Bool = False,
 ):
     """Record the primitives one draw emitted between two corner counts.
 
@@ -780,11 +820,14 @@ def _note_span(
         depth: The draw's camera-space depth.
         blends: Whether its material blends.
         order: Its node's render order.
+        transmits: Whether its material transmits.
     """
     var stride = kind.stride()
     var count = (end - begin) // stride
     if count > 0:
-        spans.append(_Span(kind, begin // stride, count, depth, blends, order))
+        spans.append(
+            _Span(kind, begin // stride, count, depth, blends, order, transmits)
+        )
 
 
 def _gather(
@@ -1423,15 +1466,23 @@ def _to_raster(
         physics.light_map,
         physics.light_map_intensity,
         physics.specular_map,
+        physics.transmission,
+        physics.transmission_map,
+        physics.thickness,
+        physics.thickness_map,
+        physics.attenuation_color,
+        physics.attenuation_distance,
+        physics.dispersion,
+        physics.ior,
     )
 
 
 @fieldwise_init
 struct _Physics(ImplicitlyCopyable):
-    """What a physical surface, a normal or bump map, the two baked maps
-    and a specular map add to every corner of one draw: the numbers and
-    the maps `RasterVertex` carries for them, gathered so `_to_raster`
-    takes one more argument rather than seventeen.
+    """What a physical surface, a normal or bump map, the two baked maps,
+    a specular map and a volume add to every corner of one draw: the
+    numbers and the maps `RasterVertex` carries for them, gathered so
+    `_to_raster` takes one more argument rather than twenty-five.
     """
 
     var roughness: Float32
@@ -1451,6 +1502,17 @@ struct _Physics(ImplicitlyCopyable):
     var light_map: TextureId
     var light_map_intensity: Float32
     var specular_map: TextureId
+    var transmission: Float32
+    var transmission_map: TextureId
+    # The material's thickness times the length of each axis of the draw's
+    # world matrix, three.js's `thickness * modelScale`.
+    var thickness: Vector3
+    var thickness_map: TextureId
+    # Decoded to linear once, as the base color is.
+    var attenuation_color: FloatColor
+    var attenuation_distance: Float32
+    var dispersion: Float32
+    var ior: Float32
 
     def __init__(out self):
         """Describe a surface that is not physical and carries no map: the
@@ -1472,6 +1534,14 @@ struct _Physics(ImplicitlyCopyable):
         self.light_map = NO_TEXTURE
         self.light_map_intensity = 1
         self.specular_map = NO_TEXTURE
+        self.transmission = 0
+        self.transmission_map = NO_TEXTURE
+        self.thickness = Vector3(0, 0, 0)
+        self.thickness_map = NO_TEXTURE
+        self.attenuation_color = FloatColor(1.0, 1.0, 1.0)
+        self.attenuation_distance = NO_ATTENUATION.to(METER)
+        self.dispersion = 0
+        self.ior = DEFAULT_IOR
 
 
 def _plane_in_view(plane: Plane, view: Matrix4) raises -> Plane:
@@ -2719,6 +2789,50 @@ def _spot_camera(
     return camera^
 
 
+def _has_transmissive_back(material: Material) -> Bool:
+    """Return True if a material's back faces join the transmission pass:
+    three.js redraws a transmissive object as `BackSide` when its side is
+    `DoubleSide`."""
+    return material.transmits() and material.side == DOUBLE_SIDE
+
+
+def _transmits(frame: Frame) -> Bool:
+    """Return True if any triangle of a prepared frame transmits.
+
+    Every triangle `prepare_frame` returns is one of its draws, so the
+    list is asked directly.
+    """
+    for triangle in range(len(frame.corners) // 3):
+        if frame.corners[triangle * 3].transmission > 0:
+            return True
+    return False
+
+
+def _is_see_through(frame: Frame, draw: Draw) -> Bool:
+    """Return True if a draw of a prepared frame transmits or blends:
+    three.js leaves both its `transmissive` and its `transparent` lists
+    out of the transmission pass."""
+    if draw.kind == DRAW_TRIANGLES:
+        ref first = frame.corners[draw.first * 3]
+        return first.transmission > 0 or first.blend.mixes()
+    if draw.kind == DRAW_SEGMENTS:
+        return frame.segments[draw.first * 2].blend.mixes()
+    return frame.points[draw.first].blend.mixes()
+
+
+def _opaque_draws(frame: Frame) -> List[Draw]:
+    """Return the draws of a prepared frame the transmission pass draws:
+    three.js's `opaqueObjects`, every run that neither transmits nor
+    blends, in the frame's order."""
+    var kept = List[Draw]()
+    # Only a frame with a transmissive run is asked, so it has a draw and
+    # the loop never runs zero times.
+    for index in range(len(frame.draws)):  # pragma: no branch
+        if not _is_see_through(frame, frame.draws[index]):
+            kept.append(frame.draws[index])
+    return kept^
+
+
 def _paint_backdrop(
     mut target: RenderTarget, kept: Rect, image: Framebuffer
 ) raises:
@@ -3209,6 +3323,7 @@ struct Renderer(Movable):
         mut spans: List[_Span],
         casters_only: Bool = False,
         receivers_cast: Bool = False,
+        transmissive_backs: Bool = False,
     ) raises -> List[RasterVertex]:
         """Turn a scene into the triangles a rasterizer can fill.
 
@@ -3261,6 +3376,10 @@ struct Renderer(Movable):
                 map, holding only the meshes that cast; see `_draws`.
             receivers_cast: Whether that view also holds the meshes that
                 receive; see `_draws`.
+            transmissive_backs: Whether this is the second half of the
+                transmission pass: the back faces of every two-sided
+                transmissive mesh and nothing else, three.js's
+                `material.side = BackSide` over its `transmissiveObjects`.
 
         Returns:
             Raster vertices, three per triangle, in submission order, or
@@ -3335,8 +3454,8 @@ struct Renderer(Movable):
                 # A wide line is drawn as triangles, so it is a filled
                 # surface and is left out of the wireframe half. Its
                 # triangles are built from its pairs of points; see
-                # `_emit_wide_line`.
-                if wireframe:
+                # `_emit_wide_line`. It never transmits.
+                if wireframe or transmissive_backs:
                     continue
                 var wide_begin = len(corners)
                 var wide_cut = List[Plane]()
@@ -3376,8 +3495,9 @@ struct Renderer(Movable):
             if draws[slot].sprite >= 0:
                 # A sprite names no geometry, so nothing below applies to
                 # it: its two triangles are built from its node instead.
-                # It is a filled surface only, and refuses a wireframe.
-                if wireframe:
+                # It is a filled surface only, and refuses a wireframe. It
+                # is basic, and never transmits.
+                if wireframe or transmissive_backs:
                     continue
                 var begin = len(corners)
                 var sprite_cut = List[Plane]()
@@ -3434,6 +3554,13 @@ struct Renderer(Movable):
             # skinned by the same code as a filled surface.
             if material.wireframe != wireframe:
                 continue
+            # The transmission pass's back faces: only a two-sided mesh
+            # that transmits, drawn from behind whatever its side says.
+            var side = material.side
+            if transmissive_backs:
+                if not _has_transmissive_back(material):
+                    continue
+                side = BACK_SIDE
             var cut = List[Plane]()
             var any_of = List[Plane]()
             _clip_sets(
@@ -3560,6 +3687,25 @@ struct Renderer(Movable):
                 _checked_data_map(
                     assets, material.specular_map, "A specular map"
                 ),
+                material.transmission,
+                _checked_data_map(
+                    assets, material.transmission_map, "A transmission map"
+                ),
+                # three.js's `thickness * modelScale`: the thickness is in
+                # the geometry's own units, and the slab is as deep along
+                # each world axis as that axis is stretched.
+                Vector3(
+                    material.thickness.to(METER) * _column_length(world, 0),
+                    material.thickness.to(METER) * _column_length(world, 1),
+                    material.thickness.to(METER) * _column_length(world, 2),
+                ),
+                _checked_data_map(
+                    assets, material.thickness_map, "A thickness map"
+                ),
+                FloatColor(srgb=material.attenuation_color),
+                material.attenuation_distance.to(METER),
+                material.dispersion,
+                material.ior,
             )
             if self.shading != SHADE_TEXTURE:
                 physics.roughness_map = NO_TEXTURE
@@ -3569,6 +3715,8 @@ struct Renderer(Movable):
                 physics.ao_map = NO_TEXTURE
                 physics.light_map = NO_TEXTURE
                 physics.specular_map = NO_TEXTURE
+                physics.transmission_map = NO_TEXTURE
+                physics.thickness_map = NO_TEXTURE
             # Where the maps are moved, tiled and turned on this surface,
             # asked of the material's own maps whatever the shading mode:
             # the uv view shows the coordinates the texture would be
@@ -3758,7 +3906,7 @@ struct Renderer(Movable):
                 tones,
                 ball,
                 mirrored,
-                material.side,
+                side,
                 env,
                 material.reflectivity,
                 material.combine,
@@ -3924,6 +4072,7 @@ struct Renderer(Movable):
                 draws[slot].depth,
                 draws[slot].blends,
                 draws[slot].order,
+                material.transmits(),
             )
 
         # A light's view of the casters keeps the standard depth, which
@@ -4630,7 +4779,7 @@ struct Renderer(Movable):
         var draws = List[Draw]()
         for span in range(len(corner_spans)):
             ref run = corner_spans[span]
-            if not run.blends:
+            if not run.blends and not run.transmits:
                 draws.append(Draw(DRAW_TRIANGLES, run.first, run.count))
         for span in range(len(segment_spans)):
             ref run = segment_spans[span]
@@ -4640,6 +4789,24 @@ struct Renderer(Movable):
             ref run = point_spans[span]
             if not run.blends:
                 draws.append(Draw(DRAW_POINTS, run.first, run.count))
+        # The transmissive runs, after every opaque run and before every
+        # blended one, furthest first, as three.js draws its
+        # `transmissive` list between its `opaque` and `transparent`
+        # lists and sorts it as it sorts the transparent one. A
+        # transmissive run that also blends is drawn here, as three.js
+        # puts an object with any transmission on that list first.
+        var clear_order = List[Int]()
+        var clear_depths = List[Float32]()
+        var clear_orders = List[Int]()
+        for span in range(len(corner_spans)):
+            if corner_spans[span].transmits:
+                clear_order.append(span)
+                clear_depths.append(corner_spans[span].depth)
+                clear_orders.append(corner_spans[span].order)
+        _sort_by(clear_order, clear_depths, clear_orders)
+        for position in range(len(clear_order)):
+            ref run = corner_spans[clear_order[position]]
+            draws.append(Draw(DRAW_TRIANGLES, run.first, run.count))
         # Every kind's blended runs, furthest first. Each list is already
         # in that order on its own; the sort is stable, so at one depth a
         # surface still goes before a line, and a line before a point.
@@ -4648,7 +4815,7 @@ struct Renderer(Movable):
         var depths = List[Float32]()
         var orders = List[Int]()
         for span in range(len(corner_spans)):
-            if corner_spans[span].blends:
+            if corner_spans[span].blends and not corner_spans[span].transmits:
                 order.append(len(mixed))
                 depths.append(corner_spans[span].depth)
                 orders.append(corner_spans[span].order)
@@ -4898,16 +5065,7 @@ struct Renderer(Movable):
         # rather than converging. See `toward_camera`. Which way is up for
         # the camera goes with them too, for the frame a `MATCAP` surface
         # is looked up in. See `camera_up`.
-        var lighting = Lighting(
-            scene,
-            visible=camera.visible_layers(),
-            eye=camera_position(scene, camera),
-            toward_eye=toward_camera(scene, camera),
-            up=camera_up(scene, camera),
-            shadows=self.shadow_maps(scene, assets, camera.visible_layers()),
-            ltc=self.ltc_tables(),
-            spot_maps=self._projected(scene, assets, camera.visible_layers()),
-        )
+        var lighting = self._lighting(scene, assets, camera)
         # The scene's fog as the rasterizer takes it. Each corner already
         # carries the depth `prepare` measured for it along this view.
         var fog = FogView(scene.fog)
@@ -4930,6 +5088,12 @@ struct Renderer(Movable):
         # lost an image to an error that touched nothing. Everything that
         # can be refused is now asked before anything is written.
         var backdrop = self.backdrop(scene, assets, camera)
+        # The opaque scene a transmissive surface looks through, drawn
+        # before the frame as three.js draws its transmission pass, and
+        # before the clear, since it too can be refused.
+        var seen = self._transmission_pass(
+            frame, scene, assets, camera, lighting, fog, backdrop
+        )
         target.clear_inside(
             kept, self.clear_color(scene), self.depth_mode_for(camera)
         )
@@ -4955,7 +5119,193 @@ struct Renderer(Movable):
             frame.points,
             assets.cube_textures,
             self.render_scale,
+            seen,
         )
+
+    def _lighting[
+        C: Camera
+    ](self, scene: Scene, assets: Assets, camera: C) raises -> Lighting:
+        """Return the scene's lights as `render_into` resolves them for
+        this camera: the ones on its layers, its shadows, and where it
+        stands."""
+        return Lighting(
+            scene,
+            visible=camera.visible_layers(),
+            eye=camera_position(scene, camera),
+            toward_eye=toward_camera(scene, camera),
+            up=camera_up(scene, camera),
+            shadows=self.shadow_maps(scene, assets, camera.visible_layers()),
+            ltc=self.ltc_tables(),
+            spot_maps=self._projected(scene, assets, camera.visible_layers()),
+        )
+
+    def to_target[C: Camera](self, scene: Scene, camera: C) raises -> Matrix4:
+        """Return the transform from a world position to a coordinate on
+        the transmission target: the camera's view, its projection and
+        the viewport, then pixels scaled to `u` across and `v` up.
+
+        three.js's `projectionMatrix * viewMatrix` followed by its
+        `* 0.5 + 0.5`, onto a target the renderer's size; see
+        `render.transmission`.
+
+        Args:
+            scene: The scene, for where the camera is.
+            camera: The camera.
+
+        Returns:
+            The matrix, divided by its fourth row as a projection is.
+
+        Raises:
+            Error: If the camera's matrices are refused.
+        """
+        var onto = Matrix4()
+        onto.elements[0] = 1 / Float32(self.width)
+        onto.elements[5] = -1 / Float32(self.height)
+        onto.elements[13] = 1
+        onto.multiply(self._to_screen(camera))
+        onto.multiply(camera.view_matrix_in(scene))
+        return onto^
+
+    def transmission_target[
+        C: Camera
+    ](
+        self, scene: Scene, assets: Assets, camera: C
+    ) raises -> TransmissionTarget:
+        """Return the opaque scene a transmissive surface looks through,
+        as `render_into` draws it first: three.js's
+        `renderTransmissionPass`.
+
+        For a caller that draws the frame elsewhere, such as
+        `render.gpu.GpuRenderer.draw`, which takes the target as it is.
+        Empty when nothing in the frame transmits or the shading mode is
+        not `SHADE_TEXTURE`.
+
+        Args:
+            scene: The scene.
+            assets: The geometry, materials and textures it names.
+            camera: The camera.
+
+        Returns:
+            The target.
+
+        Raises:
+            Error: Everything `render_into` raises.
+        """
+        var frame = self.prepare_frame(scene, assets, camera)
+        var fog = FogView(scene.fog)
+        fog.validate()
+        return self._transmission_pass(
+            frame,
+            scene,
+            assets,
+            camera,
+            self._lighting(scene, assets, camera),
+            fog,
+            self.backdrop(scene, assets, camera),
+        )
+
+    def _transmission_pass[
+        C: Camera
+    ](
+        self,
+        frame: Frame,
+        scene: Scene,
+        assets: Assets,
+        camera: C,
+        lighting: Lighting,
+        fog: FogView,
+        backdrop: Optional[Framebuffer],
+    ) raises -> TransmissionTarget:
+        """Draw the opaque part of a prepared frame into a target of its
+        own and return it with its chain: three.js's
+        `renderTransmissionPass`.
+
+        The clear color, or white at half alpha when the clear color is
+        not opaque, as three.js clears the pass. Then the background, the
+        runs that neither transmit nor blend with no tone mapping, as
+        three.js turns it off for the pass, and the chain. Then the back
+        faces of every two-sided transmissive mesh, each looking through
+        what was drawn so far, and the chain again. A frame that does not
+        transmit, or a mode that opens no texture, draws nothing and
+        returns an empty target.
+
+        Args:
+            frame: The frame, prepared.
+            scene: The scene.
+            assets: The geometry, materials and textures it names.
+            camera: The camera.
+            lighting: The scene's lights, as `_lighting` resolves them.
+            fog: The scene's fog, checked.
+            backdrop: The scene's image background, or none.
+
+        Returns:
+            The target, empty when nothing needs it.
+
+        Raises:
+            Error: Everything `rasterize_frame` raises.
+        """
+        if self.shading != SHADE_TEXTURE or not _transmits(frame):
+            return TransmissionTarget()
+        var kept = Rect.whole(self.width, self.height)
+        if self.scissor_test:
+            kept = self.scissor
+        var clear = self.clear_color(scene)
+        if clear.a < 255:
+            clear = Color(255, 255, 255, 128)
+        var drawn = RenderTarget(self.width, self.height, clear)
+        drawn.clear_inside(
+            Rect.whole(self.width, self.height),
+            clear,
+            self.depth_mode_for(camera),
+        )
+        drawn.set_scissor(kept)
+        var painted = Bool(backdrop)
+        if painted:
+            _paint_backdrop(drawn, kept, backdrop.value())
+        rasterize_frame(
+            frame.corners,
+            frame.segments,
+            _opaque_draws(frame),
+            drawn,
+            self.shading,
+            assets.textures,
+            lighting,
+            self.workers,
+            fog,
+            frame.points,
+            assets.cube_textures,
+            self.render_scale,
+        )
+        var view = self.to_target(scene, camera)
+        var seen = TransmissionTarget(drawn, view)
+        var backs = List[_Span]()
+        var turned = self._prepared(
+            scene, assets, camera, False, backs, transmissive_backs=True
+        )
+        if len(backs) == 0:
+            return seen^
+        var order = List[Draw]()
+        # Not empty, as asked just above.
+        for span in range(len(backs)):  # pragma: no branch
+            order.append(
+                Draw(DRAW_TRIANGLES, backs[span].first, backs[span].count)
+            )
+        rasterize_frame(
+            turned,
+            List[RasterVertex](),
+            order,
+            drawn,
+            self.shading,
+            assets.textures,
+            lighting,
+            self.workers,
+            fog,
+            List[RasterVertex](),
+            assets.cube_textures,
+            self.render_scale,
+            seen,
+        )
+        return TransmissionTarget(drawn, view)
 
     def set_ltc_tables(mut self, var tables: LtcTables):
         """Hold the tables a rect area light is evaluated with.

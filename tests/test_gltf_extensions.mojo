@@ -329,7 +329,9 @@ def test_every_read_extension_can_be_required() raises:
             + '"KHR_materials_ior","KHR_materials_specular",'
             + '"KHR_materials_clearcoat","KHR_materials_unlit",'
             + '"KHR_texture_transform","KHR_lights_punctual",'
-            + '"KHR_mesh_quantization","EXT_mesh_gpu_instancing"]'
+            + '"KHR_mesh_quantization","EXT_mesh_gpu_instancing",'
+            + '"KHR_materials_transmission","KHR_materials_volume",'
+            + '"KHR_materials_dispersion"]'
         ),
         scene,
         assets,
@@ -348,17 +350,16 @@ def test_a_required_extension_that_is_not_read_is_refused() raises:
     refuses(
         doc(
             ',"extensionsRequired":["KHR_texture_transform",'
-            + '"KHR_materials_transmission","KHR_materials_volume"]'
+            + '"KHR_materials_sheen","KHR_materials_iridescence"]'
         ),
-        "KHR_materials_transmission",
+        "KHR_materials_sheen",
     )
     # An extension only used is read without it: the sheen is not there.
     var scene = Scene()
     var assets = Assets()
     var index = first_material(
         '{"extensions":{"KHR_materials_sheen":{"sheenColorFactor":[1,0,0]},'
-        + '"KHR_materials_transmission":{"transmissionFactor":1},'
-        + '"KHR_materials_volume":{"thicknessFactor":1}}}',
+        + '"KHR_materials_iridescence":{"iridescenceFactor":1}}}',
         assets,
     )
     var material = assets.materials.get(index)
@@ -1099,3 +1100,87 @@ def test_a_malformed_instancing_is_refused() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+# --- transmission, volume and dispersion ------------------------------------
+
+from render.texture import IGNORED
+from render.srgb import LINEAR
+from std.math import inf
+
+
+def test_transmission_volume_and_dispersion_make_a_glass() raises:
+    var assets = Assets()
+    var index = first_material(
+        '{"extensions":{"KHR_materials_transmission":'
+        + '{"transmissionFactor":0.75},'
+        + '"KHR_materials_volume":{"thicknessFactor":0.5,'
+        + '"attenuationDistance":2,"attenuationColor":[1,0,0.2158605]},'
+        + '"KHR_materials_dispersion":{"dispersion":3}}}',
+        assets,
+    )
+    var glass = assets.materials.get(index)
+    assert_equal(glass.kind, PHYSICAL)
+    assert_true(glass.transmits())
+    assert_almost_equal(glass.transmission, Float32(0.75), atol=TOLERANCE)
+    assert_almost_equal(glass.thickness.to(METER), Float32(0.5), atol=TOLERANCE)
+    assert_almost_equal(
+        glass.attenuation_distance.to(METER), Float32(2), atol=TOLERANCE
+    )
+    # The linear factor is written as sRGB, as three.js converts it.
+    assert_equal(glass.attenuation_color.r, UInt8(255))
+    assert_equal(glass.attenuation_color.g, UInt8(0))
+    assert_equal(glass.attenuation_color.b, UInt8(128))
+    assert_almost_equal(glass.dispersion, Float32(3), atol=TOLERANCE)
+    # Each empty: three.js's defaults, and a physical material still.
+    index = first_material(
+        '{"extensions":{"KHR_materials_transmission":{},'
+        + '"KHR_materials_volume":{},"KHR_materials_dispersion":{}}}',
+        assets,
+    )
+    var bare = assets.materials.get(index)
+    assert_equal(bare.kind, PHYSICAL)
+    assert_equal(bare.transmission, Float32(0))
+    assert_equal(bare.thickness.to(METER), Float32(0))
+    assert_equal(bare.attenuation_distance.to(METER), inf[DType.float32]())
+    assert_equal(bare.attenuation_color.g, UInt8(255))
+    assert_equal(bare.dispersion, Float32(0))
+    # A distance of zero is none, as three.js's `|| Infinity` reads it.
+    index = first_material(
+        '{"extensions":{"KHR_materials_volume":{"attenuationDistance":0}}}',
+        assets,
+    )
+    assert_equal(
+        assets.materials.get(index).attenuation_distance.to(METER),
+        inf[DType.float32](),
+    )
+    refuses(
+        material_doc(
+            '{"extensions":{"KHR_materials_transmission":'
+            + '{"transmissionFactor":2}}}'
+        ),
+        "transmission must be between",
+    )
+
+
+def test_the_volume_maps_are_read_as_data() raises:
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
+        textured(
+            '[{"extensions":{"KHR_materials_transmission":'
+            + '{"transmissionFactor":1,"transmissionTexture":{"index":1}},'
+            + '"KHR_materials_volume":{"thicknessFactor":0.2,'
+            + '"thicknessTexture":{"index":1}}}}]'
+        ),
+        scene,
+        assets,
+    )
+    var glass = assets.materials.get(model.materials[0])
+    assert_true(glass.transmission_map != NO_TEXTURE)
+    assert_true(glass.thickness_map != NO_TEXTURE)
+    assert_true(
+        assets.textures.get(glass.transmission_map).color_space == LINEAR
+    )
+    assert_true(assets.textures.get(glass.transmission_map).alpha == IGNORED)
+    assert_true(assets.textures.get(glass.thickness_map).alpha == IGNORED)

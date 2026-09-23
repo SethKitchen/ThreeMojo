@@ -8,7 +8,7 @@ three.js: `Material`, `MeshLambertMaterial`, `MeshPhongMaterial`, `MeshStandardM
 
 Properties: `side`, `opacity`, `transparent`, `map`, `emissive`, `emissiveIntensity`, `emissiveMap`, `specular`, `shininess`, `alphaMap`, `alphaTest`, `gradientMap`, `matcap`, `wireframe`, `dashSize`, `gapSize`, `scale`, `size`, `sizeAttenuation`, `rotation`, `envMap`, `reflectivity`, `combine`.
 
-Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `clearcoat`, `clearcoatRoughness`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`, `aoMap`, `aoMapIntensity`, `lightMap`, `lightMapIntensity`, `specularMap`, `displacementMap`, `displacementScale`, `displacementBias`. Shading properties: `flatShading`.
+Physical properties: `roughness`, `metalness`, `roughnessMap`, `metalnessMap`, `envMapIntensity`, `ior`, `specularColor`, `specularIntensity`, `clearcoat`, `clearcoatRoughness`, `transmission`, `transmissionMap`, `thickness`, `thicknessMap`, `attenuationColor`, `attenuationDistance`, `dispersion`. Map properties: `normalMap`, `normalScale`, `bumpMap`, `bumpScale`, `aoMap`, `aoMapIntensity`, `lightMap`, `lightMapIntensity`, `specularMap`, `displacementMap`, `displacementScale`, `displacementBias`. Shading properties: `flatShading`.
 
 ## Construct one
 
@@ -71,6 +71,13 @@ Material(color, emissive=Color(255, 255, 255), emissive_intensity=0.5, emissive_
 | `light_map_intensity` | `Float32` | `1.0` | What the light map is multiplied by. |
 | `specular_map` | `TextureId` | `NO_TEXTURE` | A texture whose red channel scales the highlight and the reflection. See [Specular map](#specular-map). |
 | `flat_shading` | `Bool` | `False` | Light each face with its own normal. See [Flat shading](#flat-shading). |
+| `transmission` | `Float32` | `0.0` | How much of a `PHYSICAL` surface's diffuse light is the scene behind it. See [Transmission](#transmission). |
+| `transmission_map` | `TextureId` | `NO_TEXTURE` | A texture whose red channel multiplies the transmission. |
+| `thickness` | `Length` | `NO_THICKNESS` | How deep the volume under the surface is. |
+| `thickness_map` | `TextureId` | `NO_TEXTURE` | A texture whose green channel multiplies the thickness. |
+| `attenuation_color` | `Color` | white | The color white light becomes inside the volume. |
+| `attenuation_distance` | `Length` | `NO_ATTENUATION` | How far the light travels to become it. Infinite by default. |
+| `dispersion` | `Float32` | `0.0` | How far the three channels bend apart. |
 
 ## Side
 
@@ -329,7 +336,7 @@ A clear coat is a second, colorless GGX lobe over the surface. It lies on the su
 
 ### What is not ported
 
-three.js's transmission, sheen, iridescence, anisotropy, dispersion and their maps are not ported. Nor is the geometric roughness three.js adds from how fast the normal changes across a pixel, which needs neighboring pixels this project shades without.
+three.js's sheen, iridescence, anisotropy and their maps are not ported. Nor is the geometric roughness three.js adds from how fast the normal changes across a pixel, which needs neighboring pixels this project shades without. [Transmission](#transmission) is ported.
 
 `examples/physical.mojo` draws the range: a row of spheres from chalk to mirror, and from dielectric to metal.
 
@@ -530,6 +537,72 @@ A `BASIC` or `SHADOW` material refuses a displacement map, as three.js gives nei
 - three.js culls a displaced mesh by the bound of its geometry. This port keeps it, so the culling does not change the image.
 - Points, lines and sprites do not read the map. Their materials are `BASIC`, as in three.js.
 - The loaders and the exporters do not read or write the three properties yet.
+
+## Transmission
+
+A transmissive `PHYSICAL` surface shows the opaque scene behind it through itself, bent by its index of refraction: three.js's `transmission`. Glass, water and gems are transmissive.
+
+```mojo
+var glass = assets.materials.add(
+    physical_material(
+        Color(255, 255, 255),
+        roughness=0.05,
+        ior=1.5,
+        transmission=1.0,
+        thickness=Length(0.5, METER),
+        attenuation_color=Color(200, 230, 255),
+        attenuation_distance=Length(2.0, METER),
+    )
+)
+```
+
+| Property | three.js | Default | Meaning |
+|---|---|---|---|
+| `transmission` | `transmission` | `0.0` | How much of the diffuse light is replaced by the light seen through the surface, from zero to one. |
+| `transmission_map` | `transmissionMap` | `NO_TEXTURE` | Its red channel multiplies the transmission. Data: `LINEAR` and `IGNORED`. |
+| `thickness` | `thickness` | `NO_THICKNESS` | How deep the volume is, in the geometry's own units. |
+| `thickness_map` | `thicknessMap` | `NO_TEXTURE` | Its green channel multiplies the thickness. Data: `LINEAR` and `IGNORED`. |
+| `attenuation_color` | `attenuationColor` | white | The color white light becomes after `attenuation_distance`, as authored in sRGB. |
+| `attenuation_distance` | `attenuationDistance` | `NO_ATTENUATION` | How far the light travels to become that color. Infinite dims nothing. |
+| `dispersion` | `dispersion` | `0.0` | How far the three channels bend apart, from zero. |
+| `ior` | `ior` | `1.5` | The index the light is bent at, from one to 2.333. |
+
+### The transmission pass
+
+The renderer draws a frame that transmits in two passes, as three.js's `renderTransmissionPass` does:
+
+1. `Renderer.render_into` draws every run that neither transmits nor blends into a target of its own. It clears to the clear color, or to white at half alpha when the clear color is not opaque. It paints the background and turns no tone mapping on.
+2. It builds a mip chain of that target, a box filter of linear floats. `TransmissionTarget` in `render/transmission.mojo` holds the chain and the matrix from a world position to a place on it.
+3. It draws the back faces of every two-sided transmissive mesh into the same target, each looking through the first chain. Then it builds the chain again.
+4. It draws the frame. The transmissive runs come after every opaque run and before every blended run, furthest first. A transmissive run that blends is drawn with the transmissive runs, as three.js puts it on its `transmissive` list.
+
+`Renderer.transmission_target(scene, assets, camera)` returns the target without the frame. A caller that draws the frame on the GPU passes it to `GpuRenderer.draw` as `transmission`.
+
+### What a fragment shows
+
+A transmissive fragment follows three.js's `getIBLVolumeRefraction`:
+
+- The view is refracted at `1 / ior` and made a unit vector. It is scaled along each world axis by the thickness, times the map's green, times the length of that axis of the mesh's world matrix.
+- The point where the ray leaves is projected onto the target. The target is read there with a bicubic filter, three.js's `textureBicubic`. The level is `log2(width) * roughness * clamp(ior * 2 - 2, 0, 1)`, so a rough surface shows a blurred scene.
+- Beer's law dims each channel by `attenuation_color ^ (length / attenuation_distance)`.
+- The light is multiplied by the diffuse color and the dimming, and by one minus what the surface reflects, three.js's `EnvironmentBRDF`.
+- The diffuse light, direct and indirect, is mixed toward that light by the transmission, times the map's red. The reflection, the clear coat and the glow stay as they are.
+- The alpha is mixed toward `1 - (1 - a) * t`, where `a` is the target's alpha and `t` is the mean dimming. This only matters on a surface that blends.
+
+With a dispersion above zero, each channel is refracted at its own index: `ior` less and more half of `(ior - 1) * 0.025 * dispersion`. Red reads the red of its own sample, green the green, blue the blue.
+
+`volume_refraction` is the arithmetic, over any `TransmissionSource`. The host reads the target's texture, and the GPU kernel reads its copy of the target. So both backends run one function.
+
+### When a surface transmits
+
+A surface transmits under `SHADE_TEXTURE` alone, because the scene behind it is read from a texture. The other two shading modes draw it as a plain physical surface and draw no transmission pass. A transmissive triangle drawn with no target under `SHADE_TEXTURE` is refused. A kind that is not `PHYSICAL` refuses every transmission property that is not its default.
+
+### Where this port differs
+
+- The target is the renderer's size, where three.js sizes it to the viewport. With the viewport the whole target, as it is by default, the two agree.
+- A read past the chain's last level reads the last level. WebGL leaves `textureSize` of a missing level undefined.
+- A ray of no length is not dimmed. three.js divides zero by zero there for a black attenuation color.
+- The GPU does not draw the pass itself. The host draws it and uploads the target with the frame.
 
 ## Shadow material
 
@@ -840,10 +913,13 @@ The constructor raises for:
 - An ao map or a light map on a `MATCAP`, `NORMALS`, `DEPTH` or `SHADOW` material, or on a wireframe.
 - A specular map id below zero that is not `NO_TEXTURE`. A specular map on a kind that is not `BASIC`, `LAMBERT` or `PHONG`, or on a wireframe.
 - Flat shading on a `BASIC`, `DEPTH` or `SHADOW` material, which a wireframe is.
+- A transmission outside zero to one, or not finite. A thickness that is negative or not finite. An attenuation distance that is not above zero. A dispersion that is negative or not finite.
+- A transmission or thickness map id below zero that is not `NO_TEXTURE`.
+- A transmission property that is not its default on a kind that is not `PHYSICAL`. The seven are the transmission, the thickness, their two maps, the attenuation color and distance, and the dispersion.
 
 `Renderer.prepare` raises for a depth function, a stencil function or a stencil operation that is none of the eight. It raises for a stencil reference or mask outside 0 to 255, and for a polygon offset that is not finite. `Material.raster_state` and `Material.depth_offset` make these checks.
 
-`Renderer.prepare` raises for an emissive map that reads its alpha as coverage. It raises for an env map, or a scene environment, that is not in the assets. It raises for a roughness, metalness, normal, bump or specular map that is not in the assets or is not stored as data. It raises for an ao map that is not in the assets or is not stored as data. It raises for a light map that is not in the assets or reads its alpha as coverage. It raises for an ao map and a light map whose transforms or channels differ, and for the second channel on any other map.
+`Renderer.prepare` raises for an emissive map that reads its alpha as coverage. It raises for an env map, or a scene environment, that is not in the assets. It raises for a roughness, metalness, normal, bump, specular, transmission or thickness map that is not in the assets or is not stored as data. It raises for an ao map that is not in the assets or is not stored as data. It raises for a light map that is not in the assets or reads its alpha as coverage. It raises for an ao map and a light map whose transforms or channels differ, and for the second channel on any other map.
 
 `Material.set_displacement` and `Material.check_displacement` raise for a displacement map id below zero that is not `NO_TEXTURE`. They raise for a displacement scale or bias that is not finite. They raise for a scale that is not one meter or a bias that is not zero with no map. They raise for a map on a `BASIC` or `SHADOW` material. `Renderer.prepare` and the raycaster make the same check.
 

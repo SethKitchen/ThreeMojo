@@ -159,6 +159,15 @@ environment's diffuse term and, on a physical surface, its reflection.
 The direct lights are left alone: a lamp still lights a crevice. Each map
 reads the coordinates its texture's `channel` names, so a baked map can
 use the geometry's second set, `uv1`.
+
+`transmission`, `thickness`, `attenuation_color`, `attenuation_distance`
+and `dispersion` are three.js's fields of the same names on
+`MeshPhysicalMaterial`, with `transmission_map` and `thickness_map`. A
+transmissive surface shows the opaque scene behind it through itself,
+bent by its index of refraction through a slab `thickness` deep, dimmed
+toward `attenuation_color` over `attenuation_distance`, and blurred by its
+roughness. The renderer draws the opaque scene first to have something to
+show; see `render.transmission`.
 """
 
 from render.cube_texture_store import (
@@ -190,7 +199,7 @@ from render.texture_store import NO_TEXTURE, TextureId
 from math.bounds import Plane
 from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import isfinite, min
+from std.math import inf, isfinite, min
 from units.si import Angle, Length, METER, RADIAN
 
 # No dash and no gap: a solid line, and what a material says unless asked.
@@ -216,6 +225,12 @@ comptime MAX_IOR = Float32(2.333)
 # How many clipping planes one material holds. three.js has no limit; the
 # planes live inline here so that a material stays a plain value.
 comptime MAX_CLIPPING_PLANES = 8
+# A slab of no depth, three.js's `thickness` default: a transmissive
+# surface bends nothing and is as thin as a sheet of glass.
+comptime NO_THICKNESS = Length(0.0, METER)
+# A volume that dims nothing however far the light goes: three.js's
+# `attenuationDistance` default of `Infinity`.
+comptime NO_ATTENUATION = Length(inf[DType.float32](), METER)
 # What a dielectric reflects head on: three.js's `vec3(0.04)`.
 comptime DIELECTRIC_REFLECTANCE = Float32(0.04)
 comptime _WHITE = Color(255, 255, 255)
@@ -679,8 +694,8 @@ comptime MATCAP = MaterialKind(6)
 # environment reflected by the split sum: three.js's `MeshStandardMaterial`.
 comptime STANDARD = MaterialKind(7)
 # `STANDARD` with an index of refraction, a specular color and intensity,
-# and a clear coat: three.js's `MeshPhysicalMaterial`, in part. Its
-# transmission, sheen, iridescence and anisotropy are not ported.
+# a clear coat and transmission: three.js's `MeshPhysicalMaterial`, in
+# part. Its sheen, iridescence and anisotropy are not ported.
 comptime PHYSICAL = MaterialKind(8)
 # Unlit and transparent everywhere but where a shadow falls, where it shows
 # its color by how much of the light is blocked: three.js's
@@ -888,6 +903,23 @@ struct Material(ImplicitlyCopyable):
     # `clearcoatRoughness`. Zero and zero by default, as there.
     var clearcoat: Float32
     var clearcoat_roughness: Float32
+    # How much of a `PHYSICAL` surface's diffuse light is the opaque scene
+    # behind it seen through it instead, from zero to one, three.js's
+    # `transmission`, and a map whose red channel multiplies it, three.js's
+    # `transmissionMap`. How deep the volume under the surface is, in the
+    # geometry's own units, three.js's `thickness`, and a map whose green
+    # channel multiplies it, three.js's `thicknessMap`. The color white
+    # light becomes inside, three.js's `attenuationColor`, and how far it
+    # travels to become it, three.js's `attenuationDistance`. How far the
+    # three channels bend apart, three.js's `dispersion`. Both maps are
+    # data, `LINEAR` and `IGNORED`. See `render.transmission`.
+    var transmission: Float32
+    var transmission_map: TextureId
+    var thickness: Length
+    var thickness_map: TextureId
+    var attenuation_color: Color
+    var attenuation_distance: Length
+    var dispersion: Float32
     # The material's own clipping planes, three.js's `clippingPlanes`, at
     # most `MAX_CLIPPING_PLANES`, each a unit normal and a constant packed
     # four floats apart so that a material stays a plain value. Read with
@@ -979,6 +1011,13 @@ struct Material(ImplicitlyCopyable):
         light_map_intensity: Float32 = 1.0,
         specular_map: TextureId = NO_TEXTURE,
         flat_shading: Bool = False,
+        transmission: Float32 = 0.0,
+        transmission_map: TextureId = NO_TEXTURE,
+        thickness: Length = NO_THICKNESS,
+        thickness_map: TextureId = NO_TEXTURE,
+        attenuation_color: Color = _WHITE,
+        attenuation_distance: Length = NO_ATTENUATION,
+        dispersion: Float32 = 0.0,
     ) raises:
         """Describe a surface.
 
@@ -1121,6 +1160,25 @@ struct Material(ImplicitlyCopyable):
             flat_shading: Whether every fragment of a triangle is lit with
                 the triangle's own geometric normal rather than with the
                 interpolated vertex normals, three.js's `flatShading`.
+            transmission: How much of a `PHYSICAL` surface's diffuse light
+                is the scene behind it, from zero to one, three.js's
+                `transmission`. Zero by default.
+            transmission_map: Id of a texture whose red channel multiplies
+                the transmission, or `NO_TEXTURE`. Data: `LINEAR`,
+                `IGNORED`.
+            thickness: How deep the volume under the surface is, in the
+                geometry's own units, three.js's `thickness`. Zero by
+                default.
+            thickness_map: Id of a texture whose green channel multiplies
+                the thickness, or `NO_TEXTURE`. Data: `LINEAR`, `IGNORED`.
+            attenuation_color: The color white light becomes inside the
+                volume, as authored in sRGB, three.js's
+                `attenuationColor`. White by default.
+            attenuation_distance: How far the light travels to become it,
+                three.js's `attenuationDistance`. Infinite by default,
+                which dims nothing.
+            dispersion: How far the three channels bend apart, three.js's
+                `dispersion`. Zero by default.
 
         Raises:
             Error: If `map` or `emissive_map` is a negative other than
@@ -1201,7 +1259,14 @@ struct Material(ImplicitlyCopyable):
                 or one on a kind that is not `BASIC`, `LAMBERT` or `PHONG`,
                 or on a wireframe, is refused. A `flat_shading` on a kind
                 that reads no normal -- `BASIC`, `DEPTH` or `SHADOW` -- is
-                refused, which refuses it on a wireframe too.
+                refused, which refuses it on a wireframe too. A
+                `transmission` outside zero to one or not finite, a
+                `thickness` that is negative or not finite, an
+                `attenuation_distance` that is not above zero, a
+                `dispersion` that is negative or not finite, either map id
+                a negative other than `NO_TEXTURE`, and any of the seven
+                that is not its default on a kind that is not `PHYSICAL`
+                are refused.
         """
         if map.value < 0 and map != NO_TEXTURE:
             raise Error("A material's texture id cannot be negative")
@@ -1484,6 +1549,42 @@ struct Material(ImplicitlyCopyable):
         self.specular_intensity = specular_intensity
         self.clearcoat = clearcoat
         self.clearcoat_roughness = clearcoat_roughness
+        # The volume, refused where nothing reads it: only the physical
+        # shader transmits. An infinite attenuation distance is the
+        # default and dims nothing; not-a-number is not above zero.
+        if not _is_unit_fraction(transmission):
+            raise Error("A transmission must be between zero and one")
+        var deep = thickness.to(METER)
+        if not isfinite(deep) or deep < 0:
+            raise Error("A thickness cannot be negative")
+        if not (attenuation_distance.to(METER) > 0):
+            raise Error("An attenuation distance must be above zero")
+        if not isfinite(dispersion) or dispersion < 0:
+            raise Error("A dispersion cannot be negative")
+        if transmission_map.value < 0 and transmission_map != NO_TEXTURE:
+            raise Error("A material's transmission map id cannot be negative")
+        if thickness_map.value < 0 and thickness_map != NO_TEXTURE:
+            raise Error("A material's thickness map id cannot be negative")
+        if kind != PHYSICAL and _has_volume(
+            transmission,
+            transmission_map,
+            deep,
+            thickness_map,
+            attenuation_color,
+            attenuation_distance.to(METER),
+            dispersion,
+        ):
+            raise Error(
+                "Only a physical material transmits: give it kind=PHYSICAL,"
+                " or build it with physical_material"
+            )
+        self.transmission = transmission
+        self.transmission_map = transmission_map
+        self.thickness = thickness
+        self.thickness_map = thickness_map
+        self.attenuation_color = attenuation_color
+        self.attenuation_distance = attenuation_distance
+        self.dispersion = dispersion
         self._clip_planes = SIMD[DType.float32, 4 * MAX_CLIPPING_PLANES](0)
         self.clip_plane_count = 0
         self.clip_intersection = False
@@ -1813,6 +1914,12 @@ struct Material(ImplicitlyCopyable):
     def has_clearcoat(self) -> Bool:
         """Return True if a clear coat lies over this surface at all."""
         return self.clearcoat > 0
+
+    def transmits(self) -> Bool:
+        """Return True if this surface shows the scene behind it through
+        itself: a transmission above zero, three.js's test for putting an
+        object on its `transmissive` list."""
+        return self.transmission > 0
 
     def base_reflectance(self) -> FloatColor:
         """Return how much of the light arriving head on this surface
@@ -2196,17 +2303,27 @@ def physical_material(
     ao_map_intensity: Float32 = 1.0,
     light_map: TextureId = NO_TEXTURE,
     light_map_intensity: Float32 = 1.0,
+    transmission: Float32 = 0.0,
+    transmission_map: TextureId = NO_TEXTURE,
+    thickness: Length = NO_THICKNESS,
+    thickness_map: TextureId = NO_TEXTURE,
+    attenuation_color: Color = _WHITE,
+    attenuation_distance: Length = NO_ATTENUATION,
+    dispersion: Float32 = 0.0,
 ) raises -> Material:
-    """Return a physically shaded material with an index of refraction and
-    a clear coat, three.js's `MeshPhysicalMaterial` at three.js's defaults.
+    """Return a physically shaded material with an index of refraction, a
+    clear coat and transmission, three.js's `MeshPhysicalMaterial` at
+    three.js's defaults.
 
     `standard_material` with three more knobs. The index of refraction,
     the specular color and the specular intensity together set what the
     surface reflects head on, in place of the standard 0.04; see
     `Material.base_reflectance`. The clear coat is a second, colorless
     GGX lobe over the surface, on the surface's own normal, that dims
-    what is under it by its own Fresnel. three.js's transmission, sheen,
-    iridescence, anisotropy and dispersion are not ported.
+    what is under it by its own Fresnel. A transmission above zero shows
+    the opaque scene behind the surface through it, refracted, dimmed and
+    blurred; see `render.transmission`. three.js's sheen, iridescence and
+    anisotropy are not ported.
 
     Args:
         color: The base color, as authored in sRGB.
@@ -2244,6 +2361,17 @@ def physical_material(
         ao_map_intensity: How strongly the ao map dims.
         light_map: Id of a texture of baked light, or `NO_TEXTURE`.
         light_map_intensity: What the light map is scaled by.
+        transmission: How much of the diffuse light is the scene behind,
+            from zero to one.
+        transmission_map: Id of a texture whose red channel multiplies the
+            transmission, or `NO_TEXTURE`.
+        thickness: How deep the volume is, in the geometry's own units.
+        thickness_map: Id of a texture whose green channel multiplies the
+            thickness, or `NO_TEXTURE`.
+        attenuation_color: The color white light becomes inside, as
+            authored in sRGB.
+        attenuation_distance: How far the light travels to become it.
+        dispersion: How far the three channels bend apart.
 
     Returns:
         The material, of kind `PHYSICAL`.
@@ -2281,6 +2409,13 @@ def physical_material(
         ao_map_intensity=ao_map_intensity,
         light_map=light_map,
         light_map_intensity=light_map_intensity,
+        transmission=transmission,
+        transmission_map=transmission_map,
+        thickness=thickness,
+        thickness_map=thickness_map,
+        attenuation_color=attenuation_color,
+        attenuation_distance=attenuation_distance,
+        dispersion=dispersion,
     )
 
 
@@ -2755,6 +2890,28 @@ def depth_material(
 def _is_unit_fraction(value: Float32) -> Bool:
     """Return True if `value` is finite and between zero and one."""
     return isfinite(value) and value >= 0 and value <= 1
+
+
+def _has_volume(
+    transmission: Float32,
+    transmission_map: TextureId,
+    thickness: Float32,
+    thickness_map: TextureId,
+    attenuation_color: Color,
+    attenuation_distance: Float32,
+    dispersion: Float32,
+) -> Bool:
+    """Return True if any of the seven transmission fields is not its
+    default: what a kind that does not transmit refuses."""
+    return (
+        transmission != 0
+        or transmission_map != NO_TEXTURE
+        or thickness != 0
+        or thickness_map != NO_TEXTURE
+        or not _is_opaque_white(attenuation_color)
+        or attenuation_distance != NO_ATTENUATION.to(METER)
+        or dispersion != 0
+    )
 
 
 def _gives_off_light(emissive: Color, intensity: Float32) -> Bool:

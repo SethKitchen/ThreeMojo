@@ -562,6 +562,8 @@ def physical_outgoing(
     dot_nv_coat: Vector3,
     coat_radiance: Vector3,
     occlusion: Float32 = 1,
+    transmission: Float32 = 0,
+    transmitted: Vector3 = Vector3(0, 0, 0),
 ) -> Vector3:
     """Return the light a physical surface sends toward the camera, from
     its direct light, its indirect light and its environment: three.js's
@@ -619,6 +621,13 @@ def physical_outgoing(
             `specular_occlusion` of it multiplies the environment's
             reflection. One, the default, occludes nothing, and each term
             is multiplied by it last, so a one leaves every bit alone.
+        transmission: How much of the diffuse light is replaced by the
+            light seen through the surface, from zero to one: three.js's
+            `material.transmission`, times any map. Zero, the default,
+            replaces nothing.
+        transmitted: The light seen through the surface, from
+            `render.transmission.volume_refraction`. Read only when the
+            transmission is above zero.
 
     Returns:
         The outgoing light, linear.
@@ -683,6 +692,15 @@ def physical_outgoing(
                 coat.y + coat_radiance.y * sheen.y * occlusion,
                 coat.z + coat_radiance.z * sheen.z * occlusion,
             )
+    if transmission > 0:
+        # three.js's `transmission_fragment`: the diffuse light, direct and
+        # indirect together, gives way to what the surface shows through
+        # itself. The reflection and the glow are untouched.
+        diffuse = Vector3(
+            diffuse.x + (transmitted.x - diffuse.x) * transmission,
+            diffuse.y + (transmitted.y - diffuse.y) * transmission,
+            diffuse.z + (transmitted.z - diffuse.z) * transmission,
+        )
     var outgoing = Vector3(
         diffuse.x + specular.x + glow.x,
         diffuse.y + specular.y + glow.y,

@@ -71,11 +71,14 @@ material that `KHR_texture_transform` moves apart, since a fragment here
 samples every map at one coordinate; and a skinned node that is instanced,
 where three.js drops the skin.
 
-**Extensions.** Nine are read, the ones three.js's `GLTFLoader` reads
+**Extensions.** Twelve are read, the ones three.js's `GLTFLoader` reads
 that map onto something this renderer has. `KHR_materials_unlit` makes a
 `BASIC` material. `KHR_materials_ior`, `KHR_materials_specular` and
 `KHR_materials_clearcoat` make a `PHYSICAL` one and set its factors;
 `KHR_materials_emissive_strength` sets `emissive_intensity`.
+`KHR_materials_transmission`, `KHR_materials_volume` and
+`KHR_materials_dispersion` make a `PHYSICAL` one that transmits, with the
+transmission and thickness textures read as data.
 `KHR_texture_transform` moves, turns and scales a map's coordinates.
 `KHR_lights_punctual` adds directional, point and spot lights to the scene.
 `EXT_mesh_gpu_instancing` draws a node's primitives as `InstancedMesh`es.
@@ -84,10 +87,10 @@ component type already.
 
 **Not ported.** Every other extension: a file whose `extensionsRequired`
 names one is refused, as three.js refuses it, and one that only uses an
-extension is read without it. Sheen, transmission and volume are among
-them, since a material here has no field for them. The maps inside the
-ported material extensions are not read either, only their factors. Only
-triangles are read; a primitive of points, lines or strips is refused.
+extension is read without it. Sheen is among them, since a material here
+has no field for it. The maps inside the specular and clear coat
+extensions are not read either, only their factors. Only triangles are
+read; a primitive of points, lines or strips is refused.
 """
 
 from animation.animation_clip import AnimationClip
@@ -171,7 +174,7 @@ from render.texture import (
     texture_from,
 )
 from render.texture_store import TextureId
-from std.math import isfinite, pi, sqrt
+from std.math import inf, isfinite, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, Duration, Length, METER, RADIAN, SECOND
@@ -222,6 +225,9 @@ comptime MATERIALS_IOR = "KHR_materials_ior"
 comptime MATERIALS_SPECULAR = "KHR_materials_specular"
 comptime MATERIALS_CLEARCOAT = "KHR_materials_clearcoat"
 comptime MATERIALS_UNLIT = "KHR_materials_unlit"
+comptime MATERIALS_TRANSMISSION = "KHR_materials_transmission"
+comptime MATERIALS_VOLUME = "KHR_materials_volume"
+comptime MATERIALS_DISPERSION = "KHR_materials_dispersion"
 comptime TEXTURE_TRANSFORM = "KHR_texture_transform"
 comptime LIGHTS_PUNCTUAL = "KHR_lights_punctual"
 comptime MESH_QUANTIZATION = "KHR_mesh_quantization"
@@ -588,7 +594,7 @@ def is_supported_extension(name: String) -> Bool:
         name: The extension's name, as `extensionsRequired` lists it.
 
     Returns:
-        Whether it is one of the nine this loader reads.
+        Whether it is one of the twelve this loader reads.
     """
     return (
         name == EMISSIVE_STRENGTH
@@ -596,6 +602,9 @@ def is_supported_extension(name: String) -> Bool:
         or name == MATERIALS_SPECULAR
         or name == MATERIALS_CLEARCOAT
         or name == MATERIALS_UNLIT
+        or name == MATERIALS_TRANSMISSION
+        or name == MATERIALS_VOLUME
+        or name == MATERIALS_DISPERSION
         or name == TEXTURE_TRANSFORM
         or name == LIGHTS_PUNCTUAL
         or name == MESH_QUANTIZATION
@@ -1234,6 +1243,29 @@ struct _Loader(Movable):
         moved.rotation = Angle(self.number(transform, "rotation", 0), RADIAN)
         return assets.textures.add(moved^)
 
+    def data_map_of(
+        mut self, owner: Int, key: String, mut assets: Assets
+    ) raises -> TextureId:
+        """Return the texture an object's `key` names, read as data: linear,
+        and with its alpha ignored, as the renderer reads a map that holds
+        numbers. Or `NO_TEXTURE` when there is none.
+
+        Args:
+            owner: The object that holds the texture reference.
+            key: The reference's name.
+            assets: Where the texture is added.
+
+        Returns:
+            The texture's id.
+
+        Raises:
+            Error: Everything `map_of` raises.
+        """
+        var id = self.map_of(owner, key, LINEAR, assets)
+        if id == NO_TEXTURE:
+            return id
+        return assets.textures.add(assets.textures.get(id).ignoring_alpha())
+
     # --- materials ----------------------------------------------------------
 
     def read_materials(mut self, mut assets: Assets) raises:
@@ -1307,9 +1339,15 @@ struct _Loader(Movable):
         mut assets: Assets,
     ) raises -> Material:
         """Build a material that is not unlit: `STANDARD`, or `PHYSICAL`
-        when `KHR_materials_ior`, `KHR_materials_specular` or
-        `KHR_materials_clearcoat` is on it, with the emissive scaled by
-        `KHR_materials_emissive_strength`."""
+        when `KHR_materials_ior`, `KHR_materials_specular`,
+        `KHR_materials_clearcoat`, `KHR_materials_transmission`,
+        `KHR_materials_volume` or `KHR_materials_dispersion` is on it,
+        with the emissive scaled by `KHR_materials_emissive_strength`.
+
+        The volume is three.js's reading of it: a thickness of zero and an
+        infinite attenuation distance unless the file says otherwise, and
+        an attenuation distance of zero read as infinite, as three.js's
+        `|| Infinity` reads it."""
         var roughness = Float32(1)
         var metalness = Float32(1)
         var roughness_map = NO_TEXTURE
@@ -1360,6 +1398,37 @@ struct _Loader(Movable):
             clearcoat_roughness = self.number(
                 coat, "clearcoatRoughnessFactor", 0
             )
+        var transmission = Float32(0)
+        var transmission_map = NO_TEXTURE
+        var through = self.extension(material, MATERIALS_TRANSMISSION)
+        if through != NO_NODE:
+            kind = PHYSICAL
+            transmission = self.number(through, "transmissionFactor", 0)
+            transmission_map = self.data_map_of(
+                through, "transmissionTexture", assets
+            )
+        var thickness = Float32(0)
+        var thickness_map = NO_TEXTURE
+        var attenuation_color = Color(255, 255, 255)
+        var attenuation_distance = inf[DType.float32]()
+        var volume = self.extension(material, MATERIALS_VOLUME)
+        if volume != NO_NODE:
+            kind = PHYSICAL
+            thickness = self.number(volume, "thicknessFactor", 0)
+            thickness_map = self.data_map_of(volume, "thicknessTexture", assets)
+            attenuation_distance = self.number(
+                volume, "attenuationDistance", inf[DType.float32]()
+            )
+            if attenuation_distance == 0:
+                attenuation_distance = inf[DType.float32]()
+            var tint = self.numbers(volume, "attenuationColor", 3)
+            if len(tint) == 3:
+                attenuation_color = _unit_color(tint, "attenuationColor")
+        var dispersion = Float32(0)
+        var spread = self.extension(material, MATERIALS_DISPERSION)
+        if spread != NO_NODE:
+            kind = PHYSICAL
+            dispersion = self.number(spread, "dispersion", 0)
         return Material(
             color,
             map=map,
@@ -1381,6 +1450,13 @@ struct _Loader(Movable):
             specular_intensity=specular_intensity,
             clearcoat=clearcoat,
             clearcoat_roughness=clearcoat_roughness,
+            transmission=transmission,
+            transmission_map=transmission_map,
+            thickness=Length(thickness, METER),
+            thickness_map=thickness_map,
+            attenuation_color=attenuation_color,
+            attenuation_distance=Length(attenuation_distance, METER),
+            dispersion=dispersion,
         )
 
     def material_for(
@@ -2195,10 +2271,12 @@ def _check_one_transform(assets: Assets, material: Material) raises:
         material.emissive_map,
         material.roughness_map,
         material.normal_map,
+        material.transmission_map,
+        material.thickness_map,
     ]
     var chosen = Matrix3()
     var settled = False
-    # Four maps, always, so the loop never runs zero times.
+    # Six maps, always, so the loop never runs zero times.
     for slot in range(len(named)):  # pragma: no branch
         if named[slot] == NO_TEXTURE:
             continue

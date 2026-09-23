@@ -278,7 +278,7 @@ The loader raises, and names the element and the row, for:
 
 ## glTF
 
-`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. It reads meshes, materials, textures, nodes, skins, morph targets, animations, cameras, sparse accessors and nine [extensions](#gltf-extensions). three.js: `GLTFLoader`.
+`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. It reads meshes, materials, textures, nodes, skins, morph targets, animations, cameras, sparse accessors and twelve [extensions](#gltf-extensions). three.js: `GLTFLoader`.
 
 ```mojo
 var model = read_gltf("assets/gltf/box.glb", scene, assets)
@@ -376,7 +376,7 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 
 ### glTF extensions
 
-The loader reads nine extensions. They are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `is_supported_extension(name)` tells if the loader reads an extension.
+The loader reads twelve extensions. They are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `is_supported_extension(name)` tells if the loader reads an extension.
 
 | Extension | ThreeMojo |
 |---|---|
@@ -385,6 +385,9 @@ The loader reads nine extensions. They are the ones three.js's `GLTFLoader` read
 | `KHR_materials_ior` | A `PHYSICAL` material. `ior` sets `ior`, or 1.5 when it is not there. |
 | `KHR_materials_specular` | A `PHYSICAL` material. `specularFactor` sets `specular_intensity`. `specularColorFactor` sets `specular_color`, converted from linear to sRGB. |
 | `KHR_materials_clearcoat` | A `PHYSICAL` material. `clearcoatFactor` and `clearcoatRoughnessFactor` set `clearcoat` and `clearcoat_roughness`. |
+| `KHR_materials_transmission` | A `PHYSICAL` material. `transmissionFactor` sets `transmission`, and `transmissionTexture` sets `transmission_map`, read as data. See [Materials](Materials#transmission). |
+| `KHR_materials_volume` | A `PHYSICAL` material. `thicknessFactor` sets `thickness`, and `thicknessTexture` sets `thickness_map`, read as data. `attenuationDistance` sets `attenuation_distance`, and a distance of zero or none is infinite, as three.js reads it. `attenuationColor` sets `attenuation_color`, converted from linear to sRGB. |
+| `KHR_materials_dispersion` | A `PHYSICAL` material. `dispersion` sets `dispersion`. |
 | `KHR_texture_transform` | A copy of the texture with its `offset`, `rotation` and `repeat` set. See [Texture transforms](#texture-transforms). |
 | `KHR_lights_punctual` | A directional, point or spot `Light` on the node. See [Punctual lights](#punctual-lights). |
 | `KHR_mesh_quantization` | Nothing more. The loader reads every attribute at any component type, and a normalized one divides by its largest value. |
@@ -414,8 +417,8 @@ Each instance matrix is `TRANSLATION`, `ROTATION` and `SCALE` composed. An attri
 
 #### Not ported
 
-- `KHR_materials_sheen`, `KHR_materials_transmission` and `KHR_materials_volume`. A material has no field for them.
-- `KHR_materials_iridescence`, `KHR_materials_anisotropy`, `KHR_materials_dispersion` and `KHR_materials_variants`.
+- `KHR_materials_sheen`. A material has no field for it.
+- `KHR_materials_iridescence`, `KHR_materials_anisotropy` and `KHR_materials_variants`.
 - `KHR_draco_mesh_compression`, `EXT_meshopt_compression`, `KHR_texture_basisu`, `EXT_texture_webp` and `EXT_texture_avif`.
 - The textures in `KHR_materials_specular` and `KHR_materials_clearcoat`. Only their factors are read.
 

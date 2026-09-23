@@ -136,6 +136,7 @@ from render.rasterizer import (
     check_alpha_map,
     check_draws,
     check_output_kinds,
+    check_transmission,
     check_triangle_state,
     bumped_normal,
     interpolate_alpha,
@@ -182,8 +183,16 @@ from render.tonemap import (
     check_tone_mapping,
     tone_map,
 )
+from render.transmission import (
+    VIEW_FLOATS,
+    TransmissionSource,
+    TransmissionTarget,
+    transmission_alpha,
+    volume_refraction,
+)
 from render.texture import (
     BILINEAR,
+    CLAMP,
     COVERAGE,
     FLOAT_TYPE,
     IGNORED,
@@ -301,7 +310,22 @@ comptime LANE_LIGHT_MAP_INTENSITY = 42
 # primitive, read from the first corner's lane like the alpha test: it is
 # a float, and the state table holds integers.
 comptime LANE_LOG_DEPTH = 43
-comptime FLOATS_PER_VERTEX = LANE_LOG_DEPTH + 1
+# A transmissive surface's volume, per triangle, from the first corner's
+# lanes: how much it transmits, how deep it is along each world axis, the
+# color white light becomes inside it and how far that takes, how far its
+# channels bend apart, and its index of refraction. See
+# `render.transmission`.
+comptime LANE_TRANSMISSION = 44
+comptime LANE_THICKNESS_X = 45
+comptime LANE_THICKNESS_Y = 46
+comptime LANE_THICKNESS_Z = 47
+comptime LANE_ATTENUATION_R = 48
+comptime LANE_ATTENUATION_G = 49
+comptime LANE_ATTENUATION_B = 50
+comptime LANE_ATTENUATION_DISTANCE = 51
+comptime LANE_DISPERSION = 52
+comptime LANE_IOR = 53
+comptime FLOATS_PER_VERTEX = LANE_IOR + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -347,6 +371,10 @@ comptime STATE_LIGHT_MAP = 17
 # Which texture's red channel scales a triangle's highlight and its
 # reflectivity, three.js's `specularMap`, or `NO_TEXTURE` for none.
 comptime STATE_SPECULAR_MAP = 18
+# Which texture's red multiplies a triangle's transmission, and which
+# texture's green multiplies its thickness, each `NO_TEXTURE` for none.
+comptime STATE_TRANSMISSION_MAP = 19
+comptime STATE_THICKNESS_MAP = 20
 # How a segment's metadata is laid out in its state buffer: its blend
 # policy, and how many pixels across it is drawn. A line is unlit and
 # untextured, so it carries nothing else; see `line_state`. The width is
@@ -372,7 +400,18 @@ comptime STATE_PER_POINT = POINT_STATE_STENCIL + 1
 # How a `Draw` crosses to the device: its kind, its first primitive and its
 # count, as three integers.
 comptime INTS_PER_DRAW = 3
-comptime STATE_PER_TRIANGLE = STATE_SPECULAR_MAP + 1
+comptime STATE_PER_TRIANGLE = STATE_THICKNESS_MAP + 1
+# How the transmission target rides in the backdrop buffer, after the
+# backdrop's own pixels: a header of floats, then the chain's floats, each
+# four little-endian bytes as a float texture's texels are. The kernel has
+# no argument left to spare -- Metal binds at most thirty-one -- so the
+# opaque scene shares the buffer that already holds what is behind the
+# frame. The header is the world-to-target matrix, sixteen floats, then
+# the width, the height and how many levels the chain holds.
+comptime TRANSMISSION_WIDTH = VIEW_FLOATS
+comptime TRANSMISSION_HEIGHT = VIEW_FLOATS + 1
+comptime TRANSMISSION_LEVELS = VIEW_FLOATS + 2
+comptime TRANSMISSION_HEADER = VIEW_FLOATS + 3
 
 # How a `FogView` is laid out in the fog buffer: the two edges and the
 # density, then the fog color, linear. Six floats, whatever the kind,
@@ -615,7 +654,49 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.ao_map_intensity)
         flat.append(corner.light_map_intensity)
         flat.append(corner.state.log_depth_scale)
+        flat.append(corner.transmission)
+        flat.append(corner.thickness.x)
+        flat.append(corner.thickness.y)
+        flat.append(corner.thickness.z)
+        flat.append(corner.attenuation_color.r)
+        flat.append(corner.attenuation_color.g)
+        flat.append(corner.attenuation_color.b)
+        flat.append(corner.attenuation_distance)
+        flat.append(corner.dispersion)
+        flat.append(corner.ior)
     return flat^
+
+
+def _append_float(mut bytes: List[UInt8], value: Float32):
+    """Append one float as four little-endian bytes, what `_float_at`
+    reads back on the device."""
+    var bits = bitcast[DType.uint32](value)
+    bytes.append(UInt8(bits & 0xFF))
+    bytes.append(UInt8((bits >> 8) & 0xFF))
+    bytes.append(UInt8((bits >> 16) & 0xFF))
+    bytes.append(UInt8(bits >> 24))
+
+
+def flatten_transmission(target: TransmissionTarget) -> List[UInt8]:
+    """Return a transmission target as the bytes that follow the backdrop.
+
+    Args:
+        target: The opaque scene, built.
+
+    Returns:
+        `TRANSMISSION_HEADER` floats -- the matrix, the width, the height
+        and the level count -- then the chain's floats, largest level
+        first, each four little-endian bytes.
+    """
+    var bytes = List[UInt8]()
+    for index in range(VIEW_FLOATS):  # pragma: no branch
+        _append_float(bytes, target.view[index])
+    _append_float(bytes, Float32(target.image.width))
+    _append_float(bytes, Float32(target.image.height))
+    _append_float(bytes, Float32(target.image.levels))
+    for index in range(len(target.image.data)):
+        _append_float(bytes, target.image.data[index])
+    return bytes^
 
 
 def flatten_lights(lighting: Lighting) -> List[Float32]:
@@ -2220,7 +2301,8 @@ def triangle_state(
         value, then the roughness, metalness, normal and bump map ids, then
         one or zero for whether the shadows fall on it, then the packed
         depth, color and stencil state, then the ao and light map ids,
-        then the specular map id, per triangle, from its first corner.
+        then the specular map id, then the transmission and thickness map
+        ids, per triangle, from its first corner.
     """
     var state = List[Int32]()
     for triangle in range(len(corners) // 3):
@@ -2247,6 +2329,8 @@ def triangle_state(
         state.append(Int32(corners[triangle * 3].ao_map.value))
         state.append(Int32(corners[triangle * 3].light_map.value))
         state.append(Int32(corners[triangle * 3].specular_map.value))
+        state.append(Int32(corners[triangle * 3].transmission_map.value))
+        state.append(Int32(corners[triangle * 3].thickness_map.value))
     return state^
 
 
@@ -2526,6 +2610,101 @@ def _sample_slot(
     return FloatColor(
         total.r * share, total.g * share, total.b * share, total.a * share
     ).unpremultiplied()
+
+
+struct _DeviceSource[origin: Origin[mut=True]](TransmissionSource):
+    """The kernel's `TransmissionSource`: the transmission target's chain
+    in the backdrop buffer, read by `_sample_at` as the host's texture is
+    read by its own."""
+
+    var texels: MutPointer[UInt8, Self.origin]
+    var ramp: MutPointer[Float32, Self.origin]
+    var image: _Descriptor
+
+    def __init__(
+        out self,
+        texels: MutPointer[UInt8, Self.origin],
+        ramp: MutPointer[Float32, Self.origin],
+        image: _Descriptor,
+    ):
+        """Read the chain `image` describes out of `texels`."""
+        self.texels = texels
+        self.ramp = ramp
+        self.image = image
+
+    def level_count(self) -> Int:
+        """Return how many images the chain holds."""
+        return self.image.levels
+
+    def level_size(self, level: Int) -> Vector2:
+        """Return the size of `level`, as `_extent` gives it."""
+        return Vector2(
+            Float32(_extent(self.image.width, level)),
+            Float32(_extent(self.image.height, level)),
+        )
+
+    def fetch_level(self, u: Float32, v: Float32, level: Int) -> FloatColor:
+        """Return the bilinear sample on `level`, as `Texture._sample_at`
+        takes it."""
+        return _sample_at(
+            self.texels.unsafe_origin_cast[MutAnyOrigin](),
+            self.ramp.unsafe_origin_cast[MutAnyOrigin](),
+            self.image,
+            u,
+            v,
+            level,
+        )
+
+
+def _transmitted(
+    backdrop: MutPointer[UInt8, MutAnyOrigin],
+    ramp: MutPointer[Float32, MutAnyOrigin],
+    start: Int,
+    normal: Vector3,
+    toward_eye: Vector3,
+    roughness: Float32,
+    surface: Reflected,
+    position: Vector3,
+    thickness: Vector3,
+    dispersion: Float32,
+    ior: Float32,
+    attenuation_color: Vector3,
+    attenuation_distance: Float32,
+) -> FloatColor:
+    """Return `volume_refraction` read from the transmission target that
+    starts `start` bytes into the backdrop buffer: the device counterpart
+    of `render.transmission.host_refraction`."""
+    var view = SIMD[DType.float32, VIEW_FLOATS](0)
+    for index in range(VIEW_FLOATS):
+        view[index] = _float_at(backdrop, start + index * 4)
+    var image = _Descriptor(
+        start + TRANSMISSION_HEADER * 4,
+        Int(_float_at(backdrop, start + TRANSMISSION_WIDTH * 4)),
+        Int(_float_at(backdrop, start + TRANSMISSION_HEIGHT * 4)),
+        CLAMP,
+        BILINEAR,
+        LINEAR,
+        Int(_float_at(backdrop, start + TRANSMISSION_LEVELS * 4)),
+        COVERAGE,
+        1,
+        FLOAT_TYPE,
+    )
+    return volume_refraction(
+        _DeviceSource(backdrop, ramp, image),
+        view,
+        normal,
+        toward_eye,
+        roughness,
+        surface.diffuse,
+        surface.specular,
+        surface.clearcoat.x,
+        position,
+        thickness,
+        dispersion,
+        ior,
+        attenuation_color,
+        attenuation_distance,
+    )
 
 
 def rasterize_kernel(
@@ -3661,6 +3840,11 @@ def rasterize_kernel(
             # What the highlight and the reflectivity are scaled by: the
             # specular map's red, or one for none.
             var specular_strength = Float32(1)
+            # What the transmission and the thickness are multiplied by:
+            # the transmission map's red and the thickness map's green, or
+            # one for none.
+            var transmission_factor = Float32(1)
+            var thickness_factor = Float32(1)
             if mode == Int32(SHADE_UV.value):
                 # Coordinates, not light, through the same quantize and decode
                 # the host's `data_color` uses, so the two backends hold the
@@ -3907,6 +4091,62 @@ def rasterize_kernel(
                             highlight.y * specular_strength,
                             highlight.z * specular_strength,
                         )
+                    # The transmission map's red and the thickness map's
+                    # green, sampled where the host samples them.
+                    var through_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_TRANSMISSION_MAP
+                        ]
+                    )
+                    if through_slot != NO_TEXTURE.value:
+                        transmission_factor = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            through_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).r
+                    var deep_slot = Int(
+                        maps[
+                            unsafe_offset=index * STATE_PER_TRIANGLE
+                            + STATE_THICKNESS_MAP
+                        ]
+                    )
+                    if deep_slot != NO_TEXTURE.value:
+                        thickness_factor = _sample_slot(
+                            texels,
+                            ramp,
+                            table,
+                            deep_slot,
+                            corners,
+                            base,
+                            sax,
+                            say,
+                            sbx,
+                            sby,
+                            scx,
+                            scy,
+                            span_inv,
+                            swapped,
+                            px,
+                            py,
+                            u,
+                            v,
+                        ).g
                 # Thrown away for being too transparent, three.js's
                 # `alphatest_fragment`. Leaving `nearest` alone is the late
                 # depth write the host makes with `claim_depth`: the hole
@@ -4066,6 +4306,57 @@ def rasterize_kernel(
                                 gloss.g * strength,
                                 gloss.b * strength,
                             )
+                    # The opaque scene through the surface, by the host's
+                    # own `volume_refraction` over the device's copy of
+                    # the target; see `rasterize_shaded`.
+                    var through = Float32(0)
+                    var transmitted = Vector3(0, 0, 0)
+                    var thinned = Float32(1)
+                    var amount = corners[unsafe_offset=base + LANE_TRANSMISSION]
+                    if amount > 0 and mode == Int32(SHADE_TEXTURE.value):
+                        through = amount * transmission_factor
+                        var seen = _transmitted(
+                            backdrop,
+                            ramp,
+                            Int(width) * Int(height) * 4,
+                            facing,
+                            toward_eye_at(
+                                Vector3(
+                                    lights[unsafe_offset=LIGHTS_EYE],
+                                    lights[unsafe_offset=LIGHTS_EYE + 1],
+                                    lights[unsafe_offset=LIGHTS_EYE + 2],
+                                ),
+                                PERSPECTIVE_VIEW,
+                                spot,
+                            ),
+                            rough,
+                            surface,
+                            spot,
+                            Vector3(
+                                corners[unsafe_offset=base + LANE_THICKNESS_X],
+                                corners[unsafe_offset=base + LANE_THICKNESS_Y],
+                                corners[unsafe_offset=base + LANE_THICKNESS_Z],
+                            )
+                            * thickness_factor,
+                            corners[unsafe_offset=base + LANE_DISPERSION],
+                            corners[unsafe_offset=base + LANE_IOR],
+                            Vector3(
+                                corners[
+                                    unsafe_offset=base + LANE_ATTENUATION_R
+                                ],
+                                corners[
+                                    unsafe_offset=base + LANE_ATTENUATION_G
+                                ],
+                                corners[
+                                    unsafe_offset=base + LANE_ATTENUATION_B
+                                ],
+                            ),
+                            corners[
+                                unsafe_offset=base + LANE_ATTENUATION_DISTANCE
+                            ],
+                        )
+                        transmitted = Vector3(seen.r, seen.g, seen.b)
+                        thinned = transmission_alpha(seen.a, through)
                     var outgoing = physical_outgoing(
                         direct,
                         indirect,
@@ -4081,10 +4372,13 @@ def rasterize_kernel(
                         Vector3(dot_nv_coat, 0, 0),
                         coat_radiance,
                         occlusion,
+                        through,
+                        transmitted,
                     )
                     red = outgoing.x
                     green = outgoing.y
                     blue = outgoing.z
+                    alpha *= thinned
                 else:
                     # The highlight and then the glow, exactly as
                     # `rasterize_shaded` sums them.
@@ -4359,6 +4653,10 @@ struct GpuRenderer(Movable):
     # the first draw after it that has none: `painted` says which.
     var backdrop: DeviceBuffer[DType.uint8]
     var painted: Bool
+    # How many bytes the backdrop buffer holds past the backdrop's own
+    # pixels, for the transmission target a draw passes; see
+    # `TRANSMISSION_HEADER`. Zero until a draw passes one, and grown to fit.
+    var transmission_room: Int
     # Declared last so that it is released last. See `__deinit__`.
     var context: DeviceContext
 
@@ -4491,6 +4789,7 @@ struct GpuRenderer(Movable):
             unsafe_memcpy(
                 dest=host.unsafe_ptr(), src=steps.unsafe_ptr(), count=256
             )
+        self.transmission_room = 0
         # Transparent everywhere, so the first draw reads the clear color
         # rather than whatever the allocation held. Last, once every
         # field is set, because it is a method.
@@ -4572,6 +4871,7 @@ struct GpuRenderer(Movable):
         backdrop: Optional[Framebuffer] = None,
         line_width: Int = 1,
         depth_mode: DepthMode = STANDARD_DEPTH,
+        transmission: TransmissionTarget = TransmissionTarget(),
     ) raises:
         """Rasterize prepared triangles, lines and points into the device
         target.
@@ -4627,6 +4927,10 @@ struct GpuRenderer(Movable):
                 stores and compares by its own state; this says only what
                 `read_back` gives a pixel none of them claimed. The
                 default is `STANDARD_DEPTH`.
+            transmission: The opaque scene the transmissive triangles
+                show through themselves, as `Renderer.transmission_target`
+                draws it on the host, or an empty target when none
+                transmits. Uploaded with the draw, after the backdrop.
 
         Raises:
             Error: If the corner count is not a multiple of three, the
@@ -4720,6 +5024,15 @@ struct GpuRenderer(Movable):
             order.append(Draw(DRAW_SEGMENTS, 0, len(lines) // 2))
             order.append(Draw(DRAW_POINTS, 0, len(points)))
         check_draws(order, triangles, len(lines) // 2, len(points))
+        # Asked of the triangles a draw names, as `rasterize_frame` asks
+        # it: the kernel reads the target wherever a triangle transmits.
+        var ready = transmission.is_ready()
+        for index in range(len(order)):
+            ref run = order[index]
+            if run.kind != DRAW_TRIANGLES:
+                continue
+            for triangle in range(run.first, run.first + run.count):
+                check_transmission(corners[triangle * 3], mode, ready)
 
         # Every texture reference is checked here because it cannot be checked
         # on the device: the kernel reads the descriptor table at whatever
@@ -4741,6 +5054,8 @@ struct GpuRenderer(Movable):
                 corners[index].ao_map,
                 corners[index].light_map,
                 corners[index].specular_map,
+                corners[index].transmission_map,
+                corners[index].thickness_map,
             ]:
                 if slot == NO_TEXTURE:
                     continue
@@ -4842,6 +5157,13 @@ struct GpuRenderer(Movable):
                     )
                 self._check_data_map(
                     corners[triangle * 3].specular_map, "A specular map"
+                )
+                self._check_data_map(
+                    corners[triangle * 3].transmission_map,
+                    "A transmission map",
+                )
+                self._check_data_map(
+                    corners[triangle * 3].thickness_map, "A thickness map"
                 )
         # Two output representations cannot share a tone-mapped frame.
         # Asked here, before the launch, exactly where `Renderer.render`
@@ -5007,6 +5329,20 @@ struct GpuRenderer(Movable):
 
         self._upload_lights(lighting)
         self._upload_fog(fog)
+        # The transmission target, flattened, and room for it made after
+        # the backdrop before the backdrop is written: a new buffer holds
+        # nothing, so it is cleared below as a painted one would be.
+        var behind = self.width * self.height * Framebuffer.CHANNELS
+        var scene_bytes = List[UInt8]()
+        if ready:
+            scene_bytes = flatten_transmission(transmission)
+            if len(scene_bytes) > self.transmission_room:
+                self.context.synchronize()
+                self.backdrop = self.context.enqueue_create_buffer[DType.uint8](
+                    behind + len(scene_bytes)
+                )
+                self.transmission_room = len(scene_bytes)
+                self.painted = True
         # The backdrop, whole, rewritten for this draw, or cleared if the
         # last draw painted one and this one does not. A pixel it leaves
         # transparent is the clear color on the device as on the host.
@@ -5026,6 +5362,13 @@ struct GpuRenderer(Movable):
             self.painted = True
         else:
             self._clear_backdrop()
+        if ready:
+            with self.backdrop.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=host.unsafe_ptr().unsafe_offset(behind),
+                    src=scene_bytes.unsafe_ptr(),
+                    count=len(scene_bytes),
+                )
         # The uv view is coordinates rather than light and is never tone
         # mapped, background included, exactly as `Renderer.render` turns
         # the curve off for it. The curve was checked above as given;
@@ -5245,6 +5588,7 @@ def render_triangles(
     points: List[RasterVertex] = List[RasterVertex](),
     cubes: CubeTextureStore = CubeTextureStore(),
     backdrop: Optional[Framebuffer] = None,
+    transmission: TransmissionTarget = TransmissionTarget(),
 ) raises -> Framebuffer:
     """Draw prepared triangles, lines and points on the GPU and read the
     image back.
@@ -5275,6 +5619,8 @@ def render_triangles(
         cubes: The cube textures the triangles reflect. Empty by default.
         backdrop: A scene's image background, or none; see
             `GpuRenderer.draw`.
+        transmission: The opaque scene the transmissive triangles show
+            through themselves; see `GpuRenderer.draw`.
 
     Returns:
         The rendered image.
@@ -5299,6 +5645,7 @@ def render_triangles(
         scissor,
         points,
         backdrop,
+        transmission=transmission,
     )
     return renderer.read_back()
 

@@ -2203,3 +2203,37 @@ def test_an_index_of_refraction_and_a_specular_intensity_set_f0() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+def test_a_transmission_mixes_the_diffuse_light_toward_what_is_behind() raises:
+    # three.js's `totalDiffuse = mix(totalDiffuse, transmitted, t)`: the
+    # diffuse light gives way, the reflection and the glow do not.
+    var direct = Reflected(
+        Vector3(0.4, 0.2, 0.0), Vector3(0.01, 0.02, 0.03), Vector3(0, 0, 0)
+    )
+    var surface = physical_surface(Vector3(1, 1, 1), DIELECTRIC_F0, 0, 1)
+    var mixed = physical_outgoing(
+        direct,
+        Vector3(0, 0, 0),
+        surface,
+        1,
+        1,
+        False,
+        Vector3(0, 0, 0),
+        Vector3(0, 0, 0),
+        Vector3(0.001, 0.002, 0.003),
+        0,
+        ROUGHNESS_FLOOR,
+        Vector3(1, 0, 0),
+        Vector3(0, 0, 0),
+        1,
+        0.25,
+        Vector3(0.8, 0.6, 1.0),
+    )
+    assert_almost_equal(
+        mixed.x, 0.4 * 0.75 + 0.8 * 0.25 + 0.011, atol=TOLERANCE
+    )
+    assert_almost_equal(
+        mixed.y, 0.2 * 0.75 + 0.6 * 0.25 + 0.022, atol=TOLERANCE
+    )
+    assert_almost_equal(mixed.z, 1.0 * 0.25 + 0.033, atol=TOLERANCE)

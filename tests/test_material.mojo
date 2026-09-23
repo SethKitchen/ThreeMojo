@@ -1654,3 +1654,85 @@ def test_flat_shading_needs_a_normal_to_replace() raises:
 
 def main() raises:
     TestSuite.discover_tests[__functions_in_module()]().run()
+
+
+# --- transmission -----------------------------------------------------------
+
+
+def test_a_physical_material_transmits_at_three_js_s_defaults() raises:
+    var glass = physical_material(Color(255, 255, 255))
+    assert_equal(glass.transmission, Float32(0))
+    assert_false(glass.transmits())
+    assert_equal(glass.transmission_map, NO_TEXTURE)
+    assert_equal(glass.thickness.to(METER), Float32(0))
+    assert_equal(glass.thickness_map, NO_TEXTURE)
+    assert_equal(glass.attenuation_color.g, UInt8(255))
+    assert_equal(glass.attenuation_distance.to(METER), inf[DType.float32]())
+    assert_equal(glass.dispersion, Float32(0))
+    var clear = physical_material(
+        Color(255, 255, 255),
+        roughness=0.1,
+        ior=1.45,
+        transmission=1.0,
+        transmission_map=TextureId(2),
+        thickness=Length(0.5, METER),
+        thickness_map=TextureId(3),
+        attenuation_color=Color(200, 255, 220),
+        attenuation_distance=Length(2.0, METER),
+        dispersion=3.0,
+    )
+    assert_true(clear.transmits())
+    assert_equal(clear.transmission_map, TextureId(2))
+    assert_equal(clear.thickness.to(METER), Float32(0.5))
+    assert_equal(clear.thickness_map, TextureId(3))
+    assert_equal(clear.attenuation_color.r, UInt8(200))
+    assert_equal(clear.attenuation_distance.to(METER), Float32(2))
+    assert_equal(clear.dispersion, Float32(3))
+
+
+def test_a_material_refuses_a_volume_it_cannot_hold() raises:
+    var white = Color(255, 255, 255)
+    for wrong in [nan[DType.float32](), Float32(-0.1), Float32(1.1)]:
+        with assert_raises(contains="transmission must be between"):
+            _ = Material(white, kind=PHYSICAL, transmission=wrong)
+    for wrong in [nan[DType.float32](), Float32(-1)]:
+        with assert_raises(contains="thickness cannot be negative"):
+            _ = Material(white, kind=PHYSICAL, thickness=Length(wrong, METER))
+    for wrong in [nan[DType.float32](), Float32(0), Float32(-2)]:
+        with assert_raises(contains="attenuation distance must be above"):
+            _ = Material(
+                white,
+                kind=PHYSICAL,
+                attenuation_distance=Length(wrong, METER),
+            )
+    for wrong in [nan[DType.float32](), Float32(-1)]:
+        with assert_raises(contains="dispersion cannot be negative"):
+            _ = Material(white, kind=PHYSICAL, dispersion=wrong)
+    with assert_raises(contains="transmission map id cannot be negative"):
+        _ = Material(white, kind=PHYSICAL, transmission_map=TextureId(-5))
+    with assert_raises(contains="thickness map id cannot be negative"):
+        _ = Material(white, kind=PHYSICAL, thickness_map=TextureId(-5))
+
+
+def test_only_a_physical_material_transmits() raises:
+    var white = Color(255, 255, 255)
+    var materials = List[Material]()
+    for kind in [BASIC, LAMBERT, PHONG, STANDARD, TOON]:
+        with assert_raises(contains="Only a physical material transmits"):
+            _ = Material(white, kind=kind, transmission=0.5)
+        with assert_raises(contains="Only a physical material transmits"):
+            _ = Material(white, kind=kind, transmission_map=TextureId(0))
+        with assert_raises(contains="Only a physical material transmits"):
+            _ = Material(white, kind=kind, thickness=Length(1.0, METER))
+        with assert_raises(contains="Only a physical material transmits"):
+            _ = Material(white, kind=kind, thickness_map=TextureId(0))
+        with assert_raises(contains="Only a physical material transmits"):
+            _ = Material(white, kind=kind, attenuation_color=Color(1, 2, 3))
+        with assert_raises(contains="Only a physical material transmits"):
+            _ = Material(
+                white, kind=kind, attenuation_distance=Length(1.0, METER)
+            )
+        with assert_raises(contains="Only a physical material transmits"):
+            _ = Material(white, kind=kind, dispersion=1)
+        materials.append(Material(white, kind=kind))
+    assert_equal(len(materials), 5)

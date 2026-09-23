@@ -15,7 +15,7 @@ MAX 26.6.0 and an accelerator. See [How to use the GPU backend](How-to-use-the-G
 | Function | Meaning |
 |---|---|
 | `available() -> Bool` | Whether a GPU is present. |
-| `render_triangles(corners, width, height, background, mode, textures, lighting, fog, tone_mapping, exposure, lines, draws, scissor, points, cubes, backdrop) -> Framebuffer` | One-shot: draw and read back. |
+| `render_triangles(corners, width, height, background, mode, textures, lighting, fog, tone_mapping, exposure, lines, draws, scissor, points, cubes, backdrop, transmission) -> Framebuffer` | One-shot: draw and read back. |
 | `flatten(corners) -> List[Float32]` | The corner buffer the kernel reads, one lane per varying. |
 | `flatten_lights(lighting) -> List[Float32]` | The light buffer: the camera's position, the one direction toward it, its up axis, the ambient term, the light probes, then each directional, point, hemisphere, spot and rect area light, then the LTC tables when there is a rect area light, then the shadow maps, then the spot light maps. |
 | `flatten_fog(fog) -> List[Float32]` | The fog buffer, six floats. The kind crosses as a kernel argument. |
@@ -30,7 +30,7 @@ Hold one across frames. The device buffers survive between draws.
 |---|---|
 | `GpuRenderer(width, height)` | Create the context and the buffers. Raises without a GPU. |
 | `set_textures(store, cubes=CubeTextureStore())` | Upload every texture, then every cube texture's six faces and its [PMREM](Textures#pmrem) after them, seven rows a cube. All or nothing. |
-| `draw(corners, background, mode, lighting, fog, tone_mapping, exposure, lines, draws, scissor, points, backdrop)` | Rasterize into the device target. `backdrop` is what `Renderer.backdrop` returns, or none: the scene's image background, painted before anything is drawn. `scissor` is a `Rect` the draw may touch, or none for the whole target. A pixel outside it is neither cleared nor drawn, so the target keeps it between draws; see [Renderer](Renderer#viewport-and-scissor). Pass `Lighting(scene, visible=camera.visible_layers())` and `FogView(scene.fog, view)`, the values `Renderer.render` uses. `lines` are two corners a segment, `points` are one corner a [point](Points-and-sprites), and `draws` is the order, all from `Renderer.prepare_frame`. An empty order draws every triangle, then every segment, then every point. The kernel tone maps each pixel as `RenderTarget.resolve` does. |
+| `draw(corners, background, mode, lighting, fog, tone_mapping, exposure, lines, draws, scissor, points, backdrop, line_width, transmission)` | Rasterize into the device target. `transmission` is what `Renderer.transmission_target` returns, or an empty target when nothing transmits. `backdrop` is what `Renderer.backdrop` returns, or none: the scene's image background, painted before anything is drawn. `scissor` is a `Rect` the draw may touch, or none for the whole target. A pixel outside it is neither cleared nor drawn, so the target keeps it between draws; see [Renderer](Renderer#viewport-and-scissor). Pass `Lighting(scene, visible=camera.visible_layers())` and `FogView(scene.fog, view)`, the values `Renderer.render` uses. `lines` are two corners a segment, `points` are one corner a [point](Points-and-sprites), and `draws` is the order, all from `Renderer.prepare_frame`. An empty order draws every triangle, then every segment, then every point. The kernel tone maps each pixel as `RenderTarget.resolve` does. |
 | `read_back() -> Framebuffer` | Copy color and depth to the host. |
 
 `draw` checks every triangle's state, every segment's state, every point's state and every draw's run on the host before it launches. It checks every texture id, the alpha test, the tone mapping curve and the exposure the same way. The kernel cannot raise.
@@ -47,7 +47,7 @@ Coverage is integer arithmetic and matches the CPU exactly. Shading is floating 
 
 The kernel calls the same functions as the CPU for the fill rule, texture wrapping and texel blending. It shares the light falloff, the spot light's rim and the Blinn-Phong highlight. It shares the fog factor, the normal and depth packing, and the tone mapping curves too. See [Why the CPU and GPU share code](Why-the-CPU-and-GPU-share-code).
 
-The state table carries `STATE_PER_TRIANGLE` entries per triangle, nineteen at present. `triangle_state` writes them from the first corner, in this order:
+The state table carries `STATE_PER_TRIANGLE` entries per triangle, twenty-one at present. `triangle_state` writes them from the first corner, in this order:
 
 | Column | Entry |
 |---|---|
@@ -58,12 +58,17 @@ The state table carries `STATE_PER_TRIANGLE` entries per triangle, nineteen at p
 | 14 and 15 | The packed depth, color and stencil state: `RasterState.ops_word` and `RasterState.stencil_word`. |
 | 16 and 17 | The ambient occlusion map and the light map. |
 | 18 | The specular map. |
+| 19 and 20 | The transmission map and the thickness map. |
 
 Each map column holds a texture id, or `NO_TEXTURE` for none. The `STATE_` constants in `render/gpu.mojo` name every column. A `TOON` triangle's ramp is the gradient map column. The kernel reads the ramp's top row straight out of the texel buffer, with the host's own `toon_index`.
 
 The depth, color and stencil state rides the triangle, segment and point tables as two integers, `RasterState.ops_word` and `RasterState.stencil_word`. The kernel unpacks them and calls `test_fragment`, the function the host's target calls. It keeps the stencil as one local number per pixel, cleared to zero at the start of the launch. See [Materials](Materials#depth-color-and-stencil).
 
 The kernel tracks whether each pixel holds data rather than light, as the host's target does. It keeps the fog and the curve off those pixels.
+
+A transmissive triangle reads the [transmission target](Materials#transmission) from the backdrop buffer. The kernel has no argument to spare, because Metal binds at most thirty-one and it has thirty-one. So `draw` writes the target after the backdrop's own pixels: a header of `TRANSMISSION_HEADER` floats, then the mip chain as floats. The header is the world-to-target matrix, the width, the height and the level count. `flatten_transmission` lays it out.
+
+The kernel calls `volume_refraction`, the host's own function, over a source that reads the chain with `_sample_at`. The host draws the transmission pass: pass `Renderer.transmission_target(scene, assets, camera)` as `draw`'s `transmission`.
 
 The light buffer begins with three floats of camera position at `LIGHTS_EYE`, then three at `LIGHTS_TOWARD`. Those three hold the zero vector for a converging projection, and one unit direction for a parallel one. The kernel passes both to `toward_eye_at`, the host's own function. The camera's own up axis follows at `LIGHTS_UP`, for the frame a `MATCAP` surface is looked up in.
 

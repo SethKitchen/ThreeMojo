@@ -28,7 +28,10 @@ from math.vector3 import Vector3
 from render.framebuffer import Color, FloatColor, Framebuffer
 from materials.material import (
     BLEND,
+    DEFAULT_IOR,
     DEPTH,
+    MAX_IOR,
+    MIN_IOR,
     LAMBERT,
     MULTIPLY_OPERATION,
     NORMALS,
@@ -61,6 +64,11 @@ from render.texture import (
     mix_straight,
 )
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
+from render.transmission import (
+    TransmissionTarget,
+    host_refraction,
+    transmission_alpha,
+)
 from lights.lighting import (
     PERSPECTIVE_VIEW,
     RECIPROCAL_PI,
@@ -90,7 +98,7 @@ from render.pointrule import (
     last_covered,
     mip_level_of,
 )
-from std.math import ceil, floor, isfinite, log2, max, min, sqrt
+from std.math import ceil, floor, inf, isfinite, log2, max, min, sqrt
 
 # `TaskGroup` moved behind an underscore in Mojo 1.1: `std.runtime` keeps
 # only `parallelism_level` and `initialize_runtime` in public view, and
@@ -629,6 +637,23 @@ struct RasterVertex(ImplicitlyCopyable):
     # or `NO_TEXTURE`: three.js's `specularMap`. Per-triangle like
     # `texture`, and read by a `BASIC`, `LAMBERT` or `PHONG` triangle only.
     var specular_map: TextureId
+    # How much of a `PHYSICAL` surface's diffuse light is the opaque scene
+    # seen through it, three.js's `transmission`, and the texture whose red
+    # multiplies it. How deep the volume is along each world axis: the
+    # material's thickness times the length of each axis of the draw's
+    # world matrix, three.js's `thickness * modelScale`, and the texture
+    # whose green multiplies it. The color white light becomes inside,
+    # linear, and how far it travels to become it, infinite for never. How
+    # far the channels bend apart, and the index they bend at. All
+    # per-triangle, read from the first corner. See `render.transmission`.
+    var transmission: Float32
+    var transmission_map: TextureId
+    var thickness: Vector3
+    var thickness_map: TextureId
+    var attenuation_color: FloatColor
+    var attenuation_distance: Float32
+    var dispersion: Float32
+    var ior: Float32
 
     def __init__(
         out self,
@@ -681,6 +706,14 @@ struct RasterVertex(ImplicitlyCopyable):
         light_map: TextureId = NO_TEXTURE,
         light_map_intensity: Float32 = 1,
         specular_map: TextureId = NO_TEXTURE,
+        transmission: Float32 = 0,
+        transmission_map: TextureId = NO_TEXTURE,
+        thickness: Vector3 = Vector3(0, 0, 0),
+        thickness_map: TextureId = NO_TEXTURE,
+        attenuation_color: FloatColor = FloatColor(1.0, 1.0, 1.0),
+        attenuation_distance: Float32 = inf[DType.float32](),
+        dispersion: Float32 = 0,
+        ior: Float32 = DEFAULT_IOR,
     ):
         """Create a corner. Texture coordinates and maps default to none.
 
@@ -703,7 +736,9 @@ struct RasterVertex(ImplicitlyCopyable):
         and its `MultiplyOperation`. The depth, color and stencil state
         defaults to three.js's: the depth tested and written, the color
         written, and no stencil test. The ambient occlusion map and the
-        light map default to none, at intensities of one.
+        light map default to none, at intensities of one. The volume
+        defaults to three.js's: no transmission, no thickness, white light
+        that is never dimmed, no dispersion, and an index of 1.5.
         """
         self.x = x
         self.y = y
@@ -754,6 +789,14 @@ struct RasterVertex(ImplicitlyCopyable):
         self.light_map = light_map
         self.light_map_intensity = light_map_intensity
         self.specular_map = specular_map
+        self.transmission = transmission
+        self.transmission_map = transmission_map
+        self.thickness = thickness
+        self.thickness_map = thickness_map
+        self.attenuation_color = attenuation_color
+        self.attenuation_distance = attenuation_distance
+        self.dispersion = dispersion
+        self.ior = ior
 
 
 @fieldwise_init
@@ -1276,7 +1319,14 @@ def check_triangle_state(
             two intensities; either id that is a negative other than
             `NO_TEXTURE`, either intensity that is negative or not
             finite, and either map on a kind with no indirect term are
-            refused.
+            refused. The corners must agree on their volume; a
+            transmission outside zero to one, a thickness or an
+            attenuation color that is negative or not finite, an
+            attenuation distance that is not above zero, a dispersion that
+            is negative or not finite, an index outside one to 2.333,
+            either volume map id that is a negative other than
+            `NO_TEXTURE`, and any of them but its default on a kind that
+            is not `PHYSICAL` are refused.
     """
     if b.blend != a.blend or c.blend != a.blend:
         raise Error("A triangle's corners disagree about blending")
@@ -1509,6 +1559,108 @@ def check_triangle_state(
         raise Error(
             "Only a basic, lambert or phong triangle reads a specular map:"
             " no other shader reads one"
+        )
+    # The volume, asked as the material asks it: the numbers first, since a
+    # NaN never agrees, then the agreement, the ids and the kind.
+    if not _is_unit_fraction(a.transmission):
+        raise Error("A triangle's transmission must be between zero and one")
+    if not _is_depth(a.thickness):
+        raise Error("A triangle's thickness cannot be negative")
+    var tint = a.attenuation_color
+    if not _is_depth(Vector3(tint.r, tint.g, tint.b)):
+        raise Error("A triangle's attenuation color cannot be negative")
+    if not (a.attenuation_distance > 0):
+        raise Error("A triangle's attenuation distance must be above zero")
+    if not isfinite(a.dispersion) or a.dispersion < 0:
+        raise Error("A triangle's dispersion cannot be negative")
+    if not isfinite(a.ior) or a.ior < MIN_IOR or a.ior > MAX_IOR:
+        raise Error(
+            "A triangle's index of refraction must be between one and 2.333"
+        )
+    if not _same_volume(a, b) or not _same_volume(a, c):
+        raise Error("A triangle's corners disagree about their volume")
+    if a.transmission_map != NO_TEXTURE and a.transmission_map.value < 0:
+        raise Error(
+            "A triangle names a transmission map id that nothing can hold"
+        )
+    if a.thickness_map != NO_TEXTURE and a.thickness_map.value < 0:
+        raise Error("A triangle names a thickness map id that nothing can hold")
+    if a.kind != PHYSICAL and _has_volume(a):
+        raise Error(
+            "Only a physical triangle transmits: no other shader reads a volume"
+        )
+
+
+def _is_depth(value: Vector3) -> Bool:
+    """Return True if every axis of `value` is finite and not negative."""
+    return (
+        isfinite(value.x)
+        and isfinite(value.y)
+        and isfinite(value.z)
+        and value.x >= 0
+        and value.y >= 0
+        and value.z >= 0
+    )
+
+
+def _same_volume(a: RasterVertex, b: RasterVertex) -> Bool:
+    """Return True if two corners agree on every field of their volume."""
+    return (
+        a.transmission == b.transmission
+        and a.transmission_map == b.transmission_map
+        and a.thickness.x == b.thickness.x
+        and a.thickness.y == b.thickness.y
+        and a.thickness.z == b.thickness.z
+        and a.thickness_map == b.thickness_map
+        and a.attenuation_color.r == b.attenuation_color.r
+        and a.attenuation_color.g == b.attenuation_color.g
+        and a.attenuation_color.b == b.attenuation_color.b
+        and a.attenuation_distance == b.attenuation_distance
+        and a.dispersion == b.dispersion
+        and a.ior == b.ior
+    )
+
+
+def _has_volume(a: RasterVertex) -> Bool:
+    """Return True if a corner's volume is anything but the default: what
+    a kind that does not transmit refuses."""
+    return (
+        a.transmission != 0
+        or a.transmission_map != NO_TEXTURE
+        or a.thickness.x != 0
+        or a.thickness.y != 0
+        or a.thickness.z != 0
+        or a.thickness_map != NO_TEXTURE
+        or a.attenuation_color.r != 1
+        or a.attenuation_color.g != 1
+        or a.attenuation_color.b != 1
+        or a.attenuation_distance != inf[DType.float32]()
+        or a.dispersion != 0
+        or a.ior != DEFAULT_IOR
+    )
+
+
+def check_transmission(a: RasterVertex, mode: ShadeMode, ready: Bool) raises:
+    """Refuse a transmissive triangle with no opaque scene to look through.
+
+    A triangle transmits under `SHADE_TEXTURE` alone, since what it shows
+    is read from a texture, the opaque scene drawn first. Shared by both
+    rasterizers, and asked before the first fragment and before a launch.
+
+    Args:
+        a: The triangle's first corner.
+        mode: What a fragment's color is taken from.
+        ready: Whether a `TransmissionTarget` holding the opaque scene was
+            given.
+
+    Raises:
+        Error: If the triangle transmits under this mode and no target was
+            given.
+    """
+    if a.transmission > 0 and mode == SHADE_TEXTURE and not ready:
+        raise Error(
+            "A transmissive triangle needs the opaque scene behind it: pass"
+            " a TransmissionTarget, as Renderer.render_into builds one"
         )
 
 
@@ -1881,6 +2033,12 @@ def check_triangle_maps(
             check_light_map(textures.get(a.light_map))
         if a.specular_map != NO_TEXTURE:
             check_data_map(textures.get(a.specular_map), "A specular map")
+        if a.transmission_map != NO_TEXTURE:
+            check_data_map(
+                textures.get(a.transmission_map), "A transmission map"
+            )
+        if a.thickness_map != NO_TEXTURE:
+            check_data_map(textures.get(a.thickness_map), "A thickness map")
 
 
 def check_light_map(image: Texture) raises:
@@ -1916,6 +2074,7 @@ def rasterize_shaded(
     last_row: Int = -1,
     fog: FogView = FogView.none(),
     cubes: CubeTextureStore = CubeTextureStore(),
+    transmission: TransmissionTarget = TransmissionTarget(),
 ) raises:
     """Fill a triangle whose corners each carry their own color.
 
@@ -1983,6 +2142,9 @@ def rasterize_shaded(
             triangle that names one reflects it after the lights, the
             highlight and the glow and before the fog, by
             `materials.material.combine_light`; see `render.cube_texture`.
+        transmission: The opaque scene a transmissive triangle shows
+            through itself under `SHADE_TEXTURE`, or an empty target for
+            a frame with nothing transmissive; see `render.transmission`.
 
     Raises:
         Error: If the mode is none of the three, the fog view holds a kind
@@ -2007,6 +2169,7 @@ def rasterize_shaded(
     # The maps, asked before the first fragment as the GPU asks before the
     # launch, and only under the mode that would open each.
     check_triangle_maps(a, mode, textures, cubes)
+    check_transmission(a, mode, transmission.is_ready())
     # The ramp a `TOON` surface steps through, read once here. Its top row
     # is the whole lookup table, and it is the same for every fragment, so
     # opening the texture per light per pixel would buy nothing. Empty for
@@ -2058,6 +2221,10 @@ def rasterize_shaded(
     # lies over them.
     var physical = a.kind.is_physical()
     var coated = physical and a.clearcoat > 0
+    # Whether these fragments show the opaque scene through themselves:
+    # only when the triangle transmits and the mode opens textures, since
+    # the scene behind is read from one.
+    var transmits = a.transmission > 0 and mode == SHADE_TEXTURE
     # Whether the normal is perturbed by a map before anything reads it:
     # only when the triangle names one and the mode opens textures, since
     # a normal map is one.
@@ -2430,6 +2597,11 @@ def rasterize_shaded(
             # What the highlight and the reflectivity are scaled by: the
             # specular map's red, or one for none.
             var specular_strength = Float32(1)
+            # What the transmission and the thickness are multiplied by:
+            # the transmission map's red and the thickness map's green, or
+            # one for none.
+            var transmission_factor = Float32(1)
+            var thickness_factor = Float32(1)
             # Each mode by name, as the kernel does, so there is no "else"
             # for an unrecognized one to fall into differently on each side.
             if mode == SHADE_UV or mode == SHADE_TEXTURE:
@@ -2514,6 +2686,32 @@ def rasterize_shaded(
                             highlight.b * specular_strength,
                             1.0,
                         )
+                    # The transmission map's red and the thickness map's
+                    # green, three.js's `transmission_fragment`.
+                    if a.transmission_map != NO_TEXTURE:
+                        transmission_factor = _sample_map(
+                            textures.get(a.transmission_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).r
+                    if a.thickness_map != NO_TEXTURE:
+                        thickness_factor = _sample_map(
+                            textures.get(a.thickness_map),
+                            u,
+                            v,
+                            a,
+                            b,
+                            c,
+                            coverage,
+                            x,
+                            y,
+                        ).g
             # Thrown away for being too transparent, three.js's
             # `alphatest_fragment`: no color, and no depth either, so what
             # is behind this hole is drawn instead. Asked once the maps have
@@ -2622,6 +2820,36 @@ def rasterize_shaded(
                             gloss.g * strength,
                             gloss.b * strength,
                         )
+                # The opaque scene through the surface, three.js's
+                # `transmission_fragment`, seen from where the camera
+                # stands under either projection, as three.js measures its
+                # `v` from `cameraPosition`.
+                var through = Float32(0)
+                var transmitted = Vector3(0, 0, 0)
+                var thinned = Float32(1)
+                if transmits:
+                    through = a.transmission * transmission_factor
+                    var seen = host_refraction(
+                        transmission,
+                        facing,
+                        toward_eye_at(lighting.eye, PERSPECTIVE_VIEW, spot),
+                        rough,
+                        surface.diffuse,
+                        surface.specular,
+                        surface.clearcoat.x,
+                        spot,
+                        a.thickness * thickness_factor,
+                        a.dispersion,
+                        a.ior,
+                        Vector3(
+                            a.attenuation_color.r,
+                            a.attenuation_color.g,
+                            a.attenuation_color.b,
+                        ),
+                        a.attenuation_distance,
+                    )
+                    transmitted = Vector3(seen.r, seen.g, seen.b)
+                    thinned = transmission_alpha(seen.a, through)
                 var outgoing = physical_outgoing(
                     direct,
                     indirect,
@@ -2637,9 +2865,11 @@ def rasterize_shaded(
                     Vector3(dot_nv_coat, 0, 0),
                     coat_radiance,
                     occlusion,
+                    through,
+                    transmitted,
                 )
                 shaded = FloatColor(
-                    outgoing.x, outgoing.y, outgoing.z, shaded.a
+                    outgoing.x, outgoing.y, outgoing.z, shaded.a * thinned
                 )
             else:
                 # The highlight and then the glow, both added after the
@@ -3347,6 +3577,7 @@ async def _frame_band(
     last_row: Int,
     fog: FogView,
     cubes: Pointer[CubeTextureStore, ImmutAnyOrigin],
+    transmission: Pointer[TransmissionTarget, ImmutAnyOrigin],
     line_width: Int = 1,
 ):
     """Draw a frame into one horizontal band of the target.
@@ -3394,6 +3625,7 @@ async def _frame_band(
                         last_row,
                         fog,
                         cubes[],
+                        transmission[],
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -3445,6 +3677,7 @@ def rasterize_frame(
     points: List[RasterVertex] = List[RasterVertex](),
     cubes: CubeTextureStore = CubeTextureStore(),
     line_width: Int = 1,
+    transmission: TransmissionTarget = TransmissionTarget(),
 ) raises:
     """Draw a frame -- triangles, segments and points, in one order --
     into `target`, on `workers` threads.
@@ -3492,6 +3725,9 @@ def rasterize_frame(
             renderer's render scale; see `rasterize_line` and
             `render.linerule`. One by default, the frame drawn at its own
             size.
+        transmission: The opaque scene the transmissive triangles show
+            through themselves, or an empty target when none transmits;
+            see `render.transmission`.
 
     Raises:
         Error: If the corner count is not a multiple of three, the segment
@@ -3536,6 +3772,17 @@ def rasterize_frame(
         check_point_state(points[point])
         check_point_maps(points[point], mode, textures)
     check_draws(draws, triangles, lines, len(points))
+    # Asked of the triangles a draw names rather than of the whole list:
+    # the transmission pass draws the opaque runs of a frame that holds
+    # transmissive triangles too, before there is a scene for them to
+    # look through.
+    var ready = transmission.is_ready()
+    for index in range(len(draws)):
+        ref draw = draws[index]
+        if draw.kind != DRAW_TRIANGLES:
+            continue
+        for triangle in range(draw.first, draw.first + draw.count):
+            check_transmission(corners[triangle * 3], mode, ready)
 
     var bands = min(workers, target.height)
     if bands == 1:
@@ -3554,6 +3801,7 @@ def rasterize_frame(
                         lighting,
                         fog=fog,
                         cubes=cubes,
+                        transmission=transmission,
                     )
                 continue
             if draw.kind == DRAW_POINTS:
@@ -3602,6 +3850,7 @@ def rasterize_frame(
                 (band + 1) * target.height // bands - 1,
                 fog,
                 Pointer(to=cubes).unsafe_origin_cast[ImmutAnyOrigin](),
+                Pointer(to=transmission).unsafe_origin_cast[ImmutAnyOrigin](),
                 line_width,
             )
         )
@@ -3626,6 +3875,7 @@ def rasterize_all(
     workers: Int = 1,
     fog: FogView = FogView.none(),
     cubes: CubeTextureStore = CubeTextureStore(),
+    transmission: TransmissionTarget = TransmissionTarget(),
 ) raises:
     """Draw every triangle in `corners` into `target`, on `workers` threads.
 
@@ -3642,6 +3892,8 @@ def rasterize_all(
         fog: The scene's fog, seen through the camera; see
             `rasterize_shaded`.
         cubes: Where `SHADE_TEXTURE` looks the triangles' env maps up.
+        transmission: The opaque scene the transmissive triangles show
+            through themselves, or an empty target when none transmits.
 
     Raises:
         Error: Everything `rasterize_frame` raises of the triangles: a
@@ -3663,6 +3915,7 @@ def rasterize_all(
         workers,
         fog,
         cubes=cubes,
+        transmission=transmission,
     )
 
 

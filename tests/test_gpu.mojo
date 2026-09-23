@@ -8938,12 +8938,12 @@ def test_the_baked_lanes_and_columns_ride_last() raises:
     assert_equal(flat[LANE_AO_INTENSITY], Float32(0.8))
     assert_equal(flat[LANE_LIGHT_MAP_INTENSITY], Float32(1.5))
     assert_equal(LANE_LOG_DEPTH, LANE_LIGHT_MAP_INTENSITY + 1)
-    assert_equal(LANE_LOG_DEPTH, FLOATS_PER_VERTEX - 1)
+    assert_equal(LANE_LOG_DEPTH, LANE_TRANSMISSION - 1)
     var state = triangle_state(corners)
     assert_equal(len(state), 2 * STATE_PER_TRIANGLE)
     assert_equal(state[STATE_AO_MAP], Int32(2))
     assert_equal(state[STATE_LIGHT_MAP], Int32(3))
-    assert_equal(STATE_SPECULAR_MAP, STATE_PER_TRIANGLE - 1)
+    assert_equal(STATE_SPECULAR_MAP, STATE_TRANSMISSION_MAP - 1)
     # A corner that says nothing names neither map, at intensities of one.
     var plain = flatten([RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1))])
     assert_equal(plain[LANE_AO_INTENSITY], Float32(1))
@@ -9448,3 +9448,266 @@ def test_both_backends_agree_on_a_flat_shaded_scene() raises:
         count_background(cpu, BACKGROUND) < 48 * 36, "nothing was drawn"
     )
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+# --- transmission -----------------------------------------------------------
+
+from math.matrix4 import Matrix4
+from render.gpu import (
+    LANE_ATTENUATION_B,
+    LANE_ATTENUATION_DISTANCE,
+    LANE_ATTENUATION_R,
+    LANE_DISPERSION,
+    LANE_IOR,
+    LANE_THICKNESS_X,
+    LANE_THICKNESS_Z,
+    LANE_TRANSMISSION,
+    STATE_THICKNESS_MAP,
+    STATE_TRANSMISSION_MAP,
+    TRANSMISSION_HEADER,
+    TRANSMISSION_LEVELS,
+    TRANSMISSION_WIDTH,
+    flatten_transmission,
+)
+
+from render.transmission import TransmissionTarget
+from materials.material import physical_material
+
+
+def glass_pair(
+    transmission_map: TextureId = NO_TEXTURE,
+    thickness_map: TextureId = NO_TEXTURE,
+    dispersion: Float32 = 0,
+) -> List[RasterVertex]:
+    """Return `physical_pair` as a transmissive volume: half a meter deep,
+    tinted, and dispersing when asked."""
+    var corners = physical_pair(PHYSICAL, 0.35, 0.1)
+    for index in range(len(corners)):
+        corners[index].transmission = 0.9
+        corners[index].transmission_map = transmission_map
+        corners[index].thickness = Vector3(0.5, 0.4, 0.3)
+        corners[index].thickness_map = thickness_map
+        corners[index].attenuation_color = FloatColor(0.8, 0.5, 0.3)
+        corners[index].attenuation_distance = 0.7
+        corners[index].dispersion = dispersion
+        corners[index].ior = 1.4
+    return corners^
+
+
+def a_scene_behind() raises -> TransmissionTarget:
+    """Return a 36x30 target of a gradient, over a view that takes the
+    pairs' world square onto it."""
+    var drawn = RenderTarget(36, 30, Color(0, 0, 0))
+    for y in range(30):
+        for x in range(36):
+            drawn.write(
+                x,
+                y,
+                FloatColor(Float32(x) / 36, Float32(y) / 30, 0.5, 1.0),
+                False,
+            )
+    var view = Matrix4()
+    view.elements[12] = 0.5
+    view.elements[13] = 0.5
+    return TransmissionTarget(drawn, view)
+
+
+def test_the_volume_lanes_and_columns_ride_last() raises:
+    var corners = glass_pair(TextureId(4), TextureId(5), 2)
+    var flat = flatten(corners)
+    assert_equal(len(flat), FLOATS_PER_VERTEX * 6)
+    assert_equal(flat[LANE_TRANSMISSION], Float32(0.9))
+    assert_equal(flat[LANE_THICKNESS_X], Float32(0.5))
+    assert_equal(flat[LANE_THICKNESS_Z], Float32(0.3))
+    assert_equal(flat[LANE_ATTENUATION_R], Float32(0.8))
+    assert_equal(flat[LANE_ATTENUATION_B], Float32(0.3))
+    assert_equal(flat[LANE_ATTENUATION_DISTANCE], Float32(0.7))
+    assert_equal(flat[LANE_DISPERSION], Float32(2))
+    assert_equal(flat[LANE_IOR], Float32(1.4))
+    assert_equal(LANE_TRANSMISSION, LANE_LOG_DEPTH + 1)
+    assert_equal(LANE_IOR, FLOATS_PER_VERTEX - 1)
+    var state = triangle_state(corners)
+    assert_equal(state[STATE_TRANSMISSION_MAP], Int32(4))
+    assert_equal(state[STATE_THICKNESS_MAP], Int32(5))
+    assert_equal(STATE_TRANSMISSION_MAP, STATE_SPECULAR_MAP + 1)
+    assert_equal(STATE_THICKNESS_MAP, STATE_PER_TRIANGLE - 1)
+
+
+def test_a_transmission_target_crosses_as_a_header_and_its_chain() raises:
+    var scene = a_scene_behind()
+    var bytes = flatten_transmission(scene)
+    assert_equal(
+        len(bytes), TRANSMISSION_HEADER * 4 + len(scene.image.data) * 4
+    )
+    var at = 12 * 4
+    assert_equal(
+        float_from_bytes(
+            bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]
+        ),
+        Float32(0.5),
+    )
+    at = TRANSMISSION_WIDTH * 4
+    assert_equal(
+        float_from_bytes(
+            bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]
+        ),
+        Float32(36),
+    )
+    at = TRANSMISSION_LEVELS * 4
+    assert_equal(
+        float_from_bytes(
+            bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]
+        ),
+        Float32(scene.image.levels),
+    )
+    at = (TRANSMISSION_HEADER + 5) * 4
+    assert_equal(
+        float_from_bytes(
+            bytes[at], bytes[at + 1], bytes[at + 2], bytes[at + 3]
+        ),
+        scene.image.data[5],
+    )
+
+
+def test_both_backends_look_through_a_volume_alike() raises:
+    # The kernel reads the target out of the backdrop buffer and runs the
+    # host's own `volume_refraction` over it: refracted, dimmed, blurred,
+    # dispersed and mapped, the two must reach the same pixels.
+    if skipped_for_lack_of_a_gpu("both backends look through a volume"):
+        return
+    var textures = TextureStore()
+    var map = textures.add(a_gpu_data_map())
+    var scene = a_scene_behind()
+    var lighting = phong_lighting()
+    var pairs = List[List[RasterVertex]]()
+    pairs.append(glass_pair())
+    pairs.append(glass_pair(dispersion=4))
+    pairs.append(glass_pair(map, map))
+    for index in range(len(pairs)):
+        ref corners = pairs[index]
+        var target = RenderTarget(36, 30, BACKGROUND)
+        rasterize_all(
+            corners,
+            target,
+            SHADE_TEXTURE,
+            textures,
+            lighting,
+            1,
+            transmission=scene,
+        )
+        var cpu = target.resolve()
+        var gpu = render_triangles(
+            corners,
+            36,
+            30,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            textures,
+            lighting,
+            transmission=scene,
+        )
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_draw_a_glass_box_in_a_scene_alike() raises:
+    # The host draws the transmission pass, and both backends draw the
+    # frame looking through it.
+    if skipped_for_lack_of_a_gpu("both backends draw a glass box alike"):
+        return
+    var renderer = Renderer(48, 36)
+    renderer.set_background(BACKGROUND)
+    var assets = Assets()
+    var box = assets.geometries.add(cube(Length(0.8, METER)))
+    var scene = Scene()
+    var glass_node = scene.add(Object3D())
+    var wall = Object3D()
+    wall.set_position(0, 0, -1.5)
+    var wall_node = scene.add(wall^)
+    light_the(scene)
+    scene.update()
+    scene.add_mesh(
+        Mesh(
+            box,
+            assets.materials.add(
+                physical_material(
+                    Color(230, 240, 255),
+                    roughness=0.2,
+                    transmission=1.0,
+                    thickness=Length(0.5, METER),
+                    attenuation_color=Color(200, 230, 255),
+                    attenuation_distance=Length(1.0, METER),
+                    dispersion=2.0,
+                    side=DOUBLE_SIDE,
+                )
+            ),
+            glass_node,
+        )
+    )
+    scene.add_mesh(
+        Mesh(box, assets.materials.add(Material(Color(220, 90, 40))), wall_node)
+    )
+    var camera = PerspectiveCamera(
+        Angle(50.0, DEGREE),
+        Float32(48) / Float32(36),
+        Length(0.1, METER),
+        Length(100.0, METER),
+    )
+    camera.place(Vector3(0.4, 0.5, 3.0), Vector3(0, 0, 0))
+    var cpu = renderer.render(scene, assets, camera)
+    var frame = renderer.prepare_frame(scene, assets, camera)
+    var device = GpuRenderer(48, 36)
+    device.set_textures(assets.textures)
+    device.draw(
+        frame.corners,
+        BACKGROUND,
+        SHADE_TEXTURE,
+        Lighting(scene, eye=camera_position(scene, camera)),
+        lines=frame.segments,
+        draws=frame.draws,
+        points=frame.points,
+        transmission=renderer.transmission_target(scene, assets, camera),
+    )
+    assert_equal(count_mismatches(cpu, device.read_back(), tolerance=1), 0)
+
+
+def test_the_gpu_refuses_a_volume_it_cannot_draw() raises:
+    # No scene to look through, or a volume map encoded as color: refused
+    # before the launch, as the host refuses them before a fragment.
+    if skipped_for_lack_of_a_gpu("the gpu refuses a volume it cannot draw"):
+        return
+    var textures = TextureStore()
+    var encoded = textures.add(
+        Texture(1, 1, [UInt8(255), 255, 255, 255], REPEAT, NEAREST, SRGB, False)
+    )
+    var renderer = GpuRenderer(36, 30)
+    renderer.set_textures(textures)
+    with assert_raises(contains="needs the opaque scene"):
+        renderer.draw(glass_pair(), BACKGROUND, SHADE_TEXTURE)
+    with assert_raises(contains="A transmission map holds data"):
+        renderer.draw(
+            glass_pair(encoded),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            transmission=a_scene_behind(),
+        )
+    with assert_raises(contains="A thickness map holds data"):
+        renderer.draw(
+            glass_pair(thickness_map=encoded),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            transmission=a_scene_behind(),
+        )
+    with assert_raises(contains="has not been uploaded"):
+        renderer.draw(
+            glass_pair(TextureId(7)),
+            BACKGROUND,
+            SHADE_TEXTURE,
+            transmission=a_scene_behind(),
+        )
+    # A second draw with a target reuses the room the first one made.
+    renderer.draw(
+        glass_pair(), BACKGROUND, SHADE_TEXTURE, transmission=a_scene_behind()
+    )
+    renderer.draw(
+        glass_pair(), BACKGROUND, SHADE_TEXTURE, transmission=a_scene_behind()
+    )
