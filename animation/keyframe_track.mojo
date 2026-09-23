@@ -3,32 +3,54 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""One property of one node, given a value at a list of times, from three.js
-`src/animation/KeyframeTrack.js` and the tracks beside it.
+"""One property of one node, mesh, material or light, given a value at a
+list of times, from three.js `src/animation/KeyframeTrack.js`, the tracks
+beside it, and `PropertyBinding.js`.
 
 A track is two lists of the same length: when, and what. Between two
 entries the value is worked out from the two around it, and outside the
 ends it is the nearest end. That is all three.js's `KeyframeTrack` is, and
-`VectorKeyframeTrack` and `QuaternionKeyframeTrack` differ only in how
-many numbers a value has and how two of them are mixed.
+`VectorKeyframeTrack`, `QuaternionKeyframeTrack`, `NumberKeyframeTrack`,
+`ColorKeyframeTrack` and `BooleanKeyframeTrack` differ only in how many
+numbers a value has and how two of them are mixed.
 
 So here there is one struct and a kind, for the reason `Curve` is one
 struct and a kind: a clip has to hold a list of one type.
 
-    POSITION    three numbers, where the node is
-    SCALE       three numbers, how big it is
-    QUATERNION  four numbers, which way it is turned
+    POSITION           three numbers, where the node is
+    SCALE              three numbers, how big it is
+    QUATERNION         four numbers, which way it is turned
+    VISIBLE            one number, zero or one, whether it is drawn
+    MORPH_INFLUENCE    one number, how much of a morph target a mesh wears
+    MATERIAL_COLOR     three linear channels, and the emissive and
+                       specular colors beside it
+    MATERIAL_OPACITY   one number, and the other number fields beside it
+    LIGHT_COLOR        three linear channels
+    LIGHT_INTENSITY    one number
 
-three.js names its target with a string, `.position` or `.quaternion`, and
-finds the object by its name at run time. Here a track names a `NodeId`
-and a kind, both of which the compiler checks, so a track cannot ask for a
-property that does not exist and cannot be handed a texture id by mistake.
+three.js's `StringKeyframeTrack` is not ported: nothing in this port has a
+string property for it to drive.
 
-What that does *not* prove is that the node is in the scene. A `NodeId` is
-an index, any integer makes one, and the scene it indexes is not chosen
-until `AnimationMixer.update` is called. So the mixer checks, and raises
-on a track that names a node the scene does not have. The type stops the
-confusion; it does not stop the index.
+## A target, not a path
+
+three.js names its target with a string, `.position` or
+`.material.opacity` or `.morphTargetInfluences[2]`, and `PropertyBinding`
+parses it and finds the object by its name at run time. Here a track holds
+a `TrackTarget`: the kind, and the index of the node, mesh, material or
+light. `node_target`, `morph_target`, `material_target` and `light_target`
+each take the id type their kind needs, a `NodeId`, a `MeshIndex`, a
+`MaterialId` or a `LightIndex`, so a track cannot ask for a property that
+does not exist and cannot be handed a material id where a node was meant.
+
+What that does *not* prove is that the thing is there. An id is an index,
+any integer makes one, and the scene and the assets it indexes are not
+chosen until `AnimationMixer.update` is called. So the mixer checks, and
+raises on a track that names something they do not have. The type stops
+the confusion; it does not stop the index.
+
+A color is three linear channels, as three.js's `Color` holds it. A
+material or a light stores its color as sRGB bytes, and the mixer decodes
+and encodes at the edge; see `animation.animation_mixer`.
 
 ## How two keys are mixed
 
@@ -40,7 +62,9 @@ and averaging them makes a turn that speeds up in the middle and a
 quaternion that is no longer a rotation.
 
 `STEP` holds each value until the next key, three.js's
-`InterpolateDiscrete`.
+`InterpolateDiscrete`. It is the only mode a `VISIBLE` track has, as it is
+the only mode of three.js's `BooleanKeyframeTrack`: a flag half way
+between shown and hidden is neither.
 
 ## What is not here
 
@@ -54,7 +78,9 @@ name. It is not ported.
 
 A track with no keys, or with times that do not rise. A list of values
 that does not divide into one value per key. A kind or an interpolation
-that is none of the named ones. Each of those is a track that cannot be
+that is none of the named ones, or a morph target past the eighth. A
+`VISIBLE` track that is not `STEP`, or a key of one that is neither zero
+nor one. Each of those is a track that cannot be
 read at any time at all, and three.js finds out at the first frame.
 
 A time or a value that is not a number is refused too, and so is a time
@@ -77,7 +103,9 @@ two lists still agree before it reads them -- the same argument
 it was built can be edited afterward.
 """
 
+from core.buffer_geometry import MAX_MORPH_TARGETS
 from core.object3d import NodeId
+from materials.material import MaterialId
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
 from std.math import isfinite
@@ -91,28 +119,76 @@ comptime UNIT_SLACK = Float32(1e-3)
 
 @fieldwise_init
 struct TrackKind(Equatable, ImplicitlyCopyable, Writable):
-    """Which property of a node a track drives, as a type rather than a
-    bare int.
+    """Which property a track drives, as a type rather than a bare int.
 
-    The same argument as `materials.material.MaterialKind`: three small
-    integers that mean three different things should not be
-    interchangeable. The type stops a bare integer at compile time, and
-    `KeyframeTrack.__init__` stops `TrackKind(9)` with `is_valid`.
+    The same argument as `materials.material.MaterialKind`: small integers
+    that mean different things should not be interchangeable. The type
+    stops a bare integer at compile time, and `KeyframeTrack.__init__`
+    stops `TrackKind(9)` with `is_valid`.
+
+    The first three drive a node's transform and keep the numbers they have
+    always had. The kinds added after them start at ten, so no number in
+    between is a kind.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the three kinds there are."""
-        return self == POSITION or self == SCALE or self == QUATERNION
+        """Return True if this is one of the kinds there are."""
+        return (
+            self.value >= POSITION.value and self.value <= QUATERNION.value
+        ) or (
+            self.value >= VISIBLE.value and self.value <= LIGHT_INTENSITY.value
+        )
+
+    def is_node(self) -> Bool:
+        """Return True if this kind drives a scene node: its position,
+        scale, rotation or `visible` flag."""
+        return (
+            self == POSITION
+            or self == SCALE
+            or self == QUATERNION
+            or self == VISIBLE
+        )
+
+    def is_morph(self) -> Bool:
+        """Return True if this kind drives a mesh's morph target
+        influence."""
+        return self == MORPH_INFLUENCE
+
+    def is_material(self) -> Bool:
+        """Return True if this kind drives a field of a material."""
+        return (
+            self.value >= MATERIAL_COLOR.value
+            and self.value <= MATERIAL_IOR.value
+        )
+
+    def is_light(self) -> Bool:
+        """Return True if this kind drives a light's color or intensity."""
+        return self == LIGHT_COLOR or self == LIGHT_INTENSITY
+
+    def is_color(self) -> Bool:
+        """Return True if this kind's value is a color: three linear
+        channels, three.js's `ColorKeyframeTrack`."""
+        return (
+            self == MATERIAL_COLOR
+            or self == MATERIAL_EMISSIVE
+            or self == MATERIAL_SPECULAR
+            or self == LIGHT_COLOR
+        )
+
+    def is_boolean(self) -> Bool:
+        """Return True if this kind's value is a flag, three.js's
+        `BooleanKeyframeTrack`."""
+        return self == VISIBLE
 
     def component_count(self) -> Int:
         """Return how many numbers one of this kind's values holds.
 
         Returns:
-            Four for `QUATERNION` and three for the others. Zero for a kind
-            that is not valid, which `KeyframeTrack.__init__` has already
-            refused.
+            Four for `QUATERNION`, three for `POSITION`, `SCALE` and the
+            colors, and one for every other kind. Zero for a kind that is
+            not valid, which `KeyframeTrack.__init__` has already refused.
         """
         if self == QUATERNION:
             return 4
@@ -120,6 +196,10 @@ struct TrackKind(Equatable, ImplicitlyCopyable, Writable):
             return 3
         if self == SCALE:
             return 3
+        if self.is_color():
+            return 3
+        if self.is_valid():
+            return 1
         return 0
 
 
@@ -129,6 +209,177 @@ comptime POSITION = TrackKind(0)
 comptime SCALE = TrackKind(1)
 # Which way the node is turned, three.js's `.quaternion` track.
 comptime QUATERNION = TrackKind(2)
+# Whether the node is drawn, three.js's `.visible` `BooleanKeyframeTrack`.
+# One number a key, zero or one, and held until the next key.
+comptime VISIBLE = TrackKind(10)
+# How much of one morph target a mesh wears, three.js's
+# `.morphTargetInfluences[i]` `NumberKeyframeTrack`.
+comptime MORPH_INFLUENCE = TrackKind(11)
+# A material's colors, three.js's `.material.color`, `.material.emissive`
+# and `.material.specular` `ColorKeyframeTrack`s. Three linear channels a
+# key, from zero to one.
+comptime MATERIAL_COLOR = TrackKind(12)
+comptime MATERIAL_EMISSIVE = TrackKind(13)
+comptime MATERIAL_SPECULAR = TrackKind(14)
+# A material's number fields, three.js's `.material.opacity` and the
+# others, as `NumberKeyframeTrack`s. One number a key.
+comptime MATERIAL_OPACITY = TrackKind(15)
+comptime MATERIAL_EMISSIVE_INTENSITY = TrackKind(16)
+comptime MATERIAL_ROUGHNESS = TrackKind(17)
+comptime MATERIAL_METALNESS = TrackKind(18)
+comptime MATERIAL_SHININESS = TrackKind(19)
+comptime MATERIAL_ALPHA_TEST = TrackKind(20)
+comptime MATERIAL_REFLECTIVITY = TrackKind(21)
+comptime MATERIAL_ENV_MAP_INTENSITY = TrackKind(22)
+comptime MATERIAL_CLEARCOAT = TrackKind(23)
+comptime MATERIAL_CLEARCOAT_ROUGHNESS = TrackKind(24)
+comptime MATERIAL_SPECULAR_INTENSITY = TrackKind(25)
+comptime MATERIAL_IOR = TrackKind(26)
+# A light's color, three linear channels, and its intensity.
+comptime LIGHT_COLOR = TrackKind(27)
+comptime LIGHT_INTENSITY = TrackKind(28)
+
+
+@fieldwise_init
+struct MeshIndex(Equatable, ImplicitlyCopyable, Writable):
+    """Which of a scene's `meshes` a track drives, as a type rather than a
+    bare int.
+
+    An index into `Scene.meshes`. Any integer makes one, so the mixer
+    checks it against the scene it is given.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if the index is not negative."""
+        return self.value >= 0
+
+
+@fieldwise_init
+struct LightIndex(Equatable, ImplicitlyCopyable, Writable):
+    """Which of a scene's `lights` a track drives, as a type rather than a
+    bare int.
+
+    An index into `Scene.lights`. Any integer makes one, so the mixer
+    checks it against the scene it is given.
+    """
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if the index is not negative."""
+        return self.value >= 0
+
+
+@fieldwise_init
+struct TrackTarget(Equatable, ImplicitlyCopyable, Writable):
+    """What one track drives: a kind, and which node, mesh, material or
+    light it drives it on. This port's `PropertyBinding` path.
+
+    three.js names the target with a string, `.material.opacity` or
+    `.morphTargetInfluences[2]`, and parses it at run time. Here the kind
+    is a type, and `node_target`, `morph_target`, `material_target` and
+    `light_target` each take the id type their kind needs, so a material
+    track cannot be handed a node by mistake.
+    """
+
+    var kind: TrackKind
+    # The node, mesh, material or light, as its index. The kind says
+    # which.
+    var index: Int
+    # Which morph target, for `MORPH_INFLUENCE`; zero for every other
+    # kind.
+    var slot: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if the kind exists and the slot fits it.
+
+        The index is not checked here. Whether it names something is a
+        question for the scene and the assets, which the mixer is given at
+        `update`.
+        """
+        if not self.kind.is_valid():
+            return False
+        if self.kind.is_morph():
+            return self.slot >= 0 and self.slot < MAX_MORPH_TARGETS
+        return self.slot == 0
+
+
+def node_target(node: NodeId, kind: TrackKind) raises -> TrackTarget:
+    """Return the target for one property of one node.
+
+    Args:
+        node: Which node.
+        kind: `POSITION`, `SCALE`, `QUATERNION` or `VISIBLE`.
+
+    Returns:
+        The target.
+
+    Raises:
+        Error: If the kind does not drive a node.
+    """
+    if not kind.is_node():
+        raise Error("A node target needs a kind that drives a node")
+    return TrackTarget(kind, node.value, 0)
+
+
+def morph_target(mesh: MeshIndex, target: Int) raises -> TrackTarget:
+    """Return the target for one morph target influence of one mesh,
+    three.js's `.morphTargetInfluences[target]`.
+
+    Args:
+        mesh: Which of the scene's meshes.
+        target: Which morph target, from zero.
+
+    Returns:
+        The target.
+
+    Raises:
+        Error: If there is no such morph target: a mesh has
+            `MAX_MORPH_TARGETS` influences.
+    """
+    if target < 0 or target >= MAX_MORPH_TARGETS:
+        raise Error("A mesh has eight morph target influences")
+    return TrackTarget(MORPH_INFLUENCE, mesh.value, target)
+
+
+def material_target(
+    material: MaterialId, kind: TrackKind
+) raises -> TrackTarget:
+    """Return the target for one field of one material.
+
+    Args:
+        material: Which material in the assets.
+        kind: One of the `MATERIAL_` kinds.
+
+    Returns:
+        The target.
+
+    Raises:
+        Error: If the kind does not drive a material.
+    """
+    if not kind.is_material():
+        raise Error("A material target needs a kind that drives a material")
+    return TrackTarget(kind, material.value, 0)
+
+
+def light_target(light: LightIndex, kind: TrackKind) raises -> TrackTarget:
+    """Return the target for the color or the intensity of one light.
+
+    Args:
+        light: Which of the scene's lights.
+        kind: `LIGHT_COLOR` or `LIGHT_INTENSITY`.
+
+    Returns:
+        The target.
+
+    Raises:
+        Error: If the kind does not drive a light.
+    """
+    if not kind.is_light():
+        raise Error("A light target needs a kind that drives a light")
+    return TrackTarget(kind, light.value, 0)
 
 
 @fieldwise_init
@@ -152,14 +403,15 @@ comptime LINEAR = Interpolation(1)
 
 
 struct KeyframeTrack(Copyable, Movable):
-    """One node's one property, given a value at a list of times."""
+    """One property of one node, mesh, material or light, given a value at
+    a list of times."""
 
-    var node: NodeId
-    var kind: TrackKind
+    var target: TrackTarget
     var interpolation: Interpolation
     # When each key is, in seconds from the start of the clip, rising.
     var times: List[Float32]
-    # Every key's value end to end, `kind.component_count()` numbers each.
+    # Every key's value end to end, `target.kind.component_count()`
+    # numbers each.
     var values: List[Float32]
 
     def __init__(
@@ -168,30 +420,72 @@ struct KeyframeTrack(Copyable, Movable):
         kind: TrackKind,
         times: List[Duration],
         var values: List[Float32],
-        interpolation: Interpolation = LINEAR,
+        interpolation: Optional[Interpolation] = None,
     ) raises:
         """Create a track on one node's one property.
 
         Args:
             node: Which node the track drives.
-            kind: Which of its properties.
+            kind: Which of its properties: `POSITION`, `SCALE`,
+                `QUATERNION` or `VISIBLE`.
             times: When each key is, from the start of the clip, rising and
                 none of them negative. At least one.
             values: Every key's value end to end, three numbers each for
-                `POSITION` and `SCALE` and four for `QUATERNION`.
-            interpolation: `LINEAR`, the default and three.js's, or `STEP`.
+                `POSITION` and `SCALE`, four for `QUATERNION` and one for
+                `VISIBLE`.
+            interpolation: `LINEAR` or `STEP`. None takes the kind's own:
+                `STEP` for `VISIBLE` and `LINEAR` for the others, as in
+                three.js.
 
         Raises:
-            Error: If the kind or the interpolation is none of the named
-                ones, if there are no keys, if a time or a value is not a
-                number, if a time is negative or does not rise above the
-                one before it, if the values do not divide into one value
-                per key, or if a rotation key is not of unit length.
+            Error: As the constructor that takes a `TrackTarget` does, and
+                if the kind does not drive a node.
         """
-        if not kind.is_valid():
-            raise Error("A track needs a kind that exists")
-        if not interpolation.is_valid():
+        self = Self(node_target(node, kind), times, values^, interpolation)
+
+    def __init__(
+        out self,
+        target: TrackTarget,
+        times: List[Duration],
+        var values: List[Float32],
+        interpolation: Optional[Interpolation] = None,
+    ) raises:
+        """Create a track on any property a track can drive.
+
+        Args:
+            target: What the track drives. Build it with `node_target`,
+                `morph_target`, `material_target` or `light_target`.
+            times: When each key is, from the start of the clip, rising and
+                none of them negative. At least one.
+            values: Every key's value end to end,
+                `target.kind.component_count()` numbers each. A `VISIBLE`
+                key is zero or one.
+            interpolation: `LINEAR` or `STEP`. None takes the kind's own:
+                `STEP` for `VISIBLE`, three.js's `BooleanKeyframeTrack`
+                default, and `LINEAR` for the others.
+
+        Raises:
+            Error: If the target's kind is none of the named ones or its
+                slot does not fit it, if the interpolation is none of the
+                named ones, if a `VISIBLE` track is asked to be `LINEAR`,
+                if there are no keys, if a time or a value is not a number,
+                if a time is negative or does not rise above the one before
+                it, if the values do not divide into one value per key, if
+                a rotation key is not of unit length, or if a `VISIBLE` key
+                is neither zero nor one.
+        """
+        if not target.is_valid():
+            raise Error("A track needs a kind that exists and fits its slot")
+        var kind = target.kind
+        var how = STEP if kind.is_boolean() else LINEAR
+        if Bool(interpolation):
+            how = interpolation.value()
+        if not how.is_valid():
             raise Error("A track's interpolation must be STEP or LINEAR")
+        if kind.is_boolean() and how != STEP:
+            # three.js's `BooleanKeyframeTrack` has no other mode: a flag
+            # half way between shown and hidden is neither.
+            raise Error("A flag track holds each key: it must be STEP")
         if len(times) == 0:
             raise Error("A track needs at least one key")
         if len(values) != len(times) * kind.component_count():
@@ -199,6 +493,10 @@ struct KeyframeTrack(Copyable, Movable):
         for index in range(len(values)):  # pragma: no branch
             if not isfinite(values[index]):
                 raise Error("A track's values must be numbers")
+            if not kind.is_boolean():
+                continue
+            if values[index] != 0 and values[index] != 1:
+                raise Error("A flag track's keys must be zero or one")
         var seconds = List[Float32]()
         for index in range(len(times)):  # pragma: no branch
             var at = times[index].to(SECOND)
@@ -233,19 +531,21 @@ struct KeyframeTrack(Copyable, Movable):
                 stored[key * 4 + 1] = turned.y
                 stored[key * 4 + 2] = turned.z
                 stored[key * 4 + 3] = turned.w
-        self.node = node
-        self.kind = kind
-        self.interpolation = interpolation
+        self.target = target
+        self.interpolation = how
         self.times = seconds^
         self.values = stored^
 
     def __init__(out self, *, copy: Self):
         """Copy another track."""
-        self.node = copy.node
-        self.kind = copy.kind
+        self.target = copy.target
         self.interpolation = copy.interpolation
         self.times = copy.times.copy()
         self.values = copy.values.copy()
+
+    def kind(self) -> TrackKind:
+        """Return which property the track drives."""
+        return self.target.kind
 
     def key_count(self) -> Int:
         """Return how many keys the track holds."""
@@ -264,7 +564,7 @@ struct KeyframeTrack(Copyable, Movable):
 
     def _value_at_key(self, key: Int) -> List[Float32]:
         """Return the value stored at one key, its own numbers alone."""
-        var width = self.kind.component_count()
+        var width = self.target.kind.component_count()
         var out = List[Float32]()
         for offset in range(width):  # pragma: no branch
             out.append(self.values[key * width + offset])
@@ -314,7 +614,10 @@ struct KeyframeTrack(Copyable, Movable):
             raise Error("A track cannot be read at a time that is not a number")
         if len(self.times) == 0:
             raise Error("A track's keys were removed after it was built")
-        if len(self.values) != len(self.times) * self.kind.component_count():
+        if (
+            len(self.values)
+            != len(self.times) * self.target.kind.component_count()
+        ):
             raise Error("A track's values no longer match its keys")
         var last = len(self.times) - 1
         if seconds <= self.times[0]:
@@ -328,7 +631,7 @@ struct KeyframeTrack(Copyable, Movable):
         var part = (seconds - self.times[key]) / span
         var near = self._value_at_key(key)
         var far = self._value_at_key(key + 1)
-        if self.kind == QUATERNION:
+        if self.target.kind == QUATERNION:
             var mixed = Quaternion(near[0], near[1], near[2], near[3]).slerp(
                 Quaternion(far[0], far[1], far[2], far[3]), part
             )
@@ -351,7 +654,7 @@ struct KeyframeTrack(Copyable, Movable):
             Error: If this is a `QUATERNION` track, whose value is not a
                 vector.
         """
-        if self.kind == QUATERNION:
+        if self.target.kind == QUATERNION:
             raise Error("A rotation track's value is not a vector")
         var numbers = self.sample(at)
         return Vector3(numbers[0], numbers[1], numbers[2])
@@ -368,7 +671,7 @@ struct KeyframeTrack(Copyable, Movable):
         Raises:
             Error: If this is not a `QUATERNION` track.
         """
-        if self.kind != QUATERNION:
+        if self.target.kind != QUATERNION:
             raise Error("Only a rotation track's value is a rotation")
         var numbers = self.sample(at)
         return Quaternion(numbers[0], numbers[1], numbers[2], numbers[3])

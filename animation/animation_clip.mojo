@@ -14,15 +14,44 @@ Nothing in a clip says which node it drives. Every track says that for
 itself, so one clip can move a whole rig, and two tracks of one clip can
 name two nodes.
 
+## Blend modes
+
+A clip carries three.js's `blendMode`. `NORMAL_BLEND_MODE`, the default,
+mixes the clip's values with the other actions' by weight.
+`ADDITIVE_BLEND_MODE` adds them on top of whatever the normal actions make:
+its tracks hold changes from a reference pose rather than poses, which is
+what `animation.animation_utils.make_clip_additive` makes of a clip.
+
 ## What is refused
 
 A clip with no tracks, and a clip whose tracks all hold one key. Both last
 no time at all, and a thing that lasts no time cannot be played: an action
-looping over it would divide by its length.
+looping over it would divide by its length. A blend mode that is neither of
+the two.
 """
 
 from animation.keyframe_track import KeyframeTrack
 from units.si import Duration, SECOND
+
+
+@fieldwise_init
+struct AnimationBlendMode(Equatable, ImplicitlyCopyable, Writable):
+    """How a clip's values join the other actions' values, as a type rather
+    than a bare int."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the two blend modes there are."""
+        return self == NORMAL_BLEND_MODE or self == ADDITIVE_BLEND_MODE
+
+
+# Mix by weight with the other actions, three.js's
+# `NormalAnimationBlendMode`.
+comptime NORMAL_BLEND_MODE = AnimationBlendMode(0)
+# Add on top of what the normal actions make, three.js's
+# `AdditiveAnimationBlendMode`.
+comptime ADDITIVE_BLEND_MODE = AnimationBlendMode(1)
 
 
 struct AnimationClip(Copyable, Movable):
@@ -30,9 +59,15 @@ struct AnimationClip(Copyable, Movable):
 
     var name: String
     var tracks: List[KeyframeTrack]
+    # How the clip's values join the other actions' values, three.js's
+    # `blendMode`.
+    var blend_mode: AnimationBlendMode
 
     def __init__(
-        out self, name: String, var tracks: List[KeyframeTrack]
+        out self,
+        name: String,
+        var tracks: List[KeyframeTrack],
+        blend_mode: AnimationBlendMode = NORMAL_BLEND_MODE,
     ) raises:
         """Create a clip from its tracks.
 
@@ -40,11 +75,16 @@ struct AnimationClip(Copyable, Movable):
             name: What the clip is called, as three.js's clips are named.
             tracks: The tracks it plays, at least one, and at least one of
                 them lasting longer than no time.
+            blend_mode: `NORMAL_BLEND_MODE`, the default and three.js's, or
+                `ADDITIVE_BLEND_MODE`.
 
         Raises:
-            Error: If there are no tracks, or every track holds a single
-                key, which is a clip of no length.
+            Error: If the blend mode is neither of the two, if there are no
+                tracks, or if every track holds a single key, which is a
+                clip of no length.
         """
+        if not blend_mode.is_valid():
+            raise Error("A clip needs a blend mode that exists")
         if len(tracks) == 0:
             raise Error("A clip needs at least one track")
         var longest = Float32(0)
@@ -56,11 +96,13 @@ struct AnimationClip(Copyable, Movable):
             raise Error("A clip must last longer than no time")
         self.name = name
         self.tracks = tracks^
+        self.blend_mode = blend_mode
 
     def __init__(out self, *, copy: Self):
         """Copy another clip, its tracks included."""
         self.name = copy.name
         self.tracks = copy.tracks.copy()
+        self.blend_mode = copy.blend_mode
 
     def track_count(self) -> Int:
         """Return how many tracks the clip plays."""

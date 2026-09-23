@@ -1,10 +1,10 @@
 # Animation
 
-`animation/keyframe_track.mojo`, `animation/animation_clip.mojo` and `animation/animation_mixer.mojo`. A track gives one property of one node a value at a list of times. A clip plays tracks together. A mixer plays clips and writes the pose into a scene.
+`animation/keyframe_track.mojo`, `animation/animation_clip.mojo`, `animation/animation_mixer.mojo`, `animation/animation_object_group.mojo` and `animation/animation_utils.mojo`. A track gives one property a value at a list of times. The property is on a node, a mesh, a material or a light. A clip plays tracks together. A mixer plays clips and writes the result into a scene and its assets.
 
 ![A mixer slides and turns a cube from keyframes](out/keyframes.png)
 
-three.js: `KeyframeTrack`, `VectorKeyframeTrack`, `QuaternionKeyframeTrack`, `AnimationClip`, `AnimationAction`, `AnimationMixer`, and the mixer's `loop` and `finished` events.
+three.js: `KeyframeTrack`, `VectorKeyframeTrack`, `QuaternionKeyframeTrack`, `NumberKeyframeTrack`, `ColorKeyframeTrack`, `BooleanKeyframeTrack`, `PropertyBinding`, `PropertyMixer`, `AnimationClip`, `AnimationAction`, `AnimationMixer`, `AnimationObjectGroup`, `AnimationUtils.subclip`, `AnimationUtils.makeClipAdditive`, `AdditiveAnimationBlendMode`, and the mixer's `loop` and `finished` events.
 
 ## KeyframeTrack
 
@@ -29,6 +29,16 @@ var slide = KeyframeTrack(
 | `POSITION` | 3 | Where the node is. |
 | `SCALE` | 3 | How big it is. |
 | `QUATERNION` | 4 | Which way it is turned. |
+| `VISIBLE` | 1, zero or one | Whether the node is drawn. |
+| `MORPH_INFLUENCE` | 1 | How much of one morph target a mesh wears. |
+| `MATERIAL_COLOR`, `MATERIAL_EMISSIVE`, `MATERIAL_SPECULAR` | 3 | A material's colors, as linear channels. |
+| `MATERIAL_OPACITY` and the other `MATERIAL_` numbers | 1 | One number field of a material. |
+| `LIGHT_COLOR` | 3 | A light's color, as linear channels. |
+| `LIGHT_INTENSITY` | 1 | How bright a light is. |
+
+The material numbers are `OPACITY`, `EMISSIVE_INTENSITY`, `ROUGHNESS`, `METALNESS`, `SHININESS`, `ALPHA_TEST`, `REFLECTIVITY`, `ENV_MAP_INTENSITY`, `CLEARCOAT`, `CLEARCOAT_ROUGHNESS`, `SPECULAR_INTENSITY` and `IOR`, each with the `MATERIAL_` prefix.
+
+This port has no `StringKeyframeTrack`. Nothing in the port has a string property for it to drive.
 
 | Member | Meaning |
 |---|---|
@@ -40,15 +50,48 @@ var slide = KeyframeTrack(
 
 Before the first key the value is the first key's. After the last it is the last key's. three.js's interpolants do the same at their ends.
 
-### A track names a node, not a string
+### A track names a target, not a string
 
-three.js names its target with a string, `.position` or `.quaternion`, and looks the object up by name at run time. Here a track holds a `NodeId` and a kind, both of which the compiler checks.
+A track holds a `TrackTarget`: a kind, and the index of the thing it drives. three.js names its target with a string path, such as `.material.opacity`. Its `PropertyBinding` parses the path and looks the object up by name at run time.
 
-A string that matches nothing is three.js's most common animation bug, and naming the property by type removes it. Naming the *node* by type does not: a `NodeId` is an index, and the scene it indexes is chosen at `update`. The mixer checks there, and raises on a node the scene does not have.
+Make a target with the function for its kind. Each function takes the id type that its kind needs:
+
+```mojo
+from animation.keyframe_track import (
+    KeyframeTrack, LIGHT_INTENSITY, LightIndex, MATERIAL_OPACITY, MeshIndex,
+    light_target, material_target, morph_target,
+)
+from materials.material import MaterialId
+
+var fade = KeyframeTrack(
+    material_target(MaterialId(0), MATERIAL_OPACITY), times, [1, 0]
+)
+var smile = KeyframeTrack(morph_target(MeshIndex(0), 2), times, [0, 1])
+var dim = KeyframeTrack(
+    light_target(LightIndex(1), LIGHT_INTENSITY), times, [2, 0]
+)
+```
+
+| Function | Id it takes | Kinds |
+|---|---|---|
+| `node_target(node, kind)` | `NodeId` | `POSITION`, `SCALE`, `QUATERNION`, `VISIBLE` |
+| `morph_target(mesh, target)` | `MeshIndex`, into `scene.meshes` | `MORPH_INFLUENCE`, target 0 to 7 |
+| `material_target(material, kind)` | `MaterialId`, into `assets.materials` | The `MATERIAL_` kinds |
+| `light_target(light, kind)` | `LightIndex`, into `scene.lights` | `LIGHT_COLOR`, `LIGHT_INTENSITY` |
+
+`KeyframeTrack(node, kind, times, values)` is the short form of a node track.
+
+A string that matches nothing is three.js's most common animation bug. A typed target removes it. A typed *index* does not prove that the thing is there, because the scene and the assets are chosen at `update`. The mixer checks there, and raises on an index that names nothing.
+
+### Colors are linear
+
+A color key holds three linear channels from 0 to 1, as three.js's `Color` holds them. A material and a light store sRGB bytes. The mixer decodes a color when it binds it and encodes the result when it writes it.
 
 ### How two keys are mixed
 
 `LINEAR`, the default, runs evenly from each key to the next. `STEP` holds each key's value until the next key, which is three.js's `InterpolateDiscrete`.
+
+A `VISIBLE` track is always `STEP`, as three.js's `BooleanKeyframeTrack` is. Leave `interpolation` out, or give `STEP`. A key must be 0 or 1.
 
 Two rotations are mixed by `slerp`, not one number at a time. A rotation is not four numbers to average. Averaging them makes a turn that speeds up in the middle. It also makes a quaternion that is no longer a rotation. three.js keeps `QuaternionLinearInterpolant` apart for the same reason.
 
@@ -62,7 +105,9 @@ from animation.animation_clip import AnimationClip
 var clip = AnimationClip("slide", [slide^])
 ```
 
-A clip is a name and a list of tracks. It lasts as long as its longest track, which is how three.js works a duration out in `resetDuration`.
+A clip is a name, a list of tracks and a blend mode. It lasts as long as its longest track, which is how three.js works a duration out in `resetDuration`.
+
+The blend mode is `NORMAL_BLEND_MODE` by default. `ADDITIVE_BLEND_MODE` makes the clip add to the pose; see [Additive animation](#additive-animation).
 
 Nothing in a clip says which node it drives. Every track says that for itself, so one clip can move a whole rig.
 
@@ -95,6 +140,8 @@ An action is one clip being played.
 | `get_effective_time_scale() -> Float32` | The time scale of the last update, with the warp applied. |
 | `set_effective_weight(weight)` | Set the weight and stop the fade. |
 | `set_effective_time_scale(scale)` | Set the time scale and stop the warp. |
+| `blend_mode` | `NORMAL_BLEND_MODE` or `ADDITIVE_BLEND_MODE`. The clip's mode unless you change it. |
+| `use_group(group)` | Play every track on every member of an `AnimationObjectGroup`. |
 
 `ONCE` stops at the end and stays there. `REPEAT` starts over. `PING_PONG` runs back the way it came. A negative `time_scale` runs a clip backward, and each mode handles that going the other way.
 
@@ -120,7 +167,8 @@ mixer.update(scene, clock.delta())
 | `action(index)` | The action, for playing or reweighting. |
 | `action_count() -> Int` | How many actions the mixer holds. |
 | `time() -> Duration` | How much time the mixer has been given. |
-| `update(scene, delta)` | Move every playing action on, and set the nodes. |
+| `update(scene, delta)` | Move every playing action on, and set the nodes, meshes and lights. |
+| `update(scene, assets, delta)` | The same, and set the materials too. |
 | `cross_fade_from(index, from_index, duration, warp)` | Fade one action in and another out. |
 | `cross_fade_to(index, to_index, duration, warp)` | Fade one action out and another in. |
 | `event_count() -> Int` | How many events the last update recorded. |
@@ -147,6 +195,100 @@ result = total * pile + (1 - total) * original
 An action alone at a weight of one quarter therefore moves the node a quarter of the way. That is what lets a single animation be faded in and out. three.js does this in `PropertyMixer.apply`.
 
 That original is read once, the first time a property is driven. Reading the node each frame would read back what the mixer wrote last frame, and the pose would wander.
+
+### How each type of value mixes
+
+The mixer mixes each type of value the way three.js's `PropertyMixer` does.
+
+| Value | How two actions mix | How it rests toward the original |
+|---|---|---|
+| Number, color | Weighted mean, one number at a time. | Along the line. |
+| Rotation | Weighted mean along the arc, by `slerp`. | Along the arc. |
+| Flag | The value takes the pile if its share is at least one half. | The original takes it back if the missing weight is at least one half. |
+
+The flag rule is three.js's `_select`. With two actions, the heavier action wins. With three or more, the order of the actions can decide a near tie, as it does in three.js.
+
+### Materials need the assets
+
+A material is in the assets, not in the scene. Use `update(scene, assets, delta)` for a clip that drives a material. `update(scene, delta)` raises on a material track.
+
+### Values a property cannot hold
+
+The mixer refuses to write a value that its property cannot hold. It checks a color channel against 0 to 1 and a light intensity against zero. It checks a material number against the range that `Material` accepts for that field. A normal action cannot leave the range of its keys, but an additive action can.
+
+The mixer does not check if a material's kind reads the field. A roughness track on a `LAMBERT` material writes a number that the renderer ignores.
+
+## Additive animation
+
+An additive clip holds changes from a reference pose, not poses. An action on it adds its changes to what the normal actions make. A nod added to a walk is one example.
+
+```mojo
+from animation.animation_utils import make_clip_additive
+
+var nod = make_clip_additive(nod_clip)
+var walking = mixer.add(AnimationAction(walk_clip^))
+var nodding = mixer.add(AnimationAction(nod^))
+```
+
+`make_clip_additive(clip, reference_frame, reference_clip, fps)` reads each track of the reference clip at the reference frame. It takes that value off every key of the matching track in the clip. Tracks match when they have the same target.
+
+| Value | The change a key holds | How the mixer adds it |
+|---|---|---|
+| Number, color | The key minus the reference. | Plus the change times the weight. |
+| Rotation | The reference's conjugate times the key. | The pose times the change, along the arc by the weight. |
+| Flag | The key, unchanged. | As a normal flag, from the original. |
+
+The rotation rule is three.js's: a change is relative to the reference, and it turns after the pose. The reference clip is the clip itself by default, at frame 0 and 30 frames a second.
+
+The mixer keeps an additive pile beside each normal pile, as three.js does. It rests the normal pile toward the original first. Then it puts the additive pile on top. A property that only additive actions drive gets its changes on top of its original.
+
+In three.js the additive pile of a flag replaces the normal one. This port does the same.
+
+## Subclips
+
+`subclip(clip, name, start_frame, end_frame, fps)` returns the part of a clip between two frames, as three.js's `AnimationUtils.subclip` does.
+
+```mojo
+from animation.animation_utils import subclip
+
+var wave = subclip(everything, "wave", 30, 60, 30)
+```
+
+A key stays if its frame, its time times `fps`, is at `start_frame` or after it and before `end_frame`. The kept keys move back so that the earliest one is at zero. No key is made at the cut. A track with no key in the range is left out. The subclip keeps the clip's blend mode.
+
+## Groups
+
+An `AnimationObjectGroup` is a list of nodes that one action plays on together. A crowd that walks with one walk is an example.
+
+```mojo
+from animation.animation_object_group import AnimationObjectGroup
+
+var crowd = AnimationObjectGroup()
+crowd.add(first)
+crowd.add(second)
+var action = AnimationAction(walk_clip^)
+action.use_group(crowd^)
+```
+
+An action with a group plays each track on each member, not on the index that the track names. Each member is to a track what the object is to a three.js path:
+
+| Kind | What a member drives |
+|---|---|
+| A node kind | The member node. |
+| `MORPH_INFLUENCE` | Every mesh at the member. |
+| A `MATERIAL_` kind | The material of every mesh at the member. |
+| A `LIGHT_` kind | Every light at the member. |
+
+Two members whose meshes share a material drive it once.
+
+| Member | Meaning |
+|---|---|
+| `add(node)` | Add a node. A node already in the group stays where it is. |
+| `remove(node)` | Take a node out. A node not in the group is ignored. |
+| `contains(node) -> Bool` | True if the node is a member. |
+| `count() -> Int` | How many nodes the group holds. |
+
+In three.js, actions share one group by reference. Here an action keeps its own copy. To change the members of a playing action, edit `mixer.action(index).group`.
 
 ## Fades, warps and start times
 
@@ -231,17 +373,38 @@ three.js dispatches `loop` and `finished` to listener functions. A Mojo closure 
 | A weight, a time scale, a frame time, a start time or a key that is not a number. | An error. |
 | An action index the mixer does not have. | An error. |
 | A track naming a node the scene does not have. | An error at `update`. |
+| A track naming a mesh, a light or a material that is not there. | An error at `update`. |
+| A material track given to `update(scene, delta)`. | An error. Use `update(scene, assets, delta)`. |
+| A group member that is not in the scene. | An error at `update`. |
+| A value that its property cannot hold. | An error at `update`. |
+| A target function given a kind of another thing. | An error. |
+| A morph target below 0 or above 7. | An error. |
+| A `VISIBLE` track that is `LINEAR`, or a key of one that is not 0 or 1. | An error at construction. |
+| A blend mode that is not named. | An error. |
+| A frame rate that is not above zero, or a frame below zero. | An error. |
+| A subclip range that ends before it starts, or that keeps no clip. | An error. |
 
 A clip of no length is refused where clips are built. That is what lets an action divide by the length when it loops, without asking first.
 
 ## Not ported
 
+- `StringKeyframeTrack`: nothing in the port has a string property.
+- Tracks on other properties. A track drives only the properties in the table of kinds.
+- `AnimationObjectGroup.uncache` and its statistics. An action keeps no binding per member to release.
 - `repetitions`: a `REPEAT` or `PING_PONG` action loops without end. So a `FINISHED` event comes only from `ONCE`.
 - The mixer's own `timeScale`.
 - `setDuration` and `syncWith`.
 
+## Where this port differs from three.js
+
+- `make_clip_additive` returns a new clip. three.js changes the clip that you give it.
+- A frame rate of zero or less is an error. three.js uses 30 frames a second in its place.
+- A subclip must last longer than no time. three.js returns a clip of no length, which nothing can play.
+- An action keeps its own copy of a group. three.js shares the group between actions.
+
 ## See also
 
 - [Scene graph](Scene-graph) has the nodes a track drives.
+- [Materials](Materials) has the fields a material track drives.
 - [Rotations](Rotations) has `slerp`, which a rotation track turns along.
 - [Units](Units#clock) has the `Clock` that gives `update` its delta.

@@ -146,7 +146,7 @@ def test_a_track_copies() raises:
     var track = slide()
     var twin = KeyframeTrack(copy=track)
     assert_equal(twin.key_count(), 2)
-    assert_true(twin.kind == POSITION)
+    assert_true(twin.kind() == POSITION)
     assert_almost_equal(
         twin.sample_vector3(at(1)).x, Float32(2), atol=TOLERANCE
     )

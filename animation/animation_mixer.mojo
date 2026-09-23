@@ -134,6 +134,58 @@ A `LOOPED` event says how many ends of the clip the action ran past, signed
 by the way it ran, which is three.js's `loopDelta`. For `PING_PONG` both
 ends count, as they do in three.js.
 
+## Properties other than a node's transform
+
+A track can also drive a node's `visible` flag, a mesh's morph target
+influences, a material's colors and numbers, and a light's color and
+intensity; see `animation.keyframe_track`. Each is a property with its own
+binding and its own pile, and the piles mix the way three.js's
+`PropertyMixer` mixes each type of value:
+
+    numbers and colors    by weight, one number at a time
+    rotations             by weight, along the arc
+    flags                 the value whose share is at least one half
+
+A flag is three.js's `_select`: each value in takes the pile if its share
+of the weight so far is at least one half, and the original takes it back
+if the missing weight is at least one half. That is the heaviest action
+for two actions. For three or more it is the order they arrive in that
+decides a near tie, as it is in three.js.
+
+A color pile holds three linear channels, and the channels are what is
+mixed, as three.js mixes its `Color`'s own numbers. A material's and a
+light's colors are stored as sRGB bytes here, so the mixer decodes them
+when it binds and encodes the result when it writes.
+
+`update(scene, delta)` drives nodes, meshes and lights, which are all in
+the scene. A material is in the assets, so a clip with a material track
+needs `update(scene, assets, delta)`.
+
+## Additive actions
+
+An action on a clip made additive, by
+`animation.animation_utils.make_clip_additive`, adds its values on top of
+what the normal actions make rather than mixing with them. three.js keeps
+a second pile per property for this, and so does the mixer here:
+
+    numbers and colors    pile += weight * value
+    rotations             pile = slerp(pile, pile * value, weight)
+    flags                 as a normal flag, starting from the original
+
+When every action has had its say, the normal pile is rested toward the
+original as above, and then the additive pile is put on top: added, or for
+a rotation multiplied on the right. That is three.js's
+`PropertyMixer.apply`, and like three.js the flag of an additive pile
+replaces the normal one.
+
+## Groups
+
+An action given an `AnimationObjectGroup` plays every track on every member
+of the group instead of the target the track names; see
+`animation.animation_object_group`. Each member's property has its own
+binding and pile, so a group action mixes with the other actions on the
+same nodes as any other action does.
+
 ## What is refused
 
 A weight below zero, which is not a share of anything. A weight, a time
@@ -141,17 +193,55 @@ scale or a frame time that is not a number. A loop mode that is none of
 the three. An action index the mixer does not have, or a cross-fade from
 an action to itself. A fade, a warp or a cross-fade that lasts less than no
 time, or a time that is not a number. A warp on an action whose time scale
-is zero. A track naming a node the scene does not have. A clip of no length is refused where clips are
-built, which is what lets the looping divide by the length without asking.
+is zero. A track naming a node, a mesh, a light or a material the scene
+or the assets do not have, and a material track played without the assets.
+A group member that is not in the scene. A value written that the property
+cannot hold: a color channel outside zero to one, a light intensity below
+zero, or a material number outside the range `Material` accepts for it,
+which an additive action can reach. A blend mode that is neither of the
+two. A clip of no length is refused where clips are built, which is what
+lets the looping divide by the length without asking.
 """
 
-from animation.animation_clip import AnimationClip
-from animation.keyframe_track import POSITION, QUATERNION, SCALE, TrackKind
+from animation.animation_clip import (
+    ADDITIVE_BLEND_MODE,
+    AnimationBlendMode,
+    AnimationClip,
+)
+from animation.animation_object_group import AnimationObjectGroup
+from animation.keyframe_track import (
+    LIGHT_COLOR,
+    LIGHT_INTENSITY,
+    MATERIAL_ALPHA_TEST,
+    MATERIAL_CLEARCOAT,
+    MATERIAL_CLEARCOAT_ROUGHNESS,
+    MATERIAL_COLOR,
+    MATERIAL_EMISSIVE,
+    MATERIAL_EMISSIVE_INTENSITY,
+    MATERIAL_ENV_MAP_INTENSITY,
+    MATERIAL_IOR,
+    MATERIAL_METALNESS,
+    MATERIAL_OPACITY,
+    MATERIAL_REFLECTIVITY,
+    MATERIAL_ROUGHNESS,
+    MATERIAL_SHININESS,
+    MATERIAL_SPECULAR,
+    MATERIAL_SPECULAR_INTENSITY,
+    POSITION,
+    QUATERNION,
+    SCALE,
+    TrackKind,
+    TrackTarget,
+    VISIBLE,
+)
+from core.assets import Assets
 from core.object3d import NodeId
 from core.scene import Scene
+from materials.material import MAX_IOR, MIN_IOR
 from math.quaternion import Quaternion
 from math.vector3 import Vector3
-from std.math import floor, isfinite
+from render.framebuffer import Color, FloatColor
+from std.math import floor, inf, isfinite
 from units.si import Duration, SECOND
 
 # How many numbers a pile holds: four, which is what the widest value, a
@@ -319,10 +409,16 @@ def mix_into_pile(
         share: How much weight this value brings.
         value: The value, its own numbers alone.
         kind: Which property, which decides whether the move is along a
-            line or along an arc.
+            line or along an arc, or for a flag a choice of one value.
     """
     var part = share / (so_far + share)
     var at = slot * PILE
+    if kind.is_boolean():
+        # three.js's `_select`: the value takes the pile if its share is
+        # at least one half.
+        if part >= 0.5:
+            piles[at] = value[0]
+        return
     if kind == QUATERNION:
         var mixed = Quaternion(
             piles[at], piles[at + 1], piles[at + 2], piles[at + 3]
@@ -356,9 +452,15 @@ def rest_into_pile(
         total: How much weight the pile holds in all; below one.
         original: The `PILE` numbers the node held before.
         kind: Which property, which decides whether the move back is along
-            a line or along an arc.
+            a line or along an arc, or for a flag a choice of one value.
     """
     var at = slot * PILE
+    if kind.is_boolean():
+        # three.js's `_select` with the original coming in at the missing
+        # weight.
+        if 1 - total >= 0.5:
+            piles[at] = original[0]
+        return
     if kind == QUATERNION:
         var mixed = Quaternion(
             original[0], original[1], original[2], original[3]
@@ -377,63 +479,537 @@ def rest_into_pile(
         )
 
 
+def find_target(targets: List[TrackTarget], target: TrackTarget) -> Int:
+    """Return where the pile for one target is, or minus one when nothing
+    has been put there yet.
+
+    Args:
+        targets: Which target each pile is for.
+        target: The target wanted.
+
+    Returns:
+        The pile's place in the list, or minus one.
+    """
+    for slot in range(len(targets)):  # pragma: no branch
+        if targets[slot] == target:
+            return slot
+    return -1
+
+
+def additive_identity(
+    mut piles: List[Float32],
+    slot: Int,
+    original: List[Float32],
+    kind: TrackKind,
+):
+    """Set one additive pile to what adds nothing, three.js's
+    `_setAdditiveIdentity`.
+
+    Args:
+        piles: Every additive pile's numbers, `PILE` of them each.
+        slot: Which pile.
+        original: The `PILE` numbers the property held before it was
+            driven, which is where a flag starts.
+        kind: Which property.
+    """
+    var at = slot * PILE
+    for offset in range(PILE):  # pragma: no branch
+        piles[at + offset] = 0
+    if kind == QUATERNION:
+        piles[at + 3] = 1
+    elif kind.is_boolean():
+        piles[at] = original[0]
+
+
+def mix_additive_into_pile(
+    mut piles: List[Float32],
+    slot: Int,
+    share: Float32,
+    value: List[Float32],
+    kind: TrackKind,
+):
+    """Add one weighted value to an additive pile, three.js's
+    `_mixBufferRegionAdditive`.
+
+    Args:
+        piles: Every additive pile's numbers, `PILE` of them each.
+        slot: Which pile.
+        share: How much weight this value brings.
+        value: The value, its own numbers alone.
+        kind: Which property. A number or a color is added by weight, a
+            rotation is turned toward the pile times the value by weight,
+            and a flag is chosen as `mix_into_pile` chooses one.
+    """
+    var at = slot * PILE
+    if kind.is_boolean():
+        if share >= 0.5:
+            piles[at] = value[0]
+        return
+    if kind == QUATERNION:
+        var pile = Quaternion(
+            piles[at], piles[at + 1], piles[at + 2], piles[at + 3]
+        )
+        var turned = pile
+        turned.multiply(Quaternion(value[0], value[1], value[2], value[3]))
+        var mixed = pile.slerp(turned, share)
+        piles[at] = mixed.x
+        piles[at + 1] = mixed.y
+        piles[at + 2] = mixed.z
+        piles[at + 3] = mixed.w
+        return
+    for offset in range(len(value)):  # pragma: no branch
+        piles[at + offset] += value[offset] * share
+
+
+def add_onto_pile(
+    mut piles: List[Float32],
+    slot: Int,
+    additive: List[Float32],
+    kind: TrackKind,
+):
+    """Put an additive pile on top of a normal one, the last step of
+    three.js's `PropertyMixer.apply`.
+
+    Args:
+        piles: Every normal pile's numbers, `PILE` of them each.
+        slot: Which pile, the same place in both lists.
+        additive: Every additive pile's numbers.
+        kind: Which property. Numbers and colors add, a rotation is
+            multiplied by the additive one on the right, and a flag takes
+            the additive one.
+    """
+    var at = slot * PILE
+    if kind.is_boolean():
+        piles[at] = additive[at]
+        return
+    if kind == QUATERNION:
+        var turned = Quaternion(
+            piles[at], piles[at + 1], piles[at + 2], piles[at + 3]
+        )
+        turned.multiply(
+            Quaternion(
+                additive[at],
+                additive[at + 1],
+                additive[at + 2],
+                additive[at + 3],
+            )
+        )
+        piles[at] = turned.x
+        piles[at + 1] = turned.y
+        piles[at + 2] = turned.z
+        piles[at + 3] = turned.w
+        return
+    for offset in range(PILE):  # pragma: no branch
+        piles[at + offset] += additive[at + offset]
+
+
+def checked_value(
+    value: Float32, low: Float32, high: Float32, what: String
+) raises -> Float32:
+    """Return a value about to be written into a property, refused if the
+    property cannot hold it.
+
+    Args:
+        value: The value.
+        low: The least the property holds.
+        high: The most it holds.
+        what: What the property is, to name it in the error.
+
+    Returns:
+        The value.
+
+    Raises:
+        Error: If the value is not a number or is outside `low` to `high`.
+    """
+    if not isfinite(value) or value < low or value > high:
+        raise Error("An animation drove " + what + " to a value it cannot hold")
+    return value
+
+
+def color_to_pile(color: Color) -> List[Float32]:
+    """Return a color as the `PILE` numbers a pile holds: its three linear
+    channels and a zero.
+
+    Args:
+        color: An eight-bit sRGB color, as materials and lights store it.
+
+    Returns:
+        The decoded channels.
+    """
+    var linear = FloatColor(srgb=color)
+    return [linear.r, linear.g, linear.b, 0]
+
+
+def pile_to_color(
+    values: List[Float32], at: Int, alpha: UInt8, what: String
+) raises -> Color:
+    """Return three linear channels as an eight-bit sRGB color.
+
+    Args:
+        values: The numbers to read.
+        at: Where the channels start.
+        alpha: The alpha to keep, which a color track does not drive.
+        what: What the color is, to name it in the error.
+
+    Returns:
+        The encoded color.
+
+    Raises:
+        Error: If a channel is not a number or is outside zero to one.
+    """
+    var encoded = FloatColor(
+        checked_value(values[at], 0, 1, what),
+        checked_value(values[at + 1], 0, 1, what),
+        checked_value(values[at + 2], 0, 1, what),
+    ).encode()
+    return Color(encoded.r, encoded.g, encoded.b, alpha)
+
+
+def material_number(kind: TrackKind, top: Bool) -> Float32:
+    """Return one end of the range `Material` accepts for a number field.
+
+    Args:
+        kind: A `MATERIAL_` number kind.
+        top: False for the least value, True for the most.
+
+    Returns:
+        The end asked for. Every field starts at zero but `MATERIAL_IOR`,
+        and has no top but those that run to one and `MATERIAL_IOR`.
+    """
+    if kind == MATERIAL_IOR:
+        return MAX_IOR if top else MIN_IOR
+    if not top:
+        return 0
+    if (
+        kind == MATERIAL_EMISSIVE_INTENSITY
+        or kind == MATERIAL_SHININESS
+        or kind == MATERIAL_ENV_MAP_INTENSITY
+    ):
+        return inf[DType.float32]()
+    return 1
+
+
+def read_target(
+    scene: Scene, assets: Assets, target: TrackTarget
+) raises -> List[Float32]:
+    """Return what one property holds, as the `PILE` numbers a pile holds.
+
+    The one place a property is read, beside `write_target`, the one place
+    it is written, so the two cannot drift apart.
+
+    Args:
+        scene: The scene the nodes, meshes and lights are in.
+        assets: The assets the materials are in.
+        target: The property. The caller has checked its index.
+
+    Returns:
+        The numbers, zero after the property's own.
+
+    Raises:
+        Error: If the scene has no such node.
+    """
+    var kind = target.kind
+    if kind.is_node():
+        ref held = scene.get(NodeId(target.index))
+        if kind == QUATERNION:
+            return [
+                held.quaternion.x,
+                held.quaternion.y,
+                held.quaternion.z,
+                held.quaternion.w,
+            ]
+        if kind == SCALE:
+            return [held.scale.x, held.scale.y, held.scale.z, 0]
+        if kind == POSITION:
+            return [held.position.x, held.position.y, held.position.z, 0]
+        return [Float32(1) if held.visible else Float32(0), 0, 0, 0]
+    if kind.is_morph():
+        return [
+            scene.meshes[target.index].morph_influence(target.slot),
+            0,
+            0,
+            0,
+        ]
+    if kind.is_light():
+        ref light = scene.lights[target.index]
+        if kind == LIGHT_COLOR:
+            return color_to_pile(light.color)
+        return [light.intensity, 0, 0, 0]
+    ref material = assets.materials.materials[target.index]
+    if kind == MATERIAL_COLOR:
+        return color_to_pile(material.color)
+    if kind == MATERIAL_EMISSIVE:
+        return color_to_pile(material.emissive)
+    if kind == MATERIAL_SPECULAR:
+        return color_to_pile(material.specular)
+    var number: Float32
+    if kind == MATERIAL_OPACITY:
+        number = material.opacity
+    elif kind == MATERIAL_EMISSIVE_INTENSITY:
+        number = material.emissive_intensity
+    elif kind == MATERIAL_ROUGHNESS:
+        number = material.roughness
+    elif kind == MATERIAL_METALNESS:
+        number = material.metalness
+    elif kind == MATERIAL_SHININESS:
+        number = material.shininess
+    elif kind == MATERIAL_ALPHA_TEST:
+        number = material.alpha_test
+    elif kind == MATERIAL_REFLECTIVITY:
+        number = material.reflectivity
+    elif kind == MATERIAL_ENV_MAP_INTENSITY:
+        number = material.env_map_intensity
+    elif kind == MATERIAL_CLEARCOAT:
+        number = material.clearcoat
+    elif kind == MATERIAL_CLEARCOAT_ROUGHNESS:
+        number = material.clearcoat_roughness
+    elif kind == MATERIAL_SPECULAR_INTENSITY:
+        number = material.specular_intensity
+    else:
+        number = material.ior
+    return [number, 0, 0, 0]
+
+
+def write_target(
+    mut scene: Scene,
+    mut assets: Assets,
+    target: TrackTarget,
+    values: List[Float32],
+    at: Int,
+) raises:
+    """Write one property from the numbers of a pile.
+
+    The one place a property is set, so the pose the actions make and the
+    pose a released binding goes back to cannot drift apart.
+
+    Args:
+        scene: The scene the nodes, meshes and lights are in.
+        assets: The assets the materials are in.
+        target: The property. The caller has checked its index.
+        values: The numbers to write, `PILE` of them per entry.
+        at: Where this property's numbers start in `values`.
+
+    Raises:
+        Error: If the scene has no such node, or the value is one the
+            property cannot hold: a morph influence that is not a number,
+            a color channel outside zero to one, a light intensity below
+            zero, or a material number outside the range `Material`
+            accepts for it.
+    """
+    var kind = target.kind
+    if kind.is_node():
+        ref placed = scene.node(NodeId(target.index))
+        if kind == POSITION:
+            placed.position = Vector3(
+                values[at], values[at + 1], values[at + 2]
+            )
+        elif kind == SCALE:
+            placed.scale = Vector3(values[at], values[at + 1], values[at + 2])
+        elif kind == QUATERNION:
+            placed.quaternion = Quaternion(
+                values[at], values[at + 1], values[at + 2], values[at + 3]
+            )
+        else:
+            placed.visible = values[at] >= 0.5
+        return
+    if kind.is_morph():
+        scene.meshes[target.index].set_morph_influence(target.slot, values[at])
+        return
+    if kind.is_light():
+        ref light = scene.lights[target.index]
+        if kind == LIGHT_COLOR:
+            light.color = pile_to_color(
+                values, at, light.color.a, "a light's color"
+            )
+        else:
+            light.intensity = checked_value(
+                values[at], 0, inf[DType.float32](), "a light's intensity"
+            )
+        return
+    ref material = assets.materials.materials[target.index]
+    if kind == MATERIAL_COLOR:
+        material.color = pile_to_color(
+            values, at, material.color.a, "a material's color"
+        )
+        return
+    if kind == MATERIAL_EMISSIVE:
+        material.emissive = pile_to_color(
+            values, at, material.emissive.a, "a material's emissive"
+        )
+        return
+    if kind == MATERIAL_SPECULAR:
+        material.specular = pile_to_color(
+            values, at, material.specular.a, "a material's specular"
+        )
+        return
+    var number = checked_value(
+        values[at],
+        material_number(kind, False),
+        material_number(kind, True),
+        "a material's number",
+    )
+    if kind == MATERIAL_OPACITY:
+        material.opacity = number
+    elif kind == MATERIAL_EMISSIVE_INTENSITY:
+        material.emissive_intensity = number
+    elif kind == MATERIAL_ROUGHNESS:
+        material.roughness = number
+    elif kind == MATERIAL_METALNESS:
+        material.metalness = number
+    elif kind == MATERIAL_SHININESS:
+        material.shininess = number
+    elif kind == MATERIAL_ALPHA_TEST:
+        material.alpha_test = number
+    elif kind == MATERIAL_REFLECTIVITY:
+        material.reflectivity = number
+    elif kind == MATERIAL_ENV_MAP_INTENSITY:
+        material.env_map_intensity = number
+    elif kind == MATERIAL_CLEARCOAT:
+        material.clearcoat = number
+    elif kind == MATERIAL_CLEARCOAT_ROUGHNESS:
+        material.clearcoat_roughness = number
+    elif kind == MATERIAL_SPECULAR_INTENSITY:
+        material.specular_intensity = number
+    else:
+        material.ior = number
+
+
+def check_target(
+    scene: Scene, assets: Assets, has_assets: Bool, target: TrackTarget
+) raises:
+    """Refuse a target that names nothing in the scene or the assets.
+
+    Args:
+        scene: The scene the nodes, meshes and lights are in.
+        assets: The assets the materials are in.
+        has_assets: False when the caller gave no assets, so a material
+            cannot be driven at all.
+        target: The target to check.
+
+    Raises:
+        Error: If the target's kind is none of the named ones or its slot
+            does not fit it, or its index is below zero or past the end of
+            the list it indexes, or it drives a material and there are no
+            assets.
+    """
+    if not target.is_valid():
+        raise Error("A track needs a kind that exists and fits its slot")
+    var kind = target.kind
+    var count = scene.count()
+    if kind.is_morph():
+        count = len(scene.meshes)
+    elif kind.is_light():
+        count = len(scene.lights)
+    elif kind.is_material():
+        if not has_assets:
+            raise Error(
+                "A material track needs the assets: call update(scene,"
+                " assets, delta)"
+            )
+        count = assets.materials.count()
+    if target.index < 0 or target.index >= count:
+        raise Error(
+            "A track must name a node, a mesh, a light or a material that"
+            " is there"
+        )
+
+
+def resolve_targets(
+    scene: Scene, target: TrackTarget, group: AnimationObjectGroup
+) raises -> List[TrackTarget]:
+    """Return the targets one track drives on the members of a group.
+
+    Each member is to the track what the object is to a three.js path: the
+    member node for a node kind, every mesh at the member for a morph
+    influence, the material of every such mesh for a material kind, and
+    every light at the member for a light kind. A target reached twice is
+    listed once.
+
+    Args:
+        scene: The scene the members are in.
+        target: What the track names. Its kind and slot are kept, and its
+            index is replaced.
+        group: The members.
+
+    Returns:
+        The targets, in the order of the members.
+
+    Raises:
+        Error: If a member is not in the scene.
+    """
+    var found = List[TrackTarget]()
+    var kind = target.kind
+    for member in range(group.count()):
+        var node = group.members[member].value
+        if node < 0 or node >= scene.count():
+            raise Error("A group member must be a node in the scene")
+        var reached = List[TrackTarget]()
+        if kind.is_node():
+            reached.append(TrackTarget(kind, node, 0))
+        elif kind.is_light():
+            for light in range(len(scene.lights)):
+                if scene.lights[light].node.value == node:
+                    reached.append(TrackTarget(kind, light, 0))
+        else:
+            for mesh in range(len(scene.meshes)):
+                if scene.meshes[mesh].node.value != node:
+                    continue
+                if kind.is_morph():
+                    reached.append(TrackTarget(kind, mesh, target.slot))
+                else:
+                    reached.append(
+                        TrackTarget(kind, scene.meshes[mesh].material.value, 0)
+                    )
+        for index in range(len(reached)):
+            if find_target(found, reached[index]) < 0:
+                found.append(reached[index])
+    return found^
+
+
 struct Binding(Copyable, Movable):
-    """One node property the mixer drives, and the value it held before.
+    """One property the mixer drives, and the value it held before,
+    three.js's `PropertyBinding` and the original a `PropertyMixer` saves.
 
     Kept for as long as the mixer is, because it is the pose a weight of
     less than one blends back toward. Reading the node instead would read
     back what the mixer wrote last frame.
     """
 
+    # The node, mesh, material or light, as its index; `kind` says which.
     var node: Int
     var kind: Int
+    # Which morph target, for `MORPH_INFLUENCE`; zero for every other kind.
+    var slot: Int
     var original: List[Float32]
     # Whether anything drove this property in the last update. The frame
     # after it goes false, the original is written back and the mixer
     # leaves the property alone; see the module docstring.
     var driven: Bool
 
-    def __init__(out self, node: Int, kind: Int, var original: List[Float32]):
-        """Remember what one node property held.
+    def __init__(
+        out self,
+        node: Int,
+        kind: Int,
+        var original: List[Float32],
+        slot: Int = 0,
+    ):
+        """Remember what one property held.
 
         Args:
-            node: Which node.
+            node: Which node, mesh, material or light.
             kind: Which property.
             original: The `PILE` numbers it held.
+            slot: Which morph target, for `MORPH_INFLUENCE`.
         """
         self.node = node
         self.kind = kind
+        self.slot = slot
         self.original = original^
         self.driven = False
 
-
-def apply_pose(
-    mut scene: Scene, node: Int, kind: TrackKind, values: List[Float32], at: Int
-) raises:
-    """Write one node property from four numbers.
-
-    The one place a property is set, so the pose the actions make and the
-    pose a released binding goes back to cannot drift apart.
-
-    Args:
-        scene: The scene to write into.
-        node: Which node.
-        kind: Which property.
-        values: The numbers to write, `PILE` of them per entry.
-        at: Where this property's numbers start in `values`.
-
-    Raises:
-        Error: If the scene has no such node.
-    """
-    ref placed = scene.node(NodeId(node))
-    if kind == POSITION:
-        placed.position = Vector3(values[at], values[at + 1], values[at + 2])
-    elif kind == SCALE:
-        placed.scale = Vector3(values[at], values[at + 1], values[at + 2])
-    else:
-        placed.quaternion = Quaternion(
-            values[at], values[at + 1], values[at + 2], values[at + 3]
-        )
+    def target(self) -> TrackTarget:
+        """Return the property this binding is for, as a target."""
+        return TrackTarget(TrackKind(self.kind), self.node, self.slot)
 
 
 struct AnimationAction(Copyable, Movable):
@@ -479,6 +1055,13 @@ struct AnimationAction(Copyable, Movable):
     var loop_delta: Int
     var just_finished: Bool
     var direction: Int
+    # How the action's values join the others', three.js's `blendMode`.
+    # The clip's own unless changed.
+    var blend_mode: AnimationBlendMode
+    # The nodes the action plays on instead of the targets its tracks
+    # name, three.js's group given to `clipAction`, when `grouped` is True.
+    var group: AnimationObjectGroup
+    var grouped: Bool
 
     def __init__(
         out self,
@@ -515,6 +1098,7 @@ struct AnimationAction(Copyable, Movable):
             raise Error("An action's weight cannot be negative")
         if not isfinite(time_scale):
             raise Error("An action's time scale must be a number")
+        self.blend_mode = clip.blend_mode
         self.clip = clip^
         self.loop = loop
         self.phase = 0
@@ -535,6 +1119,8 @@ struct AnimationAction(Copyable, Movable):
         self.loop_delta = 0
         self.just_finished = False
         self.direction = 1
+        self.group = AnimationObjectGroup()
+        self.grouped = False
 
     def __init__(out self, *, copy: Self):
         """Copy another action, its clip included."""
@@ -558,6 +1144,19 @@ struct AnimationAction(Copyable, Movable):
         self.loop_delta = copy.loop_delta
         self.just_finished = copy.just_finished
         self.direction = copy.direction
+        self.blend_mode = copy.blend_mode
+        self.group = AnimationObjectGroup(copy=copy.group)
+        self.grouped = copy.grouped
+
+    def use_group(mut self, var group: AnimationObjectGroup):
+        """Play every track on every member of a group instead of on the
+        target the track names, three.js's `clipAction` given a group.
+
+        Args:
+            group: The members, consumed.
+        """
+        self.group = group^
+        self.grouped = True
 
     def play(mut self):
         """Start the action from where it is, three.js's `play`."""
@@ -1088,18 +1687,23 @@ struct AnimationMixer(Movable):
                 )
             )
 
-    def _binding(self, node: Int, kind: Int) -> Int:
-        """Return where the binding for one node property is, or minus one
-        when the mixer has not taken it over yet."""
+    def _binding(self, target: TrackTarget) -> Int:
+        """Return where the binding for one property is, or minus one when
+        the mixer has not taken it over yet."""
         for slot in range(len(self.bindings)):  # pragma: no branch
-            if self.bindings[slot].node == node:
-                if self.bindings[slot].kind == kind:
-                    return slot
+            if self.bindings[slot].target() == target:
+                return slot
         return -1
 
-    def _bind(mut self, scene: Scene, node: Int, kind: TrackKind) raises:
-        """Remember what one node property holds, each time something
-        starts to drive it.
+    def _bind(
+        mut self,
+        scene: Scene,
+        assets: Assets,
+        has_assets: Bool,
+        target: TrackTarget,
+    ) raises -> Int:
+        """Remember what one property holds, each time something starts to
+        drive it, and return where its binding is.
 
         Read again when a released property is driven again, not only the
         first time: three.js's `PropertyMixer.saveOriginalState` runs
@@ -1109,41 +1713,47 @@ struct AnimationMixer(Movable):
         threw the caller's edit away.
 
         Raises:
-            Error: If the scene has no such node.
+            Error: If the target names nothing in the scene or the assets.
         """
-        if node < 0 or node >= scene.count():
-            raise Error("A track must name a node that is in the scene")
-        var known = self._binding(node, kind.value)
+        check_target(scene, assets, has_assets, target)
+        var known = self._binding(target)
         if known >= 0 and self.bindings[known].driven:
-            return
-        ref held = scene.get(NodeId(node))
-        var original = List[Float32]()
-        if kind == QUATERNION:
-            original.append(held.quaternion.x)
-            original.append(held.quaternion.y)
-            original.append(held.quaternion.z)
-            original.append(held.quaternion.w)
-        elif kind == SCALE:
-            original.append(held.scale.x)
-            original.append(held.scale.y)
-            original.append(held.scale.z)
-            original.append(0)
-        else:
-            original.append(held.position.x)
-            original.append(held.position.y)
-            original.append(held.position.z)
-            original.append(0)
+            return known
+        var original = read_target(scene, assets, target)
         if known >= 0:
             self.bindings[known].original = original^
             self.bindings[known].driven = True
-            return
-        var made = Binding(node, kind.value, original^)
+            return known
+        var made = Binding(
+            target.index, target.kind.value, original^, target.slot
+        )
         made.driven = True
         self.bindings.append(made^)
+        return len(self.bindings) - 1
 
     def update(mut self, mut scene: Scene, delta: Duration) raises:
-        """Move every playing action on by `delta`, and write the pose the
+        """Move every playing action on by `delta`, and write what the
         actions make into the scene.
+
+        The same as the update that takes the assets, for clips that drive
+        nothing in them: nodes, meshes and lights are in the scene.
+
+        Args:
+            scene: The scene whose nodes, meshes and lights the tracks name.
+            delta: How much real time has passed since the last update.
+
+        Raises:
+            Error: As the update that takes the assets does, and if a track
+                drives a material, which is in the assets.
+        """
+        var none = Assets()
+        self._update(scene, none, False, delta)
+
+    def update(
+        mut self, mut scene: Scene, mut assets: Assets, delta: Duration
+    ) raises:
+        """Move every playing action on by `delta`, and write what the
+        actions make into the scene and the assets.
 
         An action that finishes its `ONCE` clip during this call still
         contributes its last frame, and stops contributing from the next
@@ -1160,23 +1770,37 @@ struct AnimationMixer(Movable):
         `drain_events`.
 
         Args:
-            scene: The scene whose nodes the tracks name.
+            scene: The scene whose nodes, meshes and lights the tracks name.
+            assets: The assets whose materials the tracks name.
             delta: How much real time has passed since the last update.
 
         Raises:
-            Error: If `delta` is not a number, or a track names a node the
-                scene does not have.
+            Error: If `delta` is not a number, an action's blend mode is
+                neither of the two, a track names something the scene or
+                the assets do not have, a group member is not in the scene,
+                or a value written is one its property cannot hold.
         """
+        self._update(scene, assets, True, delta)
+
+    def _update(
+        mut self,
+        mut scene: Scene,
+        mut assets: Assets,
+        has_assets: Bool,
+        delta: Duration,
+    ) raises:
+        """Run one update; see `update`."""
         var seconds = delta.to(SECOND)
         if not isfinite(seconds):
             raise Error("A mixer cannot advance by a time that is not a number")
         self.elapsed += seconds
         self.events = List[AnimationEvent]()
 
-        var nodes = List[Int]()
-        var kinds = List[Int]()
+        var targets = List[TrackTarget]()
         var weights = List[Float32]()
         var piles = List[Float32]()
+        var added = List[Float32]()
+        var additive = List[Float32]()
 
         for index in range(len(self.actions)):  # pragma: no branch
             if not self.actions[index].active:
@@ -1185,36 +1809,70 @@ struct AnimationMixer(Movable):
                 self.actions[index].now = self.elapsed
                 self.actions[index].applied_weight = 0
                 continue
+            if not self.actions[index].blend_mode.is_valid():
+                raise Error("An action needs a blend mode that exists")
             var share = self.actions[index]._tick(self.elapsed, seconds)
             self._record(index)
             if share <= 0:
                 continue
             var at = self.actions[index].at()
+            var adds = self.actions[index].blend_mode == ADDITIVE_BLEND_MODE
             for which in range(
                 self.actions[index].clip.track_count()
             ):  # pragma: no branch
-                var node = self.actions[index].clip.tracks[which].node.value
-                var kind = self.actions[index].clip.tracks[which].kind
+                var named = self.actions[index].clip.tracks[which].target
+                var kind = named.kind
                 var value = self.actions[index].clip.tracks[which].sample(at)
-                self._bind(scene, node, kind)
-                var slot = find_pile(nodes, kinds, node, kind.value)
-                if slot < 0:
-                    nodes.append(node)
-                    kinds.append(kind.value)
-                    weights.append(share)
-                    for offset in range(PILE):  # pragma: no branch
-                        if offset < len(value):
-                            piles.append(value[offset])
-                        else:
+                var reached: List[TrackTarget] = [named]
+                if self.actions[index].grouped:
+                    reached = resolve_targets(
+                        scene, named, self.actions[index].group
+                    )
+                for each in range(len(reached)):
+                    var target = reached[each]
+                    var held = self._bind(scene, assets, has_assets, target)
+                    var slot = find_target(targets, target)
+                    if slot < 0:
+                        slot = len(targets)
+                        targets.append(target)
+                        weights.append(0)
+                        added.append(0)
+                        for _ in range(PILE):  # pragma: no branch
                             piles.append(0)
-                    continue
-                mix_into_pile(piles, slot, weights[slot], share, value, kind)
-                weights[slot] += share
+                            additive.append(0)
+                    if adds:
+                        if added[slot] == 0:
+                            additive_identity(
+                                additive,
+                                slot,
+                                self.bindings[held].original,
+                                kind,
+                            )
+                        mix_additive_into_pile(
+                            additive, slot, share, value, kind
+                        )
+                        added[slot] += share
+                        continue
+                    if weights[slot] == 0:
+                        for offset in range(len(value)):  # pragma: no branch
+                            piles[slot * PILE + offset] = value[offset]
+                    else:
+                        mix_into_pile(
+                            piles, slot, weights[slot], share, value, kind
+                        )
+                    weights[slot] += share
 
-        for slot in range(len(nodes)):  # pragma: no branch
-            var kind = TrackKind(kinds[slot])
-            if weights[slot] < 1:
-                var held = self._binding(nodes[slot], kinds[slot])
+        for slot in range(len(targets)):  # pragma: no branch
+            var kind = targets[slot].kind
+            var held = self._binding(targets[slot])
+            if weights[slot] == 0:
+                # Only additive actions drive it: they add onto the pose it
+                # held, which is three.js's rest at a missing weight of one.
+                for offset in range(PILE):  # pragma: no branch
+                    piles[slot * PILE + offset] = self.bindings[held].original[
+                        offset
+                    ]
+            elif weights[slot] < 1:
                 rest_into_pile(
                     piles,
                     slot,
@@ -1222,7 +1880,9 @@ struct AnimationMixer(Movable):
                     self.bindings[held].original,
                     kind,
                 )
-            apply_pose(scene, nodes[slot], kind, piles, slot * PILE)
+            if added[slot] > 0:
+                add_onto_pile(piles, slot, additive, kind)
+            write_target(scene, assets, targets[slot], piles, slot * PILE)
 
         # Anything that was driven last frame and is not driven now goes
         # back to what it held before the mixer touched it, once, and is
@@ -1232,20 +1892,12 @@ struct AnimationMixer(Movable):
         for slot in range(len(self.bindings)):  # pragma: no branch
             if not self.bindings[slot].driven:
                 continue
-            if (
-                find_pile(
-                    nodes,
-                    kinds,
-                    self.bindings[slot].node,
-                    self.bindings[slot].kind,
-                )
-                >= 0
-            ):
+            if find_target(targets, self.bindings[slot].target()) >= 0:
                 continue
-            apply_pose(
+            write_target(
                 scene,
-                self.bindings[slot].node,
-                TrackKind(self.bindings[slot].kind),
+                assets,
+                self.bindings[slot].target(),
                 self.bindings[slot].original,
                 0,
             )
