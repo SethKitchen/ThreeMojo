@@ -43,7 +43,7 @@ To run the passes on the GPU, give the composer to a `GpuComposer`. Most passes 
 | `mask_pass(selection, inverse=False)` | `MaskPass` | Let the passes after it change only the pixels that the selected objects cover. |
 | `clear_mask_pass()` | `ClearMaskPass` | Let the passes after it change every pixel again. |
 | `clear_pass(color=transparent black)` | `ClearPass` | Clear the light, the depth and the stencil. |
-| `texture_pass(texture, opacity=1)` | `TexturePass` | Add a texture over the frame. |
+| `texture_pass(texture, opacity=1)` | `TexturePass` | Draw a texture over the frame. |
 | `lut_pass(lut, intensity=1)` | `LUTPass` | Grade the frame through a color lookup table. |
 
 Each builder returns a `Pass`. A `Pass` has a `kind`, an `enabled` flag and every setting any kind reads. The effect passes read `strength`, `radius`, `threshold`, `offset`, `scale`, `angle`, `center`, `grayscale` and `time`. The SSAA and TAA passes read `sample_level`, `unbiased`, `accumulate` and `accumulate_index`. The screen-space passes read `ssao`, `sao`, `ssr` and `outline`. See [Screen-space passes](#screen-space-passes).
@@ -78,7 +78,7 @@ The defaults are three.js's. The dot screen's angle is an `Angle`. A bare number
 
 ## What each pass works on
 
-A blur, a bloom, a copy and an afterimage work on the premultiplied light, where a sum is a sum. A color transform works on the straight color of each pixel and premultiplies it back, as a shader sees a straight texel. The sepia, the gray, the dot screen, the vignette, the grain and the curve are color transforms. Every pass keeps alpha but the copy, which scales it as three.js's `CopyShader` scales the whole texel. The exceptions in [More passes](#more-passes) follow their shaders: the bokeh and the halftone are opaque, and the glitch and the texture add to alpha.
+A blur, a bloom, a copy and an afterimage work on the premultiplied light, where a sum is a sum. A color transform works on the straight color of each pixel and premultiplies it back, as a shader sees a straight texel. The sepia, the gray, the dot screen, the vignette, the grain and the curve are color transforms. Every pass keeps alpha but the copy, which scales it as three.js's `CopyShader` scales the whole texel. The exceptions in [More passes](#more-passes) follow their shaders: the bokeh and the halftone are opaque, the glitch adds to alpha, and the texture is drawn over the frame, alpha included.
 
 A tap past the edge of the frame reads the edge pixel, as a clamped texture does. A pixel that holds data rather than light, a normal or a depth, is not tone mapped by the output pass. The other passes treat it as light.
 
@@ -310,7 +310,7 @@ The mask pass does not change the light or the depth, as three.js turns off thos
 
 `clear_pass(color)` is three.js's `ClearPass`. `clear_light` sets the light to the color, the depth to far, and the stencil to zero. The color is in sRGB, and its alpha is three.js's `clearAlpha`.
 
-`texture_pass(texture, opacity)` is three.js's `TexturePass`. The texture is a `TextureId` in the assets that `render` is given. `texture_light` adds the texture times `opacity` to every channel, alpha included. That is `CopyShader` with three.js's additive blending.
+`texture_pass(texture, opacity)` is three.js's `TexturePass`. The texture is a `TextureId` in the assets that `render` is given. `texture_light` scales the texture by `opacity` and draws it over the frame, alpha included. Below an opacity of one, the frame keeps one minus the scaled alpha of its color. At an opacity of one, the texture replaces the frame. That is `CopyShader` with three.js's premultiplied normal blending, which is on only below an opacity of one.
 
 ### LUT
 

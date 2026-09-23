@@ -1328,31 +1328,48 @@ def texture_pixel(
     base: FloatColor, texel: FloatColor, opacity: Float32
 ) -> FloatColor:
     """Return one pixel of three.js's `TexturePass`: the texel scaled by
-    the opacity and added, every channel.
+    the opacity, drawn over the pixel.
+
+    three.js draws `CopyShader`, `opacity * texel`, with
+    `premultipliedAlpha` set, and makes the material transparent only
+    below an opacity of one. Below one it blends premultiplied over, so
+    the pixel keeps one minus the scaled texel's alpha of what it held.
+    At one or more there is no blending, and the scaled texel replaces
+    the pixel.
 
     Args:
-        base: The pixel's light.
-        texel: The texture at the pixel's center.
+        base: The pixel's light, premultiplied.
+        texel: The texture at the pixel's center, read as premultiplied,
+            as three.js's blend reads it.
         opacity: What the texture is scaled by.
 
     Returns:
-        The sum.
+        The blended light, premultiplied.
     """
+    var drawn = FloatColor(
+        texel.r * opacity,
+        texel.g * opacity,
+        texel.b * opacity,
+        texel.a * opacity,
+    )
+    if opacity >= 1:
+        return drawn
+    var keep = 1 - drawn.a
     return FloatColor(
-        base.r + texel.r * opacity,
-        base.g + texel.g * opacity,
-        base.b + texel.b * opacity,
-        base.a + texel.a * opacity,
+        drawn.r + base.r * keep,
+        drawn.g + base.g * keep,
+        drawn.b + base.b * keep,
+        drawn.a + base.a * keep,
     )
 
 
 def texture_light(mut frame: RenderTarget, texture: Texture, opacity: Float32):
-    """Add a texture over the frame: three.js's `TexturePass`, which draws
-    `CopyShader` with additive blending.
+    """Draw a texture over the frame: three.js's `TexturePass`, which
+    draws `CopyShader` with premultiplied normal blending.
 
     Every channel of the texture at each pixel's center, alpha included,
-    is scaled by the opacity and added to the frame. The result holds
-    light.
+    is scaled by the opacity and drawn over the frame; see
+    `texture_pixel`. The result holds light.
 
     Args:
         frame: The frame, changed in place.

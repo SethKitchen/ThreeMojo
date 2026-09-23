@@ -829,17 +829,31 @@ def test_the_clear_resets_light_depth_data_and_stencil() raises:
     assert_almost_equal(frame.colors[0].a, Float32(0.2), atol=TOLERANCE)
 
 
-def test_the_texture_is_added_by_its_opacity() raises:
+def test_the_texture_is_blended_over_by_its_opacity() raises:
+    # three.js's `TexturePass` draws `CopyShader`, `opacity * texel`, with
+    # premultiplied normal blending: the texel over the frame, which keeps
+    # one minus the texel's alpha of what was there.
     var texture = data_texture(1, 1, [0.5, 0.25, 0.0, 1.0])
-    var frame = flat(2, 2, FloatColor(0.1, 0.1, 0.1, 0))
+    var frame = flat(2, 2, FloatColor(0.1, 0.1, 0.1, 1))
     frame.data[3] = True
     texture_light(frame, texture, 0.5)
     for slot in range(4):
-        assert_almost_equal(frame.colors[slot].r, Float32(0.35), atol=0.01)
-        assert_almost_equal(frame.colors[slot].g, Float32(0.225), atol=0.01)
-        assert_almost_equal(frame.colors[slot].b, Float32(0.1), atol=0.01)
-        assert_almost_equal(frame.colors[slot].a, Float32(0.5), atol=0.01)
+        assert_almost_equal(frame.colors[slot].r, Float32(0.3), atol=0.01)
+        assert_almost_equal(frame.colors[slot].g, Float32(0.175), atol=0.01)
+        assert_almost_equal(frame.colors[slot].b, Float32(0.05), atol=0.01)
+        assert_almost_equal(frame.colors[slot].a, Float32(1.0), atol=0.01)
     assert_false(frame.data[3])
+    # At an opacity of one the material is not transparent, so three.js
+    # draws with no blending: the texture replaces the frame, even where
+    # the texture is not opaque.
+    var glass = data_texture(1, 1, [0.2, 0.4, 0.0, 0.5])
+    var under = flat(2, 2, FloatColor(0.1, 0.1, 0.1, 1))
+    texture_light(under, glass, 1.0)
+    for slot in range(4):
+        assert_almost_equal(under.colors[slot].r, Float32(0.2), atol=0.01)
+        assert_almost_equal(under.colors[slot].g, Float32(0.4), atol=0.01)
+        assert_almost_equal(under.colors[slot].b, Float32(0.0), atol=0.01)
+        assert_almost_equal(under.colors[slot].a, Float32(0.5), atol=0.01)
 
 
 # --- in the composer ---------------------------------------------------------
