@@ -64,7 +64,15 @@ unassociated alpha.
 """
 
 from render.blend import NORMAL_MODE, Rgba, blend_pixel
-from render.raster_state import FragmentTest, RasterState, test_fragment
+from render.raster_state import (
+    STANDARD_DEPTH,
+    DepthMode,
+    FragmentTest,
+    RasterState,
+    cleared_depth,
+    is_nearer,
+    test_fragment,
+)
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rect import Rect
 from render.texture import (
@@ -180,6 +188,10 @@ struct RenderTarget(Movable):
     # a pixel still holds it.
     var clear: FloatColor
     var depth: List[Float32]
+    # How `depth` is stored, set by the last `clear_inside`: the
+    # projection's depth, its logarithmic form or its reversed form. See
+    # `render.raster_state.DepthMode`.
+    var depth_mode: DepthMode
     # Whether each pixel holds data rather than light -- a normal, a depth,
     # a coordinate -- which the tone mapping must leave alone. Set by the
     # last `write` into the pixel and cleared by any `blend` that
@@ -217,6 +229,7 @@ struct RenderTarget(Movable):
         self.depth = List[Float32](
             length=width * height, fill=inf[DType.float32]()
         )
+        self.depth_mode = STANDARD_DEPTH
         self.data = List[Bool](length=width * height, fill=False)
         self.scissor = Rect.whole(width, height)
         self.stencil = List[UInt8](length=width * height, fill=0)
@@ -240,10 +253,20 @@ struct RenderTarget(Movable):
             raise Error("A scissor must lie inside the target")
         self.scissor = rect
 
-    def clear_inside(mut self, rect: Rect, clear: Color) raises:
+    def clear_inside(
+        mut self,
+        rect: Rect,
+        clear: Color,
+        depth_mode: DepthMode = STANDARD_DEPTH,
+    ) raises:
         """Reset every pixel inside `rect` to `clear`, its depth to the
         far distance, its stencil to zero and its flag to light, leaving the
         rest alone.
+
+        The far distance is the depth mode's: infinity, or minus infinity
+        under `REVERSED_DEPTH`, three.js's clear of the reversed buffer.
+        The target records the mode, so what reads the depth later knows
+        how it is stored.
 
         What clearing under a scissor does on a GPU, and what lets two
         viewports share one target: each clears its own rectangle and
@@ -253,19 +276,25 @@ struct RenderTarget(Movable):
         Args:
             rect: The pixels to reset. It must lie wholly inside the target.
             clear: The color to fill with, decoded from sRGB, alpha kept.
+            depth_mode: How the depth is stored from now on.
 
         Raises:
-            Error: If the rectangle is empty or reaches outside the target.
+            Error: If the rectangle is empty or reaches outside the target,
+                or the depth mode is none of the three.
         """
         if not rect.fits(self.width, self.height):
             raise Error("A clear must lie inside the target")
+        if not depth_mode.is_valid():
+            raise Error("A depth mode that is none of the three")
         self.clear = FloatColor(srgb=clear).premultiplied()
+        self.depth_mode = depth_mode
+        var far = cleared_depth(depth_mode)
         var top = rect.top(self.height)
         for y in range(top, top + rect.height):  # pragma: no branch
             for x in range(rect.x, rect.x + rect.width):  # pragma: no branch
                 var slot = y * self.width + x
                 self.colors[slot] = self.clear
-                self.depth[slot] = inf[DType.float32]()
+                self.depth[slot] = far
                 self.data[slot] = False
                 self.stencil[slot] = 0
 
@@ -548,7 +577,8 @@ struct RenderTarget(Movable):
 
         **The depth is the nearest of the block**, as a resolved
         multisample depth is, so a picture read back for its depth keeps
-        its nearest surface.
+        its nearest surface. Nearest is the target's depth mode's: the
+        largest depth under `REVERSED_DEPTH`.
 
         **A pixel is data only if every sample in it is.** A block holding
         a normal beside lit smoke is not a normal any more, and the module
@@ -562,8 +592,8 @@ struct RenderTarget(Movable):
                 returns a copy.
 
         Returns:
-            The smaller target, its clear color and scissor carried over,
-            the scissor widened to the whole of it.
+            The smaller target, its clear color and depth mode carried
+            over, the scissor widened to the whole of it.
 
         Raises:
             Error: If the factor is less than one or does not divide both
@@ -579,7 +609,9 @@ struct RenderTarget(Movable):
         var colors = List[FloatColor](
             length=count, fill=FloatColor(0.0, 0.0, 0.0, 0.0)
         )
-        var depths = List[Float32](length=count, fill=inf[DType.float32]())
+        var depths = List[Float32](
+            length=count, fill=cleared_depth(self.depth_mode)
+        )
         # Counted rather than flagged: a `Bool` raised in a loop and read
         # after it is the shape that hangs codegen; see
         # `docs/wiki/The-Mojo-compiler-hang.md`.
@@ -607,7 +639,7 @@ struct RenderTarget(Movable):
                 running.a + sampled.a,
             )
             var z = self.depth[source]
-            if z < depths[slot]:
+            if is_nearer(self.depth_mode, z, depths[slot]):
                 depths[slot] = z
             if self.data[source]:
                 counts[slot] += 1
@@ -627,6 +659,7 @@ struct RenderTarget(Movable):
             flags[slot] = counts[slot] == samples
         var small = RenderTarget(width, height, Color(0, 0, 0, 0))
         small.clear = self.clear
+        small.depth_mode = self.depth_mode
         small.colors = colors^
         small.depth = depths^
         small.data = flags^
@@ -772,7 +805,9 @@ struct RenderTarget(Movable):
 
         `render.texture.depth_texture_of` of the depth as it stands: the
         color is not resolved. See there for what a texel holds, and for
-        why it is a preview at eight bits and not a depth to compare.
+        why it is a preview at eight bits and not a depth to compare. The
+        depth is read in the target's depth mode, so a reversed depth
+        shows white near and black far, as three.js's texture holds it.
 
         Args:
             wrap: How coordinates outside the unit square are resolved.
@@ -784,5 +819,5 @@ struct RenderTarget(Movable):
             Error: If the wrap mode is none of the named values.
         """
         return depth_texture_of_buffer(
-            self.width, self.height, self.depth, wrap
+            self.width, self.height, self.depth, wrap, self.depth_mode
         )

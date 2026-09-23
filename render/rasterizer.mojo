@@ -51,7 +51,7 @@ from render.cube_texture_store import (
     CubeTextureStore,
 )
 from render.target import RenderTarget
-from render.raster_state import RasterState, shades
+from render.raster_state import RasterState, fragment_depth, shades
 from render.srgb import LINEAR
 from render.texture import (
     FLOAT_TYPE,
@@ -2098,20 +2098,24 @@ def rasterize_shaded(
             var wb = fragment.wb
             var wc = fragment.wc
             var z = wa * a.z + wb * b.z + wc * c.z
+            # The denominator of the perspective correction, and the
+            # interpolated reciprocal depth in its own right.
+            var inv_w = wa * a.inv_w + wb * b.inv_w + wc * c.inv_w
+            # The depth the buffer tests and keeps: `z` itself, or its
+            # logarithmic or reversed form; see
+            # `render.raster_state.fragment_depth`. A `DEPTH` material
+            # still shows `z`.
+            var stored_z = fragment_depth(a.state, z, inv_w)
             # The stencil and the depth tests, asked without changing
             # anything: the depth and the stencil are written once the
             # fragment survives its alpha test, the *late* write a GPU
             # makes for a shader that can discard. A failing fragment
             # settles here unless an alpha test could still discard it;
             # see `render.raster_state.shades`.
-            var test = target.test_fragment(x, y, z, a.state)
+            var test = target.test_fragment(x, y, stored_z, a.state)
             if not shades(test, tested):
                 target.keep_stencil(x, y, test)
                 continue
-
-            # The denominator of the perspective correction, and the
-            # interpolated reciprocal depth in its own right.
-            var inv_w = wa * a.inv_w + wb * b.inv_w + wc * c.inv_w
             # Nothing in the renderer produces a zero here: clipping removes
             # everything at or in front of the near plane, and an
             # *orthographic* camera leaves w at one, not zero — so its inv_w
@@ -2436,7 +2440,7 @@ def rasterize_shaded(
                     # is one. Never alpha tested, so the fragment passed.
                     target.keep_stencil(x, y, test)
                     if writes_depth:
-                        target.claim_depth(x, y, z)
+                        target.claim_depth(x, y, stored_z)
                     if a.state.color_write:
                         target.write(x, y, data_color(u, v, 0.0, 1.0), True)
                     continue
@@ -2693,7 +2697,7 @@ def rasterize_shaded(
             if not test.passes:
                 continue
             if writes_depth:
-                target.claim_depth(x, y, z)
+                target.claim_depth(x, y, stored_z)
             if not a.state.color_write:
                 continue
             if blended:
@@ -2868,12 +2872,14 @@ def rasterize_line(
             share = 0
         if share > 1:
             share = 1
-        var z = a.z + (b.z - a.z) * share
         var near = a.inv_w * (1 - share)
         var far = b.inv_w * share
         var total = near + far
         if total == 0:
             continue
+        # The depth the buffer tests and keeps, from the interpolated
+        # `1 / w` as a triangle's is; see `rasterize_shaded`.
+        var stored_z = fragment_depth(a.state, a.z + (b.z - a.z) * share, total)
         var toward = far / total
         # The gap test comes before the depth test, as a discard does: a
         # pixel in a gap is not drawn and claims nothing.
@@ -2910,7 +2916,7 @@ def rasterize_line(
                 continue
             # The stencil and the depth tests, settled at once: a line
             # has no alpha test to discard it later.
-            var test = target.test_fragment(x, y, z, a.state)
+            var test = target.test_fragment(x, y, stored_z, a.state)
             target.keep_stencil(x, y, test)
             if not test.passes:
                 continue
@@ -2921,7 +2927,7 @@ def rasterize_line(
             # pixel, so a translucent wireframe lost the second edge at
             # every corner, while the kernel kept it.
             if writes_depth:
-                target.claim_depth(x, y, z)
+                target.claim_depth(x, y, stored_z)
             if not a.state.color_write:
                 continue
             if a.blend.mixes():
@@ -3088,6 +3094,9 @@ def rasterize_point(
     if sampled and point.texture != NO_TEXTURE:
         ref image = textures.get(point.texture)
         level = mip_level_of(size, image.width, image.height)
+    # The depth the buffer tests and keeps, the same at every pixel of
+    # the square; see `render.raster_state.fragment_depth`.
+    var stored_z = fragment_depth(point.state, point.z, point.inv_w)
     var mask_level = Float32(0)
     if sampled and point.alpha_map != NO_TEXTURE:
         ref mask = textures.get(point.alpha_map)
@@ -3096,10 +3105,9 @@ def rasterize_point(
         for x in range(left, right + 1):
             if not point_covers(center, size, x, y):
                 continue
-            var z = point.z
             # Tested and settled as a triangle's fragment is; see
             # `rasterize_shaded`.
-            var test = target.test_fragment(x, y, z, point.state)
+            var test = target.test_fragment(x, y, stored_z, point.state)
             if not shades(test, tested):
                 target.keep_stencil(x, y, test)
                 continue
@@ -3112,7 +3120,7 @@ def rasterize_point(
                     # so the point passed.
                     target.keep_stencil(x, y, test)
                     if writes_depth:
-                        target.claim_depth(x, y, z)
+                        target.claim_depth(x, y, stored_z)
                     if point.state.color_write:
                         target.write(
                             x, y, data_color(place.x, place.y, 0.0, 1.0), True
@@ -3149,7 +3157,7 @@ def rasterize_point(
             if not test.passes:
                 continue
             if writes_depth:
-                target.claim_depth(x, y, z)
+                target.claim_depth(x, y, stored_z)
             if not point.state.color_write:
                 continue
             if blended:

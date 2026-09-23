@@ -63,13 +63,16 @@ and supersampling them does not give back range that was already gone.
 """
 
 from render.framebuffer import Color, FloatColor, Framebuffer
+from render.raster_state import STANDARD_DEPTH, DepthMode, is_nearer
 
 # How many samples across and down each output pixel is drawn with when a
 # renderer is antialiased: two, for four samples a pixel.
 comptime SUPERSAMPLE = 2
 
 
-def downsample(image: Framebuffer, factor: Int) raises -> Framebuffer:
+def downsample(
+    image: Framebuffer, factor: Int, depth_mode: DepthMode = STANDARD_DEPTH
+) raises -> Framebuffer:
     """Return `image` shrunk by `factor` each way, every output pixel the
     average of the `factor` by `factor` block it covers.
 
@@ -78,6 +81,8 @@ def downsample(image: Framebuffer, factor: Int) raises -> Framebuffer:
             `factor`.
         factor: How many pixels across and down become one. One returns
             a copy.
+        depth_mode: How the image's depth is stored, which says which of
+            two depths is nearer: the larger under `REVERSED_DEPTH`.
 
     Returns:
         The image, `factor` times smaller each way, with the block's
@@ -117,7 +122,7 @@ def downsample(image: Framebuffer, factor: Int) raises -> Framebuffer:
                         total.a + sampled.a,
                     )
                     var z = image.depth_at(sx, sy)
-                    if z < nearest:
+                    if is_nearer(depth_mode, z, nearest):
                         nearest = z
             var shown = (
                 FloatColor(

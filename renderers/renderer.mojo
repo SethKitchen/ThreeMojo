@@ -178,7 +178,15 @@ from render.texture import (
 from render.texture_store import NO_TEXTURE, TextureId, TextureStore
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.target import RenderTarget
-from render.raster_state import NO_OFFSET, PolygonOffset, RasterState
+from render.raster_state import (
+    LOGARITHMIC_DEPTH,
+    NO_OFFSET,
+    STANDARD_DEPTH,
+    DepthMode,
+    PolygonOffset,
+    RasterState,
+    log_depth_factor,
+)
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, check_tone_mapping
 from math.vector2 import Vector2
 from render.rasterizer import (
@@ -2824,6 +2832,10 @@ struct Renderer(Movable):
     # `shadowMap.type`. `PCF_SHADOW_MAP` by default, as there. See
     # `lights.shadow`.
     var shadow_map_type: ShadowMapType
+    # How a frame's depth is stored and compared: three.js's
+    # `logarithmicDepthBuffer` and `reversedDepthBuffer`, as one value.
+    # `STANDARD_DEPTH` by default, as there. See `set_depth_mode`.
+    var depth_mode: DepthMode
 
     def __init__(out self, width: Int, height: Int, workers: Int = 1) raises:
         """Create a renderer with a dark background.
@@ -2856,6 +2868,7 @@ struct Renderer(Movable):
         self.clipping_planes = List[Plane]()
         self.local_clipping_enabled = False
         self.shadow_map_type = PCF_SHADOW_MAP
+        self.depth_mode = STANDARD_DEPTH
 
     def set_antialias(mut self, enabled: Bool):
         """Turn supersampling on or off, three.js's `antialias`.
@@ -2915,6 +2928,7 @@ struct Renderer(Movable):
         big.clipping_planes = self.clipping_planes.copy()
         big.local_clipping_enabled = self.local_clipping_enabled
         big.shadow_map_type = self.shadow_map_type
+        big.depth_mode = self.depth_mode
         # What makes the larger renderer draw a frame that *averages down*
         # to this one rather than merely one that is bigger: a point's
         # size and a line's thickness are given in the output pixels this
@@ -3035,6 +3049,76 @@ struct Renderer(Movable):
         check_tone_mapping(mode, exposure)
         self.tone_mapping = mode
         self.tone_mapping_exposure = exposure
+
+    def set_depth_mode(mut self, mode: DepthMode) raises:
+        """Choose how a frame's depth is stored and compared: three.js's
+        `logarithmicDepthBuffer` and `reversedDepthBuffer` options.
+
+        `LOGARITHMIC_DEPTH` stores `log2(1 + w)` scaled by the camera's
+        far distance, per fragment, for a perspective camera. An
+        orthographic camera keeps the standard depth, as three.js does.
+        `REVERSED_DEPTH` stores 1 at the near plane and 0 at the far
+        plane, clears to minus infinity and turns every depth comparison
+        round. Both backends follow the mode. The shadow maps do not:
+        they keep the standard depth that their comparison reads. See
+        `render.raster_state.fragment_depth`.
+
+        Args:
+            mode: `STANDARD_DEPTH`, `LOGARITHMIC_DEPTH` or
+                `REVERSED_DEPTH`.
+
+        Raises:
+            Error: If the mode is none of those three. The type stops a
+                bare integer; it does not stop `DepthMode(7)`.
+        """
+        if not mode.is_valid():
+            raise Error("A depth mode that is none of the three")
+        self.depth_mode = mode
+
+    def depth_mode_for[C: Camera](self, camera: C) raises -> DepthMode:
+        """Return the depth mode a frame through `camera` is drawn in.
+
+        The renderer's mode, but `LOGARITHMIC_DEPTH` falls back to
+        `STANDARD_DEPTH` for a camera whose projection does not divide by
+        distance: three.js's `vIsPerspective == 0.0` keeps
+        `gl_FragCoord.z`.
+
+        Args:
+            camera: The camera the frame is drawn through.
+
+        Returns:
+            The mode every primitive of the frame carries.
+
+        Raises:
+            Error: If the camera's projection cannot be built.
+        """
+        if (
+            self.depth_mode == LOGARITHMIC_DEPTH
+            and camera.projection_matrix().is_affine()
+        ):
+            return STANDARD_DEPTH
+        return self.depth_mode
+
+    def _encode_depth[
+        C: Camera
+    ](self, mut vertices: List[RasterVertex], camera: C) raises:
+        """Put the frame's depth mode on every primitive's state.
+
+        Args:
+            vertices: The prepared corners, ends or points, changed in
+                place.
+            camera: The camera the frame is drawn through.
+
+        Raises:
+            Error: If the camera's projection cannot be built.
+        """
+        var mode = self.depth_mode_for(camera)
+        var scale = Float32(0)
+        if mode == LOGARITHMIC_DEPTH:
+            scale = log_depth_factor(camera.far_distance())
+        for index in range(len(vertices)):
+            vertices[index].state.depth_mode = mode
+            vertices[index].state.log_depth_scale = scale
 
     def set_shading(mut self, mode: ShadeMode) raises:
         """Choose what a fragment's color is taken from.
@@ -3791,6 +3875,10 @@ struct Renderer(Movable):
                 draws[slot].order,
             )
 
+        # A light's view of the casters keeps the standard depth, which
+        # is what the shadow comparison reads; see `set_depth_mode`.
+        if not casters_only:
+            self._encode_depth(corners, camera)
         return corners^
 
     def prepare_lines[
@@ -4156,6 +4244,7 @@ struct Renderer(Movable):
             ordered.extend(
                 Span(corners)[run.first * 2 : (run.first + run.count) * 2]
             )
+        self._encode_depth(ordered, camera)
         return ordered^
 
     def prepare_points[
@@ -4442,6 +4531,7 @@ struct Renderer(Movable):
                 )
             )
             ordered.extend(Span(corners)[run.first : run.first + run.count])
+        self._encode_depth(ordered, camera)
         return ordered^
 
     def prepare_frame[
@@ -4789,7 +4879,9 @@ struct Renderer(Movable):
         # lost an image to an error that touched nothing. Everything that
         # can be refused is now asked before anything is written.
         var backdrop = self.backdrop(scene, assets, camera)
-        target.clear_inside(kept, self.clear_color(scene))
+        target.clear_inside(
+            kept, self.clear_color(scene), self.depth_mode_for(camera)
+        )
         # Spelled as a Bool rather than testing the Optional directly,
         # because the coverage instrumenter wraps every condition in a
         # probe that takes a Bool; see `materials.material`.
@@ -5276,6 +5368,7 @@ struct Renderer(Movable):
         side.background = self.background
         side.shading = self.shading
         side.antialias = self.antialias
+        side.depth_mode = self.depth_mode
         var faces = List[Framebuffer]()
         for face in range(FACE_COUNT):  # pragma: no branch
             faces.append(

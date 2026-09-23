@@ -9,7 +9,9 @@
 **Depth.** A render target keeps the NDC depth of every pixel, minus one
 at the near plane and one at the far, and infinity where nothing was
 drawn. `DepthView` turns it into what three.js's shaders read from a depth
-texture: the window depth, zero to one, one where nothing was drawn. With
+texture: the window depth, zero to one, one where nothing was drawn. A
+logarithmic or a reversed depth is read back into that same window depth
+first, so every pass reads one form whatever the renderer stored. With
 the camera's projection it answers the two questions every pass asks: where
 a pixel is in view space, and how far away that is.
 
@@ -34,8 +36,17 @@ from math.utils import SeededRandom
 from math.vector3 import Vector3
 from postprocessing.sampling import sample, u_of, v_of
 from render.framebuffer import FloatColor
+from render.raster_state import (
+    LOGARITHMIC_DEPTH,
+    REVERSED_DEPTH,
+    STANDARD_DEPTH,
+    DepthMode,
+    cleared_depth,
+    is_nearer,
+    log_depth_factor,
+)
 from render.target import RenderTarget
-from std.math import cos, exp, floor, inf, isfinite, pi, sin, sqrt
+from std.math import cos, exp, exp2, floor, isfinite, pi, sin, sqrt
 from units.si import Duration, Length, METER, SECOND
 
 
@@ -131,23 +142,33 @@ struct DepthView(Movable):
         projection: Matrix4,
         near: Length,
         far: Length,
+        mode: DepthMode = STANDARD_DEPTH,
     ) raises:
         """Read a render target's depth through the camera that drew it.
 
+        Each stored depth is read back into the window depth of the
+        projection. A reversed depth is one minus itself. A logarithmic
+        depth gives back its `w`, `2^((d + 1) / logDepthBufFC) - 1`, which
+        the projection turns into a window depth. Under a projection that
+        does not divide by distance a logarithmic depth is the standard
+        one, as the renderer stores it there.
+
         Args:
-            ndc_depth: One NDC depth per pixel, row by row from the top,
-                infinity where nothing was drawn: `RenderTarget.depth`.
+            ndc_depth: One stored depth per pixel, row by row from the top,
+                the mode's clear where nothing was drawn:
+                `RenderTarget.depth`.
             width: The frame's width in pixels.
             height: The frame's height in pixels.
             projection: The camera's projection matrix.
             near: The camera's near distance.
             far: The camera's far distance.
+            mode: How the depth is stored: `RenderTarget.depth_mode`.
 
         Raises:
             Error: If a size is not positive, the depth does not have one
                 entry per pixel, the distances are not finite or the near
-                one is not in front of the far one, or the projection
-                cannot be inverted.
+                one is not in front of the far one, the projection cannot
+                be inverted, or the depth mode is none of the three.
         """
         if width <= 0 or height <= 0:
             raise Error("A depth view's size must be positive")
@@ -161,16 +182,10 @@ struct DepthView(Movable):
             raise Error("A depth view's near distance must be before its far")
         if projection.determinant() == 0:
             raise Error("A depth view's projection must be invertible")
+        if not mode.is_valid():
+            raise Error("A depth mode that is none of the three")
         self.width = width
         self.height = height
-        self.depth = List[Float32](capacity=width * height)
-        for slot in range(width * height):  # pragma: no branch
-            # Both sizes are positive, so the loop runs.
-            var z = ndc_depth[slot]
-            var window = Float32(1)
-            if isfinite(z):
-                window = z * 0.5 + 0.5
-            self.depth.append(window)
         self.projection = projection
         self.inverse = projection
         self.inverse.invert()
@@ -178,6 +193,22 @@ struct DepthView(Movable):
         self.far = far.value
         # A perspective projection puts minus the distance in w.
         self.perspective = projection.elements[11] != 0
+        var logarithmic = mode == LOGARITHMIC_DEPTH and self.perspective
+        var factor = log_depth_factor(far.value)
+        self.depth = List[Float32](capacity=width * height)
+        for slot in range(width * height):  # pragma: no branch
+            # Both sizes are positive, so the loop runs.
+            var z = ndc_depth[slot]
+            var window = Float32(1)
+            if isfinite(z):
+                window = z * 0.5 + 0.5
+                if mode == REVERSED_DEPTH:
+                    window = 1 - z
+                if logarithmic:
+                    var w = exp2((z + 1) / factor) - 1
+                    var seen = projection.transform_point(Vector3(0, 0, -w))
+                    window = seen.z * 0.5 + 0.5
+            self.depth.append(window)
 
     def slot_at(self, u: Float32, v: Float32) -> Int:
         """Return the pixel a texture coordinate falls in, held at the
@@ -1525,7 +1556,9 @@ def _gaussian(x: Float32, sigma: Float32) -> Float32:
 
 
 def outline_mask(
-    all_depth: List[Float32], selected_depth: List[Float32]
+    all_depth: List[Float32],
+    selected_depth: List[Float32],
+    mode: DepthMode = STANDARD_DEPTH,
 ) raises -> List[FloatColor]:
     """Return `OutlinePass`'s mask: red zero where a selected object is
     drawn and one elsewhere, green one where that object is hidden behind
@@ -1537,27 +1570,33 @@ def outline_mask(
     than it.
 
     Args:
-        all_depth: The NDC depth of the whole scene, per pixel.
-        selected_depth: The NDC depth of the selected objects alone,
-            infinity where none is drawn.
+        all_depth: The stored depth of the whole scene, per pixel.
+        selected_depth: The stored depth of the selected objects alone,
+            the mode's clear where none is drawn.
+        mode: How both depths are stored, which says what a clear is and
+            which of two depths is nearer.
 
     Returns:
         One mask texel per pixel.
 
     Raises:
-        Error: If the two depths are not one length.
+        Error: If the two depths are not one length, or the depth mode is
+            none of the three.
     """
     if len(all_depth) != len(selected_depth):
         raise Error("An outline's two depths must be one size")
+    if not mode.is_valid():
+        raise Error("A depth mode that is none of the three")
+    var clear = cleared_depth(mode)
     var mask = List[FloatColor](capacity=len(all_depth))
     for slot in range(len(all_depth)):  # pragma: no branch
         # A frame is never empty.
         var chosen = selected_depth[slot]
-        if chosen == inf[DType.float32]():
+        if chosen == clear:
             mask.append(FloatColor(1, 1, 1, 1))
             continue
         var hidden = Float32(0)
-        if all_depth[slot] < chosen:
+        if is_nearer(mode, all_depth[slot], chosen):
             hidden = 1
         mask.append(FloatColor(0, hidden, 1, 1))
     return mask^
@@ -1569,6 +1608,7 @@ def outline_light(
     selected_depth: List[Float32],
     settings: OutlineSettings,
     time: Duration,
+    mode: DepthMode = STANDARD_DEPTH,
 ) raises:
     """Draw a glowing edge around the selected objects: three.js's
     `OutlinePass`.
@@ -1581,10 +1621,11 @@ def outline_light(
 
     Args:
         frame: The frame, changed in place.
-        all_depth: The NDC depth of the whole scene, per pixel.
-        selected_depth: The NDC depth of the selected objects alone.
+        all_depth: The stored depth of the whole scene, per pixel.
+        selected_depth: The stored depth of the selected objects alone.
         settings: The pass's settings.
         time: How long the pass has run, which drives the pulse.
+        mode: How both depths are stored; see `outline_mask`.
 
     Raises:
         Error: Everything `check_outline` and `outline_mask` raise, or if
@@ -1595,7 +1636,7 @@ def outline_light(
     var height = frame.height
     if len(all_depth) != width * height:
         raise Error("An outline's depth must be the frame's size")
-    var mask = outline_mask(all_depth, selected_depth)
+    var mask = outline_mask(all_depth, selected_depth, mode)
     var half_width = (width + 1) // OUTLINE_DOWNSAMPLE
     var half_height = (height + 1) // OUTLINE_DOWNSAMPLE
     var quarter_width = (half_width + 1) // OUTLINE_DOWNSAMPLE

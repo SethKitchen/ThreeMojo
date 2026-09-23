@@ -91,6 +91,7 @@ from postprocessing.screen_space import (
 )
 from render.antialias import SUPERSAMPLE
 from render.framebuffer import Color, FloatColor, Framebuffer
+from render.raster_state import cleared_depth, is_nearer
 from render.target import RenderTarget
 from render.texture_store import NO_TEXTURE, TextureId
 from render.tonemap import NO_TONE_MAPPING, ToneMapping, tone_map
@@ -1305,6 +1306,7 @@ def _depth_view[C: Camera](drawn: RenderTarget, camera: C) raises -> DepthView:
         camera.projection_matrix(),
         Length(camera.near_distance(), METER),
         Length(camera.far_distance(), METER),
+        drawn.depth_mode,
     )
 
 
@@ -1343,6 +1345,7 @@ def _outline[
         picked.depth,
         step.outline,
         Duration(step.time, SECOND),
+        everything.depth_mode,
     )
 
 
@@ -1411,9 +1414,13 @@ def supersample[
         renderer.width, renderer.height, renderer.background
     )
     var pixels = len(frame.colors)
+    # The samples are stored in the mode the renderer draws them in, and
+    # the nearest of them is the nearest in that mode.
+    frame.depth_mode = renderer.depth_mode_for(camera)
     for slot in range(pixels):  # pragma: no branch
         frame.colors[slot] = FloatColor(0, 0, 0, 0)
         frame.data[slot] = True
+        frame.depth[slot] = cleared_depth(frame.depth_mode)
     for index in range(count):  # pragma: no branch
         var weight = 1 / Float32(count)
         if unbiased:
@@ -1431,7 +1438,10 @@ def supersample[
                 sum.a + add.a * weight,
             )
             frame.data[slot] = frame.data[slot] and drawn.data[slot]
-            frame.depth[slot] = min(frame.depth[slot], drawn.depth[slot])
+            if is_nearer(
+                frame.depth_mode, drawn.depth[slot], frame.depth[slot]
+            ):
+                frame.depth[slot] = drawn.depth[slot]
     return frame^
 
 

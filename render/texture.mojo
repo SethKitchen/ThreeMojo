@@ -85,7 +85,8 @@ from render.srgb import (
     linear_to_srgb,
 )
 from render.float_image import FloatImage
-from std.math import ceil, floor, inf, isfinite, log2, sqrt
+from render.raster_state import STANDARD_DEPTH, DepthMode, window_depth
+from std.math import ceil, floor, isfinite, log2, sqrt
 from std.memory import bitcast
 from units.si import Angle, RADIAN
 
@@ -1916,7 +1917,11 @@ def depth_texture_of(image: Framebuffer, wrap: Wrap = CLAMP) raises -> Texture:
 
 
 def depth_texture_of_buffer(
-    width: Int, height: Int, depth: List[Float32], wrap: Wrap = CLAMP
+    width: Int,
+    height: Int,
+    depth: List[Float32],
+    wrap: Wrap = CLAMP,
+    mode: DepthMode = STANDARD_DEPTH,
 ) raises -> Texture:
     """Return a depth buffer as a texture, as `depth_texture_of` returns a
     framebuffer's, without a framebuffer around it.
@@ -1927,30 +1932,32 @@ def depth_texture_of_buffer(
     Args:
         width: The buffer's width in pixels.
         height: Its height.
-        depth: One NDC depth per pixel, row-major from the top, infinity
-            where nothing was drawn.
+        depth: One stored depth per pixel, row-major from the top, the
+            mode's clear where nothing was drawn.
         wrap: How coordinates outside the unit square are resolved.
+        mode: How the depth is stored. Each texel is
+            `render.raster_state.window_depth` of it: the raw buffer
+            value from zero to one, as three.js's `DepthTexture` holds it.
 
     Returns:
         The texture; see `depth_texture_of`.
 
     Raises:
         Error: If the dimensions are not positive, the buffer's length
-            does not match them, or the wrap mode is none of the named
-            values.
+            does not match them, the wrap mode is none of the named
+            values, or the depth mode is none of the three.
     """
     if width <= 0 or height <= 0:
         raise Error("Texture dimensions must be positive")
     if len(depth) != width * height:
         raise Error("Depth buffer length does not match the dimensions")
+    if not mode.is_valid():
+        raise Error("A depth mode that is none of the three")
     var pixels = List[UInt8]()
     pixels.reserve(width * height * Texture.CHANNELS)
     # Both dimensions are positive, so the loop always runs.
     for slot in range(width * height):  # pragma: no branch
-        var z = depth[slot]
-        var gray = UInt8(255)
-        if z != inf[DType.float32]():
-            gray = _fraction_byte(z * 0.5 + 0.5)
+        var gray = _fraction_byte(window_depth(mode, depth[slot]))
         pixels.append(gray)
         pixels.append(gray)
         pixels.append(gray)

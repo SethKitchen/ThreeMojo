@@ -38,6 +38,7 @@ from render.raster_state import (
     EQUAL_STENCIL_FUNC,
     REPLACE_STENCIL_OP,
     STENCIL_MAX,
+    cleared_depth,
     stencil_apply,
     stencil_compare,
 )
@@ -45,7 +46,7 @@ from render.srgb import linear_to_srgb, srgb_to_linear
 from render.target import RenderTarget
 from render.texture import Texture
 from render.volume_texture import Data3DTexture
-from std.math import atan2, cos, floor, inf, isfinite, pi, sin, sqrt
+from std.math import atan2, cos, floor, isfinite, pi, sin, sqrt
 from units.si import Angle, Length, METER, RADIAN
 
 # --- bokeh ------------------------------------------------------------------
@@ -1159,7 +1160,8 @@ def keep_outside_mask(mut frame: RenderTarget, saved: FrameCopy):
 
 def clear_light(mut frame: RenderTarget, color: Color):
     """Clear the frame to a color: three.js's `ClearPass`, which clears
-    the color, the depth and the stencil.
+    the color, the depth and the stencil. The depth is cleared in the
+    frame's own depth mode.
 
     Args:
         frame: The frame, replaced.
@@ -1169,7 +1171,7 @@ def clear_light(mut frame: RenderTarget, color: Color):
     var value = FloatColor(srgb=color).premultiplied()
     for slot in range(len(frame.colors)):  # pragma: no branch
         frame.colors[slot] = value
-        frame.depth[slot] = inf[DType.float32]()
+        frame.depth[slot] = cleared_depth(frame.depth_mode)
         frame.data[slot] = False
         frame.stencil[slot] = 0
 

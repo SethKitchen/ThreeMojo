@@ -22,6 +22,8 @@ var fast = Renderer(1280, 720, workers=available_workers())
 | `set_background(color)` | The clear color. |
 | `set_shading(mode)` | What a fragment's color comes from. See below. |
 | `set_tone_mapping(mode, exposure=1.0)` | The curve that compresses the light for a display. See below. |
+| `set_depth_mode(mode)` | How the depth is stored: `STANDARD_DEPTH`, `LOGARITHMIC_DEPTH` or `REVERSED_DEPTH`. See [Rasterization](Rasterization#logarithmic-depth). |
+| `depth_mode_for(camera) -> DepthMode` | The mode a frame through `camera` is drawn in. A logarithmic depth is standard under an orthographic camera. |
 | `prepare(scene, assets, camera) -> List[RasterVertex]` | Transform, clip and project every mesh. |
 | `prepare_lines(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [lines](Lines) and wireframes. |
 | `prepare_points(scene, assets, camera) -> List[RasterVertex]` | The same for the scene's [points](Points-and-sprites). A [sprite](Points-and-sprites#sprites) is two triangles, and `prepare` makes them. |

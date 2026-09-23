@@ -42,7 +42,16 @@ is size-dependent. `bench/raster_bench.mojo` measures where the crossover is.
 from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
 from render.blend import NORMAL_MODE, Rgba, blend_pixel
-from render.raster_state import RasterState, shades, test_fragment
+from render.raster_state import (
+    REVERSED_DEPTH,
+    STANDARD_DEPTH,
+    DepthMode,
+    RasterState,
+    cleared_depth,
+    fragment_depth,
+    shades,
+    test_fragment,
+)
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.linerule import covers, dash_covers, major_is_x, share_at
 from render.pointrule import (
@@ -288,7 +297,11 @@ comptime LANE_U1 = 39
 comptime LANE_V1 = 40
 comptime LANE_AO_INTENSITY = 41
 comptime LANE_LIGHT_MAP_INTENSITY = 42
-comptime FLOATS_PER_VERTEX = LANE_LIGHT_MAP_INTENSITY + 1
+# three.js's `logDepthBufFC`, `RasterState.log_depth_scale`. Per
+# primitive, read from the first corner's lane like the alpha test: it is
+# a float, and the state table holds integers.
+comptime LANE_LOG_DEPTH = 43
+comptime FLOATS_PER_VERTEX = LANE_LOG_DEPTH + 1
 comptime FLOATS_PER_TRIANGLE = FLOATS_PER_VERTEX * 3
 
 # How a triangle's metadata is laid out in the state buffer beside the
@@ -601,6 +614,7 @@ def flatten(corners: List[RasterVertex]) -> List[Float32]:
         flat.append(corner.v1)
         flat.append(corner.ao_map_intensity)
         flat.append(corner.light_map_intensity)
+        flat.append(corner.state.log_depth_scale)
     return flat^
 
 
@@ -2670,7 +2684,19 @@ def rasterize_kernel(
                         ]
                     ),
                 )
-                var test = test_fragment(state, z, nearest, stencil)
+                # The depth the buffer tests and keeps, and what the pixel
+                # holds: the clear of the point's own mode until a depth
+                # is claimed; see `render.raster_state.fragment_depth`.
+                state.log_depth_scale = points[
+                    unsafe_offset=base + LANE_LOG_DEPTH
+                ]
+                var stored_z = fragment_depth(
+                    state, z, points[unsafe_offset=base + LANE_INV_W]
+                )
+                var held = nearest
+                if not solid:
+                    held = cleared_depth(state.depth_mode)
+                var test = test_fragment(state, stored_z, held, stencil)
                 if not shades(test, tested):
                     stencil = test.stencil
                     continue
@@ -2775,7 +2801,7 @@ def rasterize_kernel(
                 found = True
                 if not mixes:
                     if state.writes_depth(mixes):
-                        nearest = z
+                        nearest = stored_z
                         solid = True
                     if not state.color_write:
                         continue
@@ -2834,7 +2860,6 @@ def rasterize_kernel(
                     share = 1
                 var az = segments[unsafe_offset=base + LANE_Z]
                 var bz = segments[unsafe_offset=far_base + LANE_Z]
-                var z = az + (bz - az) * share
                 var near = segments[unsafe_offset=base + LANE_INV_W] * (
                     1 - share
                 )
@@ -2871,7 +2896,18 @@ def rasterize_kernel(
                         ]
                     ),
                 )
-                var test = test_fragment(state, z, nearest, stencil)
+                # The depth the buffer tests and keeps, as the host's line
+                # pass finds it; see `rasterize_line`.
+                state.log_depth_scale = segments[
+                    unsafe_offset=base + LANE_LOG_DEPTH
+                ]
+                var stored_z = fragment_depth(
+                    state, az + (bz - az) * share, total
+                )
+                var held = nearest
+                if not solid:
+                    held = cleared_depth(state.depth_mode)
+                var test = test_fragment(state, stored_z, held, stencil)
                 stencil = test.stencil
                 if not test.passes:
                     continue
@@ -2935,7 +2971,7 @@ def rasterize_kernel(
                 found = True
                 if not mixes:
                     if state.writes_depth(mixes):
-                        nearest = z
+                        nearest = stored_z
                         solid = True
                     if not state.color_write:
                         continue
@@ -3049,14 +3085,22 @@ def rasterize_kernel(
                     ]
                 ),
             )
-            var test = test_fragment(state, z, nearest, stencil)
-            if not shades(test, tested):
-                stencil = test.stencil
-                continue
-
             # Color does not: weight by inv_w and divide by the interpolated
             # inv_w, matching `rasterize_shaded`.
             var inv_w = wa * aw + wb * bw + wc * cw
+            # The depth the buffer tests and keeps, and what the pixel
+            # holds: the clear of the triangle's own mode until a depth is
+            # claimed; see `render.raster_state.fragment_depth`. A `DEPTH`
+            # material still shows `z`.
+            state.log_depth_scale = corners[unsafe_offset=base + LANE_LOG_DEPTH]
+            var stored_z = fragment_depth(state, z, inv_w)
+            var held = nearest
+            if not solid:
+                held = cleared_depth(state.depth_mode)
+            var test = test_fragment(state, stored_z, held, stencil)
+            if not shades(test, tested):
+                stencil = test.stencil
+                continue
             var share_a = wa
             var share_b = wb
             var share_c = wc
@@ -4151,7 +4195,7 @@ def rasterize_kernel(
             found = True
             if not mixes:
                 if state.writes_depth(mixes):
-                    nearest = z
+                    nearest = stored_z
                     solid = True
                 if not state.color_write:
                     continue
@@ -4240,6 +4284,9 @@ struct GpuRenderer(Movable):
     # False until the first successful `draw`, so `read_back` cannot hand
     # back whatever the allocation happened to contain.
     var drawn: Bool
+    # The depth mode of the last `draw`, which says what a pixel no
+    # primitive claimed reads back as: see `read_back`.
+    var depth_mode: DepthMode
     # Every device buffer is declared before the context that owns it, and
     # `__deinit__` releases them in that order. The order is load-bearing;
     # see `__deinit__` for the hang it prevents.
@@ -4372,6 +4419,7 @@ struct GpuRenderer(Movable):
         self.width = width
         self.height = height
         self.drawn = False
+        self.depth_mode = STANDARD_DEPTH
         self.context = DeviceContext()
         self.pixels = self.context.enqueue_create_buffer[DType.uint8](
             width * height * Framebuffer.CHANNELS
@@ -4523,6 +4571,7 @@ struct GpuRenderer(Movable):
         points: List[RasterVertex] = List[RasterVertex](),
         backdrop: Optional[Framebuffer] = None,
         line_width: Int = 1,
+        depth_mode: DepthMode = STANDARD_DEPTH,
     ) raises:
         """Rasterize prepared triangles, lines and points into the device
         target.
@@ -4573,6 +4622,11 @@ struct GpuRenderer(Movable):
                 through `Renderer.supersampled` passes that renderer's
                 `render_scale`, or the lines it draws thin out when the
                 frame is averaged down. Below one is treated as one.
+            depth_mode: The mode the frame's primitives carry,
+                `Renderer.depth_mode_for` of the camera. Each primitive
+                stores and compares by its own state; this says only what
+                `read_back` gives a pixel none of them claimed. The
+                default is `STANDARD_DEPTH`.
 
         Raises:
             Error: If the corner count is not a multiple of three, the
@@ -4593,8 +4647,11 @@ struct GpuRenderer(Movable):
                 alpha map it would open is not linear or does not ignore
                 its alpha, a vertex names a cube texture that is not
                 uploaded, a spot light's map names a texture that is not
-                uploaded, or the backdrop is not the target's size.
+                uploaded, the backdrop is not the target's size, or the
+                depth mode is none of the three.
         """
+        if not depth_mode.is_valid():
+            raise Error("A depth mode that is none of the three")
         if len(corners) % 3 != 0:
             raise Error("Rasterizing needs whole triangles")
         if len(lines) % 2 != 0:
@@ -4632,6 +4689,7 @@ struct GpuRenderer(Movable):
                     mode,
                     tone_mapping=tone_mapping,
                     exposure=exposure,
+                    depth_mode=depth_mode,
                 )
         var triangles = len(corners) // 3
 
@@ -5014,6 +5072,7 @@ struct GpuRenderer(Movable):
             block_dim=(TILE, TILE),
         )
         self.drawn = True
+        self.depth_mode = depth_mode
 
     def set_textures(
         mut self,
@@ -5159,6 +5218,13 @@ struct GpuRenderer(Movable):
                 src=host.unsafe_ptr(),
                 count=self.width * self.height,
             )
+        # The kernel writes infinity where no primitive claimed the depth.
+        # Under `REVERSED_DEPTH` the clear is minus infinity, as the host's
+        # target holds it.
+        if self.depth_mode == REVERSED_DEPTH:
+            for slot in range(len(depth)):
+                if depth[slot] == inf[DType.float32]():
+                    depth[slot] = cleared_depth(REVERSED_DEPTH)
         return Framebuffer(self.width, self.height, pixels^, depth^)
 
 

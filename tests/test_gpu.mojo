@@ -57,7 +57,7 @@ from geometries.box import cube
 from geometries.sphere import sphere
 from math.matrix4 import translation
 from math.vector2 import Vector2
-from std.math import cos, inf, pi, sin
+from std.math import cos, inf, isinf, pi, sin
 from math.vector3 import Vector3
 from objects.instanced_mesh import InstancedMesh
 from materials.material import (
@@ -68,7 +68,7 @@ from materials.material import (
     points_material,
     sprite_material,
 )
-from objects.line import LOOP, Line
+from objects.line import LOOP, Line, SEGMENTS
 from objects.line_segments2 import (
     Line2,
     LineSegments2,
@@ -164,6 +164,7 @@ from render.gpu import (
     LANE_DASH,
     LANE_GAP,
     LANE_LINE_DISTANCE,
+    LANE_LOG_DEPTH,
     LANE_POINT_SIZE,
     STATE_PER_POINT,
     POINT_STATE_ALPHA_MAP,
@@ -208,9 +209,12 @@ from render.raster_state import (
     EQUAL_STENCIL_FUNC,
     GREATER_DEPTH,
     INCREMENT_STENCIL_OP,
+    LOGARITHMIC_DEPTH,
     NOT_EQUAL_STENCIL_FUNC,
     RasterState,
     REPLACE_STENCIL_OP,
+    REVERSED_DEPTH,
+    STANDARD_DEPTH,
 )
 from render.texture import Alpha
 from render.cube_texture import CubeTexture, face_forward
@@ -1070,7 +1074,7 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 39)
+    assert_equal(len(flat), 44)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[0], Float32(1))
     assert_equal(flat[1], Float32(2))
@@ -1123,6 +1127,23 @@ def test_flattening_lays_out_a_lane_per_varying() raises:
     var dim = List[RasterVertex]()
     dim.append(RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), reflectivity=0.25))
     assert_equal(flatten(dim)[LANE_REFLECTIVITY], Float32(0.25))
+    # The log depth factor rides last, zero for a corner under the
+    # standard depth.
+    assert_equal(flat[LANE_LOG_DEPTH], Float32(0))
+    var logged = List[RasterVertex]()
+    logged.append(
+        RasterVertex(
+            1,
+            2,
+            3,
+            4,
+            FloatColor(1, 1, 1),
+            state=RasterState(
+                depth_mode=LOGARITHMIC_DEPTH, log_depth_scale=0.25
+            ),
+        )
+    )
+    assert_equal(flatten(logged)[LANE_LOG_DEPTH], Float32(0.25))
 
 
 def test_the_point_state_table_has_an_entry_per_map_and_policy() raises:
@@ -4463,7 +4484,7 @@ def test_flattening_carries_the_alpha_test_in_its_own_lane() raises:
         RasterVertex(1, 2, 3, 4, FloatColor(1, 1, 1), alpha_test=0.375)
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 39)
+    assert_equal(len(flat), 44)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[20], Float32(0.375))
     # And a corner that says nothing about it carries zero, no test.
@@ -4644,7 +4665,7 @@ def test_flattening_carries_the_specular_and_the_shininess() raises:
         )
     )
     var flat = flatten(corners)
-    assert_equal(len(flat), 39)
+    assert_equal(len(flat), 44)
     assert_equal(len(flat), FLOATS_PER_VERTEX)
     assert_equal(flat[21], Float32(0.25))
     assert_equal(flat[22], Float32(0.5))
@@ -8916,7 +8937,8 @@ def test_the_baked_lanes_and_columns_ride_last() raises:
     assert_equal(LANE_V1, LANE_U1 + 1)
     assert_equal(flat[LANE_AO_INTENSITY], Float32(0.8))
     assert_equal(flat[LANE_LIGHT_MAP_INTENSITY], Float32(1.5))
-    assert_equal(LANE_LIGHT_MAP_INTENSITY, FLOATS_PER_VERTEX - 1)
+    assert_equal(LANE_LOG_DEPTH, LANE_LIGHT_MAP_INTENSITY + 1)
+    assert_equal(LANE_LOG_DEPTH, FLOATS_PER_VERTEX - 1)
     var state = triangle_state(corners)
     assert_equal(len(state), 2 * STATE_PER_TRIANGLE)
     assert_equal(state[STATE_AO_MAP], Int32(2))
@@ -9038,6 +9060,113 @@ def test_both_backends_refuse_a_baked_map_stored_the_wrong_way() raises:
             SHADE_TEXTURE,
             textures,
         )
+
+
+def test_the_state_tables_carry_the_depth_mode() raises:
+    var state = RasterState(depth_mode=REVERSED_DEPTH)
+    var corners = List[RasterVertex]()
+    for _ in range(3):
+        corners.append(_stenciled(0, 0, 0.5, Color(255, 0, 0), state))
+    var table = triangle_state(corners)
+    assert_true(
+        RasterState.unpacked(Int(table[STATE_OPS]), Int(table[STATE_STENCIL]))
+        == state
+    )
+
+
+def test_both_backends_agree_under_every_depth_mode() raises:
+    # A near square over a far one, a line behind the near one and a
+    # point in front of it, under the standard, the logarithmic and the
+    # reversed depth: the same pixels and the same stored depth on both
+    # backends, the clear included.
+    if skipped_for_lack_of_a_gpu("both backends agree under every depth mode"):
+        return
+    var assets = Assets()
+    var scene = Scene()
+    var small = assets.geometries.add(
+        plane(Length(1.0, METER), Length(1.0, METER))
+    )
+    var large = assets.geometries.add(
+        plane(Length(2.0, METER), Length(2.0, METER))
+    )
+    var near = scene.add(Object3D())
+    scene.node(near).set_position(0, 0, 0.5)
+    var far = scene.add(Object3D())
+    scene.node(far).set_position(0, 0, -0.5)
+    scene.node(far).render_order = 1
+    scene.add_mesh(
+        Mesh(
+            small,
+            assets.materials.add(Material(Color(0, 255, 0), kind=BASIC)),
+            near,
+        )
+    )
+    scene.add_mesh(
+        Mesh(
+            large,
+            assets.materials.add(Material(Color(0, 0, 255), kind=BASIC)),
+            far,
+        )
+    )
+    var segment = BufferGeometry()
+    segment.set_attribute(
+        POSITION, BufferAttribute([Float32(-2), 0.1, 0, 2, 0.1, 0], 3)
+    )
+    scene.add_line(
+        Line(
+            assets.geometries.add(segment^),
+            assets.materials.add(Material(Color(255, 0, 0), kind=BASIC)),
+            far,
+            mode=SEGMENTS,
+        )
+    )
+    var dot = BufferGeometry()
+    dot.set_attribute(POSITION, BufferAttribute([Float32(0.3), 0.3, 1.5], 3))
+    scene.add_points(
+        Points(
+            assets.geometries.add(dot^),
+            assets.materials.add(points_material(Color(255, 255, 0))),
+            far,
+        )
+    )
+    scene.update()
+    var camera = PerspectiveCamera(
+        Angle(45.0, DEGREE), 1.0, Length(0.1, METER), Length(100.0, METER)
+    )
+    camera.place(Vector3(0, 0, 4), Vector3(0, 0, 0))
+    for mode in [STANDARD_DEPTH, LOGARITHMIC_DEPTH, REVERSED_DEPTH]:
+        var renderer = Renderer(32, 32)
+        renderer.set_background(BACKGROUND)
+        renderer.set_depth_mode(mode)
+        var target = RenderTarget(32, 32, BACKGROUND)
+        renderer.render_into(target, scene, assets, camera)
+        var cpu = target.resolve()
+        var frame = renderer.prepare_frame(scene, assets, camera)
+        var device = GpuRenderer(32, 32)
+        device.draw(
+            frame.corners,
+            BACKGROUND,
+            SHADE_TEXTURE,
+            Lighting(scene),
+            FogView(scene.fog),
+            NO_TONE_MAPPING,
+            1.0,
+            frame.segments,
+            frame.draws,
+            points=frame.points,
+            depth_mode=renderer.depth_mode_for(camera),
+        )
+        var gpu = device.read_back()
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+        assert_equal(cpu.get_pixel(16, 16).g, 255)
+        for y in range(32):
+            for x in range(32):
+                var left = cpu.depth_at(x, y)
+                var right = gpu.depth_at(x, y)
+                if isinf(left):
+                    assert_equal(right, left)
+                else:
+                    assert_almost_equal(right, left, atol=Float64(1e-5))
 
 
 def main() raises:

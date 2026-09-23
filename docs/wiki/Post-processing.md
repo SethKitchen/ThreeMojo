@@ -151,6 +151,8 @@ Each pass keeps its settings in a field of `Pass`: `ssao`, `sao`, `ssr` or `outl
 
 `DepthView` reads a render target's depth through the camera that drew it. The target keeps NDC depth, from minus one to one. `DepthView` keeps the window depth, from zero to one, as a three.js depth texture holds it. A pixel where nothing was drawn has a depth of one.
 
+A target drawn with a [logarithmic](Rasterization#logarithmic-depth) or a [reversed](Rasterization#reversed-depth) depth keeps its mode in `depth_mode`. `DepthView` takes that mode and reads the stored depth back into the same window depth. So SSAO, SAO, SSR and the bokeh pass work in every mode. The outline pass and the SSAA pass compare depths in the mode of the frame.
+
 - `position(u, v, depth)` is three.js's `getViewPosition`. It returns the point in the camera's space.
 - `view_z(depth)` is `getViewZ`.
 - `linear_depth(view_z)` is `viewZToOrthographicDepth`: zero at the near plane and one at the far plane.

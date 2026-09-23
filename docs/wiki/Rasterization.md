@@ -68,9 +68,52 @@ Vertices snap to a 1/16 pixel grid. The edge function is then exact integer arit
 
 ## Depth
 
-Depth is interpolated linearly in screen space. By default a fragment is kept when it is as near as what is there, or nearer: three.js's `LessEqualDepth`. An opaque fragment writes its depth. A blended fragment tests depth and does not write it. Each corner carries a `state`, a `RasterState`, that changes these rules and adds the stencil test. See [Materials](Materials#depth-color-and-stencil).
+Depth is interpolated linearly in screen space, and the renderer's depth mode then sets what is stored. By default a fragment is kept when it is as near as what is there, or nearer: three.js's `LessEqualDepth`. An opaque fragment writes its depth. A blended fragment tests depth and does not write it. Each corner carries a `state`, a `RasterState`, that changes these rules and adds the stencil test. See [Materials](Materials#depth-color-and-stencil).
 
 An alpha-tested fragment writes its depth and its stencil *late*. It tests without claiming, and claims with `claim_depth` once it survives the test. A fragment the test throws away leaves the depth alone, so the hole shows what is behind it. A GPU does the same for a shader that can discard.
+
+## Logarithmic depth
+
+`Renderer.set_depth_mode(LOGARITHMIC_DEPTH)` stores a depth that grows with the log of the distance: three.js's `logarithmicDepthBuffer`. Use it for a scene with a small near distance and a large far distance, where the standard depth has no precision left far away.
+
+Each fragment computes its own depth from its own `w`, as three.js's `logdepthbuf_fragment` does:
+
+```
+depth = log2(1 + w) * logDepthBufFC - 1
+logDepthBufFC = 2 / log2(far + 1)
+```
+
+`w` is one over the interpolated `inv_w`, which is the perspective-correct `w`. three.js writes half of `log2(1 + w) * logDepthBufFC` to `gl_FragDepth`. This port keeps the depth on the scale of NDC depth, from minus one to one, so the result is that value doubled, less one. The depth is not linear in screen space, so each fragment computes it again. `render.raster_state.fragment_depth` holds the arithmetic, and both backends call it.
+
+The mode applies only to a perspective camera. Under an orthographic camera `depth_mode_for` returns `STANDARD_DEPTH`, as three.js keeps `gl_FragCoord.z` when `vIsPerspective` is zero.
+
+These rules are different from the standard depth:
+
+- The depth comes from `w` and not from `z`, so a polygon offset has no effect. three.js loses it the same way, because a shader that writes `gl_FragDepth` replaces the offset depth.
+- A `DEPTH` material still shows the standard depth as its gray, from `z`.
+
+## Reversed depth
+
+`Renderer.set_depth_mode(REVERSED_DEPTH)` stores 1 at the near plane and 0 at the far plane: three.js's `reversedDepthBuffer`. A clear writes minus infinity, and every depth function is turned round. `LESS_EQUAL_DEPTH` then keeps a fragment with a larger depth, as three.js's `ReversedDepthFuncs` maps it to `GreaterEqualDepth`. `EQUAL_DEPTH`, `NOT_EQUAL_DEPTH`, `ALWAYS_DEPTH` and `NEVER_DEPTH` do not change.
+
+The stored depth is `(1 - z) / 2`, where `z` is the NDC depth. A polygon offset still pushes a surface away, because it moves `z` before the depth is reversed. A `DEPTH` material still shows the standard depth as its gray.
+
+This port computes the reversed depth from the NDC depth. So it keeps the ordering and the clear of three.js's reversed buffer. It does not get the extra floating-point precision that a reversed projection matrix gives a GPU.
+
+### What reads the depth
+
+A `RenderTarget` records the mode of its last clear in `depth_mode`. Every reader of the depth uses that mode:
+
+- `RenderTarget.downsampled` and `render.antialias.downsample` keep the nearest depth of a block, which is the largest one under `REVERSED_DEPTH`.
+- `RenderTarget.depth_texture` shows the stored depth from zero to one. Under `REVERSED_DEPTH` a near surface is white and the clear is black, as three.js's `DepthTexture` holds it.
+- `DepthView`, and so SSAO, SAO, SSR and the bokeh pass, read every mode back into the standard window depth. See [Post-processing](Post-processing#the-depth-and-the-normals).
+- The outline pass, the SSAA pass and the clear pass use the mode of the frame.
+
+The shadow maps always use the standard depth, because the shadow comparison reads the standard depth. A light's view of the casters ignores the renderer's mode.
+
+### On the GPU
+
+The mode rides bits 19 and 20 of the packed depth state, and the log factor rides the vertex lane `LANE_LOG_DEPTH`. The kernel compares a fragment with the clear of the fragment's own mode until a depth is claimed. `GpuRenderer.draw` takes `depth_mode`, so that `read_back` returns minus infinity for a pixel that nothing claimed under `REVERSED_DEPTH`. `tests/test_gpu.mojo` compares the pixels and the stored depth of both backends in each mode.
 
 ## Clipping
 
@@ -164,3 +207,4 @@ A `NORMALS` or `DEPTH` triangle cannot blend. One pixel holds its own bytes or t
 - A matcap raises unless it is `IGNORED`. A matcap on a kind that is not `MATCAP` raises, and so do corners that disagree about one.
 - An alpha test outside zero to one, or not finite, raises on every worker count.
 - A fog view that `FogView.validate` refuses raises before any fragment is drawn, on every worker count.
+- A depth mode that is none of the three raises in `set_depth_mode`, `clear_inside`, `DepthView`, `outline_mask` and `GpuRenderer.draw`. A state under `LOGARITHMIC_DEPTH` whose factor is not finite and positive raises, on both backends.

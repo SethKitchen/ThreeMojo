@@ -26,13 +26,21 @@ switches, the functions and the operations, three bits each. `stencil_word`
 packs the reference and the two masks, eight bits each. Both ride the
 per-primitive state tables, and `RasterState.unpacked` reads them back.
 
+**The depth buffer's mode is in the state.** `DepthMode` says how a
+fragment's depth is stored: the projection's own depth, three.js's
+`logarithmicDepthBuffer`, or its `reversedDepthBuffer`. `fragment_depth`
+turns the interpolated depth into the stored one, and `test_fragment`
+turns the comparison round for the reversed mode. The renderer puts one
+mode on every primitive of a frame, so both backends store and compare
+alike.
+
 **Polygon offset is not in the state.** `PolygonOffset.shift` moves a
 triangle's corners before either backend sees it, so both receive the moved
 depths and agree without a device lane.
 """
 
 from math.vector3 import Vector3
-from std.math import isfinite, max, min
+from std.math import inf, isfinite, log2, max, min
 from std.memory import bitcast
 from std.utils.numerics import max_finite
 
@@ -69,6 +77,123 @@ comptime EQUAL_DEPTH = DepthFunc(4)
 comptime GREATER_EQUAL_DEPTH = DepthFunc(5)
 comptime GREATER_DEPTH = DepthFunc(6)
 comptime NOT_EQUAL_DEPTH = DepthFunc(7)
+
+
+@fieldwise_init
+struct DepthMode(Equatable, ImplicitlyCopyable, Writable):
+    """How a fragment's depth is stored and compared, as a type rather than
+    a bare int: three.js's `logarithmicDepthBuffer` and
+    `reversedDepthBuffer` renderer options, as one value."""
+
+    var value: Int
+
+    def is_valid(self) -> Bool:
+        """Return True if this is one of the three depth modes.
+
+        Returns:
+            Whether the value names a depth mode.
+        """
+        return self.value >= 0 and self.value <= 2
+
+
+# The projection's own depth: -1 at the near plane, 1 at the far plane,
+# cleared to infinity. three.js's default.
+comptime STANDARD_DEPTH = DepthMode(0)
+# three.js's `logarithmicDepthBuffer`: the depth is `log2(1 + w)` scaled
+# so the far plane is 1, stored on the same -1 to 1 scale.
+comptime LOGARITHMIC_DEPTH = DepthMode(1)
+# three.js's `reversedDepthBuffer`: 1 at the near plane, 0 at the far
+# plane, cleared to minus infinity, and every comparison turned round.
+comptime REVERSED_DEPTH = DepthMode(2)
+
+
+def log_depth_factor(far: Float32) -> Float32:
+    """Return three.js's `logDepthBufFC` for a camera's far distance.
+
+    Args:
+        far: The camera's far distance, in meters.
+
+    Returns:
+        `2 / log2(far + 1)`: what `log2(1 + w)` is multiplied by.
+    """
+    return 2 / log2(far + 1)
+
+
+@always_inline
+def fragment_depth(state: RasterState, z: Float32, inv_w: Float32) -> Float32:
+    """Return the depth a fragment is tested and stored with.
+
+    `STANDARD_DEPTH` keeps the interpolated NDC depth. `LOGARITHMIC_DEPTH`
+    is three.js's `logdepthbuf_fragment`, `log2(1 + w) * logDepthBufFC *
+    0.5`, from the fragment's own `w`, moved to the -1 to 1 scale:
+    `log2(1 + w) * logDepthBufFC - 1`. `REVERSED_DEPTH` is one minus the
+    window depth: 1 at the near plane and 0 at the far plane.
+
+    Args:
+        state: The primitive's state, for its mode and its log factor.
+        z: The fragment's NDC depth, interpolated in screen space.
+        inv_w: The fragment's interpolated `1 / w`.
+
+    Returns:
+        The stored depth.
+    """
+    if state.depth_mode == LOGARITHMIC_DEPTH:
+        return state.log_depth_scale * log2(1 + 1 / inv_w) - 1
+    if state.depth_mode == REVERSED_DEPTH:
+        return (1 - z) * 0.5
+    return z
+
+
+@always_inline
+def cleared_depth(mode: DepthMode) -> Float32:
+    """Return the depth a clear leaves in every pixel.
+
+    Args:
+        mode: The depth mode.
+
+    Returns:
+        Minus infinity for `REVERSED_DEPTH`, and infinity otherwise: beyond
+        every fragment in the direction the mode calls far.
+    """
+    if mode == REVERSED_DEPTH:
+        return -inf[DType.float32]()
+    return inf[DType.float32]()
+
+
+@always_inline
+def is_nearer(mode: DepthMode, depth: Float32, other: Float32) -> Bool:
+    """Return True if one stored depth is nearer the camera than another.
+
+    Args:
+        mode: The depth mode both were stored with.
+        depth: The depth asked about.
+        other: The depth it is compared with.
+
+    Returns:
+        `depth > other` for `REVERSED_DEPTH`, and `depth < other`
+        otherwise.
+    """
+    if mode == REVERSED_DEPTH:
+        return depth > other
+    return depth < other
+
+
+@always_inline
+def window_depth(mode: DepthMode, depth: Float32) -> Float32:
+    """Return a stored depth as a depth texture holds it: zero to one.
+
+    Args:
+        mode: The depth mode it was stored with.
+        depth: The stored depth.
+
+    Returns:
+        The stored depth moved to zero to one and clamped there. A cleared
+        pixel gives 1, or 0 under `REVERSED_DEPTH`.
+    """
+    var window = depth * 0.5 + 0.5
+    if mode == REVERSED_DEPTH:
+        window = depth
+    return min(max(window, Float32(0)), Float32(1))
 
 
 @fieldwise_init
@@ -269,6 +394,14 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
     var stencil_fail: StencilOp
     var stencil_z_fail: StencilOp
     var stencil_z_pass: StencilOp
+    # How the depth is stored and compared: three.js's
+    # `logarithmicDepthBuffer` and `reversedDepthBuffer`, set by the
+    # renderer and not by the material. See `fragment_depth`.
+    var depth_mode: DepthMode
+    # three.js's `logDepthBufFC`, `log_depth_factor` of the camera's far
+    # distance. Read only under `LOGARITHMIC_DEPTH`. It rides a float
+    # lane to the device and not the packed words.
+    var log_depth_scale: Float32
 
     def __init__(
         out self,
@@ -284,6 +417,8 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
         stencil_fail: StencilOp = KEEP_STENCIL_OP,
         stencil_z_fail: StencilOp = KEEP_STENCIL_OP,
         stencil_z_pass: StencilOp = KEEP_STENCIL_OP,
+        depth_mode: DepthMode = STANDARD_DEPTH,
+        log_depth_scale: Float32 = 0,
     ):
         """Create a state. Every default is three.js's.
 
@@ -301,6 +436,9 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             stencil_fail: The operation when the stencil test fails.
             stencil_z_fail: The operation when the depth test fails.
             stencil_z_pass: The operation when both tests pass.
+            depth_mode: How the depth is stored. `STANDARD_DEPTH`.
+            log_depth_scale: The `logDepthBufFC` of three.js, positive under
+                `LOGARITHMIC_DEPTH`.
         """
         self.depth_test = depth_test
         self.depth_write = depth_write
@@ -314,10 +452,13 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
         self.stencil_fail = stencil_fail
         self.stencil_z_fail = stencil_z_fail
         self.stencil_z_pass = stencil_z_pass
+        self.depth_mode = depth_mode
+        self.log_depth_scale = log_depth_scale
 
     def is_valid(self) -> Bool:
-        """Return True if every function and operation is one there is and
-        every stencil value fits eight bits.
+        """Return True if every function, operation and mode is one there
+        is, every stencil value fits eight bits, and a logarithmic depth
+        has a finite, positive factor.
 
         Returns:
             Whether both backends can draw under this state.
@@ -331,19 +472,27 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             and _is_byte(self.stencil_ref)
             and _is_byte(self.stencil_func_mask)
             and _is_byte(self.stencil_write_mask)
+            and self.depth_mode.is_valid()
+            and (
+                self.depth_mode != LOGARITHMIC_DEPTH
+                or (isfinite(self.log_depth_scale) and self.log_depth_scale > 0)
+            )
         )
 
     def check(self) raises:
         """Refuse a state that `is_valid` refuses.
 
         Raises:
-            Error: If a function or an operation is none of the eight, or
-                the reference or a mask is outside 0 to 255.
+            Error: If a function or an operation is none of the eight, the
+                reference or a mask is outside 0 to 255, the depth mode is
+                none of the three, or a logarithmic depth has a factor that
+                is not finite and positive.
         """
         if not self.is_valid():
             raise Error(
-                "A depth or stencil state names a function or an operation"
-                " there is not, or a stencil value outside 0 to 255"
+                "A depth or stencil state names a function, an operation or"
+                " a depth mode there is not, a stencil value outside 0 to"
+                " 255, or a logarithmic depth without a positive factor"
             )
 
     def writes_depth(self, mixes: Bool) -> Bool:
@@ -369,7 +518,8 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
         Returns:
             Bit 0 the depth test, bit 1 the depth write, bit 2 the color
             write, bit 3 the stencil write, then three bits each for the
-            depth function, the stencil function and the three operations.
+            depth function, the stencil function and the three operations,
+            then two bits for the depth mode. The log factor is not in it.
         """
         return (
             Int(self.depth_test)
@@ -381,6 +531,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             | (self.stencil_fail.value << 10)
             | (self.stencil_z_fail.value << 13)
             | (self.stencil_z_pass.value << 16)
+            | (self.depth_mode.value << 19)
         )
 
     def stencil_word(self) -> Int:
@@ -406,7 +557,9 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             stencil: What `stencil_word` returned.
 
         Returns:
-            The state, equal to the one that was packed when it was valid.
+            The state, equal to the one that was packed when it was valid
+            and its log factor was zero. The device sets the factor from
+            its own lane.
         """
         return RasterState(
             (ops & 1) != 0,
@@ -421,6 +574,7 @@ struct RasterState(Equatable, ImplicitlyCopyable, Writable):
             StencilOp((ops >> 10) & OP_MASK),
             StencilOp((ops >> 13) & OP_MASK),
             StencilOp((ops >> 16) & OP_MASK),
+            DepthMode((ops >> 19) & 3),
         )
 
 
@@ -448,15 +602,23 @@ def test_fragment(
 
     Args:
         state: The primitive's state.
-        z: The fragment's NDC depth.
+        z: The fragment's depth, as `fragment_depth` stores it.
         stored_depth: The depth the pixel holds.
         stored: The stencil value the pixel holds.
 
     Returns:
         Whether the fragment passes and the stencil value it leaves.
     """
+    # Under `REVERSED_DEPTH` the two sides trade places, which is
+    # three.js's `ReversedDepthFuncs`: less becomes greater, and equal and
+    # not equal stay as they are.
+    var left = z
+    var right = stored_depth
+    if state.depth_mode == REVERSED_DEPTH:
+        left = stored_depth
+        right = z
     var depth_ok = not state.depth_test or depth_compare(
-        state.depth_func, z, stored_depth
+        state.depth_func, left, right
     )
     if not state.stencil_write:
         return FragmentTest(depth_ok, stored, False)
