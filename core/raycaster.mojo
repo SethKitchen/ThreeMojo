@@ -59,26 +59,47 @@ level. A hit's `kind` says which of the scene's lists `index` counts in,
 and `mesh` is the shape struck as a `Mesh`: its node, geometry and
 material, whatever list it came from.
 
-What it does not see is a skinned mesh. A `SkinnedMesh` is in a list of
-its own, so a rig is simply not offered to the ray -- it is not silently
-picked in its rest pose. Teaching it about rigs means the posed bones,
-which come from the scene rather than the geometry. That is not here yet.
+**Rigs.** A skinned mesh is picked where its bones have carried it, as
+the renderer draws it: `core.deform.skin_pose` reads the posed bones and
+`skin_carriers` moves each vertex, in both. three.js's
+`SkinnedMesh.raycast` does the same.
+
+**Lines, points and sprites.** A line is met where the ray passes within
+`line_threshold` of one of its segments, three.js's `params.Line.threshold`,
+and points where it passes within `points_threshold` of a point,
+`params.Points.threshold`. Both are a meter by default, as in three.js, so
+set them to what a pointer should reach. The gap is measured in world
+space, where three.js divides the threshold by the object's average scale;
+the two agree under an even scale, and this one is exact under an uneven
+one. A sprite is met on its two triangles, laid flat to the camera as the
+renderer lays them, so a sprite needs the camera that `set_from_camera`
+records. None of the three has a face, so a hit's `normal` is zero, as
+three.js gives no `face`. `triangle` says which segment, point or half of
+the sprite was struck.
 """
 
 from cameras.camera import Camera
 from core.assets import Assets
 from core.buffer_geometry import BufferGeometry
-from core.deform import morphed_positions, sphere_of
+from core.deform import (
+    morphed_positions,
+    skin_carriers,
+    skin_pose,
+    sphere_of,
+)
 from core.layers import Layers
 from core.scene import Scene
+from math.bounds import Sphere
 from math.matrix4 import Matrix4
 from math.ray import Ray
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from core.geometry_store import GeometryId
 from materials.material import BACK_SIDE, FRONT_SIDE
+from objects.line import segment_count, segment_ends
 from objects.mesh import Mesh
-from std.math import inf, isnan
-from units.si import Length, METER
+from std.math import cos, inf, isnan, sin
+from units.si import Length, METER, RADIAN
 
 
 @fieldwise_init
@@ -86,8 +107,8 @@ struct HitKind(Equatable, ImplicitlyCopyable, Writable):
     """Which of the scene's lists a hit's `index` counts in, as a type
     rather than a bare int.
 
-    The same argument as `objects.line.LineMode`: four small integers
-    that mean four different lists must not be interchangeable, and the
+    The same argument as `objects.line.LineMode`: eight small integers
+    that mean eight different lists must not be interchangeable, and the
     type stops a bare integer at compile time. `is_valid` stops
     `HitKind(9)`.
     """
@@ -95,14 +116,8 @@ struct HitKind(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is `MESH_HIT`, `INSTANCED_HIT`,
-        `BATCHED_HIT` or `LOD_HIT`."""
-        return (
-            self == MESH_HIT
-            or self == INSTANCED_HIT
-            or self == BATCHED_HIT
-            or self == LOD_HIT
-        )
+        """Return True if this is one of the eight named kinds."""
+        return self.value >= MESH_HIT.value and self.value <= SPRITE_HIT.value
 
 
 # `index` counts in `scene.meshes`, and `instance` is -1.
@@ -115,6 +130,17 @@ comptime INSTANCED_HIT = HitKind(1)
 comptime BATCHED_HIT = HitKind(2)
 # `index` counts in `scene.lods`, and `instance` is which level was struck.
 comptime LOD_HIT = HitKind(3)
+# `index` counts in `scene.skinned_meshes`, and `instance` is -1.
+comptime SKINNED_HIT = HitKind(4)
+# `index` counts in `scene.lines`, `instance` is -1, and `triangle` is
+# which segment.
+comptime LINE_HIT = HitKind(5)
+# `index` counts in `scene.points`, `instance` is -1, and `triangle` is
+# which point: three.js's `index`.
+comptime POINTS_HIT = HitKind(6)
+# `index` counts in `scene.sprites`, `instance` is -1, and `triangle` is
+# which of the two halves.
+comptime SPRITE_HIT = HitKind(7)
 
 
 @fieldwise_init
@@ -129,6 +155,7 @@ struct Hit(ImplicitlyCopyable):
     # The face's front, in world space and unit length: the normal of the
     # triangle as wound, whichever side the ray came from. A mirrored
     # mesh's is turned back, as the renderer turns its geometric normal.
+    # Zero for a line, points or a sprite, which have no face.
     var normal: Vector3
     # Which of the scene's lists `index` counts in, and what `instance`
     # means there.
@@ -138,9 +165,11 @@ struct Hit(ImplicitlyCopyable):
     # LOD, was struck; -1 for a plain mesh.
     var instance: Int
     # The shape struck as a mesh: its node, its geometry and its material.
-    # For a plain mesh, the mesh itself.
+    # For a plain mesh, the mesh itself. A sprite names no geometry: its
+    # `geometry` is -1.
     var mesh: Mesh
-    # Which of the geometry's triangles, from zero.
+    # Which of the geometry's triangles, from zero; for a line, points or
+    # a sprite, which segment, point or half.
     var triangle: Int
 
 
@@ -182,6 +211,16 @@ struct Raycaster(ImplicitlyCopyable):
     var far: Length
     # Which layers this raycaster tests. A mesh on none of them is skipped.
     var layers: Layers
+    # How near a line or a point the ray must pass to meet it, three.js's
+    # `params.Line.threshold` and `params.Points.threshold`.
+    var line_threshold: Length
+    var points_threshold: Length
+    # The camera `set_from_camera` last aimed through, three.js's
+    # `Raycaster.camera`: its world matrix and whether its rays converge.
+    # A sprite faces it, so a sprite is picked only once one is set.
+    var has_camera: Bool
+    var camera_world: Matrix4
+    var camera_perspective: Bool
 
     def __init__(
         out self,
@@ -215,6 +254,11 @@ struct Raycaster(ImplicitlyCopyable):
         self.near = near
         self.far = far
         self.layers = Layers()
+        self.line_threshold = Length(1.0, METER)
+        self.points_threshold = Length(1.0, METER)
+        self.has_camera = False
+        self.camera_world = Matrix4()
+        self.camera_perspective = False
 
     def set(mut self, origin: Vector3, direction: Vector3) raises:
         """Point this raycaster somewhere else, three.js's `set`.
@@ -261,6 +305,9 @@ struct Raycaster(ImplicitlyCopyable):
         # The camera's own place and facing, in the world.
         var world = Matrix4(copy=view)
         world.invert()
+        self.has_camera = True
+        self.camera_world = Matrix4(copy=world)
+        self.camera_perspective = not projection.is_affine()
         if projection.is_affine():
             # Orthographic. The origin sits on the camera's own plane, the
             # NDC depth that camera-space zero projects to, and every ray
@@ -476,6 +523,310 @@ struct Raycaster(ImplicitlyCopyable):
             level,
         )
 
+    def intersect_skinned_mesh(
+        self, scene: Scene, assets: Assets, index: Int
+    ) raises -> List[Hit]:
+        """Return every place this ray meets one skinned mesh, nearest
+        first, three.js's `SkinnedMesh.raycast`: the mesh is tested where
+        its bones have carried it, and its morph targets before that.
+
+        Args:
+            scene: The scene the mesh is in, updated.
+            assets: The geometry and material it names.
+            index: Which, as its position in `scene.skinned_meshes`.
+
+        Returns:
+            The hits, nearest first.
+
+        Raises:
+            Error: If no skinned mesh has that index, its bones cannot be
+                posed or its skin attributes are refused (see
+                `core.deform.skin_carriers`), or for anything
+                `intersect_mesh` raises for.
+        """
+        var pose = skin_pose(scene, index)
+        ref skinned = scene.skinned_meshes[index]
+        var mesh = Mesh(skinned.geometry, skinned.material, skinned.node)
+        mesh.morph_influences = skinned.morph_influences
+        ref geometry = assets.geometries.get(skinned.geometry)
+        var carriers = skin_carriers(geometry, pose, geometry.vertex_count())
+        return self._intersect_shape(
+            scene,
+            assets,
+            mesh,
+            scene.world_matrix(skinned.node),
+            SKINNED_HIT,
+            index,
+            -1,
+            carriers,
+        )
+
+    def intersect_line(
+        self, scene: Scene, assets: Assets, index: Int
+    ) raises -> List[Hit]:
+        """Return every place this ray passes within `line_threshold` of
+        one line, nearest first, three.js's `Line.raycast`.
+
+        Each segment is met at its point nearest the ray. The hit's
+        `distance` is along the ray to the ray's nearest point, and its
+        `point` is on the segment, as three.js reports them.
+
+        Args:
+            scene: The scene the line is in, updated.
+            assets: The geometry the line names.
+            index: Which, as its position in `scene.lines`.
+
+        Returns:
+            The hits, nearest first. None for a line on a layer this
+            raycaster does not test, or whose bounds the ray misses.
+
+        Raises:
+            Error: If no line has that index, it names a node or a geometry
+                that is not there, its geometry has no positions or is
+                indexed, the point count does not suit the mode, or the
+                threshold is negative or not a number.
+        """
+        if index < 0 or index >= len(scene.lines):
+            raise Error("No line has that index")
+        var line = scene.lines[index]
+        var reach = self._reach(self.line_threshold)
+        var hits = List[Hit]()
+        if not scene.shows(line.node, self.layers):
+            return hits^
+        ref geometry = assets.geometries.get(line.geometry)
+        if geometry.is_indexed():
+            raise Error("A line geometry cannot be indexed")
+        var world = scene.world_matrix(line.node)
+        if not self._near_bound(geometry.bounding_sphere(), world, reach):
+            return hits^
+        var vertices = geometry.vertex_count()
+        ref positions = geometry.attribute_view(String("position"))
+        var mesh = Mesh(line.geometry, line.material, line.node)
+        for segment in range(segment_count(line.mode, vertices)):
+            var ends = segment_ends(line.mode, vertices, segment)
+            var met = self.ray.distance_sq_to_segment(
+                world.transform_point(positions.vector3(ends[0])),
+                world.transform_point(positions.vector3(ends[1])),
+            )
+            if met.distance_sq > reach * reach:
+                continue
+            var distance = (met.on_ray - self.ray.origin).length()
+            if distance < self.near.value or distance > self.far.value:
+                continue
+            hits.append(
+                Hit(
+                    distance,
+                    met.on_segment,
+                    Vector3(0, 0, 0),
+                    LINE_HIT,
+                    index,
+                    -1,
+                    mesh,
+                    segment,
+                )
+            )
+        _sort_by_distance(hits)
+        return hits^
+
+    def intersect_points(
+        self, scene: Scene, assets: Assets, index: Int
+    ) raises -> List[Hit]:
+        """Return every point of one points object the ray passes within
+        `points_threshold` of, nearest first, three.js's `Points.raycast`.
+
+        A hit's `point` is the ray's point nearest the vertex, and its
+        `triangle` is which vertex, as three.js reports them.
+
+        Args:
+            scene: The scene the points are in, updated.
+            assets: The geometry they name.
+            index: Which, as its position in `scene.points`.
+
+        Returns:
+            The hits, nearest first. None for points on a layer this
+            raycaster does not test, or whose bounds the ray misses.
+
+        Raises:
+            Error: If no points object has that index, it names a node or
+                a geometry that is not there, its geometry has no positions
+                or is indexed, or the threshold is negative or not a
+                number.
+        """
+        if index < 0 or index >= len(scene.points):
+            raise Error("No points object has that index")
+        var cloud = scene.points[index]
+        var reach = self._reach(self.points_threshold)
+        var hits = List[Hit]()
+        if not scene.shows(cloud.node, self.layers):
+            return hits^
+        ref geometry = assets.geometries.get(cloud.geometry)
+        if geometry.is_indexed():
+            raise Error("A points geometry cannot be indexed")
+        var world = scene.world_matrix(cloud.node)
+        if not self._near_bound(geometry.bounding_sphere(), world, reach):
+            return hits^
+        ref positions = geometry.attribute_view(String("position"))
+        var mesh = Mesh(cloud.geometry, cloud.material, cloud.node)
+        # Not empty: an empty geometry's bound is empty, and the test above
+        # returned for it.
+        for vertex in range(positions.count()):  # pragma: no branch
+            var place = world.transform_point(positions.vector3(vertex))
+            # Strictly inside, as three.js's test is.
+            if not (self.ray.distance_sq_to_point(place) < reach * reach):
+                continue
+            var point = self.ray.closest_point_to_point(place)
+            var distance = (point - self.ray.origin).length()
+            if distance < self.near.value or distance > self.far.value:
+                continue
+            hits.append(
+                Hit(
+                    distance,
+                    point,
+                    Vector3(0, 0, 0),
+                    POINTS_HIT,
+                    index,
+                    -1,
+                    mesh,
+                    vertex,
+                )
+            )
+        _sort_by_distance(hits)
+        return hits^
+
+    def intersect_sprite(
+        self, scene: Scene, assets: Assets, index: Int
+    ) raises -> List[Hit]:
+        """Return where this ray meets one sprite, three.js's
+        `Sprite.raycast`: its two triangles, laid flat to the camera
+        `set_from_camera` last aimed through, as the renderer lays them.
+
+        Args:
+            scene: The scene the sprite is in, updated.
+            assets: The material the sprite names.
+            index: Which, as its position in `scene.sprites`.
+
+        Returns:
+            One hit, or none.
+
+        Raises:
+            Error: If no sprite has that index, it names a node or a
+                material that is not there, or no camera has been set.
+        """
+        if index < 0 or index >= len(scene.sprites):
+            raise Error("No sprite has that index")
+        if not self.has_camera:
+            raise Error(
+                "A sprite faces a camera: set_from_camera must set one"
+                " before a sprite is picked"
+            )
+        var sprite = scene.sprites[index]
+        var hits = List[Hit]()
+        if not scene.shows(sprite.node, self.layers):
+            return hits^
+        var material = assets.materials.get(sprite.material)
+        var world = scene.world_matrix(sprite.node)
+        var view = Matrix4(copy=self.camera_world)
+        view.invert()
+        var center = view.transform_point(
+            Vector3(world.elements[12], world.elements[13], world.elements[14])
+        )
+        var scale_x = _column_length(world, 0)
+        var scale_y = _column_length(world, 1)
+        if not material.size_attenuation and self.camera_perspective:
+            scale_x *= -center.z
+            scale_y *= -center.z
+        var turn = material.rotation.to(RADIAN)
+        var turned_x = cos(turn)
+        var turned_y = sin(turn)
+        # The unit square's corners, counterclockwise from the bottom
+        # left, carried to the world: three.js's `transformVertex`.
+        var xs: List[Float32] = [-0.5, 0.5, 0.5, -0.5]
+        var ys: List[Float32] = [-0.5, -0.5, 0.5, 0.5]
+        var corners = List[Vector3]()
+        for corner in range(4):  # pragma: no branch
+            var aligned_x = (xs[corner] - (sprite.center.x - 0.5)) * scale_x
+            var aligned_y = (ys[corner] - (sprite.center.y - 0.5)) * scale_y
+            corners.append(
+                self.camera_world.transform_point(
+                    Vector3(
+                        center.x + turned_x * aligned_x - turned_y * aligned_y,
+                        center.y + turned_y * aligned_x + turned_x * aligned_y,
+                        center.z,
+                    )
+                )
+            )
+        var half = 0
+        var met = self.ray.intersect_triangle(
+            corners[0], corners[1], corners[2], False
+        )
+        if not Bool(met):
+            half = 1
+            met = self.ray.intersect_triangle(
+                corners[0], corners[2], corners[3], False
+            )
+            if not Bool(met):
+                return hits^
+        var point = met.value()
+        var distance = (point - self.ray.origin).length()
+        if distance < self.near.value or distance > self.far.value:
+            return hits^
+        # A sprite names no geometry, as its draw names none.
+        var mesh = Mesh(GeometryId(0), sprite.material, sprite.node)
+        mesh.geometry = GeometryId(-1)
+        hits.append(
+            Hit(
+                distance,
+                point,
+                Vector3(0, 0, 0),
+                SPRITE_HIT,
+                index,
+                -1,
+                mesh,
+                half,
+            )
+        )
+        return hits^
+
+    def _reach(self, threshold: Length) raises -> Float32:
+        """Return a line or points threshold in meters, checked.
+
+        Args:
+            threshold: The threshold.
+
+        Returns:
+            It, in meters.
+
+        Raises:
+            Error: If it is negative or not a number.
+        """
+        var reach = threshold.value
+        if not (reach >= 0):
+            raise Error("A raycaster's threshold must be a number, not below 0")
+        return reach
+
+    def _near_bound(
+        self, bound: Sphere, world: Matrix4, reach: Float32
+    ) raises -> Bool:
+        """Return whether the ray passes within `reach` of a bound.
+
+        Args:
+            bound: The geometry's bounding sphere, in its own space.
+            world: Where the geometry is.
+            reach: How near counts.
+
+        Returns:
+            False when nothing of the geometry can be met.
+
+        Raises:
+            Error: If the bound cannot be carried by the matrix.
+        """
+        var sphere = bound
+        if sphere.is_empty():
+            return False
+        sphere.apply_matrix4(world)
+        sphere.radius += reach
+        return self.ray.intersects_sphere(sphere)
+
     def _intersect_shape(
         self,
         scene: Scene,
@@ -485,6 +836,7 @@ struct Raycaster(ImplicitlyCopyable):
         kind: HitKind,
         index: Int,
         instance: Int,
+        carriers: List[Matrix4] = List[Matrix4](),
     ) raises -> List[Hit]:
         """Return every place this ray meets one shape at one transform,
         nearest first: three.js's `Mesh.raycast`, which every picker above
@@ -498,6 +850,8 @@ struct Raycaster(ImplicitlyCopyable):
             kind: Which list the hits say `index` counts in.
             index: The position in that list.
             instance: Which instance or level, or -1 for a plain mesh.
+            carriers: One matrix per vertex that the bones carry it by, or
+                none for a mesh no skeleton moves.
 
         Returns:
             The hits, nearest first. None for a node on a layer this
@@ -526,8 +880,16 @@ struct Raycaster(ImplicitlyCopyable):
         # geometry already worked out, and never touches a vertex when the
         # ray misses it.
         var worn = List[Vector3]()
-        if mesh.is_morphed():
+        var skinned = len(carriers) > 0
+        if mesh.is_morphed() or skinned:
             worn = morphed_positions(geometry, mesh.morph_influences)
+        # Then where the bones carry them, after the targets, as three.js's
+        # `skinning_vertex` follows `morphtarget_vertex`.
+        if skinned:
+            # Not empty: there is a carrier for every vertex, and there
+            # are some.
+            for vertex in range(len(worn)):  # pragma: no branch
+                worn[vertex] = carriers[vertex].transform_point(worn[vertex])
         var bound = geometry.bounding_sphere()
         if len(worn) > 0:
             bound = sphere_of(worn)
@@ -591,9 +953,10 @@ struct Raycaster(ImplicitlyCopyable):
         return hits^
 
     def intersect_scene(self, scene: Scene, assets: Assets) raises -> List[Hit]:
-        """Return every place this ray meets any mesh, instanced mesh,
-        batched mesh or LOD of the scene, nearest first, three.js's
-        `intersectObjects`.
+        """Return every place this ray meets anything of the scene it can
+        pick, nearest first, three.js's `intersectObjects`: meshes,
+        skinned, instanced and batched meshes, LODs, lines, points and
+        sprites. Sprites are left out until a camera is set.
 
         Args:
             scene: The scene, updated.
@@ -615,6 +978,15 @@ struct Raycaster(ImplicitlyCopyable):
             hits.extend(self.intersect_batched_mesh(scene, assets, index))
         for index in range(len(scene.lods)):
             hits.extend(self.intersect_lod(scene, assets, index))
+        for index in range(len(scene.skinned_meshes)):
+            hits.extend(self.intersect_skinned_mesh(scene, assets, index))
+        for index in range(len(scene.lines)):
+            hits.extend(self.intersect_line(scene, assets, index))
+        for index in range(len(scene.points)):
+            hits.extend(self.intersect_points(scene, assets, index))
+        if self.has_camera:
+            for index in range(len(scene.sprites)):
+                hits.extend(self.intersect_sprite(scene, assets, index))
         _sort_by_distance(hits)
         return hits^
 
@@ -633,3 +1005,19 @@ def _sort_by_distance(mut hits: List[Hit]):
             hits[slot] = hits[slot - 1]
             slot -= 1
         hits[slot] = hit
+
+
+def _column_length(matrix: Matrix4, axis: Int) -> Float32:
+    """Return the length of one of a matrix's three axis columns: how much
+    it scales along that axis, as the renderer measures a sprite.
+
+    Args:
+        matrix: The transform.
+        axis: Which column, zero for x through two for z.
+
+    Returns:
+        The length.
+    """
+    ref e = matrix.elements
+    var start = axis * 4
+    return Vector3(e[start], e[start + 1], e[start + 2]).length()

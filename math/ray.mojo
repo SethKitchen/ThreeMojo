@@ -38,7 +38,7 @@ Like `Vector3` and the bounds, a ray holds bare `Float32` meters. The
 from math.bounds import Box3, Plane, Sphere
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
-from std.math import isnan, sqrt
+from std.math import isnan, max, min, sqrt
 
 
 def _stretch(
@@ -68,6 +68,18 @@ def _stretch(
     if inverse >= 0:
         return ((low - origin) * inverse, (high - origin) * inverse)
     return ((high - origin) * inverse, (low - origin) * inverse)
+
+
+@fieldwise_init
+struct SegmentApproach(ImplicitlyCopyable):
+    """Where a ray and a segment come nearest each other, and how near."""
+
+    # The square of the gap between the two points below.
+    var distance_sq: Float32
+    # The nearest point of the ray.
+    var on_ray: Vector3
+    # The nearest point of the segment.
+    var on_segment: Vector3
 
 
 struct Ray(ImplicitlyCopyable):
@@ -161,6 +173,81 @@ struct Ray(ImplicitlyCopyable):
         """
         var gap = self.closest_point_to_point(point) - point
         return gap.dot(gap)
+
+    def distance_sq_to_segment(
+        self, start: Vector3, end: Vector3
+    ) -> SegmentApproach:
+        """Return where this ray comes nearest a segment, three.js's
+        `distanceSqToSegment`.
+
+        three.js's arithmetic, from Eberly's ray-to-segment test: the
+        segment is written as a center, a unit direction and a half
+        length, and the pair of parameters that minimize the gap is found
+        in whichever region of the parameter plane it lies. A segment
+        parallel to the ray takes the end the ray runs toward.
+
+        Args:
+            start: One end of the segment.
+            end: The other end.
+
+        Returns:
+            The squared gap, the ray's nearest point and the segment's.
+        """
+        var center = (start + end) * 0.5
+        var along = end - start
+        along.normalize()
+        var diff = self.origin - center
+        var extent = (end - start).length() * 0.5
+        var a01 = -self.direction.dot(along)
+        var b0 = diff.dot(self.direction)
+        var b1 = -diff.dot(along)
+        var c = diff.dot(diff)
+        var det = abs(1 - a01 * a01)
+        var s0: Float32
+        var s1: Float32
+        var gap: Float32
+        if det > 0:
+            s0 = a01 * b1 - b0
+            s1 = a01 * b0 - b1
+            var ext_det = extent * det
+            if s0 >= 0:
+                if s1 >= -ext_det:
+                    if s1 <= ext_det:
+                        # Both inside: the two lines' own nearest points.
+                        var inv_det = 1 / det
+                        s0 *= inv_det
+                        s1 *= inv_det
+                        gap = (
+                            s0 * (s0 + a01 * s1 + 2 * b0)
+                            + s1 * (a01 * s0 + s1 + 2 * b1)
+                            + c
+                        )
+                    else:
+                        s1 = extent
+                        s0 = max(Float32(0), -(a01 * s1 + b0))
+                        gap = -s0 * s0 + s1 * (s1 + 2 * b1) + c
+                else:
+                    s1 = -extent
+                    s0 = max(Float32(0), -(a01 * s1 + b0))
+                    gap = -s0 * s0 + s1 * (s1 + 2 * b1) + c
+            elif s1 <= -ext_det:
+                s0 = max(Float32(0), -(-a01 * extent + b0))
+                s1 = -extent if s0 > 0 else min(max(-extent, -b1), extent)
+                gap = -s0 * s0 + s1 * (s1 + 2 * b1) + c
+            elif s1 <= ext_det:
+                s0 = 0
+                s1 = min(max(-extent, -b1), extent)
+                gap = s1 * (s1 + 2 * b1) + c
+            else:
+                s0 = max(Float32(0), -(a01 * extent + b0))
+                s1 = extent if s0 > 0 else min(max(-extent, -b1), extent)
+                gap = -s0 * s0 + s1 * (s1 + 2 * b1) + c
+        else:
+            # Parallel: the end the ray runs toward.
+            s1 = -extent if a01 > 0 else extent
+            s0 = max(Float32(0), -(a01 * s1 + b0))
+            gap = -s0 * s0 + s1 * (s1 + 2 * b1) + c
+        return SegmentApproach(gap, self.at(s0), center + along * s1)
 
     def distance_to_point(self, point: Vector3) -> Float32:
         """Return how far `point` is from this ray, three.js's

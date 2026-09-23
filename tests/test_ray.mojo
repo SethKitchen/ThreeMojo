@@ -15,7 +15,7 @@ a direction of zero along an axis with the origin on that axis's face.
 from math.bounds import Box3, Plane, Sphere
 from math.matrix4 import Matrix4, rotation_z, scaling, translation
 from math.projection import perspective
-from math.ray import Ray
+from math.ray import Ray, SegmentApproach
 from math.vector3 import Vector3
 from std.testing import (
     TestSuite,
@@ -385,6 +385,58 @@ def test_a_ray_refuses_a_projection_and_a_flattening() raises:
     # Neither touched it.
     assert_point(ray.origin, 0, 0, 0)
     assert_point(ray.direction, 1, 0, 0)
+
+
+def _approach(start: Vector3, end: Vector3) raises -> SegmentApproach:
+    """Return a ray from the origin down -z against a segment."""
+    return Ray(Vector3(0, 0, 0), Vector3(0, 0, -1)).distance_sq_to_segment(
+        start, end
+    )
+
+
+def test_a_segment_across_the_ray_meets_it_between_its_ends() raises:
+    var met = _approach(Vector3(-1, 1, -5), Vector3(1, 1, -5))
+    assert_almost_equal(met.distance_sq, Float32(1), atol=1e-5)
+    assert_almost_equal(met.on_ray.z, Float32(-5), atol=1e-5)
+    assert_almost_equal(met.on_segment.y, Float32(1), atol=1e-5)
+    assert_almost_equal(met.on_segment.x, Float32(0), atol=1e-5)
+
+
+def test_a_segment_to_one_side_is_met_at_its_nearer_end() raises:
+    # Either way round, ahead of the origin: the end at x = 1.
+    for flip in range(2):
+        var a = Vector3(1, 1, -5)
+        var b = Vector3(3, 1, -5)
+        var met = _approach(a, b) if flip == 0 else _approach(b, a)
+        assert_almost_equal(met.distance_sq, Float32(2), atol=1e-5)
+        assert_almost_equal(met.on_segment.x, Float32(1), atol=1e-5)
+        assert_almost_equal(met.on_ray.z, Float32(-5), atol=1e-5)
+
+
+def test_a_segment_behind_the_origin_is_met_from_the_origin() raises:
+    var across = _approach(Vector3(-1, 1, 5), Vector3(1, 1, 5))
+    assert_almost_equal(across.distance_sq, Float32(26), atol=1e-4)
+    assert_almost_equal(across.on_ray.z, Float32(0), atol=1e-5)
+    for flip in range(2):
+        var a = Vector3(1, 1, 5)
+        var b = Vector3(3, 1, 5)
+        var met = _approach(a, b) if flip == 0 else _approach(b, a)
+        assert_almost_equal(met.distance_sq, Float32(27), atol=1e-4)
+        assert_almost_equal(met.on_segment.x, Float32(1), atol=1e-5)
+    # Behind and to one side, but reached along the ray's line past the
+    # origin: the ray's end is still the origin.
+    var side = _approach(Vector3(3, 1, 5), Vector3(3, 1, -5))
+    assert_almost_equal(side.distance_sq, Float32(10), atol=1e-4)
+
+
+def test_a_segment_parallel_to_the_ray_is_met_at_the_end_it_runs_to() raises:
+    for flip in range(2):
+        var a = Vector3(0, 1, -2)
+        var b = Vector3(0, 1, -6)
+        var met = _approach(a, b) if flip == 0 else _approach(b, a)
+        assert_almost_equal(met.distance_sq, Float32(1), atol=1e-4)
+        assert_almost_equal(met.on_segment.z, Float32(-6), atol=1e-4)
+        assert_almost_equal(met.on_ray.z, Float32(-6), atol=1e-4)
 
 
 def main() raises:

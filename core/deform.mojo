@@ -18,13 +18,10 @@ one evaluator, two callers, no second copy of the arithmetic to drift.
 
 ## What is here and what is not
 
-Morph targets only. Skinning also moves a vertex, but it needs the posed
-bones, which come from the scene rather than from the geometry, and the
-renderer already builds them per frame. Picking a skinned mesh is not
-supported yet -- `Raycaster.intersect_scene` reads `scene.meshes`, and a
-skinned mesh is not in it -- so the split costs nothing today. When
-picking learns about rigs, the carrier list belongs here beside the
-targets.
+Skinning moves a vertex too, and the same two callers need it: the posed
+bones come from the scene, `skin_pose` reads them once per mesh, and
+`skin_carriers` turns them into one matrix per vertex. The renderer draws
+a skinned mesh where they put it, and the raycaster picks it there.
 
 ## Why a list and not a callback
 
@@ -45,8 +42,18 @@ from core.buffer_geometry import (
     NORMAL,
     POSITION,
 )
+from core.scene import Scene
 from math.bounds import Box3, Sphere
+from math.matrix4 import Matrix4
 from math.vector3 import Vector3
+from objects.skeleton import blend_bones
+from objects.skinned_mesh import (
+    ATTACHED,
+    BONES_PER_VERTEX,
+    SKIN_INDEX,
+    SKIN_WEIGHT,
+)
+from std.math import floor, isfinite
 
 
 def morph_offset(
@@ -195,3 +202,168 @@ def sphere_of(points: List[Vector3]) raises -> Sphere:
         if out > reach:
             reach = out
     return Sphere(center, reach)
+
+
+def whole_bone(named: Float32, count: Int) raises -> Int:
+    """Return which bone a `skinIndex` component names.
+
+    The attribute holds floats because every vertex attribute does, but a
+    bone number is a whole number and nothing else. Converting first and
+    asking afterward loses the distinction: `Int(0.75)` is bone zero, so a
+    rig exported with fractional indices quietly drew the wrong bone
+    carrying the wrong vertex, and `Int(-0.5)` is bone zero as well, so a
+    negative index lost its sign on the way to the range check.
+
+    Args:
+        named: The component as the attribute stores it.
+        count: How many bones the skeleton has.
+
+    Returns:
+        The bone number.
+
+    Raises:
+        Error: If the component is not a number, is not whole, or is not a
+            bone the skeleton has.
+    """
+    if not isfinite(named):
+        raise Error("A bone index must be a number")
+    if named != floor(named):
+        raise Error("A bone index must be a whole number")
+    var bone = Int(named)
+    if bone < 0 or bone >= count:
+        raise Error("A vertex names a bone the skeleton does not have")
+    return bone
+
+
+struct SkinPose(Movable):
+    """One skinned mesh's bones, as the vertex loop needs them.
+
+    The palette is `Skeleton.pose`: one matrix per bone saying how far it
+    has moved since the bind. The two bind matrices carry a vertex into the
+    space the bones work in and back out again; see
+    `objects.skinned_mesh`.
+
+    `bind_inverse` is worked out by `skin_pose` rather than taken from the
+    mesh, because an `ATTACHED` mesh undoes wherever its node is *now*.
+    Taking the mesh's fixed inverse instead moved a character twice when
+    its mesh and its bones hung from one root that walked: the bones
+    carried the root's transform, and the mesh's node carried it again.
+    """
+
+    var palette: List[Matrix4]
+    var bind: Matrix4
+    var bind_inverse: Matrix4
+
+    def __init__(
+        out self,
+        var palette: List[Matrix4],
+        bind: Matrix4,
+        bind_inverse: Matrix4,
+    ):
+        """Hold one mesh's posed bones and its bind matrices.
+
+        Args:
+            palette: One matrix per bone, from `Skeleton.pose`.
+            bind: Where the mesh stood when it was bound.
+            bind_inverse: The inverse of that.
+        """
+        self.palette = palette^
+        self.bind = bind
+        self.bind_inverse = bind_inverse
+
+
+def skin_pose(scene: Scene, index: Int) raises -> SkinPose:
+    """Return where one skinned mesh's bones stand now.
+
+    Args:
+        scene: The scene, updated.
+        index: Which mesh, as its position in `scene.skinned_meshes`.
+
+    Returns:
+        The palette and the two bind matrices.
+
+    Raises:
+        Error: If no skinned mesh has that index, a bone's node is not
+            there, the scene is stale, or the matrix the bones' result is
+            carried back out of has no inverse.
+    """
+    if index < 0 or index >= len(scene.skinned_meshes):
+        raise Error("No skinned mesh has that index")
+    ref skinned = scene.skinned_meshes[index]
+    # The bones' world matrices, then how far each has moved since the
+    # bind. Once per mesh, whatever the vertex count.
+    var placed = List[Matrix4]()
+    for bone in range(skinned.bone_count()):  # pragma: no branch
+        placed.append(scene.world_matrix(skinned.skeleton.node(bone)))
+    # What the bones' world-space result is carried back out of. An
+    # attached mesh undoes its node as it stands now, so that the node
+    # carrying it and the bones carrying it do not both count; a detached
+    # one undoes the bind it was given and stays where its own node puts
+    # it.
+    var undo = Matrix4(copy=skinned.bind_matrix)
+    if skinned.bind_mode == ATTACHED:
+        undo = scene.world_matrix(skinned.node)
+    if undo.determinant() == 0:
+        raise Error("A skinned mesh has no inverse to undo its bind")
+    undo.invert()
+    return SkinPose(skinned.skeleton.pose(placed), skinned.bind_matrix, undo^)
+
+
+def skin_carriers(
+    geometry: BufferGeometry, pose: SkinPose, vertex_count: Int
+) raises -> List[Matrix4]:
+    """Return one matrix per vertex, carrying it from its own space to
+    where the bones have taken it.
+
+    three.js's `skinning_vertex` and `skinnormal_vertex` share a blend and
+    so do these: the sandwich `bind_inverse * blend * bind` is a linear
+    map, so the same matrix moves the position and turns the normal.
+
+    Args:
+        geometry: The geometry; it must carry `skinIndex` and
+            `skinWeight`.
+        pose: The mesh's posed skeleton, from `skin_pose`.
+        vertex_count: How many vertices the geometry has.
+
+    Returns:
+        One matrix per vertex.
+
+    Raises:
+        Error: If the geometry has no skin attributes, if either is not
+            four numbers a vertex or does not cover every vertex, or if a
+            vertex names a bone that is not a whole number in range or
+            carries weights that are not numbers, are negative, or do not
+            sum to one.
+    """
+    var out = List[Matrix4]()
+    if not geometry.has_attribute(String(SKIN_INDEX)) or not (
+        geometry.has_attribute(String(SKIN_WEIGHT))
+    ):
+        raise Error("A skinned mesh needs skinIndex and skinWeight")
+    ref bones = geometry.attribute_view(String(SKIN_INDEX))
+    ref weights = geometry.attribute_view(String(SKIN_WEIGHT))
+    if (
+        bones.item_size != BONES_PER_VERTEX
+        or weights.item_size != BONES_PER_VERTEX
+    ):
+        raise Error("A skin attribute holds four numbers a vertex")
+    if bones.count() != vertex_count or weights.count() != vertex_count:
+        raise Error("A skin attribute must cover every vertex")
+    var count = len(pose.palette)
+    # One pair of lists for the whole mesh. They were built per vertex,
+    # which is two allocations per vertex per frame to hold four numbers
+    # each, and the four are overwritten every time round anyway.
+    var named = List[Int](length=BONES_PER_VERTEX, fill=0)
+    var shares = List[Float32](length=BONES_PER_VERTEX, fill=0)
+    for vertex in range(vertex_count):  # pragma: no branch
+        for slot in range(BONES_PER_VERTEX):  # pragma: no branch
+            named[slot] = whole_bone(bones.component(vertex, slot), count)
+            shares[slot] = weights.component(vertex, slot)
+        var blended = blend_bones(pose.palette, named, shares)
+        # Into the bones' space, through them, and back out: three.js's
+        # `bindMatrixInverse * skinMatrix * bindMatrix`.
+        var carry = Matrix4(copy=pose.bind_inverse)
+        carry.multiply(blended)
+        carry.multiply(pose.bind)
+        out.append(carry^)
+    return out^

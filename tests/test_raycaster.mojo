@@ -568,12 +568,13 @@ def test_a_click_lands_on_the_cube_under_it() raises:
 # --- groups and levels -------------------------------------------------------
 
 
-def test_a_hit_kind_is_one_of_four() raises:
+def test_a_hit_kind_is_one_of_eight() raises:
     assert_true(MESH_HIT.is_valid())
     assert_true(INSTANCED_HIT.is_valid())
     assert_true(BATCHED_HIT.is_valid())
     assert_true(LOD_HIT.is_valid())
-    assert_false(HitKind(4).is_valid())
+    assert_true(HitKind(7).is_valid())
+    assert_false(HitKind(8).is_valid())
     assert_false(HitKind(-1).is_valid())
 
 

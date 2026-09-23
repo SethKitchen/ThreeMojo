@@ -33,7 +33,8 @@ from objects.skinned_mesh import (
     SkinnedMesh,
 )
 from render.rasterizer import RasterVertex
-from renderers.renderer import Renderer, whole_bone
+from core.deform import whole_bone
+from renderers.renderer import Renderer
 from std.testing import (
     TestSuite,
     assert_almost_equal,

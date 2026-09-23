@@ -86,7 +86,13 @@ from core.background import (
     TEXTURE_BACKGROUND,
     Background,
 )
-from core.deform import morphed_normals, morphed_positions
+from core.deform import (
+    SkinPose,
+    morphed_normals,
+    morphed_positions,
+    skin_carriers,
+    skin_pose,
+)
 from core.buffer_geometry import (
     COLOR,
     MAX_MORPH_TARGETS,
@@ -117,7 +123,6 @@ from objects.instanced_mesh import check_placing
 from geometries.edges import triangle_edges
 from objects.line import line_distances, segment_count, segment_ends
 from objects.sprite import SPRITE_RADIUS, Sprite
-from objects.skeleton import blend_bones
 from objects.skinned_mesh import (
     ATTACHED,
     BONES_PER_VERTEX,
@@ -185,53 +190,17 @@ from std.math import cos, floor, isfinite, max, sin
 from std.sys import num_logical_cores
 
 
-def whole_bone(named: Float32, count: Int) raises -> Int:
-    """Return which bone a `skinIndex` component names.
-
-    The attribute holds floats because every vertex attribute does, but a
-    bone number is a whole number and nothing else. Converting first and
-    asking afterward loses the distinction: `Int(0.75)` is bone zero, so a
-    rig exported with fractional indices quietly drew the wrong bone
-    carrying the wrong vertex, and `Int(-0.5)` is bone zero as well, so a
-    negative index lost its sign on the way to the range check.
-
-    Args:
-        named: The component as the attribute stores it.
-        count: How many bones the skeleton has.
-
-    Returns:
-        The bone number.
-
-    Raises:
-        Error: If the component is not a number, is not whole, or is not a
-            bone the skeleton has.
-    """
-    if not isfinite(named):
-        raise Error("A bone index must be a number")
-    if named != floor(named):
-        raise Error("A bone index must be a whole number")
-    var bone = Int(named)
-    if bone < 0 or bone >= count:
-        raise Error("A vertex names a bone the skeleton does not have")
-    return bone
-
-
 def _carriers(
     geometry: BufferGeometry,
-    skins: List[_Skin],
+    skins: List[SkinPose],
     skin: Int,
     vertex_count: Int,
 ) raises -> List[Matrix4]:
     """Return one matrix per vertex, carrying it from its own space to
-    where the bones have taken it.
-
-    three.js's `skinning_vertex` and `skinnormal_vertex` share a blend and
-    so do these: the sandwich `bind_inverse * blend * bind` is a linear
-    map, so the same matrix moves the position and turns the normal.
+    where the bones have taken it; see `core.deform.skin_carriers`.
 
     Args:
-        geometry: The geometry being drawn; it must carry `skinIndex` and
-            `skinWeight`.
+        geometry: The geometry being drawn.
         skins: The frame's posed skeletons.
         skin: Which of them carries this draw, or minus one for none.
         vertex_count: How many vertices the geometry has.
@@ -241,46 +210,11 @@ def _carriers(
         skinned.
 
     Raises:
-        Error: If the geometry has no skin attributes, if either is not
-            four numbers a vertex or does not cover every vertex, or if a
-            vertex names a bone that is not a whole number in range or
-            carries weights that are not numbers, are negative, or do not
-            sum to one.
+        Error: For anything `skin_carriers` raises for.
     """
-    var out = List[Matrix4]()
     if skin < 0:
-        return out^
-    if not geometry.has_attribute(String(SKIN_INDEX)) or not (
-        geometry.has_attribute(String(SKIN_WEIGHT))
-    ):
-        raise Error("A skinned mesh needs skinIndex and skinWeight")
-    ref bones = geometry.attribute_view(String(SKIN_INDEX))
-    ref weights = geometry.attribute_view(String(SKIN_WEIGHT))
-    if (
-        bones.item_size != BONES_PER_VERTEX
-        or weights.item_size != BONES_PER_VERTEX
-    ):
-        raise Error("A skin attribute holds four numbers a vertex")
-    if bones.count() != vertex_count or weights.count() != vertex_count:
-        raise Error("A skin attribute must cover every vertex")
-    var count = len(skins[skin].palette)
-    # One pair of lists for the whole draw. They were built per vertex,
-    # which is two allocations per vertex per frame to hold four numbers
-    # each, and the four are overwritten every time round anyway.
-    var named = List[Int](length=BONES_PER_VERTEX, fill=0)
-    var shares = List[Float32](length=BONES_PER_VERTEX, fill=0)
-    for vertex in range(vertex_count):  # pragma: no branch
-        for slot in range(BONES_PER_VERTEX):  # pragma: no branch
-            named[slot] = whole_bone(bones.component(vertex, slot), count)
-            shares[slot] = weights.component(vertex, slot)
-        var blended = blend_bones(skins[skin].palette, named, shares)
-        # Into the bones' space, through them, and back out: three.js's
-        # `bindMatrixInverse * skinMatrix * bindMatrix`.
-        var carry = Matrix4(copy=skins[skin].bind_inverse)
-        carry.multiply(blended)
-        carry.multiply(skins[skin].bind)
-        out.append(carry^)
-    return out^
+        return List[Matrix4]()
+    return skin_carriers(geometry, skins[skin], vertex_count)
 
 
 def face_normal(a: Vector3, b: Vector3, c: Vector3) -> Vector3:
@@ -507,47 +441,6 @@ def _in_view(
     if not bound.is_empty():
         bound.radius += slack
     return frustum.intersects_sphere(bound)
-
-
-struct _Skin(Movable):
-    """One skinned mesh's bones, as the vertex loop needs them.
-
-    The palette is `Skeleton.pose`: one matrix per bone saying how far it
-    has moved since the bind. The two bind matrices carry a vertex into the
-    space the bones work in and back out again; see
-    `objects.skinned_mesh`.
-
-    `bind_inverse` is worked out here rather than taken from the mesh,
-    because an `ATTACHED` mesh undoes wherever its node is *this frame*.
-    Taking the mesh's fixed inverse instead moved a character twice when
-    its mesh and its bones hung from one root that walked: the bones
-    carried the root's transform, and the mesh's node carried it again.
-
-    It is a per-frame thing and not part of a `_Draw`, because a draw is
-    copied into a sorted list and a palette is a list of its own. Draws
-    name theirs by index instead, which keeps a draw four small values.
-    """
-
-    var palette: List[Matrix4]
-    var bind: Matrix4
-    var bind_inverse: Matrix4
-
-    def __init__(
-        out self,
-        var palette: List[Matrix4],
-        bind: Matrix4,
-        bind_inverse: Matrix4,
-    ):
-        """Hold one mesh's posed bones and its bind matrices.
-
-        Args:
-            palette: One matrix per bone, from `Skeleton.pose`.
-            bind: Where the mesh stood when it was bound.
-            bind_inverse: The inverse of that.
-        """
-        self.palette = palette^
-        self.bind = bind
-        self.bind_inverse = bind_inverse
 
 
 @fieldwise_init
@@ -777,7 +670,7 @@ def _draws(
     visible: Layers,
     frustum: Frustum,
     slack: Float32,
-    mut skins: List[_Skin],
+    mut skins: List[SkinPose],
     casters_only: Bool = False,
 ) raises -> List[_Draw]:
     """Return what the camera draws, in the order to draw it: opaque
@@ -886,29 +779,7 @@ def _draws(
         if casters_only:
             continue
         ref skinned = scene.skinned_meshes[index]
-        # The bones' world matrices, then how far each has moved since the
-        # bind. Once per mesh per frame, whatever the vertex count.
-        var placed = List[Matrix4]()
-        for bone in range(skinned.bone_count()):  # pragma: no branch
-            placed.append(scene.world_matrix(skinned.skeleton.node(bone)))
-        # What the bones' world-space result is carried back out of. An
-        # attached mesh undoes its node as it stands now, so that the node
-        # carrying it and the bones carrying it do not both count; a
-        # detached one undoes the bind it was given and stays where its
-        # own node puts it.
-        var undo = Matrix4(copy=skinned.bind_matrix)
-        if skinned.bind_mode == ATTACHED:
-            undo = scene.world_matrix(skinned.node)
-        if undo.determinant() == 0:
-            raise Error("A skinned mesh has no inverse to undo its bind")
-        undo.invert()
-        skins.append(
-            _Skin(
-                skinned.skeleton.pose(placed),
-                skinned.bind_matrix,
-                undo^,
-            )
-        )
+        skins.append(skin_pose(scene, index))
         var skin_geometry: List[GeometryId] = [skinned.geometry]
         _gather(
             draws,
@@ -2513,7 +2384,7 @@ struct Renderer(Movable):
         # Worked out once, not once per draw, and already without what
         # the camera does not draw: every mesh, every instance and every
         # LOD's shown level, as one list.
-        var skins = List[_Skin]()
+        var skins = List[SkinPose]()
         var draws = _draws(
             scene,
             assets,
