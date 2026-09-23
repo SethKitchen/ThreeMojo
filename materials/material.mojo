@@ -158,6 +158,13 @@ from render.cube_texture_store import (
     SCENE_ENVIRONMENT,
     CubeTextureId,
 )
+from render.blend import (
+    ADD_EQUATION,
+    BlendEquation,
+    BlendFactor,
+    is_valid_custom,
+    pack_custom,
+)
 from render.framebuffer import Color, FloatColor
 from render.texture_store import NO_TEXTURE, TextureId
 from math.vector2 import Vector2
@@ -253,15 +260,80 @@ struct Blending(Equatable, ImplicitlyCopyable, Writable):
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is `OPAQUE` or `BLEND`."""
-        return self == OPAQUE or self == BLEND
+        """Return True if this is `OPAQUE`, one of the four named modes, or
+        a custom mode `custom_blending` built."""
+        return (self.value >= 0 and self.value <= 4) or is_valid_custom(
+            self.value
+        )
+
+    def mixes(self) -> Bool:
+        """Return True if a fragment mixes into the pixel rather than
+        replacing it.
+
+        Every mode but `OPAQUE` mixes. A mixing surface tests depth but
+        does not claim it, and is drawn in the translucent pass.
+
+        Returns:
+            Whether this is anything but `OPAQUE`.
+        """
+        return self != OPAQUE
 
 
 # Replace whatever is behind: depth is tested and claimed.
 comptime OPAQUE = Blending(0)
 # Mix with whatever is behind, source-over: depth is tested but not claimed,
-# so the caller owns draw order. `Renderer.prepare` sorts.
+# so the caller owns draw order. `Renderer.prepare` sorts. three.js's
+# `NormalBlending`.
 comptime BLEND = Blending(1)
+# Add the fragment's light, weighed by its alpha. three.js's
+# `AdditiveBlending`.
+comptime ADDITIVE = Blending(2)
+# Darken what is behind by the fragment's color. three.js's
+# `SubtractiveBlending`.
+comptime SUBTRACTIVE = Blending(3)
+# Multiply what is behind by the fragment's color. three.js's
+# `MultiplyBlending`.
+comptime MULTIPLY = Blending(4)
+
+
+def custom_blending(
+    src: BlendFactor,
+    dst: BlendFactor,
+    equation: BlendEquation = ADD_EQUATION,
+    src_alpha: Optional[BlendFactor] = None,
+    dst_alpha: Optional[BlendFactor] = None,
+    equation_alpha: Optional[BlendEquation] = None,
+) raises -> Blending:
+    """Return a custom blending mode. three.js's `CustomBlending` with
+    `blendSrc`, `blendDst`, `blendEquation` and their alpha forms.
+
+    Args:
+        src: The source color's factor.
+        dst: The destination color's factor.
+        equation: How the color terms join.
+        src_alpha: The source alpha's factor; the color's when unset.
+        dst_alpha: The destination alpha's factor; the color's when unset.
+        equation_alpha: How the alpha terms join; the color's when unset.
+
+    Returns:
+        The mode.
+
+    Raises:
+        Error: If a factor or an equation is not one there is.
+    """
+    var alpha_src = src_alpha.value() if Bool(src_alpha) else src
+    var alpha_dst = dst_alpha.value() if Bool(dst_alpha) else dst
+    var alpha_equation = equation_alpha.value() if Bool(
+        equation_alpha
+    ) else equation
+    var mode = Blending(
+        pack_custom(src, dst, equation, alpha_src, alpha_dst, alpha_equation)
+    )
+    if not mode.is_valid():
+        raise Error(
+            "A custom blending names a factor or an equation that is not one"
+        )
+    return mode
 
 
 @fieldwise_init
@@ -1191,7 +1263,10 @@ struct Material(ImplicitlyCopyable):
         if stated:
             var chosen = blending.value()
             if not chosen.is_valid():
-                raise Error("A material's blending must be OPAQUE or BLEND")
+                raise Error(
+                    "A material's blending must be OPAQUE, one of the four"
+                    " named modes, or a custom one"
+                )
             self.blending = chosen
         elif transparent or kind == SHADOW:
             # A shadow material is transparent wherever no shadow falls,
@@ -1222,7 +1297,7 @@ struct Material(ImplicitlyCopyable):
         # refused along with a policy stated outright -- see
         # `render.target`. A map's own alpha is another matter: an opaque
         # write keeps it, and the bytes come back exact.
-        if kind.is_data() and self.blending == BLEND:
+        if kind.is_data() and self.blending.mixes():
             raise Error(
                 "A normal or depth material cannot blend: a pixel holds its"
                 " bytes or the scene's light, not a mixture of the two"
@@ -1374,7 +1449,7 @@ struct Material(ImplicitlyCopyable):
         know — the mesh sorter, both rasterizers — asks this rather than
         inspecting a color.
         """
-        return self.blending == BLEND
+        return self.blending.mixes()
 
     def is_emissive(self) -> Bool:
         """Return True if this surface gives off light of its own.

@@ -26,7 +26,15 @@ tool runs, so each pixel costs a record written to stderr. A 320x240
 comparison produced 112 MB of them and dominated the entire coverage run.
 """
 
-from materials.material import Blending, MaterialKind
+from materials.material import (
+    ADDITIVE,
+    Blending,
+    MULTIPLY,
+    MaterialKind,
+    SUBTRACTIVE,
+    custom_blending,
+)
+from render.blend import DST_COLOR_FACTOR, ONE_MINUS_SRC_ALPHA_FACTOR
 from cameras.camera import Camera
 from cameras.orthographic_camera import centered
 from cameras.perspective_camera import PerspectiveCamera
@@ -3555,6 +3563,30 @@ def test_both_backends_blend_identically() raises:
     assert_true(cpu.get_pixel(2, 2).r > 0)
     assert_true(cpu.get_pixel(2, 2).g > 0)
     assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
+
+
+def test_both_backends_agree_on_every_blending_mode() raises:
+    # Each mode's arithmetic is `render.blend.blend_pixel`, which both
+    # backends call; this holds the plumbing on each side to it.
+    if skipped_for_lack_of_a_gpu("both backends agree on every blending mode"):
+        return
+    var modes = List[Blending]()
+    modes.append(ADDITIVE)
+    modes.append(SUBTRACTIVE)
+    modes.append(MULTIPLY)
+    modes.append(custom_blending(DST_COLOR_FACTOR, ONE_MINUS_SRC_ALPHA_FACTOR))
+    for index in range(len(modes)):
+        var corners = List[RasterVertex]()
+        corners.append(corner(0, 0, 0.8, 1, Color(40, 200, 90)))
+        corners.append(corner(40, 0, 0.8, 1, Color(40, 200, 90)))
+        corners.append(corner(0, 40, 0.8, 1, Color(40, 200, 90)))
+        var tint = Color(255, 64, 128, 160)
+        corners.append(corner(0, 0, 0.3, 1, tint, modes[index]))
+        corners.append(corner(40, 0, 0.3, 1, tint, modes[index]))
+        corners.append(corner(0, 40, 0.3, 1, tint, modes[index]))
+        var gpu = render_triangles(corners, 16, 16, BACKGROUND)
+        var cpu = cpu_render_triangles(corners, 16, 16)
+        assert_equal(count_mismatches(cpu, gpu, tolerance=1), 0)
 
 
 def test_both_backends_agree_that_a_blend_claims_no_depth() raises:

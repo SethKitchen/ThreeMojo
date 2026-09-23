@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 104 features are ported and 45 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 105 features are ported and 44 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -129,18 +129,18 @@ The port is not at parity with three.js yet. 104 features are ported and 45 are 
 - [ ] Specular map and flat shading [#120](https://github.com/SethKitchen/ThreeMojo/issues/120)
 - [ ] Transmission, thickness, attenuation and dispersion [#121](https://github.com/SethKitchen/ThreeMojo/issues/121)
 - [ ] Sheen, iridescence and anisotropy [#122](https://github.com/SethKitchen/ThreeMojo/issues/122)
-- [ ] Additive, subtractive, multiply and custom blending [#123](https://github.com/SethKitchen/ThreeMojo/issues/123)
 - [ ] Depth, color and stencil state [#124](https://github.com/SethKitchen/ThreeMojo/issues/124)
 - [ ] MeshDistanceMaterial, depth packings and Material.fog [#125](https://github.com/SethKitchen/ThreeMojo/issues/125)
 - [ ] Custom shading: ShaderMaterial and node materials [#126](https://github.com/SethKitchen/ThreeMojo/issues/126)
 
 <details>
-<summary>Ported: 18</summary>
+<summary>Ported: 19</summary>
 
 - [x] [MeshLambertMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): lit per fragment [#32](https://github.com/SethKitchen/ThreeMojo/issues/32)
 - [x] [MeshBasicMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#kind): unlit [#33](https://github.com/SethKitchen/ThreeMojo/issues/33)
 - [x] [Front, back and double side](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#side) [#34](https://github.com/SethKitchen/ThreeMojo/issues/34)
 - [x] [Opacity and blending](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#opacity-and-blending) [#35](https://github.com/SethKitchen/ThreeMojo/issues/35)
+- [x] [Additive, subtractive, multiply and custom blending](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#blending-modes): three.js's modes and WebGL's factors and equations, one function both rasterizers call [#123](https://github.com/SethKitchen/ThreeMojo/issues/123)
 - [x] [Color map](https://github.com/SethKitchen/ThreeMojo/wiki/Materials): a texture on a material [#36](https://github.com/SethKitchen/ThreeMojo/issues/36)
 - [x] [MeshPhongMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#phong): a highlight on Blinn's half vector that follows the camera, tinted by the specular and not by the color [#37](https://github.com/SethKitchen/ThreeMojo/issues/37)
 - [x] [MeshStandardMaterial and MeshPhysicalMaterial](https://github.com/SethKitchen/ThreeMojo/wiki/Materials#standard-and-physical): a metalness and a roughness through a GGX lobe and the split sum, with a clear coat [#38](https://github.com/SethKitchen/ThreeMojo/issues/38)

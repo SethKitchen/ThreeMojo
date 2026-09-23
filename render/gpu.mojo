@@ -41,6 +41,7 @@ is size-dependent. `bench/raster_bench.mojo` measures where the crossover is.
 
 from math.vector2 import Vector2
 from max.gpu.host import DeviceBuffer, DeviceContext
+from render.blend import NORMAL_MODE, Rgba, blend_pixel
 from render.fillrule import SUBPIXEL, bias, edge_at, sample, snap
 from render.linerule import covers, dash_covers, major_is_x, share_at
 from render.pointrule import (
@@ -112,7 +113,7 @@ from render.rasterizer import (
     packed_normal,
 )
 from materials.material import (
-    BLEND,
+    OPAQUE,
     DEPTH,
     LAMBERT,
     MATCAP,
@@ -2286,10 +2287,16 @@ def rasterize_kernel(
                     share = 1
                 if share < 0:
                     share = 0
-                var mixes = point_maps[
-                    unsafe_offset=index * STATE_PER_POINT + POINT_STATE_BLEND
-                ] == Int32(BLEND.value) and mode != Int32(SHADE_UV.value)
-                if mixes and share == 0:
+                var policy = Int(
+                    point_maps[
+                        unsafe_offset=index * STATE_PER_POINT
+                        + POINT_STATE_BLEND
+                    ]
+                )
+                var mixes = policy != OPAQUE.value and mode != Int32(
+                    SHADE_UV.value
+                )
+                if mixes and policy == NORMAL_MODE and share == 0:
                     continue
                 found = True
                 if not mixes:
@@ -2304,11 +2311,15 @@ def rasterize_kernel(
                     # which shows coordinates.
                     data = mode == Int32(SHADE_UV.value)
                 else:
-                    var keep = 1 - share
-                    mixed_r = red * share + mixed_r * keep
-                    mixed_g = green * share + mixed_g * keep
-                    mixed_b = blue * share + mixed_b * keep
-                    mixed_a = share + mixed_a * keep
+                    var out = blend_pixel(
+                        Rgba(mixed_r, mixed_g, mixed_b, mixed_a),
+                        Rgba(red, green, blue, share),
+                        policy,
+                    )
+                    mixed_r = out[0]
+                    mixed_g = out[1]
+                    mixed_b = out[2]
+                    mixed_a = out[3]
                     data = False
             continue
         if kind != Int32(DRAW_TRIANGLES.value):
@@ -2418,10 +2429,13 @@ def rasterize_kernel(
                     share_a = 1
                 if share_a < 0:
                     share_a = 0
-                var mixes = segment_maps[
-                    unsafe_offset=index * STATE_PER_LINE + LINE_STATE_BLEND
-                ] == Int32(BLEND.value)
-                if mixes and share_a == 0:
+                var policy = Int(
+                    segment_maps[
+                        unsafe_offset=index * STATE_PER_LINE + LINE_STATE_BLEND
+                    ]
+                )
+                var mixes = policy != OPAQUE.value
+                if mixes and policy == NORMAL_MODE and share_a == 0:
                     continue
                 found = True
                 if not mixes:
@@ -2438,11 +2452,15 @@ def rasterize_kernel(
                     # kind but an unlit one.
                     data = False
                 else:
-                    var keep = 1 - share_a
-                    mixed_r = drawn.r * share_a + mixed_r * keep
-                    mixed_g = drawn.g * share_a + mixed_g * keep
-                    mixed_b = drawn.b * share_a + mixed_b * keep
-                    mixed_a = share_a + mixed_a * keep
+                    var out = blend_pixel(
+                        Rgba(mixed_r, mixed_g, mixed_b, mixed_a),
+                        Rgba(drawn.r, drawn.g, drawn.b, share_a),
+                        policy,
+                    )
+                    mixed_r = out[0]
+                    mixed_g = out[1]
+                    mixed_b = out[2]
+                    mixed_a = out[3]
                     data = False
 
             continue
@@ -3453,14 +3471,15 @@ def rasterize_kernel(
                 share = 0
             # Asked the way the host asks it -- "is it BLEND?" -- so anything
             # else is opaque on both sides rather than opaque on one.
-            var mixes = maps[
-                unsafe_offset=index * STATE_PER_TRIANGLE + STATE_BLEND
-            ] == Int32(BLEND.value) and mode != Int32(SHADE_UV.value)
+            var policy = Int(
+                maps[unsafe_offset=index * STATE_PER_TRIANGLE + STATE_BLEND]
+            )
+            var mixes = policy != OPAQUE.value and mode != Int32(SHADE_UV.value)
             # A source-over fragment that covers nothing contributes no color,
             # so it must contribute no depth and no answer about what the pixel
             # holds either. `RenderTarget.blend` returns early for the same
             # reason; see `render.target`.
-            if mixes and share == 0:
+            if mixes and policy == NORMAL_MODE and share == 0:
                 continue
             found = True
             if not mixes:
@@ -3482,12 +3501,16 @@ def rasterize_kernel(
                 # to leave alone exactly as it leaves a normal alone.
                 data = shows_data or mode == Int32(SHADE_UV.value)
             else:
-                # Source-over, premultiplied: a weighted sum with no special case.
-                var keep = 1 - share
-                mixed_r = red * share + mixed_r * keep
-                mixed_g = green * share + mixed_g * keep
-                mixed_b = blue * share + mixed_b * keep
-                mixed_a = share + mixed_a * keep
+                # The mode's arithmetic, shared with `RenderTarget.blend`.
+                var out = blend_pixel(
+                    Rgba(mixed_r, mixed_g, mixed_b, mixed_a),
+                    Rgba(red, green, blue, share),
+                    policy,
+                )
+                mixed_r = out[0]
+                mixed_g = out[1]
+                mixed_b = out[2]
+                mixed_a = out[3]
                 # A mixture with light in it is light, and only light blends:
                 # a fragment that shows data is refused this policy by
                 # `check_triangle_state`. See `render.target`.

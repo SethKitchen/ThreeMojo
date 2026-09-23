@@ -1241,7 +1241,7 @@ def check_triangle_state(
     if b.alpha_test != a.alpha_test or c.alpha_test != a.alpha_test:
         raise Error("A triangle's corners disagree about their alpha test")
     if not a.blend.is_valid():
-        raise Error("A triangle's blend policy is neither OPAQUE nor BLEND")
+        raise Error("A triangle's blend policy is not a blending mode there is")
     if not a.kind.is_valid():
         raise Error("A triangle's material kind is none of the ten")
     if b.receives_shadow != a.receives_shadow or (
@@ -1276,7 +1276,7 @@ def check_triangle_state(
     # the pixel would hold part of each and resolve as neither. Refused
     # here so that both backends refuse it, and so that `RenderTarget.blend`
     # can say a mixture is always light. See `render.target`.
-    if a.kind.is_data() and a.blend == BLEND:
+    if a.kind.is_data() and a.blend.mixes():
         raise Error(
             "A normal or depth material cannot blend: a pixel holds its"
             " bytes or the scene's light, not a mixture of the two"
@@ -1466,13 +1466,13 @@ def check_output_kinds(
         # -- so these two are exclusive and the elif loses nothing.
         if first.kind.is_data():
             shows_data = True
-        elif first.blend == BLEND:
+        elif first.blend.mixes():
             mixes_light = True
     for segment in range(len(segments) // 2):
-        if segments[segment * 2].blend == BLEND:
+        if segments[segment * 2].blend.mixes():
             mixes_light = True
     for point in range(len(points)):
-        if points[point].blend == BLEND:
+        if points[point].blend.mixes():
             mixes_light = True
     if shows_data and mixes_light:
         raise Error(
@@ -1882,7 +1882,7 @@ def rasterize_shaded(
     #
     # The consequence is that the caller owns draw order: translucent surfaces
     # have to arrive after the opaque ones and back to front. `prepare` sorts.
-    var blended = a.blend == BLEND and mode != SHADE_UV
+    var blended = a.blend.mixes() and mode != SHADE_UV
     # Whether these fragments show data rather than light: a normal or a
     # depth. The lights, the glow and the fog leave them alone, and the
     # target keeps the tone mapping off them.
@@ -2440,7 +2440,7 @@ def rasterize_shaded(
                 )
                 shaded = fog_mix(shaded, fog.color, fog.factor_at(depth))
             if blended:
-                target.blend(x, y, shaded)
+                target.blend(x, y, shaded, a.blend.value)
             else:
                 # The depth an alpha-tested fragment did not claim before it
                 # was shaded, claimed now that it has survived.
@@ -2652,10 +2652,10 @@ def rasterize_line(
             # once did, dropped every later blended segment at a shared
             # pixel, so a translucent wireframe lost the second edge at
             # every corner, while the kernel kept it.
-            if a.blend == BLEND:
+            if a.blend.mixes():
                 if not target.depth_passes(x, y, z):
                     continue
-                target.blend(x, y, color)
+                target.blend(x, y, color, a.blend.value)
             else:
                 if not target.test_depth(x, y, z):
                     continue
@@ -2790,7 +2790,7 @@ def rasterize_point(
     check_point_maps(point, mode, textures)
     # Decided by the material and carried here, as a triangle's are; see
     # `rasterize_shaded` for what each changes.
-    var blended = point.blend == BLEND and mode != SHADE_UV
+    var blended = point.blend.mixes() and mode != SHADE_UV
     var fogged = fog.is_on() and mode != SHADE_UV
     var tested = point.alpha_test > 0 and mode != SHADE_UV
     var sampled = mode == SHADE_TEXTURE
@@ -2868,7 +2868,7 @@ def rasterize_point(
                     shaded, fog.color, fog.factor_at(point.view_depth)
                 )
             if blended:
-                target.blend(x, y, shaded)
+                target.blend(x, y, shaded, point.blend.value)
             else:
                 if tested:
                     target.claim_depth(x, y, z)

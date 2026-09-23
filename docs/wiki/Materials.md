@@ -534,6 +534,25 @@ A material that is not `transparent` is drawn opaque whatever its opacity or its
 
 Pass `blending=BLEND` or `blending=OPAQUE` to state the policy outright. A `NORMALS` or `DEPTH` material must be opaque either way.
 
+### Blending modes
+
+`render/blend.mojo` holds the arithmetic of every mode, and both rasterizers call it. three.js: `NormalBlending`, `AdditiveBlending`, `SubtractiveBlending`, `MultiplyBlending` and `CustomBlending`, with `premultipliedAlpha` off.
+
+| Mode | Color | Alpha |
+|---|---|---|
+| `BLEND` | `src * a + dst * (1 - a)` | `a + dst_a * (1 - a)` |
+| `ADDITIVE` | `src * a + dst` | `a * a + dst_a` |
+| `SUBTRACTIVE` | `dst * (1 - src)` | `dst_a` |
+| `MULTIPLY` | `dst * src` | `dst_a * a` |
+
+`custom_blending(src, dst, equation, src_alpha, dst_alpha, equation_alpha)` builds a custom mode. The factors are the eleven `BlendFactor`s, `ZERO_FACTOR` to `SRC_ALPHA_SATURATE_FACTOR`. The equations are the five `BlendEquation`s: `ADD_EQUATION`, `SUBTRACT_EQUATION`, `REVERSE_SUBTRACT_EQUATION`, `MIN_EQUATION` and `MAX_EQUATION`. The alpha parts take the color parts when left out. A custom mode packs its six parts into the one integer a `Blending` holds, so it travels the same path as a named mode.
+
+Every mode but `OPAQUE` mixes. A mixing surface tests depth without claiming it and is drawn in the translucent pass, furthest first. three.js draws an additive material that is not `transparent` in its opaque pass, and this port does not.
+
+The pixel is stored premultiplied. The factors read it as WebGL reads its framebuffer. Over an opaque pixel, stored and straight color are the same numbers, so every mode agrees with three.js there. The result's alpha stays between zero and one, and its color stays at zero or above.
+
+Under `BLEND`, a fragment with an alpha of zero changes nothing. Under the other modes a clear fragment still acts, as in WebGL: a clear subtractive fragment still darkens.
+
 | Method | Meaning |
 |---|---|
 | `is_lit() -> Bool` | `kind` is `LAMBERT`, `PHONG` or `TOON`. |
@@ -546,7 +565,7 @@ Pass `blending=BLEND` or `blending=OPAQUE` to state the policy outright. A `NORM
 | `has_alpha_map() -> Bool` | `alpha_map != NO_TEXTURE`. |
 | `is_alpha_tested() -> Bool` | `alpha_test > 0`. |
 | `is_textured() -> Bool` | `map != NO_TEXTURE`. |
-| `is_transparent() -> Bool` | `blending == BLEND`, which follows `transparent` unless stated. |
+| `is_transparent() -> Bool` | `blending.mixes()`: any mode but `OPAQUE`. It follows `transparent` unless stated. |
 | `is_dashed() -> Bool` | `gap_size` is above zero. A dash with no gap is a solid line. |
 | `is_emissive() -> Bool` | Whether the emissive color at its intensity adds any light. |
 | `emissive_light() -> FloatColor` | The emissive color decoded to linear light, times the intensity. |

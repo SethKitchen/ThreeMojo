@@ -63,6 +63,7 @@ color to recover. `resolve` unpremultiplies at the end, because PNG stores
 unassociated alpha.
 """
 
+from render.blend import NORMAL_MODE, Rgba, blend_pixel
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.rect import Rect
 from render.texture import (
@@ -373,24 +374,31 @@ struct RenderTarget(Movable):
         self.colors[slot] = color.premultiplied()
         self.data[slot] = data
 
-    def blend(mut self, x: Int, y: Int, color: FloatColor) raises:
-        """Mix `color` into pixel (x, y) with source-over compositing.
+    def blend(
+        mut self, x: Int, y: Int, color: FloatColor, mode: Int = NORMAL_MODE
+    ) raises:
+        """Mix `color` into pixel (x, y) by a blending mode.
 
         The result is light, whatever was there before. Only light blends:
         a fragment that shows data is refused a blend policy, so the mix is
         light over something, and a mixture with light in it is light. See
         the module docstring.
 
-        A color whose alpha is zero hides nothing and contributes nothing,
-        and this returns without touching the pixel -- its color, its alpha
-        and its flag alike. The identity of source-over has to be the
-        identity of the whole operation, not of the arithmetic alone.
+        Under the normal mode, source-over, a color whose alpha is zero
+        hides nothing and contributes nothing, and this returns without
+        touching the pixel -- its color, its alpha and its flag alike. The
+        identity of source-over has to be the identity of the whole
+        operation, not of the arithmetic alone. The other modes act at any
+        alpha, as WebGL's do: a subtractive fragment darkens even where it
+        is clear.
 
         Args:
             x: Column.
             y: Row.
             color: Linear color with straight (unassociated) alpha, where
                 alpha is how much of what is behind it is hidden.
+            mode: The blending mode's value, `render.blend`'s numbering.
+                Source-over when left out.
 
         Raises:
             Error: If the coordinate is out of bounds.
@@ -398,25 +406,16 @@ struct RenderTarget(Movable):
         var slot = self._slot(x, y)
         if not self.scissor.contains_pixel(x, y, self.height):
             return
-        var share = color.a
-        if share > 1:
-            share = 1
-        if share < 0:
-            share = 0
-        if share == 0:
+        if mode == NORMAL_MODE and not color.a > 0:
             return
         self.data[slot] = False
-        var source = FloatColor(
-            color.r, color.g, color.b, share
-        ).premultiplied()
         var behind = self.colors[slot]
-        var keep = 1 - share
-        self.colors[slot] = FloatColor(
-            source.r + behind.r * keep,
-            source.g + behind.g * keep,
-            source.b + behind.b * keep,
-            source.a + behind.a * keep,
+        var out = blend_pixel(
+            Rgba(behind.r, behind.g, behind.b, behind.a),
+            Rgba(color.r, color.g, color.b, color.a),
+            mode,
         )
+        self.colors[slot] = FloatColor(out[0], out[1], out[2], out[3])
 
     def shown(
         self,
