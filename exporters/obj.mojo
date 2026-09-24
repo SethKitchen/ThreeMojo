@@ -24,15 +24,37 @@ of faces after a `usemtl` line, in the order of the groups, so
 its id in the store, since a material here has no name. three.js's
 exporter writes a `usemtl` only for one named material, and no groups.
 
+**Lines and points.** A `Line` is an `o`, its positions as `v`, and
+its points joined as three.js's `OBJExporter` joins them: a `STRIP` is
+one `l` through every vertex, `SEGMENTS` is one `l` a pair, and a `LOOP`
+writes no `l`, since three.js's `type` of it is `LineLoop`. A `Points`
+is an `o`, its positions as `v`, and one `p` of every vertex. A point's
+`v` carries its color after the position when the geometry has colors,
+encoded from linear light to sRGB as three.js writes it. The index of a
+line or points is not read, as three.js reads none. `read_obj` skips
+`l` and `p`. A color goes through the C library's `pow`, which can differ
+from V8's `Math.pow` in the last digit.
+
+Every mesh is written, in three.js's `traverse` order: a skinned mesh at
+rest and an instanced mesh as its one geometry. See `exporters.common`.
+
 Not written: the materials themselves and a material library, as
-three.js writes none, and lines and points, which three.js writes as `l`
-and `p` and `read_obj` skips.
+three.js writes none.
 """
 
 from core.assets import Assets
 from core.scene import Scene
 from core.buffer_geometry import GeometryGroup
-from exporters.common import WorldMesh, format_float32, world_meshes
+from exporters.common import (
+    WORLD_LINE,
+    WORLD_POINTS,
+    WorldMesh,
+    WorldOptions,
+    format_js_float32,
+    world_meshes,
+)
+from loaders.js_number import js_number_text, js_pow
+from objects.line import SEGMENTS, STRIP
 from std.pathlib import Path
 
 
@@ -55,7 +77,7 @@ def _write_triples(
         out += keyword
         for lane in range(width):  # pragma: no branch
             out += " "
-            out += format_float32(values[vertex * width + lane])
+            out += format_js_float32(values[vertex * width + lane])
         out += "\n"
 
 
@@ -91,8 +113,63 @@ def _write_face(
     out += "\n"
 
 
+def srgb_channel(value: Float32) -> Float64:
+    """Return a linear channel encoded to sRGB, as three.js's
+    `LinearToSRGB` works it out in doubles.
+
+    Args:
+        value: The linear channel.
+
+    Returns:
+        The sRGB channel. It is not clamped, as three.js's is not.
+    """
+    var wide = Float64(value)
+    if wide < 0.0031308:
+        return wide * 12.92
+    return 1.055 * js_pow(wide, 0.41666) - 0.055
+
+
+def _write_vertex_list(
+    mut out: String, keyword: String, first: Int, count: Int
+):
+    """Write one `l` or `p` line through `count` vertices from `first`,
+    each followed by a space, as three.js writes it."""
+    out += keyword + " "
+    for vertex in range(count):
+        out += String(first + vertex + 1) + " "
+    out += "\n"
+
+
+def _write_line(mut out: String, mesh: WorldMesh, vertex_base: Int) raises:
+    """Write a line's positions and its `l` lines."""
+    _write_triples(out, "v", mesh.positions, 3)
+    var count = mesh.vertex_count()
+    if mesh.line_mode == STRIP:
+        _write_vertex_list(out, "l", vertex_base, count)
+    elif mesh.line_mode == SEGMENTS:
+        for pair in range(count // 2):
+            var first = vertex_base + pair * 2 + 1
+            out += "l " + String(first) + " " + String(first + 1) + "\n"
+
+
+def _write_points(mut out: String, mesh: WorldMesh, vertex_base: Int) raises:
+    """Write points' positions, with their colors, and their `p` line."""
+    for vertex in range(mesh.vertex_count()):
+        out += "v"
+        for lane in range(3):  # pragma: no branch
+            out += " " + format_js_float32(mesh.positions[vertex * 3 + lane])
+        if mesh.color_size > 0:
+            for lane in range(3):  # pragma: no branch
+                out += " " + js_number_text(
+                    srgb_channel(mesh.colors[vertex * mesh.color_size + lane])
+                )
+        out += "\n"
+    _write_vertex_list(out, "p", vertex_base, mesh.vertex_count())
+
+
 def export_obj(scene: Scene, assets: Assets) raises -> String:
-    """Return a scene's meshes as the text of an OBJ file.
+    """Return a scene's meshes, lines and points as the text of an OBJ
+    file.
 
     Args:
         scene: The scene. It must be current.
@@ -105,7 +182,9 @@ def export_obj(scene: Scene, assets: Assets) raises -> String:
         Error: If a node's name would not read back, or anything
             `exporters.common.world_meshes` raises.
     """
-    var meshes = world_meshes(scene, assets)
+    var meshes = world_meshes(
+        scene, assets, WorldOptions(lines=True, points=True)
+    )
     var out = String()
     var vertex_base = 0
     var uv_base = 0
@@ -117,6 +196,14 @@ def export_obj(scene: Scene, assets: Assets) raises -> String:
                 + mesh.name
             )
         out += "o " + mesh.name + "\n"
+        if mesh.kind == WORLD_LINE:
+            _write_line(out, mesh, vertex_base)
+            vertex_base += mesh.vertex_count()
+            continue
+        if mesh.kind == WORLD_POINTS:
+            _write_points(out, mesh, vertex_base)
+            vertex_base += mesh.vertex_count()
+            continue
         _write_triples(out, "v", mesh.positions, 3)
         if mesh.with_uvs:
             _write_triples(out, "vt", mesh.uvs, 2)
@@ -154,7 +241,7 @@ def export_obj(scene: Scene, assets: Assets) raises -> String:
 
 
 def write_obj(path: String, scene: Scene, assets: Assets) raises:
-    """Write a scene's meshes to an OBJ file.
+    """Write a scene's meshes, lines and points to an OBJ file.
 
     Args:
         path: The file.

@@ -14,14 +14,14 @@ write_ply("out/model.ply", scene, assets, PLY_BINARY_LITTLE_ENDIAN)
 
 | Function | Meaning |
 |---|---|
-| `export_gltf(scene, assets, container, binary_name, only_visible, cameras, animations) -> GltfFiles` | A glTF 2.0 file, and its `.bin` for `GLTF_SEPARATE`. |
-| `write_gltf(path, scene, assets, container, only_visible, cameras, animations)` | Write a `.gltf` or a `.glb` file. |
-| `export_obj(scene, assets) -> String` | The text of an OBJ file. |
+| `export_gltf(scene, assets, container, binary_name, only_visible, cameras, animations, options) -> GltfFiles` | A glTF 2.0 file, and its `.bin` for `GLTF_SEPARATE`. |
+| `write_gltf(path, scene, assets, container, only_visible, cameras, animations, options)` | Write a `.gltf` or a `.glb` file. |
+| `export_obj(scene, assets) -> String` | The text of an OBJ file, with its meshes, lines and points. |
 | `write_obj(path, scene, assets)` | Write an OBJ file. |
 | `export_stl(scene, assets, format) -> List[UInt8]` | The bytes of an STL file. |
 | `write_stl(path, scene, assets, format)` | Write an STL file. |
-| `export_ply(scene, assets, format) -> List[UInt8]` | The bytes of a PLY file. |
-| `write_ply(path, scene, assets, format)` | Write a PLY file. |
+| `export_ply(scene, assets, format, exclude_normals=, exclude_uvs=, exclude_colors=, exclude_index=) -> List[UInt8]` | The bytes of a PLY file, with its meshes and points. |
+| `write_ply(path, scene, assets, format, exclude_normals=, exclude_uvs=, exclude_colors=, exclude_index=)` | Write a PLY file. |
 | `export_exr(width, height, data, compression, type) -> List[UInt8]` | An OpenEXR file of RGBA floats. See [EXR](#exr). |
 | `export_exr_half(width, height, data, compression, type) -> List[UInt8]` | An OpenEXR file of RGBA halves. |
 | `export_exr_image(image, compression, type) -> List[UInt8]` | An OpenEXR file of a `FloatImage`. |
@@ -60,6 +60,31 @@ var files = export_gltf(
 Each node becomes a glTF node with its name, its translation, its rotation, its scale and its children. A node with `matrix_auto_update` off writes its `matrix` instead. The writer leaves out a transform that moves nothing, as three.js does.
 
 The nodes keep the scene order. Node `k` of the file is the `k`th node that the writer keeps. With `only_visible`, the default, a hidden node is left out, with its descendants and its meshes. This is three.js's `onlyVisible`.
+
+### User data and options
+
+`GltfExportOptions` holds the options of three.js's `GLTFExporter` that are not arguments of `export_gltf`. It also holds the user data of the scene and of each material, because a `Scene` and a `Material` here hold no user data.
+
+| Field | three.js | Default |
+|---|---|---|
+| `max_texture_size` | `maxTextureSize` | None: no limit |
+| `include_custom_extensions` | `includeCustomExtensions` | `False` |
+| `scene_user_data` | `scene.userData` | Empty |
+| `set_material_user_data(id, data)` | `material.userData` | Empty |
+
+The user data of a node, of the scene and of each material is written as `extras`, as three.js's `serializeUserData` writes it. User data is a `UserData` from `core/user_data.mojo`, the same map that [Scene JSON](Scene-JSON) writes.
+
+With `include_custom_extensions`, a `gltfExtensions` key in user data is written as the object's `extensions`. Each name also goes into `extensionsUsed`. The rest of the user data stays in `extras`. The value of `gltfExtensions` must be an object. A custom extension comes before the extensions that the writer adds. A custom extension with the name of a writer's extension takes the writer's value, as a three.js plugin overwrites it.
+
+`max_texture_size` clamps the width and the height of each image, each side on its own, as three.js's canvas does. The writer resamples the image bilinear at the center of each pixel. three.js lets the browser's canvas resample it, so the pixels can differ. A size below one is refused.
+
+```mojo
+var options = GltfExportOptions()
+options.max_texture_size = 1024
+options.include_custom_extensions = True
+options.scene_user_data.set_string("author", "me")
+var files = export_gltf(scene, assets, options=options)
+```
 
 ### Meshes
 
@@ -251,9 +276,22 @@ three.js writes the transform of the metalness map for both and only warns. This
 
 A mesh that wears a list of materials writes each group that it draws as a run of faces, in the order of the groups. Each run starts with `usemtl material` and the id of its material, for example `usemtl material3`. A material here has no name, so the id names it. `read_obj` reads the runs back as groups. three.js writes a `usemtl` only for one named material, and no groups.
 
+A line and points are written as three.js's `OBJExporter` writes them:
+
+| Object | OBJ |
+|---|---|
+| A `Line` of `STRIP` | An `o`, the positions as `v`, and one `l` through every vertex. |
+| A `Line` of `SEGMENTS` | An `o`, the positions as `v`, and one `l` for each pair of vertices. A last vertex without a pair has no `l`. |
+| A `Line` of `LOOP` | An `o` and the positions as `v`. three.js writes no `l` for a `LineLoop`. |
+| A `Points` | An `o`, the positions as `v`, and one `p` through every vertex. When the geometry has colors, each `v` has the color after the position, in sRGB. |
+
+The index of a line or points is not read, as in three.js. `read_obj` skips `l` and `p`.
+
 ## STL
 
 `export_stl` writes each triangle as one facet. The facet normal is `(C - B) x (A - B)`, made unit length, as three.js calculates it. The vertex normals of the geometry are not written.
+
+A skinned mesh is written where its bones hold it now, as three.js's `applyBoneTransform` puts it. The other writers write a skinned mesh at rest, as three.js does.
 
 `StlFormat` is a type. `export_stl` refuses a value that is not one of the two formats.
 
@@ -264,7 +302,7 @@ A mesh that wears a list of materials writes each group that it draws as a run o
 
 ## PLY
 
-`export_ply` writes all meshes into one `vertex` element and one `face` element. A face is `property list uchar int vertex_index`, with three corners.
+`export_ply` writes all meshes and all points into one `vertex` element, and the faces of the meshes into one `face` element. A face is `property list uchar int vertex_index`, with three corners. A text file ends with one more line break, as three.js ends it.
 
 | Property | Meaning |
 |---|---|
@@ -274,6 +312,19 @@ A mesh that wears a list of materials writes each group that it draws as a run o
 | `red`, `green`, `blue` | When a mesh has colors, as `uchar` in sRGB. |
 
 A mesh without a property writes zeros for a normal and a texture coordinate, and white for a color, as three.js does. The format is `PlyFormat` from `loaders/ply.mojo`: `PLY_ASCII`, the default, `PLY_BINARY_LITTLE_ENDIAN` or `PLY_BINARY_BIG_ENDIAN`.
+
+A scene with points writes no `face` element, as in three.js. Then a mesh need not be whole triangles. The texture coordinates are written when a mesh has them. Then points write their own texture coordinates, or zeros.
+
+The four `exclude_` flags are three.js's `excludeAttributes`:
+
+| Flag | three.js | Leaves out |
+|---|---|---|
+| `exclude_normals` | `'normal'` | `nx`, `ny` and `nz`. |
+| `exclude_uvs` | `'uv'` | `s` and `t`. |
+| `exclude_colors` | `'color'` | `red`, `green` and `blue`. |
+| `exclude_index` | `'index'` | The `face` element. The file is a point cloud. |
+
+With faces, each mesh must be whole triangles. three.js checks only the total count of faces.
 
 ## EXR
 
@@ -333,7 +384,7 @@ The archive is a ZIP file that is not compressed. Each file's data starts at a m
 
 | Node | USD |
 |---|---|
-| A node with one mesh of a `STANDARD` or `PHYSICAL` material | An `Xform` that references its geometry file and binds its material. |
+| A node with one mesh of a `STANDARD` or `PHYSICAL` material | An `Xform` that references its geometry file and binds its material. A skinned mesh is a mesh at rest. An instanced mesh is a mesh of its one geometry. |
 | A node with one mesh of another material | Not written, and nothing under it, as in three.js. |
 | A node with one camera of `cameras` | A `Camera`, with its clipping range and apertures. A perspective camera has a film gauge of 35 and a focus of 10, as in three.js. |
 | A node with more than one mesh or camera | An `Xform` with one child for each. three.js has no such node. |
@@ -421,9 +472,18 @@ The speed selects Draco's coding, as it does in three.js:
 
 OBJ, STL and PLY hold no transforms. Thus their writers put each vertex through the world matrix of its node, as three.js does. Each normal goes through the normal matrix and is made unit length. The scene must be current. Call `scene.update()` first, or the writer raises.
 
+The writers write every mesh, in the order of `Scene.traverse`, as three.js's `traverse` reaches them. On one node, the meshes come first, then the skinned meshes, then the instanced meshes, then the lines and the points. three.js writes any object that `isMesh`:
+
+- A skinned mesh is at rest. STL puts it where its bones hold it.
+- An instanced mesh is its one geometry at its node. three.js reads `matrixWorld`, not `instanceMatrix`, so the instances are not written.
+
+`exporters/common.mojo` has `world_meshes(scene, assets, options)`. It gives one `WorldMesh` for each mesh, line or points. `WorldOptions` chooses what it gathers: `posed`, `lines`, `points` and `whole_triangles`. `WorldKind` says what each is: `WORLD_MESH`, `WORLD_LINE` or `WORLD_POINTS`.
+
 ## Numbers
 
-A number is written as the shortest text that reads back to the same `Float32`. `String(Float32)` misses by one unit in the last place for about one number in 200. For those numbers, the writer uses the exact `Float64` text. The writer refuses a number that is not finite.
+OBJ, STL and PLY write a number as three.js writes it: the JavaScript text of its exact `Float64`. Thus `1` is `1`, and the `Float32` nearest a tenth is `0.10000000149011612`. `format_js_float32` gives this text. three.js moves a vertex by a matrix in doubles, and this port in `Float32`s. The text is the same when both results are exact, for example after a move by whole numbers or a scale by two.
+
+JSON numbers are written as the shortest text that reads back to the same `Float32`. `String(Float32)` misses by one unit in the last place for about one number in 200. For those numbers, the writer uses the exact `Float64` text. The writer refuses a number that is not finite.
 
 `exporters/json_writer.mojo` has `JsonWriter`, which writes JSON one value at a time. It adds the commas and the colons. It refuses a value in an object without a key, a key outside an object, and a close that does not match its open. It escapes a string as RFC 8259 requires. `quote_json(text)` gives the escaped string.
 
@@ -431,6 +491,7 @@ A number is written as the shortest text that reads back to the same `Float32`. 
 
 - A PLY color is rounded to the nearest byte. three.js rounds down, and then a file loses one level each time it is read and written again.
 - A PLY color is clamped to zero through one before it is encoded.
+- An OBJ point color above the linear part of the sRGB curve goes through the C library's `pow`. V8's `Math.pow` can give a different last digit.
 - `KHR_materials_emissive_strength` is written for every kind of material. three.js writes it only for a standard or physical material.
 - A texture's `center` is folded into the `offset` of its transform. three.js drops the `center`.
 - A volume is written when any of its fields is not at its default. three.js writes it only for a material that transmits. A clear coat is written when its roughness is not zero, also when its factor is zero.
@@ -452,6 +513,8 @@ A number is written as the shortest text that reads back to the same `Float32`. 
 - Tracks of the visibility, a material, a light or a camera.
 - A morph target of colors. glTF allows only positions, normals and tangents.
 - Batched meshes and sprites.
+- Batched meshes, LODs, sprites and wide lines in OBJ, STL and PLY. three.js writes a batched mesh, the levels of an LOD and a `LineSegments2` because each is a mesh there.
+- The instances of an instanced mesh in OBJ, STL, PLY and USDZ, as in three.js.
 - Alpha maps, light maps, specular maps, displacement maps, environment maps, matcaps and gradient maps.
 - The groups of a geometry of a mesh with one material, as in three.js.
 - A `BACK_SIDE` material is written single-sided, as three.js writes it. glTF has no back side.
@@ -484,6 +547,10 @@ The writers raise for:
 - A node track on a node that is not in the scene, and cubic spline morph tracks that cannot merge.
 - A number that is not finite.
 - A stale scene, or a node whose world matrix flattens an axis, for OBJ, STL and PLY.
+- A mesh, a line or points on a node that is not in the scene, for OBJ, STL and PLY.
+- A skinned mesh without `skinIndex` and `skinWeight`, for STL.
+- A PLY mesh that is not whole triangles, when the file has faces.
+- A `max_texture_size` below one, or a `gltfExtensions` that is not an object when `include_custom_extensions` is on.
 - An EXR image with no texels, or data that is not four values a texel.
 - An EXR compression other than none, ZIPS or ZIP, or a sample type other than HALF or FLOAT.
 - A DEFLATE level that is not from 0 to 9.
@@ -506,5 +573,7 @@ The writers raise for:
 `tests/test_ktx2_export.mojo` compares KTX2 files with the files that three.js writes, in `assets/ktx2_export/three.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
 
 `tests/test_draco_export.mojo` compares Draco files with the files that three.js writes, in `assets/draco/export/three.json` and `three.bin`. It checks a representative subset of the 323 cases: each encoder method, both traversals, each KD-tree level and each class of quantization. It reads the files of the smaller geometries back with `decode_draco` and finds each triangle of the geometry in them. To check all 323 cases, run `make draco-export-check`. This target is not part of `make check` or `make coverage`. `assets/draco/export/three_export.mjs` writes the three.js files in Node.
+
+`tests/test_export_options.mojo` compares the OBJ, STL, PLY and USDZ files byte for byte with the files of three.js 0.180. The scene has a mesh, a skinned mesh, an instanced mesh, three lines and points. It also compares the glTF `extras` and `extensions`, and what `read_gltf` and `parse_ply` read. The three.js files are in `assets/exporters/three.json`, and `assets/exporters/three_exporters.mjs` writes them in Node.
 
 `tests/test_gltf_export_scene.mojo` writes a scene with lights, cameras, a morph target, a skin, instances, lines, points and a clip. It compares the JSON with `assets/gltf/three_export.gltf`, which three.js 0.180 wrote for the same scene. It also reads both files and compares the two scenes. `assets/gltf/three_export.mjs` writes the three.js file in Node.

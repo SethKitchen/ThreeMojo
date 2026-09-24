@@ -43,7 +43,8 @@ own directory. `-s u v w` sets the texture's `repeat` and `-o u v w` its
 `-o`. `-bm scale` sets the material's bump scale, from whichever texture
 line carries it, as three.js sets it. `-mm base gain` is read and ignored,
 since it scales a displacement map, which is not ported. `-clamp on`
-clamps the texture where three.js repeats it anyway; `-clamp off` repeats.
+clamps the texture where three.js takes its `wrap` option anyway; `-clamp
+off` takes the `wrap` option, a repeat by default.
 Any other option is refused, where three.js would take it for part of the
 file name and fail to load it. The image is decoded as a PNG, a JPEG or a
 TGA, told by its first bytes; see `loaders.gltf.decode_image`. One image
@@ -56,10 +57,17 @@ front side, textures repeating.
 **Not ported.** `Ka` and `map_Ka`, which three.js reads and ignores, are
 skipped, as is every keyword three.js ignores. `map_Ks`, three.js's
 `specularMap`, is skipped, since `Material` has no specular map. `disp` is
-skipped, since no material displaces its vertices. `MTLLoader`'s options
-(`side`, `wrap`, `normalizeRGB`, `ignoreZeroRGBs`, `invertTrProperty`)
-are not ported: this reads as three.js reads with none of them set. Each
-map keeps its own `-s` and `-o`, as in three.js.
+skipped, since no material displaces its vertices. Each map keeps its
+own `-s` and `-o`, as in three.js.
+
+**Options.** `MtlOptions` holds three.js's `setMaterialOptions`. `side`
+is every material's side, a default material's too. `wrap` is every
+texture's wrap, where a `-clamp on` still clamps. `normalize_rgb` reads
+`Kd` and `Ks` from zero to 255, as three.js divides them by 255.
+`ignore_zero_rgbs` skips a `Kd` or `Ks` of three zeros, so the default
+stays. `invert_tr_property` reads `Tr` as the opacity, one minus the
+transparency three.js otherwise takes it for. Neither changes `Ke`, as
+three.js changes it with neither.
 
 A value that is not a number, a color outside zero to one, an option that
 is not known or lacks its numbers, a texture line with no file, and an
@@ -72,12 +80,19 @@ from core.geometry_store import GeometryId
 from core.object3d import NodeId
 from loaders.gltf import decode_image
 from loaders.obj import ObjModel, read_obj
-from materials.material import Material, MaterialId, PHONG
+from materials.material import FRONT_SIDE, Material, MaterialId, PHONG, Side
 from math.vector2 import Vector2
 from objects.mesh import Mesh
 from render.framebuffer import Color, FloatColor
 from render.srgb import LINEAR, SRGB
-from render.texture import CLAMP, COVERAGE, IGNORED, REPEAT, texture_from
+from render.texture import (
+    CLAMP,
+    COVERAGE,
+    IGNORED,
+    REPEAT,
+    Wrap,
+    texture_from,
+)
 from render.texture_store import NO_TEXTURE, TextureId
 from std.math import isfinite
 from std.pathlib import Path
@@ -98,17 +113,74 @@ comptime _GLOW_ROLE = 1
 comptime _DATA_ROLE = 2
 
 
+struct MtlOptions(ImplicitlyCopyable):
+    """The options of three.js's `MTLLoader.setMaterialOptions`."""
+
+    # The side every material draws, three.js's `side`.
+    var side: Side
+    # The wrap of every texture, three.js's `wrap`.
+    var wrap: Wrap
+    # Read `Kd` and `Ks` from zero to 255, three.js's `normalizeRGB`.
+    var normalize_rgb: Bool
+    # Skip a `Kd` or `Ks` of three zeros, three.js's `ignoreZeroRGBs`.
+    var ignore_zero_rgbs: Bool
+    # Read `Tr` as an opacity, three.js's `invertTrProperty`.
+    var invert_tr_property: Bool
+
+    def __init__(
+        out self,
+        *,
+        side: Side = FRONT_SIDE,
+        wrap: Wrap = REPEAT,
+        normalize_rgb: Bool = False,
+        ignore_zero_rgbs: Bool = False,
+        invert_tr_property: Bool = False,
+    ):
+        """Take the options, at three.js's defaults.
+
+        Args:
+            side: The side every material draws.
+            wrap: The wrap of every texture.
+            normalize_rgb: Read `Kd` and `Ks` from zero to 255.
+            ignore_zero_rgbs: Skip a `Kd` or `Ks` of three zeros.
+            invert_tr_property: Read `Tr` as an opacity.
+        """
+        self.side = side
+        self.wrap = wrap
+        self.normalize_rgb = normalize_rgb
+        self.ignore_zero_rgbs = ignore_zero_rgbs
+        self.invert_tr_property = invert_tr_property
+
+    def validate(self) raises:
+        """Refuse a side or a wrap that is none of the named.
+
+        Raises:
+            Error: If `side` or `wrap` is not valid.
+        """
+        if not self.side.is_valid():
+            raise Error("MTL: a side that is none of the three")
+        if not self.wrap.is_valid():
+            raise Error("MTL: a wrap that is none of the three")
+
+
 struct MtlLibrary(Movable):
     """A material library: each material's name and the `MaterialId` it
     was built as, three.js's `MaterialCreator`."""
 
     var names: List[String]
     var materials: List[MaterialId]
+    # The side a default material draws, from the library's options.
+    var side: Side
 
-    def __init__(out self):
-        """Start an empty library."""
+    def __init__(out self, side: Side = FRONT_SIDE):
+        """Start an empty library.
+
+        Args:
+            side: The side a default material draws; see `create`.
+        """
         self.names = List[String]()
         self.materials = List[MaterialId]()
+        self.side = side
 
     def count(self) -> Int:
         """Return how many materials the library names.
@@ -197,7 +269,9 @@ struct MtlLibrary(Movable):
         var index = self.find(name)
         if index >= 0:
             return self.materials[index]
-        var built = assets.materials.add(_phong(_Surface()))
+        var surface = _Surface()
+        surface.side = self.side
+        var built = assets.materials.add(_phong(surface))
         self.add(name, built)
         return built
 
@@ -258,6 +332,7 @@ struct _Surface(Copyable, Movable):
     var normal_map: TextureId
     var bump_map: TextureId
     var bump_scale: Float32
+    var side: Side
 
     def __init__(out self):
         """Start from three.js's `MeshPhongMaterial` defaults."""
@@ -273,6 +348,7 @@ struct _Surface(Copyable, Movable):
         self.normal_map = NO_TEXTURE
         self.bump_map = NO_TEXTURE
         self.bump_scale = 1
+        self.side = FRONT_SIDE
 
 
 def _phong(surface: _Surface) raises -> Material:
@@ -306,6 +382,7 @@ def _phong(surface: _Surface) raises -> Material:
         bump_scale=surface.bump_scale,
         opacity=surface.opacity,
         transparent=surface.transparent,
+        side=surface.side,
     )
 
 
@@ -393,32 +470,56 @@ def _fraction(field: String, line: Int) raises -> Float32:
     return value
 
 
-def _color(value: String, line: Int) raises -> Color:
-    """Return the color a `Kd`, `Ks` or `Ke` line gives, as authored in
-    sRGB, as three.js reads it.
+def _channels(
+    value: String, line: Int, normalize: Bool
+) raises -> List[Float32]:
+    """Return the three numbers of a `Kd`, `Ks` or `Ke` line, divided by
+    255 when `normalize` is on, as three.js's `normalizeRGB` divides them.
 
     Args:
         value: The three numbers.
         line: Which line it is on, for the error.
+        normalize: Divide each by 255.
 
     Returns:
-        The eight-bit color nearest them.
+        The three channels, each from zero to one.
 
     Raises:
         Error: If there are not exactly three numbers, or one is not a
-            number or is outside zero to one.
+            number or is outside zero to one once divided.
     """
     var fields = List[String]()
     for piece in value.split():  # pragma: no branch
         fields.append(String(piece))
     if len(fields) != 3:
         raise Error(_where(line) + "a color needs three numbers: " + value)
-    return FloatColor(
-        _fraction(fields[0], line),
-        _fraction(fields[1], line),
-        _fraction(fields[2], line),
-        1,
-    ).quantize()
+    var out = List[Float32]()
+    for field in fields:  # pragma: no branch
+        var channel = _number(field, line)
+        if normalize:
+            channel /= 255
+        if channel < 0 or channel > 1:
+            raise Error(_where(line) + "must be from zero to one: " + field)
+        out.append(channel)
+    return out^
+
+
+def _is_black(channels: List[Float32]) -> Bool:
+    """Return True if all three channels are zero."""
+    return channels[0] == 0 and channels[1] == 0 and channels[2] == 0
+
+
+def _color(channels: List[Float32]) -> Color:
+    """Return the color three channels give, as authored in sRGB, as
+    three.js reads it.
+
+    Args:
+        channels: The three channels, from zero to one.
+
+    Returns:
+        The eight-bit color nearest them.
+    """
+    return FloatColor(channels[0], channels[1], channels[2], 1).quantize()
 
 
 def _illumination(value: String, line: Int) raises:
@@ -562,6 +663,7 @@ def _texture(
     mut bump_scale: Float32,
     mut assets: Assets,
     mut textures: _Textures,
+    wrap: Wrap,
 ) raises -> TextureId:
     """Return the texture a texture line names, three.js's
     `setMapForType`: the one already set, if any, since the first is kept.
@@ -575,6 +677,7 @@ def _texture(
         bump_scale: The material's bump scale, set by a `-bm` option.
         assets: Where the texture is added.
         textures: What this library has read, to read an image once.
+        wrap: The wrap of a texture that does not clamp.
 
     Returns:
         The texture's id.
@@ -610,7 +713,7 @@ def _texture(
     var image = decode_image(_image_bytes(path, entry.line))
     var built = texture_from(
         image,
-        CLAMP if said.clamp else REPEAT,
+        CLAMP if said.clamp else wrap,
         color_space=LINEAR if role == _DATA_ROLE else SRGB,
         alpha=COVERAGE if role == _COLOR_ROLE else IGNORED,
     )
@@ -652,6 +755,7 @@ def _build(
     directory: String,
     mut assets: Assets,
     mut textures: _Textures,
+    options: MtlOptions,
 ) raises -> MaterialId:
     """Build one material from its keys, three.js's `createMaterial_`.
 
@@ -660,6 +764,7 @@ def _build(
         directory: Where texture file names are relative to.
         assets: Where the material and its textures are added.
         textures: What this library has read, to read an image once.
+        options: The side, the wrap, and how colors and `Tr` are read.
 
     Returns:
         The material's id.
@@ -668,17 +773,26 @@ def _build(
         Error: If a value is refused; see `parse_mtl`.
     """
     var surface = _Surface()
+    surface.side = options.side
     for entry in info.entries:
         # An empty value is skipped, as three.js skips it.
         if entry.value == "":
             continue
         var key = entry.key
-        if key == "kd":
-            surface.color = _color(entry.value, entry.line)
-        elif key == "ks":
-            surface.specular = _color(entry.value, entry.line)
+        if key == "kd" or key == "ks":
+            var channels = _channels(
+                entry.value, entry.line, options.normalize_rgb
+            )
+            # three.js's `ignoreZeroRGBs` drops the key, and the default
+            # stays.
+            if options.ignore_zero_rgbs and _is_black(channels):
+                continue
+            if key == "kd":
+                surface.color = _color(channels)
+            else:
+                surface.specular = _color(channels)
         elif key == "ke":
-            surface.emissive = _color(entry.value, entry.line)
+            surface.emissive = _color(_channels(entry.value, entry.line, False))
         elif key == "ns":
             var shininess = _number(entry.value, entry.line)
             if shininess < 0:
@@ -695,6 +809,8 @@ def _build(
                 surface.transparent = True
         elif key == "tr":
             var clear = _fraction(entry.value, entry.line)
+            if options.invert_tr_property:
+                clear = 1 - clear
             if clear > 0:
                 surface.opacity = 1 - clear
                 surface.transparent = True
@@ -709,6 +825,7 @@ def _build(
                 surface.bump_scale,
                 assets,
                 textures,
+                options.wrap,
             )
         elif key == "map_ke":
             surface.emissive_map = _texture(
@@ -719,6 +836,7 @@ def _build(
                 surface.bump_scale,
                 assets,
                 textures,
+                options.wrap,
             )
         elif key == "map_d":
             surface.alpha_map = _texture(
@@ -729,6 +847,7 @@ def _build(
                 surface.bump_scale,
                 assets,
                 textures,
+                options.wrap,
             )
             surface.transparent = True
         elif key == "norm":
@@ -740,6 +859,7 @@ def _build(
                 surface.bump_scale,
                 assets,
                 textures,
+                options.wrap,
             )
         elif key == "map_bump" or key == "bump":
             surface.bump_map = _texture(
@@ -750,6 +870,7 @@ def _build(
                 surface.bump_scale,
                 assets,
                 textures,
+                options.wrap,
             )
     return assets.materials.add(_phong(surface))
 
@@ -808,7 +929,10 @@ def _read_infos(text: String) raises -> List[_Info]:
 
 
 def parse_mtl(
-    text: String, directory: String, mut assets: Assets
+    text: String,
+    directory: String,
+    mut assets: Assets,
+    options: MtlOptions = MtlOptions(),
 ) raises -> MtlLibrary:
     """Read a material library's text, building a `PHONG` material per
     `newmtl` and a texture per image it names.
@@ -818,6 +942,7 @@ def parse_mtl(
         directory: Where texture file names are relative to, ending in `/`,
             or empty for the working directory.
         assets: Where the materials and textures are added.
+        options: The options of three.js's `setMaterialOptions`.
 
     Returns:
         The library: each material's name and id, in the order the names
@@ -829,14 +954,17 @@ def parse_mtl(
             `Tr` is not from zero to one; `illum` is not a whole number
             from zero to ten; a texture line has an option that is not
             known or lacks its numbers, or names no file; or an image
-            cannot be read or decoded.
+            cannot be read or decoded. Also if the options' side or wrap
+            is none of the named.
     """
+    options.validate()
     var infos = _read_infos(text)
-    var library = MtlLibrary()
+    var library = MtlLibrary(options.side)
     var textures = _Textures()
     for index in range(len(infos)):
         library.add(
-            infos[index].name, _build(infos[index], directory, assets, textures)
+            infos[index].name,
+            _build(infos[index], directory, assets, textures, options),
         )
     return library^
 
@@ -853,7 +981,9 @@ def _directory_of(path: String) -> String:
     return String(path[byte = 0 : path.rfind("/") + 1])
 
 
-def read_mtl(path: String, mut assets: Assets) raises -> MtlLibrary:
+def read_mtl(
+    path: String, mut assets: Assets, options: MtlOptions = MtlOptions()
+) raises -> MtlLibrary:
     """Read a material library file; see `parse_mtl`.
 
     Texture file names are relative to the library's own directory.
@@ -861,6 +991,7 @@ def read_mtl(path: String, mut assets: Assets) raises -> MtlLibrary:
     Args:
         path: The file.
         assets: Where the materials and textures are added.
+        options: The options of three.js's `setMaterialOptions`.
 
     Returns:
         The library.
@@ -869,7 +1000,9 @@ def read_mtl(path: String, mut assets: Assets) raises -> MtlLibrary:
         Error: If the file cannot be read, or for anything `parse_mtl`
             refuses.
     """
-    return parse_mtl(Path(path).read_text(), _directory_of(path), assets)
+    return parse_mtl(
+        Path(path).read_text(), _directory_of(path), assets, options
+    )
 
 
 def set_materials(
@@ -956,7 +1089,7 @@ struct ObjWithMaterials(Movable):
 
 
 def read_obj_with_materials(
-    path: String, mut assets: Assets
+    path: String, mut assets: Assets, options: MtlOptions = MtlOptions()
 ) raises -> ObjWithMaterials:
     """Read an OBJ file and every material library it names, and give each
     object its material.
@@ -969,6 +1102,8 @@ def read_obj_with_materials(
     Args:
         path: The OBJ file.
         assets: Where the materials and textures are added.
+        options: The options every library is read with; see
+            `parse_mtl`.
 
     Returns:
         The model, the combined library, and one list of `MaterialId`s
@@ -976,14 +1111,17 @@ def read_obj_with_materials(
 
     Raises:
         Error: If the OBJ file or a library cannot be read, or for anything
-            `parse_obj` or `parse_mtl` refuses.
+            `parse_obj` or `parse_mtl` refuses, the options included.
     """
+    options.validate()
     var model = read_obj(path)
     var directory = _directory_of(path)
-    var library = MtlLibrary()
+    var library = MtlLibrary(options.side)
     for index in range(len(model.material_libraries)):
         library.merge(
-            read_mtl(directory + model.material_libraries[index], assets)
+            read_mtl(
+                directory + model.material_libraries[index], assets, options
+            )
         )
     var ids = set_materials(model, library, assets)
     return ObjWithMaterials(model^, library^, ids^)

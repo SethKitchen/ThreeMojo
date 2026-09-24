@@ -18,7 +18,10 @@ the scene is written under it, in `Scene.children` order:
 
 - A node that carries one mesh of a `STANDARD` or `PHYSICAL` material
   is an `Xform` that references its geometry file and binds its
-  material. A mesh of any other material is not written, and nor is
+  material. A skinned mesh and an instanced mesh are meshes here, as
+  they are to three.js's `isMesh`: a skinned mesh at rest, and an
+  instanced mesh as its one geometry at its node. The meshes of a node
+  come first, then its skinned meshes, then its instanced meshes. A mesh of any other material is not written, and nor is
   anything under its node, as in three.js.
 - A node that carries one camera of `cameras` is a `Camera`.
 - Every other node is an `Xform`. Lights, lines and points are not
@@ -66,6 +69,7 @@ from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import COLOR, NORMAL, POSITION, BufferGeometry
+from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from exporters.gltf import gltf_pixels
@@ -497,13 +501,11 @@ struct _Exporter(Movable):
         node: NodeId,
         name: String,
         matrix: Matrix4,
-        which: Int,
-        scene: Scene,
+        mesh: _Drawn,
         assets: Assets,
     ) raises -> Optional[_UsdNode]:
         """Return three.js's `buildMesh` for a mesh, or nothing for a mesh
         whose material is neither `STANDARD` nor `PHYSICAL`."""
-        ref mesh = scene.meshes[which]
         ref material = assets.materials.get(mesh.material)
         if material.kind != STANDARD and material.kind != PHYSICAL:
             return None
@@ -923,6 +925,15 @@ struct _Exporter(Movable):
         return out^
 
 
+@fieldwise_init
+struct _Drawn(ImplicitlyCopyable):
+    """A mesh, a skinned mesh or an instanced mesh: the geometry and the
+    material it draws with, which is all `buildMesh` reads."""
+
+    var geometry: GeometryId
+    var material: MaterialId
+
+
 def _matrix_of(node: Object3D) raises -> Matrix4:
     """Return a node's own matrix, three.js's `object.matrix`."""
     if node.matrix_auto_update:
@@ -977,7 +988,7 @@ def _build(
     scene: Scene,
     assets: Assets,
     cameras: ObjectCameras,
-    meshes: List[List[Int]],
+    meshes: List[List[_Drawn]],
 ) raises:
     """Add the nodes under `index` to `parent`: three.js's
     `buildHierarchy`."""
@@ -998,9 +1009,7 @@ def _build(
         var things = len(carried) + len(perspective) + len(orthographic)
         var out: Optional[_UsdNode]
         if things == 1 and len(carried) == 1:
-            out = exporter.mesh(
-                child, node.name, matrix, carried[0], scene, assets
-            )
+            out = exporter.mesh(child, node.name, matrix, carried[0], assets)
         elif things == 1 and len(perspective) == 1:
             out = exporter.perspective(
                 child, node.name, matrix, cameras.perspective[perspective[0]]
@@ -1016,7 +1025,7 @@ def _build(
             var group = exporter.xform(child, node.name, matrix)
             var still = Matrix4()
             for m in carried:
-                var item = exporter.mesh(child, "", still, m, scene, assets)
+                var item = exporter.mesh(child, "", still, m, assets)
                 if Bool(item):
                     group.add_child(item.value())
             for i in perspective:
@@ -1036,6 +1045,14 @@ def _build(
             var built = out.take()
             _build(exporter, built, child, scene, assets, cameras, meshes)
             parent.add_child(built)
+
+
+def _file(mut meshes: List[List[_Drawn]], node: NodeId, drawn: _Drawn) raises:
+    """File a mesh under its node, refusing a node the scene has not
+    got."""
+    if node.value < 0 or node.value >= len(meshes):
+        raise Error("USDZ: a mesh names a node that is not in the scene")
+    meshes[node.value].append(drawn)
 
 
 def usdz_files(
@@ -1063,12 +1080,13 @@ def usdz_files(
             has a wrap or a channel that is not valid.
     """
     var count = scene.count()
-    var meshes = List[List[Int]](length=count, fill=List[Int]())
-    for which in range(len(scene.meshes)):
-        var node = scene.meshes[which].node
-        if node.value < 0 or node.value >= count:
-            raise Error("USDZ: a mesh names a node that is not in the scene")
-        meshes[node.value].append(which)
+    var meshes = List[List[_Drawn]](length=count, fill=List[_Drawn]())
+    for mesh in scene.meshes:
+        _file(meshes, mesh.node, _Drawn(mesh.geometry, mesh.material))
+    for mesh in scene.skinned_meshes:
+        _file(meshes, mesh.node, _Drawn(mesh.geometry, mesh.material))
+    for mesh in scene.instanced_meshes:
+        _file(meshes, mesh.node, _Drawn(mesh.geometry, mesh.material))
     var exporter = _Exporter(options.copy())
     var top = _UsdNode("Scene", "Xform")
     top.add_metadata_lines(

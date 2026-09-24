@@ -20,8 +20,9 @@ names `int8` through `float64`.
 
 What is read is what three.js's loader reads:
 
-- The `vertex` element: `x`, `y` and `z` into `position`, which a file
-  must have; `nx`, `ny` and `nz` into `normal`; `s` and `t` into `uv`,
+- The `vertex` element: `x`, `y` and `z` into `position`, or `px`,
+  `py` and `pz`, or `posx`, `posy` and `posz`, which a file must have;
+  `nx`, `ny` and `nz` into `normal`, or `normalx` and so on; `s` and `t` into `uv`,
   or `u` and `v`, `texture_u` and `texture_v`, or `tx` and `ty`; and
   `red`, `green` and `blue` into `color`, or their other names, `r` or
   `diffuse_red` and so on. A color is divided by 255 and decoded from
@@ -37,6 +38,17 @@ What is read is what three.js's loader reads:
 
 A file without a `face` element is a point cloud: its geometry has no
 index, as three.js's has none.
+
+**Options.** `PlyOptions` holds three.js's two mappings.
+`set_property_name` renames a property of the file as the header is
+read, three.js's `setPropertyNameMapping`: `diffuse_red` to `red` reads
+it as a color. `set_custom_attribute` reads vertex properties into an
+attribute of their own, one number each, three.js's
+`setCustomPropertyNameMapping`. The attribute's item size is its count
+of properties. It is read after the named ones, so an attribute named
+`position` replaces the positions, as in three.js. A property it names
+must be a single value of the `vertex` element, after the renames: one
+that is not there is refused, where three.js reads `NaN`.
 
 A header that is not PLY, a type or a format that is not known, a row
 too short or too long for its properties, a file that ends early, a
@@ -349,14 +361,81 @@ def _fields(line: String) -> List[String]:
     return fields^
 
 
+struct PlyOptions(Copyable, Movable):
+    """How `parse_ply` names what it reads: three.js's
+    `setPropertyNameMapping` and `setCustomPropertyNameMapping`."""
+
+    # Each property renamed: `renamed_from[i]` is read as `renamed_to[i]`.
+    var renamed_from: List[String]
+    var renamed_to: List[String]
+    # Each custom attribute's name and the vertex properties it reads, in
+    # order.
+    var custom_names: List[String]
+    var custom_properties: List[List[String]]
+
+    def __init__(out self):
+        """Start with no renames and no custom attributes."""
+        self.renamed_from = List[String]()
+        self.renamed_to = List[String]()
+        self.custom_names = List[String]()
+        self.custom_properties = List[List[String]]()
+
+    def set_property_name(mut self, name: String, read_as: String):
+        """Read a property of the file under another name.
+
+        Args:
+            name: The name in the file.
+            read_as: The name it is read as, such as `red`.
+        """
+        for at in range(len(self.renamed_from)):
+            if self.renamed_from[at] == name:
+                self.renamed_to[at] = read_as
+                return
+        self.renamed_from.append(name)
+        self.renamed_to.append(read_as)
+
+    def set_custom_attribute(
+        mut self, attribute: String, var properties: List[String]
+    ):
+        """Read vertex properties into an attribute of their own.
+
+        Args:
+            attribute: The attribute's name in the geometry.
+            properties: The vertex properties, by their names after the
+                renames, one number each. An empty list reads nothing,
+                as three.js reads nothing for it.
+        """
+        for at in range(len(self.custom_names)):
+            if self.custom_names[at] == attribute:
+                self.custom_properties[at] = properties^
+                return
+        self.custom_names.append(attribute)
+        self.custom_properties.append(properties^)
+
+    def renamed(self, name: String) -> String:
+        """Return the name a property of the file is read as.
+
+        Args:
+            name: The name in the file.
+
+        Returns:
+            Its new name, or the name itself when it is not renamed.
+        """
+        for at in range(len(self.renamed_from)):
+            if self.renamed_from[at] == name:
+                return self.renamed_to[at]
+        return name
+
+
 def _parse_header(
-    text: String, mut elements: List[_Element]
+    text: String, mut elements: List[_Element], options: PlyOptions
 ) raises -> PlyFormat:
     """Read the header, up to and not including `end_header`.
 
     Args:
         text: The header's text.
         elements: Where the elements go, in file order.
+        options: The renames, applied to every property.
 
     Returns:
         The format.
@@ -415,12 +494,20 @@ def _parse_header(
                         + fields[2]
                     )
                 elements[len(elements) - 1].properties.append(
-                    _Property(fields[4], ply_scalar(fields[3]), True, count)
+                    _Property(
+                        options.renamed(fields[4]),
+                        ply_scalar(fields[3]),
+                        True,
+                        count,
+                    )
                 )
             elif len(fields) == 3 and fields[1] != "list":
                 elements[len(elements) - 1].properties.append(
                     _Property(
-                        fields[2], ply_scalar(fields[1]), False, PLY_UINT8
+                        options.renamed(fields[2]),
+                        ply_scalar(fields[1]),
+                        False,
+                        PLY_UINT8,
                     )
                 )
             else:
@@ -640,11 +727,14 @@ def _check_convex(points: List[Vector3], face: Int) raises:
             )
 
 
-def parse_ply(bytes: List[UInt8]) raises -> BufferGeometry:
+def parse_ply(
+    bytes: List[UInt8], options: PlyOptions = PlyOptions()
+) raises -> BufferGeometry:
     """Read a PLY file's bytes into a geometry.
 
     Args:
         bytes: The whole file.
+        options: The renames and the custom attributes.
 
     Returns:
         A geometry with `position`, and `normal`, `uv` and `color` when
@@ -658,13 +748,14 @@ def parse_ply(bytes: List[UInt8]) raises -> BufferGeometry:
             file ends early, a coordinate is not finite, a vertex has only
             some channels of a normal, a texture coordinate or a color, or
             a face has fewer than three corners, names a vertex the file
-            does not have, or is not convex.
+            does not have, or is not convex. Also if a custom attribute
+            names a property the vertex element has not got, or a list.
     """
     var end = _find_bytes(bytes, "end_header")
     if end < 0:
         raise Error("PLY: the file has no `end_header`")
     var elements = List[_Element]()
-    var format = _parse_header(_text(bytes, 0, end), elements)
+    var format = _parse_header(_text(bytes, 0, end), elements, options)
     var body = end + 10  # the length of `end_header`
     if body < len(bytes) and bytes[body] == 13:
         body += 1
@@ -685,14 +776,14 @@ def parse_ply(bytes: List[UInt8]) raises -> BufferGeometry:
     if vertices < 0:
         raise Error("PLY: the file has no `vertex` element")
     ref vertex = elements[vertices]
-    var x = vertex.find(_names("x"))
-    var y = vertex.find(_names("y"))
-    var z = vertex.find(_names("z"))
+    var x = vertex.find(_names("x", "px", "posx"))
+    var y = vertex.find(_names("y", "py", "posy"))
+    var z = vertex.find(_names("z", "pz", "posz"))
     if x < 0 or y < 0 or z < 0:
         raise Error("PLY: a vertex must have `x`, `y` and `z`")
-    var nx = vertex.find(_names("nx"))
-    var ny = vertex.find(_names("ny"))
-    var nz = vertex.find(_names("nz"))
+    var nx = vertex.find(_names("nx", "normalx"))
+    var ny = vertex.find(_names("ny", "normaly"))
+    var nz = vertex.find(_names("nz", "normalz"))
     var with_normal = _all_or_none([nx, ny, nz], "normal")
     var s = vertex.find(_names("s", "u", "texture_u", "tx"))
     var t = vertex.find(_names("t", "v", "texture_v", "ty"))
@@ -706,6 +797,24 @@ def parse_ply(bytes: List[UInt8]) raises -> BufferGeometry:
         raise Error("PLY: a vertex has an alpha and no red, green and blue")
     var channels = 4 if a >= 0 else 3
     var vertex_count = vertex.rows
+    # Each custom attribute's properties, by their places in a row.
+    var custom_at = List[List[Int]]()
+    var custom_values = List[List[Float32]]()
+    for attribute in range(len(options.custom_names)):
+        var places = List[Int]()
+        for name in options.custom_properties[attribute]:
+            var place = vertex.find(_names(name))
+            if place < 0:
+                raise Error(
+                    "PLY: the custom attribute `"
+                    + options.custom_names[attribute]
+                    + "` reads `"
+                    + name
+                    + "`, which a vertex has not got"
+                )
+            places.append(place)
+        custom_at.append(places^)
+        custom_values.append(List[Float32]())
 
     var positions = List[Float32]()
     var normals = List[Float32]()
@@ -777,6 +886,11 @@ def parse_ply(bytes: List[UInt8]) raises -> BufferGeometry:
                             colors.append(srgb_to_linear(value / 255))
                         if a >= 0:
                             colors.append(_coordinate(values[a], "alpha") / 255)
+                    for attribute in range(len(custom_at)):
+                        for place in custom_at[attribute]:
+                            custom_values[attribute].append(
+                                _coordinate(values[place], "a custom value")
+                            )
             except reason:
                 raise Error(
                     "PLY element `"
@@ -831,15 +945,28 @@ def parse_ply(bytes: List[UInt8]) raises -> BufferGeometry:
         geometry.set_attribute(
             String(COLOR), BufferAttribute(colors^, channels)
         )
+    for attribute in range(len(custom_at)):
+        # three.js sets no attribute for a buffer left empty.
+        if len(custom_values[attribute]) > 0:
+            geometry.set_attribute(
+                options.custom_names[attribute],
+                BufferAttribute(
+                    custom_values[attribute].copy(),
+                    len(custom_at[attribute]),
+                ),
+            )
     geometry.set_index(index^)
     return geometry^
 
 
-def read_ply(path: String) raises -> BufferGeometry:
+def read_ply(
+    path: String, options: PlyOptions = PlyOptions()
+) raises -> BufferGeometry:
     """Read a PLY file into a geometry.
 
     Args:
         path: The file to read.
+        options: The renames and the custom attributes; see `parse_ply`.
 
     Returns:
         Its geometry; see `parse_ply`.
@@ -848,4 +975,4 @@ def read_ply(path: String) raises -> BufferGeometry:
         Error: If the file cannot be read, or for anything `parse_ply`
             refuses.
     """
-    return parse_ply(Path(path).read_bytes())
+    return parse_ply(Path(path).read_bytes(), options)

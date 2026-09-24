@@ -17,11 +17,21 @@ lines for each face, and `endsolid exported`. `STL_BINARY` writes an
 80-byte header of zeros, the face count, and fifty bytes a face: the
 normal and the three corners as little-endian `Float32`s, and an
 attribute of zero. No color is written, as three.js writes none.
+
+Every mesh is written: a `Mesh`, an `InstancedMesh` as its one geometry
+at its node, and a `SkinnedMesh` where its bones hold it now, as
+three.js's `applyBoneTransform` carries it. See `exporters.common`.
 """
 
 from core.assets import Assets
 from core.scene import Scene
-from exporters.common import format_float32, push_f32, push_word, world_meshes
+from exporters.common import (
+    WorldOptions,
+    format_js_float32,
+    push_f32,
+    push_word,
+    world_meshes,
+)
 from math.vector3 import Vector3
 from std.pathlib import Path
 
@@ -61,9 +71,9 @@ def _corner(positions: List[Float32], vertex: Int) -> Vector3:
 def _write_point(mut out: String, prefix: String, point: Vector3) raises:
     """Write one line of three numbers after a prefix."""
     out += prefix
-    out += format_float32(point.x) + " "
-    out += format_float32(point.y) + " "
-    out += format_float32(point.z) + "\n"
+    out += format_js_float32(point.x) + " "
+    out += format_js_float32(point.y) + " "
+    out += format_js_float32(point.z) + "\n"
 
 
 def export_stl(
@@ -85,7 +95,7 @@ def export_stl(
     """
     if not format.is_valid():
         raise Error("STL: a format that is neither ASCII nor binary")
-    var meshes = world_meshes(scene, assets)
+    var meshes = world_meshes(scene, assets, WorldOptions(posed=True))
     var faces = 0
     for mesh in meshes:
         faces += len(mesh.triangles) // 3

@@ -1,0 +1,344 @@
+{
+ "obj": "o plain\nv 1 2 3\nv 3 2 3\nv 3 4 3\nv 1 4 3\nvt 0 0\nvt 1 0\nvt 1 1\nvt 0 1\nvn 0 0 1\nvn 0 0 1\nvn 0 0 1\nvn 0 0 1\nf 1/1/1 2/2/2 3/3/3\nf 1/1/1 3/3/3 4/4/4\no skin\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 5 6 7\no many\nv -2 0 0\nv -1 0 0\nv -2 1 0\nf 8 9 10\no path\nv 0 0 1\nv 1 0 1\nv 1 1 1\nl 11 12 13 \no sticks\nv 0 0 0\nv 1 0 0\nv 2 0 0\nv 3 0 0\nv 4 0 0\nl 14 15\nl 16 17\no loop\nv 0 0 0\nv 1 0 0\nv 0 1 0\no cloud\nv 0 -1 0 0 0.025840001227334142 0.9999999999999999\nv 0.5 -1 0 0.9999999999999999 0 0\nv 0 -0.75 0 0.012920000613667071 0.9999999999999999 0\np 22 23 24 \n",
+ "stl_ascii": "solid exported\n\tfacet normal 0 0 1\n\t\touter loop\n\t\t\tvertex 1 2 3\n\t\t\tvertex 3 2 3\n\t\t\tvertex 3 4 3\n\t\tendloop\n\tendfacet\n\tfacet normal 0 0 1\n\t\touter loop\n\t\t\tvertex 1 2 3\n\t\t\tvertex 3 4 3\n\t\t\tvertex 1 4 3\n\t\tendloop\n\tendfacet\n\tfacet normal 0 0 1\n\t\touter loop\n\t\t\tvertex 0 2 0\n\t\t\tvertex 1 2 0\n\t\t\tvertex 0 3 0\n\t\tendloop\n\tendfacet\n\tfacet normal 0 0 1\n\t\touter loop\n\t\t\tvertex -2 0 0\n\t\t\tvertex -1 0 0\n\t\t\tvertex -2 1 0\n\t\tendloop\n\tendfacet\nendsolid exported\n",
+ "stl_binary": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAIAAAIA/AACAPwAAAEAAAEBAAABAQAAAAEAAAEBAAABAQAAAgEAAAEBAAAAAAAAAAAAAAAAAgD8AAIA/AAAAQAAAQEAAAEBAAACAQAAAQEAAAIA/AACAQAAAQEAAAAAAAAAAAAAAAACAPwAAAAAAAABAAAAAAAAAgD8AAABAAAAAAAAAAAAAAEBAAAAAAAAAAAAAAAAAAAAAAIA/AAAAwAAAAAAAAAAAAACAvwAAAAAAAAAAAAAAwAAAgD8AAAAAAAA=",
+ "ply_points_ascii": "ply\nformat ascii 1.0\nelement vertex 13\nproperty float x\nproperty float y\nproperty float z\nproperty float nx\nproperty float ny\nproperty float nz\nproperty float s\nproperty float t\nend_header\n1 2 3 0 0 1 0 0\n3 2 3 0 0 1 1 0\n3 4 3 0 0 1 1 1\n1 4 3 0 0 1 0 1\n0 0 0 0 0 0 0 0\n1 0 0 0 0 0 0 0\n0 1 0 0 0 0 0 0\n-2 0 0 0 0 0 0 0\n-1 0 0 0 0 0 0 0\n-2 1 0 0 0 0 0 0\n0 -1 0 0 1 0 0 0\n0.5 -1 0 0 1 0 0 0\n0 -0.75 0 0 1 0 0 0\n\n",
+ "ply_points_little": "cGx5CmZvcm1hdCBiaW5hcnlfbGl0dGxlX2VuZGlhbiAxLjAKZWxlbWVudCB2ZXJ0ZXggMTMKcHJvcGVydHkgZmxvYXQgeApwcm9wZXJ0eSBmbG9hdCB5CnByb3BlcnR5IGZsb2F0IHoKcHJvcGVydHkgZmxvYXQgbngKcHJvcGVydHkgZmxvYXQgbnkKcHJvcGVydHkgZmxvYXQgbnoKcHJvcGVydHkgZmxvYXQgcwpwcm9wZXJ0eSBmbG9hdCB0CmVuZF9oZWFkZXIKAACAPwAAAEAAAEBAAAAAAAAAAAAAAIA/AAAAAAAAAAAAAEBAAAAAQAAAQEAAAAAAAAAAAAAAgD8AAIA/AAAAAAAAQEAAAIBAAABAQAAAAAAAAAAAAACAPwAAgD8AAIA/AACAPwAAgEAAAEBAAAAAAAAAAAAAAIA/AAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgL8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAgD8AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACAvwAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAAD8AAIC/AAAAAAAAAAAAAIA/AAAAAAAAAAAAAAAAAAAAAAAAQL8AAAAAAAAAAAAAgD8AAAAAAAAAAAAAAAA=",
+ "ply_faces_ascii": "ply\nformat ascii 1.0\nelement vertex 10\nproperty float x\nproperty float y\nproperty float z\nproperty float nx\nproperty float ny\nproperty float nz\nproperty float s\nproperty float t\nelement face 4\nproperty list uchar int vertex_index\nend_header\n1 2 3 0 0 1 0 0\n3 2 3 0 0 1 1 0\n3 4 3 0 0 1 1 1\n1 4 3 0 0 1 0 1\n0 0 0 0 0 0 0 0\n1 0 0 0 0 0 0 0\n0 1 0 0 0 0 0 0\n-2 0 0 0 0 0 0 0\n-1 0 0 0 0 0 0 0\n-2 1 0 0 0 0 0 0\n3 0 1 2\n3 0 2 3\n3 4 5 6\n3 7 8 9\n\n",
+ "ply_faces_big": "cGx5CmZvcm1hdCBiaW5hcnlfYmlnX2VuZGlhbiAxLjAKZWxlbWVudCB2ZXJ0ZXggMTAKcHJvcGVydHkgZmxvYXQgeApwcm9wZXJ0eSBmbG9hdCB5CnByb3BlcnR5IGZsb2F0IHoKcHJvcGVydHkgZmxvYXQgbngKcHJvcGVydHkgZmxvYXQgbnkKcHJvcGVydHkgZmxvYXQgbnoKcHJvcGVydHkgZmxvYXQgcwpwcm9wZXJ0eSBmbG9hdCB0CmVsZW1lbnQgZmFjZSA0CnByb3BlcnR5IGxpc3QgdWNoYXIgaW50IHZlcnRleF9pbmRleAplbmRfaGVhZGVyCj+AAABAAAAAQEAAAAAAAAAAAAAAP4AAAAAAAAAAAAAAQEAAAEAAAABAQAAAAAAAAAAAAAA/gAAAP4AAAAAAAABAQAAAQIAAAEBAAAAAAAAAAAAAAD+AAAA/gAAAP4AAAD+AAABAgAAAQEAAAAAAAAAAAAAAP4AAAAAAAAA/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAC/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMAAAAA/gAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAwAAAAAAAAABAAAAAgMAAAAAAAAAAgAAAAMDAAAABAAAAAUAAAAGAwAAAAcAAAAIAAAACQ==",
+ "ply_cloud_ascii": "ply\nformat ascii 1.0\nelement vertex 10\nproperty float x\nproperty float y\nproperty float z\nend_header\n1 2 3\n3 2 3\n3 4 3\n1 4 3\n0 0 0\n1 0 0\n0 1 0\n-2 0 0\n-1 0 0\n-2 1 0\n\n",
+ "usdz": {
+  "files": {
+   "model.usda": "#usda 1.0\n(\n\tcustomLayerData = {\n\t\tstring creator = \"Three.js USDZExporter\"\n\t}\n\tdefaultPrim = \"Root\"\n\tmetersPerUnit = 1\n\tupAxis = \"Y\"\n)\n\ndef Xform \"Root\"\n{\n\tdef Scope \"Scenes\" (\n\t\tkind = \"sceneLibrary\"\n\t)\n\t{\n\t\tdef Xform \"Scene\" (\n\t\t\tcustomData = {\n\t\t\t\tbool preliminary_collidesWithEnvironment = 0\n\t\t\t\tstring sceneName = \"Scene\"\n\t\t\t}\n\t\t\tsceneName = \"Scene\"\n\t\t)\n\t\t{\n\t\t\ttoken preliminary:anchoring:type = \"plane\"\n\t\t\ttoken preliminary:planeAnchoring:alignment = \"horizontal\"\n\n\t\t\tdef Xform \"plain\" (\n\t\t\t\tprepend references = @./geometries/Geometry_9.usda@</Geometry>\n\t\t\t\tprepend apiSchemas = [\"MaterialBindingAPI\"]\n\t\t\t)\n\t\t\t{\n\t\t\t\tmatrix4d xformOp:transform = ( (2, 0, 0, 0), (0, 2, 0, 0), (0, 0, 2, 0), (1, 2, 3, 1) )\n\t\t\t\tuniform token[] xformOpOrder = [\"xformOp:transform\"]\n\t\t\t\trel material:binding = </Materials/Material_5>\n\t\t\t}\n\n\t\t\tdef Xform \"skin\" (\n\t\t\t\tprepend references = @./geometries/Geometry_10.usda@</Geometry>\n\t\t\t\tprepend apiSchemas = [\"MaterialBindingAPI\"]\n\t\t\t)\n\t\t\t{\n\t\t\t\tmatrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 0, 0, 1) )\n\t\t\t\tuniform token[] xformOpOrder = [\"xformOp:transform\"]\n\t\t\t\trel material:binding = </Materials/Material_5>\n\n\t\t\t\tdef Xform \"bone\"\n\t\t\t\t{\n\t\t\t\t\tmatrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (0, 3, 0, 1) )\n\t\t\t\t\tuniform token[] xformOpOrder = [\"xformOp:transform\"]\n\t\t\t\t}\n\t\t\t}\n\n\t\t\tdef Xform \"many\" (\n\t\t\t\tprepend references = @./geometries/Geometry_11.usda@</Geometry>\n\t\t\t\tprepend apiSchemas = [\"MaterialBindingAPI\"]\n\t\t\t)\n\t\t\t{\n\t\t\t\tmatrix4d xformOp:transform = ( (1, 0, 0, 0), (0, 1, 0, 0), (0, 0, 1, 0), (-2, 0, 0, 1) )\n\t\t\t\tuniform token[] xformOpOrder = [\"xformOp:transform\"]\n\t\t\t\trel material:binding = </Materials/Material_5>\n\t\t\t}\n\t\t}\n\t}\n}\n\ndef \"Materials\"\n{\n\tdef Material \"Material_5\"\n\t{\n\t\ttoken outputs:surface.connect = </Materials/Material_5/PreviewSurface.outputs:surface>\n\n\t\tdef Shader \"PreviewSurface\"\n\t\t{\n\t\t\tuniform token info:id = \"UsdPreviewSurface\"\n\t\t\tcolor3f inputs:diffuseColor = (1, 1, 1)\n\t\t\tfloat inputs:roughness = 1\n\t\t\tfloat inputs:metallic = 0\n\t\t\tfloat inputs:opacity = 1\n\t\t\tint inputs:useSpecularWorkflow = 0\n\t\t\ttoken outputs:surface\n\t\t}\n\t}\n}",
+   "geometries/Geometry_9.usda": "#usda 1.0\n(\n\tcustomLayerData = {\n\t\tstring creator = \"Three.js USDZExporter\"\n\t}\n\tdefaultPrim = \"Root\"\n\tmetersPerUnit = 1\n\tupAxis = \"Y\"\n)\n\ndef \"Geometry\"\n{\n\tdef Mesh \"Geometry\"\n\t{\n\t\tint[] faceVertexCounts = [3, 3]\n\t\tint[] faceVertexIndices = [0, 1, 2, 0, 2, 3]\n\t\tnormal3f[] normals = [(0.000000, 0.000000, 1.000000), (0.000000, 0.000000, 1.000000), (0.000000, 0.000000, 1.000000), (0.000000, 0.000000, 1.000000)] (\n\t\t\tinterpolation = \"vertex\"\n\t\t)\n\t\tpoint3f[] points = [(0.000000, 0.000000, 0.000000), (1.000000, 0.000000, 0.000000), (1.000000, 1.000000, 0.000000), (0.000000, 1.000000, 0.000000)]\n\t\ttexCoord2f[] primvars:st = [(0.000000, 1), (1.000000, 1), (1.000000, 0), (0.000000, 0)] (\n\t\t\tinterpolation = \"vertex\"\n\t\t)\n\t\tuniform token subdivisionScheme = \"none\"\n\t}\n}",
+   "geometries/Geometry_10.usda": "#usda 1.0\n(\n\tcustomLayerData = {\n\t\tstring creator = \"Three.js USDZExporter\"\n\t}\n\tdefaultPrim = \"Root\"\n\tmetersPerUnit = 1\n\tupAxis = \"Y\"\n)\n\ndef \"Geometry\"\n{\n\tdef Mesh \"Geometry\"\n\t{\n\t\tint[] faceVertexCounts = [3]\n\t\tint[] faceVertexIndices = [0, 1, 2]\n\t\tnormal3f[] normals = [(0, 0, 0), (0, 0, 0), (0, 0, 0)] (\n\t\t\tinterpolation = \"vertex\"\n\t\t)\n\t\tpoint3f[] points = [(0.000000, 0.000000, 0.000000), (1.000000, 0.000000, 0.000000), (0.000000, 1.000000, 0.000000)]\n\t\tuniform token subdivisionScheme = \"none\"\n\t}\n}",
+   "geometries/Geometry_11.usda": "#usda 1.0\n(\n\tcustomLayerData = {\n\t\tstring creator = \"Three.js USDZExporter\"\n\t}\n\tdefaultPrim = \"Root\"\n\tmetersPerUnit = 1\n\tupAxis = \"Y\"\n)\n\ndef \"Geometry\"\n{\n\tdef Mesh \"Geometry\"\n\t{\n\t\tint[] faceVertexCounts = [3]\n\t\tint[] faceVertexIndices = [0, 1, 2]\n\t\tnormal3f[] normals = [(0, 0, 0), (0, 0, 0), (0, 0, 0)] (\n\t\t\tinterpolation = \"vertex\"\n\t\t)\n\t\tpoint3f[] points = [(0.000000, 0.000000, 0.000000), (1.000000, 0.000000, 0.000000), (0.000000, 1.000000, 0.000000)]\n\t\tuniform token subdivisionScheme = \"none\"\n\t}\n}"
+  },
+  "geometries": [
+   9,
+   10,
+   11
+  ],
+  "material": 5
+ },
+ "gltf_plain": {
+  "asset": {
+   "version": "2.0",
+   "generator": "THREE.GLTFExporter r180"
+  },
+  "scenes": [
+   {
+    "nodes": [
+     0,
+     2
+    ],
+    "extras": {
+     "s": "scene",
+     "gltfExtensions": {
+      "EXT_scene": {
+       "on": true
+      }
+     }
+    }
+   }
+  ],
+  "scene": 0,
+  "nodes": [
+   {
+    "name": "holder",
+    "extras": {
+     "tag": "node",
+     "n": 1,
+     "list": [
+      1,
+      "two",
+      null
+     ],
+     "gltfExtensions": {
+      "EXT_node": {
+       "a": 1
+      }
+     }
+    },
+    "children": [
+     1
+    ]
+   },
+   {
+    "name": "thing",
+    "extras": {
+     "only": {
+      "gltfExtensions": 3
+     }
+    },
+    "mesh": 0
+   },
+   {
+    "name": "bare",
+    "extras": {
+     "gltfExtensions": {
+      "EXT_bare": {}
+     }
+    }
+   }
+  ],
+  "bufferViews": [
+   {
+    "buffer": 0,
+    "byteOffset": 0,
+    "byteLength": 36,
+    "target": 34962,
+    "byteStride": 12
+   }
+  ],
+  "buffers": [
+   {
+    "byteLength": 36,
+    "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"
+   }
+  ],
+  "accessors": [
+   {
+    "bufferView": 0,
+    "componentType": 5126,
+    "count": 3,
+    "max": [
+     1,
+     1,
+     0
+    ],
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "type": "VEC3"
+   }
+  ],
+  "materials": [
+   {
+    "pbrMetallicRoughness": {
+     "metallicFactor": 0,
+     "roughnessFactor": 1
+    },
+    "extras": {
+     "m": true,
+     "gltfExtensions": {
+      "EXT_mat": {
+       "b": [
+        1,
+        2
+       ]
+      }
+     }
+    }
+   }
+  ],
+  "meshes": [
+   {
+    "primitives": [
+     {
+      "mode": 4,
+      "attributes": {
+       "POSITION": 0
+      },
+      "material": 0
+     }
+    ]
+   }
+  ]
+ },
+ "gltf_custom": {
+  "asset": {
+   "version": "2.0",
+   "generator": "THREE.GLTFExporter r180"
+  },
+  "scenes": [
+   {
+    "nodes": [
+     0,
+     2
+    ],
+    "extensions": {
+     "EXT_scene": {
+      "on": true
+     }
+    },
+    "extras": {
+     "s": "scene"
+    }
+   }
+  ],
+  "scene": 0,
+  "nodes": [
+   {
+    "name": "holder",
+    "extensions": {
+     "EXT_node": {
+      "a": 1
+     }
+    },
+    "extras": {
+     "tag": "node",
+     "n": 1,
+     "list": [
+      1,
+      "two",
+      null
+     ]
+    },
+    "children": [
+     1
+    ]
+   },
+   {
+    "name": "thing",
+    "extras": {
+     "only": {
+      "gltfExtensions": 3
+     }
+    },
+    "mesh": 0
+   },
+   {
+    "name": "bare",
+    "extensions": {
+     "EXT_bare": {}
+    }
+   }
+  ],
+  "bufferViews": [
+   {
+    "buffer": 0,
+    "byteOffset": 0,
+    "byteLength": 36,
+    "target": 34962,
+    "byteStride": 12
+   }
+  ],
+  "buffers": [
+   {
+    "byteLength": 36,
+    "uri": "data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA"
+   }
+  ],
+  "accessors": [
+   {
+    "bufferView": 0,
+    "componentType": 5126,
+    "count": 3,
+    "max": [
+     1,
+     1,
+     0
+    ],
+    "min": [
+     0,
+     0,
+     0
+    ],
+    "type": "VEC3"
+   }
+  ],
+  "materials": [
+   {
+    "pbrMetallicRoughness": {
+     "metallicFactor": 0,
+     "roughnessFactor": 1
+    },
+    "extensions": {
+     "EXT_mat": {
+      "b": [
+       1,
+       2
+      ]
+     }
+    },
+    "extras": {
+     "m": true
+    }
+   }
+  ],
+  "meshes": [
+   {
+    "primitives": [
+     {
+      "mode": 4,
+      "attributes": {
+       "POSITION": 0
+      },
+      "material": 0
+     }
+    ]
+   }
+  ],
+  "extensionsUsed": [
+   "EXT_node",
+   "EXT_mat",
+   "EXT_bare",
+   "EXT_scene"
+  ]
+ },
+ "gltf_extras": {
+  "text": "{\"asset\":{\"version\":\"2.0\"},\"scene\":0,\"scenes\":[{\"nodes\":[0,1,2],\"extras\":{\"s\":1}}],\"nodes\":[{\"name\":\"one\",\"mesh\":0,\"extras\":{\"n\":\"node\",\"shared\":\"node\"}},{\"name\":\"two\",\"mesh\":1,\"extras\":{\"n\":2}},{\"mesh\":0,\"extras\":5}],\"meshes\":[{\"primitives\":[{\"attributes\":{\"POSITION\":0},\"material\":0}],\"extras\":{\"m\":\"mesh\",\"shared\":\"mesh\"}},{\"primitives\":[{\"attributes\":{\"POSITION\":0}},{\"attributes\":{\"POSITION\":0}}],\"extras\":{\"m\":\"two\"}}],\"materials\":[{\"extras\":{\"k\":[1,2]}}],\"accessors\":[{\"bufferView\":0,\"componentType\":5126,\"count\":3,\"type\":\"VEC3\",\"max\":[1,1,0],\"min\":[0,0,0]}],\"bufferViews\":[{\"buffer\":0,\"byteLength\":36}],\"buffers\":[{\"byteLength\":36,\"uri\":\"data:application/octet-stream;base64,AAAAAAAAAAAAAAAAAACAPwAAAAAAAAAAAAAAAAAAgD8AAAAA\"}]}",
+  "scene": {
+   "s": 1
+  },
+  "nodes": [
+   {
+    "m": "mesh",
+    "shared": "node",
+    "name": "one",
+    "n": "node"
+   },
+   {
+    "name": "two",
+    "n": 2
+   },
+   {
+    "m": "mesh",
+    "shared": "mesh"
+   }
+  ],
+  "parts": [
+   {
+    "m": "two"
+   },
+   {
+    "m": "two"
+   }
+  ],
+  "material": {
+   "k": [
+    1,
+    2
+   ]
+  }
+ },
+ "ply_mapped": {
+  "text": "ply\nformat ascii 1.0\nelement vertex 2\nproperty float x\nproperty float y\nproperty float z\nproperty uchar cr\nproperty uchar cg\nproperty uchar cb\nproperty float q1\nproperty float q2\nend_header\n0 0 0 255 0 0 1 2\n1 2 3 0 255 0 3 4\n",
+  "position": [
+   0,
+   0,
+   0,
+   1,
+   2,
+   3
+  ],
+  "color": [
+   1,
+   0,
+   0,
+   0,
+   1,
+   0
+  ],
+  "quality": [
+   1,
+   2,
+   3,
+   4
+  ],
+  "quality_size": 2
+ }
+}

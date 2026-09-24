@@ -180,7 +180,9 @@ def test_a_mesh_is_carried_into_world_space() raises:
     assert_equal(len(meshes), 4)
     assert_equal(meshes[0].name, "first")
     assert_equal(meshes[1].name, "second part")
-    assert_equal(meshes[2].name, "")
+    # In `traverse` order: both meshes of the child before the third node.
+    assert_equal(meshes[2].name, "second part")
+    assert_equal(meshes[3].name, "")
     var matrix = built.scene.world_matrix(built.scene.meshes[0].node)
     var point = matrix.transform_point(Vector3(1, 1, 0.5))
     assert_point(corner(meshes[0], 2), point.x, point.y, point.z)
@@ -192,7 +194,7 @@ def test_a_mesh_is_carried_into_world_space() raises:
     assert_true(meshes[0].with_normals and meshes[0].with_uvs)
     assert_equal(meshes[0].color_size, 3)
     assert_false(meshes[1].with_normals or meshes[1].with_uvs)
-    assert_equal(meshes[2].color_size, 4)
+    assert_equal(meshes[3].color_size, 4)
     assert_equal(len(meshes[1].triangles), 6)
     assert_equal(meshes[1].triangles[5], 5)
     # Nothing to carry: no meshes, and a mesh of no vertices.

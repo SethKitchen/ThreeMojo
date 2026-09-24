@@ -104,6 +104,19 @@ into one `weights` channel, as three.js's `mergeMorphTargetTracks`
 merges them; see `_Merged`. Any other track is left out, as three.js
 leaves it out.
 
+**User data and options.** A node's `user_data`, and the scene's and
+each material's user data from `GltfExportOptions`, are written as
+`extras`, as three.js's `serializeUserData` writes them. A `Scene` and a
+`Material` here hold no user data, so the options carry theirs. With
+`include_custom_extensions` on, a `gltfExtensions` object in user data
+is written as the object's `extensions` instead, each name also in
+`extensionsUsed`, and it must be an object. A custom extension comes
+before the ones this exporter writes, and one of the same name takes the
+exporter's value, as three.js's plugins overwrite it. `max_texture_size`
+clamps each side of an image, as three.js draws it on a canvas that
+size. The image is resampled bilinear at each pixel's center, where
+three.js lets the browser's canvas resample it.
+
 **Not written.** Ambient, hemisphere and rect area lights and light
 probes, a light's decay, batched meshes and sprites, and every map glTF
 has no place for: alpha, light, specular, displacement, environment,
@@ -148,6 +161,7 @@ from core.buffer_geometry import (
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.user_data import UserData, json_value_text
 from exporters.common import check_geometry, push_f32, push_word
 from exporters.json_writer import JsonWriter
 from loaders.gltf import (
@@ -183,6 +197,7 @@ from loaders.gltf import (
     WRAP_REPEAT,
     gl_filter,
 )
+from loaders.json import OBJECT, parse_json, quote_json
 from lights.light import DIRECTIONAL, POINT, SPOT, Light, LightKind
 from materials.material import (
     BASIC,
@@ -506,6 +521,167 @@ def _wrap_code(wrap: Wrap) -> Int:
     return WRAP_REPEAT
 
 
+struct GltfExportOptions(Copyable, Movable):
+    """The options of three.js's `GLTFExporter.parse` that go beyond the
+    arguments of `export_gltf`, and the user data that a `Scene` and a
+    `Material` here do not hold."""
+
+    # The largest width and height an image is written at, three.js's
+    # `maxTextureSize`, or none for no limit, three.js's `Infinity`.
+    var max_texture_size: Optional[Int]
+    # Write a `userData.gltfExtensions` object as `extensions`, three.js's
+    # `includeCustomExtensions`.
+    var include_custom_extensions: Bool
+    # The scene's user data, three.js's `scene.userData`, written as the
+    # glTF scene's `extras`.
+    var scene_user_data: UserData
+    # Each material's user data, three.js's `material.userData`, written
+    # as its `extras`: `material_user_data[i]` belongs to
+    # `material_ids[i]`. Set with `set_material_user_data`.
+    var material_ids: List[MaterialId]
+    var material_user_data: List[UserData]
+
+    def __init__(out self):
+        """Take three.js's defaults: no limit, no custom extensions, and
+        no user data."""
+        self.max_texture_size = None
+        self.include_custom_extensions = False
+        self.scene_user_data = UserData()
+        self.material_ids = List[MaterialId]()
+        self.material_user_data = List[UserData]()
+
+    def set_material_user_data(mut self, id: MaterialId, data: UserData):
+        """Give a material its user data, replacing what it had.
+
+        Args:
+            id: The material.
+            data: Its user data.
+        """
+        for at in range(len(self.material_ids)):
+            if self.material_ids[at] == id:
+                self.material_user_data[at] = data.copy()
+                return
+        self.material_ids.append(id)
+        self.material_user_data.append(data.copy())
+
+    def material_data(self, id: MaterialId) -> UserData:
+        """Return a material's user data.
+
+        Args:
+            id: The material.
+
+        Returns:
+            Its user data, or none when it was given none.
+        """
+        for at in range(len(self.material_ids)):
+            if self.material_ids[at] == id:
+                return self.material_user_data[at].copy()
+        return UserData()
+
+
+struct _UserParts(Movable):
+    """User data split as three.js's `serializeUserData` splits it: the
+    `extras`, and the custom extensions."""
+
+    # The `extras` object's text, or empty for none.
+    var extras: String
+    # Each custom extension's name and its value's text.
+    var names: List[String]
+    var values: List[String]
+
+    def __init__(out self):
+        """Start with neither."""
+        self.extras = String()
+        self.names = List[String]()
+        self.values = List[String]()
+
+
+def _user_parts(data: UserData, include: Bool) raises -> _UserParts:
+    """Split user data into `extras` and, when `include` is on, the custom
+    extensions its `gltfExtensions` holds, as three.js's
+    `serializeUserData` does."""
+    var parts = _UserParts()
+    var rest = data.copy()
+    if include and data.has("gltfExtensions"):
+        if data.kind("gltfExtensions") != OBJECT:
+            raise Error("glTF: userData.gltfExtensions must be an object")
+        var document = parse_json(data.json("gltfExtensions"))
+        for at in range(document.length(0)):
+            var name = document.key(0, at)
+            parts.names.append(name)
+            parts.values.append(
+                json_value_text(document, document.get(0, name))
+            )
+        _ = rest.remove("gltfExtensions")
+    if rest.count() > 0:
+        parts.extras = rest.to_json()
+    return parts^
+
+
+def _with_custom(parts: _UserParts, plugins: String) raises -> String:
+    """Return an `extensions` object: the custom extensions first, then the
+    ones this exporter writes, as three.js's plugins add theirs after
+    `serializeUserData`. A name in both keeps its first place and the
+    exporter's value, as three.js's plugin overwrites it. Empty for
+    none."""
+    if len(parts.names) == 0:
+        return plugins
+    var names = parts.names.copy()
+    var values = parts.values.copy()
+    if plugins != "":
+        var document = parse_json(plugins)
+        # The exporter writes an object only when it holds a key, and
+        # `names` holds one: both loops always run.
+        for at in range(document.length(0)):  # pragma: no branch
+            var name = document.key(0, at)
+            var text = json_value_text(document, document.get(0, name))
+            var slot = -1
+            for known in range(len(names)):  # pragma: no branch
+                if names[known] == name:
+                    slot = known
+            if slot >= 0:
+                values[slot] = text
+            else:
+                names.append(name)
+                values.append(text)
+    var out = String("{")
+    # `names` holds at least the custom extensions: the loop always runs.
+    for at in range(len(names)):  # pragma: no branch
+        if at > 0:
+            out += ","
+        out += quote_json(names[at]) + ":" + values[at]
+    return out + "}"
+
+
+def _resized(
+    pixels: List[UInt8], width: Int, height: Int, wide: Int, high: Int
+) -> List[UInt8]:
+    """Return an RGBA image resampled to `wide` by `high`, bilinear at each
+    pixel's center, as a canvas's `drawImage` with smoothing draws it."""
+    var out = List[UInt8](capacity=wide * high * 4)
+    for y in range(high):  # pragma: no branch
+        var fy = (Float64(y) + 0.5) * Float64(height) / Float64(high) - 0.5
+        fy = min(max(fy, 0.0), Float64(height - 1))
+        var y0 = Int(fy)
+        var y1 = min(y0 + 1, height - 1)
+        var ty = fy - Float64(y0)
+        for x in range(wide):  # pragma: no branch
+            var fx = (Float64(x) + 0.5) * Float64(width) / Float64(wide) - 0.5
+            fx = min(max(fx, 0.0), Float64(width - 1))
+            var x0 = Int(fx)
+            var x1 = min(x0 + 1, width - 1)
+            var tx = fx - Float64(x0)
+            for channel in range(4):  # pragma: no branch
+                var a = Float64(pixels[(y0 * width + x0) * 4 + channel])
+                var b = Float64(pixels[(y0 * width + x1) * 4 + channel])
+                var c = Float64(pixels[(y1 * width + x0) * 4 + channel])
+                var d = Float64(pixels[(y1 * width + x1) * 4 + channel])
+                var top = a + (b - a) * tx
+                var bottom = c + (d - c) * tx
+                out.append(UInt8(Int(top + (bottom - top) * ty + 0.5)))
+    return out^
+
+
 struct _Exporter(Movable):
     """The document's arrays as JSON texts, the buffer's bytes, and what
     has been written already."""
@@ -555,14 +731,17 @@ struct _Exporter(Movable):
     # the ones a reader must know.
     var used: List[String]
     var required: List[String]
+    var options: GltfExportOptions
 
-    def __init__(out self, embed: Bool):
+    def __init__(out self, embed: Bool, var options: GltfExportOptions):
         """Start an empty document.
 
         Args:
             embed: True to write images as `data:` URIs.
+            options: The options to write by.
         """
         self.embed = embed
+        self.options = options^
         self.bin = List[UInt8]()
         self.views = List[String]()
         self.accessors = List[String]()
@@ -607,6 +786,15 @@ struct _Exporter(Movable):
         self.use(name)
         if not (name in self.required):
             self.required.append(name)
+
+    def user_parts(mut self, data: UserData) raises -> _UserParts:
+        """Split user data into `extras` and custom extensions, and record
+        each custom extension as used, as three.js's `serializeUserData`
+        does."""
+        var parts = _user_parts(data, self.options.include_custom_extensions)
+        for name in parts.names:
+            self.use(name)
+        return parts^
 
     def pad(mut self):
         """Pad the buffer to a multiple of four bytes, where every view
@@ -932,7 +1120,19 @@ struct _Exporter(Movable):
             _copy_channel(pixels, first, 1, leader, assets)
             _copy_channel(pixels, second, 2, leader, assets)
         var sampler = self.sampler(leader)
-        var image = self.image(pixels^, leader.width, leader.height)
+        var width = leader.width
+        var height = leader.height
+        if Bool(self.options.max_texture_size):
+            # three.js draws the image on a canvas of at most this size a
+            # side, each side clamped on its own.
+            var most = self.options.max_texture_size.value()
+            if width > most or height > most:
+                var wide = min(width, most)
+                var high = min(height, most)
+                pixels = _resized(pixels, width, height, wide, high)
+                width = wide
+                height = high
+        var image = self.image(pixels^, width, height)
         var writer = JsonWriter()
         writer.begin_object()
         writer.key("sampler")
@@ -1080,7 +1280,11 @@ struct _Exporter(Movable):
         if material.side == DOUBLE_SIDE:
             writer.key("doubleSided")
             writer.boolean(True)
-        var extensions = self.extensions(material, assets)
+        var parts = self.user_parts(self.options.material_data(id))
+        if parts.extras != "":
+            writer.key("extras")
+            writer.raw(parts.extras)
+        var extensions = _with_custom(parts, self.extensions(material, assets))
         if extensions != "":
             writer.key("extensions")
             writer.raw(extensions)
@@ -1886,7 +2090,11 @@ struct _Exporter(Movable):
         channels.append(channel.finish())
 
     def document(
-        self, roots: List[Int], nodes: List[String], uri: String
+        self,
+        roots: List[Int],
+        nodes: List[String],
+        uri: String,
+        scene: _UserParts,
     ) raises -> String:
         """Return the whole JSON document. The buffer is padded already."""
         var writer = JsonWriter()
@@ -1926,6 +2134,12 @@ struct _Exporter(Movable):
         if len(roots) > 0:
             writer.key("nodes")
             _write_integers(writer, roots)
+        if scene.extras != "":
+            writer.key("extras")
+            writer.raw(scene.extras)
+        if len(scene.names) > 0:
+            writer.key("extensions")
+            writer.raw(_with_custom(scene, ""))
         writer.end_object()
         writer.end_array()
         _write_array(writer, "nodes", nodes)
@@ -2506,10 +2720,11 @@ def _node_json(
     children: List[Int],
     camera: Int,
     skin: Int,
+    extras: String,
     extensions: String,
 ) raises -> String:
     """Return one node as glTF writes it: -1 for no mesh, camera or
-    skin, and an empty string for no extensions."""
+    skin, and an empty string for no extras and no extensions."""
     var writer = JsonWriter()
     writer.begin_object()
     if node.name != "":
@@ -2541,9 +2756,9 @@ def _node_json(
             elements.append(node.matrix.elements[index])
         writer.key("matrix")
         _write_numbers(writer, elements)
-    if node.user_data.count() > 0:
+    if extras != "":
         writer.key("extras")
-        writer.raw(node.user_data.to_json())
+        writer.raw(extras)
     if mesh >= 0:
         writer.key("mesh")
         writer.integer(mesh)
@@ -2595,6 +2810,7 @@ def export_gltf(
     only_visible: Bool = True,
     cameras: CameraList = CameraList(),
     animations: List[AnimationClip] = List[AnimationClip](),
+    options: GltfExportOptions = GltfExportOptions(),
 ) raises -> GltfFiles:
     """Return a scene and the assets it draws with as a glTF 2.0 file.
 
@@ -2614,6 +2830,8 @@ def export_gltf(
             three.js writes a camera in the scene graph.
         animations: The clips to write, as three.js's `animations` option
             writes them.
+        options: The texture size limit, the custom extensions, and the
+            user data of the scene and the materials.
 
     Returns:
         The file, and the `.bin` for `GLTF_SEPARATE`.
@@ -2634,10 +2852,14 @@ def export_gltf(
             geometry's skin is not four whole bone indices and four
             weights a vertex, an instanced mesh has no instances, a line
             or points geometry is indexed, or a clip's morph tracks name a
-            target that is not there or cannot be merged.
+            target that is not there or cannot be merged. Also if
+            `max_texture_size` is below one, or custom extensions are
+            written and a `gltfExtensions` is not an object.
     """
     if not container.is_valid():
         raise Error("glTF: a container that is none of the three")
+    if Bool(options.max_texture_size) and options.max_texture_size.value() < 1:
+        raise Error("glTF: maxTextureSize must be one pixel or more")
     if container == GLTF_SEPARATE and not _is_relative_name(binary_name):
         raise Error("glTF: the .bin needs a relative name: " + binary_name)
     var count = scene.count()
@@ -2665,7 +2887,7 @@ def export_gltf(
         else:
             children[written[parent.value]].append(written[index])
     _carry(scene, cameras, written, carried)
-    var exporter = _Exporter(container != GLB)
+    var exporter = _Exporter(container != GLB, options.copy())
     var meshes = List[Int]()
     var instancing = List[String]()
     var morphs = List[Int]()
@@ -2688,6 +2910,7 @@ def export_gltf(
             camera = exporter.orthographic(
                 cameras.orthographic[carried[at].orthographic], node.name
             )
+        var parts = exporter.user_parts(node.user_data)
         var extensions = JsonWriter()
         extensions.begin_object()
         if carried[at].light >= 0:
@@ -2710,15 +2933,19 @@ def export_gltf(
                 children[at],
                 camera,
                 skins[at],
-                extensions.finish() if extended else "",
+                parts.extras,
+                _with_custom(parts, extensions.finish() if extended else ""),
             )
         )
     for clip in animations:
         exporter.animation(clip, scene, written, morphs)
+    var top = exporter.user_parts(options.scene_user_data)
     exporter.pad()
     var files = GltfFiles()
     if container == GLB:
-        files.document = _glb(exporter.document(roots, nodes, ""), exporter.bin)
+        files.document = _glb(
+            exporter.document(roots, nodes, "", top), exporter.bin
+        )
         return files^
     var uri = binary_name
     if container == GLTF_SEPARATE:
@@ -2727,7 +2954,7 @@ def export_gltf(
         uri = "data:application/octet-stream;base64," + encode_base64(
             exporter.bin
         )
-    files.document.extend(exporter.document(roots, nodes, uri).as_bytes())
+    files.document.extend(exporter.document(roots, nodes, uri, top).as_bytes())
     return files^
 
 
@@ -2805,6 +3032,7 @@ def write_gltf(
     only_visible: Bool = True,
     cameras: CameraList = CameraList(),
     animations: List[AnimationClip] = List[AnimationClip](),
+    options: GltfExportOptions = GltfExportOptions(),
 ) raises:
     """Write a scene and its assets to a `.gltf` or a `.glb` file.
 
@@ -2821,6 +3049,7 @@ def write_gltf(
             `export_gltf`.
         cameras: The cameras to write; see `export_gltf`.
         animations: The clips to write; see `export_gltf`.
+        options: The other options; see `export_gltf`.
 
     Raises:
         Error: If a file cannot be written, or anything `export_gltf`
@@ -2828,7 +3057,14 @@ def write_gltf(
     """
     var name = binary_name_for(path)
     var files = export_gltf(
-        scene, assets, container, name, only_visible, cameras, animations
+        scene,
+        assets,
+        container,
+        name,
+        only_visible,
+        cameras,
+        animations,
+        options,
     )
     Path(path).write_bytes(files.document)
     if len(files.binary) > 0:

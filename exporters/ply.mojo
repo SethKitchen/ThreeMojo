@@ -3,16 +3,28 @@
 # Noncommercial use is free; commercial use requires a paid license.
 # See LICENSE, LICENSE-COMMERCIAL.md and THIRD-PARTY-NOTICES.md.
 
-"""A scene's meshes written as a PLY file: three.js's `PLYExporter`, and
-the other half of `loaders.ply`.
+"""A scene's meshes and points written as a PLY file: three.js's
+`PLYExporter`, and the other half of `loaders.ply`.
 
-Every mesh goes into one `vertex` element and one `face` element, in world
-space, as three.js writes them. A vertex has `x`, `y` and `z` as
+Every mesh and every `Points` goes into one `vertex` element, and every
+mesh into one `face` element, in world space, in three.js's `traverse`
+order, as three.js writes them. A skinned mesh is at rest and an
+instanced mesh is its one geometry; see `exporters.common`. A vertex has `x`, `y` and `z` as
 `float`; `nx`, `ny` and `nz` when any mesh has normals; `s` and `t` when
 any has texture coordinates; and `red`, `green` and `blue` as `uchar`
 when any has colors. A mesh without one of them writes zeros for its
 normal and texture coordinate and white for its color, as three.js does.
 A face is `property list uchar int vertex_index`, three corners each.
+A text file ends with one more line break after the last row, as
+three.js ends it.
+
+**Points and faces.** A scene with points writes no `face` element, as
+three.js writes none then, and its meshes need not be whole triangles.
+`exclude_index` does the same for a scene of meshes alone. Texture
+coordinates are written when a mesh has them, and then a point writes
+its own or zeros, as three.js writes them. `exclude_normals`,
+`exclude_uvs` and `exclude_colors` leave the other properties out, as
+three.js's `excludeAttributes` does.
 
 The format is `loaders.ply`'s own `PlyFormat`: `PLY_ASCII`, the default,
 `PLY_BINARY_LITTLE_ENDIAN` or `PLY_BINARY_BIG_ENDIAN`, the three that
@@ -28,7 +40,14 @@ written again. Alpha is not written, as three.js writes none.
 
 from core.assets import Assets
 from core.scene import Scene
-from exporters.common import format_float32, push_f32, push_word, world_meshes
+from exporters.common import (
+    WORLD_POINTS,
+    WorldOptions,
+    format_js_float32,
+    push_f32,
+    push_word,
+    world_meshes,
+)
 from loaders.ply import (
     PLY_ASCII,
     PLY_BINARY_BIG_ENDIAN,
@@ -78,7 +97,7 @@ struct _Rows:
     def number(mut self, value: Float32) raises:
         """Write a `float`."""
         if self.text:
-            self.line += " " + format_float32(value)
+            self.line += " " + format_js_float32(value)
         else:
             push_f32(self.bytes, value, self.little)
 
@@ -98,37 +117,70 @@ struct _Rows:
 
 
 def export_ply(
-    scene: Scene, assets: Assets, format: PlyFormat = PLY_ASCII
+    scene: Scene,
+    assets: Assets,
+    format: PlyFormat = PLY_ASCII,
+    *,
+    exclude_normals: Bool = False,
+    exclude_uvs: Bool = False,
+    exclude_colors: Bool = False,
+    exclude_index: Bool = False,
 ) raises -> List[UInt8]:
-    """Return a scene's meshes as the bytes of a PLY file.
+    """Return a scene's meshes and points as the bytes of a PLY file.
+
+    The four `exclude_` flags are three.js's `excludeAttributes` of
+    `normal`, `uv`, `color` and `index`.
 
     Args:
         scene: The scene. It must be current.
         assets: Where its geometries are.
         format: `PLY_ASCII`, `PLY_BINARY_LITTLE_ENDIAN` or
             `PLY_BINARY_BIG_ENDIAN`.
+        exclude_normals: Write no `nx`, `ny` and `nz`.
+        exclude_uvs: Write no `s` and `t`.
+        exclude_colors: Write no `red`, `green` and `blue`.
+        exclude_index: Write no `face` element: a point cloud.
 
     Returns:
         The file.
 
     Raises:
-        Error: If the format is none of the three, or anything
+        Error: If the format is none of the three, faces are written and
+            a mesh is not whole triangles, or anything
             `exporters.common.world_meshes` raises.
     """
     if not format.is_valid():
         raise Error("PLY: a format that is none of the three")
-    var meshes = world_meshes(scene, assets)
+    var meshes = world_meshes(
+        scene, assets, WorldOptions(points=True, whole_triangles=False)
+    )
     var vertices = 0
     var faces = 0
+    var index = not exclude_index
     var normals = False
     var uvs = False
     var colors = False
     for mesh in meshes:
         vertices += mesh.vertex_count()
-        faces += len(mesh.triangles) // 3
         normals = normals or mesh.with_normals
-        uvs = uvs or mesh.with_uvs
         colors = colors or mesh.color_size > 0
+        if mesh.kind == WORLD_POINTS:
+            # three.js writes no faces once the scene has points.
+            index = False
+        else:
+            faces += len(mesh.triangles) // 3
+            # three.js sets `includeUVs` from its meshes alone.
+            uvs = uvs or mesh.with_uvs
+    normals = normals and not exclude_normals
+    uvs = uvs and not exclude_uvs
+    colors = colors and not exclude_colors
+    if index:
+        for mesh in meshes:
+            if len(mesh.triangles) % 3 != 0:
+                raise Error(
+                    "PLY: a mesh must hold whole triangles to be written"
+                    " with faces"
+                )
     var header = String("ply\nformat ")
     header += _format_name(format) + " 1.0\n"
     header += "element vertex " + String(vertices) + "\n"
@@ -141,8 +193,10 @@ def export_ply(
         header += (
             "property uchar red\nproperty uchar green\nproperty uchar blue\n"
         )
-    header += "element face " + String(faces) + "\n"
-    header += "property list uchar int vertex_index\nend_header\n"
+    if index:
+        header += "element face " + String(faces) + "\n"
+        header += "property list uchar int vertex_index\n"
+    header += "end_header\n"
     var rows = _Rows(format)
     rows.bytes.extend(header.as_bytes())
     for mesh in meshes:
@@ -173,21 +227,33 @@ def export_ply(
             rows.end()
     var base = 0
     for mesh in meshes:
-        for face in range(len(mesh.triangles) // 3):
-            rows.word(3, 1)
-            for corner in range(3):  # pragma: no branch
-                rows.word(base + mesh.triangles[face * 3 + corner], 4)
-            rows.end()
+        if index:
+            for face in range(len(mesh.triangles) // 3):
+                rows.word(3, 1)
+                for corner in range(3):  # pragma: no branch
+                    rows.word(base + mesh.triangles[face * 3 + corner], 4)
+                rows.end()
         base += mesh.vertex_count()
+    if rows.text:
+        # three.js ends a text file with one more line break.
+        rows.bytes.append(10)
     var out = List[UInt8]()
     swap(out, rows.bytes)
     return out^
 
 
 def write_ply(
-    path: String, scene: Scene, assets: Assets, format: PlyFormat = PLY_ASCII
+    path: String,
+    scene: Scene,
+    assets: Assets,
+    format: PlyFormat = PLY_ASCII,
+    *,
+    exclude_normals: Bool = False,
+    exclude_uvs: Bool = False,
+    exclude_colors: Bool = False,
+    exclude_index: Bool = False,
 ) raises:
-    """Write a scene's meshes to a PLY file.
+    """Write a scene's meshes and points to a PLY file.
 
     Args:
         path: The file.
@@ -195,9 +261,23 @@ def write_ply(
         assets: Where its geometries are.
         format: `PLY_ASCII`, `PLY_BINARY_LITTLE_ENDIAN` or
             `PLY_BINARY_BIG_ENDIAN`.
+        exclude_normals: Write no normals; see `export_ply`.
+        exclude_uvs: Write no texture coordinates.
+        exclude_colors: Write no colors.
+        exclude_index: Write no faces.
 
     Raises:
         Error: If the file cannot be written, or anything `export_ply`
             raises.
     """
-    Path(path).write_bytes(export_ply(scene, assets, format))
+    Path(path).write_bytes(
+        export_ply(
+            scene,
+            assets,
+            format,
+            exclude_normals=exclude_normals,
+            exclude_uvs=exclude_uvs,
+            exclude_colors=exclude_colors,
+            exclude_index=exclude_index,
+        )
+    )

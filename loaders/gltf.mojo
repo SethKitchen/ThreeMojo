@@ -90,6 +90,16 @@ that reads a third set of texture coordinates or past it, since a
 geometry here has only `uv` and `uv1`; and a skinned node that is
 instanced, where three.js drops the skin.
 
+**Extras.** An object's `extras` become user data, as three.js's
+`assignExtrasToUserData` makes them. A node's become its `user_data`,
+after its `name`, which three.js also keeps as `userData.name`. A node
+whose mesh has one primitive, and that has no camera and no light and is
+not a joint, takes the mesh's `extras` first, since three.js's node is
+that mesh. A `Mesh`, a `Material` and a `Scene` here hold no user data,
+so `GltfModel.mesh_extras`, `material_extras` and `scene_extras` hold
+theirs. `extras` that are not an object are skipped, as three.js skips
+them.
+
 **Points and lines.** A primitive of points or of lines becomes a
 `Points` or a `Line`, as three.js's `GLTFLoader.loadMesh` builds them,
 with a `BASIC` material made from the file's: see `unlit_material`. An
@@ -173,6 +183,7 @@ from core.buffer_geometry import (
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
+from core.user_data import UserData, user_data_of
 from lights.light import directional_light, point_light, spot_light
 from loaders.draco import (
     DRACO_TRIANGULAR_MESH,
@@ -566,6 +577,13 @@ struct GltfModel(Copyable, Movable):
     # One clip per glTF animation that drives something the loaded scene
     # reaches, in the file's order.
     var animations: List[AnimationClip]
+    # Each glTF mesh's `extras`, three.js's `mesh.userData`, or empty.
+    var mesh_extras: List[UserData]
+    # Each glTF material's `extras`, three.js's `material.userData`, or
+    # empty. A `Material` here holds no user data; see `read_gltf`.
+    var material_extras: List[UserData]
+    # The loaded scene's `extras`, three.js's `scene.userData`, or empty.
+    var scene_extras: UserData
 
     def __init__(out self):
         """Start empty."""
@@ -591,6 +609,9 @@ struct GltfModel(Copyable, Movable):
         self.light_count = 0
         self.cameras = List[GltfCamera]()
         self.animations = List[AnimationClip]()
+        self.mesh_extras = List[UserData]()
+        self.material_extras = List[UserData]()
+        self.scene_extras = UserData()
 
     def node_count(self) -> Int:
         """Return how many nodes the file has."""
@@ -1078,6 +1099,27 @@ struct _Loader(Movable):
         if found == NO_NODE:
             return String()
         return self.document.string(found)
+
+    def extras(self, node: Int) raises -> UserData:
+        """Return an object's `extras` as user data, three.js's
+        `assignExtrasToUserData`: empty when there are none, and when they
+        are not an object, which three.js ignores."""
+        var found = self.document.get(node, "extras")
+        if found == NO_NODE or self.document.kind(found) != OBJECT:
+            return UserData()
+        return user_data_of(self.document, found)
+
+    def is_joint(self, index: Int) raises -> Bool:
+        """Return True if a skin names a node as a joint, which three.js's
+        `GLTFLoader` makes a `Bone` rather than the node's mesh."""
+        for skin in range(self.count("skins")):
+            var joints = self.array_of(self.entry("skins", skin), "joints")
+            for slot in range(self.document.length(joints)):
+                if self.document.integer(self.document.at(joints, slot)) == (
+                    index
+                ):
+                    return True
+        return False
 
     def flag(self, node: Int, key: String) raises -> Bool:
         """Return an object's boolean under `key`, or False."""
@@ -1638,6 +1680,7 @@ struct _Loader(Movable):
             elif mode != "" and mode != "OPAQUE" and mode != "BLEND":
                 raise Error("glTF: alphaMode must be OPAQUE, MASK or BLEND")
             self.model.materials.append(assets.materials.add(built))
+            self.model.material_extras.append(self.extras(material))
             self.tinted_materials.append(MaterialId(0))
             self.has_tinted.append(False)
 
@@ -1966,6 +2009,7 @@ struct _Loader(Movable):
             self.model.first_primitives.append(len(self.model.geometries))
             var count = self.document.length(primitives)
             self.model.primitive_counts.append(count)
+            self.model.mesh_extras.append(self.extras(mesh))
             var targets = 0
             var names = self.target_names(mesh)
             for slot in range(count):
@@ -2239,6 +2283,7 @@ struct _Loader(Movable):
             return
         var chosen = self.integer(self.document.root(), "scene", 0)
         var top = self.entry("scenes", chosen)
+        self.model.scene_extras = self.extras(top)
         var roots = self.document.get(top, "nodes")
         if roots == NO_NODE:
             return
@@ -2280,6 +2325,7 @@ struct _Loader(Movable):
         var node = self.entry("nodes", index)
         var placed = Object3D()
         placed.name = self.model.node_names[index]
+        placed.user_data = self.node_user_data(node, index)
         var matrix = self.numbers(node, "matrix", 16)
         if len(matrix) == 16:
             _apply_matrix(placed, matrix)
@@ -2336,6 +2382,32 @@ struct _Loader(Movable):
                     self.document.at(children, slot)
                 )
                 self.place(child, id, scene, assets)
+
+    def node_user_data(self, node: Int, index: Int) raises -> UserData:
+        """Return a node's user data as three.js's `GLTFLoader.loadNode`
+        leaves it: its mesh's `extras` when the mesh is the node, its
+        `name`, and its own `extras`, each over the one before."""
+        var data = UserData()
+        var mesh = self.integer(node, "mesh", -1)
+        # three.js's node is its mesh when the mesh is the one object it
+        # makes: one primitive, no camera, no light, and not a joint.
+        var alone = (
+            mesh >= 0
+            and mesh < len(self.model.mesh_extras)
+            and self.model.primitive_counts[mesh] == 1
+            and not self.document.has(node, "camera")
+            and self.extension(node, LIGHTS_PUNCTUAL) == NO_NODE
+        )
+        if alone and not self.is_joint(index):
+            data = UserData(copy=self.model.mesh_extras[mesh])
+        var name = self.model.node_names[index]
+        if name != "":
+            data.set_string("name", name)
+        var own = self.extras(node)
+        for at in range(own.count()):
+            var key = own.key(at)
+            data.set_json(key, own.json(key))
+        return data^
 
     def morph_weights(self, node: Int, mesh: Int) raises -> List[Float32]:
         """Return the morph influences a node's mesh starts at: the node's

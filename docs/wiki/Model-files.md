@@ -86,13 +86,33 @@ scene.add_mesh(obj_mesh(read.materials[0], shape, node))
 
 | Function | Meaning |
 |---|---|
-| `read_mtl(path, assets) -> MtlLibrary` | Read a file. Texture file names are relative to its directory. |
-| `parse_mtl(text, directory, assets) -> MtlLibrary` | Read the text of one. `directory` ends in `/`, or is empty. |
+| `read_mtl(path, assets, options) -> MtlLibrary` | Read a file. Texture file names are relative to its directory. |
+| `parse_mtl(text, directory, assets, options) -> MtlLibrary` | Read the text of one. `directory` ends in `/`, or is empty. |
 | `set_materials(model, library, assets) -> List[List[MaterialId]]` | One list for each object of an `ObjModel`, in its order, with one `MaterialId` for each entry of the object's `materials`. |
 | `obj_mesh(materials, geometry, node) -> Mesh` | The mesh three.js builds for an object: one material, or a list when there are more. |
-| `read_obj_with_materials(path, assets) -> ObjWithMaterials` | Read an OBJ file and each library its `mtllib` lines name. |
+| `read_obj_with_materials(path, assets, options) -> ObjWithMaterials` | Read an OBJ file and each library its `mtllib` lines name. |
 
 `ObjWithMaterials` has `model`, the `ObjModel`, `library`, the combined `MtlLibrary`, and `materials`, one list of `MaterialId`s for each object. The loader reads each library relative to the OBJ file. A material in a later library replaces a material of the same name in an earlier one.
+
+### Options
+
+`MtlOptions` holds the options of three.js's `MTLLoader.setMaterialOptions`. Each option is a keyword. The defaults read a file as three.js reads it with no options.
+
+| Field | three.js | Default | Meaning |
+|---|---|---|---|
+| `side` | `side` | `FRONT_SIDE` | The side of each material, a default material too. |
+| `wrap` | `wrap` | `REPEAT` | The wrap of each texture. A `-clamp on` still clamps. |
+| `normalize_rgb` | `normalizeRGB` | `False` | Read `Kd` and `Ks` from 0 to 255, and divide them by 255. |
+| `ignore_zero_rgbs` | `ignoreZeroRGBs` | `False` | Skip a `Kd` or `Ks` of three zeros. The default color stays. |
+| `invert_tr_property` | `invertTrProperty` | `False` | Read `Tr` as the opacity. |
+
+Neither `normalize_rgb` nor `ignore_zero_rgbs` changes `Ke`, as in three.js. The loader refuses a `side` or a `wrap` that is none of the named values.
+
+```mojo
+var library = read_mtl(
+    "assets/cube.mtl", assets, MtlOptions(side=DOUBLE_SIDE, wrap=MIRROR)
+)
+```
 
 ### MtlLibrary
 
@@ -143,7 +163,7 @@ A texture line has options, then a file name. The file name can contain spaces.
 | `-o u v w` | The texture's `offset`. `w` is ignored. When `v` is missing, it is zero. |
 | `-bm n` | The material's `bump_scale`, on any texture line, as three.js reads it. |
 | `-mm base gain` | Read and ignored. It scales a displacement map, and this loader skips `disp`. |
-| `-clamp on`, `-clamp off` | `CLAMP` or `REPEAT` wrap. three.js always repeats. |
+| `-clamp on`, `-clamp off` | `CLAMP`, or the `wrap` of the options. three.js always uses the `wrap` of the options. |
 
 A texture repeats by default, as in three.js. The loader decodes PNG, JPEG and TGA images, and tells them apart by their first bytes. A color map is `SRGB`, and its alpha is coverage. An emissive map is `SRGB`, and its alpha is `IGNORED`. An alpha map, a bump map and a normal map are `LINEAR`, and their alpha is `IGNORED`. One image read the same way twice gives one texture.
 
@@ -151,7 +171,7 @@ A texture repeats by default, as in three.js. The loader decodes PNG, JPEG and T
 
 - `map_Ks`, the specular map, is skipped. `Material.specular_map` can hold one, but this loader does not read it.
 - `disp`, the displacement map, is skipped. `Material.displacement_map` can hold one, but this loader does not read it.
-- The options of `MTLLoader` are not ported: `side`, `wrap`, `normalizeRGB`, `ignoreZeroRGBs` and `invertTrProperty`.
+- `-clamp on` clamps a texture. three.js ignores `-clamp` and uses the `wrap` option.
 - An unknown texture option is refused. three.js reads it as part of the file name, and then cannot load the file.
 - A color above one is refused. `Color` holds eight bits for each channel.
 
@@ -160,7 +180,8 @@ A texture repeats by default, as in three.js. The loader decodes PNG, JPEG and T
 The loader raises, and names the line, for:
 
 - A `newmtl` line with no name.
-- A color that is not three numbers from zero to one.
+- A color that is not three numbers from zero to one, or from 0 to 255 with `normalize_rgb`.
+- A `side` or a `wrap` in the options that is none of the named values.
 - An `Ns` that is not a number, is not finite, or is negative.
 - A `d` or `Tr` outside zero to one.
 - An `illum` that is not a whole number from 0 to 10.
@@ -236,8 +257,8 @@ var shape = assets.geometries.add(read_ply("assets/cube.ply"))
 
 | Function | Meaning |
 |---|---|
-| `read_ply(path) -> BufferGeometry` | Read a file. |
-| `parse_ply(bytes) -> BufferGeometry` | Read the bytes of one. |
+| `read_ply(path, options) -> BufferGeometry` | Read a file. |
+| `parse_ply(bytes, options) -> BufferGeometry` | Read the bytes of one. |
 | `ply_format(name) -> PlyFormat` | The format a `format` line names. |
 | `ply_scalar(name) -> PlyScalar` | The type a `property` line names. |
 | `decode_ply_scalar(bytes, at, scalar, format) -> Float64` | One binary value. |
@@ -250,8 +271,8 @@ The loader reads the three formats: `ascii`, `binary_little_endian` and `binary_
 
 | Element and property | Attribute |
 |---|---|
-| `vertex`: `x`, `y`, `z` | `position`. A file must have them. |
-| `vertex`: `nx`, `ny`, `nz` | `normal`. |
+| `vertex`: `x`, `y`, `z`, or `px`, `py`, `pz`, or `posx`, `posy`, `posz` | `position`. A file must have them. |
+| `vertex`: `nx`, `ny`, `nz`, or `normalx`, `normaly`, `normalz` | `normal`. |
 | `vertex`: `s`, `t`, or `u`, `v`, or `texture_u`, `texture_v`, or `tx`, `ty` | `uv`. |
 | `vertex`: `red`, `green`, `blue`, or `r`, `g`, `b`, or `diffuse_red` and so on | `color`, divided by 255 and decoded from sRGB. |
 | `vertex`: `alpha` or `a` | The fourth channel of `color`, divided by 255. three.js does not read it. |
@@ -260,6 +281,24 @@ The loader reads the three formats: `ascii`, `binary_little_endian` and `binary_
 A face of more than three corners becomes a fan of triangles from its first corner. Thus the face must be convex, as an OBJ face must be. three.js cuts a quad on the other diagonal, and it does not read a face of five or more corners.
 
 The loader reads past all other elements and properties. A file without a `face` element is a point cloud, and its geometry has no index.
+
+### Options
+
+`PlyOptions` holds three.js's `setPropertyNameMapping` and `setCustomPropertyNameMapping`.
+
+| Method | three.js | Meaning |
+|---|---|---|
+| `set_property_name(name, read_as)` | `setPropertyNameMapping` | Read a property of the file as another name, in every element. |
+| `set_custom_attribute(attribute, properties)` | `setCustomPropertyNameMapping` | Read vertex properties into an attribute of their own. The item size is the count of properties. |
+
+```mojo
+var options = PlyOptions()
+options.set_property_name("diffuse_red", "red")
+options.set_custom_attribute("quality", ["q1", "q2"])
+var shape = read_ply("assets/scan.ply", options)
+```
+
+A custom attribute names properties after the renames. It is read after the named attributes, so a custom `position` replaces the positions, as in three.js. An empty list of properties reads nothing, as in three.js. A property that the `vertex` element does not have is refused. three.js reads `NaN` for it.
 
 ### Errors
 
@@ -270,6 +309,7 @@ The loader raises, and names the element and the row, for:
 - A property before any element. An element named twice. A list length that is not an integer type.
 - A header line that is not `format`, `element`, `property`, `comment` or `obj_info`.
 - No `vertex` element, or a vertex without `x`, `y` and `z`. A vertex property that is a list.
+- A custom attribute that names a property the `vertex` element does not have, or a list.
 - Only some channels of a normal, a texture coordinate or a color. An alpha without a color.
 - A face without a list of integer vertex indices.
 - An ASCII row with too few or too many values. A value that is not a number of its type, or is out of its range.
@@ -320,6 +360,20 @@ The model says what went where, by the file's own indices.
 | `first_light`, `light_count` | Where the lights this file added begin in `scene.lights`, and how many. |
 | `cameras` | One `GltfCamera` per node that carries a camera and that the loaded scene reaches. |
 | `animations` | One `AnimationClip` per animation that drives something the loaded scene reaches, in file order. |
+| `mesh_extras` | One `UserData` per glTF mesh: its `extras`, three.js's `mesh.userData`. |
+| `material_extras` | One `UserData` per glTF material: its `extras`, three.js's `material.userData`. |
+| `scene_extras` | The `extras` of the loaded scene, three.js's `scene.userData`. |
+
+### Extras
+
+The loader reads `extras` into user data, as three.js's `assignExtrasToUserData` does. User data is a `UserData` from `core/user_data.mojo`, the same map that [Scene JSON](Scene-JSON) reads.
+
+- A node's `extras` go into its `user_data`. A named node also gets `name` in its `user_data`, as three.js sets `userData.name`.
+- In three.js, the node of a mesh with one primitive is the mesh itself. Thus such a node takes the mesh's `extras` first, then `name`, then its own `extras`. A node with a camera or a light does not, and a joint does not. three.js makes a group or a bone of it.
+- A `Mesh`, a `Material` and a `Scene` here hold no user data. `mesh_extras`, `material_extras` and `scene_extras` hold their `extras`.
+- `extras` that are not an object are skipped, as three.js skips them.
+
+To write the user data back, give it to `GltfExportOptions`. See [Exporters](Exporters#user-data-and-options).
 
 ### What maps to what
 
