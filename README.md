@@ -51,11 +51,12 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 177 features are ported and 3 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 177 features are ported and 25 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
 
+- [ ] Scene JSON for every geometry type, shapes and curves, and single geometry and material documents [#185](https://github.com/SethKitchen/ThreeMojo/issues/185)
 
 <details>
 <summary>Ported: 15</summary>
@@ -80,6 +81,9 @@ The port is not at parity with three.js yet. 177 features are ported and 3 are o
 
 ### Geometry
 
+- [ ] RollerCoaster, TubePainter, ConvexObjectBreaker, Hilbert and Gosper curves, UVsDebug, frameCorners [#197](https://github.com/SethKitchen/ThreeMojo/issues/197)
+- [ ] BufferGeometry transforms, draw range and normalized integer attributes [#186](https://github.com/SethKitchen/ThreeMojo/issues/186)
+- [ ] Box segments, partial spheres, shape arrays and UVGenerator [#184](https://github.com/SethKitchen/ThreeMojo/issues/184)
 
 <details>
 <summary>Ported: 19</summary>
@@ -108,6 +112,7 @@ The port is not at parity with three.js yet. 177 features are ported and 3 are o
 
 ### Objects
 
+- [ ] MorphAnimMesh, MorphBlendMesh, MD2Character and Gyroscope [#196](https://github.com/SethKitchen/ThreeMojo/issues/196)
 - [ ] Skeleton, morph, batch and LOD tools [#181](https://github.com/SethKitchen/ThreeMojo/issues/181)
 - [ ] Scene objects: Reflector, Refractor, Water, Sky, Lensflare, MarchingCubes [#177](https://github.com/SethKitchen/ThreeMojo/issues/177)
 
@@ -130,6 +135,9 @@ The port is not at parity with three.js yet. 177 features are ported and 3 are o
 
 ### Materials
 
+- [ ] Gouraud, toon, subsurface scattering and volume shaders, and the flakes texture [#194](https://github.com/SethKitchen/ThreeMojo/issues/194)
+- [ ] Node material leftovers, and the Wood and MeshPostProcessing materials [#193](https://github.com/SethKitchen/ThreeMojo/issues/193)
+- [ ] A wider GLSL subset, and shader materials on points, lines and sprites [#192](https://github.com/SethKitchen/ThreeMojo/issues/192)
 
 <details>
 <summary>Ported: 30</summary>
@@ -169,6 +177,7 @@ The port is not at parity with three.js yet. 177 features are ported and 3 are o
 
 ### Lights
 
+- [ ] Shadows from skinned, instanced, batched, LOD, line, point and translucent objects [#187](https://github.com/SethKitchen/ThreeMojo/issues/187)
 
 <details>
 <summary>Ported: 13</summary>
@@ -219,6 +228,11 @@ The port is not at parity with three.js yet. 177 features are ported and 3 are o
 
 ### Loaders and exporters
 
+- [ ] TIFF, PVR, TTF, uncompressed DDS and MaterialX loaders [#204](https://github.com/SethKitchen/ThreeMojo/issues/204)
+- [ ] USD, KMZ, NRRD, VTK, PDB, GCode and MDD loaders [#203](https://github.com/SethKitchen/ThreeMojo/issues/203)
+- [ ] LWO and LDraw loaders [#202](https://github.com/SethKitchen/ThreeMojo/issues/202)
+- [ ] glTF meshopt compression, WebP textures and material variants [#201](https://github.com/SethKitchen/ThreeMojo/issues/201)
+- [ ] Skinned and instanced meshes in OBJ, STL, PLY and USDZ, OBJ lines and points, and glTF extras [#200](https://github.com/SethKitchen/ThreeMojo/issues/200)
 - [ ] More loaders and exporters: 3MF, PCD, SVG, Draco, VRML, 3DS, BVH and others [#176](https://github.com/SethKitchen/ThreeMojo/issues/176)
 
 <details>
@@ -245,6 +259,11 @@ The port is not at parity with three.js yet. 177 features are ported and 3 are o
 
 ### Rendering
 
+- [ ] SVGRenderer and Projector [#205](https://github.com/SethKitchen/ThreeMojo/issues/205)
+- [ ] GPUComputationRenderer, ProgressiveLightMap, SceneOptimizer and radix sort [#198](https://github.com/SethKitchen/ThreeMojo/issues/198)
+- [ ] Velocity: motion blur, TRAA, denoise, depth of field and SSR nodes [#191](https://github.com/SethKitchen/ThreeMojo/issues/191)
+- [ ] Blur, chromatic aberration, anamorphic, lens flare and Bayer passes [#190](https://github.com/SethKitchen/ThreeMojo/issues/190)
+- [ ] Output color space and post-processing leftovers [#189](https://github.com/SethKitchen/ThreeMojo/issues/189)
 
 <details>
 <summary>Ported: 27</summary>
@@ -281,6 +300,7 @@ The port is not at parity with three.js yet. 177 features are ported and 3 are o
 
 ### Windowing and controls
 
+- [ ] SelectionBox, OrbitControls state and key speed, TransformControls limits and CSMHelper [#199](https://github.com/SethKitchen/ThreeMojo/issues/199)
 
 <details>
 <summary>Ported: 7</summary>
@@ -297,6 +317,7 @@ The port is not at parity with three.js yet. 177 features are ported and 3 are o
 
 ### Animation
 
+- [ ] Clip creator, mixer setTime, element paths, morph tracks by name and instanced morphs [#195](https://github.com/SethKitchen/ThreeMojo/issues/195)
 
 <details>
 <summary>Ported: 7</summary>
@@ -313,6 +334,7 @@ The port is not at parity with three.js yet. 177 features are ported and 3 are o
 
 ### Math and foundations
 
+- [ ] Object3D.up, Timer, Vector4 and small math and color members [#188](https://github.com/SethKitchen/ThreeMojo/issues/188)
 
 <details>
 <summary>Ported: 13</summary>
