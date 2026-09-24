@@ -13,6 +13,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [XYZ](#xyz) | `loaders/xyz.mojo` | `read_xyz(path) -> BufferGeometry` | `XYZLoader` |
 | [AMF](#amf) | `loaders/amf.mojo` | `read_amf(path, scene, assets) -> AmfModel` | `AMFLoader` |
 | [VOX](#vox) | `loaders/vox.mojo` | `read_vox(path) -> List[VoxModel]` | `VOXLoader` |
+| [MD2](#md2) | `loaders/md2.mojo` | `read_md2(path) -> Md2Model` | `MD2Loader` |
 
 ## PCD
 
@@ -488,3 +489,49 @@ The loader refuses these, with a message that names the problem:
 ### Example
 
 `assets/vox/fixture.vox` has three models, a chunk that the loader skips, and a palette for the last model. One model is all black. `tests/test_vox.mojo` compares each geometry and volume with three.js 0.180.
+
+## MD2
+
+`loaders/md2.mojo`. `read_md2(path)` reads a Quake II model into a geometry, its frames and its animations. three.js: `MD2Loader`.
+
+```mojo
+var model = read_md2("assets/md2/fixture.md2")
+var shape = assets.geometries.add(model.geometry.clone())
+var clip = md2_clip(model, 0, MeshIndex(0))
+```
+
+| Function | What it does |
+|---|---|
+| `read_md2(path) -> Md2Model` | Read a file. |
+| `parse_md2(bytes) -> Md2Model` | Read the bytes of one. |
+| `md2_clip(model, animation, mesh, fps, loop) -> AnimationClip` | One animation as morph target tracks, three.js's `CreateFromMorphTargetSequence`. |
+| `md2_animation_name(frame) -> Optional[String]` | The animation that a frame belongs to: its name without the digits at the end. |
+
+### Md2Model
+
+| Field | What it holds |
+|---|---|
+| `geometry` | One vertex for each corner of each triangle, with no index. It has the position and normal of the first frame, and the texture coordinates. |
+| `frames` | Each frame's name, and a position and a normal for each vertex of the geometry. |
+| `animations` | Each animation's name and frames. |
+
+Positions and normals turn from z up to y up, as in three.js. When there are `MAX_MORPH_TARGETS` frames or fewer, each frame is also a morph target of the geometry. The morph targets are whole, not relative.
+
+three.js puts frames in an animation by their names: `run1` to `run6` are the animation `run`. `md2_clip` makes one track for each frame of an animation, at ten frames each second. A track goes to one at the time of its frame, and to zero at the times of the frames next to it. When `loop` is True, a track whose first key is at zero gets one more key at the end, as three.js does.
+
+### Differences from three.js
+
+- A mesh here has `MAX_MORPH_TARGETS` morph targets. A model with more frames keeps its frames, but its geometry has no morph targets, and `md2_clip` refuses its animations.
+- `md2_clip` refuses an animation of one or two frames. three.js makes tracks that have two keys at one time for these.
+
+### Errors
+
+The loader refuses these, with a message that names the problem:
+
+- A file that is not `IDP2` version 8, or whose size is not the end in its header. three.js logs these and returns nothing.
+- A file that ends inside a value, and a model with no frames.
+- A vertex, texture coordinate or normal index that is past its list.
+
+### Example
+
+`assets/md2/fixture.md2` has eight frames in three animations and one frame that is in no animation. `assets/md2/many.md2` has ten frames. `tests/test_md2.mojo` compares the geometry, the frames and each clip with three.js 0.180.
