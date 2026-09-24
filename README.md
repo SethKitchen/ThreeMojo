@@ -51,7 +51,7 @@ The pages live in [`docs/wiki/`](docs/wiki) and are published to the wiki on eve
 
 A ticked item is ported, tested with full coverage, and documented on the linked wiki page. An unticked item is a three.js feature that is not ported yet. Each item has a GitHub issue.
 
-The port is not at parity with three.js yet. 174 features are ported and 6 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
+The port is not at parity with three.js yet. 175 features are ported and 5 are open. Each section lists its open items first. Open the dropdown under a section to see what is ported.
 
 <!-- features -->
 ### Scene
@@ -246,11 +246,11 @@ The port is not at parity with three.js yet. 174 features are ported and 6 are o
 ### Rendering
 
 - [ ] Render-target features: MSAA, 3D, array and cube targets, texture copies [#174](https://github.com/SethKitchen/ThreeMojo/issues/174)
-- [ ] Renderer hooks and material flags [#170](https://github.com/SethKitchen/ThreeMojo/issues/170)
 
 <details>
-<summary>Ported: 25</summary>
+<summary>Ported: 26</summary>
 
+- [x] [Renderer hooks and material flags](https://github.com/SethKitchen/ThreeMojo/wiki/Renderer-hooks-and-material-flags): hooks, override material, custom sorts, autoClear, info, custom tone mapping and material flags [#170](https://github.com/SethKitchen/ThreeMojo/issues/170)
 - [x] [View, light probe, octree and texture helpers, and a shadow map viewer](https://github.com/SethKitchen/ThreeMojo/wiki/Helpers): drawn by both rasterizers, except the view helper [#182](https://github.com/SethKitchen/ThreeMojo/issues/182)
 - [x] [More post-processing passes and shader effects](https://github.com/SethKitchen/ThreeMojo/wiki/Post-processing#scene-gtao-and-shader-passes): pixelated, GTAO, transition and shader passes, fifteen screen shaders, god rays, and stereo and outline effects [#178](https://github.com/SethKitchen/ThreeMojo/issues/178)
 - [x] [Depth buffer](https://github.com/SethKitchen/ThreeMojo/wiki/Rasterization#depth) [#72](https://github.com/SethKitchen/ThreeMojo/issues/72)
