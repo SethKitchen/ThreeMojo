@@ -1,6 +1,6 @@
 # Exporters
 
-`exporters/gltf.mojo`, `exporters/obj.mojo`, `exporters/stl.mojo` and `exporters/ply.mojo` write a scene and its assets to model files. `exporters/exr.mojo` writes an HDR image. `exporters/usdz.mojo` writes a scene for AR Quick Look. Each file reads back through the matching loader in `loaders/` to the same geometry. A glTF file also reads back to the same node transforms and materials. three.js: `GLTFExporter`, `OBJExporter`, `STLExporter` and `PLYExporter`.
+`exporters/gltf.mojo`, `exporters/obj.mojo`, `exporters/stl.mojo` and `exporters/ply.mojo` write a scene and its assets to model files. `exporters/exr.mojo` writes an HDR image, and `exporters/ktx2.mojo` a texture. `exporters/usdz.mojo` writes a scene for AR Quick Look. Each file reads back through the matching loader in `loaders/` to the same geometry. A glTF file also reads back to the same node transforms and materials. three.js: `GLTFExporter`, `OBJExporter`, `STLExporter` and `PLYExporter`.
 
 To write a scene as three.js JSON, see [Scene JSON](Scene-JSON).
 
@@ -25,6 +25,8 @@ write_ply("out/model.ply", scene, assets, PLY_BINARY_LITTLE_ENDIAN)
 | `export_exr(width, height, data, compression, type) -> List[UInt8]` | An OpenEXR file of RGBA floats. See [EXR](#exr). |
 | `export_exr_half(width, height, data, compression, type) -> List[UInt8]` | An OpenEXR file of RGBA halves. |
 | `export_exr_image(image, compression, type) -> List[UInt8]` | An OpenEXR file of a `FloatImage`. |
+| `export_ktx2(texture, channels, half, writer) -> List[UInt8]` | A KTX 2.0 file of a texture. See [KTX2](#ktx2). |
+| `export_ktx2_volume(texture, channels, half, writer) -> List[UInt8]` | A KTX 2.0 file of a `Data3DTexture`. |
 | `export_usdz(scene, assets, cameras, options) -> List[UInt8]` | A USDZ archive for AR Quick Look. See [USDZ](#usdz). |
 | `usdz_files(scene, assets, cameras, options) -> UsdzFiles` | The files of the archive: `model.usda`, the geometries and the textures. |
 | `zlib_deflate(data, level) -> List[UInt8]`, `deflate(data, level)` | A zlib or a raw DEFLATE stream, as fflate writes it. These are in `render/deflate.mojo`. |
@@ -192,6 +194,23 @@ three.js writes two kinds of block that its own `EXRLoader` reads wrong values f
 
 Every other block, and the header, are the bytes that three.js writes. A NaN is written as three.js writes it on x86-64: `0xFE00` as a half, and `0x7FC00000` as a float. An image with no texels, or data of the wrong length, is refused.
 
+## KTX2
+
+`exporters/ktx2.mojo` writes a texture as a KTX 2.0 file. three.js: `KTX2Exporter`. `render.ktx2.read` reads the file back to the same texels.
+
+```mojo
+var bytes = export_ktx2(texture)
+var sky = export_ktx2(hdr, half=True)
+```
+
+- The file has one level, the texture's full size, with no supercompression.
+- `channels` is 4, 2 or 1: the first channels of each texel, three.js's `RGBAFormat`, `RGFormat` or `RedFormat`.
+- A byte texture is written as bytes: `SRGB` with the sRGB transfer function, and `LINEAR` with the linear one.
+- A float texture is written as floats, or as halves when `half` is on. It must be `LINEAR`. A half is made as three.js's `DataUtils.toHalfFloat` makes it.
+- The rows are written in the order the texture holds them, as three.js writes a data texture's array.
+- The key and value data has one key, `KTXwriter`. Its value is `writer`, `ThreeMojo` by default. three.js writes `three.js` and its revision.
+- A texture here has no `NoColorSpace`, so the primaries are always BT.709, three.js's for `LinearSRGBColorSpace`.
+
 ## USDZ
 
 `exporters/usdz.mojo` writes a scene as a USDZ archive. three.js: `USDZExporter`.
@@ -289,8 +308,9 @@ The writers raise for:
 - A stale scene, or a node whose world matrix flattens an axis, for OBJ, STL and PLY.
 - An EXR image with no texels, data that is not four values a texel, a compression other than none, ZIPS or ZIP, or a sample type other than HALF or FLOAT.
 - A DEFLATE level that is not from 0 to 9.
+- A KTX2 texture that is blank, a channel count that is not 1, 2 or 4, a byte texture asked for halves, or a float texture that is `SRGB`.
 - A USDZ mesh that names a node that is not in the scene, a geometry with no position or that is not whole triangles, or a texture with a wrap or a channel that is not valid.
 
 ## Example
 
-`tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY. `tests/test_exr_export.mojo` compares EXR files with the files that three.js 0.180 writes, in `assets/exr_export/three.json`. `tests/test_deflate.mojo` compares zlib and DEFLATE streams with fflate's, in `assets/deflate/fflate.json`, and Huffman code lengths with fflate's, in `assets/deflate/trees.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
+`tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY. `tests/test_exr_export.mojo` compares EXR files with the files that three.js 0.180 writes, in `assets/exr_export/three.json`. `tests/test_deflate.mojo` compares zlib and DEFLATE streams with fflate's, in `assets/deflate/fflate.json`, and Huffman code lengths with fflate's, in `assets/deflate/trees.json`. `tests/test_ktx2_export.mojo` compares KTX2 files with the files that three.js writes, in `assets/ktx2_export/three.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.

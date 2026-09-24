@@ -286,6 +286,21 @@ A channel is `byte * 2^(exponent - 128) / 255`, worked in doubles and stored as 
 
 A channel holds halves or floats. A half widens to the float it spells, subnormals and all. `R`, `G` and `B` make RGBA, with `A` as the alpha or one where there is none. `Y` alone makes gray, with an alpha of one. Other channels are read past. Rows come out from the top line of the data window.
 
+### Six HDR files as a cube
+
+`loaders/hdr_cube.mojo` reads six Radiance `.hdr` files into a float cube texture. three.js: `HDRCubeTextureLoader`.
+
+```mojo
+var paths: List[String] = ["px.hdr", "nx.hdr", "py.hdr", "ny.hdr", "pz.hdr", "nz.hdr"]
+var cube = assets.cube_textures.add(read_hdr_cube_texture(paths, SEEN_FROM_OUTSIDE))
+```
+
+- `read_hdr_cube_texture(paths, layout, mipmapped)` reads the files in `px`, `nx`, `py`, `ny`, `pz`, `nz` order. `hdr_cube_texture_from(images, layout, mipmapped)` takes six `FloatImage`s.
+- Each face is a float texture: `LINEAR`, `CLAMP`, `BILINEAR` and no chain, the settings of three.js's loader.
+- `SEEN_FROM_OUTSIDE` reads the files as three.js's cube loaders read them. See `cube_texture_from`.
+- three.js's default type is `HalfFloatType`, which rounds each value to a half. This keeps the floats, as three.js's `setDataType(FloatType)` does.
+- `tests/test_hdr_cube.mojo` compares the faces with the floats that three.js 0.180 reads, in `assets/hdr_cube/three.json`.
+
 ### An equirectangular environment or background
 
 A panorama with an equirectangular `mapping` is read directly, at `equirect_uv` of each direction. `equirect_uv` is three.js's `equirectUv`.
