@@ -555,6 +555,44 @@ def test_morph_targets_are_read_as_offsets_with_their_weights() raises:
     assert_equal(scene.meshes[4].morph_influence(0), 0)
 
 
+def test_morph_colors_and_target_names_are_read() raises:
+    var bin = Bin()
+    morph_bin(bin)
+    # 5: the base colors; 6: one target's colors, with alpha.
+    _ = bin.floats([1, 1, 1, 1, 1, 1, 1, 1, 1], "VEC3")
+    _ = bin.floats([0, 0.5, 0, 0, 0, 0.5, 0, 0, 0, 0, 0.5, 0], "VEC4")
+    var text = bin.document(
+        ',"meshes":['
+        + '{"primitives":[{"attributes":{"POSITION":0,"COLOR_0":5},"targets":[{"POSITION":2,"COLOR_0":6},{"POSITION":3}]}],'
+        + '"weights":[1,0],"extras":{"targetNames":["smile","frown"]}},'
+        + '{"primitives":[{"attributes":{"POSITION":0},"targets":[{"POSITION":2,"COLOR_0":5}]}],"extras":1},'
+        + '{"primitives":[{"attributes":{"POSITION":0},"targets":[{"POSITION":2}]}],"extras":{}}'
+        + "]"
+        + ',"nodes":[{"mesh":0},{"mesh":1},{"mesh":2}]'
+        + ',"scenes":[{"nodes":[0,1,2]}]'
+    )
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(text, scene, assets)
+    ref face = assets.geometries.get(model.geometries[0])
+    assert_true(face.has_morph_colors())
+    assert_equal(face.morph_colors[0].item_size, 4)
+    assert_equal(face.morph_colors[0].data[1], 0.5)
+    # A target that names no COLOR_0 changes no color.
+    assert_equal(face.morph_colors[1].item_size, 4)
+    assert_equal(face.morph_colors[1].data[1], 0)
+    assert_equal(face.morph_target_name(0), "smile")
+    assert_equal(face.morph_target_name(1), "frown")
+    assert_equal(scene.meshes[0].morph_target_dictionary["frown"], 1)
+    assert_equal(scene.meshes[0].morph_influence(0), 1)
+    # No names, or extras that are not an object: the targets are named
+    # by their index.
+    assert_equal(scene.meshes[1].morph_target_dictionary["0"], 0)
+    ref three = assets.geometries.get(model.geometries[1])
+    assert_equal(three.morph_colors[0].item_size, 3)
+    assert_equal(scene.meshes[2].morph_target_dictionary["0"], 0)
+
+
 def test_malformed_morph_targets_are_refused() raises:
     var bin = Bin()
     morph_bin(bin)
@@ -575,11 +613,12 @@ def test_malformed_morph_targets_are_refused() raises:
     )
     refuses(
         bin.document(
-            ',"meshes":[{"primitives":[{"attributes":{"POSITION":0},"targets":[{"COLOR_0":2}]}]}]'
+            ',"meshes":[{"primitives":[{"attributes":{"POSITION":0},"targets":[{"COLOR_0":4}]}]}]'
             + nodes
         ),
-        "morph target of colors",
+        "COLOR_0 must be a VEC3 or a VEC4",
     )
+
     refuses(
         bin.document(
             ',"meshes":[{"primitives":[{"attributes":{"POSITION":0},"targets":[{"POSITION":4}]}]}]'
@@ -602,21 +641,26 @@ def test_malformed_morph_targets_are_refused() raises:
         ),
         "as many morph targets",
     )
-    # Nine targets, one past what a geometry holds.
+    # Nine targets, past the eight this port once held, are read.
     var nine = String()
     for index in range(9):
         if index > 0:
             nine += ","
         nine += '{"POSITION":2}'
-    refuses(
+    var scene = Scene()
+    var assets = Assets()
+    var model = loaded(
         bin.document(
             ',"meshes":[{"primitives":[{"attributes":{"POSITION":0},"targets":['
             + nine
             + "]}]}]"
             + nodes
         ),
-        "at most eight",
+        scene,
+        assets,
     )
+    assert_equal(assets.geometries.get(model.geometries[0]).morph_count(), 9)
+    assert_equal(len(scene.meshes[0].morph_influences), 9)
     # Weights that are not one per target, on the mesh or on the node.
     var one = ',"meshes":[{"primitives":[{"attributes":{"POSITION":0},"targets":[{"POSITION":2}]}]'
     refuses(bin.document(one + ',"weights":[1,2]}]' + nodes), "one number per")
@@ -641,8 +685,8 @@ def test_malformed_morph_targets_are_refused() raises:
         "weights must be finite",
     )
     # Empty weights leave every influence at zero.
-    var scene = Scene()
-    var assets = Assets()
+    scene = Scene()
+    assets = Assets()
     _ = loaded(
         bin.document(
             one

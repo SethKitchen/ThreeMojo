@@ -12,12 +12,12 @@ from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
     GeometryGroup,
-    MAX_MORPH_TARGETS,
     MaterialIndex,
     NORMAL,
     POSITION,
 )
 from core.interleaved_buffer import InterleavedBuffer
+from core.morph import MorphInfluences
 from geometries.attribute_utils import (
     DrawMode,
     TRIANGLES_DRAW_MODE,
@@ -192,11 +192,17 @@ def test_deinterleaving_a_geometry_leaves_plain_attributes_alone() raises:
     geometry.set_attribute(String(NORMAL), rep([0, 0, 1], 3))
     geometry.add_morph_target(laid[0].copy(), rep([0, 1, 0], 3))
     geometry.add_morph_target(rep([1, 1, 1], 3), laid[0].copy())
+    var tints = List[BufferAttribute]()
+    tints.append(laid[0].copy())
+    tints.append(rep([1, 0, 0], 3))
+    geometry.set_morph_colors(tints^)
     deinterleave_geometry(geometry)
     for slot in range(geometry.attribute_count()):
         assert_false(geometry.values[slot].is_interleaved())
     assert_false(geometry.morph_positions[0].is_interleaved())
     assert_false(geometry.morph_normals[1].is_interleaved())
+    assert_false(geometry.morph_colors[0].is_interleaved())
+    check(geometry.morph_colors[1].data, [1, 0, 0, 1, 0, 0, 1, 0, 0])
     check(geometry.attribute_view("uv").data, [0, 0, 1, 0, 0, 1])
     check(geometry.morph_positions[0].data, [0, 0, 0, 1, 0, 0, 0, 1, 0])
 
@@ -358,11 +364,11 @@ def morph_geometry(relative: Bool) raises -> BufferGeometry:
     return geometry^
 
 
-def weights() -> SIMD[DType.float32, MAX_MORPH_TARGETS]:
+def weights() raises -> MorphInfluences:
     """Return the weights of the three.js reference."""
-    var out = SIMD[DType.float32, MAX_MORPH_TARGETS](0)
-    out[0] = 0.25
-    out[1] = 0.5
+    var out = MorphInfluences()
+    out.set(0, 0.25)
+    out.set(1, 0.5)
     return out
 
 
@@ -397,7 +403,7 @@ def test_morphed_attributes_carry_a_skinned_mesh() raises:
         carriers.append(carry)
     var worn = compute_morphed_attributes(
         morph_geometry(False),
-        SIMD[DType.float32, MAX_MORPH_TARGETS](0),
+        MorphInfluences(),
         carriers,
     )
     # Positions turn a quarter and then move; normals only turn.

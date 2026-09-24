@@ -555,26 +555,33 @@ three.js refuses a geometry without an index. This port reads one three corners 
 
 ```mojo
 var head = sphere(Length(1.0, METER), 24, 16)
-head.add_morph_target(smiling)                 # a BufferAttribute of positions
-head.add_morph_target(frowning, frown_normals) # positions and normals
+head.add_morph_target(smiling, name="smile")   # a BufferAttribute of positions
+head.add_morph_target(frowning, name="frown")
 
-var face = Mesh(assets.geometries.add(head^), skin, node)
-face.set_morph_influence(0, 0.7)               # seven tenths of a smile
+var face = Mesh(assets.geometries.add(head.clone()), skin, node)
+face.update_morph_targets(head)                # names and zero weights
+face.set_morph_influence("smile", 0.7)         # seven tenths of a smile
+face.set_morph_influence(1, 0.2)               # a target by its index
 ```
 
 A morph target is a second set of positions for the same vertices. The mesh gives each one a weight, and the vertex drawn is the base vertex moved toward the targets by their weights. That is how a face smiles: one geometry, one target per expression, and a number per expression.
 
-three.js: `BufferGeometry.morphAttributes`, `Mesh.morphTargetInfluences`, `morphTargetsRelative`.
+three.js: `BufferGeometry.morphAttributes`, `Mesh.morphTargetInfluences`, `Mesh.morphTargetDictionary`, `Mesh.updateMorphTargets`, `morphTargetsRelative`.
 
 | Member | Meaning |
 |---|---|
-| `geometry.add_morph_target(positions)` | Add a target that moves vertices only. |
-| `geometry.add_morph_target(positions, normals)` | Add one that turns them too. |
+| `geometry.add_morph_target(positions, name="")` | Add a target that moves vertices only. |
+| `geometry.add_morph_target(positions, normals, name="")` | Add one that turns them too. |
+| `geometry.set_morph_colors(colors)` | Give every target a color. three.js's `morphAttributes.color`. |
 | `geometry.morph_count() -> Int` | How many targets the geometry carries. |
 | `geometry.has_morph_normals() -> Bool` | Whether the targets carry normals. |
+| `geometry.has_morph_colors() -> Bool` | Whether the targets carry colors. |
+| `geometry.morph_target_name(target) -> String` | A target's name, or its index as text. |
 | `geometry.morph_relative` | Whether a target holds destinations or offsets. |
-| `mesh.set_morph_influence(target, weight)` | How much of one target to wear. |
-| `mesh.morph_influence(target) -> Float32` | What it is wearing. |
+| `mesh.set_morph_influence(target, weight)` | How much of one target to wear, by index or by name. |
+| `mesh.morph_influence(target) -> Float32` | What it is wearing. Zero for a target never set. |
+| `mesh.update_morph_targets(geometry)` | One zero weight per target, and the dictionary of names. |
+| `mesh.morph_target_dictionary` | Each target's name and index. |
 | `mesh.is_morphed() -> Bool` | Whether any target is worn at all. |
 
 The targets live on the geometry and the weights live on the mesh. That is what lets two meshes share one head and pull different faces. It is the same split that puts `position` on the geometry and the transform on the node.
@@ -591,6 +598,22 @@ Every target is measured from the *unmorphed* vertex, so wearing two of them at 
 
 Either every target carries normals or none does. A geometry whose targets carry none keeps the base normal however far the positions move, which is what three.js's shader does when `morphAttributes.normal` is absent.
 
+### Colors
+
+`set_morph_colors` gives every target a color attribute of three or four numbers a vertex. Either every target carries a color or none does. A color target morphs the geometry's `color` attribute when the material has `vertex_colors` on. The arithmetic is three.js's `morphcolor_vertex`, in `core.deform.morphed_colors`.
+
+A target of three numbers reads an alpha of one, as three.js fills it. The morphed alpha is used only when the `color` attribute has four numbers a vertex. three.js morphs it only under `USE_COLOR_ALPHA`, for the same reason.
+
+The colors are morphed in `Renderer.prepare`, so the CPU and GPU rasterizers draw the same colors. `tests/test_gpu.mojo` has a parity test with twelve color targets.
+
+### Names and the dictionary
+
+A target's name is three.js's `name` on its morph attribute. A target without a name has its index as its name, as three.js's `updateMorphTargets` gives it. `update_morph_targets` fills the mesh's weights and its `morph_target_dictionary` from the geometry. A mesh names its geometry by id and cannot read it, so the caller gives the geometry. The glTF and scene JSON loaders make the call, and the glTF loader reads `extras.targetNames`.
+
+### Any number of targets
+
+A geometry carries any number of targets, and a mesh wears any number. three.js on WebGL2 passes its targets in a texture and has no cap. This port had a cap of eight until a mesh held its weights in a list. `MorphInfluences` is that list. A weight past its end reads as zero, and `set` grows it with zeros.
+
 ### What is drawn is what is picked
 
 `core/deform.mojo` answers where a vertex is once its targets are worn, and both the renderer and the [raycaster](Raycasting) ask it. They did not always. Rendering wore the targets and picking did not, so a morphed mesh was drawn in one place and clicked in another.
@@ -598,8 +621,6 @@ Either every target carries normals or none does. A geometry whose targets carry
 ### A worn mesh is not culled
 
 A mesh wearing a target is not where its geometry's bounding sphere says it is, so the renderer does not measure it against the frustum. three.js culls it anyway, and clips morphed meshes at the edge of the view for exactly this reason.
-
-Eight targets is this port's ceiling, not three.js's. Older three.js had the same number, from how many attribute slots a WebGL program has. Current three.js passes its targets in a texture and is bounded by memory. Eight is here because a mesh holds its weights in a fixed row rather than a list, which is what keeps a `Mesh` copyable.
 
 ## Interleaved buffers
 

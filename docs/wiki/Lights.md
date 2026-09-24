@@ -230,7 +230,7 @@ A shadow needs three things to be said, as in three.js. The light must cast. The
 
 ### How a shadow is drawn
 
-The renderer draws the scene once per casting light, from the light, keeping only the depth: `Renderer.shadow_maps`. A directional light draws through an orthographic camera at its node looking at its target, between its `left`, `right`, `top` and `bottom` edges. A spot light draws through a perspective camera twice its angle wide. Only the meshes that cast are drawn, under lit shading with no lights. A skinned, instanced or batched mesh, an LOD and a sprite cast nothing yet. A cut-out map cuts nothing out of a shadow, and a translucent surface, which claims no depth, casts none.
+The renderer draws the scene once per casting light, from the light, keeping only the depth: `Renderer.shadow_maps`. A directional light draws through an orthographic camera at its node looking at its target, between its `left`, `right`, `top` and `bottom` edges. A spot light draws through a perspective camera twice its angle wide. Only the meshes that cast are drawn, under lit shading with no lights. A skinned, instanced or batched mesh and a sprite cast nothing yet. A cut-out map cuts nothing out of a shadow, and a translucent surface, which claims no depth, casts none.
 
 Each fragment the camera then shades is projected into each map, `shadow_coordinate`, and compared against the depth stored there. Seventeen taps are compared on their own and averaged: three.js's `PCFShadowMap`, its default. Nine taps are `radius` texels apart, and eight more are at half that spread. The other filters are in [Soft shadows](#soft-shadows). A fragment off the map or past the far plane is lit. `ShadowMap.lit` is the arithmetic, from functions the GPU kernel calls too.
 

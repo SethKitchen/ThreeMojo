@@ -5865,9 +5865,9 @@ def test_a_casting_light_on_its_target_looks_down_minus_z() raises:
 
 
 def test_only_meshes_cast_shadows_yet() raises:
-    # A skinned, instanced or batched mesh, an LOD and a sprite are left
-    # out of a light's view: the map holds the block alone, the same map
-    # the scene draws without them.
+    # A skinned, instanced or batched mesh and a sprite are left out of a
+    # light's view, and so is an LOD's level mesh that does not cast: the
+    # map holds the block alone, the same map the scene draws without them.
     var assets = Assets()
     var scene = shadow_scene(assets, True, True, "sun")
     var renderer = Renderer(WIDTH, HEIGHT)
@@ -5880,7 +5880,9 @@ def test_only_meshes_cast_shadows_yet() raises:
     _ = batch.add_instance(block)
     scene.add_batched_mesh(batch^)
     var lod = Lod(lift)
-    lod.add_level(block, red)
+    var level = scene.add(Object3D())
+    scene.add_mesh(Mesh(block, red, level))
+    lod.add_level(level)
     scene.add_lod(lod^)
     scene.add_sprite(Sprite(red, lift))
     scene.add_skinned_mesh(

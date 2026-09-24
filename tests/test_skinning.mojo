@@ -12,7 +12,6 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     BufferGeometry,
-    MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
 )
@@ -571,13 +570,10 @@ def test_a_skinned_mesh_wears_morph_targets_too() raises:
     with assert_raises():
         mesh.set_morph_influence(-1, 1)
     with assert_raises():
-        mesh.set_morph_influence(MAX_MORPH_TARGETS, 1)
-    with assert_raises():
         mesh.set_morph_influence(0, nowhere)
     with assert_raises():
         _ = mesh.morph_influence(-1)
-    with assert_raises():
-        _ = mesh.morph_influence(MAX_MORPH_TARGETS)
+    assert_equal(mesh.morph_influence(12), 0)
     scene.add_skinned_mesh(mesh^)
     # And the bone carries everything a meter along x from there.
     scene.node(NodeId(1)).set_position(1, 0, 0)

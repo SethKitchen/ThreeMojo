@@ -515,7 +515,7 @@ JSON numbers are written as the shortest text that reads back to the same `Float
 - Tracks of the visibility, a material, a light or a camera.
 - A morph target of colors. glTF allows only positions, normals and tangents.
 - Batched meshes and sprites.
-- Batched meshes, LODs, sprites and wide lines in OBJ, STL and PLY. three.js writes a batched mesh, the levels of an LOD and a `LineSegments2` because each is a mesh there.
+- Batched meshes, sprites and wide lines in OBJ, STL and PLY. three.js writes a batched mesh and a `LineSegments2` because each is a mesh there. The meshes on an LOD's levels are written, every level, as three.js writes them.
 - The instances of an instanced mesh in OBJ, STL, PLY and USDZ, as in three.js.
 - Alpha maps, light maps, specular maps, displacement maps, environment maps, matcaps and gradient maps.
 - The groups of a geometry of a mesh with one material, as in three.js.

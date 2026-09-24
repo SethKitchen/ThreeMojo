@@ -89,6 +89,7 @@ from core.background import (
 from core.deform import (
     SkinPose,
     displaced_positions,
+    morphed_colors,
     morphed_normals,
     morphed_positions,
     skin_carriers,
@@ -96,7 +97,6 @@ from core.deform import (
 )
 from core.buffer_geometry import (
     COLOR,
-    MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
     TANGENT,
@@ -127,6 +127,7 @@ from lights.ltc import LtcTables
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from core.layers import Layers
+from core.morph import MorphInfluences
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.bounds import Plane, Sphere
@@ -135,7 +136,7 @@ from math.matrix3 import Matrix3
 from render.rect import Rect
 from math.matrix4 import Matrix4, translation
 from math.vector3 import Vector3
-from objects.instanced_mesh import check_placing
+from objects.instanced_mesh import BatchedDrawItem, BatchedMesh, check_placing
 from geometries.edges import triangle_edges
 from objects.line import SEGMENTS, line_distances, segment_count, segment_ends
 from objects.line_segments2 import cap_steps, dash_spans
@@ -387,6 +388,7 @@ def _vertex_colors(
     base: FloatColor,
     count: Int,
     instance: Int = -1,
+    influences: MorphInfluences = MorphInfluences(),
 ) raises -> List[FloatColor]:
     """Return the color each vertex carries: `base` for every one, or
     `base` times the geometry's `color` attribute when the material asks,
@@ -404,6 +406,11 @@ def _vertex_colors(
     without them is a wrong asset, not a wrong frame, and so is an
     attribute with the wrong shape or too few colors.
 
+    A geometry whose morph targets carry colors has its colors morphed
+    first, three.js's `morphcolor_vertex`, by `core.deform.morphed_colors`.
+    A morphed alpha is read only from a color attribute of four floats, as
+    three.js morphs it only under `USE_COLOR_ALPHA`.
+
     Args:
         geometry: The geometry, for its `color` attribute.
         tinted: Whether the material asks for vertex colors.
@@ -411,6 +418,7 @@ def _vertex_colors(
         count: How many vertices the geometry has.
         instance: Which instance the draw is, or minus one for a draw that
             is not one.
+        influences: How much of each morph target the draw wears.
 
     Returns:
         One color per vertex.
@@ -438,16 +446,33 @@ def _vertex_colors(
     var item = 0
     if per_instance:
         item = max(instance, 0) // tints.mesh_per_attribute()
+    var read = List[SIMD[DType.float32, 4]](capacity=count)
     for vertex in range(count):
         if not per_instance:
             item = vertex
         var alpha = Float32(1)
         if channels == 4:
             alpha = tints.component(item, 3)
+        read.append(
+            SIMD[DType.float32, 4](
+                tints.component(item, 0),
+                tints.component(item, 1),
+                tints.component(item, 2),
+                alpha,
+            )
+        )
+    # A per-instance color is one color for many vertices, and three.js
+    # morphs the vertex color attribute only.
+    if geometry.has_morph_colors() and not per_instance:
+        read = morphed_colors(geometry, read, influences)
+    for vertex in range(count):
+        var alpha = Float32(1)
+        if channels == 4:
+            alpha = read[vertex][3]
         colors[vertex] = FloatColor(
-            base.r * tints.component(item, 0),
-            base.g * tints.component(item, 1),
-            base.b * tints.component(item, 2),
+            base.r * read[vertex][0],
+            base.g * read[vertex][1],
+            base.b * read[vertex][2],
             base.a * alpha,
         )
     return colors^
@@ -699,9 +724,9 @@ def _in_view(
 struct _Draw(ImplicitlyCopyable):
     """One geometry drawn with one material at one world transform.
 
-    What a mesh is; what each instance of an instanced or batched mesh
-    is, with the instance's matrix folded into the node's; and what the
-    level an LOD picks is. `prepare` reads the scene as a list of these,
+    What a mesh is, and what each instance of an instanced or batched
+    mesh is, with the instance's matrix folded into the node's. An
+    LOD's level is a node, drawn by its meshes. `prepare` reads the scene as a list of these,
     so that everything after the draw order is written once.
     """
 
@@ -709,9 +734,9 @@ struct _Draw(ImplicitlyCopyable):
     var material: MaterialId
     var world: Matrix4
     # How much of each of the geometry's morph targets this draw wears.
-    # A mesh's own; all zero for an instance, a batch member or an LOD
-    # level, none of which three.js morphs either.
-    var morph_influences: SIMD[DType.float32, MAX_MORPH_TARGETS]
+    # A mesh's own; all zero for an instance or a batch member,
+    # neither of which three.js morphs either.
+    var morph_influences: MorphInfluences
     # Which of the frame's skins carries this draw, or minus one when
     # nothing does. Only a skinned mesh has one.
     var skin: Int
@@ -1080,22 +1105,21 @@ def _gather(
     slack: Float32,
     mut bounds: List[Sphere],
     mut known: List[Bool],
-    morph_influences: SIMD[DType.float32, MAX_MORPH_TARGETS] = SIMD[
-        DType.float32, MAX_MORPH_TARGETS
-    ](0),
+    morph_influences: MorphInfluences = MorphInfluences(),
     skin: Int = -1,
     receive_shadow: Bool = False,
     colors: List[Color] = List[Color](),
     instances: List[Int] = List[Int](),
     group_start: Int = 0,
     group_count: Int = -1,
+    one_depth: Bool = False,
 ) raises:
     """Add the draws of one scene object to `draws`, each with its sort
     key alongside, unless the camera leaves it out.
 
-    An object is a mesh, every instance of an instanced or batched mesh,
-    or the level an LOD shows: one node, one material, and a geometry and
-    a matrix per draw. It is left out whole when its node shares no layer
+    An object is a mesh, or every instance of an instanced or batched
+    mesh: one node, one material, and a geometry and a matrix per
+    draw. It is left out whole when its node shares no layer
     with the camera, three.js's `layers.test` in `projectObject`, before
     anything is measured for it. Each draw is left out on its own when
     its bound lies wholly outside the frustum, three.js's `frustumCulled`
@@ -1150,6 +1174,9 @@ def _gather(
             fills: a group's `start`, or zero for the whole stream.
         group_count: How many slots each draw fills: a group's `count`,
             or minus one for the whole stream.
+        one_depth: Whether every draw takes the node's depth, so that
+            the stable sort keeps them in the order given: a batch with a
+            custom sort.
 
     Raises:
         Error: If the node, a geometry or the material is not there, a
@@ -1186,8 +1213,11 @@ def _gather(
             asked = True
         # The camera looks down -z, so a smaller z is further away. The
         # draw's own origin: the translation column of where it is placed.
+        ref origin = placed if one_depth else world
         var depth = view.transform_point(
-            Vector3(world.elements[12], world.elements[13], world.elements[14])
+            Vector3(
+                origin.elements[12], origin.elements[13], origin.elements[14]
+            )
         ).z
         depths.append(depth)
         clear.append(blends)
@@ -1220,11 +1250,114 @@ def _gather(
         )
 
 
+def _gather_batch(
+    mut draws: List[_Draw],
+    mut depths: List[Float32],
+    mut clear: List[Bool],
+    scene: Scene,
+    assets: Assets,
+    batch: BatchedMesh,
+    view: Matrix4,
+    visible: Layers,
+    frustum: Frustum,
+    slack: Float32,
+    mut bounds: List[Sphere],
+    mut known: List[Bool],
+) raises:
+    """Add the draws of one batched mesh, as `_gather` adds an object's.
+
+    A deleted or hidden instance is left out, as three.js's
+    `onBeforeRender` leaves it out. With `per_object_frustum_culled` each
+    instance out of view is left out; without it, the batch is left out
+    only when every instance is out of view. A batch with a custom sort
+    hands the instances in view to it, each with its depth in front of
+    the camera, three.js's `z`, and draws them in the order it leaves them,
+    all at the node's depth.
+
+    Args:
+        draws: Every draw so far; the batch's are appended.
+        depths: Each draw's camera-space depth, appended alongside.
+        clear: Whether each draw's material blends, appended alongside.
+        scene: The transform hierarchy, updated.
+        assets: Where the geometries and materials live.
+        batch: The batched mesh.
+        view: The world-to-camera transform.
+        visible: The camera's layers.
+        frustum: The camera's frustum, in world space.
+        slack: How far past a plane a bound may lie and still be drawn.
+        bounds: Each geometry's local bound, filled in as met.
+        known: Which entries of `bounds` have been filled in.
+
+    Raises:
+        Error: For anything `_gather` raises for, or if a custom sort
+            leaves an instance in the list that is not drawn.
+    """
+    if not scene.shows(batch.node, visible):
+        return
+    var placed = scene.world_matrix(batch.node)
+    var each = batch.frustum_culled and batch.per_object_frustum_culled
+    var items = List[BatchedDrawItem]()
+    var any_inside = False
+    for slot in range(batch.count()):
+        if not batch.is_drawn(slot):
+            continue
+        ref member = batch.instances[slot]
+        check_placing(member.matrix)
+        var world = Matrix4(copy=placed)
+        world.multiply(member.matrix)
+        var inside = True
+        if batch.frustum_culled:
+            inside = _in_view(
+                assets, member.geometry, world, frustum, slack, bounds, known
+            ) or _displaces(assets, batch.material)
+        if each and not inside:
+            continue
+        any_inside = any_inside or inside
+        var ahead = -view.transform_point(
+            Vector3(world.elements[12], world.elements[13], world.elements[14])
+        ).z
+        items.append(BatchedDrawItem(slot, ahead))
+    if not any_inside:
+        return
+    # A batch with no custom sort holds one that keeps the order.
+    batch.custom_sort(items)
+    var geometries = List[GeometryId]()
+    var matrices = List[Matrix4]()
+    var colors = List[Color]()
+    # An instance is in view, or the batch returned above: this runs.
+    for item in items:  # pragma: no branch
+        if not batch.is_drawn(item.index):
+            raise Error("A custom sort left an instance that is not drawn")
+        ref member = batch.instances[item.index]
+        geometries.append(member.geometry)
+        matrices.append(member.matrix)
+        colors.append(member.color)
+    _gather(
+        draws,
+        depths,
+        clear,
+        scene,
+        assets,
+        batch.node,
+        batch.material,
+        geometries,
+        matrices,
+        False,
+        view,
+        visible,
+        frustum,
+        slack,
+        bounds,
+        known,
+        colors=colors,
+        one_depth=batch.custom_sorted,
+    )
+
+
 def _draws(
     scene: Scene,
     assets: Assets,
     view: Matrix4,
-    eye: Vector3,
     visible: Layers,
     frustum: Frustum,
     slack: Float32,
@@ -1236,11 +1369,11 @@ def _draws(
     """Return what the camera draws, in the order to draw it: opaque
     draws nearest first, then the translucent ones furthest first.
 
-    The scene's meshes, instanced meshes, batched meshes and LODs are
-    read into draws by `_gather`, which also leaves out what the camera's
-    layers and frustum leave out; an LOD contributes the one level its
-    node's distance from the camera picks, three.js's `LOD.update`, or
-    nothing when it has no levels. A mesh that wears a material list
+    The scene's meshes, instanced meshes and batched meshes are read into
+    draws by `_gather`, which also leaves out what the camera's layers and
+    frustum leave out. An LOD's levels are nodes: the one
+    `Scene.update_lods` shows is drawn by what it carries, and the hidden
+    ones are left out as any hidden node is. A mesh that wears a material list
     contributes a draw per group, in the group's material, as three.js's
     `projectObject` pushes a render item per group: each goes into the
     opaque or the translucent list by its own material, at the mesh's
@@ -1277,7 +1410,6 @@ def _draws(
         scene: The transform hierarchy, and what it draws.
         assets: Where the geometries and materials live.
         view: The world-to-camera transform, for measuring depth.
-        eye: Where the camera is, in world space, for an LOD's distance.
         visible: The camera's layers. An object on none of them is left
             out.
         frustum: The camera's frustum, in world space. A draw whose bound
@@ -1289,7 +1421,7 @@ def _draws(
         casters_only: Whether this is a light's view for a shadow map,
             which holds the meshes that cast and nothing else: not a
             mesh that does not cast, and not a skinned, instanced or
-            batched mesh, an LOD, a sprite or a wide line, none of which
+            batched mesh, a sprite or a wide line, none of which
             casts yet.
         receivers_cast: Whether a light's view also holds the meshes that
             receive a shadow, as three.js draws them into a
@@ -1440,58 +1572,13 @@ def _draws(
     for index in range(len(scene.batched_meshes)):
         if casters_only:
             continue
-        ref batch = scene.batched_meshes[index]
-        var geometries = List[GeometryId]()
-        var matrices = List[Matrix4]()
-        var colors = List[Color]()
-        for slot in range(batch.count()):
-            geometries.append(batch.instances[slot].geometry)
-            matrices.append(batch.instances[slot].matrix)
-            colors.append(batch.instances[slot].color)
-        _gather(
+        _gather_batch(
             draws,
             depths,
             clear,
             scene,
             assets,
-            batch.node,
-            batch.material,
-            geometries,
-            matrices,
-            batch.frustum_culled,
-            view,
-            visible,
-            frustum,
-            slack,
-            bounds,
-            known,
-            colors=colors,
-        )
-    for index in range(len(scene.lods)):
-        if casters_only:
-            continue
-        ref lod = scene.lods[index]
-        # The level `Scene.update_lods` last chose sets the hysteresis; a
-        # scene never updated gets the stateless choice.
-        var level = lod.level_from(
-            Length((eye - scene.world_position(lod.node)).length(), METER),
-            lod.shown,
-        )
-        if level < 0:
-            continue
-        var shown = lod.levels[level]
-        var geometry: List[GeometryId] = [shown.geometry]
-        _gather(
-            draws,
-            depths,
-            clear,
-            scene,
-            assets,
-            lod.node,
-            shown.material,
-            geometry,
-            one,
-            lod.frustum_culled,
+            scene.batched_meshes[index],
             view,
             visible,
             frustum,
@@ -1499,6 +1586,9 @@ def _draws(
             bounds,
             known,
         )
+    # An LOD's levels are nodes, drawn by what they carry: the level
+    # `Scene.update_lods` chose is shown and the others hidden, as
+    # three.js's `LOD.update` sets their `visible`.
     # The sprites, sorted among the meshes by their own depth so that a
     # translucent sprite falls between the translucent surfaces either
     # side of it. Culled by the sphere around the unit square carried by
@@ -1530,7 +1620,7 @@ def _draws(
                 GeometryId(-1),
                 sprite.material,
                 world^,
-                SIMD[DType.float32, MAX_MORPH_TARGETS](0),
+                MorphInfluences(),
                 -1,
                 depth,
                 blends,
@@ -1574,7 +1664,7 @@ def _draws(
                 line.geometry,
                 line.material,
                 world^,
-                SIMD[DType.float32, MAX_MORPH_TARGETS](0),
+                MorphInfluences(),
                 -1,
                 depth,
                 blends,
@@ -3362,8 +3452,8 @@ def camera_position[C: Camera](scene: Scene, camera: C) raises -> Vector3:
     """Return where `camera` stands, in world space.
 
     three.js's `cameraPosition` uniform. A `PHONG` material measures its
-    highlight along the direction from the surface to here, and an `Lod`
-    measures its distance from here, so both `prepare` and `render` ask it.
+    highlight along the direction from the surface to here, so
+    `render` asks it. `Scene.update_lods` takes it for an LOD.
     The view transform is rigid, so its inverse's translation is the eye.
 
     Args:
@@ -4346,8 +4436,8 @@ struct Renderer(Movable):
             and nor does one whose bounding sphere lies wholly outside the
             camera's frustum, unless it opted out of that test. An
             instanced or batched mesh contributes each of its instances the
-            same way, and an LOD the one level its distance from the camera
-            picks.
+            same way. An LOD's hidden levels contribute nothing, as any
+            hidden node does.
 
         Raises:
             Error: If a mesh names a node, a geometry or a material that is
@@ -4383,20 +4473,14 @@ struct Renderer(Movable):
         # The renderer's clipping planes, carried into camera space once.
         var global_planes = _planes_in_view(self.clipping_planes, view)
 
-        # Where the camera is, in the world: what an LOD measures its
-        # distance from, and what a highlight is measured toward.
-        var to_world = Matrix4(copy=view)
-        to_world.invert()
-        var eye = to_world.transform_point(Vector3(0, 0, 0))
         # Worked out once, not once per draw, and already without what
-        # the camera does not draw: every mesh, every instance and every
-        # LOD's shown level, as one list.
+        # the camera does not draw: every mesh and every instance, as one
+        # list.
         var skins = List[SkinPose]()
         var draws = _draws(
             scene,
             assets,
             view,
-            eye,
             camera.visible_layers(),
             frustum,
             far * CULL_SLACK,
@@ -4846,6 +4930,7 @@ struct Renderer(Movable):
                 base,
                 vertex_count,
                 draws[slot].instance,
+                draws[slot].morph_influences,
             )
 
             # The index buffer is read directly, checked once up front.

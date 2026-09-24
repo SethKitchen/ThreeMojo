@@ -643,7 +643,7 @@ def test_clipping_distance_and_offset_as_written() raises:
 
 
 def test_morph_influences_as_written() raises:
-    """A mesh reads up to eight influences, and the rest are zero."""
+    """A mesh reads every influence, and the rest are zero."""
     var library = (
         '"geometries":[{"uuid":"g","type":"BoxGeometry"}],'
         '"materials":[{"uuid":"m","type":"MeshBasicMaterial"}],'
@@ -665,12 +665,14 @@ def test_morph_influences_as_written() raises:
         )
     )
     assert_false(bare[0].meshes[0].is_morphed())
-    _refuses(
-        library
-        + '"object":{"uuid":"o","type":"Mesh","geometry":"g",'
-        '"material":"m","morphTargetInfluences":[0,0,0,0,0,0,0,0,0]}',
-        "eight morph influences",
+    var nine = _read(
+        _wrap(
+            library
+            + '"object":{"uuid":"o","type":"Mesh","geometry":"g",'
+            '"material":"m","morphTargetInfluences":[0,0,0,0,0,0,0,0,9]}'
+        )
     )
+    assert_equal(nine[0].meshes[0].morph_influence(8), 9)
     # The writer leaves them out of a geometry without morph targets.
     var assets = Assets()
     var scene = Scene()

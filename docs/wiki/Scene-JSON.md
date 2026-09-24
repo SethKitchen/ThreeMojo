@@ -70,7 +70,7 @@ The type of the object tells what the node carries:
 
 A `Scene` root is not a node. Its `fog` becomes the fog of the scene. A number in `background` becomes a color background. A string in `background` names a texture or a cube texture. A string in `environment` names the cube texture of the scene's `environment`. See [Cube textures](#cube-textures).
 
-A `Mesh` and a `SkinnedMesh` carry their `morphTargetInfluences`, one number for each morph target of the geometry. The reader reads eight at most, because a mesh here holds eight.
+A `Mesh` and a `SkinnedMesh` carry their `morphTargetInfluences`, one number for each morph target of the geometry. The reader reads every number, because a mesh here has no cap. The reader fills a mesh's `morph_target_dictionary` from its geometry, as three.js's `Mesh` constructor does.
 
 A light's `target` names an object by its uuid. When no object has that uuid, the target is the origin. This is the default target of three.js. A light's `shadow` gives `intensity`, `bias`, `normalBias`, `radius`, `mapSize` and the planes of its camera. A directional light's shadow camera gives `left`, `right`, `top` and `bottom`.
 
@@ -92,7 +92,7 @@ An LOD, a skinned mesh and a batched mesh have more parts than a mesh. The write
 
 | Object | Keys |
 |---|---|
-| `LOD` | `levels`: one entry for each level, with the `object` uuid, the `distance` and the `hysteresis`. Each level is a child `Mesh` at the identity. |
+| `LOD` | `levels`: one entry for each level, with the `object` uuid, the `distance` and the `hysteresis`, and `autoUpdate`. Each level is a child object of any type. |
 | `SkinnedMesh` | `bindMode` (`attached` or `detached`), `bindMatrix` and `skeleton`. The `skeleton` names an entry of the `skeletons` library. |
 | `BatchedMesh` | One joined `geometry`, `geometryInfo`, `instanceInfo`, `perObjectFrustumCulled` and three data textures. |
 
@@ -108,7 +108,7 @@ The reader splits the joined geometry back into its parts. It adds each part to 
 
 ## Geometry
 
-The writer writes each geometry as a `BufferGeometry`. Each attribute is a `Float32Array`. The index is a `Uint16Array` up to 65535 vertices, and a `Uint32Array` above that, as three.js chooses. The groups and the morph targets are written too.
+The writer writes each geometry as a `BufferGeometry`. Each attribute is a `Float32Array`. The index is a `Uint16Array` up to 65535 vertices, and a `Uint32Array` above that, as three.js chooses. The groups and the morph targets are written too: positions with their names, normals and colors.
 
 An instanced geometry is an `InstancedBufferGeometry` with its `instanceCount`, and each per-instance attribute has its `meshPerAttribute`. An interleaved attribute is written as its own floats, as three.js writes one attribute alone. See [Geometry](Geometry#interleaved-buffers).
 
@@ -224,7 +224,7 @@ The scene's `backgroundBlurriness`, `backgroundIntensity`, `backgroundRotation`,
 - One material can be a mesh material and a line material here. The writer writes one entry for each three.js class that uses it.
 - The writer writes `transparent` false on a `SpriteMaterial`. three.js leaves it out, and then its loader reads a transparent sprite.
 - The writer writes a sprite's `center` when it is not the middle. three.js does not write it, and ignores it.
-- An LOD level must be a child `Mesh` at the identity, because an `Lod` draws its levels at its own node.
+- The reader finds an LOD level anywhere in the document, and makes it a child of the LOD. three.js finds it among the LOD's descendants.
 - A skeleton can leave out `boneInverses`, or give an empty list. Then the reader calculates the inverses. three.js's `Skeleton.fromJSON` reads one entry for each bone and fails without them.
 - The writer writes a material's clipping planes, a distance material's range and a `dashOffset`. three.js does not write them.
 - The writer refuses a standard or physical material that reflects nothing in a scene with an environment. three.js would reflect the environment on it.
@@ -243,7 +243,7 @@ The writer does not write these things, and the reader refuses them:
 - A flat texture with a mapping that is not `UVMapping` or equirectangular, or a `channel` that is not 0 or 1. A float texture.
 - A cube texture that does not have six images, or a mapping that is not a cube mapping. A cube texture with float faces.
 - An `envMap`, an `environment` or a blurred background that names a flat texture without an equirectangular mapping.
-- More than eight clipping planes on a material, or more than eight morph influences on a mesh.
+- More than eight clipping planes on a material.
 - A depth function, a stencil function or a stencil operation that is not one of three.js's. A `shadowSide` that is not a side, or a `blendAlpha` outside zero to one.
 - A clip with a track that the reader cannot bind. See [Animation](Animation#scene-json).
 
@@ -253,7 +253,7 @@ The writer does not write these things, and the reader ignores them:
 - `shapes`.
 - An `up` other than the default. The writer writes `up` as `[0, 1, 0]` on each object, and the reader ignores it.
 - The material keys that have no field here.
-- An LOD's `autoUpdate`, and a batched mesh's sorting, reserved ranges and bounds.
+- A batched mesh's sorting, reserved ranges and bounds.
 - An instanced mesh's `morphTexture` and `morphTargetInfluences`. An `InstancedMesh` here wears no morph targets. See [Meshes and assets](Meshes-and-assets#instance-colors).
 - A texture's `format`, `type` and `premultiplyAlpha`.
 
@@ -280,7 +280,7 @@ The reader raises for a document that is not JSON, for each refusal in [Not port
 - A shadow map that is not square.
 - A shadow camera whose right edge is not beyond its left edge, or whose top is not above its bottom.
 - A shadow that `LightShadow.validate` refuses, when the light does not cast too.
-- An LOD level that is not a child `Mesh` at the identity without children.
+- An LOD level that names no object, that is the LOD itself, or that is above the LOD.
 - A bone uuid that no object has.
 - A skeleton with a `boneInverses` list that is not empty and has fewer entries than bones. three.js's `Skeleton.fromJSON` fails on it too.
 - An `envMap` or an `environment` that names a texture that is not a cube.

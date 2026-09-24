@@ -42,9 +42,9 @@ and its `fog` and `background` become the scene's. A light's `target`
 names another object by uuid, or an object that is not in the file, which
 is three.js's default target at the origin.
 
-An `LOD`'s `levels` name child objects by uuid, each a `Mesh` at the
-identity with no children, which is what `exporters.object_json` writes:
-an `Lod` draws its levels at its own node, so a level is not a node. A
+An `LOD`'s `levels` name objects by uuid, each of any type, and its
+`autoUpdate` is read; `Scene.add_lod` makes each level a child of the
+LOD, as three.js's `addLevel` does. A
 `SkinnedMesh` names an entry of the `skeletons` library, whose `bones`
 are objects of the document and whose `boneInverses` are their inverse
 binds; it is bound after the whole tree is read, as three.js binds it. A
@@ -111,9 +111,9 @@ three.js's, a flat texture whose mapping is neither `UVMapping` nor an
 equirectangular one or whose `channel` is neither of two, a cube texture
 that is not six images or whose mapping is neither cube mapping, an
 `envMap`, `environment` or blurred background that names a flat texture
-that is not equirectangular, more than eight clipping planes
-or morph influences, an LOD level that is
-not a bare mesh child, a skeleton with fewer `boneInverses` than bones, a batch
+that is not equirectangular, more than eight clipping planes, an LOD
+level that names no object or is the LOD or above it, a skeleton with
+fewer `boneInverses` than bones, a batch
 whose info names what is not there, and every number the builders
 refuse.
 
@@ -144,18 +144,18 @@ its `normalMapType`. The scene reads its `backgroundBlurriness`,
 a cube texture's wrap; an
 `envMap` on a class whose shader reads none; the material keys this port
 has no field for; a texture's `format`, `type`,
-`premultiplyAlpha` and `unpackAlignment`; an LOD's `autoUpdate`; and a
-batch's sorting, reserved ranges and bounds.
+`premultiplyAlpha` and `unpackAlignment`; and a batch's sorting,
+reserved ranges and bounds.
 """
 
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
-    MAX_MORPH_TARGETS,
     BufferGeometry,
     MaterialIndex,
 )
 from core.interleaved_buffer import InterleavedBuffer
+from core.morph import MorphInfluences
 from core.background import (
     color_background,
     cube_background,
@@ -1307,12 +1307,14 @@ struct _Loader(Movable):
         mut geometry: BufferGeometry,
         mut shared: Dict[String, InterleavedBuffer],
     ) raises:
-        """Add a geometry's morph targets, positions and maybe normals."""
+        """Add a geometry's morph targets: positions, maybe normals and
+        maybe colors, each position named by its `name`."""
         var morphs = self.entry(data, "morphAttributes")
         if morphs == NO_NODE:
             return
         var positions = self.array(morphs, "position")
         var normals = self.array(morphs, "normal")
+        var colors = self.array(morphs, "color")
         var count = 0
         if positions != NO_NODE:
             count = self.document.length(positions)
@@ -1320,16 +1322,25 @@ struct _Loader(Movable):
         if with_normals and self.document.length(normals) != count:
             raise Error("Object JSON: every morph target needs a normal")
         for at in range(count):
-            var position = self.attribute(
-                self.document.at(positions, at), data, shared
-            )
+            var entry = self.document.at(positions, at)
+            var position = self.attribute(entry, data, shared)
+            # `attribute` refused an entry that is not an object.
+            var name = self.text(entry, "name", "")
             if with_normals:
                 geometry.add_morph_target(
                     position^,
                     self.attribute(self.document.at(normals, at), data, shared),
+                    name=name,
                 )
             else:
-                geometry.add_morph_target(position^)
+                geometry.add_morph_target(position^, name=name)
+        if colors != NO_NODE:
+            var tints = List[BufferAttribute]()
+            for at in range(self.document.length(colors)):
+                tints.append(
+                    self.attribute(self.document.at(colors, at), data, shared)
+                )
+            geometry.set_morph_colors(tints^)
         geometry.morph_relative = self.flag(data, "morphTargetsRelative", False)
 
     # --- textures -----------------------------------------------------------
@@ -2002,23 +2013,13 @@ struct _Loader(Movable):
         parent: NodeId,
         mut scene: Scene,
         mut assets: Assets,
-        levels: List[String] = List[String](),
     ) raises:
-        """Read an object's children under a node, leaving out the LOD
-        levels named in `levels`, which are read as its levels."""
+        """Read an object's children under a node."""
         var list = self.array(item, "children")
         if list == NO_NODE:
             return
         for at in range(self.document.length(list)):
-            var child = self.document.at(list, at)
-            if not self.is_named(child, levels):
-                self.place(child, parent, scene, assets)
-
-    def is_named(self, child: Int, uuids: List[String]) raises -> Bool:
-        """Return True if an object has one of `uuids`."""
-        if len(uuids) == 0 or self.document.kind(child) != OBJECT:
-            return False
-        return _position_of(uuids, self.text(child, "uuid", "")) >= 0
+            self.place(self.document.at(list, at), parent, scene, assets)
 
     def transform(self, item: Int, mut node: Object3D) raises:
         """Set a node from an object's matrix, or its separate parts."""
@@ -2096,7 +2097,6 @@ struct _Loader(Movable):
         var light = _position_of(light_type_names(), kind)
         var line = _position_of(line_type_names(), kind)
         var culled = self.flag(item, "frustumCulled", True)
-        var levels = List[String]()
         if kind == "Mesh":
             var geometry = self.geometry_named(item)
             var list = self.material_list(item)
@@ -2119,7 +2119,8 @@ struct _Loader(Movable):
                     cast_shadow=self.flag(item, "castShadow", False),
                     receive_shadow=self.flag(item, "receiveShadow", False),
                 )
-            mesh.morph_influences = self.influences(item)
+            mesh.update_morph_targets(assets.geometries.get(geometry))
+            self.wear(item, mesh.morph_influences)
             self.meshes[mine] = len(scene.meshes)
             scene.add_mesh(mesh)
         elif kind == "InstancedMesh":
@@ -2178,93 +2179,52 @@ struct _Loader(Movable):
                     frustum_culled=culled,
                 )
             )
-        elif kind == "LOD":
-            levels = self.lod(item, id, culled, scene)
-        elif kind != "Object3D" and kind != "Group" and kind != "Bone":
+        elif (
+            kind != "LOD"
+            and kind != "Object3D"
+            and kind != "Group"
+            and kind != "Bone"
+        ):
             raise Error("Object JSON: an object type that is not read: " + kind)
-        self.children(item, id, scene, assets, levels)
+        self.children(item, id, scene, assets)
+        # An LOD's levels name objects under it, so they are read after
+        # its children, as three.js's `ObjectLoader` binds them.
+        if kind == "LOD":
+            self.lod(item, id, scene)
 
-    def influences(
-        self, item: Int
-    ) raises -> SIMD[DType.float32, MAX_MORPH_TARGETS]:
-        """Return a mesh's `morphTargetInfluences`, zero past the ones
-        the object names."""
-        var out = SIMD[DType.float32, MAX_MORPH_TARGETS](0)
+    def wear(self, item: Int, mut worn: MorphInfluences) raises:
+        """Set a mesh's weights from its `morphTargetInfluences`, when the
+        object names them. There is no cap on how many."""
         var list = self.array(item, "morphTargetInfluences")
         if list == NO_NODE:
-            return out
+            return
         var weights = self.numbers_of(list)
-        if len(weights) > MAX_MORPH_TARGETS:
-            raise Error("Object JSON: a mesh has eight morph influences")
         for target in range(len(weights)):
-            out[target] = weights[target]
-        return out
+            worn.set(target, weights[target])
 
-    def lod(
-        mut self, item: Int, id: NodeId, culled: Bool, mut scene: Scene
-    ) raises -> List[String]:
-        """Build an LOD from its `levels`, and return the uuids of the
-        children they name.
+    def lod(mut self, item: Int, id: NodeId, mut scene: Scene) raises:
+        """Build an LOD from its `levels` and `autoUpdate`, three.js's
+        `ObjectLoader` for an `LOD`.
 
-        Each level must name a child `Mesh` at the identity with no
-        children of its own, which is what `LOD.toJSON` writes for a
-        level here: an `Lod` draws its levels at its own node.
+        Each level names an object already read, which may be any object.
+        three.js's `getObjectByProperty` finds it among the LOD's
+        descendants; this finds it anywhere read before, and `add_lod`
+        makes it a child of the LOD, as three.js's `addLevel` does. That
+        is how a second LOD on one node reads back: this writer puts its
+        levels beside it. The distance is taken as its size, as three.js's
+        `addLevel` takes `Math.abs` of it.
         """
-        var built = Lod(id, frustum_culled=culled)
-        var named = List[String]()
+        var built = Lod(id, auto_update=self.flag(item, "autoUpdate", True))
         var levels = self.array(item, "levels")
-        var children = self.array(item, "children")
         if levels != NO_NODE:
             for at in range(self.document.length(levels)):
                 var level = self.document.at(levels, at)
-                var uuid = self.text(level, "object", "")
-                var child = self.child_named(children, uuid)
-                if child == NO_NODE:
-                    raise Error("Object JSON: an LOD level names no child")
-                if not self.is_bare_mesh(child):
-                    raise Error(
-                        "Object JSON: an LOD level is read as a mesh at the"
-                        " LOD's node with no children"
-                    )
-                if uuid in self.seen:
-                    raise Error("Object JSON: a uuid named twice: " + uuid)
-                self.seen[uuid] = 0
                 built.add_level(
-                    self.geometry_named(child),
-                    self.material_named(child),
+                    self.model.node(self.text(level, "object", "")),
                     Length(abs(self.number(level, "distance", 0)), METER),
                     self.number(level, "hysteresis", 0),
                 )
-                named.append(uuid)
         scene.add_lod(built^)
-        return named^
-
-    def child_named(self, children: Int, uuid: String) raises -> Int:
-        """Return the child object with a uuid, or `NO_NODE`."""
-        var found = NO_NODE
-        if children == NO_NODE:
-            return found
-        for at in range(self.document.length(children)):
-            var child = self.document.at(children, at)
-            if self.is_named(child, [uuid]):
-                found = child
-        return found
-
-    def is_bare_mesh(self, child: Int) raises -> Bool:
-        """Return True if an object is a mesh at the identity with no
-        children."""
-        var node = Object3D()
-        self.transform(child, node)
-        var matrix = (
-            node.local_matrix() if node.matrix_auto_update else node.matrix
-        )
-        var list = self.array(child, "children")
-        var bare = list == NO_NODE or self.document.length(list) == 0
-        return (
-            self.text(child, "type", "") == "Mesh"
-            and bare
-            and _is_identity(matrix)
-        )
 
     def batched(
         self, item: Int, id: NodeId, mut assets: Assets
@@ -2273,13 +2233,17 @@ struct _Loader(Movable):
         geometry into the geometries its `geometryInfo` names, and place
         the instances its `instanceInfo` names from its data textures.
 
-        An instance that is not active or not visible is left out, as
-        three.js draws neither.
+        An instance that is not active is left out, so the instances after
+        it take lower indices than three.js gives them. One that is not
+        visible is added and hidden, as three.js keeps it.
         """
         var batch = BatchedMesh(
             self.material_named(item),
             id,
-            frustum_culled=self.flag(item, "perObjectFrustumCulled", True),
+            frustum_culled=self.flag(item, "frustumCulled", True),
+            per_object_frustum_culled=self.flag(
+                item, "perObjectFrustumCulled", True
+            ),
         )
         var whole = assets.geometries.get(self.geometry_named(item)).clone()
         var infos = self.array(item, "geometryInfo")
@@ -2313,10 +2277,7 @@ struct _Loader(Movable):
             )
         for at in range(count):
             var info = self.document.at(instances, at)
-            var shown = self.flag(info, "active", True) and self.flag(
-                info, "visible", True
-            )
-            if not shown:
+            if not self.flag(info, "active", True):
                 continue
             var which = self.integer(info, "geometryIndex", -1)
             var named = which >= 0 and which < len(geometries)
@@ -2330,6 +2291,7 @@ struct _Loader(Movable):
             var index = batch.add_instance(
                 GeometryId(geometries[which]), matrix
             )
+            batch.set_visible_at(index, self.flag(info, "visible", True))
             if tinted:
                 batch.set_color_at(
                     index,
@@ -2775,9 +2737,9 @@ struct _Loader(Movable):
             var slot = -1
             if path.property_index != "":
                 slot = atol(path.property_index)
-                if slot < 0 or slot >= MAX_MORPH_TARGETS:
+                if slot < 0:
                     raise Error(
-                        "Object JSON: a mesh has eight morph influences"
+                        "Object JSON: a morph target index cannot be negative"
                     )
             if self.meshes[at] >= 0:
                 return TrackTarget(MORPH_INFLUENCE, self.meshes[at], slot)
@@ -2888,7 +2850,7 @@ struct _Loader(Movable):
                 bind_mode=bind_mode_of(self.text(item, "bindMode", "attached")),
                 frustum_culled=self.flag(item, "frustumCulled", True),
             )
-            mesh.morph_influences = self.influences(item)
+            self.wear(item, mesh.morph_influences)
             scene.add_skinned_mesh(mesh^)
 
 
@@ -2898,12 +2860,3 @@ def _matrix_of(elements: List[Float32]) -> Matrix4:
     for index in range(16):  # pragma: no branch
         matrix.elements[index] = elements[index]
     return matrix^
-
-
-def _is_identity(matrix: Matrix4) -> Bool:
-    """Return True if a matrix is exactly the identity."""
-    var identity = Matrix4()
-    var same = True
-    for index in range(16):  # pragma: no branch
-        same = same and matrix.elements[index] == identity.elements[index]
-    return same

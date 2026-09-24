@@ -54,6 +54,18 @@ Normals may be morphed alongside positions, and either every target carries
 them or none does. three.js allows the same, and a geometry whose targets
 have no normals keeps the base normal -- which is what three.js's shader
 does when `morphAttributes.normal` is absent.
+
+Colors may be morphed too, three.js's `morphAttributes.color`, by the same
+rule: every target carries a color or none does. A color target holds
+three or four numbers a vertex. A missing fourth number reads as one, as
+three.js's `WebGLMorphtargets` fills it.
+
+A geometry carries any number of targets. Older three.js had a
+`MAX_MORPH_TARGETS` of eight, and this port kept that cap until the mesh
+held its weights in a list; three.js on WebGL2 passes the targets in a
+texture and has no cap. Each target has a name, three.js's
+`morphAttributes.position[i].name`, which a mesh's
+`morph_target_dictionary` is built from.
 """
 
 from core.buffer_attribute import BufferAttribute
@@ -62,17 +74,6 @@ from math.bounds import Box3, Sphere
 from math.vector3 import Vector3
 from std.math import isfinite
 
-# How many morph targets one geometry may carry. This port's limit, and
-# not three.js's: older three.js had a `MAX_MORPH_TARGETS` of eight because
-# of how many attribute slots a WebGL program has, and current three.js
-# passes the targets in a texture instead and is bounded by memory rather
-# than by eight.
-#
-# Eight is here because a mesh holds its weights in a fixed row rather than
-# a list, which is what keeps a `Mesh` implicitly copyable, and a row has
-# to have a size. Widening it is changing one number and the tests that
-# name it.
-comptime MAX_MORPH_TARGETS = 8
 
 # The attributes this port knows about, named as three.js names them.
 # `position` is the only one a geometry must have.
@@ -200,6 +201,9 @@ struct BufferGeometry(Movable):
     var morph_positions: List[BufferAttribute]
     # The matching normals, either one per target or none at all.
     var morph_normals: List[BufferAttribute]
+    # The matching colors, three.js's `morphAttributes.color`: either one
+    # per target or none at all. See `set_morph_colors`.
+    var morph_colors: List[BufferAttribute]
     # Whether a target holds finished positions or offsets to add:
     # three.js's `morphTargetsRelative`. Read only when there are targets,
     # and either answer is a legitimate one, so nothing checks it.
@@ -241,6 +245,7 @@ struct BufferGeometry(Movable):
         self.index = List[Int]()
         self.morph_positions = List[BufferAttribute]()
         self.morph_normals = List[BufferAttribute]()
+        self.morph_colors = List[BufferAttribute]()
         self.morph_relative = False
         self.morph_names = List[String]()
         self.groups = List[GeometryGroup]()
@@ -271,6 +276,7 @@ struct BufferGeometry(Movable):
             self.morph_positions, originals, clones
         )
         copied.morph_normals = _cloned(self.morph_normals, originals, clones)
+        copied.morph_colors = _cloned(self.morph_colors, originals, clones)
         copied.morph_relative = self.morph_relative
         copied.morph_names = self.morph_names.copy()
         copied.groups = self.groups.copy()
@@ -381,9 +387,8 @@ struct BufferGeometry(Movable):
 
         Raises:
             Error: If the geometry has no positions, if the attribute is
-                not three numbers a vertex, if it does not describe the
-                same vertices the positions do, or if the geometry already
-                holds `MAX_MORPH_TARGETS` of them.
+                not three numbers a vertex, or if it does not describe the
+                same vertices the positions do.
         """
         if not self.has_attribute(String(POSITION)):
             raise Error("A morph target needs a geometry with positions")
@@ -391,10 +396,10 @@ struct BufferGeometry(Movable):
             raise Error("A morph target holds three numbers a vertex")
         if attribute.count() != self.attribute_view(String(POSITION)).count():
             raise Error("A morph target must cover every vertex")
-        if len(self.morph_positions) >= MAX_MORPH_TARGETS:
-            raise Error("A geometry holds at most eight morph targets")
 
-    def add_morph_target(mut self, var positions: BufferAttribute) raises:
+    def add_morph_target(
+        mut self, var positions: BufferAttribute, *, name: String = ""
+    ) raises:
         """Add one morph target's positions, with no normals.
 
         The base normal is then used whatever the weights are, which is
@@ -404,37 +409,184 @@ struct BufferGeometry(Movable):
         Args:
             positions: Where every vertex goes at full weight, or how far
                 it moves when `morph_relative` is set.
+            name: The target's name, three.js's attribute `name`. Empty,
+                the default, names it by its index.
 
         Raises:
             Error: If the target does not fit the geometry -- see
                 `_check_morph` -- or if the targets already added carry
-                normals, since either all of them do or none does.
+                normals or colors, since either all of them do or none
+                does.
         """
         self._check_morph(positions)
         if len(self.morph_normals) > 0:
             raise Error("Every morph target must carry normals, or none")
+        self._check_no_colors()
         self.morph_positions.append(positions^)
+        self._name_target(name)
 
     def add_morph_target(
-        mut self, var positions: BufferAttribute, var normals: BufferAttribute
+        mut self,
+        var positions: BufferAttribute,
+        var normals: BufferAttribute,
+        *,
+        name: String = "",
     ) raises:
         """Add one morph target's positions and normals.
 
         Args:
             positions: Where every vertex goes at full weight.
             normals: Which way every vertex faces at full weight.
+            name: The target's name, three.js's attribute `name`. Empty,
+                the default, names it by its index.
 
         Raises:
             Error: If either does not fit the geometry -- see
                 `_check_morph` -- or if the targets already added carry no
-                normals, since either all of them do or none does.
+                normals, or carry colors, since either all of them do or
+                none does.
         """
         self._check_morph(positions)
         self._check_morph(normals)
         if len(self.morph_positions) != len(self.morph_normals):
             raise Error("Every morph target must carry normals, or none")
+        self._check_no_colors()
         self.morph_positions.append(positions^)
         self.morph_normals.append(normals^)
+        self._name_target(name)
+
+    def _name_target(mut self, name: String):
+        """Name the target just added, keeping `morph_names` empty or one
+        per target: a first name gives the targets before it empty names.
+        """
+        if name == "" and len(self.morph_names) == 0:
+            return
+        while len(self.morph_names) < len(self.morph_positions) - 1:
+            self.morph_names.append("")
+        self.morph_names.append(name)
+
+    def _check_no_colors(self) raises:
+        """Refuse a new target once the targets carry colors.
+
+        Raises:
+            Error: If the targets already carry colors, which a new target
+                added without one would leave unequal.
+        """
+        if len(self.morph_colors) > 0:
+            raise Error("Every morph target must carry a color, or none")
+
+    def set_morph_colors(mut self, var colors: List[BufferAttribute]) raises:
+        """Give every morph target a color, three.js's
+        `morphAttributes.color`.
+
+        Args:
+            colors: One attribute per target, in the targets' order, each
+                three or four numbers a vertex and one item per vertex.
+                Every color is at full weight, or an offset when
+                `morph_relative` is set.
+
+        Raises:
+            Error: If the geometry has no targets, if the list does not
+                hold one attribute per target, or if an attribute is not
+                three or four numbers a vertex or does not cover every
+                vertex.
+        """
+        if len(self.morph_positions) == 0:
+            raise Error("Only a geometry with morph targets has color targets")
+        if len(colors) != len(self.morph_positions):
+            raise Error("Every morph target must carry a color, or none")
+        var count = self.attribute_view(String(POSITION)).count()
+        for index in range(len(colors)):  # pragma: no branch
+            var size = colors[index].item_size
+            if size != 3 and size != 4:
+                raise Error("A color target holds three or four numbers")
+            if colors[index].count() != count:
+                raise Error("A morph target must cover every vertex")
+        self.morph_colors = colors^
+
+    def has_morph_colors(self) -> Bool:
+        """Return True if the morph targets carry colors, three.js's
+        `morphAttributes.color`."""
+        return len(self.morph_colors) > 0
+
+    def morph_color(
+        self, target: Int, vertex: Int
+    ) raises -> SIMD[DType.float32, 4]:
+        """Return one vertex's color in one morph target.
+
+        Args:
+            target: Which target, from zero.
+            vertex: Which vertex.
+
+        Returns:
+            The color as red, green, blue and alpha. A target of three
+            numbers a vertex reads an alpha of one, as three.js fills it.
+
+        Raises:
+            Error: If the targets carry no colors, if there is no such
+                target, or no such vertex.
+        """
+        if target < 0 or target >= len(self.morph_colors):
+            raise Error("No morph target has that color")
+        ref colors = self.morph_colors[target]
+        var alpha = Float32(1)
+        if colors.item_size == 4:
+            alpha = colors.component(vertex, 3)
+        return SIMD[DType.float32, 4](
+            colors.component(vertex, 0),
+            colors.component(vertex, 1),
+            colors.component(vertex, 2),
+            alpha,
+        )
+
+    def morph_target_name(self, target: Int) raises -> String:
+        """Return one target's name, or its index as text when it has none:
+        the key three.js's `updateMorphTargets` gives it.
+
+        Args:
+            target: Which target, from zero.
+
+        Returns:
+            The name.
+
+        Raises:
+            Error: If there is no such target.
+        """
+        if target < 0 or target >= len(self.morph_positions):
+            raise Error("No morph target has that index")
+        if target >= len(self.morph_names) or self.morph_names[target] == "":
+            return String(target)
+        return self.morph_names[target]
+
+    def gather_morphs_into(
+        self, mut into: BufferGeometry, slots: List[Int]
+    ) raises:
+        """Copy every morph target into another geometry, each read at
+        `slots`: positions, normals, colors, names and `morph_relative`.
+
+        What `to_non_indexed`, `group_part` and a weld share, so that none
+        of them drops a part of a target.
+
+        Args:
+            into: The geometry to fill. Its own targets are replaced.
+            slots: Which vertex each vertex of `into` reads.
+
+        Raises:
+            Error: If a slot points past the last vertex of a target.
+        """
+        into.morph_positions = List[BufferAttribute]()
+        into.morph_normals = List[BufferAttribute]()
+        into.morph_colors = List[BufferAttribute]()
+        for target in range(len(self.morph_positions)):
+            into.morph_positions.append(
+                self.morph_positions[target].gather(slots)
+            )
+        for target in range(len(self.morph_normals)):
+            into.morph_normals.append(self.morph_normals[target].gather(slots))
+        for target in range(len(self.morph_colors)):
+            into.morph_colors.append(self.morph_colors[target].gather(slots))
+        into.morph_names = self.morph_names.copy()
+        into.morph_relative = self.morph_relative
 
     def morph_position(self, target: Int, vertex: Int) raises -> Vector3:
         """Return where one vertex goes in one morph target.
@@ -780,16 +932,7 @@ struct BufferGeometry(Movable):
                 result.set_attribute(
                     self.names[slot], self.values[slot].gather(self.index)
                 )
-        for target in range(len(self.morph_positions)):
-            result.morph_positions.append(
-                self.morph_positions[target].gather(self.index)
-            )
-        for target in range(len(self.morph_normals)):
-            result.morph_normals.append(
-                self.morph_normals[target].gather(self.index)
-            )
-        result.morph_relative = self.morph_relative
-        result.morph_names = self.morph_names.copy()
+        self.gather_morphs_into(result, self.index)
         result.groups = self.groups.copy()
         return result^
 
@@ -856,14 +999,7 @@ struct BufferGeometry(Movable):
         var part = BufferGeometry()
         for at in range(len(self.names)):
             part.set_attribute(self.names[at], self.values[at].gather(slots))
-        for target in range(len(self.morph_positions)):
-            part.morph_positions.append(
-                self.morph_positions[target].gather(slots)
-            )
-        for target in range(len(self.morph_normals)):
-            part.morph_normals.append(self.morph_normals[target].gather(slots))
-        part.morph_relative = self.morph_relative
-        part.morph_names = self.morph_names.copy()
+        self.gather_morphs_into(part, slots)
         return part^
 
     def triangle_run(self, start: Int, count: Int) raises -> Tuple[Int, Int]:

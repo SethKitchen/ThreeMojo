@@ -127,6 +127,14 @@ def merge_geometries(
             raise Error("Merged geometries must carry the same morph targets")
         if other.has_morph_normals() != first.has_morph_normals():
             raise Error("Merged morph targets must all carry normals, or none")
+        if other.has_morph_colors() != first.has_morph_colors():
+            raise Error("Merged morph targets must all carry colors, or none")
+        for target in range(len(first.morph_colors)):
+            if (
+                other.morph_colors[target].item_size
+                != first.morph_colors[target].item_size
+            ):
+                raise Error("A merged color target must keep its item size")
         if other.morph_relative != first.morph_relative:
             raise Error("Merged morph targets must all be relative, or none")
 
@@ -168,6 +176,14 @@ def merge_geometries(
         for part in range(len(geometries)):  # pragma: no branch
             data.extend(geometries[part].morph_normals[target].packed())
         merged.morph_normals.append(BufferAttribute(data^, 3))
+    for target in range(len(first.morph_colors)):
+        var data = List[Float32]()
+        for part in range(len(geometries)):  # pragma: no branch
+            data.extend(geometries[part].morph_colors[target].packed())
+        merged.morph_colors.append(
+            BufferAttribute(data^, first.morph_colors[target].item_size)
+        )
+    merged.morph_names = first.morph_names.copy()
     merged.morph_relative = first.morph_relative
     merged.set_index(index^)
     return merged^
@@ -239,13 +255,7 @@ def merge_vertices(
         welded.set_attribute(
             geometry.names[name], geometry.values[name].gather(kept)
         )
-    for target in range(geometry.morph_count()):
-        welded.morph_positions.append(
-            geometry.morph_positions[target].gather(kept)
-        )
-    for target in range(len(geometry.morph_normals)):
-        welded.morph_normals.append(geometry.morph_normals[target].gather(kept))
-    welded.morph_relative = geometry.morph_relative
+    geometry.gather_morphs_into(welded, kept)
     welded.groups = geometry.groups.copy()
     welded.set_index(index^)
     return welded^

@@ -121,6 +121,34 @@ struct Skeleton(Copyable, Movable):
             raise Error("The skeleton has no bone at that index")
         return self.bones[index].node
 
+    def calculate_inverses(mut self, placed: List[Matrix4]) raises:
+        """Bind every bone where it stands now, three.js's
+        `Skeleton.calculateInverses`: each inverse bind becomes the inverse
+        of the bone's world matrix.
+
+        Args:
+            placed: Each bone's world matrix now, in the skeleton's own
+                order; as many as there are bones. `core.skeleton_utils`
+                reads them from a scene.
+
+        Raises:
+            Error: If there is not one world matrix per bone, or one has
+                no inverse: a bone at a scale of zero. three.js stores the
+                inverse of such a matrix as all zeros, which no later pose
+                can measure against. Nothing changes when this raises.
+        """
+        if len(placed) != len(self.bones):
+            raise Error("Binding needs one world matrix for every bone")
+        var inverses = List[Matrix4]()
+        for index in range(len(placed)):  # pragma: no branch
+            var stood = Matrix4(copy=placed[index])
+            if stood.determinant() == 0:
+                raise Error("A bone cannot be bound where it has no size")
+            stood.invert()
+            inverses.append(stood^)
+        for index in range(len(placed)):  # pragma: no branch
+            self.bones[index].inverse_bind = Matrix4(copy=inverses[index])
+
     def pose(self, placed: List[Matrix4]) raises -> List[Matrix4]:
         """Return one matrix per bone, saying how far it has moved since
         the mesh was bound to it.
@@ -237,9 +265,7 @@ def bind_skeleton(
         raise Error("Binding needs one world matrix for every bone")
     var bones = List[Bone]()
     for index in range(len(nodes)):  # pragma: no branch
-        var stood = Matrix4(copy=placed[index])
-        if stood.determinant() == 0:
-            raise Error("A bone cannot be bound where it has no size")
-        stood.invert()
-        bones.append(Bone(nodes[index], stood^))
-    return Skeleton(bones^)
+        bones.append(Bone(nodes[index], Matrix4()))
+    var skeleton = Skeleton(bones^)
+    skeleton.calculate_inverses(placed)
+    return skeleton^

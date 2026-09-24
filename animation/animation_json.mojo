@@ -96,7 +96,6 @@ from animation.keyframe_track import (
 )
 from exporters.json_writer import JsonWriter
 from loaders.json import ARRAY, BOOLEAN, JsonDocument, NO_NODE, NUMBER, OBJECT
-from core.buffer_geometry import MAX_MORPH_TARGETS
 from units.si import Duration, SECOND
 
 # three.js's interpolation constants, as a track's JSON writes them.
@@ -743,8 +742,8 @@ def _whole_morph(
     if keys == 0 or len(values) % keys != 0:
         raise Error("A morph track needs the same number of values a key")
     var stride = len(values) // keys
-    if stride == 0 or stride > MAX_MORPH_TARGETS:
-        raise Error("A mesh has one to eight morph influences")
+    if stride == 0:
+        raise Error("A morph track needs one influence a key at least")
     var out = List[KeyframeTrack]()
     for slot in range(stride):  # pragma: no branch
         var one = read_track(

@@ -60,8 +60,10 @@ the skin's inverse bind matrices, bound at the identity as three.js's
 `GLTFLoader` binds it. `JOINTS_0` and `WEIGHTS_0` become `skinIndex` and
 `skinWeight`, the weights normalized as three.js's `normalizeSkinWeights`
 does. A primitive's `targets` become the geometry's morph targets, which
-glTF holds as offsets, so `morph_relative` is set; `weights` on the node,
-or on the mesh when the node has none, become the influences. Each
+glTF holds as offsets, so `morph_relative` is set. A target's `COLOR_0`
+becomes a color target, and the mesh's `extras.targetNames` name the
+targets, which fills each mesh's `morph_target_dictionary`. `weights` on
+the node, or on the mesh when the node has none, become the influences. Each
 animation becomes an `AnimationClip`: a `translation`, `rotation` or
 `scale` channel a track on the node, and a `weights` channel one
 morph influence track per mesh and target. A `weights` channel drives
@@ -81,10 +83,10 @@ elements of its buffer view, or of zeros when it has none.
 
 **Where this differs from three.js.** A morph target without a `POSITION`
 moves nothing here, where three.js adds the base positions to it as if
-they were offsets. A channel on a node
+they were offsets. A target without a `COLOR_0` changes no color, where
+three.js adds the base colors the same way. A channel on a node
 the default scene does not reach is left out, and so is an animation left
-with no channel. A skin joint the scene does not reach, a morph color, and
-more than `MAX_MORPH_TARGETS` targets are refused. So are a specular
+with no channel. A skin joint the scene does not reach is refused. So is a specular
 color factor outside zero to one, which a `Color` cannot hold; any map
 that reads a third set of texture coordinates or past it, since a
 geometry here has only `uv` and `uv1`; and a skinned node that is
@@ -173,7 +175,6 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     COLOR,
-    MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
     UV,
@@ -2225,13 +2226,15 @@ struct _Loader(Movable):
             raise Error("glTF: a primitive's targets must be an array")
         var count = self.document.length(targets)
         var any_normals = False
+        var any_colors = False
         for slot in range(count):
             var target = self.object_at(targets, slot)
             if self.document.has(target, "COLOR_0"):
-                raise Error("glTF: a morph target of colors is not read")
+                any_colors = True
             if self.document.has(target, "NORMAL"):
                 any_normals = True
         geometry.morph_relative = True
+        var tints = List[BufferAttribute]()
         for slot in range(count):
             var target = self.document.at(targets, slot)
             var moved = self.target_offsets(target, "POSITION", floats)
@@ -2242,6 +2245,28 @@ struct _Loader(Movable):
                 )
             else:
                 geometry.add_morph_target(BufferAttribute(moved^, 3))
+            if any_colors:
+                tints.append(self.target_colors(target, geometry))
+        if any_colors:
+            geometry.set_morph_colors(tints^)
+
+    def target_colors(
+        mut self, target: Int, geometry: BufferGeometry
+    ) raises -> BufferAttribute:
+        """Return one morph target's `COLOR_0` offsets, or zeros when it
+        names none: a target without a color changes no color, as one
+        without a `POSITION` moves nothing."""
+        var index = self.integer(target, "COLOR_0", -1)
+        if index < 0:
+            return BufferAttribute(
+                List[Float32](length=geometry.vertex_count() * 4, fill=0), 4
+            )
+        var colors = self.accessor_floats(index)
+        if colors[1] != 3 and colors[1] != 4:
+            raise Error(
+                "glTF: a morph target's COLOR_0 must be a VEC3 or a VEC4"
+            )
+        return BufferAttribute(colors[0].copy(), colors[1])
 
     def target_offsets(
         mut self, target: Int, key: String, floats: Int
@@ -2456,6 +2481,7 @@ struct _Loader(Movable):
                 continue
             var material = self.material_for(chosen, tinted, assets)
             var drawn = Mesh(geometry, material, node)
+            drawn.update_morph_targets(assets.geometries.get(geometry))
             for target in range(len(weights)):
                 drawn.set_morph_influence(target, weights[target])
             self.node_meshes[index].append(len(scene.meshes))
@@ -2737,6 +2763,7 @@ struct _Loader(Movable):
                 self.integer(primitive, "material", -1), tinted, assets
             )
             var drawn = SkinnedMesh(geometry, material, node, skeleton.copy())
+            drawn.update_morph_targets(assets.geometries.get(geometry))
             for target in range(len(weights)):
                 drawn.set_morph_influence(target, weights[target])
             self.node_skins[index].append(len(scene.skinned_meshes))

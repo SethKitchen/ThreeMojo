@@ -587,17 +587,24 @@ def test_a_track_on_every_morph_target_is_split() raises:
         _ = read_one(
             track_json('"type":"number","times":[],"values":[]'), [every]
         )
-    with assert_raises(contains="one to eight"):
+    with assert_raises(contains="one influence a key"):
         _ = read_one(
             track_json('"type":"number","times":[0],"values":[]'), [every]
         )
-    with assert_raises(contains="one to eight"):
-        _ = read_one(
+    # Nine influences a key, past the eight this port once held.
+    var nine = (
+        read_one(
             track_json(
-                '"type":"number","times":[0],"values":[0,0,0,0,0,0,0,0,0]'
+                '"type":"number","times":[0,1],"values":[0,0,0,0,0,0,0,0,9,'
+                "0,0,0,0,0,0,0,0,9]"
             ),
             [every],
         )
+        .value()
+        .copy()
+    )
+    assert_equal(nine.track_count(), 9)
+    assert_equal(nine.tracks[8].values[0], 9)
     # A Bezier track on every target takes each target's control points.
     var curve = (
         read_one(
@@ -745,15 +752,10 @@ def test_a_track_the_loader_cannot_bind_is_refused() raises:
         _ = load(clip("c", own), '"c"', Scene())
     with assert_raises(contains="no animation has the uuid"):
         _ = load(clip("c", own), '"x"', Scene())
-    var far: List[String] = [
-        track("Box.morphTargetInfluences[9]", "number", "[0,1]")
-    ]
-    with assert_raises(contains="eight morph influences"):
-        _ = load(clip("c", far), '"c"', Scene())
     var below: List[String] = [
         track("Box.morphTargetInfluences[-1]", "number", "[0,1]")
     ]
-    with assert_raises(contains="eight morph influences"):
+    with assert_raises(contains="cannot be negative"):
         _ = load(clip("c", below), '"c"', Scene())
     # A scene naming no clip, and a clip of no track, read nothing.
     assert_equal(len(load(clip("c", own), "", Scene())[2]), 0)

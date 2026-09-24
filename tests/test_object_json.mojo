@@ -277,8 +277,13 @@ def _scene(mut assets: Assets) raises -> Tuple[Scene, ObjectCameras]:
     indexed.clear_groups()
     indexed.add_group(0, 6, MaterialIndex(1))
     indexed.add_morph_target(
-        indexed.clone_attribute(POSITION), indexed.clone_attribute(NORMAL)
+        indexed.clone_attribute(POSITION),
+        indexed.clone_attribute(NORMAL),
+        name="swell",
     )
+    var tints = List[BufferAttribute]()
+    tints.append(indexed.clone_attribute(NORMAL))
+    indexed.set_morph_colors(tints^)
     indexed.morph_relative = True
     var boxed = assets.geometries.add(indexed^)
 
@@ -559,6 +564,9 @@ def test_round_trip() raises:
         assert_equal(a.morph_count(), b.morph_count())
         assert_equal(a.morph_relative, b.morph_relative)
         assert_equal(a.has_morph_normals(), b.has_morph_normals())
+        assert_equal(a.has_morph_colors(), b.has_morph_colors())
+        for target in range(a.morph_count()):
+            assert_equal(a.morph_names[target], b.morph_names[target])
         for slot in range(len(a.names)):
             assert_true(b.has_attribute(a.names[slot]))
             assert_equal(
@@ -567,6 +575,9 @@ def test_round_trip() raises:
             )
     ref boxed = read.geometries.get(scene.meshes[1].geometry)
     assert_equal(boxed.groups[0].material_index.value, 1)
+    assert_equal(boxed.morph_target_name(0), "swell")
+    assert_equal(boxed.morph_colors[0].item_size, 3)
+    assert_equal(scene.meshes[1].morph_target_dictionary["swell"], 0)
     assert_equal(boxed.groups[0].count, 6)
     # Textures come back once per alpha mode they are used with.
     ref first = read.materials.get(scene.meshes[1].material)
@@ -1779,6 +1790,9 @@ def test_geometry_refusals() raises:
     )
     _refuses(with_position + '"position":[' + morph + '],"normal":[]}}}' + tail)
     _refuses(with_position + '"normal":[' + morph + "]}}}" + tail)
+    # Colors for no targets, and too few colors for the targets.
+    _refuses(with_position + '"color":[]}}}' + tail)
+    _refuses(with_position + '"position":[' + morph + '],"color":[]}}}' + tail)
     var both = _read(
         with_position
         + '"position":['

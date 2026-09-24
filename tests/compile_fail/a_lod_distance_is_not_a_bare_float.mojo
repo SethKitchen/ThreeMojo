@@ -7,13 +7,11 @@
 fifty what? three.js's `LOD.addLevel(object, distance)` takes a unitless
 number and divides it by the camera's zoom."""
 
-from core.geometry_store import GeometryId
 from core.object3d import NodeId
-from materials.material import MaterialId
 from objects.lod import Lod
 
 
 def main() raises:
     var lod = Lod(NodeId(0))
-    lod.add_level(GeometryId(0), MaterialId(0), 50.0)
+    lod.add_level(NodeId(1), 50.0)
     print(lod.count())

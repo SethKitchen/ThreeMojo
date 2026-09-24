@@ -27,9 +27,9 @@ object per thing, each at the identity. A light with no node, as an
 ambient light usually is, is a child of the scene. A node that carries
 nothing and is a bone of a skeleton is a `Bone`.
 
-**The other objects.** An `LOD` writes each level as a child `Mesh` at the
-identity, and names it in `levels` with its `distance` and `hysteresis`,
-as `LOD.toJSON` does. A `SkinnedMesh` writes its `bindMode`, its
+**The other objects.** An `LOD` names each level's node in `levels`
+with its `distance` and `hysteresis`, and writes its `autoUpdate`, as
+`LOD.toJSON` does; each level node is a child object. A `SkinnedMesh` writes its `bindMode`, its
 `bindMatrix` and the uuid of its skeleton; the skeleton is an entry of a
 `skeletons` library with the uuids of its bones and their `boneInverses`.
 A `BatchedMesh` is written as three.js writes one: its geometries joined
@@ -118,10 +118,11 @@ from core.background import (
     TEXTURE_BACKGROUND,
 )
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import MAX_MORPH_TARGETS, BufferGeometry
+from core.buffer_geometry import BufferGeometry
 from core.fog import EXP2_FOG, LINEAR_FOG
 from core.geometry_store import GeometryId
 from core.layers import Layers
+from core.morph import MorphInfluences
 from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from exporters.gltf import encode_base64
@@ -264,15 +265,21 @@ def _matrix(mut writer: JsonWriter, matrix: Matrix4) raises:
     _numbers(writer, values)
 
 
-def _attribute(mut writer: JsonWriter, attribute: BufferAttribute) raises:
+def _attribute(
+    mut writer: JsonWriter, attribute: BufferAttribute, name: String = ""
+) raises:
     """Write an attribute as three.js's `BufferAttribute.toJSON` does.
 
     An interleaved attribute is written with its own numbers, as three.js's
     `InterleavedBufferAttribute.toJSON` writes one when it is given no
     buffers to share. A per-instance attribute is marked as three.js's
-    `InstancedBufferAttribute.toJSON` marks it.
+    `InstancedBufferAttribute.toJSON` marks it. A name is written when
+    there is one, as three.js writes a morph target's.
     """
     writer.begin_object()
+    if name != "":
+        writer.key("name")
+        writer.string(name)
     writer.key("itemSize")
     writer.integer(attribute.item_size)
     writer.key("type")
@@ -531,13 +538,24 @@ struct _Library(Movable):
             writer.begin_object()
             writer.key("position")
             writer.begin_array()
-            for target in geometry.morph_positions:  # pragma: no branch
-                _attribute(writer, target)
+            for target in range(geometry.morph_count()):  # pragma: no branch
+                _attribute(
+                    writer,
+                    geometry.morph_positions[target],
+                    geometry.morph_names[target] if target
+                    < len(geometry.morph_names) else String(""),
+                )
             writer.end_array()
             if geometry.has_morph_normals():
                 writer.key("normal")
                 writer.begin_array()
                 for target in geometry.morph_normals:  # pragma: no branch
+                    _attribute(writer, target)
+                writer.end_array()
+            if geometry.has_morph_colors():
+                writer.key("color")
+                writer.begin_array()
+                for target in geometry.morph_colors:  # pragma: no branch
                     _attribute(writer, target)
                 writer.end_array()
             writer.end_object()
@@ -1362,7 +1380,7 @@ def _clipping(mut writer: JsonWriter, material: Material) raises:
 
 def _influences(
     mut writer: JsonWriter,
-    influences: SIMD[DType.float32, MAX_MORPH_TARGETS],
+    influences: MorphInfluences,
     count: Int,
 ) raises:
     """Write a mesh's `morphTargetInfluences`, one for each of its
@@ -1580,14 +1598,13 @@ struct _Writer(Movable):
         scene: Scene,
         cameras: ObjectCameras,
         assets: Assets,
-    ) raises -> List[String]:
-        """Write one thing's header and fields, and return the objects of
-        an LOD's levels, which are its children."""
+    ) raises:
+        """Write one thing's header and fields."""
         var category = thing // _STRIDE
         var which = thing % _STRIDE
         if category == _LOD:
-            return self.lod(writer, header^, scene, which, assets)
-        if category == _MESH:
+            self.lod(writer, header^, scene, which)
+        elif category == _MESH:
             self.mesh(writer, header^, scene, which, assets)
         elif category == _INSTANCED:
             self.instanced(writer, header^, scene, which, assets)
@@ -1607,7 +1624,6 @@ struct _Writer(Movable):
             self.points(writer, header^, scene, which, assets)
         else:
             self.sprite(writer, header^, scene, which, assets)
-        return List[String]()
 
     def mesh(
         mut self,
@@ -1699,6 +1715,7 @@ struct _Writer(Movable):
         var joined = _Joined(geometries, assets)
         var geometry = self.library.add_geometry(joined.geometry, -1)
         header.type = "BatchedMesh"
+        header.frustum_culled = batch.frustum_culled
         header.write(writer)
         writer.key("geometry")
         writer.string(object_uuid(_GEOMETRY_UUID, geometry))
@@ -1707,7 +1724,7 @@ struct _Writer(Movable):
             self.library.material(batch.material, assets, _SURFACE_USE)
         )
         writer.key("perObjectFrustumCulled")
-        writer.boolean(batch.frustum_culled)
+        writer.boolean(batch.per_object_frustum_culled)
         writer.key("sortObjects")
         writer.boolean(True)
         writer.key("geometryInfo")
@@ -1740,18 +1757,20 @@ struct _Writer(Movable):
         writer.end_array()
         writer.key("instanceInfo")
         writer.begin_array()
-        for at in chosen:
+        for at in range(len(chosen)):
             writer.begin_object()
             writer.key("visible")
-            writer.boolean(True)
+            writer.boolean(batch.instances[at].visible)
             writer.key("active")
-            writer.boolean(True)
+            writer.boolean(batch.instances[at].active)
             writer.key("geometryIndex")
-            writer.integer(at)
+            writer.integer(chosen[at])
             writer.end_object()
         writer.end_array()
         writer.key("availableInstanceIds")
         writer.begin_array()
+        for free in batch.available_instances:
+            writer.integer(free)
         writer.end_array()
         writer.key("availableGeometryIds")
         writer.begin_array()
@@ -1920,45 +1939,26 @@ struct _Writer(Movable):
         var header: _Header,
         scene: Scene,
         which: Int,
-        assets: Assets,
-    ) raises -> List[String]:
-        """Write an LOD as `LOD.toJSON` does, and return its levels, each a
-        mesh object at the identity."""
+    ) raises:
+        """Write an LOD as `LOD.toJSON` does. Each level names its node,
+        which is written as a child of the LOD's node."""
         ref lod = scene.lods[which]
         header.type = "LOD"
-        header.frustum_culled = lod.frustum_culled
         header.write(writer)
         writer.key("autoUpdate")
-        writer.boolean(True)
+        writer.boolean(lod.auto_update)
         writer.key("levels")
         writer.begin_array()
-        var levels = List[String]()
         for level in lod.levels:
-            var uuid = self.library.part_uuid()
-            var part = _Header(uuid, header.layers)
-            part.type = "Mesh"
-            part.frustum_culled = lod.frustum_culled
-            var mesh = JsonWriter()
-            mesh.begin_object()
-            part.write(mesh)
-            mesh.key("geometry")
-            mesh.string(self.library.geometry(level.geometry, assets))
-            mesh.key("material")
-            mesh.string(
-                self.library.material(level.material, assets, _SURFACE_USE)
-            )
-            mesh.end_object()
-            levels.append(mesh.finish())
             writer.begin_object()
             writer.key("object")
-            writer.string(uuid)
+            writer.string(object_uuid(_NODE_UUID, level.object.value))
             writer.key("distance")
             writer.number(level.distance.to(METER))
             writer.key("hysteresis")
             writer.number(level.hysteresis)
             writer.end_object()
         writer.end_array()
-        return levels^
 
     def light(
         mut self,
@@ -2109,14 +2109,13 @@ struct _Writer(Movable):
         if chosen < 0 and carried.bones[index]:
             header.type = "Bone"
         writer.begin_object()
-        var levels = List[String]()
         if chosen >= 0:
             self.named[chosen] = header.uuid
-            levels = self.thing(writer, header^, chosen, scene, cameras, assets)
+            self.thing(writer, header^, chosen, scene, cameras, assets)
         else:
             header.write(writer)
         var children = scene.children(NodeId(index))
-        var parts = len(things) + len(levels)
+        var parts = len(things)
         if chosen >= 0:
             parts -= 1
         if len(children) + parts > 0:
@@ -2124,8 +2123,6 @@ struct _Writer(Movable):
             writer.begin_array()
             for child in children:
                 self.node(writer, scene, child.value, carried, cameras, assets)
-            for level in levels:
-                writer.raw(level)
             for thing in things:
                 if thing != chosen:
                     self.part(
@@ -2157,7 +2154,7 @@ struct _Writer(Movable):
         writer.begin_object()
         var uuid = self.library.part_uuid()
         self.named[thing] = uuid
-        var levels = self.thing(
+        self.thing(
             writer,
             _Header(uuid, own),
             thing,
@@ -2165,12 +2162,6 @@ struct _Writer(Movable):
             cameras,
             assets,
         )
-        if len(levels) > 0:
-            writer.key("children")
-            writer.begin_array()
-            for level in levels:  # pragma: no branch
-                writer.raw(level)
-            writer.end_array()
         writer.end_object()
 
 

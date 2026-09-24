@@ -198,7 +198,8 @@ def test_a_target_fits_its_slot() raises:
     assert_false(TrackTarget(POSITION, 0, 1).is_valid())
     assert_false(TrackTarget(TrackKind(9), 0, 0).is_valid())
     assert_true(TrackTarget(MORPH_INFLUENCE, 0, 7).is_valid())
-    assert_false(TrackTarget(MORPH_INFLUENCE, 0, 8).is_valid())
+    # No cap on the targets, as three.js on WebGL2 has none.
+    assert_true(TrackTarget(MORPH_INFLUENCE, 0, 80).is_valid())
     assert_false(TrackTarget(MORPH_INFLUENCE, 0, -1).is_valid())
 
 
@@ -219,8 +220,9 @@ def test_each_target_takes_the_kinds_of_its_own_thing() raises:
         _ = node_target(NodeId(0), MATERIAL_OPACITY)
     with assert_raises():
         _ = morph_target(MeshIndex(0), -1)
-    with assert_raises():
-        _ = morph_target(MeshIndex(0), 8)
+    assert_true(
+        morph_target(MeshIndex(0), 8) == TrackTarget(MORPH_INFLUENCE, 0, 8)
+    )
     with assert_raises():
         _ = material_target(MaterialId(0), POSITION)
     with assert_raises():
@@ -250,7 +252,9 @@ def test_a_flag_track_holds_each_key() raises:
 
 def test_a_track_refuses_a_target_that_does_not_fit() raises:
     with assert_raises():
-        _ = KeyframeTrack(TrackTarget(MORPH_INFLUENCE, 0, 9), seconds([0]), [1])
+        _ = KeyframeTrack(
+            TrackTarget(MORPH_INFLUENCE, 0, -1), seconds([0]), [1]
+        )
     with assert_raises():
         _ = KeyframeTrack(
             TrackTarget(MATERIAL_OPACITY, 0, 0),

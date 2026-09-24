@@ -49,8 +49,8 @@ weights keeps its four largest, and the weights are normalized. The mesh
 model's matrix in a `BindPose` is the bind matrix, or the identity when
 there is none. A `BlendShape` deformer's channels are morph targets, held
 as offsets, so `morph_relative` is set, and named by the channel. A
-geometry of more than `MAX_MORPH_TARGETS` targets is refused: a mesh here
-wears at most that many. `loaders.fbx_animation` reads the animation
+geometry can carry any number of them, as three.js's can on WebGL2.
+`loaders.fbx_animation` reads the animation
 stacks into clips.
 
 **Not ported.** NURBS curves, a
@@ -70,7 +70,6 @@ from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
 from core.buffer_geometry import (
     COLOR,
-    MAX_MORPH_TARGETS,
     NORMAL,
     POSITION,
     UV,
@@ -886,8 +885,7 @@ def load_fbx(
             `MAX_MODEL_DEPTH`; a mesh model has no geometry; or a camera,
             a light or a material is refused by its builder; or a skin, a
             blend shape or an animation stack is malformed or names what
-            is not there, or a geometry has more blend shape channels than
-            `MAX_MORPH_TARGETS`.
+            is not there.
     """
     if not document.format.is_valid():
         raise Error("FBX: a format that is neither ASCII nor binary")
@@ -1986,13 +1984,6 @@ struct _Loader(Movable):
         if id not in self.rig.channels:
             return rows^
         var channels = self.rig.channels[id].copy()
-        if len(channels) > MAX_MORPH_TARGETS:
-            raise Error(
-                "FBX: a geometry has "
-                + String(len(channels))
-                + " blend shape targets, and a mesh wears at most "
-                + String(MAX_MORPH_TARGETS)
-            )
         for slot in range(len(channels)):
             var shape = self.rig.shapes[channels[slot]]
             self.rig.slots[channels[slot]] = slot

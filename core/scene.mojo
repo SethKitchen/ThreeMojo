@@ -330,17 +330,103 @@ struct Scene(Movable):
     def add_lod(mut self, var lod: Lod) raises:
         """Add a level-of-detail object, three.js's `scene.add(lod)`.
 
+        Each level's node becomes a child of the LOD's node, as three.js's
+        `addLevel` makes it one, and keeps its own transform. The level
+        `shown` names is shown and the others are hidden, which is what a
+        scene shows until `update_lods`.
+
         Args:
-            lod: The LOD, consumed. Its node must already be in the scene;
-                its levels' geometries and materials are checked when the
-                level is rendered.
+            lod: The LOD, consumed. Its node and its levels' nodes must
+                already be in the scene.
 
         Raises:
-            Error: If it names a node the scene does not have.
+            Error: If it names a node the scene does not have, or a level
+                cannot go under the LOD's node: the LOD's node is under it.
         """
         if lod.node.value >= len(self._nodes):
             raise Error("An LOD must name a node that is in the scene")
+        var above = self._chain(lod.node)
+        for level in lod.levels:
+            if level.object.value >= len(self._nodes):
+                raise Error(
+                    "An LOD level must name a node that is in the scene"
+                )
+            if level.object.value in above:
+                raise Error(
+                    "A node cannot go under itself or its own descendant"
+                )
+        for level in lod.levels:
+            self.add(level.object, parent=lod.node)
         self.lods.append(lod^)
+        self._show_level(len(self.lods) - 1)
+
+    def add_lod_level(
+        mut self,
+        index: Int,
+        object: NodeId,
+        distance: Length = Length(0.0, METER),
+        hysteresis: Float32 = 0,
+    ) raises:
+        """Add a level to an LOD in the scene, three.js's `lod.addLevel`:
+        the node becomes a child of the LOD's node, and the level shown
+        stays shown.
+
+        Args:
+            index: Which LOD, as its position in `lods`.
+            object: The node to show from `distance` on.
+            distance: How far the camera must be for this level to show.
+            hysteresis: The level's hysteresis; see `Lod.add_level`.
+
+        Raises:
+            Error: If no LOD has that index, the node is not in the scene
+                or cannot go under the LOD's node, or for anything
+                `Lod.add_level` raises for.
+        """
+        if index < 0 or index >= len(self.lods):
+            raise Error("No LOD has that index")
+        self._check(object)
+        var holder = self.lods[index].node
+        if object.value in self._chain(holder):
+            raise Error("A node cannot go under itself or its own descendant")
+        self.lods[index].add_level(object, distance, hysteresis)
+        self.add(object, parent=holder)
+        self._show_level(index)
+
+    def remove_lod_level(mut self, index: Int, distance: Length) raises -> Bool:
+        """Remove the first level of an LOD at a distance, and take its
+        node off the LOD's node, three.js's `lod.removeLevel`.
+
+        Args:
+            index: Which LOD, as its position in `lods`.
+            distance: The level's distance, exactly.
+
+        Returns:
+            True if a level was removed.
+
+        Raises:
+            Error: If no LOD has that index.
+        """
+        if index < 0 or index >= len(self.lods):
+            raise Error("No LOD has that index")
+        var removed = self.lods[index].remove_level(distance)
+        if not removed:
+            return False
+        var holder = self.lods[index].node
+        self.remove(removed.value(), parent=holder)
+        self._show_level(index)
+        return True
+
+    def _show_level(mut self, index: Int):
+        """Show the level an LOD has chosen and hide the others, as
+        three.js's `LOD.update` sets each level object's `visible`."""
+        ref lod = self.lods[index]
+        for level in range(len(lod.levels)):
+            ref node = self._nodes[lod.levels[level].object.value]
+            var shown = level == lod.shown
+            # Only a change leaves the scene to be updated again.
+            if node.visible != shown:
+                node.visible = shown
+                self._stale = True
 
     def add_skinned_mesh(mut self, var mesh: SkinnedMesh) raises:
         """Add a mesh carried by bones, three.js's
@@ -1071,12 +1157,13 @@ struct Scene(Movable):
         return self.traverse(index)
 
     def update_lods(mut self, eye: Vector3) raises:
-        """Choose every LOD's level for a camera at `eye`, and remember the
-        choices: three.js's `LOD.update(camera)`, for the whole scene.
+        """Choose the level of every LOD whose `auto_update` is set for a
+        camera at `eye`, show it and hide the others, then update the
+        scene: what three.js's renderer does with `LOD.update(camera)` as
+        it draws.
 
-        The renderer measures the same distance and reads the memory, so a
-        frame drawn after this shows what this chose, hysteresis included.
-        A scene never given this shows the stateless choice.
+        This renderer does not change the scene it draws, so call this
+        before a frame, as `update` is called.
 
         Args:
             eye: The camera's position in world space.
@@ -1085,12 +1172,48 @@ struct Scene(Movable):
             Error: If the scene is stale, or an LOD names a node that is
                 not there.
         """
+        # Every distance is measured before any level changes: showing a
+        # level leaves the scene stale, and a stale scene has no world
+        # positions to measure the next LOD by.
+        var distances = List[Length]()
         for index in range(len(self.lods)):
-            var distance = Length(
-                (eye - self.world_position(self.lods[index].node)).length(),
-                METER,
-            )
-            _ = self.lods[index].update(distance)
+            distances.append(self._lod_distance(index, eye))
+        for index in range(len(self.lods)):
+            if self.lods[index].auto_update:
+                self._choose_level(index, distances[index])
+        self.update()
+
+    def update_lod(mut self, index: Int, eye: Vector3) raises:
+        """Choose one LOD's level for a camera at `eye`, show it and hide
+        the others, then update the scene: three.js's `LOD.update(camera)`,
+        whatever the LOD's `auto_update`.
+
+        Args:
+            index: Which LOD, as its position in `lods`.
+            eye: The camera's position in world space.
+
+        Raises:
+            Error: If no LOD has that index, the scene is stale, or the
+                LOD names a node that is not there.
+        """
+        if index < 0 or index >= len(self.lods):
+            raise Error("No LOD has that index")
+        self._choose_level(index, self._lod_distance(index, eye))
+        self.update()
+
+    def _lod_distance(self, index: Int, eye: Vector3) raises -> Length:
+        """How far a camera at `eye` is from one LOD's node."""
+        return Length(
+            (eye - self.world_position(self.lods[index].node)).length(), METER
+        )
+
+    def _choose_level(mut self, index: Int, distance: Length) raises:
+        """Choose and show one LOD's level. three.js changes nothing for an
+        LOD of one level or none, and neither does this."""
+        if self.lods[index].count() < 2:
+            return
+        _ = self.lods[index].update(distance)
+        self._show_level(index)
 
     def validate(self) raises:
         """Check the invariants the update relies on.
@@ -1506,6 +1629,13 @@ struct Scene(Movable):
             if copy >= 0:
                 var lod = self.lods[index].copy()
                 lod.node = NodeId(copy)
+                # A level copied with the LOD is the copy's level; one
+                # that was not stays the original's, as three.js's `copy`
+                # would clone it.
+                for level in range(len(lod.levels)):
+                    var moved = _copy_of(copies, lod.levels[level].object)
+                    if moved >= 0:
+                        lod.levels[level].object = NodeId(moved)
                 self.lods.append(lod^)
         for index in range(len(self.skinned_meshes)):
             var copy = _copy_of(copies, self.skinned_meshes[index].node)
