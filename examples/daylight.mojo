@@ -76,7 +76,9 @@ def main() raises:
 
     var frames = List[Framebuffer]()
     for index in range(FRAMES):
-        var turn = Float32(0.35) + Float32(0.9) * Float32(index) / Float32(FRAMES - 1)
+        var turn = Float32(0.35) + Float32(0.9) * Float32(index) / Float32(
+            FRAMES - 1
+        )
         var sun = Vector3(cos(turn), sin(turn) + 0.15, -0.2)
         assets.programs.get(sky.program).set_uniform("sunPosition", sun)
         scene.node(lamp_node).set_position(
