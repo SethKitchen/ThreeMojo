@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="200" height="200" fill="#336699">
+  <style>
+    /* Rules by class and by id. */
+    .thick, #named { stroke: black; stroke-width: 4 }
+    .round { stroke-linejoin: round; stroke-linecap: round }
+    @media print { .thick { stroke-width: 9 } }
+  </style>
+  <defs>
+    <style>.square { stroke-linecap: square; stroke-linejoin: bevel }</style>
+    <path id="arrow" d="M0,0 L10,5 L0,10 z" fill="orange"/>
+    <circle cx="0" cy="0" r="100"/>
+  </defs>
+  <path class="thick round" d="M10 10 L60 10 L60 60 L10 60 Z M20 20 L20 50 L50 50 L50 20 Z" fill="rgb(255, 0, 0)"/>
+  <path id="named" fill-rule="evenodd" d="M100,10 h50 v50 h-50 z m10,10 h30 v30 h-30 z m5,5 h20 v20 h-20 z" style="fill: hsl(120, 50%, 50%); stroke-opacity: 0.5"/>
+  <path d="m5 100 c10-20 30-20 40 0 s30 20 40 0 q10-10 20 0 t20 0 l0 20 H5 V100z" fill="none" stroke="#123" stroke-width="2" stroke-linejoin="miter-clip" stroke-miterlimit="1"/>
+  <path d="M10 150 C20 130 40 130 50 150 S80 170 90 150 Q100 140 110 150 T130 150 L130 170 h-10 v5 Z" fill="url(#gradient)" fill-opacity="1.5"/>
+  <path d="M150 150 A20 10 30 1 0 190 150 a15,15 0 0,1 -20,20 A0 5 0 0 1 150 180 A 5 5 0 1 1 150 180 a0 0 0 0 0 0 0 z" stroke="blue" stroke-linecap="square" opacity="0.25"/>
+  <path d="M0 0.5e1L1.5-2.5.5.5 1e1-1E1" stroke="green" stroke-linejoin="bevel" stroke-width="3px"/>
+  <path d="" fill="red"/>
+  <path d="none"/>
+  <g transform="translate(10, 20) rotate(30 5 5)" stroke-width="2mm">
+    <rect x="5" y="5" width="40" height="20" rx="4" stroke="red" class="square"/>
+    <rect x="50" y="5" width="10" height="10" ry="3"/>
+    <rect width="10" height="10"/>
+    <g transform="scale(2) skewX(20)">
+      <ellipse cx="10" cy="10" rx="8" ry="4"/>
+      <path d="M40 40 A10 5 0 0 1 60 40" stroke="purple"/>
+    </g>
+    <g transform="matrix(-1 0 0 1 100 0)">
+      <circle cx="20" cy="20" r="5" fill="teal"/>
+      <path d="M30 30 A10 5 20 0 1 50 40" stroke="purple" stroke-linejoin="round"/>
+    </g>
+    <g transform="skewY(10) scale(1, 0.5)">
+      <path d="M0 0 A5 5 0 0 0 10 0"/>
+    </g>
+  </g>
+  <polygon points="100,100 150,100 150,150 1-2,3" fill="navy"/>
+  <polyline points="10 190, 30 180 50 190 70 180" stroke="black" fill="none" class="round"/>
+  <line x1="0" y1="0" x2="1in" y2="10mm" stroke="gray" visibility="hidden"/>
+  <use xlink:href="#arrow" x="170" y="10" fill="yellow"/>
+  <use xlink:href="#arrow" transform="rotate(90)"/>
+  <a><path d="M0 0 L5 5 L0 5 Z" fill="lime" stroke="none" stroke-width="-3"/></a>
+  <g transform="translate(5)"><use xlink:href="#arrow" x="0" y="3"/></g>
+</svg>

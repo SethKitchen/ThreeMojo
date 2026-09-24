@@ -7,6 +7,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [PCD](#pcd) | `loaders/pcd.mojo` | `read_pcd(path) -> PcdModel` | `PCDLoader` |
 | [3MF](#3mf) | `loaders/three_mf.mojo` | `read_3mf(path, scene, assets) -> ThreeMfModel` | `ThreeMFLoader` |
 | [ZIP](#zip) | `loaders/zip.mojo` | `unzip(bytes) -> List[ZipEntry]` | fflate's `unzipSync` |
+| [SVG](#svg) | `loaders/svg.mojo` | `read_svg(path) -> SvgData` | `SVGLoader` |
 
 ## PCD
 
@@ -157,3 +158,84 @@ The loader refuses these, with a message that names the problem:
 `ZipMethod` is a type. A bare integer does not compile. `unzip` reads `ZIP_STORED` and `ZIP_DEFLATED` entries, and `zip_archive` writes `ZIP_STORED` entries only.
 
 `unzip` checks each entry's size and CRC-32. fflate does not check them. `unzip` refuses encrypted entries, other compression methods, ZIP64 archives and archives on more than one disk.
+
+## SVG
+
+`loaders/svg.mojo`. `read_svg(path)` reads a Scalable Vector Graphics file into shape paths, one for each element that draws. `loaders/svg_shapes.mojo` turns a shape path into filled shapes and into strokes. three.js: `SVGLoader`, `SVGLoader.createShapes` and `SVGLoader.pointsToStroke`.
+
+```mojo
+var data = read_svg("assets/svg/fixture.svg")
+for path in data.paths:
+    for shape in create_shapes(path):
+        var fill = shape_geometry(shape.to_shape())
+    for sub in path.sub_paths:
+        var stroke = points_to_stroke(sub.get_points(), SvgStrokeStyle(path.style))
+```
+
+| Function | What it does |
+|---|---|
+| `read_svg(path, default_unit, default_dpi) -> SvgData` | Read a file. |
+| `parse_svg(text, default_unit, default_dpi) -> SvgData` | Read the text of one. |
+| `parse_path_data(d) -> SvgShapePath` | Read the `d` attribute of a `path`. |
+| `parse_floats(text, flags, stride) -> List[Float64]` | Read a list of numbers, as three.js's `parseFloats` does. |
+| `parse_css_rules(text) -> List[CssRule]` | Read the rules of a `style` element. |
+| `create_shapes(path) -> List[SvgShape]` | Sort the outlines into shapes with holes, by the path's `fill-rule`. |
+| `points_to_stroke(points, style, arc_divisions, min_distance) -> SvgStroke` | Make the triangles of a stroke. |
+| `transform_path(path, matrix)` | Move each curve of a shape path. |
+
+`SvgUnit`, `SvgFillRule`, `SvgLineJoin`, `SvgLineCap` and `PointLocation` are types. A bare integer does not compile. `svg_unit_scale`, `create_shapes_with_rule` and `points_to_stroke` refuse a value that is not valid.
+
+### SvgData and SvgShapePath
+
+`SvgData` has `paths` and `document`, the parsed XML. three.js returns the same two things as `paths` and `xml`.
+
+| `SvgShapePath` field | What it holds |
+|---|---|
+| `sub_paths` | The outlines. Each `SvgSubPath` has its curves and its `auto_close` flag. |
+| `color` | The fill as a linear color. It is white when there is no fill, as in three.js. |
+| `style` | The `SvgStyle`: fill, fill opacity, fill rule, opacity, stroke, stroke opacity, stroke width, joins, caps, miter limit and visibility. |
+| `node` | The element, as an index into `document`. |
+
+An `SvgCurve` is a line, a quadratic Bezier curve, a cubic Bezier curve or an arc of an ellipse. Its numbers are `Float64`, as in three.js. `SvgSubPath.get_points(divisions)` samples it as three.js's `getPoints` does. `SvgShape.to_shape()` gives a `math.path.Shape` for `shape_geometry`.
+
+### What is read
+
+- The elements `path`, `rect`, `polygon`, `polyline`, `circle`, `ellipse` and `line` draw.
+- `svg` and `g` give their style to their children.
+- `style` holds CSS rules. A rule applies to an element by its class or its id.
+- `defs` hides its children, except `style` and `defs`.
+- `use` draws the element that its `xlink:href` names, at its `x` and `y`.
+- The `transform` attribute: `translate`, `rotate`, `scale`, `skewX`, `skewY` and `matrix`.
+- The loader reads each other element's children with the parent's style.
+
+A style property comes from the parent, then the attribute, then a CSS rule, then the `style` attribute. A length can have the unit `mm`, `cm`, `in`, `pt`, `pc` or `px`. The loader converts it to `default_unit` with `default_dpi` pixels for each inch.
+
+### Units
+
+An SVG coordinate is a user unit, a number with no length. three.js uses it as a world unit, and this port does the same. `to_shape` makes one user unit one meter.
+
+### Differences from three.js
+
+- three.js uses the browser's `DOMParser` and CSS parser. This port uses `loaders/xml.mojo` and a small CSS reader. The CSS reader skips comments and at-rules.
+- A `use` element with only one of `x` and `y` uses zero for the other. three.js reads the other as `NaN`.
+- Mojo fuses a multiply and an add into one instruction, and JavaScript rounds twice. The results agree to about one part in 10^15. Where two segments of a stroke meet almost in line, a join is badly conditioned, and the stroke can differ.
+
+### Errors
+
+The loader refuses these, with a message that names the problem:
+
+- A file that is not well-formed XML.
+- A path that draws before it moves, or a path command that is not known.
+- A path command whose numbers do not fill its last step.
+- A number that is not a number, or two commas or two signs together.
+- A `rect` with no `width` or no `height`, and a `polygon` or `polyline` with no points.
+- A `use` that names no element, or that draws itself.
+- A transform with no parenthesis.
+- A `fill-rule` other than `nonzero` and `evenodd`, in `create_shapes`.
+- An outline that the scan line of `create_shapes` does not cross. This happens only with a coordinate that is not a number.
+
+three.js throws for most of these, or continues with `NaN`. A fill that three.js cannot read, such as `url(#gradient)`, keeps the path white, as in three.js.
+
+### Example
+
+`assets/svg/fixture.svg` has each element, each path command, styles from CSS, transforms, `use` and `defs`. `assets/svg/fixture.json` has what three.js 0.180 gives for it: colors, styles, curves, points, shapes and strokes. `assets/svg/strokes.json` has three.js's strokes for each join and cap. `tests/test_svg.mojo` compares all of them.
