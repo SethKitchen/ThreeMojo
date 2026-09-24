@@ -486,6 +486,12 @@ def test_ligaments_span_one_two_and_three_bands() raises:
     with assert_raises():
         _ = ligament_mass_from_dimensions(dims, DELTOID, bad)
     with assert_raises():
+        _ = ligament_mass_from_dimensions(
+            dims, FootLigament(-1), ligament_tissue()
+        )
+    with assert_raises():
+        _ = FootLigamentField(dims, FootLigament(-1))
+    with assert_raises():
         _ = ligament_from_dimensions(dims, FootLigament(11), 8)
     var mesh = foot_ligament(_person(), ANTERIOR_TALOFIBULAR, LEFT, 8)
     assert_true(mesh.triangle_count() > 0)
@@ -550,6 +556,12 @@ def test_tendons_do_not_scale_and_bellies_do() raises:
     tendon.kind = SoftTissueKind(41)
     with assert_raises():
         _ = foot_muscle_mass_from_dimensions(plain, CALCANEAL_TENDON, tendon)
+    with assert_raises():
+        _ = foot_muscle_mass_from_dimensions(
+            plain, FootMuscle(-1), tendon_tissue()
+        )
+    with assert_raises():
+        _ = FootMuscleField(plain, FootMuscle(-1))
     var mesh = foot_muscle(_person(), ABDUCTOR_HALLUCIS, RIGHT, 8)
     assert_true(mesh.triangle_count() > 0)
     var achilles = foot_muscle(
@@ -606,6 +618,14 @@ def test_vessels_keep_physical_mass() raises:
     with assert_raises():
         _ = foot_vessel_mass_from_dimensions(dims, DORSALIS_PEDIS_ARTERY, bad)
     with assert_raises():
+        _ = foot_vessel_mass_from_dimensions(
+            dims, FootVessel(-1), arterial_tissue()
+        )
+    with assert_raises():
+        _ = FootVesselField(dims, FootVessel(-1))
+    var vein = foot_vessel_mass(_person(), GREAT_SAPHENOUS_VEIN)
+    assert_true(vein.envelope.value > 0)
+    with assert_raises():
         _ = vessel_from_dimensions(dims, FootVessel(15), 8)
     var mesh = foot_vessel(_person(), GREAT_SAPHENOUS_VEIN, LEFT, 8)
     assert_true(mesh.triangle_count() > 0)
@@ -643,6 +663,10 @@ def test_lymph_and_nerves_use_physical_radii() raises:
     with assert_raises():
         _ = foot_lymph_mass_from_dimensions(dims, DORSAL_LYMPHATICS, bad_lymph)
     with assert_raises():
+        _ = foot_lymph_mass_from_dimensions(dims, FootLymph(-1), lymph_tissue())
+    with assert_raises():
+        _ = FootLymphField(dims, FootLymph(-1))
+    with assert_raises():
         _ = lymph_from_dimensions(dims, FootLymph(-1), 8)
     var lymph_mesh = foot_lymph(_person(), DORSAL_LYMPHATICS, RIGHT, 8)
     assert_true(lymph_mesh.triangle_count() > 0)
@@ -667,6 +691,7 @@ def test_lymph_and_nerves_use_physical_radii() raises:
         tube_set_volume(nerve_shown.tubes) > tube_set_volume(nerve.tubes)
     )
     assert_equal(nerve_part_label(FootNerve(12)), "foot nerve")
+    assert_false(FootNerve(-1).is_valid())
     assert_equal(
         foot_nerve_occupancy(dims, TIBIAL_NERVE, nerve.tubes.c0.p2), SOFT_FILL
     )
@@ -678,6 +703,10 @@ def test_lymph_and_nerves_use_physical_radii() raises:
     bad_nerve.kind = SoftTissueKind(44)
     with assert_raises():
         _ = foot_nerve_mass_from_dimensions(dims, TIBIAL_NERVE, bad_nerve)
+    with assert_raises():
+        _ = foot_nerve_mass_from_dimensions(dims, FootNerve(-1), nerve_tissue())
+    with assert_raises():
+        _ = FootNerveField(dims, FootNerve(-1))
     with assert_raises():
         _ = nerve_from_dimensions(dims, FootNerve(8), 8)
     var nerve_mesh = foot_nerve(_person(), TIBIAL_NERVE, LEFT, 8)
@@ -822,6 +851,8 @@ def test_hair_roots_sit_on_the_skin() raises:
     bad.kind = SoftTissueKind(46)
     with assert_raises():
         _ = foot_hair_mass_from_dimensions(dims, DORSAL_HAIR, bad)
+    with assert_raises():
+        _ = foot_hair_mass_from_dimensions(dims, FootHair(-1), hair_tissue())
     with assert_raises():
         _ = hair_from_dimensions(dims, FootHair(3), 8)
     with assert_raises():
@@ -1013,7 +1044,7 @@ def test_add_foot_places_every_layer() raises:
             ligament_paint,
             muscle_paint,
             tendon_paint,
-            contents=BONES,
+            contents=SKIN,
             detail=7,
         )
 
