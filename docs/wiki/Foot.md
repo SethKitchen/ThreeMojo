@@ -139,7 +139,7 @@ Physical hair radius is an authored adult mean. The mesh draws a wider shaft so 
 
 ## Examples
 
-`examples/foot.mojo` draws one six foot male right foot and writes `out/foot.png`. Run it with:
+`examples/foot.mojo` draws one six foot male right foot and writes `out/foot.png`. `examples/limb.mojo` draws that foot on its leg, with skin and without it. It writes `out/limb.png`. Run the foot gallery with:
 
 ```bash
 .venv/bin/mojo run -I . examples/foot.mojo out/foot.png

@@ -86,3 +86,15 @@ Run it with:
 ## Ankle
 
 `ankle_center()` returns the tibial plafond in the leg frame. That point is the origin of the foot. Pass it as `origin` to `add_foot`. See [Foot](Foot).
+
+## Limb
+
+`examples/limb.mojo` draws one right leg and its foot, twice. The left copy has bones and muscles and no skin. The right copy is the skin envelope. The foot uses `ankle_center()` as its origin. The picture is `out/limb.png`.
+
+![A six-foot male right leg and foot turn twice, once open and once in skin](out/limb.png)
+
+Run it with:
+
+```bash
+.venv/bin/mojo run -I . examples/limb.mojo out/limb.png
+```

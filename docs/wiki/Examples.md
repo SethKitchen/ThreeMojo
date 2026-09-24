@@ -81,6 +81,7 @@ mkdir -p out
 | `leg.mojo` | `leg.png` | [Leg](Leg) |
 | `legs.mojo` | `legs.png` | [Leg](Leg) |
 | `foot.mojo` | `foot.png` | [Foot](Foot) |
+| `limb.mojo` | `limb.png` | [Leg](Leg) |
 | `vessels.mojo` | `vessels.png` | [Vessels](Vessels) |
 | `lymph.mojo` | `lymph.png` | [Lymph](Lymph) |
 | `nerves.mojo` | `nerves.png` | [Nerves](Nerves) |
