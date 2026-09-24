@@ -279,7 +279,7 @@ def a_camera() raises -> OrthographicCamera:
 
 def test_the_builder_names_a_table_and_refuses_none() raises:
     assert_true(LUT.is_valid())
-    assert_false(PassKind(27).is_valid())
+    assert_false(PassKind(35).is_valid())
     var step = lut_pass(Data3DTextureId(0), 0.75)
     assert_equal(step.kind, LUT)
     assert_equal(step.lut, Data3DTextureId(0))

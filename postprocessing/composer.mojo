@@ -16,7 +16,12 @@ jittered samples averaged at once (SSAA) or over frames (TAA); see
 ambient occlusion (SSAO and SAO), reflections (SSR) and an outline around
 chosen objects; see `postprocessing.screen_space`. Seven more blur by depth,
 glitch, halftone, mask, clear, lay a texture over the frame and grade it
-through a color lookup table; see `postprocessing.effects`. The composer runs its passes in
+through a color lookup table; see `postprocessing.effects`. Eight more
+draw a pixelated scene, occlusion by GTAO, a transition between two
+views and a cube texture, save the frame, run a node program or one of
+fifteen screen shaders, and lay god rays over the frame; see
+`postprocessing.render_passes`, `postprocessing.gtao`,
+`postprocessing.shader_pass` and `postprocessing.shaders`. The composer runs its passes in
 order on one target and resolves it once at the end. three.js ping-pongs
 between two targets because a shader cannot read the texture it writes;
 a pass here reads the whole target before it writes, so one target serves.
@@ -49,6 +54,7 @@ from core.scene import Scene
 from math.smoothstep import smoothstep
 from math.utils import SeededRandom
 from math.vector2 import Vector2
+from math.vector3 import Vector3
 from postprocessing.antialiasing import (
     JITTER_LEVELS,
     JitteredCamera,
@@ -74,9 +80,54 @@ from postprocessing.effects import (
     keep_outside_mask,
     lut_light,
     mask_stencil,
+    texture_overlay,
     texture_light,
 )
+from postprocessing.gtao import GtaoSettings, check_gtao, gtao_light
+from postprocessing.render_passes import (
+    PixelatedSettings,
+    TransitionSettings,
+    check_pixelated,
+    check_transition,
+    cube_overlay,
+    cube_texture_light,
+    pixelated_light,
+    pixelated_size,
+    transition_light,
+)
 from postprocessing.sampling import LightView, mix, u_of, v_of
+from postprocessing.shader_pass import (
+    ShaderSettings,
+    check_shader,
+    shader_light,
+)
+from postprocessing.shaders import (
+    BLEACH_BYPASS,
+    BRIGHTNESS_CONTRAST,
+    COLOR_CORRECTION,
+    COLORIFY,
+    EXPOSURE,
+    FREI_CHEN,
+    GAMMA_CORRECTION,
+    HORIZONTAL_TILT_SHIFT,
+    HUE_SATURATION,
+    KALEIDO,
+    MIRROR,
+    MIRROR_RIGHT,
+    RGB_SHIFT,
+    SOBEL,
+    TECHNICOLOR,
+    VERTICAL_TILT_SHIFT,
+    EffectSettings,
+    GodRaysSettings,
+    MirrorSide,
+    ShaderEffect,
+    check_effect,
+    check_god_rays,
+    effect_light,
+    god_rays_light,
+    god_rays_sun,
+)
 from postprocessing.screen_space import (
     DepthView,
     OutlineSettings,
@@ -93,7 +144,9 @@ from postprocessing.screen_space import (
     ssao_light,
     ssr_light,
 )
+from materials.nodes import NodeProgramId
 from render.antialias import SUPERSAMPLE
+from render.cube_texture_store import NO_CUBE_TEXTURE, CubeTextureId
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.raster_state import cleared_depth, is_nearer
 from render.target import (
@@ -117,14 +170,14 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
 
     three.js has a class per pass and this has a tag, for the reason
     `Material` has one: a composer holds one list of one type. The type
-    stops a bare integer at compile time; it does not stop `PassKind(27)`,
+    stops a bare integer at compile time; it does not stop `PassKind(35)`,
     which `check_pass` refuses.
     """
 
     var value: Int
 
     def is_valid(self) -> Bool:
-        """Return True if this is one of the twenty-seven kinds there are."""
+        """Return True if this is one of the thirty-five kinds there are."""
         return (
             self == RENDER
             or self == COPY
@@ -153,6 +206,14 @@ struct PassKind(Equatable, ImplicitlyCopyable, Writable):
             or self == CLEAR
             or self == TEXTURE
             or self == LUT
+            or self == RENDER_PIXELATED
+            or self == GTAO
+            or self == RENDER_TRANSITION
+            or self == CUBE_TEXTURE
+            or self == SAVE
+            or self == SHADER
+            or self == SHADER_EFFECT
+            or self == GOD_RAYS
         )
 
 
@@ -211,6 +272,24 @@ comptime CLEAR = PassKind(24)
 comptime TEXTURE = PassKind(25)
 # Grade the frame through a color lookup table: `LUTPass`.
 comptime LUT = PassKind(26)
+# Draw the scene small and show it in blocks with drawn edges:
+# `RenderPixelatedPass`.
+comptime RENDER_PIXELATED = PassKind(27)
+# Darken by ground-truth ambient occlusion: `GTAOPass`.
+comptime GTAO = PassKind(28)
+# Draw two views and mix them: `RenderTransitionPass`.
+comptime RENDER_TRANSITION = PassKind(29)
+# Draw a cube texture as the camera sees it: `CubeTexturePass`.
+comptime CUBE_TEXTURE = PassKind(30)
+# Keep a copy of the frame: `SavePass`.
+comptime SAVE = PassKind(31)
+# Run a node program over the screen: `ShaderPass`.
+comptime SHADER = PassKind(32)
+# Run one of fifteen of three.js's screen shaders: `ShaderPass` with
+# `RGBShiftShader`, `SobelOperatorShader` and the rest.
+comptime SHADER_EFFECT = PassKind(33)
+# Lay god rays from a sun over the frame: the `GodRaysShader` chain.
+comptime GOD_RAYS = PassKind(34)
 
 # three.js's `LuminosityHighPassShader` fades a pixel in over this much
 # luminance above the threshold.
@@ -246,7 +325,10 @@ struct Pass(Copyable, Movable):
     `fxaa_pass`, `smaa_pass`, `ssaa_render_pass`, `taa_render_pass`,
     `ssao_pass`, `sao_pass`, `ssr_pass`, `outline_pass`, `bokeh_pass`,
     `glitch_pass`, `halftone_pass`, `mask_pass`, `clear_mask_pass`,
-    `clear_pass`, `texture_pass` or `lut_pass`, and change a
+    `clear_pass`, `texture_pass`, `lut_pass`, `render_pixelated_pass`,
+    `gtao_pass`, `render_transition_pass`, `cube_texture_pass`,
+    `save_pass`, `shader_pass`, `effect_pass` or one of its fifteen
+    shorthands, or `god_rays_pass`, and change a
     setting afterward as three.js changes a
     pass's uniforms; `EffectComposer.render` checks each again.
     """
@@ -301,11 +383,27 @@ struct Pass(Copyable, Movable):
     # and `clearAlpha`.
     var clear_color: Color
     # The texture pass's image, in the assets `render` is given; its
-    # opacity is `strength`.
+    # opacity is `strength`. The transition pass's mix texture.
     var texture: TextureId
     # The LUT pass's table, in the assets `render` is given; its
     # intensity is `strength`.
     var lut: Data3DTextureId
+    # What a pixelated, a GTAO, a transition, a shader, a shader effect or
+    # a god-rays pass reads; see `postprocessing.render_passes`,
+    # `postprocessing.gtao`, `postprocessing.shader_pass` and
+    # `postprocessing.shaders`.
+    var pixelated: PixelatedSettings
+    var gtao: GtaoSettings
+    var transition: TransitionSettings
+    var shader: ShaderSettings
+    var effect: EffectSettings
+    var god_rays: GodRaysSettings
+    # The layers each view of a transition pass shows.
+    var first: Layers
+    var second: Layers
+    # The cube texture pass's cube, in the assets `render` is given; its
+    # opacity is `strength`.
+    var cube: CubeTextureId
 
     def __init__(out self, kind: PassKind):
         """Start a pass of `kind` with every setting at its default.
@@ -339,6 +437,15 @@ struct Pass(Copyable, Movable):
         self.clear_color = Color(0, 0, 0, 0)
         self.texture = NO_TEXTURE
         self.lut = NO_DATA_3D_TEXTURE
+        self.pixelated = PixelatedSettings()
+        self.gtao = GtaoSettings()
+        self.transition = TransitionSettings()
+        self.shader = ShaderSettings()
+        self.effect = EffectSettings()
+        self.god_rays = GodRaysSettings()
+        self.first = Layers()
+        self.second = Layers()
+        self.cube = NO_CUBE_TEXTURE
 
 
 def check_pass(step: Pass) raises:
@@ -348,18 +455,22 @@ def check_pass(step: Pass) raises:
         step: The pass.
 
     Raises:
-        Error: If the kind is none of the twenty-seven; a strength, radius,
+        Error: If the kind is none of the thirty-five; a strength, radius,
             threshold, offset, scale, angle or time is not finite; a
             strength, radius, threshold, offset or scale is negative; a
             bloom's radius or an afterimage's damp is above one; the sample
             level is outside zero through five; or the accumulate index is
             outside minus one through 32; or a texture pass names no
-            texture, or a LUT pass no table. Everything `check_ssao`, `check_sao`, `check_ssr`,
-            `check_outline`, `check_bokeh`, `check_glitch` and
-            `check_halftone` raise.
+            texture, a LUT pass no table, a cube texture pass no cube, a
+            transition pass that reads a texture no texture, or a shader
+            pass no program. Everything `check_ssao`, `check_sao`,
+            `check_ssr`, `check_outline`, `check_bokeh`, `check_glitch`,
+            `check_halftone`, `check_pixelated`, `check_gtao`,
+            `check_transition`, `check_effect` and `check_god_rays`
+            raise, and `check_shader` for a shader pass.
     """
     if not step.kind.is_valid():
-        raise Error("A pass kind must be one of the twenty-seven named kinds")
+        raise Error("A pass kind must be one of the thirty-five named kinds")
     if not (
         isfinite(step.strength)
         and isfinite(step.radius)
@@ -399,6 +510,18 @@ def check_pass(step: Pass) raises:
         raise Error("A texture pass must name a texture")
     if step.kind == LUT and step.lut.value < 0:
         raise Error("A LUT pass must name a 3D texture")
+    check_pixelated(step.pixelated)
+    check_gtao(step.gtao)
+    check_transition(step.transition)
+    check_effect(step.effect)
+    check_god_rays(step.god_rays)
+    if step.kind == CUBE_TEXTURE and step.cube.value < 0:
+        raise Error("A cube texture pass must name a cube texture")
+    var mixes = step.kind == RENDER_TRANSITION and step.transition.use_texture
+    if mixes and step.texture.value < 0:
+        raise Error("A transition that reads a texture must name one")
+    if step.kind == SHADER:
+        check_shader(step.shader)
 
 
 def render_pass() -> Pass:
@@ -997,6 +1120,483 @@ def lut_pass(lut: Data3DTextureId, intensity: Float32 = 1.0) raises -> Pass:
     return step^
 
 
+def render_pixelated_pass(
+    pixel_size: Int = 6,
+    normal_edge_strength: Float32 = 0.3,
+    depth_edge_strength: Float32 = 0.4,
+) raises -> Pass:
+    """Return a pass that draws the scene a pixel size smaller each way and
+    shows it in blocks, with its edges drawn: three.js's
+    `RenderPixelatedPass`.
+
+    Put it where a `render_pass` goes: it draws the frame itself.
+
+    Args:
+        pixel_size: How many frame pixels one drawn texel covers each way.
+        normal_edge_strength: How much an edge between two normals
+            lightens.
+        depth_edge_strength: How much an edge in the depth darkens.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_pixelated` raises.
+    """
+    var step = Pass(RENDER_PIXELATED)
+    step.pixelated.pixel_size = pixel_size
+    step.pixelated.normal_edge_strength = normal_edge_strength
+    step.pixelated.depth_edge_strength = depth_edge_strength
+    check_pass(step)
+    return step^
+
+
+def gtao_pass(
+    radius: Length = Length(0.25, METER), blend_intensity: Float32 = 1.0
+) raises -> Pass:
+    """Return a pass that darkens the frame by ground-truth ambient
+    occlusion: three.js's `GTAOPass`.
+
+    Put it after a `render_pass`. It draws the scene's depth and normals
+    itself and darkens the frame it is given. Its other parameters are
+    the fields of `gtao`.
+
+    Args:
+        radius: How far the samples reach from the surface.
+        blend_intensity: How much of the occlusion darkens the frame.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_gtao` raises.
+    """
+    var step = Pass(GTAO)
+    step.gtao.radius = radius
+    step.gtao.blend_intensity = blend_intensity
+    check_pass(step)
+    return step^
+
+
+def render_transition_pass(
+    first: Layers,
+    second: Layers,
+    texture: TextureId = NO_TEXTURE,
+    mix_ratio: Float32 = 0.0,
+) raises -> Pass:
+    """Return a pass that draws two views of the scene and mixes them:
+    three.js's `RenderTransitionPass`.
+
+    three.js takes two scenes and two cameras. This takes two sets of
+    layers, each drawn through the composer's camera, as `outline_pass`
+    takes one. `render_transition` draws two scenes through two cameras.
+    Put it where a `render_pass` goes.
+
+    Args:
+        first: The layers the first view shows: three.js's `sceneA`.
+        second: The layers the second view shows: `sceneB`.
+        texture: The texture whose red leads the mix, in the assets
+            `render` is given; `NO_TEXTURE` mixes evenly, as three.js's
+            `useTexture( false )` does.
+        mix_ratio: Zero shows the second view and one the first.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_transition` raises.
+    """
+    var step = Pass(RENDER_TRANSITION)
+    step.first = first
+    step.second = second
+    step.texture = texture
+    step.transition.use_texture = texture != NO_TEXTURE
+    step.transition.mix_ratio = mix_ratio
+    check_pass(step)
+    return step^
+
+
+def cube_texture_pass(
+    cube: CubeTextureId, opacity: Float32 = 1.0
+) raises -> Pass:
+    """Return a pass that draws a cube texture as the camera sees it, over
+    the frame: three.js's `CubeTexturePass`.
+
+    Args:
+        cube: The cube texture, in the assets `render` is given.
+        opacity: What the cube's alpha is scaled by. Below one the cube is
+            blended over the frame; at one it replaces it.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: If the cube is `NO_CUBE_TEXTURE` or another negative id, or
+            the opacity is negative or not finite.
+    """
+    var step = Pass(CUBE_TEXTURE)
+    step.cube = cube
+    step.strength = opacity
+    check_pass(step)
+    return step^
+
+
+def save_pass() -> Pass:
+    """Return a pass that keeps a copy of the frame and changes nothing:
+    three.js's `SavePass`.
+
+    `EffectComposer.saved_image` returns the copy, and a `shader_pass`
+    can read it through a sampler; see `ShaderSettings.saved`.
+
+    Returns:
+        The pass.
+    """
+    return Pass(SAVE)
+
+
+def shader_pass(
+    program: NodeProgramId, input: String = "tDiffuse"
+) raises -> Pass:
+    """Return a pass that runs a node program over the screen: three.js's
+    `ShaderPass`.
+
+    Build the program with `NodeGraph`, or compile GLSL with
+    `materials.glsl.compile_shader_material` and
+    `postprocessing.shader_pass.SCREEN_VERTEX_SHADER`, and add it to the
+    assets' `programs`. Set its uniforms there, as three.js sets
+    `pass.uniforms`.
+
+    Args:
+        program: The program, in the assets `render` is given.
+        input: The sampler uniform that reads the frame: three.js's
+            `textureID`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_shader` raises.
+    """
+    var step = Pass(SHADER)
+    step.shader.program = program
+    step.shader.input = input
+    check_pass(step)
+    return step^
+
+
+def effect_pass(effect: ShaderEffect) raises -> Pass:
+    """Return a pass that runs one of fifteen of three.js's screen shaders
+    with its default uniforms: a `ShaderPass` of that shader.
+
+    Change the uniforms in the fields of `effect` afterward.
+
+    Args:
+        effect: Which shader; see `postprocessing.shaders`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = Pass(SHADER_EFFECT)
+    step.effect = EffectSettings(effect)
+    check_pass(step)
+    return step^
+
+
+def rgb_shift_pass(
+    amount: Float32 = 0.005, angle: Angle = Angle(0.0, RADIAN)
+) raises -> Pass:
+    """Return a pass of three.js's `RGBShiftShader`.
+
+    Args:
+        amount: How far red and blue move apart, in texture widths.
+        angle: Which way red moves.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(RGB_SHIFT)
+    step.effect.amount = amount
+    step.effect.angle = angle
+    check_pass(step)
+    return step^
+
+
+def brightness_contrast_pass(
+    brightness: Float32 = 0.0, contrast: Float32 = 0.0
+) raises -> Pass:
+    """Return a pass of three.js's `BrightnessContrastShader`.
+
+    Args:
+        brightness: Added to each channel, minus one to one.
+        contrast: Minus one grays, zero keeps, toward one hardens.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(BRIGHTNESS_CONTRAST)
+    step.effect.brightness = brightness
+    step.effect.contrast = contrast
+    check_pass(step)
+    return step^
+
+
+def hue_saturation_pass(
+    hue: Float32 = 0.0, saturation: Float32 = 0.0
+) raises -> Pass:
+    """Return a pass of three.js's `HueSaturationShader`.
+
+    Args:
+        hue: The turn about the gray axis, in half turns, minus one to
+            one.
+        saturation: Minus one grays, zero keeps, up to one saturates.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(HUE_SATURATION)
+    step.effect.hue = hue
+    step.effect.saturation = saturation
+    check_pass(step)
+    return step^
+
+
+def color_correction_pass(
+    pow_rgb: Vector3 = Vector3(2, 2, 2),
+    mul_rgb: Vector3 = Vector3(1, 1, 1),
+    add_rgb: Vector3 = Vector3(0, 0, 0),
+) raises -> Pass:
+    """Return a pass of three.js's `ColorCorrectionShader`.
+
+    Args:
+        pow_rgb: The power of each channel.
+        mul_rgb: The scale of each channel.
+        add_rgb: The offset of each channel, added first.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(COLOR_CORRECTION)
+    step.effect.pow_rgb = pow_rgb
+    step.effect.mul_rgb = mul_rgb
+    step.effect.add_rgb = add_rgb
+    check_pass(step)
+    return step^
+
+
+def colorify_pass(color: Color = Color(255, 255, 255)) raises -> Pass:
+    """Return a pass of three.js's `ColorifyShader`.
+
+    Args:
+        color: The tint, in sRGB.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Never; every color is a tint.
+    """
+    var step = effect_pass(COLORIFY)
+    step.effect.color = color
+    return step^
+
+
+def bleach_bypass_pass(opacity: Float32 = 1.0) raises -> Pass:
+    """Return a pass of three.js's `BleachBypassShader`.
+
+    Args:
+        opacity: How much of the bleach shows.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(BLEACH_BYPASS)
+    step.effect.opacity = opacity
+    check_pass(step)
+    return step^
+
+
+def technicolor_pass() raises -> Pass:
+    """Return a pass of three.js's `TechnicolorShader`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Never; the defaults are valid.
+    """
+    return effect_pass(TECHNICOLOR)
+
+
+def sobel_pass() raises -> Pass:
+    """Return a pass of three.js's `SobelOperatorShader`, its `resolution`
+    the frame's size.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Never; the defaults are valid.
+    """
+    return effect_pass(SOBEL)
+
+
+def frei_chen_pass() raises -> Pass:
+    """Return a pass of three.js's `FreiChenShader`, its `aspect` the
+    frame's size.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Never; the defaults are valid.
+    """
+    return effect_pass(FREI_CHEN)
+
+
+def kaleido_pass(
+    sides: Float32 = 6.0, angle: Angle = Angle(0.0, RADIAN)
+) raises -> Pass:
+    """Return a pass of three.js's `KaleidoShader`.
+
+    Args:
+        sides: How many wedges.
+        angle: How far the wedges are turned.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(KALEIDO)
+    step.effect.sides = sides
+    step.effect.angle = angle
+    check_pass(step)
+    return step^
+
+
+def mirror_pass(side: MirrorSide = MIRROR_RIGHT) raises -> Pass:
+    """Return a pass of three.js's `MirrorShader`.
+
+    Args:
+        side: Which half is kept.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(MIRROR)
+    step.effect.side = side
+    check_pass(step)
+    return step^
+
+
+def tilt_shift_pass(
+    across: Bool = True,
+    spread: Float32 = Float32(1.0 / 512.0),
+    focus: Float32 = 0.35,
+) raises -> Pass:
+    """Return a pass of three.js's `HorizontalTiltShiftShader`, or of its
+    `VerticalTiltShiftShader` when not `across`.
+
+    Args:
+        across: Whether the blur runs along the row.
+        spread: The shader's `h` or `v`.
+        focus: The shader's `r`: the texture row in focus.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(VERTICAL_TILT_SHIFT)
+    if across:
+        step.effect.effect = HORIZONTAL_TILT_SHIFT
+    step.effect.spread = spread
+    step.effect.focus = focus
+    check_pass(step)
+    return step^
+
+
+def exposure_pass(exposure: Float32 = 1.0) raises -> Pass:
+    """Return a pass of three.js's `ExposureShader`.
+
+    Args:
+        exposure: What the light is scaled by.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_effect` raises.
+    """
+    var step = effect_pass(EXPOSURE)
+    step.effect.exposure = exposure
+    check_pass(step)
+    return step^
+
+
+def gamma_correction_pass() raises -> Pass:
+    """Return a pass of three.js's `GammaCorrectionShader`.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Never; the defaults are valid.
+    """
+    return effect_pass(GAMMA_CORRECTION)
+
+
+def god_rays_pass(
+    sun: Vector3, intensity: Float32 = 0.69, fake_sun: Bool = False
+) raises -> Pass:
+    """Return a pass that lays god rays from a sun over the frame:
+    three.js's god-rays example, `GodRaysShader`'s four shaders.
+
+    Put it after a `render_pass`. It draws the scene's depth itself. The
+    other settings are the fields of `god_rays`.
+
+    Args:
+        sun: Where the sun is, in the world.
+        intensity: How much the rays add: `fGodRayIntensity`.
+        fake_sun: Whether to paint a glow about the sun behind the scene.
+
+    Returns:
+        The pass.
+
+    Raises:
+        Error: Everything `check_god_rays` raises.
+    """
+    var step = Pass(GOD_RAYS)
+    step.god_rays.sun = sun
+    step.god_rays.intensity = intensity
+    step.god_rays.fake_sun = fake_sun
+    check_pass(step)
+    return step^
+
+
 struct TaaMemory(Copyable, Movable):
     """What a TAA pass keeps between frames: three.js's `_holdRenderTarget`
     and `_sampleRenderTarget`.
@@ -1097,6 +1697,35 @@ struct EffectComposer(Movable):
     def pass_count(self) -> Int:
         """Return how many passes there are."""
         return len(self.passes)
+
+    def saved_image(self, index: Int) raises -> List[FloatColor]:
+        """Return the copy of the frame a save pass kept: three.js's
+        `SavePass.renderTarget`.
+
+        Args:
+            index: Which pass, in order.
+
+        Returns:
+            The light, premultiplied, row by row from the top. Empty before
+            the pass has run.
+
+        Raises:
+            Error: If the index names no save pass.
+        """
+        if index < 0 or index >= len(self.passes):
+            raise Error("There is no pass at that index")
+        if self.passes[index].kind != SAVE:
+            raise Error("Only a save pass keeps an image")
+        if index >= len(self.memories):
+            return List[FloatColor]()
+        return self.memories[index].copy()
+
+    def _saved_for(self, shader: ShaderSettings) raises -> List[FloatColor]:
+        """Return the image a shader pass's saved sampler reads, or none
+        when it names no sampler."""
+        if shader.saved.byte_length() == 0:
+            return List[FloatColor]()
+        return self.saved_image(shader.saved_pass)
 
     def fit_memories(mut self):
         """Give every pass a memory and an accumulation, and drop the ones
@@ -1387,6 +2016,54 @@ struct EffectComposer(Movable):
             lut_light(
                 frame, assets.data_3d_textures.get(step.lut), step.strength
             )
+        elif step.kind == RENDER_PIXELATED:
+            _pixelated(frame, step, renderer, scene, assets, camera)
+        elif step.kind == GTAO:
+            var drawn = RenderTarget(
+                renderer.width,
+                renderer.height,
+                renderer.background,
+                outputs=frame_outputs(self.passes),
+            )
+            _draw(drawn, renderer, scene, assets, camera)
+            var view = _depth_view(drawn, camera)
+            gtao_light(frame, view, view.normals(), step.gtao)
+        elif step.kind == RENDER_TRANSITION:
+            _transition(frame, step, renderer, scene, assets, camera)
+        elif step.kind == CUBE_TEXTURE:
+            cube_texture_light(
+                frame,
+                cube_overlay(
+                    assets.cube_textures.get(step.cube),
+                    camera,
+                    scene,
+                    frame.width,
+                    frame.height,
+                ),
+                step.strength,
+            )
+        elif step.kind == SAVE:
+            self.memories[index] = frame.colors.copy()
+        elif step.kind == SHADER:
+            self.passes[index].time += delta_time
+            ref shader = self.passes[index].shader
+            shader_light(
+                frame,
+                assets.programs.get(shader.program),
+                shader,
+                self._saved_for(shader),
+                assets.textures,
+                self.passes[index].time,
+            )
+        elif step.kind == SHADER_EFFECT:
+            effect_light(frame, step.effect)
+        elif step.kind == GOD_RAYS:
+            god_rays_light(
+                frame,
+                depth_view(renderer, scene, assets, camera),
+                sun_on_screen(camera, scene, step.god_rays.sun),
+                step.god_rays,
+            )
         else:
             # `OUTPUT`: the only kind left once `check_pass` has had
             # its say.
@@ -1407,9 +2084,9 @@ def reads_frame_as_light(kind: PassKind) -> Bool:
     zero keeps no color through the two.
 
     The passes that leave the frame's color alone or draw it new do not:
-    a mask, a clear mask, a render and the SSAA and TAA passes, which
-    store their data straight themselves. Nor does the output pass, which
-    leaves every data pixel as it is.
+    a mask, a clear mask, a render, the SSAA, TAA, pixelated and
+    transition passes, which store their data straight themselves. Nor
+    does the output pass, which leaves every data pixel as it is.
 
     Args:
         kind: The pass's kind.
@@ -1424,6 +2101,8 @@ def reads_frame_as_light(kind: PassKind) -> Bool:
         or kind == SSAA_RENDER
         or kind == TAA_RENDER
         or kind == OUTPUT
+        or kind == RENDER_PIXELATED
+        or kind == RENDER_TRANSITION
     )
 
 
@@ -1488,9 +2167,36 @@ def _draw[
     renderer.render_into(frame, scene, assets, camera)
 
 
+def draw_scene[
+    C: Camera
+](
+    mut frame: RenderTarget,
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+) raises:
+    """Draw the scene into a target as a render pass draws it: through the
+    renderer's antialias when that is on, clearing first. For an effect
+    that draws the scene more than once and combines the views, as
+    `renderers.stereo_effects` does.
+
+    Args:
+        frame: The target, the renderer's size.
+        renderer: What the scene is drawn with.
+        scene: The transform hierarchy, and the meshes and lights in it.
+        assets: The geometry, materials and textures the meshes name.
+        camera: The camera the scene is drawn through.
+
+    Raises:
+        Error: Everything `Renderer.render_into` raises.
+    """
+    _draw(frame, renderer, scene, assets, camera)
+
+
 def frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
     """Return the outputs a composer's frame is drawn with: the color and
-    a normal attachment when an enabled SSAO, SAO or SSR pass reads
+    a normal attachment when an enabled SSAO, SAO, SSR or GTAO pass reads
     normals, and the color alone otherwise.
 
     Args:
@@ -1501,7 +2207,12 @@ def frame_outputs(passes: List[Pass]) -> List[TargetOutput]:
     """
     for index in range(len(passes)):
         ref step = passes[index]
-        var reads = step.kind == SSAO or step.kind == SAO or step.kind == SSR
+        var reads = (
+            step.kind == SSAO
+            or step.kind == SAO
+            or step.kind == SSR
+            or step.kind == GTAO
+        )
         if step.enabled and reads:
             return [OUTPUT_COLOR, OUTPUT_NORMAL]
     return color_only()
@@ -1583,6 +2294,187 @@ def _mask[
     )
     _draw(picked, renderer, scene, assets, chosen)
     mask_stencil(frame, picked.depth, step.mask.inverse)
+
+
+def sized_renderer(
+    renderer: Renderer, width: Int, height: Int
+) raises -> Renderer:
+    """Return a renderer of another size with the same settings, drawing
+    over its whole target: what a pixelated pass draws its small scene
+    with, as three.js's pass draws into a smaller target.
+
+    Args:
+        renderer: The renderer whose settings are taken.
+        width: The new width in pixels.
+        height: The new height in pixels.
+
+    Returns:
+        The renderer.
+
+    Raises:
+        Error: If a size is not positive.
+    """
+    var sized = Renderer(width, height, renderer.workers)
+    sized.background = renderer.background
+    sized.shading = renderer.shading
+    sized.tone_mapping = renderer.tone_mapping
+    sized.tone_mapping_exposure = renderer.tone_mapping_exposure
+    sized.clipping_planes = renderer.clipping_planes.copy()
+    sized.local_clipping_enabled = renderer.local_clipping_enabled
+    sized.shadow_map_type = renderer.shadow_map_type
+    sized.depth_mode = renderer.depth_mode
+    sized.time = renderer.time
+    sized.antialias = renderer.antialias
+    sized.render_scale = renderer.render_scale
+    return sized^
+
+
+def _pixelated[
+    C: Camera
+](
+    mut frame: RenderTarget,
+    step: Pass,
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+) raises:
+    """Run a pixelated pass: draw the scene, with its normals, a pixel
+    size smaller each way, and show it over the frame."""
+    var width = pixelated_size(renderer.width, step.pixelated.pixel_size)
+    var height = pixelated_size(renderer.height, step.pixelated.pixel_size)
+    var small = sized_renderer(renderer, width, height)
+    var drawn = RenderTarget(
+        width,
+        height,
+        renderer.background,
+        outputs=[OUTPUT_COLOR, OUTPUT_NORMAL],
+    )
+    _draw(drawn, small, scene, assets, camera)
+    pixelated_light(frame, drawn, _depth_view(drawn, camera), step.pixelated)
+
+
+def _layer_view[
+    C: Camera
+](
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+    layers: Layers,
+) raises -> RenderTarget:
+    """Return the objects on some layers drawn through the camera."""
+    var chosen = JitteredCamera(
+        camera, scene, 0, 0, renderer.width, renderer.height
+    )
+    chosen.layers = layers
+    var drawn = RenderTarget(
+        renderer.width, renderer.height, renderer.background
+    )
+    _draw(drawn, renderer, scene, assets, chosen)
+    return drawn^
+
+
+def _transition[
+    C: Camera
+](
+    mut frame: RenderTarget,
+    step: Pass,
+    renderer: Renderer,
+    scene: Scene,
+    assets: Assets,
+    camera: C,
+) raises:
+    """Run a transition pass: draw the two sets of layers and mix them."""
+    var first = _layer_view(renderer, scene, assets, camera, step.first)
+    var second = _layer_view(renderer, scene, assets, camera, step.second)
+    var texels = List[FloatColor]()
+    if step.transition.use_texture:
+        texels = texture_overlay(
+            assets.textures.get(step.texture), frame.width, frame.height
+        )
+    transition_light(frame, first, second, texels, step.transition)
+
+
+def render_transition[
+    A: Camera, B: Camera
+](
+    renderer: Renderer,
+    first_scene: Scene,
+    first_camera: A,
+    second_scene: Scene,
+    second_camera: B,
+    assets: Assets,
+    settings: TransitionSettings,
+    texture: TextureId = NO_TEXTURE,
+) raises -> Framebuffer:
+    """Draw two scenes, each through its own camera, and mix them: three.js's
+    `RenderTransitionPass` with its `sceneA`, `cameraA`, `sceneB` and
+    `cameraB`, drawn to the screen.
+
+    Args:
+        renderer: What both scenes are drawn with, and whose size,
+            background and curve the image takes.
+        first_scene: The first scene: `sceneA`.
+        first_camera: Its camera.
+        second_scene: The second scene: `sceneB`.
+        second_camera: Its camera.
+        assets: The geometry, materials and textures both scenes name.
+        settings: The ratio, the threshold and whether the texture leads.
+        texture: The texture whose red leads the mix; read only with
+            `use_texture` on.
+
+    Returns:
+        The image, through the renderer's curve.
+
+    Raises:
+        Error: Everything `check_transition` raises and everything
+            `Renderer.render_into` raises, or if the texture is read and
+            not in the assets.
+    """
+    check_transition(settings)
+    var first = RenderTarget(
+        renderer.width, renderer.height, renderer.background
+    )
+    _draw(first, renderer, first_scene, assets, first_camera)
+    var second = RenderTarget(
+        renderer.width, renderer.height, renderer.background
+    )
+    _draw(second, renderer, second_scene, assets, second_camera)
+    var texels = List[FloatColor]()
+    if settings.use_texture:
+        texels = texture_overlay(
+            assets.textures.get(texture), renderer.width, renderer.height
+        )
+    var frame = RenderTarget(
+        renderer.width, renderer.height, renderer.background
+    )
+    transition_light(frame, first, second, texels, settings)
+    return frame.resolve(
+        renderer.workers, renderer.tone_curve(), renderer.tone_mapping_exposure
+    )
+
+
+def sun_on_screen[
+    C: Camera
+](camera: C, scene: Scene, sun: Vector3) raises -> Vector3:
+    """Return a god-ray sun as the camera sees it: `god_rays_sun` through
+    the camera's projection and view.
+
+    Args:
+        camera: The camera.
+        scene: The scene the camera's placement is read from.
+        sun: The sun, in the world.
+
+    Returns:
+        The sun's texture coordinate across and up, and its clip z.
+
+    Raises:
+        Error: If the camera's matrices cannot be built.
+    """
+    var projection_view = camera.projection_matrix()
+    projection_view.multiply(camera.view_matrix_in(scene))
+    return god_rays_sun(projection_view, sun)
 
 
 def supersample[

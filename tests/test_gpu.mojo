@@ -335,14 +335,27 @@ from std.testing import (
 from postprocessing.composer import (
     BOKEH,
     COPY,
+    CUBE_TEXTURE,
+    GOD_RAYS,
+    GTAO,
     LUT,
     MASK,
     RENDER,
+    RENDER_PIXELATED,
+    RENDER_TRANSITION,
+    SAVE,
+    SHADER,
+    SHADER_EFFECT,
     SMAA,
     TEXTURE,
     EffectComposer,
     Pass,
     PassKind,
+    cube_texture_pass,
+    effect_pass,
+    god_rays_pass,
+    save_pass,
+    shader_pass,
     afterimage_pass,
     bloom_pass,
     blur_pass,
@@ -376,6 +389,11 @@ from postprocessing.effects import (
     HALFTONE_SQUARE,
     HalftoneShape,
 )
+from postprocessing.shader_pass import SCREEN_VERTEX_SHADER
+from postprocessing.shaders import MIRROR_TOP, ShaderEffect
+from postprocessing.shaders import MIRROR as MIRROR_SHADER
+from materials.glsl import compile_shader_material
+from materials.nodes import NodeProgram, NodeProgramId
 from render.gpu import GpuComposer, runs_on_device
 from render.volume_texture import Data3DTexture, VolumeImage
 from render.volume_texture_store import Data3DTextureId
@@ -10046,6 +10064,7 @@ def compare_post(
     steps: List[Pass],
     tolerance: Int = 1,
     frames: Int = 1,
+    programs: List[NodeProgram] = List[NodeProgram](),
 ) raises -> Int:
     """Run `steps` after a render pass on both backends for `frames`
     frames, assert every frame agrees, and return the GPU composer's
@@ -10055,6 +10074,8 @@ def compare_post(
         steps: The passes after the render pass.
         tolerance: How many levels a channel may differ by.
         frames: How many frames to run, a quarter second apart.
+        programs: The node programs a shader pass names, added to the
+            assets in order, so the first is `NodeProgramId(0)`.
 
     Returns:
         How many passes of the last frame ran on the host.
@@ -10068,6 +10089,9 @@ def compare_post(
     var tint = assets.textures.add(
         checkerboard(8, 2, Color(255, 255, 255), Color(0, 0, 255))
     )
+    var sky = assets.cube_textures.add(a_gpu_cube())
+    for index in range(len(programs)):
+        _ = assets.programs.add(programs[index].copy())
     var camera = post_camera()
     var renderer = post_renderer()
     var host = EffectComposer()
@@ -10081,6 +10105,8 @@ def compare_post(
             step.lut = lut
         if step.kind == TEXTURE:
             step.texture = tint
+        if step.kind == CUBE_TEXTURE:
+            step.cube = sky
         host.add_pass(step.copy())
         device_side.add_pass(step^)
     var device = GpuComposer(POST_WIDTH, POST_HEIGHT)
@@ -10121,7 +10147,15 @@ def test_the_gpu_composer_runs_the_per_pixel_passes_on_the_device() raises:
     assert_false(runs_on_device(RENDER))
     assert_false(runs_on_device(SMAA))
     assert_false(runs_on_device(MASK))
-    assert_false(runs_on_device(PassKind(27)))
+    assert_true(runs_on_device(CUBE_TEXTURE))
+    assert_true(runs_on_device(SAVE))
+    assert_true(runs_on_device(SHADER))
+    assert_true(runs_on_device(SHADER_EFFECT))
+    assert_true(runs_on_device(GOD_RAYS))
+    assert_false(runs_on_device(RENDER_PIXELATED))
+    assert_false(runs_on_device(GTAO))
+    assert_false(runs_on_device(RENDER_TRANSITION))
+    assert_false(runs_on_device(PassKind(35)))
 
 
 def test_a_gpu_composer_refuses_a_bad_size() raises:
@@ -10324,6 +10358,103 @@ def test_the_gpu_composer_matches_the_host_on_a_lut() raises:
     # `compare_post` puts its table in place of the first one.
     steps.append(lut_pass(Data3DTextureId(0), 0.75))
     assert_equal(compare_post(steps), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_each_shader_effect() raises:
+    if skipped_for_lack_of_a_gpu("post shader effects"):
+        return
+    for value in range(15):
+        var step = effect_pass(ShaderEffect(value))
+        if step.effect.effect == MIRROR_SHADER:
+            step.effect.side = MIRROR_TOP
+        assert_equal(compare_post(one_pass(step)), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_god_rays() raises:
+    if skipped_for_lack_of_a_gpu("post god rays"):
+        return
+    var steps = List[Pass]()
+    steps.append(god_rays_pass(Vector3(0.5, 2, -5), 0.4, True))
+    # The depth is drawn on the host; the mask, the rays and the combine
+    # run on the device.
+    assert_equal(compare_post(steps), 1)
+    steps[0].god_rays.fake_sun = False
+    steps[0].god_rays.resolution_scale = 0.5
+    assert_equal(compare_post(steps), 1)
+
+
+def test_the_gpu_composer_matches_the_host_on_a_cube_texture() raises:
+    if skipped_for_lack_of_a_gpu("post cube texture"):
+        return
+    # `compare_post` puts its cube in place of the first one.
+    assert_equal(
+        compare_post(one_pass(cube_texture_pass(CubeTextureId(0), 0.5))), 1
+    )
+    assert_equal(compare_post(one_pass(cube_texture_pass(CubeTextureId(0)))), 1)
+
+
+comptime SCREEN_FRAGMENT = """
+uniform sampler2D tDiffuse;
+uniform sampler2D tSaved;
+uniform float amount;
+varying vec2 vUv;
+void main() {
+    vec4 now = texture2D(tDiffuse, vec2(1.0 - vUv.x, vUv.y));
+    vec4 kept = texture2D(tSaved, vUv);
+    gl_FragColor = vec4(mix(now.rgb, kept.bgr, amount), now.a);
+}
+"""
+
+
+def test_the_gpu_composer_matches_the_host_on_a_save_and_a_shader() raises:
+    if skipped_for_lack_of_a_gpu("post save and shader"):
+        return
+    var program = compile_shader_material(SCREEN_VERTEX_SHADER, SCREEN_FRAGMENT)
+    program.set_uniform("amount", Float32(0.25))
+    var programs = List[NodeProgram]()
+    programs.append(program^)
+    var steps = List[Pass]()
+    steps.append(save_pass())
+    steps.append(sepia_pass(0.8))
+    var shader = shader_pass(NodeProgramId(0))
+    shader.shader.saved = "tSaved"
+    shader.shader.saved_pass = 1
+    steps.append(shader^)
+    assert_equal(compare_post(steps, programs=programs), 1)
+    # Before the save pass has run, its image is transparent black.
+    var early = List[Pass]()
+    var first = shader_pass(NodeProgramId(0))
+    first.shader.saved = "tSaved"
+    first.shader.saved_pass = 2
+    early.append(first^)
+    early.append(save_pass())
+    assert_equal(compare_post(early, programs=programs), 1)
+
+
+def test_the_gpu_composer_runs_a_shader_that_reads_a_texture_on_the_host() raises:
+    if skipped_for_lack_of_a_gpu("post shader texture"):
+        return
+    var program = compile_shader_material(
+        SCREEN_VERTEX_SHADER,
+        """
+        uniform sampler2D tDiffuse;
+        uniform sampler2D map;
+        varying vec2 vUv;
+        void main() {
+            gl_FragColor = texture2D(tDiffuse, vUv) * texture2D(map, vUv);
+        }
+        """,
+    )
+    # `compare_post` adds its checkerboard as the first texture.
+    program.set_texture("map", TextureId(0))
+    var programs = List[NodeProgram]()
+    programs.append(program^)
+    assert_equal(
+        compare_post(
+            one_pass(shader_pass(NodeProgramId(0))), programs=programs
+        ),
+        2,
+    )
 
 
 def test_the_gpu_composer_masks_on_the_device() raises:

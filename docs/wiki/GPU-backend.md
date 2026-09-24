@@ -133,17 +133,19 @@ These passes run as kernels:
 - Copy, blur, bloom, film, dot screen, sepia, vignette, luminosity, afterimage and output.
 - FXAA, glitch, halftone, clear, texture and LUT.
 - Bokeh. The host draws the depth, and the device blurs the light.
+- The fifteen shader effects, the cube texture, the save and the shader pass. A shader pass whose program reads a texture in the assets uses the fallback, because the device holds no textures.
+- God rays. The host draws the depth, and the device makes the mask, walks the rays and adds them.
 
 These passes use the fallback. The composer reads the frame back, runs `EffectComposer.run_step` on the host, and puts the frame back:
 
-- Render, SSAA, TAA, SSAO, SAO, SSR, outline and mask. Each draws the scene. The GPU rasterizer resolves to bytes, and a pass needs the light.
+- Render, SSAA, TAA, SSAO, SAO, SSR, outline, mask, pixelated, GTAO and transition. Each draws the scene. The GPU rasterizer resolves to bytes, and a pass needs the light.
 - SMAA. Its three stages walk rows and columns of edges, and the port keeps them on the host.
 
 A mask works on the device. Before each pass inside a mask, a kernel copies the frame aside. After the pass, a kernel puts back each pixel that `inside_mask` refuses.
 
 ### Shared arithmetic
 
-Each kernel calls the per-pixel function that the host pass calls. Examples are `copy_pixel`, `blur_pixel`, `bloom_glow`, `fxaa_pixel`, `glitch_pixel`, `halftone_pixel` and `lut_pixel`. A pass that reads its neighbors reads a `LightView`. The host builds one over a list, and a kernel builds one over a device buffer. Both read through the same `tap` and `sample`.
+Each kernel calls the per-pixel function that the host pass calls. Examples are `copy_pixel`, `blur_pixel`, `bloom_glow`, `fxaa_pixel`, `glitch_pixel`, `halftone_pixel`, `lut_pixel`, `effect_pixel`, `god_rays_generate_pixel` and `screen_pixel`. A pass that reads its neighbors reads a `LightView`. The host builds one over a list, and a kernel builds one over a device buffer. Both read through the same `tap` and `sample`.
 
 The LUT kernel reads a `DecodedVolume` through `filter_volume`, the function `Data3DTexture.sample` calls. The host decodes the table and uploads it for each LUT pass.
 

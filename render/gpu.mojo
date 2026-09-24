@@ -306,7 +306,13 @@ from postprocessing.composer import (
     HALFTONE,
     LUT,
     TEXTURE,
+    CUBE_TEXTURE,
+    GOD_RAYS,
+    SAVE,
+    SHADER,
+    SHADER_EFFECT,
     EffectComposer,
+    Pass,
     PassKind,
     afterimage_pixel,
     bloom_glow,
@@ -327,6 +333,7 @@ from postprocessing.composer import (
     reads_frame_as_light,
     separable_blur_pixel,
     sepia_pixel,
+    sun_on_screen,
     vignette_pixel,
 )
 from postprocessing.effects import (
@@ -345,7 +352,27 @@ from postprocessing.effects import (
     texture_overlay,
     texture_pixel,
 )
+from postprocessing.render_passes import cube_overlay
+from postprocessing.screen_space import DepthView
 from postprocessing.sampling import LightView, Untracked, u_of, v_of
+from postprocessing.shader_pass import (
+    ScreenNodes,
+    reads_assets,
+    screen_code,
+    screen_pixel,
+)
+from postprocessing.shaders import (
+    GOD_RAYS_PASSES,
+    GodRaysSettings,
+    effect_floats,
+    effect_from_floats,
+    effect_pixel,
+    god_rays_combine_pixel,
+    god_rays_generate_pixel,
+    god_rays_mask,
+    god_rays_size,
+    god_rays_step,
+)
 from render.target import RenderTarget
 from render.volume_texture import DecodedVolume, decoded_texels
 from renderers.renderer import Renderer
@@ -8071,6 +8098,162 @@ def keep_outside_mask_kernel(
     stencil[unsafe_offset=slot] = stored
 
 
+def effect_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    params: MutPointer[Float32, MutAnyOrigin],
+    width: Int32,
+    height: Int32,
+):
+    """Run one of the fifteen screen shaders: `effect_pixel`, its settings
+    read back from `params` by `effect_from_floats`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var view = LightView(floats=source, width=w, height=h)
+    var slot = y * w + x
+    _store(light, slot, effect_pixel(view, x, y, effect_from_floats(params)))
+    data[unsafe_offset=slot] = 0
+
+
+def god_rays_generate_kernel(
+    destination: MutPointer[Float32, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    source_width: Int32,
+    source_height: Int32,
+    width: Int32,
+    height: Int32,
+    sun_x: Float32,
+    sun_y: Float32,
+    sun_z: Float32,
+    step: Float32,
+):
+    """Walk the mask or the rays toward the sun: `god_rays_generate_pixel`."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var view = LightView(
+        floats=source, width=Int(source_width), height=Int(source_height)
+    )
+    _store(
+        destination,
+        y * w + x,
+        god_rays_generate_pixel(
+            view, u_of(x, w), v_of(y, h), Vector3(sun_x, sun_y, sun_z), step
+        ),
+    )
+
+
+def god_rays_combine_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    mask: MutPointer[Float32, MutAnyOrigin],
+    rays: MutPointer[Float32, MutAnyOrigin],
+    params: MutPointer[Float32, MutAnyOrigin],
+    rays_width: Int32,
+    rays_height: Int32,
+    width: Int32,
+    height: Int32,
+):
+    """Add the rays to the frame, over the fake sun where asked:
+    `god_rays_combine_pixel`. The mask's red is the window depth, and
+    `params` holds what `GpuComposer` packs: the sun, the intensity, the
+    fake sun's switch and its two colors."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var settings = GodRaysSettings()
+    settings.intensity = params[unsafe_offset=3]
+    settings.fake_sun = params[unsafe_offset=4] != 0
+    settings.sun_color = Color(
+        UInt8(Int(params[unsafe_offset=5])),
+        UInt8(Int(params[unsafe_offset=6])),
+        UInt8(Int(params[unsafe_offset=7])),
+    )
+    settings.bg_color = Color(
+        UInt8(Int(params[unsafe_offset=8])),
+        UInt8(Int(params[unsafe_offset=9])),
+        UInt8(Int(params[unsafe_offset=10])),
+    )
+    var sun = Vector3(
+        params[unsafe_offset=0],
+        params[unsafe_offset=1],
+        params[unsafe_offset=2],
+    )
+    var view = LightView(
+        floats=rays, width=Int(rays_width), height=Int(rays_height)
+    )
+    var slot = y * w + x
+    var u = u_of(x, w)
+    var v = v_of(y, h)
+    _store(
+        light,
+        slot,
+        god_rays_combine_pixel(
+            _load(light, slot),
+            view.sample(u, v).r,
+            mask[unsafe_offset=slot * 4],
+            u,
+            v,
+            Float32(w) / Float32(h),
+            sun,
+            settings,
+        ),
+    )
+    data[unsafe_offset=slot] = 0
+
+
+def shader_kernel(
+    light: MutPointer[Float32, MutAnyOrigin],
+    data: MutPointer[UInt8, MutAnyOrigin],
+    source: MutPointer[Float32, MutAnyOrigin],
+    code: MutPointer[Float32, MutAnyOrigin],
+    saved_start: Int32,
+    saved_width: Int32,
+    saved_height: Int32,
+    width: Int32,
+    height: Int32,
+):
+    """Run a node program over the screen: `screen_pixel` on a
+    `ScreenNodes`. `code` holds the program's floats, bound by
+    `screen_code`, and the saved image `saved_start` floats in."""
+    var x = Int(global_idx.x)
+    var y = Int(global_idx.y)
+    var w = Int(width)
+    var h = Int(height)
+    if x >= w or y >= h:
+        return
+    var input = LightView(floats=source, width=w, height=h)
+    var saved = LightView(
+        floats=code.unsafe_offset(Int(saved_start)),
+        width=Int(saved_width),
+        height=Int(saved_height),
+    )
+    var words = code.unsafe_mut_cast[False]().unsafe_origin_cast[Untracked]()
+    var slot = y * w + x
+    _store(
+        light,
+        slot,
+        screen_pixel(
+            ScreenNodes(words, input, saved, x, y),
+            _load(source, slot),
+            u_of(x, w),
+            v_of(y, h),
+        ),
+    )
+    data[unsafe_offset=slot] = 0
+
+
 def runs_on_device(kind: PassKind) -> Bool:
     """Return True if `GpuComposer` runs a pass of this kind on the
     device, and False if it reads the frame back and runs it on the host.
@@ -8079,7 +8262,10 @@ def runs_on_device(kind: PassKind) -> Bool:
     render, SSAA, TAA, SSAO, SAO, SSR, outline and mask -- because the
     GPU rasterizer resolves to bytes and a pass needs the light. It runs
     SMAA too: its three stages walk rows and columns of edges. A bokeh
-    pass draws its depth on the host and blurs on the device.
+    and a god-rays pass draw their depth on the host and run the rest on
+    the device. The pixelated, GTAO and transition passes draw the scene,
+    so the host runs them. A shader pass whose program reads a texture in
+    the assets also runs on the host; see `GpuComposer.render`.
 
     Args:
         kind: The pass's kind.
@@ -8088,7 +8274,12 @@ def runs_on_device(kind: PassKind) -> Bool:
         Whether a kernel runs it.
     """
     return (
-        kind == COPY
+        kind == CUBE_TEXTURE
+        or kind == SAVE
+        or kind == SHADER
+        or kind == SHADER_EFFECT
+        or kind == GOD_RAYS
+        or kind == COPY
         or kind == BLUR
         or kind == BLOOM
         or kind == FILM
@@ -8543,6 +8734,142 @@ struct GpuComposer(Movable):
             block_dim=(TILE, TILE),
         )
 
+    def _shader(
+        mut self, composer: EffectComposer, index: Int, assets: Assets
+    ) raises:
+        """Run a shader pass's program over the device frame: its floats,
+        bound by `screen_code`, and the saved image after them, in
+        `extra`."""
+        ref step = composer.passes[index]
+        ref program = assets.programs.get(step.shader.program)
+        var floats = screen_code(program, step.shader, step.time)
+        var saved_start = len(floats)
+        var saved_width = 1
+        var saved_height = 1
+        var saved = List[FloatColor]()
+        if step.shader.saved.byte_length() > 0:
+            saved = composer.saved_image(step.shader.saved_pass)
+        if len(saved) == self.width * self.height:
+            saved_width = self.width
+            saved_height = self.height
+        elif len(saved) != 0:
+            raise Error("A saved image must be the frame's size")
+        else:
+            saved = [FloatColor(0, 0, 0, 0)]
+        for slot in range(len(saved)):
+            floats.append(saved[slot].r)
+            floats.append(saved[slot].g)
+            floats.append(saved[slot].b)
+            floats.append(saved[slot].a)
+        self._put_floats(floats)
+        self._take_source()
+        self.context.enqueue_function[shader_kernel](
+            self.light.unsafe_ptr(),
+            self.data.unsafe_ptr(),
+            self.source.unsafe_ptr(),
+            self.extra.unsafe_ptr(),
+            Int32(saved_start),
+            Int32(saved_width),
+            Int32(saved_height),
+            Int32(self.width),
+            Int32(self.height),
+            grid_dim=self._grid(),
+            block_dim=(TILE, TILE),
+        )
+
+    def _god_rays(
+        mut self, settings: GodRaysSettings, view: DepthView, sun: Vector3
+    ) raises:
+        """Run the god-rays chain on the device: the mask, the three
+        generate passes and the combine, `god_rays_light`'s stages. The
+        mask, the two rays images and the combine's settings lie back to
+        back in `extra`."""
+        var mask = god_rays_mask(view)
+        var rays_width = god_rays_size(self.width, settings.resolution_scale)
+        var rays_height = god_rays_size(self.height, settings.resolution_scale)
+        var mask_floats = len(mask) * 4
+        var rays_floats = rays_width * rays_height * 4
+        var floats = List[Float32](capacity=mask_floats + rays_floats * 2 + 11)
+        for slot in range(len(mask)):
+            floats.append(mask[slot].r)
+            floats.append(mask[slot].g)
+            floats.append(mask[slot].b)
+            floats.append(mask[slot].a)
+        for _ in range(rays_floats * 2):
+            floats.append(0)
+        floats.append(sun.x)
+        floats.append(sun.y)
+        floats.append(sun.z)
+        floats.append(settings.intensity)
+        floats.append(Float32(1) if settings.fake_sun else Float32(0))
+        floats.append(Float32(settings.sun_color.r))
+        floats.append(Float32(settings.sun_color.g))
+        floats.append(Float32(settings.sun_color.b))
+        floats.append(Float32(settings.bg_color.r))
+        floats.append(Float32(settings.bg_color.g))
+        floats.append(Float32(settings.bg_color.b))
+        self._put_floats(floats)
+        var base = self.extra.unsafe_ptr().unsafe_origin_cast[MutAnyOrigin]()
+        var first = base.unsafe_offset(mask_floats)
+        var second = base.unsafe_offset(mask_floats + rays_floats)
+        var params = base.unsafe_offset(mask_floats + rays_floats * 2)
+        var rays_grid = (
+            ceildiv(rays_width, TILE),
+            ceildiv(rays_height, TILE),
+        )
+        # The first pass reads the mask at the frame's size; each pass
+        # after it reads the one before, the two images taking turns.
+        var from_pointer = base
+        var from_width = self.width
+        var from_height = self.height
+        var to_pointer = first
+        var into_first = True
+        for index in range(1, GOD_RAYS_PASSES + 1):
+            self.context.enqueue_function[god_rays_generate_kernel](
+                to_pointer,
+                from_pointer,
+                Int32(from_width),
+                Int32(from_height),
+                Int32(rays_width),
+                Int32(rays_height),
+                sun.x,
+                sun.y,
+                sun.z,
+                god_rays_step(settings.filter_length, index),
+                grid_dim=rays_grid,
+                block_dim=(TILE, TILE),
+            )
+            from_pointer = to_pointer
+            from_width = rays_width
+            from_height = rays_height
+            into_first = not into_first
+            to_pointer = first if into_first else second
+        self.context.enqueue_function[god_rays_combine_kernel](
+            self.light.unsafe_ptr(),
+            self.data.unsafe_ptr(),
+            base,
+            from_pointer,
+            params,
+            Int32(rays_width),
+            Int32(rays_height),
+            Int32(self.width),
+            Int32(self.height),
+            grid_dim=self._grid(),
+            block_dim=(TILE, TILE),
+        )
+
+    def _on_device(self, step: Pass, assets: Assets) raises -> Bool:
+        """Return True if a pass runs on the device: `runs_on_device` of
+        its kind, less a shader pass whose program reads a texture in the
+        assets, which the device does not hold."""
+        if not runs_on_device(step.kind):
+            return False
+        if step.kind != SHADER:
+            return True
+        return not reads_assets(
+            assets.programs.get(step.shader.program), step.shader
+        )
+
     def _run[
         C: Camera
     ](
@@ -8746,6 +9073,63 @@ struct GpuComposer(Movable):
                 grid_dim=grid,
                 block_dim=(TILE, TILE),
             )
+        elif kind == CUBE_TEXTURE:
+            self._put_colors(
+                cube_overlay(
+                    assets.cube_textures.get(composer.passes[index].cube),
+                    camera,
+                    scene,
+                    self.width,
+                    self.height,
+                )
+            )
+            self.context.enqueue_function[texture_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.extra.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                composer.passes[index].strength,
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == SAVE:
+            # The copy is kept on the host, in the composer, so both
+            # backends share it, as the afterimage's trail is kept.
+            var kept = List[FloatColor](
+                length=count, fill=FloatColor(0, 0, 0, 0)
+            )
+            with self.light.map_to_host() as host:
+                unsafe_memcpy(
+                    dest=kept.unsafe_ptr().unsafe_bitcast[Float32](),
+                    src=host.unsafe_ptr(),
+                    count=count * 4,
+                )
+            composer.memories[index] = kept^
+        elif kind == SHADER:
+            composer.passes[index].time += delta_time
+            self._shader(composer, index, assets)
+        elif kind == SHADER_EFFECT:
+            self._put_floats(effect_floats(composer.passes[index].effect))
+            self._take_source()
+            self.context.enqueue_function[effect_kernel](
+                self.light.unsafe_ptr(),
+                self.data.unsafe_ptr(),
+                self.source.unsafe_ptr(),
+                self.extra.unsafe_ptr(),
+                Int32(self.width),
+                Int32(self.height),
+                grid_dim=grid,
+                block_dim=(TILE, TILE),
+            )
+        elif kind == GOD_RAYS:
+            self._god_rays(
+                composer.passes[index].god_rays,
+                depth_view(renderer, scene, assets, camera),
+                sun_on_screen(
+                    camera, scene, composer.passes[index].god_rays.sun
+                ),
+            )
         else:
             # `LUT`: the last kind `runs_on_device` says yes to.
             ref lut = assets.data_3d_textures.get(composer.passes[index].lut)
@@ -8839,7 +9223,7 @@ struct GpuComposer(Movable):
             var masked = mask_active and kind != MASK
             if masked:
                 self._save()
-            if runs_on_device(kind):
+            if self._on_device(composer.passes[index], assets):
                 # The device frame keeps its data pixels straight, as the
                 # host frame does, and premultiplies them around a pass
                 # that reads light, as `EffectComposer.run_step` does.

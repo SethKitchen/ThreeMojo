@@ -45,10 +45,20 @@ To run the passes on the GPU, give the composer to a `GpuComposer`. Most passes 
 | `clear_pass(color=transparent black)` | `ClearPass` | Clear the light, the depth and the stencil. |
 | `texture_pass(texture, opacity=1)` | `TexturePass` | Draw a texture over the frame. |
 | `lut_pass(lut, intensity=1)` | `LUTPass` | Grade the frame through a color lookup table. |
+| `render_pixelated_pass(pixel_size=6, normal_edge_strength=0.3, depth_edge_strength=0.4)` | `RenderPixelatedPass` | Draw the scene small and show it in blocks, with its edges drawn. |
+| `gtao_pass(radius=0.25 m, blend_intensity=1)` | `GTAOPass` | Darken the frame by ground-truth ambient occlusion. |
+| `render_transition_pass(first, second, texture=NO_TEXTURE, mix_ratio=0)` | `RenderTransitionPass` | Draw two sets of layers and mix them, evenly or by a texture. |
+| `cube_texture_pass(cube, opacity=1)` | `CubeTexturePass` | Draw a cube texture as the camera sees it. |
+| `save_pass()` | `SavePass` | Keep a copy of the frame. |
+| `shader_pass(program, input="tDiffuse")` | `ShaderPass` | Run a node program over the screen. |
+| `effect_pass(effect)` | `ShaderPass` with one of fifteen shaders | Run a screen shader. Each shader also has a builder of its own. |
+| `god_rays_pass(sun, intensity=0.69, fake_sun=False)` | The god-rays example | Lay rays from a sun over the frame. |
 
 Each builder returns a `Pass`. A `Pass` has a `kind`, an `enabled` flag and every setting any kind reads. The effect passes read `strength`, `radius`, `threshold`, `offset`, `scale`, `angle`, `center`, `grayscale` and `time`. The SSAA and TAA passes read `sample_level`, `unbiased`, `accumulate` and `accumulate_index`. The screen-space passes read `ssao`, `sao`, `ssr` and `outline`. See [Screen-space passes](#screen-space-passes).
 
 The bokeh, glitch, halftone and mask passes read `bokeh`, `glitch`, `halftone` and `mask`. The clear pass reads `clear_color`. The texture pass reads `texture` and `strength`. The LUT pass reads `lut` and `strength`. See [More passes](#more-passes).
+
+The pixelated, GTAO, transition, shader, shader effect and god-rays passes read `pixelated`, `gtao`, `transition`, `shader`, `effect` and `god_rays`. The transition pass also reads `first`, `second` and `texture`. The cube texture pass reads `cube` and `strength`. See [Scene, GTAO and shader passes](#scene-gtao-and-shader-passes) and [Shader effects](#shader-effects).
 
 Change a setting after the pass is added, as three.js changes a uniform. A pass that is not enabled is skipped.
 
@@ -63,6 +73,7 @@ The defaults are three.js's. The dot screen's angle is an `Angle`. A bare number
 | `remove_pass(index)` | `removePass` | Take a pass out. |
 | `pass_count() -> Int` | | How many passes there are. |
 | `reset()` | `reset` | Forget what every afterimage pass saw and what every TAA pass accumulated. |
+| `saved_image(index) -> List[FloatColor]` | `SavePass.renderTarget` | The copy of the frame that the save pass at `index` kept. Empty before the pass runs. |
 | `render(renderer, scene, assets, camera, delta_time=0) -> Framebuffer` | `render` | Run every enabled pass in order and return the image. |
 | `run_step(index, frame, renderer, scene, assets, camera, delta_time)` | | Run one pass on a frame, less the mask's bookkeeping. It fits the memories first, and refuses an index that names no pass. The GPU composer calls it for a pass with no kernel. |
 
@@ -70,7 +81,7 @@ The defaults are three.js's. The dot screen's angle is an `Angle`. A bare number
 
 ## Validation
 
-`PassKind` is a type. `is_valid` names the twenty-seven kinds. `check_pass` refuses any other kind. It refuses a setting that is not finite. It refuses a strength, radius, threshold, offset or scale that is negative. It refuses a bloom radius above one and an afterimage damp above one.
+`PassKind` is a type. `is_valid` names the thirty-five kinds. `check_pass` refuses any other kind. It refuses a setting that is not finite. It refuses a strength, radius, threshold, offset or scale that is negative. It refuses a bloom radius above one and an afterimage damp above one.
 
 `check_pass` also refuses a sample level outside zero through five. three.js clamps the level; this port refuses it. It refuses an accumulate index outside minus one through 32. `jitter_offsets` refuses a level outside zero through five. `JitteredCamera` refuses an offset that is not finite and an image size that is not positive.
 
@@ -376,8 +387,184 @@ Put the LUT pass after the output pass, as three.js's example does. Then the tab
 - The LUT pass's 2D table, which three.js once used for WebGL 1.
 - `LUT3dlLoader` and `LUTImageLoader`, which read `.3dl` files and image strips.
 
+## Scene, GTAO and shader passes
+
+`postprocessing/render_passes.mojo`, `postprocessing/gtao.mojo` and `postprocessing/shader_pass.mojo`. Six more passes draw the scene anew, darken it by occlusion, keep a copy of the frame and run a program over it.
+
+```mojo
+var composer = EffectComposer()
+composer.add_pass(render_pixelated_pass(pixel_size=4))
+composer.add_pass(gtao_pass())
+composer.add_pass(output_pass())
+var image = composer.render(renderer, scene, assets, camera)
+```
+
+### Pixelated
+
+`render_pixelated_pass` is three.js's `RenderPixelatedPass`. Put it where a `render_pass` goes. It draws the scene into a target a pixel size smaller each way, with its depth and its normals. `sized_renderer` makes the small renderer with the same settings.
+
+`pixelated_light` shows each drawn texel as a block of pixels, with the nearest texel. `pixelated_strength` is the pass's shader. Where a neighbor is behind the texel, the depth edge darkens it by `depth_edge_strength`. Otherwise, where a neighbor faces another way, the normal edge lightens it by `normal_edge_strength`.
+
+### GTAO
+
+`gtao_pass` is three.js's `GTAOPass`. Put it after a `render_pass`. It draws the depth and the normals itself. The fields of `GtaoSettings` are three.js's parameters, with its defaults.
+
+1. `gtao_occlusion` is `GTAOShader`. It cuts the hemisphere above each surface into three slices, or five for thirty samples or more. In each slice it finds the highest horizon both ways, and it integrates the visible arc against the normal.
+2. `gtao_noise` turns the slices from pixel to pixel by a five by five magic square, as `generateMagicSquareNoise` does.
+3. `gtao_denoise` is `PoissonDenoiseShader`. It averages sixteen taps on a Poisson disk, each weighed by how like the pixel it is.
+4. With the default output, the frame is multiplied by the result, mixed toward one by `blend_intensity`. The other five outputs are the SSAO pass's. See [Outputs](#outputs).
+
+### Transition
+
+`render_transition_pass(first, second, texture, mix_ratio)` is three.js's `RenderTransitionPass`. Put it where a `render_pass` goes. It draws the objects on the `first` layers and then on the `second` layers, through the composer's camera. `transition_pixel` mixes the two views. A `mix_ratio` of one shows the first view, and zero shows the second.
+
+With a texture, a threshold sweeps across the texture's red channel as the ratio moves. `threshold` sets how soft the edge is. Without one, the two views are mixed evenly.
+
+`render_transition(renderer, first_scene, first_camera, second_scene, second_camera, assets, settings, texture)` draws two scenes, each through its own camera, as three.js's pass does. It returns the image.
+
+### Cube texture
+
+`cube_texture_pass(cube, opacity)` is three.js's `CubeTexturePass`. `cube_overlay` reads the cube in the direction of each pixel's ray. The camera's position does not change it. `cube_texture_light` draws it over the frame as the texture pass draws.
+
+### Save and shader
+
+`save_pass()` is three.js's `SavePass`. It keeps a copy of the frame and changes nothing. `EffectComposer.saved_image` returns the copy.
+
+`shader_pass(program, input)` is three.js's `ShaderPass`. The program is a [node program](Node-materials) in the assets' `programs`. Compile a fragment shader against `SCREEN_VERTEX_SHADER` with `compile_shader_material`, or build a `NodeGraph`.
+
+```mojo
+var program = compile_shader_material(SCREEN_VERTEX_SHADER, fragment)
+program.set_uniform("amount", Float32(0.5))
+var id = assets.programs.add(program^)
+var step = shader_pass(id)
+step.shader.saved = "tSaved"
+step.shader.saved_pass = 1
+composer.add_pass(step^)
+```
+
+- The sampler named `input`, `tDiffuse` by default, reads the frame before the pass.
+- The sampler named `shader.saved` reads the image of the save pass at `shader.saved_pass`. Before that pass runs, it reads transparent black.
+- Every other sampler reads a texture in the assets.
+- `uv` and a varying copied from it are the pixel's texture coordinate. The `time` node reads the pass's `time`, which `delta_time` advances.
+- The output node, or else the color node, is the straight color. The opacity node is the alpha. A fragment that the mask node throws away keeps the pixel.
+
+### Validation of the scene and shader passes
+
+- `check_pixelated` refuses a pixel size below one, and an edge strength that is negative or not finite.
+- `check_gtao` refuses an output that is not named and a setting that is not finite. It refuses a radius, thickness, scale or phi that is not positive, and a fall-off outside zero to one. It refuses a negative intensity or exponent, fewer than two samples, and a denoise radius below one pixel.
+- `check_transition` refuses a setting that is not finite, and a threshold that is not positive.
+- `check_shader` refuses `NO_NODES`, and a saved sampler that names no pass.
+- `check_pass` refuses a cube texture pass with `NO_CUBE_TEXTURE`, and a transition pass that reads a texture with `NO_TEXTURE`.
+- `shader_light` refuses a saved image that is not the frame's size, and a texture that is not in the store. `saved_image` refuses an index that names no save pass.
+
+### How the scene and shader passes differ from three.js
+
+- **The transition's scenes.** three.js's pass takes two scenes and two cameras. The pass takes two sets of layers and the composer's camera. `render_transition` takes two scenes and two cameras.
+- **The shader's program.** three.js compiles GLSL for WebGL. The pass runs a node program. GLSL runs through the subset that `compile_shader_material` knows.
+- **The GTAO noise.** three.js seeds the denoise's simplex noise from `Math.random`. This port seeds it from `seed`.
+
+## Shader effects
+
+`postprocessing/shaders.mojo`. Fifteen of three.js's screen shaders, each run as a `ShaderPass` runs it, and its god-rays chain.
+
+```mojo
+composer.add_pass(render_pass())
+composer.add_pass(hue_saturation_pass(hue=0.2, saturation=0.3))
+composer.add_pass(god_rays_pass(Vector3(0, 1000, -1000)))
+```
+
+`effect_pass(effect)` runs the shader that a `ShaderEffect` names, with three.js's default uniforms. Change the uniforms in the fields of `effect`, an `EffectSettings`.
+
+| Effect | Builder | three.js |
+|---|---|---|
+| `RGB_SHIFT` | `rgb_shift_pass(amount=0.005, angle=0)` | `RGBShiftShader` |
+| `BRIGHTNESS_CONTRAST` | `brightness_contrast_pass(brightness=0, contrast=0)` | `BrightnessContrastShader` |
+| `HUE_SATURATION` | `hue_saturation_pass(hue=0, saturation=0)` | `HueSaturationShader` |
+| `COLOR_CORRECTION` | `color_correction_pass(pow_rgb, mul_rgb, add_rgb)` | `ColorCorrectionShader` |
+| `COLORIFY` | `colorify_pass(color=white)` | `ColorifyShader` |
+| `BLEACH_BYPASS` | `bleach_bypass_pass(opacity=1)` | `BleachBypassShader` |
+| `TECHNICOLOR` | `technicolor_pass()` | `TechnicolorShader` |
+| `SOBEL` | `sobel_pass()` | `SobelOperatorShader` |
+| `FREI_CHEN` | `frei_chen_pass()` | `FreiChenShader` |
+| `KALEIDO` | `kaleido_pass(sides=6, angle=0)` | `KaleidoShader` |
+| `MIRROR` | `mirror_pass(side=MIRROR_RIGHT)` | `MirrorShader` |
+| `HORIZONTAL_TILT_SHIFT` and `VERTICAL_TILT_SHIFT` | `tilt_shift_pass(across=True, spread=1/512, focus=0.35)` | `HorizontalTiltShiftShader` and `VerticalTiltShiftShader` |
+| `EXPOSURE` | `exposure_pass(exposure=1)` | `ExposureShader` |
+| `GAMMA_CORRECTION` | `gamma_correction_pass()` | `GammaCorrectionShader` |
+
+`effect_pixel` is one pixel of any of the fifteen, line for line with its fragment shader. A color transform reads the straight color of the pixel and premultiplies the result. The shift, the edge filters, the kaleidoscope, the mirror and the tilt shifts read their neighbors bilinear, clamped at the edges.
+
+### God rays
+
+`god_rays_pass(sun, intensity, fake_sun)` runs three.js's god-rays example after the scene. The fields of `GodRaysSettings` are the example's values, with its defaults.
+
+1. `god_rays_mask` is `GodRaysDepthMaskShader` on the scene's depth.
+2. `god_rays_generate_pixel` is `GodRaysGenerateShader`. Three passes walk the mask toward the sun, at `resolution_scale` of the frame's size. Each step is a sixth of the step before.
+3. `god_rays_combine_pixel` is `GodRaysCombineShader`. It adds the rays to the frame. With `fake_sun` on, `fake_sun_color` is `GodRaysFakeSunShader`, a glow where nothing was drawn.
+
+`sun_on_screen` projects the sun through the camera, as the example does.
+
+### Validation of the shader effects
+
+- `check_effect` refuses an effect or a mirror side that is not named, and a uniform that is not finite. It refuses a contrast of one or more, where the shader divides by zero. It refuses a saturation above one and sides that are not positive.
+- `check_god_rays` refuses a setting that is not finite, a negative intensity and a filter length that is not positive. It refuses a resolution scale outside above zero to one.
+
+`ShaderEffect` and `MirrorSide` are types. A bare number does not compile. `tests/compile_fail/` proves it.
+
+## Renderer effects
+
+`renderers/stereo_effects.mojo`, `renderers/ascii_effect.mojo` and `renderers/outline_effect.mojo`. Five of three.js's `examples/jsm/effects/`. Each wraps a renderer and draws the scene in its own way.
+
+| Effect | three.js | Meaning |
+|---|---|---|
+| `StereoEffect()` | `StereoEffect` | Draw the left eye in the left half and the right eye in the right half. |
+| `AnaglyphEffect()` | `AnaglyphEffect` | Mix the two eyes through two Dubois matrices, for red and cyan glasses. |
+| `ParallaxBarrierEffect()` | `ParallaxBarrierEffect` | Take alternate rows from each eye. |
+| `AsciiEffect(characters, resolution=0.15, color, alpha, block, invert)` | `AsciiEffect` | Draw the scene as characters. |
+| `OutlineEffect(thickness=0.003, color=black, alpha=1)` | `OutlineEffect` | Draw an ink outline around every mesh. |
+
+```mojo
+var effect = OutlineEffect()
+var image = effect.render(renderer, scene, assets, camera)
+var ascii = AsciiEffect().render(renderer, scene, assets, camera)
+print(ascii.text())
+```
+
+### Stereo
+
+Each stereo effect makes its two eyes from the camera with a `StereoCamera`. `StereoEffect` draws through an `ArrayCamera`, each eye at half the aspect. `set_eye_separation` changes the distance between the eyes. `AnaglyphEffect` draws each eye into its own target, and `anaglyph_pixel` mixes them. `color_matrix_left` and `color_matrix_right` are the two matrices. `ParallaxBarrierEffect` reads the left eye where `barrier_row_is_left`.
+
+### ASCII
+
+`AsciiEffect.render` draws the scene and calls `asciify`. `asciify` shrinks the image by `resolution`. Each pixel of every other row of the small image becomes one character. `ascii_brightness` is three.js's brightness, and `ascii_index` picks the character. A dark pixel takes a character near the end of the set.
+
+`AsciiImage.text` returns the characters as lines of plain text. `AsciiImage.html` returns the markup that three.js writes into its table cell. With `color` on, each character is a `span` in its color. `block` fills its background, and `alpha` gives it its opacity. An empty character set is three.js's fallback set.
+
+### Outline
+
+`OutlineEffect.render` draws the scene with each mesh outlined. The outline material is three.js's GLSL, compiled by `compile_shader_material`. It draws the back faces, each vertex moved out along its normal in clip space, in one flat color. The rim is then the same width at every distance.
+
+`set_parameters(material, parameters)` gives the meshes of one material their own `OutlineParameters`: `thickness`, `color`, `alpha` and `visible`. This is three.js's `userData.outlineParameters`. `enabled` off draws the scene alone.
+
+The outline meshes, their materials and their programs are added to the scene and the assets. They are taken out again when `render` returns or raises.
+
+### Validation of the renderer effects
+
+- `StereoEffect.render` refuses a renderer narrower than two pixels. `set_eye_separation` refuses a negative separation and keeps the old one.
+- `AsciiEffect` refuses a resolution that is not finite, or not above zero and at most one. `asciify` refuses an image that shrinks to nothing.
+- `check_outline_parameters` refuses a thickness or an alpha that is not finite, a negative thickness, and an alpha outside zero to one. `set_parameters` refuses a negative material id.
+
+### How the renderer effects differ from three.js
+
+- **The ASCII shrink.** A browser shrinks the canvas by a filter that it picks. This port averages the pixels whose centers fall in each small pixel, weighed by their alpha.
+- **The ASCII output.** three.js writes an HTML table into the page. This port returns an `AsciiImage` with its text and its markup.
+- **The outline draw.** three.js draws the scene and then the outlines over it. This port draws the scene once with the outline meshes added. The depth test gives the same image for opaque surfaces.
+- **What is outlined.** Only the meshes in `Scene.meshes` whose geometry has normals. Instanced, batched and skinned meshes, lines, points and sprites are not outlined.
+- **The outline shader.** This port's GLSL knows the built-in matrices only as the steps to `gl_Position`. So the shader reads the model-view-projection matrix and its inverse from two uniforms, set for each mesh.
+- **The stereo pair's odd width.** For an odd width, three.js's right viewport is one pixel off the image. This port's is not.
+
 ## Not ported
 
-The passes run on the host. `GpuComposer` runs the same composer with the frame on the GPU. See [GPU backend](GPU-backend#post-processing-on-the-gpu). `GTAOPass`, `RenderPixelatedPass` and the other passes are not ported.
+The passes run on the host. `GpuComposer` runs the same composer with the frame on the GPU. See [GPU backend](GPU-backend#post-processing-on-the-gpu).
 
 The SSAA and TAA passes use the renderer's background as their clear color. three.js's passes have their own `clearColor` and `clearAlpha`, and these are not ported. An SSAA pass jitters the camera with no view offset of its own, because the cameras here have none.
