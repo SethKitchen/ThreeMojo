@@ -5,8 +5,9 @@
 
 """Skin envelope derived from the modeled anatomy of one foot.
 
-Seven sections run from the malleoli to the metatarsal heads. Five
-toe sections continue to the tips. Each section is fitted to the bones,
+A narrow cuff follows the Achilles tendon into the heel. Six more
+sections run from the heel to the metatarsal heads. Five toe
+sections continue to the tips. Each section is fitted to the bones,
 ligaments, muscles, vessels, lymphatic trunks and nerves. A separate
 shell is the dermis for occupancy and mass.
 
@@ -82,8 +83,10 @@ struct _Env(ImplicitlyCopyable):
 struct SkinField(DistanceField, ImplicitlyCopyable):
     """The outer skin surface around the modeled foot anatomy."""
 
+    var cuff: _Section
     var ankle: _Section
     var s0: _Section
+    var heel_back: _Section
     var s1: _Section
     var s2: _Section
     var s3: _Section
@@ -127,27 +130,54 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         sole.append(_Env(foot.medial_malleolus, 0.010, 0.010))
         sole.append(_Env(foot.lateral_malleolus, 0.010, 0.010))
         sole.append(_Env(Vector3(0, 0, 0), 0.012, 0.012))
-        self.ankle = _fit(sole, mal, 0.045 * foot.length.value, cover)
-        # The two malleoli are close in height. A real ankle is rounder
-        # than that span, and this cuff is what meets the leg skin.
-        self.ankle.ml = max(self.ankle.ml, Float32(0.022) * S)
-        self.ankle.ap = max(self.ankle.ap, Float32(0.020) * S)
+        var tendon = Vector3(0, Float32(0.040) * S, Float32(-0.045) * S)
+        var tendon_r = 0.0036 * S + cover
+        self.cuff = _Section(tendon, tendon_r, tendon_r)
+        var local = 0.028 * S
+        self.ankle = _fit(sole, mal, 0.045 * foot.length.value, cover, local)
+        self.ankle.ml = max(self.ankle.ml, Float32(0.020) * S)
+        self.ankle.ap = max(self.ankle.ap, Float32(0.018) * S)
         var heel_z = foot.heel.z
         self.s0 = _fit(
-            sole, Vector3(foot.heel.x, foot.heel.y, heel_z), slab, cover
+            sole,
+            Vector3(foot.heel.x, foot.heel.y, heel_z),
+            slab,
+            cover,
+            local,
+        )
+        # The calf's back line covers the calcaneus. A section behind the
+        # bone is the part of the heel a side view can see.
+        self.heel_back = _Section(
+            Vector3(
+                foot.heel.x,
+                foot.heel.y - Float32(0.012),
+                heel_z - Float32(0.10),
+            ),
+            Float32(0.038),
+            Float32(0.026),
         )
         self.s1 = _fit(
             sole,
             Vector3(0, Float32(-0.030) * S, heel_z + 0.20 * foot.length.value),
             slab,
             cover,
+            local,
         )
-        self.s2 = _fit(sole, Vector3(0, Float32(-0.020) * S, 0), slab, cover)
+        self.s2 = _fit(
+            sole, Vector3(0, Float32(-0.020) * S, 0), slab, cover, local
+        )
         self.s3 = _fit(sole, foot.navicular, slab, cover)
         self.s4 = _fit(
             sole, mix_point(foot.mt2_base, foot.mt2_head, 0.45), slab, cover
         )
         self.s5 = _fit(sole, foot.mt2_head, slab, cover)
+        # A tall midfoot ellipse is a block. Keep the sole low and the
+        # forefoot shorter so the profile can taper into the toes.
+        self.s1.center.y = min(self.s1.center.y, foot.heel.y + Float32(0.006))
+        self.s1.ap = min(self.s1.ap, Float32(0.030))
+        self.s2.ap = min(self.s2.ap, Float32(0.038))
+        self.s5.ap = min(self.s5.ap, Float32(0.032))
+        self.s5.center.y = min(self.s5.center.y, foot.mt2_head.y)
         var z_slab = 0.24 * foot.length.value
         var x_slab = 0.22 * foot.width.value
         self.h0 = _fit_toe(toes, foot.mt1_head, z_slab, x_slab, cover)
@@ -160,12 +190,25 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         self.w1 = _fit_toe(toes, foot.toe4_tip, z_slab, x_slab, cover)
         self.x0 = _fit_toe(toes, foot.mt5_head, z_slab, x_slab, cover)
         self.x1 = _fit_toe(toes, foot.toe5_tip, z_slab, x_slab, cover)
+        var toe_r = 0.012 * S
+        self.h1.ml = max(self.h1.ml, toe_r)
+        self.h1.ap = max(self.h1.ap, toe_r)
+        self.u1.ml = max(self.u1.ml, toe_r)
+        self.u1.ap = max(self.u1.ap, toe_r)
+        self.v1.ml = max(self.v1.ml, toe_r)
+        self.v1.ap = max(self.v1.ap, toe_r)
+        self.w1.ml = max(self.w1.ml, toe_r)
+        self.w1.ap = max(self.w1.ap, toe_r)
+        self.x1.ml = max(self.x1.ml, toe_r)
+        self.x1.ap = max(self.x1.ap, toe_r)
         self.blend = 0.0045 * S
         self.dermis = 0.0015 * S
         self.epsilon = 0.0008 * S
         var box = empty_bounds()
+        _include(box, self.cuff)
         _include(box, self.ankle)
         _include(box, self.s0)
+        _include(box, self.heel_back)
         _include(box, self.s1)
         _include(box, self.s2)
         _include(box, self.s3)
@@ -191,8 +234,11 @@ struct SkinField(DistanceField, ImplicitlyCopyable):
         Negative is inside. Zero is the surface.
         """
         var axis = Vector3(1, 0, 0)
-        var d = _span(point, self.ankle, self.s0, axis)
+        var d = _span(point, self.cuff, self.ankle, axis)
+        d = smin(d, _span(point, self.cuff, self.s0, axis), self.blend)
+        d = smin(d, _span(point, self.ankle, self.s0, axis), self.blend)
         d = smin(d, _span(point, self.ankle, self.s2, axis), self.blend)
+        d = smin(d, _span(point, self.s0, self.heel_back, axis), self.blend)
         d = smin(d, _span(point, self.s0, self.s1, axis), self.blend)
         d = smin(d, _span(point, self.s1, self.s2, axis), self.blend)
         d = smin(d, _span(point, self.s2, self.s3, axis), self.blend)
@@ -377,7 +423,11 @@ def _station(
 
 
 def _fit(
-    points: List[_Env], seed: Vector3, slab: Float32, cover: Float32
+    points: List[_Env],
+    seed: Vector3,
+    slab: Float32,
+    cover: Float32,
+    y_slab: Float32 = 1.0,
 ) -> _Section:
     """Fit one enclosing ellipse to samples near `seed` along z."""
     var least_x = seed.x
@@ -389,11 +439,15 @@ def _fit(
         var dz = sample.center.z - seed.z
         if dz < 0:
             dz = -dz
+        var dy = sample.center.y - seed.y
+        if dy < 0:
+            dy = -dy
         if dz <= slab:
-            least_x = min(least_x, sample.center.x - sample.ml)
-            most_x = max(most_x, sample.center.x + sample.ml)
-            least_y = min(least_y, sample.center.y - sample.ap)
-            most_y = max(most_y, sample.center.y + sample.ap)
+            if dy <= y_slab:
+                least_x = min(least_x, sample.center.x - sample.ml)
+                most_x = max(most_x, sample.center.x + sample.ml)
+                least_y = min(least_y, sample.center.y - sample.ap)
+                most_y = max(most_y, sample.center.y + sample.ap)
     return _section_from(least_x, most_x, least_y, most_y, seed.z, cover)
 
 
@@ -440,9 +494,11 @@ def _section_from(
         Float32(0.5) * (least_y + most_y),
         z,
     )
-    # 0.72 of the full span is more than the half-span, so corners stay inside.
+    # Width uses 0.72 of the span so the corners stay inside.
+    # Height uses half the span plus cover, so the sole stays a foot
+    # instead of a tall oval.
     var ml = Float32(0.72) * (most_x - least_x) + cover
-    var ap = Float32(0.72) * (most_y - least_y) + cover
+    var ap = Float32(0.50) * (most_y - least_y) + cover
     return _Section(center, ml, ap)
 
 
