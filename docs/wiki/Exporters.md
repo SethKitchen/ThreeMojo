@@ -1,6 +1,6 @@
 # Exporters
 
-`exporters/gltf.mojo`, `exporters/obj.mojo`, `exporters/stl.mojo` and `exporters/ply.mojo` write a scene and its assets to model files. `exporters/exr.mojo` writes an HDR image, and `exporters/ktx2.mojo` a texture. `exporters/usdz.mojo` writes a scene for AR Quick Look. Each file reads back through the matching loader in `loaders/` to the same geometry. A glTF file also reads back to the same node transforms and materials. three.js: `GLTFExporter`, `OBJExporter`, `STLExporter` and `PLYExporter`.
+`exporters/gltf.mojo`, `exporters/obj.mojo`, `exporters/stl.mojo` and `exporters/ply.mojo` write a scene and its assets to model files. `exporters/exr.mojo` writes an HDR image, and `exporters/ktx2.mojo` a texture. `exporters/usdz.mojo` writes a scene for AR Quick Look, and `exporters/draco.mojo` writes a geometry as a Draco file. Each file reads back through the matching loader in `loaders/` to the same geometry. A glTF file also reads back to the same node transforms and materials. three.js: `GLTFExporter`, `OBJExporter`, `STLExporter`, `PLYExporter` and `DRACOExporter`.
 
 To write a scene as three.js JSON, see [Scene JSON](Scene-JSON).
 
@@ -29,6 +29,8 @@ write_ply("out/model.ply", scene, assets, PLY_BINARY_LITTLE_ENDIAN)
 | `export_ktx2_volume(texture, channels, half, writer) -> List[UInt8]` | A KTX 2.0 file of a `Data3DTexture`. |
 | `export_usdz(scene, assets, cameras, options) -> List[UInt8]` | A USDZ archive for AR Quick Look. See [USDZ](#usdz). |
 | `usdz_files(scene, assets, cameras, options) -> UsdzFiles` | The files of the archive: `model.usda`, the geometries and the textures. |
+| `export_draco(geometry, kind, options) -> List[UInt8]` | A Draco file of a mesh or a point cloud. See [Draco](#draco). |
+| `write_draco(path, geometry, kind, options)` | Write a Draco file. |
 | `zlib_deflate(data, level) -> List[UInt8]`, `deflate(data, level)` | A zlib or a raw DEFLATE stream, as fflate writes it. These are in `render/deflate.mojo`. |
 
 ## glTF
@@ -365,6 +367,56 @@ The text is the text that three.js writes for a scene whose numbers are short de
 - Each file's data starts at a multiple of 64 bytes. three.js pads each file by a count that is right only for the first file.
 - A geometry that is not whole triangles is refused. three.js throws a `RangeError`.
 
+## Draco
+
+`exporters/draco.mojo` writes a mesh or a point cloud as a Draco file (`.drc`). three.js: `DRACOExporter`, which runs Draco's own encoder, compiled to WebAssembly. The port is that encoder, from Draco 1.5.6, the version of `draco3d` that three.js 0.180 uses. It writes the same bytes that three.js writes. `read_draco` reads the file back. See [Draco](More-model-files#draco).
+
+```mojo
+var bytes = export_draco(geometry)
+var options = DracoExportOptions(encode_speed=0, decode_speed=0)
+write_draco("out/cloud.drc", cloud, DRACO_EXPORT_POINTS, options)
+```
+
+Five modules hold its parts. `draco_writer.mojo` writes the bytes, the bits and the rANS streams. `draco_connectivity.mojo` builds the corner tables and writes the Edgebreaker symbols. `draco_predict.mojo` quantizes and predicts the attributes. `draco_kd_tree.mojo` writes the KD-tree of a point cloud. `draco_log2.mojo` has the logarithm of the C library that the WebAssembly encoder links.
+
+| `DracoExportOptions` | Meaning |
+|---|---|
+| `encode_speed`, `decode_speed` | From 0 to 10. The larger of the two is Draco's speed. 0 gives the smallest file, and 10 the fastest encoder. The default of each is 5. |
+| `encoder_method` | `DRACO_MESH_EDGEBREAKER_ENCODING`, the default, or `DRACO_MESH_SEQUENTIAL_ENCODING`. For a point cloud, Edgebreaker selects the KD-tree. |
+| `quantization` | The bits of `POSITION`, `NORMAL`, `COLOR`, `TEX_COORD` and `GENERIC`, in that order. The default is `[16, 8, 8, 8, 8]`. A missing entry, or zero, keeps the floats. |
+| `export_uvs`, `export_normals` | Write the `uv` and the `normal` of a mesh. Both are on by default. |
+| `export_color` | Write the `color`, converted from linear to sRGB. It is off by default. |
+
+`DracoObjectKind` is a type. `DRACO_EXPORT_MESH`, the default, is three.js's `Mesh`, and `DRACO_EXPORT_POINTS` is its `Points`. `DracoEncoderMethod` is a type too. A bare integer does not compile.
+
+### Speed
+
+The speed selects Draco's coding, as it does in three.js:
+
+- Speed 0 stores the positions of a mesh in the order of the best prediction.
+- Below speed 2, a mesh of 40 points or more takes the constrained multi-parallelogram prediction. Up to speed 7, it takes the parallelogram prediction. From speed 8, it takes the difference prediction.
+- Below speed 4, the texture coordinates and the normals take their own predictions when the positions are quantized. Otherwise the normals take the difference prediction.
+- Below speed 5, a mesh of 1000 triangles or more takes the valence traversal.
+- From speed 6, all attributes share one connectivity, and no seam is written.
+- A point cloud takes a KD-tree at level 6, or at level 10 minus the speed when that is less.
+
+### Same as three.js
+
+- Each file has the bytes that three.js 0.180 writes with draco3d 1.5.6. `make draco-export-check` compares 323 exports.
+- Equal values and equal points are merged before the encoding, in the order they first come.
+- A color is converted to sRGB with three.js's `LinearToSRGB`, and a normal is folded onto an octahedron.
+- The size estimates use musl's `log2`, which the WebAssembly encoder links. The host's `log2` rounds some values differently.
+- A cast of a float to an integer gives the smallest integer for `NaN`, as the WebAssembly build gives it.
+
+### Differences from three.js
+
+- A geometry without an index is written with one triangle for each three vertices. three.js gives Draco one triangle for each vertex. Draco then reads past the end of the index, so that file is not the same from one run to the next.
+- A geometry quantized to more than 24 bits is written. The WebAssembly encoder can run out of memory there, and three.js throws.
+- A `position` or a `normal` must have three components, a `uv` two, and a `color` three or four. three.js passes any item size to Draco.
+- An attribute must have one value for each vertex, and a geometry must have a vertex.
+- A speed must be from 0 to 10. A normal must be finite. Draco writes an infinite normal as the result of an overflow.
+- A quantized attribute with a range of 2^31 or more is refused. Draco fails there, or writes a file that its decoder refuses.
+
 ## World space
 
 OBJ, STL and PLY hold no transforms. Thus their writers put each vertex through the world matrix of its node, as three.js does. Each normal goes through the normal matrix and is made unit length. The scene must be current. Call `scene.update()` first, or the writer raises.
@@ -440,11 +492,19 @@ The writers raise for:
 - A USDZ mesh that names a node that is not in the scene.
 - A USDZ geometry with no position, or that is not whole triangles.
 - A USDZ texture with a wrap or a channel that is not valid.
+- A Draco object kind, encoder method or speed that is not valid.
+- A Draco geometry without a vertex, or with an attribute of the wrong item size or count.
+- A Draco quantization above 30 bits, or of one bit for normals.
+- A Draco value to quantize that is not finite, or an infinite normal.
+- A Draco point cloud with an attribute that is not quantized, for the KD-tree.
+- A Draco mesh whose triangles all repeat a vertex, for Edgebreaker.
 
 ## Example
 
 `tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY. `tests/test_exr_export.mojo` compares EXR files with the files that three.js 0.180 writes, in `assets/exr_export/three.json`. `tests/test_deflate.mojo` compares zlib and DEFLATE streams with fflate's, in `assets/deflate/fflate.json`, and Huffman code lengths with fflate's, in `assets/deflate/trees.json`.
 
 `tests/test_ktx2_export.mojo` compares KTX2 files with the files that three.js writes, in `assets/ktx2_export/three.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
+
+`tests/test_draco_export.mojo` compares Draco files with the files that three.js writes, in `assets/draco/export/three.json` and `three.bin`. It checks a representative subset of the 323 cases: each encoder method, both traversals, each KD-tree level and each class of quantization. It reads the files of the smaller geometries back with `decode_draco` and finds each triangle of the geometry in them. To check all 323 cases, run `make draco-export-check`. This target is not part of `make check` or `make coverage`. `assets/draco/export/three_export.mjs` writes the three.js files in Node.
 
 `tests/test_gltf_export_scene.mojo` writes a scene with lights, cameras, a morph target, a skin, instances, lines, points and a clip. It compares the JSON with `assets/gltf/three_export.gltf`, which three.js 0.180 wrote for the same scene. It also reads both files and compares the two scenes. `assets/gltf/three_export.mjs` writes the three.js file in Node.

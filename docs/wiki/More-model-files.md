@@ -18,7 +18,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [3DL](#3dl) | `loaders/lut_3dl.mojo` | `read_lut_3dl(path) -> Lut3dl` | `LUT3dlLoader` |
 | [LUT image](#lut-image) | `loaders/lut_image.mojo` | `read_lut_image(path) -> LutImage` | `LUTImageLoader` |
 | [VRML](#vrml) | `loaders/vrml.mojo` | `read_vrml(path, scene, assets) -> VrmlModel` | `VRMLLoader` |
-| [Draco](#draco) | `loaders/draco.mojo` | `read_draco(path) -> BufferGeometry` | `DRACOLoader` |
+| [Draco](#draco) | `loaders/draco.mojo` | `read_draco(path) -> BufferGeometry` | `DRACOLoader`, and `DRACOExporter` in [Exporters](Exporters#draco) |
 
 ## PCD
 
@@ -759,6 +759,15 @@ print(geometry.attribute_view(String(POSITION)).count())
 
 A glTF file can hold Draco data. See [Draco primitives](Model-files#draco-primitives).
 
+### Writing a Draco file
+
+`exporters/draco.mojo` writes a Draco file, as three.js's `DRACOExporter` writes it. The port is Draco 1.5.6's encoder, and its files have the same bytes as three.js's files. `read_draco` reads them back. See [Draco](Exporters#draco) in the exporters.
+
+```mojo
+write_draco("out/model.drc", geometry)
+var geometry = read_draco("out/model.drc")
+```
+
 ### Same as three.js
 
 - Each value is the same `Float32` that three.js's decoder gives. The floats of dequantization and of the normals are computed in `Float32`, in Draco's order.
@@ -781,3 +790,5 @@ The decoder raises for a file that does not start with `DRACO`, and for another 
 `assets/draco/` has 60 files. The Draco 1.5.7 encoder wrote most of them. They hold meshes at several speeds, with seams, holes, handles, the valence traversal and metadata. They hold point clouds of every type too. Some were changed by one byte to reach a path that the encoder does not write. Some were written by hand: empty geometry and bad counts.
 
 `three.json` and `three.bin` hold what three.js 0.180's decoder gives for each file, in node. `tests/test_draco.mojo` compares each value by its bits.
+
+`assets/draco/export/` holds the files that three.js's `DRACOExporter` writes for 14 geometries, with many options. `tests/test_draco_export.mojo` compares the files that `export_draco` writes with them, byte for byte. It also reads each file back with this decoder.

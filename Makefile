@@ -166,7 +166,7 @@ endef
         docs-check wiki-publish \
         lint lint-cpu lint-gpu gpu-status docstrings fmt fmt-check coverage \
         compile-fail example animation viewer bench bench-scene bench-examples \
-        clean clean-images
+        clean clean-images draco-export-check
 
 help:
 	@echo "ThreeMojo tasks ($(TOOLCHAIN), inputs hash to $(HASH))"
@@ -191,6 +191,7 @@ help:
 	@echo "  make bench      CPU vs GPU rasterization across sizes"
 	@echo "  make bench-scene  a textured sphere through the CPU renderer, per stage"
 	@echo "  make bench-examples  each example vs three.js, and vs Mojo 1.0"
+	@echo "  make draco-export-check  every Draco export against three.js (not in check)"
 	@echo "  make clean      remove the coverage build and the cache"
 	@echo "  make clean-images  remove the rendered images in out/"
 	@echo
@@ -482,6 +483,10 @@ example: $(OUT_DIR)/triangle.png
 # through `run`: that captures the output, and this output is the window.
 viewer:
 	@$(MOJO) run $(MOJOFLAGS) examples/viewer.mojo
+
+# All 323 Draco exports against three.js. The suite checks a subset.
+draco-export-check:
+	@$(MOJO) run $(MOJOFLAGS) tools/draco_export_check.mojo
 
 animation: $(OUT_DIR)/spin.png $(OUT_DIR)/cube.png $(OUT_DIR)/cubes.png \
            $(OUT_DIR)/uv.png $(OUT_DIR)/textured.png $(OUT_DIR)/glass.png \

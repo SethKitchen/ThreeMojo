@@ -457,7 +457,16 @@ Edgebreaker, sequential and KD-tree decoders, the corner tables and
 traversers, the prediction schemes and their transforms, and the quantization
 and octahedron transforms. The port is a translation to Mojo and changes the
 code: it reads bitstreams 2.2 and 2.3 only, and it refuses malformed data with
-an error where the original returns false or reads on. Draco is distributed
+an error where the original returns false or reads on.
+`exporters/draco.mojo`, `exporters/draco_writer.mojo`,
+`exporters/draco_connectivity.mojo`, `exporters/draco_predict.mojo` and
+`exporters/draco_kd_tree.mojo` port the encoder of the same version, which
+three.js's `DRACOExporter` runs from the `draco3d` package: the encoder buffer,
+the rANS, bit and symbol encoders with their entropy estimates, the corner
+tables, the Edgebreaker and sequential encoders with the standard and valence
+traversals, the traversers, the prediction scheme encoders and their
+transforms, the quantization and octahedron transforms, value and point
+deduplication, and the KD-tree encoder. Draco is distributed
 under the Apache License 2.0, reproduced in full under Basis Universal above,
 with this notice at the head of each source file:
 
@@ -478,7 +487,48 @@ limitations under the License.
 ```
 
 The test files under `assets/draco/` were written by the Draco 1.5.7 encoder,
-built from its source, and some were then changed by hand.
+built from its source, and some were then changed by hand. The files under
+`assets/draco/export/` were written by three.js's `DRACOExporter` with the
+Draco 1.5.6 encoder of the `draco3d` package.
+
+---
+
+## musl
+
+<https://musl.libc.org>
+
+`exporters/draco_log2.mojo` ports `src/math/log2.c` and
+`src/math/log2_data.c` of musl 1.2.2, which Emscripten links into Draco's
+WebAssembly encoder. The port is a translation to Mojo of the code path
+without fused multiply-add, with the same tables. These files carry this
+notice:
+
+```
+Copyright (c) 2018, Arm Limited.
+SPDX-License-Identifier: MIT
+```
+
+They are distributed under the MIT License:
+
+```
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
 
 ---
 
