@@ -15,6 +15,8 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [VOX](#vox) | `loaders/vox.mojo` | `read_vox(path) -> List[VoxModel]` | `VOXLoader` |
 | [MD2](#md2) | `loaders/md2.mojo` | `read_md2(path) -> Md2Model` | `MD2Loader` |
 | [IES](#ies) | `loaders/ies.mojo` | `read_ies(path) -> IesLamp` | `IESLoader` |
+| [3DL](#3dl) | `loaders/lut_3dl.mojo` | `read_lut_3dl(path) -> Lut3dl` | `LUT3dlLoader` |
+| [LUT image](#lut-image) | `loaders/lut_image.mojo` | `read_lut_image(path) -> LutImage` | `LUTImageLoader` |
 
 ## PCD
 
@@ -581,3 +583,72 @@ The loader refuses these, with a message that names the problem:
 ### Example
 
 `assets/ies/` has four profiles. They are a quadrant with tilt data, a full circle, one whose horizontal angles go backward, and one with a fractional last angle. `assets/ies/fixture.json` has a digest of three.js 0.180's texture data for each, in each type. `tests/test_ies.mojo` compares them.
+
+## 3DL
+
+`loaders/lut_3dl.mojo`. `read_lut_3dl(path)` reads a `.3dl` color lookup table into a `Lut3dl`. Its texture is a `Data3DTexture` of `size` texels a side. three.js: `LUT3dlLoader`.
+
+```mojo
+var table = read_lut_3dl("assets/lut/table.3dl")
+var floats = read_lut_3dl("assets/lut/table.3dl", FLOAT_TYPE)
+```
+
+| Function | What it does |
+|---|---|
+| `read_lut_3dl(path, texel_type) -> Lut3dl` | Read a file. |
+| `parse_lut_3dl(text, texel_type) -> Lut3dl` | Read the text of one. |
+| `lut_3dl_byte(value) -> UInt8` | A number as a `Uint8Array` stores it. |
+
+| Field | What it holds |
+|---|---|
+| `size` | The number of entries on one side. |
+| `grid` | The input values of the grid line. |
+| `max_bit_value` | The power of two that divides each number. |
+| `texture` | The table: red across, green up and blue deep. It is clamped, bilinear and linear. |
+
+### What is read
+
+The first line of only digits and spaces is the grid. Each line of exactly three numbers is an entry. Blue changes fastest, then green, then red. A grid of three values is an entry too, as in three.js.
+
+The loader finds the largest number. It divides each number by the power of two at or above it. `UNSIGNED_BYTE_TYPE` is the default. It stores each value times 255, cut to a whole number. `FLOAT_TYPE` stores the value. Alpha is one.
+
+Entries past `size` cubed wrap around and write over the first ones, as in three.js. Missing entries are zero.
+
+### Errors
+
+The loader refuses these, with a message that names the problem:
+
+- A texel type that is not valid.
+- A file with no grid, and a grid that is not evenly spaced. three.js throws for these too.
+- A number that is not one. three.js reads it as `NaN`.
+- A table whose largest number is not above zero. three.js divides by zero.
+
+### Example
+
+`assets/lut/table.3dl` is a 10-bit table of size three. `assets/lut/small.3dl` has a grid of three values and one entry past its size. `assets/lut/fixture.json` has three.js 0.180's texture data for each, in each type. `tests/test_lut_3dl.mojo` compares them.
+
+## LUT image
+
+`loaders/lut_image.mojo`. `read_lut_image(path)` reads a color lookup table that is stored as an image into a `LutImage`. three.js: `LUTImageLoader`.
+
+```mojo
+var table = read_lut_image("assets/lut/column.png")
+```
+
+| Function | What it does |
+|---|---|
+| `read_lut_image(path) -> LutImage` | Read a PNG, a JPEG or a TGA. |
+| `lut_image_from(image) -> LutImage` | Make a table of a decoded image. |
+| `parse_lut_image(data, size) -> LutImage` | Make a table of RGBA bytes in a column of squares. |
+
+A table of size `n` is `n` squares of `n` by `n` texels. There is one square for each blue value. Red goes across and green goes down. The squares can be in a column or in a row. The loader turns a row into a column, as three.js does. The texture is clamped, bilinear and linear.
+
+### Differences from three.js
+
+- three.js draws the image on a canvas. This port reads the decoded bytes.
+- three.js's `flip` option is not ported.
+- A column must be `n` squares high, and a row must be `n` squares wide. three.js makes a texture that its data does not fill for any other shape. This port refuses it.
+
+### Example
+
+`assets/lut/row.png` and `assets/lut/column.png` hold one table of size three, as a row and as a column. `tests/test_lut_3dl.mojo` checks that they give the same texture.
