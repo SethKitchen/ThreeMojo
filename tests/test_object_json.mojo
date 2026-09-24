@@ -134,6 +134,7 @@ from std.testing import (
     assert_true,
 )
 from units.si import Angle, DEGREE, InverseLength, Length, METER, PER_METER
+from units.si import MILLIMETER
 
 comptime TOLERANCE = Float64(1e-5)
 comptime WHITE = Color(255, 255, 255)
@@ -1522,21 +1523,127 @@ def test_light_refusals() raises:
 
 def test_cameras_read_with_three_js_defaults() raises:
     """A camera with no numbers takes three.js's defaults, and one with a
-    zoom, a film offset or a view this port does not read is refused."""
+    zoom, a film or a view that is not one is refused."""
     var read = _read(
         '"object":{"uuid":"s","type":"Scene","children":['
         + '{"uuid":"a","type":"PerspectiveCamera","view":null},'
         + '{"uuid":"b","type":"OrthographicCamera","view":null}]}'
     )
     ref cameras = read[2].cameras
+    ref eye = cameras.perspective[0]
+    assert_almost_equal(Float64(eye.fov.to(DEGREE)), 50, atol=TOLERANCE)
+    assert_equal(eye.zoom, 1)
+    assert_almost_equal(Float64(eye.focus.to(METER)), 10, atol=TOLERANCE)
     assert_almost_equal(
-        Float64(cameras.perspective[0].fov.to(DEGREE)), 50, atol=TOLERANCE
+        Float64(eye.film_gauge.to(MILLIMETER)), 35, atol=TOLERANCE
     )
+    assert_equal(eye.film_offset.value, 0)
+    assert_false(Bool(eye.view))
     assert_equal(cameras.orthographic[0].right.to(METER), 1)
-    _refuses('"object":{"uuid":"a","type":"PerspectiveCamera","zoom":2}')
-    _refuses('"object":{"uuid":"a","type":"PerspectiveCamera","filmOffset":1}')
-    _refuses('"object":{"uuid":"a","type":"PerspectiveCamera","view":{}}')
-    _refuses('"object":{"uuid":"a","type":"OrthographicCamera","view":{}}')
+    assert_false(Bool(cameras.orthographic[0].view))
+    _refuses('"object":{"uuid":"a","type":"PerspectiveCamera","zoom":0}')
+    _refuses('"object":{"uuid":"a","type":"PerspectiveCamera","filmGauge":0}')
+    _refuses('"object":{"uuid":"a","type":"PerspectiveCamera","focus":-1}')
+    _refuses('"object":{"uuid":"a","type":"PerspectiveCamera","view":3}')
+    _refuses(
+        '"object":{"uuid":"a","type":"PerspectiveCamera","view":'
+        + '{"fullWidth":0}}'
+    )
+    _refuses(
+        '"object":{"uuid":"a","type":"OrthographicCamera","view":{"width":-1}}'
+    )
+
+
+def test_a_camera_reads_three_js_zoom_film_and_view() raises:
+    """A camera as three.js 0.180 writes it, zoomed, filmed and tiled,
+    reads back to every setting, and a view with keys left out takes
+    three.js's first numbers, disabled."""
+    var read = _read(
+        '"object":{"uuid":"s","type":"Scene","children":['
+        + '{"uuid":"a","type":"PerspectiveCamera","fov":60,"zoom":2,'
+        + '"near":0.5,"far":100,"focus":7,"aspect":1.5,"view":'
+        + '{"enabled":true,"fullWidth":1200,"fullHeight":800,"offsetX":300,'
+        + '"offsetY":200,"width":600,"height":400},"filmGauge":24,'
+        + '"filmOffset":4},'
+        + '{"uuid":"b","type":"OrthographicCamera","zoom":2,"view":{}}]}'
+    )
+    ref eye = read[2].cameras.perspective[0]
+    assert_equal(eye.zoom, 2)
+    assert_almost_equal(Float64(eye.focus.to(METER)), 7, atol=TOLERANCE)
+    assert_almost_equal(
+        Float64(eye.film_gauge.to(MILLIMETER)), 24, atol=TOLERANCE
+    )
+    assert_almost_equal(
+        Float64(eye.film_offset.to(MILLIMETER)), 4, atol=TOLERANCE
+    )
+    var view = eye.view.value()
+    assert_true(view.enabled)
+    assert_equal(view.full_width, 1200)
+    assert_equal(view.full_height, 800)
+    assert_equal(view.offset_x, 300)
+    assert_equal(view.offset_y, 200)
+    assert_equal(view.width, 600)
+    assert_equal(view.height, 400)
+    ref plan = read[2].cameras.orthographic[0]
+    var tile = plan.view.value()
+    assert_false(tile.enabled)
+    assert_equal(tile.full_width, 1)
+    assert_equal(tile.offset_x, 0)
+    assert_equal(tile.height, 1)
+
+
+def test_a_camera_writes_its_zoom_film_and_view_as_three_js_does() raises:
+    """The camera three.js 0.180 wrote in node, zoomed, filmed and with a
+    cleared view, is written with the same keys in the same order."""
+    var scene = Scene()
+    var assets = Assets()
+    var cameras = ObjectCameras()
+    var eye = PerspectiveCamera(
+        Angle(60, DEGREE), 1.5, Length(0.5, METER), Length(100, METER)
+    )
+    eye.zoom = 2
+    eye.film_offset = Length(4, MILLIMETER)
+    eye.set_view_offset(1200, 800, 300, 200, 600, 400)
+    eye.clear_view_offset()
+    eye.attach(scene.add(Object3D()))
+    cameras.perspective.append(eye)
+    var plan = OrthographicCamera(
+        Length(-4, METER),
+        Length(6, METER),
+        Length(3, METER),
+        Length(-1, METER),
+        Length(0.5, METER),
+        Length(50, METER),
+    )
+    plan.set_view_offset(1000, 400, 250, 100, 500, 200)
+    plan.clear_view_offset()
+    plan.attach(scene.add(Object3D()))
+    cameras.orthographic.append(plan^)
+    var text = object_to_json(scene, assets, cameras)
+    # three.js writes 2 where this writes 2.0; the keys, their order and
+    # the numbers they read back to are the same.
+    assert_true(
+        '"zoom":2.0,"near":0.5,"far":100.0,"focus":10.0,"aspect":1.5,'
+        + '"view":{"enabled":false,"fullWidth":1200.0,"fullHeight":800.0,'
+        + '"offsetX":300.0,"offsetY":200.0,"width":600.0,"height":400.0},'
+        + '"filmGauge":35.0,"filmOffset":4.0}'
+        in text
+    )
+    assert_true(
+        '"zoom":1.0,"left":-4.0,"right":6.0,"top":3.0,"bottom":-1.0,'
+        + '"near":0.5,"far":50.0,"view":{"enabled":false,'
+        + '"fullWidth":1000.0,"fullHeight":400.0,"offsetX":250.0,'
+        + '"offsetY":100.0,"width":500.0,"height":200.0}}'
+        in text
+    )
+    # A setting that is not one is refused on the way out.
+    cameras.perspective[0].zoom = 0
+    with assert_raises(contains="zoom"):
+        _ = object_to_json(scene, assets, cameras)
+    cameras.perspective[0].zoom = 1
+    cameras.orthographic[0].view.value().width = 0
+    with assert_raises(contains="positive"):
+        _ = object_to_json(scene, assets, cameras)
 
 
 def test_scene_fog_and_background_refusals() raises:

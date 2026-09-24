@@ -19,20 +19,55 @@ three.js's camera is an `Object3D` and is always the second; `place` is the
 shortcut every example wanted, and `attach` is the general case -- a camera
 on a pivot orbits with it, and a camera that is a child of a car looks out
 of the windscreen. See `cameras.camera`.
+
+## Film, zoom and tiles
+
+The rest is three.js's, setting for setting. `zoom` divides the frustum's
+height and width about its center. `film_gauge` is the height of the film,
+or its width when the image is portrait, and `film_offset` moves the film
+across: `set_focal_length` and `get_focal_length` convert between a lens and
+the field of view through it. `focus` is carried for a scene's JSON; nothing
+here draws differently for it. `set_view_offset` draws one tile of a larger
+image. `projection_matrix` builds from all of them in the order three.js's
+`updateProjectionMatrix` does.
+
+three.js keeps the film in millimeters by convention and never says so.
+Here the gauge and the offset are `Length`s, and only their ratio reaches
+the projection.
 """
 
-from cameras.camera import Camera, node_view_matrix
+from cameras.camera import Camera, ViewOffset, node_view_matrix, view_offset
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.projection import look_at, perspective, viewport
+from math.vector2 import Vector2
 from math.vector3 import Vector3
-from std.math import isfinite, tan
-from units.si import Angle, Length, METER
+from std.math import atan, isfinite, max, min, tan
+from units.si import Angle, Length, METER, MILLIMETER, RADIAN
 
 # A frustum that looks straight ahead: what a camera has unless asked.
 comptime NO_SHIFT = Length(0.0, METER)
+# three.js's `filmGauge`: 35 millimeters, the film a 35 mm camera takes.
+comptime DEFAULT_FILM_GAUGE = Length(35.0, MILLIMETER)
+# three.js's `focus`: ten meters.
+comptime DEFAULT_FOCUS_DISTANCE = Length(10.0, METER)
+
+
+@fieldwise_init
+struct ViewBounds(ImplicitlyCopyable):
+    """The rectangle a perspective camera sees at one distance, three.js's
+    `getViewBounds`: its lower-left and its upper-right corner, in meters
+    across and up in the camera's own frame."""
+
+    var min_corner: Vector2
+    var max_corner: Vector2
+
+
+def _positive(value: Float32) -> Bool:
+    """Return True if a number is finite and above zero."""
+    return value > 0 and isfinite(value)
 
 
 struct PerspectiveCamera(Camera, ImplicitlyCopyable):
@@ -58,6 +93,20 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
     # Which layers this camera draws, three.js's `camera.layers`: layer
     # zero alone until told otherwise. See `core.layers`.
     var layers: Layers
+    # How far the view is magnified, three.js's `zoom`: the frustum's
+    # height and width are divided by it. One by default.
+    var zoom: Float32
+    # How far in front of the camera things are in focus, three.js's
+    # `focus`. Carried, and written to JSON; nothing here reads it.
+    var focus: Length
+    # The film's size along its larger axis, three.js's `filmGauge`.
+    var film_gauge: Length
+    # How far the film is moved across, three.js's `filmOffset`: an
+    # off-center projection, as `view_shift` is, measured on the film.
+    var film_offset: Length
+    # The tile of a larger image this camera draws, three.js's `view`:
+    # none until `set_view_offset`. See `cameras.camera.ViewOffset`.
+    var view: Optional[ViewOffset]
 
     def __init__(
         out self,
@@ -103,6 +152,180 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         self.up = Vector3(0, 1, 0)
         self.node = NO_PARENT
         self.layers = Layers()
+        self.zoom = 1
+        self.focus = DEFAULT_FOCUS_DISTANCE
+        self.film_gauge = DEFAULT_FILM_GAUGE
+        self.film_offset = NO_SHIFT
+        self.view = None
+
+    def validate(self) raises:
+        """Refuse a zoom, a film, a focus or a tile that is not one.
+
+        The fields are open, so a value can be written that three.js would
+        take and turn into a projection of infinities. `projection_matrix`
+        asks this first.
+
+        Raises:
+            Error: If the zoom, the film gauge or the focus is not
+                positive and finite, the film offset is not finite, or an
+                enabled view is refused by `ViewOffset.validate`.
+        """
+        if not _positive(self.zoom):
+            raise Error("A camera's zoom must be positive, got ", self.zoom)
+        if not _positive(self.film_gauge.value):
+            raise Error("A film gauge must be positive")
+        if not isfinite(self.film_offset.value):
+            raise Error("A film offset must be finite")
+        if not _positive(self.focus.value):
+            raise Error("A focus distance must be positive")
+        if self._tiled():
+            self.view.value().validate()
+
+    def _tiled(self) -> Bool:
+        """Return True if a view offset is set and enabled."""
+        return Bool(self.view) and self.view.value().enabled
+
+    def set_view_offset(
+        mut self,
+        full_width: Float32,
+        full_height: Float32,
+        x: Float32,
+        y: Float32,
+        width: Float32,
+        height: Float32,
+    ) raises:
+        """Draw one tile of a larger image, three.js's `setViewOffset`.
+
+        The aspect ratio becomes the full image's, as in three.js. Three
+        monitors side by side, each 1920 by 1080, are drawn by three
+        cameras set to `(5760, 1080, 0, 0, 1920, 1080)`,
+        `(5760, 1080, 1920, 0, 1920, 1080)` and
+        `(5760, 1080, 3840, 0, 1920, 1080)`.
+
+        Args:
+            full_width: The full image's width, in pixels.
+            full_height: The full image's height, in pixels.
+            x: How far across the full image the tile starts.
+            y: How far down the full image the tile starts.
+            width: The tile's width.
+            height: The tile's height.
+
+        Raises:
+            Error: If a number is not finite, or a width or a height is
+                not positive. The camera is left as it was.
+        """
+        var view = view_offset(full_width, full_height, x, y, width, height)
+        self.aspect = full_width / full_height
+        self.view = view
+
+    def clear_view_offset(mut self):
+        """Draw the whole image again, three.js's `clearViewOffset`.
+
+        The tile is kept, disabled, as three.js keeps it.
+        """
+        if Bool(self.view):
+            self.view.value().enabled = False
+
+    def get_film_width(self) -> Length:
+        """Return how wide the film's image is, three.js's `getFilmWidth`.
+
+        Returns:
+            The gauge, or less for a portrait image, which does not cover
+            the film across.
+        """
+        return self.film_gauge.scaled(min(self.aspect, Float32(1)))
+
+    def get_film_height(self) -> Length:
+        """Return how tall the film's image is, three.js's `getFilmHeight`.
+
+        Returns:
+            The gauge, or less for a landscape image, which does not cover
+            the film up and down.
+        """
+        return Length(
+            self.film_gauge.value / max(self.aspect, Float32(1)), METER
+        )
+
+    def get_focal_length(self) -> Length:
+        """Return the focal length of the lens that sees `fov` on this
+        film, three.js's `getFocalLength`.
+
+        Returns:
+            The focal length, in the film's own units: about 50 mm for 40
+            degrees on the default 35 mm gauge, square.
+        """
+        var slope = tan(self.fov.to(RADIAN) / 2)
+        return Length(0.5 * self.get_film_height().value / slope, METER)
+
+    def set_focal_length(mut self, focal_length: Length) raises:
+        """Set the field of view to what a lens of `focal_length` sees on
+        this film, three.js's `setFocalLength`.
+
+        Args:
+            focal_length: The lens's focal length.
+
+        Raises:
+            Error: If the focal length or the film gauge is not positive
+                and finite.
+        """
+        if not _positive(focal_length.value):
+            raise Error("A focal length must be positive")
+        if not _positive(self.film_gauge.value):
+            raise Error("A film gauge must be positive")
+        var slope = 0.5 * self.get_film_height().value / focal_length.value
+        self.fov = Angle(2 * atan(slope), RADIAN)
+
+    def get_effective_fov(self) -> Angle:
+        """Return the vertical field of view once `zoom` is applied,
+        three.js's `getEffectiveFOV`.
+
+        Returns:
+            The narrower angle a zoom above one leaves.
+        """
+        var slope = tan(self.fov.to(RADIAN) / 2) / self.zoom
+        return Angle(2 * atan(slope), RADIAN)
+
+    def get_view_bounds(self, distance: Length) raises -> ViewBounds:
+        """Return the rectangle this camera sees at `distance` in front of
+        it, three.js's `getViewBounds`.
+
+        The projection's corners are carried back through its inverse, so
+        zoom, film offset, view shift and tile all move the rectangle.
+
+        Args:
+            distance: How far in front of the camera.
+
+        Returns:
+            Its lower-left and upper-right corners, across and up.
+
+        Raises:
+            Error: If the projection cannot be built.
+        """
+        var inverse = self.projection_matrix()
+        inverse.invert()
+        var low = inverse.transform_point(Vector3(-1, -1, 0.5))
+        var high = inverse.transform_point(Vector3(1, 1, 0.5))
+        var reach = distance.value
+        return ViewBounds(
+            Vector2(low.x, low.y) * (-reach / low.z),
+            Vector2(high.x, high.y) * (-reach / high.z),
+        )
+
+    def get_view_size(self, distance: Length) raises -> Vector2:
+        """Return how wide and how tall the view is at `distance`,
+        three.js's `getViewSize`.
+
+        Args:
+            distance: How far in front of the camera.
+
+        Returns:
+            The width and the height, in meters.
+
+        Raises:
+            Error: If the projection cannot be built.
+        """
+        var bounds = self.get_view_bounds(distance)
+        return bounds.max_corner - bounds.min_corner
 
     def visible_layers(self) -> Layers:
         """Return which layers this camera draws; see `core.layers`."""
@@ -132,28 +355,45 @@ struct PerspectiveCamera(Camera, ImplicitlyCopyable):
         self.node = node
 
     def projection_matrix(self) raises -> Matrix4:
-        """Return the matrix taking camera space to normalized device space.
+        """Return the matrix taking camera space to normalized device space,
+        three.js's `updateProjectionMatrix`.
 
-        The top edge is found from half the field of view and the rest
-        follows from it and the aspect ratio. The two side edges are then
-        moved by `view_shift`, which keeps the frustum's width and skews
-        it: the symmetric frustum is the shift of zero.
+        The top edge is found from half the field of view, divided by the
+        zoom, and the width follows from it and the aspect ratio. An
+        enabled view offset then cuts its tile out of that, and the film
+        offset moves both side edges, as in three.js. Last the side edges
+        are moved by `view_shift`, which keeps the frustum's width and
+        skews it: the symmetric frustum is the shift of zero.
 
         Returns:
             The projection matrix.
 
         Raises:
-            Error: If the frustum works out degenerate.
+            Error: If `validate` refuses the settings, or the frustum works
+                out degenerate.
         """
-        var top = self.near.value * tan(self.fov.value / 2)
-        var right = top * self.aspect
-        var shift = self.view_shift.value
+        self.validate()
+        var near = self.near.value
+        var top = near * tan(self.fov.value / 2) / self.zoom
+        var height = 2 * top
+        var width = self.aspect * height
+        var left = -0.5 * width
+        if self._tiled():
+            var view = self.view.value()
+            left += view.offset_x * width / view.full_width
+            top -= view.offset_y * height / view.full_height
+            width *= view.width / view.full_width
+            height *= view.height / view.full_height
+        var skew = self.film_offset.value
+        if skew != 0:
+            left += near * skew / self.get_film_width().value
+        left += self.view_shift.value
         return perspective(
-            -right + shift,
-            right + shift,
+            left,
+            left + width,
             top,
-            -top,
-            self.near.value,
+            top - height,
+            near,
             self.far.value,
         )
 

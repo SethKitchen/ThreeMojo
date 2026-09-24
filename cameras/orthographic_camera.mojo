@@ -27,10 +27,14 @@ costs nothing here and is not special-cased: an orthographic matrix leaves the
 transformed w at one, so every `inv_w` is one and the correction divides by
 one. A backend that special-cased it would be two code paths where the math
 already gives one.
+
+`zoom` and `set_view_offset` are three.js's. The zoom divides the box's
+width and height about its center, and a view offset cuts one tile of a
+larger image out of the zoomed box, as `updateProjectionMatrix` cuts it.
 """
 
 from std.math import isfinite
-from cameras.camera import Camera, node_view_matrix
+from cameras.camera import Camera, ViewOffset, node_view_matrix, view_offset
 from core.layers import Layers
 from core.object3d import NO_PARENT, NodeId
 from core.scene import Scene
@@ -61,6 +65,9 @@ struct OrthographicCamera(Camera):
     # width and height are divided by it about their center. One by
     # default. OrbitControls zooms an orthographic camera by changing it.
     var zoom: Float32
+    # The tile of a larger image this camera draws, three.js's `view`:
+    # none until `set_view_offset`. See `cameras.camera.ViewOffset`.
+    var view: Optional[ViewOffset]
 
     def __init__(
         out self,
@@ -106,6 +113,44 @@ struct OrthographicCamera(Camera):
         self.node = NO_PARENT
         self.layers = Layers()
         self.zoom = 1
+        self.view = None
+
+    def set_view_offset(
+        mut self,
+        full_width: Float32,
+        full_height: Float32,
+        x: Float32,
+        y: Float32,
+        width: Float32,
+        height: Float32,
+    ) raises:
+        """Draw one tile of a larger image, three.js's `setViewOffset`.
+
+        Unlike the perspective camera's, this leaves the volume's edges as
+        they are, as three.js leaves them: the tile is a share of the box
+        the edges and the zoom describe.
+
+        Args:
+            full_width: The full image's width, in pixels.
+            full_height: The full image's height, in pixels.
+            x: How far across the full image the tile starts.
+            y: How far down the full image the tile starts.
+            width: The tile's width.
+            height: The tile's height.
+
+        Raises:
+            Error: If a number is not finite, or a width or a height is
+                not positive. The camera is left as it was.
+        """
+        self.view = view_offset(full_width, full_height, x, y, width, height)
+
+    def clear_view_offset(mut self):
+        """Draw the whole image again, three.js's `clearViewOffset`.
+
+        The tile is kept, disabled, as three.js keeps it.
+        """
+        if Bool(self.view):
+            self.view.value().enabled = False
 
     def visible_layers(self) -> Layers:
         """Return which layers this camera draws; see `core.layers`."""
@@ -136,37 +181,47 @@ struct OrthographicCamera(Camera):
             The projection matrix.
 
         Raises:
-            Error: If the view volume works out degenerate, or the zoom is
-                not positive and finite.
+            Error: If the view volume works out degenerate, the zoom is
+                not positive and finite, or an enabled view offset is
+                refused by `ViewOffset.validate`.
         """
         if not (self.zoom > 0 and isfinite(self.zoom)):
             raise Error(
                 "An orthographic zoom must be positive, got ", self.zoom
             )
-        if self.zoom == 1:
-            # The edges as given, not rebuilt from a center and a half
-            # width, which can round a last bit away.
-            return orthographic(
-                self.left.value,
-                self.right.value,
-                self.top.value,
-                self.bottom.value,
-                self.near.value,
-                self.far.value,
-            )
-        # three.js's `updateProjectionMatrix`: the half extents divided by
-        # the zoom, about the volume's center.
-        var half_x = (self.right.value - self.left.value) / (2 * self.zoom)
-        var half_y = (self.top.value - self.bottom.value) / (2 * self.zoom)
-        var mid_x = (self.right.value + self.left.value) / 2
-        var mid_y = (self.top.value + self.bottom.value) / 2
+        # The edges as given at a zoom of one, not rebuilt from a center
+        # and a half width, which can round a last bit away.
+        var left = self.left.value
+        var right = self.right.value
+        var top = self.top.value
+        var bottom = self.bottom.value
+        if self.zoom != 1:
+            # three.js's `updateProjectionMatrix`: the half extents divided
+            # by the zoom, about the volume's center.
+            var half_x = (self.right.value - self.left.value) / (2 * self.zoom)
+            var half_y = (self.top.value - self.bottom.value) / (2 * self.zoom)
+            var mid_x = (self.right.value + self.left.value) / 2
+            var mid_y = (self.top.value + self.bottom.value) / 2
+            left = mid_x - half_x
+            right = mid_x + half_x
+            top = mid_y + half_y
+            bottom = mid_y - half_y
+        if Bool(self.view) and self.view.value().enabled:
+            var view = self.view.value()
+            view.validate()
+            # One pixel of the full image, in meters of the zoomed box.
+            var scale_w = (
+                (self.right.value - self.left.value) / view.full_width
+            ) / self.zoom
+            var scale_h = (
+                (self.top.value - self.bottom.value) / view.full_height
+            ) / self.zoom
+            left += scale_w * view.offset_x
+            right = left + scale_w * view.width
+            top -= scale_h * view.offset_y
+            bottom = top - scale_h * view.height
         return orthographic(
-            mid_x - half_x,
-            mid_x + half_x,
-            mid_y + half_y,
-            mid_y - half_y,
-            self.near.value,
-            self.far.value,
+            left, right, top, bottom, self.near.value, self.far.value
         )
 
     def view_matrix(self) raises -> Matrix4:

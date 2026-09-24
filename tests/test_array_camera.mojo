@@ -319,6 +319,27 @@ def test_the_eyes_stand_either_side_of_the_camera_and_converge() raises:
     assert_true(left_near.x > right_near.x + 1)
 
 
+def test_the_eyes_keep_the_cameras_zoom() raises:
+    # three.js 0.180 in node: StereoCamera with eyeSep 0.2 and aspect 0.5
+    # about a camera zoomed by 2 and focused at 4 m, cameraL's matrix.
+    var scene = Scene()
+    var camera = a_camera()
+    camera.zoom = 2
+    var stereo = StereoCamera(
+        Length(0.2, METER), Length(4.0, METER), aspect=0.5
+    )
+    stereo.update(camera, scene)
+    assert_equal(stereo.left.zoom, 2)
+    assert_equal(stereo.right.zoom, 2)
+    var matrix = stereo.left.projection_matrix()
+    ref e = matrix.elements
+    assert_almost_equal(Float64(e[0]), 4.0, atol=TOLERANCE)
+    assert_almost_equal(Float64(e[5]), 2.0, atol=TOLERANCE)
+    assert_almost_equal(Float64(e[8]), 0.1, atol=TOLERANCE)
+    assert_almost_equal(Float64(e[10]), -1.02020202, atol=TOLERANCE)
+    assert_almost_equal(Float64(e[14]), -2.02020202, atol=TOLERANCE)
+
+
 def test_the_eyes_follow_a_camera_riding_a_node() raises:
     var scene = Scene()
     var seat = Object3D()

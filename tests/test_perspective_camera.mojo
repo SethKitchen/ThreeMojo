@@ -24,7 +24,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, FOOT, Length, METER, RADIAN
+from units.si import Angle, DEGREE, FOOT, Length, METER, MILLIMETER, RADIAN
 
 comptime TOLERANCE = Float64(1e-4)
 
@@ -394,6 +394,239 @@ def test_a_mirrored_or_flattened_camera_node_is_refused() raises:
     camera.attach(flattened)
     with assert_raises():
         _ = camera.view_matrix_in(scene)
+
+
+# --- zoom, film and view offset: three.js 0.180 in node ---------------------
+
+
+def assert_elements(matrix: Matrix4, expected: List[Float64]) raises:
+    """Assert a matrix's 16 column-major elements, to a part in 1e5.
+
+    Args:
+        matrix: The matrix.
+        expected: The `elements` three.js gives.
+
+    Raises:
+        Error: If any element differs.
+    """
+    for at in range(16):
+        assert_almost_equal(
+            Float64(matrix.elements[at]),
+            expected[at],
+            atol=TOLERANCE * (1 + abs(expected[at])),
+        )
+
+
+def filmed_camera() raises -> PerspectiveCamera:
+    """Return three.js's `PerspectiveCamera(60, 1.5, 0.5, 100)` at a zoom
+    of 2 and a film offset of 4 mm, not yet tiled."""
+    var camera = PerspectiveCamera(
+        Angle(60.0, DEGREE), 1.5, Length(0.5, METER), Length(100.0, METER)
+    )
+    camera.zoom = 2
+    camera.film_offset = Length(4.0, MILLIMETER)
+    return camera^
+
+
+def test_a_camera_has_three_js_film_defaults() raises:
+    var camera = square_camera()
+    assert_equal(camera.zoom, 1)
+    assert_almost_equal(camera.focus.to(METER), Float32(10), atol=TOLERANCE)
+    assert_almost_equal(
+        camera.film_gauge.to(MILLIMETER), Float32(35), atol=TOLERANCE
+    )
+    assert_equal(camera.film_offset.value, 0)
+    assert_true(not Bool(camera.view))
+    # Clearing a view that was never set changes nothing.
+    camera.clear_view_offset()
+    assert_true(not Bool(camera.view))
+
+
+def test_zoom_film_offset_and_view_offset_project_as_three_js_does() raises:
+    var camera = filmed_camera()
+    camera.set_view_offset(1200, 800, 300, 200, 600, 400)
+    assert_almost_equal(camera.aspect, Float32(1.5), atol=TOLERANCE)
+    assert_elements(
+        camera.projection_matrix(),
+        [
+            4.61880215,
+            0,
+            0,
+            0,
+            0,
+            6.92820323,
+            0,
+            0,
+            0.527863103,
+            0,
+            -1.01005025,
+            -1,
+            0,
+            0,
+            -1.00502513,
+            0,
+        ],
+    )
+    # Cleared, the tile is kept but no longer read.
+    camera.clear_view_offset()
+    assert_true(Bool(camera.view))
+    assert_true(not camera.view.value().enabled)
+    assert_elements(
+        camera.projection_matrix(),
+        [
+            2.30940108,
+            0,
+            0,
+            0,
+            0,
+            3.46410162,
+            0,
+            0,
+            0.263931552,
+            0,
+            -1.01005025,
+            -1,
+            0,
+            0,
+            -1.00502513,
+            0,
+        ],
+    )
+
+
+def test_the_film_and_the_lens_agree_with_three_js() raises:
+    var camera = filmed_camera()
+    assert_almost_equal(
+        camera.get_film_width().to(MILLIMETER), Float32(35), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        camera.get_film_height().to(MILLIMETER),
+        Float32(23.333333),
+        atol=TOLERANCE,
+    )
+    assert_almost_equal(
+        camera.get_focal_length().to(MILLIMETER),
+        Float32(20.2072594),
+        atol=TOLERANCE,
+    )
+    assert_almost_equal(
+        camera.get_effective_fov().to(DEGREE),
+        Float32(32.2042275),
+        atol=TOLERANCE,
+    )
+    # A portrait image does not cover the film across.
+    var portrait = PerspectiveCamera(
+        Angle(50.0, DEGREE), 0.5, Length(0.1, METER), Length(2000.0, METER)
+    )
+    assert_almost_equal(
+        portrait.get_film_width().to(MILLIMETER), Float32(17.5), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        portrait.get_film_height().to(MILLIMETER), Float32(35), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        portrait.get_focal_length().to(MILLIMETER),
+        Float32(37.5288711),
+        atol=TOLERANCE,
+    )
+    portrait.set_focal_length(Length(50.0, MILLIMETER))
+    assert_almost_equal(
+        portrait.fov.to(DEGREE), Float32(38.5800924), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        portrait.get_focal_length().to(MILLIMETER), Float32(50), atol=TOLERANCE
+    )
+
+
+def test_the_view_bounds_and_size_agree_with_three_js() raises:
+    var camera = filmed_camera()
+    camera.set_view_offset(1200, 800, 300, 200, 600, 400)
+    var bounds = camera.get_view_bounds(Length(10.0, METER))
+    assert_almost_equal(
+        bounds.min_corner.x, Float32(-1.02220637), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        bounds.min_corner.y, Float32(-1.44337567), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        bounds.max_corner.x, Float32(3.30792065), atol=TOLERANCE
+    )
+    assert_almost_equal(
+        bounds.max_corner.y, Float32(1.44337567), atol=TOLERANCE
+    )
+    var size = camera.get_view_size(Length(10.0, METER))
+    assert_almost_equal(size.x, Float32(4.33012702), atol=TOLERANCE)
+    assert_almost_equal(size.y, Float32(2.88675135), atol=TOLERANCE)
+
+
+def test_three_monitors_tile_one_image() raises:
+    # The three tiles' frustums meet edge to edge and span the whole.
+    var whole = PerspectiveCamera(
+        Angle(50.0, DEGREE), 3.0, Length(1.0, METER), Length(10.0, METER)
+    )
+    var full = whole.get_view_bounds(Length(1.0, METER))
+    var previous = full.min_corner.x
+    for monitor in range(3):
+        var tile = whole
+        tile.set_view_offset(3, 1, Float32(monitor), 0, 1, 1)
+        var bounds = tile.get_view_bounds(Length(1.0, METER))
+        assert_almost_equal(bounds.min_corner.x, previous, atol=TOLERANCE)
+        assert_almost_equal(
+            bounds.max_corner.y, full.max_corner.y, atol=TOLERANCE
+        )
+        previous = bounds.max_corner.x
+    assert_almost_equal(previous, full.max_corner.x, atol=TOLERANCE)
+
+
+def test_a_zoom_film_or_focus_that_is_not_one_is_refused() raises:
+    var zero = square_camera()
+    zero.zoom = 0
+    with assert_raises(contains="zoom"):
+        _ = zero.projection_matrix()
+    var endless = square_camera()
+    endless.zoom = Float32.MAX * 2
+    with assert_raises(contains="zoom"):
+        _ = endless.projection_matrix()
+    var gauge = square_camera()
+    gauge.film_gauge = Length(0.0, METER)
+    with assert_raises(contains="film gauge"):
+        _ = gauge.projection_matrix()
+    var offset = square_camera()
+    offset.film_offset = Length(Float32.MAX * 2, METER)
+    with assert_raises(contains="film offset"):
+        _ = offset.projection_matrix()
+    var focus = square_camera()
+    focus.focus = Length(-1.0, METER)
+    with assert_raises(contains="focus"):
+        _ = focus.projection_matrix()
+
+
+def test_a_view_offset_that_is_not_one_is_refused() raises:
+    var camera = square_camera()
+    with assert_raises(contains="finite"):
+        camera.set_view_offset(100, 100, Float32.MAX * 2, 0, 50, 50)
+    with assert_raises(contains="positive"):
+        camera.set_view_offset(100, 0, 0, 0, 50, 50)
+    # Refused, it left the camera as it was.
+    assert_true(not Bool(camera.view))
+    assert_equal(camera.aspect, 1)
+    # Written after, it is refused when the projection is built.
+    camera.set_view_offset(100, 100, 0, 0, 50, 50)
+    camera.view.value().width = 0
+    with assert_raises(contains="positive"):
+        _ = camera.projection_matrix()
+    # A disabled tile is not read.
+    camera.clear_view_offset()
+    _ = camera.projection_matrix()
+
+
+def test_a_focal_length_that_is_not_one_is_refused() raises:
+    var camera = square_camera()
+    with assert_raises(contains="focal length"):
+        camera.set_focal_length(Length(0.0, MILLIMETER))
+    camera.film_gauge = Length(-1.0, MILLIMETER)
+    with assert_raises(contains="film gauge"):
+        camera.set_focal_length(Length(50.0, MILLIMETER))
 
 
 def main() raises:

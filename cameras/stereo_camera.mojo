@@ -23,7 +23,7 @@ with both side edges moved at the near plane by
 toward the other eye, so the two frustums cross at `focus`: the left
 eye's edges move right and the right eye's move left. That is the
 `view_shift` a `PerspectiveCamera` carries, and the reason it carries
-one. The field of view, the planes and the layers are the camera's own;
+one. The field of view, the zoom, the planes and the layers are the camera's own;
 the aspect is the camera's times this camera's `aspect`, which three.js
 keeps at one and a side-by-side image sets to a half.
 
@@ -191,6 +191,10 @@ def _eye(
     var eye = PerspectiveCamera(
         camera.fov, aspect, camera.near, camera.far, view_shift=shift
     )
+    # three.js's eye divides its height by the camera's zoom, as the
+    # camera's own projection does, and reads neither its film offset
+    # nor its view offset.
+    eye.zoom = camera.zoom
     eye.place(position, position + forward)
     eye.up = up
     eye.layers = camera.layers

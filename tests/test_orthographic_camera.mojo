@@ -21,6 +21,7 @@ from core.object3d import Object3D
 from core.scene import Scene
 from lights.light import ambient_light, directional_light
 from geometries.box import cube
+from math.matrix4 import Matrix4
 from math.projection import look_at, orthographic
 from math.vector3 import Vector3
 from objects.mesh import Mesh
@@ -483,6 +484,72 @@ def test_moving_away_still_changes_the_depth_buffer() raises:
                 assert_true(far.depth_at(x, y) > near.depth_at(x, y))
                 compared += 1
     assert_true(compared > 0, "no covered pixel to compare depth at")
+
+
+def assert_elements(matrix: Matrix4, expected: List[Float64]) raises:
+    """Assert a matrix's 16 column-major elements, to a part in 1e5.
+
+    Args:
+        matrix: The matrix.
+        expected: The `elements` three.js gives.
+
+    Raises:
+        Error: If any element differs.
+    """
+    for at in range(16):
+        assert_almost_equal(
+            Float64(matrix.elements[at]),
+            expected[at],
+            atol=1e-5 * (1 + abs(expected[at])),
+        )
+
+
+def test_a_view_offset_cuts_a_tile_as_three_js_does() raises:
+    # three.js 0.180 in node: OrthographicCamera(-4, 6, 3, -1, 0.5, 50).
+    var camera = OrthographicCamera(
+        Length(-4.0, METER),
+        Length(6.0, METER),
+        Length(3.0, METER),
+        Length(-1.0, METER),
+        Length(0.5, METER),
+        Length(50.0, METER),
+    )
+    # Clearing a view that was never set changes nothing.
+    camera.clear_view_offset()
+    assert_true(not Bool(camera.view))
+    camera.zoom = 2
+    camera.set_view_offset(1000, 400, 250, 100, 500, 200)
+    var depth = -0.0404040404
+    var shift = -1.02020202
+    assert_elements(
+        camera.projection_matrix(),
+        [0.8, 0, 0, 0, 0, 2, 0, 0, 0, 0, depth, 0, -0.8, -2, shift, 1],
+    )
+    camera.zoom = 1
+    assert_elements(
+        camera.projection_matrix(),
+        [0.4, 0, 0, 0, 0, 1, 0, 0, 0, 0, depth, 0, -0.4, -1, shift, 1],
+    )
+    # Cleared, the tile is kept but not read: the whole box again.
+    camera.clear_view_offset()
+    assert_true(not camera.view.value().enabled)
+    assert_elements(
+        camera.projection_matrix(),
+        [0.2, 0, 0, 0, 0, 0.5, 0, 0, 0, 0, depth, 0, -0.2, -0.5, shift, 1],
+    )
+
+
+def test_a_view_offset_that_is_not_one_is_refused() raises:
+    var camera = centered(
+        Length(2.0, METER), 1, Length(0.1, METER), Length(10.0, METER)
+    )
+    with assert_raises(contains="positive"):
+        camera.set_view_offset(100, 100, 0, 0, -1, 50)
+    assert_true(not Bool(camera.view))
+    camera.set_view_offset(100, 100, 0, 0, 50, 50)
+    camera.view.value().full_height = Float32.MAX * 2
+    with assert_raises(contains="finite"):
+        _ = camera.projection_matrix()
 
 
 def main() raises:

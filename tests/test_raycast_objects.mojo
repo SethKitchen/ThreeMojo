@@ -194,6 +194,10 @@ def test_a_line_is_met_within_its_threshold() raises:
     assert_almost_equal(hits[0].point.y, Float32(0), atol=TOLERANCE)
     assert_almost_equal(hits[0].point.x, Float32(0.5), atol=TOLERANCE)
     assert_almost_equal(hits[0].normal.length(), Float32(0), atol=TOLERANCE)
+    # three.js's `Line.raycast` gives no face, texture or point on line.
+    assert_true(not Bool(hits[0].face))
+    assert_true(not Bool(hits[0].uv))
+    assert_true(not Bool(hits[0].point_on_line))
     # Too far to one side for a tighter threshold.
     caster.line_threshold = Length(0.1, METER)
     assert_equal(len(caster.intersect_line(scene, assets, 0)), 0)
@@ -400,8 +404,15 @@ def test_a_sprite_is_met_on_either_half() raises:
     assert_equal(lower[0].triangle, 0)
     assert_equal(lower[0].mesh.geometry.value, -1)
     assert_almost_equal(lower[0].distance, Float32(5), atol=TOLERANCE)
+    # The texture at the point, as three.js's `Sprite.raycast` mixes it
+    # (three.js 0.180 in node: 0.8, 0.3 at 0.3, -0.2).
+    assert_almost_equal(lower[0].uv.value().x, Float32(0.8), atol=TOLERANCE)
+    assert_almost_equal(lower[0].uv.value().y, Float32(0.2), atol=TOLERANCE)
+    assert_true(not Bool(lower[0].face))
     var upper = _aimed(-0.3, 0.3).intersect_sprite(scene, assets, 0)
     assert_equal(upper[0].triangle, 1)
+    assert_almost_equal(upper[0].uv.value().x, Float32(0.2), atol=TOLERANCE)
+    assert_almost_equal(upper[0].uv.value().y, Float32(0.8), atol=TOLERANCE)
     assert_equal(len(_aimed(0.6, 0).intersect_sprite(scene, assets, 0)), 0)
     assert_equal(len(_aimed(0, 0).intersect_scene(scene, assets)), 1)
 

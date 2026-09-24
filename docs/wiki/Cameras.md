@@ -43,6 +43,48 @@ The field of view is an `Angle`. A bare number does not compile. The near plane 
 | `project(point, width, height) -> Vector3` | A world point in pixels, with NDC depth in z. |
 | `screen_matrix(width, height)` | World space to pixels in one matrix. |
 
+### Zoom, film and lens
+
+A perspective camera has three.js's zoom, film and focus. `projection_matrix()` builds from them in the order of three.js's `updateProjectionMatrix`. The values agree with three.js 0.180 to a part in 100,000.
+
+```mojo
+camera.zoom = 2
+camera.set_focal_length(Length(50.0, MILLIMETER))
+var fov = camera.get_effective_fov()          # the field of view after the zoom
+var size = camera.get_view_size(Length(10.0, METER))
+```
+
+| Member | three.js | Default | Meaning |
+|---|---|---|---|
+| `zoom` | `zoom` | `1` | Divides the frustum's height and width. Positive. |
+| `focus` | `focus` | 10 m | A distance for the scene's JSON. Nothing draws differently for it. Positive. |
+| `film_gauge` | `filmGauge` | 35 mm | The film's larger side. Positive. |
+| `film_offset` | `filmOffset` | 0 | Moves the film across. The frustum's side edges move by `near * film_offset / film width`. Finite. |
+| `get_film_width()`, `get_film_height()` | `getFilmWidth`, `getFilmHeight` | | The film the image covers. A portrait image covers less across, a landscape one less up. |
+| `get_focal_length()` | `getFocalLength` | | The lens that sees `fov` on this film, as a `Length`. |
+| `set_focal_length(length)` | `setFocalLength` | | Sets `fov` from a lens. The length must be positive. |
+| `get_effective_fov()` | `getEffectiveFOV` | | The vertical field of view after the zoom, as an `Angle`. |
+| `get_view_bounds(distance)` | `getViewBounds` | | The lower-left and upper-right corners of the view at a distance, in a `ViewBounds`. |
+| `get_view_size(distance)` | `getViewSize` | | The width and height of the view at a distance, as a `Vector2`. |
+| `validate()` | | | Refuses a zoom, film, focus or view that is not one. |
+
+The film is a `Length`, where three.js takes a bare number in millimeters. Only the ratio of the offset to the gauge reaches the projection. `view_shift` is added to the side edges last, after the film offset.
+
+The fields are open. `projection_matrix()` calls `validate()` first, so a bad value raises there. three.js takes the same value and makes a projection of infinities.
+
+## View offset
+
+`set_view_offset(full_width, full_height, x, y, width, height)` makes a camera draw one tile of a larger image: three.js's `setViewOffset`. Both cameras have it. Use it for a wall of monitors or for a render in tiles.
+
+```mojo
+# Three monitors side by side, each 1920 by 1080. This one is the middle.
+camera.set_view_offset(5760, 1080, 1920, 0, 1920, 1080)
+```
+
+The numbers are pixels of the full image, and need not be whole. The tile starts `x` across and `y` down. The camera keeps the tile in `view`, a `ViewOffset`. A perspective camera also sets its aspect to `full_width / full_height`, as three.js does. An orthographic camera keeps its edges and cuts the tile from the zoomed box.
+
+`clear_view_offset()` draws the whole image again. It keeps the tile and sets its `enabled` to false, as three.js does, so the scene's JSON still carries it. Every number must be finite, and every width and height positive. `set_view_offset` refuses a bad tile and leaves the camera as it was. `projection_matrix()` refuses a bad tile that was written into `view` afterward.
+
 ## OrthographicCamera
 
 ```mojo
@@ -57,6 +99,8 @@ An orthographic projection leaves `w` at one. The perspective correction then di
 
 
 `zoom` magnifies the view, three.js's `zoom`. The volume's width and height are divided by it about their center. It is one by default and must be positive. [OrbitControls](Windowing-and-controls#orthographic-cameras) zooms an orthographic camera by changing it.
+
+An orthographic camera also has `set_view_offset` and `clear_view_offset`. See [View offset](#view-offset).
 
 ## ArrayCamera
 
@@ -103,10 +147,10 @@ eyes.add(stereo.right, Rect(120, 0, 120, 120))
 | Argument | three.js | Default | Meaning |
 |---|---|---|---|
 | `eye_separation` | `eyeSep` | 64 mm | How far apart the eyes are. Not negative. |
-| `focus` | `camera.focus` | 10 m | How far ahead the two views cross. Positive. |
+| `focus` | `camera.focus` | 10 m | How far ahead the two views cross. Positive. three.js reads the camera's `focus`. This port keeps its own. |
 | `aspect` | `aspect` | `1.0` | What the camera's aspect is multiplied by for each eye. A half for a side-by-side pair. |
 
-`update(camera, scene)` places `left` and `right` from the camera as it stands, placed or riding a node of the scene. The eyes take the camera's field of view, planes and layers. The skew is `eye_separation / 2 * near / focus` at the near plane, three.js's own arithmetic, set as each eye's `view_shift`. A point at the focus lands on the same column in both eyes. A nearer point lands further apart, which is the parallax.
+`update(camera, scene)` places `left` and `right` from the camera as it stands, placed or riding a node of the scene. The eyes take the camera's field of view, zoom, planes and layers. They do not take its film offset or view offset, as in three.js. The skew is `eye_separation / 2 * near / focus` at the near plane, three.js's own arithmetic, set as each eye's `view_shift`. A point at the focus lands on the same column in both eyes. A nearer point lands further apart, which is the parallax.
 
 The three settings are open fields. `validate()` refuses a negative or non-finite separation and a focus or aspect that is not positive and finite. `update` calls it before it places an eye. It builds both eyes before it keeps either, so a refused update leaves the pair as it was.
 

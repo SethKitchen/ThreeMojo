@@ -82,6 +82,17 @@ records. None of the three has a face, so a hit's `normal` is zero, as
 three.js gives no `face`. `triangle` says which segment, point or half of
 the sprite was struck.
 
+**What a mesh hit carries.** three.js's record, field for field. A hit on
+a mesh of any kind has a `face`: the three vertices of the triangle
+struck, its normal and its material index. It has a `barycoord`, the
+point's weights on those three corners, and the `uv`, `uv1` and
+`vertex_normal` the geometry's attributes give there, where it has them.
+`vertex_normal` is three.js's `normal`: interpolated, not normalized, and
+turned to face the ray. It and `face.normal` are in the mesh's own space,
+as three.js gives them. `normal`, the port's own, is the face's front in
+world space. A sprite's hit has a `uv` too, and a wide line's has a
+`point_on_line`.
+
 **Wide lines.** A `LineSegments2` is picked by `intersect_wide_line`,
 three.js's `LineSegments2.raycast`: a segment is struck when the ray
 passes within half the line's width of it, measured in the world or on the
@@ -91,7 +102,6 @@ size, which `intersect_scene` does not have, so it leaves wide lines out.
 
 from cameras.camera import Camera
 from core.assets import Assets
-from core.buffer_geometry import BufferGeometry
 from core.deform import (
     displaced_positions,
     morphed_positions,
@@ -100,11 +110,20 @@ from core.deform import (
     sphere_of,
 )
 from core.layers import Layers
-from core.buffer_geometry import POSITION
+from core.buffer_geometry import (
+    BufferGeometry,
+    MaterialIndex,
+    NORMAL,
+    POSITION,
+    UV,
+    UV1,
+)
+from core.buffer_attribute import BufferAttribute
 from core.scene import Scene
 from math.bounds import Sphere
 from math.matrix4 import Matrix4
 from math.ray import Ray
+from math.triangle import Triangle
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from core.geometry_store import GeometryId
@@ -163,6 +182,21 @@ comptime WIDE_LINE_HIT = HitKind(8)
 
 
 @fieldwise_init
+struct HitFace(ImplicitlyCopyable):
+    """The triangle a hit struck, three.js's `intersection.face`."""
+
+    # Which vertices are its corners, through the index if there is one.
+    var a: Int
+    var b: Int
+    var c: Int
+    # Its unit normal, in the mesh's own space, from the corners as wound:
+    # three.js's `Triangle.getNormal`. Zero for a triangle with no area.
+    var normal: Vector3
+    # Which of the mesh's materials it wears. A mesh here wears one, so
+    # this is zero, as three.js leaves it for a mesh of one material.
+    var material_index: MaterialIndex
+
+
 struct Hit(ImplicitlyCopyable):
     """One place a ray meets a mesh, three.js's intersection record."""
 
@@ -190,6 +224,158 @@ struct Hit(ImplicitlyCopyable):
     # Which of the geometry's triangles, from zero; for a line, points or
     # a sprite, which segment, point or half.
     var triangle: Int
+    # The texture coordinates at the point, three.js's `uv` and `uv1`:
+    # mixed from the corners' by `barycoord`. None where the geometry has
+    # no such attribute, and for a line or points.
+    var uv: Optional[Vector2]
+    var uv1: Optional[Vector2]
+    # The geometry's normals mixed by `barycoord`, three.js's `normal`: in
+    # the mesh's own space, not normalized, and turned to face the ray.
+    # None where the geometry has no normals, and for anything but a mesh.
+    var vertex_normal: Optional[Vector3]
+    # The triangle struck, three.js's `face`. None for anything but a mesh.
+    var face: Optional[HitFace]
+    # The point's weights on the face's three corners, three.js's
+    # `barycoord`. None for anything but a mesh.
+    var barycoord: Optional[Vector3]
+    # The point on a wide line's segment nearest the ray, three.js's
+    # `pointOnLine`; `point` is on the ray. None for anything else.
+    var point_on_line: Optional[Vector3]
+
+    def __init__(
+        out self,
+        distance: Float32,
+        point: Vector3,
+        normal: Vector3,
+        kind: HitKind,
+        index: Int,
+        instance: Int,
+        mesh: Mesh,
+        triangle: Int,
+    ):
+        """Create a hit that carries nothing beyond where it is and what it
+        struck; the pickers fill in the rest.
+
+        Args:
+            distance: How far along the ray, in meters.
+            point: Where, in world space.
+            normal: The face's front in world space, or zero.
+            kind: Which of the scene's lists `index` counts in.
+            index: The position in that list.
+            instance: Which instance or level, or -1.
+            mesh: The shape struck.
+            triangle: Which triangle, segment, point or half.
+        """
+        self.distance = distance
+        self.point = point
+        self.normal = normal
+        self.kind = kind
+        self.index = index
+        self.instance = instance
+        self.mesh = mesh
+        self.triangle = triangle
+        self.uv = None
+        self.uv1 = None
+        self.vertex_normal = None
+        self.face = None
+        self.barycoord = None
+        self.point_on_line = None
+
+
+def _barycoord(point: Vector3, a: Vector3, b: Vector3, c: Vector3) -> Vector3:
+    """Return a point's weights on three corners, three.js's
+    `Triangle.getBarycoord`, or zero for corners on one line, as three.js
+    leaves its target."""
+    var found = Triangle(a, b, c)._weights(point)
+    return found.value() if Bool(found) else Vector3(0, 0, 0)
+
+
+def _mixed_uv(
+    attribute: BufferAttribute, corners: List[Int], weights: Vector3
+) raises -> Vector2:
+    """Return an attribute's first two numbers at three vertices, mixed by
+    `weights`: three.js's `Triangle.getInterpolatedAttribute` for a
+    `Vector2`.
+
+    Args:
+        attribute: The texture coordinates.
+        corners: The three vertices.
+        weights: Their weights.
+
+    Returns:
+        The mixed coordinates.
+
+    Raises:
+        Error: If a vertex is out of range or an item holds fewer than two
+            numbers.
+    """
+    return (
+        _uv_at(attribute, corners[0]) * weights.x
+        + _uv_at(attribute, corners[1]) * weights.y
+        + _uv_at(attribute, corners[2]) * weights.z
+    )
+
+
+def _uv_at(attribute: BufferAttribute, vertex: Int) raises -> Vector2:
+    """Return an attribute's first two numbers at one vertex."""
+    return Vector2(
+        attribute.component(vertex, 0), attribute.component(vertex, 1)
+    )
+
+
+def _describe_face(
+    mut hit: Hit,
+    geometry: BufferGeometry,
+    triangle: Int,
+    a: Vector3,
+    b: Vector3,
+    c: Vector3,
+    point: Vector3,
+    direction: Vector3,
+) raises:
+    """Fill in what three.js's `checkGeometryIntersection` adds to a mesh
+    hit: `barycoord`, `uv`, `uv1`, `vertex_normal` and `face`.
+
+    Args:
+        hit: The hit to fill in.
+        geometry: The geometry struck.
+        triangle: Which of its triangles.
+        a: The triangle's first corner, in the mesh's own space, as picked.
+        b: Its second.
+        c: Its third.
+        point: Where it was struck, in the mesh's own space.
+        direction: The ray's direction, in the mesh's own space.
+
+    Raises:
+        Error: If an index entry points past the last vertex, or an
+            attribute's items are too short.
+    """
+    var corners: List[Int] = [
+        geometry.corner_index(triangle, 0),
+        geometry.corner_index(triangle, 1),
+        geometry.corner_index(triangle, 2),
+    ]
+    var weights = _barycoord(point, a, b, c)
+    if geometry.has_attribute(UV):
+        hit.uv = _mixed_uv(geometry.attribute_view(UV), corners, weights)
+    if geometry.has_attribute(UV1):
+        hit.uv1 = _mixed_uv(geometry.attribute_view(UV1), corners, weights)
+    if geometry.has_attribute(NORMAL):
+        ref normals = geometry.attribute_view(NORMAL)
+        var mixed = (
+            normals.vector3(corners[0]) * weights.x
+            + normals.vector3(corners[1]) * weights.y
+            + normals.vector3(corners[2]) * weights.z
+        )
+        if mixed.dot(direction) > 0:
+            mixed = -mixed
+        hit.vertex_normal = mixed
+    var front = Triangle(a, b, c).raw_normal()
+    front.normalize()
+    hit.face = HitFace(
+        corners[0], corners[1], corners[2], front, MaterialIndex(0)
+    )
+    hit.barycoord = weights
 
 
 def _worn_corner(
@@ -775,11 +961,15 @@ struct Raycaster(ImplicitlyCopyable):
                 )
             )
         var half = 0
+        # The texture's corners at the triangle's three, three.js's `_uvA`,
+        # `_uvB` and `_uvC`.
+        var third = 1
         var met = self.ray.intersect_triangle(
             corners[0], corners[1], corners[2], False
         )
         if not Bool(met):
             half = 1
+            third = 3
             met = self.ray.intersect_triangle(
                 corners[0], corners[2], corners[3], False
             )
@@ -792,18 +982,19 @@ struct Raycaster(ImplicitlyCopyable):
         # A sprite names no geometry, as its draw names none.
         var mesh = Mesh(GeometryId(0), sprite.material, sprite.node)
         mesh.geometry = GeometryId(-1)
-        hits.append(
-            Hit(
-                distance,
-                point,
-                Vector3(0, 0, 0),
-                SPRITE_HIT,
-                index,
-                -1,
-                mesh,
-                half,
-            )
+        var hit = Hit(
+            distance, point, Vector3(0, 0, 0), SPRITE_HIT, index, -1, mesh, half
         )
+        # The unit square's texture, mixed at the point: three.js's
+        # `Triangle.getInterpolation` over the half that was struck.
+        var weights = _barycoord(point, corners[0], corners[third], corners[2])
+        var uvs_x: List[Float32] = [0, 1, 1, 0]
+        var uvs_y: List[Float32] = [0, 0, 1, 1]
+        hit.uv = Vector2(
+            uvs_x[third] * weights.y + weights.z,
+            uvs_y[third] * weights.y + weights.z,
+        )
+        hits.append(hit)
         return hits^
 
     def _reach(self, threshold: Length) raises -> Float32:
@@ -933,6 +1124,14 @@ struct Raycaster(ImplicitlyCopyable):
         # Then into the mesh's own space, where its triangles are.
         var into = Matrix4(copy=world)
         into.invert()
+        # The inverse of an affine matrix is affine, and `world` is one:
+        # the bound above refused it otherwise. The general inverse can
+        # round its bottom row to (1e-9, 0, 0, 0.99999994) under a turn
+        # and a stretch, which the ray refuses, so the row is set exactly.
+        into.elements[3] = 0
+        into.elements[7] = 0
+        into.elements[11] = 0
+        into.elements[15] = 1
         var local = self.ray
         local.apply_matrix4(into)
         # The box is skipped for a morphed mesh: the sphere above was built
@@ -971,18 +1170,20 @@ struct Raycaster(ImplicitlyCopyable):
             normal.normalize()
             if mirrored:
                 normal = -normal
-            hits.append(
-                Hit(
-                    distance,
-                    point,
-                    normal,
-                    kind,
-                    index,
-                    instance,
-                    mesh,
-                    triangle,
-                )
+            var hit = Hit(
+                distance, point, normal, kind, index, instance, mesh, triangle
             )
+            _describe_face(
+                hit,
+                geometry,
+                triangle,
+                a,
+                b,
+                c,
+                met.value(),
+                local.direction,
+            )
+            hits.append(hit)
         _sort_by_distance(hits)
         return hits^
 
@@ -1113,18 +1314,18 @@ struct Raycaster(ImplicitlyCopyable):
             var distance = (nearest.on_ray - self.ray.origin).length()
             if distance < near or distance > far:
                 continue
-            hits.append(
-                Hit(
-                    distance,
-                    nearest.on_ray,
-                    -self.ray.direction,
-                    WIDE_LINE_HIT,
-                    index,
-                    -1,
-                    shape,
-                    segment,
-                )
+            var hit = Hit(
+                distance,
+                nearest.on_ray,
+                -self.ray.direction,
+                WIDE_LINE_HIT,
+                index,
+                -1,
+                shape,
+                segment,
             )
+            hit.point_on_line = nearest.on_segment
+            hits.append(hit)
         _sort_by_distance(hits)
         return hits^
 

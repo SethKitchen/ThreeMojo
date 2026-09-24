@@ -17,7 +17,14 @@ from cameras.orthographic_camera import centered
 from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
 from core.buffer_attribute import BufferAttribute
-from core.buffer_geometry import BufferGeometry, POSITION
+from core.buffer_geometry import (
+    BufferGeometry,
+    MaterialIndex,
+    NORMAL,
+    POSITION,
+    UV,
+    UV1,
+)
 from core.geometry_store import GeometryId
 from core.object3d import NodeId, Object3D
 from core.raycaster import (
@@ -28,6 +35,7 @@ from core.raycaster import (
     MESH_HIT,
     HitKind,
     Raycaster,
+    _barycoord,
 )
 from core.scene import Scene
 from geometries.box import cube
@@ -48,7 +56,7 @@ from std.testing import (
     assert_raises,
     assert_true,
 )
-from units.si import Angle, DEGREE, Length, METER
+from units.si import Angle, DEGREE, Length, METER, RADIAN
 
 comptime TOLERANCE = Float64(1e-4)
 
@@ -814,6 +822,162 @@ def test_picking_a_scene_sees_the_worn_mesh_too() raises:
     scene.update()
     var onto = Raycaster(Vector3(10.25, 0.25, 1), Vector3(0, 0, -1))
     assert_equal(len(onto.intersect_scene(scene, assets)), 1)
+
+
+# --- what a hit carries: three.js 0.180 in node -----------------------------
+
+
+def a_warped_quad_scene(mut assets: Assets, attributes: Bool) raises -> Scene:
+    """Return a scene with one double-sided warped quad, indexed, moved,
+    turned and stretched, as the reference script built it in three.js.
+
+    Args:
+        assets: The stores to add the quad and its material to.
+        attributes: Whether the quad carries `uv`, `uv1` and `normal`.
+
+    Returns:
+        The updated scene, with the quad as mesh zero.
+
+    Raises:
+        Error: If the scene is invalid, which it is not.
+    """
+    var geometry = BufferGeometry()
+    geometry.set_attribute(
+        POSITION,
+        BufferAttribute(
+            [-1, -1, 0, 1, -1, 0.2, 1, 1, 0, -1, 1, -0.3],
+            3,
+        ),
+    )
+    if attributes:
+        geometry.set_attribute(UV, BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2))
+        geometry.set_attribute(
+            UV1, BufferAttribute([0.5, 0.1, 0.9, 0.2, 0.7, 0.8, 0.1, 0.6], 2)
+        )
+        geometry.set_attribute(
+            NORMAL,
+            BufferAttribute(
+                [0, 0, 1, 0.3, 0, 1, 0, 0.4, 1, -0.2, -0.1, 1],
+                3,
+            ),
+        )
+    geometry.set_index([0, 1, 2, 0, 2, 3])
+    var material = Material(Color(255, 255, 255))
+    material.side = DOUBLE_SIDE
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.node(node).set_position(0.5, -0.25, 1)
+    scene.node(node).set_euler(
+        Angle(0.2, RADIAN), Angle(0.3, RADIAN), Angle(0.1, RADIAN)
+    )
+    scene.node(node).set_scale(1.5, 1, 0.8)
+    scene.update()
+    scene.add_mesh(
+        Mesh(
+            assets.geometries.add(geometry^),
+            assets.materials.add(material),
+            node,
+        )
+    )
+    return scene^
+
+
+def assert_uv(got: Optional[Vector2], x: Float32, y: Float32) raises:
+    """Assert a hit's texture coordinates are there and match."""
+    assert_true(Bool(got))
+    assert_almost_equal(got.value().x, x, atol=TOLERANCE)
+    assert_almost_equal(got.value().y, y, atol=TOLERANCE)
+
+
+def test_a_mesh_hit_carries_three_js_face_data_from_the_front() raises:
+    var assets = Assets()
+    var scene = a_warped_quad_scene(assets, True)
+    var caster = Raycaster(Vector3(0.3, 0.1, 5), Vector3(0.05, -0.02, -1))
+    var hits = caster.intersect_mesh(scene, assets, 0)
+    assert_equal(len(hits), 1)
+    ref hit = hits[0]
+    assert_almost_equal(hit.distance, Float32(3.98189834), atol=TOLERANCE)
+    assert_point(hit.point, 0.498806856, 0.0204772577, 1.02386289)
+    assert_equal(hit.triangle, 1)
+    assert_uv(hit.uv, 0.511575761, 0.633848485)
+    assert_uv(hit.uv1, 0.553406056, 0.519239404)
+    assert_true(Bool(hit.vertex_normal))
+    assert_point(hit.vertex_normal.value(), -0.0244545453, 0.192403035, 1)
+    assert_true(Bool(hit.face))
+    var face = hit.face.value()
+    assert_equal(face.a, 0)
+    assert_equal(face.b, 2)
+    assert_equal(face.c, 3)
+    assert_point(face.normal, -0.146734802, 0.146734802, 0.978231974)
+    assert_equal(face.material_index, MaterialIndex(0))
+    assert_true(Bool(hit.barycoord))
+    assert_point(hit.barycoord.value(), 0.366151515, 0.511575761, 0.122272724)
+    assert_true(not Bool(hit.point_on_line))
+
+
+def test_a_mesh_hit_from_behind_turns_its_vertex_normal_to_the_ray() raises:
+    var assets = Assets()
+    var scene = a_warped_quad_scene(assets, True)
+    var caster = Raycaster(Vector3(0.2, -0.4, -5), Vector3(0.02, 0.03, 1))
+    var hits = caster.intersect_mesh(scene, assets, 0)
+    assert_equal(len(hits), 1)
+    ref hit = hits[0]
+    assert_almost_equal(hit.distance, Float32(6.04449627), atol=TOLERANCE)
+    assert_point(hit.point, 0.320811424, -0.218782865, 1.04057118)
+    assert_uv(hit.uv, 0.441220208, 0.528271079)
+    assert_uv(hit.uv1, 0.553423688, 0.452379589)
+    assert_point(hit.vertex_normal.value(), 0.0174101745, -0.167782998, -1)
+    # The face's own normal is as wound, whichever side was struck.
+    assert_point(
+        hit.face.value().normal, -0.146734802, 0.146734802, 0.978231974
+    )
+    assert_point(hit.barycoord.value(), 0.471728921, 0.441220208, 0.0870508711)
+
+
+def test_a_mesh_without_texture_or_normals_has_a_face_and_no_more() raises:
+    var assets = Assets()
+    var scene = a_warped_quad_scene(assets, False)
+    var caster = Raycaster(Vector3(0.3, 0.1, 5), Vector3(0.05, -0.02, -1))
+    var hits = caster.intersect_mesh(scene, assets, 0)
+    assert_equal(len(hits), 1)
+    assert_true(not Bool(hits[0].uv))
+    assert_true(not Bool(hits[0].uv1))
+    assert_true(not Bool(hits[0].vertex_normal))
+    assert_true(Bool(hits[0].face))
+    assert_point(
+        hits[0].barycoord.value(), 0.366151515, 0.511575761, 0.122272724
+    )
+
+
+def test_every_kind_of_mesh_hit_carries_a_face() raises:
+    # An instanced cube is picked through the same triangle test.
+    var assets = Assets()
+    var scene = Scene()
+    var node = scene.add(Object3D())
+    scene.update()
+    scene.add_instanced_mesh(
+        InstancedMesh(
+            assets.geometries.add(cube(Length(1.0, METER))),
+            assets.materials.add(Material(Color(255, 255, 255))),
+            node,
+            1,
+        )
+    )
+    var hits = down_z().intersect_instanced_mesh(scene, assets, 0)
+    assert_equal(len(hits), 1)
+    assert_true(Bool(hits[0].face))
+    assert_point(hits[0].face.value().normal, 0, 0, 1)
+    assert_point(hits[0].vertex_normal.value(), 0, 0, 1)
+    assert_true(Bool(hits[0].uv))
+
+
+def test_three_corners_on_one_line_weigh_nothing() raises:
+    # three.js's `getBarycoord` leaves its target at zero for a triangle
+    # with no area, and so does this.
+    var weights = _barycoord(
+        Vector3(0, 0, 0), Vector3(0, 0, 0), Vector3(1, 0, 0), Vector3(2, 0, 0)
+    )
+    assert_point(weights, 0, 0, 0)
 
 
 def main() raises:

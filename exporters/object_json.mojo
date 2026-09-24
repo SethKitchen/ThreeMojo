@@ -187,7 +187,8 @@ from render.texture import NEAREST, Texture
 from render.texture_store import TextureId
 from std.math import ceil, isfinite, sqrt
 from std.pathlib import Path
-from units.si import DEGREE, METER, NANOMETER, PER_METER, RADIAN
+from cameras.camera import ViewOffset
+from units.si import DEGREE, METER, MILLIMETER, NANOMETER, PER_METER, RADIAN
 
 # What the leading hex digit of a uuid says it names.
 comptime _SCENE_UUID = 1
@@ -1923,24 +1924,27 @@ struct _Writer(Movable):
         """Write a perspective camera's header and fields."""
         if camera.view_shift.value != 0:
             raise Error("Object JSON: a camera's view shift is not written")
+        camera.validate()
         header.type = "PerspectiveCamera"
         header.write(writer)
         writer.key("fov")
         writer.number(camera.fov.to(DEGREE))
         writer.key("zoom")
-        writer.integer(1)
+        writer.number(camera.zoom)
         writer.key("near")
         writer.number(camera.near.to(METER))
         writer.key("far")
         writer.number(camera.far.to(METER))
         writer.key("focus")
-        writer.integer(10)
+        writer.number(camera.focus.to(METER))
         writer.key("aspect")
         writer.number(camera.aspect)
+        if Bool(camera.view):
+            _view(writer, camera.view.value())
         writer.key("filmGauge")
-        writer.integer(35)
+        writer.number(camera.film_gauge.to(MILLIMETER))
         writer.key("filmOffset")
-        writer.integer(0)
+        writer.number(camera.film_offset.to(MILLIMETER))
 
     def orthographic(
         mut self,
@@ -1965,6 +1969,8 @@ struct _Writer(Movable):
         writer.number(camera.near.to(METER))
         writer.key("far")
         writer.number(camera.far.to(METER))
+        if Bool(camera.view):
+            _view(writer, camera.view.value())
 
     def on_layers(
         self, thing: Int, layers: Layers, scene: Scene, cameras: ObjectCameras
@@ -2063,6 +2069,36 @@ struct _Writer(Movable):
                 writer.raw(level)
             writer.end_array()
         writer.end_object()
+
+
+def _view(mut writer: JsonWriter, view: ViewOffset) raises:
+    """Write a camera's `view`, as three.js's `Object.assign` copies it.
+
+    Args:
+        writer: The writer, inside the camera's object.
+        view: The tile.
+
+    Raises:
+        Error: If `ViewOffset.validate` refuses the tile.
+    """
+    view.validate()
+    writer.key("view")
+    writer.begin_object()
+    writer.key("enabled")
+    writer.boolean(view.enabled)
+    writer.key("fullWidth")
+    writer.number(view.full_width)
+    writer.key("fullHeight")
+    writer.number(view.full_height)
+    writer.key("offsetX")
+    writer.number(view.offset_x)
+    writer.key("offsetY")
+    writer.number(view.offset_y)
+    writer.key("width")
+    writer.number(view.width)
+    writer.key("height")
+    writer.number(view.height)
+    writer.end_object()
 
 
 def _shadow(mut writer: JsonWriter, light: Light) raises:

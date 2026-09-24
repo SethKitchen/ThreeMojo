@@ -694,6 +694,15 @@ def test_a_pick_in_the_world_strikes_within_half_the_width() raises:
     assert_equal(len(hits), 1)
     assert_almost_equal(hits[0].point.z, 0, atol=TOLERANCE)
     assert_almost_equal(hits[0].distance, 5, atol=TOLERANCE)
+    # three.js's `point` is on the ray and its `pointOnLine` on the
+    # segment, straight across from it.
+    assert_almost_equal(hits[0].point.y, 0.2, atol=TOLERANCE)
+    assert_true(Bool(hits[0].point_on_line))
+    var on_line = hits[0].point_on_line.value()
+    assert_almost_equal(on_line.x, 0, atol=TOLERANCE)
+    assert_almost_equal(on_line.y, 0, atol=TOLERANCE)
+    assert_almost_equal(on_line.z, 0, atol=TOLERANCE)
+    assert_true(not Bool(hits[0].face))
     ray.set(Vector3(0, 0.3, 5), Vector3(0, 0, -1))
     assert_equal(
         len(ray.intersect_wide_line(scene, assets, 0, a_camera(), SIZE, SIZE)),

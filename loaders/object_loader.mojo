@@ -118,8 +118,7 @@ refuse.
 and `animations`; the background's blurriness and intensity, and the
 rotations of the background and the environment; a cube texture's wrap; an
 `envMap` on a class whose shader reads none; the material keys this port
-has no field for; a
-camera's `focus` and `filmGauge`; a texture's `format`, `type`,
+has no field for; a texture's `format`, `type`,
 `premultiplyAlpha` and `unpackAlignment`; an LOD's `autoUpdate`; and a
 batch's sorting, reserved ranges and bounds.
 """
@@ -143,6 +142,7 @@ from core.layers import Layers
 from core.object3d import GROUP_TYPE, NO_PARENT, NodeId, Object3D
 from core.scene import Scene
 from core.user_data import user_data_of
+from cameras.camera import ViewOffset
 from cameras.orthographic_camera import OrthographicCamera
 from cameras.perspective_camera import PerspectiveCamera
 from geometries.box import box
@@ -264,6 +264,7 @@ from std.math import inf, isfinite, pi, sqrt
 from std.memory import bitcast
 from std.pathlib import Path
 from units.si import Angle, DEGREE, InverseLength, Length, METER, NANOMETER
+from units.si import MILLIMETER
 from units.si import PER_METER, RADIAN
 
 # The format version `Object3D.toJSON` writes, and the one major version
@@ -2252,31 +2253,56 @@ struct _Loader(Movable):
     def perspective(
         self, item: Int, id: NodeId, mask: Int
     ) raises -> PerspectiveCamera:
-        """Build a perspective camera riding a node."""
-        if self.number(item, "zoom", 1) != 1:
-            raise Error("Object JSON: a perspective camera's zoom is not read")
-        if self.number(item, "filmOffset", 0) != 0:
-            raise Error("Object JSON: a camera's filmOffset is not read")
-        var view = self.document.get(item, "view")
-        if view != NO_NODE and not self.document.is_null(view):
-            raise Error("Object JSON: a camera's view offset is not read")
+        """Build a perspective camera riding a node, with three.js's zoom,
+        focus, film and view. The film is in millimeters, three.js's
+        convention."""
         var camera = PerspectiveCamera(
             Angle(self.number(item, "fov", 50), DEGREE),
             self.number(item, "aspect", 1),
             Length(self.number(item, "near", 0.1), METER),
             Length(self.number(item, "far", 2000), METER),
         )
+        camera.zoom = self.number(item, "zoom", 1)
+        camera.focus = Length(self.number(item, "focus", 10), METER)
+        camera.film_gauge = Length(
+            self.number(item, "filmGauge", 35), MILLIMETER
+        )
+        camera.film_offset = Length(
+            self.number(item, "filmOffset", 0), MILLIMETER
+        )
+        camera.view = self.view_offset(item)
+        camera.validate()
         camera.attach(id)
         camera.layers = Layers(UInt32(mask))
         return camera
+
+    def view_offset(self, item: Int) raises -> Optional[ViewOffset]:
+        """Return a camera's `view`, checked, or None when it has none.
+
+        three.js copies the object as it is, so a key left out is
+        `undefined`: `enabled` then reads as false, and a number as the
+        one three.js's `setViewOffset` starts from.
+        """
+        var found = self.document.get(item, "view")
+        if found == NO_NODE or self.document.is_null(found):
+            return None
+        var view = self.entry(item, "view")
+        var tile = ViewOffset(
+            self.flag(view, "enabled", False),
+            self.number(view, "fullWidth", 1),
+            self.number(view, "fullHeight", 1),
+            self.number(view, "offsetX", 0),
+            self.number(view, "offsetY", 0),
+            self.number(view, "width", 1),
+            self.number(view, "height", 1),
+        )
+        tile.validate()
+        return tile
 
     def orthographic(
         self, item: Int, id: NodeId, mask: Int
     ) raises -> OrthographicCamera:
         """Build an orthographic camera riding a node."""
-        var view = self.document.get(item, "view")
-        if view != NO_NODE and not self.document.is_null(view):
-            raise Error("Object JSON: a camera's view offset is not read")
         var camera = OrthographicCamera(
             Length(self.number(item, "left", -1), METER),
             Length(self.number(item, "right", 1), METER),
@@ -2286,6 +2312,7 @@ struct _Loader(Movable):
             Length(self.number(item, "far", 2000), METER),
         )
         camera.zoom = self.number(item, "zoom", 1)
+        camera.view = self.view_offset(item)
         camera.attach(id)
         camera.layers = Layers(UInt32(mask))
         return camera^

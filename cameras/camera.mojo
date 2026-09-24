@@ -41,6 +41,97 @@ from core.object3d import NodeId
 from core.scene import Scene
 from math.matrix4 import Matrix4
 from math.vector3 import Vector3
+from std.math import isfinite
+
+
+@fieldwise_init
+struct ViewOffset(ImplicitlyCopyable):
+    """One tile of a larger image, three.js's `camera.view`.
+
+    `set_view_offset` on either camera fills it in. The camera then draws
+    the part of a `full_width` by `full_height` image that starts `offset_x`
+    across and `offset_y` down, and is `width` by `height`: what a
+    multi-monitor wall or a tiled render draws on each tile. Every number
+    is in pixels of the full image, and none has to be whole.
+
+    `clear_view_offset` sets `enabled` to False and keeps the numbers, as
+    three.js keeps them, so a scene written to JSON carries them still.
+    """
+
+    var enabled: Bool
+    var full_width: Float32
+    var full_height: Float32
+    var offset_x: Float32
+    var offset_y: Float32
+    var width: Float32
+    var height: Float32
+
+    def validate(self) raises:
+        """Refuse a tile that no projection can be built from.
+
+        three.js checks nothing here, and a full width of zero divides by
+        zero in `updateProjectionMatrix`. The fields are open, so the
+        cameras ask again each time they build a projection.
+
+        Raises:
+            Error: If any number is not finite, or a width or a height is
+                not positive.
+        """
+        if not _finite_tile(self):
+            raise Error("A view offset's numbers must be finite")
+        if not _positive_tile(self):
+            raise Error("A view offset's widths and heights must be positive")
+
+
+def _finite_tile(view: ViewOffset) -> Bool:
+    """Return True if every number of a tile is finite."""
+    return (
+        isfinite(view.full_width)
+        and isfinite(view.full_height)
+        and isfinite(view.offset_x)
+        and isfinite(view.offset_y)
+        and isfinite(view.width)
+        and isfinite(view.height)
+    )
+
+
+def _positive_tile(view: ViewOffset) -> Bool:
+    """Return True if every width and height of a tile is above zero."""
+    return (
+        view.full_width > 0
+        and view.full_height > 0
+        and view.width > 0
+        and view.height > 0
+    )
+
+
+def view_offset(
+    full_width: Float32,
+    full_height: Float32,
+    x: Float32,
+    y: Float32,
+    width: Float32,
+    height: Float32,
+) raises -> ViewOffset:
+    """Return an enabled tile, checked, for `set_view_offset`.
+
+    Args:
+        full_width: The full image's width, in pixels.
+        full_height: The full image's height, in pixels.
+        x: How far across the full image the tile starts.
+        y: How far down the full image the tile starts.
+        width: The tile's width.
+        height: The tile's height.
+
+    Returns:
+        The tile, enabled.
+
+    Raises:
+        Error: If `ViewOffset.validate` refuses it.
+    """
+    var view = ViewOffset(True, full_width, full_height, x, y, width, height)
+    view.validate()
+    return view
 
 
 trait Camera(Copyable, Movable):

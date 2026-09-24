@@ -77,7 +77,24 @@ if len(hits) > 0:
 | `index` | The object's position in that list. |
 | `instance` | Which instance of an instanced or batched mesh, or which level of an LOD. -1 for a plain mesh. three.js's `instanceId` and `batchId`. |
 | `mesh` | The shape struck as a `Mesh`: its node, geometry and material. For a plain mesh, the mesh itself. A sprite has no geometry, so its `geometry` is -1. |
-| `triangle` | Which of the geometry's triangles, from zero. For a line or a wide line, which segment. For points, which point. For a sprite, which of its two halves. |
+| `triangle` | Which of the geometry's triangles, from zero. For a line or a wide line, which segment. For points, which point. For a sprite, which of its two halves. three.js's `faceIndex` and `index`. |
+| `uv`, `uv1` | The texture coordinates at the point, as an `Optional[Vector2]`. None when the geometry has no such attribute. A sprite's `uv` runs from 0 to 1 across it. |
+| `vertex_normal` | The geometry's normals mixed at the point, as an `Optional[Vector3]`. three.js's `normal`. None when the geometry has no normals. |
+| `face` | The triangle struck, as an `Optional[HitFace]`. three.js's `face`. |
+| `barycoord` | The point's weights on the face's three corners, as an `Optional[Vector3]`. They add up to one. |
+| `point_on_line` | For a wide line, the point on the segment nearest the ray, as an `Optional[Vector3]`. three.js's `pointOnLine`. |
+
+A hit on a mesh of any kind has `face` and `barycoord`, and `uv`, `uv1` and `vertex_normal` where the geometry has them. Anything else leaves them `None`, as three.js leaves them out. The values agree with three.js 0.180 to a part in 10,000.
+
+| `HitFace` field | Meaning |
+|---|---|
+| `a`, `b`, `c` | The vertices at the triangle's corners, through the index if there is one. |
+| `normal` | The triangle's unit normal, from its corners as wound. Zero for a triangle with no area. |
+| `material_index` | A `MaterialIndex`. Always zero, because a mesh here has one material. three.js also gives zero for one material. |
+
+`vertex_normal` and `face.normal` are in the mesh's own space, as three.js gives them. Carry them to the world with the node's world matrix. `normal` is already in world space. `vertex_normal` is not made unit length. It is turned to face the ray, so a hit from behind has it reversed. `face.normal` is not turned.
+
+The two normals and the weights come from the triangle as picked. A morphed, skinned or displaced mesh gives them from where its corners were carried. The texture coordinates and the vertex normals are read from the geometry, as three.js reads them.
 
 A `HitKind` is a type. A bare integer does not compile.
 
@@ -110,6 +127,8 @@ A mesh is tested in three steps. First its bounding sphere, in world space. Then
 The material's `side` decides which faces count. A `FRONT_SIDE` mesh is not picked through its back. A `BACK_SIDE` mesh is picked only on its back. A `DOUBLE_SIDE` mesh is picked on both. What the renderer draws, the raycaster hits. See [Materials](Materials#side).
 
 A mirrored mesh is hit on the face the renderer draws. Its hit normal is turned back, as the renderer turns its geometric normal.
+
+The ray is carried into a mesh's own space by the inverse of its world matrix. That inverse is set to be exactly affine. Before, a turned and stretched mesh could round the inverse's bottom row off `(0, 0, 0, 1)`, and the pick raised.
 
 A geometry of lines or points must not be indexed, as for the renderer.
 

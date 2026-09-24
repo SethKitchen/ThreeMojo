@@ -72,6 +72,10 @@ The writer makes the same objects. A node that carries one thing becomes that th
 
 A camera is not a scene node in this port. Put the cameras in an `ObjectCameras`, and attach each one to a node first. The writer refuses a camera that rides no node.
 
+A perspective camera carries `zoom`, `focus`, `filmGauge`, `filmOffset` and `view`. An orthographic camera carries `zoom` and `view`. The reader and the writer read and write them as three.js's `ObjectLoader` and `toJSON` do. The film numbers are millimeters, three.js's convention, and `focus` is meters.
+
+A `view` holds `enabled`, `fullWidth`, `fullHeight`, `offsetX`, `offsetY`, `width` and `height`. A key that a `view` leaves out takes the first value of three.js's `setViewOffset`, and `enabled` is then false. A `view` of `null` is no view. See [Cameras](Cameras#view-offset).
+
 A node that carries nothing and is a bone of a skeleton becomes a `Bone`.
 
 ## Other objects
@@ -218,7 +222,6 @@ The writer does not write these things, and the reader refuses them:
 - A cube texture that does not have six images, or a mapping that is not `CubeReflectionMapping`. A cube texture with float faces.
 - More than eight clipping planes on a material, or more than eight morph influences on a mesh.
 - A depth function, a stencil function or a stencil operation that is not one of three.js's.
-- A perspective camera with `zoom`, `filmOffset` or `view`, and an orthographic camera with `view`.
 
 The writer does not write these things, and the reader ignores them:
 
@@ -228,7 +231,7 @@ The writer does not write these things, and the reader ignores them:
 - The material keys that have no field here.
 - An LOD's `autoUpdate`, and a batched mesh's sorting, reserved ranges and bounds.
 - An instanced mesh's `morphTexture` and `morphTargetInfluences`. An `InstancedMesh` here wears no morph targets. See [Meshes and assets](Meshes-and-assets#instance-colors).
-- A camera's `focus` and `filmGauge`, and a texture's `format`, `type` and `premultiplyAlpha`.
+- A texture's `format`, `type` and `premultiplyAlpha`.
 
 ## Errors
 
@@ -241,7 +244,7 @@ The writer raises for:
 - A line, points or sprite material that is not `BASIC`, or a line width in world units.
 - A line mode or a bind mode that is not one of its values.
 - A batched mesh with geometries that it cannot join.
-- A perspective camera with a view shift.
+- A perspective camera with a view shift, or with a zoom, film, focus or view that its `validate` refuses. An orthographic camera with a view that is not one.
 - A cube texture with float faces, or with faces that do not have the same filter, color space and mip chain.
 - A cube without its PMREM that the environment or a standard or physical material reflects.
 - A standard or physical material that reflects nothing in a scene with an environment.
@@ -257,6 +260,7 @@ The reader raises for a document that is not JSON, for each refusal in [Not port
 - An `envMap` or an `environment` that names a texture that is not a cube.
 - A `geometryInfo` or an instance that names data that is not there.
 - Each value that the builders refuse, for example a negative intensity.
+- A camera's `view` that is not an object or `null`, or a zoom, film, focus or view that the camera's checks refuse.
 
 ## Example
 
