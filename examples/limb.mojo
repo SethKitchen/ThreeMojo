@@ -128,8 +128,8 @@ def _add_limb(
     var pose = assemble_leg(person, RIGHT)
     var holder = Object3D()
     holder.set_position(x, 0, 0)
-    # Medial three-quarter view, so the heel, arch and toes read as a foot.
-    holder.rotate_y(Angle(80.0, DEGREE))
+    # Side view, so the heel, arch and toes read as a foot.
+    holder.rotate_y(Angle(90.0, DEGREE))
     var nid = scene.attach(holder^, parent)
     _ = add_leg(
         scene,
@@ -233,7 +233,7 @@ def main() raises:
         Length(0.05, METER),
         Length(20.0, METER),
     )
-    camera.place(Vector3(0.06, 0.22, 3.55), Vector3(0.0, -0.04, 0.0))
+    camera.place(Vector3(0.06, 0.20, 3.40), Vector3(0.0, -0.02, 0.0))
 
     var step = Angle(Float32(360) / Float32(FRAMES), DEGREE)
     var frames = List[Framebuffer]()
