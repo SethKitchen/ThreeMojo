@@ -1,6 +1,6 @@
 # Exporters
 
-`exporters/gltf.mojo`, `exporters/obj.mojo`, `exporters/stl.mojo` and `exporters/ply.mojo` write a scene and its assets to model files. Each file reads back through the matching loader in `loaders/` to the same geometry. A glTF file also reads back to the same node transforms and materials. three.js: `GLTFExporter`, `OBJExporter`, `STLExporter` and `PLYExporter`.
+`exporters/gltf.mojo`, `exporters/obj.mojo`, `exporters/stl.mojo` and `exporters/ply.mojo` write a scene and its assets to model files. `exporters/exr.mojo` writes an HDR image. `exporters/usdz.mojo` writes a scene for AR Quick Look. Each file reads back through the matching loader in `loaders/` to the same geometry. A glTF file also reads back to the same node transforms and materials. three.js: `GLTFExporter`, `OBJExporter`, `STLExporter` and `PLYExporter`.
 
 To write a scene as three.js JSON, see [Scene JSON](Scene-JSON).
 
@@ -22,6 +22,12 @@ write_ply("out/model.ply", scene, assets, PLY_BINARY_LITTLE_ENDIAN)
 | `write_stl(path, scene, assets, format)` | Write an STL file. |
 | `export_ply(scene, assets, format) -> List[UInt8]` | The bytes of a PLY file. |
 | `write_ply(path, scene, assets, format)` | Write a PLY file. |
+| `export_exr(width, height, data, compression, type) -> List[UInt8]` | An OpenEXR file of RGBA floats. See [EXR](#exr). |
+| `export_exr_half(width, height, data, compression, type) -> List[UInt8]` | An OpenEXR file of RGBA halves. |
+| `export_exr_image(image, compression, type) -> List[UInt8]` | An OpenEXR file of a `FloatImage`. |
+| `export_usdz(scene, assets, cameras, options) -> List[UInt8]` | A USDZ archive for AR Quick Look. See [USDZ](#usdz). |
+| `usdz_files(scene, assets, cameras, options) -> UsdzFiles` | The files of the archive: `model.usda`, the geometries and the textures. |
+| `zlib_deflate(data, level) -> List[UInt8]`, `deflate(data, level)` | A zlib or a raw DEFLATE stream, as fflate writes it. These are in `render/deflate.mojo`. |
 
 ## glTF
 
@@ -161,6 +167,81 @@ A mesh that wears a list of materials writes each group that it draws as a run o
 
 A mesh without a property writes zeros for a normal and a texture coordinate, and white for a color, as three.js does. The format is `PlyFormat` from `loaders/ply.mojo`: `PLY_ASCII`, the default, `PLY_BINARY_LITTLE_ENDIAN` or `PLY_BINARY_BIG_ENDIAN`.
 
+## EXR
+
+`exporters/exr.mojo` writes RGBA texels as an OpenEXR file. three.js: `EXRExporter`. `render.exr.decode` reads the file back.
+
+```mojo
+var bytes = export_exr_image(image, ZIP_COMPRESSION, HALF_SAMPLES)
+```
+
+- `export_exr` takes the `Float32` texels of a three.js `FloatType` data texture. `export_exr_half` takes the half bits of a `HalfFloatType` one. Both take four values a texel, from the bottom row up.
+- `export_exr_image` takes a `FloatImage`, from the top row down. `decode` gives the same image back.
+- The compression is `NO_COMPRESSION`, `ZIPS_COMPRESSION` (one line a block) or `ZIP_COMPRESSION` (sixteen lines a block, the default).
+- The sample type is `HALF_SAMPLES` (the default) or `FLOAT_SAMPLES`. A half is made as three.js's `DataUtils.toHalfFloat` makes it: the extra bits are cut off, and a value is clamped to 65,504.
+- The channels are `A`, `B`, `G` and `R`. The header has the attributes that three.js writes, in its order.
+
+zlib is a port of fflate 0.8.2, the library that three.js exports with. `render/deflate.mojo` gives the same bytes as fflate at each level from 0 to 9.
+
+### Differences from three.js
+
+three.js writes two kinds of block that its own `EXRLoader` reads wrong values from. This port writes them as OpenEXR says:
+
+- The last block of a `ZIP_COMPRESSION` file, when the height is not a multiple of 16. three.js compresses it at the size of a full block, with bytes of the block before it. This port compresses only the real lines.
+- A block that zlib does not make smaller, for example in a small image. A reader takes such a block as raw lines. three.js writes the zlib stream. This port writes the raw lines.
+
+Every other block, and the header, are the bytes that three.js writes. A NaN is written as three.js writes it on x86-64: `0xFE00` as a half, and `0x7FC00000` as a float. An image with no texels, or data of the wrong length, is refused.
+
+## USDZ
+
+`exporters/usdz.mojo` writes a scene as a USDZ archive. three.js: `USDZExporter`.
+
+```mojo
+var archive = export_usdz(scene, assets, cameras)
+```
+
+The archive is a ZIP file that is not compressed. Each file's data starts at a multiple of 64 bytes. It holds:
+
+- `model.usda`: a `Root` `Xform`, a `Scenes` scope and a `Scene` `Xform` that holds the nodes, then a `Materials` scope.
+- `geometries/Geometry_<id>.usda`: one `Mesh` for each geometry, with its triangles, normals, points, texture coordinates and colors.
+- `textures/Texture_<id>_true.png`: one PNG for each texture.
+
+| Node | USD |
+|---|---|
+| A node with one mesh of a `STANDARD` or `PHYSICAL` material | An `Xform` that references its geometry file and binds its material. |
+| A node with one mesh of another material | Not written, and nothing under it, as in three.js. |
+| A node with one camera of `cameras` | A `Camera`, with its clipping range and apertures. A perspective camera has a film gauge of 35 and a focus of 10, as in three.js. |
+| A node with more than one mesh or camera | An `Xform` with one child for each. three.js has no such node. |
+| Any other node | An `Xform`. |
+
+| `UsdzOptions` field | three.js option | Default |
+|---|---|---|
+| `anchoring_type` | `ar.anchoring.type` | `plane` |
+| `plane_alignment` | `ar.planeAnchoring.alignment` | `horizontal` |
+| `include_anchoring_properties` | `includeAnchoringProperties` | `True` |
+| `only_visible` | `onlyVisible` | `True` |
+| `quick_look_compatible` | `quickLookCompatible` | `False` |
+
+Each material is a `UsdPreviewSurface`. It has the color or the map, the emissive color or map, the normal map, the ao map, the roughness, the metalness and the opacity. A `PHYSICAL` material also has the clear coat and the index of refraction. Each map has a `UsdTransform2d` of the texture's repeat, offset and rotation.
+
+### Numbers
+
+The text is the text that three.js writes for a scene whose numbers are short decimals:
+
+- A vertex value has seven significant digits, as three.js writes it.
+- A color is the linear double that three.js's `setHex` gives for the same sRGB bytes.
+- Another number is held here as a `Float32` and in three.js as a double. It is written as the shortest text that reads back to the `Float32`, so `0.1` is `0.1`.
+- A matrix is this port's `Float32` matrix. A turn that a `Float32` cannot hold exactly is written a few units apart in the last digits.
+
+`loaders/js_number.mojo` has the JavaScript number text that this uses: `js_number_text`, `js_float32_text`, `js_to_precision` and `js_to_fixed`.
+
+### Differences from three.js
+
+- Each texture is written as its own pixels, as a PNG from `render.png`, at its own size. three.js draws it on a canvas and scales it to `maxTextureSize`.
+- A texture file is named for the texture's id. three.js names it for the id of its source.
+- Each file's data starts at a multiple of 64 bytes. three.js pads each file by a count that is right only for the first file.
+- A geometry that is not whole triangles is refused. three.js throws a `RangeError`.
+
 ## World space
 
 OBJ, STL and PLY hold no transforms. Thus their writers put each vertex through the world matrix of its node, as three.js does. Each normal goes through the normal matrix and is made unit length. The scene must be current. Call `scene.update()` first, or the writer raises.
@@ -206,7 +287,10 @@ The writers raise for:
 - A roughness map and a metalness map that are not one size, or that do not share one transform and one channel.
 - A number that is not finite.
 - A stale scene, or a node whose world matrix flattens an axis, for OBJ, STL and PLY.
+- An EXR image with no texels, data that is not four values a texel, a compression other than none, ZIPS or ZIP, or a sample type other than HALF or FLOAT.
+- A DEFLATE level that is not from 0 to 9.
+- A USDZ mesh that names a node that is not in the scene, a geometry with no position or that is not whole triangles, or a texture with a wrap or a channel that is not valid.
 
 ## Example
 
-`tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY.
+`tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY. `tests/test_exr_export.mojo` compares EXR files with the files that three.js 0.180 writes, in `assets/exr_export/three.json`. `tests/test_deflate.mojo` compares zlib and DEFLATE streams with fflate's, in `assets/deflate/fflate.json`, and Huffman code lengths with fflate's, in `assets/deflate/trees.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
