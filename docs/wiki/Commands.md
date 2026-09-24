@@ -36,6 +36,7 @@ Results are cached on a SHA-256 of the source contents, the Makefile and the too
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `COV_BUDGET` | One second per suite | Seconds the coverage run gets before it is killed. |
+| `AFFECTED` | Empty | A git ref. `check-cpu`, `lint-cpu`, `test-cpu`, `fmt-check`, `compile-fail` and `coverage` then check only what the change since that ref affects. See [How to run the checks](How-to-run-the-checks#check-only-what-a-change-affects). |
+| `COV_BUDGET` | One second per suite, and a minute at least | Seconds the coverage run gets before it is killed. |
 | `GPU_BUDGET` | 300 | Seconds the GPU suite gets. |
 | `JOBS` | The core count | Suites run in parallel. |

@@ -94,6 +94,40 @@ COV_DIR := coverage/build
 # `make animation` rewrites them when an example changes.
 OUT_DIR := out
 
+# --- affected ---------------------------------------------------------------
+# `make check-cpu AFFECTED=origin/main` checks only what the change since that
+# ref can reach, as nx's "affected" does. tools/affected.py walks the import
+# graph: a suite, an example or a module is checked when it imports a changed
+# module, directly or through others, or quotes a changed asset's path.
+# Formatting reads each file alone, so it checks the changed files only. A
+# change to this Makefile, the CI workflow, the coverage tool or a file the
+# script cannot place checks everything. CI checks a pull request this way,
+# and checks everything on a push to main.
+#
+# Coverage stays exact for each module it measures: every suite that can
+# reach a measured module runs. What it cannot see is a test change that
+# lowers the coverage of a module the change did not reach. The full run on
+# main sees that.
+AFFECTED :=
+COMPILE_FAIL_RUN := $(COMPILE_FAIL)
+ifneq ($(strip $(AFFECTED)),)
+affected = $(shell python3 tools/affected.py --base $(AFFECTED) $(1))
+AFFECTED_CHANGE  := $(shell python3 tools/affected.py --base $(AFFECTED) --list)
+FORMATTED        := $(shell python3 tools/affected.py --base $(AFFECTED) \
+                      --changed $(FORMATTED))
+CPU_ENTRY_POINTS := $(call affected,$(CPU_ENTRY_POINTS))
+CPU_DOC_SOURCES  := $(call affected,$(CPU_DOC_SOURCES))
+CPU_TESTS        := $(call affected,$(CPU_TESTS))
+COMPILE_FAIL_RUN := $(call affected,$(COMPILE_FAIL))
+COVERED          := $(call affected,$(COVERED))
+$(info Affected since $(AFFECTED): $(words $(CPU_TESTS)) suites, \
+  $(words $(CPU_ENTRY_POINTS)) entry points, $(words $(COVERED)) measured \
+  modules, $(words $(FORMATTED)) changed files.)
+endif
+# What the coverage build copies through uninstrumented: the excluded module,
+# and in an AFFECTED run every module the change does not reach.
+COVERAGE_PASSTHROUGH := $(filter-out $(COVERED),$(LIB_SOURCES))
+
 # --- caching ----------------------------------------------------------------
 # A task's result is keyed on the content of every file that can affect it, so
 # a task re-runs only when something relevant changed. Content rather than
@@ -125,7 +159,10 @@ JOBS ?= $(shell sysctl -n hw.logicalcpu 2> /dev/null \
 # same reason, and because it needs MAX, which the coverage run does not
 # install. It runs in `make test` and in CI as `make test-gpu-host`.
 COVERAGE_TESTS := $(CPU_TESTS)
-COV_BUDGET := $(words $(COVERAGE_TESTS))
+# At least a minute: a run of a few affected suites still pays a compile
+# that takes longer than a second.
+COV_BUDGET := $(shell n=$(words $(COVERAGE_TESTS)); \
+                [ $$n -lt 60 ] && n=60; echo $$n)
 
 CACHE_DIR := .cache
 HASHER    := $(shell command -v shasum > /dev/null 2>&1 \
@@ -137,7 +174,10 @@ INPUTS    := $(SOURCES) $(COMPILE_FAIL) Makefile
 # launch (about 40ms) per make invocation, which is worth not lying about what
 # has been checked.
 TOOLCHAIN := $(shell $(MOJO) --version 2>/dev/null || echo "no-mojo")
-HASH      := $(shell { cat $(INPUTS) 2>/dev/null; echo "$(TOOLCHAIN)"; } \
+# An AFFECTED run checks a part, so its stamps are keyed on the change as
+# well: a partial run must never stand in for a whole one.
+HASH      := $(shell { cat $(INPUTS) 2>/dev/null; echo "$(TOOLCHAIN)"; \
+                echo "$(AFFECTED) $(AFFECTED_CHANGE)"; } \
                | $(HASHER) | cut -c1-12)
 
 # What the cache key cannot include is whether a GPU is plugged in, which is
@@ -341,14 +381,17 @@ $(FMT_STAMP):
 coverage: $(COV_STAMP)
 $(COV_STAMP):
 	@rm -rf $(COV_DIR)
+ifeq ($(strip $(COVERED)),)
+	@echo "No measured module is affected; coverage not measured."
+else
 	@for f in $(COVERED); do mkdir -p "$(COV_DIR)/$$(dirname $$f)"; done
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/build_cli.mojo \
 	  $(COV_DIR) $(COVERED)); \
 	[ $$rc -eq 0 ] || exit 1
-	@# Excluded modules are copied through unchanged. Without them the build
-	@# tree is an incomplete package and imports fail to resolve, since the
-	@# first -I wins and never falls back to the real tree.
-	@for f in $(COVERAGE_EXCLUDE); do \
+	@# Unmeasured modules are copied through unchanged. Without them the
+	@# build tree is an incomplete package and imports fail to resolve,
+	@# since the first -I wins and never falls back to the real tree.
+	@for f in $(COVERAGE_PASSTHROUGH); do \
 	  mkdir -p "$(COV_DIR)/$$(dirname $$f)"; cp "$$f" "$(COV_DIR)/$$f"; \
 	done
 	@# The coverage tool itself, and the suites that drive it, both copied
@@ -360,7 +403,7 @@ $(COV_STAMP):
 	@mkdir -p $(COV_DIR)/coverage
 	@cp coverage/*.mojo $(COV_DIR)/coverage/
 	@mkdir -p $(COV_DIR)/tests
-	@cp $(COVERAGE_TESTS) $(COV_DIR)/tests/
+	@[ -z "$(strip $(COVERAGE_TESTS))" ] || cp $(COVERAGE_TESTS) $(COV_DIR)/tests/
 	@mkdir -p $(COV_DIR)/hits
 	@# One file per suite rather than a shared append: probe records must not
 	@# interleave mid-line, and MC-DC needs each decision's records in order.
@@ -391,6 +434,7 @@ $(COV_STAMP):
 	@$(call run,$(MOJO) run $(MOJOFLAGS) coverage/report_cli.mojo \
 	  $(COV_DIR)/manifest.txt $(COV_DIR)/hits/*.txt); \
 	[ $$rc -eq 0 ] || exit 1
+endif
 	@$(call stamp,coverage)
 
 # The units system's value is what it *rejects*, and a rejection cannot be
@@ -400,13 +444,13 @@ $(COV_STAMP):
 compile-fail: $(NEG_STAMP)
 $(NEG_STAMP):
 	@fail=0; \
-	for f in $(COMPILE_FAIL); do \
+	for f in $(COMPILE_FAIL_RUN); do \
 	  if $(MOJO) build $(MOJOFLAGS) -o /dev/null "$$f" > /dev/null 2>&1; then \
 	    echo "compiled but should not have: $$f"; fail=1; \
 	  fi; \
 	done; \
 	if [ $$fail -ne 0 ]; then exit 1; fi; \
-	echo "All $(words $(COMPILE_FAIL)) unit errors rejected."
+	echo "All $(words $(COMPILE_FAIL_RUN)) unit errors rejected."
 	@$(call stamp,compile-fail)
 
 # --- documentation ----------------------------------------------------------

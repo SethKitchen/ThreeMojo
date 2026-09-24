@@ -38,7 +38,21 @@ Results are cached on a hash of the source contents and the toolchain version. A
 make -B check
 ```
 
-`make ci` forces everything, which is what the CI workflow runs.
+`make ci` forces everything.
+
+## Check only what a change affects
+
+```bash
+make check-cpu coverage AFFECTED=origin/main
+```
+
+This checks only what the change since the merge base with `origin/main` can reach, as nx's "affected" does. The change includes the files you have not committed. `tools/affected.py` reads the import graph. A suite, an example or a module is checked when it imports a changed module, directly or through other modules. A test that quotes the path of a changed asset is checked too. The format check reads the changed files only.
+
+A change to one leaf module, for example a loader, checks one suite in about a minute. A change to a module that most of the library imports, for example `core/scene.mojo`, still checks about half the suites. A documentation change checks no suite. A change to the Makefile, the CI workflow, the coverage tool or a file that the script cannot place checks everything.
+
+Coverage is exact for each module it measures, because every suite that can reach the module runs. A test change can lower the coverage of a module that the change does not reach. `AFFECTED` does not see that. The full run does.
+
+The CI workflow checks a pull request with `AFFECTED` set to its base branch. It checks everything on a push to `main`.
 
 ## Measure the examples
 

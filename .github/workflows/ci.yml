@@ -28,6 +28,13 @@ on:
 permissions:
   contents: read
 
+# A pull request is checked as nx checks "affected": only the suites,
+# examples and modules its change can reach, through the import graph. See
+# tools/affected.py and the AFFECTED block in the Makefile. A push to main
+# checks everything, which also catches what the graph cannot see.
+env:
+  AFFECTED: ${{ github.event_name == 'pull_request' && format('origin/{0}', github.base_ref) || '' }}
+
 jobs:
   cpu:
     name: check-cpu (standard library only)
@@ -39,7 +46,10 @@ jobs:
     timeout-minutes: 150
 
     steps:
+      # The whole history, so that the merge base with the base branch exists.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -58,7 +68,7 @@ jobs:
       # Formatting, linting, the CPU suites, and the compile-fail cases. No
       # MAX, which is what proves the no-dependencies claim still holds.
       - name: check-cpu
-        run: make -B check-cpu
+        run: make -B check-cpu AFFECTED="$AFFECTED"
 
   # Coverage runs beside the CPU suites rather than after them: each takes
   # half an hour or more on a hosted runner, and one after the other ran
@@ -69,7 +79,10 @@ jobs:
     timeout-minutes: 150
 
     steps:
+      # The whole history, so that the merge base with the base branch exists.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install uv
         uses: astral-sh/setup-uv@v5
@@ -106,7 +119,7 @@ jobs:
       # 3600 went the same way at 273: the run for 0e0b997 was stopped at
       # the hour, and the next passed with minutes to spare.
       - name: coverage
-        run: make -B coverage COV_BUDGET=6000
+        run: make -B coverage COV_BUDGET=6000 AFFECTED="$AFFECTED"
 
   # The GPU backend's host side: the suites that import render/gpu.mojo but
   # open no device. They lay out the vertex lanes, the state tables, the
