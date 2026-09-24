@@ -14,6 +14,7 @@ These loaders read the less common model formats of three.js's `examples/jsm/loa
 | [AMF](#amf) | `loaders/amf.mojo` | `read_amf(path, scene, assets) -> AmfModel` | `AMFLoader` |
 | [VOX](#vox) | `loaders/vox.mojo` | `read_vox(path) -> List[VoxModel]` | `VOXLoader` |
 | [MD2](#md2) | `loaders/md2.mojo` | `read_md2(path) -> Md2Model` | `MD2Loader` |
+| [IES](#ies) | `loaders/ies.mojo` | `read_ies(path) -> IesLamp` | `IESLoader` |
 
 ## PCD
 
@@ -535,3 +536,48 @@ The loader refuses these, with a message that names the problem:
 ### Example
 
 `assets/md2/fixture.md2` has eight frames in three animations and one frame that is in no animation. `assets/md2/many.md2` has ten frames. `tests/test_md2.mojo` compares the geometry, the frames and each clip with three.js 0.180.
+
+## IES
+
+`loaders/ies.mojo`. `read_ies(path)` reads an IES light profile (IESNA LM-63) into an `IesLamp`. `ies_texture` makes the texture that three.js makes of it. three.js: `IESLoader`.
+
+```mojo
+var lamp = read_ies("assets/ies/full.ies")
+var profile = assets.textures.add(ies_texture(lamp))
+```
+
+| Function | What it does |
+|---|---|
+| `read_ies(path) -> IesLamp` | Read a file. |
+| `parse_ies(text) -> IesLamp` | Read the text of one. |
+| `ies_values(lamp) -> List[Float64]` | The lamp at each whole degree, three.js's `_getIESValues`. |
+| `ies_texture(lamp, type) -> Texture` | The values as a red texture: `IES_UNSIGNED_BYTE`, `IES_HALF_FLOAT` (the default) or `IES_FLOAT`. |
+| `to_half_float(value) -> UInt16` | The half bits of a value, three.js's `DataUtils.toHalfFloat`. |
+
+`IesType` is a type. A bare integer does not compile. `ies_texture` refuses a type that is not valid.
+
+### What is read
+
+The loader reads the lines up to the one with `TILT`. With `TILT=INCLUDE`, it reads the tilt data. Then it reads the ten lamp values, the three factors, the vertical and horizontal angles, and the candela values. Numbers can go over many lines, with spaces or commas between them.
+
+three.js multiplies each candela value by itself and by the multiplier. Then it divides each value by the largest one, so that the brightest value is one. This port does the same.
+
+`ies_values` gives 360 rows of 180 values. There is one row for each whole horizontal degree, and one value for each whole vertical degree. A profile of one quadrant or one half fills only the rows that its angles reach, as in three.js. The other rows are NaN.
+
+### Differences from three.js
+
+- three.js gives its `DataTexture` a width of 180 and a height of one, but 64800 values. The texture here is 180 wide and 360 high.
+- An empty row is zero in each type. three.js has NaN in an empty row of a float texture.
+
+### Errors
+
+The loader refuses these, with a message that names the problem:
+
+- A file with no `TILT` line, and a file that ends early.
+- A value that is not a number. three.js reads it as `NaN`. An empty line is zero, as in JavaScript.
+- A line with more numbers than its array needs. three.js reads past it until the file ends, and then throws.
+- A number of angles that is not a whole number.
+
+### Example
+
+`assets/ies/` has four profiles. They are a quadrant with tilt data, a full circle, one whose horizontal angles go backward, and one with a fractional last angle. `assets/ies/fixture.json` has a digest of three.js 0.180's texture data for each, in each type. `tests/test_ies.mojo` compares them.
