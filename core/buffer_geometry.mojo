@@ -204,6 +204,9 @@ struct BufferGeometry(Movable):
     # three.js's `morphTargetsRelative`. Read only when there are targets,
     # and either answer is a legitimate one, so nothing checks it.
     var morph_relative: Bool
+    # Each morph target's name, three.js's morph attribute `name`, which
+    # its `morphTargetDictionary` is made from: empty, or one per target.
+    var morph_names: List[String]
     # Runs of triangles that wear one material each: three.js's `groups`.
     # Empty means the whole geometry is one run. See `add_group`.
     var groups: List[GeometryGroup]
@@ -239,6 +242,7 @@ struct BufferGeometry(Movable):
         self.morph_positions = List[BufferAttribute]()
         self.morph_normals = List[BufferAttribute]()
         self.morph_relative = False
+        self.morph_names = List[String]()
         self.groups = List[GeometryGroup]()
         self.instanced = instanced
         self.instance_count = None
@@ -268,6 +272,7 @@ struct BufferGeometry(Movable):
         )
         copied.morph_normals = _cloned(self.morph_normals, originals, clones)
         copied.morph_relative = self.morph_relative
+        copied.morph_names = self.morph_names.copy()
         copied.groups = self.groups.copy()
         copied.instance_count = self.instance_count
         return copied^
@@ -784,6 +789,7 @@ struct BufferGeometry(Movable):
                 self.morph_normals[target].gather(self.index)
             )
         result.morph_relative = self.morph_relative
+        result.morph_names = self.morph_names.copy()
         result.groups = self.groups.copy()
         return result^
 
@@ -857,6 +863,7 @@ struct BufferGeometry(Movable):
         for target in range(len(self.morph_normals)):
             part.morph_normals.append(self.morph_normals[target].gather(slots))
         part.morph_relative = self.morph_relative
+        part.morph_names = self.morph_names.copy()
         return part^
 
     def triangle_run(self, start: Int, count: Int) raises -> Tuple[Int, Int]:

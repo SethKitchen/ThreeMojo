@@ -115,12 +115,17 @@ def _check_attribute(
         raise Error("An exported " + name + " must have one item per position")
 
 
-def check_geometry(geometry: BufferGeometry) raises -> Int:
+def check_geometry(
+    geometry: BufferGeometry, triangles: Bool = True
+) raises -> Int:
     """Refuse a geometry no exporter can write, and return its vertex
     count.
 
     Args:
         geometry: The geometry.
+        triangles: True for a geometry drawn as triangles, False for one
+            drawn as lines or points, whose vertices need not come three
+            to a triangle.
 
     Returns:
         How many vertices its `position` holds.
@@ -131,8 +136,8 @@ def check_geometry(geometry: BufferGeometry) raises -> Int:
             other than two, or a `color` of other than three or four, or
             any of them with a count other than the positions'; an index
             that is not whole triangles, or an entry that is negative or
-            past the last vertex; or no index and a vertex count that is
-            not a whole number of triangles.
+            past the last vertex; or, for triangles, no index and a vertex
+            count that is not a whole number of triangles.
     """
     if not geometry.has_attribute(POSITION):
         raise Error("An exported geometry needs a position attribute")
@@ -152,7 +157,7 @@ def check_geometry(geometry: BufferGeometry) raises -> Int:
             raise Error("An index entry cannot be negative")
         if geometry.index[slot] >= count:
             raise Error("An index entry points past the last vertex")
-    if not geometry.is_indexed() and count % 3 != 0:
+    if triangles and not geometry.is_indexed() and count % 3 != 0:
         raise Error(
             "A geometry without an index must hold whole triangles to be"
             " exported"

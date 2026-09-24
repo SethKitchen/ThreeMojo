@@ -90,7 +90,14 @@ that reads a third set of texture coordinates or past it, since a
 geometry here has only `uv` and `uv1`; and a skinned node that is
 instanced, where three.js drops the skin.
 
-**Extensions.** Fifteen are read, the ones three.js's `GLTFLoader` reads
+**Points and lines.** A primitive of points or of lines becomes a
+`Points` or a `Line`, as three.js's `GLTFLoader.loadMesh` builds them,
+with a `BASIC` material made from the file's: see `unlit_material`. An
+index here holds triangles, so an indexed one is read out in index
+order. A mesh's `extras.targetNames` name its morph targets, the
+geometry's `morph_names`.
+
+**Extensions.** Eighteen are read, the ones three.js's `GLTFLoader` reads
 that map onto something this renderer has. `KHR_materials_unlit` makes a
 `BASIC` material. `KHR_materials_ior`, `KHR_materials_specular` and
 `KHR_materials_clearcoat` make a `PHYSICAL` one and set its factors and
@@ -119,11 +126,16 @@ from the Draco data too. An attribute the extension does not name is read
 from its accessor. Draco would round a float attribute read at an
 integer type; a file that asks for that is not valid glTF, and it is
 refused.
+`EXT_materials_bump` makes a `PHYSICAL` one with a bump map, as three.js
+reads it. `KHR_texture_basisu` reads the KTX 2.0 image it names through
+`render.ktx2`; see `ktx2_texture`. `EXT_texture_webp` is not read: a
+WebP image is not decoded, so a texture reads its fallback `source`, and
+a file that requires the extension is refused.
 
 **Not ported.** Every other extension: a file whose `extensionsRequired`
 names one is refused, as three.js refuses it, and one that only uses an
-extension is read without it. Only triangles are read; a primitive of
-points, lines or strips is refused.
+extension is read without it. A primitive of triangle strips or fans is
+refused, and so is a point or a line on a skinned or an instanced node.
 """
 
 from animation.animation_clip import AnimationClip
@@ -191,6 +203,7 @@ from materials.material import (
     Material,
     MaterialId,
     Side,
+    points_material,
     standard_material,
 )
 from math.matrix4 import Matrix4
@@ -206,12 +219,16 @@ from math.quaternion import Quaternion
 from math.vector2 import Vector2
 from math.vector3 import Vector3
 from objects.mesh import Mesh
+from objects.line import LOOP, SEGMENTS, STRIP, Line, LineMode
+from objects.points import Points
 from render.framebuffer import Color, FloatColor
 from render.jpeg import decode as decode_jpeg
 from render.png import DecodedImage, decode as decode_png
 from render.srgb import LINEAR, SRGB, ColorSpace
 from render.tga import decode as decode_tga
+from render import ktx2
 from render.texture import (
+    Alpha,
     BILINEAR,
     CLAMP,
     COVERAGE,
@@ -252,7 +269,12 @@ comptime COMPONENT_UNSIGNED_SHORT = 5123
 comptime COMPONENT_UNSIGNED_INT = 5125
 comptime COMPONENT_FLOAT = 5126
 
-# The one primitive mode that is read: triangles.
+# The primitive modes that are read: points, the three kinds of line, and
+# triangles. glTF names them by their GL constants.
+comptime MODE_POINTS = 0
+comptime MODE_LINES = 1
+comptime MODE_LINE_LOOP = 2
+comptime MODE_LINE_STRIP = 3
 comptime MODE_TRIANGLES = 4
 
 # The sampler's wrap and filter constants.
@@ -367,6 +389,12 @@ comptime LIGHTS_PUNCTUAL = "KHR_lights_punctual"
 comptime MESH_QUANTIZATION = "KHR_mesh_quantization"
 comptime GPU_INSTANCING = "EXT_mesh_gpu_instancing"
 comptime DRACO_MESH_COMPRESSION = "KHR_draco_mesh_compression"
+comptime MATERIALS_BUMP = "EXT_materials_bump"
+comptime TEXTURE_BASISU = "KHR_texture_basisu"
+# WebP images, which this port does not decode. A texture that names a
+# WebP image reads its fallback `source`, and a file that requires the
+# extension is refused.
+comptime TEXTURE_WEBP = "EXT_texture_webp"
 
 # A spot light's cone when `KHR_lights_punctual` names none: no inner cone,
 # and an outer one of a quarter of a half turn, the specification's.
@@ -522,6 +550,12 @@ struct GltfModel(Copyable, Movable):
     # `scene.instanced_meshes`.
     var first_instanced_mesh: Int
     var instanced_mesh_count: Int
+    # The same for the lines and the points that primitives of lines and
+    # of points added to `scene.lines` and `scene.points`.
+    var first_line: Int
+    var line_count: Int
+    var first_points: Int
+    var points_count: Int
     # The same for the lights `KHR_lights_punctual` added to
     # `scene.lights`, one per node that carries a light.
     var first_light: Int
@@ -549,6 +583,10 @@ struct GltfModel(Copyable, Movable):
         self.skinned_mesh_count = 0
         self.first_instanced_mesh = 0
         self.instanced_mesh_count = 0
+        self.first_line = 0
+        self.line_count = 0
+        self.first_points = 0
+        self.points_count = 0
         self.first_light = 0
         self.light_count = 0
         self.cameras = List[GltfCamera]()
@@ -689,13 +727,16 @@ def load_gltf(
         Error: If the JSON is not JSON or not glTF 2, an extension this
             loader does not read is required, a buffer, accessor, image, material, mesh, node,
             skin, camera or animation is malformed or names something the
-            file does not have, a primitive is not triangles, a skin names
-            a joint the scene does not reach, or a camera, a skeleton, a
-            morph target or a track is one its type refuses. Also if an
-            extension is malformed, a material's texture transforms
-            differ, a specular color factor is outside zero to one, a
-            skinned node is instanced, or a material, a light or an
-            instance matrix is one its type refuses.
+            file does not have, a primitive is a strip or a fan of
+            triangles, a skin names a joint the scene does not reach, or a
+            camera, a skeleton, a morph target or a track is one its type
+            refuses. Also if an extension is malformed, a material's
+            texture transforms differ, a specular color factor is outside
+            zero to one, a skinned node is instanced, a point or a line is
+            on a skinned or an instanced node, `targetNames` do not name
+            each target, a texture names no image or only a WebP one, a
+            KTX 2.0 image is refused by `render.ktx2`, or a material, a
+            light or an instance matrix is one its type refuses.
     """
     var document = parse_json(text)
     var root = document.root()
@@ -706,6 +747,12 @@ def load_gltf(
     if required != NO_NODE:
         for slot in range(document.length(required)):
             var name = document.string(document.at(required, slot))
+            if name == TEXTURE_WEBP:
+                raise Error(
+                    "glTF: the file requires EXT_texture_webp, and WebP"
+                    " images are not decoded: give each texture a PNG or"
+                    " JPEG source as well"
+                )
             if not is_supported_extension(name):
                 raise Error(
                     "glTF: the file requires an extension that is not read: "
@@ -729,10 +776,12 @@ def is_supported_extension(name: String) -> Bool:
         name: The extension's name, as `extensionsRequired` lists it.
 
     Returns:
-        Whether it is one of the sixteen this loader reads.
+        Whether it is one of the eighteen this loader reads.
     """
     return (
         name == EMISSIVE_STRENGTH
+        or name == MATERIALS_BUMP
+        or name == TEXTURE_BASISU
         or name == MATERIALS_IOR
         or name == MATERIALS_SPECULAR
         or name == MATERIALS_CLEARCOAT
@@ -893,6 +942,8 @@ struct _Loader(Movable):
     var alpha_textures: List[TextureId]
     # How many morph targets each glTF mesh's primitives carry.
     var morph_counts: List[Int]
+    # Each primitive's mode, mesh by mesh, as `model.geometries` lists them.
+    var primitive_modes: List[Int]
     # Per glTF node, the indices in `scene.meshes` of the meshes drawn at
     # it, which a `weights` channel drives.
     var node_meshes: List[List[Int]]
@@ -923,6 +974,7 @@ struct _Loader(Movable):
         self.texture_samplers = List[GltfSampler]()
         self.alpha_textures = List[TextureId]()
         self.morph_counts = List[Int]()
+        self.primitive_modes = List[Int]()
         self.node_meshes = List[List[Int]]()
         self.node_skins = List[List[Int]]()
         self.skinned_nodes = List[Int]()
@@ -1266,7 +1318,7 @@ struct _Loader(Movable):
         """Resolve each texture's image and sampler, reading nothing yet."""
         for index in range(self.count("textures")):
             var texture = self.entry("textures", index)
-            var image = self.required_integer(texture, "source")
+            var image = self.image_of(texture)
             if image < 0 or image >= self.count("images"):
                 raise Error("glTF: a texture names an image that is not there")
             # glTF's defaults, three.js's `GLTFLoader` reads them: repeat
@@ -1296,6 +1348,23 @@ struct _Loader(Movable):
             self.alpha_textures.append(NO_TEXTURE)
             self.model.color_textures.append(NO_TEXTURE)
             self.model.data_textures.append(NO_TEXTURE)
+
+    def image_of(self, texture: Int) raises -> Int:
+        """Return the image a texture reads: its `KHR_texture_basisu`
+        source when it has one, as three.js's plugin reads it first, and
+        its own `source` otherwise. A texture that names only a WebP image
+        is refused: see `TEXTURE_WEBP`."""
+        var basis = self.extension(texture, TEXTURE_BASISU)
+        if basis != NO_NODE:
+            return self.required_integer(basis, "source")
+        if self.document.has(texture, "source"):
+            return self.required_integer(texture, "source")
+        if self.extension(texture, TEXTURE_WEBP) != NO_NODE:
+            raise Error(
+                "glTF: a texture names only a WebP image, and WebP images"
+                " are not decoded"
+            )
+        raise Error("glTF: source is required")
 
     def image_bytes(self, index: Int) raises -> List[UInt8]:
         """Return an image's file bytes, from its URI or its buffer view."""
@@ -1341,20 +1410,24 @@ struct _Loader(Movable):
         ):
             return self.model.data_textures[index]
         var bytes = self.image_bytes(self.texture_images[index])
-        var image = decode_image(bytes)
         # A linear texture holds numbers -- metalness and roughness, a
         # normal, occlusion -- and its alpha is not coverage: the renderer
         # refuses a data map that reads alpha as coverage, so one built
         # with the default could not be drawn.
         ref sampling = self.texture_samplers[index]
-        var built = texture_from(
-            image,
-            sampling.wrap_s,
-            sampling.mag_filter,
-            space,
-            sampling.min_filter.is_mipmap(),
-            alpha=IGNORED if space == LINEAR and not keep_alpha else COVERAGE,
-        )
+        var alpha = IGNORED if space == LINEAR and not keep_alpha else COVERAGE
+        var built: Texture
+        if is_ktx2(bytes):
+            built = ktx2_texture(bytes, sampling, space, alpha)
+        else:
+            built = texture_from(
+                decode_image(bytes),
+                sampling.wrap_s,
+                sampling.mag_filter,
+                space,
+                sampling.min_filter.is_mipmap(),
+                alpha=alpha,
+            )
         built.wrap_t = sampling.wrap_t
         built.min_filter = sampling.min_filter
         # glTF's `v` runs down from the top, as the image's rows do: three.js
@@ -1620,6 +1693,20 @@ struct _Loader(Movable):
         if bright != NO_NODE:
             strength = self.number(bright, "emissiveStrength", 1)
         var kind = STANDARD
+        # three.js's `GLTFMaterialsBumpExtension`: a physical material with
+        # a height map read as data. three.js draws the normal map of a
+        # material that has both and ignores the bump map, and a material
+        # here holds one or the other; a bump factor with no map draws
+        # nothing.
+        var bump_map = NO_TEXTURE
+        var bump_scale = Float32(1)
+        var bump = self.extension(material, MATERIALS_BUMP)
+        if bump != NO_NODE:
+            kind = PHYSICAL
+            if normal_map == NO_TEXTURE:
+                bump_map = self.data_map_of(bump, "bumpTexture", assets)
+            if bump_map != NO_TEXTURE:
+                bump_scale = self.number(bump, "bumpFactor", 1)
         var ior = DEFAULT_IOR
         var refraction = self.extension(material, MATERIALS_IOR)
         if refraction != NO_NODE:
@@ -1799,6 +1886,8 @@ struct _Loader(Movable):
             metalness_map=roughness_map,
             normal_map=normal_map,
             normal_scale=Vector2(normal_scale, normal_scale),
+            bump_map=bump_map,
+            bump_scale=bump_scale,
             ao_map=occlusion[0],
             ao_map_intensity=occlusion[1],
             ior=ior,
@@ -1878,9 +1967,25 @@ struct _Loader(Movable):
             var count = self.document.length(primitives)
             self.model.primitive_counts.append(count)
             var targets = 0
+            var names = self.target_names(mesh)
             for slot in range(count):
                 var primitive = self.document.at(primitives, slot)
-                var geometry = self.geometry_of(primitive)
+                var mode = self.integer(primitive, "mode", MODE_TRIANGLES)
+                if mode < MODE_POINTS or mode > MODE_TRIANGLES:
+                    raise Error(
+                        "glTF: a primitive must be points, lines, a line"
+                        " loop, a line strip or triangles: strips and fans"
+                        " of triangles are not read"
+                    )
+                var geometry = self.geometry_of(primitive, mode)
+                if len(names) > 0:
+                    if len(names) != geometry.morph_count():
+                        raise Error(
+                            "glTF: targetNames must hold one name per morph"
+                            " target"
+                        )
+                    geometry.morph_names = names.copy()
+                self.primitive_modes.append(mode)
                 if slot == 0:
                     targets = geometry.morph_count()
                 elif geometry.morph_count() != targets:
@@ -1952,10 +2057,27 @@ struct _Loader(Movable):
             out.append(_integer_component(value, component, normalized))
         return (out^, width)
 
-    def geometry_of(mut self, primitive: Int) raises -> BufferGeometry:
-        """Build a primitive's geometry."""
-        if self.integer(primitive, "mode", MODE_TRIANGLES) != MODE_TRIANGLES:
-            raise Error("glTF: only a primitive of triangles is read")
+    def target_names(self, mesh: Int) raises -> List[String]:
+        """Return the morph target names a mesh's `extras` holds in
+        `targetNames`, as three.js's `GLTFLoader` reads them into
+        `morphTargetDictionary`, or none when it holds no such array."""
+        var names = List[String]()
+        var extras = self.document.get(mesh, "extras")
+        if extras == NO_NODE or self.document.kind(extras) != OBJECT:
+            return names^
+        var found = self.document.get(extras, "targetNames")
+        if found == NO_NODE or self.document.kind(found) != ARRAY:
+            return names^
+        for slot in range(self.document.length(found)):
+            names.append(self.document.string(self.document.at(found, slot)))
+        return names^
+
+    def geometry_of(
+        mut self, primitive: Int, mode: Int
+    ) raises -> BufferGeometry:
+        """Build a primitive's geometry. A primitive of points or lines
+        with indices is read out in index order, since an index here is a
+        triangle index."""
         var attributes = self.document.get(primitive, "attributes")
         if attributes == NO_NODE or self.document.kind(attributes) != OBJECT:
             raise Error("glTF: a primitive needs attributes")
@@ -2034,9 +2156,14 @@ struct _Loader(Movable):
             draco.value().geometry.geometry_type == DRACO_TRIANGULAR_MESH
         ):
             geometry.set_index(draco.value().geometry.faces.copy())
-        elif indices >= 0:
-            geometry.set_index(self.accessor_indices(indices))
-        return geometry^
+            return geometry^
+        if indices < 0:
+            return geometry^
+        var order = self.accessor_indices(indices)
+        if mode == MODE_TRIANGLES:
+            geometry.set_index(order^)
+            return geometry^
+        return _gathered(geometry, order)
 
     def read_targets(
         mut self, primitive: Int, mut geometry: BufferGeometry, floats: Int
@@ -2105,6 +2232,8 @@ struct _Loader(Movable):
         self.model.first_skinned_mesh = len(scene.skinned_meshes)
         self.model.first_instanced_mesh = len(scene.instanced_meshes)
         self.model.first_light = len(scene.lights)
+        self.model.first_line = len(scene.lines)
+        self.model.first_points = len(scene.points)
         var scenes = self.count("scenes")
         if scenes == 0:
             return
@@ -2123,6 +2252,8 @@ struct _Loader(Movable):
             len(scene.instanced_meshes) - self.model.first_instanced_mesh
         )
         self.model.light_count = len(scene.lights) - self.model.first_light
+        self.model.line_count = len(scene.lines) - self.model.first_line
+        self.model.points_count = len(scene.points) - self.model.first_points
         for slot in range(len(self.skinned_nodes)):
             var index = self.skinned_nodes[slot]
             var id = self.skinned_ids[slot]
@@ -2224,7 +2355,9 @@ struct _Loader(Movable):
         mut scene: Scene,
         mut assets: Assets,
     ) raises:
-        """Add a `Mesh` per primitive of a glTF mesh at a node."""
+        """Add a `Mesh` per primitive of triangles of a glTF mesh at a
+        node, a `Line` per primitive of lines and a `Points` per primitive
+        of points, as three.js's `GLTFLoader.loadMesh` builds them."""
         # `place` asks only for a mesh the node named, zero or more.
         if mesh >= len(self.model.first_primitives):
             raise Error("glTF: a node names a mesh that is not there")
@@ -2233,20 +2366,60 @@ struct _Loader(Movable):
         var primitives = self.document.get(entry, "primitives")
         for slot in range(self.model.primitive_counts[mesh]):
             var primitive = self.document.at(primitives, slot)
-            var geometry = self.model.geometries[
-                self.model.first_primitives[mesh] + slot
-            ]
+            var at = self.model.first_primitives[mesh] + slot
+            var geometry = self.model.geometries[at]
             var tinted = assets.geometries.get(geometry).has_attribute(
                 String(COLOR)
             )
-            var material = self.material_for(
-                self.integer(primitive, "material", -1), tinted, assets
-            )
+            var chosen = self.integer(primitive, "material", -1)
+            var mode = self.primitive_modes[at]
+            if mode != MODE_TRIANGLES:
+                var worn = self.unlit_material(chosen, tinted, mode, assets)
+                if mode == MODE_POINTS:
+                    scene.add_points(Points(geometry, worn, node))
+                else:
+                    scene.add_line(
+                        Line(geometry, worn, node, mode=_line_mode(mode))
+                    )
+                continue
+            var material = self.material_for(chosen, tinted, assets)
             var drawn = Mesh(geometry, material, node)
             for target in range(len(weights)):
                 drawn.set_morph_influence(target, weights[target])
             self.node_meshes[index].append(len(scene.meshes))
             scene.add_mesh(drawn)
+
+    def unlit_material(
+        mut self, index: Int, tinted: Bool, mode: Int, mut assets: Assets
+    ) raises -> MaterialId:
+        """Return the material a primitive of points or lines draws with,
+        as three.js's `GLTFLoader` makes a `PointsMaterial` or a
+        `LineBasicMaterial` from the file's: its color, opacity and
+        transparency, vertex colors when the primitive carries them, and
+        for points its map and alpha test, at a size of one pixel that
+        does not shrink with distance. A line here carries no map."""
+        var base = assets.materials.get(self.material_for(index, False, assets))
+        if mode == MODE_POINTS:
+            return assets.materials.add(
+                points_material(
+                    base.color,
+                    size_attenuation=False,
+                    map=base.map,
+                    alpha_test=base.alpha_test,
+                    opacity=base.opacity,
+                    transparent=base.transparent,
+                    vertex_colors=tinted,
+                )
+            )
+        return assets.materials.add(
+            Material(
+                base.color,
+                kind=BASIC,
+                opacity=base.opacity,
+                transparent=base.transparent,
+                vertex_colors=tinted,
+            )
+        )
 
     def draw_instanced(
         mut self,
@@ -2328,9 +2501,13 @@ struct _Loader(Movable):
         )
         for slot in range(self.model.primitive_counts[mesh]):
             var primitive = self.document.at(primitives, slot)
-            var geometry = self.model.geometries[
-                self.model.first_primitives[mesh] + slot
-            ]
+            var at = self.model.first_primitives[mesh] + slot
+            if self.primitive_modes[at] != MODE_TRIANGLES:
+                raise Error(
+                    "glTF: an instanced node draws triangles only: an"
+                    " instanced line or points is not ported"
+                )
+            var geometry = self.model.geometries[at]
             var tinted = assets.geometries.get(geometry).has_attribute(
                 String(COLOR)
             )
@@ -2469,9 +2646,13 @@ struct _Loader(Movable):
         )
         for slot in range(self.model.primitive_counts[mesh]):
             var primitive = self.document.at(primitives, slot)
-            var geometry = self.model.geometries[
-                self.model.first_primitives[mesh] + slot
-            ]
+            var at = self.model.first_primitives[mesh] + slot
+            if self.primitive_modes[at] != MODE_TRIANGLES:
+                raise Error(
+                    "glTF: a skinned node draws triangles only: a skinned"
+                    " line or points is not ported"
+                )
+            var geometry = self.model.geometries[at]
             ref shape = assets.geometries.get(geometry)
             var bones = shape.has_attribute(String(SKIN_INDEX))
             var shares = shape.has_attribute(String(SKIN_WEIGHT))
@@ -2660,6 +2841,36 @@ struct _Loader(Movable):
                             target,
                         )
                     )
+
+
+def _line_mode(mode: Int) -> LineMode:
+    """Return a primitive mode of lines as a line's mode."""
+    if mode == MODE_LINES:
+        return SEGMENTS
+    if mode == MODE_LINE_LOOP:
+        return LOOP
+    return STRIP
+
+
+def _gathered(
+    geometry: BufferGeometry, order: List[Int]
+) raises -> BufferGeometry:
+    """Return a geometry's vertices copied out in index order, its morph
+    targets with them, as three.js's `toNonIndexed` copies them."""
+    var out = BufferGeometry()
+    # A primitive has a POSITION, so the loop always runs.
+    for slot in range(len(geometry.names)):  # pragma: no branch
+        out.set_attribute(
+            geometry.names[slot], geometry.values[slot].gather(order)
+        )
+    for target in range(geometry.morph_count()):
+        out.morph_positions.append(
+            geometry.morph_positions[target].gather(order)
+        )
+    for target in range(len(geometry.morph_normals)):
+        out.morph_normals.append(geometry.morph_normals[target].gather(order))
+    out.morph_relative = geometry.morph_relative
+    return out^
 
 
 def _path_kind(path: String) raises -> TrackKind:
@@ -2865,6 +3076,72 @@ def _wrap_of(mode: Int) raises -> Wrap:
     if mode == WRAP_MIRROR:
         return MIRROR
     raise Error("glTF: a wrap mode that is not known")
+
+
+def is_ktx2(bytes: List[UInt8]) -> Bool:
+    """Return True if bytes begin with the KTX 2.0 identifier, as the image
+    a `KHR_texture_basisu` texture names does.
+
+    Args:
+        bytes: An image file.
+
+    Returns:
+        Whether it is a KTX 2.0 file.
+    """
+    var magic = ktx2.identifier()
+    if len(bytes) < len(magic):
+        return False
+    # The identifier is twelve bytes, so the loop always runs.
+    for at in range(len(magic)):  # pragma: no branch
+        if bytes[at] != magic[at]:
+            return False
+    return True
+
+
+def ktx2_texture(
+    bytes: List[UInt8], sampling: GltfSampler, space: ColorSpace, alpha: Alpha
+) raises -> Texture:
+    """Return a KTX 2.0 image as a glTF texture, as three.js's
+    `KTX2Loader` decodes the one a `KHR_texture_basisu` texture names.
+
+    The first level of the first face is read, through `render.ktx2`. A
+    byte texture takes the color space the material asks for, as every
+    other glTF image does here, and builds its own chain when the sampler
+    reads one. A texture that decodes to floats, UASTC HDR for one, is
+    linear whatever the material asks.
+
+    Args:
+        bytes: The KTX 2.0 file.
+        sampling: The glTF sampler's wraps and filters.
+        space: `SRGB` for a color map, `LINEAR` for data.
+        alpha: `COVERAGE` or `IGNORED`.
+
+    Returns:
+        The texture. `flip_y` is off, as glTF has it.
+
+    Raises:
+        Error: If `render.ktx2` refuses the file or cannot decode it.
+    """
+    var container = ktx2.read(bytes)
+    var chain = sampling.min_filter.is_mipmap()
+    if container.decodes_to_floats():
+        return container.texture(
+            wrap=sampling.wrap_s,
+            filter=sampling.mag_filter,
+            mipmapped=chain,
+            alpha=alpha,
+        )
+    var first = container.texture()
+    return Texture(
+        first.width,
+        first.height,
+        first.pixels.copy(),
+        sampling.wrap_s,
+        sampling.mag_filter,
+        space,
+        chain,
+        alpha,
+    )
 
 
 def decode_image(bytes: List[UInt8]) raises -> DecodedImage:

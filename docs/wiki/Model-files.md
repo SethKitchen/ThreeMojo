@@ -283,7 +283,7 @@ The loader raises, and names the element and the row, for:
 
 ## glTF
 
-`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. It reads meshes, materials, textures, nodes, skins, morph targets, animations, cameras, sparse accessors and twelve [extensions](#gltf-extensions). three.js: `GLTFLoader`.
+`loaders/gltf.mojo`. `read_gltf(path, scene, assets)` reads a glTF 2.0 file into the scene and the assets it is handed. It reads meshes, points, lines, materials, textures, nodes, skins, morph targets, animations, cameras, sparse accessors and eighteen [extensions](#gltf-extensions). three.js: `GLTFLoader`.
 
 ```mojo
 var model = read_gltf("assets/gltf/box.glb", scene, assets)
@@ -315,6 +315,8 @@ The model says what went where, by the file's own indices.
 | `first_mesh`, `mesh_count` | Where the meshes this file added begin in `scene.meshes`, and how many. |
 | `first_skinned_mesh`, `skinned_mesh_count` | Where the skinned meshes this file added begin in `scene.skinned_meshes`, and how many. |
 | `first_instanced_mesh`, `instanced_mesh_count` | Where the instanced meshes this file added begin in `scene.instanced_meshes`, and how many. |
+| `first_line`, `line_count` | Where the lines this file added begin in `scene.lines`, and how many. |
+| `first_points`, `points_count` | Where the points this file added begin in `scene.points`, and how many. |
 | `first_light`, `light_count` | Where the lights this file added begin in `scene.lights`, and how many. |
 | `cameras` | One `GltfCamera` per node that carries a camera and that the loaded scene reaches. |
 | `animations` | One `AnimationClip` per animation that drives something the loaded scene reaches, in file order. |
@@ -324,6 +326,7 @@ The model says what went where, by the file's own indices.
 | glTF | ThreeMojo |
 |---|---|
 | A primitive of triangles | A `BufferGeometry` with `position`, and `normal`, `uv`, `uv1` and `color` when present, indexed when it is. `TEXCOORD_1` becomes `uv1`. |
+| A primitive of points or lines | A `Points` or a `Line`. See [Points and lines](#points-and-lines). |
 | A material | A `STANDARD` material, or a `BASIC` or `PHYSICAL` one when an [extension](#gltf-extensions) asks. It reads base color and alpha, base color texture, metallic and roughness factors, the metallic-roughness texture as both `roughness_map` and `metalness_map`, normal texture and scale, the [occlusion texture](#occlusion), emissive factor and texture, `doubleSided`. `BLEND` sets `transparent`. `MASK` sets `alpha_test` to `alphaCutoff`. |
 | A texture | A `Texture` at its sampler's wrap and filters. A base color or emissive map is read as sRGB. A metallic-roughness, normal or occlusion map is read as linear, with its alpha ignored. One glTF texture read both ways is two textures. |
 | A node | An `Object3D` at its translation, rotation and scale, or at its matrix decomposed, with the node's `name`. Each primitive of its mesh is a `Mesh`. |
@@ -337,6 +340,24 @@ A primitive without a material draws with one default `standard_material`. A pri
 glTF's texture coordinates run down from an image's top left. Each glTF texture has `flip_y` off, as three.js sets `flipY = false`. So `v` reads down from the first row, and the geometry's coordinates and any `KHR_texture_transform` are kept as the file has them. The writer writes a texture with `flip_y` upside down, as three.js's `GLTFExporter` writes a `flipY` texture, and one without it as it is.
 
 A texture takes its sampler's `wrapS`, `wrapT`, `magFilter` and `minFilter`, as three.js's `GLTFLoader` reads them. A mipmap `minFilter` builds the chain. The reader refuses a mipmap `magFilter` and a filter that is none of glTF's six. The writer writes the four, and writes a mipmap `minFilter` on a texture without a chain as the filter it reads inside a level.
+
+### Points and lines
+
+A primitive of points or lines draws as three.js's `GLTFLoader.loadMesh` draws it.
+
+| `mode` | ThreeMojo |
+|---|---|
+| `POINTS`, 0 | `Points`. |
+| `LINES`, 1 | `Line` with `SEGMENTS`. |
+| `LINE_LOOP`, 2 | `Line` with `LOOP`. |
+| `LINE_STRIP`, 3 | `Line` with `STRIP`. |
+| `TRIANGLES`, 4 | `Mesh`. This is the default. |
+
+A point or a line gets a `BASIC` material of its own, as three.js makes a `PointsMaterial` or a `LineBasicMaterial`. It takes the color, the opacity and the transparency of the file's material. It has `vertex_colors` on when the primitive has `COLOR_0`. Points also take the base color texture and the alpha test, at a size of one pixel that does not shrink with distance. A line takes no texture, because a line here has none.
+
+An index here holds triangles. Thus the loader copies the vertices of an indexed point or line primitive out in index order, as three.js's `toNonIndexed` does. The morph targets are copied with them.
+
+A point or a line on a skinned node or an instanced node is refused. A skinned or instanced line is not ported.
 
 ### Occlusion
 
@@ -357,6 +378,7 @@ The loader reads a skin into a `Skeleton`, a morph target into the geometry, and
 | A skin | A `Skeleton` with one `Bone` per joint. The inverse bind matrices come from `inverseBindMatrices`, or are the identity. The mesh is bound at the identity, in `ATTACHED` mode. |
 | A primitive's `targets` | Morph targets of the geometry, with `morph_relative` set, because glTF holds offsets. `POSITION` and `NORMAL` are read. |
 | `weights` | The morph influences of each mesh. A node's `weights` replace its mesh's `weights`. |
+| `extras.targetNames` | The geometry's `morph_names`, one per target, as three.js reads them into `morphTargetDictionary`. `extras` of another form names nothing. |
 | An animation | An `AnimationClip`, named by the file or `animation_` and its index. |
 | A `translation`, `rotation` or `scale` channel | A `POSITION`, `QUATERNION` or `SCALE` track on the node. |
 | A `weights` channel | One morph influence track for each morph target of each mesh, plain or skinned, on the node and below it. |
@@ -391,7 +413,7 @@ A perspective camera takes `yfov` in radians and `znear`. Without `aspectRatio`,
 
 ### glTF extensions
 
-The loader reads sixteen extensions. They are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `is_supported_extension(name)` tells if the loader reads an extension.
+The loader reads eighteen extensions. They are the ones three.js's `GLTFLoader` reads that map onto a feature of this renderer. `is_supported_extension(name)` tells if the loader reads an extension.
 
 | Extension | ThreeMojo |
 |---|---|
@@ -411,6 +433,8 @@ The loader reads sixteen extensions. They are the ones three.js's `GLTFLoader` r
 | `KHR_mesh_quantization` | Nothing more. The loader reads every attribute at any component type, and a normalized one divides by its largest value. |
 | `EXT_mesh_gpu_instancing` | One `InstancedMesh` for each primitive of the node's mesh. See [Instancing](#instancing). |
 | `KHR_draco_mesh_compression` | The primitive's Draco data, decoded by `loaders/draco.mojo`. See [Draco primitives](#draco-primitives). |
+| `EXT_materials_bump` | A `PHYSICAL` material. `bumpTexture` sets `bump_map`, read as data, and `bumpFactor` sets `bump_scale`. See [Bump maps](#bump-maps). |
+| `KHR_texture_basisu` | The texture reads the KTX 2.0 image that the extension names, before its own `source`. See [KTX 2.0 textures](#ktx-20-textures). |
 
 A file that lists another extension in `extensionsRequired` is refused, as three.js refuses it. A file that lists an extension only in `extensionsUsed` is read without that extension.
 
@@ -446,10 +470,33 @@ The loader decodes the buffer view that the extension names, as three.js's `DRAC
 
 The loader refuses an id that is not in the Draco data, and a value that does not fit its accessor's type. It also refuses a Draco float attribute that an integer accessor reads. Draco rounds that float. That file is not valid glTF.
 
+#### Bump maps
+
+`EXT_materials_bump` makes a `PHYSICAL` material, as three.js makes one. A material here holds a normal map or a bump map, not both. three.js draws the normal map of a material with both and ignores the bump map. Thus the loader drops the bump map of such a material. A `bumpFactor` without a `bumpTexture` draws nothing, and the loader keeps a `bump_scale` of one.
+
+#### KTX 2.0 textures
+
+`KHR_texture_basisu` names a KTX 2.0 image, which `render/ktx2.mojo` decodes. A texture with the extension reads that image, and the texture's own `source` is not needed. The loader reads the first level of the first face.
+
+| Image | Texture |
+|---|---|
+| UASTC, ETC1S or another format of bytes | A byte texture in the color space that the map needs: sRGB for a color map, linear for data. The loader builds the mip chain when the sampler reads one. |
+| UASTC HDR, or a half or float format | A float texture, linear, whatever the map needs. |
+
+The loader tells a KTX 2.0 image by its identifier, `is_ktx2(bytes)`. `ktx2_texture(bytes, sampling, space, alpha)` builds the texture.
+
+#### WebP images
+
+`EXT_texture_webp` is not read, because this port has no WebP decoder. A lossless WebP decoder is a bounded task, but most WebP textures in glTF files are lossy. A lossy decoder is a large task, and it is left for later.
+
+- A file that requires `EXT_texture_webp` is refused with a message that says so.
+- A texture that uses the extension and has a `source` reads that PNG or JPEG image, as three.js reads the fallback.
+- A texture with only a WebP image is refused.
+
 #### Not ported
 
 - `KHR_materials_variants`.
-- `EXT_meshopt_compression`, `KHR_texture_basisu`, `EXT_texture_webp` and `EXT_texture_avif`.
+- `EXT_meshopt_compression`, `EXT_texture_webp` and `EXT_texture_avif`.
 
 #### Differences from three.js
 
@@ -459,10 +506,12 @@ The loader refuses an id that is not in the Draco data, and a value that does no
 - An `iridescenceTexture` or `iridescenceThicknessTexture` with an `iridescenceFactor` of zero is left out. So is an `anisotropyTexture` with an `anisotropyStrength` of zero. three.js keeps them, but draws neither.
 - A `sheenColorFactor` outside zero to one is refused, as a `specularColorFactor` is.
 - A skinned node with `EXT_mesh_gpu_instancing` is refused. An instanced skinned mesh is not ported. three.js drops the skin.
+- A KTX 2.0 byte image takes the color space that the map needs. three.js keeps the image's own color space for a data map.
+- A KTX 2.0 image builds its own mip chain from its first level. three.js uploads the chain that the file holds.
 
 ### Not read
 
-A primitive of points, lines or strips is refused. Only the first two sets of texture coordinates are read.
+A primitive of triangle strips or triangle fans is refused. three.js turns them into triangles. Only the first two sets of texture coordinates are read.
 
 ### Errors
 
@@ -471,7 +520,9 @@ The loader raises for:
 - A file it cannot read. A document that is not JSON or not glTF 2. A required extension that the loader does not read.
 - A buffer shorter than its length. A buffer view or accessor that runs past its buffer.
 - An unknown accessor type or component type. An attribute of the wrong width. Indices that are not unsigned integers.
-- An image that is not PNG, JPEG or TGA. A texture or material that names something the file does not have.
+- An image that is not PNG, JPEG, TGA or KTX 2.0. A texture or material that names something the file does not have. A texture with no image, or with only a WebP image.
+- A primitive mode that is not points, lines or triangles. A point or a line on a skinned or instanced node.
+- `targetNames` that do not hold one name per morph target.
 - An unknown wrap mode or alpha mode.
 - A node reached twice. A node matrix that flattens an axis.
 - A sparse accessor with indices that do not rise, that are not unsigned integers, or that name an element past the accessor.

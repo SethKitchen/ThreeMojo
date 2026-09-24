@@ -78,10 +78,37 @@ are combined into one image of the same size, as three.js's
 `buildMetalRoughTexture` combines them. Two maps combined must share one
 transform and one channel, since one reference carries them.
 
-**Not written.** Lights, cameras, animations, skins, morph targets,
-instanced, batched and skinned meshes, lines, points and sprites, and
-every map glTF has no place for: bump, alpha, light, specular,
-displacement, environment, matcap and gradient maps. An ao map on a
+**What a node carries.** A glTF node has one mesh, one skin, one camera
+and one light, so everything that rides one scene node is written on it.
+A directional, point or spot light is a `KHR_lights_punctual` light, as
+three.js's `GLTFLightExtension` writes it; glTF aims it down its node's
+-z axis, and the target is not written. A camera of the `CameraList`
+handed in is a perspective or an orthographic camera, named by its
+node; `xmag` and `ymag` are half the box, as the specification and
+`read_gltf` have them, where three.js writes twice `right` and `top`. A
+skinned mesh writes `JOINTS_0` and `WEIGHTS_0`, and its node a skin of
+its bones' nodes, each inverse bind times the bind matrix, as three.js's
+`processSkin` writes it. An instanced mesh writes
+`EXT_mesh_gpu_instancing`, required, as three.js's
+`GLTFMeshGpuInstancing` writes it. A line and points are primitives of
+their own mode. Morph targets are the primitives' `targets`, as offsets,
+with the mesh's `weights` and `extras.targetNames`. A skinned or an
+instanced mesh shares its node with nothing else, and the meshes on one
+node share one set of morph targets and weights: glTF gives a node one
+mesh, one skin and one instancing.
+
+**Animations.** Each `AnimationClip` handed in is a glTF animation, as
+three.js's `processAnimation` writes it: a node's position, rotation and
+scale tracks are channels, and the morph tracks of one node are merged
+into one `weights` channel, as three.js's `mergeMorphTargetTracks`
+merges them; see `_Merged`. Any other track is left out, as three.js
+leaves it out.
+
+**Not written.** Ambient, hemisphere and rect area lights and light
+probes, a light's decay, batched meshes and sprites, and every map glTF
+has no place for: alpha, light, specular, displacement, environment,
+matcap and gradient maps. A bump map is `EXT_materials_bump` on a
+standard or a physical material, as three.js writes it. An ao map on a
 `BASIC` material is written, as three.js writes it, but `read_gltf` reads
 no occlusion for an unlit material. A `BACK_SIDE` material is written single-sided, as three.js
 writes it, since glTF has no back side. A geometry's groups are not split
@@ -92,8 +119,32 @@ the list does not have, or that holds no whole triangle, writes nothing,
 as nothing is drawn for it. three.js writes it with no material.
 """
 
+from animation.animation_clip import AnimationClip
+from animation.keyframe_track import (
+    CUBIC_SPLINE,
+    MORPH_INFLUENCE,
+    POSITION as TRANSLATION_KIND,
+    QUATERNION,
+    SCALE,
+    STEP,
+    Interpolation,
+    KeyframeTrack,
+    TrackKind,
+)
+from cameras.camera_list import CameraList
+from cameras.orthographic_camera import OrthographicCamera
+from cameras.perspective_camera import PerspectiveCamera
 from core.assets import Assets
-from core.buffer_geometry import COLOR, NORMAL, POSITION, UV, UV1
+from core.buffer_attribute import BufferAttribute
+from core.buffer_geometry import (
+    COLOR,
+    MAX_MORPH_TARGETS,
+    NORMAL,
+    POSITION,
+    UV,
+    UV1,
+    BufferGeometry,
+)
 from core.geometry_store import GeometryId
 from core.object3d import NO_PARENT, NodeId, Object3D
 from core.scene import Scene
@@ -108,6 +159,9 @@ from loaders.gltf import (
     GLB_JSON_CHUNK,
     GLB_MAGIC,
     GLB_VERSION,
+    GPU_INSTANCING,
+    LIGHTS_PUNCTUAL,
+    MATERIALS_BUMP,
     MATERIALS_ANISOTROPY,
     MATERIALS_CLEARCOAT,
     MATERIALS_DISPERSION,
@@ -118,6 +172,10 @@ from loaders.gltf import (
     MATERIALS_TRANSMISSION,
     MATERIALS_UNLIT,
     MATERIALS_VOLUME,
+    MODE_LINES,
+    MODE_LINE_LOOP,
+    MODE_LINE_STRIP,
+    MODE_POINTS,
     MODE_TRIANGLES,
     TEXTURE_TRANSFORM,
     WRAP_CLAMP,
@@ -125,12 +183,14 @@ from loaders.gltf import (
     WRAP_REPEAT,
     gl_filter,
 )
+from lights.light import DIRECTIONAL, POINT, SPOT, Light, LightKind
 from materials.material import (
     BASIC,
     DEFAULT_IOR,
     DOUBLE_SIDE,
     NO_TEXTURE,
     PHYSICAL,
+    STANDARD,
     Material,
     MaterialId,
 )
@@ -138,11 +198,14 @@ from math.matrix4 import Matrix4
 from math.quaternion import Quaternion
 from math.vector2 import Vector2
 from math.vector3 import Vector3
+from objects.instanced_mesh import InstancedMesh
+from objects.line import LOOP, SEGMENTS, LineMode
+from objects.skinned_mesh import SKIN_INDEX, SKIN_WEIGHT, SkinnedMesh
 from render.framebuffer import Color, FloatColor, Framebuffer
 from render.png import encode as encode_png
 from render.texture import CLAMP, FLOAT_TYPE, MIRROR, Texture, Wrap
 from render.texture_store import TextureId
-from std.math import isfinite
+from std.math import floor, isfinite
 from std.pathlib import Path
 from units.si import METER, NANOMETER, RADIAN
 
@@ -475,8 +538,23 @@ struct _Exporter(Movable):
     var uv1s: List[Int]
     var colors: List[Int]
     var indices: List[Int]
-    # The extensions written, each once, in the order first written.
+    # Each geometry's morph targets as glTF's offsets: a `POSITION`
+    # accessor and a `NORMAL` accessor, or -1 for none, per target.
+    var targets: List[List[Int]]
+    # Each geometry's `JOINTS_0` and `WEIGHTS_0`, or -1 until a skinned
+    # mesh asks for them.
+    var joints: List[Int]
+    var skin_weights: List[Int]
+    # `KHR_lights_punctual`'s lights, and the cameras, skins and
+    # animations, as JSON texts.
+    var lights: List[String]
+    var cameras: List[String]
+    var skins: List[String]
+    var animations: List[String]
+    # The extensions written, each once, in the order first written, and
+    # the ones a reader must know.
     var used: List[String]
+    var required: List[String]
 
     def __init__(out self, embed: Bool):
         """Start an empty document.
@@ -506,7 +584,15 @@ struct _Exporter(Movable):
         self.uv1s = List[Int]()
         self.colors = List[Int]()
         self.indices = List[Int]()
+        self.targets = List[List[Int]]()
+        self.joints = List[Int]()
+        self.skin_weights = List[Int]()
+        self.lights = List[String]()
+        self.cameras = List[String]()
+        self.skins = List[String]()
+        self.animations = List[String]()
         self.used = List[String]()
+        self.required = List[String]()
 
     def use(mut self, name: String):
         """Add an extension to `extensionsUsed`, once."""
@@ -514,6 +600,13 @@ struct _Exporter(Movable):
             if known == name:
                 return
         self.used.append(name)
+
+    def require(mut self, name: String):
+        """Add an extension to `extensionsUsed` and `extensionsRequired`,
+        once."""
+        self.use(name)
+        if not (name in self.required):
+            self.required.append(name)
 
     def pad(mut self):
         """Pad the buffer to a multiple of four bytes, where every view
@@ -546,14 +639,25 @@ struct _Exporter(Movable):
         return len(self.views) - 1
 
     def float_accessor(
-        mut self, data: List[Float32], width: Int, kind: String, bounded: Bool
+        mut self,
+        data: List[Float32],
+        width: Int,
+        kind: String,
+        bounded: Bool,
+        vertex: Bool = True,
     ) raises -> Int:
-        """Write an attribute of `Float32`s and return its accessor."""
+        """Write `Float32`s and return their accessor: a vertex attribute,
+        in an array buffer view with a stride, or with `vertex` off the
+        keys, the matrices or the instances, in a plain view."""
         var bytes = List[UInt8](capacity=len(data) * 4)
-        # `geometry` refuses a geometry with no vertices before this.
+        # Every caller writes at least one element: `geometry` refuses a
+        # geometry with no vertices, a track has a key, a skeleton a bone,
+        # and `instancing` refuses an instanced mesh with no instances.
         for value in data:  # pragma: no branch
             push_f32(bytes, value, True)
-        var view = self.view(bytes, ARRAY_BUFFER, width * 4)
+        var view = self.view(
+            bytes, ARRAY_BUFFER if vertex else 0, width * 4 if vertex else 0
+        )
         var count = len(data) // width
         var writer = JsonWriter()
         writer.begin_object()
@@ -586,6 +690,29 @@ struct _Exporter(Movable):
         self.accessors.append(writer.finish())
         return len(self.accessors) - 1
 
+    def joint_accessor(mut self, joints: List[Float32]) raises -> Int:
+        """Write a `JOINTS_0` of unsigned shorts, as three.js's
+        `GLTFExporter` converts a `skinIndex` to them, and return its
+        accessor. `primitive` has checked every index."""
+        var bytes = List[UInt8](capacity=len(joints) * 2)
+        # A skinned geometry has at least one vertex.
+        for value in joints:  # pragma: no branch
+            push_word(bytes, Int(value), 2, True)
+        var view = self.view(bytes, ARRAY_BUFFER, 8)
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("bufferView")
+        writer.integer(view)
+        writer.key("componentType")
+        writer.integer(COMPONENT_UNSIGNED_SHORT)
+        writer.key("count")
+        writer.integer(len(joints) // 4)
+        writer.key("type")
+        writer.string("VEC4")
+        writer.end_object()
+        self.accessors.append(writer.finish())
+        return len(self.accessors) - 1
+
     def index_accessor(mut self, index: List[Int], vertices: Int) raises -> Int:
         """Write a primitive's indices and return their accessor."""
         var component = index_component(vertices)
@@ -610,17 +737,25 @@ struct _Exporter(Movable):
         return len(self.accessors) - 1
 
     def geometry(
-        mut self, id: GeometryId, colored: Bool, assets: Assets
+        mut self,
+        id: GeometryId,
+        colored: Bool,
+        assets: Assets,
+        skinned: Bool = False,
+        triangles: Bool = True,
     ) raises -> Int:
-        """Write a geometry's accessors, once, and its colors once they
-        are asked for; return its slot in the geometry lists."""
+        """Write a geometry's accessors and its morph targets, once, and
+        its colors and its skin once they are asked for; return its slot in
+        the geometry lists."""
         ref geometry = assets.geometries.get(id)
+        # Checked each time, since a line's geometry need not hold whole
+        # triangles and a mesh's must.
+        var count = check_geometry(geometry, triangles)
         var slot = -1
         for at in range(len(self.geometry_keys)):
             if self.geometry_keys[at] == id.value:
                 slot = at
         if slot < 0:
-            var count = check_geometry(geometry)
             if count == 0:
                 raise Error("glTF: a geometry with no vertices is not written")
             self.geometry_keys.append(id.value)
@@ -652,7 +787,20 @@ struct _Exporter(Movable):
             if geometry.is_indexed():
                 indices = self.index_accessor(geometry.index, count)
             self.indices.append(indices)
+            self.targets.append(self.morph_targets(geometry))
+            self.joints.append(-1)
+            self.skin_weights.append(-1)
             slot = len(self.geometry_keys) - 1
+        if skinned and self.joints[slot] < 0:
+            self.joints[slot] = self.joint_accessor(
+                geometry.attribute_view(SKIN_INDEX).packed()
+            )
+            self.skin_weights[slot] = self.float_accessor(
+                geometry.attribute_view(SKIN_WEIGHT).packed(),
+                4,
+                "VEC4",
+                False,
+            )
         if colored and self.colors[slot] < 0:
             ref color = geometry.attribute_view(COLOR)
             self.colors[slot] = self.float_accessor(
@@ -662,6 +810,34 @@ struct _Exporter(Movable):
                 False,
             )
         return slot
+
+    def morph_targets(mut self, geometry: BufferGeometry) raises -> List[Int]:
+        """Write a geometry's morph targets as glTF's offsets, as three.js's
+        `GLTFExporter` writes them: a target that holds finished positions
+        has the base taken off. Return a `POSITION` accessor and a `NORMAL`
+        accessor or -1 per target."""
+        var found = List[Int]()
+        for target in range(geometry.morph_count()):
+            found.append(
+                self.float_accessor(
+                    _offsets(
+                        geometry, geometry.morph_positions[target], POSITION
+                    ),
+                    3,
+                    "VEC3",
+                    True,
+                )
+            )
+            var normal = -1
+            if geometry.has_morph_normals():
+                normal = self.float_accessor(
+                    _offsets(geometry, geometry.morph_normals[target], NORMAL),
+                    3,
+                    "VEC3",
+                    False,
+                )
+            found.append(normal)
+        return found^
 
     def sampler(mut self, texture: Texture) raises -> Int:
         """Write the sampler for a texture's two wraps and two filters,
@@ -944,6 +1120,22 @@ struct _Exporter(Movable):
             writer.number(material.emissive_intensity)
             writer.end_object()
             written += 1
+        if material.bump_map != NO_TEXTURE and material.is_physical():
+            # three.js's `GLTFMaterialsBumpExtension`, for a standard or a
+            # physical material. A material here has a bump scale that is
+            # not one only when it has a bump map.
+            self.open_extension(writer, MATERIALS_BUMP)
+            self.texture_info(
+                writer,
+                "bumpTexture",
+                material.bump_map,
+                material.bump_map,
+                assets,
+            )
+            writer.key("bumpFactor")
+            writer.number(material.bump_scale)
+            writer.end_object()
+            written += 1
         if material.kind == PHYSICAL:
             written += self.physical_extensions(writer, material, assets)
         writer.end_object()
@@ -1141,27 +1333,52 @@ struct _Exporter(Movable):
         return written
 
     def mesh(
-        mut self, scene: Scene, drawn: List[Int], assets: Assets
+        mut self, scene: Scene, carried: _Carried, assets: Assets
     ) raises -> Int:
-        """Write the meshes on one node as one glTF mesh, a primitive
-        each, and return its index.
+        """Write what one node draws as one glTF mesh, a primitive each,
+        and return its index.
 
         A mesh that wears a material list writes a primitive for each
         group it draws, with the group's slice of the index, as three.js's
-        `processMesh` does. A mesh whose list draws nothing writes no
-        primitive, and a node whose meshes write none gets no mesh: -1.
+        `processMesh` does. A skinned mesh, an instanced mesh, a line and
+        points write a primitive each, of their own mode. A mesh whose
+        list draws nothing writes no primitive, and a node whose meshes
+        write none gets no mesh: -1. A node with morph targets writes its
+        `weights` and its `targetNames`, as three.js writes them.
         """
+        var skinned = len(carried.skinned) > 0
+        var instanced = len(carried.instanced) > 0
+        var others = (
+            len(carried.meshes) + len(carried.lines) + len(carried.points)
+        )
+        if skinned and (instanced or others > 0):
+            raise Error(
+                "glTF: a node that carries a skinned mesh carries nothing"
+                " else: glTF gives a node one mesh and one skin"
+            )
+        if instanced and others > 0:
+            raise Error(
+                "glTF: a node that carries an instanced mesh carries nothing"
+                " else: glTF instances a node's whole mesh"
+            )
+        var shapes = _geometries(scene, carried)
+        var morphs = _morph_count(shapes, assets)
+        var weights = _weights(scene, carried, morphs)
         var writer = JsonWriter()
         writer.begin_object()
         writer.key("primitives")
         writer.begin_array()
         var primitives = 0
-        # `export_gltf` asks only for a node that carries a mesh.
-        for which in drawn:  # pragma: no branch
+        for which in carried.meshes:
             ref mesh = scene.meshes[which]
             if not mesh.is_multi_material():
                 self.primitive(
-                    writer, mesh.geometry, mesh.material, List[Int](), assets
+                    writer,
+                    mesh.geometry,
+                    mesh.material,
+                    List[Int](),
+                    assets,
+                    MODE_TRIANGLES,
                 )
                 primitives += 1
                 continue
@@ -1180,10 +1397,73 @@ struct _Exporter(Movable):
                 for slot in range(run[0], last):  # pragma: no branch
                     slice.append(geometry.vertex_at(slot))
                 self.primitive(
-                    writer, mesh.geometry, worn.value(), slice, assets
+                    writer,
+                    mesh.geometry,
+                    worn.value(),
+                    slice,
+                    assets,
+                    MODE_TRIANGLES,
                 )
                 primitives += 1
+        for which in carried.skinned:
+            ref skin = scene.skinned_meshes[which]
+            self.primitive(
+                writer,
+                skin.geometry,
+                skin.material,
+                List[Int](),
+                assets,
+                MODE_TRIANGLES,
+                skin.skeleton.bone_count(),
+            )
+            primitives += 1
+        for which in carried.instanced:
+            ref crowd = scene.instanced_meshes[which]
+            self.primitive(
+                writer,
+                crowd.geometry,
+                crowd.material,
+                List[Int](),
+                assets,
+                MODE_TRIANGLES,
+            )
+            primitives += 1
+        for which in carried.lines:
+            ref line = scene.lines[which]
+            self.primitive(
+                writer,
+                line.geometry,
+                line.material,
+                List[Int](),
+                assets,
+                line_mode_code(line.mode),
+            )
+            primitives += 1
+        for which in carried.points:
+            ref dots = scene.points[which]
+            self.primitive(
+                writer,
+                dots.geometry,
+                dots.material,
+                List[Int](),
+                assets,
+                MODE_POINTS,
+            )
+            primitives += 1
         writer.end_array()
+        if morphs > 0:
+            writer.key("weights")
+            _write_numbers(writer, weights)
+            ref first = assets.geometries.get(shapes[0])
+            writer.key("extras")
+            writer.begin_object()
+            writer.key("targetNames")
+            writer.begin_array()
+            # A geometry with morph targets has at least one.
+            for target in range(morphs):  # pragma: no branch
+                writer.string(target_name(first, target))
+            writer.end_array()
+            writer.end_object()
         writer.end_object()
         if primitives == 0:
             return -1
@@ -1197,20 +1477,31 @@ struct _Exporter(Movable):
         material_id: MaterialId,
         slice: List[Int],
         assets: Assets,
+        mode: Int,
+        bones: Int = 0,
     ) raises:
-        """Write one primitive: a geometry drawn in one material, over its
-        own index or, when `slice` is not empty, over that slice of it."""
+        """Write one primitive: a geometry drawn in one material and one
+        mode, over its own index or, when `slice` is not empty, over that
+        slice of it. `bones` is the skeleton's size for a skinned mesh,
+        whose `JOINTS_0` and `WEIGHTS_0` are written, and zero otherwise.
+        """
         var material = assets.materials.get(material_id)
-        var colored = material.vertex_colors and assets.geometries.get(
-            id
-        ).has_attribute(COLOR)
-        var slot = self.geometry(id, colored, assets)
+        ref shape = assets.geometries.get(id)
+        if mode != MODE_TRIANGLES and shape.is_indexed():
+            raise Error(
+                "glTF: a line or points geometry has no index: an index"
+                " here is a triangle index"
+            )
+        if bones > 0:
+            _check_skin(shape, bones)
+        var colored = material.vertex_colors and shape.has_attribute(COLOR)
+        var slot = self.geometry(
+            id, colored, assets, bones > 0, mode == MODE_TRIANGLES
+        )
         var index = self.material(material_id, assets)
         var indices = self.indices[slot]
         if len(slice) > 0:
-            indices = self.index_accessor(
-                slice, assets.geometries.get(id).vertex_count()
-            )
+            indices = self.index_accessor(slice, shape.vertex_count())
         writer.begin_object()
         writer.key("attributes")
         writer.begin_object()
@@ -1228,6 +1519,11 @@ struct _Exporter(Movable):
         if colored:
             writer.key("COLOR_0")
             writer.integer(self.colors[slot])
+        if bones > 0:
+            writer.key("JOINTS_0")
+            writer.integer(self.joints[slot])
+            writer.key("WEIGHTS_0")
+            writer.integer(self.skin_weights[slot])
         writer.end_object()
         if indices >= 0:
             writer.key("indices")
@@ -1235,8 +1531,359 @@ struct _Exporter(Movable):
         writer.key("material")
         writer.integer(index)
         writer.key("mode")
-        writer.integer(MODE_TRIANGLES)
+        writer.integer(mode)
+        if len(self.targets[slot]) > 0:
+            writer.key("targets")
+            writer.begin_array()
+            var pairs = len(self.targets[slot]) // 2
+            for target in range(pairs):  # pragma: no branch
+                writer.begin_object()
+                writer.key("POSITION")
+                writer.integer(self.targets[slot][target * 2])
+                if self.targets[slot][target * 2 + 1] >= 0:
+                    writer.key("NORMAL")
+                    writer.integer(self.targets[slot][target * 2 + 1])
+                writer.end_object()
+            writer.end_array()
         writer.end_object()
+
+    def instancing(mut self, scene: Scene, carried: _Carried) raises -> String:
+        """Return a node's `EXT_mesh_gpu_instancing` as JSON, or an empty
+        string when it carries no instanced mesh, as three.js's
+        `GLTFMeshGpuInstancing` writes it: each instance's matrix split
+        into a `TRANSLATION`, a `ROTATION` and a `SCALE`, and its color as
+        `_COLOR_0` when the mesh colors its instances. The extension is
+        required, since a reader without it draws one instance."""
+        if len(carried.instanced) == 0:
+            return ""
+        ref first = scene.instanced_meshes[carried.instanced[0]]
+        for at in range(1, len(carried.instanced)):
+            if not _same_instances(
+                first, scene.instanced_meshes[carried.instanced[at]]
+            ):
+                raise Error(
+                    "glTF: the instanced meshes on one node must place their"
+                    " instances alike: glTF instances a node's whole mesh"
+                )
+        if first.count() == 0:
+            raise Error(
+                "glTF: an instanced mesh of no instances is not written: an"
+                " accessor holds at least one element"
+            )
+        var moves = List[Float32]()
+        var turns = List[Float32]()
+        var sizes = List[Float32]()
+        var tints = List[Float32]()
+        # Refused above when there are no instances.
+        for at in range(first.count()):  # pragma: no branch
+            var position = Vector3(0, 0, 0)
+            var rotation = Quaternion(0, 0, 0, 1)
+            var scale = Vector3(1, 1, 1)
+            first.matrices[at].decompose(position, rotation, scale)
+            moves.extend([position.x, position.y, position.z])
+            turns.extend([rotation.x, rotation.y, rotation.z, rotation.w])
+            sizes.extend([scale.x, scale.y, scale.z])
+            var tint = FloatColor(srgb=first.color_at(at))
+            tints.extend([tint.r, tint.g, tint.b])
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("attributes")
+        writer.begin_object()
+        writer.key("TRANSLATION")
+        writer.integer(self.float_accessor(moves, 3, "VEC3", False, False))
+        writer.key("ROTATION")
+        writer.integer(self.float_accessor(turns, 4, "VEC4", False, False))
+        writer.key("SCALE")
+        writer.integer(self.float_accessor(sizes, 3, "VEC3", False, False))
+        if len(first.colors) > 0:
+            writer.key("_COLOR_0")
+            writer.integer(self.float_accessor(tints, 3, "VEC3", False, False))
+        writer.end_object()
+        writer.end_object()
+        self.require(GPU_INSTANCING)
+        return writer.finish()
+
+    def skin(
+        mut self, scene: Scene, carried: _Carried, written: List[Int]
+    ) raises -> Int:
+        """Write the skin of a node's skinned meshes and return its index,
+        or -1 when it carries none, as three.js's `processSkin` writes
+        one: each bone's node as a joint, the first the `skeleton`, and
+        each inverse bind matrix times the mesh's bind matrix."""
+        if len(carried.skinned) == 0:
+            return -1
+        ref first = scene.skinned_meshes[carried.skinned[0]]
+        for at in range(1, len(carried.skinned)):
+            if not _same_skin(first, scene.skinned_meshes[carried.skinned[at]]):
+                raise Error(
+                    "glTF: the skinned meshes on one node must share one"
+                    " skeleton and one bind matrix: glTF gives a node one"
+                    " skin"
+                )
+        var joints = List[Int]()
+        var inverses = List[Float32]()
+        # A skeleton has at least one bone.
+        for bone in first.skeleton.bones:  # pragma: no branch
+            var joint = _written_slot(bone.node, written, "a bone")
+            if joint < 0:
+                raise Error(
+                    "glTF: a bone rides a node that is not written: show it,"
+                    " or write every node"
+                )
+            joints.append(joint)
+            var inverse = bone.inverse_bind * first.bind_matrix
+            for element in range(16):  # pragma: no branch
+                inverses.append(inverse.elements[element])
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("inverseBindMatrices")
+        writer.integer(self.float_accessor(inverses, 16, "MAT4", False, False))
+        writer.key("joints")
+        _write_integers(writer, joints)
+        writer.key("skeleton")
+        writer.integer(joints[0])
+        writer.end_object()
+        self.skins.append(writer.finish())
+        return len(self.skins) - 1
+
+    def light(mut self, light: Light, name: String) raises -> Int:
+        """Write a directional, point or spot light to
+        `KHR_lights_punctual` and return its index, as three.js's
+        `GLTFLightExtension` writes it: the color linear, the distance as
+        its `range` when it has one, and a spot light's cone as its outer
+        angle, with the penumbra's part of it outside the inner one."""
+        self.use(LIGHTS_PUNCTUAL)
+        var writer = JsonWriter()
+        writer.begin_object()
+        if name != "":
+            writer.key("name")
+            writer.string(name)
+        writer.key("color")
+        _write_color(writer, light.color)
+        writer.key("intensity")
+        writer.number(light.intensity)
+        writer.key("type")
+        writer.string(_light_type(light.kind))
+        if light.kind != DIRECTIONAL and light.distance > 0:
+            writer.key("range")
+            writer.number(light.distance)
+        if light.kind == SPOT:
+            var outer = light.angle.to(RADIAN)
+            writer.key("spot")
+            writer.begin_object()
+            writer.key("innerConeAngle")
+            writer.number((1 - light.penumbra) * outer)
+            writer.key("outerConeAngle")
+            writer.number(outer)
+            writer.end_object()
+        writer.end_object()
+        self.lights.append(writer.finish())
+        return len(self.lights) - 1
+
+    def perspective(
+        mut self, camera: PerspectiveCamera, name: String
+    ) raises -> Int:
+        """Write a perspective camera and return its index, as three.js's
+        `processCamera` writes one."""
+        camera.validate()
+        var writer = JsonWriter()
+        writer.begin_object()
+        if name != "":
+            writer.key("name")
+            writer.string(name)
+        writer.key("type")
+        writer.string("perspective")
+        writer.key("perspective")
+        writer.begin_object()
+        writer.key("aspectRatio")
+        writer.number(camera.aspect)
+        writer.key("yfov")
+        writer.number(camera.fov.to(RADIAN))
+        writer.key("zfar")
+        writer.number(camera.far.to(METER))
+        writer.key("znear")
+        writer.number(camera.near.to(METER))
+        writer.end_object()
+        writer.end_object()
+        self.cameras.append(writer.finish())
+        return len(self.cameras) - 1
+
+    def orthographic(
+        mut self, camera: OrthographicCamera, name: String
+    ) raises -> Int:
+        """Write an orthographic camera and return its index. `xmag` and
+        `ymag` are half the width and half the height, as the
+        specification and `read_gltf` read them; three.js writes twice
+        `right` and twice `top`. glTF's box is centered on the camera's
+        axis, so a box that is not is refused."""
+        var right = camera.right.to(METER)
+        var top = camera.top.to(METER)
+        if camera.left.to(METER) != -right or camera.bottom.to(METER) != -top:
+            raise Error(
+                "glTF: an orthographic camera's box is centered on its axis:"
+                " left must be minus right, and bottom minus top"
+            )
+        var writer = JsonWriter()
+        writer.begin_object()
+        if name != "":
+            writer.key("name")
+            writer.string(name)
+        writer.key("type")
+        writer.string("orthographic")
+        writer.key("orthographic")
+        writer.begin_object()
+        writer.key("xmag")
+        writer.number(right)
+        writer.key("ymag")
+        writer.number(top)
+        writer.key("zfar")
+        writer.number(camera.far.to(METER))
+        writer.key("znear")
+        writer.number(camera.near.to(METER))
+        writer.end_object()
+        writer.end_object()
+        self.cameras.append(writer.finish())
+        return len(self.cameras) - 1
+
+    def animation(
+        mut self,
+        clip: AnimationClip,
+        scene: Scene,
+        written: List[Int],
+        morphs: List[Int],
+    ) raises:
+        """Write one clip as a glTF animation, as three.js's
+        `processAnimation` writes it.
+
+        A node's `POSITION`, `QUATERNION` and `SCALE` tracks are its
+        `translation`, `rotation` and `scale` channels. The morph tracks of
+        the meshes on one node are merged into one `weights` channel, as
+        three.js's `mergeMorphTargetTracks` merges them. A track on a node
+        that is not written, and a track of any other kind, is left out,
+        as three.js leaves out a track it cannot write. A clip left with
+        no channel is not written, since a glTF animation has at least
+        one.
+        """
+        var entries = List[Int]()
+        var merged = List[_Merged]()
+        # A clip has at least one track.
+        for at in range(len(clip.tracks)):  # pragma: no branch
+            ref track = clip.tracks[at]
+            var kind = track.target.kind
+            if kind.is_morph():
+                var slot = _written_slot(
+                    _morph_node(track, scene), written, "a mesh"
+                )
+                if slot < 0:
+                    continue
+                if track.target.slot >= morphs[slot]:
+                    raise Error(
+                        "glTF: a morph track names a target the mesh on its"
+                        " node has not got"
+                    )
+                var found = -1
+                for index in range(len(merged)):
+                    if merged[index].node == slot:
+                        found = index
+                if found < 0:
+                    merged.append(_Merged(slot, morphs[slot], track))
+                    entries.append(-len(merged))
+                else:
+                    merged[found].merge(track)
+                continue
+            if (
+                kind != TRANSLATION_KIND
+                and kind != QUATERNION
+                and kind != SCALE
+            ):
+                continue
+            var node = NodeId(track.target.index)
+            if _written_slot(node, written, "a track") < 0:
+                continue
+            entries.append(at)
+        if len(entries) == 0:
+            return
+        var samplers = List[String]()
+        var channels = List[String]()
+        # Refused above when there is no entry.
+        for entry in entries:  # pragma: no branch
+            if entry >= 0:
+                ref track = clip.tracks[entry]
+                var kind = track.target.kind
+                self.channel(
+                    samplers,
+                    channels,
+                    written[track.target.index],
+                    _path_of(kind),
+                    track.times,
+                    _output(track),
+                    kind.component_count(),
+                    _interpolation_name(track.interpolation),
+                )
+            else:
+                ref one = merged[-entry - 1]
+                self.channel(
+                    samplers,
+                    channels,
+                    one.node,
+                    "weights",
+                    one.times,
+                    one.output(),
+                    1,
+                    one.interpolation(),
+                )
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("name")
+        if clip.name != "":
+            writer.string(clip.name)
+        else:
+            writer.string("clip_" + String(len(self.animations)))
+        _write_array(writer, "samplers", samplers)
+        _write_array(writer, "channels", channels)
+        writer.end_object()
+        self.animations.append(writer.finish())
+
+    def channel(
+        mut self,
+        mut samplers: List[String],
+        mut channels: List[String],
+        node: Int,
+        path: String,
+        times: List[Float32],
+        output: List[Float32],
+        width: Int,
+        interpolation: String,
+    ) raises:
+        """Write one sampler, its key times with the bounds the
+        specification asks for and its values, and the channel that
+        drives a node's `path` with it."""
+        var input = self.float_accessor(times, 1, "SCALAR", True, False)
+        var kind = "SCALAR" if width == 1 else "VEC" + String(width)
+        var values = self.float_accessor(output, width, kind, False, False)
+        var writer = JsonWriter()
+        writer.begin_object()
+        writer.key("input")
+        writer.integer(input)
+        writer.key("output")
+        writer.integer(values)
+        writer.key("interpolation")
+        writer.string(interpolation)
+        writer.end_object()
+        samplers.append(writer.finish())
+        var channel = JsonWriter()
+        channel.begin_object()
+        channel.key("sampler")
+        channel.integer(len(samplers) - 1)
+        channel.key("target")
+        channel.begin_object()
+        channel.key("node")
+        channel.integer(node)
+        channel.key("path")
+        channel.string(path)
+        channel.end_object()
+        channel.end_object()
+        channels.append(channel.finish())
 
     def document(
         self, roots: List[Int], nodes: List[String], uri: String
@@ -1257,6 +1904,20 @@ struct _Exporter(Movable):
             for name in self.used:  # pragma: no branch
                 writer.string(name)
             writer.end_array()
+        if len(self.required) > 0:
+            writer.key("extensionsRequired")
+            writer.begin_array()
+            for name in self.required:  # pragma: no branch
+                writer.string(name)
+            writer.end_array()
+        if len(self.lights) > 0:
+            writer.key("extensions")
+            writer.begin_object()
+            writer.key(LIGHTS_PUNCTUAL)
+            writer.begin_object()
+            _write_array(writer, "lights", self.lights)
+            writer.end_object()
+            writer.end_object()
         writer.key("scene")
         writer.integer(0)
         writer.key("scenes")
@@ -1269,6 +1930,9 @@ struct _Exporter(Movable):
         writer.end_array()
         _write_array(writer, "nodes", nodes)
         _write_array(writer, "meshes", self.meshes)
+        _write_array(writer, "cameras", self.cameras)
+        _write_array(writer, "skins", self.skins)
+        _write_array(writer, "animations", self.animations)
         _write_array(writer, "materials", self.materials)
         _write_array(writer, "textures", self.textures)
         _write_array(writer, "images", self.images)
@@ -1288,6 +1952,445 @@ struct _Exporter(Movable):
             writer.end_array()
         writer.end_object()
         return writer.finish()
+
+
+struct _Carried(Copyable, Movable):
+    """What one written node carries, by its index in each of the scene's
+    lists, or -1 for no light and no camera."""
+
+    var meshes: List[Int]
+    var skinned: List[Int]
+    var instanced: List[Int]
+    var lines: List[Int]
+    var points: List[Int]
+    var light: Int
+    var perspective: Int
+    var orthographic: Int
+
+    def __init__(out self):
+        """Carry nothing."""
+        self.meshes = List[Int]()
+        self.skinned = List[Int]()
+        self.instanced = List[Int]()
+        self.lines = List[Int]()
+        self.points = List[Int]()
+        self.light = -1
+        self.perspective = -1
+        self.orthographic = -1
+
+    def has_camera(self) -> Bool:
+        """Return True if a camera rides the node already."""
+        return self.perspective >= 0 or self.orthographic >= 0
+
+
+struct _Merged(Copyable, Movable):
+    """The morph tracks of one node merged into one `weights` channel, as
+    three.js's `mergeMorphTargetTracks` merges them: every key of every
+    track, and at each key a weight for every target."""
+
+    # The node's index in the file, and how many targets its mesh has.
+    var node: Int
+    var count: Int
+    # Whether the channel is a cubic spline, which merges only with cubic
+    # splines at the same times, or steps.
+    var cubic: Bool
+    var step: Bool
+    var times: List[Float32]
+    # `count` weights a key, and for a cubic spline its two tangents.
+    var values: List[Float32]
+    var ins: List[Float32]
+    var outs: List[Float32]
+
+    def __init__(out self, node: Int, count: Int, track: KeyframeTrack):
+        """Start from a node's first morph track, as three.js clones it.
+        A track that is neither a cubic spline nor steps is linear.
+
+        Args:
+            node: The node's index in the file.
+            count: How many morph targets its mesh has.
+            track: The first morph track.
+        """
+        self.node = node
+        self.count = count
+        self.cubic = track.interpolation == CUBIC_SPLINE
+        self.step = track.interpolation == STEP
+        self.times = track.times.copy()
+        var size = len(self.times) * count
+        self.values = List[Float32](length=size, fill=0)
+        self.ins = List[Float32](length=size if self.cubic else 0, fill=0)
+        self.outs = List[Float32](length=size if self.cubic else 0, fill=0)
+        self.fill(track)
+
+    def fill(mut self, track: KeyframeTrack):
+        """Copy a track keyed at the same times into its target's lane."""
+        var target = track.target.slot
+        # A track has at least one key.
+        for key in range(len(self.times)):  # pragma: no branch
+            var at = key * self.count + target
+            self.values[at] = track.values[key]
+            if self.cubic:
+                self.ins[at] = track.in_tangents[key]
+                self.outs[at] = track.out_tangents[key]
+
+    def merge(mut self, track: KeyframeTrack) raises:
+        """Merge one more of the node's morph tracks in.
+
+        Its lane takes its value at every key the channel has, and each
+        of its own keys is added to the channel when no key is within a
+        millisecond of it, with every other lane's value there, as
+        three.js's `insertKeyframe` adds it.
+
+        Args:
+            track: The track.
+
+        Raises:
+            Error: If either is a cubic spline and they are not both cubic
+                splines at the same times, as three.js refuses to merge a
+                cubic spline.
+        """
+        var cubic = track.interpolation == CUBIC_SPLINE
+        if self.cubic or cubic:
+            if not (self.cubic and cubic and self.times == track.times):
+                raise Error(
+                    "glTF: the morph tracks of one node are one weights"
+                    " channel, and a cubic spline merges only with cubic"
+                    " splines at the same times"
+                )
+            self.fill(track)
+            return
+        var target = track.target.slot
+        var step = track.interpolation == STEP
+        # The channel and a track each have at least one key.
+        for key in range(len(self.times)):  # pragma: no branch
+            self.values[key * self.count + target] = _sample(
+                track.times, track.values, 1, self.times[key], step
+            )[0]
+        for key in range(len(track.times)):  # pragma: no branch
+            var at = self.insert(track.times[key])
+            self.values[at * self.count + target] = track.values[key]
+
+    def insert(mut self, time: Float32) -> Int:
+        """Return the key within a millisecond of `time`, or add one there
+        with the channel's own value at that time, and return it."""
+        var at = 0
+        while at < len(self.times) and self.times[at] < time:
+            at += 1
+        if at > 0 and abs(self.times[at - 1] - time) < KEY_TOLERANCE:
+            return at - 1
+        if at < len(self.times) and abs(self.times[at] - time) < KEY_TOLERANCE:
+            return at
+        var sampled = _sample(
+            self.times, self.values, self.count, time, self.step
+        )
+        self.times.insert(at, time)
+        # A node with a morph track has at least one target.
+        for lane in range(self.count):  # pragma: no branch
+            self.values.insert(at * self.count + lane, sampled[lane])
+        return at
+
+    def output(self) -> List[Float32]:
+        """Return the sampler's output: the weights key by key, and for a
+        cubic spline each key's in-tangents, weights and out-tangents, as
+        glTF lays them out."""
+        if not self.cubic:
+            return self.values.copy()
+        var out = List[Float32]()
+        # A track has at least one key.
+        for key in range(len(self.times)):  # pragma: no branch
+            var start = key * self.count
+            out.extend(self.ins[start : start + self.count])
+            out.extend(self.values[start : start + self.count])
+            out.extend(self.outs[start : start + self.count])
+        return out^
+
+    def interpolation(self) -> String:
+        """Return the sampler's interpolation."""
+        if self.cubic:
+            return "CUBICSPLINE"
+        return "STEP" if self.step else "LINEAR"
+
+
+# How close two key times are to be one key, in seconds: three.js's
+# `insertKeyframe` tolerance of a millisecond.
+comptime KEY_TOLERANCE = Float32(0.001)
+
+
+def _sample(
+    times: List[Float32],
+    values: List[Float32],
+    width: Int,
+    at: Float32,
+    step: Bool,
+) -> List[Float32]:
+    """Return a run of keys' value at a time, as three.js's
+    `LinearInterpolant` and `DiscreteInterpolant` give it: the first key's
+    before it, the last key's after it, and between two keys the value
+    blended linearly or the earlier key's."""
+    var last = len(times) - 1
+    var key = 0
+    while key < last and times[key + 1] <= at:
+        key += 1
+    var blend = Float32(0)
+    if key < last and not step and at > times[key]:
+        blend = (at - times[key]) / (times[key + 1] - times[key])
+    var out = List[Float32]()
+    var next = min(key + 1, last)
+    # Every caller reads at least one lane.
+    for lane in range(width):  # pragma: no branch
+        var here = values[key * width + lane]
+        out.append(here + (values[next * width + lane] - here) * blend)
+    return out^
+
+
+def _output(track: KeyframeTrack) -> List[Float32]:
+    """Return a node track's sampler output: its values, and for a cubic
+    spline each key's in-tangent, value and out-tangent, as glTF lays
+    them out."""
+    if track.interpolation != CUBIC_SPLINE:
+        return track.values.copy()
+    var width = track.target.kind.component_count()
+    var out = List[Float32]()
+    # A track has at least one key.
+    for key in range(len(track.times)):  # pragma: no branch
+        var start = key * width
+        out.extend(track.in_tangents[start : start + width])
+        out.extend(track.values[start : start + width])
+        out.extend(track.out_tangents[start : start + width])
+    return out^
+
+
+def _path_of(kind: TrackKind) -> String:
+    """Return the channel path a node track drives, three.js's
+    `PATH_PROPERTIES`."""
+    if kind == TRANSLATION_KIND:
+        return "translation"
+    if kind == QUATERNION:
+        return "rotation"
+    return "scale"
+
+
+def _interpolation_name(how: Interpolation) -> String:
+    """Return a track's interpolation as glTF names it. Only a step and a
+    cubic spline have names of their own there, and every other track is
+    written `LINEAR`, as three.js writes one."""
+    if how == STEP:
+        return "STEP"
+    if how == CUBIC_SPLINE:
+        return "CUBICSPLINE"
+    return "LINEAR"
+
+
+def _morph_node(track: KeyframeTrack, scene: Scene) raises -> NodeId:
+    """Return the node of the mesh or the skinned mesh a morph track
+    drives."""
+    var index = track.target.index
+    if track.target.kind == MORPH_INFLUENCE:
+        if index < 0 or index >= len(scene.meshes):
+            raise Error("glTF: a morph track names a mesh that is not there")
+        return scene.meshes[index].node
+    if index < 0 or index >= len(scene.skinned_meshes):
+        raise Error("glTF: a morph track names a mesh that is not there")
+    return scene.skinned_meshes[index].node
+
+
+def _written_slot(node: NodeId, written: List[Int], what: String) raises -> Int:
+    """Return a scene node's index in the file, or -1 when it is left out."""
+    if node.value < 0 or node.value >= len(written):
+        raise Error("glTF: " + what + " names a node that is not in the scene")
+    return written[node.value]
+
+
+def _geometries(scene: Scene, carried: _Carried) -> List[GeometryId]:
+    """Return the geometry of everything a node draws, in the order its
+    primitives are written."""
+    var found = List[GeometryId]()
+    for which in carried.meshes:
+        found.append(scene.meshes[which].geometry)
+    for which in carried.skinned:
+        found.append(scene.skinned_meshes[which].geometry)
+    for which in carried.instanced:
+        found.append(scene.instanced_meshes[which].geometry)
+    for which in carried.lines:
+        found.append(scene.lines[which].geometry)
+    for which in carried.points:
+        found.append(scene.points[which].geometry)
+    return found^
+
+
+def _morph_count(shapes: List[GeometryId], assets: Assets) raises -> Int:
+    """Return how many morph targets the geometries of one glTF mesh carry,
+    which must be as many for each: the specification asks it."""
+    var count = 0
+    for at in range(len(shapes)):
+        var own = assets.geometries.get(shapes[at]).morph_count()
+        if at > 0 and own != count:
+            raise Error(
+                "glTF: the meshes on one node must carry as many morph"
+                " targets: glTF gives the primitives of a mesh one set"
+            )
+        count = own
+    return count
+
+
+def _weights(
+    scene: Scene, carried: _Carried, morphs: Int
+) raises -> List[Float32]:
+    """Return the morph influences the meshes on one node wear, which must
+    be one set: glTF gives a mesh one `weights`. Zero for a node whose
+    geometry has targets and whose things wear none, as three.js's
+    `InstancedMesh`, `Line` and `Points` start at zero."""
+    var worn = List[SIMD[DType.float32, MAX_MORPH_TARGETS]]()
+    for which in carried.meshes:
+        worn.append(scene.meshes[which].morph_influences)
+    for which in carried.skinned:
+        worn.append(scene.skinned_meshes[which].morph_influences)
+    var weights = List[Float32](length=morphs, fill=0)
+    for at in range(len(worn)):
+        for target in range(morphs):
+            if at > 0 and worn[at][target] != weights[target]:
+                raise Error(
+                    "glTF: the meshes on one node must wear one set of morph"
+                    " influences: glTF gives a mesh one set of weights"
+                )
+            weights[target] = worn[at][target]
+    return weights^
+
+
+def target_name(geometry: BufferGeometry, target: Int) -> String:
+    """Return a morph target's name as three.js's `GLTFExporter` writes it
+    in `targetNames`: its own name, or its index when it has none, as
+    three.js's `updateMorphTargets` names it.
+
+    Args:
+        geometry: The geometry.
+        target: Which morph target, from zero.
+
+    Returns:
+        The name.
+    """
+    var named = target < len(geometry.morph_names)
+    return geometry.morph_names[target] if named and geometry.morph_names[
+        target
+    ] != "" else String(target)
+
+
+def line_mode_code(mode: LineMode) -> Int:
+    """Return a line's mode as glTF's primitive mode.
+
+    Args:
+        mode: A valid line mode.
+
+    Returns:
+        `MODE_LINES` for `SEGMENTS`, `MODE_LINE_LOOP` for `LOOP`, and
+        `MODE_LINE_STRIP` for `STRIP`.
+    """
+    if mode == SEGMENTS:
+        return MODE_LINES
+    if mode == LOOP:
+        return MODE_LINE_LOOP
+    return MODE_LINE_STRIP
+
+
+def _is_punctual(kind: LightKind) -> Bool:
+    """Return True for the three kinds `KHR_lights_punctual` holds."""
+    return kind == DIRECTIONAL or kind == POINT or kind == SPOT
+
+
+def _light_type(kind: LightKind) -> String:
+    """Return a punctual light's `type`."""
+    if kind == DIRECTIONAL:
+        return "directional"
+    if kind == POINT:
+        return "point"
+    return "spot"
+
+
+def _check_skin(shape: BufferGeometry, bones: Int) raises:
+    """Refuse a skinned geometry whose `skinIndex` and `skinWeight` glTF
+    cannot hold: four of each a vertex, and every index a whole number
+    that names a bone."""
+    if not shape.has_attribute(String(SKIN_INDEX)) or not shape.has_attribute(
+        String(SKIN_WEIGHT)
+    ):
+        raise Error("glTF: a skinned geometry needs skinIndex and skinWeight")
+    ref joints = shape.attribute_view(String(SKIN_INDEX))
+    if (
+        joints.item_size != 4
+        or shape.attribute_view(String(SKIN_WEIGHT)).item_size != 4
+    ):
+        raise Error("glTF: a skinned geometry has four bones a vertex")
+    # A skinned geometry has at least one vertex.
+    for value in joints.packed():  # pragma: no branch
+        if value < 0 or value >= Float32(bones) or value != floor(value):
+            raise Error(
+                "glTF: a skin index must be a whole number that names a bone"
+            )
+
+
+def _same_instances(first: InstancedMesh, other: InstancedMesh) raises -> Bool:
+    """Return True if two instanced meshes place and color their instances
+    alike."""
+    var same = first.count() == other.count() and len(first.colors) == len(
+        other.colors
+    )
+    for at in range(min(first.count(), other.count())):
+        same = (
+            same
+            and first.matrices[at] == other.matrices[at]
+            and _same_color(first.color_at(at), other.color_at(at))
+        )
+    return same
+
+
+def _same_color(first: Color, other: Color) -> Bool:
+    """Return True if two colors are one."""
+    return (
+        first.r == other.r
+        and first.g == other.g
+        and first.b == other.b
+        and first.a == other.a
+    )
+
+
+def _same_skin(first: SkinnedMesh, other: SkinnedMesh) -> Bool:
+    """Return True if two skinned meshes share one skeleton and one bind
+    matrix."""
+    var same = (
+        first.bind_matrix == other.bind_matrix
+        and first.skeleton.bone_count() == other.skeleton.bone_count()
+    )
+    # A skeleton has at least one bone.
+    for at in range(
+        min(first.skeleton.bone_count(), other.skeleton.bone_count())
+    ):  # pragma: no branch
+        same = (
+            same
+            and first.skeleton.bones[at].node == other.skeleton.bones[at].node
+            and first.skeleton.bones[at].inverse_bind
+            == other.skeleton.bones[at].inverse_bind
+        )
+    return same
+
+
+def _offsets(
+    geometry: BufferGeometry, target: BufferAttribute, name: String
+) raises -> List[Float32]:
+    """Return one morph target as glTF's offsets: as it is when the
+    geometry holds offsets, and less the base attribute when it holds
+    finished values, as three.js's `GLTFExporter` takes them off."""
+    var moved = target.packed()
+    if geometry.morph_relative:
+        return moved^
+    if not geometry.has_attribute(name):
+        raise Error(
+            "glTF: a geometry's morph normals need its normals, to be"
+            " written as offsets"
+        )
+    var base = geometry.attribute_view(name).packed()
+    # A morph target covers every vertex, and there is at least one.
+    for at in range(len(moved)):  # pragma: no branch
+        moved[at] -= base[at]
+    return moved^
 
 
 def _is_opaque_white(color: FloatColor, opacity: Float32) -> Bool:
@@ -1397,8 +2500,16 @@ def _write_array(
     writer.end_array()
 
 
-def _node_json(node: Object3D, mesh: Int, children: List[Int]) raises -> String:
-    """Return one node as glTF writes it."""
+def _node_json(
+    node: Object3D,
+    mesh: Int,
+    children: List[Int],
+    camera: Int,
+    skin: Int,
+    extensions: String,
+) raises -> String:
+    """Return one node as glTF writes it: -1 for no mesh, camera or
+    skin, and an empty string for no extensions."""
     var writer = JsonWriter()
     writer.begin_object()
     if node.name != "":
@@ -1436,9 +2547,18 @@ def _node_json(node: Object3D, mesh: Int, children: List[Int]) raises -> String:
     if mesh >= 0:
         writer.key("mesh")
         writer.integer(mesh)
+    if camera >= 0:
+        writer.key("camera")
+        writer.integer(camera)
+    if skin >= 0:
+        writer.key("skin")
+        writer.integer(skin)
     if len(children) > 0:
         writer.key("children")
         _write_integers(writer, children)
+    if extensions != "":
+        writer.key("extensions")
+        writer.raw(extensions)
     writer.end_object()
     return writer.finish()
 
@@ -1473,6 +2593,8 @@ def export_gltf(
     container: GltfContainer = GLTF_EMBEDDED,
     binary_name: String = "scene.bin",
     only_visible: Bool = True,
+    cameras: CameraList = CameraList(),
+    animations: List[AnimationClip] = List[AnimationClip](),
 ) raises -> GltfFiles:
     """Return a scene and the assets it draws with as a glTF 2.0 file.
 
@@ -1488,18 +2610,31 @@ def export_gltf(
             `GLTF_SEPARATE`; read beside the `.gltf`.
         only_visible: True, as three.js's `onlyVisible` is, to leave out
             a node that is hidden, what is under it, and what it carries.
+        cameras: The cameras to write, each riding a node of the scene, as
+            three.js writes a camera in the scene graph.
+        animations: The clips to write, as three.js's `animations` option
+            writes them.
 
     Returns:
         The file, and the `.bin` for `GLTF_SEPARATE`.
 
     Raises:
         Error: If the container is none of the three, the `.bin` name is
-            empty or has a scheme, a mesh names a node, geometry,
+            empty or has a scheme, a mesh, a light, a camera, a bone or a
+            track names a node that is not in the scene, or a geometry,
             material or texture that is not there, a geometry is refused
             by `exporters.common.check_geometry` or has no vertices, a
             texture is refused by `gltf_pixels`, a combined roughness and
             metalness map are not one size or do not share one transform
-            and one channel, or a number is not finite.
+            and one channel, or a number is not finite. Also if one node
+            carries two lights or two cameras, or what the module
+            docstring says a node cannot carry together, a light or a
+            camera is refused by its own checks, an orthographic camera is
+            not centered, a bone's node is not written, a skinned
+            geometry's skin is not four whole bone indices and four
+            weights a vertex, an instanced mesh has no instances, a line
+            or points geometry is indexed, or a clip's morph tracks name a
+            target that is not there or cannot be merged.
     """
     if not container.is_valid():
         raise Error("glTF: a container that is none of the three")
@@ -1511,7 +2646,7 @@ def export_gltf(
     var kept = List[Int]()
     var roots = List[Int]()
     var children = List[List[Int]]()
-    var drawn = List[List[Int]]()
+    var carried = List[_Carried]()
     for id in scene.traverse():
         var index = id.value
         var node = scene.get(id)
@@ -1524,26 +2659,62 @@ def export_gltf(
         written[index] = len(kept)
         kept.append(index)
         children.append(List[Int]())
-        drawn.append(List[Int]())
+        carried.append(_Carried())
         if parent == NO_PARENT:
             roots.append(written[index])
         else:
             children[written[parent.value]].append(written[index])
-    for which in range(len(scene.meshes)):
-        var node = scene.meshes[which].node
-        if node.value < 0 or node.value >= count:
-            raise Error("glTF: a mesh names a node that is not in the scene")
-        if written[node.value] >= 0:
-            drawn[written[node.value]].append(which)
+    _carry(scene, cameras, written, carried)
     var exporter = _Exporter(container != GLB)
+    var meshes = List[Int]()
+    var instancing = List[String]()
+    var morphs = List[Int]()
+    for at in range(len(kept)):
+        meshes.append(exporter.mesh(scene, carried[at], assets))
+        instancing.append(exporter.instancing(scene, carried[at]))
+        morphs.append(_morph_count(_geometries(scene, carried[at]), assets))
+    var skins = List[Int]()
+    for at in range(len(kept)):
+        skins.append(exporter.skin(scene, carried[at], written))
     var nodes = List[String]()
     for at in range(len(kept)):
-        var mesh = -1
-        if len(drawn[at]) > 0:
-            mesh = exporter.mesh(scene, drawn[at], assets)
+        var node = scene.get(NodeId(kept[at]))
+        var camera = -1
+        if carried[at].perspective >= 0:
+            camera = exporter.perspective(
+                cameras.perspective[carried[at].perspective], node.name
+            )
+        elif carried[at].orthographic >= 0:
+            camera = exporter.orthographic(
+                cameras.orthographic[carried[at].orthographic], node.name
+            )
+        var extensions = JsonWriter()
+        extensions.begin_object()
+        if carried[at].light >= 0:
+            extensions.key(LIGHTS_PUNCTUAL)
+            extensions.begin_object()
+            extensions.key("light")
+            extensions.integer(
+                exporter.light(scene.lights[carried[at].light], node.name)
+            )
+            extensions.end_object()
+        if instancing[at] != "":
+            extensions.key(GPU_INSTANCING)
+            extensions.raw(instancing[at])
+        extensions.end_object()
+        var extended = carried[at].light >= 0 or instancing[at] != ""
         nodes.append(
-            _node_json(scene.get(NodeId(kept[at])), mesh, children[at])
+            _node_json(
+                node,
+                meshes[at],
+                children[at],
+                camera,
+                skins[at],
+                extensions.finish() if extended else "",
+            )
         )
+    for clip in animations:
+        exporter.animation(clip, scene, written, morphs)
     exporter.pad()
     var files = GltfFiles()
     if container == GLB:
@@ -1560,12 +2731,80 @@ def export_gltf(
     return files^
 
 
+def _carry(
+    scene: Scene,
+    cameras: CameraList,
+    written: List[Int],
+    mut carried: List[_Carried],
+) raises:
+    """Hand everything the scene draws, lights and the cameras see to the
+    written node it rides. What rides a node that is left out is left out
+    with it; what rides a node the scene has not got is refused."""
+    for which in range(len(scene.meshes)):
+        var slot = _written_slot(scene.meshes[which].node, written, "a mesh")
+        if slot >= 0:
+            carried[slot].meshes.append(which)
+    for which in range(len(scene.skinned_meshes)):
+        var slot = _written_slot(
+            scene.skinned_meshes[which].node, written, "a mesh"
+        )
+        if slot >= 0:
+            carried[slot].skinned.append(which)
+    for which in range(len(scene.instanced_meshes)):
+        var slot = _written_slot(
+            scene.instanced_meshes[which].node, written, "a mesh"
+        )
+        if slot >= 0:
+            carried[slot].instanced.append(which)
+    for which in range(len(scene.lines)):
+        var slot = _written_slot(scene.lines[which].node, written, "a line")
+        if slot >= 0:
+            carried[slot].lines.append(which)
+    for which in range(len(scene.points)):
+        var slot = _written_slot(scene.points[which].node, written, "points")
+        if slot >= 0:
+            carried[slot].points.append(which)
+    for which in range(len(scene.lights)):
+        ref light = scene.lights[which]
+        if not light.kind.is_valid():
+            raise Error("glTF: a light of a kind that is none of the named")
+        light.validate()
+        if not _is_punctual(light.kind):
+            continue
+        var slot = _written_slot(light.node, written, "a light")
+        if slot < 0:
+            continue
+        if carried[slot].light >= 0:
+            raise Error("glTF: a node carries one light, and two ride one")
+        carried[slot].light = which
+    for which in range(len(cameras.perspective)):
+        var slot = _written_slot(
+            cameras.perspective[which].node, written, "a camera"
+        )
+        if slot < 0:
+            continue
+        if carried[slot].has_camera():
+            raise Error("glTF: a node carries one camera, and two ride one")
+        carried[slot].perspective = which
+    for which in range(len(cameras.orthographic)):
+        var slot = _written_slot(
+            cameras.orthographic[which].node, written, "a camera"
+        )
+        if slot < 0:
+            continue
+        if carried[slot].has_camera():
+            raise Error("glTF: a node carries one camera, and two ride one")
+        carried[slot].orthographic = which
+
+
 def write_gltf(
     path: String,
     scene: Scene,
     assets: Assets,
     container: GltfContainer = GLTF_EMBEDDED,
     only_visible: Bool = True,
+    cameras: CameraList = CameraList(),
+    animations: List[AnimationClip] = List[AnimationClip](),
 ) raises:
     """Write a scene and its assets to a `.gltf` or a `.glb` file.
 
@@ -1580,13 +2819,17 @@ def write_gltf(
         container: `GLTF_EMBEDDED`, `GLTF_SEPARATE` or `GLB`.
         only_visible: True to leave out what is hidden; see
             `export_gltf`.
+        cameras: The cameras to write; see `export_gltf`.
+        animations: The clips to write; see `export_gltf`.
 
     Raises:
         Error: If a file cannot be written, or anything `export_gltf`
             raises.
     """
     var name = binary_name_for(path)
-    var files = export_gltf(scene, assets, container, name, only_visible)
+    var files = export_gltf(
+        scene, assets, container, name, only_visible, cameras, animations
+    )
     Path(path).write_bytes(files.document)
     if len(files.binary) > 0:
         var directory = String(path[byte = 0 : path.rfind("/") + 1])

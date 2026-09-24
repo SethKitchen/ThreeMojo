@@ -14,8 +14,8 @@ write_ply("out/model.ply", scene, assets, PLY_BINARY_LITTLE_ENDIAN)
 
 | Function | Meaning |
 |---|---|
-| `export_gltf(scene, assets, container, binary_name, only_visible) -> GltfFiles` | A glTF 2.0 file, and its `.bin` for `GLTF_SEPARATE`. |
-| `write_gltf(path, scene, assets, container, only_visible)` | Write a `.gltf` or a `.glb` file. |
+| `export_gltf(scene, assets, container, binary_name, only_visible, cameras, animations) -> GltfFiles` | A glTF 2.0 file, and its `.bin` for `GLTF_SEPARATE`. |
+| `write_gltf(path, scene, assets, container, only_visible, cameras, animations)` | Write a `.gltf` or a `.glb` file. |
 | `export_obj(scene, assets) -> String` | The text of an OBJ file. |
 | `write_obj(path, scene, assets)` | Write an OBJ file. |
 | `export_stl(scene, assets, format) -> List[UInt8]` | The bytes of an STL file. |
@@ -33,7 +33,13 @@ write_ply("out/model.ply", scene, assets, PLY_BINARY_LITTLE_ENDIAN)
 
 ## glTF
 
-`export_gltf` writes the nodes, the meshes, the materials and the textures of a scene. `read_gltf` reads the file back. See [Model files](Model-files).
+`export_gltf` writes the nodes, the meshes, the materials and the textures of a scene. It also writes the lights, the cameras, the skins, the morph targets, the instances, the lines, the points and the animation clips. `read_gltf` reads the file back. See [Model files](Model-files).
+
+```mojo
+var files = export_gltf(
+    scene, assets, GLB, cameras=cameras, animations=clips
+)
+```
 
 ### Containers
 
@@ -90,7 +96,9 @@ Every material is written as a metallic-roughness material.
 | `DOUBLE_SIDE` | `doubleSided`. |
 | `BASIC` | The `KHR_materials_unlit` extension. |
 
-Every extension that the writer uses is listed once in `extensionsUsed`. The writer lists none in `extensionsRequired`, as three.js does.
+A `STANDARD` or `PHYSICAL` material with a `bump_map` writes the `EXT_materials_bump` extension, as three.js does. The extension holds `bumpTexture` and `bumpFactor`, the `bump_scale`. `read_gltf` reads it back as a `PHYSICAL` material, as three.js does. Another kind with a bump map writes no bump map.
+
+Every extension that the writer uses is listed once in `extensionsUsed`. Only `EXT_mesh_gpu_instancing` is listed in `extensionsRequired`, as three.js lists it. A reader without it draws one instance, not all of them.
 
 ### Physical extensions
 
@@ -120,6 +128,102 @@ A `PHYSICAL` material writes its sheen, its thin film and its stretched lobe, wi
 The sheen roughness is in the alpha channel of its texture. The written image keeps the alpha, and `read_gltf` reads it back. Each map writes its channel as `texCoord` and its transform as `KHR_texture_transform`, as every other map does.
 
 glTF has no sheen amount. `read_gltf` reads a sheen of one, as three.js does. The renderer multiplies the sheen color by the amount, so the writer writes the color times the amount. The material draws the same after it is read back.
+
+### What a node carries
+
+A glTF node carries one mesh, one skin, one camera and one light. The writer puts on one node everything that rides one scene node. These are the rules for each kind of thing.
+
+#### Lights
+
+A directional light, a point light and a spot light are written with the `KHR_lights_punctual` extension, as three.js's `GLTFLightExtension` writes them. Each light is one entry of the extension's `lights`, and its node names that entry.
+
+| Property | glTF |
+|---|---|
+| The node's name | `name`, when the node has one. |
+| `color` | `color`, in linear light. |
+| `intensity` | `intensity`. |
+| The kind | `type`: `directional`, `point` or `spot`. |
+| `distance` of a point or spot light | `range`, when it is above zero. |
+| `angle` and `penumbra` of a spot light | `spot.outerConeAngle` is the angle. `spot.innerConeAngle` is `(1 - penumbra) * angle`. |
+
+glTF points a directional light and a spot light down the -z axis of its node. The writer does not write the target. A target that is a child of the light's node, on its -z axis, keeps the direction. `read_gltf` adds such a target. Any other target loses its direction, and three.js only warns.
+
+glTF lights fall off with a decay of two. The writer does not write the decay.
+
+An ambient light, a hemisphere light, a rect area light and a light probe have no glTF form. The writer leaves them out, as three.js does.
+
+#### Cameras
+
+The `cameras` argument is a `CameraList`. Each camera rides a node of the scene, and the node names the camera. A camera on a hidden node is left out with the node.
+
+| Camera | glTF |
+|---|---|
+| `PerspectiveCamera` | `perspective`: `aspectRatio`, `yfov` in radians, `zfar` and `znear` in meters. |
+| `OrthographicCamera` | `orthographic`: `xmag` and `ymag`, half the width and half the height, and `zfar` and `znear` in meters. |
+
+The camera's `name` is the node's name. The zoom and the view offset are not written, as three.js does not write them.
+
+#### Morph targets
+
+A geometry's morph targets are the primitive's `targets`, as three.js writes them. Each target has a `POSITION` and, when the geometry has morph normals, a `NORMAL`. glTF holds offsets. Thus a geometry without `morph_relative` has the base taken off each target.
+
+The glTF mesh writes `weights`, the `morph_influences` of the mesh. It writes `extras.targetNames`, from the geometry's `morph_names`. A target with no name is named by its index, as three.js names it. `read_gltf` reads the names back into `morph_names`.
+
+All primitives of one glTF mesh have one set of targets and one set of weights. Thus the meshes on one node must have as many morph targets and wear one set of influences. An instanced mesh, a line and points on such a node add zero weights, as three.js starts them at zero.
+
+#### Skins
+
+A skinned mesh writes `JOINTS_0` as unsigned shorts and `WEIGHTS_0` as floats. Its node gets a skin, as three.js's `processSkin` writes it.
+
+| Skin | Value |
+|---|---|
+| `joints` | The node of each bone. |
+| `skeleton` | The node of the first bone. |
+| `inverseBindMatrices` | The inverse bind of each bone, times the `bind_matrix` of the mesh. |
+
+The skinned meshes on one node must share one skeleton and one bind matrix. A node with a skinned mesh carries no other mesh, line or points, since glTF skins the whole mesh of a node.
+
+#### Instances
+
+An instanced mesh writes the `EXT_mesh_gpu_instancing` extension on its node, as three.js's `GLTFMeshGpuInstancing` writes it. The matrix of each instance is split into `TRANSLATION`, `ROTATION` and `SCALE`. The colors of the instances are `_COLOR_0`, in linear light, when the mesh has colors.
+
+The instanced meshes on one node must place and color their instances alike. A node with an instanced mesh carries no other mesh, line or points, since glTF instances the whole mesh of a node.
+
+#### Lines and points
+
+A line and points are primitives of their own mode, as three.js writes them. The geometry has no index here, so the primitive has none.
+
+| Object | `mode` |
+|---|---|
+| `Points` | `POINTS`, 0. |
+| `Line` with `SEGMENTS` | `LINES`, 1. |
+| `Line` with `LOOP` | `LINE_LOOP`, 2. |
+| `Line` with `STRIP` | `LINE_STRIP`, 3. |
+
+The material is written as every other material is. A `BASIC` material writes `KHR_materials_unlit`. The point size is not written, because glTF has no point size.
+
+### Animations
+
+The `animations` argument is a list of `AnimationClip`s. Each clip becomes one glTF animation, as three.js's `processAnimation` writes it. An unnamed clip is named `clip_` and its index.
+
+| Track | Channel `path` |
+|---|---|
+| `POSITION` of a node | `translation`. |
+| `QUATERNION` of a node | `rotation`. |
+| `SCALE` of a node | `scale`. |
+| `MORPH_INFLUENCE` or `SKINNED_MORPH_INFLUENCE` | `weights`, on the node of the mesh. |
+
+A `STEP` track is written `STEP`. A `CUBIC_SPLINE` track is written `CUBICSPLINE`, with each key's in-tangent, value and out-tangent in that order. Every other track is written `LINEAR`, as three.js writes it. Each sampler's `input` has the `min` and the `max` that the specification requires.
+
+A glTF `weights` channel drives every target of a node at once. Thus the writer merges the morph tracks of one node into one channel, as three.js's `mergeMorphTargetTracks` merges them:
+
+1. The channel starts with the keys of the first track. Every other target is zero at each key.
+2. Each next track gives its value at every key of the channel. A step track holds its last key, and a linear track is blended.
+3. Each key of that track is added to the channel, unless a key is within a millisecond of it. A new key starts with the channel's own value at that time.
+
+A cubic spline merges only with cubic splines at the same times. three.js refuses to merge a cubic spline at all.
+
+A track on a node that is not written is left out. So is a track of any other kind: `VISIBLE`, a material, a light or a camera. three.js leaves such a track out and warns. A clip left with no channel is not written, since a glTF animation needs one.
 
 ### Textures
 
@@ -283,12 +387,20 @@ A number is written as the shortest text that reads back to the same `Float32`. 
 - A combined metallic-roughness image needs two maps of one size. three.js scales them to one size.
 - A node that keeps its own matrix writes `matrix`. Every other node writes its translation, its rotation and its scale. three.js writes `matrix` unless you set `trs`.
 - An empty geometry is refused by `export_gltf`. glTF does not allow a buffer view of zero bytes.
+- An orthographic camera writes half its width as `xmag`, as the specification says. three.js writes twice `right`, and then the camera reads back twice as wide. A box that is not centered on its axis is refused.
+- A camera is named after its node. three.js names it after its type, `PerspectiveCamera` or `OrthographicCamera`.
+- Cubic spline morph tracks at the same times are merged. three.js refuses them.
+- A clip with no channel is left out. three.js writes it with no channels.
+- The things that ride one scene node share one glTF node. Thus two lights or two cameras on one node are refused. In three.js each of them is a node of its own.
 
 ## Not written
 
-- Lights, cameras, animations, skins and morph targets.
-- Instanced, batched and skinned meshes, lines, points and sprites.
-- Bump maps, alpha maps, light maps, specular maps, displacement maps, environment maps, matcaps and gradient maps.
+- Ambient, hemisphere and rect area lights, and light probes. glTF has no form for them.
+- The decay of a light, the target of a directional or spot light, and the zoom and view offset of a camera.
+- Tracks of the visibility, a material, a light or a camera.
+- A morph target of colors. glTF allows only positions, normals and tangents.
+- Batched meshes and sprites.
+- Alpha maps, light maps, specular maps, displacement maps, environment maps, matcaps and gradient maps.
 - The groups of a geometry of a mesh with one material, as in three.js.
 - A `BACK_SIDE` material is written single-sided, as three.js writes it. glTF has no back side.
 - OBJ materials and a material library. three.js writes none. Only the `usemtl` names of a mesh that wears a list are written.
@@ -304,6 +416,20 @@ The writers raise for:
 - An index entry past the last vertex, or a geometry without an index that is not whole triangles.
 - A blank texture, or a texture with a wrap, filter, color space or channel that is none of its named values.
 - A roughness map and a metalness map that are not one size, or that do not share one transform and one channel.
+- Two lights or two cameras on one node, or a light or a camera on a node that is not in the scene.
+- A light of a kind that is not a named one, or one that `Light.validate` refuses.
+- An orthographic camera whose box is not centered on its axis.
+- A skinned mesh and anything else on one node, or skinned meshes on one node with different skeletons or bind matrices.
+- A bone on a node that is not written.
+- A skinned geometry without four `skinIndex` and four `skinWeight` values a vertex.
+- A skin index that is not a whole number that names a bone.
+- An instanced mesh and anything else on one node, or an instanced mesh with no instances.
+- Instanced meshes on one node that place or color their instances differently.
+- Meshes on one node with different counts of morph targets or different influences.
+- Morph normals in a geometry without `normal` and without `morph_relative`.
+- A line or points on an indexed geometry.
+- A morph track on a mesh that is not there, or on a target that the mesh does not have.
+- A node track on a node that is not in the scene, and cubic spline morph tracks that cannot merge.
 - A number that is not finite.
 - A stale scene, or a node whose world matrix flattens an axis, for OBJ, STL and PLY.
 - An EXR image with no texels, or data that is not four values a texel.
@@ -320,3 +446,5 @@ The writers raise for:
 `tests/test_gltf_exporter.mojo` writes a scene in the three containers and reads each file back with `read_gltf`. `tests/test_model_exporters.mojo` does the same for OBJ, STL and PLY. `tests/test_exr_export.mojo` compares EXR files with the files that three.js 0.180 writes, in `assets/exr_export/three.json`. `tests/test_deflate.mojo` compares zlib and DEFLATE streams with fflate's, in `assets/deflate/fflate.json`, and Huffman code lengths with fflate's, in `assets/deflate/trees.json`.
 
 `tests/test_ktx2_export.mojo` compares KTX2 files with the files that three.js writes, in `assets/ktx2_export/three.json`. `tests/test_usdz.mojo` compares the `.usda` files with the files that three.js writes, in `assets/usdz/three.json`. `tests/test_js_number.mojo` compares the number text with V8's, in `assets/js_number/v8.json`.
+
+`tests/test_gltf_export_scene.mojo` writes a scene with lights, cameras, a morph target, a skin, instances, lines, points and a clip. It compares the JSON with `assets/gltf/three_export.gltf`, which three.js 0.180 wrote for the same scene. It also reads both files and compares the two scenes. `assets/gltf/three_export.mjs` writes the three.js file in Node.

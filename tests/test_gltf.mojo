@@ -893,7 +893,13 @@ def test_a_malformed_mesh_or_node_is_refused() raises:
     _ = refused(
         doc(
             head
-            + ',"meshes":[{"primitives":[{"attributes":{"POSITION":0},"mode":1}]}]'
+            + ',"meshes":[{"primitives":[{"attributes":{"POSITION":0},"mode":5}]}]'
+        )
+    )
+    _ = refused(
+        doc(
+            head
+            + ',"meshes":[{"primitives":[{"attributes":{"POSITION":0},"mode":-1}]}]'
         )
     )
     _ = refused(
